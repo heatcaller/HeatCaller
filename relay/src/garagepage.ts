@@ -484,6 +484,8 @@ const view = {
   setupFrom: {},
   // Which of each car's sheet sections are open, by car id then section.
   setupOpen: {},
+  // Which sheet each car's card is on, by car id: a sheet's id or 'short'.
+  setupSheet: {},
 };
 
 function section(name, id, keyOf, build) {
@@ -1793,11 +1795,21 @@ function buildCars(box, sec) {
 
 // ---- 6. setup sheet
 
-function sheetOf(car) {
-  const id = str(car && car.sheet);
+function sheetById(id) {
   const sheets = garage && garage.sheets && typeof garage.sheets === 'object' ? garage.sheets : {};
-  const s = OBJECT_ID.test(id) ? sheets[id] : null;
+  const s = OBJECT_ID.test(str(id)) && Object.prototype.hasOwnProperty.call(sheets, id) ? sheets[id] : null;
   return s && typeof s === 'object' && Array.isArray(s.sections) ? s : null;
+}
+
+function sheetOf(car) {
+  return sheetById(car && car.sheet);
+}
+
+// Every sheet HeatCaller sent, in its order: since 7 Nov 2026 every sheet
+// in the PC app's Garage, the ones a chassis links to first.
+function sheetIds() {
+  const sheets = garage && garage.sheets && typeof garage.sheets === 'object' ? garage.sheets : {};
+  return Object.keys(sheets).filter((id) => sheetById(id) !== null);
 }
 
 function fieldsOf(sheet) {
@@ -1952,7 +1964,6 @@ function buildSetup(box, sec) {
   }
   card.appendChild(el('h2', '', 'Setup · ' + carName(car)));
 
-  const sheet = sheetOf(car);
   const setups = setupsOf(car);
   const newest = setups[0] || null;
   const form = 'setup-' + car.id;
@@ -1970,6 +1981,43 @@ function buildSetup(box, sec) {
   // the form afresh from it; what is sent is still a new entry in the log.
   const fromId = str(view.setupFrom[car.id]);
   const from = fromId === 'blank' ? null : setups.find((s) => s.id === fromId) || newest;
+
+  // WHICH SHEET (7 Nov 2026, Asher: "I'm only seeing the save button"):
+  // any sheet in the PC app's Garage, as its Setup Sheet window offers -
+  // a club whose chassis types link no sheet had only the short log. The
+  // one picked here, else the car's chassis sheet, else the one the setup
+  // it starts from was filled in on, else the first. The short log only
+  // for a car whose chassis links no sheet, since HeatCaller would put
+  // anything sent for it on that sheet.
+  const all = sheetIds();
+  const chassisSheet = sheetOf(car) ? str(car.sheet) : '';
+  const picked = str(view.setupSheet[car.id]);
+  const sheetId = picked === 'short' && !chassisSheet ? 'short'
+    : sheetById(picked) ? picked
+    : chassisSheet || (from && sheetById(from.sheet) ? str(from.sheet) : '') || all[0] || 'short';
+  const sheet = sheetId === 'short' ? null : sheetById(sheetId);
+  if (all.length > 0) {
+    const label = el('label', 'f', 'Setup sheet');
+    const pick = document.createElement('select');
+    pick.className = 'sx-c';
+    const choices = all.map((id) => [id, str(sheetById(id).name) || 'Setup sheet']);
+    if (!chassisSheet) choices.push(['short', 'Short setup log']);
+    for (const [v, words] of choices) {
+      const o = document.createElement('option');
+      o.value = v;
+      o.textContent = words;
+      pick.appendChild(o);
+    }
+    pick.value = sheetId;
+    pick.addEventListener('change', () => {
+      view.setupSheet[car.id] = String(pick.value || '');
+      drop(form);
+      paint(sec, true);
+    });
+    label.appendChild(pick);
+    hdr.appendChild(label);
+  }
+
   if (setups.length > 0) {
     const label = el('label', 'f', 'Start from');
     const pick = document.createElement('select');
@@ -1985,6 +2033,9 @@ function buildSetup(box, sec) {
     pick.value = from ? from.id : 'blank';
     pick.addEventListener('change', () => {
       view.setupFrom[car.id] = String(pick.value || '');
+      // A setup opens on the sheet it was filled in on.
+      const s = setups.find((x) => x.id === pick.value);
+      if (s && sheetById(s.sheet)) view.setupSheet[car.id] = str(s.sheet);
       drop(form);
       paint(sec, true);
     });
@@ -2033,7 +2084,7 @@ function buildSetup(box, sec) {
 
     // The button says what it will do, counted as the sheet changes.
     const go = tapButton('', 'go', async () => {
-      const f = { car: car.id, sheet: str(car.sheet), notes: cleanNotes(val(form, 'notes', fix ? str(newest.notes) : '')) };
+      const f = { car: car.id, sheet: sheetId, notes: cleanNotes(val(form, 'notes', fix ? str(newest.notes) : '')) };
       const r = String(race.input.value || '');
       if (OBJECT_ID.test(r)) f.race = r;
       if (val(form, 'fix', false) === true && canFix) f.entry = newest.id;
@@ -2102,7 +2153,7 @@ function buildSetup(box, sec) {
     recount();
     save.appendChild(go);
   } else {
-    body.appendChild(el('p', 'when', 'This car has no setup sheet at the club, so this is the short setup log.'));
+    body.appendChild(el('p', 'when', all.length > 0 ? 'The short setup log: five parts, no sheet.' : 'This car has no setup sheet at the club, so this is the short setup log.'));
     body.appendChild(hdr);
     const start = valuesOf(from);
     for (const [k, words] of LEGACY) textBox(body, sec, form, k, words, start[k] || '', 80).input.className = 'sx-c';

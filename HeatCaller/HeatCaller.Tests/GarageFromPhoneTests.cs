@@ -385,6 +385,32 @@ public sealed class GarageFromPhoneTests : IDisposable
         Assert.True(root.GetProperty("stats").GetProperty("groups").GetArrayLength() >= 1);
     }
 
+    [Fact]
+    public void Every_sheet_in_the_garage_goes_to_the_phone_even_with_no_chassis_linked_to_it()
+    {
+        // 7 Nov 2026: a club whose chassis types link no sheet got the short
+        // log on every car's phone, though the Setup Sheet window offered
+        // every sheet. Each sheet goes now, and each setup says its sheet.
+        var w = new World();
+        var sheet = new ChassisTemplate { Name = "Loose sheet" };
+        sheet.Sections.Add(new SetupSection { Name = "Gearing", Fields = { new SetupField { Id = "pinion", Label = "Pinion", Kind = SetupFieldKind.Number } } });
+        w.Sheets.Upsert(sheet);
+        w.Cars.Upsert(new Car { Id = CarId, Name = "Mine", OwnerTransponder = "100" });
+        w.Setups.Upsert(new SetupEntry { CarId = CarId, DriverName = "Al", ChassisTemplateId = sheet.Id, Values = { ["pinion"] = "8" } });
+
+        var sources = new DriverGarage.Sources(w.Profiles, w.Packs, w.History, w.Cars, w.Chassis, w.Sheets, w.Setups,
+            Array.Empty<string>(), _ => null);
+
+        using var doc = JsonDocument.Parse(DriverGarage.Build(w.Profiles.Get("100")!, sources, DateTime.UtcNow));
+        var root = doc.RootElement;
+
+        Assert.Equal("Loose sheet", root.GetProperty("sheets").GetProperty(sheet.Id).GetProperty("name").GetString());
+        var car = Assert.Single(root.GetProperty("cars").EnumerateArray());
+        Assert.Equal(JsonValueKind.Null, car.GetProperty("sheet").ValueKind);
+        var setup = Assert.Single(car.GetProperty("setups").EnumerateArray());
+        Assert.Equal(sheet.Id, setup.GetProperty("sheet").GetString());
+    }
+
     private static byte[] TinyJpeg()
     {
         using var bitmap = new Bitmap(40, 30);

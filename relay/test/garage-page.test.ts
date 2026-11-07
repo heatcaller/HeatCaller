@@ -560,8 +560,25 @@ describe("garage page: what it sends", () => {
     assert.equal(f["car"], CAR_A);
   });
 
-  it("a car with no sheet gets the five parts", async () => {
+  it("a car whose chassis links no sheet gets the garage's sheets to pick from (7 Nov 2026)", async () => {
     const g = garage();
+    (g["cars"] as Record<string, unknown>[])[0]!["sheet"] = null;
+    const page = await open(relay({ read: () => ({ status: 200, body: { ok: true, garage: g, asks: [] } }) }));
+    const pick = field(page.get("gs"), /^Setup sheet/);
+    assert.equal(pick.value, SHEET, "the first sheet, not the short log");
+    assert.equal(field(page.get("gs"), /^Front spring/).value, "Soft");
+    type(field(page.get("gs"), /^Front spring/), "Hard");
+    await press(page, page.get("gs"), SAVE);
+    const f = asks(page)[0]?.body["f"] as Record<string, string>;
+    assert.equal(f["sheet"], SHEET, "sent on the sheet picked");
+    assert.equal(f["v.front-spring"], "Hard");
+
+    type(field(page.get("gs"), /^Setup sheet/), "short");
+    assert.ok(field(page.get("gs"), /^Tires/), "the short log when picked");
+  });
+
+  it("a car with no sheet gets the five parts", async () => {
+    const g = garage({ sheets: {} });
     (g["cars"] as Record<string, unknown>[])[0]!["sheet"] = null;
     const page = await open(relay({ read: () => ({ status: 200, body: { ok: true, garage: g, asks: [] } }) }));
     const box = page.get("gs");
