@@ -2121,7 +2121,8 @@ export function shell(page: Shell, context: PageContext): string {
   const heading = `<div class="hchead">
     <h1>${name} <span>${escapeHtml(page.heading)}</span></h1>
     <div class="hcside">${page.active === "live" ? `
-      <span class="onair" aria-hidden="true"><b>LIVE</b></span>` : ""}
+      <span class="onair" aria-hidden="true"><b>LIVE</b></span>` : ""}${page.active === "night" ? `
+      <div class="me-si" id="mesi" hidden></div>` : ""}
       <div class="hcby">${HC_SUN}<span>on HeatCaller</span></div>
     </div>
     </div>`;
@@ -13455,9 +13456,6 @@ function meSignedInButton() {
     at.setAttribute('data-on', '1');
   }
   at.hidden = false;
-  // Their name makes room for it on the same line (6 Nov 2026).
-  const top = document.getElementById('metop');
-  if (top) top.setAttribute('data-si', '1');
 }
 
 function meAskSignOut() {
@@ -13547,7 +13545,7 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // the Garage folded in as a space ("me-garage", the Garage page's own
     // sections and script); the pack-swap sheet and the empty note at the foot.
     body: `<style>${ME_CSS}${GARAGE_CSS}</style>` +
-      '<div class="me-top" id="metop"><div class="me-si" id="mesi" hidden></div><div id="nh"></div></div><div id="nj"></div>' + ME_BODY_TOP + '<div id="ng"></div>' +
+      '<div class="me-top" id="metop"><div id="nh"></div></div><div id="nj"></div>' + ME_BODY_TOP + '<div id="ng"></div>' +
       '<div id="nx"><div id="lv"></div><div id="ea"></div></div><div id="nt"><p class="note">Loading&hellip;</p></div>' +
       GARAGE_EMBED_BODY + '<div id="yd"></div>' +
       '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>' + ME_BODY_END,

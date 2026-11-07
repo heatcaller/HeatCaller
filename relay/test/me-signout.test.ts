@@ -75,7 +75,9 @@ describe("Me: the Signed in button asks before signing out", () => {
     assert.equal(page.get("mesi").hidden, false);
     assert.ok(signedIn(page), "a Signed in button");
     assert.equal(signedIn(page)!.getAttribute("aria-label"), "Signed in on this phone. Tap to sign out.");
-    assert.match(nightPage("acme-rc", "Acme RC"), /<div class="me-si" id="mesi" hidden><\/div><div id="nh"><\/div>/);
+    // Above the byline in the page's head (7 Nov 2026), not beside their name.
+    assert.match(nightPage("acme-rc", "Acme RC"), /<div class="me-si" id="mesi" hidden><\/div>\s*<div class="hcby">/);
+    assert.match(nightPage("acme-rc", "Acme RC"), /<div class="me-top" id="metop"><div id="nh"><\/div><\/div>/);
   });
 
   it("asks first, and Stay signed in keeps everything", async () => {

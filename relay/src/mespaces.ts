@@ -109,14 +109,13 @@ body[data-me="stats"] [data-sp]:not([data-sp="stats"]) { display: none !importan
 }
 
 /* Signed in, top right of Me (6 Nov 2026): a tap asks before signing out.
-   On the same line as their name rather than a row of its own above it
-   (6 Nov 2026, Asher: "move the driver name and everything below it up
-   and closer to the top"); the name keeps clear of it. */
+   Above the byline in the page's head since 7 Nov 2026 (Asher: "flip the
+   byline with the signed in bug on the me tab"), where Live keeps its
+   broadcast bug - it was under the byline, beside their name. */
 .me-top { position: relative; max-width: 42rem; margin: 0 auto; }
-.me-si { position: absolute; top: -6px; right: 0; z-index: 2; margin: 0; }
+.me-si { margin: 0; }
 .me-si[hidden] { display: none !important; }
 .me-si .me-chip { min-height: 44px; cursor: pointer; }
-.me-top[data-si="1"] #nh h2 { padding-right: 7.5rem; }
 .me-sheet { position: fixed; inset: 0; z-index: 40; background: rgba(5, 3, 12, 0.55); display: flex; align-items: flex-end; justify-content: center; }
 .me-sheet[hidden] { display: none !important; }
 .me-sheet .in { width: 100%; max-width: 34rem; max-height: 84%; overflow-y: auto; background: var(--surface); border-radius: 24px 24px 0 0;
