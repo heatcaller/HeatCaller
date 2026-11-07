@@ -722,4 +722,31 @@ public sealed class CommentaryDirectorTests : IDisposable
         Assert.NotNull(said);
         Assert.Equal(SegmentKind.PaceNote, said!.Kind);
     }
+
+    // --- The rolling record watch's own segment (7 Nov 2026, known issues) ---
+
+    [Fact]
+    public async Task A_record_coming_is_called_by_its_own_segment()
+    {
+        _rig.Director.RecordThreatened(new RecordThreat(
+            "A", RecordThreatLevel.OnTheDoorstep, 12.05, 12.0, "Jen", 0.05, 2, 6, true));
+
+        var said = await _rig.Director.NextAsync();
+
+        Assert.NotNull(said);
+        Assert.Equal(SegmentKind.RecordWatch, said!.Kind);
+    }
+
+    [Fact]
+    public async Task A_record_threat_is_not_held_over_into_the_next_race()
+    {
+        _rig.Director.RecordThreatened(new RecordThreat(
+            "A", RecordThreatLevel.OnTheDoorstep, 12.05, 12.0, "Jen", 0.05, 2, 6, true));
+
+        _rig.Director.RaceStarted("heat-2", "Box Stock");
+
+        var said = await _rig.Director.NextAsync();
+
+        Assert.True(said is null || said.Kind != SegmentKind.RecordWatch);
+    }
 }

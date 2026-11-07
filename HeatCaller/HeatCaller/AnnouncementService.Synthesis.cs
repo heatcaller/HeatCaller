@@ -75,7 +75,7 @@ public sealed partial class AnnouncementService
         if (profile.EffectiveEngine == VoiceEngine.HeatCaller)
         {
             throw new InvalidOperationException(
-                "The HeatCaller voice can't be tested from here. Choose \"My own ElevenLabs account\" on the Voice tab to test a voice you pay for.");
+                "The HeatCaller voice can't be tested from here. Choose \"ElevenLabs - natural voices from your own ElevenLabs account\" on the Voice tab to test a voice you pay for.");
         }
 
         // A Test press waits on its own button, not in the voice queue.

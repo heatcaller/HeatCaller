@@ -5420,6 +5420,12 @@ public sealed class CommentaryService
         SegmentKind.PaceNote =>
             "Call this lap in one sentence, as a commentator would the moment it flashed up.",
 
+        // A record NOT YET gone (7 Nov 2026, known issues) - the facts are
+        // what the laps have been and what the mark is, and nothing more.
+        SegmentKind.RecordWatch =>
+            "Point the crowd at this driver's pace against the record, in one sentence: what they have been doing and "
+            + "what the record is. Do not say they will break it - they have not, and they may not.",
+
         // THE NO-PREDICTION RULE, AGAIN AND HARDER (15 Oct 2026). This is
         // the one segment whose whole subject is the future, so it is the
         // one most likely to come back as "and he's going to catch him".
@@ -5537,6 +5543,7 @@ public sealed class CommentaryService
         SegmentKind.BattleWatch => "Battle",
         SegmentKind.PaceNote => "Pace",
         SegmentKind.Horizon => "Still to decide",
+        SegmentKind.RecordWatch => "Record watch",
         SegmentKind.ComingUpNext => "Coming up",
         SegmentKind.GridHistory => "Grid",
         SegmentKind.ClubAside => "Club note",

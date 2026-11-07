@@ -5635,7 +5635,13 @@ function drawBoard(state) {
     columns.map((c, i) => '<th class="' + (i === 0 ? 'pos' : '') + (i === 0 || WORDY.test(c) ? '' : ' n') + '">' + esc(c) + '</th>').join('') +
     '</tr></thead><tbody>' +
     rows.map((r) => '<tr>' + cells(r, columns) + '</tr>').join('') +
-    '</tbody></table></div>';
+    '</tbody></table></div>' +
+    // WHAT THE * MEANS (7 Nov 2026, known issues): the laptop marks a lap
+    // count that includes laps race control counted by hand ("12*"), and
+    // says so with handCounted, so the board carries the same legend the
+    // laptop's own pages and printouts do. The words are the relay's own,
+    // never text off the frame.
+    (state.handCounted === true ? '<p class="hint">* includes laps counted by hand</p>' : '');
 
   // The board redraws every second or two, and a fresh card starts
   // scrolled hard left - so a phone that had swiped over to the last

@@ -129,7 +129,7 @@ What to know:
 
 When a transponder stops being read and you add laps with **+1 Lap** (or the keyboard shortcut) during the race, or with **Edit Result** afterwards, the result remembers how many laps were counted by hand. Scoring doesn't change; the count is there so a result built partly by hand can be trusted and questioned.
 
-The lap count shows with a star, for example **12\***, wherever results are shown: the leaderboard, Race History, the Event Report, printed results and the **Live Results** page on the club's Wi-Fi, each with the line "\* includes laps counted by hand". In Race History, hover over the count to see how many. On Race Control, the driver's lap strip ends "+2 by hand", and the optional **By Hand** column (see [Columns](running-a-race.md#columns)) shows the count. Taking a lap off removes a hand-counted one first.
+The lap count shows with a star, for example **12\***, wherever results are shown: the leaderboard, Race History, the Event Report, printed results, the **Live Results** page on the club's Wi-Fi and the live board on the club's online pages, each with the line "\* includes laps counted by hand". In Race History, hover over the count to see how many. On Race Control, the driver's lap strip ends "+2 by hand", and the optional **By Hand** column (see [Columns](running-a-race.md#columns)) shows the count. Taking a lap off removes a hand-counted one first.
 
 The club's website (the relay) doesn't show the mark yet: its live board and results show the plain lap count.
 
@@ -181,6 +181,7 @@ The **Championship** page has two tabs, **Standings** and **Calendar**. The **St
 | **Count every race day** | Untick it to choose which race days count, by ticking them in the list of race days. A race day whose **Championship:** on **Race Day → Setup** names this championship counts either way, and is marked ✓ in the list. | On |
 | **Count each driver's best:** | "Best N rounds": only each driver's N highest-scoring rounds count. **0** counts every round. | 0 |
 | **Rounds in the season:** | How many rounds the championship is *scheduled* to run. **Only the announcer uses this** — it changes no points and no standings. It's the one figure that lets it talk about what's still possible: "nobody can catch him now", "three rounds left and these two are level", "a win today and it's his". **0** means you haven't said, and then the announcer says nothing about any of that rather than guessing. | 0 |
+| **Announcer's note:** | One sentence about the season in your own words, up to 60 characters, for example "two rounds left and four points covering the top three". **Only the announcer uses this.** It's read out as typed at the cold open and in the sign-off numbers, on a night with a race this championship counts. Leave it empty to say nothing. See [The top and tail of the night](../announcer/commentary.md#the-top-and-tail-of-the-night). | Empty |
 
 The rules read each race's round to find its class and whether it was a main. A freeform race with no round can't match a class or mains-only rule, but you can still tick it by hand.
 

@@ -4,6 +4,14 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **The known issues, again (7 November).**
+    - **Record in danger**, a new **During the race** segment on **Voice → Commentary**: the announcer calls a driver whose last few laps are closing on the layout record, before it falls. Until now this was only written to the console. See [Commentary](announcer/commentary.md).
+    - **"Nobody can catch him now" after the flag.** With **Rounds in the season** filled in, **Championship check** says "That settles it: nobody can catch Bill in Box Stock now", or how many drivers can still win, proved the same way the race intro proves it. See [What the championship still has riding on it](announcer/commentary.md#what-the-championship-still-has-riding-on-it).
+    - **Announcer's note** on a championship's **Scoring Rules**: one sentence in your own words, read out as typed at the cold open and the sign-off. See [Championships](race-control/results-and-championships.md).
+    - **Visiting from another club** on a driver's profile: the cold open counts them ("7 of them visiting"). See [Drivers](race-day/drivers-and-classes.md).
+    - **The club's live board shows laps counted by hand** ("12\*") with the line "\* includes laps counted by hand", as the laptop's own pages do. Update HeatCaller on the race PC and redeploy the relay (`fly deploy --ha=false`).
+    - **Re-roll Line** refuses a line saved with full names before **Shorten published names** was ticked, so the full names aren't sent to the online voice again. Use **Forget Line** for those.
+
 - **The help catches up with 3-6 November (6 November).** Every page of the guide was checked against the app and the relay again, and the screenshots were retaken. What it now covers, and hadn't:
     - **Kokoro stand-ins for the whole cast.** On **Voice → Cast**, each speaker has an **If ElevenLabs runs out:** voice with its own **Test Voice**. When your ElevenLabs allowance runs out, or the usage chip reaches 100%, each speaker switches to their own Kokoro voice and saved ElevenLabs lines are held back, so the night stays in one set of voices. See [Each of the cast when ElevenLabs runs out](announcer/voice.md#each-of-the-cast-when-elevenlabs-runs-out).
     - **Race Control:** the level meters sit under **Broadcast** at the foot of the clock column (see [Level meters](race-control/running-a-race.md#level-meters)), and a lap breakdown scrolls back through every lap.

@@ -436,7 +436,7 @@ Now and then a take comes out odd: a strange pause, or a word stressed wrongly. 
 
 On the HeatCaller voice the **Test** buttons are hidden, so **Re-roll Line** is the way to get a new take. The new take is your club's own: the relay keeps it for your club only, other clubs keep hearing the shared take, and it costs your allowance like any line that wasn't saved. (**Forget Line** on its own usually brings back the relay's shared copy, which costs nothing but sounds the same.) The relay must be up to date for this — on an older relay a re-roll hands back the same take; see [Relay hosting](../admin/relay-hosting.md).
 
-**Re-roll Line** refuses, with the reason, for a Kokoro line (Kokoro makes every line fresh on this laptop anyway), for a line whose words weren't recorded with it, for a line spoken in pieces, and for a line saved with a different voice or different settings — an event's own speed, say. **Forget Line** is the answer for those.
+**Re-roll Line** refuses, with the reason, for a Kokoro line (Kokoro makes every line fresh on this laptop anyway), for a line whose words weren't recorded with it, for a line spoken in pieces, for a line saved with a different voice or different settings — an event's own speed, say — and for a line saved with drivers' full names before **Shorten published names** was ticked, which the race no longer plays (re-rolling it would send the full names to the online voice again). **Forget Line** is the answer for those.
 
 A name the voice says wrongly is best fixed with the driver's **Announcer name:** on **Driver Hub**. Changing the words makes a new line, so it's rendered the new way from then on. That works on every voice.
 

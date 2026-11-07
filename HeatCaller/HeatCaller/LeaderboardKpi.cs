@@ -379,9 +379,10 @@ public static class KpiCatalog
         // HandCountedLaps. The number is the same; the mark says how it
         // was got.
         new("laps", "Laps", "Laps completed. A * means some were counted by hand.", 45,
-            // Not on the relay's public copy, whose pages have no legend to
-            // say what the mark means.
-            (s, _, ctx) => new KpiValue(HandCountedLaps.LapsText(s.Laps, ctx.PublicCopy ? 0 : HandCountedLaps.During(s)))),
+            // On the relay's public copy too since 7 Nov 2026 (known
+            // issues): the copy carries handCounted, and the relay's board
+            // draws the legend under it - see WebServerService.
+            (s, _, ctx) => new KpiValue(HandCountedLaps.LapsText(s.Laps, HandCountedLaps.During(s)))),
 
         new("last", "Last Lap", "Most recent counted lap.", 65,
             (s, _, _) => new KpiValue(Secs(s.LapTimesMs.Count > 0 ? s.LapTimesMs[^1] : 0))),

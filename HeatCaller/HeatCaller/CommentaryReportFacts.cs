@@ -409,8 +409,9 @@ public static class CommentaryReportFacts
         // how many rounds are left and how the drops fall.
         //
         // ONLY WHEN THE CALLER ACTUALLY WORKED IT OUT (14 Oct 2026).
-        // StillAlive defaults to true, and no reader in the app can fill it
-        // in yet (see CommentaryReaders.Championship), so "everyone alive"
+        // StillAlive defaults to true, and it is only filled in where
+        // CommentaryReaders.ChampionshipAfter could PROVE it (7 Nov 2026),
+        // so "everyone alive"
         // is what "not known" looks like. Counted anyway, a table of one -
         // the season's first round, one driver scored - came out as one
         // alive, and the announcer said "that settles it: nobody can catch"

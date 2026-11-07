@@ -193,6 +193,7 @@ The dialog is titled **Add Driver Profile** or **Edit Driver Profile**. The left
 | **Setup configuration:** | Free-text notes about the car's setup. For structured setup sheets, log setups against the car in the [Garage](#garage). |
 | **Rental / loaner transponder** | Marks this transponder as a club loaner. |
 | **Exclude from track records and points** | Keeps the driver out of all-time records and championship points. Use it for guests, staff cars and loaners. |
+| **Visiting from another club** | Marks the driver as a visitor. The announcer's cold open counts these, and only these: "41 drivers across 6 classes, 7 of them visiting". Changes no points or records. See [The top and tail of the night](../announcer/commentary.md#the-top-and-tail-of-the-night). |
 | **Notes:** | Free text. Shown at the bottom of the driver card. |
 | **Team / club:** | The team or club the driver runs under. |
 | **Sponsors:** | Who backs the driver, for example "Kyosho, PN Racing". Shown on the driver card. |

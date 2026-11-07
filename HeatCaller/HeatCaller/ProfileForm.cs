@@ -105,6 +105,7 @@ public sealed class ProfileForm : Form
     private readonly List<OwnedTransponder> _transponders;
     private readonly CheckBox _chkRental = new ThemedCheckBox();
     private readonly CheckBox _chkExcludeRecords = new ThemedCheckBox();
+    private readonly CheckBox _chkVisitor = new ThemedCheckBox();
     private readonly ComboBox _cmbClass = new();
 
     /// <summary>The other classes they race, as "Also races" shows them - chosen with Choose... (OtherClassesForm), saved as DriverProfile.Classes.</summary>
@@ -461,6 +462,12 @@ public sealed class ProfileForm : Form
         fields.AddField(_chkExcludeRecords);
         fields.AddHint("Both keep a driver out of all-time records - for guests, staff cars and loaners.");
 
+        _chkVisitor.Text = "Visiting from another club";
+        _chkVisitor.AutoSize = true;
+        _chkVisitor.Checked = Result.Visitor;
+        fields.AddField(_chkVisitor);
+        fields.AddHint("The announcer's opening counts these: \"six of them visiting\".");
+
         _txtNotes.Multiline = true;
         _txtNotes.AcceptsReturn = true;
         _txtNotes.ScrollBars = ScrollBars.Vertical;
@@ -646,6 +653,7 @@ public sealed class ProfileForm : Form
             pronounsWidth + _cmbPronouns.Margin.Horizontal,
             _chkRental.GetPreferredSize(Size.Empty).Width,
             _chkExcludeRecords.GetPreferredSize(Size.Empty).Width,
+            _chkVisitor.GetPreferredSize(Size.Empty).Width,
             _chkEmailMyNight.GetPreferredSize(Size.Empty).Width,
             _chkNoPhotoOnline.GetPreferredSize(Size.Empty).Width,
             _chkNoVideoOnline.GetPreferredSize(Size.Empty).Width,
@@ -1234,6 +1242,7 @@ public sealed class ProfileForm : Form
                                 ?? new List<OwnedTransponder>(),
             IsRental = _chkRental.Checked,
             ExcludeFromRecords = _chkExcludeRecords.Checked,
+            Visitor = _chkVisitor.Checked,
 
             PhotoFileName = _photoFileName,
             Team = _txtTeam.Text.Trim(),

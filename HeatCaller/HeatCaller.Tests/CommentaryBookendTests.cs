@@ -239,9 +239,11 @@ public sealed class CommentaryBookendTests : IDisposable
         Assert.Equal(4, night.Rounds);
         Assert.Equal("Upstate Mini Z", night.VenueName);
 
-        // AND THE TWO THE APP CANNOT ANSWER. Null, both of them, every
-        // time - see the reader for the whole argument. These two asserts
-        // are the ones to leave alone.
+        // AND THE TWO ONLY THE CLUB CAN ANSWER. Null, both of them, with no
+        // profiles or seasons handed in: since 7 Nov 2026 the visitor count
+        // is the club's own "Visiting from another club" ticks and the note
+        // is a season's typed "Announcer's note" (KnownIssues4Tests) - never
+        // anything worked out.
         Assert.Null(night.TravelledFrom);
         Assert.Null(night.ChampionshipNote);
 

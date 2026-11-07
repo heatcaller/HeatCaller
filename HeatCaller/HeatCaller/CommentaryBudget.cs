@@ -59,6 +59,10 @@ public enum SegmentKind
     // state is by name: an int anywhere downstream would otherwise be
     // re-labelled, and the end of the list costs nothing.
     Horizon,
+
+    // The rolling record watch (7 Nov 2026, known issues): a record coming,
+    // where PaceNote is a record gone. Appended for Horizon's reason.
+    RecordWatch,
 }
 
 /// <summary>
@@ -373,6 +377,14 @@ public sealed class CommentaryBudget
             // he'll do it", which is the one sentence RaceHorizon exists
             // never to say.
             new(SegmentKind.Horizon,            SegmentTier.Core, 1, true, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(30), 8,  4, "What's still to decide", "Points the room at a gap that is coming down - or going out - with the laps running out."),
+            // A RECORD COMING, BEFORE IT FALLS (7 Nov 2026, known issues) -
+            // RecordWatch, heard in the console only since 22 Oct. Pace, not
+            // one lap: two of the last three inside the band. It escalates
+            // at most three times per driver per race and never goes back
+            // down, so six a meeting and three a class is room for two
+            // drivers' stories. Its life is short for the battle watch's
+            // reason - "on the doorstep" is stale three laps later.
+            new(SegmentKind.RecordWatch,        SegmentTier.Core, 1, true, TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(30), 6,  3, "Record in danger", "Calls a driver whose last few laps are closing on the layout record - before it falls."),
             new(SegmentKind.ComingUpNext,       SegmentTier.Core, 1, true, TimeSpan.FromSeconds(90), TimeSpan.FromSeconds(20), 12, 12, "Coming up next", "Says what is on next, in the gap between races."),
             new(SegmentKind.ChampionshipCheck,  SegmentTier.Core, 1, true, TimeSpan.FromMinutes(3),  TimeSpan.FromSeconds(20), 6,  1, "Championship check", "Where the season stands, after a class's last main.", true),
 
