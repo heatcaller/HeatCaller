@@ -141,6 +141,9 @@ function field(root: FakeNode, words: RegExp): FakeNode {
   return input;
 }
 
+// The setup card's Save button, whatever it says the change count is.
+const SAVE = /^(Add to my setup log|Save setup)/;
+
 function type(input: FakeNode, value: string): void {
   input.value = value;
   input.fire(input.tagName === "SELECT" ? "change" : "input");
@@ -457,16 +460,18 @@ describe("garage page: what it sends", () => {
     assert.equal(field(box, /^Front spring/).value, "Soft", "started from the last setup");
     type(field(box, /^Front spring/), "Hard");
     type(field(box, /^Camber/), "-1.5");
-    const oil = box.find((n) => n.tagName === "LABEL" && n.textContent === "Oil")[0]!.find((n) => n.tagName === "INPUT")[0]!;
-    (oil as unknown as { checked: boolean }).checked = true;
-    oil.fire("change");
-    const sway = field(box, /^Sway bar/);
-    (sway as unknown as { checked: boolean }).checked = true;
-    sway.fire("change");
+    // Diffs is a multi-pick: its dropdown opens a ticked list (7 Nov 2026).
+    box.find((n) => n.tagName === "BUTTON" && n.textContent === "Oil")[0]!.fire("click");
+    // Sway bar is a yes/no: a No/Yes dropdown.
+    type(field(box, /^Sway bar/), "Yes");
+    const spring = box.find((n) => n.tagName === "LABEL" && /^Front spring/.test(n.textContent))[0]!;
+    assert.match(spring.className, /\bch\b/, "a changed field is marked");
+    assert.match(spring.textContent, /was Soft/);
+    assert.match(page.button(box, SAVE)!.textContent, /^Save setup · 4 changes$/);
     type(field(box, /^Ran in race/), RACE1);
-    type(field(box, /^Notes/), "grippy");
-    assert.equal(field(box, /^Ride height \(mm\)/).getAttribute("inputmode"), "decimal");
-    await press(page, box, /^Add to my setup log$/);
+    type(field(box, /^Notes for this entry/), "grippy");
+    assert.equal(field(box, /^Ride height/).getAttribute("inputmode"), "decimal");
+    await press(page, box, SAVE);
     assert.deepEqual(asks(page)[0]?.body, {
       id: CODE, kind: "setup",
       f: {
@@ -497,7 +502,7 @@ describe("garage page: what it sends", () => {
     assert.equal(field(box, /^Front spring/).value, "Medium", "the older setup, the typing gone");
     assert.match(box.textContent, /Started from your setup of/);
     assert.ok(!box.textContent.includes("Fix my last entry"), "no fixing the last entry from another one");
-    await press(page, box, /^Add to my setup log$/);
+    await press(page, box, SAVE);
     const f = asks(page)[0]?.body["f"] as Record<string, string>;
     assert.equal(f["v.front-spring"], "Medium");
     assert.equal(f["v.ride"], "5");
@@ -514,8 +519,8 @@ describe("garage page: what it sends", () => {
     setups[0]!["values"] = { "front-spring": "Soft", sway: "true" };
     const page = await open(relay({ read: () => ({ status: 200, body: { ok: true, garage: stored, asks: [] } }) }));
     const box = page.get("gs");
-    assert.equal((field(box, /^Sway bar/) as unknown as { checked: boolean }).checked, true, "started from the last setup");
-    await press(page, box, /^Add to my setup log$/);
+    assert.equal(field(box, /^Sway bar/).value, "Yes", "started from the last setup");
+    await press(page, box, SAVE);
     const f = asks(page)[0]?.body["f"] as Record<string, string>;
     assert.equal(f["v.sway"], "Yes");
   });
@@ -530,7 +535,7 @@ describe("garage page: what it sends", () => {
     const page = await open(relay({ read: () => ({ status: 200, body: { ok: true, garage: stored, asks: [] } }) }));
     const box = page.get("gs");
     type(field(box, /^Front spring/), "Hard");
-    await press(page, box, /^Add to my setup log$/);
+    await press(page, box, SAVE);
     const f = asks(page)[0]?.body["f"] as Record<string, string>;
     assert.ok(f, "sent");
     assert.equal(f["v.front-spring"], "Hard");
@@ -541,17 +546,15 @@ describe("garage page: what it sends", () => {
     const page = await open(relay({}));
     const box = page.get("gs");
     type(field(box, /^Camber/), "x".repeat(81));
-    await press(page, box, /^Add to my setup log$/);
+    await press(page, box, SAVE);
     assert.equal(asks(page).length, 0);
   });
 
   it("fixing the last entry sends its id", async () => {
     const page = await open(relay({}));
     const box = page.get("gs");
-    const fix = field(box, /^Fix my last entry/);
-    (fix as unknown as { checked: boolean }).checked = true;
-    fix.fire("change");
-    await press(page, page.get("gs"), /^Save the fix$/);
+    type(field(box, /^Save as/), "fix");
+    await press(page, page.get("gs"), /^Save the fix/);
     const f = asks(page)[0]?.body["f"] as Record<string, string>;
     assert.equal(f["entry"], SETUP1);
     assert.equal(f["car"], CAR_A);
@@ -564,7 +567,7 @@ describe("garage page: what it sends", () => {
     const box = page.get("gs");
     type(field(box, /^Tires/), "Sweep 32");
     type(field(box, /^Motor/), "");
-    await press(page, box, /^Add to my setup log$/);
+    await press(page, box, SAVE);
     assert.deepEqual(asks(page)[0]?.body["f"], { tires: "Sweep 32", ride: "4", car: "33333333333333333333333333333333" });
   });
 });
