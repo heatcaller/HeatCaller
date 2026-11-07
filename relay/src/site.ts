@@ -292,6 +292,26 @@ function oneLine(value: unknown, max: number): string {
       .slice(0, max);
 }
 
+/**
+ * A part's words with their own line breaks (7 Nov 2026, Asher: "honor the
+ * line spacing for both the newcomer card and club notes that's on the PC
+ * app editor"): each line as oneLine tidies it, blank lines dropped - a
+ * blank line is where the app starts a new part - and the whole capped.
+ * Pages draw it as text, so a break is only ever a break.
+ */
+function lines(value: unknown, max: number): string {
+  return typeof value !== "string"
+    ? ""
+    : value
+      .replace(/\r\n?/g, "\n")
+      .split("\n")
+      .map((line) => oneLine(line, max))
+      .filter((line) => line !== "")
+      .join("\n")
+      .slice(0, max)
+      .trim();
+}
+
 /** The site document's "newcomer" object of { where, when, join }, each a line of plain text. */
 export function newcomerFrom(value: unknown): Newcomer {
   const raw = record(value);
@@ -333,7 +353,7 @@ function partsFrom(value: unknown, most: number, maxWords: number): readonly Gui
 
   for (const item of value) {
     const raw = record(item);
-    const words = oneLine(raw?.["words"], maxWords);
+    const words = lines(raw?.["words"], maxWords);
 
     if (words !== "") {
       parts.push({ heading: oneLine(raw?.["heading"], MAX_GUIDE_HEADING), words });

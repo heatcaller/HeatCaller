@@ -774,8 +774,8 @@ internal static class RelayDocuments
 
     /// <summary>
     /// The guide as typed into the box, in parts: split at blank lines, each
-    /// paragraph's lines run together, and a heading taken from before the
-    /// first colon when there is a short one there ("Parking: round the
+    /// paragraph's own line breaks kept, and a heading taken from before the
+    /// first line's colon when there is a short one there ("Parking: round the
     /// back"); otherwise the paragraph is words with no heading.
     /// </summary>
     internal static List<(string Heading, string Words)> GuideParts(string? text) =>
@@ -791,15 +791,23 @@ internal static class RelayDocuments
 
         foreach (var paragraph in Regex.Split((text ?? string.Empty).Replace("\r", string.Empty, StringComparison.Ordinal), @"\n[ \t]*\n"))
         {
-            var flat = Regex.Replace(paragraph, @"\s+", " ").Trim();
+            // THE LINES AS TYPED (7 Nov 2026, Asher: "honor the line spacing
+            // for both the newcomer card and club notes that's on the PC app
+            // editor"): a paragraph's own line breaks are kept - each line
+            // tidied, blank ones dropped - where they used to run together.
+            var flat = string.Join("\n", paragraph.Split('\n')
+                .Select(line => Regex.Replace(line, @"\s+", " ").Trim())
+                .Where(line => line.Length > 0));
 
             if (flat.Length == 0)
             {
                 continue;
             }
 
+            // A heading only from the first line: "Parking: round the back".
             var colon = flat.IndexOf(':');
-            var heading = colon > 0 && colon <= MaxGuideHeading ? flat[..colon].Trim() : string.Empty;
+            var firstBreak = flat.IndexOf('\n');
+            var heading = colon > 0 && colon <= MaxGuideHeading && (firstBreak < 0 || colon < firstBreak) ? flat[..colon].Trim() : string.Empty;
             var words = heading.Length > 0 ? flat[(colon + 1)..].Trim() : flat;
 
             if (words.Length == 0)

@@ -19,7 +19,8 @@ public sealed class FirstNightGuideTests
 
         Assert.Equal(new[]
         {
-            ("Parking", "round the back, by the bins."),
+            // The paragraph's own line break kept (7 Nov 2026).
+            ("Parking", "round the back,\nby the bins."),
             ("", "Bring a chair - there are never enough."),
             ("", "Food:"),
         }, parts);

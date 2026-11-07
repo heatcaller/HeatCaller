@@ -570,6 +570,11 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .guide dl { margin: 0; padding: 4px 16px 14px; }
 .guide dt { font-weight: 600; margin-top: 10px; }
 .guide dd { margin: 2px 0 0; color: var(--muted); }
+/* The club's own line breaks, as typed in the app (7 Nov 2026) - the guide
+   and Club updates alike. */
+.guide dd { white-space: pre-line; overflow-wrap: anywhere; }
+/* A part with no heading starts apart from the one before it. */
+.guide dd + dd { margin-top: 10px; }
 .guide .gdone { display: block; margin: 0 auto 4px; }
 /* Home's slim banner (6 Nov 2026): flag, two lines, a chevron that turns. */
 .guide summary.gbar { flex-wrap: nowrap; align-items: center; gap: 12px; min-height: 44px; padding: 10px 16px; font-weight: 400; }
@@ -583,12 +588,9 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .guide[open] .gbar .gchev { transform: rotate(180deg); }
 .guide[open] .gbar { border-bottom: 1px solid var(--border); }
 @media (prefers-reduced-motion: reduce) { .gbar .gchev { transition: none; } }
-/* Club updates (4 Nov 2026): the guide's look, open rather than folded. */
-.lc.updates { border-left-color: var(--primary); }
-.updates dl { margin: 0 0 12px; }
-.updates dt { font-weight: 600; margin-top: 10px; }
-.updates dd { margin: 2px 0 0; color: var(--muted); }
-.updates .gdone { display: block; margin: 0 auto; }
+/* Club updates (4 Nov 2026): the guide's look - and since 7 Nov 2026
+   folded as Home's guide is, a slim strip that opens to the news. */
+.guide.updates .gdone { margin: 0 auto 14px; }
 /* The results page's penalty chip: numbers only, never the reason. */
 .chip { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: 0.72rem;
         font-weight: 700; color: var(--bad); border: 1px solid var(--bad); vertical-align: 1px; }
@@ -7549,6 +7551,8 @@ function updatesMark(parts) {
   return h.toString(36);
 }
 
+let updatesOpen = false;
+
 function drawUpdates() {
   const into = document.getElementById('up');
   if (!into) return;
@@ -7559,11 +7563,38 @@ function drawUpdates() {
   into.textContent = '';
   if (gone || parts.length === 0) return;
 
-  const card = document.createElement('section');
-  card.className = 'lc updates';
-  const h = document.createElement('h3');
-  h.textContent = 'Club updates';
-  card.appendChild(h);
+  // FOLDED LIKE THE GUIDE (7 Nov 2026, Asher: "the club notes card should
+  // be small and expand like the newcomer card"): one short strip - an
+  // icon, Club updates, how many and how long they take - that opens to
+  // the whole news, and stays as it was left while this page is open.
+  const card = document.createElement('details');
+  card.className = 'guide updates';
+  card.open = updatesOpen;
+  card.addEventListener('toggle', () => { updatesOpen = card.open; });
+  const bar = document.createElement('summary');
+  bar.className = 'gbar';
+  const icon = document.createElement('span');
+  icon.className = 'gico';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 10v4h3l6 4V6L7 10H4zM16 9a4 4 0 0 1 0 6"/></svg>';
+  bar.appendChild(icon);
+  const text = document.createElement('span');
+  text.className = 'gtx';
+  const title = document.createElement('b');
+  title.textContent = 'Club updates';
+  text.appendChild(title);
+  const words = parts.map((p) => p.join(' ')).join(' ').split(' ').filter(Boolean).length;
+  const sub = document.createElement('span');
+  sub.className = 'gsub';
+  sub.textContent = parts.length + (parts.length === 1 ? ' update' : ' updates') + ' \\u00b7 ' + Math.max(1, Math.ceil(words / 200)) + ' min read';
+  text.appendChild(sub);
+  bar.appendChild(text);
+  const chev = document.createElement('span');
+  chev.className = 'gchev';
+  chev.setAttribute('aria-hidden', 'true');
+  chev.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>';
+  bar.appendChild(chev);
+  card.appendChild(bar);
 
   const list = document.createElement('dl');
   for (const pair of parts) {
@@ -8128,12 +8159,14 @@ export function homePage(club: string, clubName: string, context: PageContext = 
     // Tonight in numbers, Moments, Season at a glance and Sponsor of the
     // night - each hidden until it has something to say - and New here?
     // further down, for the visitor who has scrolled to find out more.
-    // The first-night guide first of all (6 Nov 2026), in "gd".
+    // The first-night guide first of all (6 Nov 2026), in "gd", and the
+    // club's updates ("up") right under it since 7 Nov 2026 (Asher: "move
+    // club notes to right below newcomer card") - two slim strips together.
     body:
       '<div id="gd"></div>' +
+      '<div id="up"></div>' +
       '<section class="lc" id="mine" hidden></section>' +
       `<div id="now" data-when="${escapeHtml(n.when)}"><p class="note">Loading&hellip;</p></div>` +
-      '<div id="up"></div>' +
       // No "Check in: tap Me and type your PIN" line any more (5 Nov 2026,
       // Asher: "remove open your night and check in from home screen"):
       // checking in is on Me, a tap away on the bar.
