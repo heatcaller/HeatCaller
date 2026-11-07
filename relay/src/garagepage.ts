@@ -428,6 +428,9 @@ const view = {
   // The Manage sheet: '' shut, a car's id, or 'add' for a new car.
   sheet: '', taggedRaces: false,
   layout: '', chart: 'fade', history: false,
+  // Which saved setup each car's sheet starts from, by car id: a setup's
+  // id, 'blank', or absent for the newest.
+  setupFrom: {},
 };
 
 function section(name, id, keyOf, build) {
@@ -1843,13 +1846,42 @@ function buildSetup(box, sec) {
   const key = 'setup-' + car.id;
   const body = el('div', 'su');
 
+  // START FROM ANY SAVED SETUP (7 Nov 2026, Asher: "add a setup sheet
+  // picker that pulls from the laptop to the setup card on the me tab"):
+  // the setups HeatCaller sent for this car - its last few, newest first -
+  // or a blank sheet, instead of only ever the newest. Picking one starts
+  // the form afresh from it; what is sent is still a new entry in the log.
+  const fromId = str(view.setupFrom[car.id]);
+  const from = fromId === 'blank' ? null : setups.find((s) => s.id === fromId) || newest;
+  if (setups.length > 0) {
+    const label = el('label', 'f', 'Start from');
+    const pick = document.createElement('select');
+    const choices = setups.map((s, i) => [s.id, [when(s.at) || 'Setup', str(s.track), str(s.raceLabel)].filter(Boolean).join(' · ') + (i === 0 ? ' (latest)' : '')])
+      .concat([['blank', 'A blank sheet']]);
+    for (const [v, words] of choices) {
+      const o = document.createElement('option');
+      o.value = v;
+      o.textContent = words;
+      pick.appendChild(o);
+    }
+    pick.value = from ? from.id : 'blank';
+    pick.addEventListener('change', () => {
+      view.setupFrom[car.id] = String(pick.value || '');
+      drop(form);
+      paint(sec, true);
+    });
+    label.appendChild(pick);
+    body.appendChild(label);
+  }
+
   if (sheet) {
-    const start = valuesOf(newest);
-    body.appendChild(el('p', 'when', newest
-      ? 'Started from your last setup (' + when(newest.at) + '). Change what you changed.'
+    const start = valuesOf(from);
+    body.appendChild(el('p', 'when', from
+      ? (from === newest ? 'Started from your last setup (' + when(from.at) + ').' : 'Started from your setup of ' + (when(from.at) || 'before') + '.') + ' Change what you changed.'
       : 'The ' + (str(sheet.name) || 'club') + ' setup sheet.'));
     const fields = fieldsOf(sheet);
-    const canFix = !!newest && newest.editable === true;
+    // Fixing the last entry is only offered while the sheet is that entry.
+    const canFix = !!newest && from === newest && newest.editable === true;
     const fix = canFix && val(form, 'fix', false) === true;
     if (canFix) {
       tickBox(body, sec, form, 'fix', 'Fix my last entry (' + when(newest.at) + ') instead of adding a new one', false, (on) => {
@@ -1897,7 +1929,7 @@ function buildSetup(box, sec) {
     }));
   } else {
     body.appendChild(el('p', 'when', 'This car has no setup sheet at the club, so this is the short setup log.'));
-    const start = valuesOf(newest);
+    const start = valuesOf(from);
     for (const [k, words] of LEGACY) textBox(body, sec, form, k, words, start[k] || '', 80);
     textBox(body, sec, form, 'notes', 'Notes', '', 300, { long: true });
     body.appendChild(tapButton('Add to my setup log', 'go', async () => {

@@ -476,6 +476,37 @@ describe("garage page: what it sends", () => {
     });
   });
 
+  it("Start from: any saved setup HeatCaller sent, or a blank sheet (7 Nov 2026)", async () => {
+    const OLDER = "66666666666666666666666666666666";
+    const stored = garage();
+    const cars = stored["cars"] as Record<string, unknown>[];
+    (cars[0]!["setups"] as Record<string, unknown>[]).push({
+      id: OLDER, at: "2026-10-20T18:00:00Z", track: "Club layout", race: null, raceLabel: "",
+      values: { "front-spring": "Medium", ride: "5" }, notes: "", fromPhone: false, editable: false,
+    });
+    const page = await open(relay({ read: () => ({ status: 200, body: { ok: true, garage: stored, asks: [] } }) }));
+    const pick = () => field(page.get("gs"), /^Start from/);
+    assert.equal(pick().value, SETUP1, "the newest to begin with");
+    assert.equal(field(page.get("gs"), /^Front spring/).value, "Soft");
+    assert.ok(page.get("gs").textContent.includes("Fix my last entry"));
+
+    type(field(page.get("gs"), /^Front spring/), "Hard");
+    type(pick(), OLDER);
+    const box = page.get("gs");
+    assert.equal(pick().value, OLDER);
+    assert.equal(field(box, /^Front spring/).value, "Medium", "the older setup, the typing gone");
+    assert.match(box.textContent, /Started from your setup of/);
+    assert.ok(!box.textContent.includes("Fix my last entry"), "no fixing the last entry from another one");
+    await press(page, box, /^Add to my setup log$/);
+    const f = asks(page)[0]?.body["f"] as Record<string, string>;
+    assert.equal(f["v.front-spring"], "Medium");
+    assert.equal(f["v.ride"], "5");
+    assert.equal(f["entry"], undefined, "a new entry, not a fix");
+
+    type(pick(), "blank");
+    assert.equal(field(page.get("gs"), /^Front spring/).value, "");
+  });
+
   it("bug hunt 11: a tick HeatCaller stored as \"true\" starts ticked and goes back as Yes", async () => {
     const stored = garage();
     const cars = stored["cars"] as Record<string, unknown>[];
