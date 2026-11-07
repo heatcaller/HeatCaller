@@ -6,7 +6,7 @@ import { FakePage, pageParts, type Answerer, type FakeNode } from "./driverexp-r
 
 /**
  * RELAY NAVIGATION, ROUND 3 (29 Oct 2026): the little links. Watch live or
- * See the running order on the night's Right now card, Your next race on
+ * See the running order on the night's moment card (the Right now card's until 6 Nov 2026), Your next race on
  * Home for a phone that remembers its driver, and Go to Me after sign-up.
  */
 
@@ -37,6 +37,13 @@ function links(under: FakeNode): { words: string; href: string | null }[] {
 }
 
 describe("relay navigation, round 3: Watch live and the running order on the night", () => {
+  // On Me's moment card since 6 Nov 2026, when the Alerts card lost its
+  // first lines (the race, its slot, its countdown and these links).
+  function hero(page: FakePage): FakeNode {
+    page.eval("meMoment()");
+    return page.get("me-moment");
+  }
+
   async function openNight(next: unknown): Promise<FakePage> {
     const { html, script } = pageParts(nightPage("acme-rc", "Acme RC"));
     const page = new FakePage(html, relay(next), { hash: `#d=${CODE}` });
@@ -47,19 +54,21 @@ describe("relay navigation, round 3: Watch live and the running order on the nig
 
   it("offers Watch live while their race is on track", async () => {
     const page = await openNight({ race: "Q2 Heat 1", away: 0, now: true });
-    assert.deepEqual(links(page.get("lv")), [{ words: "Watch live", href: "/c/acme-rc/live" }]);
+    assert.deepEqual(links(hero(page)), [{ words: "Watch live", href: "/c/acme-rc/live" }]);
   });
 
   it("offers See the running order while it is next, staged or not", async () => {
     for (const next of [{ race: "Q2 Heat 1", away: 0 }, { race: "Q2 Heat 1", away: 0, staged: true }]) {
       const page = await openNight(next);
-      assert.deepEqual(links(page.get("lv")), [{ words: "See the running order", href: "/c/acme-rc/schedule" }]);
+      assert.deepEqual(links(hero(page)), [{ words: "See the running order", href: "/c/acme-rc/schedule" }]);
     }
   });
 
   it("offers neither for a race further off, or no race in the next few", async () => {
-    assert.deepEqual(links((await openNight({ race: "Q2 Heat 1", away: 3 })).get("lv")), []);
-    assert.deepEqual(links((await openNight(null)).get("lv")), []);
+    assert.deepEqual(links(hero(await openNight({ race: "Q2 Heat 1", away: 3 }))), []);
+    assert.deepEqual(links(hero(await openNight(null))), []);
+    // And the Alerts card has neither, whatever the race is doing.
+    assert.deepEqual(links((await openNight({ race: "Q2 Heat 1", away: 0 })).get("lv")), []);
   });
 
   it("follows the race as it moves: next, then on track", async () => {
@@ -69,12 +78,12 @@ describe("relay navigation, round 3: Watch live and the running order on the nig
     page.run(script);
     await page.settle();
 
-    assert.equal(links(page.get("lv"))[0]?.words, "See the running order");
+    assert.equal(links(hero(page))[0]?.words, "See the running order");
 
     next = { race: "Q2 Heat 1", away: 0, now: true };
     await page.advance(30000);
 
-    assert.equal(links(page.get("lv"))[0]?.words, "Watch live");
+    assert.equal(links(hero(page))[0]?.words, "Watch live");
   });
 });
 

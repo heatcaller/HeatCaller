@@ -62,9 +62,15 @@ describe("night: null with a live entry", () => {
       live: { at: "2026-10-22T19:00:00Z", next: { race: "Q2 Heat 1 (Stock Buggy)", away: 2, slot: 3, now: false, words: "2 races before yours" } },
     }));
 
-    const lv = page.get("lv").textContent;
-    assert.match(lv, /2 races before yours/);
-    assert.match(lv, /Q2 Heat 1 \(Stock Buggy\) · grid slot 3/);
+    // The race, how far off it is and the grid slot are on Me's moment card
+    // since 6 Nov 2026; the card under it is Alerts.
+    page.eval("meMoment()");
+    const hero = page.get("me-moment").textContent;
+    assert.match(hero, /Q2 Heat 1 \(Stock Buggy\)/);
+    assert.match(hero, /2 races before yours/);
+    assert.match(hero, /Grid3rd/);
+    assert.match(page.get("lv").textContent, /^Alerts/);
+    assert.doesNotMatch(page.get("lv").textContent, /Q2 Heat 1|grid slot/);
     assert.match(page.get("nt").textContent, /Nothing is filed for you yet tonight/);
     assert.doesNotMatch(page.get("nt").drawn(), /No night was found/);
   });
@@ -138,11 +144,11 @@ describe("the live poll", () => {
     let entry: unknown = { next: { race: "Q1 Heat 2", away: 1 } };
     const page = await open(relay({ ok: true, night: night(), live: entry }, { poll: () => ({ ok: true, ...(entry ? { live: entry } : {}) }) }));
 
-    assert.match(page.get("lv").textContent, /Q1 Heat 2/);
+    assert.match(page.get("lv").textContent, /^Alerts/);
     entry = undefined;
     await page.advance(20000);
 
-    assert.doesNotMatch(page.get("lv").textContent, /Q1 Heat 2/);
+    assert.equal(page.get("lv").textContent, "");
     assert.match(page.get("nt").drawn(), /Bill raced twice/);
   });
 
@@ -163,10 +169,13 @@ describe("the live poll", () => {
     page.run(script);
     await page.settle();
 
-    assert.match(page.get("lc-eta").textContent, /^about 7 min \(/);
+    // On Me's moment card since 6 Nov 2026, redrawn with every poll.
+    page.eval("meMoment()");
+    assert.match(page.get("me-moment").textContent, /about 7 min \(/);
 
     await page.advance(120000);
-    assert.match(page.get("lc-eta").textContent, /^about 5 min \(/);
+    page.eval("meMoment()");
+    assert.match(page.get("me-moment").textContent, /about 5 min \(/);
   });
 });
 
@@ -287,17 +296,17 @@ describe("check-in from the night page", () => {
     assert.equal(page.button(page.get("lv"), /Check in/), undefined);
   });
 
-  it("has no Check in button on the Right now card, open or not", async () => {
+  it("has no Check in button on the Alerts card, open or not", async () => {
     const page = await open(relay({ ok: true, night: night(), live: { next: { race: "A", away: 1 } } }, {
       one: { status: 200, body: { ok: true, driver: { id: CODE, name: "Bill", checkedIn: false }, nights: true } },
     }));
 
     assert.equal(page.eval("ci.shown"), true);
-    assert.match(page.get("lv").textContent, /Right now/);
+    assert.match(page.get("lv").textContent, /Alerts/);
     assert.equal(page.button(page.get("lv"), /Check(ed)? in/), undefined);
   });
 
-  it("draws no Right now card before they have a live entry", async () => {
+  it("draws no Alerts card before they have a live entry", async () => {
     const page = await open(relay({ ok: true, night: night() }, {
       one: { status: 200, body: { ok: true, driver: { id: CODE, name: "Bill", checkedIn: false }, nights: true } },
     }));
@@ -387,46 +396,16 @@ describe("the first-night guide", () => {
     ["the night", { ok: true, night: night({ firstNight: true }) }],
     ["the live entry", { ok: true, night: null, live: { firstNight: true } }],
   ] as const) {
-    it(`appears when ${what} says so`, async () => {
+    // Off Me since 6 Nov 2026 (Asher: "remove first night card from me
+    // tab"): Home has it for everybody, and the check-in page for a new driver.
+    it(`is not on Me even when ${what} says it is their first night`, async () => {
       const page = await open(relay(body));
-      const guide = page.get("gd").find((n) => n.tagName === "DETAILS")[0];
 
-      assert.ok(guide, "a collapsible guide");
-      assert.match(guide.textContent, /Your first night/);
-      assert.match(guide.textContent, /Marshal after your race/);
-      assert.match(guide.textContent, /jump start/);
+      assert.equal(page.eval("document.getElementById('gd') === null"), true, "no place for it");
+      assert.doesNotMatch(page.get("lv").textContent, /first night/i);
+      assert.doesNotMatch(page.get("nt").textContent, /Marshal after your race/);
     });
   }
-
-  it("is not there otherwise", async () => {
-    const page = await open(relay({ ok: true, night: night(), live: { next: { race: "A", away: 1 } } }));
-
-    assert.equal(page.get("gd").find((n) => n.tagName === "DETAILS").length, 0);
-    assert.doesNotMatch(page.get("gd").textContent, /first night/i);
-  });
-
-  it("stays open across the poll's redraws once opened", async () => {
-    const page = await open(relay({ ok: true, night: null, live: { firstNight: true } }, { poll: () => ({ ok: true, live: { firstNight: true } }) }));
-    const guide = page.get("gd").find((n) => n.tagName === "DETAILS")[0]!;
-
-    guide.open = true;
-    guide.fire("toggle");
-    await page.advance(20000);
-
-    assert.equal(page.get("gd").find((n) => n.tagName === "DETAILS")[0]!.open, true);
-  });
-
-  it("goes for good once they tap Got it, poll or no poll", async () => {
-    const page = await open(relay({ ok: true, night: null, live: { firstNight: true } }, { poll: () => ({ ok: true, live: { firstNight: true } }) }));
-    const done = page.button(page.get("gd"), /^Got it/);
-
-    assert.ok(done, "a way to put it away once read");
-    done.click();
-    assert.equal(page.get("gd").find((n) => n.tagName === "DETAILS").length, 0);
-
-    await page.advance(20000);
-    assert.equal(page.get("gd").find((n) => n.tagName === "DETAILS").length, 0, "the next redraw leaves it gone");
-  });
 });
 
 describe("the night's own extras", () => {
@@ -797,20 +776,23 @@ describe("against R1's relay", () => {
     page.run(script);
     await page.settle();
 
+    // Alerts since 6 Nov 2026: the race itself is on the moment card above,
+    // which offers Check in first while they have not.
     const lv = page.get("lv").textContent;
-    assert.match(lv, /You're up next/);
-    assert.match(lv, /Q2 Heat 1 \(Stock Buggy\) · grid slot 3/);
-    assert.match(lv, /about 7 min/);
+    assert.match(lv, /^Alerts/);
+    assert.doesNotMatch(lv, /You're up next|grid slot/);
     assert.match(lv, /Turn 3/);
     assert.match(lv, /Last seen at/);
-    assert.match(page.get("gd").textContent, /Your first night/, "the guide, under their name");
+    assert.equal(page.eval("document.getElementById('gd') === null"), true, "no first-night guide on Me");
     assert.equal(page.eval("ci.shown"), true, "checkin/one said check-in is open");
-    assert.equal(page.button(page.get("lv"), /Check in/), undefined, "offered on the moment card, not Right now");
+    assert.equal(page.button(page.get("lv"), /Check in/), undefined, "offered on the moment card, not Alerts");
+    page.eval("meMoment()");
+    assert.ok(page.button(page.get("me-moment"), /Check in/), "the moment card offers it");
     assert.match(page.get("nt").textContent, /Nothing is filed for you yet/);
 
     // And the live poll reads the same entry.
     await page.advance(20000);
     assert.ok(page.sent.some((s) => s.body["part"] === "live"));
-    assert.match(page.get("lv").textContent, /You're up next/);
+    assert.match(page.get("lv").textContent, /Turn 3/);
   });
 });

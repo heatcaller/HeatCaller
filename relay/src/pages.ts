@@ -571,6 +571,18 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .guide dt { font-weight: 600; margin-top: 10px; }
 .guide dd { margin: 2px 0 0; color: var(--muted); }
 .guide .gdone { display: block; margin: 0 auto 4px; }
+/* Home's slim banner (6 Nov 2026): flag, two lines, a chevron that turns. */
+.guide summary.gbar { flex-wrap: nowrap; align-items: center; gap: 12px; min-height: 44px; padding: 10px 16px; font-weight: 400; }
+.gbar .gico, .gbar .gchev { flex: none; display: flex; }
+.gbar svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.gbar .gico { color: var(--primary); }
+.gbar .gtx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.gbar .gtx b { font-weight: 600; }
+.gbar .gsub { color: var(--muted); font-size: 0.85rem; }
+.gbar .gchev { color: var(--muted); transition: transform 0.2s; }
+.guide[open] .gbar .gchev { transform: rotate(180deg); }
+.guide[open] .gbar { border-bottom: 1px solid var(--border); }
+@media (prefers-reduced-motion: reduce) { .gbar .gchev { transition: none; } }
 /* Club updates (4 Nov 2026): the guide's look, open rather than folded. */
 .lc.updates { border-left-color: var(--primary); }
 .updates dl { margin: 0 0 12px; }
@@ -1016,6 +1028,12 @@ a.more { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
 details.done summary .title { color: var(--muted); }
 details.running { border-color: var(--good); }
 .lineup { padding: 4px 16px 14px; color: var(--muted); font-size: 0.9rem; }
+/* A race's grid, opened from the running order (6 Nov 2026): slot, driver,
+   car. The car wraps rather than pushing the card wider than a phone. */
+.sgrid-wrap { padding: 0 0 8px; border-top: 1px solid var(--border); }
+table.sgrid td { padding: 8px 16px; }
+table.sgrid td.scar { white-space: normal; color: var(--muted); }
+table.sgrid tr.me td { background: var(--row-alt); }
 .tm { font-variant-numeric: tabular-nums; color: var(--accent); min-width: 3.5rem; }
 .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 4px; }
 .tools select, .tools input { margin-bottom: 0; }
@@ -1304,8 +1322,26 @@ footer .links:has(a.soc) { gap: 4px 8px; }
 }
 `;
 
+/**
+ * NO PINCH OR DOUBLE-TAP ZOOM (6 Nov 2026, Asher: "don't allow for pinch
+ * and zoom on relay"): the pages are laid out for a phone already, and a
+ * pinch at the track left drivers stuck half-zoomed on a board that is
+ * meant to fit. Three parts, because no one of them is enough everywhere:
+ * the viewport tag (Android browsers), touch-action on the page (pinch and
+ * double-tap on Chrome and newer Safari), and NO_ZOOM_JS (Safari on an
+ * iPhone, which ignores user-scalable=no by design). maximum-scale=1 also
+ * stops Safari zooming into a box with small text the moment it is tapped.
+ */
+const NO_ZOOM_HEAD = `<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<style>html { touch-action: pan-x pan-y; }</style>`;
+
+const NO_ZOOM_JS = `
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+document.addEventListener('gesturechange', (e) => e.preventDefault());
+`;
+
 /** Shared by every page: escaping, time formatting, and polling that stops when nobody is looking. */
-const COMMON_JS = `
+const COMMON_JS = NO_ZOOM_JS + `
 const CLUB = document.body.dataset.club;
 // What a person reads, where CLUB is what addresses are built from. Only
 // the night's card draws it so far; it is here rather than in that page's
@@ -1679,9 +1715,26 @@ function meForget() {
 // the PIN instead of opening it again (meSignedOut).
 const ME_OUT_KEY = 'hg-me-out-' + CLUB;
 const ME_LEFTOVERS = ['hg-me-seen-' + CLUB, 'hg-charge-' + CLUB, 'hg-me-space', 'hg-night-order', 'hg-night-just-me',
-  'hg-night-hide-runs', 'hg-nighttalk-' + CLUB, 'hg-nighttalk-short-' + CLUB, 'hg-nighttalk-say-' + CLUB];
+  'hg-night-hide-runs', 'hg-nighttalk-' + CLUB, 'hg-nighttalk-short-' + CLUB, 'hg-nighttalk-say-' + CLUB, 'hc-alerts:' + CLUB];
+
+// Signing out stops this phone's push alerts too (6 Nov 2026): the relay
+// forgets it for that driver, and the phone drops its push address.
+function meStopPush(code) {
+  try {
+    if (!/^[0-9a-f]{20}$/.test(String(code)) || !('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.getRegistration('/c/' + encodeURIComponent(CLUB) + '/sw.js').then((reg) => reg ? reg.pushManager.getSubscription() : null).then((sub) => {
+      if (!sub) return;
+      fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/push/unsubscribe', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: String(code), sub: { endpoint: sub.endpoint } }),
+      }).catch(() => {}).then(() => sub.unsubscribe());
+    }).catch(() => {});
+  } catch (e) { /* the relay drops a phone the push service says is gone */ }
+}
 
 function meSignOut(code) {
+  meStopPush(code);
   meForget();
   for (const k of ME_LEFTOVERS) {
     try { localStorage.removeItem(k); } catch (e) { /* nothing was kept */ }
@@ -2143,7 +2196,7 @@ export function shell(page: Shell, context: PageContext): string {
 <html lang="en" class="${look.light ? "light" : "dark"}${sunset ? " synthwave" : ""}">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+${NO_ZOOM_HEAD}
 <meta name="color-scheme" content="${look.light ? "light" : "dark"}">
 <meta name="theme-color" content="${look.themeColor}">${page.noindex === true ? `
 <meta name="robots" content="noindex, nofollow">` : ""}
@@ -8178,6 +8231,26 @@ function lateWords(late) {
   return late > 0 ? 'Running ' + late + ' min behind' : 'Running ' + (-late) + ' min ahead';
 }
 
+// TAP A RACE FOR ITS GRID (6 Nov 2026, Asher): an opened race shows who
+// starts where and in what car, a row each, when the laptop sends the grid;
+// a laptop from before then sends only the names, which stay a plain list.
+function lineupHtml(l, drivers, q) {
+  const grid = Array.isArray(l.grid) ? l.grid.filter((g) => g && g.name) : [];
+  if (grid.length > 0) {
+    const anyCar = grid.some((g) => g.car);
+    return '<div class="sgrid-wrap"><table class="sgrid"><thead><tr><th class="pos">Grid</th><th>Driver</th>' +
+      (anyCar ? '<th>Car</th>' : '') + '</tr></thead><tbody>' +
+      grid.map((g) => {
+        const who = hit(g.name, q) ? '<mark>' + nm(g.name) + '</mark>' : nm(g.name);
+        return '<tr' + (hit(g.name, q) ? ' class="me"' : '') + '><td class="pos">' + esc(Number(g.slot) > 0 ? g.slot : '') + '</td>' +
+          '<td>' + who + '</td>' + (anyCar ? '<td class="scar">' + (g.car ? esc(g.car) : '&ndash;') + '</td>' : '') + '</tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  return drivers.length > 0
+    ? '<div class="lineup">' + drivers.map((n) => hit(n, q) ? '<mark>' + nm(n) + '</mark>' : nm(n)).join(', ') + '</div>'
+    : '';
+}
+
 function draw() {
   if (doc === null) return;
 
@@ -8225,9 +8298,7 @@ function draw() {
       '<span class="winner">' +
         (drivers.length > 0 ? '<span class="when">' + drivers.length + (drivers.length === 1 ? ' driver' : ' drivers') + '</span> ' : '') +
         pill + '</span></summary>' +
-      (drivers.length > 0
-        ? '<div class="lineup">' + drivers.map((n) => hit(n, q) ? '<mark>' + nm(n) + '</mark>' : nm(n)).join(', ') + '</div>'
-        : '') +
+      lineupHtml(l, drivers, q) +
       '</details>';
   }).join('');
 }
@@ -8705,8 +8776,47 @@ const GUIDE_KEY = 'hc-guide-done:' + CLUB + ':' + guideMark(GUIDE);
 let guideDone = false;
 try { guideDone = localStorage.getItem(GUIDE_KEY) === '1'; } catch (e) { /* shown, then */ }
 
-// The guide, or null once they have tapped Got it.
-function firstNightGuide() {
+// How long the guide takes to read, in whole minutes (about 200 words a
+// minute, never under one).
+function guideMinutes(parts) {
+  const words = parts.map((p) => p.join(' ')).join(' ').split(/\\s+/).filter(Boolean).length;
+  return Math.max(1, Math.ceil(words / 200));
+}
+
+// THE SLIM BANNER ON HOME (6 Nov 2026, Asher picked option A of five): Home
+// is opened by regulars too, so folded the guide is one short strip - a
+// flag, "New here?", how many parts and how long they take - that opens to
+// the whole guide. The check-in and night pages, which only show it to a
+// driver the laptop says is new, keep their plain heading.
+function guideBar(s) {
+  s.className = 'gbar';
+  const flag = document.createElement('span');
+  flag.className = 'gico';
+  flag.setAttribute('aria-hidden', 'true');
+  flag.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>';
+  s.appendChild(flag);
+
+  const text = document.createElement('span');
+  text.className = 'gtx';
+  const title = document.createElement('b');
+  title.textContent = 'New here?';
+  text.appendChild(title);
+  const sub = document.createElement('span');
+  sub.className = 'gsub';
+  sub.textContent = GUIDE.length + (OWN_GUIDE.length > 0 ? ' things to know' : ' club rules') +
+    ' \\u00b7 ' + guideMinutes(GUIDE) + ' min read';
+  text.appendChild(sub);
+  s.appendChild(text);
+
+  const chev = document.createElement('span');
+  chev.className = 'gchev';
+  chev.setAttribute('aria-hidden', 'true');
+  chev.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>';
+  s.appendChild(chev);
+}
+
+// The guide, or null once they have tapped Got it. Slim: Home's banner.
+function firstNightGuide(slim) {
   if (guideDone) return null;
   const d = document.createElement('details');
   d.className = 'guide';
@@ -8714,7 +8824,7 @@ function firstNightGuide() {
   d.addEventListener('toggle', () => { guideOpen = d.open; });
 
   const s = document.createElement('summary');
-  s.textContent = 'Your first night - what happens';
+  if (slim) guideBar(s); else s.textContent = 'Your first night - what happens';
   d.appendChild(s);
 
   const list = document.createElement('dl');
@@ -8778,7 +8888,7 @@ function firstNightGuide() {
 const HOME_GUIDE_JS = GUIDE_JS + `
 (function () {
   const at = document.getElementById('gd');
-  const guide = at ? firstNightGuide() : null;
+  const guide = at ? firstNightGuide(true) : null;
   if (guide) at.appendChild(guide);
 })();
 `;
@@ -10220,13 +10330,109 @@ function dutyKey(m) {
   return m && typeof m === 'object' && typeof m.race === 'string' ? m.race + '|' + num(m.away) : 'none';
 }
 
-// The phone's own notice, only while the page is out of sight and only
-// when the driver said yes to them: in sight, the toast and the buzz say it.
-function notice(title, body) {
+// PUSH ALERTS (6 Nov 2026, Asher: "Build real push alerts") - see push.ts
+// on the relay. The page's own beep only ever worked while it was open on
+// screen, and the phone's notice it tried for a page out of sight could
+// never fire: the page stops polling once hidden, and phones refuse a
+// notice made that way. Now "Turn on alerts" signs this phone up with the
+// relay, which sends the phone's own notification - locked, in a pocket,
+// page closed. On an iPhone only from the page on the Home Screen.
+// pushState: '' not tried, 'waiting', 'on', 'blocked' (said no, or turned
+// off in settings), 'install' (an iPhone outside the Home Screen app),
+// 'unsupported', 'failed'.
+let pushState = '';
+const ALERTS_KEY = 'hc-alerts:' + CLUB;
+
+function keyBytes(text) {
+  const s = String(text).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(s + '='.repeat((4 - s.length % 4) % 4));
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+function pushSupported() {
+  return typeof navigator === 'object' && 'serviceWorker' in navigator && typeof window.PushManager !== 'undefined' && typeof Notification === 'function';
+}
+
+function workerUrl() {
+  return '/c/' + encodeURIComponent(CLUB) + '/sw.js';
+}
+
+// Signs this phone up. Asks for permission first and at once, inside the
+// tap - an iPhone only asks from a tap.
+function pushOn() {
+  if (!pushSupported()) {
+    pushState = /iPhone|iPad|iPod/.test(navigator.userAgent || '') ? 'install' : 'unsupported';
+    return;
+  }
+
+  let asked = null;
+  try { asked = Notification.requestPermission(); } catch (e) { asked = null; }
+  pushState = 'waiting';
+
+  Promise.resolve(asked).then(async (answer) => {
+    const perm = answer || Notification.permission;
+    if (perm !== 'granted') { pushState = 'blocked'; drawLive(); return; }
+    try {
+      await navigator.serviceWorker.register(workerUrl());
+      const reg = await navigator.serviceWorker.ready;
+      const k = await fetch(API + '/push/key', { cache: 'no-store' }).then((r) => r.json());
+      if (!k || typeof k.key !== 'string') throw new Error('no key');
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(k.key) });
+      const a = await post('/push/subscribe', { id: CODE, sub: sub.toJSON() });
+      pushState = a.status === 200 ? 'on' : 'failed';
+    } catch (e) {
+      pushState = 'failed';
+    }
+    drawLive();
+  });
+}
+
+// Takes this phone off: the relay forgets it, and so does the phone.
+async function pushOff() {
+  pushState = '';
+  if (!pushSupported()) return;
   try {
-    if (!document.hidden || typeof Notification !== 'function' || Notification.permission !== 'granted') return;
-    new Notification(title, { body: body, tag: 'hc-' + CLUB });
-  } catch (e) { /* the buzz still went */ }
+    const reg = await navigator.serviceWorker.getRegistration(workerUrl());
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    if (!sub) return;
+    await post('/push/unsubscribe', { id: CODE, sub: { endpoint: sub.endpoint } });
+    await sub.unsubscribe();
+  } catch (e) { /* the relay drops a phone the push service says is gone */ }
+}
+
+// A phone that turned alerts on before: on again, and signed up again
+// quietly where it still is - a push address can change under it.
+async function pushResume() {
+  try { alertsOn = localStorage.getItem(ALERTS_KEY) === '1'; } catch (e) { alertsOn = false; }
+  if (!alertsOn) return;
+  if (!pushSupported()) { pushState = /iPhone|iPad|iPod/.test(navigator.userAgent || '') ? 'install' : 'unsupported'; return; }
+  if (Notification.permission !== 'granted') { pushState = Notification.permission === 'denied' ? 'blocked' : ''; return; }
+  try {
+    const reg = await navigator.serviceWorker.getRegistration(workerUrl());
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    if (!sub) { pushState = ''; return; }
+    const a = await post('/push/subscribe', { id: CODE, sub: sub.toJSON() });
+    pushState = a.status === 200 ? 'on' : 'failed';
+  } catch (e) {
+    pushState = 'failed';
+  }
+  drawLive();
+}
+
+// What the card says under the switch.
+function alertsWords() {
+  const what = 'when your race is next, when it is staged, ' + alertsAlso();
+  if (!alertsOn) return 'Your phone tells you ' + what;
+  if (pushState === 'on') return 'Your phone will tell you ' + what + ' Even with this page closed and the phone locked.';
+  if (pushState === 'waiting') return 'Setting up alerts on this phone...';
+  if (pushState === 'install') return 'On an iPhone, alerts with this page closed need it on your Home Screen: tap Share, then Add to Home Screen, open it from there and turn alerts on. Until then keep this page open - it beeps ' + what;
+  if (pushState === 'blocked') return 'Notifications are turned off for this site in your phone\\'s settings, so only this page can beep - keep it open. It beeps ' + what;
+  if (pushState === 'unsupported') return 'This browser cannot alert you with the page closed. Keep this page open - it beeps ' + what;
+  if (pushState === 'failed') return 'Alerts with the page closed could not be set up just now - tap off and on to try again. Until then keep this page open - it beeps ' + what;
+  return 'Keep this page open. It beeps ' + what;
 }
 
 // The rest of what alerts cover, as the card says it: marshal duty only for
@@ -10236,10 +10442,11 @@ function alertsAlso() {
   return (m && typeof m === 'object' && typeof m.race === 'string' && m.race !== '' ? 'when your marshal duty is next ' : '') + 'and when your result is in.';
 }
 
+// On the page while it is open; the relay's push says it with the page
+// closed (pushOn).
 function alertNow(title, body) {
   buzz();
   toast(title + (body ? ' - ' + body : ''));
-  notice(title, body);
 }
 
 // --- Lap times in my ear, on their own night (29 Oct 2026, asked for by
@@ -10734,15 +10941,20 @@ function toggleAlerts() {
     } catch (e) { audio = null; }
     lastKey = callKey(live && live.next);
     lastDuty = dutyKey(live && live.marshal);
-    try {
-      if (typeof Notification === 'function' && Notification.permission === 'default') Notification.requestPermission();
-    } catch (e) { /* buzz and toast only */ }
+    // The phone's own alerts, page closed or not (6 Nov 2026) - asked
+    // for here, inside the tap.
+    pushOn();
     buzz();
-    toast('Alerts on. Keep this page open on your screen.');
+    toast(pushState === 'install' || pushState === 'unsupported' ? 'Alerts on. Keep this page open on your screen.' : 'Alerts on.');
   } else {
     lastKey = '';
+    void pushOff();
     toast('Alerts off.');
   }
+
+  // Remembered on this phone, so a reload or another tab does not turn
+  // them off without saying.
+  try { localStorage.setItem(ALERTS_KEY, alertsOn ? '1' : '0'); } catch (e) { /* this visit only */ }
 
   drawLive();
 }
@@ -10888,24 +11100,19 @@ function liveCard() {
   const n = live && live.next && typeof live.next === 'object' ? live.next : null;
   const card = el('section', 'lc' + (n && n.staged === true ? ' staged' : n && n.now !== true && num(n.away) === 0 ? ' next' : ''));
 
-  card.appendChild(el('h3', '', 'Right now'));
+  // SETUP, NOT RIGHT NOW (6 Nov 2026, Asher: "remove top lines of right
+  // now card on me tonight. change the title of right now to Setup"): the
+  // race that is next, its grid slot, when it goes and the way to watch it
+  // were the card's first lines, and the moment card above already says
+  // all of them. What is left is getting ready: alerts, marshalling, the
+  // transponder and the pack. Qualifying moved up to the moment card too.
+  // Alerts since later on 6 Nov 2026 (Asher: "change setup on tonight tab
+  // to Alerts"): the alerts switch is the first thing on it.
+  card.appendChild(el('h3', '', 'Alerts'));
 
   if (live) {
-    if (n) {
-      card.appendChild(el('div', 'lc-big', callWords(n)));
-      card.appendChild(el('div', '', [n.race, num(n.slot) > 0 ? 'grid slot ' + num(n.slot) : ''].filter(Boolean).join(' · ')));
-      const eta = el('div', 'lc-eta', n.now === true ? '' : etaWords(n.eta, relayNow()));
-      eta.id = 'lc-eta';
-      card.appendChild(eta);
-      const go = goLink(n); if (go) card.appendChild(go);
-    } else {
-      card.appendChild(el('div', '', 'None of your races is in the next few on the running order.'));
-    }
-
     card.appendChild(tapButton(alertsOn ? 'Alerts on - tap to turn off' : 'Turn on alerts', 'go quiet' + (alertsOn ? ' on' : ''), toggleAlerts));
-    card.appendChild(el('div', 'when', alertsOn
-      ? 'Keep this page open. It beeps and buzzes when your race is next, when it is staged, ' + alertsAlso()
-      : 'Two beeps and a buzz when your race is next, when it is staged, ' + alertsAlso()));
+    card.appendChild(el('div', 'when', alertsWords()));
 
     const m = live.marshal;
 
@@ -10947,9 +11154,9 @@ function liveCard() {
       jobs.appendChild(pack);
     }
 
-    // Where they stand in qualifying (4 Nov 2026) - see qualMine.
-    const standing = qualPart();
-    if (standing) jobs.appendChild(standing);
+    // Where they stand in qualifying is on the moment card since 6 Nov 2026
+    // (Asher: "move the qualifying and best information on the right now
+    // card to the hero card above it") - see meQual in mespaces.ts.
   }
 
   if (jobs.children.length > 0) card.appendChild(jobs);
@@ -10986,14 +11193,11 @@ function drawLive() {
     }
   }
 
-  // The guide in its own place under their name where the page has one,
-  // else under the card. Null once they have tapped Got it.
-  const guideBox = document.getElementById('gd');
-  if (guideBox) guideBox.textContent = '';
-  const guide = firstNight ? firstNightGuide() : null;
-  if (guide) (guideBox || lvBox).appendChild(guide);
+  // No first-night guide on Me since 6 Nov 2026 (Asher: "remove first
+  // night card from me tab"): Home has it at the top for everybody, and
+  // the check-in page for a driver the laptop says is new.
 
-  // The jump bar has a Right now or Lap times button only while that card
+  // The jump bar has a Setup or Lap times button only while that card
   // is there.
   const now = (live ? 'n' : '') + (ears ? 'e' : '');
   if (now !== jumpNow) {
@@ -11751,7 +11955,7 @@ function drawJump() {
   at.textContent = '';
   // In the order of the cards (jumps, from arrange), each only while its
   // card is there: Right now and Lap times come and go with the live entry.
-  const names = { lv: 'Right now', ea: 'Lap times', 'n-races': 'Races', 'n-how': 'Report card', 'n-score': 'Driver score', 'n-prog': 'Progress', 'n-calls': 'Race calls' };
+  const names = { lv: 'Alerts', ea: 'Lap times', 'n-races': 'Races', 'n-how': 'Report card', 'n-score': 'Driver score', 'n-prog': 'Progress', 'n-calls': 'Race calls' };
   const list = jumps
     .filter((id) => hasCard(document.getElementById(id)))
     .map((id) => [id, names[id] || (carNames[id] || '')])
@@ -12089,7 +12293,7 @@ function nightPart(into, glanceInto, races, facts, coach, improve, progress, cli
 // mistake while scrolling a phone in the pits, and a button says what it
 // does to a screen reader.
 const ORDER_KEY = 'hg-night-order';
-const CARD_WORDS = { now: 'Right now', ear: 'Lap times in my ear', races: 'Races', how: 'Report card', score: 'Driver score', prog: 'Progress', reach: 'Achievements in reach', calls: 'Race calls' };
+const CARD_WORDS = { now: 'Alerts', ear: 'Lap times in my ear', races: 'Races', how: 'Report card', score: 'Driver score', prog: 'Progress', reach: 'Achievements in reach', calls: 'Race calls' };
 let cardOrder = [];
 try {
   const kept = JSON.parse(localStorage.getItem(ORDER_KEY) || '[]');
@@ -13205,8 +13409,11 @@ async function load() {
     return;
   }
 
+  // Alerts this phone turned on before (6 Nov 2026), before the first draw.
+  try { alertsOn = localStorage.getItem(ALERTS_KEY) === '1'; } catch (e) { /* off */ }
   paintNight();
   drawLive();
+  void pushResume();
   refreshAsks();
   startLive();
   loadCheckIn();
@@ -13340,7 +13547,7 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // the Garage folded in as a space ("me-garage", the Garage page's own
     // sections and script); the pack-swap sheet and the empty note at the foot.
     body: `<style>${ME_CSS}${GARAGE_CSS}</style>` +
-      '<div class="me-top" id="metop"><div class="me-si" id="mesi" hidden></div><div id="nh"></div></div><div id="nj"></div>' + ME_BODY_TOP + '<div id="gd"></div><div id="ng"></div>' +
+      '<div class="me-top" id="metop"><div class="me-si" id="mesi" hidden></div><div id="nh"></div></div><div id="nj"></div>' + ME_BODY_TOP + '<div id="ng"></div>' +
       '<div id="nx"><div id="lv"></div><div id="ea"></div></div><div id="nt"><p class="note">Loading&hellip;</p></div>' +
       GARAGE_EMBED_BODY + '<div id="yd"></div>' +
       '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>' + ME_BODY_END,
@@ -13563,7 +13770,7 @@ export function myNightPage(club: string, clubName: string, context: PageContext
  * (always false over the relay) to keep hiding the one further place it
  * matters: the per-round START button on the programme.
  */
-const MANAGE_JS = `
+const MANAGE_JS = NO_ZOOM_JS + `
 const CLUB = document.body.dataset.club;
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -14565,7 +14772,7 @@ export function managePage(club: string, clubName: string, context: PageContext 
 <html lang="en" class="${look.light ? "light" : "dark"}">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+${NO_ZOOM_HEAD}
 <meta name="color-scheme" content="${look.light ? "light" : "dark"}">
 <meta name="theme-color" content="${look.themeColor}">
 <meta name="robots" content="noindex, nofollow">
@@ -14865,7 +15072,7 @@ export function appShellPage(club: string, clubName: string, context: PageContex
 <html lang="en" class="hcshell ${look.light ? "light" : "dark"}">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+${NO_ZOOM_HEAD}
 <meta name="color-scheme" content="${look.light ? "light" : "dark"}">
 <meta name="theme-color" content="${look.themeColor}">
 <meta name="robots" content="noindex, nofollow">
@@ -15048,7 +15255,7 @@ function heatcallerNotice(title: string, inner: string): string {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+${NO_ZOOM_HEAD}
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#0D0820">
 <title>${title}</title>

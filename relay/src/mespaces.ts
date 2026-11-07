@@ -58,6 +58,11 @@ export const ME_CSS = `
 .me-mini div { background: color-mix(in srgb, var(--bg) 55%, transparent); border-radius: 12px; padding: 8px 10px; display: grid; gap: 2px; min-width: 0; }
 .me-mini small { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; }
 .me-mini b { font-size: 1.02rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+/* Qualifying on the moment card (6 Nov 2026), and what it takes to move up. */
+.me-qual { display: grid; gap: 6px; }
+.me-qual .me-mini { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.me-qual .me-mini b { overflow-wrap: normal; }
+.me-qual-up { color: var(--muted); font-size: 0.85rem; }
 .me-hero .acts { display: flex; gap: 8px; flex-wrap: wrap; }
 .me-hero .acts button { flex: 1 1 8rem; }
 
@@ -384,6 +389,28 @@ function meMini(pairs) {
   return box;
 }
 
+// WHERE THEY STAND IN QUALIFYING, ON THE MOMENT CARD (6 Nov 2026, Asher:
+// "move the qualifying and best information on the right now card to the
+// hero card above it"): their place, the main it puts them in and their
+// best qualifying run, with what it takes to move up under it. Found by
+// their cars' row tags (qualMine), never a name match; null until the
+// laptop has published qualifying with them in it.
+function meQual() {
+  if (!(live && Array.isArray(live.cars) && live.cars.some((c) => c && typeof c.tag === 'string' && c.tag !== ''))) return null;
+  readQual();
+  const m = qualMine();
+  if (!m) return null;
+  const part = el('div', 'me-qual');
+  // Two boxes rather than three, so "17/4:59.000" fits a phone on one line.
+  part.appendChild(meMini([
+    ['Qualifying', nth(Number(m.r.pos)) + ' of ' + m.rows.length + (m.r.main ? ' · ' + String(m.r.main) + ' main' : '')],
+    ['Qual best', qualScore(m.cls, m.r)],
+  ]));
+  const up = qualToMoveUp(m.cls, m.rows, m.r);
+  if (up) part.appendChild(el('div', 'me-qual-up', up));
+  return part;
+}
+
 function meMoment() {
   const at = document.getElementById('me-moment');
   if (!at) return;
@@ -397,6 +424,7 @@ function meMoment() {
   const fresh = Number.isFinite(lastAt) && relayNow() - lastAt < 20 * 60 * 1000;
 
   if (typeof ci === 'object' && ci && ci.shown && !checkedIn()) {
+    meHeroKind = 'checkin';
     hero.appendChild(el('span', 'k', 'You have arrived'));
     const big = el('div', 'big', 'Check in');
     big.appendChild(el('br'));
@@ -434,6 +462,10 @@ function meMoment() {
     const best = races.reduce((b, r) => (num(r.bestMs) > 0 && (b === 0 || num(r.bestMs) < b) ? num(r.bestMs) : b), 0);
     const m = live && live.marshal && typeof live.marshal === 'object' && typeof live.marshal.race === 'string' ? live.marshal : null;
     hero.appendChild(meMini([['Grid', num(n.slot) > 0 ? nth(n.slot) : ''], ['Best tonight', meLap(best)], ['Marshal', m ? String(m.race) : '']]));
+    // See the running order while it is next, moved up from the Setup
+    // card's old first lines (6 Nov 2026) with the rest of what they said.
+    const go = typeof goLink === 'function' ? goLink(n) : null;
+    if (go) hero.appendChild(go);
   } else if (races.length > 0) {
     hero.appendChild(el('span', 'k', 'Your night'));
     const best = races.reduce((b, r) => (num(r.bestMs) > 0 && (b === 0 || num(r.bestMs) < b) ? num(r.bestMs) : b), 0);
@@ -441,6 +473,12 @@ function meMoment() {
     hero.appendChild(meMini([['Best lap', meLap(best)], ['Last', last ? finishWords(last) : ''], ['Pack', mePackNow()]]));
   } else {
     return;
+  }
+  // Qualifying under whatever the card is saying - except Check in, which
+  // is the one thing to do when they arrive.
+  if (meHeroKind !== 'checkin') {
+    const q = meQual();
+    if (q) hero.appendChild(q);
   }
   at.appendChild(hero);
 }

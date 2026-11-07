@@ -72,8 +72,20 @@ describe("the first-night guide from the app", () => {
     return page;
   }
 
+  // The guide is drawn on Home, not Me, since 6 Nov 2026 (Asher: "remove
+  // first night card from me tab") - so these read it there.
+  async function guideOn(guide?: string, store?: Map<string, string>): Promise<FakePage> {
+    const { html, script } = pageParts(homePage("acme-rc", "Acme RC"));
+    const page = new FakePage(html, async () => ({ status: 404 }));
+    if (guide !== undefined) page.body.dataset["guide"] = guide;
+    if (store) for (const [k, v] of store) page.store.set(k, v);
+    page.run(script);
+    await page.settle();
+    return page;
+  }
+
   async function drawn(guide?: string): Promise<string> {
-    return (await opened(guide)).get("gd").textContent;
+    return (await guideOn(guide)).get("gd").textContent;
   }
 
   // On Home since 5 Nov 2026 (Asher: "move that card from the me tab to
@@ -123,13 +135,13 @@ describe("the first-night guide from the app", () => {
 
   it("shows again after Got it once the club sends a new guide, and not before", async () => {
     const first = JSON.stringify([{ heading: "Parking", words: "Round the back." }]);
-    const page = await opened(first);
+    const page = await guideOn(first);
     page.button(page.get("gd"), /^Got it/)!.click();
 
-    const again = await opened(first, page.store);
+    const again = await guideOn(first, page.store);
     assert.equal(again.get("gd").textContent, "", "the same guide stays hidden");
 
-    const updated = await opened(JSON.stringify([{ heading: "Parking", words: "Out front now." }]), page.store);
+    const updated = await guideOn(JSON.stringify([{ heading: "Parking", words: "Out front now." }]), page.store);
     assert.match(updated.get("gd").textContent, /Out front now\./, "the club's new guide is shown");
   });
 

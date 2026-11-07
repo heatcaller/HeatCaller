@@ -75,6 +75,7 @@ import { LapVoiceLibrary } from "./lapvoice.js";
 import { VOICE_PLAN_OFF, type MeterUsage, type VoiceService } from "./voice.js";
 import { isMeterName, type TopUpRequests } from "./topuprequests.js";
 import type { UsageLog } from "./usagelog.js";
+import { pushSubFrom, SERVICE_WORKER_JS, type PushService } from "./push.js";
 
 /** The public pages under /c/<club>/, by their last path segment. */
 const PAGES: Readonly<Record<string, (club: string, clubName: string, context: PageContext) => string>> = Object.freeze({
@@ -1027,6 +1028,11 @@ export interface RelayOptions {
    * manifest lists none and the pages use the phone's own voice.
    */
   readonly lapVoice?: LapVoiceLibrary | undefined;
+  /**
+   * Push alerts to drivers' phones (6 Nov 2026) - see push.ts. Absent, the
+   * relay takes no sign-ups and the Me page keeps its on-screen alerts.
+   */
+  readonly push?: PushService | undefined;
 }
 
 interface Parsed {
@@ -1105,6 +1111,7 @@ export class Relay {
   // on the laptop. See removeLeftoverVideos (oldvideos.ts) for the disk.
   /** Drivers' own race clips - see clips.ts (22 Oct 2026, driver experience). */
   private readonly clips: ClipVault | undefined;
+  private readonly push: PushService | undefined;
   /** Phones fetching a clip, per club and address - an audio player asks in ranges too. */
   private readonly clipReads: Limiter;
   /** One laptop sending clips: one per driver per race. */
@@ -1377,6 +1384,7 @@ export class Relay {
     this.lapVoice = options.lapVoice ?? new LapVoiceLibrary(new Map());
     // 22 Oct 2026, driver experience: clips and drivers' asks. See the fields.
     this.clips = options.clips;
+    this.push = options.push;
     this.clipReads = new Limiter(900, 60 * 1000, () => this.now().getTime());
     this.clipUploads = new Limiter(120, 60 * 1000, () => this.now().getTime());
     this.askTraffic = new Limiter(300, 10 * 60 * 1000, () => this.now().getTime());
@@ -2167,6 +2175,14 @@ export class Relay {
             return;
           }
 
+          // PUSH ALERTS (6 Nov 2026): the club's service worker, at the
+          // club's own address so its scope is this club's pages and no
+          // other's. Never cached long: a phone checks it for a new one.
+          if (page === "sw.js" && this.push !== undefined) {
+            sendBody(response, 200, "text/javascript; charset=utf-8", SERVICE_WORKER_JS, "no-cache");
+            return;
+          }
+
           // HeatCaller's sun for every club, logo or not (30 Oct 2026,
           // relay branding, Asher: "synthwave colors for the icon
           // regardless of logo"). The club's logo stays on its pages.
@@ -2546,6 +2562,24 @@ export class Relay {
       return;
     }
 
+    // PUSH ALERTS (6 Nov 2026) - see push.ts and pushSignUp. The key the
+    // browser needs is public; signing a phone up or off takes the badge
+    // code, in the body, as reading the night does.
+    if (method === "GET" && rest.length === 2 && rest[0] === "push" && rest[1] === "key") {
+      if (this.push === undefined) {
+        sendJson(response, 404, { ok: false, error: "This relay does not send alerts." });
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, key: await this.push.publicKey() });
+      return;
+    }
+
+    if (method === "POST" && rest.length === 2 && rest[0] === "push" && (rest[1] === "subscribe" || rest[1] === "unsubscribe")) {
+      await this.pushSignUp(request, response, club, rest[1] === "subscribe");
+      return;
+    }
+
     // The podium video upload from the laptop is gone (28 Oct
     // 2026, asked for by Asher: the videos stay on the laptop). An older
     // laptop that still sends one is refused like any unknown address, and
@@ -2914,6 +2948,13 @@ export class Relay {
           this.forgetDriverDoc(club, spec.name);
         }
 
+        // Push alerts (6 Nov 2026): what changed for a driver signed up.
+        // Not waited for - it posts to the push services, and the laptop's
+        // publish is answered without it. afterLive never throws.
+        if (spec.name === DRIVER_LIVE_CHANNEL && this.push !== undefined && !unreadable) {
+          void this.push.afterLive(club, existing?.body, body);
+        }
+
         if (spec.name === "checkin") {
           this.forgetCheckin(club);
 
@@ -3010,6 +3051,12 @@ export class Relay {
 
         if (spec.name === PREVIEW_CHANNEL) {
           this.forgetPreviews(club);
+        }
+
+        // Push alerts (6 Nov 2026): a race newly on a driver's night is
+        // their result in. Not waited for, and never throws.
+        if (spec.name === NIGHTS_CHANNEL && this.push !== undefined && !unreadable) {
+          void this.push.afterNight(club, itemId as string, existing?.body, body);
         }
 
         await this.prune(club, spec.name, victims);
@@ -6556,6 +6603,72 @@ export class Relay {
    * which ids exist, which is the one thing eighty bits are there to
    * prevent.
    */
+  /**
+   * PUSH ALERTS (6 Nov 2026): a phone signing up for a driver's alerts, or
+   * off them. The badge code in the body is the credential, as for the
+   * night itself, held to the same allowance and the same answer: a code
+   * that is not a driver tonight, or a club not offering nights, is "Not
+   * found" whichever it was. The push address must be one of the push
+   * services' (pushSubFrom), so the relay never posts anywhere else.
+   */
+  private async pushSignUp(request: IncomingMessage, response: ServerResponse, club: string, on: boolean): Promise<void> {
+    const who = `${club}|${clientAddress(request)}`;
+
+    if (this.push === undefined) {
+      sendJson(response, 404, { ok: false, error: "This relay does not send alerts." });
+      return;
+    }
+
+    if (this.checkinReads.blocked(who)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
+      return;
+    }
+
+    this.checkinReads.hit(who);
+    const body = await readBody(request, response, CHECKIN_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    const id = typeof body["id"] === "string" ? body["id"].trim().toLowerCase() : "";
+
+    if (!DRIVER_ID.test(id) || !(await this.nightsOpenFor(club))) {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    if (!on) {
+      const endpoint = isPlainObject(body["sub"]) && typeof body["sub"]["endpoint"] === "string" ? body["sub"]["endpoint"] : "";
+      await this.push.unsubscribe(club, id, endpoint);
+      sendJson(response, 200, { ok: true });
+      return;
+    }
+
+    const known = (await this.liveEntryOf(club, id)) !== undefined
+      || (await this.store.getItem(club, NIGHTS_CHANNEL, id).catch(() => undefined)) !== undefined;
+
+    if (!known) {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    const sub = pushSubFrom(body["sub"], this.now().toISOString());
+
+    if (sub === undefined) {
+      sendJson(response, 400, { ok: false, error: "This phone's alerts could not be set up." });
+      return;
+    }
+
+    if ((await this.push.subscribe(club, id, sub)) === "full") {
+      sendJson(response, 507, { ok: false, error: "This club cannot take any more phones for alerts." });
+      return;
+    }
+
+    sendJson(response, 200, { ok: true });
+  }
+
   private async readOneNight(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
     const who = `${club}|${clientAddress(request)}`;
 
@@ -8841,7 +8954,15 @@ function withoutLineups(body: unknown): unknown {
     ...body,
     ...("lineups" in body ? { lineups: false } : {}),
     ...(Array.isArray(lines)
-      ? { lines: lines.map((line: unknown) => (isPlainObject(line) && "drivers" in line ? { ...line, drivers: null } : line)) }
+      ? {
+          lines: lines.map((line: unknown) =>
+            // The grid (7 Nov 2026) is the same names again, with their slot
+            // and car, so it goes with them.
+            isPlainObject(line) && ("drivers" in line || "grid" in line)
+              ? { ...line, ...("drivers" in line ? { drivers: null } : {}), ...("grid" in line ? { grid: null } : {}) }
+              : line,
+          ),
+        }
       : {}),
   };
 }
@@ -9889,6 +10010,10 @@ function sendHtml(response: ServerResponse, status: number, html: string, nonce:
     "media-src 'self' data:",
     "connect-src 'self'",
     "manifest-src 'self'",
+    // PUSH ALERTS (6 Nov 2026) - see push.ts. The club's service worker,
+    // /c/<club>/sw.js, from this relay and nowhere else. Without it a
+    // worker falls back to script-src, whose nonce no worker can carry.
+    "worker-src 'self'",
     "base-uri 'none'",
     "form-action 'self'",
     // FRAMED BY ITS OWN PAGES ONLY (1 Nov 2026). The home-screen icon's

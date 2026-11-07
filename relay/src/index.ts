@@ -13,6 +13,7 @@ import { elevenLabsRenderer, migrateVoiceFolder, VoiceService } from "./voice.js
 import { LAP_VOICE_DIR, LapVoiceLibrary } from "./lapvoice.js";
 import { TopUpRequests } from "./topuprequests.js";
 import { UsageLog } from "./usagelog.js";
+import { PushService } from "./push.js";
 import { ADMIN_COMMANDS, voiceAdmin, type AdminCommand } from "./voiceadmin.js";
 
 /**
@@ -154,6 +155,18 @@ async function serve(): Promise<number> {
     // The lap voice's clips, from relay/lap-voice beside dist/ (in the
     // image, /app/lap-voice) - see lapvoice.ts.
     lapVoice: LapVoiceLibrary.load(fileURLToPath(new URL(`../../${LAP_VOICE_DIR}/`, import.meta.url)), (line) => console.log(line)),
+    // Push alerts to drivers' phones (6 Nov 2026) - see push.ts. The key
+    // pair is made on the first start and kept on the volume, beside the
+    // voice's folder, so a deploy keeps every phone signed up. The "sub"
+    // the push services are shown is this app's own address on Fly, or
+    // RELAY_PUSH_SUBJECT where the relay runs somewhere else.
+    push: new PushService({
+      store,
+      keyFile: join(config.dataDir, ".push", "vapid.json"),
+      subject: (process.env["RELAY_PUSH_SUBJECT"] ?? "").trim()
+        || (process.env["FLY_APP_NAME"] ? `https://${process.env["FLY_APP_NAME"]}.fly.dev` : "https://localhost"),
+      log: (line) => console.log(line),
+    }),
   });
 
   if (voice !== undefined) {
