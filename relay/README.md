@@ -44,7 +44,7 @@ npm test
 `npm install` pulls TypeScript and `@types/node`. Both are dev
 dependencies; the deployed server needs neither.
 
-`npm test` compiles and runs the suite (277 tests).
+`npm test` compiles and runs the whole suite.
 
 ## Configure
 
@@ -163,15 +163,34 @@ is the part that can be wrong on a machine where every test passes.
 | `achievements` | snapshot | who has earned which badge |
 | `tracks` | snapshot | every layout: picture, lap record, top-10 best laps |
 | `site` | snapshot | the club's colours, welcome line and logo |
+| `preview` | snapshot | a preview of a meeting that has not happened yet, with its own expiry |
+| `qualifying` | snapshot | where qualifying stands on the race day in hand, and the main each driver would make |
+| `sponsors` | snapshot | the club's sponsors for the foot of Live: name, line, logo, website |
+| `captions` | snapshot | the announcer's last few lines, as text (16 KB at most) |
+| `listen` | collection | the room's last couple of minutes as audio: 40 documents, 8 MB of its own |
 | `checkin` | snapshot, **private** | online check-in: roster, photos, PIN hashes |
 | `manage` | snapshot, **private** | whether the race-day manager is open over the relay, and its PIN hash |
 | `signup` | snapshot, **private** | driver sign-up: open or not, the classes, and each invite code's hash and expiry |
+| `nights` | collection, **private** | one driver's own night per badge id: 400 at most, 64 KB each, 4 MB of its own |
+| `driverlive` | snapshot, **private** | each driver's live evening (next race, marshal duty, the desk's answers), 256 KB at most |
+| `driverme` | snapshot, **private** | each driver's own details they can ask the desk to change, 512 KB at most |
+| `garage` | collection, **private** | one driver's garage per badge id - packs, races, cars with 240-pixel photo thumbnails, setup sheets: 400 at most, 512 KB each, 24 MB of its own |
+
+A channel with a budget of its own ("of its own" above) is not counted
+against the club's 50 MB and can never push a result out; past its budget
+it forgets its own oldest documents. The live race frame (`state`) also
+carries the live track map since 4 Nov 2026 - the layout's line thinned to
+240 points, the split loops and each car's place by its row's tag, never a
+transponder.
 
 A **private** channel is published like any other but never served: a
 public read answers exactly as it would for a channel that does not exist.
 The relay hands out pieces of `checkin` to a PIN or a QR check-in, never the
 whole document; `manage` holds nothing to hand out at all - see "Race-day
 manager" below, which does not use a channel for the requests themselves.
+`nights`, `driverlive`, `driverme` and `garage` are handed out one driver
+at a time, through their own POST routes, to somebody who sends that
+driver's badge id - see "Drivers' garages" below.
 
 `site` is the one document the relay reads itself - a theme applied in the
 browser after the page has drawn would flash the wrong colours on every
@@ -234,6 +253,7 @@ finished last.
 /c/:club/checkin             online check-in (lights the Me tab; no tab of its own)
 /c/:club/mynight             Me: a remembered driver's night, or the personal PIN box
 /c/:club/night               a driver's own night, opened by its private link
+/c/:club/garage              a driver's own garage, opened from their night with the same code
 /c/:club/signup              the sign-up page an invite opens
 /c/:club/app                 the home-screen app: one bar along the bottom, the club's
                              pages in a frame above it; a phone opened from the icon
@@ -248,6 +268,7 @@ finished last.
 /c/:club/results/:sessionId/card.png
                              the drawn 1200x630 picture that goes with that link
 /c/:club/manifest.webmanifest   makes "Add to Home Screen" install the pages as an app
+/c/:club/sw.js               the club's service worker: shows push alerts, caches nothing
 /c/:club/icon.png            HeatCaller's sun, the same for every club (src/sun.ts)
 /c/:club/logo.png            the club's logo (404 if it has none)
 ```
@@ -467,13 +488,17 @@ GET    /healthz                 -> {"ok":true,"clubs":N}
 GET    /voice/samples           no token; -> the voices there is a sample of
 GET    /voice/sample/:voiceId   no token; -> audio/mpeg
 POST   /voice/preview           token required; -> audio/mpeg
+GET    /lap-voice               no token; -> the lap voice's clips (see "The lap voice")
+GET    /lap-voice/:name.mp3     no token; -> audio/mpeg
 GET    /api/v1/c/:club/whoami   token required; -> {ok, club, name, publishRoster}
 DELETE /api/v1/c/:club          token required; erases everything that club published
 ```
 
 The three `/voice/` routes are documented under **Hearing a voice before
-choosing it**; they are listed here because they are the only routes
-outside `/api/v1/c/:club/` that are not a page.
+choosing it** and the two `/lap-voice` routes under **The lap voice**; they
+are listed here because, with `/healthz`, they are the only routes outside
+`/api/v1/c/:club/` that are not a page. The lap voice's clips are the same
+fixed recordings for every club and take nothing from a caller.
 
 The delete takes the club's wrong-PIN counts with it - check-in's and the
 manager's alike - from memory as well as disk, and waits for a save of
@@ -1058,10 +1083,14 @@ same for every club whatever voice a club runs in its Cast tab. See
 The clips: lap times 3.00 to 19.99, the two halves of a time with a
 thousandth ("six nine" and "thirty-five", played back to back, so 3.001 to
 19.999 is never rounded), "Lap one" to "Lap two hundred", "P one"
-to "P thirty", gaps from "nothing in it" to "thirty seconds back" and "a lap
-back" to "nine laps back", the target words up to two seconds, "best lap"
-and "Lap times on". 2,453 clips, 39,666 characters: about $1.59 at Flash's
-$0.04 per 1,000, once. A call the clips can't cover, or a clip that takes
+to "P thirty", "Up to P one" and "Down to P one" to thirty, gaps from
+"nothing in it" to "thirty seconds back" and "a lap back" to "nine laps
+back" - and the same gaps ending "off the lead" (`gl-*`) and "clear"
+(`gb-*`) - "last lap", "two laps to go" to fifty, "a minute left" to sixty
+minutes and "ten seconds left" to fifty (`lt-*`), the target words up to two
+seconds, "best lap", "off your best", "Lap times on" and "Lap times off".
+2,744 clips, 45,755 characters: about $1.83 at Flash's $0.04 per 1,000,
+once. A call the clips can't cover, or a clip that takes
 more than a second, is said in the phone's own voice, whole.
 
 **Making them.** On your own PC, with your ElevenLabs key on the first line
@@ -1071,7 +1100,8 @@ commercial licence):
     lap-voice-render.cmd count     what it would make and cost; spends nothing
     lap-voice-render.cmd           makes the missing ones, after you type yes
 
-They land in `lap-voice/`, which git ignores. Run it again any time: clips
+They land in `lap-voice/`, which git ignores - all but `lap6.mp3`, a recut
+take force-added so a fresh copy keeps it. Run it again any time: clips
 already there are never asked for twice. Then `fly deploy --ha=false` carries
 the folder into the image, and the relay logs how many it has when it
 starts. Deploying from a copy without the clips puts the relay back on the
@@ -1150,6 +1180,81 @@ laptop still makes the videos; they stay on it, in its own folder.
 - Drivers' own race clips (`/clip/`, mp3s on their private night) are not
   podium videos and are unchanged.
 
+### Drivers' garages (badge id; laptop side needs a token)
+
+```
+POST /api/v1/c/:club/driver/garage            {id, pass?}             -> {garage, pin, signedIn, asks}
+POST /api/v1/c/:club/driver/photo             {id, pass?, car, data}  -> {ref}    a car photo, JPEG in base64
+GET  /api/v1/c/:club/driver/photos            token; the photos waiting, without their pictures
+GET  /api/v1/c/:club/driver/photo/:id         token; one waiting photo, picture and all
+POST /api/v1/c/:club/driver/photos/collected  token; {ids} - forgets them
+```
+
+A driver's garage (`src/garage.ts`, the page in `src/garagepage.ts`) is the
+`garage` document the laptop built for that badge id, handed out only to
+somebody who sends the id, only while the club offers drivers' nights and
+takes their requests, and only for a driver on the check-in list - one 404
+for every way of failing that. Changes to packs, cars and setup sheets go
+through `driver/ask` like any other request, with the badge id alone since
+5 Nov 2026 (the personal PIN is still needed for a driver's details); the
+laptop applies them by itself. They are held to 120 an hour per driver.
+
+A car photo is shrunk on the phone first: at most 450 KB of JPEG (640 KB of
+request body), held until the laptop collects it - 6 per driver and 40 per
+club at once, 30 an hour per driver. Only the first bytes are checked for
+the JPEG marker here; the laptop decodes the whole picture before it keeps
+any of it. The upload may take longer than the usual 30-second ceiling, on
+an idle timeout, as a clip does. Turning driver requests off deletes every
+garage and every photo still waiting.
+
+### Push alerts (badge id)
+
+```
+GET  /api/v1/c/:club/push/key           -> {key}   the relay's public key, for the browser
+POST /api/v1/c/:club/push/subscribe     {id, sub}  -> {ok}   sub is PushSubscription.toJSON()
+POST /api/v1/c/:club/push/unsubscribe   {id, sub: {endpoint}}
+```
+
+Web Push, with no dependencies (`src/push.ts`: ECDH, HKDF, AES-128-GCM and
+ES256 from `node:crypto`). The relay's VAPID key pair is made the first
+time it is needed and kept in `dataDir/.push/vapid.json`, so a deploy keeps
+every phone signed up; the VAPID subject is `RELAY_PUSH_SUBJECT`, or
+`https://<FLY_APP_NAME>.fly.dev` on Fly. Signing up takes the badge id, as
+reading the night does, with the same 404 and the same 600-a-minute
+allowance per address, and only while the club offers drivers' nights. The
+push address must be `https` on a known push service's host (Google's,
+Mozilla's, Apple's, Microsoft's - `pushHostAllowed`), so the relay never
+posts anywhere a caller chose. Up to 5 phones per driver (a new one pushes
+out the oldest) and 2,000 per club (`507` past it).
+
+Alerts are worked out on the relay from what the laptop publishes, never
+on the first look at a driver: their race has just become the next one or
+been staged and their marshal duty has just become next (from
+`driverlive`), and a race newly filed on their night (from `nights`; a demo
+race or practice run says so). Each is encrypted for its one phone (RFC
+8291), lives 10 minutes at the push service, and carries no badge code - a
+tap opens `/c/:club/mynight`. A phone the push service answers 404 or 410
+for is forgotten. No `Topic` header: Apple refuses it. The log has a line
+for each alert accepted (`[push] "club": hc-race accepted for 2 phones`)
+and each refused, with the push service's reason. iPhones only take alerts
+from the club's pages added to the Home Screen.
+
+### Sponsor counts (public; reading them needs a token)
+
+```
+POST /api/v1/c/:club/sponsors/seen    {seen: [id, ...]} or {tap: id}
+GET  /api/v1/c/:club/sponsors/views   token; -> {hours: {"2026-11-05T22": {id: [seen, taps]}}}
+```
+
+The sponsors card on Live and the sponsor of the night on Home count a
+sponsor as seen once it is on screen, once per phone per half hour (kept in
+that phone's own storage), and a tap when somebody follows the link. Only
+ids in the published `sponsors` document are counted, so nothing else can
+be written this way; one address may report 20 times in five minutes. The
+counts are kept by the hour for 45 days in `sponsorviews`, never served to
+the public, for the laptop's sponsor report. Nothing about the phone is
+kept.
+
 ### Race control
 
 ```
@@ -1182,8 +1287,8 @@ ids go on posters - treat them as names, not credentials.
 
 ## Storage
 
-`FileStore` writes each document to `dataDir/<club>/<channel>/...` and
-writes atomically - temp file, then `rename` - so a crash mid-write leaves
+`FileStore` writes each document to `dataDir/<club>/snapshot/<channel>.json`
+or `dataDir/<club>/collection/<channel>/<id>.json` and writes atomically - temp file, then `rename` - so a crash mid-write leaves
 the previous document intact rather than a truncated one. A temp file a
 crash left behind is removed the next time the relay starts. Clubs are
 separate directories; the club id is validated before it is ever allowed
@@ -1205,6 +1310,13 @@ against a club's 50 MB publishing quota. A club that deletes everything it
 has published loses its own recorded lines; its usage file, its history and
 its top-ups stay, because those are what it is billed by and a delete must
 not hand it a fresh month's allowance.
+
+A club's folder also holds what is not a channel and is never served:
+`collection/pushsubs/` (the phones signed up for each driver's alerts, by
+badge id), `collection/driverphotos/` (car photos waiting for the laptop)
+and `snapshot/sponsorviews.json` (the hourly sponsor counts). The relay's
+own push key pair is `dataDir/.push/vapid.json`, outside every club's tree;
+lose it and every phone has to turn its alerts on again.
 
 Drivers' own race clips live in `dataDir/.clips/<club>/` (`src/clips.ts`),
 outside the club's tree for the same reasons as the voice cache. The old
@@ -1555,6 +1667,10 @@ src/pinguard.ts  the club-wide wrong-PIN count and its escalating lockout, kept 
                  one instance guards check-in's PIN, a second and independent one the
                  manager's
 src/pages.ts     every public page, the manifest
+src/push.ts      push alerts: the VAPID key, the push-service allow-list, sign-ups per driver,
+                 what to send when, RFC 8291 encryption, and the club's service worker
+src/garage.ts    a driver's garage document and car photos from the phone - the pure half
+src/garagepage.ts the driver's Garage page
 src/site.ts      the club's look, read narrowly from its site document
 src/icon.ts      a PNG encoder
 src/sun.ts       HeatCaller's sun as pixels: every club's home-screen icon and the corner

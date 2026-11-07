@@ -208,7 +208,7 @@ The portable copy of HeatCaller has no model beside it. It also looks in `%LOCAL
 
 Changes save as you make them and take effect straight away.
 
-![Voice, AI Commentary tab with Enable AI commentary ticked: the Who writes it card with the relay writing and This month at 11% used, and How it's written below](../assets/images/voice-ai-commentary.png)
+![Voice, AI Commentary tab with Enable AI commentary ticked: the Who writes it card with the relay writing and This month at 56% used, and How it's written below](../assets/images/voice-ai-commentary.png)
 
 ### Warm-up
 
@@ -218,7 +218,7 @@ The model takes a few seconds to load into memory the first time it's used. Heat
 
 The settings are on cards down the **Voice → AI Commentary** tab in Advanced mode: **Who writes it** first, then **How it's written**, since it covers every line, then the rest in the order the night happens: **Before the start**, **Through the night**, **After the flag**, **Recap show** and **Between races**. Above them is the master switch, **Enable AI commentary** (off until you tick it). Everything else on the page is grayed out while it's off.
 
-Who speaks - the announcer's and the recap host's names, the co-host, the Technical Lead, the Team Principal and the achievements reader, with their voices - is on **Voice → Cast**. One **Load Voices**, on the **Voices** card at the top, fills every voice list on the tab. Under it, every speaker has a card laid out the same way: their name first, then their voice with **Test Voice**, then what they do and the settings for it - the **Announcer** card first. The show's music is on **Sounds → Imaging**, and recording the night is on **Club Website → Recording**. The sections below still describe those settings here, where they're explained.
+Who speaks - the announcer's and the recap host's names, the co-host, the Technical Lead, the Team Principal and the achievements reader, with their voices - is on **Voice → Cast**. One **Load Voices**, on the **Voices** card at the top, fills every voice list on the tab. Under it, every speaker has a card laid out the same way: what the speaker does under the card's title, then **Name:**, **Voice:** with **Test Voice**, and **If ElevenLabs runs out:** (the Kokoro voice they switch to, with its own **Test Voice**; see [Each of the cast when ElevenLabs runs out](voice.md#each-of-the-cast-when-elevenlabs-runs-out)), then the switches and settings for what they do - the **Announcer** card first. The show's music is on **Sounds → Imaging**, and recording the night is on **Club Website → Recording**. The sections below still describe those settings here, where they're explained.
 
 ### How it's written
 
@@ -270,7 +270,7 @@ Intros and recaps are what the announcer says about a race. This card is everyth
 
 **How chatty:** comes first, with a line under it describing the choice. It's the one dial for the AI commentary: it sets the level the night's shape sits at, and every segment's own limits and gaps - see [How chatty](#how-chatty). The tick boxes below it say which segments run.
 
-**Pacing**, the gap between the built-in timing calls ("Top spot to Al Gorithim!"), is on **Voice > Announcements**, in the **How often** card beside **Max spoken announcements per lap**. It never governed the AI's segments, which is why it moved. The **Segments run** picker that used to sit here is gone: a club that had picked less than everything finds the segments past its choice unticked instead, so nothing it heard changes.
+The gap between the built-in timing calls ("Top spot to Al Gorithim!") is **Pacing:** on **Voice → Race Calls**, in the **How often** card under **Max spoken announcements per lap:** (see [How often](voice.md#how-often)). It never governed the AI's segments, which is why it moved. The **Segments run** picker that used to sit here is gone: a club that had picked less than everything finds the segments past its choice unticked instead, so nothing it heard changes.
 
 To see why the AI said little in a race, click the lost/held count on Race Control's announcer strip. The **Lines not said this race** window now opens with a line for the AI: what it said, and what held the rest, such as "too soon after the last line x12".
 
@@ -331,13 +331,14 @@ A second commentator, for the segments that suit one. The announcer makes a rema
 | Setting | What it does | Default |
 |---|---|---|
 | **Two voices in the booth** | Turns the co-host on. Only the segments marked as a two-hander in the table above use them. | Off |
-| **Co-host's name:** | What the announcer calls them. Leave it blank and they are spoken *to* but never named — the model is told not to invent one. | Blank |
-| **Co-host's voice:** | Which voice reads their half. With nothing picked for the engine you're using, the announcer's own voice reads both halves — still a conversation, and better than silence. **Test Voice** beside it says a line in the voice picked. | Blank |
+| **Name:** | What the announcer calls them. Leave it blank and they are spoken *to* but never named — the model is told not to invent one. | Blank |
+| **Voice:** | Which voice reads their half. With nothing picked for the engine you're using, the announcer's own voice reads both halves — still a conversation, and better than silence. **Test Voice** beside it says a line in the voice picked. | Blank |
+| **If ElevenLabs runs out:** | The Kokoro voice they read in while Kokoro stands in, with its own **Test Voice**. Shown in Advanced mode. See [Each of the cast when ElevenLabs runs out](voice.md#each-of-the-cast-when-elevenlabs-runs-out). | Adam (American, male) |
 | **What they're like:** | Their point of view — see below. | Even-handed |
 | **How much they talk:** | **Brief - a remark and a reply**, **Conversational - three turns** or **Full - four turns**. Each turn is another line the AI writes, and, on the relay, another line of the club's month. | Conversational |
 | **Two voices in the heats too, not just the mains** | The co-host is normally kept for the mains, which helps a main sound like one. Ticking this lets them out in the heats as well; it doesn't make the night any chattier. **Lively** and **Non-stop** under [How chatty](#how-chatty) do the same. | Off |
 
-The co-host also asks the questions in the Technical Lead's and the Team Principal's interviews. The card is grayed out while every one of those, and every two-hander segment, is switched off. In Simple mode, **What they're like** and **How much they talk** are hidden.
+The co-host also asks the questions in the Technical Lead's and the Team Principal's interviews. The card is grayed out while every one of those, and every two-hander segment, is switched off. In Simple mode, **If ElevenLabs runs out:**, **What they're like** and **How much they talk** are hidden.
 
 Anything that can't be split cleanly into two voices is simply said in one instead. That costs a second request to the model, so it's worth knowing it happens — but it only happens when the model ignores the format, and a silence would cost more.
 
@@ -443,8 +444,8 @@ If the first of those says video cannot play here, the usual cause is the video 
 The announcer's line into the break - the teaser - is written by the AI each race instead of picked from your list, so it's a little different every time. It always:
 
 - plugs the show by the name in **Show name:** on this page
-- says the race recap with its host, the name in **Recap host's name:** on **Cast**, is coming up after the break
-- signs off with the announcer's own name, from **Announcer's name:** on **Cast**
+- says the race recap with its host, the name in **Name:** on the **Recap host** card on **Cast**, is coming up after the break
+- signs off with the announcer's own name, from **Name:** on the **Announcer** card on **Cast**
 
 A name you leave blank is left out, never made up. Your teaser lines are given to the AI as the feel your club likes, not copied.
 
@@ -462,18 +463,19 @@ Both are on **Voice → Cast**, a card each. The Technical Lead has the car; the
 
 | Setting | What it does | Default |
 |---|---|---|
-| **Announcer's name:** (Announcer card) | What the main announcer calls himself: for example "Dave Marsh". Said in the On Air openings and the cold open. Leave it blank and he is never named. | Blank |
+| **Name:** (Announcer card) | What the main announcer calls himself: for example "Dave Marsh". Said in the On Air openings and the cold open. Leave it blank and he is never named. | Blank |
 | **After a main, down to pit lane for a word with the winner's Technical Lead** | At the flag, straight after the finish call (and the unofficial result): the announcer throws down to the co-host in pit lane, who asks two questions about the race and any setup changes logged in the **Garage** for the winning car, then hands back before the break. Needs race recaps on. | Off |
 | **After heats too, not only mains** | Gives the heats a Technical Lead as well. | Off |
-| **Technical Lead's name:** | What they're called. Blank and they're "the team's technical lead"; the model never makes a name up. | Blank |
-| **Technical Lead's voice:** | The voice they answer in. See below. | The announcer's own voice |
+| **Name:** (Technical Lead card) | What they're called. Blank and they're "the team's technical lead"; the model never makes a name up. | Blank |
+| **Voice:** (Technical Lead card) | The voice they answer in. See below. | The announcer's own voice |
+| **If ElevenLabs runs out:** (on every card but the Announcer's) | The Kokoro voice that speaker uses while Kokoro stands in. See [Each of the cast when ElevenLabs runs out](voice.md#each-of-the-cast-when-elevenlabs-runs-out). | A Kokoro voice of their own |
 | **Before a race, a quick word with a Team Principal** | When a race is staged, two questions about how the team is feeling and what it is hoping for, for the driver with the most riding on it - each driver's principal once a night. The countdown waits for it, and it's skipped when the night is running ten minutes or more behind. | Off |
 | **On the recap show, the winner's Team Principal in the booth** | The recap host has them in the booth for two questions about what the win means to the team. Part of the recap show, so it needs race recaps on. | Off |
 | **Heats as well as mains** | Gives the heats a Team Principal as well as the mains. | On |
 | **Only for drivers with a team on their profile** | A driver with a team gets that team's principal; one without gets their own, unless this is ticked. | Off |
-| **Team Principal's name:** / **Team Principal's voice:** | As for the Technical Lead. Blank is "the team principal". | Blank / the announcer's own voice |
+| **Name:** / **Voice:** (Team Principal card) | As for the Technical Lead. Blank is "the team principal". | Blank / the announcer's own voice |
 | **After a race, a third voice reads out the achievements it unlocked** (Achievements reader card) | The achievements the race just unlocked, read out as a segment of the recap rather than called out one at a time at the flag: the announcer throws to the reader, they go over who got what, and it comes back. This one needs no model. | Off |
-| **Reader's name:** / **Reader's voice:** | What the announcer calls the reader, and the voice they read in. Blank and they're thrown to but never named. With no voice picked, the announcer's own voice reads them. | Blank / the announcer's own voice |
+| **Name:** / **Voice:** (Achievements reader card) | What the announcer calls the reader, and the voice they read in. Blank and they're thrown to but never named. With no voice picked, the announcer's own voice reads them. | Blank / the announcer's own voice |
 
 The two pit-lane tick boxes and the booth tick box are also on the AI Commentary tab - the Team Principal's throw on **Before the start**, the Technical Lead's on **After the flag** and the booth on **Recap show**; ticking either copy ticks both.
 
@@ -485,12 +487,13 @@ What the Technical Lead says about the car comes from the **Garage**: the setup 
 
 #### Pick a voice for the Technical Lead or Team Principal
 
-1. Choose the voice engine on **Voice Settings** first. The list offers that engine's voices: your ElevenLabs voices, the HeatCaller voices your club can use, or the Kokoro voices on this laptop. With ElevenLabs or the HeatCaller voice chosen, the list ends with the Kokoro voices on this laptop too, marked "Kokoro:" - pick one and that speaker talks in Kokoro's free voice whatever the announcer uses. See [Use the Kokoro voice](voice.md#use-the-kokoro-voice).
+1. Choose the voice engine under **Speak with** on **Voice → Voice** first. The list offers that engine's voices: your ElevenLabs voices, the HeatCaller voices your club can use, or the Kokoro voices on this laptop. With ElevenLabs or the HeatCaller voice chosen, the list ends with the Kokoro voices on this laptop too, marked "Kokoro:" - pick one and that speaker talks in Kokoro's free voice whatever the announcer uses. See [Use the Kokoro voice](voice.md#use-the-kokoro-voice).
 2. On **Voice → Cast**, click **Load Voices** on the **Voices** card at the top.
-3. Pick a voice from **Technical Lead's voice:** or **Team Principal's voice:**.
+3. Pick a voice from **Voice:** on the **Technical Lead** or **Team Principal** card.
 4. Click **Test Voice** to hear a line in it. It plays even while the announcer is muted.
+5. With ElevenLabs or the HeatCaller voice speaking, pick the Kokoro voice they switch to in **If ElevenLabs runs out:** under it, and press the **Test Voice** beside that to hear it.
 
-A voice is kept for each engine, so if you switch engine on **Voice Settings**, pick a voice for the new one too - except a Kokoro voice picked from another engine's list, which is kept whatever the engine. With none picked for the engine in use, the announcer's own voice answers, and the console says so after the race.
+A voice is kept for each engine, so if you switch engine on **Voice → Voice**, pick a voice for the new one too - except a Kokoro voice picked from another engine's list, which is kept whatever the engine. With none picked for the engine in use, the announcer's own voice answers, and the console says so after the race.
 
 <a id="broadcast"></a>
 
@@ -512,7 +515,7 @@ How the recap sounds is set on other pages:
 
 | Setting | What it does | Default |
 |---|---|---|
-| **Recap voice delivery - give the recap its own stability and style** | On the **Recap host** card on **Voice → Cast**, with the two below. Uses the **Stability:** and **Style:** below for the recap only, instead of the values on **Voice Settings**. Leave it off to use your Voice Settings values for everything. If you tuned Voice Settings and heard no change in the recap, this was why. Stability and Style belong to your own ElevenLabs account, so this makes no difference to the Kokoro voice or to the HeatCaller voice, where the relay sets them. | Off |
+| **Give the recap its own stability and style** | On the **Recap host** card on **Voice → Cast**, with the two below. Uses the **Stability:** and **Style:** below for the recap only, instead of the values on **Voice → Voice**. Leave it off to use the Voice tab's values for everything. If you tuned the Voice tab and heard no change in the recap, this was why. Stability and Style belong to your own ElevenLabs account, so this makes no difference to the Kokoro voice or to the HeatCaller voice, where the relay sets them. | Off |
 | **Stability:** | Lower means more emotional range. | 0.60 |
 | **Style:** | Higher is more dramatic; past about 0.6 it can distort. | 0.15 |
 | **Duck music and crowd further during the recap, down to** _n_ **%** | While the recap plays, music and ambience drop to this level instead of the normal announcement duck. It stays down through the interview and the sign-off. | On, 20% |
@@ -568,7 +571,7 @@ A race day can use a different preset for that day only: **Between-race talk:** 
 
 **The phone and the PA agree.** The call-up is for the same race the drivers' phones show as "You're up next". If **Start Next** would start a race with nobody on its grid yet, such as a main that hasn't been seeded, the announcer calls nothing rather than send the wrong drivers to the stand, and the console says why.
 
-**Call-ups go out with captions.** Like the Timetable's reminders, every line in the gap shows on the Big Screen and the overlay and plays on the relay's Listen Along, so a driver with earbuds in hears "you're up next" too.
+**Call-ups go out with captions.** Like the Timetable's reminders, every line in the gap shows on the Big Screen and the overlay and plays to anyone using **Listen live** on the club's page, so a driver with earbuds in hears "you're up next" too.
 
 **The console says why a call-up didn't go**, once a gap per reason, on a line starting `[gap]`: "Call-up for Heat 3 held - inside the quiet before the call".
 
@@ -945,7 +948,7 @@ The layout's **lap record** in the table above belongs to one driver, and a club
 
 Both are read from your own filed results, and both are held to the usual bars:
 
-- **Tonight doesn't count.** "His best ever here" said about a lap he set in the heat an hour ago is the timing system describing this evening as club history, in front of the man who did it. The figure is what he had to beat when he arrived — which is also the only version worth hearing *before* a race.
+- **Tonight doesn't count.** "His best ever here" said about a lap he set in the heat an hour ago is the timing system describing this evening as club history, in front of the man who did it. The figure is what he had to beat when he arrived — which is also the only version worth hearing *before* a race. A race tonight doesn't add to a run of wins either, but one won here tonight by somebody else ends it, and the run isn't mentioned again that night.
 - **Four races before a best is a figure.** Everybody's second lap on a new track is their best. Four means they've been round it enough times that the figure is their measure of the place.
 - **Three wins before a run is a run.** Two in a row is chance where ten drivers share the wins — and the driver who won the one before those two is standing right there.
 - **A race needs three real cars** to count as a win on a layout. An evening somebody turned up to alone neither starts a run nor ends one.
@@ -1414,7 +1417,7 @@ Everything else in the commentary layer reports to the developer console, which 
 
 The window stays open beside Race Control while you work, and closing it only hides it: a hold you put on stays on. While a hold is on, the **Broadcast** button on Race Control reads **Broadcast · HELD** in amber, and when notes from the room are waiting it reads **Broadcast · 3 notes**, so neither is missed with the window shut. The flag keys, <kbd>F1</kbd> to <kbd>F10</kbd> and <kbd>F12</kbd>, still work while the window has the focus.
 
-Across the top is what's on air now, or the last segment that went out. The level meters are on Race Control's flag row, not here (see [Level meters](../race-control/running-a-race.md#level-meters)).
+Across the top is what's on air now, or the last segment that went out. The level meters are on **Race Control**, under the **Broadcast** button, not here (see [Level meters](../race-control/running-a-race.md#level-meters)).
 
 Under that, **Controls** has the buttons in the table below, and **At a glance** says:
 
@@ -1487,7 +1490,7 @@ Where the writing happens decides this. With **Write through the club relay when
 The continuity lines are not part of this: they're built on the laptop from the program and the results, and never go to the model at all. What the model is given: driver names, teams and sponsors from profiles, results and lap times, rivalries, round and class names, the drivers' records at this club, the layout's lap record and its holder, how many cars are out, how a driver's pace has moved tonight, the car they raced, tonight's class and driver counts and the venue typed on the race day, the night's totals, the night's storyline, championship positions and the one conditional worked out from them, the show name, and, for the Technical Lead, the setup changes logged for the winning car in the **Garage**. Names and other typed text are cleaned before they go to the model (one line, no brackets, kept short), so something typed into a profile can't turn into instructions to the model.
 
 !!! note
-    With ElevenLabs chosen on **Voice Settings**, the spoken intros and recaps also go to ElevenLabs to be turned into speech, like every other announcement. With the HeatCaller voice chosen, they go to your club's relay, and on to ElevenLabs from there. With the Kokoro voice chosen, they're spoken on the laptop and go nowhere.
+    With ElevenLabs chosen on **Voice → Voice**, the spoken intros and recaps also go to ElevenLabs to be turned into speech, like every other announcement. With the HeatCaller voice chosen, they go to your club's relay, and on to ElevenLabs from there. With the Kokoro voice chosen, they're spoken on the laptop and go nowhere.
 
 See [Security and privacy](../admin/security-and-privacy.md).
 
@@ -1502,9 +1505,9 @@ See [Security and privacy](../admin/security-and-privacy.md).
 | "[llm] This PC took ...s to write one line" | This PC is too slow for the built-in model at the current **Give up after:**, so it's switched off for the session. | Raise **Give up after:** on the **Who writes it** card, or rely on the relay. |
 | Recap never arrives after a race | The relay can't be reached, and the model on this PC is too slow or can't run here. | Press **Test Connection** and read the console lines starting `[brain]` and `[llm]`. |
 | No intro before a round | No round selected, or intros off, or **Only for a main, or a race with a known rivalry on the grid** is ticked. | Select the round on **Race Control** before pressing **Stage**, and tick **Race intros**. The console says when an intro was skipped for a heat. |
-| Recap sounds tamer than other calls | **Recap voice delivery** is on with gentler values. | Untick it to use your Voice Settings values. |
+| Recap sounds tamer than other calls | **Give the recap its own stability and style** is on with gentler values. | Untick it, on the **Recap host** card on **Voice → Cast**, to use the Voice tab's values. |
 | No interview after a main | The round isn't set up as a main, the model didn't answer in time, or its answer couldn't be split into two voices. | Check the console lines starting `[commentary]` after the race. The interview only follows a race run as a main from the race program. |
-| The Technical Lead or Team Principal sounds like the announcer | No voice is picked for them for the voice engine in use. | Pick one under **Technical Lead's voice:** or **Team Principal's voice:** on **Voice → Cast**, after choosing the engine on **Voice Settings**. |
+| The Technical Lead or Team Principal sounds like the announcer | No voice is picked for them for the voice engine in use. | Pick one under **Voice:** on their card on **Voice → Cast**, after choosing the engine on **Voice → Voice**. While they have no voice of their own, they also stand in with the announcer's Kokoro voice when ElevenLabs runs out. |
 | The Technical Lead never talks about the car | No setup is logged for the winning car on the day. | Log the setup against the car in the **Garage** before the main. |
 | **Play It** does nothing | No opener or bed has been chosen yet. | Choose at least one of those two. The button is grayed out until there's something to play, and a sting on its own isn't enough. |
 | **Play It** says the announcer is muted | Sound is muted on the **Mixer**. | Unmute it. The test needs a real voice to judge the bed against. |

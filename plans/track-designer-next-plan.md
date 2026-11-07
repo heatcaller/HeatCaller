@@ -2,7 +2,7 @@
 
 **Asked for:** "plan on how we can make it better" (Asher, 25 Oct 2026, straight after the eight-phase overhaul was finished).
 
-**Status (25 Oct 2026):** a plan, nothing built. Phase A comes first because it is about finding out, not guessing. After that, the order is Asher's to choose.
+**Status (25 Oct 2026):** a plan, nothing built (still true on 6 Nov 2026). Phase A comes first because it is about finding out, not guessing. After that, the order is Asher's to choose.
 
 **Where it stands.** In one day the overhaul gave the designer:
 - RCP's real tile joints, a new look and the Lane tool;

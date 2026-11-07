@@ -1,102 +1,94 @@
-# HeatCaller — Neon Timing API Proof of Concept
+# HeatCaller
 
 ## What this is
 
-A minimal Windows Forms (.NET 10) app that connects to the local **Neon Timing API**
-exposed by **Next Level Timing v4.9.1**, and dumps every raw message it receives
-to an on-screen developer console. It is intentionally read-only: it does not
-send race-control commands, and it never talks to the EasyLap USB decoder —
-only to Next Level Timing's local network API.
+A Windows Forms (.NET 10) race-timing and announcing app for RC car clubs.
+It reads the lap decoder itself, runs the race (staging, starts, flags,
+penalties, qualifying, mains, championships), keeps and corrects the
+results, publishes them to phones and the club's website, and calls the
+race out loud with an announcer, AI commentary and soundscapes.
 
-## Protocol research (source, not guesswork)
+Version **0.60.0 BETA** (the one number is `<Version>` in
+`HeatCaller\HeatCaller.csproj`; `AppVersion` reads it back from the
+assembly). What changed in each release is in
+`..\website\docs\release-notes.md`.
 
-Next Level Timing publishes the **Neon Timing Protocol** openly and it is the
-basis for this client:
+This file began as the notes for a read-only proof of concept that dumped
+messages from Next Level Timing's Neon Timing API. That connection was
+retired in 0.50.0 (see `DecoderConnection.RetiredNeonApi`, kept only so an
+old saved `0` still loads); HeatCaller has talked to the decoder directly
+ever since.
 
-- Protocol spec: https://github.com/NextLevelTiming/neon-timing-protocol
-- Race event definitions: https://github.com/NextLevelTiming/neon-timing-protocol/blob/main/events/race.md
-- Reference JS client: https://github.com/NextLevelTiming/neon-timing-socketio-example
+## Decoders
 
-Findings used to build this POC:
+Chosen on the Connection page; the list is `DecoderConnection.Offered` in
+`HeatCaller.Timing\DecoderConnection.cs`.
 
-| Aspect | Finding |
-|---|---|
-| Transport | Socket.IO, **WebSocket only**, no long-poll upgrade |
-| Namespace | `neon-timing` (connect to `.../neon-timing`) |
-| Auth | `token` query-string parameter at connect time, e.g. `/neon-timing?token=abc-123` |
-| Message format | JSON, max 400 chars, base envelope `{"cmd","protocol":"NT1","time","did"}` |
-| Handshake | Host sends `handshake_init`; client **must** reply `handshake_ack` (with `init_time` echoed) within 1 second or risk disconnection |
-| Live events | `{"cmd":"event","evt":"race","type":"racer_passed_gate",...}` for lap/gate passes, plus `standings`, `race_started`, `race_completed`, flag/gate/telemetry groups |
+| Decoder | How | Status |
+|---|---|---|
+| EasyLap | USB HID (`DirectDecoderClient`, `EasyLapFramer`) | Proven at home rehearsals |
+| I-Lap | Serial (`ILapClient`) | Proven on real hardware, split times and all |
+| MyLaps / AMB P3 (AMBrc, RC4, TranX3, ChipX) | Network (port 5403) or serial | Beta |
+| ZRound open protocol / RiCino | Serial or network | Beta |
+| Cano / RCHourglass | Serial | Beta |
+| OpenStint | ZeroMQ (HeatCaller's own ZMTP 3.0 subscriber) | Beta |
+| EasyLap / Robitronic serial | Serial | Beta |
 
-### Open question — flagged, not guessed
-
-The protocol README illustrates Socket.IO usage with **placeholder** event
-names (`socket.emit('client_event', ...)` / `socket.on('host_event', ...)`).
-It is not confirmed from public docs whether Next Level Timing 4.9.1's real
-server uses these literal channel names or something product-specific.
-
-Rather than invent an answer, this POC:
-1. Uses Socket.IO's catch-all handler (`OnAny`) to log **every** event under
-   **every** channel name it receives, raw, to the developer console. Run it
-   against your real installation and the console will show you the actual
-   channel name(s) in use.
-2. When it detects a `handshake_init` payload (regardless of which channel it
-   arrived on), it replies with `handshake_ack` on that same channel, and
-   also on the documented placeholder `client_event`, to maximize the chance
-   the reply is accepted without fabricating protocol details.
-
-If your install's traffic looks different from what's described above (e.g.
-a different auth parameter name, a different path), the raw console output
-is the tool for diagnosing that — check it before assuming the code is wrong.
+The five Beta decoders (added 1 Nov 2026, `plans\decoder-support-plan.md`)
+were written from published formats and run by `StreamDecoderClient`; each
+keeps "(Beta)" until it has timed a real session on real hardware
+(`DecoderConnection.Beta`). Each also has a simulated mode for rehearsing
+without hardware, and their raw traffic is captured to `decoder-raw-*.log`
+for reports.
 
 ## Project layout
 
 ```
 HeatCaller.sln
-HeatCaller/
-  HeatCaller.csproj   .NET 10 WinForms app, references SocketIOClient 3.1.2 (doghappy)
-  Program.cs                 entry point
-  MainForm.cs / .Designer.cs UI: host/port/API key fields, connect/disconnect, status, console
-  AppSettings.cs             persists host/port/API key to %AppData%\HeatCaller\settings.json
-  NeonTimingClient.cs        Socket.IO wrapper implementing connect + handshake_ack + raw logging
+HeatCaller/            the WinForms app (net10.0-windows), ~600 source files
+  ROADMAP.md           the live roadmap: where things stand, what's next, gotchas
+  ROADMAP-1.md         archived snapshot of 27 Sep 2026, not maintained
+  Assets/              fonts, sound packs, music, icons, legal text; Kokoro and
+                       the commentary model are fetched, not in git
+HeatCaller.Timing/     timing in a plain net10.0 library with no WinForms:
+                       RaceControlSession, the decoder protocols, journal, host
+HeatCaller.Tests/      xUnit tests (see its README)
 ```
+
+Beside this folder, at the top of the repo: `relay\` (the TypeScript relay
+on Fly.io that gives a club its https address and phone pages), `website\`
+(the MkDocs user guide), `plans\` (design plans) and the scripts below.
+
+Main packages: NAudio, HidSharp, System.IO.Ports, QRCoder, KokoroSharp
+(the free local voice), LLamaSharp (the built-in commentary model),
+LibVLCSharp (video) and Velopack (installer and updates).
 
 ## Building
 
-Requires the .NET 10 SDK and Windows (WinForms).
+Requires the .NET 10 SDK and Windows (WinForms). From the repo root:
 
 ```
-cd HeatCaller
-dotnet restore
-dotnet build
-dotnet run --project HeatCaller
+dotnet run --project HeatCaller\HeatCaller\HeatCaller.csproj
 ```
 
-`dotnet restore` needs internet access to pull the `SocketIOClient` NuGet
-package (version 3.1.2, by doghappy) the first time.
+The first build pulls the NuGet packages. A source build looks for the
+Kokoro voice in `%LocalAppData%\HeatCaller\Kokoro` and offers to download
+it.
+
+Scripts at the repo root:
+
+- `check.cmd` builds and tests the app and the relay (`check.cmd app`,
+  `check.cmd relay` for one). A change isn't done until it ends with
+  **ALL GREEN**. The full app suite is long (tens of minutes).
+- `layout.cmd` writes the layout report with pictures of every page and
+  window (see `HeatCaller.Tests\README.md`).
+- `fetch-kokoro.cmd` and `fetch-llm.cmd` fetch the voice (~310 MB) and the
+  commentary model (~440 MB) into `Assets\` once, before publishing.
+- `publish.cmd` cuts the self-contained build; `pack.cmd` packs and signs it
+  as a Velopack release. Only ever publish from a green `check.cmd`.
 
 ## Using it
 
-1. In Next Level Timing, confirm the Neon Timing API is enabled and note the
-   port (you said `14122`) and the API key/token if one is configured.
-2. Launch HeatCaller, enter Host `127.0.0.1`, Port `14122`, and the
-   API key.
-3. Click **Connect**. Watch the developer console:
-   - You should see the transport connect.
-   - Then a `handshake_init` payload should appear from Next Level Timing.
-   - The app will log its `handshake_ack` reply.
-   - After that, start/stop practice in Next Level Timing and watch for
-     `racer_passed_gate`, `standings`, etc. in the raw log.
-4. If nothing arrives after the socket connects, check the console for the
-   actual channel name Next Level Timing is using and compare against the
-   assumptions above — that's the next thing to adjust in `NeonTimingClient.cs`.
-
-## Non-goals (by design, for this step)
-
-- No parsing/display of standings, laps, or race state beyond the raw log.
-- No control of Next Level Timing (no start/stop/flag commands sent).
-- No direct EasyLap/USB/serial access.
-- No persistence of race data.
-
-These are the natural next steps once the connection and event shapes are
-confirmed against your live install.
+The user guide is in `..\website\docs` (start with
+`getting-started\install.md` and `first-race-night.md`). Where things stand,
+and what to read before changing anything, is in `HeatCaller\ROADMAP.md`.

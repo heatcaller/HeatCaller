@@ -380,7 +380,7 @@ Only a render that isn't already on disk is charged to ElevenLabs and counted ag
 
 - **A line with no driver's name in it is rendered once for every club.** The laptop tells the relay when a line is one of the announcer's fixed lines, so "Green flag!" is paid for by the first club that asks and handed to all the rest. Most of a club's fixed lines cost nothing at all.
 - **A line with a name in it is cached for that club alone.**
-- **A re-roll is charged like a new line.** **Re-roll Line...** on the club's **Voice Settings** asks for a fresh take past every cache. It's counted against that club's month and kept in that club's own cache, so other clubs keep hearing the shared take; the club's own copy is used first from then on. An older relay ignores the request and hands back the cached take - redeploy with `fly deploy --ha=false`.
+- **A re-roll is charged like a new line.** **Re-roll Line...** on the club's **Voice → Voice** tab asks for a fresh take past every cache. It's counted against that club's month and kept in that club's own cache, so other clubs keep hearing the shared take; the club's own copy is used first from then on. An older relay ignores the request and hands back the cached take - redeploy with `fly deploy --ha=false`.
 - **Each club's month is a calendar month (UTC)**, counted in `dataDir/.voice/usage/<club>.json`, so a deploy doesn't hand anybody a fresh allowance.
 - **The allowance holds under load.** A club's characters are reserved before the render and given back if it fails, so a laptop with several lines in flight at once can't slip past the limit.
 
@@ -435,11 +435,34 @@ Lines are counted per club, a calendar month (UTC) at a time, in `dataDir/.brain
 **Lap times in my ear**, on the club's **Live** page and a driver's own night (see [Lap times in my ear](../online/index.md#lap-times-in-my-ear)), plays short clips in one ElevenLabs voice for every club. The clips aren't rendered on the fly: you make them once, on your own PC, and they go into the relay's image.
 
 1. Put an ElevenLabs key (on a paid plan, for the commercial license) on the first line of `voice-test.key` in the relay folder.
-2. `lap-voice-render.cmd count` says what it would make and what it would cost, and spends nothing.
+2. `lap-voice-render.cmd count` says what it would make and what it would cost, and spends nothing. The full set is 2,744 clips and 45,755 characters: lap times, lap numbers, positions, places gained and lost, the gaps to the car ahead, the car behind and the leader, laps or time left, the target words, "off your best", and "Lap times on" and "Lap times off".
 3. `lap-voice-render.cmd` makes the missing clips, after you type `yes`. They land in the `lap-voice` folder. Clips already there are never asked for twice.
 4. `fly deploy --ha=false` carries the folder into the image.
 
-The relay's start-up log says how many it has: `[lap voice] N of M clips in the Daniel voice.` Without them it says `... so spoken laps use the phone's voice.`, and phones read the laps in their own voice. Deploying from a copy of the relay folder without the clips does the same, so keep the clips in the `lap-voice` folder safe (Git leaves them out).
+The relay's start-up log says how many it has: `[lap voice] N of M clips in the Daniel voice.` Without them it says `... so spoken laps use the phone's voice.`, and phones read the laps in their own voice. Deploying from a copy of the relay folder without the clips does the same, so keep the clips in the `lap-voice` folder safe: Git leaves them out, all but one recut clip (`lap6.mp3`).
+
+## Push alerts
+
+A driver who turns alerts on from their own night page gets a notification on their phone, even with the page closed or the phone locked, when their race is next, when it's staged, when their marshal duty is next, and when a result of theirs is filed (a demo race or practice run says so). The drivers' side is in [The online relay](../online/index.md). On an iPhone, alerts only work from the club's pages added to the Home Screen; that is Apple's rule.
+
+There's nothing to set up and no key to buy. The relay makes its own key pair the first time it's needed (the log says `[push] made the relay's push key`) and keeps it on the volume in `.push/vapid.json`. Keep that file: it's what lets a redeploy keep every phone signed up, so it's in every [backup](#backups). The push services are told who runs the relay: `https://<app-name>.fly.dev` on Fly, or whatever you set in `RELAY_PUSH_SUBJECT` elsewhere.
+
+How it works, for anyone checking:
+
+- **Only for clubs offering drivers' nights.** Signing a phone up needs the driver's badge code, as reading their night does, and is refused with the same "Not found" when the club has turned nights off or the code isn't a driver tonight. It shares the night page's limit of 600 requests a minute per address.
+- **Only to the push services.** A phone hands over an address at its browser's push service. The relay only accepts `https` addresses at Google's (`fcm.googleapis.com`, `android.googleapis.com`), Mozilla's (`updates.push.services.mozilla.com`, `push.services.mozilla.com`), Apple's (`web.push.apple.com`, `*.push.apple.com`) and Microsoft's (`*.notify.windows.com`), so it never posts anywhere a caller chose.
+- **What's kept.** For each driver signed up, under their badge code in the club's folder (`collection/pushsubs/`): each phone's push address and the two keys its browser gave, and when it signed up. No name. At most 5 phones a driver (a sixth replaces the oldest) and 2,000 a club; past that, the phone is told "This club cannot take any more phones for alerts."
+- **What's sent.** The alert's title and a line such as the race and grid slot, or the place, encrypted for that one phone, so the push service carries words it can't read. A tap opens the club's `/c/<club>/mynight`; no badge code is in the alert. An alert waits at the push service for 10 minutes at most.
+- **When a phone goes.** A phone the push service says has gone (404 or 410) is forgotten. A phone that turns alerts off is taken off. Otherwise sign-ups stay until the club uses **Delete Everything Published**.
+
+The log has a line for each alert a push service accepts, by kind and count only, and one for each it refuses, with the push service's own reason:
+
+```
+[push] "acme-rc": hc-race accepted for 2 phones
+[push] "acme-rc": web.push.apple.com answered 400 {"reason":"..."}
+```
+
+The kinds are `hc-race`, `hc-marshal` and `hc-result`.
 
 ## Day to day
 
@@ -575,6 +598,10 @@ The data, all under the relay's data folder:
 | `.requests/<club>.auto.json` | What automatic top-ups have given, by month. | The relay only. |
 | `.usage-log/<YYYY-MM>.jsonl` | One line per voice and commentary request: the club, what it cost, how it went. No words, names or facts are ever kept. Kept 24 months. | The relay only. |
 | `.clips/<club>/` | A driver's own race calls for their private night page: `<id>.mp3` beside `<id>.json`. Each is removed after 7 days. | The relay only. |
+| `.push/vapid.json` | The relay's own key pair for [push alerts](#push-alerts), made the first time it's needed. | The relay only. |
+| `<club>/collection/pushsubs/` | The phones signed up for each driver's alerts. | The relay only. |
+| `<club>/snapshot/sponsorviews.json` | How many phones saw each sponsor on the club's pages, and how many tapped through, by the hour, for the last 45 days. | The relay only. |
+| `<club>/collection/driverphotos/` | Car photos sent from drivers' phones, waiting for the laptop to collect them. | The relay only. |
 
 Each file has one writer, so the running relay and a command run at the same moment can never save over each other. Run through ssh, the commands run as root; they hand every file and folder they make to the relay's own user, and refuse to run without `RELAY_DATA`, which is where the relay's data really is.
 
@@ -631,6 +658,7 @@ fly status
 | `[relay] "x": could not save the wrong-PIN count (...)` | The volume is full or unwritable. The count is kept in memory until the relay restarts. |
 | `[relay] HeatCaller voice: ...` / `[relay] commentary brain: ...` | Whether the voice and AI commentary are on, and for how many clubs. See [The key](#the-key) and [AI commentary](#ai-commentary). |
 | `[lap voice] ...` | How many lap voice clips the relay has. See [The lap voice](#the-lap-voice). |
+| `[push] ...` | An alert a push service accepted or refused, or the relay's push key being made. See [Push alerts](#push-alerts). |
 | `[relay] forwarding every request to https://...` | This app is a forwarder (see below). |
 
 ### The machine sleeps when idle
@@ -698,7 +726,7 @@ The new deploy mounts a `relay_data` volume; with the old volume still there it 
 backup.cmd
 ```
 
-It wakes the machine, packs `/data` into one file there, downloads it to `relay-backups\<date>_<time>\relay-data.tgz` and deletes the packed file from the machine. That file is every club's published results, nights, race calls and the voice and commentary usage files clubs are billed by. Take one before a deploy that changes storage, once a week while clubs are racing, and before adding or removing a club; keep a copy somewhere other than the race PC.
+It wakes the machine, packs `/data` into one file there, downloads it to `relay-backups\<date>_<time>\relay-data.tgz` and deletes the packed file from the machine. That file is every club's published results, nights, garages, race calls, the phones signed up for alerts with the relay's push key, and the voice and commentary usage files clubs are billed by. Take one before a deploy that changes storage, once a week while clubs are racing, and before adding or removing a club; keep a copy somewhere other than the race PC.
 
 To put a backup back onto a volume (it replaces what is there):
 
@@ -844,6 +872,7 @@ A voice's optional settings default to `eleven_flash_v2_5`, stability 0.5, simil
 | `RELAY_DATA` | Data folder. Overrides `dataDir` in the config. `fly.toml` sets it to `/data`. |
 | `RELAY_UID` / `RELAY_GID` | The user and group the relay switches to after starting as root. Default 1000, the `node` user in the image. |
 | `RELAY_REDIRECT_ORIGIN` | Turns the relay into a forwarder. See [How the forwarder behaves](#how-the-forwarder-behaves). |
+| `RELAY_PUSH_SUBJECT` | Who runs the relay, as an `https://` address or a `mailto:`, for the push services behind [push alerts](#push-alerts). Not needed on Fly, where the relay uses `https://<app-name>.fly.dev` from Fly's own `FLY_APP_NAME`; elsewhere it falls back to `https://localhost`. |
 
 `PORT` and `RELAY_DATA` override the config on purpose. If you paste a laptop config (with `"dataDir": "./data"`) into the Fly secret and the file won, the relay would write inside the container instead of on the volume, and every deploy would erase the club's history.
 
@@ -882,11 +911,16 @@ To check a config before you push it, run `node dist/src/index.js check-config r
 | Request body | `maxBodyBytes` (1 MiB by default) | Refused with 413. |
 | One result document | 256 KB (or `maxBodyBytes` if smaller) | Refused with 413. |
 | Results kept per club | Every one, until the club's storage is full | There's no count limit; only the 50 MB below makes old results go, oldest first. The laptop keeps every result. |
-| Storage per club | 50 MB, not counting the race-day manager's requests and answers, driver sign-ups or the results index | The oldest results are forgotten to make room. Only a document that wouldn't fit even then is refused, with 507. Live race frames and other snapshots are never refused for space. |
+| Storage per club | 50 MB, not counting the race-day manager's requests and answers, driver sign-ups, what phones send (check-in taps, votes, shout-outs, driver requests and car photos), or anything with a budget of its own (the results index, drivers' nights and garages, the listen-along audio) | The oldest results are forgotten to make room. Only a document that wouldn't fit even then is refused, with 507. Live race frames and other snapshots are never refused for space. |
 | Results index | 2 MB of its own, at most 1 MB for one year | The earliest year is forgotten to make room for a later one. An earlier year that wouldn't fit is refused with 507, rather than pushing out a later season. |
 | Check-in taps waiting | 500 | New taps are refused with 503 until the laptop collects them. Taps older than 12 hours are dropped. |
 | Race-day manager requests waiting | 300, or 952 KB in all | New requests are refused with 503 ("The race-day manager is busy - ...") until the laptop collects them. Requests older than 10 minutes are dropped. |
 | Race-day manager answers waiting | 300, or 4 MB in all | The oldest answers are forgotten. Answers older than 10 minutes are dropped. |
+| Drivers' nights | 4 MB of their own, at most 400, 64 KB each | The oldest are forgotten to make room. |
+| Drivers' garages | 24 MB of their own, at most 400, 512 KB each | The oldest are forgotten to make room. |
+| Car photos from phones | 450 KB each once the phone has shrunk it, JPEG only; 6 waiting per driver and 40 per club; 30 an hour per driver | Refused. Past the waiting limits the phone says "HeatCaller has not picked up the photos already sent - is the timing desk's laptop on? Try again in a minute." A photo waits until the laptop collects it. |
+| Garage changes from one driver (packs, cars, setups) | 120 an hour | Refused with 429: "That is a lot of changes in one hour - wait a little and try again." |
+| Phones signed up for alerts | 5 per driver, 2,000 per club | A sixth phone replaces a driver's oldest; past the club's ceiling, refused with 507. |
 | Check-in request body | 4 KB | Refused. |
 | Results listing | 8 MB | The listing holds the newest results that fit, and says how many older ones were left out (`omitted`). Each is still readable on its own. Old results are only forgotten after a new one has been saved. |
 | A club's voice allowance | `voice.monthlyChars` (100,000 by default) a calendar month | The relay refuses to speak, and the club's announcer uses the free Kokoro voice for every line until the month turns. Characters are reserved before each render and given back if it fails, so concurrent lines can't overshoot. |

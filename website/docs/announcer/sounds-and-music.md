@@ -135,6 +135,8 @@ These are on the **Reactions** card, under the layers. How loud the ambience is 
 
 **Sounds → Music** is a soundtrack for between races. Eleven tracks are included: Horizon Line, Chasing Sunset, Grid Runner, Afterglow, Cooldown Lap, Vanishing Point, Last Lap Lights, Redline Memory, One More Run, Back to the Grid and Long Way Home. The soundscapes' own music is included too, Victory Lane and Race Day Live among it; see [Theme music](#theme-music).
 
+![Sounds, Music tab: Enable music and Shuffle ticked, Theme music picked, the player stopped and the library of included and the club's own tracks, with Add Track, Include / Exclude, Remove, Open Music Folder and Restore Included Tracks](../assets/images/sounds-music.png)
+
 1. Tick **Enable music**.
 2. Leave **Shuffle** ticked (the default) to play every track once before repeating any.
 3. Choose what plays, next to **Play:**: **Theme music** or **My music**. See [Theme music or my music](#theme-music-or-my-music).
@@ -330,7 +332,7 @@ It's the way to keep a setup you built by hand on those tabs, for example with y
 
 ### Voice lines
 
-Voice lines are a soundscape's fixed race calls (staging, the countdown, the start, the flags, the last lap and the checkered flag), recorded once in the soundscape's delivery with your own ElevenLabs key or the HeatCaller voice. After that they play from the laptop whenever the announcer says those words, whichever voice is chosen: even the free Kokoro voice, even with no internet. Only lines with nothing filled in at race time can be recorded, and only for the moments that are switched on. Lines with a driver's name or a time in them are always spoken live.
+Voice lines are a soundscape's fixed race calls (staging, the countdown, the start, the flags, the last lap and the checkered flag), recorded once in the soundscape's delivery with your own ElevenLabs key or the HeatCaller voice. After that they play from the laptop whenever the announcer says those words, whichever voice is chosen: even the free Kokoro voice, even with no internet. The one exception is while your own ElevenLabs allowance is used up and the Kokoro voice is standing in for it: the recordings are held back then, like the announcer's saved lines, so the night is in one set of voices (see [When ElevenLabs can't speak a line](voice.md#when-elevenlabs-cant-speak-a-line)). Only lines with nothing filled in at race time can be recorded, and only for the moments that are switched on. Lines with a driver's name or a time in them are always spoken live.
 
 **Voice Lines** on a card opens a menu:
 
@@ -407,6 +409,8 @@ When you customize a soundscape, **No music of its own** gives it no theme music
 
 **Sounds → Imaging** is the soundscape's broadcast imaging: the jingles, sweepers, bumpers, stingers and music beds that make race night sound like a radio station. Each soundscape has its own, and where it has several of one kind they take turns at random. Race night plays the imaging of the soundscape in use on the **Soundscapes** tab.
 
+![Sounds, Imaging tab: Broadcast imaging on, the Classic soundscape picked, and its pieces - jingles, sweepers and a bumper - with their files, post and out times, and Add Files, Play, Stop and Remove below](../assets/images/sounds-imaging.png)
+
 **Broadcast imaging ON** (it reads **Broadcast imaging OFF** while off) is the switch for all of it, and it's on to begin with. With it off, no imaging plays, and your club's own show music plays where it's set up. With it on, **On Air** on **Race Control** starts the show and the rest follows the race by itself.
 
 The page has these cards:
@@ -455,7 +459,7 @@ The **Announcements** status also says which voice is speaking:
 | "Ready - Kokoro voice standing in" | ElevenLabs or the HeatCaller voice is chosen but can't speak just now, and the Kokoro voice is saying the lines. See [When ElevenLabs can't speak a line](voice.md#when-elevenlabs-cant-speak-a-line) and [When the HeatCaller voice can't speak a line](voice.md#when-the-heatcaller-voice-cant-speak-a-line). |
 | "Can't speak -" and the reason | The announcer is muted, or no voice can speak the announcements. |
 
-If the announcer can't speak at all, a red warning appears on its own line under the page's introduction, above the channels: "NO VOICE:" and the reason, for example "NO VOICE:  the Kokoro voice isn't downloaded on this PC yet (the Voice tab has a Download button)." Where the reason is about a quota, the notice adds "Sound effects, music and ambience are unaffected." While the Kokoro voice is only standing in, an amber notice takes that place instead, because the announcer can still speak, for example "The free Kokoro voice is standing in - the ElevenLabs quota is used up."
+If the announcer can't speak at all, a red warning appears on its own line under the page's introduction, above the channels: "NO VOICE:" and the reason, for example "NO VOICE:  the Kokoro voice isn't downloaded on this PC yet (the Voice tab has a Download button)." Where the reason is about a quota, the notice adds "Sound effects, music and ambience are unaffected." While the Kokoro voice is only standing in, an amber notice takes that place instead, because the announcer can still speak, for example "The free Kokoro voice is standing in - the ElevenLabs quota is used up." or, once your own ElevenLabs meter reaches 100%, "... - the ElevenLabs allowance is at 100%".
 
 The reason after the colon says which voice can't speak and why:
 
@@ -523,6 +527,8 @@ If a session that brings the music up starts while the last one's **Fade out** i
 
 **Sounds → Lap Beeps** gives each driver their own short cue when they cross the line, so they can hear their lap without watching the screen. Cues differ in shape as well as pitch, because pitch alone is hard to pick out over track noise. It's off by default: a cue per lap per driver is a lot of noise if you didn't ask for it.
 
+![Sounds, Lap Beeps tab: Per-driver lap cues off, and the drivers list with each transponder, class and cue, with Change Cue, Test Cue, Turn On / Off, Auto-Assign All and Clear All below](../assets/images/sounds-lap-beeps.png)
+
 1. Tick **Per-driver lap cues ON** (it reads **Per-driver lap cues OFF** while off).
 2. Press **Auto-Assign All** to give every driver a different cue, or select a driver and press **Change Cue** to choose one.
 3. Press **Test Cue** to hear the selected driver's cue.
@@ -536,6 +542,8 @@ Lap beeps play the instant the car crosses, ahead of any spoken line, at the **S
 ## Race recordings
 
 HeatCaller records every race as it goes out and, once the broadcast has finished, saves the whole thing as an mp3 - with a short clip for each driver beside it, covering just the moments they were named. You don't set anything up: it's on, and the race log says where each file went. A club can keep the broadcast of a title race, or hand a driver the part of the night where they were called - as an mp3, or as a [highlight video](#highlight-videos) for their phone.
+
+![Club Website, Recording tab: the Recording the night card with Record each race and its clip, highlight video, folder and keep options, and the Written from the night card below](../assets/images/club-website-recording.png)
 
 The settings are on **Club Website → Recording**, on the **Recording the night** card - the **Club Website** page has two tabs, **Website** and **Recording**. Searching the sidebar for "recording", "clips" or "highlights" goes straight there. See [Turning it off](#turning-it-off) if you don't want it.
 

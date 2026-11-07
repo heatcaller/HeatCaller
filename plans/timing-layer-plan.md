@@ -6,6 +6,8 @@
 
 ## Status (23 Oct 2026): ALL PHASES BUILT, P0 to P6 (cloud repo; not yet on the PC)
 
+**6 Nov 2026:** on the PC since 5baec70 (24 Oct 2026, "Timing on its own thread (P0-P8)..."), with a clean test build. The commit hashes below are the cloud repo's and are not in this one.
+
 **Commits:**
 - 59083e9: P0 and P1
 - 1047986: P2

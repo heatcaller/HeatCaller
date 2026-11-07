@@ -9,7 +9,7 @@
 
 Each phase is one commit, and `check.cmd` must be green on Windows before the next phase starts.
 
-**Status (25 Oct 2026):** All eight phases built (see "as built" at the end); 1 to 6 compiled on Windows, 7 and 8 not yet.
+**Status (25 Oct 2026):** All eight phases built (see "as built" at the end); 1 to 6 compiled on Windows, 7 and 8 not yet. **6 Nov 2026:** 7 and 8 are on Windows too (fd016ab, 25 Oct, with their `Rcp*` tests), so the whole overhaul has shipped. The next round is track-designer-next-plan.md.
 
 ---
 

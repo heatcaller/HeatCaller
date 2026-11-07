@@ -89,7 +89,7 @@ All data files are plain JSON text, except where noted.
 | `ghosts.json` | Ghost car settings (**Ghost Cars** page). |
 | `rivalries.json` | Rivalries for the announcer (**Voice → Race Calls**). |
 | `signups.json` | Online driver sign-up: whether it's on, and the invites made. The invite codes are sealed; see [Secrets](#secrets). See [Driver sign-up](../online/sign-up.md). |
-| `driver-requests.json` | What drivers have asked the desk for from their phones (a change to their details, their battery pack, a query about a result) and what the desk answered. See [Driver requests](../online/driver-requests.md). |
+| `driver-requests.json` | What drivers have asked the desk for from their phones (a change to their details, their battery pack, a query about a result) and what the desk answered, and the changes drivers made to their own garage from their phones (packs, cars, car photos and setups), which HeatCaller applies by itself. See [A driver's garage from their phone](../race-day/drivers-and-classes.md#a-drivers-garage-from-their-phone). See [Driver requests](../online/driver-requests.md). |
 
 ### Tracks and venues
 

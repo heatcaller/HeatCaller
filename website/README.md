@@ -1,6 +1,6 @@
 # HeatCaller documentation site
 
-The Markdown source for the HeatCaller documentation website. Everything under `docs/` is what gets published; this README, `KNOWN-ISSUES.md` and `STYLE.md` are for whoever maintains the docs and are not published.
+The Markdown source for the HeatCaller documentation website. Everything under `docs/` is what gets published; this README, `KNOWN-ISSUES.md`, `STYLE.md` and `legal-drafts/` are for whoever maintains the docs and are not published.
 
 ## Preview and publish
 

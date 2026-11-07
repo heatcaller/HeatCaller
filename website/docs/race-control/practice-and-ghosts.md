@@ -56,6 +56,7 @@ A saved practice session goes into **Race History** as a Practice session named 
 - **Counts toward:** personal bests (**Race Analytics → Personal Bests**), the **Lap Times** chart and ghost pace.
 - **Never counts toward:** track records, championship points or achievement badges.
 - **Ghosts:** never saved.
+- **Online:** a saved practice session tonight shows on each driver's own night page, marked **Practice**, with no place (see [A driver's own night](../online/index.md#a-drivers-own-night)).
 
 Practice is never kept for crash recovery. If you close HeatCaller while practice is running, it asks "Practice is running. Close HeatCaller anyway?". Choosing **Yes** stops practice the same as pressing **Stop**, so it's saved if **Save automatically on stop** is ticked. Practice and demos never mark a line on the timetable as started.
 
@@ -149,7 +150,7 @@ In practice, the ghost's row sits just under its driver on the board, wherever i
 2. Click **Chase**. A ghost called, for example, "Sam's best" joins the practice at their best tonight on this layout, or their best ever on it before they've set one tonight. Ghost racing is switched on with it, and in a running practice it goes straight on track.
 3. When they beat it, pick the same driver again: the ghost is brought up to their new best from its next lap, rather than a second ghost being added.
 
-It's a ghost like any other: it's on the board and the Big Screen, it can be edited or switched off in the ghost list, and it's kept out of records, results, points and badges. One **Undo** puts the ghosts back as they were. A driver with no lap on the layout at all has nothing to chase, so the ghost sits out and the console says why. "Nobody to chase" means there are no driver profiles yet.
+It's a ghost like any other: it's on the board and the Big Screen, it can be edited or switched off in the ghost list, and it's kept out of records, results, points and badges. One **Undo** takes back only what the chase did: a new ghost comes off, a brought-up ghost goes back to the best it was running, and ghost racing is switched off again if the chase switched it on. Other ghosts, and anything you changed after the chase, are left alone. A driver with no lap on the layout at all has nothing to chase, so the ghost sits out and the console says why. "Nobody to chase" means there are no driver profiles yet.
 
 ## Demo Mode
 
@@ -191,7 +192,7 @@ A saved demo is marked as a demo and is never scored:
 - In **Race History** its type is **Demo**, and its detail title reads "Demo race (not scored)".
 - By default it's never linked to a heat and never moves the program on, even if a round is selected on **Race Control**, and running a round with **Start as Demo...** leaves that round unrun. To rehearse a whole night, tick **Let a demo fill in the race program (rehearse a whole night)** in the **Settings** card (it ticks **Save demo races to Race History** too): a demo race then marks its heat as run and the program moves on, with qualifying, the mains and bump-ups worked out from the demo results. A demo never replaces a heat that has really been run. To clear a rehearsed night, delete its demo races from **Race History** and the heats go back to unrun.
 - It never counts toward championship points (even if you tick it into a championship by hand), badges and achievements, personal bests, track records, ghost pace, handicap suggestions, Race Analytics totals, trends and head-to-head, the event report, or battery pack pace. It counts toward qualifying only when it's been let fill in the program, as above.
-- It isn't published to the online relay, neither in results nor in track best laps.
+- It isn't published to the online relay, neither in results nor in track best laps. The one place it goes online is each driver's own night page, marked **Demo** and counted for nothing, so they can look at their lap stats after a rehearsal (see [A driver's own night](../online/index.md#a-drivers-own-night)).
 - In the results JSON export it has an `"isDemo"` field.
 
 So you can use real driver profiles in a demo without affecting anyone's records.
@@ -232,7 +233,9 @@ A time credit is usually worked out as a driver's gap over a whole race, so on a
 2. Their credit comes off that projected time. Time penalties are added on as they are, not scaled.
 3. Drivers are ranked on the result, so a credit can make up laps, not only break a tie.
 
-When everyone finishes on the same lap, this is simply the credit off their total time. Drivers who stopped before the end (retired) are ranked behind everyone still running, by laps and then time. Drivers with no laps go last.
+When everyone finishes on the same lap, this is simply the credit off their total time. Drivers who stopped before the end (retired) are ranked behind everyone still running, by laps and then time. Drivers marked **DNF** come after the finishers, then drivers with no laps, and drivers marked **DQ** go last.
+
+The winner's lap count and the end of the racing are taken from the finishers only. A **DNF** or **DQ** driver can't set them, so a disqualified car that ran a lap more than the winner doesn't change who wins on handicap.
 
 A handicap (pursuit) start isn't scored this way: its credits were already used as the head start on track.
 

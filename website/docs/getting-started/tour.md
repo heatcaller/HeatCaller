@@ -17,7 +17,7 @@ The sidebar is always dark, whatever look you use. From top to bottom it has:
 1. The **HEATCALLER** header, or your club logo if you've set one. With a look that has Synthwave effects, such as **Synthwave**, it's animated (unless the logo is showing).
 2. The **Search pages...** box, with a chevron beside it that narrows the sidebar to just its icons (see [Just the icons](#just-the-icons)).
 3. The list of pages. Click one to open it.
-4. Icon buttons at the bottom: **Manage Navigation** (in Advanced mode only), the announcer mute, and **Undo**. They have no text on them - hover over one to see its name. They're described below. In Advanced mode an amber **Advanced** sits above them; see [Simple and Advanced mode](simple-and-advanced-mode.md). When your club uses the HeatCaller voice, the AI commentary through the relay or ElevenLabs, a small line above them shows how much of this month's allowance is used, for example "AI 47% · Voice 34%". Click it for the **This Month** window; see [The chip in the sidebar](../announcer/commentary.md#the-chip-in-the-sidebar).
+4. Icon buttons at the bottom: **Manage Navigation**, the announcer mute, and **Undo**. They have no text on them - hover over one to see its name. They're described below. In Advanced mode an amber **Advanced** sits above them; see [Simple and Advanced mode](simple-and-advanced-mode.md). When your club uses the HeatCaller voice, the AI commentary through the relay or ElevenLabs, a small line above them shows how much of this month's allowance is used, for example "AI 47% · Voice 34%". Click it for the **This Month** window; see [The chip in the sidebar](../announcer/commentary.md#the-chip-in-the-sidebar).
 
 HeatCaller opens on the **Race Control** page.
 
@@ -132,7 +132,7 @@ You can put the pages you use most at the top, and hide the ones you never use.
 
 **To reorder by dragging:** drag a page up or down in the sidebar list. The new order is saved straight away. A page stays in its own group (Essentials or Club Tools); drop it in the other group and it moves back into its own.
 
-**To reorder or hide with Manage Navigation** (in Advanced mode; Simple mode keeps the sidebar as it ships and has no **Manage Navigation** button):
+**To reorder or hide with Manage Navigation** (in Simple and Advanced mode alike):
 
 1. Click **Manage Navigation** at the bottom of the sidebar.
 2. In the **Manage Navigation** dialog:
@@ -182,11 +182,11 @@ Press <kbd>?</kbd> at any time you're not typing in a box to see a sheet of the 
 
 ## The sidebar buttons
 
-Icon buttons, with no text on them - hover over one to see its name. **Manage Navigation** is there in Advanced mode only.
+Icon buttons, with no text on them - hover over one to see its name. All three are there in Simple and Advanced mode alike.
 
 | Button | What it does |
 |---|---|
-| **Manage Navigation** | Opens the dialog for hiding and reordering pages (see above). Advanced mode only. |
+| **Manage Navigation** | Opens the dialog for hiding and reordering pages (see above). |
 | **Mute Announcer** / **Unmute Announcer** | Silences the announcer (anything already queued is dropped), stops the crowd ambience and pauses the music. Unmuting brings back the ambience and music that were playing. The mute is remembered between sessions. The icon turns red while muted. <kbd>M</kbd> does the same (except while you're typing in a box). |
 | **Undo** | Undoes the last change you made (<kbd>Ctrl</kbd>+<kbd>Z</kbd> does the same, except while you're typing in a box). A count badge appears on the icon while there's anything to undo; hover over it to see the whole list, in order. To undo several steps at once, right-click the button (or click the small arrow on it) and pick a step: it's undone along with everything newer. HeatCaller keeps the last 25 undoable changes. With nothing to undo, there's no badge and the tooltip reads "Nothing to undo." |
 

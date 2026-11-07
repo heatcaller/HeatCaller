@@ -4,6 +4,14 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **The help catches up with 3-6 November (6 November).** Every page of the guide was checked against the app and the relay again, and the screenshots were retaken. What it now covers, and hadn't:
+    - **Kokoro stand-ins for the whole cast.** On **Voice → Cast**, each speaker has an **If ElevenLabs runs out:** voice with its own **Test Voice**. When your ElevenLabs allowance runs out, or the usage chip reaches 100%, each speaker switches to their own Kokoro voice and saved ElevenLabs lines are held back, so the night stays in one set of voices. See [Each of the cast when ElevenLabs runs out](announcer/voice.md#each-of-the-cast-when-elevenlabs-runs-out).
+    - **Race Control:** the level meters sit under **Broadcast** at the foot of the clock column (see [Level meters](race-control/running-a-race.md#level-meters)), and a lap breakdown scrolls back through every lap.
+    - **Manage Navigation** shows in Simple mode too.
+    - **Retire** asks "Are you sure?" first, for transponders, packs, cars and chassis types.
+    - **Choose Live Board Columns** on **Club Website** picks the columns of the relay's live board. See [Live board columns](online/setup.md#live-board-columns).
+    - **The relay's pages:** the new Home, the Live page's flag card, charts and track map, race grids and running late on Schedule, head to head, club health and theoretical best on Results, the Tonight, Races, Garage and Stats spaces on **Me**, a driver's garage from their phone, and push alerts. See [Your club's pages](online/index.md#your-clubs-pages), [Alerts](online/index.md#alerts), [Garage](online/index.md#garage) and [A driver's garage from their phone](race-day/drivers-and-classes.md#a-drivers-garage-from-their-phone). Hosting them is in [Push alerts](admin/relay-hosting.md#push-alerts).
+
 - **The standard first-night guide is club rules (6 November).** **Your first night - what happens** now covers checking in, safety in the pits, batteries, the driver stand, racing clean, the start, marshalling, race control and leaving the place tidy, instead of how the page works. A club's own guide is unchanged. A club that had sent the old standard guide unchanged gets the new one; the **Club Website** page shows it in the box. Update HeatCaller on the race PC and redeploy the relay (`fly deploy --ha=false`).
 
 - **The first-night guide on Home (6 November).** **Your first night - what happens** is now the first thing on Home, for every phone, folded until tapped. **Got it - hide this** hides it for good on that phone, here and on the check-in and night pages.

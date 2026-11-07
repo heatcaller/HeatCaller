@@ -89,13 +89,24 @@ A relay that has been idle may take a second or two to wake up. The test and pub
 
 ## What gets published
 
-The **What gets published** card lists what's always sent: the live race while one is running, each session's results as it is saved, championship standings, today's schedule (from the day's timetable), the badges drivers have earned, and every track layout with its lap record and best laps. Demo races are never published, in results or in track best laps.
+The **What gets published** card lists what's always sent: "The live race while one is running, each session's results as it is saved, championship standings, today's schedule from the Timetable, the achievements drivers have earned, and every track layout with its lap record and best laps." Demo races are never published, in results or in track best laps. HeatCaller also sends where qualifying stands for each class, and the sponsors switched on on the **Sponsors** page (see [Sponsors](../screens/big-screen.md#sponsors)). For everything that goes online and what never does, see [What's published, and what never is](index.md#whats-published-and-what-never-is).
+
+### Live board columns
+
+**Choose Live Board Columns** picks the columns of the live race on the club's **Live** page. It opens the column picker, titled "Club website live board"; **Restore Defaults** in it goes back to following the Live Results page. The line under the button says which columns are in use, for example "The live race on the club's website. The same columns as the Live Results page: ..." or "... Its own columns: ...", and ends "The transponder number is never shown online."
+
+- Until you pick, the club's **Live** page shows the same columns as the **Live Results** page on **Local Screens**, and follows any change made there (see [Live results](../screens/phone-and-web.md#live-results)). A pick that comes out the same as the Live Results page's is kept as no pick, so the board goes on following that page.
+- The **Transponder** column is never offered here, and never goes online.
+- **Undo** in the sidebar puts the previous columns back ("Change the website's live board columns").
+
+### The switches
 
 | Setting | What it does | Default |
 |---|---|---|
-| **Also publish the roster and heat line-ups (who is entered, and who is in which heat)** | Adds who is in each heat to the Schedule page, and sends the list of who is entered. The relay only shows either if your relay admin has also allowed it for your club; until then the Schedule page shows the heats without who is in them. | Off |
+| **Also publish the roster and heat line-ups (who is entered, and who is in which heat)** | Adds who is in each heat to the Schedule page, with each race's grid (slot, driver and car) when a race is tapped, and sends the list of who is entered. The relay only shows any of it if your relay admin has also allowed it for your club; until then the Schedule page shows the heats without who is in them. | Off |
 | **Give each driver their own night at a private address** | "Each driver who raced gets a page of their evening - races, finishes, best laps and moments - at an address built from the code on their check-in badge, which nobody without it can find or open." Needs online check-in set up. Unticking takes every night off the relay, with any driver requests still waiting there. See [A driver's own night](index.md#a-drivers-own-night). | Off |
-| **Let drivers send changes from their phone** | A step in, under the nights tick. From their night page a driver can ask to change their details or battery pack, ask to be kept more private online, or query a result. Nothing changes until the desk approves it. Grayed out until drivers' nights and online check-in are on. Unticking throws away any requests still on the relay. See [Driver requests](driver-requests.md). | Off |
+| **Let drivers send changes from their phone** | A step in, under the nights tick. From their night page a driver can ask to change their details, ask to be kept more private online, or query a result; nothing changes until the desk approves it. It also opens each driver's own Garage on their night page: the pack in their car, their packs, cars, car photos and setup sheets, which go straight into HeatCaller with no approval at the desk. Grayed out until drivers' nights and online check-in are on. Unticking throws away any requests still on the relay. See [Driver requests](driver-requests.md). | Off |
+| **Let drivers query a result** | A step in, under the requests tick. "Shows "Something wrong?" under each race on a driver's night page. Untick it and drivers ask about a result at the desk instead; their other requests still work." Grayed out until **Let drivers send changes from their phone** is ticked and can be used. See [Querying a result](driver-requests.md#querying-a-result). | On |
 | **Offer drivers their night by email** | Drivers who asked for it on their profile are emailed their races, their report card and a link to their night page. See [Drivers' nights by email](#drivers-nights-by-email). | Off |
 | **Send automatically when the race day closes** | A step in, under the email tick: sends tonight's night emails by itself "When tonight's race day is closed on Race Day. Otherwise, press Email Tonight's Nights." Grayed out until **Offer drivers their night by email** is ticked. | Off |
 | **Captions on the club's live page** | "What the announcer says, as text on the live page, for anyone who can't hear the PA - no sound needed. Lines about drivers who asked to be shown by initials are left out." See [Captions](index.md#captions). Unticking takes the captions back off the relay, and lines said while it was off are never sent later. | Off |
@@ -159,6 +170,32 @@ The pages' colors and the club logo used to be set here too. Since 0.48 they're 
 
 !!! note
     The larger logo, its plate and the instant logo change need the relay updated for 0.48. See [Updating the relay](../admin/relay-hosting.md#updating-the-relay).
+
+## Your first night guide
+
+The **Your first night guide** card holds the guide a driver on their first night at the club sees on their phone, **Your first night - what happens** (see [The first-night guide](check-in.md#the-first-night-guide)). The box starts with HeatCaller's standard guide, the club rules, for you to reword. The card shows in Simple mode too.
+
+- Write one part per paragraph, with a blank line between parts, each starting with its heading and a colon, for example "Parking: round the back, by the bins." A paragraph with no colon near its start is shown as words with no heading. The relay keeps up to 20 parts, with a heading of up to 60 characters and up to 600 characters of words each.
+- Nothing reaches the phones as you type. Click **Send to the club's pages** and the guide goes within a few seconds. A driver who had hidden the old guide with **Got it - hide this** sees the new one.
+- **Put back the standard guide** puts HeatCaller's own words back in the box and sends them.
+
+The line under the buttons says where things stand: "Drivers see the standard guide.", "Changed here, not sent yet - *n* parts. Press Send to put it on drivers' phones." or "Sent. Drivers see this guide within a few seconds, including any who had hidden the old one."
+
+Since 6 November 2026 the standard guide is general club rules. A club that had sent the old standard guide unchanged gets the new one, and the box shows it. The card's own hint says the guide shows on drivers' check-in and night pages; since 6 November it is on the check-in card and at the top of the club's **Home** page instead (see [Your club's pages](index.md#your-clubs-pages)).
+
+## Club updates
+
+The **Club updates** card puts the club's news, such as a change of night, a new track layout or a race coming up, in a **Club updates** card on the club's **Home** page. It's optional: leave the box empty for no card. It shows in Simple mode too.
+
+- Write one item per paragraph, with a blank line between items. Start an item with a heading and a colon to give it a heading. Up to 10 items, of up to 1,000 characters each.
+- As with the guide, nothing goes until you click **Send to the club's pages**. Each phone can hide the card with **Got it - hide this**; new updates show again on a phone that had hidden the last ones.
+- **Take the card down** empties the box and takes the card off the pages.
+
+The line under the buttons says, for example, "No club updates card on drivers' pages.", "Changed here, not sent yet - *n* items. Press Send to put it on drivers' phones." or "Sent. Drivers see these within a few seconds, including any who had hidden the last ones."
+
+The card's hint still says the updates go on drivers' night pages; they moved to **Home** on 5 November 2026.
+
+The guide and the updates need the relay redeployed since 6 Nov 2026 (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)).
 
 ## The relay also speaks
 
@@ -258,7 +295,7 @@ Older results stay on the laptop. If you move to a new relay, only the last 36 h
 
 ## Deleting everything published
 
-**Delete Everything Published** in the **Status** card removes everything your club has on the relay: results, standings, the live race, the schedule, badges, tracks, the look and the online check-in list. It asks first. Nothing on the laptop is touched.
+**Delete Everything Published** in the **Status** card removes everything your club has on the relay: results, standings, the live race, the schedule, achievements, tracks, the look and the online check-in list. It asks first. Nothing on the laptop is touched.
 
 Before it deletes anything, it unticks **Publish to the relay** and stops any upload that was already on its way, so the relay stays empty. Nothing goes back up, not even after a restart, until you tick **Publish to the relay** again. When you do, everything is sent again, including the last 36 hours of results.
 

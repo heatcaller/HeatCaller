@@ -30,7 +30,7 @@ Race Analytics (Overview, Personal Bests, Lap Times, Head to Head, Trends, Pace)
 Practice, Ghost Cars, Demo Mode, Venues, Themes (no tabs: Looks, Club logo and Appearance cards), Sponsors, Local Screens,
 Club Website (Website, Recording), Voice (Voice, Cast, Race Calls with Rivalries at its end, AI Commentary),
 Sounds (Mixer, Soundscapes, Imaging, Effects, Ambience, Music, Lap Beeps), Connection, Backup & Restore.
-There's a "Search pages..." box and "Manage Navigation..." to reorder/hide pages (Advanced mode only).
+There's a "Search pages..." box and "Manage Navigation..." to reorder/hide pages (in both Simple and Advanced mode since 6 Nov 2026).
 The sidebar shows the pages in groups: ESSENTIALS, then CLUB TOOLS (Race Day, Championship, Rentals, Handicaps, Venues,
 Sponsors, Local Screens, Club Website), each in the order above; while a race day is open, TONIGHT (Race Day, Race Control,
 Championship) sits on top. Simple mode leaves out Venues and hides the Race Calls, Imaging, Effects, Ambience, Lap Beeps

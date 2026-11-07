@@ -8,7 +8,7 @@ The pages covered here are all in the sidebar: **Driver Hub**, **Classes**, **Re
 
 A driver profile ties a transponder to a person. When the decoder reports a transponder, HeatCaller looks up its profile to get the name the announcer says, the class the driver races in, and everything shown on screens and results.
 
-![Driver Hub: the roster on the left with Ella Vator selected, and her card on the right with class badges, Checked in, and the Profile tab's race-day and profile details](../assets/images/driver-hub.png)
+![Driver Hub: the roster on the left with Terry Byte selected, and their card on the right with class badges, Checked in, and the Profile tab's race-day and profile details](../assets/images/driver-hub.png)
 
 The page has two views. **Drivers** and **Garage** in the upper left switch between them, and the page opens on the one you used last. The banner for [unknown transponders](../timing/transponders.md#unknown-transponders) is across the top of both.
 
@@ -77,7 +77,7 @@ The list shows each transponder the driver has, which car it's **Fitted to** (or
 
 - **Fitted to:** sets which of the driver's cars the selected transponder is in.
 - **Add Transponder** adds another one: a second car's, a spare or a replacement.
-- **Retire** marks the selected one as no longer used. It stays the driver's, and so does everything timed on it. **Bring Back** puts it back in use.
+- **Retire** marks the selected one as no longer used, after asking "Are you sure you want to retire transponder *number*?". It stays the driver's, and so does everything timed on it. **Bring Back** puts it back in use.
 - **Transfer** gives the selected one to another driver for good: sold, given or swapped. See [Transfer a transponder](#transfer-a-transponder).
 - **Remove** takes a transponder off the driver altogether; laps already timed on it no longer count as theirs. The main transponder can't be removed.
 - **Add Split Transponder** adds one the [split loop](../timing/decoders.md#a-split-loop) reads, listed as "split loop". Drive the car over the split loop first, and its number is filled in. It's fitted to the driver's car when they have only one; otherwise pick the car in **Fitted to:**. A split transponder never counts a lap and can't be transferred on its own. Its number only has to be different from other split transponders, since it's a different decoder's.
@@ -113,22 +113,33 @@ The **Batteries** tab answers one question: is the driver slower on a particular
 
 - **Add Pack** adds one: a **Label:** (whatever's written on it, like "3" or "Blue tape"), a **Type:** (NiMH, LiPo, LiFe, Alkaline, or type your own) and **Notes:**. A driver's first pack goes straight in the car.
 - **Use This One** puts the selected pack in the car. On the pack that's in, it reads **Take Out of the Car**.
-- **Edit**, **Retire** (or **Bring Back**), **Transfer** and **Delete** act on the selected pack. A retired pack keeps its history but isn't offered any more, and comes out of the car. Deleting a pack removes it from every session it's recorded on, so its pace history is lost: retire it instead to keep the history. **Transfer** gives it to another driver or the club for good; the sessions run on it stay recorded.
+- **Edit**, **Retire** (or **Bring Back**), **Transfer** and **Delete** act on the selected pack. **Retire** asks "Are you sure you want to retire pack *label*?" first, with **No** as the default; **Bring Back** is one click. A retired pack keeps its history but isn't offered any more, and comes out of the car. Deleting a pack removes it from every session it's recorded on, so its pace history is lost: retire it instead to keep the history. **Transfer** gives it to another driver or the club for good; the sessions run on it stay recorded.
 
 Every change can be undone.
 
-**The pack in the car is what gets recorded.** When a race or practice session is saved, each driver in it is recorded as running the pack in their car. You can set it in four places:
+**The pack in the car is what gets recorded.** When a race or practice session is saved, each driver in it is recorded as running the pack in their car. You can set it in five places:
 
 - **Use This One** on this tab.
 - The **Pack** column on **Race Day → Who's Racing** at check-in. See [The Drivers card](events-and-entries.md#the-drivers-card).
 - Right-click the driver on the **Race Control** leaderboard and choose their pack. During a race it puts the pack in the car, so the race is recorded on it. After the flag, it records the pack for the race just run and puts it in the car too. See [Running a race](../race-control/running-a-race.md).
 - **Pack in the car** under the driver on the phone race manager's **Entries** tab. See [Phone and web](../screens/phone-and-web.md).
+- The driver, from **Garage** on their own phone (see [A driver's garage from their phone](#a-drivers-garage-from-their-phone)).
 
 Changing the pack in the car never changes sessions already recorded.
 
-**Recent sessions** lists the driver's sessions, newest first, with the **Pack** each was run on and **Recorded by**: **In the car** (the pack in the car when it was saved), **Race Control**, **By hand** (picked here), **Before** (from before packs were per driver) or **Whole session** (see below). Double-click a session, or select it and click **Set Pack**, to pick a different pack or **No pack recorded**. A pack picked by hand always wins over the one in the car.
+**Recent sessions** lists the driver's sessions, newest first, with the **Pack** each was run on and **Recorded by**: **In the car** (the pack in the car when it was saved), **Race Control**, **By hand** (picked here), **Phone** (picked by the driver on their phone), **Before** (from before packs were per driver) or **Whole session** (see below). Double-click a session, or select it and click **Set Pack**, to pick a different pack or **No pack recorded**. A pack picked by hand always wins over the one in the car.
 
-**Pace by pack** compares the driver's pace across packs: **Sessions**, **Best lap**, **Avg best lap** and the **Gap** to the quickest pack. A gap of 0.1 seconds or more is in red.
+**Pace by pack** compares the driver's pace across packs, on the layout picked in **Layout:** (**All layouts** to start with): **Races**, **Best**, **Median** (the median clean lap), **Consistency** (how steady its laps are, for example "±0.120s"), **Fade** (the last third of a race against the first) and the **Gap** from each pack's median to the quickest pack's. A gap of a tenth of a second or more is in red, and the quickest pack is in green. A pack with fewer than 3 races is marked "(few races)" and grayed out, since that's too few to trust. **Chart:** draws the packs under the list, as **Fade through a race** or **Median lap over time**.
+
+<!-- screenshot: a driver's Batteries tab with Pace by pack and the Fade through a race chart -->
+
+### A driver's garage from their phone
+
+A driver signed in to their night on the club's relay pages can look after their own garage from **Garage** on **Me**, and what they change lands in **Driver Hub** by itself within seconds, with no approval at the desk: their battery packs (added, edited, retired, brought back or removed, which is a retire instead once a pack has races), the pack in the car and the pack each race was run on, their cars (details, racing tonight and photos) and setups filled in on the car's setup sheet. Each change is an **Undo** step of its own, headed "Phone:". Only a driver's own packs and cars can be changed this way, never the club's or one lent to them, and a driver with a personal PIN needs it. If the desk set a race's pack after the phone asked, the desk's choice stays.
+
+<!-- TODO: confirm whether phone garage changes need Driver Requests (Club Website) turned on, and link a relay page section once online/ documents the phone Garage -->
+
+The laptop needs the [relay](../online/index.md) set up and running for this; with HeatCaller closed, the changes wait on the relay until it's back.
 
 Before this version a pack was recorded for a whole session, not for each driver. Those packs still count for every driver in the session (**Whole session**). The first time you start this version, a session one driver ran alone becomes that driver's own (**Before**), and a pack only ever recorded for one driver becomes theirs. Every other pack becomes the club's.
 
@@ -623,17 +634,19 @@ The **Garage** page shows all the club's cars. One driver's cars are also on the
 
 The **Garage** page shows the club's cars as cards, grouped under their class. A car with a photo shows it; one without gets a plate with its number. **Show:** picks whose cars are on the wall (**Everyone's cars**, **The club's own cars**, or one driver's), and **Include retired** adds retired cars. The buttons under the wall are **Add a Car**, **Chassis Types** (the list of chassis a car can be), **Chassis Sheets** (see [Chassis sheets](#chassis-sheets)) and **Club Batteries** (see [Club batteries](#club-batteries)).
 
+![Garage page: Everyone's cars, grouped under Box Stock 2, Mod 2 and Stock 4, two with photos and the rest on numbered plates, with Add a Car, Chassis Types, Chassis Sheets and Club Batteries below](../assets/images/garage.png)
+
 Click a car to open it: its photos (**Photos**), its details (**Edit**), **Lend Out**, **Transfer** (see [Transfer a car](#transfer-a-car)), **Retire** and **Delete**, and every setup logged for it.
 
 - **Photos** adds pictures with **Add a Photo**, takes one off with **Remove**, and **Make it First** makes the selected one the car's main picture. Pictures are copied into HeatCaller, so they stay with the car.
 - **Edit** (or **Add a Car**) has the car's **Name:**, **Owner:**, **Class:**, **Chassis:**, **Shell:**, **Race number:** and **Notes:**. **Owner:** can only be picked when the car is added.
 - **Lend Out** lends the car to another driver for the race day you have open, in **Lend it to:**. The loan is for that day only: the car goes back to its owner when the day ends, and **Nobody - it stays with its owner** takes it back sooner. It's grayed out while no race day is open. The car shows who has it as **On loan to:**.
-- **Retire** keeps a car you no longer run out of the way without losing it; on a retired car it reads **Put Back**.
+- **Retire** keeps a car you no longer run out of the way without losing it. It asks "Are you sure?" first, with **No** as the default. On a retired car it reads **Put Back**, which is one click.
 - **Delete** asks first. Setups logged against the car stay in the log, without the car.
 
-Each of these can be undone.
+Each of these can be undone. A driver can also change their own cars from their phone; see [A driver's garage from their phone](#a-drivers-garage-from-their-phone). A car window left open on the laptop doesn't save an older copy over a change made from the phone.
 
-**Chassis Types** on the **Garage** page is the club's list of chassis a car can be. Each has a **Name**, a **Maker** and a **Setup sheet to use**: logging a setup for a car on that chassis opens on that sheet. **Add** makes a new one, **Save Changes** keeps your edits, **Retire** keeps one nobody runs any more, and **Delete** removes it.
+**Chassis Types** on the **Garage** page is the club's list of chassis a car can be. Each has a **Name**, a **Maker** and a **Setup sheet to use**: logging a setup for a car on that chassis opens on that sheet. **Add** makes a new one, **Save Changes** keeps your edits, **Retire** keeps one nobody runs any more (after an "Are you sure?"), and **Delete** removes it.
 
 Setups are logged against a car: open a car, and its setups are listed under **Setups logged for this car**. A setup records what was in the car and can be linked to the session it ran in, so the session's best lap shows right next to it. Over time it shows which changes actually made the car quicker.
 

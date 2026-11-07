@@ -12,6 +12,10 @@ dotnet test
 
 Or in Visual Studio: **Test → Run All Tests**. The first run downloads the test packages from NuGet.
 
+`check.cmd` at the top of the repo runs the same tests with a progress bar (`test-progress.ps1`), then the relay's. The whole suite is several thousand tests and takes a long time (around 20 to 45 minutes on the dev laptop), so finish editing before starting it: a rebuild mid-run means starting again. `test-progress.ps1 -Filter Commentary` runs only the tests whose names contain that.
+
+If the build folder is locked, build elsewhere with `--artifacts-path`, but keep that folder **inside** the repo: many tests find the source by walking up from the build folder to `check.cmd`, and fail when they can't.
+
 ## The one rule: tests never touch the club's real data
 
 Every file the app reads or writes lives under `AppPaths.Root` (`%AppData%\HeatCaller`) or `AppPaths.LocalRoot` (`%LocalAppData%\HeatCaller`). Under test, `TestSetup` redirects both to `%TEMP%\HeatCaller.Tests\<run>` before any test runs, and `AppPaths.RedirectForTests` refuses any folder that overlaps the real ones.
@@ -21,6 +25,8 @@ Every file the app reads or writes lives under `AppPaths.Root` (`%AppData%\HeatC
 - **Not covered by the redirect:** the default backup folder and results exports, which go to Documents on purpose. A test of `BackupService.CreateBackup` or a results export must pass its own folder.
 
 ## What is here
+
+About 540 test files now. The table below is the foundation laid in late September and is not a full list. Most of the rest come in families named for the work that added them: `BugHunt*` (one set per bug hunt, through `BugHunt11b_*`), `TimingLayer_P0` to `P8` (timing on its own thread), `DriverExp_*` (the driver's night and phone pages), `Rcp*` and `TrackDesigner*` (the Track Designer), `KnownIssues*`, `Roadmap*`, and `DecoderProtocolTests`, `StreamDecoderClientTests` and `StreamDecoderSourceTests` (the Beta decoders). `WindowLayoutTests` holds every converted window (dialog) to what `LayoutTests` holds the pages to, built with made-up data from the `WindowCatalog.*` files.
 
 | File | Covers |
 |---|---|
@@ -60,7 +66,7 @@ Every file the app reads or writes lives under `AppPaths.Root` (`%AppData%\HeatC
 
 ## The layout report
 
-`LayoutTests` writes `bin\Debug\net10.0-windows\layout\report.txt` on every run: for each page and each size, what does not fit, and where. It is each page's own layout, as the app shows it - nothing in the app nudges a page into shape any more (the old layout repair pass was deleted on 30 Sep, once every page was on the layout pieces, `LayoutPieces.cs`, ROADMAP item 8).
+`LayoutTests` writes `bin\Debug\net10.0-windows\layout\report.txt` on every run: for each page and each size, what does not fit, and where. It is each page's own layout, as the app shows it - nothing in the app nudges a page into shape any more (the old layout repair pass was deleted on 30 Sep, once every page was on the layout pieces, `LayoutPieces.cs`, ROADMAP item 8). `WindowLayoutTests` writes the same for the windows beside it, in `layout\windows.txt`.
 
 For pictures as well, run `layout.cmd` beside `check.cmd`: every page and tab at every size, in `layout\pictures`. `layout.cmd "Race Control"` does one page (several: `"Race Control;Voice"`), which is quicker. It copies the report and the pictures to `layout-check\` at the top of the folder too, where a clean build doesn't delete them and Claude's file bridge can reach them (it stops seven folders down); git ignores that folder.
 
