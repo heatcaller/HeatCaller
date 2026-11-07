@@ -738,6 +738,40 @@ public sealed partial class RaceControlControl
                 $"{AppTime.LogStampNow()}  [commentary] Recap has the garage's own record of {Plural.Of(raceCars.Cars.Count, "car")}.");
         }
 
+        // AND THE HANDICAP, for a class scored on one (7 Nov 2026). The
+        // credits were only ever applied in the event report, so a class
+        // racing on time or lap credits had the recap name the raw winner
+        // and never say who won on handicap. Not for a pursuit start: its
+        // credits were spent as the head start on track, and applying them
+        // again would count them twice (see HandicapCalculator's note).
+        // Loaded here as the start sequence loads it - once a race, and
+        // this is the only part of the recap that needs it.
+        RaceHandicap? raceHandicap = null;
+
+        if (commentaryAvailable
+            && round is not null
+            && _race.StartType != RaceStartType.StaggeredHandicap)
+        {
+            try
+            {
+                var handicaps = HandicapStore.Load();
+                var mode = handicaps.ModeFor(round.ClassName);
+
+                if (mode != HandicapMode.None)
+                {
+                    raceHandicap = new RaceHandicap(mode, HandicapCalculator.Apply(record.Results, handicaps, mode));
+
+                    StatusMessage?.Invoke(
+                        $"{AppTime.LogStampNow()}  [commentary] {round.ClassName} is scored on handicap - the recap says who won on it.");
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [commentary] Recap goes without the handicap result - it could not be worked out: {ex.Message}");
+            }
+        }
+
         // AND WHO HAS BEEN WINNING THE MAINS ON THIS LAYOUT (11 Oct 2026) -
         // the one claim in the broadcast no human announcer could make.
         // Nobody standing at a club track holds "who won the main here at
@@ -1199,7 +1233,8 @@ public sealed partial class RaceControlControl
                         cars: raceCars,
                         mains: raceMains,
                         leadChanges: recapLeads,
-                        presentedBy: recapSponsor?.Name)
+                        presentedBy: recapSponsor?.Name,
+                        handicap: raceHandicap)
                     : null;
 
                 // A recap that was written but never spoken is not "the last

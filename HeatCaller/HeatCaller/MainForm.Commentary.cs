@@ -216,6 +216,33 @@ public partial class MainForm
 
         recording.PlayADriversNight = announcer.PlayADriversNightAsync;
 
+        // THE SEASON'S OWN PIECE (7 Nov 2026) - SeasonPiece.FactsFor, built
+        // on 13 Oct 2026 and called by nothing until now. The season, its
+        // races as EventSpine resolves them (demo and imported races out,
+        // as the championship itself leaves them) and its table in the
+        // order ComputeStandings returns it - never re-sorted, which is
+        // what keeps a season that went to a tie-break naming the champion
+        // the table names. Read fresh each press, on the UI thread.
+        recording.Seasons = () => _seasonStore.All
+            .Select(season => (season.Id, season.Name))
+            .ToList();
+
+        announcer.SeasonFor = id =>
+        {
+            if (_seasonStore.Get(id) is not { } season || _rounds is null)
+            {
+                return null;
+            }
+
+            var races = EventSpine.SessionsFor(season, _raceEvents, _rounds, _sessionHistory)
+                .Where(s => !s.IsNotScored())
+                .ToList();
+
+            return (season, races, SeasonStore.ComputeStandings(season, races, _profiles));
+        };
+
+        recording.PlayTheSeason = announcer.PlayTheSeasonAsync;
+
         // And why the announcer said what it last said - see
         // NightAccount.Proof.
         recording.ProofOfTheLastLine = announcer.TheProofOfTheLastLine;
@@ -812,12 +839,28 @@ public partial class MainForm
         // numbers, and the two could disagree after a result was corrected
         // mid-evening. What differs is what each SAYS; see
         // CommentaryDirector's FormGuide case.
-        director.GridHistory = () => CommentaryReaders.GridHistory(
-            _race.GetOrderedStandings().Select(s => s.TransponderId).ToList(),
-            _activeRound?.ClassName,
-            _profiles,
-            _sessionHistory,
-            _rounds);
+        //
+        // AND WHERE EACH STANDS IN THE CHAMPIONSHIP (7 Nov 2026), which
+        // DriverForm had a place for and nothing filled - so the form guide
+        // could read out "second, first, fourth" about a driver leading the
+        // title and never say so. The table before this race, every driver
+        // on the grid, by the same reader the race intro's stakes use.
+        director.GridHistory = () =>
+        {
+            var grid = _race.GetOrderedStandings().Select(s => s.TransponderId).ToList();
+
+            var (form, rivalries) = CommentaryReaders.GridHistory(
+                grid,
+                _activeRound?.ClassName,
+                _profiles,
+                _sessionHistory,
+                _rounds);
+
+            var stake = CommentaryReaders.ChampionshipBefore(
+                _activeRound, grid, _seasonStore, _rounds, _raceEvents, _sessionHistory, _profiles, most: int.MaxValue);
+
+            return (CommentaryReaders.WithChampionship(form, stake), rivalries);
+        };
 
         // AND THE SHAPE OF THEIR LAST FEW NIGHTS (11 Oct 2026) - the half
         // of a form guide the app did not have. A reader of its own and not

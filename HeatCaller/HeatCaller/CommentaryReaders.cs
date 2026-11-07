@@ -1048,13 +1048,19 @@ public static partial class CommentaryReaders
                 // it - whether a title is mathematically settled needs the
                 // rounds left and the points on offer, and neither is here
                 // (the same silence Championship above keeps).
+                // What is behind the total, too (7 Nov 2026) - see
+                // ChampionshipMove's note on the same four figures.
                 rows.Add(new ChampionshipStanding(
                     before[i].DriverName,
                     before[i].DriverName,
                     i + 1,
                     i + 1,
                     before[i].TotalPoints,
-                    Math.Max(0, leaderPoints - before[i].TotalPoints)));
+                    Math.Max(0, leaderPoints - before[i].TotalPoints),
+                    DroppedRounds: before[i].DroppedRounds,
+                    DroppedPoints: Math.Max(0, before[i].RawPoints - before[i].TotalPoints),
+                    CarriedIn: before[i].CarriedIn,
+                    Dnfs: before[i].Dnfs));
             }
 
             // A table nobody in this race is in is not what this race is
@@ -1092,6 +1098,45 @@ public static partial class CommentaryReaders
     /// drivers and never asked about the ninth is exactly the claim this
     /// whole feature exists to refuse.
     /// </summary>
+    /// <summary>
+    /// The grid's records with each driver's place in the championship
+    /// filled in, from the table <see cref="ChampionshipBefore"/> worked out
+    /// - DriverForm.ChampionshipPosition, which was declared, documented and
+    /// set by nobody until 7 Nov 2026.
+    ///
+    /// Matched on the driver's name, which is what the standings and the
+    /// grid's records are both keyed on (GridHistory takes the profile's
+    /// DriverName, ChampionshipBefore matches the same). A driver the table
+    /// does not have keeps null, which says nothing.
+    /// </summary>
+    /// <param name="grid">The grid's records, from <see cref="GridHistory"/>.</param>
+    /// <param name="stake">The championship as it stands before this race, with EVERY driver on this grid (pass most: int.MaxValue).</param>
+    public static IReadOnlyList<DriverForm> WithChampionship(IReadOnlyList<DriverForm> grid, ChampionshipAtStake? stake)
+    {
+        if (stake is null || stake.OnThisGrid.Count == 0)
+        {
+            return grid;
+        }
+
+        var places = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var row in stake.OnThisGrid)
+        {
+            var name = Typed(row.Name);
+
+            if (name.Length > 0 && row.PositionNow > 0)
+            {
+                places.TryAdd(name, row.PositionNow);
+            }
+        }
+
+        return grid
+            .Select(form => places.TryGetValue(Typed(form.Name), out var place)
+                ? form with { ChampionshipPosition = place }
+                : form)
+            .ToList();
+    }
+
     private const int MostEntrantsToProve = 24;
 
     /// <summary>The id the hypothetical finishing order is scored under, which no saved race can have - ChampionshipLive.LiveSessionId's own trick.</summary>
@@ -4565,7 +4610,12 @@ public static partial class CommentaryReaders
             // THE CALLER'S WORDS (7 Nov 2026, known issues): the season's
             // "Announcer's note", read out as typed, for a championship one
             // of tonight's filed races counts towards - see SeasonNoteFor.
-            SeasonNoteFor(seasons, rounds, events, races));
+            SeasonNoteFor(seasons, rounds, events, races),
+
+            // WHAT RACE CONTROL DECIDED TONIGHT (7 Nov 2026), named as the
+            // announcer says them - for the night's recap. See
+            // CommentaryOfficialFacts.ForTheNight.
+            CommentaryOfficialFacts.ForTheNight(races, who => SaidAs(profiles, Typed(who))));
     }
 
     /// <summary>

@@ -157,6 +157,11 @@ public static class CommentaryWeekFacts
             return 500 + driver.NightsOut;
         }
 
+        if (MissedJustOne(driver))
+        {
+            return 400 + driver.NightsOut;
+        }
+
         if (driver.FinishedEverything && driver.RacesStarted >= LeastRacesForClean)
         {
             return 300 + driver.RacesStarted;
@@ -174,6 +179,17 @@ public static class CommentaryWeekFacts
     /// kind of true a room laughs at.
     /// </summary>
     public const int LeastRacesForClean = 6;
+
+    /// <summary>
+    /// Out at all but one of a full window of the club's nights - read off
+    /// <see cref="DriverWeeks.NightsMissed"/>, which counts a miss anywhere
+    /// in the window, so a driver who missed one night a month ago and has
+    /// been at every one since is this and not "back".
+    /// </summary>
+    private static bool MissedJustOne(DriverWeeks driver) =>
+        driver.NightsTheClubRan >= NightsInWindow
+        && driver.NightsMissed == 1
+        && driver.NightsOut == driver.NightsTheClubRan - 1;
 
     /// <summary>
     /// The one thing worth saying about this driver's last few nights, or
@@ -267,6 +283,17 @@ public static class CommentaryWeekFacts
         {
             return $"{who} has been out at every one of the club's last "
                    + $"{CommentaryHistoryFacts.Spell(driver.NightsOut)} {nights}.";
+        }
+
+        // MISSED JUST ONE (7 Nov 2026) - the use NightsMissed was carried
+        // for and never put to. Attendance that is nearly perfect is the
+        // same colour as perfect, and at a club where somebody is away for
+        // one week in six it is the commoner of the two by far; the line
+        // above could only ever say it about a driver with no misses at all.
+        if (MissedJustOne(driver))
+        {
+            return $"{who} has missed just one of the club's last "
+                   + $"{CommentaryHistoryFacts.Spell(driver.NightsTheClubRan)} {nights}.";
         }
 
         // FINISHED EVERYTHING THEY STARTED. The quiet virtue, and the one

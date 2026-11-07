@@ -403,7 +403,8 @@ public sealed partial class RaceControlControl
                     screen,
                     profile?.RaceNumber ?? string.Empty,
                     profile?.HomeTrack ?? string.Empty,
-                    DriverIntros.Stat(history, transponder, now));
+                    DriverIntros.Stat(history, transponder, now),
+                    DriverIntros.Career(history, transponder, now, DriverTargets.TargetMs(transponder)));
             }).ToList();
 
             var qualifying = isMain && round is not null && _settings.CommentaryQualifyingRecap ? QualifyingRecapFor(round, field) : null;

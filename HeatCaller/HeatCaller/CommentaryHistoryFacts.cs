@@ -712,9 +712,16 @@ public static class CommentaryHistoryFacts
         // order of the words. A model handed four numbers and no direction
         // reads them whichever way makes the better sentence, and a run of
         // form read backwards is a different and false story.
+        // AND WHERE THEY STAND IN THE TITLE (7 Nov 2026), when the caller
+        // knows - the before-this-race table, so it is a place they hold
+        // now, not one this race will give them.
+        var title = driver.ChampionshipPosition is int place && place > 0
+            ? $" {name} is {CommentaryFacts.Ordinal(place)} in the championship going into this race."
+            : string.Empty;
+
         return new FactBlock(
             $"form:{raceKey}:{driver.DriverId}",
-            $"{name}'s last {Spell(read.Count)} {Of(scope)}races here, most recent first: {string.Join(", ", read.Select(Placing))}.",
+            $"{name}'s last {Spell(read.Count)} {Of(scope)}races here, most recent first: {string.Join(", ", read.Select(Placing))}.{title}",
             FactTheme.Driver(driver.DriverId));
     }
 
