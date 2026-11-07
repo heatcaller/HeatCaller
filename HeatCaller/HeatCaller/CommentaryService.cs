@@ -1510,6 +1510,7 @@ public sealed class CommentaryService
                   + ", do not predict a winner or a champion, and do not invent a "
                   + "position, a points total, a gap or a round count that is not listed."
                 : string.Empty)
+            + (AnyBehindTheTotal(stakes) ? ChampionshipFiguresRule : string.Empty)
             // AND THE CONDITIONAL, WHICH IS HALF THIS FEATURE.
             //
             // The club owner's own words for what this instruction is for:
@@ -1704,7 +1705,7 @@ public sealed class CommentaryService
                   + "the grid\" after it. Do not number every driver in turn either: vary how the position is put. "
                   + "Never give a row number - the grid is two by two, so first and second share the front row."
                 : " There is no grid for this race, so do not give anybody a position or call anybody on pole.")
-            + " Use each driver's racing number, home and form only where they are listed, exactly as written, and only "
+            + " Use each driver's racing number, home, form and \"also\" line only where they are listed, exactly as written, and only "
             + "for that driver. Never give a driver a number, a town, a result, a nickname or a record that is not listed "
             + "against them. The race has not started: describe no laps, battles or results in it."
             // QUALIFYING INSIDE THE INTRODUCTIONS (19 Oct 2026). It used to
@@ -2628,6 +2629,52 @@ public sealed class CommentaryService
     /// own does not - but the gap to the leader is the other half of the
     /// same story, so both are given.
     /// </summary>
+    /// <summary>
+    /// How the recap is told to use what race control did (7 Nov 2026) -
+    /// see CommentaryOfficialFacts. Plainly, as decisions, and never as a
+    /// verdict on a person: "a five second penalty for blocking" is the
+    /// record, "a dirty drive" is the model's opinion of somebody's child.
+    /// Empty when the facts carry none of it.
+    /// </summary>
+    internal static string RaceControlRule(bool official, bool decided, bool handicap, bool targets, bool note)
+    {
+        var rule = new System.Text.StringBuilder();
+
+        if (decided)
+        {
+            rule.Append(" The penalties changed this result, and that is part of the story: say who had it on the road "
+                        + "and who it went to, exactly as the lines say, and do not describe the race as if the road "
+                        + "order had stood.");
+        }
+
+        if (official)
+        {
+            rule.Append(" The race control lines are decisions exactly as recorded. Mention one where it matters to the "
+                        + "result - what was given and why, in plain words - and never judge a driver by it, call it "
+                        + "dirty or unfair, or add anything to the reason.");
+        }
+
+        if (handicap)
+        {
+            rule.Append(" This class is scored on handicap: say who won on handicap as well as who crossed the line "
+                        + "first, using the handicap lines exactly as written, and do not work out a credit yourself.");
+        }
+
+        if (targets)
+        {
+            rule.Append(" A beaten lap target is a nice touch for that driver - the target as written, and only for them.");
+        }
+
+        if (note)
+        {
+            rule.Append(" The race director's note is background from race control - the track, the weather, an "
+                        + "incident. Use it if it fits, in your own words, without adding to it or naming anybody it "
+                        + "does not name.");
+        }
+
+        return rule.ToString();
+    }
+
     private static List<string> ChampionshipLines(ChampionshipSwing swing)
     {
         var lines = new List<string>
@@ -2663,8 +2710,56 @@ public sealed class CommentaryService
                     ? $"down {Plural.Of(-move.PlacesGained, "place")} from P{move.PreviousPosition}"
                     : "unchanged";
 
-        return $"P{move.Position} {Field(move.DriverName)} - {Plural.Of(move.TotalPoints, "point")}, {gap}, {movement}";
+        return $"P{move.Position} {Field(move.DriverName)} - {Plural.Of(move.TotalPoints, "point")}, {gap}, {movement}"
+               + BehindTheTotal(move.DroppedRounds, move.DroppedPoints, move.CarriedIn, move.Dnfs);
     }
+
+    /// <summary>
+    /// What is behind a championship total, for the line that states it (7
+    /// Nov 2026): rounds the best-rounds rule dropped and what they were
+    /// worth, points carried in from before, rounds with no laps. Empty for
+    /// the usual driver, who has none of these - and then nothing is added,
+    /// because "no rounds dropped" on every line is four facts about
+    /// nothing.
+    ///
+    /// Each is a figure ComputeStandings already worked out; the model is
+    /// told (see ChampionshipFiguresRule) to say them as they are and never
+    /// to do sums with them.
+    /// </summary>
+    internal static string BehindTheTotal(int droppedRounds, int droppedPoints, int carriedIn, int dnfs)
+    {
+        var parts = new List<string>();
+
+        if (droppedRounds > 0)
+        {
+            parts.Add(droppedPoints > 0
+                ? $"{Plural.Of(droppedRounds, "round")} dropped under the best-rounds rule, worth {Plural.Of(droppedPoints, "point")}"
+                : $"{Plural.Of(droppedRounds, "round")} dropped under the best-rounds rule");
+        }
+
+        if (carriedIn != 0)
+        {
+            parts.Add($"{Plural.Of(carriedIn, "point")} carried in from before");
+        }
+
+        if (dnfs > 0)
+        {
+            parts.Add($"{Plural.Of(dnfs, "round")} entered without completing a lap");
+        }
+
+        return parts.Count > 0 ? "; " + string.Join("; ", parts) : string.Empty;
+    }
+
+    /// <summary>Whether any of these championship lines carries what is behind a total.</summary>
+    internal static bool AnyBehindTheTotal(IEnumerable<string> lines) =>
+        lines.Any(line => line.Contains("under the best-rounds rule", StringComparison.Ordinal)
+                          || line.Contains("carried in from before", StringComparison.Ordinal)
+                          || line.Contains("without completing a lap", StringComparison.Ordinal));
+
+    /// <summary>Said whenever a championship line carries what is behind a total - see BehindTheTotal.</summary>
+    internal const string ChampionshipFiguresRule =
+        " Where a championship line says rounds were dropped, points carried in or rounds without a lap, that is "
+        + "background to the total: say it as written if it explains the table, and never add, subtract or predict with it.";
 
     /// <summary>
     /// How many championship lines a race INTRO carries - the same four
@@ -2707,7 +2802,8 @@ public sealed class CommentaryService
                 ? "leads the championship"
                 : $"{Plural.Of(row.BehindLeader, "point")} behind the leader";
 
-            lines.Add($"  P{row.PositionNow} {name}, in this race - {Plural.Of(row.Points, "point")}, {gap}");
+            lines.Add($"  P{row.PositionNow} {name}, in this race - {Plural.Of(row.Points, "point")}, {gap}"
+                      + BehindTheTotal(row.DroppedRounds, row.DroppedPoints, row.CarriedIn, row.Dnfs));
         }
 
         if (lines.Count == 1)
@@ -2955,7 +3051,8 @@ public sealed class CommentaryService
         RaceCars? cars = null,
         MainsOnLayout? mains = null,
         (int Changes, int Leaders)? leadChanges = null,
-        string? presentedBy = null)
+        string? presentedBy = null,
+        RaceHandicap? handicap = null)
     {
         if (Client is null || session.Results.Count == 0)
         {
@@ -2973,10 +3070,34 @@ public sealed class CommentaryService
         // distinguished only by whose row they sat on - and it
         // cross-attributed them, crediting one driver's fastest lap to
         // another. One lap time, stated once, removes the ambiguity.
+        //
+        // A DNF OR A DQ SAYS SO ON ITS OWN LINE (7 Nov 2026). "P6 Sam - 0
+        // laps" left the model to guess why, and it guessed a crash.
         var lines = ordered.Select(r =>
             $"P{r.Position} {PromptName(r.Transponder)}"
             + (Field(CarFor(r)) is { Length: > 0 } car ? $" ({car})" : string.Empty)
-            + $" - {r.Laps} laps");
+            + $" - {r.Laps} laps"
+            + (ResultEditor.NormaliseOutcome(r.Outcome) switch
+            {
+                ResultEditor.Dq => " - disqualified",
+                ResultEditor.Dnf => " - did not finish",
+                _ => string.Empty,
+            }));
+
+        // WHAT RACE CONTROL DID (7 Nov 2026): the warnings and their
+        // reasons, the jump starts and the penalties, a black flag, and
+        // whether any of it changed who won - all of it already on the
+        // saved result, and none of it ever handed to the recap, which
+        // described a race decided by a penalty as if the road order had
+        // stood. See CommentaryOfficialFacts.
+        var officialLines = CommentaryOfficialFacts.ForRace(session, PromptName);
+        var decidedLines = CommentaryOfficialFacts.PenaltiesDecided(session, PromptName);
+        var directorNote = CommentaryOfficialFacts.Note(session);
+        var handicapLines = CommentaryOfficialFacts.Handicap(handicap, PromptName);
+
+        // And the coaching target race control set a driver tonight, for
+        // the drivers the recap names who beat it.
+        var targetLines = CommentaryOfficialFacts.TargetsBeaten(ordered, DriverTargets.TargetMs, PromptName);
 
         // The fastest lap of the race already gets its own live announcement
         // during the race (see AnnouncementService's FastLap event) - saying
@@ -3206,6 +3327,15 @@ public sealed class CommentaryService
             (ratingLines.Count > 0
                 ? $"Driver rating for this race, out of 150 (finish, laps led, pace, fastest lap, distance and places gained): {string.Join(", ", ratingLines)}\n"
                 : string.Empty) +
+            (officialLines.Count > 0
+                ? "Race control in this race, exactly as recorded:\n" + string.Join("\n", officialLines.Select(l => "  " + l)) + "\n"
+                : string.Empty) +
+            (decidedLines.Count > 0
+                ? "What the penalties did to the result:\n" + string.Join("\n", decidedLines.Select(l => "  " + l)) + "\n"
+                : string.Empty) +
+            (handicapLines.Count > 0 ? string.Join("\n", handicapLines) + "\n" : string.Empty) +
+            (targetLines.Count > 0 ? $"Lap targets: {string.Join("; ", targetLines)}\n" : string.Empty) +
+            (directorNote.Length > 0 ? $"Race director's note on this race: \"{directorNote}\"\n" : string.Empty) +
             FactsClose + "\n" +
             // Deliberately NOT "write one sentence" - that was hardcoded
             // here as well as in the system prompt, so it capped the
@@ -3249,6 +3379,7 @@ public sealed class CommentaryService
                   + "Do not invent a gap, a position or a change that is not listed, and do not say a title is won "
                   + "or lost unless the lines say so."
                 : string.Empty)
+            + (AnyBehindTheTotal(championshipLines) ? ChampionshipFiguresRule : string.Empty)
             // THE HISTORY IS EXACT AND THE MODEL MAY NOT ADD TO IT.
             //
             // The same discipline the line above states for the times,
@@ -3312,6 +3443,7 @@ public sealed class CommentaryService
                   + "with the number exactly as written. Do not explain how it is worked out and do not rate anybody "
                   + "who is not listed."
                 : string.Empty)
+            + RaceControlRule(officialLines.Count > 0, decidedLines.Count > 0, handicapLines.Count > 0, targetLines.Count > 0, directorNote.Length > 0)
             // THE SPONSOR GOES AT THE TOP (21 Oct 2026), so the model is not
             // handed one at all: left to place the credit itself it put it
             // at the end, and on the recap show a sponsor is credited before
@@ -4397,6 +4529,7 @@ public sealed class CommentaryService
                 ? "\nThe championship lines are the standings AFTER this race: use positions, points and gaps exactly as "
                   + "written, and do not say a title is won or lost unless the lines say so. "
                 : string.Empty)
+            + (AnyBehindTheTotal(standings) ? ChampionshipFiguresRule.TrimStart() + " " : string.Empty)
             + "Every name, time and number in the facts is exact - use them as written or not at all. "
             + "No quotes, no stage directions, no square-bracket tags, and nothing before the first HOST line.";
 
@@ -4557,6 +4690,7 @@ public sealed class CommentaryService
                 ? "\nThe championship lines are the standings BEFORE this race: use positions, points and gaps exactly as "
                   + "written, and do not say what this race will do to them. "
                 : string.Empty)
+            + (AnyBehindTheTotal(standings) ? ChampionshipFiguresRule.TrimStart() + " " : string.Empty)
             + "Every name and number in the facts is exact - use them as written or not at all. "
             + "No quotes, no stage directions, no square-bracket tags, and nothing before the first HOST line.";
 
@@ -5215,6 +5349,37 @@ public sealed class CommentaryService
         var extra = DriverCut.ExtraWordsOver(_settings.CommentaryMaxWords);
 
         return await RecordAndReturn("Driver's night", Ask(Client,
+            BuildSystemPrompt(extra),
+            body,
+            maxTokens: MaxTokensForWordLimit(extra),
+            temperature: Variety,
+            ct: ct,
+            timeout: LongPieceTimeout));
+    }
+
+    /// <summary>
+    /// A CHAMPIONSHIP'S WHOLE SEASON, written for a prize night (7 Nov 2026)
+    /// - see <see cref="SeasonPiece"/>. The driver's night's shape: the
+    /// facts arrive packed, and the word allowance is the DIFFERENCE over
+    /// the club's own per-line limit, because BuildSystemPrompt adds its
+    /// argument rather than replacing it.
+    /// </summary>
+    public async Task<string?> BuildSeasonPieceAsync(PackedFacts facts, CancellationToken ct = default)
+    {
+        if (Client is null || facts.Empty)
+        {
+            return null;
+        }
+
+        var body =
+            FactsOpen + "\n" +
+            facts.Text + "\n" +
+            FactsClose +
+            "\n\n" + SeasonPiece.Instruction;
+
+        var extra = Math.Max(0, SeasonPiece.Words - Math.Max(0, _settings.CommentaryMaxWords));
+
+        return await RecordAndReturn("Season piece", Ask(Client,
             BuildSystemPrompt(extra),
             body,
             maxTokens: MaxTokensForWordLimit(extra),

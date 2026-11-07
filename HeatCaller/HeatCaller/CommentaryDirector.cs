@@ -2798,8 +2798,19 @@ public sealed class CommentaryDirector
     /// Empty on a night with nothing filed, and then there is no recap to
     /// write - which the caller says in those words.
     /// </summary>
-    public PackedFacts NightFacts() =>
-        FactPack.Build(Gather(SegmentKind.SignOffNumbers), said: null);
+    public PackedFacts NightFacts()
+    {
+        var blocks = Gather(SegmentKind.SignOffNumbers).ToList();
+
+        // AND WHAT RACE CONTROL DECIDED (7 Nov 2026) - the recap's alone,
+        // never the sign-off's. See CommentaryShowFacts.RaceControlTonight.
+        if (NightDone?.Invoke() is { } done)
+        {
+            blocks.AddRange(CommentaryShowFacts.RaceControlTonight(done, _dayKey));
+        }
+
+        return FactPack.Build(blocks, said: null);
+    }
 
     /// <summary>The fight this pass's battle facts were built from. See Candidates.</summary>
     private Battle? _calling;

@@ -26,6 +26,25 @@ public sealed class ChampionshipMove
     /// <summary>Whether they were in the race that just finished.</summary>
     public required bool RacedThisTime { get; init; }
 
+    // --- What is behind the total (7 Nov 2026) ---
+    //
+    // All four were worked out by SeasonStore.ComputeStandings and shown on
+    // the Seasons page, and none reached the commentary - so "best five of
+    // seven" changed every table the recap read out and the recap could
+    // never say why a driver who raced had not moved.
+
+    /// <summary>Rounds of theirs the best-rounds rule dropped. Zero when it is off or they have raced no more than it keeps.</summary>
+    public int DroppedRounds { get; init; }
+
+    /// <summary>Points those dropped rounds were worth - SeasonStandingEntry.RawPoints less TotalPoints.</summary>
+    public int DroppedPoints { get; init; }
+
+    /// <summary>Points carried in from before HeatCaller (Season.CarriedPoints), already inside TotalPoints.</summary>
+    public int CarriedIn { get; init; }
+
+    /// <summary>Rounds they were entered in and completed no laps.</summary>
+    public int Dnfs { get; init; }
+
     /// <summary>Places gained (positive) or lost (negative). Zero for a first appearance.</summary>
     public int PlacesGained => PreviousPosition == 0 ? 0 : PreviousPosition - Position;
 }
@@ -144,6 +163,10 @@ public static class Championship
                     TotalPoints = entry.TotalPoints,
                     PointsBehindLeader = leaderPoints - entry.TotalPoints,
                     RacedThisTime = raced,
+                    DroppedRounds = entry.DroppedRounds,
+                    DroppedPoints = Math.Max(0, entry.RawPoints - entry.TotalPoints),
+                    CarriedIn = entry.CarriedIn,
+                    Dnfs = entry.Dnfs,
                 };
             }
 

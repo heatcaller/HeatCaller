@@ -254,7 +254,7 @@ In the order the room hears them, after the show open and before staging. These 
 |---|---|---|
 | **Race intros - a "coming up" line as each race goes to the grid** | Speaks a short intro when a round is staged. | On |
 | **Only for a main, or a race with a known rivalry on the grid** | A step in under the race intros. Skips the intro for every other race, so heats start without one. The console says "No round intro for ... - intros are set to mains and rivalries only, and this race is neither." Rivalries are set at the bottom of **Voice → Race Calls**. | Off |
-| **Driver introductions - each driver on the grid, in order** | Grid position, racing number and home club from each driver's profile, with a line of form. The automatic start waits for them before the countdown. | On |
+| **Driver introductions - each driver on the grid, in order** | Grid position, racing number and home club from each driver's profile, with a line of form and, where there is one, one more thing from their time here: the practice they put in this week (at least 2 sessions and 20 laps), laps led in races here (50 or more), days on track here (10 or more), or the target lap race control set them tonight. The automatic start waits for them before the countdown. | On |
 | **Only for a main** | A step in under the driver introductions. Keeps them to the mains. | Off |
 | **Before a main, open with what qualifying decided** | A step in under the driver introductions: the qualifying recap that opens a main's introductions, so it needs them on and is grayed out with them. Uses tonight's qualifying, ranked as the grid sheet ranks it. | On |
 | **Show each driver's name and photo on the Big Screen as they're introduced** | A step in under the driver introductions. As the announcer reaches each driver, the Big Screen shows a card with their photo, name, grid spot, number and home club. A driver whose profile keeps their photo off the Big Screen gets their initials instead, with their name. See [Driver introductions](../screens/big-screen.md#driver-introductions). | On |
@@ -303,7 +303,7 @@ The rest of the card is the segments. They come switched on, and they're grouped
 
 | Tick box | What it does | What it needs first |
 |---|---|---|
-| **Form guide** | How the drivers in a main have been going lately - their recent placings, and the shape of their last few race nights. | At least 3 finished races on file for a driver before their placings can be talked about. It reads up to their last 4 results, for up to 3 drivers. The nights half needs the driver out at **3** of the club's last **6** nights in the class - see [The shape of the last few weeks](#the-shape-of-the-last-few-weeks). |
+| **Form guide** | How the drivers in a main have been going lately - their recent placings, where each stands in the championship going into the race, and the shape of their last few race nights. | At least 3 finished races on file for a driver before their placings can be talked about. It reads up to their last 4 results, for up to 3 drivers. The nights half needs the driver out at **3** of the club's last **6** nights in the class - see [The shape of the last few weeks](#the-shape-of-the-last-few-weeks). |
 | **Qualifying report** | What qualifying decided, before the mains go out. | A class on track with a qualifying order worked out from its filed heats, and a name on pole. The margin to second is only given when both actually set a lap. |
 | **Grid history** | A debut or a rivalry the race intro did not get to. | A driver history the intro didn't have room for. It's a top-up, so it's capped at 3 a night and one per class. |
 
@@ -397,6 +397,28 @@ HeatCaller starts writing the recap the moment the flag drops, so the model work
 #### The hand-overs
 
 When the host throws to another member of the cast - the announcer down to the co-host in pit lane, at the flag and before a race, or the recap host over to the achievements reader - the model writes both sides of it: a line or two from the host picking up from what was just said and handing over by name, and a line or two from the guest reacting to what they covered and **handing back to the host by first name** ("...back to you, Rick"). Before 26 Oct 2026 these were the same fixed sentences every race, the pre-race word never handed back at all, and the achievements reader simply stopped.
+
+#### What race control did
+
+> "Bill takes it - though on the road it was Sam's, until a five second penalty for track cutting dropped him to second."
+
+The recap knows what race control did in the race, and whether it changed the result. All of it is already on the saved result, so there is nothing new to fill in:
+
+| The recap is told | Where it comes from |
+|---|---|
+| Each warning, its reason and what it cost | The warnings given from the leaderboard during the race. The reason is the one the PA already read out when the warning was given. |
+| A jump start, and the seconds it added (or that none were added) | The jump-start call and the penalty buttons. |
+| A black flag, and the disqualification it led to | The warning ladder. Said once, not again as a correction. |
+| A DNF or a DQ, on the driver's own result line | **Edit Result** in Race History. |
+| A correction made after the race, and the reason typed for it | **Edit Result**. It says what the result is now - "5 seconds added as a penalty" - never the before-and-after. |
+| **Who had it on the road**, when a penalty changed the winner, and how many places a penalty cost anybody else | Worked out from the laps and time as raced, less the penalty. A missed lap put back by hand is a correction, not a penalty, so it never counts as one. |
+| **Who won on handicap**, for a class scored on time or lap credits | The **Handicaps** page. Not for a **Staggered - handicap** start, whose credits were already spent as the head start. |
+| A driver who beat the **target lap** race control set them tonight | **Coach → Target lap...** on the leaderboard. Only a beaten target is said. |
+| **The race director's note** on the race - the weather, the track, an incident | The **Notes** box in Race History. |
+
+The model is told to say a decision plainly - what was given and why - and never to judge a driver by it or add to the reason. A clean race carries none of this, so it sounds exactly as it did before.
+
+Most corrections are made after the race's own recap has gone out. Those are picked up by [the night in four minutes](#the-night-in-four-minutes) instead, which tells the evening as it finally stood: a result a penalty changed, a disqualification, a correction, and the race director's notes. It says what changed but never the reason typed for it, because this is the piece a club passes on to people who weren't there. None of it goes into the sign-off, so the evening never ends on the worst thing that happened to one driver.
 
 - **Written and voiced ahead.** Each hand-over is written and turned into speech while something else is playing - the interview being made, or the recap being said - so it plays straight on, with no wait for the model or the voice.
 - **Never a pause for it.** HeatCaller's own built-in lines are made ready as well, and go out for either half that isn't in hand by the moment it's wanted, or that the model got wrong: too long, or missing the name it had to say. A hand-over the model has already written gets up to three seconds more to finish being voiced; one still being written gets none, so it never adds a pause. The interview itself is waited for exactly as long as before, and the hand-over is only looked at once it has come. The console says which went out.
@@ -820,12 +842,13 @@ If something is already recording when a bookend starts, it isn't recorded separ
 
 #### Written from the night
 
-Under **Recording the night**, the **Written from the night** card has four things the commentary writes from the evening. They need AI commentary on (**Voice → AI Commentary**).
+Under **Recording the night**, the **Written from the night** card has five things the commentary writes from the evening. They need AI commentary on (**Voice → AI Commentary**).
 
 | Row | Button | What it does |
 |---|---|---|
 | **Tonight's recap:** | **Write And Play It** | The evening as a short piece, after the last race. See [The night in four minutes](#the-night-in-four-minutes). |
 | **A driver's night:** | Pick a driver, then **Write And Play It** | About ninety seconds on one driver's races and pace, played once and saved in tonight's folder under their name. The list is tonight's drivers, filled again each time you open it. |
+| **A season:** | Pick a championship, then **Write And Play It** | A few minutes on that championship's whole season, for a prize night: what the season was, who won it and by how much, who turned up most, its best moments and its busiest night. Played once with your opener and bed, and saved in tonight's folder under the season's name. See [A season's piece](#a-seasons-piece). |
 | **Check a line:** | **Why It Said That** | Lists the facts from the club's results that the last segment was built from, in the developer console. |
 | **The night before:** | **Write The Preview** | A short preview of the next race day from the program and entry lists, saved as a text file in `Documents\HeatCaller Previews` to paste into the club's page or group, and written out in the console. It never predicts winners or grids. With nothing in the program worth previewing it says "There was nothing in the program worth previewing yet - add the entry lists first." |
 
@@ -861,6 +884,14 @@ Each piece queues like any other spoken line, which means **a flag call still ju
 | The commentary isn't set up on this PC | No model is configured — see [Who writes it](#who-writes-it). |
 
 Nothing is written until it has the broadcast floor, because writing takes the best part of a minute and a segment that started in the middle of that would be talking over the recap's own opener by the time it arrived. The recorder starts *after* the writing, so the file doesn't open with a minute of silence.
+
+#### A season's piece
+
+**Write And Play It**, beside **A season:**, writes one championship's whole season as a piece to be read to the members at a prize night - roughly in order, ending with the championship. It is about the racing and the club rather than the points table, because one driver won and everybody else in the room did not. It names only the drivers in its facts, never says who improved or who should have done better, and writes a shorter piece rather than padding a thin season.
+
+**Play it once beforehand, in an empty clubhouse.** Like everything here it is made by being played, so the way to hear it before the room does is to play it with nobody there. The file it leaves in tonight's folder is the piece to play on the night, and it's the identical recording.
+
+It refuses for the same reasons as the night's recap above, and also when the championship has no races filed yet. The next race being called cuts it off.
 
 #### Two things worth knowing
 
@@ -910,6 +941,8 @@ A club that doesn't run its practice through HeatCaller hears nothing about prac
 >
 > "Sam has been out at every one of the club's last six Box Stock nights."
 >
+> "Ann has missed just one of the club's last six Box Stock nights."
+>
 > "Bill has finished every one of the 8 races they have started over the club's last four Box Stock nights."
 >
 > "Dave is back after missing the club's last three Box Stock nights - their last was 22 August."
@@ -924,6 +957,7 @@ What each one needs:
 |---|---|
 | A run of top-three nights | **3** or more of the club's most recent nights in a row, counting only nights the driver was there for |
 | Out at every one | the full window — all **6** of the club's last nights in the class |
+| Missed just one | the full window, and out at all but one of those **6** nights |
 | Finished everything they started | at least **6** races started in the window, and no retirement or disqualification in any of them |
 | Back after a while away | **3** or more of the club's nights missed, and a date for their last one |
 
@@ -1209,6 +1243,10 @@ And in the **Championship check** after the flag, worked out from the table with
 > "3 drivers can still win the Box Stock championship."
 
 After the flag it stays quiet on a night with another race still to run that the championship counts (a B-main as well as the A-main, say), because it proves each round left as one race.
+
+### What is behind a total
+
+The standings the race intro and the recap are handed also say what is behind a driver's total, when there is something: rounds the best-rounds rule dropped and what they were worth, points carried in from before HeatCaller, and rounds entered without completing a lap. These are the figures the **Championship** page shows. They explain why a driver who raced didn't move, and the model is told never to do sums with them.
 
 ### It needs one thing from you
 

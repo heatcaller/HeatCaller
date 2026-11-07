@@ -28,6 +28,13 @@ public readonly record struct NightAhead(
 /// <param name="ClosestFinishWinner">Who won it.</param>
 /// <param name="Debutants">How many drivers raced here for the first time tonight.</param>
 /// <param name="ChampionshipNote">"The title goes down to the last round" - the caller's words.</param>
+/// <param name="RaceControl">
+/// What race control decided tonight - a result a penalty changed, a
+/// disqualification, a correction after the race and why, the race
+/// director's notes - already worded by CommentaryOfficialFacts.ForTheNight
+/// (7 Nov 2026). For the night's recap only: the sign-off is the night's
+/// numbers, and a disqualification is not one of those.
+/// </param>
 public readonly record struct NightDone(
     int Races,
     int Laps,
@@ -36,7 +43,8 @@ public readonly record struct NightDone(
     double ClosestFinishSeconds = 0,
     string? ClosestFinishWinner = null,
     int? Debutants = null,
-    string? ChampionshipNote = null);
+    string? ChampionshipNote = null,
+    IReadOnlyList<string>? RaceControl = null);
 
 /// <summary>
 /// THE NIGHT'S THREAD: the one storyline an evening is told as, as far as
@@ -280,6 +288,35 @@ public static class CommentaryShowFacts
         if (season.Length > 0)
         {
             found.Add(new FactBlock($"signoff:{dayKey}:season", season));
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// What race control decided tonight, for the night's recap (7 Nov
+    /// 2026) - one block per line CommentaryOfficialFacts.ForTheNight wrote,
+    /// in race order, after the night's numbers so the pack drops these
+    /// first when it runs short.
+    ///
+    /// NOT IN THE SIGN-OFF. The sign-off is the numbers nobody was counting;
+    /// "Sam was disqualified from heat three" read out in it would end a
+    /// club's evening on the worst thing that happened to one driver. The
+    /// recap is the evening told properly, and there it is part of the
+    /// story - and the one place a correction made after a race's own recap
+    /// can be heard. See CommentaryDirector.NightFacts.
+    /// </summary>
+    public static IReadOnlyList<FactBlock> RaceControlTonight(NightDone night, string dayKey)
+    {
+        var found = new List<FactBlock>();
+        var index = 0;
+
+        foreach (var line in night.RaceControl ?? Array.Empty<string>())
+        {
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                found.Add(new FactBlock($"night:{dayKey}:control:{index++}", line.Trim()));
+            }
         }
 
         return found;

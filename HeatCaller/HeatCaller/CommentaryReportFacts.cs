@@ -65,7 +65,11 @@ public readonly record struct ChampionshipStanding(
     int PositionBefore,
     int Points,
     int BehindLeader,
-    bool StillAlive = true);
+    bool StillAlive = true,
+    int DroppedRounds = 0,
+    int DroppedPoints = 0,
+    int CarriedIn = 0,
+    int Dnfs = 0);
 
 /// <summary>
 /// The two segments that only make sense once a block of racing has

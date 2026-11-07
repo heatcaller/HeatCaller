@@ -3767,7 +3767,7 @@ night and would need the night's folder passed in rather than today's.
 |---|---|---|---|
 | 1 | ~~`SeasonPiece` facts - the five selectors~~ | **BUILT 13 Oct 2026** | `SeasonPiece.FactsFor`. Four of the five; see below for the one left out |
 | 2 | ~~The instruction~~ | **BUILT 13 Oct 2026** | `SeasonPiece.Instruction`. Two rules of its own beyond `DriverCut`'s |
-| 3 | The button, the season picker, the guards, `BuildSeasonPieceAsync` | ~1 day | `PlayADriversNightAsync` is the shape, guards and all. **Not started - nothing calls FactsFor yet** |
+| 3 | ~~The button, the season picker, the guards, `BuildSeasonPieceAsync`~~ | **BUILT 7 Nov 2026** | `AnnouncerControl.PlayTheSeasonAsync`, `CommentaryService.BuildSeasonPieceAsync`, **A season:** on Club Website → Recording. `PlayADriversNightAsync`'s shape and guards, without the cold-open clip |
 | 4 | ~~Tests~~ | **BUILT 13 Oct 2026** | 24 tests, `SeasonPieceTests` |
 | 5 | The clips, if a club keeps a season of audio | ~1 day | `DriversOwnClip` already finds them |
 
@@ -3802,6 +3802,37 @@ test that holds it.
 `PastMeetings` lesson arriving before it could cost anything: every race
 has one, so over a season of two hundred races the pack fills with them and
 says nothing about the year.
+
+### Wired, 7 Nov 2026 - with the rest of the commentary's unused data
+
+A research pass asked what the app collects for the commentary and never
+hands it. Built from what it found, in one change:
+
+- **Race control into the recap** - `CommentaryOfficialFacts` (warnings and
+  reasons, jump starts, in-race and post-race penalties, black flags, DNF/DQ
+  on the result line, corrections and reasons, and `PenaltiesDecided`: who
+  had it on the road when a penalty moved the winner). The road result is
+  the as-raced laps (missed crossings kept) and time less `RacePenaltyMs`.
+- **The handicap result** for a TimeCredit/LapCredit class, worked out in
+  Race Control and passed as `RaceHandicap`. Not for a pursuit start.
+  Before this only the event report applied the credits.
+- **The race director's note** (`SessionRecord.Notes`) in the recap, and
+  `ForTheNight` (corrections made after a race's recap, DQs, notes) in the
+  night's recap only - `NightDone.RaceControl`, never the sign-off.
+- **Beaten lap targets** (`DriverTargets`) in the recap; tonight's target,
+  practice this week, career laps led and days on track as the intro's
+  "also" line (`DriverIntros.Career`).
+- **What is behind a championship total** - dropped rounds and their points,
+  carried-in points, rounds with no lap - on `ChampionshipMove` and
+  `ChampionshipStanding`, said by the recap, the intro and the booth.
+- **`DriverForm.ChampionshipPosition`** filled (`CommentaryReaders.
+  WithChampionship`) for the director's grid history and form guide, and
+  said by `FormLine`.
+- **`DriverWeeks.NightsMissed`** read at last: "missed just one of the
+  club's last six".
+- **This piece** - item 3 above.
+
+Tests: `CommentaryGapsTests`.
 
 ### Open question recorded: "who got better"
 

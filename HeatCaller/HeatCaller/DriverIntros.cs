@@ -8,6 +8,7 @@ namespace HeatCaller;
 /// <param name="Number">Racing number from the profile, or empty.</param>
 /// <param name="Hometown">Home club or town from the profile, or empty.</param>
 /// <param name="Stat">One line of form from their history (<see cref="DriverIntros.Stat"/>), or empty.</param>
+/// <param name="Career">One line from the rest of their time here - practice this week, laps led, days on track, tonight's lap target (<see cref="DriverIntros.Career"/>) - or empty.</param>
 public sealed record IntroDriver(
     string Transponder,
     int Slot,
@@ -15,7 +16,8 @@ public sealed record IntroDriver(
     string ScreenName,
     string Number = "",
     string Hometown = "",
-    string Stat = "");
+    string Stat = "",
+    string Career = "");
 
 /// <summary>One car in a main's qualifying recap, in qualifying order.</summary>
 /// <param name="SpokenName">The name the voice is given.</param>
@@ -85,7 +87,101 @@ internal static class DriverIntros
             parts.Add($"form: {CommentaryService.Field(driver.Stat)}");
         }
 
+        if (!string.IsNullOrWhiteSpace(driver.Career))
+        {
+            parts.Add($"also: {CommentaryService.Field(driver.Career, 80)}");
+        }
+
         return $"{index + 1}. " + string.Join("; ", parts);
+    }
+
+    /// <summary>The most practice sessions this week that count as "putting the work in" - fewer is a warm-up.</summary>
+    internal const int LeastPracticeSessions = 2;
+
+    /// <summary>The fewest practice laps this week worth a sentence.</summary>
+    internal const int LeastPracticeLaps = 20;
+
+    /// <summary>How far back "this week" reaches for practice.</summary>
+    internal static readonly TimeSpan PracticeWeek = TimeSpan.FromDays(7);
+
+    /// <summary>The fewest laps led here, across a career, worth a sentence.</summary>
+    internal const int LeastCareerLapsLed = 50;
+
+    /// <summary>The fewest race days on track here worth a sentence.</summary>
+    internal const int LeastDaysOnTrack = 10;
+
+    /// <summary>
+    /// One line from the rest of a driver's time here, for their
+    /// introduction (7 Nov 2026) - the figures DriverStats keeps for the
+    /// profile page and the commentary never had, worked out here from the
+    /// same saved sessions so the intro needs no second store:
+    ///
+    ///   the practice they put in this week ("forty practice laps over
+    ///   three sessions this week"),
+    ///   laps led in races here over their whole time at the club,
+    ///   how many days they have been on track here,
+    ///   the target lap race control set them tonight.
+    ///
+    /// ONE, the first that clears its bar, in that order: practice this
+    /// week is about tonight, the rest is about a career, and an intro line
+    /// for eight drivers cannot carry four facts each. Empty when nothing
+    /// clears its bar, which for most drivers most weeks is the answer.
+    ///
+    /// Before <paramref name="beforeUtc"/> only - the race being introduced
+    /// is not part of its own record - and never a demo or an imported race.
+    /// </summary>
+    /// <param name="targetMs">Tonight's lap target for them (DriverTargets), or null.</param>
+    public static string Career(IEnumerable<SessionRecord> history, string transponder, DateTime beforeUtc, long? targetMs = null)
+    {
+        var theirs = (history ?? Enumerable.Empty<SessionRecord>())
+            .Where(s => s is not null
+                && !s.IsNotScored()
+                && s.StartedAtUtc < beforeUtc
+                && s.Results is not null)
+            .Select(s => (Session: s, Entry: s.Results.FirstOrDefault(r =>
+                r is not null && string.Equals(r.Transponder, transponder, StringComparison.OrdinalIgnoreCase))))
+            .Where(x => x.Entry is not null)
+            .ToList();
+
+        var practice = theirs
+            .Where(x => x.Session.SessionType == RaceSessionType.Practice
+                        && x.Session.StartedAtUtc >= beforeUtc - PracticeWeek
+                        && x.Entry!.Laps > 0)
+            .ToList();
+
+        var practiceLaps = practice.Sum(x => x.Entry!.Laps);
+
+        if (practice.Count >= LeastPracticeSessions && practiceLaps >= LeastPracticeLaps)
+        {
+            return $"{RaceNumbers.Words(practiceLaps)} practice laps over {RaceNumbers.Words(practice.Count)} "
+                   + "practice sessions this week";
+        }
+
+        var lapsLed = theirs
+            .Where(x => x.Session.SessionType == RaceSessionType.Race)
+            .Sum(x => Math.Max(0, x.Entry!.LapsLed));
+
+        if (lapsLed >= LeastCareerLapsLed)
+        {
+            return $"has led {RaceNumbers.Words(lapsLed)} laps in races here";
+        }
+
+        var days = theirs
+            .Select(x => TonightAtTheTrack.NightOf(x.Session.StartedAtUtc.ToLocalTime()))
+            .Distinct()
+            .Count();
+
+        if (days >= LeastDaysOnTrack)
+        {
+            return $"on track here on {RaceNumbers.Words(days)} different days";
+        }
+
+        if (targetMs is > 0)
+        {
+            return $"chasing a target lap of {RaceNumbers.LapSpoken(targetMs.Value)} set by race control tonight";
+        }
+
+        return string.Empty;
     }
 
     /// <summary>

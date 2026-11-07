@@ -2,6 +2,18 @@
 
 HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whole feature lands, *c* for fixes and smaller additions.
 
+## Since 0.61.0
+
+Not released yet.
+
+- **The commentary hears what race control did (7 November).** Everything here was already saved and never handed to the AI commentary.
+    - **The race recap** now knows each warning and its reason, jump starts, penalties, black flags, DNFs and DQs, corrections and their reasons, and the race director's note. When a penalty changed the winner, it says who had it on the road. For a class scored on handicap it says who won on handicap, and it mentions a driver who beat the target lap race control set them. See [What race control did](announcer/commentary.md#what-race-control-did).
+    - **Tonight's recap** picks up corrections made after a race's own recap (what changed, not the reason typed for it), and the race director's notes. The sign-off doesn't.
+    - **Championship lines** say when a driver's rounds were dropped under the best-rounds rule, their carried-in points, and rounds without a lap. See [What is behind a total](announcer/commentary.md#what-is-behind-a-total).
+    - **The form guide** says where each driver stands in the championship, and a driver who has **missed just one** of the club's last six nights gets a line too.
+    - **Driver introductions** can add one more thing from a driver's time here: practice laps this week, laps led in races here, days on track, or tonight's target lap.
+    - **A season's piece.** **A season:** on **Club Website → Recording** writes one championship's whole season and plays it, for a prize night. See [A season's piece](announcer/commentary.md#a-seasons-piece).
+
 ## 0.61.0
 
 Released 7 Nov 2026. Everything since 0.60.0, newest first.

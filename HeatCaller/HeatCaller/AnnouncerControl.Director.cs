@@ -725,6 +725,188 @@ public partial class AnnouncerControl
     /// <summary>What a driver's own piece calls itself while it holds the floor.</summary>
     private const string ADriversNight = "a driver's own piece";
 
+    /// <summary>What the season's piece calls itself while it holds the floor.</summary>
+    private const string TheSeasonPiece = "the season's piece";
+
+    /// <summary>
+    /// One championship as the season's piece needs it - the season, its
+    /// races as EventSpine.SessionsFor resolves them, and its table as
+    /// SeasonStore.ComputeStandings returns it, in that order. Handed in by
+    /// MainForm, which owns the season, programme and race-day stores this
+    /// control does not. Null for a season it cannot find.
+    /// </summary>
+    public Func<string, (Season Season, IReadOnlyList<SessionRecord> Races, IReadOnlyList<SeasonStandingEntry> Standings)?>? SeasonFor { get; set; }
+
+    /// <summary>
+    /// THE SEASON'S OWN PIECE, written and played (7 Nov 2026) - see
+    /// <see cref="SeasonPiece"/> for what it is. The facts and the
+    /// instruction were built and tested on 13 Oct 2026 and nothing ever
+    /// called them; this is item 3 of that plan, the wiring.
+    ///
+    /// THE DRIVER'S NIGHT'S SHAPE, GUARDS AND ALL, which is what the plan
+    /// asked for: the same checks in the same order, the floor claimed
+    /// before the model is asked, the recorder started after the writing,
+    /// cut off by the next race or a Reset. What differs is only what it is
+    /// about - a whole championship rather than tonight - so there is no
+    /// cold-open clip (a season has no one race to open on) and nothing
+    /// here needs tonight to have had a race.
+    ///
+    /// MADE BY BEING PLAYED, as every piece here is. The roadmap's own
+    /// recommendation for a prize night stands: play it once in an empty
+    /// clubhouse, and the file it leaves in the night's folder is the piece
+    /// to play at the presentation.
+    /// </summary>
+    /// <param name="seasonId">The championship, by its id.</param>
+    public async Task<string?> PlayTheSeasonAsync(string? seasonId)
+    {
+        if (_commentary is not { IsAvailable: true })
+        {
+            return "The commentary isn't set up on this PC yet, so there is nothing to write the piece with.";
+        }
+
+        if (Treatment is not { } treatment)
+        {
+            return "The commentary isn't set up on this PC yet.";
+        }
+
+        if (string.IsNullOrWhiteSpace(seasonId))
+        {
+            return "Pick a championship first.";
+        }
+
+        if (_announcer.Muted)
+        {
+            return "The announcer is muted, so nobody would hear it and the recording would be silent. "
+                + "Unmute it on the Mixer and try again.";
+        }
+
+        if (SeasonFor?.Invoke(seasonId) is not { } found)
+        {
+            return "That championship isn't there any more. Pick it again.";
+        }
+
+        var named = string.IsNullOrWhiteSpace(found.Season.Name) ? "the season" : found.Season.Name.Trim();
+        var facts = SeasonPiece.FactsFor(found.Season, found.Races, found.Standings, Layouts?.Invoke());
+
+        if (facts.Empty)
+        {
+            return $"{named} has no races filed yet, so there is no season to write about.";
+        }
+
+        // Not while a race is on - the driver's night's reason, and the
+        // season's piece is longer.
+        if (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
+        {
+            return "A race is on. Wait for the flag and try again.";
+        }
+
+        if (ShowFloor.Busy)
+        {
+            return $"{ShowFloor.HeldBy ?? "Something else"} is on air. Wait for it to finish and try again.";
+        }
+
+        if (_segmentInFlight || ShowOnAir.Playing)
+        {
+            return "A commentary segment is on air. Wait for it to finish and try again.";
+        }
+
+        if (!ShowFloor.TryClaim(TheSeasonPiece, NightRecap.LongestHold))
+        {
+            return $"{ShowFloor.HeldBy ?? "Something else"} has the broadcast. Wait for it to finish and try again.";
+        }
+
+        BookendRecording? recording = null;
+
+        using var nextRace = new CancellationTokenSource();
+        Action<RaceState> onNextRace = state => NextRaceCalled(state, nextRace);
+
+        _race.StateChanged += onNextRace;
+
+        var readAhead = CancellationTokenSource.CreateLinkedTokenSource(nextRace.Token);
+        var readToken = readAhead.Token;
+        Action onSilenced = () => StopReadingAhead(readAhead);
+
+        _announcer.Silenced += onSilenced;
+
+        try
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Writing {named}'s season piece...");
+
+            var script = await _commentary.BuildSeasonPieceAsync(facts, nextRace.Token).ConfigureAwait(true);
+
+            if (WhyNotAfterWriting(TheSeasonPiece, nextRace) is { } whyNot)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] {named}'s season piece was written but not played - {whyNot}");
+
+                return $"The season piece was written but not played - {whyNot}";
+            }
+
+            var chunks = SeasonPiece.Chunks(script);
+
+            if (chunks.Count == 0)
+            {
+                return "The model did not write anything usable. Try again, or check the Connection card on Voice > AI Commentary.";
+            }
+
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [show] {named}'s season: {Plural.Of(chunks.Count, "piece")} to read, "
+                + $"about {SponsorCopy.SpokenLength(script!).TotalSeconds:0} seconds. Playing it now.");
+
+            var voiced = VoiceTheReadAhead(chunks, readToken);
+
+            recording = BookendRecording.StartForASeason(found.Season.Name, line => StatusMessage?.Invoke(line));
+
+            await FirstPieceVoicedAsync(voiced, readToken).ConfigureAwait(true);
+
+            var band = SeasonPiece.OnTheBand(found.Season.Name);
+
+            if (treatment.Treats(SegmentKind.SignOffNumbers)
+                && await treatment.RunLongAsync(
+                    () => SayTheRecap(chunks, voiced, readToken, band),
+                    SegmentKind.SignOffNumbers,
+                    SeasonPiece.LongestRead,
+                    caption: band,
+                    ct: readToken).ConfigureAwait(true))
+            {
+                return null;
+            }
+
+            readToken.ThrowIfCancellationRequested();
+            SayTheRecap(chunks, voiced, readToken, band);
+
+            await treatment.WaitForTheReadAsync(SeasonPiece.LongestRead, readToken).ConfigureAwait(true);
+
+            return null;
+        }
+        catch (OperationCanceledException) when (nextRace.IsCancellationRequested)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] {named}'s season piece was cut off - the next race was called to the grid.");
+
+            return "The next race was called to the grid, so the season piece was cut off. Play it again after the flag.";
+        }
+        catch (OperationCanceledException) when (readAhead.IsCancellationRequested)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] {named}'s season piece was stopped - everything was silenced (Reset).");
+
+            return "Everything was stopped (Reset), so the season piece was cut off. Play it again when you are ready.";
+        }
+        catch (Exception ex)
+        {
+            return $"Couldn't play the season piece: {ex.Message}";
+        }
+        finally
+        {
+            _race.StateChanged -= onNextRace;
+            _announcer.Silenced -= onSilenced;
+
+            StopReadingAhead(readAhead);
+
+            recording?.Finish(line => StatusMessage?.Invoke(line));
+
+            ShowFloor.Release(TheSeasonPiece);
+        }
+    }
+
     /// <summary>
     /// ONE DRIVER'S NIGHT, written and played (12 Oct 2026) - see
     /// <see cref="DriverCut"/> for what it is.

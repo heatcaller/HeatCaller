@@ -154,6 +154,14 @@ internal sealed class BookendRecording
         StartForAPiece(DriverCut.LabelFor(driverName), "a driver's own piece", log);
 
     /// <summary>
+    /// Starts recording the season's own piece - see <see cref="SeasonPiece"/>.
+    /// Labelled with the season's name, so a club with a Winter Series and
+    /// a Summer Series can tell the two files apart.
+    /// </summary>
+    internal static BookendRecording? StartForASeason(string? seasonName, Action<string> log) =>
+        StartForAPiece(SeasonPiece.LabelFor(seasonName), "the season's piece", log);
+
+    /// <summary>
     /// The one way a piece that is not a segment gets recorded.
     ///
     /// ONE METHOD rather than the same twenty lines per piece, which is

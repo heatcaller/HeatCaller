@@ -95,6 +95,30 @@ public sealed class RecordingControl : UserControl
     /// </summary>
     private readonly List<(string Transponder, string Name)> _driversTonight = new();
 
+    // --- The season's own piece (7 Nov 2026) - see SeasonPiece ---
+
+    /// <summary>Which championship's piece to write - the club's seasons, filled when the box is opened.</summary>
+    private readonly ComboBox _cmbSeason = new();
+
+    private readonly Button _btnSeason = new();
+    private readonly Label _lblSeason = new();
+
+    /// <summary>The seasons in the order the box lists them, so the box's index gives back an id - the driver picker's shape.</summary>
+    private readonly List<(string Id, string Name)> _seasons = new();
+
+    private bool _seasonRunning;
+
+    private const string SeasonCaption = "Write And Play It";
+
+    /// <summary>The club's championships, for the season picker. Null until wired, and then the picker stays empty.</summary>
+    internal Func<IReadOnlyList<(string Id, string Name)>>? Seasons { get; set; }
+
+    /// <summary>
+    /// Writes one championship's season, plays it out once and keeps it as
+    /// a file - AnnouncerControl.PlayTheSeasonAsync. Null until wired.
+    /// </summary>
+    internal Func<string, Task<string?>>? PlayTheSeason { get; set; }
+
     private readonly Button _btnProof = new();
     private readonly Label _lblProof = new();
     private readonly Button _btnNightBefore = new();
@@ -296,7 +320,7 @@ public sealed class RecordingControl : UserControl
             return holder;
         }
 
-        foreach (var label in new[] { _lblNightRecap, _lblDriverCut, _lblProof, _lblNightBefore, _lblOnDisk })
+        foreach (var label in new[] { _lblNightRecap, _lblDriverCut, _lblSeason, _lblProof, _lblNightBefore, _lblOnDisk })
         {
             label.AutoSize = true;
             label.ForeColor = AppTheme.TextMuted;
@@ -451,6 +475,24 @@ public sealed class RecordingControl : UserControl
             "A driver's night:",
             Line(_cmbDriverCut, Steady(_btnDriverCut, DriverCutCaption), _lblDriverCut)));
 
+        // THE SEASON'S OWN PIECE (7 Nov 2026), on the driver's night's card
+        // because it is the same kind of thing at a bigger scale: a written
+        // piece played once and kept as a file - for a prize night. See
+        // SeasonPiece.
+        _cmbSeason.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbSeason.DropDown += (_, _) => FillSeasons();
+
+        _btnSeason.Text = SeasonCaption;
+        _btnSeason.Click += async (_, _) => await PlayTheSeasonAsync();
+
+        cutGrid.AddHint(
+            "A few minutes on one championship's whole season, for a prize night. Play it once beforehand in an empty "
+            + "room and play the saved file on the night.");
+
+        Flush(cutGrid.AddRow(
+            "A season:",
+            Line(_cmbSeason, Steady(_btnSeason, SeasonCaption), _lblSeason)));
+
         // AND WHY IT SAID THAT. Every claim the announcer makes is worked
         // out from the club's own results. See NightAccount.Proof.
         _btnProof.Text = ProofCaption;
@@ -544,6 +586,7 @@ public sealed class RecordingControl : UserControl
     private void SizeFields()
     {
         Fit(_cmbDriverCut, UiLayout.AtTextSize(DriverPickerWidth));
+        Fit(_cmbSeason, UiLayout.AtTextSize(DriverPickerWidth));
         Fit(_cmbVideos, UiLayout.AtTextSize(DriverPickerWidth));
         Fit(_txtVideoHandle, UiLayout.AtTextSize(DriverPickerWidth));
         Fit(_numKeepNights, NumberWidth(_numKeepNights));
@@ -610,6 +653,8 @@ public sealed class RecordingControl : UserControl
         // handlers rather than by a greyed-out button.
         _btnDriverCut.Enabled = !_driverCutRunning && on;
         _cmbDriverCut.Enabled = !_driverCutRunning && on;
+        _btnSeason.Enabled = !_seasonRunning && on;
+        _cmbSeason.Enabled = !_seasonRunning && on;
         _btnProof.Enabled = on;
 
         // THE SAME RULE for the preview. It is never spoken, but it is
@@ -804,6 +849,113 @@ public sealed class RecordingControl : UserControl
                 string.Equals(one.Transponder, wanted, StringComparison.OrdinalIgnoreCase));
 
         _cmbDriverCut.SelectedIndex = back >= 0 ? back : 0;
+    }
+
+    /// <summary>
+    /// Fills the season picker, keeping the one picked - FillDriversTonight's
+    /// shape, for its reasons.
+    /// </summary>
+    private void FillSeasons()
+    {
+        var wanted = _cmbSeason.SelectedIndex >= 0 && _cmbSeason.SelectedIndex < _seasons.Count
+            ? _seasons[_cmbSeason.SelectedIndex].Id
+            : string.Empty;
+
+        var fresh = (Seasons?.Invoke() ?? Array.Empty<(string Id, string Name)>())
+            .Where(one => !string.IsNullOrWhiteSpace(one.Id) && !string.IsNullOrWhiteSpace(one.Name))
+            .ToList();
+
+        if (fresh.Count == _seasons.Count
+            && fresh.Select(one => one.Id).SequenceEqual(_seasons.Select(one => one.Id), StringComparer.Ordinal)
+            && fresh.Select(one => one.Name).SequenceEqual(_seasons.Select(one => one.Name), StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        _seasons.Clear();
+        _seasons.AddRange(fresh);
+
+        _cmbSeason.Items.Clear();
+
+        foreach (var one in _seasons)
+        {
+            _cmbSeason.Items.Add(one.Name.Trim());
+        }
+
+        if (_cmbSeason.Items.Count == 0)
+        {
+            return;
+        }
+
+        var back = wanted.Length == 0 ? -1 : _seasons.FindIndex(one => string.Equals(one.Id, wanted, StringComparison.Ordinal));
+
+        _cmbSeason.SelectedIndex = back >= 0 ? back : 0;
+    }
+
+    /// <summary>
+    /// Writes and plays the picked championship's season - see
+    /// <see cref="SeasonPiece"/>. The driver's night's handler, for a season.
+    /// </summary>
+    private async Task PlayTheSeasonAsync()
+    {
+        if (PlayTheSeason is null)
+        {
+            return;
+        }
+
+        FillSeasons();
+
+        if (_cmbSeason.SelectedIndex < 0 || _cmbSeason.SelectedIndex >= _seasons.Count)
+        {
+            _lblSeason.Text = _seasons.Count == 0
+                ? "There are no championships yet - set one up on the Championship page."
+                : "Pick a championship first.";
+            _lblSeason.ForeColor = AppTheme.Accent;
+
+            return;
+        }
+
+        var (id, name) = _seasons[_cmbSeason.SelectedIndex];
+
+        _seasonRunning = true;
+        _btnSeason.Enabled = false;
+        _cmbSeason.Enabled = false;
+        _btnSeason.Text = "Writing...";
+        _lblSeason.Text = string.Empty;
+        _lblSeason.ForeColor = AppTheme.TextMuted;
+
+        try
+        {
+            var problem = await PlayTheSeason.Invoke(id);
+
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            _lblSeason.Text = problem
+                ?? $"Played, and saved in tonight's folder as \"{SeasonPiece.LabelFor(name)}\". "
+                   + "Open folder above to find it.";
+            _lblSeason.ForeColor = problem is null ? AppTheme.TextMuted : AppTheme.Accent;
+        }
+        catch (Exception ex)
+        {
+            _lblSeason.Text = ex.Message;
+            _lblSeason.ForeColor = AppTheme.Accent;
+        }
+        finally
+        {
+            _seasonRunning = false;
+
+            if (!IsDisposed)
+            {
+                var on = IsCommentaryOn;
+
+                _btnSeason.Enabled = on;
+                _cmbSeason.Enabled = on;
+                _btnSeason.Text = SeasonCaption;
+            }
+        }
     }
 
     /// <summary>
