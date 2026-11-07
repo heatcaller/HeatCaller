@@ -82,6 +82,8 @@ export interface PushMessage {
 /** What posting to a push service came back with. */
 export interface PushAnswer {
   readonly status: number;
+  /** What the push service said back, cut short - Apple puts its reason here ({"reason":"..."}). */
+  readonly reason?: string;
 }
 
 export type PushPoster = (url: string, init: { method: string; headers: Record<string, string>; body: Uint8Array }) => Promise<PushAnswer>;
@@ -346,7 +348,11 @@ export class PushService {
         body: new Blob([new Uint8Array(init.body)]),
         signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
       });
-      return { status: r.status };
+      // The reason (7 Nov 2026): a refused alert logged only "answered
+      // 400", which says nothing about what to fix. The body is short and
+      // carries nothing of the driver's - the push service's own words.
+      const reason = r.ok ? "" : (await r.text().catch(() => "")).slice(0, 200);
+      return { status: r.status, reason };
     });
   }
 
@@ -513,7 +519,11 @@ export class PushService {
             "Content-Type": "application/octet-stream",
             TTL: String(PUSH_TTL_SECONDS),
             Urgency: "high",
-            Topic: message.tag.replace(/[^A-Za-z0-9_-]/g, ""),
+            // No Topic header (7 Nov 2026): Apple refused every alert with
+            // 400 {"reason":"BadWebPushTopic"} for "hc-race", which the
+            // standard allows. Nothing is lost - the tag inside the
+            // message already has a newer alert replace the older one on
+            // the phone; Topic only folded alerts still queued unsent.
           },
           body: encryptForPush(payload, sub),
         });
@@ -523,7 +533,7 @@ export class PushService {
         } else if (answer.status >= 200 && answer.status < 300) {
           sent++;
         } else {
-          this.log(`[push] "${club}": ${new URL(sub.endpoint).hostname} answered ${answer.status}`);
+          this.log(`[push] "${club}": ${new URL(sub.endpoint).hostname} answered ${answer.status}${answer.reason ? ` ${answer.reason}` : ""}`);
         }
       } catch (e) {
         this.log(`[push] "${club}": could not reach ${new URL(sub.endpoint).hostname}: ${String(e)}`);
