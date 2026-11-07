@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Setup Card Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600;700&display=swap">
+<style>
+/* A review sheet for the Me tab's Setup card: the rules, then three phones
+   that work - change a value and the markers, section counts and Save
+   button follow. Phone colours are the club look tokens (Pit Wall kit). */
+:root {
+  --page: #F3F1F7; --ink: #1B1530; --soft: #615A78; --line: #DDD8E8; --card: #FFFFFF; --hi: #D81B7A;
+  --f-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page: #0E0A1A; --ink: #EEEAF7; --soft: #A39BBD; --line: #2B2443; --card: #171128; --hi: #FF5FAE; color-scheme: dark } }
+:root[data-theme="dark"] { --page: #0E0A1A; --ink: #EEEAF7; --soft: #A39BBD; --line: #2B2443; --card: #171128; --hi: #FF5FAE; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.55 var(--f-body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 28px 16px 80px; }
+h1, h2 { font-family: var(--f-display); letter-spacing: .01em; text-wrap: balance; }
+h1 { font-size: 2.6rem; line-height: 1; margin: 0 0 8px; }
+.eyebrow { font-weight: 600; font-size: .72rem; text-transform: uppercase; letter-spacing: .14em; color: var(--hi); margin-bottom: 6px; }
+.lede { color: var(--soft); max-width: 72ch; margin: 0; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin: 22px 0 8px; }
+.box { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; }
+.box h2 { font-size: 1.2rem; margin: 0 0 4px; }
+.box ul { margin: 4px 0 0; padding-left: 18px; }
+.box li { margin: 3px 0; font-size: .92rem; }
+.trio { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 26px; justify-items: center; margin-top: 30px; }
+.slot { display: grid; gap: 10px; justify-items: center; width: 100%; max-width: 360px; align-content: start; }
+.cap { width: 100%; display: grid; gap: 2px; }
+.cap b { font-family: var(--f-display); font-size: 1.3rem; }
+.cap span { color: var(--soft); font-size: .84rem; }
+
+/* ---------- the phone ---------- */
+.phone {
+  --bg:#0F0722; --surface:#1A0F3A; --primary:#FF2E9A; --on-primary:#FFFFFF; --accent:#2EE6FF;
+  --text:#F7F2FF; --muted:#9E8AC7; --border:#33215C; --good:#3DD68C; --warn:#F5B83D; --bad:#FF5C7A;
+  --tonal: color-mix(in srgb, var(--primary) 16%, var(--surface));
+  --on-tonal: color-mix(in srgb, var(--primary) 45%, var(--text));
+  --ring: color-mix(in srgb, var(--accent) 70%, transparent);
+  width: 100%; max-width: 360px; height: 720px; padding: 10px; border-radius: 36px; background: #07040F;
+  box-shadow: 0 18px 40px -18px rgba(0,0,0,.5);
+}
+.phone.light {
+  --bg:#F6F3FB; --surface:#FFFFFF; --primary:#C2157A; --accent:#0B7FA0; --text:#1B1530;
+  --muted:#5E5677; --border:#DCD5EA; --good:#13865A; --warn:#B67800; --bad:#C62C4C;
+  background: #2A2540;
+}
+.phone.narrow { max-width: 320px; }
+.scr { position: relative; height: 100%; border-radius: 26px; overflow: hidden; background: var(--bg); color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; }
+.scroll { flex: 1; overflow-y: auto; padding: 14px 12px 12px; display: grid; gap: 12px; align-content: start; }
+.sw4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; padding: 3px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+.sw4 span { text-align: center; font-size: 13px; font-weight: 600; padding: 8px 0; border-radius: 11px; color: var(--muted); }
+.sw4 span.on { background: var(--primary); color: var(--on-primary); }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px 12px; display: grid; gap: 12px; }
+.card h3 { margin: 0; font-size: 1.15rem; line-height: 1.2; }
+.card .sub { margin: -8px 0 0; color: var(--muted); font-size: 13px; }
+
+/* Every control: a label above, at least 44px to tap, kit corners and ring. */
+.hdr { display: grid; gap: 8px; }
+.f { display: grid; gap: 4px; font-size: 13px; color: var(--muted); font-weight: 600; min-width: 0; }
+select, input[type=text], input[type=number], textarea, .msel {
+  width: 100%; min-height: 44px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  font: inherit; font-size: 15px; font-weight: 500; padding: 0 12px; }
+select { appearance: none; -webkit-appearance: none; padding-right: 32px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+textarea { padding: 10px 12px; min-height: 72px; resize: vertical; }
+select:focus-visible, input:focus-visible, textarea:focus-visible, .msel:focus-visible, summary:focus-visible, button:focus-visible {
+  outline: 3px solid var(--ring); outline-offset: 2px; }
+
+/* Sections fold, as the PC sheet's bordered blocks. */
+details.sec { border: 1px solid var(--border); border-radius: 14px; background: var(--bg); }
+details.sec > summary { list-style: none; cursor: pointer; min-height: 52px; padding: 8px 12px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 8px; }
+details.sec > summary::-webkit-details-marker { display: none; }
+summary .nm { font-weight: 700; font-size: 15px; }
+summary .ct { grid-column: 1; font-size: 12.5px; color: var(--muted); }
+summary .ct b { color: var(--accent); font-weight: 700; }
+summary .chev { grid-row: 1 / span 2; grid-column: 2; width: 9px; height: 9px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); margin: 0 6px 4px; transition: transform .15s; }
+details[open] > summary .chev { transform: rotate(-135deg); margin-bottom: -4px; }
+.rows { display: grid; padding: 0 12px 6px; }
+
+/* A row per field: the label on the left, the control in one column down the right. */
+.row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 4px 10px; align-items: center; padding: 8px 0 8px 0; border-top: 1px solid var(--border); position: relative; }
+.row .lb { font-size: 14px; font-weight: 500; line-height: 1.25; }
+.row .was { display: block; font-size: 12px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+.row.ch { padding-left: 10px; }
+.row.ch::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; background: var(--accent); }
+.row.ch .was { color: var(--accent); }
+.unit { position: relative; }
+.unit input { padding-right: 44px; }
+.unit i { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-style: normal; color: var(--muted); font-size: 14px; pointer-events: none; }
+/* A field whose options are long (the springs' colours) or a box for notes
+   takes the full width, its label above, so nothing is cut off. */
+.row.full { grid-template-columns: 1fr; }
+/* A narrow phone: the label above its control. */
+.narrow .row { grid-template-columns: 1fr; }
+
+/* Multi-pick: shut, a dropdown saying how many; open, the phone's own ticked list. */
+.msel { display: flex; align-items: center; justify-content: space-between; cursor: pointer; text-align: left; }
+.msel::after { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); margin: -4px 2px 0 8px; flex: none; }
+.mlist { grid-column: 1 / -1; display: grid; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.mlist[hidden] { display: none; }
+.mlist button { all: unset; display: flex; justify-content: space-between; align-items: center; min-height: 44px; padding: 0 14px; font-size: 15px; border-top: 1px solid var(--border); cursor: pointer; }
+.mlist button:first-child { border-top: 0; }
+.mlist button[aria-pressed=true]::after { content: "✓"; color: var(--accent); font-weight: 800; }
+
+/* Save along the foot, above the tab bar. */
+.save { border-top: 1px solid var(--border); background: var(--surface); padding: 10px 12px; display: grid; gap: 6px; }
+.go { min-height: 48px; border-radius: 14px; border: 0; background: var(--primary); color: var(--on-primary); font: inherit; font-weight: 700; font-size: 16px; cursor: pointer; }
+.go:disabled { background: var(--tonal); color: var(--on-tonal); cursor: default; }
+.said { font-size: 12.5px; color: var(--muted); text-align: center; min-height: 1em; }
+.said.ok { color: var(--good); }
+.tabs { display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid var(--border); background: var(--surface); padding: 6px 4px 10px; }
+.tabs span { text-align: center; font-size: 11px; color: var(--muted); }
+.tabs span.on { color: var(--primary); font-weight: 700; }
+.hist { color: var(--muted); font-size: 13.5px; padding: 0 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Relay · Me tab · Garage space</div>
+  <h1>The Setup card, as the PC sheet</h1>
+  <p class="lede">The sheet's sections and fields as the laptop's Garage holds them, in the same order and words, as text with an input box or dropdown on each row. There are no pictures. Every control below works: change a value and the change marker, the section count and the Save button all update.</p>
+
+  <div class="cols">
+    <div class="box"><h2>Each field type</h2><ul>
+      <li><b>Choice:</b> dropdown, "—" first, then the sheet's options in order</li>
+      <li><b>Number:</b> number box with its unit inside (mm, °, pcs)</li>
+      <li><b>Text:</b> one-line box; Notes gets a larger box</li>
+      <li><b>Yes/No:</b> dropdown — / Yes / No</li>
+      <li><b>Multi-pick:</b> dropdown showing "2 picked"; opens a ticked list</li>
+    </ul></div>
+    <div class="box"><h2>What changed</h2><ul>
+      <li>An accent bar and "was …" on every field you change</li>
+      <li>Each section's heading counts what's set and what changed</li>
+      <li>Save says what it will do: "Save setup · 3 changes"</li>
+    </ul></div>
+    <div class="box"><h2>Kept from today</h2><ul>
+      <li>Start from any saved setup, or a blank sheet</li>
+      <li>Ran in race, and notes</li>
+      <li>Fix my last entry, now a "Save as" dropdown</li>
+      <li>Sends exactly what it sends now; no laptop change</li>
+    </ul></div>
+  </div>
+
+  <div class="trio">
+    <div class="slot">
+      <div class="cap"><b>1 · Filling it in</b><span>Dark look. Started from the latest setup; Front Suspension open with two changes.</span></div>
+      <div class="phone" id="p1"></div>
+    </div>
+    <div class="slot">
+      <div class="cap"><b>2 · Fixing the last entry</b><span>Light look. Save as "Fix my last entry", with Chassis &amp; Drivetrain open.</span></div>
+      <div class="phone light" id="p2"></div>
+    </div>
+    <div class="slot">
+      <div class="cap"><b>3 · Yes/No and multi-pick</b><span>A 320px phone, so labels sit above their controls. A touring car sheet; tap "Bearings".</span></div>
+      <div class="phone narrow" id="p3"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// The Kyosho MR-04 / MR-03 sheet as HeatCaller sends it to the phone.
+const MR03 = { name: 'Kyosho MR-04 / MR-03', sections: [
+  { name: 'Event', fields: [
+    { id: 'ev', label: 'Event', kind: 'text' }, { id: 'bd', label: 'Body', kind: 'text' }, { id: 'tx', label: 'Transmitter', kind: 'text' },
+    { id: 'tc', label: 'Track condition', kind: 'choice', options: ['RCP Smooth', 'RCP Rough', 'Carpet', 'Urethane', 'Other'] },
+    { id: 'bt', label: 'Battery', kind: 'choice', options: ['Alkaline dry', 'NiMH', 'LiFe', 'Other'] } ] },
+  { name: 'Chassis & Drivetrain', fields: [
+    { id: 'ct', label: 'Chassis type', kind: 'choice', options: ['Standard (Black)', 'SP (Gray)', 'Translucent'] },
+    { id: 'mm', label: 'Motor mount', kind: 'choice', options: ['HM', 'MM', 'RM', 'LM', 'RML'] },
+    { id: 'wb', label: 'Wheel base', kind: 'choice', options: ['S', 'M', 'L', 'LL', '3L'] },
+    { id: 'wbm', label: 'Wheel base measured', kind: 'number', unit: 'mm' },
+    { id: 'mo', label: 'Motor', kind: 'choice', options: ['Standard', 'XSPEED V', 'Other'] },
+    { id: 'md', label: 'Motor detail', kind: 'text' },
+    { id: 'pg', label: 'Pinion gear', kind: 'choice', options: ['6T', '7T', '8T', '9T'] },
+    { id: 'df', label: 'Differential', kind: 'choice', options: ['Gear diff', 'Ball diff'] },
+    { id: 'db', label: 'Diff ball', kind: 'choice', options: ['Standard', 'Ceramic'] },
+    { id: 'ax', label: 'Axle', kind: 'choice', options: ['Standard', 'Titanium'] } ] },
+  { name: 'Front Suspension', fields: [
+    { id: 'fs', label: 'Front spring', kind: 'choice', options: ['Soft (Red)', 'Medium Soft (Purple)', 'Medium (Green)', 'Medium Hard (Orange/Standard)', 'Hard (Yellow)'] },
+    { id: 'kp', label: 'King pin ball', kind: 'choice', options: ['Standard', 'SP', 'Long'] },
+    { id: 'ua', label: 'Upper suspension arm', kind: 'choice', options: ['Standard', 'Inner tube', 'Aluminum', 'Hard'] },
+    { id: 'us', label: 'Upper suspension shaft', kind: 'choice', options: ['Standard', 'SP'] },
+    { id: 'b47', label: '4.7mm ball', kind: 'choice', options: ['Standard', 'Hard fluorine coat'] },
+    { id: 'hab', label: 'Height adjust ball', kind: 'choice', options: ['0.3mm', '0.5mm', '1.0mm (Standard)'] },
+    { id: 'la', label: 'Suspension limiter A', kind: 'number', unit: 'mm' },
+    { id: 'lb', label: 'Suspension limiter B', kind: 'number', unit: 'mm' },
+    { id: 'lc', label: 'Suspension limiter C', kind: 'number', unit: 'mm' },
+    { id: 'tr', label: 'Tie-rod', kind: 'choice', options: ['-2°', 'Standard 0°', '+2°', '+4°', '+6°'] } ] },
+  { name: 'Rear Suspension', fields: [
+    { id: 'rs', label: 'Rear spring', kind: 'choice', options: ['Soft (Red)', 'Medium (Green)', 'Standard (Green)', 'Hard (Yellow)', 'Other'] },
+    { id: 'tb', label: 'Suspension plate (T-bar)', kind: 'choice', options: ['Standard', 'Carbon', 'FRP'] },
+    { id: 'tt', label: 'T-bar type', kind: 'choice', options: ['Soft', 'Medium', 'Hard'] },
+    { id: 'sp', label: 'Height adjustment spacers (0.2mm)', kind: 'number', unit: 'pcs' },
+    { id: 'rk', label: 'Rear shock', kind: 'choice', options: ['None', 'Oil shock', 'Friction shock'] },
+    { id: 'on', label: 'Oil shock oil no.', kind: 'text' } ] },
+  { name: 'Front Tires & Wheels', fields: [
+    { id: 'ftw', label: 'Front tire width', kind: 'choice', options: ['Narrow', 'Semi Wide', 'Wide'] },
+    { id: 'ftt', label: 'Front tire type', kind: 'choice', options: ['High Grip', 'Flat', 'Classic', 'LM', 'Racing Radial'] },
+    { id: 'fth', label: 'Front tire hardness', kind: 'number', unit: '°' },
+    { id: 'ftd', label: 'Front tire diameter', kind: 'number', unit: 'mm' },
+    { id: 'fwo', label: 'Front wheel offset', kind: 'number', unit: 'mm' } ] },
+  { name: 'Rear Tires & Wheels', fields: [
+    { id: 'rtw', label: 'Rear tire width', kind: 'choice', options: ['Narrow', 'Semi Wide', 'Wide'] },
+    { id: 'rtt', label: 'Rear tire type', kind: 'choice', options: ['High Grip', 'Flat', 'Classic', 'LM', 'Racing Radial'] },
+    { id: 'rth', label: 'Rear tire hardness', kind: 'number', unit: '°' },
+    { id: 'rtd', label: 'Rear tire diameter', kind: 'number', unit: 'mm' } ] },
+  { name: 'Notes', fields: [
+    { id: 'op', label: 'Other parts installed', kind: 'text' }, { id: 'nt', label: 'Notes', kind: 'text', long: true } ] },
+] };
+
+const MR03_LAST = { tc: 'RCP Smooth', bt: 'NiMH', ct: 'SP (Gray)', mm: 'MM', wb: 'M', wbm: '90', mo: 'XSPEED V', pg: '8T', df: 'Ball diff', db: 'Ceramic',
+  fs: 'Medium (Green)', kp: 'Standard', ua: 'Aluminum', us: 'SP', hab: '0.5mm', la: '1.2', lb: '1.0', tr: 'Standard 0°',
+  rs: 'Medium (Green)', tb: 'Carbon', tt: 'Medium', sp: '2', rk: 'Oil shock', on: '#300',
+  ftw: 'Narrow', ftt: 'High Grip', fth: '30', ftd: '22.5', rtw: 'Wide', rtt: 'Racing Radial', rth: '20', rtd: '23.0' };
+
+// A sheet with the two kinds the MR-03 sheet has none of.
+const TOURING = { name: 'Club touring', sections: [
+  { name: 'Drivetrain', fields: [
+    { id: 'bdf', label: 'Ball diff', kind: 'bool' },
+    { id: 'spool', label: 'Front spool', kind: 'bool' },
+    { id: 'brg', label: 'Bearings', kind: 'multi', options: ['Steel', 'Ceramic front', 'Ceramic rear', 'Rubber sealed'] },
+    { id: 'gr', label: 'Final drive ratio', kind: 'number', unit: ':1' } ] },
+  { name: 'Shocks', fields: [
+    { id: 'so', label: 'Shock oil', kind: 'number', unit: 'cSt' },
+    { id: 'sp', label: 'Pistons', kind: 'choice', options: ['2-hole', '3-hole', '4-hole'] } ] },
+] };
+const TOURING_LAST = { bdf: 'Yes', spool: 'No', brg: 'Steel, Ceramic front', gr: '6.8', so: '350', sp: '3-hole' };
+
+const SETUPS = [['s1', '5 Nov · Club layout (latest)'], ['s2', '29 Oct · Club layout · Heat 3'], ['s3', '22 Oct · Big loop'], ['blank', 'A blank sheet']];
+const RACES = ['Not in a race', 'Heat 1 · tonight', 'Heat 2 · tonight', 'A Final · tonight'];
+
+function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+function sel(options, value) {
+  const s = document.createElement('select');
+  for (const o of options) { const [v, w] = Array.isArray(o) ? o : [o, o]; const op = el('option', '', w); op.value = v; s.appendChild(op); }
+  s.value = value; return s;
+}
+function labelled(words, control, cls) { const l = el('label', 'f' + (cls ? ' ' + cls : '')); l.appendChild(el('span', '', words)); l.appendChild(control); return l; }
+
+function phone(at, opts) {
+  const { sheet, start, open, edits = {}, fix = false, car } = opts;
+  const now = Object.assign({}, start, edits);
+  const scr = el('div', 'scr');
+  const scroll = el('div', 'scroll');
+  const sw = el('div', 'sw4');
+  for (const [w, on] of [['Tonight'], ['Races'], ['Garage', 1], ['Stats']]) sw.appendChild(el('span', on ? 'on' : '', w));
+  scroll.appendChild(sw);
+
+  const card = el('section', 'card');
+  card.appendChild(el('h3', '', 'Setup · ' + car));
+  card.appendChild(el('p', 'sub', sheet.name + ' sheet'));
+
+  const hdr = el('div', 'hdr');
+  hdr.appendChild(labelled('Start from', sel(SETUPS, 's1'), 'wide'));
+  hdr.appendChild(labelled('Ran in race', sel(RACES, RACES[fix ? 1 : 0])));
+  const saveAs = sel([['new', 'New entry'], ['fix', 'Fix my last entry']], fix ? 'fix' : 'new');
+  hdr.appendChild(labelled('Save as', saveAs));
+  card.appendChild(hdr);
+
+  const counts = [];
+  sheet.sections.forEach((s, si) => {
+    const d = el('details', 'sec');
+    if (si === open) d.open = true;
+    const sum = el('summary');
+    sum.appendChild(el('span', 'nm', s.name));
+    const ct = el('span', 'ct');
+    sum.appendChild(ct);
+    sum.appendChild(el('span', 'chev'));
+    d.appendChild(sum);
+    const rows = el('div', 'rows');
+    for (const f of s.fields) rows.appendChild(row(f));
+    d.appendChild(rows);
+    card.appendChild(d);
+    counts.push([s, ct]);
+  });
+  scroll.appendChild(card);
+  scroll.appendChild(el('p', 'hist', '▸ Recent setups (3)'));
+  scr.appendChild(scroll);
+
+  const save = el('div', 'save');
+  const go = el('button', 'go');
+  const said = el('div', 'said');
+  go.addEventListener('click', () => { said.textContent = 'Sent - HeatCaller will have it in a few seconds'; said.className = 'said ok'; });
+  save.appendChild(go); save.appendChild(said);
+  scr.appendChild(save);
+  const tabs = el('div', 'tabs');
+  for (const [w, on] of [['Home'], ['Live'], ['Results'], ['Schedule'], ['Me', 1]]) tabs.appendChild(el('span', on ? 'on' : '', w));
+  scr.appendChild(tabs);
+  at.appendChild(scr);
+  saveAs.addEventListener('change', refresh);
+  refresh();
+  // Each phone opens scrolled to its open section, as if just tapped.
+  requestAnimationFrame(() => {
+    const d = card.querySelector('details[open]');
+    if (d) scroll.scrollTop = d.offsetTop - scroll.offsetTop - 8;
+  });
+
+  function changed(id) { return (now[id] || '') !== (start[id] || ''); }
+  function refresh() {
+    let n = 0;
+    for (const [s, ct] of counts) {
+      const set = s.fields.filter((f) => (now[f.id] || '') !== '').length;
+      const ch = s.fields.filter((f) => changed(f.id)).length;
+      n += ch;
+      ct.textContent = '';
+      ct.append(set + ' of ' + s.fields.length + ' set');
+      if (ch) { ct.append(' · '); ct.appendChild(el('b', '', ch + ' changed')); }
+    }
+    const fixing = saveAs.value === 'fix';
+    go.disabled = n === 0 && !fixing;
+    go.textContent = fixing ? 'Save the fix' + (n ? ' · ' + n + (n === 1 ? ' change' : ' changes') : '')
+      : n ? 'Save setup · ' + n + (n === 1 ? ' change' : ' changes') : 'Nothing changed yet';
+    said.textContent = ''; said.className = 'said';
+  }
+
+  function row(f) {
+    const longest = Math.max(0, ...(f.options || []).map((o) => o.length));
+    const r = el('div', 'row' + (f.long || longest > 14 ? ' full' : ''));
+    const lb = el('label', 'lb', f.label);
+    const was = el('span', 'was');
+    lb.appendChild(was);
+    r.appendChild(lb);
+    const mark = () => {
+      const c = changed(f.id);
+      r.classList.toggle('ch', c);
+      was.textContent = c ? (start[f.id] ? 'was ' + start[f.id] : 'was blank') : '';
+      refresh();
+    };
+    let control;
+    if (f.kind === 'choice' || f.kind === 'bool') {
+      control = sel([['', '—']].concat(f.kind === 'bool' ? ['Yes', 'No'] : f.options), now[f.id] || '');
+      control.addEventListener('change', () => { now[f.id] = control.value; mark(); });
+    } else if (f.kind === 'number') {
+      control = el('div', 'unit');
+      const i = document.createElement('input');
+      i.type = 'text'; i.inputMode = 'decimal'; i.value = now[f.id] || ''; i.placeholder = '—';
+      i.addEventListener('input', () => { now[f.id] = i.value.trim(); mark(); });
+      control.appendChild(i);
+      if (f.unit) control.appendChild(el('i', '', f.unit));
+    } else if (f.kind === 'multi') {
+      control = el('button', 'msel');
+      control.type = 'button';
+      const list = el('div', 'mlist');
+      list.hidden = true;
+      const picked = () => (now[f.id] || '').split(', ').filter(Boolean);
+      const words = () => { const p = picked(); return p.length === 0 ? '—' : p.length === 1 ? p[0] : p.length + ' picked'; };
+      control.textContent = words();
+      control.addEventListener('click', () => { list.hidden = !list.hidden; control.setAttribute('aria-expanded', String(!list.hidden)); });
+      for (const o of f.options) {
+        const b = el('button', '', o);
+        b.type = 'button';
+        b.setAttribute('aria-pressed', String(picked().includes(o)));
+        b.addEventListener('click', () => {
+          const p = picked();
+          const next = p.includes(o) ? p.filter((x) => x !== o) : f.options.filter((x) => p.includes(x) || x === o);
+          now[f.id] = next.join(', ');
+          b.setAttribute('aria-pressed', String(next.includes(o)));
+          control.textContent = words();
+          mark();
+        });
+        list.appendChild(b);
+      }
+      r.appendChild(control);
+      r.appendChild(list);
+      lb.htmlFor = '';
+      setTimeout(mark);
+      return r;
+    } else if (f.long) {
+      control = document.createElement('textarea');
+      control.value = now[f.id] || '';
+      control.addEventListener('input', () => { now[f.id] = control.value.trim(); mark(); });
+    } else {
+      control = document.createElement('input');
+      control.type = 'text'; control.value = now[f.id] || ''; control.placeholder = '—';
+      control.addEventListener('input', () => { now[f.id] = control.value.trim(); mark(); });
+    }
+    const id = 'f' + Math.random().toString(36).slice(2);
+    const input = control.matches('input, select, textarea') ? control : control.querySelector('input');
+    if (input) { input.id = id; lb.htmlFor = id; }
+    r.appendChild(control);
+    setTimeout(mark);
+    return r;
+  }
+}
+
+phone(document.getElementById('p1'), { sheet: MR03, start: MR03_LAST, open: 2, car: 'MR-03 Red',
+  edits: { fs: 'Medium Hard (Orange/Standard)', lc: '0.8' } });
+phone(document.getElementById('p2'), { sheet: MR03, start: MR03_LAST, open: 1, car: 'MR-03 Red', fix: true,
+  edits: { pg: '9T' } });
+phone(document.getElementById('p3'), { sheet: TOURING, start: TOURING_LAST, open: 0, car: 'TT-02 Blue',
+  edits: { spool: 'Yes' } });
+</script>
+</body>
+</html>

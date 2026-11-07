@@ -26,6 +26,9 @@ internal static class DriverGarage
     /// <summary>The newest setups per car.</summary>
     internal const int SetupsPerCar = 6;
 
+    /// <summary>The most setup sheets sent to a phone - every one a garage is likely to have.</summary>
+    internal const int MostSheets = 24;
+
     /// <summary>The layouts the pack charts are split by, beside "every layout".</summary>
     internal const int LayoutGroups = 3;
 
@@ -173,6 +176,9 @@ internal static class DriverGarage
                     ["raceLabel"] = e.LinkedSessionId is { } sid && from.History.Get(sid) is { } s ? RaceLabel(s) : string.Empty,
                     ["values"] = e.IsLegacy ? LegacyValues(e) : e.Values.Where(kv => !string.IsNullOrWhiteSpace(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value),
                     ["notes"] = e.Notes ?? string.Empty,
+                    // The sheet it was filled in on (7 Nov 2026), so the
+                    // phone's Start from opens it on that sheet.
+                    ["sheet"] = from.Sheets.Get(e.ChassisTemplateId)?.Id,
                     ["fromPhone"] = false,
                     ["editable"] = name.Length > 0 && DriverRequestDesk.IsEditableFromPhone(e, car, name, nowUtc),
                 })
@@ -212,7 +218,16 @@ internal static class DriverGarage
 
         doc["classes"] = from.Classes.Where(c => !string.IsNullOrWhiteSpace(c)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-        doc["sheets"] = sheetsUsed.Select(id => from.Sheets.Get(id)).Where(t => t is not null).ToDictionary(t => t!.Id, t => (object?)new Dictionary<string, object?>
+        // EVERY SHEET IN THE GARAGE (7 Nov 2026, Asher: the phone's setup
+        // card "should present the setup sheet that is accessible in the
+        // garage section of the pc app"). Only the sheets a car's chassis
+        // linked to went, and a club whose chassis types link none - most,
+        // since the Setup Sheet window lets you pick any sheet - got the
+        // short log on every car. Every sheet goes now, the linked ones
+        // first, so the phone can offer them all as the desk's form does.
+        var sheetIds = sheetsUsed.Concat(from.Sheets.All.Select(t => t.Id)).Distinct(StringComparer.Ordinal).Take(MostSheets);
+
+        doc["sheets"] = sheetIds.Select(id => from.Sheets.Get(id)).Where(t => t is not null).ToDictionary(t => t!.Id, t => (object?)new Dictionary<string, object?>
         {
             ["name"] = t!.Name,
             ["sections"] = t.Sections.Select(s => new Dictionary<string, object?>

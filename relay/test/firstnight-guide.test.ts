@@ -25,6 +25,13 @@ describe("the first-night guide from the app", () => {
     ]);
   });
 
+  it("keeps the line breaks typed in the app, each line tidied and blank ones dropped (7 Nov 2026)", () => {
+    assert.deepEqual(guideFrom([{ heading: "Parking", words: "Round the  back,\r\n\r\n  by the bins.\n" }]),
+      [{ heading: "Parking", words: "Round the back,\nby the bins." }]);
+    assert.deepEqual(updatesFrom([{ heading: "Line one\nLine two", words: "A\nB" }]),
+      [{ heading: "Line one Line two", words: "A\nB" }], "a heading stays one line");
+  });
+
   it("drops a part with no words, stops at twenty, and is empty for anything not a list", () => {
     assert.deepEqual(guideFrom([{ heading: "Only a heading" }, { words: 7 }, null, "text"]), []);
     assert.equal(guideFrom(Array.from({ length: 30 }, (_, i) => ({ heading: "", words: "Part " + i }))).length, 20);
@@ -104,6 +111,8 @@ describe("the first-night guide from the app", () => {
   it("keeps the club's updates off the driver's night now that they are on Home", () => {
     assert.doesNotMatch(nightPage("acme-rc", "Acme RC"), /id="up"/);
     assert.match(homePage("acme-rc", "Acme RC"), /id="up"/);
+    // Right under the first-night guide (7 Nov 2026).
+    assert.match(homePage("acme-rc", "Acme RC"), /<div id="gd"><\/div><div id="up"><\/div>/);
   });
 
   it("draws the club's updates on Home, hides them on Got it, and shows newer news again", async () => {
@@ -113,6 +122,11 @@ describe("the first-night guide from the app", () => {
 
     assert.match(page.get("up").textContent, /Club updates/);
     assert.match(page.get("up").textContent, /Track night moved/);
+    // Folded as the guide is (7 Nov 2026): a strip saying how many and how long.
+    const card = page.get("up").find((n) => n.tagName === "DETAILS")[0]!;
+    assert.ok(card, "a card that folds");
+    assert.equal((card as unknown as { open: boolean }).open, false, "shut until tapped");
+    assert.match(card.textContent, /1 update · 1 min read/);
     page.button(page.get("up"), /^Got it/)!.click();
     assert.equal(page.get("up").textContent, "");
 

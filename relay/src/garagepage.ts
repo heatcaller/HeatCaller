@@ -160,6 +160,61 @@ html.synthwave .gpal { --gp0: var(--ln0); --gp1: var(--ln1); --gp2: var(--ln2); 
 .gset .when { display: block; }
 .gx details > summary { min-height: 44px; display: flex; align-items: center; color: var(--accent); cursor: pointer; }
 .gx fieldset .chk { min-height: 32px; }
+/* THE SETUP CARD AS THE PC SHEET (7 Nov 2026, Asher picked the mockup,
+   relay/mockups/setup-card.html): the sheet's sections folding as its
+   bordered blocks, a row per field - its label on the left and its
+   dropdown or box down the right, or the label above when the options are
+   long or the screen narrow - a changed field marked, and Save along the
+   foot above the tab bar. Text and controls only; colours from the look. */
+.sx-hdr { display: grid; gap: 8px; margin: 6px 0 12px; }
+.sx-hdr .f { margin: 0; }
+.sx-c { width: 100%; min-height: 44px; margin: 0; border-radius: 12px; border: 1px solid var(--border); background: var(--bg);
+        color: var(--text); font: inherit; font-size: 1rem; font-weight: 500; padding: 0 12px; }
+textarea.sx-c { padding: 10px 12px; min-height: 72px; resize: vertical; }
+.sx-c:focus-visible, .sx-sec > summary:focus-visible, .sx-ml button:focus-visible { outline: 3px solid var(--ring, var(--accent)); outline-offset: 2px; }
+.gx details.sx-sec { border: 1px solid var(--border); border-radius: 14px; background: var(--bg); margin: 0 0 8px; }
+.gx details.sx-sec > summary { list-style: none; min-height: 52px; padding: 8px 12px; display: grid; grid-template-columns: 1fr auto;
+                               align-items: center; gap: 2px 8px; color: var(--text); cursor: pointer; }
+.sx-sec > summary::-webkit-details-marker { display: none; }
+.sx-sec .sx-nm { font-weight: 700; } /* Not .nm: that is a driver's name, which a tap follows. */
+.sx-sec .ct { grid-column: 1; font-size: 0.8rem; color: var(--muted); }
+.sx-sec .ct b { color: var(--accent); }
+.sx-sec .chev { grid-row: 1 / span 2; grid-column: 2; width: 9px; height: 9px; margin: 0 6px 4px;
+                border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform 0.15s; }
+.sx-sec[open] .chev { transform: rotate(-135deg); margin-bottom: -4px; }
+@media (prefers-reduced-motion: reduce) { .sx-sec .chev { transition: none; } }
+.sx-rows { padding: 0 12px 6px; }
+.sx-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 4px 10px; align-items: center;
+          padding: 8px 0; border-top: 1px solid var(--border); position: relative; }
+.sx-row.full { grid-template-columns: 1fr; }
+@media (max-width: 360px) { .sx-row { grid-template-columns: 1fr; } }
+.sx-row .lb { font-size: 0.9rem; font-weight: 500; line-height: 1.25; overflow-wrap: anywhere; }
+.sx-row .was { display: block; font-size: 0.78rem; color: var(--muted); font-weight: 400; margin-top: 2px; }
+.sx-row.ch { padding-left: 10px; }
+.sx-row.ch::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; background: var(--accent); }
+.sx-row.ch .was { color: var(--accent); }
+.sx-u { position: relative; }
+.sx-u .sx-c { padding-right: 48px; }
+.sx-u i { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-style: normal; color: var(--muted); pointer-events: none; }
+button.sx-c { display: flex; align-items: center; justify-content: space-between; text-align: left; cursor: pointer; }
+button.sx-c::after { content: ""; flex: none; width: 7px; height: 7px; margin: -4px 2px 0 8px;
+                     border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); }
+.sx-ml { grid-column: 1 / -1; display: grid; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.sx-ml[hidden] { display: none; }
+.sx-ml button { font: inherit; color: var(--text); background: transparent; border: 0; border-top: 1px solid var(--border);
+                display: flex; justify-content: space-between; align-items: center; min-height: 44px; padding: 0 14px; text-align: left; cursor: pointer; }
+.sx-ml button:first-child { border-top: 0; }
+.sx-ml button[aria-pressed="true"]::after { content: "\\2713"; color: var(--accent); font-weight: 800; }
+/* Save in its place under the notes, not floating over the sheet (7 Nov
+   2026, Asher: "make the add to my setup log button stationary"). */
+.sx-save { display: grid; gap: 6px; margin: 12px 0 4px; }
+.sx-save .go { width: 100%; margin: 0; }
+/* Add a pack as the kit's primary button (7 Nov 2026), full width like the
+   card's other buttons, its form's two buttons stacked under it. */
+.gpadd { margin-top: 12px; }
+.gpadd h3 { margin: 4px 0 6px; }
+.gpadd .go { display: block; width: 100%; margin: 8px 0 0; }
+.sx-save .go:disabled { background: var(--tonal, var(--surface)); color: var(--on-tonal, var(--muted)); opacity: 1; }
 `;
 
 /*
@@ -428,6 +483,13 @@ const view = {
   // The Manage sheet: '' shut, a car's id, or 'add' for a new car.
   sheet: '', taggedRaces: false,
   layout: '', chart: 'fade', history: false,
+  // Which saved setup each car's sheet starts from, by car id: a setup's
+  // id, 'blank', or absent for the newest.
+  setupFrom: {},
+  // Which of each car's sheet sections are open, by car id then section.
+  setupOpen: {},
+  // Which sheet each car's card is on, by car id: a sheet's id or 'short'.
+  setupSheet: {},
 };
 
 function section(name, id, keyOf, build) {
@@ -826,21 +888,27 @@ function buildPacks(box, sec) {
   }
   card.appendChild(list);
 
-  // Add a pack.
-  const add = el('details', 'yd-change');
-  add.open = view.packAdd;
-  add.addEventListener('toggle', () => { view.packAdd = add.open; });
-  add.appendChild(el('summary', '', 'Add a pack'));
-  const fields = packForm(add, sec, 'pack-add', null);
-  fields.appendChild(tapButton('Add the pack', 'go', async () => {
-    const f = packFields('pack-add', null);
-    if (f.label === '') { setStatus('pack-add', 'Give the pack a label - what is written on it.', '', 'gno'); return; }
-    if (await change('packedit', { op: 'add', pack: newId(), label: f.label, chem: f.chem, notes: f.notes }, 'pack-add')) {
-      drop('pack-add');
-      view.packAdd = false;
-      paint(sec, true);
-    }
-  }));
+  // Add a pack: a real button since 7 Nov 2026 (Asher: "make add a pack a
+  // real button. all pit wall") - the kit's primary, pink like the other
+  // Add buttons ("make add a pack button pink"), where a text link
+  // opened a fold - and the form under it with Add the pack and Cancel.
+  const add = el('div', 'gpadd');
+  if (!view.packAdd) {
+    add.appendChild(tapButton('Add a pack', 'go', () => { view.packAdd = true; paint(sec, true); }));
+  } else {
+    add.appendChild(el('h3', '', 'Add a pack'));
+    const fields = packForm(add, sec, 'pack-add', null);
+    fields.appendChild(tapButton('Add the pack', 'go', async () => {
+      const f = packFields('pack-add', null);
+      if (f.label === '') { setStatus('pack-add', 'Give the pack a label - what is written on it.', '', 'gno'); return; }
+      if (await change('packedit', { op: 'add', pack: newId(), label: f.label, chem: f.chem, notes: f.notes }, 'pack-add')) {
+        drop('pack-add');
+        view.packAdd = false;
+        paint(sec, true);
+      }
+    }));
+    fields.appendChild(tapButton('Cancel', 'go quiet', () => { drop('pack-add'); view.packAdd = false; paint(sec, true); }));
+  }
   card.appendChild(add);
   card.appendChild(statusLine('pack-add'));
   box.appendChild(card);
@@ -1737,11 +1805,21 @@ function buildCars(box, sec) {
 
 // ---- 6. setup sheet
 
-function sheetOf(car) {
-  const id = str(car && car.sheet);
+function sheetById(id) {
   const sheets = garage && garage.sheets && typeof garage.sheets === 'object' ? garage.sheets : {};
-  const s = OBJECT_ID.test(id) ? sheets[id] : null;
+  const s = OBJECT_ID.test(str(id)) && Object.prototype.hasOwnProperty.call(sheets, id) ? sheets[id] : null;
   return s && typeof s === 'object' && Array.isArray(s.sections) ? s : null;
+}
+
+function sheetOf(car) {
+  return sheetById(car && car.sheet);
+}
+
+// Every sheet HeatCaller sent, in its order: since 7 Nov 2026 every sheet
+// in the PC app's Garage, the ones a chassis links to first.
+function sheetIds() {
+  const sheets = garage && garage.sheets && typeof garage.sheets === 'object' ? garage.sheets : {};
+  return Object.keys(sheets).filter((id) => sheetById(id) !== null);
 }
 
 function fieldsOf(sheet) {
@@ -1763,47 +1841,105 @@ function raceChoices() {
   return [['', 'Not in a race']].concat(races().map((r) => [r.id, (str(r.label) || 'Race') + (when(r.at) ? ' · ' + when(r.at) : '')]));
 }
 
-function sheetField(parent, sec, form, f, initial) {
+// One row of the setup sheet (7 Nov 2026, the Setup card as the PC sheet):
+// the field's label, then its dropdown or box - a choice and a yes/no as a
+// dropdown, a multi-pick as a dropdown that opens its ticked list, a number
+// with its unit inside the box - marked when it differs from the setup the
+// sheet started from, with what it was. The label is the row itself, so a
+// tap anywhere on it reaches the control.
+function sheetRow(sec, form, f, initial, onChange) {
   const kind = str(f.kind);
   const field = 'v.' + f.id;
-  const title = (str(f.label) || f.id) + (str(f.unit) ? ' (' + str(f.unit) + ')' : '');
+  const words = str(f.label) || f.id;
   const options = (Array.isArray(f.options) ? f.options : []).filter((o) => typeof o === 'string' && o !== '');
+  const start = kind === 'bool' ? (isTick(initial) ? 'Yes' : '') : cleanText(initial);
+  const longest = options.reduce((m, o) => Math.max(m, o.length), 0);
+  const multi = kind === 'multi';
+  const cls = 'sx-row' + (longest > 14 ? ' full' : '');
+  const row = el(multi ? 'div' : 'label', cls);
+  const lb = el('span', 'lb', words);
+  const was = el('span', 'was');
+  lb.appendChild(was);
+  row.appendChild(lb);
+  const now = () => sheetValue(form, f, initial);
+  const mark = () => {
+    const c = now() !== start;
+    row.className = cls + (c ? ' ch' : '');
+    was.textContent = c ? 'was ' + (start !== '' ? start : kind === 'bool' ? 'No' : 'blank') : '';
+  };
+  const changed = (v) => { put(sec, form, field, v); mark(); onChange(); };
 
-  if (kind === 'choice') {
+  if (kind === 'choice' || kind === 'bool') {
     const list = options.slice();
-    if (initial && !list.includes(initial)) list.push(initial);
-    selectBox(parent, sec, form, field, title, [['', '—']].concat(list.map((o) => [o, o])), initial);
-    return;
-  }
-
-  if (kind === 'multi') {
-    const set = el('fieldset', '');
-    set.appendChild(el('legend', '', title));
-    const on = String(val(form, field, initial)).split(', ').filter(Boolean);
-    const boxes = [];
-    for (const o of options) {
-      const label = el('label', 'chk');
-      const box = document.createElement('input');
-      box.type = 'checkbox';
-      box.checked = on.includes(o);
-      box.addEventListener('change', () => {
-        put(sec, form, field, boxes.filter((b) => b[0].checked).map((b) => b[1]).join(', '));
-      });
-      boxes.push([box, o]);
-      label.appendChild(box);
-      label.appendChild(el('span', '', o));
-      set.appendChild(label);
+    if (kind === 'choice' && start && !list.includes(start)) list.push(start);
+    const choices = kind === 'bool' ? [['', 'No'], ['Yes', 'Yes']] : [['', '—']].concat(list.map((o) => [o, o]));
+    const pick = document.createElement('select');
+    pick.className = 'sx-c';
+    for (const [v, w] of choices) {
+      const o = document.createElement('option');
+      o.value = v;
+      o.textContent = w;
+      pick.appendChild(o);
     }
-    parent.appendChild(set);
-    return;
+    pick.value = now();
+    pick.addEventListener('change', () => changed(String(pick.value || '')));
+    row.appendChild(pick);
+  } else if (multi) {
+    // The phone's own way to pick several: shut, how many; open, a ticked list.
+    const picked = () => now().split(',').map((x) => x.trim()).filter(Boolean);
+    const list = options.slice();
+    for (const p of picked()) if (!list.includes(p)) list.push(p);
+    const btn = el('button', 'sx-c');
+    btn.type = 'button';
+    btn.setAttribute('aria-expanded', 'false');
+    const menu = el('div', 'sx-ml');
+    menu.hidden = true;
+    const say = () => {
+      const p = picked();
+      btn.textContent = p.length === 0 ? '—' : p.length === 1 ? p[0] : p.length + ' picked';
+      btn.setAttribute('aria-label', words + ': ' + (p.length === 0 ? 'none picked' : p.join(', ')));
+    };
+    say();
+    btn.addEventListener('click', () => {
+      menu.hidden = !menu.hidden;
+      btn.setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
+    });
+    for (const o of list) {
+      const b = el('button', '', o);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', picked().includes(o) ? 'true' : 'false');
+      b.addEventListener('click', () => {
+        const p = picked();
+        const next = list.filter((x) => (x === o ? !p.includes(o) : p.includes(x)));
+        b.setAttribute('aria-pressed', next.includes(o) ? 'true' : 'false');
+        changed(next.join(', '));
+        say();
+      });
+      menu.appendChild(b);
+    }
+    row.appendChild(btn);
+    row.appendChild(menu);
+  } else {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'sx-c';
+    input.maxLength = 80;
+    input.setAttribute('maxlength', '80');
+    input.setAttribute('autocomplete', 'off');
+    if (kind === 'number') input.setAttribute('inputmode', 'decimal');
+    input.value = String(val(form, field, initial === undefined || initial === null ? '' : initial));
+    input.addEventListener('input', () => changed(String(input.value || '')));
+    if (str(f.unit)) {
+      const u = el('span', 'sx-u');
+      u.appendChild(input);
+      u.appendChild(el('i', '', str(f.unit)));
+      row.appendChild(u);
+    } else {
+      row.appendChild(input);
+    }
   }
-
-  if (kind === 'bool') {
-    tickBox(parent, sec, form, field, title, isTick(initial));
-    return;
-  }
-
-  textBox(parent, sec, form, field, title, initial, 80, kind === 'number' ? { mode: 'decimal' } : {});
+  mark();
+  return { row: row, changed: () => now() !== start, filled: () => now() !== '' };
 }
 
 // WHY (2026-11-05, Bug hunt 11): HeatCaller stores a ticked yes/no as
@@ -1817,7 +1953,9 @@ function isTick(v) {
 }
 
 function sheetValue(form, f, initial) {
-  const v = val(form, 'v.' + f.id, str(f.kind) === 'bool' ? isTick(initial) : initial);
+  // A yes/no is a No/Yes dropdown since 7 Nov 2026; HeatCaller keeps only
+  // ticked or not, so No is left out of what is sent.
+  const v = val(form, 'v.' + f.id, str(f.kind) === 'bool' ? (isTick(initial) ? 'Yes' : '') : initial);
   if (str(f.kind) === 'bool') return v === true || v === 'Yes' ? 'Yes' : '';
   return cleanText(v);
 }
@@ -1836,43 +1974,127 @@ function buildSetup(box, sec) {
   }
   card.appendChild(el('h2', '', 'Setup · ' + carName(car)));
 
-  const sheet = sheetOf(car);
   const setups = setupsOf(car);
   const newest = setups[0] || null;
   const form = 'setup-' + car.id;
   const key = 'setup-' + car.id;
   const body = el('div', 'su');
+  const hdr = el('div', 'sx-hdr');
+  // Save along the foot of the card, above the tab bar (7 Nov 2026), with
+  // what it says about the last send under it.
+  const save = el('div', 'sx-save');
+
+  // START FROM ANY SAVED SETUP (7 Nov 2026, Asher: "add a setup sheet
+  // picker that pulls from the laptop to the setup card on the me tab"):
+  // the setups HeatCaller sent for this car - its last few, newest first -
+  // or a blank sheet, instead of only ever the newest. Picking one starts
+  // the form afresh from it; what is sent is still a new entry in the log.
+  const fromId = str(view.setupFrom[car.id]);
+  const from = fromId === 'blank' ? null : setups.find((s) => s.id === fromId) || newest;
+
+  // WHICH SHEET (7 Nov 2026, Asher: "I'm only seeing the save button"):
+  // any sheet in the PC app's Garage, as its Setup Sheet window offers -
+  // a club whose chassis types link no sheet had only the short log. The
+  // one picked here, else the car's chassis sheet, else the one the setup
+  // it starts from was filled in on, else the first. The short log only
+  // for a car whose chassis links no sheet, since HeatCaller would put
+  // anything sent for it on that sheet.
+  const all = sheetIds();
+  const chassisSheet = sheetOf(car) ? str(car.sheet) : '';
+  const picked = str(view.setupSheet[car.id]);
+  const sheetId = picked === 'short' && !chassisSheet ? 'short'
+    : sheetById(picked) ? picked
+    : chassisSheet || (from && sheetById(from.sheet) ? str(from.sheet) : '') || all[0] || 'short';
+  const sheet = sheetId === 'short' ? null : sheetById(sheetId);
+  if (all.length > 0) {
+    const label = el('label', 'f', 'Setup sheet');
+    const pick = document.createElement('select');
+    pick.className = 'sx-c';
+    const choices = all.map((id) => [id, str(sheetById(id).name) || 'Setup sheet']);
+    if (!chassisSheet) choices.push(['short', 'Short setup log']);
+    for (const [v, words] of choices) {
+      const o = document.createElement('option');
+      o.value = v;
+      o.textContent = words;
+      pick.appendChild(o);
+    }
+    pick.value = sheetId;
+    pick.addEventListener('change', () => {
+      view.setupSheet[car.id] = String(pick.value || '');
+      drop(form);
+      paint(sec, true);
+    });
+    label.appendChild(pick);
+    hdr.appendChild(label);
+  }
+
+  if (setups.length > 0) {
+    const label = el('label', 'f', 'Start from');
+    const pick = document.createElement('select');
+    pick.className = 'sx-c';
+    const choices = setups.map((s, i) => [s.id, [when(s.at) || 'Setup', str(s.track), str(s.raceLabel)].filter(Boolean).join(' · ') + (i === 0 ? ' (latest)' : '')])
+      .concat([['blank', 'A blank sheet']]);
+    for (const [v, words] of choices) {
+      const o = document.createElement('option');
+      o.value = v;
+      o.textContent = words;
+      pick.appendChild(o);
+    }
+    pick.value = from ? from.id : 'blank';
+    pick.addEventListener('change', () => {
+      view.setupFrom[car.id] = String(pick.value || '');
+      // A setup opens on the sheet it was filled in on.
+      const s = setups.find((x) => x.id === pick.value);
+      if (s && sheetById(s.sheet)) view.setupSheet[car.id] = str(s.sheet);
+      drop(form);
+      paint(sec, true);
+    });
+    label.appendChild(pick);
+    hdr.appendChild(label);
+  }
 
   if (sheet) {
-    const start = valuesOf(newest);
-    body.appendChild(el('p', 'when', newest
-      ? 'Started from your last setup (' + when(newest.at) + '). Change what you changed.'
-      : 'The ' + (str(sheet.name) || 'club') + ' setup sheet.'));
+    const start = valuesOf(from);
+    body.appendChild(el('p', 'when', (str(sheet.name) || 'The club') + ' sheet. ' + (from
+      ? (from === newest ? 'Started from your last setup (' + when(from.at) + ').' : 'Started from your setup of ' + (when(from.at) || 'before') + '.') + ' Change what you changed.'
+      : 'A blank sheet.')));
+    body.appendChild(hdr);
     const fields = fieldsOf(sheet);
-    const canFix = !!newest && newest.editable === true;
+    // Fixing the last entry is only offered while the sheet is that entry.
+    const canFix = !!newest && from === newest && newest.editable === true;
     const fix = canFix && val(form, 'fix', false) === true;
+    const raceInit = fix && OBJECT_ID.test(str(newest.race)) ? newest.race : '';
+    const race = selectBox(hdr, sec, form, 'race', 'Ran in race', raceChoices(), raceInit);
+    race.input.className = 'sx-c';
+    // Save as (7 Nov 2026): a new entry, or a fix of the last one - the tick
+    // it was, as a dropdown like everything else on the card.
     if (canFix) {
-      tickBox(body, sec, form, 'fix', 'Fix my last entry (' + when(newest.at) + ') instead of adding a new one', false, (on) => {
-        if (on) {
+      const label = el('label', 'f', 'Save as');
+      const pick = document.createElement('select');
+      pick.className = 'sx-c';
+      for (const [v, words] of [['new', 'New entry'], ['fix', 'Fix my last entry (' + when(newest.at) + ')']]) {
+        const o = document.createElement('option');
+        o.value = v;
+        o.textContent = words;
+        pick.appendChild(o);
+      }
+      pick.value = fix ? 'fix' : 'new';
+      pick.addEventListener('change', () => {
+        put(sec, form, 'fix', pick.value === 'fix');
+        if (pick.value === 'fix') {
           const d = draftOf(form);
           if (d && !Object.prototype.hasOwnProperty.call(d.values, 'notes')) d.values.notes = str(newest.notes);
           if (d && !Object.prototype.hasOwnProperty.call(d.values, 'race')) d.values.race = OBJECT_ID.test(str(newest.race)) ? newest.race : '';
         }
         paint(sec, true);
       });
+      label.appendChild(pick);
+      hdr.appendChild(label);
     }
-    for (const s of arr(sheet.sections)) {
-      const set = el('fieldset', '');
-      set.appendChild(el('legend', '', str(s.name) || 'Setup'));
-      for (const f of arr(s.fields).filter((x) => FIELD_ID.test(str(x.id)))) sheetField(set, sec, form, f, start[f.id] || '');
-      body.appendChild(set);
-    }
-    const raceInit = fix && OBJECT_ID.test(str(newest.race)) ? newest.race : '';
-    const race = selectBox(body, sec, form, 'race', 'Ran in race', raceChoices(), raceInit);
-    textBox(body, sec, form, 'notes', 'Notes', fix ? str(newest.notes) : '', 300, { long: true });
 
-    body.appendChild(tapButton(fix ? 'Save the fix' : 'Add to my setup log', 'go', async () => {
-      const f = { car: car.id, sheet: str(car.sheet), notes: cleanNotes(val(form, 'notes', fix ? str(newest.notes) : '')) };
+    // The button says what it will do, counted as the sheet changes.
+    const go = tapButton('', 'go', async () => {
+      const f = { car: car.id, sheet: sheetId, notes: cleanNotes(val(form, 'notes', fix ? str(newest.notes) : '')) };
       const r = String(race.input.value || '');
       if (OBJECT_ID.test(r)) f.race = r;
       if (val(form, 'fix', false) === true && canFix) f.entry = newest.id;
@@ -1894,13 +2116,59 @@ function buildSetup(box, sec) {
       }
       if (count === 0 && f.notes === '') { setStatus(key, 'Fill in at least one part of the sheet.', '', 'gno'); return; }
       if (await change('setup', f, key)) settled(form);
-    }));
+    });
+    const counts = [];
+    const recount = () => {
+      let n = 0;
+      for (const [ct, mine] of counts) {
+        const set = mine.filter((r) => r.filled()).length;
+        const ch = mine.filter((r) => r.changed()).length;
+        n += ch;
+        ct.textContent = set + ' of ' + mine.length + ' set';
+        if (ch > 0) {
+          ct.appendChild(el('span', '', ' · '));
+          ct.appendChild(el('b', '', ch + ' changed'));
+        }
+      }
+      const more = n > 0 ? ' · ' + plural(n, 'change', 'changes') : '';
+      go.textContent = fix ? 'Save the fix' + more : n > 0 ? 'Save setup' + more : 'Add to my setup log';
+    };
+
+    // The sheet's sections as the PC sheet has them, each folding; the
+    // first open until they choose, and kept as they left them.
+    const opened = view.setupOpen[car.id] || (view.setupOpen[car.id] = {});
+    arr(sheet.sections).forEach((s, i) => {
+      const list = arr(s.fields).filter((x) => FIELD_ID.test(str(x.id)));
+      if (list.length === 0) return;
+      const d = el('details', 'sx-sec');
+      d.open = Object.prototype.hasOwnProperty.call(opened, i) ? opened[i] === true : counts.length === 0;
+      d.addEventListener('toggle', () => { opened[i] = d.open; });
+      const sum = el('summary', '');
+      sum.appendChild(el('span', 'sx-nm', str(s.name) || 'Setup'));
+      const ct = el('span', 'ct');
+      sum.appendChild(ct);
+      sum.appendChild(el('span', 'chev'));
+      d.appendChild(sum);
+      const inner = el('div', 'sx-rows');
+      const mine = list.map((f) => {
+        const r = sheetRow(sec, form, f, start[f.id] || '', recount);
+        inner.appendChild(r.row);
+        return r;
+      });
+      d.appendChild(inner);
+      body.appendChild(d);
+      counts.push([ct, mine]);
+    });
+    textBox(body, sec, form, 'notes', 'Notes for this entry', fix ? str(newest.notes) : '', 300, { long: true });
+    recount();
+    save.appendChild(go);
   } else {
-    body.appendChild(el('p', 'when', 'This car has no setup sheet at the club, so this is the short setup log.'));
-    const start = valuesOf(newest);
-    for (const [k, words] of LEGACY) textBox(body, sec, form, k, words, start[k] || '', 80);
-    textBox(body, sec, form, 'notes', 'Notes', '', 300, { long: true });
-    body.appendChild(tapButton('Add to my setup log', 'go', async () => {
+    body.appendChild(el('p', 'when', all.length > 0 ? 'The short setup log: five parts, no sheet.' : 'This car has no setup sheet at the club, so this is the short setup log.'));
+    body.appendChild(hdr);
+    const start = valuesOf(from);
+    for (const [k, words] of LEGACY) textBox(body, sec, form, k, words, start[k] || '', 80).input.className = 'sx-c';
+    textBox(body, sec, form, 'notes', 'Notes for this entry', '', 300, { long: true });
+    save.appendChild(tapButton('Add to my setup log', 'go', async () => {
       const f = {};
       for (const [k] of LEGACY) {
         const v = cleanText(val(form, k, start[k] || ''));
@@ -1914,8 +2182,11 @@ function buildSetup(box, sec) {
       if (await change('setup', f, key)) settled(form);
     }));
   }
-  body.appendChild(statusLine(key));
+  save.appendChild(statusLine(key));
   card.appendChild(body);
+  // Save right under the notes, in its place on the card (7 Nov 2026, Asher:
+  // "make the add to my setup log button stationary and not floating").
+  card.appendChild(save);
 
   // The car's recent setups, with what changed from the one before.
   if (setups.length > 0) {
