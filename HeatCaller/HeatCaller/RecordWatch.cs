@@ -110,7 +110,10 @@ public sealed class RecordWatch
     private readonly HashSet<string> _recordGone = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _seen = new(StringComparer.Ordinal);
 
-    /// <summary>The layout record at the green, in seconds (Bug hunt 11) - null until one is read.</summary>
+    /// <summary>
+    /// The layout record at the green, in seconds (Bug hunt 11) - null until
+    /// one is read, infinity when none stood.
+    /// </summary>
     private double? _markAtGreen;
 
     /// <summary>Half a millisecond: a lap and a record within this are the same timed lap.</summary>
@@ -209,7 +212,16 @@ public sealed class RecordWatch
             return null;
         }
 
-        _markAtGreen ??= mark.Seconds;
+        // WHY (2026-11-06): a mark first seen mid-race was taken as the one
+        // at the green. On a new layout Race Control writes the first record
+        // as the lap crosses, so the setter's own lap became the green mark,
+        // never counted as set since the green, and a near lap later told
+        // them to match their own record. Reset now keeps "none stood" as
+        // infinity, and a watch never Reset (the console's first race) takes
+        // a first mark that IS this lap as set this race.
+        _markAtGreen ??= Math.Abs(lap.LapSeconds - mark.Seconds) < SameLap
+            ? double.PositiveInfinity
+            : mark.Seconds;
 
         // The record has gone. PaceWatch calls that, and from here on this
         // driver has nothing left to be close to.
@@ -396,7 +408,9 @@ public sealed class RecordWatch
         _seen.Clear();
 
         // The record as it stands at the green (Bug hunt 11) - see Saw.
-        _markAtGreen = LayoutRecord?.Invoke() is { Seconds: > 0 } mark ? mark.Seconds : null;
+        // None standing is infinity rather than null, so whatever mark is
+        // set during this race reads as set since the green (2026-11-06).
+        _markAtGreen = LayoutRecord?.Invoke() is { Seconds: > 0 } mark ? mark.Seconds : double.PositiveInfinity;
     }
 
     /// <summary>

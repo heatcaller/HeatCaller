@@ -91,4 +91,28 @@ public sealed class BugHunt8_BroadcastImaging_csTests : IDisposable
         Assert.Single(files);
         Assert.Equal(Path.GetFullPath(here), files[0], ignoreCase: true);
     }
+
+    /// <summary>
+    /// 6 Nov 2026: marks are kept by file name, so a club's piece added to a
+    /// built-in soundscape must never take a shipped piece's name. With
+    /// shipped Jingle 2 removed, the copy used to be named Jingle 4 beside
+    /// the shipped Jingle 4.
+    /// </summary>
+    [Fact]
+    public void A_club_piece_added_to_a_built_in_soundscape_never_takes_a_shipped_name()
+    {
+        var theme = new Theme { Id = "broadcast-id", Name = "Broadcast", IsBuiltIn = true };
+        var shipped = BroadcastImaging.DefaultFiles(theme, ImagingElement.Jingle);
+        Assert.True(shipped.Count >= 4);
+
+        BroadcastImaging.Remove(theme, ImagingElement.Jingle, shipped[1]);
+
+        Assert.True(BroadcastImaging.Add(theme, ImagingElement.Jingle, shipped[1], out var problem), problem);
+
+        var added = BroadcastImaging.FilesFor(theme, ImagingElement.Jingle)
+            .Except(shipped, StringComparer.OrdinalIgnoreCase)
+            .Single();
+
+        Assert.DoesNotContain(Path.GetFileName(added), shipped.Select(Path.GetFileName), StringComparer.OrdinalIgnoreCase);
+    }
 }

@@ -182,6 +182,9 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
     /// <summary>The music and crowd kept for this race's videos, or null - see RecapBed. Set before the tap goes on, never after.</summary>
     private RecapBed? _bed;
 
+    /// <summary>A race, so this feeds RaceReplayBuffer - see StartFor's isRace. Set before the tap goes on, never after.</summary>
+    private bool _feedsReplay;
+
     /// <summary>When each read of the bus is heard - the bus's own output's buffering. The device's thread only.</summary>
     private readonly RecapBed.Stamper _callHeardAt = new(AudioBus.OutputLatencyMs, AudioBus.OutputBuffers);
 
@@ -256,7 +259,11 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
     /// A race (not a bookend or a piece): also keep the music and crowd for
     /// its highlight videos, when the club makes any - see RecapBed.
     /// </param>
-    public static RaceAudioRecorder? StartFor(RaceAudioStore store, string? raceLabel, DateTime startedUtc, Action<string> log, bool withVideoBed = false)
+    /// <param name="isRace">
+    /// A race (not a bookend or a piece): its audio is what Replay plays as
+    /// "the last seconds of the race" - see RaceReplayBuffer.
+    /// </param>
+    public static RaceAudioRecorder? StartFor(RaceAudioStore store, string? raceLabel, DateTime startedUtc, Action<string> log, bool withVideoBed = false, bool isRace = false)
     {
         // A new race: the last one's closing seconds are not this race's to
         // replay (RaceReplayBuffer, 22 Oct 2026).
@@ -268,7 +275,16 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         // Replay played it over this race as "the last seconds of the race".
         // Now every start moves the replay's start, recorded or not. Safe
         // with nothing listening: Restart only moves where this race begins.
-        RaceReplayBuffer.Shared.Restart();
+        //
+        // ONLY A RACE TOUCHES THE REPLAY (6 Nov 2026). A cold open, sign-off,
+        // night recap or driver's piece used to restart the ring and then
+        // fill it, so Replay after the night recap played the recap as "the
+        // last seconds of the race" and the race's finish was gone. A piece
+        // now leaves the ring exactly as the race left it.
+        if (isRace)
+        {
+            RaceReplayBuffer.Shared.Restart();
+        }
 
         if (!store.Enabled)
         {
@@ -345,7 +361,11 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             // as at the top, so a recording that takes the feed from
             // something else starts its replay at the takeover, not with
             // the folder and file setup's worth of what was recording before.
-            RaceReplayBuffer.Shared.Restart();
+            if (isRace)
+            {
+                RaceReplayBuffer.Shared.Restart();
+                recorder._feedsReplay = true;
+            }
 
             // THE MUSIC UNDER THE VIDEOS (26 Oct 2026, asked for by Asher:
             // "video recaps should include the music that is playing as
@@ -444,7 +464,8 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
 
             var bytes = new byte[frames * BytesPerSample];
             var at = 0;
-            var replay = RaceReplayBuffer.Shared;
+            // Null for a bookend or a piece (6 Nov 2026) - see StartFor.
+            var replay = _feedsReplay ? RaceReplayBuffer.Shared : null;
 
             for (var frame = 0; frame < frames; frame++)
             {
@@ -470,10 +491,10 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
                 // The replay's copy (22 Oct 2026): a store into a ring that
                 // was allocated once - no lock, no allocation. See
                 // RaceReplayBuffer.
-                replay.Put(sample);
+                replay?.Put(sample);
             }
 
-            replay.Commit();
+            replay?.Commit();
 
             // Which of this file's samples the room hears when, for the
             // videos' music to be put under them (26 Oct 2026) - see
@@ -687,8 +708,12 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         // race" long after it stopped, so a recording that has given up now
         // holds nothing to replay. A race that ended normally never gets
         // here: BeginStop has already set _closed, and the return above
-        // leaves its replay alone.
-        RaceReplayBuffer.Shared.Restart();
+        // leaves its replay alone. A piece never fed the ring (6 Nov 2026),
+        // so one giving up leaves the race's replay alone too.
+        if (_feedsReplay)
+        {
+            RaceReplayBuffer.Shared.Restart();
+        }
 
         try
         {

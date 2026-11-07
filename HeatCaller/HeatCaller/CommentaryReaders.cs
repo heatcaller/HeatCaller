@@ -2867,13 +2867,15 @@ public static partial class CommentaryReaders
     /// <param name="layoutName">The layout being raced on, as the round or the session names it.</param>
     /// <param name="className">The class whose mains are counted. Blank is no answer, not "every class".</param>
     /// <param name="nowLocal">Now, in local time - for which night counts as tonight. Defaults to now.</param>
+    /// <param name="withinRoundIds">The round ids belonging to the race day in hand, or null for every round - RaceEventStore.ActiveRoundScope's own answer. Only the "another A leg still to come" check reads it.</param>
     public static MainsOnLayout? MainsHere(
         SessionHistoryStore history,
         RoundDefinitionStore? rounds,
         ProfileStore? profiles,
         string? layoutName,
         string? className,
-        DateTime? nowLocal = null)
+        DateTime? nowLocal = null,
+        IReadOnlySet<string>? withinRoundIds = null)
     {
         var layout = Typed(layoutName);
         var cls = Typed(className);
@@ -2965,6 +2967,12 @@ public static partial class CommentaryReaders
         // round being recapped is not linked yet when this is asked, hence
         // the check against tonight's filed round ids as well. The recap
         // keys the line on the night, so it is said once an evening too.
+        //
+        // TONIGHT'S DAY ONLY (6 Nov 2026). Another race day's programme in
+        // the same store - next week's built in advance, or any day added
+        // after tonight's - sits LATER in Order, so its unrun A-main held
+        // this line back every night until it was raced. Only a round of
+        // the race day in hand can be a leg still to come tonight.
         if (topTonight.Count > 0
             && topTonight.MaxBy(one => one.EndedAtUtc) is { RoundId: { } latestId }
             && rounds.Get(latestId) is { } latestRound)
@@ -2979,6 +2987,7 @@ public static partial class CommentaryReaders
                 && round.MainTier <= 0
                 && !round.IsRecorded
                 && !filedTonight.Contains(round.Id)
+                && (withinRoundIds is null || withinRoundIds.Contains(round.Id))
                 && round.Order > latestRound.Order
                 && string.Equals(Typed(round.ClassName), cls, StringComparison.OrdinalIgnoreCase));
 

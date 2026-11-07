@@ -501,6 +501,29 @@ describe("lap voice: the Live page", () => {
     assert.deepEqual(l.played, ["lap4", "t952", "p2", "g-t4"], "the clips at once from the new context");
   });
 
+  it("stops the silence once lap times are off, and a tap or the page coming back never starts it again (6 Nov 2026)", async () => {
+    const l = await livePageWith(field([9500, 9600]), {});
+    const tap = () => { for (const run of l.p.documentListeners.get("click") ?? []) run({ target: l.p.body, preventDefault() {} }); };
+    const visibility = (hidden: boolean) => {
+      l.p.hidden = hidden;
+      for (const run of l.p.documentListeners.get("visibilitychange") ?? []) run({});
+    };
+
+    tap();
+    l.p.get("lapbtn").click();
+    await l.p.advance(1000);
+    tap();
+    await l.p.advance(2000);
+    assert.ok((l.p.eval("__paused") as number) > 0, "a tap just after turning it off does not keep it going");
+
+    const held = l.p.eval("__held") as number;
+    tap();
+    visibility(true);
+    visibility(false);
+    await l.p.advance(1000);
+    assert.equal(l.p.eval("__held"), held, "nothing starts it again while lap times are off");
+  });
+
   it("says a new race's first lap when the board already has it the first time it is read (3 Nov 2026)", async () => {
     // Asher: "I didn't hear lap one". The board between races still showed
     // the last race, and the new one's first read had a lap on it already.

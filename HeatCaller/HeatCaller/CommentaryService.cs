@@ -3355,7 +3355,17 @@ public sealed class CommentaryService
                 BuildBroadcastSystemPrompt(extraWords), facts,
                 maxTokens: MaxTokensForWordLimit(extraWords),
                 temperature: Variety, ct: ct, timeout: BetweenRacesTimeout),
+            // The names the facts use too (6 Nov 2026), not only the saved
+            // ones: the winner's team and sponsors, the names the prompt
+            // calls the drivers, their cars and the race. Left off, the
+            // model's "a great night for HFCC" was calmed to "hfcc" for
+            // good and the PA read it as a word - the round intro's bug,
+            // which the recap never got the fix for.
             session.Results.Select(result => result.DriverName)
+                .Concat(session.Results.Select(result => PromptName(result.Transponder)))
+                .Concat(session.Results.Select(result => Field(CarFor(result))))
+                .Concat(TeamAndSponsorNamesFor(new[] { winner.Transponder }))
+                .Append(SpokenLabel(session))
                 .Append(context?.ShowName ?? string.Empty)
                 .Append(context?.AnnouncerName ?? string.Empty)
                 .Append(resultSponsor)

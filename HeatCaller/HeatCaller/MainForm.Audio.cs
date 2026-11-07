@@ -1114,7 +1114,11 @@ public partial class MainForm
         // lives in a tab host, so removing/adding against the page would
         // have dropped it out of the tab and left it covering the whole
         // page instead.
+        //
+        // Its pending edit dropped first: the soundscape has just saved a
+        // whole new profile, and flushing the old rows would undo it.
         _soundEffectsSubPage.Controls.Remove(_soundEffectsControl);
+        _soundEffectsControl.DropPendingEdit();
         _soundEffectsControl.Dispose();
         _soundEffectsControl = new SoundEffectsControl(_soundStore, _undo) { Dock = DockStyle.Fill };
         _soundEffectsSubPage.Controls.Add(_soundEffectsControl);

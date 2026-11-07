@@ -115,6 +115,26 @@ public sealed class BugHunt7TrackEditorTests
         Assert.Equal(1, stacked);
     }
 
+    [Fact]
+    public void Escape_straight_after_a_nudge_lands_it_and_tells_the_readouts()
+    {
+        // 6 Nov 2026: ClearSelection settled the run but never raised
+        // DesignChanged, so the rails and line were not worked out again.
+        var (stacked, told) = OnUiThread(() =>
+        {
+            using var canvas = NudgedOntoATile();
+            var changes = 0;
+
+            canvas.DesignChanged += () => changes++;
+            canvas.ClearSelection();
+
+            return (TilesAt(canvas.Design, 1, 0), changes);
+        });
+
+        Assert.Equal(1, stacked);
+        Assert.Equal(1, told);
+    }
+
     // --- Mirroring markings ----------------------------------------------------
 
     /// <summary>

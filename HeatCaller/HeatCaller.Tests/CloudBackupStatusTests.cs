@@ -173,7 +173,12 @@ public sealed class CloudBackupStatusTests
     [Fact]
     public void A_round_of_copies_that_all_worked_is_written_down_as_a_success()
     {
-        var settings = new AppSettings { LastCloudBackupProblem = "Not copied to OneDrive: nope." };
+        var settings = new AppSettings
+        {
+            CloudBackupOneDrive = true,
+            CloudBackupGoogleDrive = true,
+            LastCloudBackupProblem = "Not copied to OneDrive: nope.",
+        };
 
         CloudBackupStatus.Record(settings, new[]
         {
@@ -188,7 +193,12 @@ public sealed class CloudBackupStatusTests
     [Fact]
     public void A_copy_that_failed_keeps_only_its_own_line_and_does_not_count_as_a_success()
     {
-        var settings = new AppSettings { LastCloudBackupUtc = Now.AddDays(-30) };
+        var settings = new AppSettings
+        {
+            CloudBackupOneDrive = true,
+            CloudBackupGoogleDrive = true,
+            LastCloudBackupUtc = Now.AddDays(-30),
+        };
 
         CloudBackupStatus.Record(settings, new[]
         {
@@ -200,6 +210,47 @@ public sealed class CloudBackupStatusTests
         // Google Drive." is not what a red light should be saying.
         Assert.Equal(Now.AddDays(-30), settings.LastCloudBackupUtc);
         Assert.Equal("Not copied to OneDrive: Access to the path is denied.", settings.LastCloudBackupProblem);
+    }
+
+    [Fact]
+    public void A_service_ticked_on_while_the_backup_ran_is_not_counted_as_having_a_copy()
+    {
+        // The round set off copying to Google Drive only; OneDrive was ticked
+        // during the zip, which cleared the time so the light reads "Not yet".
+        var settings = new AppSettings { CloudBackupGoogleDrive = true, LastCloudBackupUtc = Now.AddDays(-1) };
+        CloudBackup.SetEnabled(settings, CloudService.OneDrive, true);
+        CloudBackupStatus.ServiceSwitched(settings, switchedOn: true);
+
+        CloudBackupStatus.Record(settings, new[]
+        {
+            new CloudBackup.CopyOutcome(CloudService.GoogleDrive, true, "Copied to Google Drive."),
+        }, Now);
+
+        Assert.Null(settings.LastCloudBackupUtc);
+        Assert.Equal(string.Empty, settings.LastCloudBackupProblem);
+    }
+
+    [Fact]
+    public void A_failure_for_a_service_ticked_off_while_the_backup_ran_is_not_written_back()
+    {
+        var settings = new AppSettings
+        {
+            CloudBackupOneDrive = true,
+            CloudBackupGoogleDrive = true,
+            LastCloudBackupProblem = "Not copied to OneDrive: nope.",
+        };
+        CloudBackup.SetEnabled(settings, CloudService.OneDrive, false);
+        CloudBackupStatus.ServiceSwitched(settings, switchedOn: false);
+
+        CloudBackupStatus.Record(settings, new[]
+        {
+            new CloudBackup.CopyOutcome(CloudService.GoogleDrive, true, "Copied to Google Drive."),
+            new CloudBackup.CopyOutcome(CloudService.OneDrive, false, "Not copied to OneDrive: nope."),
+        }, Now);
+
+        // Google Drive, the only service still on, got its copy.
+        Assert.Equal(Now, settings.LastCloudBackupUtc);
+        Assert.Equal(string.Empty, settings.LastCloudBackupProblem);
     }
 
     [Fact]

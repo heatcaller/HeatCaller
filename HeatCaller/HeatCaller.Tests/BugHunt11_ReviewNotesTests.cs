@@ -218,6 +218,23 @@ public sealed class BugHunt11_ReviewNotesTests : IDisposable
     }
 
     /// <summary>
+    /// 6 Nov 2026, bug hunt finding 30: a note from the club Wi-Fi has no
+    /// relay copy, so removing it while the file is unreadable must not
+    /// swallow the next shout-out with the same words.
+    /// </summary>
+    [Fact]
+    public void A_removed_club_wifi_note_does_not_swallow_the_next_one_with_the_same_words()
+    {
+        var notes = LoadUnreadableNotes();
+
+        Assert.Null(notes.AddFromTheRoom("Happy birthday Jack", "Jess"));
+        notes.Remove(Assert.Single(notes.All).Id);
+
+        Assert.Null(notes.AddFromTheRoom("Happy birthday Jack", "Kim"));
+        Assert.Contains(notes.All, n => n.Text == "Happy birthday Jack" && n.From == "Kim");
+    }
+
+    /// <summary>
     /// A relay on the loopback that answers each request from a rule and
     /// records "METHOD path body" for every one it was sent. (A copy of
     /// BugHunt11_RelayPublisherTests' private one.)

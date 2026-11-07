@@ -650,6 +650,65 @@ public sealed class RaceAudioTests : IDisposable
     }
 
     [Fact]
+    public void A_piece_recorded_after_the_race_leaves_the_races_replay_alone()
+    {
+        // 6 Nov 2026: the night recap or a driver's piece, played after the
+        // flag, used to wipe the ring and fill it with itself, so Replay
+        // played the piece as "the last seconds of the race".
+        var store = RaceAudioStore.Load();
+        store.FolderSetting = Path.Combine(_data.Folder, "audio");
+
+        var replay = RaceReplayBuffer.Shared;
+        var race = RaceAudioRecorder.StartFor(store, "Heat 1", DateTime.UtcNow, _ => { }, isRace: true);
+
+        Assert.NotNull(race);
+
+        var mix = Tenth();
+
+        try
+        {
+            for (var chunk = 0; chunk < 40; chunk++)
+            {
+                race!.Mixed(mix, 0, mix.Length);
+            }
+
+            race!.Stop();
+        }
+        finally
+        {
+            race?.Dispose();
+        }
+
+        var held = replay.HeldSeconds;
+        var finish = replay.Last(RaceReplayBuffer.Seconds);
+
+        Assert.True(held >= 3, "The race recording no longer feeds the replay.");
+
+        var piece = RaceAudioRecorder.StartFor(store, "Night recap", DateTime.UtcNow, _ => { });
+
+        Assert.NotNull(piece);
+
+        try
+        {
+            var quiet = new float[mix.Length];
+
+            for (var chunk = 0; chunk < 20; chunk++)
+            {
+                piece!.Mixed(quiet, 0, quiet.Length);
+            }
+
+            piece!.Stop();
+        }
+        finally
+        {
+            piece?.Dispose();
+        }
+
+        Assert.Equal(held, replay.HeldSeconds);
+        Assert.Equal(finish, replay.Last(RaceReplayBuffer.Seconds));
+    }
+
+    [Fact]
     public void A_recording_in_progress_is_named_so_a_crash_can_be_told_from_a_finish()
     {
         var store = RaceAudioStore.Load();

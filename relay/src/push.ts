@@ -295,9 +295,13 @@ function racesOf(night: unknown): unknown[] {
   return isObject(night) && Array.isArray(night["races"]) ? night["races"] : [];
 }
 
-/** A race of theirs just filed on their night: "Your result is in". Nothing when the night has no more races than before. */
+/** A race of theirs just filed on their night: "Your result is in". Nothing when the same night has no more races than before. */
 export function nightAlerts(before: unknown, after: unknown, url: string): PushMessage[] {
-  const was = racesOf(before).length;
+  // A driver's night is one item kept from meeting to meeting, so `before`
+  // can be last week's. A new night starts from no races (6 Nov 2026), or a
+  // returning driver heard nothing until they passed last week's count.
+  const sameNight = (isObject(before) ? before["night"] : undefined) === (isObject(after) ? after["night"] : undefined);
+  const was = sameNight ? racesOf(before).length : 0;
   const races = racesOf(after);
 
   if (races.length <= was) {

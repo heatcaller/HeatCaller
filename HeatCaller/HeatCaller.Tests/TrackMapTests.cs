@@ -67,6 +67,23 @@ public sealed class TrackMapTests
     }
 
     [Fact]
+    public void A_wide_finish_line_starts_the_lap_on_the_tile_the_line_passes_over()
+    {
+        // The chequer across a wide lane, its outer tile first in the list
+        // and first top-left, too far from the line to be on it.
+        var design = Square(withFinish: false);
+        design.Decals.Insert(0, new RcpDecal { Kind = RcpDecalKind.FinishLine, Col = 4, Row = -2 });
+        design.Decals.Add(new RcpDecal { Kind = RcpDecalKind.FinishLine, Col = 4, Row = 0 });
+
+        var line = TrackLine.From(design)!;
+
+        Assert.NotNull(line);
+        Assert.Equal(4.5f, line.At(0).X, 3);
+        Assert.Equal(0f, line.At(0).Y, 3);
+        Assert.Equal(0.25f, Assert.Single(line.SplitAt), 3);
+    }
+
+    [Fact]
     public void A_car_moves_round_at_its_usual_pace_and_waits_at_the_next_loop()
     {
         var noSplits = Array.Empty<float>();

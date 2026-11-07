@@ -785,13 +785,19 @@ public partial class MainForm
             // AnnouncementService.WaitForAudioAsync records at length, and
             // for the same reason: three attempts at that timing were made
             // by reasoning about the code and each was wrong.
+            //
+            // Noted on every open, not only a slow one (6 Nov 2026): a page
+            // whose first open was quick, or came while the window was being
+            // built, was never recorded, so its first slow open later was
+            // logged as ", first time" when it was a repeat visit.
+            var firstTime = _pageShownBefore.Add(name);
             if (opening.ElapsedMilliseconds >= SlowPageMs && !LayoutFreeze.Building)
             {
                 OnClientRawMessage(
                     $"{AppTime.LogStampNow()}  [ui] {name} took {opening.Elapsed.TotalSeconds:0.00}s to open - "
                     + $"text size {afterTextSize}ms, swap {afterSwap - afterTextSize}ms, "
                     + $"layout {afterLayout - afterSwap}ms, refresh {opening.ElapsedMilliseconds - afterLayout}ms"
-                    + $"{(_pageShownBefore.Add(name) ? ", first time" : string.Empty)}.");
+                    + $"{(firstTime ? ", first time" : string.Empty)}.");
             }
 
             // The "one yellow button per page" pass used to run here, on a

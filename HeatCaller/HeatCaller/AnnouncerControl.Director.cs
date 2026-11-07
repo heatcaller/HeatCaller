@@ -929,7 +929,7 @@ public partial class AnnouncerControl
             // in every sentence of it, under a band reading "Sign-Off".
             if (treatment.Treats(SegmentKind.SignOffNumbers)
                 && await treatment.RunLongAsync(
-                    () => SayTheRecap(chunks, voiced, readToken),
+                    () => SayTheRecap(chunks, voiced, readToken, DriverCut.OnTheBand(driverName)),
                     SegmentKind.SignOffNumbers,
                     NightRecap.LongestRead,
                     caption: DriverCut.OnTheBand(driverName),
@@ -941,7 +941,7 @@ public partial class AnnouncerControl
             // WHY (20 Oct 2026, Bug Hunt 8): false from a cancelled run is
             // not "no music" - see the recap's path - so it is not read out.
             readToken.ThrowIfCancellationRequested();
-            SayTheRecap(chunks, voiced, readToken);
+            SayTheRecap(chunks, voiced, readToken, DriverCut.OnTheBand(driverName));
 
             // AND WAITED FOR, for the reason the recap's own path states at
             // length: SpeakReminder queues and returns, so without this the
@@ -1296,10 +1296,12 @@ public partial class AnnouncerControl
     /// has cut everything since the read began.
     /// </remarks>
     /// <param name="voiced">Each piece's audio as it is made, index for index - see VoiceTheReadAhead. Null: every piece is made as it is said.</param>
+    /// <param name="onAir">What the announcer strip calls every piece - see SayAPiece.</param>
     private void SayTheRecap(
         IReadOnlyList<string> chunks,
         VoicedRead? voiced = null,
-        CancellationToken stop = default)
+        CancellationToken stop = default,
+        string onAir = NightRecap.OnTheBand)
     {
         if (chunks.Count == 0)
         {
@@ -1310,7 +1312,7 @@ public partial class AnnouncerControl
         {
             for (var at = 0; at < chunks.Count; at++)
             {
-                SayAPiece(chunks, at, null);
+                SayAPiece(chunks, at, null, onAir: onAir);
             }
 
             return;
@@ -1334,11 +1336,11 @@ public partial class AnnouncerControl
         var mutedAt = _announcer.MutedGeneration;
 
         var taken = new TaskCompletionSource<DateTime>(TaskCreationOptions.RunContinuationsAsynchronously);
-        SayAPiece(chunks, 0, made, () => taken.TrySetResult(DateTime.UtcNow));
+        SayAPiece(chunks, 0, made, () => taken.TrySetResult(DateTime.UtcNow), onAir);
 
         if (chunks.Count > 1)
         {
-            _ = FeedTheReadAsync(chunks, voiced, taken.Task, made is null ? null : voiced.LengthAt(0), silencedAt, mutedAt, stop);
+            _ = FeedTheReadAsync(chunks, voiced, taken.Task, made is null ? null : voiced.LengthAt(0), silencedAt, mutedAt, stop, onAir);
         }
     }
 
@@ -1378,7 +1380,8 @@ public partial class AnnouncerControl
         TimeSpan? frontLength,
         long silencedAt,
         long mutedAt,
-        CancellationToken stop)
+        CancellationToken stop,
+        string onAir)
     {
         try
         {
@@ -1423,7 +1426,7 @@ public partial class AnnouncerControl
                 }
 
                 var taken = new TaskCompletionSource<DateTime>(TaskCreationOptions.RunContinuationsAsynchronously);
-                SayAPiece(chunks, at, made, () => taken.TrySetResult(DateTime.UtcNow));
+                SayAPiece(chunks, at, made, () => taken.TrySetResult(DateTime.UtcNow), onAir);
                 frontTaken = taken.Task;
                 frontLength = made is null ? null : voiced.LengthAt(at);
             }
@@ -1468,7 +1471,8 @@ public partial class AnnouncerControl
 
     /// <summary>One piece of a long read: made already when <paramref name="made"/> is, otherwise made as it is said.</summary>
     /// <param name="taken">Called when the queue takes the piece - see AnnouncementService.SpeakPrepared.</param>
-    private void SayAPiece(IReadOnlyList<string> chunks, int at, AnnouncementService.PreparedSpeech? made, Action? taken = null)
+    /// <param name="onAir">What the announcer strip calls the piece: the recap's band, or a driver's own night's.</param>
+    private void SayAPiece(IReadOnlyList<string> chunks, int at, AnnouncementService.PreparedSpeech? made, Action? taken = null, string onAir = NightRecap.OnTheBand)
     {
         var run = CommentaryExchange.ExchangeRun.At(at, chunks.Count);
         var tail = run.AnotherFollows
@@ -1482,9 +1486,12 @@ public partial class AnnouncerControl
         // two minutes in has to be told it is still the recap. The Big
         // Screen's own band says the same thing - see NightRecap.OnTheBand,
         // which is deliberately this and not the recording's file name.
+        // WHY (6 Nov 2026, Bug Hunt): a driver's own night passes its own
+        // band (DriverCut.OnTheBand) - this was hard-coded, so the strip read
+        // "Tonight's Racing" for the whole of a piece about one driver.
         if (made is not null)
         {
-            _announcer.SpeakPrepared(made, tail, lead, NightRecap.OnTheBand, dequeued: taken);
+            _announcer.SpeakPrepared(made, tail, lead, onAir, dequeued: taken);
         }
         else
         {
@@ -1493,7 +1500,7 @@ public partial class AnnouncerControl
                 showOnScreens: true,
                 tail: tail,
                 lead: lead,
-                onAir: NightRecap.OnTheBand,
+                onAir: onAir,
                 dequeued: taken);
         }
     }
@@ -2298,7 +2305,15 @@ public partial class AnnouncerControl
             // announcer can get wrong.
             _handedOver = HandOverKey(director.ContinuityNow());
 
-            await SpeakAsync(said, director).ConfigureAwait(true);
+            // WHY (6 Nov 2026, Bug Hunt): a segment dropped after its turns
+            // were rendered (a mute inside the render) or abandoned unspoken
+            // came back here like one that was said, and was booked against
+            // the gap's cap and spacing - so a line nobody heard could turn
+            // away the next one after the unmute. Booked only when heard.
+            if (!await SpeakAsync(said, director).ConfigureAwait(true))
+            {
+                return;
+            }
 
             // Booked with the gap Race Control keeps, so the director's line
             // and Race Control's calls count toward one cap and one spacing.
@@ -2492,12 +2507,13 @@ public partial class AnnouncerControl
     /// knowing about. It used to be fired and forgotten; a block owns the
     /// gap while it paces its items, so the caller's one-at-a-time guard
     /// has to stay on for as long as it runs. See SpeakNextSegmentAsync.
+    /// False when it was dropped unheard on the way (and already Dropped).
     /// </summary>
-    private Task SpeakAsync(SpokenSegment said, CommentaryDirector director)
+    private Task<bool> SpeakAsync(SpokenSegment said, CommentaryDirector director)
     {
         if (_settings is null)
         {
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
 
         // Not heard until a line of it reaches the speaker - see
@@ -2525,13 +2541,13 @@ public partial class AnnouncerControl
         // and the hand-over is where that lands. See RenderTurnsAsync.
         return said.IsExchange ? SpeakRenderedAsync(said) : SpeakNow(said);
 
-        Task SpeakNow(SpokenSegment one)
+        Task<bool> SpeakNow(SpokenSegment one)
         {
             SpeakPlainly(one);
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
 
-        async Task SpeakRenderedAsync(SpokenSegment one)
+        async Task<bool> SpeakRenderedAsync(SpokenSegment one)
         {
             _renderedTurns = await RenderTurnsAsync(one).ConfigureAwait(true);
 
@@ -2546,10 +2562,11 @@ public partial class AnnouncerControl
             {
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [brain] Rendered, then dropped - {notNow}.");
                 director.Dropped(one);
-                return;
+                return false;
             }
 
             SpeakPlainly(one);
+            return true;
         }
     }
 
@@ -2573,7 +2590,7 @@ public partial class AnnouncerControl
     /// that knows. A segment said twice is far worse than one said without
     /// music.
     /// </summary>
-    private async Task RunAsShowAsync(ShowTreatment treatment, SpokenSegment said, CommentaryDirector director)
+    private async Task<bool> RunAsShowAsync(ShowTreatment treatment, SpokenSegment said, CommentaryDirector director)
     {
         // EVERY TURN RENDERED BEFORE THE BLOCK STARTS. The staging below
         // waits for each turn to be heard before queueing the next, so a
@@ -2612,7 +2629,7 @@ public partial class AnnouncerControl
             {
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [brain] Rendered, then dropped - {notNow}.");
                 director.Dropped(said);
-                return;
+                return false;
             }
         }
 
@@ -2777,6 +2794,9 @@ public partial class AnnouncerControl
             // race's own recording. Finish never throws and never waits.
             taping?.Finish(line => StatusMessage?.Invoke(line));
         }
+
+        // Abandoned before a word of it was queued: Dropped above, not said.
+        return spoken || !abandoned;
     }
 
     /// <summary>

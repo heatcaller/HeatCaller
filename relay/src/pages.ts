@@ -4257,6 +4257,10 @@ const lapVoice = (function () {
 
   let ctx = null, asked = false, version = '', voice = '';
   let have = null, listed = false, hold = null, held = 0;
+  // Whether lap times are on, from unlock() to release(). Only then does a
+  // tap or the page coming back start the silence again (6 Nov 2026: a tap
+  // after lap times went off started it again, and nothing stopped it).
+  let on = false;
   const kept = new Map();
   let playing = 0, sources = [];
   const waiting = [];
@@ -4284,6 +4288,7 @@ const lapVoice = (function () {
       // iPhone: play through the silent switch, as the phone's voice does.
       if (navigator.audioSession) navigator.audioSession.type = 'playback';
     } catch (e) { /* an older phone */ }
+    on = true;
     if (!ctx) fresh(); else nudge();
     holdOn();
   }
@@ -4313,6 +4318,7 @@ const lapVoice = (function () {
   // Lap times off: the silence stops too - after afterMs, so a last call
   // ("Lap times off") is heard, unless lap times are on again by then.
   function release(afterMs) {
+    on = false;
     const mine = held;
     const pause = () => {
       if (held !== mine) return;
@@ -4344,7 +4350,7 @@ const lapVoice = (function () {
   function back() {
     if (ctx === null) return;
     if (away) fresh(); else nudge();
-    holdOn();
+    if (on) holdOn();
   }
 
   function wake() {
@@ -4357,7 +4363,7 @@ const lapVoice = (function () {
         nudge();
         done();
       };
-      holdOn();
+      if (on) holdOn();
       nudge();
       setTimeout(end, WAKE_MS);
     });
@@ -5729,7 +5735,10 @@ async function load() {
   // this one answers, so one that never did would stop the board for good.
   const answer = await grab('/snapshot/state', 5000).catch(() => null);
 
-  if (answer === null) {
+  // Only a 404 is "nothing published" (6 Nov 2026): a 503 from the relay
+  // or a 502 from the proxy during a deploy turned a running race into
+  // Race over on every phone watching it.
+  if (answer === null || (answer.missing && answer.status !== 404)) {
     board.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
     boardHtml = '';
     return;
@@ -7097,7 +7106,9 @@ function whatItTakes(season) {
 async function load() {
   const answer = await grab('/snapshot/standings').catch(() => null);
 
-  if (answer === null) {
+  // Only a 404 is "nothing published" (6 Nov 2026): a busy or broken relay
+  // said no standings had been published.
+  if (answer === null || (answer.missing && answer.status !== 404)) {
     table.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
     return;
   }
@@ -8026,7 +8037,8 @@ async function loadRecap() {
 async function loadTracks() {
   const answer = await grab('/snapshot/tracks').catch(() => null);
 
-  if (answer === null) return;
+  // Only a 404 is "no tracks" (6 Nov 2026): a busy relay hid the card.
+  if (answer === null || (answer.missing && answer.status !== 404)) return;
 
   const doc = answer.missing ? {} : answer.body.body || {};
   const tracks = Array.isArray(doc.tracks) ? doc.tracks.slice() : [];
@@ -8601,7 +8613,8 @@ async function load() {
   await loadCatalogue();
   const answer = await grab('/snapshot/achievements').catch(() => null);
 
-  if (answer === null) {
+  // Only a 404 is "nothing earned yet" (6 Nov 2026), not a busy relay.
+  if (answer === null || (answer.missing && answer.status !== 404)) {
     recent.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
     return;
   }
@@ -8669,7 +8682,8 @@ function card(t, current) {
 async function load() {
   const answer = await grab('/snapshot/tracks').catch(() => null);
 
-  if (answer === null) {
+  // Only a 404 is "no tracks published" (6 Nov 2026), not a busy relay.
+  if (answer === null || (answer.missing && answer.status !== 404)) {
     list.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
     return;
   }
@@ -10343,6 +10357,11 @@ function dutyKey(m) {
 // 'unsupported', 'failed'.
 let pushState = '';
 const ALERTS_KEY = 'hc-alerts:' + CLUB;
+// WHY (6 Nov 2026, bug hunt): alerts turned off while pushOn() was still
+// signing up found no subscription to take off, and pushOn() then signed
+// the phone up anyway - pushes to a phone showing alerts off. Each turn on
+// or off is a new run; a run that is no longer the newest stops.
+let pushRun = 0;
 
 function keyBytes(text) {
   const s = String(text).replace(/-/g, '+').replace(/_/g, '/');
@@ -10371,8 +10390,10 @@ function pushOn() {
   let asked = null;
   try { asked = Notification.requestPermission(); } catch (e) { asked = null; }
   pushState = 'waiting';
+  const run = ++pushRun;
 
   Promise.resolve(asked).then(async (answer) => {
+    if (run !== pushRun) return;
     const perm = answer || Notification.permission;
     if (perm !== 'granted') { pushState = 'blocked'; drawLive(); return; }
     try {
@@ -10382,9 +10403,17 @@ function pushOn() {
       if (!k || typeof k.key !== 'string') throw new Error('no key');
       let sub = await reg.pushManager.getSubscription();
       if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(k.key) });
+      if (run !== pushRun) {
+        // Turned off meanwhile: the phone forgets it too. On again, and
+        // the newer run has it.
+        if (!alertsOn) { try { await sub.unsubscribe(); } catch (e) { /* gone already */ } }
+        return;
+      }
       const a = await post('/push/subscribe', { id: CODE, sub: sub.toJSON() });
+      if (run !== pushRun) return;
       pushState = a.status === 200 ? 'on' : 'failed';
     } catch (e) {
+      if (run !== pushRun) return;
       pushState = 'failed';
     }
     drawLive();
@@ -10394,12 +10423,14 @@ function pushOn() {
 // Takes this phone off: the relay forgets it, and so does the phone.
 async function pushOff() {
   pushState = '';
+  const run = ++pushRun;
   if (!pushSupported()) return;
   try {
     const reg = await navigator.serviceWorker.getRegistration(workerUrl());
     const sub = reg ? await reg.pushManager.getSubscription() : null;
-    if (!sub) return;
+    if (!sub || run !== pushRun) return;
     await post('/push/unsubscribe', { id: CODE, sub: { endpoint: sub.endpoint } });
+    if (run !== pushRun) return;
     await sub.unsubscribe();
   } catch (e) { /* the relay drops a phone the push service says is gone */ }
 }
@@ -11503,7 +11534,7 @@ function meCharts(r) {
   const sid = raceSid(r);
 
   // The two controls, made afresh on every draw.
-  const controls = (others) => {
+  const controls = (others, vs) => {
     const bar = el('div', 'mesay');
     const tick = el('div', 'lvsay jm');
     const label = el('label');
@@ -11530,10 +11561,12 @@ function meCharts(r) {
       const o = document.createElement('option');
       o.value = l.name;
       o.textContent = l.name;
-      if (l.name === view.vs) o.selected = true;
+      if (l.name === vs) o.selected = true;
       pick.appendChild(o);
     }
-    pick.value = view.vs;
+    // The rival worked out for this race (6 Nov 2026): one kept from a race
+    // they were not in left the box blank over the whole field.
+    pick.value = vs;
     pick.disabled = justMe();
     pick.addEventListener('change', () => { view.vs = pick.value; paint(); });
     pickBox.appendChild(pick);
@@ -11551,7 +11584,7 @@ function meCharts(r) {
     if (typeof view.vs !== 'string') view.vs = '';
     const vs = others.some((l) => l.name === view.vs) ? view.vs : '';
     // The choices only when there is somebody to hide, above the charts.
-    if (others.length > 0) out.appendChild(controls(others));
+    if (others.length > 0) out.appendChild(controls(others, vs));
     const shown = others.length === 0 ? lines
       : justMe() ? lines.filter((l) => l.me)
       : vs !== '' ? lines.filter((l) => l.me || l.name === vs) : lines;

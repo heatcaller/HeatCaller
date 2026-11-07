@@ -786,6 +786,21 @@ internal sealed partial class DriverRequestDesk
                     values[fieldId] = kept;
                 }
             }
+
+            // WHY (2026-11-06, Bug hunt): a value the desk stored over the
+            // phone's 80 characters can't come back from the phone, which
+            // leaves it out when the driver didn't touch it. A fix kept
+            // dropping it; it stays now, as the desk left it.
+            if (editing.Values is { } stored)
+            {
+                foreach (var (fieldId, kept) in stored)
+                {
+                    if (!values.ContainsKey(fieldId) && kept is { Length: > DriverAsk.SheetValueMaxChars } && sheet.FindField(fieldId) is not null)
+                    {
+                        values[fieldId] = kept;
+                    }
+                }
+            }
         }
 
         entry.Notes = notes;

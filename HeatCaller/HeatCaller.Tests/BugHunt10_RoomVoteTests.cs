@@ -114,4 +114,40 @@ public sealed class BugHunt10_RoomVoteTests : IDisposable
         Assert.Equal("tonight", vote.DayId);
         Assert.Equal("a-main", vote.OnRaceKey);
     }
+
+    // 6 Nov 2026: a vote still open when its result is filed is closed
+    // by Finished, and that must wake the relay like any other close.
+    [Fact]
+    public void Filing_the_result_of_a_still_open_vote_raises_Closed_once()
+    {
+        var vote = RoomVote.Load();
+        var closed = 0;
+        vote.Closed += () => closed++;
+
+        vote.FollowDay(OpenDay("tonight"));
+        Assert.Null(vote.OpenFor("a-main", "Stock A-Main", "Stock", Grid()));
+
+        vote.Finished("a-main", "A4821B", "Bill Hargrove");
+        Assert.Equal(1, closed);
+
+        vote.Finished("a-main", "A4821B", "Bill Hargrove");
+        Assert.Equal(1, closed);
+    }
+
+    [Fact]
+    public void Filing_the_result_of_a_vote_closed_at_the_green_does_not_raise_Closed_again()
+    {
+        var vote = RoomVote.Load();
+
+        vote.FollowDay(OpenDay("tonight"));
+        Assert.Null(vote.OpenFor("a-main", "Stock A-Main", "Stock", Grid()));
+        vote.StartedRace("a-main");
+
+        var closed = 0;
+        vote.Closed += () => closed++;
+
+        vote.Finished("a-main", "A4821B", "Bill Hargrove");
+
+        Assert.Equal(0, closed);
+    }
 }

@@ -253,6 +253,19 @@ public sealed class BigScreenIntroCardsTests
     }
 
     [Fact]
+    public void Heard_but_dropped_unplayed_the_next_line_does_not_take_the_cards()
+    {
+        // A flag lands while the introductions decode, and they never play.
+        // A test line pressed later never passes through Heard.
+        var onAir = Armed();
+
+        onAir.Heard(Words, At);
+
+        Assert.Equal(0, onAir.Playing(TimeSpan.Zero, TimeSpan.FromSeconds(3), At + IntroOnAir.HeardFor + TimeSpan.FromSeconds(1)));
+        Assert.Null(onAir.Current(At + IntroOnAir.HeardFor + TimeSpan.FromSeconds(2)));
+    }
+
+    [Fact]
     public void Heard_once_then_used_up()
     {
         var onAir = Armed();

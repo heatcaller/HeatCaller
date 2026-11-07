@@ -272,13 +272,15 @@ public sealed class RaceReplayForm : Form
                 EndScrub();
             }
         };
-        _scrub.ValueChanged += (_, _) =>
+        // WHY (6 Nov 2026): this listened to ValueChanged and did nothing
+        // unless a left-button drag was under way, so the arrow keys, Home,
+        // End, PageUp/PageDown and the wheel moved the handle but not the
+        // replay - and the next tick put the handle back. Scroll fires for
+        // every move the user makes (drag, keys, wheel) and never for the
+        // timer's own writes in Advance, so it needs no flag to tell them
+        // apart.
+        _scrub.Scroll += (_, _) =>
         {
-            if (!_scrubbing)
-            {
-                return;
-            }
-
             _positionMs = _scrub.Value * 100L;
             _canvas.Invalidate();
             UpdateClock();

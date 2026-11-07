@@ -260,9 +260,21 @@ public sealed class QualifyingProjectionForm : Form
 
         // Put the view back where it was, so a list longer than the window
         // does not jump to the top four times a second.
+        // Guarded (6 Nov 2026): the grid refuses a scroll it has no room to
+        // show, and a minimized window has no room at all. The timer runs on
+        // regardless, so the refusal reached the crash dialog on a crossing.
         if (scroll >= 0 && scroll < _grid.Rows.Count)
         {
-            _grid.FirstDisplayedScrollingRowIndex = scroll;
+            try
+            {
+                _grid.FirstDisplayedScrollingRowIndex = scroll;
+            }
+            catch (InvalidOperationException)
+            {
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+            }
         }
 
         if (selected is not null)

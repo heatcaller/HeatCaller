@@ -37,4 +37,46 @@ public sealed class BugHuntMixerTests
     {
         Assert.Equal(expected, MixerControl.LevelToPercent(level));
     }
+
+    // Mute Everything during an audition (6 Nov 2026): it cleared the
+    // audition flag by hand, skipping StopAudition's restore, so the
+    // sidebar's unmute brought back the crowd and music the audition had
+    // started, the crowd at race level. The handler needs a window, so this
+    // reads the source.
+    [Fact]
+    public void Mute_everything_ends_an_audition_through_its_restore()
+    {
+        var source = File.ReadAllText(Path.Combine(RepoRoot, "HeatCaller", "HeatCaller", "MixerControl.cs"));
+
+        var start = source.IndexOf("btnMuteAll.Click +=", StringComparison.Ordinal);
+        Assert.True(start >= 0, "The Mute Everything handler has moved - this test needs its bounds updated.");
+
+        var end = source.IndexOf("SetAnnouncerMuted(true);", start, StringComparison.Ordinal);
+        Assert.True(end > start, "The Mute Everything handler no longer mutes through the sidebar - this test needs its bounds updated.");
+
+        var beforeMute = source[start..end];
+
+        Assert.Contains("StopAudition();", beforeMute);
+        Assert.DoesNotContain("_auditioning = false;", beforeMute);
+    }
+
+    private static string RepoRoot
+    {
+        get
+        {
+            var folder = new DirectoryInfo(AppContext.BaseDirectory);
+
+            while (folder is not null)
+            {
+                if (File.Exists(Path.Combine(folder.FullName, "check.cmd")))
+                {
+                    return folder.FullName;
+                }
+
+                folder = folder.Parent;
+            }
+
+            throw new DirectoryNotFoundException("No folder with check.cmd in it above " + AppContext.BaseDirectory);
+        }
+    }
 }

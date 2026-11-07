@@ -41,6 +41,7 @@ public static class ChampionshipLive
     /// UI thread: it reads the history, programme and event stores.
     /// </summary>
     /// <param name="round">The round the race is being run for, if any. A season's rule takes a race by its round's class and kind.</param>
+    /// <param name="filedSessionId">The id of the saved race <paramref name="results"/> came from, when it has been filed already - see Candidates.</param>
     public static IfItEndedNow? Compute(
         IReadOnlyList<SessionResultEntry> results,
         RoundDefinition? round,
@@ -48,8 +49,9 @@ public static class ChampionshipLive
         RoundDefinitionStore? rounds,
         RaceEventStore? events,
         SessionHistoryStore history,
-        ProfileStore? profiles = null) =>
-        FromCandidates(Candidates(round, seasons, rounds, events, history), results, round, profiles);
+        ProfileStore? profiles = null,
+        string? filedSessionId = null) =>
+        FromCandidates(Candidates(round, seasons, rounds, events, history, filedSessionId), results, round, profiles);
 
     /// <summary>
     /// The championships a race run for <paramref name="round"/> would count
@@ -59,12 +61,14 @@ public static class ChampionshipLive
     /// going through the whole history for every season each time is not
     /// something to do on the thread that is counting laps.
     /// </summary>
+    /// <param name="filedSessionId">The saved race being scored again as the live one, which is left out of the counted races.</param>
     public static IReadOnlyList<(Season Season, IReadOnlyList<SessionRecord> Counted)> Candidates(
         RoundDefinition? round,
         SeasonStore? seasons,
         RoundDefinitionStore? rounds,
         RaceEventStore? events,
-        SessionHistoryStore history)
+        SessionHistoryStore history,
+        string? filedSessionId = null)
     {
         var list = new List<(Season, IReadOnlyList<SessionRecord>)>();
 
@@ -90,6 +94,12 @@ public static class ChampionshipLive
             var counted = EventSpine.SessionsFor(season, events, rounds, history)
                 .Where(s => !s.IsNotScored())
                 .Where(s => round is null || !string.Equals(s.RoundId, round.Id, StringComparison.Ordinal))
+                // A race already filed is left out by its own id too (6 Nov
+                // 2026): a freeform race, or one whose round has since been
+                // deleted, has no round to leave it out by, so it stayed in
+                // the counted table AND came back as the live one, and the
+                // championship check put its points to air doubled.
+                .Where(s => filedSessionId is null || !string.Equals(s.Id, filedSessionId, StringComparison.Ordinal))
                 .ToList();
 
             list.Add((season, counted));

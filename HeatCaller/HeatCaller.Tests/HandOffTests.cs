@@ -343,7 +343,7 @@ public sealed class HandOffTests : IDisposable
         Assert.True(firstPiece > voiced && show > firstPiece, "The read's first piece is not in hand before the show opens.");
         Assert.Contains("ct: readToken).ConfigureAwait(true))", body, StringComparison.Ordinal);
         Assert.Contains("WaitForTheReadAsync(NightRecap.LongestRead, readToken)", body, StringComparison.Ordinal);
-        Assert.Contains("SayTheRecap(chunks, voiced, readToken)", body, StringComparison.Ordinal);
+        Assert.Contains("SayTheRecap(chunks, voiced, readToken", body, StringComparison.Ordinal);
         Assert.Contains("catch (OperationCanceledException) when (readAhead.IsCancellationRequested)", body, StringComparison.Ordinal);
         Assert.True(finallyAt > 0 && stopped > finallyAt && unsubscribed > finallyAt,
             "What is still being voiced ahead is not stopped, or Silenced not let go of, when the read ends.");
@@ -363,7 +363,7 @@ public sealed class HandOffTests : IDisposable
         var waited = feed.IndexOf("await Task.WhenAny(piece, frontTaken, Task.Delay(Timeout.Infinite, stop))", StringComparison.Ordinal);
         var stopCheck = feed.IndexOf("if (ReadIsOver(stop, silencedAt, mutedAt))", StringComparison.Ordinal);
         var gaveUp = feed.IndexOf("voiced.GiveUp(at);", StringComparison.Ordinal);
-        var queued = feed.IndexOf("SayAPiece(chunks, at, made, () => taken.TrySetResult(DateTime.UtcNow));", StringComparison.Ordinal);
+        var queued = feed.IndexOf("SayAPiece(chunks, at, made, () => taken.TrySetResult(DateTime.UtcNow), onAir);", StringComparison.Ordinal);
         var next = feed.IndexOf("frontTaken = taken.Task;", StringComparison.Ordinal);
 
         Assert.True(waited > 0 && stopCheck > waited && gaveUp > stopCheck && queued > gaveUp && next > queued,
@@ -375,8 +375,45 @@ public sealed class HandOffTests : IDisposable
         Assert.Contains("_announcer.MutedGeneration != mutedAt", over, StringComparison.Ordinal);
 
         var say = MethodBody(Source("AnnouncerControl.Director.cs"), "private void SayAPiece(", "private sealed class VoicedRead");
-        Assert.Contains("_announcer.SpeakPrepared(made, tail, lead, NightRecap.OnTheBand, dequeued: taken);", say, StringComparison.Ordinal);
+        Assert.Contains("_announcer.SpeakPrepared(made, tail, lead, onAir, dequeued: taken);", say, StringComparison.Ordinal);
         Assert.Contains("dequeued: taken);", say[say.IndexOf("_announcer.SpeakReminder(", StringComparison.Ordinal)..], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_drivers_night_is_named_on_the_strip_for_every_piece()
+    {
+        // Bug hunt, 6 Nov 2026: SayAPiece hard-coded "Tonight's Racing", so
+        // the strip said that for the whole of a piece about one driver.
+        var night = WithoutComments(MethodBody(Source("AnnouncerControl.Director.cs"),
+            "public async Task<string?> PlayADriversNightAsync(", "private static void NextRaceCalled("));
+        var named = "SayTheRecap(chunks, voiced, readToken, DriverCut.OnTheBand(driverName))";
+        var first = night.IndexOf(named, StringComparison.Ordinal);
+
+        Assert.True(first >= 0 && night.IndexOf(named, first + 1, StringComparison.Ordinal) > first,
+            "A driver's night does not pass its own band to both of its reads.");
+
+        var say = WithoutComments(MethodBody(Source("AnnouncerControl.Director.cs"), "private void SayAPiece(", "private sealed class VoicedRead"));
+        var body = say[say.IndexOf('{')..];
+        Assert.DoesNotContain("NightRecap.OnTheBand", body, StringComparison.Ordinal);
+        Assert.Contains("onAir: onAir,", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_segment_dropped_on_the_way_is_not_booked_against_the_gap()
+    {
+        // Bug hunt, 6 Nov 2026: a segment dropped after its turns were
+        // rendered still counted toward the gap's cap and spacing.
+        var next = WithoutComments(MethodBody(Source("AnnouncerControl.Director.cs"),
+            "private async Task SpeakNextSegmentAsync(", "private string? WhyNotNow("));
+        var asked = next.IndexOf("if (!await SpeakAsync(said, director).ConfigureAwait(true))", StringComparison.Ordinal);
+        var booked = next.IndexOf("GapState.Shared.SaidByTheDirector(GapState.LineFor(said.Kind)", StringComparison.Ordinal);
+
+        Assert.True(asked > 0 && booked > asked, "The gap is booked whether or not the segment was said.");
+
+        var show = WithoutComments(MethodBody(Source("AnnouncerControl.Director.cs"),
+            "private async Task<bool> RunAsShowAsync(", "private void SayContinuityLine("));
+        Assert.Contains("return false;", show, StringComparison.Ordinal);
+        Assert.Contains("return spoken || !abandoned;", show, StringComparison.Ordinal);
     }
 
     [Fact]

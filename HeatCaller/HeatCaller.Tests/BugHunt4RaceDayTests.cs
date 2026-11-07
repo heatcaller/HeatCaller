@@ -427,6 +427,46 @@ public sealed class BugHunt4RaceDayTests : IDisposable
             step);
     }
 
+    // --- A driver seated under his alternate transponder ---------------------------------
+
+    /// <summary>
+    /// Windows-only: the laptop's Program tab is a real control. A heat can
+    /// hold a driver's alternate transponder; program.heat sends him by his
+    /// main one's id, and program.moveDriver now finds him by it
+    /// (2026-11-06: "Bob isn't in Heat 1", and he was offered as available).
+    /// </summary>
+    [Fact]
+    public void A_driver_seated_under_his_alternate_can_be_taken_out_of_the_heat_from_the_phone() => OnUiThread(() =>
+    {
+        using var laptop = new Laptop();
+
+        laptop.Classes.Upsert(new RaceClass { Name = "Stock" });
+        Assert.True(laptop.Profiles.TryAdd(new DriverProfile { Transponder = "MAIN123", AlternateTransponder = "ALT555", DriverName = "Bob", ClassName = "Stock" }, out _));
+        Assert.True(laptop.Profiles.TryAdd(new DriverProfile { Transponder = "S01", DriverName = "Ava", ClassName = "Stock" }, out _));
+
+        var heat = new RoundDefinition
+        {
+            ClassName = "Stock", RoundLabel = "Heat 1",
+            AssignedTransponders = new List<string> { "ALT555", "S01" },
+        };
+
+        laptop.Rounds.Add(heat);
+
+        var shown = laptop.Send("program.heat", new { roundId = heat.Id }, RaceDayChannel.WiFi);
+        Assert.True(shown.GetProperty("ok").GetBoolean(), shown.GetRawText());
+
+        var data = shown.GetProperty("data");
+        var bob = data.GetProperty("drivers").EnumerateArray().Single(d => d.GetProperty("name").GetString() == "Bob");
+        var bobId = bob.GetProperty("id").GetString();
+
+        Assert.DoesNotContain(data.GetProperty("available").EnumerateArray(), d => d.GetProperty("id").GetString() == bobId);
+
+        var moved = laptop.Send("program.moveDriver", new { fromRoundId = heat.Id, driverId = bobId }, RaceDayChannel.WiFi);
+        Assert.True(moved.GetProperty("ok").GetBoolean(), moved.GetRawText());
+
+        Assert.Equal(new[] { "S01" }, laptop.Rounds.All.Single(r => r.Id == heat.Id).AssignedTransponders);
+    });
+
     private static T Field<T>(object owner, string name) =>
         (T)owner.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(owner)!;
 

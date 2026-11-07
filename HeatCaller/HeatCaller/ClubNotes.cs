@@ -478,7 +478,15 @@ internal sealed class ClubNotes
     /// </summary>
     /// <param name="text">The aside, in their words.</param>
     /// <param name="from">Who sent it, if they said. Never trusted for anything but being read out.</param>
-    internal string? AddFromTheRoom(string? text, string? from = null) => AddFromTheRoom(text, from, out _);
+    //
+    // NO RELAY COPY (6 Nov 2026, bug hunt finding 30): this is the club
+    // Wi-Fi's way in (WebServerService's /api/note), and a note sent here was
+    // never on the relay. It used to share the collector's bookkeeping, so
+    // with the file unreadable a removed LAN note left a _goneWhileHeldOnRelay
+    // entry that swallowed the next identical shout-out - while the phone was
+    // told it had been sent.
+    internal string? AddFromTheRoom(string? text, string? from = null) =>
+        AddFromTheRoom(text, from, onRelay: false, out _);
 
     /// <summary>
     /// <see cref="AddFromTheRoom(string?, string?)"/>, also saying whether
@@ -488,7 +496,16 @@ internal sealed class ClubNotes
     /// not do so then (2026-11-05, Bug hunt 11: RelayPublisher). False for a
     /// note refused, which was never going to be kept.
     /// </summary>
-    internal string? AddFromTheRoom(string? text, string? from, out bool notOnDisk)
+    internal string? AddFromTheRoom(string? text, string? from, out bool notOnDisk) =>
+        AddFromTheRoom(text, from, onRelay: true, out notOnDisk);
+
+    /// <summary>
+    /// Both of the above. <paramref name="onRelay"/> says the note has a copy
+    /// on the relay (RelayPublisher's collector): only then is it tracked as
+    /// held there, or matched against one removed while held - a note from
+    /// the club Wi-Fi has no leftover copy to account for.
+    /// </summary>
+    private string? AddFromTheRoom(string? text, string? from, bool onRelay, out bool notOnDisk)
     {
         notOnDisk = false;
 
@@ -517,7 +534,7 @@ internal sealed class ClubNotes
             // while held, every later "Go Sam!" anybody sent was answered as
             // filed, confirmed and deleted from the relay - never seen. The
             // entry stands for ONE leftover relay copy; matched, it is spent.
-            if (_goneWhileHeldOnRelay.Remove(said))
+            if (onRelay && _goneWhileHeldOnRelay.Remove(said))
             {
                 return null;
             }
@@ -598,7 +615,7 @@ internal sealed class ClubNotes
             Save();
             notOnDisk = LoadedUnreadable || !_onDisk;
 
-            if (notOnDisk)
+            if (notOnDisk && onRelay)
             {
                 _heldOnRelay.Add(id);
             }

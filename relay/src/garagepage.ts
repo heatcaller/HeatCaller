@@ -1880,6 +1880,13 @@ function buildSetup(box, sec) {
       for (const fl of fields) {
         const v = sheetValue(form, fl, start[fl.id] || '');
         if (v === '') continue;
+        // WHY (2026-11-06, Bug hunt): the desk keeps values over 80
+        // characters (a long note, several options ticked), and this sheet
+        // starts from them. Sending one back, untouched, stopped every save
+        // with "Keep it under 80" until the driver cut down a value they
+        // never changed. An untouched one stays out of the request instead;
+        // a fix keeps it on the laptop.
+        if (v.length > 80 && str(fl.kind) !== 'bool' && v === cleanText(start[fl.id] || '')) continue;
         if (v.length > 80) { setStatus(key, 'Keep ' + (str(fl.label) || fl.id) + ' under 80 characters.', '', 'gno'); return; }
         count += 1;
         if (count > 80) { setStatus(key, 'That sheet has too many values to send at once.', '', 'gno'); return; }
