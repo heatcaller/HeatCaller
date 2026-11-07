@@ -38,7 +38,7 @@ describe("Me as a pit wall", () => {
     }
 
     // The night's own parts are all still there - the layout is laid over them.
-    for (const id of ["nh", "nj", "ng", "nx", "lv", "ea", "nt", "yd", "meout"]) {
+    for (const id of ["nh", "nj", "ng", "nx", "lv", "ea", "nt", "yd"]) {
       assert.match(html, new RegExp(`id="${id}"`), id);
     }
     // No first-night guide on Me since 6 Nov 2026 (Asher: "remove first
@@ -83,7 +83,7 @@ describe("Me as a pit wall", () => {
       // Your details moved from the Garage to Tonight on 6 Nov 2026.
       ["yd", "tonight"],
       ["ng", "races"], ["nt", "races"], ["n-races", "races"], ["n-calls", "races"], ["n-car-0", "races"],
-      ["meout", "garage"], ["me-garage", "garage"],
+      ["me-garage", "garage"],
       ["n-how", "stats"], ["n-score", "stats"], ["n-prog", "stats"],
     ]) {
       const spaceOf = new Function(`${/function meSpaceOf[\s\S]*?\n}\n/.exec(ME_JS)?.[0] ?? ""}; return meSpaceOf;`)() as (n: unknown) => string;

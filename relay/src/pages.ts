@@ -2121,7 +2121,8 @@ export function shell(page: Shell, context: PageContext): string {
   const heading = `<div class="hchead">
     <h1>${name} <span>${escapeHtml(page.heading)}</span></h1>
     <div class="hcside">${page.active === "live" ? `
-      <span class="onair" aria-hidden="true"><b>LIVE</b></span>` : ""}
+      <span class="onair" aria-hidden="true"><b>LIVE</b></span>` : ""}${page.active === "night" ? `
+      <div class="me-si" id="mesi" hidden></div>` : ""}
       <div class="hcby">${HC_SUN}<span>on HeatCaller</span></div>
     </div>
     </div>`;
@@ -11138,6 +11139,8 @@ function liveCard() {
 
   if (live) {
     const tp = el('div', 'lc-part');
+    // Where Me's "Transponder not heard" chip takes them (7 Nov 2026).
+    tp.id = 'lc-tp';
     tp.appendChild(el('b', '', 'Your transponder'));
     tp.appendChild(el('div', 'when', seenWords(live.seen)));
     if (check.state !== '') tp.appendChild(el('div', 'lc-check ' + check.state, check.words));
@@ -12432,7 +12435,9 @@ function drawExtras() {
 
   // Right now and Lap times in my ear are drawn by drawLive, not here:
   // lifted out before the rest is cleared, and put back as they were.
-  const held = [lvBox, document.getElementById('ea')].filter(Boolean);
+  // Lap times in my ear first since 7 Nov 2026 (Asher: "move laptimes in
+  // my ear above alerts on the tonight tab").
+  const held = [document.getElementById('ea'), lvBox].filter(Boolean);
   for (const n of held) n.remove();
   at.textContent = '';
   for (const n of held) at.appendChild(n);
@@ -13436,15 +13441,14 @@ function meRemembered(code) {
   if (meSignedOut(code)) { meToPin(); return; }
   meRemember(code);
   if (meCode() !== code) return;
-  const out = document.getElementById('meout');
-  if (out) out.hidden = false;
   meSignedInButton();
 }
 
 // THE SIGNED IN BUTTON (6 Nov 2026, Asher: "when signed in if you hit the
 // signed in button you should get a popup asking to confirming signing
 // out"). Top of Me, on every space, once this phone remembers the night it
-// is showing; Sign out at the foot asks the same question.
+// is showing - the one way to sign out on Me since the foot's link went
+// (7 Nov 2026).
 function meSignedInButton() {
   const at = document.getElementById('mesi');
   if (!at) return;
@@ -13455,9 +13459,6 @@ function meSignedInButton() {
     at.setAttribute('data-on', '1');
   }
   at.hidden = false;
-  // Their name makes room for it on the same line (6 Nov 2026).
-  const top = document.getElementById('metop');
-  if (top) top.setAttribute('data-si', '1');
 }
 
 function meAskSignOut() {
@@ -13482,12 +13483,6 @@ function meAskSignOut() {
   if (meSignedOut(CODE)) { meToPin(); return; }
   // A page the browser kept and shows again on Back.
   try { window.addEventListener('pageshow', (e) => { if (e && e.persisted && meSignedOut(CODE, true)) meToPin(); }); } catch (e) { /* reloads instead */ }
-  const link = document.getElementById('meoutlink');
-  if (!link) return;
-  link.addEventListener('click', (e) => {
-    e.preventDefault();
-    meAskSignOut();
-  });
 })();
 `;
 
@@ -13531,8 +13526,6 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // "yd" is "Your details" (22 Oct 2026, driver experience, RP2), under
     // the night and outside it, so a redraw of the night never wipes a
     // half-typed change; empty unless the club is taking requests.
-    // "meout" is Sign out on this phone (29 Oct 2026, relay navigation
-    // round 2), shown once this phone remembers the night it is showing.
     // "nh" is their name and the night's title, "gd" the first-night guide
     // under it, above the live card. (The club's updates were under the
     // guide until 5 Nov 2026, when they moved to Home.)
@@ -13547,10 +13540,12 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // the Garage folded in as a space ("me-garage", the Garage page's own
     // sections and script); the pack-swap sheet and the empty note at the foot.
     body: `<style>${ME_CSS}${GARAGE_CSS}</style>` +
-      '<div class="me-top" id="metop"><div class="me-si" id="mesi" hidden></div><div id="nh"></div></div><div id="nj"></div>' + ME_BODY_TOP + '<div id="ng"></div>' +
-      '<div id="nx"><div id="lv"></div><div id="ea"></div></div><div id="nt"><p class="note">Loading&hellip;</p></div>' +
-      GARAGE_EMBED_BODY + '<div id="yd"></div>' +
-      '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>' + ME_BODY_END,
+      '<div class="me-top" id="metop"><div id="nh"></div></div><div id="nj"></div>' + ME_BODY_TOP + '<div id="ng"></div>' +
+      '<div id="nx"><div id="ea"></div><div id="lv"></div></div><div id="nt"><p class="note">Loading&hellip;</p></div>' +
+      // No "Sign out on this phone" at the foot since 7 Nov 2026 (Asher:
+      // "remove the sign out link at the bottom of the garage tab"): the
+      // Signed in button at the top asks the same question.
+      GARAGE_EMBED_BODY + '<div id="yd"></div>' + ME_BODY_END,
     script: LAPS_JS + QUAL_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS + garageEmbedScript() + ME_JS,
     noindex: true,
   }, context);

@@ -47,7 +47,7 @@ describe("relay navigation, round 2: the night page remembers the driver", () =>
     const page = await openNight(relay({ ok: true, night: night() }));
 
     assert.equal(stored(page, ME), CODE);
-    assert.equal(page.get("meout").hidden, false, "Sign out on this phone shows");
+    assert.equal(page.get("mesi").hidden, false, "Signed in shows");
   });
 
   it("keeps nothing for a code the relay has no night for, or a page with no code", async () => {
@@ -64,8 +64,9 @@ describe("relay navigation, round 2: the night page remembers the driver", () =>
   it("forgets the driver, and the details sign-in, on Sign out on this phone, and goes back to Me", async () => {
     const page = await openNight(relay({ ok: true, night: night() }), `#d=${CODE}`, { "hg-night-pass-acme-rc": "ef".repeat(32) });
 
-    page.get("meoutlink").click();
-    // Since 6 Nov 2026 it asks first (me-signout.test.ts).
+    // Signed in at the top since the foot's link went (7 Nov 2026); it
+    // asks first (me-signout.test.ts).
+    page.button(page.get("mesi"), /^Signed in$/)!.click();
     page.button(page.get("me-sheet-body"), /^Sign out$/)!.click();
 
     assert.equal(stored(page, ME), null);
@@ -73,8 +74,8 @@ describe("relay navigation, round 2: the night page remembers the driver", () =>
     assert.equal(page.eval("location.href"), "/c/acme-rc/mynight");
   });
 
-  it("draws Sign out on this phone on the page, hidden until there is something to forget", () => {
-    assert.match(nightPage("acme-rc", "Acme RC"), /<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone<\/a><\/p>/);
+  it("draws Signed in on the page, hidden until there is something to forget", () => {
+    assert.match(nightPage("acme-rc", "Acme RC"), /<div class="me-si" id="mesi" hidden><\/div>/);
   });
 });
 
