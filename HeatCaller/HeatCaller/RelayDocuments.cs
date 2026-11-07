@@ -112,7 +112,7 @@ internal static class RelayDocuments
         // Indexed rather than ToDictionary: two lines sharing an id (a
         // hand-edited file, an old import) must not cost the club its
         // whole schedule over an exception.
-        var heats = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var heats = new Dictionary<string, List<GridSlot>>(StringComparer.Ordinal);
 
         if (lineups)
         {
@@ -124,7 +124,7 @@ internal static class RelayDocuments
 
         // One name map for the whole day, so a driver in three heats is
         // shortened the same way in all three.
-        var shown = NameMap(heats.Values.SelectMany(names => names), abbreviate);
+        var shown = NameMap(heats.Values.SelectMany(grid => grid.Select(g => g.Name)), abbreviate);
 
         var current = events.Current;
         var ev = current.Id == RaceEventStore.LegacyEventId ? null : current;
@@ -153,25 +153,53 @@ internal static class RelayDocuments
                         ? "running"
                         : ReferenceEquals(l, next) ? "next" : "upcoming",
                 startedUtc = l.ActualStartUtc,
-                drivers = heats.TryGetValue(l.Id ?? string.Empty, out var names) && names.Count > 0
-                    ? names.Select(n => shown[n]).ToList()
+                drivers = heats.TryGetValue(l.Id ?? string.Empty, out var grid) && grid.Count > 0
+                    ? grid.Select(g => shown[g.Name]).ToList()
+                    : null,
+
+                // TAP A RACE FOR ITS GRID (6 Nov 2026, Asher): who starts
+                // where and in what, so the Schedule's card can open on it.
+                // The slot is the driver's place in the heat as the heat
+                // sheet numbers it; the car, the one the Garage has on that
+                // transponder or the driver's active car, null when unknown.
+                grid = grid is { Count: > 0 }
+                    ? grid.Select(g => new { slot = g.Slot, name = shown[g.Name], car = g.Car }).ToList()
                     : null,
             }).ToList(),
         });
     }
 
-    /// <summary>Who is in the heat a generated line runs. Empty for a line somebody typed.</summary>
-    private static List<string> LineupFor(ScheduleEntry line, RoundDefinitionStore rounds, ProfileStore profiles)
+    /// <summary>One driver on a heat's grid: their slot, public name and car.</summary>
+    private sealed record GridSlot(int Slot, string Name, string? Car);
+
+    /// <summary>
+    /// Who is in the heat a generated line runs, in grid order. Empty for a
+    /// line somebody typed. A driver left out (a ghost, nobody named) keeps
+    /// their slot, so the numbers still match the printed heat sheet.
+    /// </summary>
+    private static List<GridSlot> LineupFor(ScheduleEntry line, RoundDefinitionStore rounds, ProfileStore profiles)
     {
         if (string.IsNullOrEmpty(line.RoundId) || rounds.Get(line.RoundId) is not { } round)
         {
-            return new List<string>();
+            return new List<GridSlot>();
         }
 
         return round.AssignedTransponders
-            .Select(t => PublicName(profiles, t))
-            .OfType<string>()
+            .Select((t, i) => PublicName(profiles, t) is { } name
+                ? new GridSlot(i + 1, name, PublicCar(profiles, t))
+                : null)
+            .OfType<GridSlot>()
             .ToList();
+    }
+
+    /// <summary>
+    /// The car a transponder is in, fit for a public page: blank, or one
+    /// carrying the transponder number, is left out as such a name is.
+    /// </summary>
+    private static string? PublicCar(ProfileStore profiles, string transponder)
+    {
+        var car = profiles.CarModelFor(transponder).Trim();
+        return car.Length == 0 || CarriesTransponder(car, transponder.Trim()) ? null : car;
     }
 
     // -------------------------------------------------------------- badges

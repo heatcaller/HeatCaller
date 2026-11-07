@@ -158,7 +158,7 @@ describe("My Night lap times: the control", () => {
   it("is not drawn for an older HeatCaller that sends no cars", async () => {
     const n = await open(field([9500]), { cars: null });
     assert.equal(ears(n), undefined);
-    assert.match(n.p.get("lv").textContent, /Right now/, "the rest of the card is still there");
+    assert.match(n.p.get("lv").textContent, /Alerts/, "the rest of the card is still there");
   });
 
   it("is not drawn when a tag is not the laptop's shape", async () => {

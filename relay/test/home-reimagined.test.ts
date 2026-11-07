@@ -219,7 +219,8 @@ describe("the first-night guide on Home (6 Nov 2026)", () => {
     const page = await open(relay());
     const guide = page.get("gd").find((n) => n.className === "guide")[0];
     assert.ok(guide, "the guide");
-    assert.match(guide.textContent, /^Your first night - what happens/);
+    // A slim banner (6 Nov 2026, option A): New here?, how many rules and how long.
+    assert.match(guide.textContent, /^New here\?10 club rules · 2 min read/);
     assert.equal((guide as unknown as { open: boolean }).open, false);
 
     page.button(guide, /Got it - hide this/)!.click();

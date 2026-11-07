@@ -132,21 +132,21 @@ describe("Me tab: before anything is filed", () => {
   it("still has the tab bar and every card, each saying when it fills in", async () => {
     const page = await bare({ next: { race: "Heat 1", away: 2, eta: 600 } });
 
-    assert.deepEqual(jumpNames(page), ["Right now", "Races", "Report card", "Driver score", "Progress", "Rearrange"]);
+    assert.deepEqual(jumpNames(page), ["Alerts", "Races", "Report card", "Driver score", "Progress", "Rearrange"]);
     assert.match(page.get("n-score").textContent, /Your driver score shows here after your first race/);
     assert.match(page.get("n-how").textContent, /Your report card is written after your first race/);
     assert.match(page.get("n-prog").textContent, /Your progress/);
   });
 
-  it("moves Right now below the night's cards, and keeps it there as it redraws", async () => {
+  it("moves Alerts below the night's cards, and keeps it there as it redraws", async () => {
     const page = await bare({ next: { race: "Heat 1", away: 2, eta: 600 } });
     page.button(page.get("nj"), /^Rearrange$/)!.click();
-    for (let i = 0; i < 4; i++) labelled(page, "Move Right now down").click();
+    for (let i = 0; i < 4; i++) labelled(page, "Move Alerts down").click();
 
-    assert.deepEqual(jumpNames(page).slice(0, 5), ["Races", "Report card", "Driver score", "Progress", "Right now"]);
+    assert.deepEqual(jumpNames(page).slice(0, 5), ["Races", "Report card", "Driver score", "Progress", "Alerts"]);
     await page.advance(30000);
-    assert.match(page.get("lv").textContent, /Right now/);
+    assert.match(page.get("lv").textContent, /Alerts/);
     const kids = page.get("nx").children;
-    assert.equal(kids[kids.length - 2]!.id, "lv", "Right now is the last card, above Done");
+    assert.equal(kids[kids.length - 2]!.id, "lv", "Alerts is the last card, above Done");
   });
 });

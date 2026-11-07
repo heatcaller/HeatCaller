@@ -38,9 +38,12 @@ describe("Me as a pit wall", () => {
     }
 
     // The night's own parts are all still there - the layout is laid over them.
-    for (const id of ["nh", "nj", "gd", "ng", "nx", "lv", "ea", "nt", "yd", "meout"]) {
+    for (const id of ["nh", "nj", "ng", "nx", "lv", "ea", "nt", "yd", "meout"]) {
       assert.match(html, new RegExp(`id="${id}"`), id);
     }
+    // No first-night guide on Me since 6 Nov 2026 (Asher: "remove first
+    // night card from me tab").
+    assert.doesNotMatch(html, /id="gd"/);
   });
 
   it("keeps the pack sheet's buttons clear of the home-screen icon's one bar", () => {

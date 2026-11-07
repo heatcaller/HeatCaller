@@ -150,19 +150,19 @@ describe("My Night on race night: marshal duty", () => {
   });
 });
 
-describe("My Night on race night: back up to Right now", () => {
-  it("puts Right now first on the jump bar", async () => {
+describe("My Night on race night: back up to Alerts", () => {
+  it("puts Alerts first on the jump bar", async () => {
     const { page } = await open();
     const names = page.get("nj").find((n) => n.tagName === "BUTTON").map((n) => n.textContent);
 
-    assert.deepEqual(names, ["Right now", "Lap times", "Races", "Report card", "Driver score", "Progress", "Your details", "Rearrange"]);
+    assert.deepEqual(names, ["Alerts", "Lap times", "Races", "Report card", "Driver score", "Progress", "Your details", "Rearrange"]);
   });
 
-  it("has no Right now button when there is no card", async () => {
+  it("has no Alerts button when there is no card", async () => {
     const { page } = await open({ live: null });
     const names = page.get("nj").find((n) => n.tagName === "BUTTON").map((n) => n.textContent);
 
-    assert.equal(names.includes("Right now"), false);
+    assert.equal(names.includes("Alerts"), false);
   });
 });
 
