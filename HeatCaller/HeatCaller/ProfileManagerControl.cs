@@ -227,9 +227,14 @@ public sealed partial class ProfileManagerControl : UserControl
         // the card. Raised on the UI thread today, but posted rather than
         // run inline so the race's own wrap-up (badges are awarded straight
         // after the save) has finished before the card reads its results.
+        // A result corrected (a DQ, a DNF) or a race deleted changes them
+        // just as much - a phone steward can do either while the desk sits
+        // on this page - so those start the stats again too.
         if (_sources?.History is not null)
         {
             _sources.History.SessionAdded += OnSessionAdded;
+            _sources.History.SessionEdited += OnSessionAdded;
+            _sources.History.SessionDeleted += OnSessionAdded;
         }
 
         RefreshList();
@@ -559,6 +564,8 @@ public sealed partial class ProfileManagerControl : UserControl
             if (_sources?.History is not null)
             {
                 _sources.History.SessionAdded -= OnSessionAdded;
+                _sources.History.SessionEdited -= OnSessionAdded;
+                _sources.History.SessionDeleted -= OnSessionAdded;
             }
 
             // A driver chosen in the last moment before the page went is
