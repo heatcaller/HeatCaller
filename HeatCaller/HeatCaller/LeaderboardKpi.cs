@@ -88,9 +88,15 @@ public static class RaceGaps
     /// <param name="aheadCrossingMs">Race time at which the car ahead completed a given lap, or null if unknown.</param>
     public static RaceGap Compute(int carLaps, long carLastCrossingMs, int aheadLaps, long aheadLastCrossingMs, Func<int, long?> aheadCrossingMs)
     {
+        // A car yet to cross the line - still held at the line in a
+        // hand-released start, say - is only lapped once the car ahead has
+        // crossed TWO or more times, the same rule as below. Taking the
+        // plain difference showed every held car as "+1L" the moment the
+        // first released car finished its start lap (bug hunt 13), the very
+        // "leader crossed first" mistake this class is here to avoid.
         if (carLaps <= 0 || aheadLaps <= 0)
         {
-            return new RaceGap(Math.Max(0, aheadLaps - carLaps), null);
+            return new RaceGap(Math.Max(0, aheadLaps - carLaps - 1), null);
         }
 
         if (aheadLaps < carLaps)

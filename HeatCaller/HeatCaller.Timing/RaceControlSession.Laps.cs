@@ -909,8 +909,9 @@ public sealed partial class RaceControlSession
         // The leader crossing to start the final lap. Announced once, for
         // the first car to reach one short of the limit - by definition the
         // leader on laps. Practice has no limit-driven finish, so it never
-        // has a last lap to call.
-        if (isValid && !isGhost && !IsPracticeMode && !_lastLapAnnounced
+        // has a last lap to call. Nor is it a black-flagged car's to start:
+        // it is out of the race, and cannot put the checkered out (below).
+        if (isValid && !isGhost && !standing.IsBlackFlagged && !IsPracticeMode && !_lastLapAnnounced
             && LapLimit.HasValue && standing.Laps == LapLimit.Value - 1)
         {
             _lastLapAnnounced = true;
@@ -934,7 +935,14 @@ public sealed partial class RaceControlSession
         // Only while the race is still running: when this crossing was the
         // last car taking the flag, the race finished just above, and it
         // then logged "lap limit reached" underneath "race complete".
-        if (isValid && !isGhost && State == RaceState.Racing && LapLimit.HasValue && standing.Laps >= LapLimit.Value)
+        //
+        // Nor a black-flagged car (bug hunt 13). Its crossings are still
+        // recorded, but it is out of the race, and the finish does not wait
+        // for it (see EveryExpectedCarHasTakenTheFlag). A disqualified
+        // leader who ignored the call to come in used to reach the limit
+        // first and put the checkered out for the whole field a lap early -
+        // or, with FinishOnNextCrossing off, end the race there and then.
+        if (isValid && !isGhost && !standing.IsBlackFlagged && State == RaceState.Racing && LapLimit.HasValue && standing.Laps >= LapLimit.Value)
         {
             // Same reasoning as the time-limit guard in Tick() above.
             if (IsPracticeMode)

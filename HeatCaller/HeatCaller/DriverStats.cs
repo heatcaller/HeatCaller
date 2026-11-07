@@ -599,7 +599,11 @@ public sealed class DriverStats
                 continue;
             }
 
-            var field = session.Results.Count(e => !GhostService.IsGhost(e.Transponder));
+            // The cars that raced: AchievementEvaluator's field, a lap or
+            // more. A hand-released grid files the whole roster at the green
+            // and a DQ'd car is cut to no laps, so counting rows read "P1 of
+            // 6" for a heat only two cars ran.
+            var field = session.Results.Count(e => !GhostService.IsGhost(e.Transponder) && e.Laps >= 1);
 
             var outcome = !IsFinish(row) || place is not { } finished
                 ? "did not finish"
@@ -963,7 +967,7 @@ public sealed class DriverStats
     /// The lap records that are this driver's now. A layout's record keeps
     /// only the holder's name as it was announced, so it is matched by the
     /// lap itself: one of their (non-demo) results on that layout has the
-    /// record lap as its best. Should somebody else have the very same lap
+    /// record lap as its best, or among its laps. Should somebody else have the very same lap
     /// there too, the name announced decides - so a tie never makes two
     /// holders, and a driver renamed since still keeps a record nobody
     /// else could hold.
@@ -986,7 +990,13 @@ public sealed class DriverStats
 
                 foreach (var result in session.Results)
                 {
-                    if (result.FastLapMs != lapMs)
+                    // Among all their laps, not only their best (the badge's
+                    // IsLiveTrackRecord rule): a phantom Race Control refused
+                    // as a record, run later by the setter themselves, still
+                    // becomes their best lap. Matched on the best alone, the
+                    // card left out a record they still hold, and listed it
+                    // as one they held before.
+                    if (result.FastLapMs != lapMs && !(result.LapTimesMs?.Contains(lapMs) ?? false))
                     {
                         continue;
                     }

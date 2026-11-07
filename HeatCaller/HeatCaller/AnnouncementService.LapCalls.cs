@@ -320,6 +320,16 @@ public sealed partial class AnnouncementService
             return;
         }
 
+        // Held by the dial (7 Nov 2026, bug hunt 13): Measured and Sparing
+        // both hold the running order, and it never goes through
+        // EnqueueVoice, where the dial is asked for everything else. Asked
+        // here so a held report doesn't start waiting for its cars, and
+        // again in SayPositionReport in case the dial moves while it waits.
+        if (!DialLetsItSpeak(AnnouncementEventType.PositionReport, config))
+        {
+            return;
+        }
+
         // With ghosts not announced, the report is about the real field
         // only. A pace ghost is still ranked in the standings (so gaps and
         // leader changes between real drivers stay right), but it used to
@@ -517,6 +527,14 @@ public sealed partial class AnnouncementService
 
         if (HeldByCaution(AnnouncementEventType.PositionReport, config))
         {
+            return;
+        }
+
+        // Or the dial turned down - see MaybeAnnouncePositions.
+        if (!DialLetsItSpeak(AnnouncementEventType.PositionReport, config))
+        {
+            StatusMessage?.Invoke(
+                $"[voice] PositionReport held - the announcer is set to {ShowChatter.For(Chatter).Name}.");
             return;
         }
 
@@ -1294,8 +1312,13 @@ public sealed partial class AnnouncementService
 
         var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.StreakLead));
 
+        // The dial too (7 Nov 2026, bug hunt 13): this line skips
+        // EnqueueVoice, so without it a takeover was called at Sparing -
+        // and took a per-lap slot by its weight - while the plain streak
+        // beside it was held. See VoiceCandidateCanSpeak.
         if (Muted || config is null || !CallOn(config) || config.EffectiveTemplates.Count == 0
-            || HeldByCaution(AnnouncementEventType.StreakLead, config))
+            || HeldByCaution(AnnouncementEventType.StreakLead, config)
+            || !DialLetsItSpeak(AnnouncementEventType.StreakLead, config))
         {
             return;
         }
@@ -1620,6 +1643,20 @@ public sealed partial class AnnouncementService
         if (HeldByCaution(type, config))
         {
             StatusMessage?.Invoke($"[voice] {type} held - a flag is out.");
+            return false;
+        }
+
+        // The dial (7 Nov 2026, bug hunt 13). This line goes straight to
+        // the per-lap batch and EnqueueVoiceWork, never through
+        // EnqueueVoice, so the floor there never saw it: a lapping was
+        // still called at Sparing, which says it holds lappings, while the
+        // Commentary page listed it as held. A close battle has asked the
+        // dial already (VoiceCandidateCanSpeak); asking again here is what
+        // catches the lapping.
+        if (!DialLetsItSpeak(type, config))
+        {
+            StatusMessage?.Invoke(
+                $"[voice] {type} held - the announcer is set to {ShowChatter.For(Chatter).Name}.");
             return false;
         }
 

@@ -281,13 +281,13 @@ public sealed partial class RelayPublisher
                 + (refused > 0 ? $", and passed over {refused} the night's list had no room for" : string.Empty)
                 + ". They are waiting on Race Control for you to approve.");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             // Shutting down, or the pass was cancelled. Nothing to report.
         }
         catch (Exception ex)
         {
-            NotesTrouble($"Could not collect shout-outs: {ex.Message}");
+            NotesTrouble($"Could not collect shout-outs: {Plain(ex)}");
         }
     }
 
@@ -354,13 +354,13 @@ public sealed partial class RelayPublisher
 
             return true;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             return false;
         }
         catch (Exception ex)
         {
-            NotesTrouble($"Could not reach the relay about shout-outs: {ex.Message}");
+            NotesTrouble($"Could not reach the relay about shout-outs: {Plain(ex)}");
             return false;
         }
     }
@@ -397,13 +397,13 @@ public sealed partial class RelayPublisher
 
             return false;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             return false;
         }
         catch (Exception ex)
         {
-            NotesTrouble($"Collected shout-outs but could not clear them: {ex.Message}");
+            NotesTrouble($"Collected shout-outs but could not clear them: {Plain(ex)}");
             return false;
         }
     }

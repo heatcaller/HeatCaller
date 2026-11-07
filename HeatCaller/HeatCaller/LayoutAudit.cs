@@ -306,7 +306,7 @@ internal static class LayoutAudit
         // The club's chassis list beside the fields for the one selected, from the Garage's Chassis Types... (ChassisTypesForm).
         "Chassis Types",
 
-        // A car opened from the Garage's wall: the photo beside the facts, one toolbar, the setups logged for it (CarDetailForm, titled with the car's name).
+        // A car opened from the Garage's wall: a strip for the car - its thumbnail, facts and buttons - over a timeline of the setups logged for it (CarDetailForm, titled with the car's name).
         "Car Details",
 
         // A chassis sheet's editor: the diagram beside the selected point and the other tuning fields (ChassisTemplateForm).

@@ -236,6 +236,24 @@ describe("garage page: reading", () => {
     assert.equal(page.get("gp").children.length, 0);
   });
 
+  it("a 404 is not for good: it keeps reading and the garage comes back once the desk opens (7 Nov 2026)", async () => {
+    // Bug hunt 13: one 404 - phone requests not on yet, check-in closed, a
+    // store hiccup - stopped every read until the page was reloaded.
+    let open404 = true;
+    const page = await open(relay({
+      read: () => open404
+        ? { status: 404, body: { ok: false, error: "Not found" } }
+        : { status: 200, body: { ok: true, garage: garage(), pin: false, signedIn: false, asks: [] } },
+    }));
+    assert.match(page.get("gm").textContent, /No garage was found for that code/);
+    open404 = false;
+    const before = page.sent.length;
+    await page.advance(15000);
+    assert.equal(page.sent.length, before + 1, "read again at the usual pace");
+    assert.doesNotMatch(page.get("gm").textContent, /No garage was found/);
+    assert.match(page.get("gp").textContent, /Battery packs/);
+  });
+
   it("no garage yet says it is waiting for the laptop", async () => {
     const page = await open(relay({ read: () => ({ status: 200, body: { ok: true, garage: null, pin: false, signedIn: false, asks: [] } }) }));
     assert.match(page.get("gm").textContent, /Waiting for the timing desk's laptop/);
@@ -443,6 +461,28 @@ describe("garage page: what it sends", () => {
     await page.settle();
     const sent = page.sent.filter((s) => s.url.endsWith("/driver/photo"));
     assert.deepEqual(sent[0]?.body, { id: CODE, car: CAR_A, data: "QUJD" });
+  });
+
+  it("two photos sent before either is answered both stop counting once answered (7 Nov 2026)", async () => {
+    // Bug hunt 13: the second took over the car's status line, so the first
+    // ref was never settled and the car was full one photo early.
+    let answered = false;
+    const page = await open(relay({
+      read: () => ({
+        status: 200,
+        body: {
+          ok: true, garage: garage(), asks: answered
+            ? [{ ref: "F0F0F1", kind: "photo", state: "approved", said: "" }, { ref: "F0F0F2", kind: "photo", state: "approved", said: "" }]
+            : [],
+        },
+      }),
+    }));
+    await page.eval(`photoRefs.set('F0F0F1', '${CAR_A}'); setStatus('photo-${CAR_A}', sentWords('F0F0F1'), 'F0F0F1')`);
+    await page.eval(`photoRefs.set('F0F0F2', '${CAR_A}'); setStatus('photo-${CAR_A}', sentWords('F0F0F2'), 'F0F0F2')`);
+    assert.equal(page.eval(`pendingPhotos('${CAR_A}')`), 2);
+    answered = true;
+    await page.advance(15000);
+    assert.equal(page.eval(`pendingPhotos('${CAR_A}')`), 0);
   });
 
   it("a car with its photos full refuses another", async () => {
@@ -675,6 +715,27 @@ describe("garage page: status, polling and the PIN", () => {
     await retirePack(page, "Red 1");
     assert.deepEqual(asks(page)[0]?.body, { id: CODE, kind: "packedit", f: { op: "retire", pack: PACK_B } });
     assert.match(said(row()), /Sent — HeatCaller will have it/);
+  });
+
+  it("a read sent without a pass does not wipe one stored while it was on its way (7 Nov 2026)", async () => {
+    // Bug hunt 13: signing in under Your details during a garage read lost
+    // the pass, and the next Send went back to the PIN box.
+    let signIn = false;
+    let page: FakePage | undefined;
+    page = await open(relay({
+      read: () => {
+        if (signIn) page!.store.set("hg-night-pass-acme-rc", PASS);
+        return { status: 200, body: { ok: true, garage: garage(), pin: true, signedIn: false, asks: [] } };
+      },
+    }));
+    signIn = true;
+    await page.advance(15000);
+    assert.equal(page.store.get("hg-night-pass-acme-rc"), PASS, "the new pass is kept");
+  });
+
+  it("a pass the relay no longer takes is still forgotten", async () => {
+    const page = await open(relay({ read: () => ({ status: 200, body: { ok: true, garage: garage(), pin: true, signedIn: false, asks: [] } }) }), `#d=${CODE}`, PASS);
+    assert.equal(page.store.get("hg-night-pass-acme-rc"), undefined);
   });
 
   it("a pass from the night page is sent with every change", async () => {

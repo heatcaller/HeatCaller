@@ -405,7 +405,6 @@ let hasPin = false;
 let signedIn = false;
 let asks = [];
 let loaded = false;
-let stopped = false;
 
 function limits() {
   const l = garage && garage.limits && typeof garage.limits === 'object' ? garage.limits : {};
@@ -630,6 +629,14 @@ function matchAsks() {
       setStatus(key, 'HeatCaller did not take that' + (said ? ': ' + said : '.'), '', 'gno');
     }
   }
+  // A second photo of the same car takes over its status line before the
+  // first is answered, so the first ref is no longer on any status. Settle
+  // those from asks too, or they count as waiting for good and the car is
+  // full one photo early.
+  for (const ref of [...photoRefs.keys()]) {
+    const a = asks.find((x) => str(x.ref) === ref);
+    if (a && (a.state === 'approved' || a.state === 'noted' || a.state === 'declined')) photoRefs.delete(ref);
+  }
 }
 
 // Every refusal in words - the relay's own where it has them.
@@ -676,7 +683,6 @@ let reading = false;
 let lastRead = 0;
 
 function schedule() {
-  if (stopped) return;
   clearTimeout(timer);
   const wait = fast.length > 0 ? fast.shift() : EVERY_MS;
   timer = setTimeout(() => {
@@ -696,17 +702,19 @@ function message(words, bad) {
   if (words) box.appendChild(el('p', bad ? 'note bad' : 'note', words));
 }
 
-function take(body) {
+function take(body, sent) {
   garage = body && typeof body.garage === 'object' && body.garage !== null && !Array.isArray(body.garage) ? body.garage : null;
   hasPin = !!body && body.pin === true;
   signedIn = !!body && body.signedIn === true;
   asks = arr(body && body.asks);
   // A pass the relay no longer takes - their PIN changed - is forgotten.
-  if (hasPin && !signedIn && pass() !== '') setPass('');
+  // Only the pass this read carried: one stored while it was on its way
+  // (they signed in under Your details just now) was never asked about.
+  if (hasPin && !signedIn && sent !== '' && pass() === sent) setPass('');
 }
 
 async function readGarage() {
-  if (reading || stopped) return;
+  if (reading) return;
   reading = true;
   lastRead = Date.now();
 
@@ -737,19 +745,24 @@ async function readGarage() {
   }
 
   if (a.status !== 200 || a.body.ok !== true) {
-    stopped = true;
+    // Not for good: phone requests or check-in may open later tonight, or
+    // the driver be added to the list, so this keeps reading at the usual
+    // pace and the garage comes back by itself once it can.
     garage = null;
+    loaded = false;
     message(NOTHING, true);
     for (const name of Object.keys(SECTIONS)) {
       const s = SECTIONS[name];
       if (s.box) s.box.textContent = '';
       s.key = null;
     }
+    try { document.dispatchEvent(new CustomEvent('hg-garage', { detail: null })); } catch (e) { /* an old browser: no tiles from it */ }
+    schedule();
     return;
   }
 
   loaded = true;
-  take(a.body);
+  take(a.body, p);
   message(garage === null ? "Waiting for the timing desk's laptop… Your garage shows here once HeatCaller sends it." : '');
   paintAll();
   matchAsks();

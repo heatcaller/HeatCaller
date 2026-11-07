@@ -529,13 +529,20 @@ public sealed partial class RelayPublisher
                 + (refused > 0 ? $", and {refused} the vote had no room for" : string.Empty)
                 + $". {Plural.Of(vote.Votes, "vote")} in on {vote.OnRace}.");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             // Shutting down, or the pass was cancelled. Nothing to report.
+            //
+            // ONLY THEN (7 Nov 2026, Bug Hunt 13). Send's own time limit
+            // throws the same exception with the pass token untouched, and
+            // that used to land here too - so a relay too slow to answer
+            // was never reported, and the Club Website page showed the
+            // vote as working while no votes came in. A timeout now falls
+            // through to the report below, as the check-ins already did.
         }
         catch (Exception ex)
         {
-            VoteTrouble($"Could not read the room's vote: {ex.Message}");
+            VoteTrouble($"Could not read the room's vote: {Plain(ex)}");
         }
     }
 
@@ -668,13 +675,13 @@ public sealed partial class RelayPublisher
 
             return true;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             return false;
         }
         catch (Exception ex)
         {
-            VoteTrouble($"Could not reach the relay about the room's vote: {ex.Message}");
+            VoteTrouble($"Could not reach the relay about the room's vote: {Plain(ex)}");
             return false;
         }
     }

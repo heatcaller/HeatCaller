@@ -393,13 +393,13 @@ public sealed partial class RelayPublisher
 
             return code is 413 ? ListenSend.LetGo : ListenSend.TryAgain;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             return ListenSend.TryAgain;
         }
         catch (Exception ex)
         {
-            ListenTrouble($"Could not reach the relay with a line for listeners: {ex.Message}");
+            ListenTrouble($"Could not reach the relay with a line for listeners: {Plain(ex)}");
             return ListenSend.TryAgain;
         }
     }
@@ -468,13 +468,13 @@ public sealed partial class RelayPublisher
 
             return true;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             return false;
         }
         catch (Exception ex)
         {
-            ListenTrouble($"Could not reach the relay about listening along: {ex.Message}");
+            ListenTrouble($"Could not reach the relay about listening along: {Plain(ex)}");
             return false;
         }
     }

@@ -94,6 +94,46 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
     // a top-up - or the month's reset time has passed.
     // ------------------------------------------------------------------
 
+    // ------------------------------------------------------------------
+    // WHAT THE RELAY CHARGED FOR ONE SEGMENT (7 Nov 2026, Bug hunt 13)
+    //
+    // The relay keeps its charge for any answer that is not empty (brain.ts
+    // refunds only an empty answer or a failed write), but this client can
+    // still throw that answer away - cut off before its first full stop, or
+    // too long once tidied - and a two-hander that came back untagged is
+    // asked for again in one voice, which is a second charged line. The
+    // director gave the first kind back whole and counted the second as
+    // one, so tonight's headroom said there was more left than there was.
+    // Now each segment's write carries a tally, and every answer the relay
+    // charged for is counted on it, used or not.
+    // ------------------------------------------------------------------
+
+    /// <summary>The lines the relay charged while one segment was being written.</summary>
+    public sealed class Charges
+    {
+        private int _lines;
+
+        /// <summary>How many lines the relay kept a charge for.</summary>
+        public int Lines => Volatile.Read(ref _lines);
+
+        internal void Add() => Interlocked.Increment(ref _lines);
+    }
+
+    private static readonly AsyncLocal<Charges?> _charging = new();
+
+    /// <summary>
+    /// The tally the write in progress counts its relay charges on, or null
+    /// when nothing is counting. Ambient for the same reason as
+    /// FallbackCommentaryBrain.RelayOnly: it belongs to the one segment's
+    /// call, not to whatever else is writing at the same moment. Set by
+    /// CommentaryDirector around the write and cleared after it.
+    /// </summary>
+    public static Charges? Charging
+    {
+        get => _charging.Value;
+        set => _charging.Value = value;
+    }
+
     /// <summary>How often one line is let through to a spent relay anyway, in case a top-up has landed that nothing here has heard of yet.</summary>
     internal static readonly TimeSpan SpentProbeEvery = TimeSpan.FromMinutes(30);
 
@@ -540,6 +580,9 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
                 StatusMessage?.Invoke("[brain] The relay answered with no line.");
                 return null;
             }
+
+            // Charged from here on, whatever Finish makes of it - see Charges.
+            Charging?.Add();
 
             // Said once per line and only to the console: a club watching
             // its allowance should not have to ask the relay for it.

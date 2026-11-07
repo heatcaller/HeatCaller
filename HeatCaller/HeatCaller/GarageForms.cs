@@ -1044,39 +1044,36 @@ internal sealed class ChassisTypesForm : Form
 /// Every change is written through the stores before this closes, so the
 /// wall behind it just re-reads. Nothing is handed back.
 ///
-/// On the layout pieces (DialogFit): the photo down the left at the width
-/// it had, and beside it what the car is - the heading, the facts, the
-/// notes - wrapping to the room left, the photo as tall as the words when
-/// they need more than its own height. Under both, one toolbar: the photo's
-/// arrows, which one is showing and Photos... on the left, the car's own
-/// buttons against the right-hand edge, over the facts they act on - onto a
-/// second line when there is not room for both. Then the setups under their
-/// heading, taking the height, and their buttons on the left with Close on
-/// the right at the foot. It opens at the size it had at the normal text
-/// size, at the size in use - never taller than the screen - and can be made
-/// bigger, the setups taking the room. It used to be placed in pixels, over
-/// a floor of 1000x720 whatever the screen: the photo a fixed 460x300, the
-/// facts beside it wrapped at a fixed width, the two toolbars at fixed
-/// places under the photo and the setups a fixed 220px tall above buttons
-/// anchored to the foot - taller than a 1280x720 screen leaves a window, so
-/// the buttons were under its edge.
+/// On the layout pieces (DialogFit): a strip across the top for the car -
+/// a thumbnail of its photo, and beside it the heading, the facts on a line
+/// or two, the notes, and the car's three buttons: Edit, Photos and More,
+/// whose menu holds Lend Out, Transfer, Retire and Delete Car. Then the
+/// setups' heading with Log a Setup against the right-hand edge, the setups
+/// themselves as a timeline of cards (SetupTimeline) taking the height, and
+/// Close at the foot.
+///
+/// WHY (7 Nov 2026, the car window redesign): it was the photo big beside
+/// four lines of facts, two rows of five buttons - each with its own Edit
+/// and its own pink Delete, so which acted on the car and which on the
+/// setup was a guess - and an eight-column grid of setups that cut short
+/// exactly the two columns worth reading, what changed and what the setup
+/// was, while Track and Best Lap sat empty. Now the car has one place for
+/// its buttons and the setup has its own, on its card, and no Delete shows
+/// until a menu is opened. It opens at the size it had at the normal text
+/// size, at the size in use - never taller than the screen - and can be
+/// made bigger, the setups taking the room.
 /// </summary>
 internal sealed class CarDetailForm : Form
 {
     /// <summary>How big the window opens inside its frame at the normal text size - the size it had. It can be made bigger; the setups take the height.</summary>
-    private const int DialogWidth = 1138;
+    private const int DialogWidth = 960;
     private const int DialogHeight = 692;
 
-    /// <summary>The photo's width at the normal text size - the column down the left.</summary>
-    private const int PhotoWidth = 460;
+    /// <summary>The thumbnail's width at the normal text size - the strip's left-hand column.</summary>
+    private const int PhotoWidth = 180;
 
-    /// <summary>
-    /// The photo's height at the normal text size - taller when what is said
-    /// beside it needs more. 40px shorter than the 300 it was, so that all
-    /// of the window, the setups at their least, fits a 1280x720 screen, and
-    /// a 1920x1080 one at twice the text size, without scrolling.
-    /// </summary>
-    private const int PhotoHeight = 260;
+    /// <summary>The thumbnail's height at the normal text size - taller when what is said beside it needs more.</summary>
+    private const int PhotoHeight = 120;
 
     /// <summary>
     /// The photo's size, <paramref name="pixels"/> at the normal text size,
@@ -1088,9 +1085,6 @@ internal sealed class CarDetailForm : Form
     /// </summary>
     private static int PhotoAt(int pixels) =>
         UiLayout.AtDpi((int)Math.Round(pixels * (1f + Math.Max(0f, AppTheme.FontScale - 1f) / 2f)));
-
-    /// <summary>The setups show their headings and at least this many rows before the window scrolls instead.</summary>
-    private const int LeastRows = 2;
 
     private readonly Car _car;
     private readonly CarStore _cars;
@@ -1104,26 +1098,22 @@ internal sealed class CarDetailForm : Form
     private readonly UndoService _undo;
     private readonly RaceEventStore? _events;
 
+    /// <summary>The thumbnail. A click shows the next photo, or opens Photos when there are none yet.</summary>
     private readonly PictureBox _photo = new();
-
-    /// <summary>Which photo is showing - as wide as the longest it can say, so the toolbar never moves as it changes.</summary>
-    private readonly SteadyLabel _lblCount = new();
-
-    private readonly Button _btnPrev = new();
-    private readonly Button _btnNext = new();
 
     private readonly Label _lblHeading = new();
     private readonly Label _lblFacts = new();
     private readonly Label _lblNotes = new();
 
-    private readonly Button _btnRetire = new();
-    private readonly Button _btnLend = new();
-    private readonly Button _btnTransfer = new();
+    /// <summary>More's menu: the car's less everyday buttons, Delete Car last and in the danger colour.</summary>
+    private readonly ContextMenuStrip _moreMenu = new();
+    private readonly ToolStripMenuItem _miLend = new("Lend Out...");
+    private readonly ToolStripMenuItem _miRetire = new("Retire");
 
-    private readonly DataGridView _setupGrid = new();
-    private readonly Button _btnEditSetup = new();
-    private readonly Button _btnDuplicateSetup = new();
-    private readonly Button _btnDeleteSetup = new();
+    private readonly Label _lblSetups = new();
+    private readonly SetupTimeline _timeline = new();
+    private readonly Button _btnLog = new() { Text = "Log a Setup..." };
+    private readonly ContextMenuStrip _setupMenu = new();
 
     private Image? _shown;
     private int _index;
@@ -1172,16 +1162,13 @@ internal sealed class CarDetailForm : Form
         // car is judged on its own colours, not the app's.
         _photo.BackColor = AppTheme.Background;
 
-        // Every heading whole, the date and the best lap kept wide enough
-        // for theirs, and the rest shared by weight - see
-        // Pieces.KeepHeadingsWhole. The date read "9/29/..." at 200%
-        // (layout pictures, 30 Sep). The widest date is a real one, written
-        // the way this PC writes dates.
-        Pieces.KeepHeadingsWhole(
-            _setupGrid,
-            ("date", AppTime.DateAndTime(new DateTime(2026, 12, 28, 22, 58, 0))),
-            ("bestlap", "99.999s"),
-            ("filled", "99"));
+        // Logging a setup is what this window is opened for most - the one
+        // button in the app's colour. The theme goes by the caption, and
+        // "Log a Setup" is not one it knows.
+        AppTheme.StyleButton(_btnLog, AppTheme.ButtonKind.Primary);
+
+        AppTheme.StyleContextMenu(_moreMenu);
+        AppTheme.StyleContextMenu(_setupMenu);
 
         RefreshAll();
 
@@ -1193,41 +1180,11 @@ internal sealed class CarDetailForm : Form
     /// <summary>The window's page, built: see the class notes. Returned for DialogFit to size the window to.</summary>
     private FillPage BuildLayout()
     {
+        // --- the car, across the top ---
+
         _photo.SizeMode = PictureBoxSizeMode.Zoom;
-
-        _btnPrev.Text = "◀";
-        _btnPrev.Click += (_, _) => Step(-1);
-
-        _btnNext.Text = "▶";
-        _btnNext.Click += (_, _) => Step(1);
-
-        // Centred up and down on the buttons beside it (see FieldGrid.Inline),
-        // and as wide as the longest it can say.
-        _lblCount.AutoSize = true;
-        _lblCount.Anchor = AnchorStyles.Left;
-        _lblCount.ForeColor = AppTheme.TextMuted;
-        _lblCount.Font = AppTheme.SmallFont;
-        _lblCount.Wordings = new[] { "No photographs yet", "1 photograph", "88 of 88" };
-
-        var btnPhotos = new Button { Text = "Photos..." };
-        btnPhotos.Click += (_, _) => EditPhotos();
-
-        var btnEdit = new Button { Text = "Edit..." };
-        btnEdit.Click += (_, _) => EditCar();
-
-        _btnLend.Text = "Lend Out...";
-        _btnLend.Click += (_, _) => LendCar();
-
-        _btnRetire.Text = "Retire";
-        _btnRetire.Click += (_, _) => RetireCar();
-
-        _btnTransfer.Text = "Transfer...";
-        _btnTransfer.Click += (_, _) => TransferCar();
-
-        var btnDelete = new Button { Text = "Delete" };
-        btnDelete.Click += (_, _) => DeleteCar();
-
-        // --- the facts, beside the picture ---
+        _photo.Click += (_, _) => PhotoClicked();
+        _photo.Paint += (_, e) => PaintPhotoBadge(e.Graphics);
 
         _lblHeading.AutoSize = true;
         _lblHeading.Font = AppTheme.HeadingFont;
@@ -1238,11 +1195,27 @@ internal sealed class CarDetailForm : Form
         _lblNotes.ForeColor = AppTheme.TextMuted;
         _lblNotes.Font = AppTheme.SmallFont;
 
-        // The photo down the left at the width it had - at the larger text
-        // sizes grown half as much as the text (PhotoAt) - and the heading,
-        // the facts and the notes beside it, each
-        // wrapping to the width left - the two as tall as the taller needs,
-        // the photo taking any height the words need past its own.
+        var btnEdit = new Button { Text = "Edit..." };
+        btnEdit.Click += (_, _) => EditCar();
+
+        var btnPhotos = new Button { Text = "Photos..." };
+        btnPhotos.Click += (_, _) => EditPhotos();
+
+        var btnMore = new Button { Text = "More ▾" };
+        btnMore.Click += (_, _) => _moreMenu.Show(btnMore, new Point(0, btnMore.Height));
+
+        _miLend.Click += (_, _) => LendCar();
+        _miRetire.Click += (_, _) => RetireCar();
+
+        var miTransfer = new ToolStripMenuItem("Transfer...", null, (_, _) => TransferCar());
+        var miDelete = new ToolStripMenuItem("Delete Car...", null, (_, _) => DeleteCar()) { Tag = AppTheme.DangerMenuItem };
+
+        _moreMenu.ShowImageMargin = false;
+        _moreMenu.Items.AddRange(new ToolStripItem[] { _miLend, miTransfer, _miRetire, new ToolStripSeparator(), miDelete });
+
+        // The thumbnail down the left, and beside it the heading, the facts,
+        // the notes and the car's three buttons, each wrapping to the width
+        // left - the thumbnail taking any height the words need past its own.
         var band = new Beside(PhotoAt(PhotoWidth))
         {
             SideOnLeft = true,
@@ -1251,93 +1224,56 @@ internal sealed class CarDetailForm : Form
         };
 
         band.AddSideFill(_photo, _ => PhotoAt(PhotoHeight), gapBelow: 0);
-        band.Add(_lblHeading);
-        band.Add(_lblFacts);
+        band.Add(_lblHeading, gapBelow: UiLayout.HintGap);
+        band.Add(_lblFacts, gapBelow: UiLayout.HintGap);
+        // The room over the buttons is the bar's own padding, not a gap
+        // under the notes, so a car with no notes - its line shrunk to
+        // nothing - keeps the same room there.
+        var carButtons = new ButtonBar().With(btnEdit, btnPhotos, btnMore);
+        carButtons.Padding = new Padding(0, UiLayout.RowGap, 0, 0);
+
         band.Add(_lblNotes, gapBelow: 0);
-
-        // One toolbar under the two columns, as there was one line under
-        // them before: the photo's arrows, which one is showing and Photos...
-        // on the left, the arrows only as wide as their marks; the car's own
-        // buttons against the right-hand edge, over the facts they act on,
-        // and under the photo's when the line is too short for both. Tab
-        // still goes through them in the order they read, as it did: the
-        // right-hand bar takes them right to left, in the order they were
-        // added.
-        var toolbar = new SplitBar(
-            new ButtonBar().With(new ButtonBar(tight: true).With(_btnPrev, _btnNext), _lblCount, btnPhotos),
-            new ButtonBar(alignRight: true).With(btnDelete, _btnRetire, _btnTransfer, _btnLend, btnEdit));
-
-        btnEdit.TabIndex = 0;
-        _btnLend.TabIndex = 1;
-        _btnTransfer.TabIndex = 2;
-        _btnRetire.TabIndex = 3;
-        btnDelete.TabIndex = 4;
+        band.Add(carButtons, gapBelow: 0);
 
         // --- its setups ---
 
-        var lblSetups = new Label
+        _lblSetups.AutoSize = true;
+        _lblSetups.Font = AppTheme.BoldFont;
+        _lblSetups.Anchor = AnchorStyles.Left;
+
+        _btnLog.Click += (_, _) => AddSetup();
+
+        var setupsHeading = new SplitBar(
+            new ButtonBar().With(_lblSetups),
+            new ButtonBar(alignRight: true).With(_btnLog));
+
+        _timeline.EmptyText = "No setups logged for this car yet. Log one after a run - each one after it says what changed from the one before.";
+        _timeline.Activated += EditSetup;
+        _timeline.DeletePressed += DeleteSetup;
+
+        _setupMenu.ShowImageMargin = false;
+        _setupMenu.Items.AddRange(new ToolStripItem[]
         {
-            Text = "Setups logged for this car",
-            AutoSize = true,
-            Font = AppTheme.BoldFont,
-        };
-
-        _setupGrid.ReadOnly = true;
-        _setupGrid.AllowUserToAddRows = false;
-        _setupGrid.AllowUserToDeleteRows = false;
-        _setupGrid.AllowUserToResizeRows = false;
-        _setupGrid.RowHeadersVisible = false;
-        _setupGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _setupGrid.MultiSelect = true;
-        _setupGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-        _setupGrid.Columns.AddRange(
-            new DataGridViewTextBoxColumn { Name = "date", HeaderText = "Date", FillWeight = 40 },
-            new DataGridViewTextBoxColumn { Name = "driver", HeaderText = "Driver", FillWeight = 55 },
-            new DataGridViewTextBoxColumn { Name = "track", HeaderText = "Track", FillWeight = 60 },
-            new DataGridViewTextBoxColumn { Name = "sheet", HeaderText = "Chassis Sheet", FillWeight = 55 },
-            new DataGridViewTextBoxColumn { Name = "filled", HeaderText = "Filled", FillWeight = 26 },
-            new DataGridViewTextBoxColumn { Name = "bestlap", HeaderText = "Best Lap", FillWeight = 42 },
-
-            // What this setup changed from the one before it, so a run of
-            // setups reads as a run of changes (27 Sep 2026). See SetupDiff.
-            // It and the setup give way before the track and the driver do:
-            // theirs are sentences, cut short in any narrow window whatever
-            // they are given, and a name cut short says nothing at all (30
-            // Sep - the track read "Club C..." at 200% beside them).
-            new DataGridViewTextBoxColumn { Name = "changed", HeaderText = "Changed Since Last", FillWeight = 115 },
-            new DataGridViewTextBoxColumn { Name = "summary", HeaderText = "Setup", FillWeight = 95 }
-        );
-        _setupGrid.SelectionChanged += (_, _) => UpdateButtons();
-        _setupGrid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) EditSetup(); };
-
-        var btnLog = new Button { Text = "Log a Setup..." };
-        btnLog.Click += (_, _) => AddSetup();
-
-        _btnEditSetup.Text = "Edit...";
-        _btnEditSetup.Click += (_, _) => EditSetup();
-
-        _btnDuplicateSetup.Text = "Duplicate";
-        _btnDuplicateSetup.Click += (_, _) => DuplicateSetup();
-
-        _btnDeleteSetup.Text = "Delete";
-        _btnDeleteSetup.Click += (_, _) => DeleteSetup();
+            new ToolStripMenuItem("Edit...", null, (_, _) => EditSetup()),
+            new ToolStripMenuItem("Duplicate", null, (_, _) => DuplicateSetup()),
+            new ToolStripSeparator(),
+            new ToolStripMenuItem("Delete Setup...", null, (_, _) => DeleteSetup()) { Tag = AppTheme.DangerMenuItem },
+        });
+        _timeline.CardMenu = _setupMenu;
 
         var btnClose = new Button { Text = "Close", DialogResult = DialogResult.OK };
 
-        // The setups' own buttons on the left, Close against the right-hand
-        // edge, as they were.
-        var setupButtons = new SplitBar(
-            new ButtonBar().With(btnLog, _btnEditSetup, _btnDuplicateSetup, _btnDeleteSetup),
-            new ButtonBar(alignRight: true).With(btnClose));
+        btnEdit.TabIndex = 0;
+        btnPhotos.TabIndex = 1;
+        btnMore.TabIndex = 2;
 
-        // The setups take the height; they keep their headings and a couple
-        // of rows before the window scrolls instead.
+        // The setups take the height; one card's first lines stay before the
+        // window scrolls instead.
         var page = new FillPage();
-        page.Add(band, gapBelow: UiLayout.HintGap);
-        page.Add(toolbar, gapBelow: UiLayout.SectionGap);
-        page.Add(lblSetups, stretch: false, gapBelow: UiLayout.RowGap);
-        page.AddFill(_setupGrid, _ => _setupGrid.ColumnHeadersHeight + LeastRows * _setupGrid.RowTemplate.Height + 2, gapBelow: UiLayout.RowGap);
-        page.Add(setupButtons, gapBelow: 0);
+        page.Add(band, gapBelow: UiLayout.SectionGap);
+        page.Add(setupsHeading, gapBelow: UiLayout.RowGap);
+        page.AddFill(_timeline, _ => SetupTimeline.LeastHeight, gapBelow: UiLayout.RowGap);
+        page.Add(new ButtonBar(alignRight: true).With(btnClose), gapBelow: 0);
 
         Controls.Add(page);
 
@@ -1352,10 +1288,13 @@ internal sealed class CarDetailForm : Form
         Text = _car.DisplayName;
         _lblHeading.Text = _car.DisplayName + (_car.Retired ? "   (retired)" : string.Empty);
 
+        // What the car is on one line, wrapping when it has to, and what
+        // has happened to it - changed hands, lent out - on the next.
+        var facts = new List<string>();
         var lines = new List<string>();
 
         var owner = _car.IsClubCar ? "The club" : NameOf(_car.OwnerTransponder);
-        lines.Add($"Owner:  {(owner.Length == 0 ? "—" : owner)}");
+        facts.Add($"Owner:  {(owner.Length == 0 ? "—" : owner)}");
 
         // The last time it changed hands, and from whom: by their name now,
         // or as it was then for a driver no longer on file.
@@ -1370,20 +1309,22 @@ internal sealed class CarDetailForm : Form
             lines.Add($"Transferred from:  {was}, {last.AtUtc.ToLocalTime():d MMM yyyy}");
         }
 
-        lines.Add($"Class:  {(string.IsNullOrWhiteSpace(_car.ClassName) ? "—" : _car.ClassName)}");
+        facts.Add($"Class:  {(string.IsNullOrWhiteSpace(_car.ClassName) ? "—" : _car.ClassName)}");
 
         var chassis = _chassisTypes.NameOf(_car.ChassisTypeId);
-        lines.Add($"Chassis:  {(chassis.Length == 0 ? "—" : chassis)}");
+        facts.Add($"Chassis:  {(chassis.Length == 0 ? "—" : chassis)}");
 
         if (!string.IsNullOrWhiteSpace(_car.Bodyshell))
         {
-            lines.Add($"Shell:  {_car.Bodyshell}");
+            facts.Add($"Shell:  {_car.Bodyshell}");
         }
 
         if (!string.IsNullOrWhiteSpace(_car.RaceNumber))
         {
-            lines.Add($"Number:  {_car.RaceNumber}");
+            facts.Add($"Number:  {_car.RaceNumber}");
         }
+
+        lines.Insert(0, string.Join("     ", facts));
 
         var eventId = CurrentEventId;
         var driver = _car.DriverFor(eventId);
@@ -1398,10 +1339,23 @@ internal sealed class CarDetailForm : Form
         _lblFacts.Text = string.Join("\r\n", lines);
 
         _lblNotes.Text = _car.Notes;
-        _lblNotes.Visible = !string.IsNullOrWhiteSpace(_car.Notes);
+        // No notes: the line shrunk to nothing rather than hidden. The
+        // strip (Beside) measured a hidden part in and placed it out, and
+        // the car's buttons under it ran past its foot at the larger text
+        // sizes (layout test, 7 Nov 2026).
+        var hasNotes = !string.IsNullOrWhiteSpace(_car.Notes);
+        _lblNotes.AutoSize = hasNotes;
 
-        _btnRetire.Text = _car.Retired ? "Put Back" : "Retire";
-        _btnLend.Enabled = eventId is not null;
+        if (!hasNotes)
+        {
+            _lblNotes.Height = 0;
+        }
+
+        _miRetire.Text = _car.Retired ? "Put Back" : "Retire";
+
+        // Lending is for one race day; with none open it says why it can't.
+        _miLend.Enabled = eventId is not null;
+        _miLend.Text = eventId is not null ? "Lend Out..." : "Lend Out (open a race day first)";
 
         _index = Math.Clamp(_index, 0, Math.Max(0, _car.PhotoFileNames.Count - 1));
 
@@ -1452,15 +1406,60 @@ internal sealed class CarDetailForm : Form
 
         var count = _car.PhotoFileNames.Count;
 
-        _lblCount.Text = count switch
+        _photo.Cursor = count == 1 ? Cursors.Default : Cursors.Hand;
+        _photo.AccessibleName = count switch
         {
-            0 => "No photographs yet",
-            1 => "1 photograph",
-            _ => $"{_index + 1} of {count}",
+            0 => "No photographs yet - click to add one",
+            1 => "The car's photograph",
+            _ => $"Photograph {_index + 1} of {count} - click for the next",
         };
 
-        _btnPrev.Enabled = count > 1;
-        _btnNext.Enabled = count > 1;
+        _photo.Invalidate();
+    }
+
+    /// <summary>The thumbnail's click: the next photo, or Photos when there are none yet to step through.</summary>
+    private void PhotoClicked()
+    {
+        if (_car.PhotoFileNames.Count == 0)
+        {
+            EditPhotos();
+        }
+        else
+        {
+            Step(1);
+        }
+    }
+
+    /// <summary>
+    /// Over the thumbnail: "2 / 5" in its corner when there is more than one
+    /// photo - the arrows the big photo had are gone, and a click steps on -
+    /// and "Add a photo" across it when there are none.
+    /// </summary>
+    private void PaintPhotoBadge(Graphics g)
+    {
+        var count = _car.PhotoFileNames.Count;
+        var area = _photo.ClientRectangle;
+
+        if (count == 0)
+        {
+            TextRenderer.DrawText(g, "Add a photo", AppTheme.SmallFont, area, AppTheme.TextMuted,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak);
+            return;
+        }
+
+        if (count < 2)
+        {
+            return;
+        }
+
+        var text = $"{_index + 1} / {count}";
+        var size = TextRenderer.MeasureText(text, AppTheme.SmallFont);
+        var pad = UiLayout.AtTextSize(4);
+        var badge = new Rectangle(area.Right - size.Width - pad * 3, area.Bottom - size.Height - pad * 2, size.Width + pad * 2, size.Height);
+
+        AppTheme.DrawPill(g, badge, AppTheme.Surface, string.Empty, AppTheme.TextDark);
+        TextRenderer.DrawText(g, text, AppTheme.SmallFont, badge, AppTheme.TextDark,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
     }
 
     // ------------------------------------------------------------- car
@@ -1776,9 +1775,9 @@ internal sealed class CarDetailForm : Form
 
     private void RefreshSetups()
     {
-        _setupGrid.Rows.Clear();
+        var items = new List<SetupTimeline.Item>();
 
-        // Newest first, so the setup before each one is the next row down.
+        // Newest first, so the setup before each one is the next card down.
         var setups = SetupsForThisCar();
 
         for (var i = 0; i < setups.Count; i++)
@@ -1795,32 +1794,42 @@ internal sealed class CarDetailForm : Form
                 ? null
                 : SetupDiff.Between(previous, entry, _chassisTemplates.Get);
 
-            var changed = previous is not null && changes is null
-                ? "(first on a setup sheet)"
-                : SetupDiff.Describe(changes);
-
-            var index = _setupGrid.Rows.Add(
-                AppTime.DateAndTime(entry.RecordedAtUtc.ToLocalTime()),
-                entry.DriverName,
-                entry.TrackLayoutName,
-                // A sheet deleted since says so, rather than leaving the cell
-                // blank - the delete asks with exactly these words.
-                template?.Name ?? (entry.IsLegacy ? "(older entry)" : entry.ChassisTemplateId is not null ? "(sheet deleted)" : string.Empty),
-                entry.IsLegacy ? string.Empty : entry.FilledCount.ToString(),
-                BestLapFor(entry),
-                changed,
-                entry.Summarise(template));
-
-            _setupGrid.Rows[index].Tag = entry.Id;
-
-            // The whole list where the cell can only show the first few.
-            if (changes is { Count: > 3 })
+            // The whole list, every change - the card wraps rather than
+            // cutting it short as the grid's cell did.
+            var (changed, quiet) = (previous, changes) switch
             {
-                _setupGrid.Rows[index].Cells["changed"].ToolTipText = SetupDiff.Describe(changes, int.MaxValue);
-            }
+                (null, _) => ("First setup for this car", true),
+                (_, null) => ("First on a setup sheet", true),
+                (_, { Count: 0 }) => ("No changes from the one before", true),
+                _ => ("Changed:  " + SetupDiff.Describe(changes, int.MaxValue), false),
+            };
+
+            // A sheet deleted since says so, rather than saying nothing - the
+            // delete asks with exactly these words.
+            var sheet = template?.Name ?? (entry.IsLegacy ? "(older entry)" : entry.ChassisTemplateId is not null ? "(sheet deleted)" : string.Empty);
+            var bestLap = BestLapFor(entry);
+
+            var facts = new[]
+                {
+                    entry.DriverName.Trim(),
+                    entry.TrackLayoutName.Trim(),
+                    sheet,
+                    entry.IsLegacy ? string.Empty : $"{entry.FilledCount} filled",
+                    bestLap.Length == 0 ? string.Empty : $"best lap {bestLap}",
+                }
+                .Where(f => f.Length > 0);
+
+            items.Add(new SetupTimeline.Item(
+                entry.Id,
+                AppTime.DateAndTime(entry.RecordedAtUtc.ToLocalTime()),
+                string.Join("  ·  ", facts),
+                changed,
+                quiet,
+                SetupDiff.Filled(entry, _chassisTemplates.Get, int.MaxValue)));
         }
 
-        UpdateButtons();
+        _lblSetups.Text = setups.Count == 0 ? "Setups" : $"Setups  ·  {setups.Count}";
+        _timeline.SetItems(items);
     }
 
     /// <summary>The best lap of the session an entry was linked to, or empty - the reason for linking one at all.</summary>
@@ -1837,15 +1846,8 @@ internal sealed class CarDetailForm : Form
         return mine is { FastLapMs: > 0 } ? $"{mine.FastLapMs / 1000.0:0.000}s" : string.Empty;
     }
 
-    private void UpdateButtons()
-    {
-        _btnEditSetup.Enabled = _setupGrid.SelectedRows.Count == 1;
-        _btnDuplicateSetup.Enabled = _setupGrid.SelectedRows.Count == 1;
-        _btnDeleteSetup.Enabled = _setupGrid.SelectedRows.Count >= 1;
-    }
-
     private SetupEntry? SelectedSetup() =>
-        _setupGrid.SelectedRows.Count >= 1 && _setupGrid.SelectedRows[0].Tag is string id ? _setups.Get(id) : null;
+        _timeline.SelectedId is { } id ? _setups.Get(id) : null;
 
     private void AddSetup()
     {
@@ -1935,38 +1937,31 @@ internal sealed class CarDetailForm : Form
         }
     }
 
+    /// <summary>
+    /// Deletes the selected setup, after asking. One at a time: the grid
+    /// this replaced took several at once, but a card is picked one by one,
+    /// and Undo puts back a slip.
+    /// </summary>
     private void DeleteSetup()
     {
-        var chosen = _setupGrid.SelectedRows
-            .Cast<DataGridViewRow>()
-            .Select(r => r.Tag as string)
-            .Where(id => !string.IsNullOrEmpty(id))
-            .Select(id => _setups.Get(id!))
-            .Where(e => e is not null)
-            .Select(e => e!)
-            .ToList();
-
-        if (chosen.Count == 0)
+        if (SelectedSetup() is not { } entry)
         {
             return;
         }
 
-        if (AppDialog.Show(this,
-                chosen.Count == 1 ? "Delete this setup?" : $"Delete {Plural.Of(chosen.Count, "setup")}?",
+        var when = AppTime.DateAndTime(entry.RecordedAtUtc.ToLocalTime());
+
+        if (AppDialog.Show(this, $"Delete the setup logged {when}?",
                 "Delete setup", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
         {
             return;
         }
 
-        var removed = chosen.Select(SetupLogStore.CopyOf).ToList();
+        var removed = new List<SetupEntry> { SetupLogStore.CopyOf(entry) };
 
-        _undo.Capture(chosen.Count == 1 ? "Delete a setup" : $"Delete {chosen.Count} setups",
-            () => _setups.RestoreDeleted(removed));
+        _undo.Capture("Delete a setup", () => _setups.RestoreDeleted(removed));
 
-        foreach (var entry in chosen)
-        {
-            _setups.Delete(entry.Id);
-        }
+        _setups.Delete(entry.Id);
 
         RefreshSetups();
     }
@@ -1977,6 +1972,8 @@ internal sealed class CarDetailForm : Form
         {
             _photo.Image = null;
             _shown?.Dispose();
+            _moreMenu.Dispose();
+            _setupMenu.Dispose();
         }
 
         base.Dispose(disposing);

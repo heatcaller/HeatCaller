@@ -1195,8 +1195,8 @@ public sealed partial class RaceControlControl
     /// race program. Requiring a round was silently turning every staggered
     /// start into a standard one.
     ///
-    /// The last-race fallback is for staggered and hand-released starts
-    /// only, and only when the last race was the same kind of race - run
+    /// The last-race fallback is for staggered starts only, and only when
+    /// the last race was the same kind of race - run
     /// without a round too, so the same class of freeform running. A
     /// standard or qualifying start needs no grid to run, and handing it a
     /// different field's finishing order saved start positions nobody
@@ -1226,9 +1226,10 @@ public sealed partial class RaceControlControl
             return roster;
         }
 
-        // No round, and a start that does not need a grid to run: no grid,
-        // so start positions stay at zero rather than borrowed - see above.
-        if (_race.StartType is RaceStartType.Standard or RaceStartType.Qualifier)
+        // No round, and a start that does not need a grid to run, or (hand
+        // released) would put a borrowed one on the board: no grid, so start
+        // positions stay at zero rather than borrowed - see above.
+        if (!LastRaceCanBeTheGrid(_race.StartType))
         {
             return new List<string>();
         }
@@ -1261,6 +1262,21 @@ public sealed partial class RaceControlControl
 
         return fromResult;
     }
+
+    /// <summary>
+    /// Whether a start with no round can take the last race's finishing
+    /// order as its grid - a staggered start only.
+    ///
+    /// A standard or qualifying start needs no grid (see GridForStagger).
+    /// Nor does a hand-released start get one (bug hunt 13): it puts every
+    /// car on its grid on the board at the green, held at the line, so the
+    /// last race's field put its drivers who are not here tonight into this
+    /// race, with no way to take them off, and they were filed with it as
+    /// 0-lap finishers. Without a round there is nobody to hold, and
+    /// everyone goes on the green - see BuildStartSchedule.
+    /// </summary>
+    internal static bool LastRaceCanBeTheGrid(RaceStartType startType) =>
+        startType is RaceStartType.StaggeredGrid or RaceStartType.StaggeredReverse or RaceStartType.StaggeredHandicap;
 
     /// <summary>
     /// The clock a handicap start replaced with the shared one, so it can

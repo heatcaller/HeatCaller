@@ -2099,6 +2099,7 @@ public sealed class CommentaryDirector
         // for the report only once the line is said (Commit) and given back on
         // every drop below - BuildSegmentAsync used to count it as written.
         var sponsors = new SponsorCreditsHeld();
+        var charges = new RelayCommentaryClient.Charges();
 
         try
         {
@@ -2111,11 +2112,20 @@ public sealed class CommentaryDirector
             // club's brain yet, and the local model is all it has.
             FallbackCommentaryBrain.RelayOnly = verdict.Fallback == BrainFallback.None && Budget.AllowanceKnown;
 
+            // WHY (7 Nov 2026, Bug hunt 13): what the relay charged, counted
+            // as it is charged. A relay answer this app threw away (cut off,
+            // too long once tidied) came back null here and was given back
+            // whole, and an untagged two-hander asked twice was counted
+            // once - the relay kept both, so tonight keeps them too.
+            RelayCommentaryClient.Charging = charges;
+
             var written = await WriteAsync(kind, spec, pack, ct, sponsors).ConfigureAwait(false);
+
+            Budget.Charged(verdict.Ticket, charges.Lines);
 
             if (written is null)
             {
-                Budget.Release(verdict.Ticket);
+                Budget.Release(verdict.Ticket, written: charges.Lines > 0);
                 sponsors.Unheard();
                 return null;
             }
@@ -2316,7 +2326,9 @@ public sealed class CommentaryDirector
         }
         catch (Exception ex)
         {
-            Budget.Release(verdict.Ticket);
+            // Whatever the relay charged before the throw stays charged.
+            Budget.Charged(verdict.Ticket, charges.Lines);
+            Budget.Release(verdict.Ticket, written: charges.Lines > 0);
             sponsors.Unheard();
             Say($"[brain] {spec.Title} failed: {ex.GetType().Name}: {ex.Message}");
 
@@ -2326,6 +2338,7 @@ public sealed class CommentaryDirector
         {
             Writing = false;
             FallbackCommentaryBrain.RelayOnly = false;
+            RelayCommentaryClient.Charging = null;
         }
     }
 

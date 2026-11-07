@@ -38,6 +38,13 @@ public static class AppTheme
     /// </summary>
     public const string KeepBackColor = "keep-backcolor";
 
+    /// <summary>
+    /// Tag a menu item with this and its caption is drawn in the danger
+    /// colour, as a Delete button is: the car window's "Delete Car..." at
+    /// the foot of its More menu (7 Nov 2026).
+    /// </summary>
+    public const string DangerMenuItem = "danger-menu-item";
+
     /// <summary>True when this control asked to keep the background it was given.</summary>
     public static bool KeepsBackColor(Control control) =>
         control.Tag as string == KeepBackColor;
@@ -604,7 +611,9 @@ public static class AppTheme
 
         protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
         {
-            e.TextColor = e.Item.Enabled ? TextDark : TextMuted;
+            e.TextColor = !e.Item.Enabled ? TextMuted
+                : e.Item.Tag is DangerMenuItem ? Danger
+                : TextDark;
             e.TextFont = BodyFont;
 
             // Ampersands in a driver's name are text, not accelerators.

@@ -250,13 +250,13 @@ public sealed partial class RelayPublisher
 
             AsksTrouble(null);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             // Shutting down, or the pass was cancelled. Nothing to report.
         }
         catch (Exception ex)
         {
-            AsksTrouble($"Could not collect driver requests: {ex.Message}");
+            AsksTrouble($"Could not collect driver requests: {Plain(ex)}");
         }
     }
 
@@ -315,13 +315,13 @@ public sealed partial class RelayPublisher
 
             return true;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             return false;
         }
         catch (Exception ex)
         {
-            AsksTrouble($"Could not reach the relay about driver requests: {ex.Message}");
+            AsksTrouble($"Could not reach the relay about driver requests: {Plain(ex)}");
             return false;
         }
     }
@@ -349,13 +349,13 @@ public sealed partial class RelayPublisher
 
             return true;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             return false;
         }
         catch (Exception ex)
         {
-            AsksTrouble($"Collected driver requests but could not clear them: {ex.Message}");
+            AsksTrouble($"Collected driver requests but could not clear them: {Plain(ex)}");
             return false;
         }
     }
