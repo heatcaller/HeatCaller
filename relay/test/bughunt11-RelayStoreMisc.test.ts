@@ -49,6 +49,20 @@ function card(page: FakePage): FakeNode {
   return c;
 }
 
+/** Since the Garage rework (6 Nov 2026) a car's Edit is in its Manage sheet. */
+async function openEdit(page: FakePage): Promise<void> {
+  page.button(card(page), /^Manage$/)!.click();
+  await page.settle();
+  page.button(sheet(page), /^Edit details$/)!.click();
+  await page.settle();
+}
+
+function sheet(page: FakePage): FakeNode {
+  const s = page.get("gg").find((n) => n.className === "gsheet")[0];
+  assert.ok(s, "the Manage sheet");
+  return s;
+}
+
 describe("bug hunt 11: a car on a retired chassis keeps it when edited from the phone", () => {
   it("the chassis select starts on the car's own chassis and Save sends it back", async () => {
     const { html, script } = pageParts(garagePage("acme-rc", "Acme RC"));
@@ -56,16 +70,15 @@ describe("bug hunt 11: a car on a retired chassis keeps it when edited from the 
     page.run(script);
     await page.settle();
 
-    page.button(card(page), /^Edit$/)!.click();
-    await page.settle();
-    const pick = field(card(page), /^Chassis/);
+    await openEdit(page);
+    const pick = field(sheet(page), /^Chassis/);
     assert.equal(pick.value, RETIRED, "starts on the car's chassis, not 'Not set'");
     assert.match(pick.textContent, /Tamiya M-05/);
 
-    const num = field(card(page), /^Race number/);
+    const num = field(sheet(page), /^Race number/);
     num.value = "8";
     num.fire("input");
-    page.button(card(page), /^Save the car$/)!.click();
+    page.button(sheet(page), /^Save the car$/)!.click();
     await page.settle();
 
     const sent = page.sent.filter((s) => s.url.endsWith("/driver/ask"));
@@ -84,16 +97,15 @@ describe("bug hunt 11: a car on a retired chassis keeps it when edited from the 
     page.run(script);
     await page.settle();
 
-    page.button(card(page), /^Edit$/)!.click();
-    await page.settle();
-    const pick = field(card(page), /^Chassis/);
+    await openEdit(page);
+    const pick = field(sheet(page), /^Chassis/);
     assert.equal(pick.value, "", "starts on 'Not set'");
     assert.doesNotMatch(pick.textContent, /Current chassis/);
 
-    const num = field(card(page), /^Race number/);
+    const num = field(sheet(page), /^Race number/);
     num.value = "8";
     num.fire("input");
-    page.button(card(page), /^Save the car$/)!.click();
+    page.button(sheet(page), /^Save the car$/)!.click();
     await page.settle();
 
     const sent = page.sent.filter((s) => s.url.endsWith("/driver/ask"));

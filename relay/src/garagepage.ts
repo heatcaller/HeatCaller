@@ -71,20 +71,62 @@ export const GARAGE_CSS = `
 .gcar { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px 12px; padding: 14px 0; border-top: 1px solid var(--border); }
 .glist > .gcar:first-child { border-top: 0; }
 .gcar > .gwide { grid-column: 1 / -1; }
-/* Two or more cars: a row to swipe through, a big photo on each. */
-.gcars { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 2px 8px;
+/* THE CARS ON TOP (6 Nov 2026, Asher picked option A of the Garage rework,
+   relay/mockups/garage-rework.html): a carousel at the head of the Garage,
+   always - one car or many - a big photo on each slide with its name over
+   it, and an Add a car slide at the end. Words over the photo sit on a
+   scrim made from the look's own background, so they read in every look. */
+.gtopcars { max-width: 42rem; margin: 0 auto 16px; text-align: left; }
+.gcars { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 2px 2px 8px;
          scrollbar-width: none; overscroll-behavior-x: contain; }
 .gcars::-webkit-scrollbar { display: none; }
-.gcars > .gcar { flex: 0 0 86%; scroll-snap-align: center; grid-template-columns: minmax(0, 1fr); align-content: start;
-                 padding: 12px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg); }
-.glist.gcars > .gcar:first-child { border-top: 1px solid var(--border); }
-.gcars .gthumb { width: 100%; height: auto; aspect-ratio: 4 / 3; border-radius: 12px; }
-.gcars div.gthumb { display: grid; place-items: center; }
-.gcars div.gthumb::after { content: "No photo yet"; color: var(--muted); font-size: 0.85rem; }
+.gcars > .gslide { flex: 0 0 86%; scroll-snap-align: center; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.gpic { position: relative; display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 16px; overflow: hidden;
+        border: 1px solid var(--border);
+        background: radial-gradient(90% 70% at 70% 20%, color-mix(in srgb, var(--primary) 30%, transparent), transparent 70%),
+                    linear-gradient(170deg, var(--surface), var(--bg) 75%); }
+.gpic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.gpic::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 55%;
+               background: linear-gradient(transparent, color-mix(in srgb, var(--bg) 88%, transparent)); }
+.gpic.none::before { content: "No photo yet"; position: absolute; inset: 0 0 30% 0; display: grid; place-items: center;
+                     color: var(--muted); font-size: 0.85rem; }
+.gover { position: absolute; left: 12px; right: 12px; bottom: 10px; z-index: 1; color: var(--text); }
+.gover b { display: block; font-size: 1.3rem; font-weight: 800; line-height: 1.1; overflow-wrap: anywhere; }
+.gover span { display: block; font-size: 0.8rem; color: var(--muted); }
+.gpic .gtag { position: absolute; top: 10px; left: 10px; z-index: 1; margin: 0; }
+.gcount { position: absolute; top: 10px; right: 10px; z-index: 1; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem;
+          font-weight: 700; background: color-mix(in srgb, var(--bg) 70%, transparent); color: var(--text); }
+.gslide .gbtns > .gb { flex: 1 1 0; }
+.gadd { font: inherit; color: var(--accent); text-align: center; cursor: pointer; padding: 0;
+        background: transparent; border: 2px dashed var(--border); display: grid; place-items: center; align-content: center; gap: 4px; }
+.gadd b { font-size: 1.1rem; }
+.gadd span { color: var(--muted); font-size: 0.85rem; }
+.gadd::after { display: none; }
+.gtopcars details > summary { min-height: 44px; display: flex; align-items: center; color: var(--accent); cursor: pointer; }
+.gadd:focus-visible { outline: 3px solid var(--ring, var(--accent)); outline-offset: 2px; }
+.gb.pri { color: var(--on-primary, #FFFFFF); background: var(--primary); border-color: transparent; }
+.gb.ton { color: var(--on-tonal, var(--text)); background: var(--tonal, var(--surface)); border-color: transparent; }
 .gdots { display: flex; justify-content: center; gap: 6px; margin: 2px 0 6px; }
 .gdots button { width: 24px; height: 24px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; place-items: center; }
 .gdots button::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
 .gdots button[aria-current="true"]::before { background: var(--accent); width: 18px; border-radius: 4px; }
+.gdots button.plus::before { background: transparent; border: 1px solid var(--muted); width: 6px; height: 6px; }
+/* Manage: a sheet from the foot of the screen for the car it was opened on. */
+.gsheet { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; justify-content: flex-end;
+          background: color-mix(in srgb, var(--bg) 70%, transparent); }
+.gpane { width: 100%; max-width: 42rem; margin: 0 auto; max-height: 88vh; overflow-y: auto; overscroll-behavior: contain; text-align: left;
+         background: var(--surface); border: 1px solid var(--border); border-bottom: 0; border-radius: 22px 22px 0 0;
+         padding: 10px 16px calc(18px + env(safe-area-inset-bottom, 0px)); }
+.ggrab { width: 38px; height: 4px; border-radius: 4px; background: var(--border); margin: 0 auto 10px; }
+.gpane h3 { margin: 0 0 10px; font-size: 1.1rem; overflow-wrap: anywhere; }
+.gpane h3:focus { outline: none; }
+.gpane .gdone { width: 100%; margin-top: 12px; }
+/* Races still waiting for a pack. */
+.gwait { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; margin: 4px 0 6px;
+         background: color-mix(in srgb, var(--warn, var(--accent)) 12%, var(--surface));
+         border: 1px solid color-mix(in srgb, var(--warn, var(--accent)) 35%, transparent); }
+.gwait b { display: block; }
+.gx td .when { display: block; font-size: 0.78rem; }
 .gthumb { display: block; width: 76px; height: 57px; object-fit: cover; border-radius: 10px; background: var(--bg);
           border: 1px solid var(--border); }
 .gphotos { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; margin: 8px 0; }
@@ -382,8 +424,10 @@ function settled(form) {
 const SECTIONS = {};
 const view = {
   packEdit: '', packRemove: '', packAdd: false,
-  carEdit: '', carPhotos: '', photo: '', photoRemove: false, carAdd: false, retired: false, carAt: '',
-  layout: '', chart: 'fade', setupCar: '', history: false,
+  carEdit: '', carPhotos: '', photo: '', photoRemove: false, retired: false, carAt: '',
+  // The Manage sheet: '' shut, a car's id, or 'add' for a new car.
+  sheet: '', taggedRaces: false,
+  layout: '', chart: 'fade', history: false,
 };
 
 function section(name, id, keyOf, build) {
@@ -694,33 +738,19 @@ function packFields(form, p) {
   };
 }
 
+// Since the Garage rework (6 Nov 2026, option A): a Put in button on each
+// pack says which is in the car, and Take out on the one that is; Edit,
+// Retire and Remove sit behind Manage.
 function buildPacks(box, sec) {
   if (!garage) return;
   const card = el('section', 'gx');
   card.appendChild(el('h2', '', 'Battery packs'));
   const all = packs();
 
-  // The pack in the car now.
-  const inUse = all.filter((p) => p.retired !== true);
-  const inCar = all.find((p) => p.inCar === true);
-  const carForm = 'pack-car';
-  const now = el('div', 'su');
-  const pick = selectBox(now, sec, carForm, 'pack', 'The pack in your car now',
-    [['none', 'No pack in the car']].concat(inUse.map((p) => [p.id, packLabel(p) + (p.club === true ? ' (club pack)' : '')])),
-    inCar ? inCar.id : 'none');
-  now.appendChild(tapButton('Save', 'go quiet', async () => {
-    const v = String(pick.input.value || 'none');
-    if (v !== 'none' && !OBJECT_ID.test(v)) { setStatus('pack-car', 'Pick one of your packs.', '', 'gno'); return; }
-    if (await change('pack', { pack: v }, 'pack-car')) settled(carForm);
-  }));
-  now.appendChild(statusLine('pack-car'));
-  card.appendChild(now);
-
-  // Their packs.
-  card.appendChild(el('h3', '', 'Your packs'));
   if (all.length === 0) card.appendChild(el('p', 'note', 'No packs yet. Add one below.'));
   const list = el('div', 'glist');
   for (const p of all) {
+    const key = 'pack-' + p.id;
     const row = el('div', 'grow' + (p.retired === true ? ' gmuted' : ''));
     const name = el('div', 'gname');
     const b = el('b', '', packLabel(p));
@@ -733,55 +763,63 @@ function buildPacks(box, sec) {
     if (str(p.notes)) name.appendChild(el('span', 'when', str(p.notes)));
     row.appendChild(name);
 
+    const btns = el('div', 'gbtns');
+    if (p.inCar === true) {
+      btns.appendChild(tapButton('Take out', 'gb', () => { change('pack', { pack: 'none' }, key); }));
+    } else if (p.retired !== true) {
+      btns.appendChild(tapButton('Put in', 'gb ton', () => { change('pack', { pack: p.id }, key); }));
+    }
     if (p.mine === true) {
-      const btns = el('div', 'gbtns');
-      btns.appendChild(tapButton('Edit', 'gb' + (view.packEdit === p.id ? ' on' : ''), () => {
+      btns.appendChild(tapButton('Manage', 'gb' + (view.packEdit === p.id ? ' on' : ''), () => {
         view.packEdit = view.packEdit === p.id ? '' : p.id;
         view.packRemove = '';
         paint(sec, true);
       }));
-      btns.appendChild(tapButton(p.retired === true ? 'Unretire' : 'Retire', 'gb', () => {
-        change('packedit', { op: p.retired === true ? 'unretire' : 'retire', pack: p.id }, 'pack-' + p.id);
+    }
+    row.appendChild(btns);
+
+    if (p.mine === true && view.packEdit === p.id) {
+      const form = 'pack-edit-' + p.id;
+      const wrap = el('div', 'gform');
+      const fields = packForm(wrap, sec, form, p);
+      fields.appendChild(tapButton('Save the pack', 'go', async () => {
+        const f = packFields(form, p);
+        if (f.label === '') { setStatus(key, 'Give the pack a label.', '', 'gno'); return; }
+        if (await change('packedit', { op: 'edit', pack: p.id, label: f.label, chem: f.chem, notes: f.notes }, key)) {
+          drop(form);
+          view.packEdit = '';
+          paint(sec, true);
+        }
       }));
-      btns.appendChild(tapButton('Remove', 'gb warn', () => {
-        view.packRemove = view.packRemove === p.id ? '' : p.id;
+      fields.appendChild(tapButton('Cancel', 'linkish', () => { drop(form); view.packEdit = ''; paint(sec, true); }));
+
+      const more = el('div', 'gbtns');
+      more.appendChild(tapButton(p.retired === true ? 'Unretire' : 'Retire', 'gb', () => {
         view.packEdit = '';
         paint(sec, true);
+        change('packedit', { op: p.retired === true ? 'unretire' : 'retire', pack: p.id }, key);
       }));
-      row.appendChild(btns);
-
+      if (view.packRemove !== p.id) {
+        more.appendChild(tapButton('Remove', 'gb warn', () => { view.packRemove = p.id; paint(sec, true); }));
+      }
+      wrap.appendChild(more);
       if (view.packRemove === p.id) {
         const ask = el('div', 'gform');
         ask.appendChild(el('p', '', 'Remove ' + packLabel(p) + '? Packs with races on them are retired instead, so their charts stay.'));
         const yes = el('div', 'gbtns');
         yes.appendChild(tapButton('Yes, remove it', 'gb warn', async () => {
           view.packRemove = '';
+          view.packEdit = '';
           paint(sec, true);
-          await change('packedit', { op: 'remove', pack: p.id }, 'pack-' + p.id);
+          await change('packedit', { op: 'remove', pack: p.id }, key);
         }));
         yes.appendChild(tapButton('Keep it', 'gb', () => { view.packRemove = ''; paint(sec, true); }));
         ask.appendChild(yes);
-        row.appendChild(ask);
+        wrap.appendChild(ask);
       }
-
-      if (view.packEdit === p.id) {
-        const form = 'pack-edit-' + p.id;
-        const wrap = el('div', 'gform');
-        const fields = packForm(wrap, sec, form, p);
-        fields.appendChild(tapButton('Save the pack', 'go', async () => {
-          const f = packFields(form, p);
-          if (f.label === '') { setStatus('pack-' + p.id, 'Give the pack a label.', '', 'gno'); return; }
-          if (await change('packedit', { op: 'edit', pack: p.id, label: f.label, chem: f.chem, notes: f.notes }, 'pack-' + p.id)) {
-            drop(form);
-            view.packEdit = '';
-            paint(sec, true);
-          }
-        }));
-        fields.appendChild(tapButton('Cancel', 'linkish', () => { drop(form); view.packEdit = ''; paint(sec, true); }));
-        row.appendChild(wrap);
-      }
+      row.appendChild(wrap);
     }
-    const said = statusLine('pack-' + p.id);
+    const said = statusLine(key);
     said.className += ' gfull';
     row.appendChild(said);
     list.appendChild(row);
@@ -819,6 +857,34 @@ function whoWords(by) {
   return '';
 }
 
+function raceRow(r, all, sec) {
+  const row = el('div', 'grow');
+  const name = el('div', 'gname');
+  name.appendChild(el('b', '', str(r.label) || 'Race'));
+  name.appendChild(el('span', 'when', [when(r.at), str(r.layout), isNum(r.best) ? 'best ' + secs(r.best) : ''].filter(Boolean).join(' · ')));
+  const who = whoWords(str(r.by));
+  if (who && OBJECT_ID.test(str(r.pack))) name.appendChild(el('span', 'when', who));
+  row.appendChild(name);
+
+  const tagged = str(r.pack);
+  const choices = all.filter((p) => p.retired !== true || p.id === tagged);
+  const form = 'race-' + r.id;
+  const wrap = el('div', 'su gfull');
+  const pick = selectBox(wrap, sec, form, 'pack', 'Pack in ' + (str(r.label) || 'this race'),
+    [['none', 'Not recorded']].concat(choices.map((p) => [p.id, packLabel(p)])),
+    OBJECT_ID.test(tagged) ? tagged : 'none');
+  wrap.appendChild(tapButton('Save', 'go quiet', async () => {
+    const v = String(pick.input.value || 'none');
+    if (v !== 'none' && !OBJECT_ID.test(v)) return;
+    if (await change('pack', { pack: v, race: r.id }, form)) settled(form);
+  }));
+  wrap.appendChild(statusLine(form));
+  row.appendChild(wrap);
+  return row;
+}
+
+// Since the Garage rework (6 Nov 2026): only the races with no pack yet are
+// asked about; the rest wait, folded, to be put right.
 function buildRaces(box, sec) {
   if (!garage) return;
   const list = races();
@@ -829,35 +895,34 @@ function buildRaces(box, sec) {
     box.appendChild(card);
     return;
   }
-  card.appendChild(el('p', 'when', 'Say which pack was in the car for each race. It feeds your pack charts.'));
   const all = packs();
-  const rows = el('div', 'glist');
-  for (const r of list) {
-    const row = el('div', 'grow');
-    const name = el('div', 'gname');
-    name.appendChild(el('b', '', str(r.label) || 'Race'));
-    name.appendChild(el('span', 'when', [when(r.at), str(r.layout), isNum(r.best) ? 'best ' + secs(r.best) : ''].filter(Boolean).join(' · ')));
-    const who = whoWords(str(r.by));
-    if (who && OBJECT_ID.test(str(r.pack))) name.appendChild(el('span', 'when', who));
-    row.appendChild(name);
+  const waiting = list.filter((r) => !OBJECT_ID.test(str(r.pack)));
+  const done = list.filter((r) => OBJECT_ID.test(str(r.pack)));
 
-    const tagged = str(r.pack);
-    const choices = all.filter((p) => p.retired !== true || p.id === tagged);
-    const form = 'race-' + r.id;
-    const wrap = el('div', 'su gfull');
-    const pick = selectBox(wrap, sec, form, 'pack', 'Pack in ' + (str(r.label) || 'this race'),
-      [['none', 'Not recorded']].concat(choices.map((p) => [p.id, packLabel(p)])),
-      OBJECT_ID.test(tagged) ? tagged : 'none');
-    wrap.appendChild(tapButton('Save', 'go quiet', async () => {
-      const v = String(pick.input.value || 'none');
-      if (v !== 'none' && !OBJECT_ID.test(v)) return;
-      if (await change('pack', { pack: v, race: r.id }, form)) settled(form);
-    }));
-    wrap.appendChild(statusLine(form));
-    row.appendChild(wrap);
-    rows.appendChild(row);
+  if (waiting.length > 0) {
+    const nudge = el('div', 'gwait');
+    const words = el('div', '');
+    words.appendChild(el('b', '', plural(waiting.length, 'race needs', 'races need') + ' a pack'));
+    words.appendChild(el('span', 'when', 'Say which pack was in the car. It feeds your pack charts.'));
+    nudge.appendChild(words);
+    card.appendChild(nudge);
+    const rows = el('div', 'glist');
+    for (const r of waiting) rows.appendChild(raceRow(r, all, sec));
+    card.appendChild(rows);
+  } else {
+    card.appendChild(el('p', 'when', 'Every race has its pack. ✓'));
   }
-  card.appendChild(rows);
+
+  if (done.length > 0) {
+    const old = el('details', 'yd-change');
+    old.open = view.taggedRaces;
+    old.addEventListener('toggle', () => { view.taggedRaces = old.open; });
+    old.appendChild(el('summary', '', 'Races with a pack (' + done.length + ')'));
+    const rows = el('div', 'glist');
+    for (const r of done) rows.appendChild(raceRow(r, all, sec));
+    old.appendChild(rows);
+    card.appendChild(old);
+  }
   box.appendChild(card);
 }
 
@@ -1028,15 +1093,15 @@ function buildCharts(box, sec) {
   const take = takeaway(list);
   if (take) card.appendChild(el('p', 'gtake', take));
 
-  // The numbers.
+  // The numbers: four columns that fit a phone (6 Nov 2026, the Garage
+  // rework); races, best and ± go on a small line under the pack's name.
   const wrap = el('div', 'card');
   const table = el('table');
   const thead = el('thead');
   const hr = el('tr');
-  for (const [words, n] of [['Pack', false], ['Races', true], ['Best', true], ['Median', true], ['±', true], ['Fade', true], ['Gap', true]]) {
+  for (const [words, n] of [['Pack', false], ['Median', true], ['Fade', true], ['Gap', true]]) {
     const th = el('th', n ? 'n' : '', words);
     th.setAttribute('scope', 'col');
-    if (words === '±') th.setAttribute('title', 'Consistency: how much the laps vary (lower is steadier)');
     hr.appendChild(th);
   }
   thead.appendChild(hr);
@@ -1050,11 +1115,11 @@ function buildCharts(box, sec) {
     name.appendChild(sw);
     name.appendChild(document.createTextNode ? document.createTextNode(packLabel(p)) : el('span', '', packLabel(p)));
     if (p.enough !== true) name.appendChild(el('span', 'gtag', 'few races'));
+    const n = isNum(p.sessions) ? Math.round(p.sessions) : 0;
+    name.appendChild(el('span', 'when', [plural(n, 'race', 'races'), isNum(p.best) ? 'best ' + secs(p.best) : '',
+      isNum(p.spread) ? '±' + secs(p.spread) : ''].filter(Boolean).join(' · ')));
     tr.appendChild(name);
-    tr.appendChild(el('td', 'n', isNum(p.sessions) ? String(Math.round(p.sessions)) : '-'));
-    tr.appendChild(el('td', 'n', secs(p.best)));
     tr.appendChild(el('td', 'n', secs(p.median)));
-    tr.appendChild(el('td', 'n', secs(p.spread)));
     tr.appendChild(el('td', 'n', isNum(p.fade) ? signed(p.fade, 2) + 's' : '-'));
     tr.appendChild(el('td', 'n', isNum(p.gap) ? (p.gap <= 0.0005 ? 'quickest' : '+' + p.gap.toFixed(3)) : '-'));
     tbody.appendChild(tr);
@@ -1062,7 +1127,7 @@ function buildCharts(box, sec) {
   table.appendChild(tbody);
   wrap.appendChild(table);
   card.appendChild(wrap);
-  card.appendChild(el('p', 'when', 'Median is a normal lap. ± is how much your laps vary. Fade is how much slower you are at the end of a run than at the start. Gap is behind your quickest pack.'));
+  card.appendChild(el('p', 'when', 'Median is a normal lap. Fade is how much slower you are at the end of a run than at the start. Gap is behind your quickest pack. ± is how much your laps vary.'));
 
   // The two charts, one at a time.
   const tabs = el('div', 'rtabs');
@@ -1175,75 +1240,225 @@ function carFields(form, car, inputs) {
   return f;
 }
 
-function carCard(car, sec) {
-  const card = el('div', 'gcar' + (car.retired === true ? ' gmuted' : ''));
+// The car the carousel is on, which the setup sheet follows (6 Nov 2026,
+// the Garage rework): the one swiped to, else the one racing tonight, else
+// the first.
+function liveCars() {
+  return cars().filter((c) => c.retired !== true);
+}
+
+function carInView() {
+  const list = liveCars();
+  return list.find((c) => c.id === view.carAt) || list.find((c) => c.tonight === true) || list[0] || null;
+}
+
+function carFacts(car) {
+  return [str(car.chassisName), str(car.cls), str(car.number) ? '#' + str(car.number) : ''].filter(Boolean).join(' · ');
+}
+
+function focusOn(n) {
+  try { if (n && typeof n.focus === 'function') n.focus(); } catch (e) { /* nowhere to put it */ }
+}
+
+// The Manage buttons as last drawn, so closing the sheet hands focus back.
+const manageButtons = new Map();
+let sheetHeading = null;
+
+function openSheet(which, sec) {
+  view.sheet = which;
+  view.carEdit = '';
+  view.carPhotos = '';
+  view.photo = '';
+  view.photoRemove = false;
+  paint(sec, true);
+  focusOn(sheetHeading);
+}
+
+// What was typed stays as a draft, as it always has: Cancel is what drops it.
+function closeSheet(sec) {
+  const was = view.sheet;
+  view.sheet = '';
+  view.carEdit = '';
+  view.carPhotos = '';
+  view.photo = '';
+  view.photoRemove = false;
+  paint(sec, true);
+  focusOn(manageButtons.get(was));
+}
+
+// The big picture on a slide: the cover photo with the car's name over it.
+function carPicture(car) {
+  const cover = coverOf(car);
+  const pic = el('div', 'gpic' + (cover ? '' : ' none'));
+  if (cover) {
+    const im = el('img', '');
+    im.setAttribute('src', cover.thumb);
+    im.setAttribute('alt', 'Photo of ' + carName(car));
+    pic.appendChild(im);
+  }
+  if (car.tonight === true) pic.appendChild(el('span', 'gtag tonight', 'Racing tonight'));
+  const n = photosOf(car).length;
+  if (n > 0) pic.appendChild(el('span', 'gcount', plural(n, 'photo', 'photos')));
+  const over = el('div', 'gover');
+  over.appendChild(el('b', '', carName(car)));
+  const facts = carFacts(car);
+  if (facts) over.appendChild(el('span', '', facts));
+  if (str(car.body)) over.appendChild(el('span', '', 'Body: ' + str(car.body)));
+  pic.appendChild(over);
+  return pic;
+}
+
+function manageButton(car, sec) {
+  const b = tapButton('Manage', 'gb', () => openSheet(car.id, sec));
+  b.setAttribute('aria-haspopup', 'dialog');
+  manageButtons.set(car.id, b);
+  return b;
+}
+
+// One slide: the picture, then one main button and Manage. The car racing
+// tonight gets Log setup; any other car, Racing tonight.
+function carSlide(car, sec) {
+  const slide = el('div', 'gcar gslide');
+  slide.appendChild(carPicture(car));
+  const key = 'car-' + car.id;
+  const btns = el('div', 'gbtns');
+  if (car.tonight === true) {
+    btns.appendChild(tapButton('Log setup', 'gb pri', () => {
+      view.carAt = car.id;
+      paint('setup', false);
+      const s = document.getElementById('gs');
+      try { if (s && typeof s.scrollIntoView === 'function') s.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* it is just below */ }
+    }));
+  } else {
+    btns.appendChild(tapButton('Racing tonight', 'gb ton', () => { change('car', { op: 'tonight', car: car.id }, key); }));
+  }
+  btns.appendChild(manageButton(car, sec));
+  slide.appendChild(btns);
+  // Its words show in the sheet while the sheet is open on it.
+  if (view.sheet !== car.id) slide.appendChild(statusLine(key));
+  return slide;
+}
+
+// A retired car: a small row under Retired cars, with Unretire and Manage.
+function retiredRow(car, sec) {
+  const row = el('div', 'gcar gmuted');
   const cover = coverOf(car);
   if (cover) {
     const im = el('img', 'gthumb');
     im.setAttribute('src', cover.thumb);
     im.setAttribute('alt', 'Photo of ' + carName(car));
-    card.appendChild(im);
+    row.appendChild(im);
   } else {
     const none = el('div', 'gthumb');
     none.setAttribute('aria-hidden', 'true');
-    card.appendChild(none);
+    row.appendChild(none);
   }
-
   const name = el('div', 'gname');
   const b = el('b', '', carName(car));
-  if (car.tonight === true) b.appendChild(el('span', 'gtag tonight', 'Racing tonight'));
-  if (car.retired === true) b.appendChild(el('span', 'gtag', 'Retired'));
+  b.appendChild(el('span', 'gtag', 'Retired'));
   name.appendChild(b);
-  const facts = [str(car.chassisName), str(car.cls), str(car.number) ? '#' + str(car.number) : ''].filter(Boolean);
-  if (facts.length > 0) name.appendChild(el('span', 'when', facts.join(' · ')));
-  if (str(car.body)) name.appendChild(el('span', 'when', 'Body: ' + str(car.body)));
-  if (str(car.notes)) name.appendChild(el('span', 'when', str(car.notes)));
-  card.appendChild(name);
-
+  const facts = carFacts(car);
+  if (facts) name.appendChild(el('span', 'when', facts));
+  row.appendChild(name);
   const key = 'car-' + car.id;
   const btns = el('div', 'gbtns gwide');
-  btns.appendChild(tapButton('Edit', 'gb' + (view.carEdit === car.id ? ' on' : ''), () => {
-    view.carEdit = view.carEdit === car.id ? '' : car.id;
-    paint(sec, true);
-  }));
-  if (car.retired !== true && car.tonight !== true) {
-    btns.appendChild(tapButton('Racing tonight', 'gb', () => { change('car', { op: 'tonight', car: car.id }, key); }));
+  btns.appendChild(tapButton('Unretire', 'gb', () => { change('car', { op: 'unretire', car: car.id }, key); }));
+  btns.appendChild(manageButton(car, sec));
+  row.appendChild(btns);
+  if (view.sheet !== car.id) {
+    const said = statusLine(key);
+    said.className += ' gwide';
+    row.appendChild(said);
   }
-  btns.appendChild(tapButton(car.retired === true ? 'Unretire' : 'Retire', 'gb', () => {
-    change('car', { op: car.retired === true ? 'unretire' : 'retire', car: car.id }, key);
-  }));
-  const shots = photosOf(car);
-  btns.appendChild(tapButton('Photos (' + shots.length + ')', 'gb' + (view.carPhotos === car.id ? ' on' : ''), () => {
-    view.carPhotos = view.carPhotos === car.id ? '' : car.id;
-    view.photo = '';
-    view.photoRemove = false;
-    paint(sec, true);
-  }));
-  card.appendChild(btns);
+  return row;
+}
 
-  if (view.carEdit === car.id) {
-    const form = 'car-edit-' + car.id;
-    const wrap = el('div', 'gform gwide');
-    const inputs = carForm(wrap, sec, form, car);
-    inputs.box.appendChild(tapButton('Save the car', 'go', async () => {
-      const f = carFields(form, car, inputs);
-      if (f.name === '') { setStatus(key, 'Give the car a name.', '', 'gno'); return; }
-      if (await change('car', Object.assign({ op: 'edit', car: car.id }, f), key)) {
-        drop(form);
-        view.carEdit = '';
+// Manage: Edit details, Photos and Retire for one car - or the form for a
+// new one - in a sheet from the foot of the screen.
+function manageSheet(sec) {
+  const adding = view.sheet === 'add';
+  const car = adding ? null : cars().find((c) => c.id === view.sheet);
+  if (!adding && !car) {
+    view.sheet = '';
+    return null;
+  }
+  const sheet = el('div', 'gsheet');
+  // Me's sideways swipe between spaces leaves the sheet alone.
+  sheet.setAttribute('data-noswipe', '');
+  sheet.addEventListener('click', (e) => { if (e && e.target === sheet) closeSheet(sec); });
+  sheet.addEventListener('keydown', (e) => { if (e && e.key === 'Escape') closeSheet(sec); });
+  const pane = el('div', 'gpane');
+  pane.setAttribute('role', 'dialog');
+  pane.setAttribute('aria-modal', 'true');
+  pane.setAttribute('aria-label', adding ? 'Add a car' : 'Manage ' + carName(car));
+  pane.appendChild(el('div', 'ggrab'));
+  const h = el('h3', '', adding ? 'Add a car' : carName(car));
+  h.setAttribute('tabindex', '-1');
+  sheetHeading = h;
+  pane.appendChild(h);
+
+  if (adding) {
+    const inputs = carForm(pane, sec, 'car-add', null);
+    inputs.box.appendChild(tapButton('Add the car', 'go', async () => {
+      const f = carFields('car-add', null, inputs);
+      if (f.name === '') { setStatus('car-add', 'Give the car a name.', '', 'gno'); return; }
+      if (await change('car', Object.assign({ op: 'add', car: newId() }, f), 'car-add')) {
+        drop('car-add');
+        view.sheet = '';
         paint(sec, true);
       }
     }));
-    inputs.box.appendChild(tapButton('Cancel', 'linkish', () => { drop(form); view.carEdit = ''; paint(sec, true); }));
-    card.appendChild(wrap);
+    inputs.box.appendChild(tapButton('Cancel', 'linkish', () => { drop('car-add'); closeSheet(sec); }));
+    pane.appendChild(statusLine('car-add'));
+  } else {
+    const key = 'car-' + car.id;
+    const facts = carFacts(car);
+    if (facts) pane.appendChild(el('p', 'when', facts));
+    if (str(car.notes)) pane.appendChild(el('p', 'when', str(car.notes)));
+    const btns = el('div', 'gbtns');
+    btns.appendChild(tapButton('Edit details', 'gb' + (view.carEdit === car.id ? ' on' : ''), () => {
+      view.carEdit = view.carEdit === car.id ? '' : car.id;
+      view.carPhotos = '';
+      paint(sec, true);
+    }));
+    btns.appendChild(tapButton('Photos (' + photosOf(car).length + ')', 'gb' + (view.carPhotos === car.id ? ' on' : ''), () => {
+      view.carPhotos = view.carPhotos === car.id ? '' : car.id;
+      view.carEdit = '';
+      view.photo = '';
+      view.photoRemove = false;
+      paint(sec, true);
+    }));
+    const retired = car.retired === true;
+    btns.appendChild(tapButton(retired ? 'Unretire' : 'Retire this car', retired ? 'gb' : 'gb warn', () => {
+      closeSheet(sec);
+      change('car', { op: retired ? 'unretire' : 'retire', car: car.id }, key);
+    }));
+    pane.appendChild(btns);
+
+    if (view.carEdit === car.id) {
+      const form = 'car-edit-' + car.id;
+      const wrap = el('div', 'gform');
+      const inputs = carForm(wrap, sec, form, car);
+      inputs.box.appendChild(tapButton('Save the car', 'go', async () => {
+        const f = carFields(form, car, inputs);
+        if (f.name === '') { setStatus(key, 'Give the car a name.', '', 'gno'); return; }
+        if (await change('car', Object.assign({ op: 'edit', car: car.id }, f), key)) {
+          drop(form);
+          view.carEdit = '';
+          view.sheet = '';
+          paint(sec, true);
+        }
+      }));
+      inputs.box.appendChild(tapButton('Cancel', 'linkish', () => { drop(form); view.carEdit = ''; paint(sec, true); }));
+      pane.appendChild(wrap);
+    }
+
+    if (view.carPhotos === car.id) pane.appendChild(photoPanel(car, sec));
+    pane.appendChild(statusLine(key));
   }
-
-  if (view.carPhotos === car.id) card.appendChild(photoPanel(car, sec));
-
-  const said = statusLine(key);
-  said.className += ' gwide';
-  card.appendChild(said);
-  return card;
+  pane.appendChild(tapButton('Done', 'gb gdone', () => closeSheet(sec)));
+  sheet.appendChild(pane);
+  return sheet;
 }
 
 function photoPanel(car, sec) {
@@ -1412,16 +1627,17 @@ async function sendPhoto(car, data, key) {
   return false;
 }
 
-// The cars as a row to swipe through, with a dot for each. Which car is in
-// view is kept by id, so a redraw (every read, every change) stays on it;
-// the first time, the one racing tonight.
+// The cars as a row to swipe through, with a dot for each and one for Add a
+// car. Which car is in view is kept by id, so a redraw (every read, every
+// change) stays on it; the first time, the one racing tonight. The setup
+// sheet below follows it.
 function carousel(card, list, live) {
   const dots = el('div', 'gdots');
   dots.setAttribute('aria-label', 'Your cars');
   const slides = Array.from(list.children);
   const go = (i, smooth) => {
     const s = slides[i];
-    if (!s) return;
+    if (!s || typeof list.scrollTo !== 'function') return;
     list.scrollTo({ left: s.offsetLeft - (list.clientWidth - s.offsetWidth) / 2, behavior: smooth ? 'smooth' : 'auto' });
   };
   live.forEach((c, i) => {
@@ -1431,13 +1647,18 @@ function carousel(card, list, live) {
     d.addEventListener('click', () => go(i, true));
     dots.appendChild(d);
   });
+  const plus = el('button', 'plus');
+  plus.type = 'button';
+  plus.setAttribute('aria-label', 'Add a car');
+  plus.addEventListener('click', () => go(live.length, true));
+  dots.appendChild(plus);
   card.appendChild(dots);
 
   const mark = (i) => {
     Array.from(dots.children).forEach((d, j) => d.setAttribute('aria-current', j === i ? 'true' : 'false'));
   };
-  let at = live.findIndex((c) => c.id === view.carAt);
-  if (at < 0) at = Math.max(0, live.findIndex((c) => c.tonight === true));
+  const inView = carInView();
+  const at = Math.max(0, live.findIndex((c) => inView && c.id === inView.id));
   mark(at);
   let t = 0;
   list.addEventListener('scroll', () => {
@@ -1448,8 +1669,13 @@ function carousel(card, list, live) {
       slides.forEach((s, j) => {
         if (Math.abs(s.offsetLeft + s.offsetWidth / 2 - mid) < Math.abs(slides[best].offsetLeft + slides[best].offsetWidth / 2 - mid)) best = j;
       });
-      view.carAt = live[best].id;
       mark(best);
+      // The Add a car slide leaves the setup sheet on the last car.
+      const c = live[best];
+      if (c && c.id !== view.carAt) {
+        view.carAt = c.id;
+        paint('setup', false);
+      }
     }, 80);
   }, { passive: true });
   // Once it is on the page and has a size - which, folded into Me, is only
@@ -1465,19 +1691,31 @@ function carousel(card, list, live) {
   }
 }
 
+// At the head of the Garage, always - one car or many - and no card round
+// it: the photos are the heading.
 function buildCars(box, sec) {
   if (!garage) return;
+  manageButtons.clear();
+  sheetHeading = null;
   const all = cars();
-  const card = el('section', 'gx');
-  card.appendChild(el('h2', '', 'My garage'));
   const live = all.filter((c) => c.retired !== true);
   const gone = all.filter((c) => c.retired === true);
-  if (live.length === 0) card.appendChild(el('p', 'note', 'No cars yet. Add one below.'));
-  const swipe = live.length > 1;
-  const list = el('div', 'glist' + (swipe ? ' gcars' : ''));
-  for (const c of live) list.appendChild(carCard(c, sec));
-  card.appendChild(list);
-  if (swipe) carousel(card, list, live);
+  const top = el('section', 'gtopcars');
+  top.setAttribute('aria-label', 'Your cars');
+
+  const list = el('div', 'gcars');
+  for (const c of live) list.appendChild(carSlide(c, sec));
+  const last = el('div', 'gslide');
+  const add = tapButton('', 'gpic gadd', () => openSheet('add', sec));
+  add.appendChild(el('b', '', '+ Add a car'));
+  add.appendChild(el('span', '', live.length === 0 ? 'Your first car: its name, chassis and class' : 'Name, chassis and class, then photos'));
+  add.setAttribute('aria-haspopup', 'dialog');
+  manageButtons.set('add', add);
+  last.appendChild(add);
+  list.appendChild(last);
+  top.appendChild(list);
+  carousel(top, list, live);
+  if (view.sheet !== 'add') top.appendChild(statusLine('car-add'));
 
   if (gone.length > 0) {
     const old = el('details', 'yd-change');
@@ -1485,28 +1723,16 @@ function buildCars(box, sec) {
     old.addEventListener('toggle', () => { view.retired = old.open; });
     old.appendChild(el('summary', '', 'Retired cars (' + gone.length + ')'));
     const olist = el('div', 'glist');
-    for (const c of gone) olist.appendChild(carCard(c, sec));
+    for (const c of gone) olist.appendChild(retiredRow(c, sec));
     old.appendChild(olist);
-    card.appendChild(old);
+    top.appendChild(old);
   }
+  box.appendChild(top);
 
-  const add = el('details', 'yd-change');
-  add.open = view.carAdd;
-  add.addEventListener('toggle', () => { view.carAdd = add.open; });
-  add.appendChild(el('summary', '', 'Add a car'));
-  const inputs = carForm(add, sec, 'car-add', null);
-  inputs.box.appendChild(tapButton('Add the car', 'go', async () => {
-    const f = carFields('car-add', null, inputs);
-    if (f.name === '') { setStatus('car-add', 'Give the car a name.', '', 'gno'); return; }
-    if (await change('car', Object.assign({ op: 'add', car: newId() }, f), 'car-add')) {
-      drop('car-add');
-      view.carAdd = false;
-      paint(sec, true);
-    }
-  }));
-  card.appendChild(add);
-  card.appendChild(statusLine('car-add'));
-  box.appendChild(card);
+  if (view.sheet !== '') {
+    const sheet = manageSheet(sec);
+    if (sheet) box.appendChild(sheet);
+  }
 }
 
 // ---- 6. setup sheet
@@ -1599,31 +1825,16 @@ function sheetValue(form, f, initial) {
 function buildSetup(box, sec) {
   if (!garage) return;
   const card = el('section', 'gx');
-  card.appendChild(el('h2', '', 'Setup sheet'));
-  const list = cars().filter((c) => c.retired !== true);
-  if (list.length === 0) {
+  // The car the carousel is on (6 Nov 2026, the Garage rework): swipe to a
+  // car and this is its sheet - no second way to pick one.
+  const car = carInView();
+  if (!car) {
+    card.appendChild(el('h2', '', 'Setup sheet'));
     card.appendChild(el('p', 'note', 'Add a car to your garage first, and its setup sheet shows here.'));
     box.appendChild(card);
     return;
   }
-  if (!list.some((c) => c.id === view.setupCar)) view.setupCar = (list.find((c) => c.tonight === true) || list[0]).id;
-  const car = list.find((c) => c.id === view.setupCar);
-
-  const top = el('div', 'su');
-  const label = el('label', 'f', 'Car');
-  const pick = document.createElement('select');
-  for (const c of list) {
-    const o = document.createElement('option');
-    o.value = c.id;
-    o.textContent = carName(c) + (c.tonight === true ? ' (racing tonight)' : '');
-    if (c.id === car.id) o.selected = true;
-    pick.appendChild(o);
-  }
-  pick.value = car.id;
-  pick.addEventListener('change', () => { view.setupCar = String(pick.value || ''); paint(sec, true); });
-  label.appendChild(pick);
-  top.appendChild(label);
-  card.appendChild(top);
+  card.appendChild(el('h2', '', 'Setup · ' + carName(car)));
 
   const sheet = sheetOf(car);
   const setups = setupsOf(car);
@@ -1735,7 +1946,7 @@ section('packs', 'gp', () => [garage ? [garage.packs, garage.chemistries] : null
 section('races', 'gr', () => [garage ? [garage.races, garage.packs] : null], buildRaces);
 section('charts', 'gc', () => [garage ? garage.stats : null], buildCharts);
 section('cars', 'gg', () => [garage ? [garage.cars, garage.chassis, garage.classes, garage.limits] : null], buildCars);
-section('setup', 'gs', () => [garage ? [garage.cars, garage.sheets, garage.races] : null], buildSetup);
+section('setup', 'gs', () => [garage ? [garage.cars, garage.sheets, garage.races] : null, garage ? (carInView() || {}).id || '' : ''], buildSetup);
 
 function start() {
   if (!CODE) {
@@ -1768,7 +1979,7 @@ export function garagePage(club: string, clubName: string, context: PageContext 
     path: `/c/${club}/garage`,
     body: `<style>${GARAGE_CSS}</style>` +
       '<div id="gh"></div><div id="gm"><p class="note">Loading&hellip;</p></div>' +
-      '<div id="gp"></div><div id="gr"></div><div id="gc"></div><div id="gg"></div><div id="gs"></div>',
+      '<div id="gg"></div><div id="gs"></div><div id="gp"></div><div id="gr"></div><div id="gc"></div>',
     script: GARAGE_PAGE_JS + GARAGE_JS + GARAGE_OUT_JS,
     noindex: true,
   }, context);
@@ -1782,11 +1993,12 @@ export function garagePage(club: string, clubName: string, context: PageContext 
  * Garage page's own bits (GARAGE_PAGE_JS) - the night puts the code in the
  * fragment and has their name at the top.
  */
-// Cars first on Me (the mix's car-first Garage), then the packs, the races'
-// packs, the pack charts and the setup sheet.
+// The cars on top, then the setup sheet for the car in view (6 Nov 2026,
+// the Garage rework, option A), then the packs, the races' packs and the
+// pack charts. The Garage page has the same order.
 export const GARAGE_EMBED_BODY =
   '<div id="me-garage"><div id="gh"></div><div id="gm"></div>' +
-  '<div id="gg"></div><div id="gp"></div><div id="gr"></div><div id="gc"></div><div id="gs"></div></div>';
+  '<div id="gg"></div><div id="gs"></div><div id="gp"></div><div id="gr"></div><div id="gc"></div></div>';
 
 export function garageEmbedScript(): string {
   return "\n;(() => {\n" + GARAGE_JS + "\n})();\n";

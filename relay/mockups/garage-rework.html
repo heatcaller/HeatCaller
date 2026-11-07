@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Garage Rework</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600;700&display=swap">
+<style>
+/* A review sheet: the plan, then the three Garage options as phones side by side. Phone colours are the club look tokens (Pit Wall kit). */
+:root {
+  --page: #F3F1F7; --ink: #1B1530; --soft: #615A78; --line: #DDD8E8; --card: #FFFFFF; --hi: #D81B7A;
+  --f-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page: #0E0A1A; --ink: #EEEAF7; --soft: #A39BBD; --line: #2B2443; --card: #171128; --hi: #FF5FAE; color-scheme: dark } }
+:root[data-theme="dark"] { --page: #0E0A1A; --ink: #EEEAF7; --soft: #A39BBD; --line: #2B2443; --card: #171128; --hi: #FF5FAE; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.55 var(--f-body); }
+.wrap { max-width: 1160px; margin: 0 auto; padding: 28px 16px 80px; }
+h1, h2 { font-family: var(--f-display); letter-spacing: .01em; text-wrap: balance; }
+h1 { font-size: 2.6rem; line-height: 1; margin: 0 0 8px; }
+h2 { font-size: 1.5rem; margin: 0 0 6px; }
+.eyebrow { font-weight: 600; font-size: .72rem; text-transform: uppercase; letter-spacing: .14em; color: var(--hi); margin-bottom: 6px; }
+.lede { color: var(--soft); max-width: 70ch; margin: 0; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 24px 0 8px; }
+.box { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; }
+.box ul { margin: 6px 0 0; padding-left: 18px; }
+.box li { margin: 3px 0; }
+.trio { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 26px; justify-items: center; margin-top: 34px; }
+.slot { display: grid; gap: 10px; justify-items: center; width: 100%; max-width: 340px; align-content: start; }
+.cap { width: 100%; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.cap b { font-family: var(--f-display); font-size: 1.3rem; }
+.cap span { color: var(--soft); font-size: .8rem; }
+.why { font-size: .86rem; color: var(--soft); margin: 0; width: 100%; }
+.why ul { margin: 4px 0 0; padding-left: 18px; }
+.rec { color: var(--hi); font-weight: 700; }
+
+/* ================= THE PHONE ================= */
+.phone {
+  --bg:#0F0722; --surface:#1A0F3A; --primary:#FF2E9A; --on-primary:#FFFFFF; --accent:#2EE6FF;
+  --text:#F7F2FF; --muted:#9E8AC7; --border:#33215C; --good:#3DD68C; --bad:#FF5C7A; --warn:#F5B83D;
+  --tonal: color-mix(in srgb, var(--primary) 16%, var(--surface));
+  --on-tonal: color-mix(in srgb, var(--primary) 55%, var(--text));
+  --ring: color-mix(in srgb, var(--accent) 70%, transparent);
+  width: 100%; max-width: 330px; height: 680px; border-radius: 34px; padding: 10px; background: #08060D;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 18px 40px rgba(10,5,25,.28);
+}
+.scr { position: relative; height: 100%; border-radius: 26px; overflow: hidden; background: var(--bg); color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; }
+.status { height: 22px; flex: none; display: flex; justify-content: space-between; padding: 6px 18px 0; font-size: 11px; font-weight: 600; opacity: .8; }
+.body { flex: 1; overflow-y: auto; padding: 10px 14px 18px; display: flex; flex-direction: column; gap: 12px; scrollbar-width: none; }
+.body::-webkit-scrollbar { display: none; }
+.body > * { flex-shrink: 0; }
+.mh { display: flex; align-items: center; gap: 10px; }
+.mh .av { width: 34px; height: 34px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 24%, var(--surface)); display: grid; place-items: center; font-weight: 800; font-size: 12px; }
+.mh b { font-size: 17px; font-weight: 800; display: block; line-height: 1.1; }
+.mh small { color: var(--muted); font-size: 11.5px; }
+.sw4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; padding: 3px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  position: sticky; top: -10px; z-index: 3; }
+.sw4 span { text-align: center; font-size: 12px; font-weight: 700; padding: 8px 0; border-radius: 11px; color: var(--muted); }
+.sw4 span.on { background: var(--primary); color: var(--on-primary); }
+.k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); font-weight: 700; }
+.mut { color: var(--muted); font-size: 12.5px; }
+.num { font-variant-numeric: tabular-nums; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.card h4 { margin: 0; font-size: 15px; font-weight: 800; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.card h4 small { font-weight: 600; color: var(--muted); font-size: 11.5px; }
+.row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.row .grow { flex: 1; min-width: 0; }
+.row .grow b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+.list > .row { padding: 9px 0; border-top: 1px solid var(--border); }
+.list > .row:first-child { border-top: 0; }
+.chip { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 4px 8px; border-radius: 999px; white-space: nowrap;
+  background: color-mix(in srgb, var(--muted) 20%, transparent); color: var(--muted); }
+.chip.ok { background: color-mix(in srgb, var(--good) 20%, transparent); color: var(--good); }
+.chip.warn { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+.chip.solid { background: var(--good); color: var(--bg); }
+.field { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 12px; }
+.field .in { min-height: 40px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); display: flex; align-items: center; justify-content: space-between; padding: 0 12px; font-weight: 500; font-size: 13.5px; }
+.field .in i { font-style: normal; color: var(--muted); font-size: 11px; }
+.f2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.b { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 16px; border-radius: 14px;
+  font: 700 14px/1 system-ui, -apple-system, "Segoe UI", sans-serif; border: 1px solid transparent; cursor: pointer; white-space: nowrap; }
+.b:active { transform: scale(.97); }
+.b:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.b.sm { min-height: 36px; padding: 0 12px; font-size: 12.5px; }
+.b.full { width: 100%; }
+.b-pri { background: var(--primary); color: var(--on-primary); }
+.b-ton { background: var(--tonal); color: var(--on-tonal); }
+.b-out { background: transparent; color: var(--text); border-color: var(--border); }
+.b-gho { background: transparent; color: var(--accent); padding: 0 6px; }
+.b-dan { background: color-mix(in srgb, var(--bad) 16%, var(--surface)); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
+.brow { display: flex; gap: 8px; }
+.brow > .b { flex: 1 1 0; }
+svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.sw { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 6px; }
+
+/* The car "photo": a stand-in picture, each car its own colour. */
+.ph { position: relative; border-radius: 14px; overflow: hidden; aspect-ratio: 4 / 3;
+  background: radial-gradient(90% 70% at 70% 20%, color-mix(in srgb, var(--c) 45%, transparent), transparent 70%),
+              linear-gradient(170deg, #2a2240, #120c22 70%); }
+.ph svg.car { position: absolute; left: 8%; right: 8%; bottom: 14%; width: 84%; height: auto; aspect-ratio: 200 / 70; color: var(--c); }
+.ph .floor { position: absolute; left: 0; right: 0; bottom: 0; height: 22%; background: linear-gradient(transparent, rgba(0,0,0,.45)); }
+
+/* Option A and B: the carousel */
+.car-rail { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -14px; padding: 0 14px 2px; scrollbar-width: none; overscroll-behavior-x: contain; }
+.car-rail::-webkit-scrollbar { display: none; }
+.slide { flex: 0 0 88%; scroll-snap-align: center; display: flex; flex-direction: column; gap: 8px; }
+.slide .ph { box-shadow: 0 0 0 1px var(--border); }
+.slide .over { position: absolute; left: 12px; right: 12px; bottom: 10px; display: flex; justify-content: space-between; align-items: end; gap: 8px; }
+.slide .over b { font-size: 20px; font-weight: 800; line-height: 1.05; text-shadow: 0 1px 8px rgba(0,0,0,.6); }
+.slide .over small { display: block; font-size: 11.5px; color: #E6DDF7; font-weight: 600; text-shadow: 0 1px 6px rgba(0,0,0,.6); }
+.slide .tag { position: absolute; top: 10px; left: 10px; }
+.slide .cnt { position: absolute; top: 10px; right: 10px; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: rgba(0,0,0,.45); color: #fff; }
+.slide.add .ph { display: grid; place-items: center; background: transparent; border: 2px dashed var(--border); box-shadow: none; color: var(--accent); text-align: center; }
+.slide.add .ph b { display: block; font-size: 17px; margin-top: 6px; }
+.slide.short .ph { aspect-ratio: 16 / 9; }
+.slide.short .ph svg.car { left: 34%; width: 62%; bottom: 40%; }
+.dots { display: flex; justify-content: center; gap: 6px; }
+.dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--border); transition: width .2s; }
+.dots i.on { width: 18px; border-radius: 4px; background: var(--accent); }
+.dots i.plus { background: transparent; border: 1px solid var(--muted); }
+
+/* Option B: Setup | Packs | Charts */
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 3px; border-radius: 14px; border: 1px solid var(--border); }
+.seg button { font: 700 12.5px system-ui, sans-serif; color: var(--muted); background: none; border: 0; border-radius: 11px; min-height: 36px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--tonal); color: var(--on-tonal); }
+.panel[hidden] { display: none; }
+
+/* Option C: tonight's rig */
+.rig { border-radius: 18px; padding: 14px; display: grid; gap: 10px;
+  background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 60%),
+              linear-gradient(160deg, color-mix(in srgb, var(--primary) 28%, var(--surface)), var(--surface));
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border)); }
+.rig .top { display: grid; grid-template-columns: 112px 1fr; gap: 12px; align-items: center; }
+.rig .ph { aspect-ratio: 4 / 3; border-radius: 12px; }
+.rig .k { color: var(--primary); }
+.rig .nm { font-size: 19px; font-weight: 800; line-height: 1.1; }
+.trip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.trip div { background: color-mix(in srgb, var(--bg) 55%, transparent); border-radius: 12px; padding: 7px 9px; display: grid; gap: 1px; min-width: 0; }
+.trip small { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.trip b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chips { display: flex; gap: 8px; overflow-x: auto; margin: 0 -14px; padding: 0 14px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.cchip { flex: none; width: 92px; display: grid; gap: 4px; font-size: 11.5px; font-weight: 700; text-align: center; }
+.cchip .ph { border-radius: 10px; box-shadow: 0 0 0 1px var(--border); }
+.cchip.on .ph { box-shadow: 0 0 0 2px var(--accent); }
+.cchip.add .ph { background: transparent; border: 2px dashed var(--border); box-shadow: none; display: grid; place-items: center; color: var(--accent); font-size: 22px; }
+
+/* The Manage sheet (A) */
+.sheet { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; justify-content: end; background: rgba(5,2,12,.55); }
+.sheet[hidden] { display: none; }
+.sheet .pane { background: var(--surface); border-top: 1px solid var(--border); border-radius: 22px 22px 0 0; padding: 10px 16px 18px; display: grid; gap: 8px; }
+.sheet .grab { width: 38px; height: 4px; border-radius: 4px; background: var(--border); margin: 0 auto 4px; }
+.sheet .opt { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 4px; border-top: 1px solid var(--border); font-weight: 600; }
+.sheet .opt:first-of-type { border-top: 0; }
+.sheet .opt.bad { color: var(--bad); }
+.mini { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.mini th, .mini td { padding: 6px 4px; text-align: right; border-top: 1px solid var(--border); }
+.mini th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; border-top: 0; }
+.mini th:first-child, .mini td:first-child { text-align: left; }
+.nudge { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: color-mix(in srgb, var(--warn) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); }
+.nudge b { font-size: 13.5px; }
+.chart { width: 100%; height: 86px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="car" viewBox="0 0 200 70">
+    <path fill="currentColor" d="M14 50c0-8 4-13 12-15l22-6c8-10 22-18 46-18h26c16 0 28 7 38 16l18 4c8 2 12 7 12 14v5H14z"/>
+    <path fill="rgba(255,255,255,.28)" d="M70 30c8-8 18-12 30-12h18c10 0 18 4 25 11z"/>
+    <circle cx="52" cy="54" r="13" fill="#0b0814"/><circle cx="52" cy="54" r="6" fill="#4b4560"/>
+    <circle cx="150" cy="54" r="13" fill="#0b0814"/><circle cx="150" cy="54" r="6" fill="#4b4560"/>
+    <rect x="168" y="28" width="22" height="4" rx="2" fill="currentColor"/>
+  </symbol>
+</svg>
+
+<div class="wrap">
+  <div class="eyebrow">Relay · Me · Garage</div>
+  <h1>Garage rework: three options</h1>
+  <p class="lede">The Garage space on Me, three ways. Every phone works: swipe the cars, tap Manage in A, the tabs in B and the car chips in C. The cars, packs and numbers are made up. The look is the Pit Wall kit on the Synthwave club look.</p>
+
+  <div class="cols">
+    <div class="box"><b>Today</b><ul>
+      <li>The carousel shows only with 2+ cars, inside the "My garage" card</li>
+      <li>The setup sheet has its own car dropdown, so it can show a different car from the carousel</li>
+      <li>Four buttons on every car, and Retire is as easy to hit as Edit</li>
+      <li>One pack picker per race, and a 7-column pack table</li>
+    </ul></div>
+    <div class="box"><b>True in all three</b><ul>
+      <li>Only races with no pack yet are asked about ("3 races need a pack")</li>
+      <li>Pack table cut to Pack · Median · Fade · Gap</li>
+      <li>Retire and Remove sit behind Manage</li>
+      <li>No changes to the data, the laptop or the contract</li>
+    </ul></div>
+  </div>
+
+  <div class="trio">
+
+    <!-- ================= A ================= -->
+    <div class="slot">
+      <div class="cap"><b>A · Car carousel on top</b><span class="rec">Recommended</span></div>
+      <div class="phone"><div class="scr" id="pa">
+        <div class="status"><span>8:41</span><span>●●● 5G</span></div>
+        <div class="body">
+          <div class="mh"><div class="av">SR</div><div><b>Sam Rowe</b><small>Thursday club night · Heat 3 next</small></div></div>
+          <div class="sw4"><span>Tonight</span><span>Races</span><span class="on">Garage</span><span>Stats</span></div>
+
+          <div class="car-rail" data-rail="a">
+            <div class="slide" data-car="MR-03 Red">
+              <div class="ph" style="--c:#FF4D6D"><span class="chip solid tag">Racing tonight</span><span class="cnt">3 photos</span><svg class="car"><use href="#car"/></svg><div class="floor"></div>
+                <div class="over"><div><b>MR-03 Red</b><small>Kyosho MR-03 · Stock · #17</small></div></div></div>
+              <div class="brow"><button class="b b-pri sm" type="button">Log setup</button><button class="b b-out sm" type="button" data-manage>Manage</button></div>
+            </div>
+            <div class="slide" data-car="GL Blue">
+              <div class="ph" style="--c:#4DA3FF"><span class="cnt">1 photo</span><svg class="car"><use href="#car"/></svg><div class="floor"></div>
+                <div class="over"><div><b>GL Blue</b><small>GL-Racing GLR · Modified · #17</small></div></div></div>
+              <div class="brow"><button class="b b-ton sm" type="button">Racing tonight</button><button class="b b-out sm" type="button" data-manage>Manage</button></div>
+            </div>
+            <div class="slide" data-car="PN Spare">
+              <div class="ph" style="--c:#F5C342"><span class="cnt">No photo</span><svg class="car"><use href="#car"/></svg><div class="floor"></div>
+                <div class="over"><div><b>PN Spare</b><small>PN 2.5 W · Stock</small></div></div></div>
+              <div class="brow"><button class="b b-ton sm" type="button">Racing tonight</button><button class="b b-out sm" type="button" data-manage>Manage</button></div>
+            </div>
+            <div class="slide add">
+              <div class="ph"><div><svg class="i" style="width:30px;height:30px"><path d="M12 5v14M5 12h14"/></svg><b>Add a car</b><span class="mut">Name, chassis, class, photo</span></div></div>
+            </div>
+          </div>
+          <div class="dots" data-dots="a"><i class="on"></i><i></i><i></i><i class="plus"></i></div>
+
+          <div class="card">
+            <h4><span>Setup · <span data-carname="a">MR-03 Red</span></span><small>Club sheet</small></h4>
+            <span class="mut">Started from your last setup (Tue 4 Nov). Change what you changed.</span>
+            <div class="f2">
+              <div class="field">Tyres<div class="in">Sweep 30 <i>▾</i></div></div>
+              <div class="field">Pinion<div class="in">11T</div></div>
+              <div class="field">Spring F<div class="in">Soft</div></div>
+              <div class="field">Ride height<div class="in">3.0 mm</div></div>
+            </div>
+            <span class="b-gho mut" style="font-size:12.5px;font-weight:700;color:var(--accent)">Show the whole sheet (14 more)</span>
+            <button class="b b-pri full" type="button">Add to my setup log</button>
+            <span class="mut">Recent setups (6) · last changed: pinion 11T (was 12T)</span>
+          </div>
+
+          <div class="card">
+            <h4><span>Battery packs</span><small>4 packs</small></h4>
+            <div class="nudge"><svg class="i" style="color:var(--warn)"><path d="M12 8v5M12 16.5v.5"/><circle cx="12" cy="12" r="9"/></svg><div class="grow"><b>3 races need a pack</b><div class="mut">So the charts learn from them</div></div><button class="b b-ton sm" type="button">Say</button></div>
+            <div class="list">
+              <div class="row"><div class="grow"><b>Blue 2</b><span class="mut">LiPo · 14 races</span></div><span class="chip ok">In the car</span></div>
+              <div class="row"><div class="grow"><b>Red 1</b><span class="mut">LiPo · 9 races</span></div><button class="b b-out sm" type="button">Put in</button></div>
+              <div class="row"><div class="grow"><b>Club 4</b><span class="mut">NiMH · 3 races</span></div><button class="b b-out sm" type="button">Put in</button></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h4><span>Pack charts</span><small>All layouts</small></h4>
+            <b style="font-size:13.5px">Blue 2 is your quickest and holds its pace best; Red 1 fades 0.3s by the end.</b>
+            <table class="mini num"><thead><tr><th>Pack</th><th>Median</th><th>Fade</th><th>Gap</th></tr></thead><tbody>
+              <tr><td><span class="sw" style="background:var(--accent)"></span>Blue 2</td><td>9.412</td><td>+0.08s</td><td>quickest</td></tr>
+              <tr><td><span class="sw" style="background:var(--primary)"></span>Red 1</td><td>9.501</td><td>+0.31s</td><td>+0.089</td></tr>
+            </tbody></table>
+          </div>
+        </div>
+
+        <div class="sheet" hidden data-sheet>
+          <div class="pane">
+            <div class="grab"></div>
+            <b style="font-size:16px" data-sheetname>MR-03 Red</b>
+            <div class="opt"><svg class="i"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>Edit details</div>
+            <div class="opt"><svg class="i"><rect x="3" y="6" width="18" height="14" rx="3"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l2-2h4l2 2"/></svg>Photos · choose the cover</div>
+            <div class="opt bad"><svg class="i"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>Retire this car</div>
+            <button class="b b-out full" type="button" data-close>Done</button>
+          </div>
+        </div>
+      </div></div>
+      <div class="why"><ul>
+        <li>The carousel is always at the top, even with one car. The last slide adds a car.</li>
+        <li>Swipe a car and the setup sheet below switches to it. Try it.</li>
+        <li>Each car has one main button. Everything else is under Manage.</li>
+        <li>The page is long, but it's in the order you'd use it.</li>
+      </ul></div>
+    </div>
+
+    <!-- ================= B ================= -->
+    <div class="slot">
+      <div class="cap"><b>B · Carousel + tabs</b><span>Shortest page</span></div>
+      <div class="phone"><div class="scr">
+        <div class="status"><span>8:41</span><span>●●● 5G</span></div>
+        <div class="body">
+          <div class="mh"><div class="av">SR</div><div><b>Sam Rowe</b><small>Thursday club night · Heat 3 next</small></div></div>
+          <div class="sw4"><span>Tonight</span><span>Races</span><span class="on">Garage</span><span>Stats</span></div>
+
+          <div class="car-rail" data-rail="b">
+            <div class="slide short" data-car="MR-03 Red">
+              <div class="ph" style="--c:#FF4D6D"><span class="chip solid tag">Racing tonight</span><svg class="car"><use href="#car"/></svg><div class="floor"></div>
+                <div class="over"><div><b>MR-03 Red</b><small>Kyosho MR-03 · Stock · #17</small></div><button class="b b-out sm" type="button" style="background:rgba(0,0,0,.4);color:#fff;border-color:rgba(255,255,255,.25)">Manage</button></div></div>
+            </div>
+            <div class="slide short" data-car="GL Blue">
+              <div class="ph" style="--c:#4DA3FF"><svg class="car"><use href="#car"/></svg><div class="floor"></div>
+                <div class="over"><div><b>GL Blue</b><small>GL-Racing GLR · Modified</small></div><button class="b b-out sm" type="button" style="background:rgba(0,0,0,.4);color:#fff;border-color:rgba(255,255,255,.25)">Manage</button></div></div>
+            </div>
+            <div class="slide short" data-car="PN Spare">
+              <div class="ph" style="--c:#F5C342"><svg class="car"><use href="#car"/></svg><div class="floor"></div>
+                <div class="over"><div><b>PN Spare</b><small>PN 2.5 W · Stock</small></div><button class="b b-out sm" type="button" style="background:rgba(0,0,0,.4);color:#fff;border-color:rgba(255,255,255,.25)">Manage</button></div></div>
+            </div>
+            <div class="slide short add"><div class="ph"><div><svg class="i" style="width:28px;height:28px"><path d="M12 5v14M5 12h14"/></svg><b>Add a car</b></div></div></div>
+          </div>
+          <div class="dots" data-dots="b"><i class="on"></i><i></i><i></i><i class="plus"></i></div>
+
+          <div class="seg" data-seg>
+            <button type="button" aria-pressed="true" data-p="setup">Setup</button>
+            <button type="button" aria-pressed="false" data-p="packs">Packs <span style="color:var(--warn)">•</span></button>
+            <button type="button" aria-pressed="false" data-p="charts">Charts</button>
+          </div>
+
+          <div class="panel" data-panel="setup">
+            <div class="card">
+              <h4><span>Setup · <span data-carname="b">MR-03 Red</span></span><small>Tue 4 Nov</small></h4>
+              <div class="f2">
+                <div class="field">Tyres<div class="in">Sweep 30 <i>▾</i></div></div>
+                <div class="field">Pinion<div class="in">11T</div></div>
+                <div class="field">Spring F<div class="in">Soft</div></div>
+                <div class="field">Ride height<div class="in">3.0 mm</div></div>
+              </div>
+              <button class="b b-pri full" type="button">Add to my setup log</button>
+              <span class="mut">Recent setups (6) · last changed: pinion 11T (was 12T)</span>
+            </div>
+          </div>
+          <div class="panel" data-panel="packs" hidden>
+            <div class="card">
+              <div class="nudge"><div class="grow"><b>3 races need a pack</b><div class="mut">Heat 1, Heat 2, Final A</div></div><button class="b b-ton sm" type="button">Say</button></div>
+              <div class="list">
+                <div class="row"><div class="grow"><b>Blue 2</b><span class="mut">LiPo · 14 races</span></div><span class="chip ok">In the car</span></div>
+                <div class="row"><div class="grow"><b>Red 1</b><span class="mut">LiPo · 9 races</span></div><button class="b b-out sm" type="button">Put in</button></div>
+                <div class="row"><div class="grow"><b>Club 4</b><span class="mut">NiMH · 3 races</span></div><button class="b b-out sm" type="button">Put in</button></div>
+              </div>
+              <button class="b b-out full sm" type="button">Add a pack</button>
+            </div>
+          </div>
+          <div class="panel" data-panel="charts" hidden>
+            <div class="card">
+              <b style="font-size:13.5px">Blue 2 holds its pace best; Red 1 fades 0.3s by the end.</b>
+              <svg class="chart" viewBox="0 0 280 86" aria-label="Fade across a run">
+                <line x1="0" x2="280" y1="40" y2="40" stroke="var(--muted)" stroke-dasharray="5 4"/>
+                <polyline fill="none" stroke="var(--accent)" stroke-width="2.5" points="0,44 70,42 140,40 210,39 280,37"/>
+                <polyline fill="none" stroke="var(--primary)" stroke-width="2.5" points="0,48 70,44 140,38 210,28 280,16"/>
+              </svg>
+              <table class="mini num"><thead><tr><th>Pack</th><th>Median</th><th>Fade</th><th>Gap</th></tr></thead><tbody>
+                <tr><td><span class="sw" style="background:var(--accent)"></span>Blue 2</td><td>9.412</td><td>+0.08s</td><td>quickest</td></tr>
+                <tr><td><span class="sw" style="background:var(--primary)"></span>Red 1</td><td>9.501</td><td>+0.31s</td><td>+0.089</td></tr>
+              </tbody></table>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <div class="why"><ul>
+        <li>The same carousel with a shorter 16:9 photo. Manage sits on the photo.</li>
+        <li>Setup, Packs and Charts are shown one at a time, so almost no scrolling.</li>
+        <li>The dot on Packs means races are waiting for a pack.</li>
+        <li>Downside: tabs inside Me's own tabs.</li>
+      </ul></div>
+    </div>
+
+    <!-- ================= C ================= -->
+    <div class="slot">
+      <div class="cap"><b>C · Tonight's rig first</b><span>Race-night speed</span></div>
+      <div class="phone"><div class="scr">
+        <div class="status"><span>8:41</span><span>●●● 5G</span></div>
+        <div class="body">
+          <div class="mh"><div class="av">SR</div><div><b>Sam Rowe</b><small>Thursday club night · Heat 3 next</small></div></div>
+          <div class="sw4"><span>Tonight</span><span>Races</span><span class="on">Garage</span><span>Stats</span></div>
+
+          <div class="rig">
+            <div class="top">
+              <div class="ph" style="--c:#FF4D6D" data-rigph><svg class="car"><use href="#car"/></svg></div>
+              <div><div class="k">Tonight's rig</div><div class="nm" data-rigname>MR-03 Red</div><span class="mut" data-rigfacts>Kyosho MR-03 · Stock · #17</span></div>
+            </div>
+            <div class="trip">
+              <div><small>Pack</small><b>Blue 2</b></div>
+              <div><small>Setup</small><b>Tue 4 Nov</b></div>
+              <div><small>Best</small><b class="num">9.204</b></div>
+            </div>
+            <div class="brow"><button class="b b-pri sm" type="button">Swap pack</button><button class="b b-ton sm" type="button">Log setup</button></div>
+          </div>
+
+          <div class="card">
+            <h4><span>My cars</span><small>Tap to see one</small></h4>
+            <div class="chips" data-chips>
+              <div class="cchip on" data-c="#FF4D6D" data-n="MR-03 Red" data-f="Kyosho MR-03 · Stock · #17"><div class="ph" style="--c:#FF4D6D"><svg class="car"><use href="#car"/></svg></div>MR-03 Red</div>
+              <div class="cchip" data-c="#4DA3FF" data-n="GL Blue" data-f="GL-Racing GLR · Modified"><div class="ph" style="--c:#4DA3FF"><svg class="car"><use href="#car"/></svg></div>GL Blue</div>
+              <div class="cchip" data-c="#F5C342" data-n="PN Spare" data-f="PN 2.5 W · Stock"><div class="ph" style="--c:#F5C342"><svg class="car"><use href="#car"/></svg></div>PN Spare</div>
+              <div class="cchip add"><div class="ph">+</div>Add</div>
+            </div>
+          </div>
+
+          <div class="nudge"><div class="grow"><b>3 races need a pack</b><div class="mut">Heat 1, Heat 2, Final A</div></div><button class="b b-ton sm" type="button">Say</button></div>
+
+          <div class="card">
+            <h4><span>Battery packs</span><small>4 packs</small></h4>
+            <div class="list">
+              <div class="row"><div class="grow"><b>Blue 2</b><span class="mut">LiPo · 14 races · fades +0.08s</span></div><span class="chip ok">In the car</span></div>
+              <div class="row"><div class="grow"><b>Red 1</b><span class="mut">LiPo · 9 races · fades +0.31s</span></div><span class="chip warn">Fades</span></div>
+              <div class="row"><div class="grow"><b>Club 4</b><span class="mut">NiMH · 3 races</span></div><span class="chip">Few races</span></div>
+            </div>
+            <button class="b b-out full sm" type="button">Pack charts</button>
+          </div>
+        </div>
+      </div></div>
+      <div class="why"><ul>
+        <li>The top card is tonight's car, pack and setup, with the two things you do in the pits.</li>
+        <li>Cars become small chips. Tap one to see it at the top.</li>
+        <li>Pack numbers sit on each pack. The full charts are one tap away.</li>
+        <li>Downside: least like the carousel plan, and it repeats the Tonight tiles.</li>
+      </ul></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// Carousels: the dot under them and the car the setup card names follow the slide in view.
+for (const rail of document.querySelectorAll('[data-rail]')) {
+  const id = rail.getAttribute('data-rail');
+  const dots = Array.from(document.querySelectorAll('[data-dots="' + id + '"] i'));
+  const name = document.querySelector('[data-carname="' + id + '"]');
+  const slides = Array.from(rail.children);
+  let t = 0;
+  rail.addEventListener('scroll', () => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      const mid = rail.scrollLeft + rail.clientWidth / 2;
+      let best = 0;
+      slides.forEach((s, j) => {
+        if (Math.abs(s.offsetLeft + s.offsetWidth / 2 - mid) < Math.abs(slides[best].offsetLeft + slides[best].offsetWidth / 2 - mid)) best = j;
+      });
+      dots.forEach((d, j) => d.classList.toggle('on', j === best));
+      const car = slides[best].getAttribute('data-car');
+      if (name && car) name.textContent = car;
+    }, 70);
+  }, { passive: true });
+  dots.forEach((d, j) => d.addEventListener('click', () => {
+    const s = slides[j];
+    rail.scrollTo({ left: s.offsetLeft - (rail.clientWidth - s.offsetWidth) / 2, behavior: 'smooth' });
+  }));
+}
+
+// A: Manage opens a sheet for the car it is on.
+const sheet = document.querySelector('[data-sheet]');
+for (const b of document.querySelectorAll('[data-manage]')) {
+  b.addEventListener('click', () => {
+    document.querySelector('[data-sheetname]').textContent = b.closest('.slide').getAttribute('data-car');
+    sheet.hidden = false;
+  });
+}
+sheet.addEventListener('click', (e) => { if (e.target === sheet || e.target.closest('[data-close]')) sheet.hidden = true; });
+
+// B: one tab at a time.
+for (const b of document.querySelectorAll('[data-seg] button')) {
+  b.addEventListener('click', () => {
+    for (const o of document.querySelectorAll('[data-seg] button')) o.setAttribute('aria-pressed', o === b ? 'true' : 'false');
+    for (const p of document.querySelectorAll('[data-panel]')) p.hidden = p.getAttribute('data-panel') !== b.getAttribute('data-p');
+  });
+}
+
+// C: a car chip puts that car in the rig card.
+for (const c of document.querySelectorAll('[data-chips] .cchip:not(.add)')) {
+  c.addEventListener('click', () => {
+    for (const o of document.querySelectorAll('[data-chips] .cchip')) o.classList.toggle('on', o === c);
+    document.querySelector('[data-rigph]').style.setProperty('--c', c.getAttribute('data-c'));
+    document.querySelector('[data-rigname]').textContent = c.getAttribute('data-n');
+    document.querySelector('[data-rigfacts]').textContent = c.getAttribute('data-f');
+  });
+}
+</script>
+</body>
+</html>

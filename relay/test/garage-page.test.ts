@@ -157,11 +157,37 @@ function said(root: FakeNode): string {
   return root.find((n) => n.getAttribute("role") === "status").map((n) => n.textContent).join(" | ");
 }
 
-/** The car's card in My garage, by its name. */
+/** The car's slide in the carousel (or its row under Retired cars), by its name. */
 function carCard(page: FakePage, name: string): FakeNode {
   const card = page.get("gg").find((n) => n.className.startsWith("gcar") && n.textContent.includes(name))[0];
   assert.ok(card, `a card for ${name}`);
   return card;
+}
+
+/** The Manage sheet, while it is open. */
+function sheet(page: FakePage): FakeNode {
+  const s = page.get("gg").find((n) => n.className === "gsheet")[0];
+  assert.ok(s, "the Manage sheet is open");
+  return s;
+}
+
+/** Opens Manage on a car and answers its sheet. */
+async function manage(page: FakePage, name: string): Promise<FakeNode> {
+  await press(page, carCard(page, name), /^Manage$/);
+  return sheet(page);
+}
+
+/** A pack's row in Battery packs, by its label. */
+function packRow(page: FakePage, label: string): FakeNode {
+  const row = page.get("gp").find((n) => n.className.startsWith("grow") && n.textContent.includes(label))[0];
+  assert.ok(row, `a row for ${label}`);
+  return row;
+}
+
+/** Retire behind a pack's Manage (6 Nov 2026, the Garage rework). */
+async function retirePack(page: FakePage, label: string): Promise<void> {
+  await press(page, packRow(page, label), /^Manage$/);
+  await press(page, packRow(page, label), /^Retire$/);
 }
 
 describe("garage page: the markup", () => {
@@ -217,10 +243,16 @@ describe("garage page: reading", () => {
     assert.match(page.get("gp").textContent, /Battery packs/);
     assert.match(page.get("gp").textContent, /Club spare/);
     assert.match(page.get("gr").textContent, /Recorded by the desk/);
+    assert.match(page.get("gr").textContent, /1 race needs a pack/);
     assert.match(page.get("gc").textContent, /Blue 2 is your quickest and holds its pace best; Red 1 fades 0\.31s by the end\./);
     assert.match(page.get("gg").textContent, /Racing tonight/);
     assert.match(page.get("gg").textContent, /Retired cars \(1\)/);
     assert.match(page.get("gs").textContent, /Started from your last setup/);
+    assert.match(page.get("gs").textContent, /Setup · MR-03 Red/);
+    // The pack table fits a phone: four columns, the rest under the name.
+    const heads = page.get("gc").find((n) => n.tagName === "TH").map((n) => n.textContent);
+    assert.deepEqual(heads, ["Pack", "Median", "Fade", "Gap"]);
+    assert.match(page.get("gc").textContent, /9 races · best 12\.101 · ±0\.214/);
     for (const id of ["gh", "gp", "gr", "gc", "gg", "gs"]) {
       const box = page.get(id);
       assert.deepEqual(box.find((n) => n !== box && n.hadMarkup), [], `${id} built with createElement`);
@@ -248,15 +280,14 @@ describe("garage page: reading", () => {
 });
 
 describe("garage page: what it sends", () => {
-  it("the pack in the car: kind pack with no race", async () => {
+  it("the pack in the car: Put in and Take out, kind pack with no race", async () => {
     const page = await open(relay({}));
-    const box = page.get("gp");
-    type(field(box, /^The pack in your car now/), PACK_B);
-    const save = box.find((n) => n.tagName === "BUTTON" && n.textContent === "Save")[0]!;
-    save.click();
-    await page.settle();
+    assert.equal(page.button(packRow(page, "Blue 2"), /^Put in$/), undefined, "already in the car");
+    await press(page, packRow(page, "Red 1"), /^Put in$/);
     assert.deepEqual(asks(page)[0]?.body, { id: CODE, kind: "pack", f: { pack: PACK_B } });
-    assert.match(said(box), /Sent — HeatCaller will have it in a few seconds \(ref A1B2C3\)/);
+    assert.match(said(packRow(page, "Red 1")), /Sent — HeatCaller will have it in a few seconds \(ref A1B2C3\)/);
+    await press(page, packRow(page, "Blue 2"), /^Take out$/);
+    assert.deepEqual(asks(page)[1]?.body, { id: CODE, kind: "pack", f: { pack: "none" } });
   });
 
   it("which pack ran in a race: kind pack with the race", async () => {
@@ -266,6 +297,17 @@ describe("garage page: what it sends", () => {
     const row = box.find((n) => n.className.startsWith("grow") && n.textContent.includes("Heat 1"))[0]!;
     await press(page, row, /^Save$/);
     assert.deepEqual(asks(page)[0]?.body, { id: CODE, kind: "pack", f: { pack: PACK_B, race: RACE2 } });
+  });
+
+  it("races with a pack fold away; with none waiting it says so (6 Nov 2026)", async () => {
+    const g = garage();
+    (g["races"] as Record<string, unknown>[])[1]!["pack"] = PACK_B;
+    const page = await open(relay({ read: () => ({ status: 200, body: { ok: true, garage: g, asks: [] } }) }));
+    const box = page.get("gr");
+    assert.match(box.textContent, /Every race has its pack/);
+    const folded = box.find((n) => n.tagName === "DETAILS")[0]!;
+    assert.match(folded.textContent, /Races with a pack \(2\)/);
+    assert.ok(folded.textContent.includes("Heat 1") && folded.textContent.includes("Heat 2"));
   });
 
   it("adding a pack makes its own 32-hex id", async () => {
@@ -284,15 +326,17 @@ describe("garage page: what it sends", () => {
 
   it("editing, retiring and removing a pack", async () => {
     const page = await open(relay({}));
-    const row = () => page.get("gp").find((n) => n.className.startsWith("grow") && n.textContent.includes("Red 1"))[0]!;
-    await press(page, row(), /^Edit$/);
+    const row = () => packRow(page, "Red 1");
+    assert.equal(page.button(row(), /^Retire$/), undefined, "Retire waits behind Manage");
+    await press(page, row(), /^Manage$/);
     type(field(row(), /^Label/), "Red 1b");
     await press(page, row(), /^Save the pack$/);
     assert.deepEqual(asks(page)[0]?.body["f"], { op: "edit", pack: PACK_B, label: "Red 1b", chem: "LiPo", notes: "puffy" });
 
-    await press(page, row(), /^Retire$/);
+    await retirePack(page, "Red 1");
     assert.deepEqual(asks(page)[1]?.body["f"], { op: "retire", pack: PACK_B });
 
+    await press(page, row(), /^Manage$/);
     await press(page, row(), /^Remove$/);
     assert.match(row().textContent, /Packs with races on them are retired instead/);
     await press(page, row(), /^Yes, remove it$/);
@@ -301,8 +345,8 @@ describe("garage page: what it sends", () => {
 
   it("editing a car sends every text field", async () => {
     const page = await open(relay({}));
-    await press(page, carCard(page, "MR-03 Red"), /^Edit$/);
-    const card = carCard(page, "MR-03 Red");
+    await press(page, await manage(page, "MR-03 Red"), /^Edit details$/);
+    const card = sheet(page);
     type(field(card, /^Name/), "MR-03 Blue");
     type(field(card, /^Chassis/), "other");
     type(field(card, /^Which chassis is it/), "Atomic MRX");
@@ -314,11 +358,15 @@ describe("garage page: what it sends", () => {
       id: CODE, kind: "car",
       f: { op: "edit", car: CAR_A, name: "MR-03 Blue", chassis: "", chassisOther: "Atomic MRX", cls: "Vintage", body: "Porsche 911", number: "42", notes: "" },
     });
+    assert.equal(page.get("gg").find((n) => n.className === "gsheet").length, 0, "saved: the sheet closes");
+    assert.match(said(carCard(page, "MR-03 Red")), /Sent — HeatCaller will have it/);
   });
 
   it("adding a car, racing tonight, retiring, cover and removing a photo", async () => {
     const page = await open(relay({}));
-    const add = page.get("gg").find((n) => n.tagName === "DETAILS" && n.textContent.includes("Add a car"))[0]!;
+    await press(page, page.get("gg"), /^\+ Add a car/);
+    const add = sheet(page);
+    assert.match(add.textContent, /^Add a car/);
     type(field(add, /^Name/), "TT-02");
     type(field(add, /^Chassis/), CHASSIS);
     type(field(add, /^Class/), "Modified");
@@ -333,21 +381,30 @@ describe("garage page: what it sends", () => {
     await press(page, old, /^Unretire$/);
     assert.deepEqual(asks(page)[1]?.body["f"], { op: "unretire", car: CAR_B });
 
-    await press(page, carCard(page, "MR-03 Red"), /^Photos \(2\)$/);
-    const photo = carCard(page, "MR-03 Red").find((n) => n.getAttribute("aria-label") === "Photo 2")[0]!;
+    await press(page, await manage(page, "MR-03 Red"), /^Photos \(2\)$/);
+    const photo = sheet(page).find((n) => n.getAttribute("aria-label") === "Photo 2")[0]!;
     photo.click();
     await page.settle();
-    await press(page, carCard(page, "MR-03 Red"), /^Make cover$/);
+    await press(page, sheet(page), /^Make cover$/);
     assert.deepEqual(asks(page)[2]?.body["f"], { op: "cover", car: CAR_A, photo: "0a0b0c0d0e0f.jpg" });
-    await press(page, carCard(page, "MR-03 Red"), /^Remove$/);
-    await press(page, carCard(page, "MR-03 Red"), /^Yes, remove this photo$/);
+    await press(page, sheet(page), /^Remove$/);
+    await press(page, sheet(page), /^Yes, remove this photo$/);
     assert.deepEqual(asks(page)[3]?.body["f"], { op: "unphoto", car: CAR_A, photo: "0a0b0c0d0e0f.jpg" });
+
+    // Retire is in the sheet too, and closes it.
+    await press(page, sheet(page), /^Retire this car$/);
+    assert.deepEqual(asks(page)[4]?.body["f"], { op: "retire", car: CAR_A });
+    assert.equal(page.get("gg").find((n) => n.className === "gsheet").length, 0);
+    await press(page, await manage(page, "MR-03 Red"), /^Done$/);
+    assert.equal(page.get("gg").find((n) => n.className === "gsheet").length, 0);
   });
 
-  it("one car is a plain list; two or more swipe, with a dot per car and the one racing tonight first in view", async () => {
+  it("the cars swipe even when there is one, with an Add a car slide; the one racing tonight first in view (6 Nov 2026)", async () => {
     const one = await open(relay({}));
-    assert.equal(one.get("gg").find((n) => /\bgcars\b/.test(n.className)).length, 0);
-    assert.equal(one.get("gg").find((n) => n.className === "gdots").length, 0);
+    const solo = one.get("gg").find((n) => /\bgcars\b/.test(n.className))[0];
+    assert.ok(solo, "one car still swipes");
+    assert.equal(solo.children.length, 2, "the car and Add a car");
+    assert.equal(one.button(carCard(one, "MR-03 Red"), /^Log setup$/) !== undefined, true, "the car tonight logs a setup");
 
     const two = garage();
     const cars = two["cars"] as Record<string, unknown>[];
@@ -355,10 +412,24 @@ describe("garage page: what it sends", () => {
     const page = await open(relay({ read: () => ({ status: 200, body: { ok: true, garage: two, pin: false, signedIn: false, asks: [] } }) }));
     const row = page.get("gg").find((n) => /\bgcars\b/.test(n.className))[0];
     assert.ok(row, "the cars swipe");
-    assert.equal(row.children.length, 2, "the retired car is not in the row");
+    assert.equal(row.children.length, 3, "two cars and Add a car; the retired car is not in the row");
     const dots = page.get("gg").find((n) => n.className === "gdots")[0]!;
-    assert.deepEqual(dots.children.map((d) => d.getAttribute("aria-label")), ["TT-02", "MR-03 Red"]);
-    assert.deepEqual(dots.children.map((d) => d.getAttribute("aria-current")), ["false", "true"]);
+    assert.deepEqual(dots.children.map((d) => d.getAttribute("aria-label")), ["TT-02", "MR-03 Red", "Add a car"]);
+    assert.deepEqual(dots.children.map((d) => d.getAttribute("aria-current")), ["false", "true", "false"]);
+    // A car not racing tonight offers Racing tonight instead of Log setup.
+    await press(page, carCard(page, "TT-02"), /^Racing tonight$/);
+    assert.deepEqual(asks(page)[0]?.body["f"], { op: "tonight", car: "88888888888888888888888888888888" });
+  });
+
+  it("the setup sheet follows the car in view (6 Nov 2026)", async () => {
+    const two = garage();
+    const cars = two["cars"] as Record<string, unknown>[];
+    cars.unshift({ ...cars[1], id: "88888888888888888888888888888888", name: "TT-02", retired: false, tonight: false });
+    const page = await open(relay({ read: () => ({ status: 200, body: { ok: true, garage: two, pin: false, signedIn: false, asks: [] } }) }));
+    assert.match(page.get("gs").textContent, /Setup · MR-03 Red/, "the car racing tonight first");
+    assert.equal(page.get("gs").find((n) => n.tagName === "LABEL" && /^Car/.test(n.textContent)).length, 0, "no second car picker");
+    page.eval(`view.carAt = '88888888888888888888888888888888'; paint('setup', false)`);
+    assert.match(page.get("gs").textContent, /Setup · TT-02/);
   });
 
   it("a photo goes to driver/photo with the car and the base64", async () => {
@@ -452,7 +523,7 @@ describe("garage page: status, polling and the PIN", () => {
       }),
     }));
     const row = () => page.get("gp").find((n) => n.className.startsWith("grow") && n.textContent.includes("Red 1"))[0]!;
-    await press(page, row(), /^Retire$/);
+    await retirePack(page, "Red 1");
     assert.match(said(row()), /Sent — HeatCaller will have it/);
     answered = true;
     const before = page.sent.length;
@@ -466,7 +537,7 @@ describe("garage page: status, polling and the PIN", () => {
     const page = await open(relay({
       read: () => ({ status: 200, body: { ok: true, garage: garage(), asks: answered ? [{ ref: "A1B2C3", kind: "car", state: "declined", said: "That car is not yours." }] : [] } }),
     }));
-    await press(page, carCard(page, "MR-03 Red"), /^Retire$/);
+    await press(page, await manage(page, "MR-03 Red"), /^Retire this car$/);
     answered = true;
     await page.advance(3000);
     assert.match(said(carCard(page, "MR-03 Red")), /HeatCaller did not take that: That car is not yours\./);
@@ -476,10 +547,10 @@ describe("garage page: status, polling and the PIN", () => {
     let status = 429;
     const page = await open(relay({ ask: () => ({ status, body: { ok: false } }) }));
     const row = () => page.get("gp").find((n) => n.className.startsWith("grow") && n.textContent.includes("Red 1"))[0]!;
-    await press(page, row(), /^Retire$/);
+    await retirePack(page, "Red 1");
     assert.match(said(row()), /too many changes/);
     status = 404;
-    await press(page, row(), /^Retire$/);
+    await retirePack(page, "Red 1");
     assert.match(said(row()), /not taking changes from phones just now/);
   });
 
@@ -511,7 +582,7 @@ describe("garage page: status, polling and the PIN", () => {
     }));
     assert.doesNotMatch(page.get("gh").textContent, /personal PIN|changes here need it/);
     const row = () => page.get("gp").find((n) => n.className.startsWith("grow") && n.textContent.includes("Red 1"))[0]!;
-    await press(page, row(), /^Retire$/);
+    await retirePack(page, "Red 1");
     assert.deepEqual(asks(page)[0]?.body, { id: CODE, kind: "packedit", f: { op: "retire", pack: PACK_B } });
     assert.match(said(row()), /Sent — HeatCaller will have it/);
   });
@@ -519,7 +590,7 @@ describe("garage page: status, polling and the PIN", () => {
   it("a pass from the night page is sent with every change", async () => {
     const page = await open(relay({ read: () => ({ status: 200, body: { ok: true, garage: garage(), pin: true, signedIn: true, asks: [] } }) }), `#d=${CODE}`, PASS);
     assert.deepEqual(page.sent[0]?.body, { id: CODE, pass: PASS });
-    await press(page, carCard(page, "MR-03 Red"), /^Retire$/);
+    await press(page, await manage(page, "MR-03 Red"), /^Retire this car$/);
     assert.equal(asks(page)[0]?.body["pass"], PASS);
   });
 });
