@@ -229,9 +229,12 @@ public static class RcpLapModel
 
         var peak = Math.Min(car.TopSpeed, Math.Sqrt(peakSquared));
 
-        if (peak <= Math.Max(vIn, vOut))
+        // Both corners at or over top speed: flat out the whole way. Only
+        // both - with one corner at top speed and the other slower, there is
+        // still the braking for (or the run up from) the slower one, which
+        // the sum below gives.
+        if (peak <= Math.Min(vIn, vOut))
         {
-            // Both corners at or over top speed: flat out the whole way.
             return metres / peak;
         }
 

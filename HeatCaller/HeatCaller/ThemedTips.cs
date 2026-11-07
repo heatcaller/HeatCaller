@@ -45,6 +45,14 @@ internal static class NativeTips
                 break;
 
             case ListView listView:
+                // A list that asked for its item notes (ShowItemToolTips on)
+                // still shows them, in the app's own colours - Track
+                // Layouts' who-holds-each-sector-record is one. See ListTips.
+                if (listView.ShowItemToolTips)
+                {
+                    ListTips.Attach(listView);
+                }
+
                 listView.ShowItemToolTips = false;
                 ClearListViewTips(listView);
 
@@ -248,6 +256,76 @@ internal static class MenuTips
         }
 
         menu.Disposed += (_, _) => tip.Dispose();
+    }
+}
+
+/// <summary>
+/// Themed pop-ups for list items that carry a note (ToolTipText), in place
+/// of the list's own pale Windows ones - which NativeTips switches off for
+/// every list. Only for a list that asked for its notes.
+/// </summary>
+internal static class ListTips
+{
+    private static readonly ConditionalWeakTable<ListView, ToolTip> Attached = new();
+
+    public static bool IsAttached(ListView list) => Attached.TryGetValue(list, out _);
+
+    /// <summary>The note to show over an item: what the page wrote on it, or none.</summary>
+    public static string? NoteFor(ListViewItem? item) =>
+        item is null || string.IsNullOrWhiteSpace(item.ToolTipText) ? null : item.ToolTipText;
+
+    public static void Attach(ListView list)
+    {
+        if (Attached.TryGetValue(list, out _))
+        {
+            return;
+        }
+
+        var tip = new ToolTip();
+
+        // Kept, for the same reason as MenuTips: the list asked for its item
+        // notes, and its own Windows tips are off.
+        AppTheme.StyleToolTip(tip, keep: true);
+        Attached.Add(list, tip);
+
+        // The item the note now showing belongs to, so moving the mouse
+        // along one row doesn't put the same note up again and again.
+        ListViewItem? under = null;
+
+        list.MouseMove += (_, e) =>
+        {
+            ListViewItem? item;
+
+            try
+            {
+                item = list.HitTest(e.Location).Item;
+            }
+            catch
+            {
+                // The list emptied as the mouse moved - nothing to show.
+                item = null;
+            }
+
+            if (ReferenceEquals(item, under))
+            {
+                return;
+            }
+
+            under = item;
+            tip.Hide(list);
+
+            if (NoteFor(item) is { } note)
+            {
+                AppTheme.ShowToolTip(tip, note, list, item!.Bounds.Left + 8, item.Bounds.Bottom + 2);
+            }
+        };
+
+        list.MouseLeave += (_, _) =>
+        {
+            under = null;
+            tip.Hide(list);
+        };
+        list.Disposed += (_, _) => tip.Dispose();
     }
 }
 

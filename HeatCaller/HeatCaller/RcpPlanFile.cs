@@ -39,6 +39,13 @@ public static class RcpPlanFile
     /// <summary>How far from the middle of the grid anything may sit, in tiles.</summary>
     public const int MostReach = 2000;
 
+    /// <summary>
+    /// The highest lane number a file may give a tile. Far past any this
+    /// editor hands out, and low enough that one more for a new lane (see
+    /// RcpAutoRails.NewLane) can never run off the end of an int.
+    /// </summary>
+    public const int MostLane = 1_000_000;
+
     /// <summary>The widest or deepest room a file may say, in its own unit (feet or metres): what the Room tab's boxes go to.</summary>
     public const double MostRoom = 500;
 
@@ -191,7 +198,7 @@ public static class RcpPlanFile
 
         foreach (var tile in design.Tiles)
         {
-            tile.Lane = Math.Max(0, tile.Lane);
+            tile.Lane = Math.Clamp(tile.Lane, 0, MostLane);
             tile.Turns = Quarter(tile.Turns);
             tile.Label = Capped(tile.Label, MostLabel);
         }
