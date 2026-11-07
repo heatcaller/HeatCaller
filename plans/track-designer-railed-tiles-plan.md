@@ -271,6 +271,41 @@ What changes:
 
 Each phase is one commit, with the full suite green before the next. 2 and 3 can be built side by side once 1 is in.
 
+## Phase 1 - as built (7 Nov 2026)
+
+**Built as a first step,** not the whole of what Phase 1 above describes. The seams (`Walls`, `Curves`) are still what the editor draws and saves. Each tile's piece is worked out from them after every edit and saved alongside them, and the projection back to seams is proven against them. The other way round (the editor lays pieces, and the seams are worked out from them) comes with Phase 2, which needs it. Doing it now would have left the current Rails and Turns tools with nothing to edit.
+
+- **`RcpTile`** gained three fields, added on the end:
+  - `Piece`: the new enum `RcpPiece` (Plain, Rail, Finish, Arched, OuterCurve, InnerCorner, Blank);
+  - `Facing`: the bolt-hole edge;
+  - `Corner`: where a turn or an inner piece sits.
+
+  `Clone()` carries all three, so Undo keeps them. They default to Plain, so every old plan opens unchanged.
+- **`RcpPieces.cs` (new):**
+  - `Adopt` puts each rail on its tile:
+    - a one-tile turn makes its tile an outer curve tile;
+    - the inside of each bend is an inner corner tile, with the corner its piece sits in (`InnerCorners`);
+    - a divider (`Double`) puts one rail on each lane's tile;
+    - a single rail goes on the track tile beside it, and on the other tile when that one is taken.
+  - Finish, arched and blank tiles are laid as themselves, so `Adopt` keeps them.
+  - It returns a `Report`: rails with no tile, second rails on a tile, turns with no tile, and turns the club has no piece for.
+  - `Project` gives the seams back from the tiles.
+- **When it runs:** `RcpTrackCanvas.Rework` calls `Adopt` after every edit, inside that edit's undo step. That covers opening a plan, Undo and Redo too.
+- **Plan files:** a piece, edge or corner number this HeatCaller doesn't know opens as a plain tile.
+- **Nothing that reads the plan changed.** The painter, the lap, Trace route, the map and the stock check all read the seams as before.
+- **Not done yet:** the report isn't shown in the designer. Many plans drawn today, including Wall the edge's own square corners, would light it up before Phase 2 gives a way to fix them. It goes on the board with Phase 2.
+
+**Tests:** `RcpPiecesTests` (15). The other 307 designer, map and sector tests pass unchanged.
+
+**Found while building:**
+- **Six of RCP's seven preset layouts** (`RcpStockLayout`) can't be built from the club's pieces as drawn:
+  - the 50cm Oval's lanes are one tile wide, so a tile would need two rails;
+  - the Wide L, Oblong and Oval Wide use two-tile turns;
+  - in both serpentines and the Wide L, a divider runs into the outside wall, which leaves the corner tile there two rails.
+
+  Only the 30cm Double Oval Wide is clean. They are reconstructions (their own header says so), and the test now holds that every rail is either on a tile or reported, never lost. Redrawing them from pieces belongs with Phase 2.
+- **Every layout Build me a track offers** goes onto tiles cleanly and comes back exactly.
+
 ## Answers (Asher, 7 Nov 2026)
 
 - **The rails stay on** between race nights. The cupboard holds pieces (Phase 4).
@@ -286,3 +321,4 @@ Each phase is one commit, with the full suite green before the next. 2 and 3 can
 
 1. **How many arched rail tiles the club has,** and whether RCP gives them a name. "Arched rail tile" is a stand-in. Not needed before Phase 1.
 2. **A close photo of the inner corner tile,** for Phase 5's drawing. Not needed before then.
+3. **Where a divider meets the outside wall** (found building Phase 1). The tile in that corner would need the wall's rail and the divider's last rail. On the floor, does the divider stop a tile short of the wall, does an inner corner piece go there, or is it built some other way? This decides how Phase 2 lays a divider that runs into a wall.

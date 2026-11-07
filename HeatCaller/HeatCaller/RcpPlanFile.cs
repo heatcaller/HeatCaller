@@ -122,6 +122,17 @@ public static class RcpPlanFile
             tile.Kind = RcpTileKind.Straight;
         }
 
+        // The same for a tile's piece and the edge or corner its rail is on
+        // (railed tiles, 7 Nov 2026): one this HeatCaller doesn't know is a
+        // plain tile.
+        foreach (var tile in design.Tiles.Where(t => !Enum.IsDefined(typeof(RcpPiece), t.Piece)
+                     || !Enum.IsDefined(typeof(RcpEdge), t.Facing) || !Enum.IsDefined(typeof(RcpQuadrant), t.Corner)))
+        {
+            tile.Piece = RcpPiece.Plain;
+            tile.Facing = RcpEdge.North;
+            tile.Corner = RcpQuadrant.NorthEast;
+        }
+
         design.Curves = design.Curves.Where(c => Enum.IsDefined(typeof(RcpQuadrant), c.Quadrant)).ToList();
         design.Decals = design.Decals.Where(d => Enum.IsDefined(typeof(RcpDecalKind), d.Kind)).ToList();
 

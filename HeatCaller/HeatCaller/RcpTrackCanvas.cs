@@ -1035,6 +1035,11 @@ public sealed class RcpTrackCanvas : Control
             SelectionChanged?.Invoke();
         }
 
+        // Which tile each rail is bolted to (railed tiles, Phase 1, 7 Nov
+        // 2026) - worked out from the rails after every edit, and saved with
+        // the plan, ready for the editor to lay tiles and rails as one piece.
+        RcpPieces.Adopt(_design);
+
         if (!_strokeOpen && _design.RouteAuto)
         {
             RetraceLine();
