@@ -456,6 +456,17 @@ describe("garage page: what it sends", () => {
     assert.match(String(page.eval(`statuses.get('photo-x').words`)), /has 6 photos already/);
   });
 
+  it("a sheet section's name is not a driver's name, so tapping it opens the section (7 Nov 2026)", async () => {
+    // .nm is a driver's name everywhere: the pages' shared tap handler
+    // follows whoever it names, and stops the tap opening anything.
+    const page = await open(relay({}));
+    const sections = page.get("gs").find((n) => n.tagName === "SUMMARY");
+    assert.ok(sections.length > 0);
+    for (const s of sections) {
+      assert.equal(s.find((n) => /(^| )nm( |$)/.test(n.className)).length, 0, "no .nm in " + s.textContent);
+    }
+  });
+
   it("the setup sheet: car, sheet, race, notes and v.<field> per value", async () => {
     const page = await open(relay({}));
     const box = page.get("gs");

@@ -176,7 +176,7 @@ textarea.sx-c { padding: 10px 12px; min-height: 72px; resize: vertical; }
 .gx details.sx-sec > summary { list-style: none; min-height: 52px; padding: 8px 12px; display: grid; grid-template-columns: 1fr auto;
                                align-items: center; gap: 2px 8px; color: var(--text); cursor: pointer; }
 .sx-sec > summary::-webkit-details-marker { display: none; }
-.sx-sec .nm { font-weight: 700; }
+.sx-sec .sx-nm { font-weight: 700; } /* Not .nm: that is a driver's name, which a tap follows. */
 .sx-sec .ct { grid-column: 1; font-size: 0.8rem; color: var(--muted); }
 .sx-sec .ct b { color: var(--accent); }
 .sx-sec .chev { grid-row: 1 / span 2; grid-column: 2; width: 9px; height: 9px; margin: 0 6px 4px;
@@ -209,7 +209,7 @@ button.sx-c::after { content: ""; flex: none; width: 7px; height: 7px; margin: -
    2026, Asher: "make the add to my setup log button stationary"). */
 .sx-save { display: grid; gap: 6px; margin: 12px 0 4px; }
 .sx-save .go { width: 100%; margin: 0; }
-/* Add a pack as the kit's tonal button (7 Nov 2026), full width like the
+/* Add a pack as the kit's primary button (7 Nov 2026), full width like the
    card's other buttons, its form's two buttons stacked under it. */
 .gpadd { margin-top: 12px; }
 .gpadd h3 { margin: 4px 0 6px; }
@@ -889,11 +889,12 @@ function buildPacks(box, sec) {
   card.appendChild(list);
 
   // Add a pack: a real button since 7 Nov 2026 (Asher: "make add a pack a
-  // real button. all pit wall") - the kit's tonal one, where a text link
+  // real button. all pit wall") - the kit's primary, pink like the other
+  // Add buttons ("make add a pack button pink"), where a text link
   // opened a fold - and the form under it with Add the pack and Cancel.
   const add = el('div', 'gpadd');
   if (!view.packAdd) {
-    add.appendChild(tapButton('Add a pack', 'go quiet', () => { view.packAdd = true; paint(sec, true); }));
+    add.appendChild(tapButton('Add a pack', 'go', () => { view.packAdd = true; paint(sec, true); }));
   } else {
     add.appendChild(el('h3', '', 'Add a pack'));
     const fields = packForm(add, sec, 'pack-add', null);
@@ -2143,7 +2144,7 @@ function buildSetup(box, sec) {
       d.open = Object.prototype.hasOwnProperty.call(opened, i) ? opened[i] === true : counts.length === 0;
       d.addEventListener('toggle', () => { opened[i] = d.open; });
       const sum = el('summary', '');
-      sum.appendChild(el('span', 'nm', str(s.name) || 'Setup'));
+      sum.appendChild(el('span', 'sx-nm', str(s.name) || 'Setup'));
       const ct = el('span', 'ct');
       sum.appendChild(ct);
       sum.appendChild(el('span', 'chev'));
