@@ -238,6 +238,25 @@ public sealed class BugHunt13_CommentaryTests : IDisposable
         Assert.StartsWith("Dot ", lead);
         Assert.DoesNotContain("from Alex", lead);
         Assert.DoesNotContain("still", lead);
+
+        // The Big Screen's ticker line by the same rule: whichever of the two
+        // the tie-break put first, nobody's lead is taken.
+        Assert.Equal("Dot would lead the Winter Series by 1 point", table.Headline);
+    }
+
+    [Fact]
+    public void The_headline_still_takes_the_lead_from_a_sole_leader()
+    {
+        var season = new Season { Name = "Winter Series", AutoInclude = true, MainsOnly = false };
+        // Alex 10, Dot 9 before - Alex leads alone. Tonight Dot wins and
+        // Alex is third: Dot 19, Alex 18.
+        var earlier = Race(DateTime.UtcNow.AddDays(-7), Result(1, "Alex"), Result(2, "Dot"));
+        var live = Race(DateTime.UtcNow, Result(1, "Dot"), Result(2, "Sam"), Result(3, "Alex"));
+
+        var table = ChampionshipLive.Table(season, new[] { earlier }, live, null)!;
+
+        Assert.StartsWith("Dot would", table.Headline);
+        Assert.Contains("from Alex", table.Headline);
     }
 
     [Fact]

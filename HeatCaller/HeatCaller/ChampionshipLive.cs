@@ -165,7 +165,7 @@ public static class ChampionshipLive
         // WHY (7 Nov 2026, Bug hunt 13): who was level at the top before the
         // race. Was() reads the tie-break as a place, so of two drivers on
         // 40 one "was first" - and ChampionshipCheck said the new leader
-        // took the lead from him. Level is level, whichever way it falls.
+        // took the lead from them. Level is level, whichever way it falls.
         var levelAtTop = before.Count > 1 && before[1].TotalPoints == before[0].TotalPoints
             ? before.TakeWhile(e => e.TotalPoints == before[0].TotalPoints)
                 .Select(e => e.DriverName)
@@ -201,7 +201,14 @@ public static class ChampionshipLive
             return $"{leader.DriverName} and {after[1].DriverName} would be level at the top of the {series}";
         }
 
-        if (before.Count > 0 && !string.Equals(before[0].DriverName, leader.DriverName, StringComparison.OrdinalIgnoreCase))
+        // Nor was a driver only level at the top before the race the one
+        // the lead is taken from (7 Nov 2026, bug hunt 13) - the tie-break
+        // put them first, but they did not lead on their own. Then it is
+        // just the new lead, by its margin, as ChampionshipCheck says it.
+        var levelBefore = before.Count > 1 && before[1].TotalPoints == before[0].TotalPoints;
+
+        if (before.Count > 0 && !levelBefore
+            && !string.Equals(before[0].DriverName, leader.DriverName, StringComparison.OrdinalIgnoreCase))
         {
             return $"{leader.DriverName} would take the {series} lead from {before[0].DriverName}";
         }
