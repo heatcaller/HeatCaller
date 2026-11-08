@@ -99,7 +99,7 @@ public sealed class BugHunt8FBTests : IDisposable
     [Fact]
     public void Level_checks_and_previews_are_not_sent_to_listeners()
     {
-        Assert.Contains("bool forListeners = true)", Between(Source("AnnouncementService.cs"), "public void SpeakReminder(", "public sealed record PreparedSpeech("));
+        Assert.Contains("bool forListeners = true", Between(Source("AnnouncementService.cs"), "public void SpeakReminder(", "public sealed record PreparedSpeech("));
 
         var mixer = Source("MixerControl.cs");
         Assert.Contains("SpeakReminder(\"Announcement level check.\", forListeners: false)", mixer);

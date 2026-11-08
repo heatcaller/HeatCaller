@@ -13,6 +13,14 @@ public sealed record SpokenSegment(SegmentKind Kind, string Text, IReadOnlyList<
 
     /// <summary>The two cars a Battle watch or Horizon line is about, or null. See AnnouncementService.BattleLines.</summary>
     public BattlePair? About { get; init; }
+
+    /// <summary>
+    /// For an in-race segment, the race as it was when the line was asked
+    /// for, with the segment's deadline - so the announcer can drop it once
+    /// the race makes it untrue. Null between races. See
+    /// AnnouncementService.Freshness.
+    /// </summary>
+    public RaceFactsStamp? Facts { get; init; }
 }
 
 /// <summary>
@@ -277,6 +285,16 @@ public sealed class CommentaryDirector
     /// is still waiting to be said, not quietly spent.
     /// </summary>
     public bool CommitWhenSpoken { get; set; }
+
+    /// <summary>
+    /// The race as it is now, from the announcer - the host sets it to
+    /// AnnouncementService.RaceFactsNow (8 Nov 2026). Taken when an in-race
+    /// line is asked for, asked again when it comes back, and carried on the
+    /// line so the announcer can drop it once the race makes it untrue. Null
+    /// leaves in-race lines unchecked, as they always were. See
+    /// AnnouncementService.Freshness.
+    /// </summary>
+    public Func<RaceFactsStamp>? RaceFactsNow { get; set; }
 
     /// <summary>
     /// The host said this segment: settle it - spend, facts, marks,
@@ -2095,6 +2113,13 @@ public sealed class CommentaryDirector
         // describing a race that has moved on.
         var asked = _clock();
 
+        // The race this line is about, as the facts were read (8 Nov 2026) -
+        // with the segment's own deadline, counted to when it is HEARD rather
+        // than to when the answer comes back. See AnnouncementService.Freshness.
+        var factsAsked = InRace(kind) && RaceFactsNow?.Invoke() is { } stamp
+            ? stamp with { SayByMs = stamp.AtMs + (long)spec.NeedsBy.TotalMilliseconds }
+            : null;
+
         // WHY (2026-11-05, Bug hunt 11): the segment's sponsor credit, counted
         // for the report only once the line is said (Commit) and given back on
         // every drop below - BuildSegmentAsync used to count it as written.
@@ -2142,6 +2167,27 @@ public sealed class CommentaryDirector
 
                 Say($"[brain] Dropped {spec.Title.ToLowerInvariant()} - it came back after the moment had gone.");
                 return null;
+            }
+
+            // The race moved on while it was being written (8 Nov 2026): a
+            // quicker lap, a new leader, another lap by the leader. Its
+            // numbers were read off a board that now says something else.
+            if (factsAsked is not null && RaceFactsNow?.Invoke() is { } factsBack
+                && AnnouncementService.WhyNoLongerTrue(factsAsked, factsBack) is { } movedOn)
+            {
+                // The relay kept the charge for this written line, so the budget keeps it too - see above.
+                Budget.Release(verdict.Ticket, written: true);
+                Account.DroppedAfterWriting();
+                sponsors.Unheard();
+                _commentary.ForgetLine(written.Text);
+
+                Say($"[brain] Dropped {spec.Title.ToLowerInvariant()} - {movedOn}.");
+                return null;
+            }
+
+            if (factsAsked is not null)
+            {
+                written = written with { Facts = factsAsked };
             }
 
             // Held while it was being written. Nothing is lost by

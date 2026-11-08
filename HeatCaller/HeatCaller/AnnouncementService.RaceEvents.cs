@@ -784,6 +784,10 @@ public sealed partial class AnnouncementService
         StatusMessage?.Invoke($"[audio-trace] NotifyRaceStarted (muted={Muted})");
         EndPostRaceQuiet("a new race started");
 
+        // An AI line written about the last race is not about this one - see
+        // AnnouncementService.Freshness.
+        NoteNewRaceForFacts();
+
         // Normally long finished - the green waits for the countdown's audio.
         // Not when the green was forced early, and they mustn't tick on
         // under the start.

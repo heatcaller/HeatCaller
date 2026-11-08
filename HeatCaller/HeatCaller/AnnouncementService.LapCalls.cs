@@ -987,6 +987,15 @@ public sealed partial class AnnouncementService
             PostLeadChangeMoment(leadChange);
         }
 
+        // The race as an AI line written now would read it (8 Nov 2026) - see
+        // AnnouncementService.Freshness. Whatever the calls below do.
+        if (_currentLeaderTransponder is not null && leader.Transponder != _currentLeaderTransponder)
+        {
+            NoteLeadChangeForFacts();
+        }
+
+        NoteLeaderLapsForFacts(leader.Laps);
+
         if (_currentLeaderTransponder is not null && leader.Transponder != _currentLeaderTransponder)
         {
             // Only offered when they could be heard - see VoiceCandidateCanSpeak.
@@ -2165,6 +2174,11 @@ public sealed partial class AnnouncementService
             // Whatever happens to this lap's own call, one still waiting
             // about the lap it beat is no longer true - see BinWaitingFastLaps.
             BinWaitingFastLaps();
+
+            // And neither is an AI line written before it - "RIPS it with a
+            // five forty-two" heard a second after a 4.936 (8 Nov 2026). See
+            // AnnouncementService.Freshness.
+            NoteRaceFastestLap();
 
             var fastLapSoundCfg = sounds.Effects.GetValueOrDefault(nameof(SoundEffectKind.FastLap));
             if (SoundCandidateCanPlay(SoundEffectKind.FastLap, fastLapSoundCfg))
