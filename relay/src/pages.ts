@@ -11707,6 +11707,14 @@ function fieldFor(sid, done) {
   return null;
 }
 
+// The field for a race card (8 Nov 2026): a demo or practice run carries
+// its own in the night (races[].field, DriverNightExtras.FieldOf) - a demo
+// never has a public result to read it from - and a race reads its result.
+function raceField(r, done) {
+  if (Array.isArray(r.field) && r.field.length > 0) return r.field;
+  return fieldFor(raceSid(r), done);
+}
+
 // The Lap chart tab: Just me and Compare with when there is a field, then
 // the two charts, redrawn when either changes or the result arrives.
 //
@@ -11719,7 +11727,6 @@ function meCharts(r) {
   const box = el('div', 'charts mecharts');
   let out = el('div');
   box.appendChild(out);
-  const sid = raceSid(r);
 
   // The two controls, made afresh on every draw.
   const controls = (others, vs) => {
@@ -11767,7 +11774,7 @@ function meCharts(r) {
     out.remove();
     out = el('div');
     box.appendChild(out);
-    const lines = meLines(r, fieldFor(sid, paint));
+    const lines = meLines(r, raceField(r, paint));
     const others = lines.filter((l) => !l.me);
     if (typeof view.vs !== 'string') view.vs = '';
     const vs = others.some((l) => l.name === view.vs) ? view.vs : '';
@@ -11891,14 +11898,13 @@ function raceStory(r, field) {
 // notes under them. Drawn again once the field arrives.
 function storyPanel(r) {
   const box = el('div', 'nlx story');
-  const sid = raceSid(r);
   let out = el('div');
   box.appendChild(out);
   const paint = () => {
     out.remove();
     out = el('div');
     box.appendChild(out);
-    const s = raceStory(r, fieldFor(sid, paint));
+    const s = raceStory(r, raceField(r, paint));
     const dl = el('dl', 'lxs');
     for (const line of s.lines) {
       const one = el('div');
