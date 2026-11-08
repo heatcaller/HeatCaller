@@ -86,6 +86,26 @@ public sealed class SpokenFiguresTests
             AnnouncementService.SpellOutTimesForSpeech("A best lap of 5.06s for Sam."));
     }
 
+    [Theory]
+    [InlineData("A best lap of just 5.06s for Sam.", "A best lap of just five oh six for Sam.")]
+    [InlineData("Only 5.2s for Sam this time.", "Only five twenty for Sam this time.")]
+    [InlineData("A mere 12.345s lap.", "A mere twelve three forty-five lap.")]
+    [InlineData("She's barely 2.5s behind.", "She's barely two and a half seconds behind.")]
+    [InlineData("Only 1.5s down on the leader.", "Only a second and a half down on the leader.")]
+    [InlineData("Just 0.2s in it.", "Just two tenths in it.")]
+    public void Just_only_mere_and_barely_make_a_gap_only_under_a_second_or_with_a_gap_word_after(string written, string said)
+    {
+        // 8 Nov 2026: they go in front of a lap as often as a gap, and "a
+        // best lap of just 5.06s" was said "five seconds".
+        Assert.Equal(said, AnnouncementService.SpellOutTimesForSpeech(written));
+    }
+
+    [Fact]
+    public void By_and_within_still_make_a_gap_whatever_follows()
+    {
+        Assert.Equal("Sam wins it by a second and a half.", AnnouncementService.SpellOutTimesForSpeech("Sam wins it by 1.5s."));
+    }
+
     [Fact]
     public void A_decimal_without_a_unit_is_left_alone()
     {

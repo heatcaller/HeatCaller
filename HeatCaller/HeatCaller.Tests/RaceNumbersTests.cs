@@ -111,6 +111,71 @@ public sealed class RaceNumbersTests
     }
 
     [Fact]
+    public void No_two_laps_sound_the_same_when_the_hyphens_are_not_heard()
+    {
+        // 8 Nov 2026: a voice does not say a hyphen. 30.425 was "thirty four
+        // twenty-five" and 34.250 "thirty-four twenty-five" - the same words
+        // aloud - and 20.506 was 25.060's "twenty-five oh six".
+        var seen = new Dictionary<string, long>();
+
+        for (var ms = 1000L; ms < 60000L; ms++)
+        {
+            var heard = RaceNumbers.LapSpoken(ms).Replace('-', ' ');
+
+            Assert.True(seen.TryAdd(heard, ms), $"{ms}ms and {(seen.TryGetValue(heard, out var other) ? other : 0)}ms are both heard as \"{heard}\"");
+        }
+    }
+
+    [Theory]
+    [InlineData(30425, "thirty point four twenty-five")]
+    [InlineData(34250, "thirty-four twenty-five")]
+    [InlineData(20506, "twenty point five oh six")]
+    [InlineData(25060, "twenty-five oh six")]
+    [InlineData(20531, "twenty point five thirty-one")]
+    [InlineData(20031, "twenty oh thirty-one")]
+    [InlineData(20530, "twenty fifty-three")]
+    public void After_twenty_thirty_forty_or_fifty_a_lone_tenth_is_given_a_point(long ms, string expected)
+    {
+        Assert.Equal(expected, RaceNumbers.LapSpoken(ms));
+    }
+
+    [Theory]
+    [InlineData(61235, "sixty-one point two three five seconds")]
+    [InlineData(60500, "sixty point five zero seconds")]
+    [InlineData(999, "zero point nine nine nine seconds")]
+    public void A_lap_past_a_minute_keeps_the_thousandth_the_screen_shows(long ms, string expected)
+    {
+        // 8 Nov 2026: 61.235 on the screen was "sixty-one point two four
+        // seconds" from the speaker - Plainly's hundredths.
+        Assert.Equal(expected, RaceNumbers.LapSpoken(ms));
+    }
+
+    [Fact]
+    public void A_negative_time_is_said_minus_not_with_the_sign_in_the_digits()
+    {
+        // 8 Nov 2026: Plainly(-500) was "zero point - five zero seconds".
+        Assert.Equal("minus zero point five zero seconds", RaceNumbers.Plainly(-500));
+        Assert.Equal("minus one point two three five seconds", RaceNumbers.PlainlyToTheThousandth(-1235));
+        Assert.DoesNotContain("-", RaceNumbers.LapSpoken(-1500));
+    }
+
+    [Theory]
+    [InlineData(1300, "one point three", "1.3s")]
+    [InlineData(1150, "one point two", "1.2s")]
+    [InlineData(1500, "a second and a half", "1.5s")]
+    [InlineData(1000, "a second", "1.0s")]
+    [InlineData(200, "two tenths", "0.2s")]
+    [InlineData(12_340, "twelve point three", "12.3s")]
+    public void A_gap_in_tenths_is_said_to_the_tenth_it_is_shown_to(long ms, string spoken, string shown)
+    {
+        // 8 Nov 2026: the split and ghost lines said 1.3s as "a second and a half".
+        var tenths = RaceNumbers.TenthsOf(ms);
+
+        Assert.Equal(spoken, RaceNumbers.GapInTenths(tenths));
+        Assert.Equal(shown, RaceNumbers.TenthsShown(tenths));
+    }
+
+    [Fact]
     public void No_lap_time_contains_a_digit_character()
     {
         // THE RULE THE WHOLE CLASS KEEPS, and it is not a style choice:

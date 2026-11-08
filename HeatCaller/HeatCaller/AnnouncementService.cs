@@ -1575,10 +1575,17 @@ public sealed partial class AnnouncementService
                 // second only the words that cannot follow a lap make it
                 // one - "5.06s down from 5.2s" is a lap time going down.
                 var after = match.Groups["post"].Value;
+                var before = match.Groups["pre"].Value;
 
+                // WHY (8 Nov 2026): "just", "only", "mere" and "barely" go in
+                // front of a lap as often as a gap - "a best lap of just
+                // 5.06s" was said "five seconds", a lap rounded to the half
+                // second. Over a second they make a gap only with a gap word
+                // after ("only 1.2s behind"), as LapCanBe's words do.
                 var readsAsGap = whole == 0
                     || (GapWordsAfter.Contains(after) && (whole < 1 || !LapCanBe(after)))
-                    || GapWordsBefore.Contains(match.Groups["pre"].Value);
+                    || GapWordsBefore.Contains(before)
+                    || (GapOrLapWordsBefore.Contains(before) && GapWordsAfter.Contains(after));
 
                 return readsAsGap
                     ? RaceNumbers.MarginSpoken(ms / 1000.0)
@@ -1608,7 +1615,7 @@ public sealed partial class AnnouncementService
 
     /// <summary>
     /// Words that, straight BEFORE a figure, make it a gap: "by 0.04s",
-    /// "within 0.3s", "just 0.2s".
+    /// "within 0.3s".
     ///
     /// NOT "of" and NOT "under", which both look like gap words and are
     /// far commoner in front of a lap: "a best lap of 5.06s", "the first
@@ -1617,7 +1624,18 @@ public sealed partial class AnnouncementService
     /// </summary>
     private static readonly HashSet<string> GapWordsBefore = new(StringComparer.OrdinalIgnoreCase)
     {
-        "by", "within", "just", "only", "mere", "barely",
+        "by", "within",
+    };
+
+    /// <summary>
+    /// Words that go in front of a gap OR a lap - "just 0.2s", "only 1.2s
+    /// behind", but also "a best lap of just 5.06s" - so they make a gap
+    /// only under a second or with a gap word after (8 Nov 2026). They were
+    /// in <see cref="GapWordsBefore"/>, and the lap came out "five seconds".
+    /// </summary>
+    private static readonly HashSet<string> GapOrLapWordsBefore = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "just", "only", "mere", "barely",
     };
 
     public AnnouncementService(ProfileStore profiles, VoiceSettingsStore voiceStore, SoundEffectsStore soundStore, RivalryStore? rivalries = null)

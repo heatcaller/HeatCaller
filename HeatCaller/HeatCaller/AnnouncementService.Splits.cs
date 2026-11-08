@@ -116,7 +116,10 @@ public sealed partial class AnnouncementService
             return "level";
         }
 
-        var gap = RaceNumbers.GapSpoken(Math.Abs(deltaMs) / 1000.0);
+        // WHY (8 Nov 2026): to the tenth, as DeltaShown puts it on the
+        // screen - GapSpoken's halves said "down a second and a half" under
+        // "down 1.3s". See RaceNumbers.GapInTenths.
+        var gap = RaceNumbers.GapInTenths(RaceNumbers.TenthsOf(deltaMs));
 
         return deltaMs < 0 ? $"up {gap}" : $"down {gap}";
     }
@@ -129,7 +132,9 @@ public sealed partial class AnnouncementService
             return "level";
         }
 
-        var seconds = (Math.Abs(deltaMs) / 1000.0).ToString("0.0", CultureInfo.InvariantCulture) + "s";
+        // The same rounding as the spoken form (8 Nov 2026), so the two
+        // cannot fall either side of a tenth.
+        var seconds = RaceNumbers.TenthsShown(RaceNumbers.TenthsOf(deltaMs));
 
         return deltaMs < 0 ? $"up {seconds}" : $"down {seconds}";
     }
@@ -147,9 +152,11 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        var tenths = Math.Max(1, (long)Math.Round(gapMs / 100.0));
-        var spoken = RaceNumbers.GapSpoken(tenths / 10.0);
-        var display = (tenths / 10.0).ToString("0.0", CultureInfo.InvariantCulture) + "s";
+        // WHY (8 Nov 2026): said to the tenth it is shown to - GapSpoken
+        // rounded a 1.3s gap on the screen to "a second and a half".
+        var tenths = Math.Max(1, RaceNumbers.TenthsOf(gapMs));
+        var spoken = RaceNumbers.GapInTenths(tenths);
+        var display = RaceNumbers.TenthsShown(tenths);
         var rival = DisplayNameFor(behindTransponder);
         var battle = place is not { } at || at < 1 ? string.Empty : at == 1 ? "for the lead" : $"for {Ordinal(at)}";
 

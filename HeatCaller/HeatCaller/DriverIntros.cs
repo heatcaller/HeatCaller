@@ -411,18 +411,19 @@ internal static class DriverIntros
     /// </summary>
     internal static string DurationSpoken(long ms)
     {
-        var centiseconds = (long)Math.Round(ms / 10.0);
-        var minutes = centiseconds / 6000;
-        var rest = centiseconds % 6000;
+        // WHY (8 Nov 2026): to the thousandth when there is one, as Clock
+        // shows it beside this - "5:02.315" was said "two point three two".
+        var minutes = ms / 60_000;
+        var rest = ms % 60_000;
 
         if (minutes <= 0)
         {
-            return RaceNumbers.Plainly(ms);
+            return RaceNumbers.PlainlyToTheThousandth(ms);
         }
 
         var said = $"{RaceNumbers.Words(minutes)} {Plural.Word(minutes, "minute")}";
 
-        return rest == 0 ? $"{said} flat" : $"{said} and {RaceNumbers.Plainly(rest * 10)}";
+        return rest == 0 ? $"{said} flat" : $"{said} and {RaceNumbers.PlainlyToTheThousandth(rest)}";
     }
 
     /// <summary>"5:02.310" - the timing sheet's way of writing a heat's run time.</summary>
