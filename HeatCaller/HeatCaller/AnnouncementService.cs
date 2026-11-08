@@ -48,7 +48,9 @@ public sealed partial class AnnouncementService
     /// room is hearing - and on a night with a flag call cutting in, those
     /// are different lines.
     /// </param>
-    private sealed record QueuedVoiceItem(AnnouncementEventType Type, string? Transponder, Func<Task> Work, string? OnAir = null, BattleLine? Battle = null);
+    /// <param name="SayByMs">The TimingClock time it must start by or not be said - a lap call's, or a clock call's. See AnnouncementService.Freshness.</param>
+    /// <param name="Facts">For an AI line written during a race, the race it was written against. See AnnouncementService.Freshness.</param>
+    private sealed record QueuedVoiceItem(AnnouncementEventType Type, string? Transponder, Func<Task> Work, string? OnAir = null, BattleLine? Battle = null, long? SayByMs = null, RaceFactsStamp? Facts = null);
 
     private readonly List<QueuedVoiceItem> _voiceQueue = new();
     private readonly object _voiceQueueLock = new();
@@ -1086,8 +1088,14 @@ public sealed partial class AnnouncementService
     /// check or one of the day's timers and wrong for a four-minute recap.
     /// See QueuedVoiceItem.OnAir and OnAirNow.
     /// </param>
+    /// <param name="facts">
+    /// For an AI line written during a race, the race it was written against:
+    /// it is dropped unheard once a quicker lap, a new leader or another lap
+    /// by the leader makes it untrue - see AnnouncementService.Freshness.
+    /// </param>
     public void SpeakReminder(string text, (double Stability, double Style)? deliveryOverride = null, SecondVoice? voice = null, bool showOnScreens = false,
-        SpeechTail tail = SpeechTail.Normal, SpeechLead lead = SpeechLead.Normal, string? onAir = null, Action? dequeued = null, bool forListeners = true)
+        SpeechTail tail = SpeechTail.Normal, SpeechLead lead = SpeechLead.Normal, string? onAir = null, Action? dequeued = null, bool forListeners = true,
+        RaceFactsStamp? facts = null)
     {
         if (Muted || string.IsNullOrWhiteSpace(text))
         {
@@ -1108,7 +1116,8 @@ public sealed partial class AnnouncementService
                 return SynthesizeAndPlayAsync(spoken, "[voice] Reminder", deliveryOverride: deliveryOverride, voice: voice, tail: tail, lead: lead, forListeners: forListeners);
             },
             displayText: showOnScreens ? text : null,
-            onAir: onAir);
+            onAir: onAir,
+            facts: facts);
     }
 
     /// <summary>Tells a caller its line has been taken off the queue - see SpeakPrepared's dequeued. A throwing caller never stops the line.</summary>
@@ -1323,7 +1332,8 @@ public sealed partial class AnnouncementService
     /// behind this one and the next must go in now. Never called for a line
     /// that is dropped instead. On the voice loop's thread; must not block.
     /// </param>
-    public void SpeakPrepared(PreparedSpeech prepared, SpeechTail tail = SpeechTail.Normal, SpeechLead lead = SpeechLead.Normal, string? onAir = null, Action? dequeued = null)
+    /// <param name="facts">For an AI turn written during a race, the race it was written against - see AnnouncementService.Freshness.</param>
+    public void SpeakPrepared(PreparedSpeech prepared, SpeechTail tail = SpeechTail.Normal, SpeechLead lead = SpeechLead.Normal, string? onAir = null, Action? dequeued = null, RaceFactsStamp? facts = null)
     {
         if (Muted)
         {
@@ -1401,6 +1411,13 @@ public sealed partial class AnnouncementService
                     return;
                 }
 
+                // An AI turn the race moved past while it waited - see AnnouncementService.Freshness.
+                if (WhyDequeuedLineIsStale() is { } stale)
+                {
+                    StatusMessage?.Invoke($"[voice] Reminder (prepared): dropped \"{prepared.Text}\" - {stale}.");
+                    return;
+                }
+
                 // Muted while it waited for the speaker.
                 if (Muted)
                 {
@@ -1427,7 +1444,7 @@ public sealed partial class AnnouncementService
             {
                 _audioPlaybackLock.Release();
             }
-        }, displayText: prepared.DisplayText);
+        }, displayText: prepared.DisplayText, facts: facts);
     }
 
     /// <summary>
@@ -1741,6 +1758,9 @@ public sealed partial class AnnouncementService
     public void ResetSession()
     {
         EndPostRaceQuiet("the session was reset");
+
+        // See AnnouncementService.Freshness.
+        NoteNewRaceForFacts();
 
         lock (_voiceQueueLock)
         {

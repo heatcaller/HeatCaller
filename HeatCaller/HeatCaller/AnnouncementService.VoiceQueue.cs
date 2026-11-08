@@ -371,7 +371,8 @@ public sealed partial class AnnouncementService
                 }
             },
             displayText: displayText.Length > 0 ? displayText : text,
-            lost: releaseMention);
+            lost: releaseMention,
+            sayByMs: sayByMs);
 
         if (!accepted)
         {
@@ -536,8 +537,18 @@ public sealed partial class AnnouncementService
         }
 
         StatusMessage?.Invoke($"{announcingLogPrefix}: \"{text}\"");
+        var rendering = System.Diagnostics.Stopwatch.StartNew();
         var synthesis = await RenderCastLineAsync(withoutVoice, currentProfile, voice, text);
         var audio = synthesis.Audio;
+        rendering.Stop();
+
+        // How long the words took to make (8 Nov 2026). The log line above is
+        // written BEFORE the render, so a slow model's seconds were invisible
+        // - and they are what made every call on a 5.5s track a lap late.
+        if (rendering.ElapsedMilliseconds >= 1_500)
+        {
+            StatusMessage?.Invoke($"[voice] Rendered in {Seconds(rendering.ElapsedMilliseconds)} ({currentProfile.EffectiveEngine}{(currentProfile.EffectiveEngine == VoiceEngine.ElevenLabs ? " " + currentProfile.ModelId : string.Empty)}, {(synthesis.FromLibrary ? "saved take" : "new")}).");
+        }
 
         // A race-control call with its own sound - the start horn, the
         // time-up buzzer, the finish fanfare - lets the sound play first.
@@ -575,6 +586,15 @@ public sealed partial class AnnouncementService
             if (IsOvertakenOnTrack())
             {
                 StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - the two cars it is about swapped while it was being synthesized.");
+                return;
+            }
+
+            // And for a lap call or an AI line the race moved past while it
+            // was rendered (8 Nov 2026): on eleven_v3 that is seconds - see
+            // AnnouncementService.Freshness.
+            if (WhyDequeuedLineIsStale() is { } stale)
+            {
+                StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - {stale} (rendered in {Seconds(rendering.ElapsedMilliseconds)}).");
                 return;
             }
 
@@ -1037,8 +1057,32 @@ public sealed partial class AnnouncementService
     /// the same call again on the next crossing (CheckCloseBattles) can wait
     /// out the gap instead of being held again and again.
     /// </param>
-    private bool EnqueueVoiceWork(AnnouncementEventType type, string? transponder, Func<Task> work, string? displayText = null, string? onAir = null, bool heldOver = false, Action? lost = null, Action? paced = null, int? routineWeight = null)
+    /// <param name="sayByMs">
+    /// The TimingClock time the line must START by, or it is not said -
+    /// checked as it comes off the queue and again once it is rendered. A
+    /// lap call (IsLapBoundCall) gets LapCallSayWithinMs from now when the
+    /// caller gives none. See AnnouncementService.Freshness.
+    /// </param>
+    /// <param name="facts">
+    /// For an AI line written during a race: the race it was written
+    /// against. It is dropped once the race makes it untrue, and it neither
+    /// bins the lap calls queued ahead of it nor waits in front of the ones
+    /// queued after it. See AnnouncementService.Freshness.
+    /// </param>
+    private bool EnqueueVoiceWork(AnnouncementEventType type, string? transponder, Func<Task> work, string? displayText = null, string? onAir = null, bool heldOver = false, Action? lost = null, Action? paced = null, int? routineWeight = null, long? sayByMs = null, RaceFactsStamp? facts = null)
     {
+        // From the moment it was first offered: a call kept for the end of a
+        // line comes back with the deadline it went in with.
+        sayByMs ??= IsLapBoundCall(type) ? TimingClock.NowMs + LapCallSayWithinMs : null;
+
+        // Written against a race that has already moved on - nothing to queue.
+        if (WhyStale(null, facts) is { } untrue)
+        {
+            StatusMessage?.Invoke($"[voice] Dropped an AI line before it was queued - {untrue}: \"{displayText ?? onAir ?? type.ToString()}\".");
+            NoteKeptCallLost(heldOver, type, transponder, displayText, untrue);
+            return false;
+        }
+
         // 17 Oct 2026, Bug Hunt 8, A06-5: a call already past the entry
         // points' mute check - a field flush still in its window, a call kept
         // for the end of a line - reached here after the mute and raised its
@@ -1130,7 +1174,7 @@ public sealed partial class AnnouncementService
                 {
                     using (AboutBattle(battle?.Pair))
                     {
-                        return EnqueueVoiceWork(type, transponder, work, displayText, onAir, heldOver: true, lost: lost, routineWeight: routineWeight);
+                        return EnqueueVoiceWork(type, transponder, work, displayText, onAir, heldOver: true, lost: lost, routineWeight: routineWeight, sayByMs: sayByMs, facts: facts);
                     }
                 },
                 alreadyCounted: heldOver,
@@ -1193,7 +1237,11 @@ public sealed partial class AnnouncementService
                 BinQueuedLocked(item => IsTimeLeftCall(item.Type), ref giveBack);
             }
 
-            if (isPriority)
+            // Not for an AI line written during a race (8 Nov 2026): it is
+            // colour about the race, and the lap calls waiting ahead of it are
+            // the race. It used to bin them - "Cleared 1 queued announcement
+            // to make way for Reminder" - see AnnouncementService.Freshness.
+            if (isPriority && facts is null)
             {
                 // Drop any queued-but-not-yet-started routine announcements.
                 // Once a flag is out, lap chatter from a moment ago is stale
@@ -1224,7 +1272,15 @@ public sealed partial class AnnouncementService
             // the line it waited on was still speaking.
             var at = heldOver ? HeldOverSlot(_voiceQueue.Select(waiting => waiting.Type).ToList()) : _voiceQueue.Count;
 
-            var queued = new QueuedVoiceItem(type, transponder, OnAir: onAir, Battle: battle, Work: async () =>
+            // A lap call goes in front of any AI line still waiting (8 Nov
+            // 2026): the 4.936 that was the fastest lap of the race sat
+            // behind two of them and was still in the queue at the flag.
+            if (IsLapBoundCall(type))
+            {
+                at = Math.Min(at, LapCallSlot(_voiceQueue.Select(waiting => waiting.Facts is not null).ToList()));
+            }
+
+            var queued = new QueuedVoiceItem(type, transponder, OnAir: onAir, Battle: battle, SayByMs: sayByMs, Facts: facts, Work: async () =>
             {
                 try
                 {
@@ -1473,6 +1529,11 @@ public sealed partial class AnnouncementService
             // The fight a battle line is about, so the board can cut it off.
             BattleLine? battle = null;
 
+            // Its deadline and the race it was written against - see AnnouncementService.Freshness.
+            long? sayBy = null;
+            RaceFactsStamp? facts = null;
+            var dequeuedType = AnnouncementEventType.Reminder;
+
             lock (_voiceQueueLock)
             {
                 if (_voiceQueue.Count > 0)
@@ -1482,6 +1543,9 @@ public sealed partial class AnnouncementService
                     onAirCall = item.Type;
                     onAirNamed = item.OnAir;
                     battle = item.Battle;
+                    sayBy = item.SayByMs;
+                    facts = item.Facts;
+                    dequeuedType = item.Type;
                     _battleOnAir = battle;
                     _voiceQueue.RemoveAt(0);
 
@@ -1528,6 +1592,19 @@ public sealed partial class AnnouncementService
             _dequeuedUnderGeneration.Value = generation;
             _dequeuedUnderCountdown.Value = countdownGeneration;
             _dequeuedBattle.Value = battle;
+            _dequeuedFreshness.Value = (sayBy, facts);
+
+            // Gone stale while it waited its turn (8 Nov 2026) - a lap call
+            // past its few seconds, or an AI line the race has overtaken.
+            // Dropped the way a mute drops it, below, with the reason said.
+            var stale = work is null ? null : WhyStale(sayBy, facts);
+
+            if (stale is not null)
+            {
+                StatusMessage?.Invoke(facts is not null
+                    ? $"[voice] Dropped a waiting AI line unheard - {stale}."
+                    : $"[voice] Dropped {dequeuedType} unheard - {stale}.");
+            }
 
             // Mute can land between an item being queued and it being
             // played, so check again here rather than trusting the
@@ -1535,7 +1612,7 @@ public sealed partial class AnnouncementService
             //
             // Its reservation is given back (23 Oct 2026, bug hunt 10): the
             // work never runs, so nothing else would.
-            if (Muted)
+            if (Muted || stale is not null)
             {
                 if (lostIfUnsaid is not null)
                 {

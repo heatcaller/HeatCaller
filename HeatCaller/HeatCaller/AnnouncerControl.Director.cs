@@ -290,6 +290,12 @@ public partial class AnnouncerControl
             // now tells it Spoken or Dropped.
             _director.CommitWhenSpoken = true;
 
+            // THE RACE AS THE ANNOUNCER SEES IT (8 Nov 2026), so an in-race
+            // line is checked against the board when it is written, when it
+            // comes back and when it is about to be heard - see
+            // AnnouncementService.Freshness.
+            _director.RaceFactsNow = _announcer.RaceFactsNow;
+
             // THE NIGHT'S LEDGER, HANDED TO THE TWO PROMPT BUILDERS THAT DO
             // NOT COME THROUGH THE DIRECTOR (10 Oct 2026).
             //
@@ -2857,7 +2863,8 @@ public partial class AnnouncerControl
                 said.Kind,
                 opening: at == 0,
                 prepared: at >= 0 && at < _renderedTurns.Count ? _renderedTurns[at] : null,
-                about: said.About);
+                about: said.About,
+                facts: said.Facts);
         }
 
         // A race moved on and took the block with it. The segment is then
@@ -3112,7 +3119,10 @@ public partial class AnnouncerControl
             // See AnnouncementService.BattleLines.
             using (_announcer.AboutBattle(said.About))
             {
-                _announcer.SpeakReminder(spoken, showOnScreens: true, onAir: ShowBlock.NameFor(said.Kind));
+                // With the race it was written against, so a quicker lap or
+                // another lap by the leader drops it unheard (8 Nov 2026) -
+                // see AnnouncementService.Freshness.
+                _announcer.SpeakReminder(spoken, showOnScreens: true, onAir: ShowBlock.NameFor(said.Kind), facts: said.Facts);
             }
 
             return;
@@ -3126,7 +3136,8 @@ public partial class AnnouncerControl
                 said.Kind,
                 opening: at == 0,
                 prepared: at < _renderedTurns.Count ? _renderedTurns[at] : null,
-                about: said.About);
+                about: said.About,
+                facts: said.Facts);
         }
     }
 
@@ -3216,7 +3227,8 @@ public partial class AnnouncerControl
         SegmentKind kind,
         bool opening,
         AnnouncementService.PreparedSpeech? prepared = null,
-        BattlePair? about = null)
+        BattlePair? about = null,
+        RaceFactsStamp? facts = null)
     {
         if (_settings is null)
         {
@@ -3245,7 +3257,7 @@ public partial class AnnouncerControl
 
         if (prepared is not null)
         {
-            _announcer.SpeakPrepared(prepared, tail, lead, onAir);
+            _announcer.SpeakPrepared(prepared, tail, lead, onAir, facts: facts);
             return;
         }
 
@@ -3259,6 +3271,7 @@ public partial class AnnouncerControl
             showOnScreens: true,
             tail: tail,
             lead: lead,
-            onAir: onAir);
+            onAir: onAir,
+            facts: facts);
     }
 }
