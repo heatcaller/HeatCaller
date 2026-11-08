@@ -339,9 +339,17 @@ public static class RcpBuildList
                           + $", on the tiles at {Named(size.Select(RcpPlan.QuadrantCell))}.");
             }
 
-            if (inventory.InnerCornerPieces > 0)
+            if (inventory.InnerCornerTiles > 0)
             {
-                lines.Add($"{Plural.Of(inventory.InnerCornerPieces, "inner corner piece")}, one on each inner corner tile: {Named(inner)}.");
+                lines.Add($"{Plural.Of(inventory.InnerCornerTiles, "inner corner piece")}, one on each inner corner tile: {Named(inner)}.");
+            }
+
+            // Rail posts laid by hand: the same quarter piece, on the tiles
+            // round each post (Asher, 8 Nov 2026).
+            if (inventory.PostQuarters > 0)
+            {
+                var posts = design.Decals.Where(d => d.Kind == RcpDecalKind.Post).Select(d => (d.Col, d.Row));
+                lines.Add($"{Plural.Of(inventory.PostQuarters, "rail post quarter")} - the inner corner piece - on the tiles at {Named(posts)}.");
             }
 
             steps.Add(new RcpBuildStep("Put the turns in", lines));
@@ -350,7 +358,10 @@ public static class RcpBuildList
         // --- The markings ------------------------------------------------------
         var labelled = design.Tiles.Where(t => !string.IsNullOrWhiteSpace(t.Label)).OrderBy(t => t.Row).ThenBy(t => t.Col).ToList();
 
-        if (design.Decals.Count > 0 || labelled.Count > 0)
+        // Rail posts are rail parts, listed with the turns above, not here.
+        var markings = design.Decals.Where(d => d.Kind != RcpDecalKind.Post).ToList();
+
+        if (markings.Count > 0 || labelled.Count > 0)
         {
             var lines = new List<string>();
 
@@ -360,7 +371,7 @@ public static class RcpBuildList
                 lines.Add("Named tiles: " + string.Join(", ", labelled.Select(t => $"{Cell(origin, t.Col, t.Row)} {t.Label.Trim()}")) + ".");
             }
 
-            foreach (var kind in design.Decals.GroupBy(d => d.Kind).OrderBy(g => g.Key))
+            foreach (var kind in markings.GroupBy(d => d.Kind).OrderBy(g => g.Key))
             {
                 var where = Named(kind.Select(d => (d.Col, d.Row)));
 

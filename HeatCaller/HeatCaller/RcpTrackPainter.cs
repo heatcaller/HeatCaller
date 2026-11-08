@@ -125,7 +125,9 @@ public static class RcpTrackPainter
             DrawTileFloor(g, tile, scale, origin, detailed, outsideCorner);
         }
 
-        foreach (var decal in design.Decals)
+        // Rail posts are drawn with the rails, below: a rail part, not a
+        // marking on the floor.
+        foreach (var decal in design.Decals.Where(d => d.Kind != RcpDecalKind.Post))
         {
             DrawDecal(g, decal, scale, origin, detailed);
         }
@@ -159,6 +161,13 @@ public static class RcpTrackPainter
         }
 
         DrawInnerCornerPieces(g, design, scale, origin, detailed);
+
+        // The rail post quarters laid by hand: the same corner rail piece,
+        // over the rail ends it joins (Asher, 8 Nov 2026).
+        foreach (var post in design.Decals.Where(d => d.Kind == RcpDecalKind.Post))
+        {
+            DrawDecal(g, post, scale, origin, detailed);
+        }
 
         foreach (var (at, vertical, twin) in RcpPlan.OpenEnds(design))
         {

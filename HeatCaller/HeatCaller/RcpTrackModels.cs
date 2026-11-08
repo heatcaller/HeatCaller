@@ -562,10 +562,18 @@ public sealed class RcpInventory
     public int OuterTurnRails { get; set; }
 
     /// <summary>
-    /// Inner corner pieces: one at the inside of every bend, on its inner
-    /// corner tile - whether that corner is drawn square or with a turn.
+    /// Rail posts laid by hand - each one quarter of a pink post on its own
+    /// tile. The quarter IS the inner corner piece, a rail part that joins
+    /// rails at a corner (Asher, 8 Nov 2026), so these count with them.
     /// </summary>
-    public int InnerCornerPieces => InnerCornerTiles;
+    public int PostQuarters { get; set; }
+
+    /// <summary>
+    /// Inner corner pieces: one at the inside of every bend, on its inner
+    /// corner tile - whether that corner is drawn square or with a turn -
+    /// and every rail post quarter laid by hand, which is the same part.
+    /// </summary>
+    public int InnerCornerPieces => InnerCornerTiles + PostQuarters;
 
     /// <summary>The plain floor: every tile that is neither corner tile.</summary>
     public int PlainTiles => Math.Max(0, Tiles - OuterCurveTiles - InnerCornerTiles);
@@ -818,6 +826,7 @@ public static class RcpPlan
 
         inventory.StraightRails = design.Walls.Sum(w => w.Double ? 2 : 1);
         inventory.EndCaps = OpenEnds(design).Count;
+        inventory.PostQuarters = design.Decals.Count(d => d.Kind == RcpDecalKind.Post);
 
         var corners = CornerTiles(design);
         inventory.OuterCurveTiles = corners.Outer.Count;

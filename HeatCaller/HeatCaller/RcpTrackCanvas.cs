@@ -4922,7 +4922,7 @@ public static class RcpTiles
         RcpPaletteItem.Turn => "Turn rail",
         RcpPaletteItem.FinishLine => "Finish line",
         RcpPaletteItem.GridBox => "Grid box",
-        RcpPaletteItem.Post => "Rail post",
+        RcpPaletteItem.Post => "Corner rail piece",
         RcpPaletteItem.Kerb => "Apex curb",
         RcpPaletteItem.Split1 => "Split 1 loop",
         RcpPaletteItem.Split2 => "Split 2 loop",
@@ -4950,7 +4950,7 @@ public static class RcpTiles
         RcpPaletteItem.Turn => "A corner by hand, at whatever radius you set.",
         RcpPaletteItem.FinishLine => "The checkered line across the track.",
         RcpPaletteItem.GridBox => "One staggered starting box.",
-        RcpPaletteItem.Post => "A quarter of the pink post. Click the tile's corner it goes in.",
+        RcpPaletteItem.Post => "The quarter rail piece that joins rails at a corner. Click the tile's corner it goes in.",
         RcpPaletteItem.Kerb => "Red and white, for marking an apex.",
         RcpPaletteItem.Split1 or RcpPaletteItem.Split2 or RcpPaletteItem.Split3 =>
             "Where a split loop lies across the track. With the racing line through it, it measures each sector for sector speeds.",
@@ -4982,6 +4982,10 @@ public static class RcpTiles
         RcpPaletteItem.ArchedTile,
         RcpPaletteItem.BlankTile,
         RcpPaletteItem.Blocked,
+
+        // A rail part, not a marking (Asher, 8 Nov 2026): the quarter that
+        // joins rails at a corner - the inner corner piece.
+        RcpPaletteItem.Post,
     };
 
     public static IReadOnlyList<RcpPaletteItem> Floor { get; } = new[]
@@ -5001,7 +5005,6 @@ public static class RcpTiles
     {
         RcpPaletteItem.FinishLine,
         RcpPaletteItem.GridBox,
-        RcpPaletteItem.Post,
         RcpPaletteItem.Kerb,
         RcpPaletteItem.Furniture,
         RcpPaletteItem.Split1,
