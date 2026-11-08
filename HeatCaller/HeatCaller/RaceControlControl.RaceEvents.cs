@@ -608,6 +608,10 @@ public sealed partial class RaceControlControl
             // The race penalty (20 Oct 2026, bug hunt 8): the provisional
             // pole call adds it to a driver's best run, as qualifying does.
             PenaltyMs = standing.PenaltyMs,
+            // The lap history, so the announcer's gaps are the board's (8 Nov
+            // 2026) - see RaceStanding.LapTimesMs. A copy: the session's list
+            // keeps growing after this is handed over.
+            LapTimesMs = standing.LapTimesMs.ToArray(),
         };
         _announcer.OnStandingUpdated(miniZStanding);
 
@@ -682,7 +686,10 @@ public sealed partial class RaceControlControl
     /// <summary>
     /// A lap added or removed, or a penalty, by hand. Updates the board and
     /// the announcer's running order - but it is not a pass, so no lap,
-    /// lap-time, streak or invalid-lap announcement is made for it.
+    /// lap-time, streak or invalid-lap announcement is made for it - nor,
+    /// since 8 Nov 2026, a lead change, lapping, battle, rivalry or pass
+    /// call (the announcer keeps its order in step quietly - see
+    /// AnnouncementService.KeepInStepWithCorrection).
     /// </summary>
     private void OnStandingAdjusted(RacerStanding standing)
     {
@@ -701,6 +708,10 @@ public sealed partial class RaceControlControl
             // The race penalty (20 Oct 2026, bug hunt 8): the provisional
             // pole call adds it to a driver's best run, as qualifying does.
             PenaltyMs = standing.PenaltyMs,
+            // So the penalty moves every crossing and a lap added by hand
+            // gets none, as on the board (8 Nov 2026) - see
+            // RaceStanding.LapTimesMs.
+            LapTimesMs = standing.LapTimesMs.ToArray(),
         });
 
         // The crash journal is written for it, forced - a correction by hand

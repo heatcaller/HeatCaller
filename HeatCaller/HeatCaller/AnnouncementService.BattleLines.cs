@@ -51,6 +51,17 @@ internal sealed class BattleLine
 
     /// <summary>True the first time only, so one pass is called once.</summary>
     public bool MarkOvertaken() => Interlocked.Exchange(ref _overtaken, 1) == 0;
+
+    private int _excused;
+
+    /// <summary>
+    /// The pair was put the other way round by a correction by hand while
+    /// this line was being said - see AnnouncementService.SettleBattleLinesAfterCorrection.
+    /// Never judged overtaken after that: nobody passed anybody.
+    /// </summary>
+    public bool Excused => Volatile.Read(ref _excused) == 1;
+
+    public void Excuse() => Interlocked.Exchange(ref _excused, 1);
 }
 
 /// <summary>What the board did to the battle lines in the air - see <see cref="AnnouncementService.JudgeBattleLines"/>.</summary>
@@ -206,7 +217,7 @@ public sealed partial class AnnouncementService
     /// </summary>
     internal static BattleVerdict JudgeBattleLines(BattleLine? onAir, IEnumerable<BattleLine> queued, Func<string, RaceStanding?> standingOf)
     {
-        var cut = onAir is { Overtaken: false } line && HasPassed(line.Pair, standingOf) && line.MarkOvertaken()
+        var cut = onAir is { Overtaken: false, Excused: false } line && HasPassed(line.Pair, standingOf) && line.MarkOvertaken()
             ? line
             : null;
 
@@ -419,5 +430,66 @@ public sealed partial class AnnouncementService
         _voiceQueueSignal.Release();
 
         return place <= 1;
+    }
+
+    /// <summary>
+    /// CallTheBattlePass for a correction by hand: the board has put a pair
+    /// the other way round, but nobody passed anybody.
+    /// </summary>
+    /// <remarks>
+    /// WHY (8 Nov 2026): a penalty used to go through CallTheBattlePass like
+    /// a crossing, so a 10 s penalty could cut the line on air and call
+    /// "And Sam takes the lead!" for a pass nobody made. Left alone instead,
+    /// the next real crossing would have found the pair swapped and made the
+    /// same call then. Now the line being said is excused - it finishes, and
+    /// is never judged overtaken - and lines still waiting about the pair are
+    /// binned unheard, since they describe an order the board no longer
+    /// shows. No pass call, no cut, nothing shown.
+    /// </remarks>
+    private void SettleBattleLinesAfterCorrection()
+    {
+        List<BattleLine> stale;
+        List<Action>? giveBack = null;
+
+        lock (_voiceQueueLock)
+        {
+            if (_battleOnAir is null && !_voiceQueue.Any(item => item.Battle is not null))
+            {
+                return;
+            }
+
+            RaceStanding? StandingOf(string transponder) => _standings.TryGetValue(transponder, out var standing) ? standing : null;
+
+            if (_battleOnAir is { Overtaken: false } onAir && !CutSinceTaken(onAir) && HasPassed(onAir.Pair, StandingOf))
+            {
+                onAir.Excuse();
+            }
+
+            stale = _voiceQueue
+                .Select(item => item.Battle)
+                .OfType<BattleLine>()
+                .Where(waiting => !waiting.Overtaken && HasPassed(waiting.Pair, StandingOf))
+                .Distinct()
+                .Where(waiting => waiting.MarkOvertaken())
+                .ToList();
+
+            if (stale.Count > 0)
+            {
+                BinQueuedLocked(item => item.Battle is { } line && stale.Contains(line), ref giveBack);
+            }
+        }
+
+        GiveBackLost(giveBack);
+
+        foreach (var pair in stale.Select(line => line.Pair).Distinct())
+        {
+            SayBattleLineDropped(pair);
+        }
+
+        if (stale.Count > 0)
+        {
+            StatusMessage?.Invoke(
+                $"[voice] Dropped {Plural.Of(stale.Count, "waiting line")} - a correction by hand put the two cars it is about the other way round.");
+        }
     }
 }

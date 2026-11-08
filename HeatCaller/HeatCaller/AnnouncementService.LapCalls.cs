@@ -828,11 +828,30 @@ public sealed partial class AnnouncementService
     /// OnStandingRemoved and ResetSession forget a car (or everything) here
     /// through Remove and Clear, so the copy drops it when _standings does.
     /// </summary>
+    /// <remarks>
+    /// WHY (8 Nov 2026): a crossing is now worked out by the board's own rule
+    /// whenever the standing carries its lap times (RaceStanding.LapTimesMs,
+    /// as Race Control's always do) - RaceGaps.CrossingMs, the same call the
+    /// leaderboard's gap columns make. It used to be the elapsed time written
+    /// against the lap count on every update, corrections included, so after
+    /// a penalty only the current lap's crossing moved, and a lap added by
+    /// hand got a "crossing" at the time of the lap before. Car A over lap 10
+    /// at 60.0 then given 5 s, B over lap 9 at 56.0: the voice measured B
+    /// against A's old lap-9 time of 54.0 and said "two seconds back"; the
+    /// board, against 59.0, showed "-". Every gap the announcer says
+    /// (GapBetween, the lapped and close battle calls, the position report)
+    /// reads from here, so all of them now match the board. A source with no
+    /// lap times keeps the old book, less any crossing for a hand correction.
+    /// </remarks>
     private sealed class LapCrossingBook
     {
         private readonly object _lock = new();
         private readonly Dictionary<string, Dictionary<int, long>> _crossings = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, LapHistory> _histories = new(StringComparer.OrdinalIgnoreCase);
         private RaceStanding[] _board = [];
+
+        /// <summary>A car's lap times as the session last gave them, with the lap count and elapsed time they go with. Never changed.</summary>
+        private sealed record LapHistory(long[] LapTimesMs, int Laps, long ElapsedMs);
 
         /// <summary>A car's crossing, and the board with it on, as one change.</summary>
         public void Record(RaceStanding standing, RaceStanding[] board)
@@ -840,6 +859,16 @@ public sealed partial class AnnouncementService
             lock (_lock)
             {
                 _board = board;
+
+                if (standing.LapTimesMs is { } lapTimes)
+                {
+                    // The whole history, every update: a penalty or a lap
+                    // added or taken away by hand reshapes earlier crossings
+                    // too, exactly as it does on the board.
+                    _histories[standing.Transponder] = new LapHistory(lapTimes.ToArray(), standing.Laps, standing.ElapsedMs);
+                    _crossings.Remove(standing.Transponder);
+                    return;
+                }
 
                 if (standing.Laps <= 0 || standing.ElapsedMs <= 0)
                 {
@@ -852,6 +881,18 @@ public sealed partial class AnnouncementService
                     _crossings[standing.Transponder] = laps;
                 }
 
+                if (IsHandAdjustment(standing))
+                {
+                    // Nobody crossed the line. A lap taken away loses its
+                    // crossing; a lap added gets none, as on the board.
+                    foreach (var lap in laps.Keys.Where(lap => lap > standing.Laps).ToList())
+                    {
+                        laps.Remove(lap);
+                    }
+
+                    return;
+                }
+
                 laps[standing.Laps] = standing.ElapsedMs;
             }
         }
@@ -861,6 +902,11 @@ public sealed partial class AnnouncementService
         {
             lock (_lock)
             {
+                if (_histories.TryGetValue(transponder, out var history))
+                {
+                    return RaceGaps.CrossingMs(history.LapTimesMs, history.Laps, history.ElapsedMs, lap);
+                }
+
                 return _crossings.TryGetValue(transponder, out var laps) && laps.TryGetValue(lap, out var t) ? t : null;
             }
         }
@@ -882,6 +928,7 @@ public sealed partial class AnnouncementService
             lock (_lock)
             {
                 _crossings.Remove(transponder);
+                _histories.Remove(transponder);
                 // Ordinal, as _standings itself is keyed.
                 _board = _board
                     .Where(s => !string.Equals(s.Transponder, transponder, StringComparison.Ordinal))
@@ -894,6 +941,7 @@ public sealed partial class AnnouncementService
             lock (_lock)
             {
                 _crossings.Clear();
+                _histories.Clear();
                 _board = [];
             }
         }
@@ -934,6 +982,21 @@ public sealed partial class AnnouncementService
         RaceGaps.Compute(car.Laps, car.ElapsedMs, ahead.Laps, ahead.ElapsedMs,
             lap => CrossingMs(ahead.Transponder, lap));
 
+    /// <summary>
+    /// The gap the announcer would give from <paramref name="car"/> back to
+    /// <paramref name="ahead"/>, by transponder, as of the last update - or
+    /// null while either is not on its board. For tests holding it to the
+    /// board's RaceGaps.Between (8 Nov 2026).
+    /// </summary>
+    internal RaceGap? GapAsSpoken(string car, string ahead)
+    {
+        var board = _lapCrossings.Board;
+        var behind = board.FirstOrDefault(s => s.Transponder == car);
+        var front = board.FirstOrDefault(s => s.Transponder == ahead);
+
+        return behind is null || front is null ? null : GapBetween(behind, front);
+    }
+
     private void HandleStandingUpdated(RaceStanding standing)
     {
         // A crossing - not a correction by hand - starts the clock on every
@@ -958,6 +1021,14 @@ public sealed partial class AnnouncementService
         var leader = ordered.FirstOrDefault();
         if (leader is null)
         {
+            return;
+        }
+
+        // A correction by hand is not a pass (8 Nov 2026): the order is kept
+        // in step, and nothing is said - see KeepInStepWithCorrection.
+        if (IsHandAdjustment(standing))
+        {
+            KeepInStepWithCorrection(ordered);
             return;
         }
 
@@ -1055,6 +1126,70 @@ public sealed partial class AnnouncementService
         CheckLapped(ordered);
         CheckCloseBattles(ordered);
         CheckRivalries(ordered);
+    }
+
+    /// <summary>
+    /// What HandleStandingUpdated does for a penalty, or a lap added or taken
+    /// away by hand: the announcer's idea of the race moved to match the
+    /// board, with no call, sound, banner, battle cut or rivalry line.
+    /// </summary>
+    /// <remarks>
+    /// WHY (8 Nov 2026): Race Control's OnStandingAdjusted promised no call
+    /// for an adjustment, but the standing went through the lead change call,
+    /// the lapped, close battle and rivalry checks and the battle-line pass
+    /// cut like any crossing - so a 10 s penalty could make the room hear
+    /// "Sam takes the lead" or "Bill has been lapped" for a pass nobody made.
+    /// Skipping the lot was not enough either: the next real crossing would
+    /// then find the stale leader, lapping or rivalry order and call the
+    /// change a lap late. So each is brought into step here, quietly:
+    ///
+    ///   the leader         _currentLeaderTransponder, and the lead tracker
+    ///                      (LeadTracker.Correct - not counted as a change)
+    ///   lappings           _lappedAnnounced raised to what the board shows
+    ///   rivalries          who is ahead, remembered without a line
+    ///   battle lines       SettleBattleLinesAfterCorrection
+    ///
+    /// No running order is started either. A close battle is left alone - it
+    /// is once per pair and marked only when said, so a real crossing with
+    /// the two still close calls it as it would have.
+    ///
+    /// The AI's race-facts counters DO move on: a penalty that changes the
+    /// lead makes an AI line about the old leader as untrue as a pass would,
+    /// and it must be dropped the same way (AnnouncementService.Freshness).
+    /// </remarks>
+    private void KeepInStepWithCorrection(List<RaceStanding> ordered)
+    {
+        // The real field, as below in HandleStandingUpdated.
+        var field = ordered.Where(s => !MutedGhost(s.Transponder)).ToList();
+
+        if (field.FirstOrDefault() is not { } leader)
+        {
+            return;
+        }
+
+        if (_currentLeaderTransponder is not null && leader.Transponder != _currentLeaderTransponder)
+        {
+            NoteLeadChangeForFacts();
+        }
+
+        NoteLeaderLapsForFacts(leader.Laps);
+
+        _leads.Correct(leader.Transponder);
+        _currentLeaderTransponder = leader.Transponder;
+
+        // Only ever up, as in CheckLapped.
+        foreach (var car in field.Skip(1))
+        {
+            var lapsDown = GapBetween(car, leader).LapsDown;
+
+            if (lapsDown > _lappedAnnounced.GetValueOrDefault(car.Transponder))
+            {
+                _lappedAnnounced[car.Transponder] = lapsDown;
+            }
+        }
+
+        CheckRivalries(field, call: false);
+        SettleBattleLinesAfterCorrection();
     }
 
     /// <summary>
@@ -1842,7 +1977,12 @@ public sealed partial class AnnouncementService
     /// profile pointing a transponder at that name) or hasn't posted a lap
     /// yet this session - there's no meaningful "ahead/behind" to compare.
     /// </summary>
-    private void CheckRivalries(List<RaceStanding> ordered)
+    /// <param name="call">
+    /// False for a correction by hand (8 Nov 2026): who is ahead is
+    /// remembered, so the next crossing does not call a swap nobody made,
+    /// but no line is said - see KeepInStepWithCorrection.
+    /// </param>
+    private void CheckRivalries(List<RaceStanding> ordered, bool call = true)
     {
         if (_rivalries is null || _rivalries.All.Count == 0)
         {
@@ -1890,7 +2030,7 @@ public sealed partial class AnnouncementService
 
             var currentlyAhead = indexA < indexB ? transponderA : transponderB;
 
-            if (_rivalryLastAhead.TryGetValue(rivalry.Id, out var previouslyAhead) && previouslyAhead != currentlyAhead)
+            if (call && _rivalryLastAhead.TryGetValue(rivalry.Id, out var previouslyAhead) && previouslyAhead != currentlyAhead)
             {
                 var overtakerName = currentlyAhead == transponderA ? rivalry.DriverA : rivalry.DriverB;
                 var overtakenName = currentlyAhead == transponderA ? rivalry.DriverB : rivalry.DriverA;
