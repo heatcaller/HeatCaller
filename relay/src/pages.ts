@@ -2403,10 +2403,23 @@ function lapRows(raw, posAt, startMs, lengthS) {
   const limitMs = typeof lengthS === 'number' && lengthS > 0 ? lengthS * 1000 : 0;
   const good = lxLaps(list);
   const quickest = good.length > 0 ? Math.min.apply(null, good) : 0;
-  let total = typeof startMs === 'number' && startMs > 0 ? startMs : 0;
+  const start = typeof startMs === 'number' && isFinite(startMs) && startMs > 0 ? startMs : 0;
+  let total = start;
   let counted = 0;
   let marked = false;
   const rows = [];
+
+  // THE START LAP IS LAP 1 (8 Nov 2026, Asher: the race card said "10
+  // laps" while the lap list said "Lap times (9)" and the chart stopped at
+  // lap 9). The laptop counts green-flag-to-the-line as a driver's first
+  // lap and sends it apart as startMs, with lapsMs holding only the flying
+  // laps. Numbering those from 1 put every lap one behind the count the
+  // card, the result and the announcer all use. So the start lap is the
+  // first row, and the flying laps are numbered from 2. It is never the
+  // best lap and takes no part in the stats or the pace: it is shorter
+  // than a lap and starts from the grid.
+  if (start > 0) rows.push({ n: 1, ms: start, best: false, pace: '', pos: 0, start: true });
+  const first = start > 0 ? 2 : 1;
 
   list.forEach((ms, i) => {
     const real = typeof ms === 'number' && isFinite(ms) && ms > 0;
@@ -2425,7 +2438,7 @@ function lapRows(raw, posAt, startMs, lengthS) {
     if (best) marked = true;
 
     const pos = places !== null && typeof places[i] === 'number' && places[i] > 0 ? places[i] : 0;
-    rows.push({ n: counted, ms, best, pace, pos });
+    rows.push({ n: counted - 1 + first, ms, best, pace, pos });
   });
 
   return rows;
@@ -2672,7 +2685,10 @@ function positionGraph(results) {
   if (drivers.length < 2) return '';
 
   const field = Math.max(drivers.length, ...drivers.map((r) => Math.max.apply(null, r.posAt)));
-  const most = Math.max(...drivers.map((r) => r.posAt.length));
+  // posAt is one place per FLYING lap (LapByLap), so with a start lap sent
+  // the first of them is the place after lap 2, not lap 1 - see lapRows.
+  const first = (r) => Number(r.startMs) > 0 ? 2 : 1;
+  const most = Math.max(...drivers.map((r) => r.posAt.length - 1 + first(r)));
   const W = 600;
   const H = 40 + field * 34;
   const L = 34;
@@ -2697,7 +2713,7 @@ function positionGraph(results) {
     const colour = LINE_COLOURS[i % LINE_COLOURS.length];
     const points = [];
     if (Number(r.qual) > 0) points.push([0, Number(r.qual)]);
-    r.posAt.forEach((p, k) => points.push([k + 1, p]));
+    r.posAt.forEach((p, k) => points.push([k + first(r), p]));
     const path = points.map((pt) => x(pt[0]).toFixed(1) + ',' + y(pt[1]).toFixed(1)).join(' ');
     svg += '<g style="--c:' + colour + '"><polyline points="' + path + '"/>' +
       points.map((pt) => '<circle cx="' + x(pt[0]).toFixed(1) + '" cy="' + y(pt[1]).toFixed(1) + '" r="3"/>').join('') + '</g>';
@@ -11516,9 +11532,12 @@ function sameLaps(a, b) {
   return a.length > 0 && a.length === b.length && a.every((v, i) => v === b[i]);
 }
 
-// [{name, colour, me, posAt, start, laps}], in the order they finished.
+// [{name, colour, me, posAt, start, laps, first}], in the order they
+// finished. first is the lap number of their first flying lap: 2 when the
+// start lap was sent apart (startMs), so posAt and laps are drawn at the
+// laps the card and the result count - see lapRows.
 function meLines(r, field) {
-  const own = { name: 'You', me: true, posAt: r.posAt, start: num(r.start), laps: lxLaps(r.lapsMs) };
+  const own = { name: 'You', me: true, posAt: r.posAt, start: num(r.start), laps: lxLaps(r.lapsMs), first: num(r.startMs) > 0 ? 2 : 1 };
   const list = Array.isArray(field) ? field.filter((x) => x && typeof x === 'object') : [];
   let at = list.findIndex((x) => sameLaps(lxLaps(x.lapsMs), own.laps));
   if (at < 0 && num(r.pos) > 0) at = list.findIndex((x) => num(x.pos) === num(r.pos));
@@ -11532,7 +11551,7 @@ function meLines(r, field) {
     })
     : {
       name: String(x.name || 'Unnamed driver'), me: false, colour: ME_COLOURS[i % ME_COLOURS.length],
-      posAt: x.posAt, start: num(x.qual), laps: lxLaps(x.lapsMs),
+      posAt: x.posAt, start: num(x.qual), laps: lxLaps(x.lapsMs), first: num(x.startMs) > 0 ? 2 : 1,
     });
 }
 
@@ -11603,7 +11622,7 @@ function meFigure(title, svg, key, note) {
 function mePositions(lines, of, W) {
   const use = lines.filter((l) => Array.isArray(l.posAt) && l.posAt.length > 0 && l.posAt.every((p) => typeof p === 'number' && p > 0));
   if (use.length === 0) return null;
-  const marks = use.map((l) => (l.start > 0 ? [[0, l.start]] : []).concat(l.posAt.map((p, k) => [k + 1, p])));
+  const marks = use.map((l) => (l.start > 0 ? [[0, l.start]] : []).concat(l.posAt.map((p, k) => [k + (l.first || 1), p])));
   const laps = [].concat.apply([], marks.map((m) => m.map((p) => p[0])));
   const lo = Math.min.apply(null, laps);
   const hi = Math.max.apply(null, laps);
@@ -11641,11 +11660,12 @@ function meTimes(lines, W) {
   let hi = Math.ceil(slow / 1000 / step) * step;
   if (hi - lo < step / 2) hi = lo + step;
   const places = step >= 1 ? 0 : step === 0.25 ? 2 : 1;
-  const most = Math.max.apply(null, use.map((l) => l.laps.length));
+  const most = Math.max.apply(null, use.map((l) => l.laps.length - 1 + (l.first || 1)));
+  const lowest = Math.min.apply(null, use.map((l) => l.first || 1));
   const me = use.find((l) => l.me);
   const mine = me ? Math.min.apply(null, me.laps) : 0;
-  const aria = 'Lap times for every lap' + (me ? ', your best ' + lap(mine) + ' on lap ' + (me.laps.indexOf(mine) + 1) : '');
-  const f = meFrame(W, 260, 1, Math.max(2, most), 'Lap time (s)', aria, 'metimes');
+  const aria = 'Lap times for every lap' + (me ? ', your best ' + lap(mine) + ' on lap ' + (me.laps.indexOf(mine) + (me.first || 1)) : '');
+  const f = meFrame(W, 260, lowest, Math.max(lowest + 1, most), 'Lap time (s)', aria, 'metimes');
   const yOf = (s) => f.T + (s - lo) / (hi - lo) * (f.base - 12 - f.T);
   const y = (ms) => ms > cap ? f.base - 4 : yOf(ms / 1000);
   const count = Math.round((hi - lo) / step);
@@ -11659,7 +11679,7 @@ function meTimes(lines, W) {
     const l = use[i];
     const best = Math.min.apply(null, l.laps);
     const at = l.laps.indexOf(best);
-    const pts = l.laps.map((ms, k) => [f.x(k + 1), y(ms), ms > cap]);
+    const pts = l.laps.map((ms, k) => [f.x(k + (l.first || 1)), y(ms), ms > cap]);
     meLine(f.svg, l, pts, (j) => j === at);
   }
   const key = meKey(use, (l) => lap(Math.min.apply(null, l.laps)));

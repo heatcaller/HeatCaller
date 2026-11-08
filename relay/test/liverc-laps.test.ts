@@ -47,8 +47,31 @@ describe("lap stats and pace", () => {
     // 2.0 s to the line, then a 10.0 s lap: crossed at 12.0 s, so 15 laps of 12.0 s.
     const rows = call(page, "lapRows([10000], [1], 2000, 180)") as { pace: string; pos: number }[];
 
-    assert.equal(rows[0]!.pace, "15/3:00.000");
-    assert.equal(rows[0]!.pos, 1);
+    // Row 0 is the start lap itself (see the next test); the flying lap is row 1.
+    assert.equal(rows[1]!.pace, "15/3:00.000");
+    assert.equal(rows[1]!.pos, 1);
+  });
+
+  it("lists the start lap as lap 1 and numbers the flying laps from 2", async () => {
+    // 8 Nov 2026: a card saying "10 laps" over a list of 9 numbered 1 to 9.
+    const page = await resultsScript();
+    const rows = call(page, "lapRows([15066, 17131, 15040], [2, 3, 4], 9146, 0)") as
+      { n: number; ms: number; best: boolean; pos: number; start?: boolean }[];
+
+    assert.deepEqual(rows.map((r) => r.n), [1, 2, 3, 4]);
+    assert.deepEqual(rows.map((r) => r.ms), [9146, 15066, 17131, 15040]);
+    assert.equal(rows[0]!.start, true);
+    // Shorter than any lap, but never the best: it starts from the grid.
+    assert.deepEqual(rows.map((r) => r.best), [false, false, false, true]);
+    assert.deepEqual(rows.map((r) => r.pos), [0, 2, 3, 4]);
+  });
+
+  it("numbers from 1 when no start lap was sent", async () => {
+    const page = await resultsScript();
+    const rows = call(page, "lapRows([9000, 8000], [2, 1], 0, 0)") as { n: number; start?: boolean }[];
+
+    assert.deepEqual(rows.map((r) => r.n), [1, 2]);
+    assert.equal(rows.some((r) => r.start), false);
   });
 
   it("has no pace without a time limit, and no positions that are out of step", async () => {
