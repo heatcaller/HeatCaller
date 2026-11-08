@@ -71,15 +71,27 @@ describe("Me tonight: Alerts, and qualifying on the moment card", () => {
     assert.ok(html.indexOf('id="ea"') < html.indexOf('id="lv"'));
   });
 
-  it("makes the moment card's pack and transponder chips go where they are fixed (7 Nov 2026)", async () => {
+  it("makes the moment card's pack and transponder tiles go where they are fixed (7 Nov 2026)", async () => {
     const page = await open();
     const hero = page.get("me-moment");
 
-    page.button(hero, /^Transponder not heard$/)!.click();
+    page.button(hero, /^TransponderNot heard$/)!.click();
     assert.equal(page.eval("document.body.getAttribute('data-me')"), "tonight");
 
-    page.button(hero, /^No pack set$/)!.click();
+    page.button(hero, /^PackNone set$/)!.click();
     assert.equal(page.get("me-sheet").hidden, false, "the quick pack change");
+  });
+
+  it("draws them as tiles that keep the old chips' words for a screen reader (7 Nov 2026)", async () => {
+    const page = await open();
+    const hero = page.get("me-moment");
+    const tiles = hero.find((n) => n.tagName === "BUTTON" && /\bme-act\b/.test(n.className));
+
+    assert.ok(tiles.length >= 2, "pack and transponder at least");
+    assert.equal(tiles[0]!.getAttribute("aria-label"), "No pack set");
+    assert.equal(tiles[1]!.getAttribute("aria-label"), "Transponder not heard");
+    assert.match(tiles[0]!.className, /\bwait\b/);
+    assert.equal(hero.find((n) => /\bme-chip\b/.test(n.className)).length, 0, "no chips left on the card");
   });
 
   it("says nothing about qualifying before the laptop has published it", async () => {
