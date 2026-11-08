@@ -167,6 +167,13 @@ public partial class MainForm
 
         if (_driverRequestsForm is { IsDisposed: false } open)
         {
+            // Activate alone leaves a minimised window minimised - and the
+            // Desk click looking as if it did nothing.
+            if (open.WindowState == FormWindowState.Minimized)
+            {
+                open.WindowState = FormWindowState.Normal;
+            }
+
             open.Activate();
             return;
         }

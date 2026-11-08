@@ -247,9 +247,15 @@ internal sealed class RoomAndWebCard
         Card.Add(_lblNotesWhere, gapBelow: UiLayout.SectionGap);
 
         Card.Add(Heading("The room's vote"), stretch: false, gapBelow: UiLayout.HintGap);
+
+        // Bug hunt 14 (7 Nov 2026): it said the vote closes when the result
+        // comes in. It closes at that race's green (RoomVote.StartedRace) -
+        // a prediction gathered after the flag is not one - and the result
+        // is only the backstop. RoomVoteForm's blurb had it right.
         Card.Add(Hint(
             "The room votes on who wins, and after the race the announcer says how it did. Open a vote on the Votes "
-            + "button in the Broadcast window; it closes when the result comes in. The announcer stays quiet "
+            + "button in the Broadcast window; it closes when that race goes green (or when its result is filed, "
+            + "if that comes first). The announcer stays quiet "
             + "if too few voted or the room split, and never says who picked whom."));
         Card.Add(_chkVoteWifi, stretch: false, gapBelow: 0);
         Card.Add(_chkVoteRelay, stretch: false, gapBelow: 0);

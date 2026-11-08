@@ -367,6 +367,20 @@ public sealed partial class RaceControlControl
             {
                 ShowFloor.Release(ReplayingTheMoment);
             }
+
+            // WHY (7 Nov 2026, bug hunt 14): the buffer is fed from the
+            // room's mix, and the replay plays in the room - so while the
+            // race was still recording, the replay went into the buffer
+            // too, and pressing Replay Moment again replayed the replay.
+            // The held audio starts again from here instead (Put is never
+            // paused - a gap there would splice two moments, which the
+            // buffer is built never to do). Only while it is being fed:
+            // after the race nothing new comes in, and replaying the end
+            // of the race twice has to keep working.
+            if (!finished)
+            {
+                buffer.Restart();
+            }
         }
     }
 

@@ -44,7 +44,15 @@ public partial class MainForm
                 _checkInStore.IsCheckedIn(p.Transponder)))
             .ToList();
 
-        _webServer.PublishRoster(roster);
+        // Bug hunt 14 (7 Nov 2026): with whether the day is closed, so a
+        // phone's tap is refused there and then with the reason rather than
+        // answered "checked in" and dropped here (ApplyPhoneCheckIn). The
+        // roster timer republishes every two seconds, and a change of day
+        // asks for one straight away (see the CurrentChanged handler).
+        var closedDay = CheckInStore.ClosedCurrentDay(_raceEvents);
+        _webServer.PublishRoster(roster, closedDay is null
+            ? null
+            : $"Check-in is closed: the laptop is on a race day that has been closed (\"{closedDay.DisplayName}\"). Ask at the desk to start tonight's race day.");
 
         // WHY (26 Oct 2026, asked for by Asher: "is there a reason the phone
         // sign in page you can sign in/out anyone you want without a pin?"):
@@ -626,6 +634,12 @@ public partial class MainForm
     {
         if (_signupsForm is { IsDisposed: false } open)
         {
+            // Activate alone leaves a minimised window minimised.
+            if (open.WindowState == FormWindowState.Minimized)
+            {
+                open.WindowState = FormWindowState.Normal;
+            }
+
             open.Activate();
             return;
         }
@@ -1163,11 +1177,10 @@ public partial class MainForm
         {
             seasons = _seasonStore.All.Select(season =>
             {
-                var table = SeasonStore.ComputeStandings(
-                    season,
-                    // Only what is on disk - see SessionHistoryStore.Saved.
-                    EventSpine.SessionsFor(season, _raceEvents, _rounds, _sessionHistory.SavedView()),
-                    _profiles);
+                // Only what is on disk - see SessionHistoryStore.Saved.
+                var counted = EventSpine.SessionsFor(season, _raceEvents, _rounds, _sessionHistory.SavedView());
+                var table = SeasonStore.ComputeStandings(season, counted, _profiles);
+                var length = Championship.WhatItTakesLength(season, counted, _raceEvents);
 
                 // Per season, because a season is the list a reader
                 // compares within - and shortened together, so two
@@ -1208,10 +1221,19 @@ public partial class MainForm
                     // the best-rounds rule, and the rounds run so far - as
                     // many as anybody has raced, counted and dropped, which
                     // is the season to date for a driver who made them all.
-                    planned = season.PlannedRounds,
+                    //
+                    // WHY (7 Nov 2026, bug hunt 14): held was the most
+                    // anybody had raced plus their dropped rounds - but
+                    // SessionsCounted already holds the dropped ones, so a
+                    // best-6 season eight nights in said ten were held, and
+                    // a night with an A and a B main counted twice. Now the
+                    // race DAYS, as the commentary counts them, and a
+                    // season that cannot be put on days sends planned 0 so
+                    // the page says nothing - see Championship.WhatItTakesLength.
+                    planned = length.Planned,
                     most = season.MostPointsInARound(),
                     bestOf = season.CountBestRounds,
-                    held = table.Count == 0 ? 0 : table.Max(entry => entry.SessionsCounted + entry.DroppedRounds),
+                    held = length.Held,
 
                     standings = table.Select((entry, index) => new
                     {

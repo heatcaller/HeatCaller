@@ -1756,10 +1756,11 @@ public sealed partial class RaceControlSession
         // Brought up to the limit while the flag is still in: the lap added
         // is the crossing that reached it, so the checkered comes out as it
         // would have then. Not for a ghost while real cars race, and not
-        // under a red, when no crossing would have counted either.
+        // under a red, when no crossing would have counted either. Nor for a
+        // black-flagged car (bug hunt 14), as for its crossings.
         var isGhost = _standings.Keys.Any(k => !Ghosts.IsGhost(k)) && Ghosts.IsGhost(id);
 
-        if (lapsBefore < limit && standing.Laps >= limit && !IsFinishing && !isGhost && Flag != FlagState.Red)
+        if (lapsBefore < limit && standing.Laps >= limit && !IsFinishing && !isGhost && !standing.IsBlackFlagged && Flag != FlagState.Red)
         {
             Log($"Lap limit of {limit} reached by {id} - lap added by hand.");
 
@@ -2574,6 +2575,10 @@ public sealed partial class RaceControlSession
         // running is abandoned - Race Control has asked, or the phone has.
         var overRunningRace = State == RaceState.Racing;
 
+        // Bug hunt 14: read here too - a countdown that did not come
+        // through Stage (nor restarts one) is a fresh start, see below.
+        var freshStart = State is not (RaceState.Staging or RaceState.Countdown);
+
         // A countdown that did not come through Stage opens the jump-start
         // window itself. Only Stage used to, so a countdown started straight
         // from a finished (or idle) session carried the LAST race's jump
@@ -2623,8 +2628,23 @@ public sealed partial class RaceControlSession
         // thrown during the new countdown comes after this, so it still
         // stops the automatic start. A countdown from a finished race keeps
         // that race's checkered, as before - it stops nothing.
-        if (overRunningRace)
+        //
+        // Bug hunt 14 (7 Nov 2026): a yellow or red left out from before the
+        // countdown goes too, when the countdown did not come through Stage.
+        // One thrown after the finish (F4/F5 or the phone) or at Idle was
+        // still showing, and the automatic start stopped before the green as
+        // if it had been thrown during this start. Stage clears it already;
+        // a countdown restarted mid-start keeps it, since that one was thrown
+        // during this start. A leftover red's stoppage goes with it - there
+        // is no race for it to have paused - so it is dropped, not banked.
+        if (overRunningRace || (freshStart && (Flag is FlagState.Yellow or FlagState.Red)))
         {
+            if (!overRunningRace)
+            {
+                _redFlagStartedUtc = null;
+                _redFlagStartedClockMs = null;
+            }
+
             SetFlag(FlagState.None);
         }
 
@@ -2816,12 +2836,13 @@ public sealed partial class RaceControlSession
             // whole field ran a lap long. The restart puts it out instead, as
             // the crossing that reached the limit would have, and every car
             // already there has finished. Not for a ghost while real cars
-            // race, which can never put the checkered out.
+            // race, which can never put the checkered out - nor for a
+            // black-flagged car, out of the race (bug hunt 14).
             if (LapLimit is { } limit && !IsPracticeMode)
             {
                 var realCarsRacing = _standings.Keys.Any(k => !Ghosts.IsGhost(k));
                 var atTheLimit = _standings.Values
-                    .Where(s => s.Laps >= limit && !(realCarsRacing && Ghosts.IsGhost(s.TransponderId)))
+                    .Where(s => s.Laps >= limit && !s.IsBlackFlagged && !(realCarsRacing && Ghosts.IsGhost(s.TransponderId)))
                     .Select(s => s.TransponderId)
                     .ToList();
 

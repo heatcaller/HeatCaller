@@ -53,6 +53,47 @@ public sealed class DeskButtonTests
         Assert.Contains("_btnReset, _btnBarDesk);", Source("RaceControlControl.Layout.cs"), StringComparison.Ordinal);
     }
 
+    // Bug hunt 14: Driver Requests minimised, then Desk clicked - Activate()
+    // alone left it minimised and the click did nothing visible.
+    [Theory]
+    [InlineData("MainForm.DriverRequests.cs", "private void ShowDriverRequests()")]
+    [InlineData("MainForm.Relay.cs", "private void ShowSignups()")]
+    public void Bringing_the_window_forward_restores_it_from_minimised(string file, string method)
+    {
+        var source = Source(file);
+        var start = source.IndexOf(method, StringComparison.Ordinal);
+        Assert.True(start > 0, method);
+
+        var body = source[start..source.IndexOf("open.Activate();", start, StringComparison.Ordinal)];
+        Assert.Contains("open.WindowState = FormWindowState.Normal;", body, StringComparison.Ordinal);
+    }
+
+    private sealed class Held(float? progress) : IShownHold
+    {
+        public string Doing => "throw the red flag";
+
+        public float? Progress { get; } = progress;
+    }
+
+    // Bug hunt 14: a request arriving while Red, Checkered or Reset was held
+    // re-centred the row under the cursor, which called the hold off.
+    [Fact]
+    public void The_row_is_not_laid_out_again_while_a_hold_is_under_way()
+    {
+        Assert.True(RaceControlControl.DeskMayMoveRow(Array.Empty<IShownHold>()));
+        Assert.True(RaceControlControl.DeskMayMoveRow(new IShownHold[] { new Held(null), new Held(null) }));
+        Assert.False(RaceControlControl.DeskMayMoveRow(new IShownHold[] { new Held(null), new Held(0.4f) }));
+
+        var desk = Source("RaceControlControl.Desk.cs");
+        var set = desk[desk.IndexOf("internal void SetDeskWaiting(int count)", StringComparison.Ordinal)..desk.IndexOf("private bool _deskMoveOwed;", StringComparison.Ordinal)];
+        Assert.DoesNotContain("Rearrange()", set, StringComparison.Ordinal);
+        Assert.Contains("MoveDeskIfOwed();", set, StringComparison.Ordinal);
+
+        // Every hold on the row tries again as it is let go.
+        Assert.Contains("hold.Changed += _ => MoveDeskIfOwed();", Source("RaceControlControl.Morph.cs"), StringComparison.Ordinal);
+        Assert.Contains("skip.Changed += _ => MoveDeskIfOwed();", Source("RaceControlControl.BetweenRaces.cs"), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void On_a_wide_row_the_buttons_shift_along_to_make_room_and_the_row_keeps_its_height()
     {

@@ -2020,7 +2020,7 @@ public static partial class CommentaryReaders
     /// session ticked into a championship by hand carries no round, and a
     /// championship holding one has a round count that is a guess.
     /// </summary>
-    private static int? RoundsCountedSoFar(
+    internal static int? RoundsCountedSoFar(
         IReadOnlyList<SessionRecord> counted,
         RaceEventStore? events,
         RoundDefinition? round)

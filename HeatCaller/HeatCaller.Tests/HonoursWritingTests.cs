@@ -320,6 +320,8 @@ public sealed class HonoursWritingTests
         Assert.Contains("[1] = aiRead", source, StringComparison.Ordinal);
 
         var service = File.ReadAllText(Path.Combine(SourceDir(), "CommentaryService.cs"));
-        Assert.Contains("HonoursWriting.Check(StripAudioTags(reply), picks, others, given, notes)", service, StringComparison.Ordinal);
+        // Bug hunt 14 (7 Nov 2026), H4: checked against this race's facts
+        // only, not the prompt's earlier reads.
+        Assert.Contains("HonoursWriting.Check(StripAudioTags(reply), picks, others, numbersFrom, notes)", service, StringComparison.Ordinal);
     }
 }

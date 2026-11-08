@@ -389,7 +389,7 @@ public sealed class CommentaryGapsTests : IDisposable
     {
         Assert.Equal(string.Empty, CommentaryService.BehindTheTotal(0, 0, 0, 0));
         Assert.Equal(
-            "; 2 rounds dropped under the best-rounds rule, worth 14 points; 40 points carried in from before; 1 round entered without completing a lap",
+            "; 2 rounds dropped under the best-rounds rule, worth 14 points; 40 points carried in from before; 1 race without a finish",
             CommentaryService.BehindTheTotal(2, 14, 40, 1));
 
         Assert.True(CommentaryService.AnyBehindTheTotal(new[] { "P1 Sam - 88 points" + CommentaryService.BehindTheTotal(1, 0, 0, 0) }));

@@ -2677,9 +2677,13 @@ public sealed class CommentaryService
 
     private static List<string> ChampionshipLines(ChampionshipSwing swing)
     {
+        // WHY (7 Nov 2026, bug hunt 14): RoundsCounted is the RACES the
+        // championship counts, and a club's "round" is a race day - a
+        // night with an A and a B main is one round and two races. So the
+        // figure is said as races, which it is.
         var lines = new List<string>
         {
-            $"Championship after this race: {Field(swing.SeasonName)}, {Plural.Of(swing.RoundsCounted, "round")} counted",
+            $"Championship after this race: {Field(swing.SeasonName)}, {Plural.Of(swing.RoundsCounted, "race")} counted",
         };
 
         lines.AddRange(swing.Moves.Select(m => "  " + DescribeMove(m)));
@@ -2717,7 +2721,7 @@ public sealed class CommentaryService
     /// <summary>
     /// What is behind a championship total, for the line that states it (7
     /// Nov 2026): rounds the best-rounds rule dropped and what they were
-    /// worth, points carried in from before, rounds with no laps. Empty for
+    /// worth, points carried in from before, races without a finish. Empty for
     /// the usual driver, who has none of these - and then nothing is added,
     /// because "no rounds dropped" on every line is four facts about
     /// nothing.
@@ -2742,9 +2746,14 @@ public sealed class CommentaryService
             parts.Add($"{Plural.Of(carriedIn, "point")} carried in from before");
         }
 
+        // WHY (7 Nov 2026, bug hunt 14): Dnfs is not only the races with no
+        // laps. ComputeStandings counts a race the director marked DNF or
+        // DQ too, laps and points kept - so "without completing a lap" was
+        // false for those, and the points it scored looked impossible.
+        // "Without a finish" is true of all three.
         if (dnfs > 0)
         {
-            parts.Add($"{Plural.Of(dnfs, "round")} entered without completing a lap");
+            parts.Add($"{Plural.Of(dnfs, "race")} without a finish");
         }
 
         return parts.Count > 0 ? "; " + string.Join("; ", parts) : string.Empty;
@@ -2754,11 +2763,11 @@ public sealed class CommentaryService
     internal static bool AnyBehindTheTotal(IEnumerable<string> lines) =>
         lines.Any(line => line.Contains("under the best-rounds rule", StringComparison.Ordinal)
                           || line.Contains("carried in from before", StringComparison.Ordinal)
-                          || line.Contains("without completing a lap", StringComparison.Ordinal));
+                          || line.Contains("without a finish", StringComparison.Ordinal));
 
     /// <summary>Said whenever a championship line carries what is behind a total - see BehindTheTotal.</summary>
     internal const string ChampionshipFiguresRule =
-        " Where a championship line says rounds were dropped, points carried in or rounds without a lap, that is "
+        " Where a championship line says rounds were dropped, points carried in or races without a finish, that is "
         + "background to the total: say it as written if it explains the table, and never add, subtract or predict with it.";
 
     /// <summary>
@@ -2784,9 +2793,11 @@ public sealed class CommentaryService
     {
         var season = Field(stake.SeasonName, MaxFieldChars * 2);
 
+        // Races, not rounds (7 Nov 2026, bug hunt 14) - the same count and
+        // the same reason as ChampionshipLines.
         var lines = new List<string>
         {
-            $"Championship as it stands BEFORE this race: {season}, {Plural.Of(stake.RoundsCounted, "round")} counted so far",
+            $"Championship as it stands BEFORE this race: {season}, {Plural.Of(stake.RoundsCounted, "race")} counted so far",
         };
 
         foreach (var row in stake.OnThisGrid.Take(MostStakes))
@@ -4114,8 +4125,17 @@ public sealed class CommentaryService
             return null;
         }
 
+        // Bug hunt 14 (7 Nov 2026), H4: the numbers the read may say are
+        // THIS race's - its label ("heat 2") and its badges' facts - and not
+        // the earlier reads', which are in the prompt only so the read does
+        // not open the same way twice. A count from the last race's read
+        // passed the check before.
+        var numbersFrom =
+            (race.Length > 0 ? $"Race: {race}\n" : string.Empty) +
+            string.Join("\n", badgeFacts.Select(block => Field(block, MaxNightFactChars * 2)).Where(b => b.Length > 0));
+
         var notes = new List<string>();
-        var read = HonoursWriting.Check(StripAudioTags(reply), picks, others, given, notes);
+        var read = HonoursWriting.Check(StripAudioTags(reply), picks, others, numbersFrom, notes);
 
         if (read is null)
         {

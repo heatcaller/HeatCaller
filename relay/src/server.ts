@@ -191,6 +191,12 @@ const SPONSOR_VIEWS_DAYS = 45;
 /** A phone's report of what it saw is a short list of ids. */
 const SPONSOR_SEEN_MAX_BODY = 2048;
 
+/**
+ * Sponsor views and taps one address may send a club in five minutes - a
+ * flood brake, not a per-phone limit. See sponsorTraffic.
+ */
+export const SPONSOR_SEEN_PER_ADDRESS = 300;
+
 const MANAGE_QUEUE = "managequeue";
 
 /**
@@ -407,6 +413,12 @@ const NOTES_HELD_MOST = 40;
  * voter). Counting arrivals instead would make the tally a measure of who
  * pressed hardest.
  *
+ * Address AND phone (7 Nov 2026, bug hunt 14): keyed by address alone, a
+ * whole room on the venue Wi-Fi - one address - was one voter, each phone
+ * replacing the last. The page now sends an id its phone made up and
+ * keeps, and the key hashes that in too; VOTERS_PER_ADDRESS stops one
+ * address making up as many as it likes. See roomVoterKey.
+ *
  * The salt is minted per ballot and never leaves the relay, so the ids say
  * nothing: they cannot be correlated between two races or two clubs, and
  * nobody can test whether a given address has voted.
@@ -446,6 +458,27 @@ const VOTE_MAX_CHARS = 60;
  * than draining it - see readRoomVotes.
  */
 const VOTES_HELD_MOST = 500;
+
+/**
+ * Votes one address may send a club in five minutes - a flood brake, as a
+ * room of phones shares one address. See voteTraffic.
+ */
+export const VOTE_SENDS_PER_ADDRESS = 100;
+
+/**
+ * The most different voters one address may be in a race (7 Nov 2026, bug
+ * hunt 14).
+ *
+ * Each phone now votes as itself (see roomVoterKey), and the id it votes
+ * with is one it makes up - so without this, one address could be as many
+ * voters as it liked by sending a fresh id each time. Forty is a room of
+ * phones on the venue Wi-Fi; it bites only on a NEW voter, never on one
+ * already held changing their mind.
+ */
+export const VOTERS_PER_ADDRESS = 40;
+
+/** How much of a voter's key is its address's hash - see roomVoterKey. */
+const VOTER_ADDRESS_CHARS = 16;
 
 /** The laptop's signup/answer body: a hash, a state, a line for the phone and at most one driver's name and number. */
 const SIGNUP_ANSWER_MAX_BODY = 8 * 1024;
@@ -1103,9 +1136,30 @@ export class Relay {
    * where a person will never meet it and a script meets it immediately.
    */
   private readonly notesTraffic: Limiter;
+  /**
+   * Votes from one address, per club: a hundred in five minutes.
+   *
+   * WHY (7 Nov 2026, bug hunt 14): it was six, which was right while one
+   * address was one voter - but a whole room of phones shares the venue
+   * Wi-Fi's one address, so the seventh phone in the room was refused.
+   * Each phone now votes as itself (see roomVoterKey), so this is a flood
+   * brake only; VOTERS_PER_ADDRESS is what stops one address stuffing the
+   * ballot.
+   */
   private readonly voteTraffic: Limiter;
 
-  /** Sponsor views and taps from one address - see sponsorSeen. */
+  /**
+   * Sponsor views and taps from one address, per club: three hundred in
+   * five minutes - see sponsorSeen.
+   *
+   * WHY (7 Nov 2026, bug hunt 14): it was twenty, but a whole room of
+   * phones shares the venue Wi-Fi's one address (or a carrier's NAT), so
+   * the 21st view in five minutes was refused for everybody - and the
+   * phone had already written it down as counted, so it never went again
+   * and the sponsor report came up short. This is a flood brake only, as
+   * askTraffic is: the per-phone limit is the page's own once-a-half-hour
+   * stamp, which it now writes only once the relay has said yes.
+   */
   private readonly sponsorTraffic: Limiter;
   /** One laptop rendering lines: a race night's worth in a burst when Prepare Lines runs, and a trickle after that. */
   private readonly voiceTraffic: Limiter;
@@ -1360,9 +1414,10 @@ export class Relay {
 
     // Looser than the notes limiter, and matching the laptop's own Wi-Fi
     // route: changing your mind is a legitimate thing to do here, where
-    // sending a second dedication is not.
-    this.voteTraffic = new Limiter(6, 5 * 60 * 1000, () => this.now().getTime());
-    this.sponsorTraffic = new Limiter(20, 5 * 60 * 1000, () => this.now().getTime());
+    // sending a second dedication is not. Per address, and a room of
+    // phones shares one, so a flood brake (bug hunt 14) - see voteTraffic.
+    this.voteTraffic = new Limiter(VOTE_SENDS_PER_ADDRESS, 5 * 60 * 1000, () => this.now().getTime());
+    this.sponsorTraffic = new Limiter(SPONSOR_SEEN_PER_ADDRESS, 5 * 60 * 1000, () => this.now().getTime());
 
     // Prepare Lines on the laptop walks a whole announcer style in one go -
     // a hundred or so lines, two at a time - and a club is entitled to do
@@ -8375,6 +8430,11 @@ export class Relay {
       return;
     }
 
+    // Counted before the body is read, refusals included (bug hunt 14
+    // review): each one still costs a read of the sponsors, so a refused
+    // body going free would be the one way past the brake. A stale page
+    // with a sponsor no longer published does not wear it down - it takes
+    // a 400 or 404 as final and sends that view again only half an hour on.
     this.sponsorTraffic.hit(who);
 
     const body = await readBody(request, response, SPONSOR_SEEN_MAX_BODY);
@@ -8513,7 +8573,10 @@ export class Relay {
     if (this.voteTraffic.blocked(who)) {
       sendJson(response, 429, {
         ok: false,
-        error: "You have changed your mind a few times already - that one stands.",
+        // A flood brake on a whole address since bug hunt 14 (7 Nov 2026),
+        // so a first vote in a busy room can meet it: not "you changed
+        // your mind", which it may never have.
+        error: "Too many votes from this connection just now - try again in a minute.",
       });
       return;
     }
@@ -8554,7 +8617,9 @@ export class Relay {
       return;
     }
 
-    const voter = this.roomVoterKey(ballot.salt, request);
+    const phone = typeof body["p"] === "string" && /^[A-Za-z0-9_-]{8,40}$/.test(body["p"]) ? body["p"] : "";
+    const voter = this.roomVoterKey(ballot.salt, request, phone);
+    const sameAddress = this.roomVoterKey(ballot.salt, request, "").slice(0, VOTER_ADDRESS_CHARS);
 
     const outcome = await this.withLock(club, async () => {
       // Read again inside the lock: the club may have closed the vote, or
@@ -8583,6 +8648,16 @@ export class Relay {
         return "full" as const;
       }
 
+      // One address, as many voters as it has phones - up to a room's
+      // worth (bug hunt 14). The same rule as the ceiling above: it bites
+      // only on a new voter, never on a held one changing their mind.
+      if (
+        !held.some((one) => one.id === voter) &&
+        held.filter((one) => one.id.startsWith(sameAddress)).length >= VOTERS_PER_ADDRESS
+      ) {
+        return "crowded" as const;
+      }
+
       await this.store.putItem(club, VOTE_CHANNEL, voter, {
         seq: this.now().getTime(),
         publishedAt: this.now().toISOString(),
@@ -8602,6 +8677,11 @@ export class Relay {
       return;
     }
 
+    if (outcome === "crowded") {
+      sendJson(response, 429, { ok: false, error: "That is as many votes as this connection can send for this one." });
+      return;
+    }
+
     sendJson(response, 200, { ok: true });
   }
 
@@ -8612,12 +8692,31 @@ export class Relay {
    * leaves this relay and is minted per race, so the id cannot be
    * correlated between two races or two clubs and nobody can test whether
    * a given address has voted. See VOTE_CHANNEL.
+   *
+   * And the phone (7 Nov 2026, bug hunt 14): phone is the id the page made
+   * up and keeps (VOTE_JS), so two phones on one venue Wi-Fi are two
+   * voters. The key is two halves - the address's hash, then the phone's -
+   * so the voters one address has made can be counted from the item ids
+   * alone, without reading a vote (see VOTERS_PER_ADDRESS). A vote with no
+   * phone id (a page drawn before this) is the address's hash whole, which
+   * starts with the same half and so counts against the same address.
+   * The halves are as salted as the whole was: the laptop, which sees the
+   * ids, can tell two votes came over one connection and nothing more.
    */
-  private roomVoterKey(salt: string, request: IncomingMessage): string {
-    return createHash("sha256")
+  private roomVoterKey(salt: string, request: IncomingMessage, phone: string): string {
+    const address = createHash("sha256")
       .update(`${salt}|${clientAddress(request)}`)
-      .digest("hex")
-      .slice(0, 32);
+      .digest("hex");
+
+    if (phone === "") {
+      return address.slice(0, 32);
+    }
+
+    const own = createHash("sha256")
+      .update(`${salt}|${clientAddress(request)}|${phone}`)
+      .digest("hex");
+
+    return address.slice(0, VOTER_ADDRESS_CHARS) + own.slice(0, 32 - VOTER_ADDRESS_CHARS);
   }
 
   /**

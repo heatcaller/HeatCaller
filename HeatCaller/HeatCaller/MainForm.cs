@@ -878,6 +878,12 @@ public partial class MainForm : Form
         {
             _clubNotes.FollowDay(_raceEvents.Active);
             _roomVote.FollowDay(_raceEvents.Active);
+
+            // Bug hunt 14 (7 Nov 2026): the phones are told whether the day
+            // is closed with the roster (see PublishCheckInRoster), so a new
+            // day - or one closed or reopened - goes out now rather than on
+            // the next roster tick. Posted: a close can come from any thread.
+            TryPost(PublishCheckInRosterSoon);
         };
 
         // --- The event spine ---

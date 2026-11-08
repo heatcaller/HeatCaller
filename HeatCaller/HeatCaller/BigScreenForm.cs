@@ -1678,8 +1678,12 @@ public sealed class BigScreenForm : Form
     /// hold is let go exactly once (see StopSponsorVideo) and the rotation
     /// starts its wait for the next spot from now. Safe when nothing is up,
     /// and twice. UI thread.
+    ///
+    /// <paramref name="reason"/> is what the log line opens with (7 Nov 2026,
+    /// bug hunt 14): On Air takes the spot down too now, before its jingle,
+    /// and its line must not say "Reset".
     /// </summary>
-    internal void StopSponsorSpot()
+    internal void StopSponsorSpot(string reason = "Reset")
     {
         if (IsDisposed || Disposing)
         {
@@ -1688,7 +1692,7 @@ public sealed class BigScreenForm : Form
 
         if (_showingSponsor && _sponsors is not null)
         {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [sponsor] Reset - the sponsor spot is taken off the Big Screen.");
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [sponsor] {reason} - the sponsor spot is taken off the Big Screen.");
             ShowLeaderboardAgain();
             return;
         }

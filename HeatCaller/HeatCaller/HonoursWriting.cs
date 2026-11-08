@@ -82,6 +82,32 @@ internal static class HonoursWriting
     private static readonly Regex Number = new(@"\d+(?:[.,]\d+)*", RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     /// <summary>
+    /// Counts the read might say in words, each with the count the facts would
+    /// have to give for it (bug hunt 14, H4): cardinals as themselves, ordinals
+    /// as their cardinal - "her second achievement" stands on "two achievements
+    /// in all". Not "one" or "first", which English uses for "a".
+    /// </summary>
+    private static readonly (string Word, int Count)[] NumberWords =
+        Enumerable.Range(2, 11).Select(n => (Words(n), n))
+            .Concat(new[]
+            {
+                ("second", 2), ("third", 3), ("fourth", 4), ("fifth", 5), ("sixth", 6),
+                ("seventh", 7), ("eighth", 8), ("ninth", 9), ("tenth", 10), ("eleventh", 11),
+                ("twelfth", 12),
+            })
+            .ToArray();
+
+    /// <summary>A club-first claim, in the normalised read (bug hunt 14, H4): "the first at the club", "a club first", "nobody had ever... before".</summary>
+    private static readonly Regex ClubFirstClaim = new(
+        @" first (?:\w+ ){0,2}at (?:the |this )?club | club s first | club first | (?:nobody|no one)(?: \w+){0,10} before ",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    /// <summary>A first-achievement claim, in the normalised read (bug hunt 14, H4): "her first achievement", "his first ever badge".</summary>
+    private static readonly Regex FirstAchievementClaim = new(
+        @" first (?:ever )?(?:achievements?|badges?) ",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    /// <summary>
     /// The hand back is a turn of its own (HandOff.HonoursBack, or the AI's),
     /// said straight after the read - a read that hands back as well is the
     /// reader saying it twice.
@@ -110,7 +136,18 @@ internal static class HonoursWriting
         foreach (var pick in picks)
         {
             var block = new StringBuilder();
-            block.Append($"{pick.Driver} earned {(pick.Badges.Count == 1 ? "one achievement" : $"{Words(pick.Badges.Count)} achievements")} in this race:");
+
+            // Bug hunt 14 (7 Nov 2026), H3: the count is what the driver
+            // EARNED in this race, over every unlock - not the badges read
+            // out, which RaceHonours caps at three a driver. A first race
+            // that unlocked five said "earned three" before.
+            var now = allUnlocks.Count(u => string.Equals(u.Transponder, pick.Transponder, StringComparison.OrdinalIgnoreCase));
+            var earned = Math.Max(now, pick.Badges.Count);
+
+            block.Append($"{pick.Driver} earned {(earned == 1 ? "one achievement" : $"{Words(earned)} achievements")} in this race");
+            block.Append(earned > pick.Badges.Count
+                ? $", {Words(pick.Badges.Count)} of them read out here:"
+                : ":");
 
             for (var i = 0; i < pick.Badges.Count && i < pick.Unlocks.Count; i++)
             {
@@ -153,7 +190,6 @@ internal static class HonoursWriting
                     is { } theirs)
             {
                 var all = theirs.Unlocked.Count;
-                var now = allUnlocks.Count(u => string.Equals(u.Transponder, pick.Transponder, StringComparison.OrdinalIgnoreCase));
 
                 if (all > 0 && all <= now)
                 {
@@ -224,23 +260,83 @@ internal static class HonoursWriting
             }
         }
 
-        foreach (Match number in Number.Matches(text))
-        {
-            if (!Regex.IsMatch(facts, $@"(?<![\d.,]){Regex.Escape(number.Value)}(?![\d])"))
-            {
-                notes?.Add($"it said \"{number.Value}\", which is not in the facts");
-                return null;
-            }
-        }
-
         // Every name the read could say, normalised the same way the read
         // is: lower case, and anything that is not a letter or a digit a
         // space - so "Nail-Biter" and "nail biter" are one badge, and the TTS
         // says either the same.
         var mentions = new List<(int At, int Length, string Kind, string Key)>();
         var said = Normalise(text);
+        var saidFacts = Normalise(facts);
 
-        void Find(string name, string kind, string key)
+        foreach (Match number in Number.Matches(text))
+        {
+            // Bug hunt 14 (7 Nov 2026), H4: the facts give counts in words -
+            // "two achievements in all" - so a "2" the read says for one of
+            // them is the same number.
+            var inWords = int.TryParse(number.Value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n)
+                          && n is >= 1 and <= 12
+                          && saidFacts.Contains($" {Words(n)} ", StringComparison.Ordinal);
+
+            if (!inWords && !Regex.IsMatch(facts, $@"(?<![\d.,]){Regex.Escape(number.Value)}(?![\d])"))
+            {
+                notes?.Add($"it said \"{number.Value}\", which is not in the facts");
+                return null;
+            }
+        }
+
+        // Bug hunt 14 (7 Nov 2026), H4: and the numbers said in WORDS, which
+        // the digit check above never saw - "her eighth achievement" against
+        // facts that say two. An ordinal is held to its count ("second" to
+        // "two"). "One" and "first" are left alone: they are how English
+        // says "a", and the club-first claims are checked on their own below.
+        //
+        // Review (7 Nov 2026): and a word the facts say THEMSELVES passes -
+        // the badges' own words use ordinals that are not counts ("Finished
+        // within a second of the car next to you", "Second half of a race
+        // quicker than the first", "from third or further back"), and the
+        // details give counts as digits ("5 second places"), so "five second
+        // places" stands on the 5. Without both, accurate reads were thrown
+        // away for quoting the facts. The digit stands for a cardinal only:
+        // "Heat 2" in the race label is not "her second achievement".
+        foreach (var (word, count) in NumberWords)
+        {
+            if (said.Contains($" {word} ", StringComparison.Ordinal)
+                && !saidFacts.Contains($" {word} ", StringComparison.Ordinal)
+                && !saidFacts.Contains($" {Words(count)} ", StringComparison.Ordinal)
+                && !(word == Words(count) && Regex.IsMatch(facts, $@"(?<![\d.,]){count}(?!\d|[.,]\d)")))
+            {
+                notes?.Add($"it said \"{word}\", which is not in the facts");
+                return null;
+            }
+        }
+
+        // Bug hunt 14 (7 Nov 2026), H4: "the first at the club" is the line
+        // the room looks up for, and the one the prompt says never to say
+        // when the facts do not - so it is held to the fact, not trusted.
+        var clubFirst = facts.Contains("Nobody at the club had earned it before tonight", StringComparison.OrdinalIgnoreCase);
+        var firstEver = Regex.IsMatch(facts, @"first achievements? ever", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        if (!clubFirst && ClubFirstClaim.IsMatch(said))
+        {
+            notes?.Add("it called a badge a club first, which the facts do not");
+            return null;
+        }
+
+        if (!firstEver && FirstAchievementClaim.IsMatch(said))
+        {
+            notes?.Add("it called a badge somebody's first achievement, which the facts do not");
+            return null;
+        }
+
+        if (!firstEver && !clubFirst && said.Contains(" first ever ", StringComparison.Ordinal))
+        {
+            notes?.Add("it said \"first ever\", which the facts do not");
+            return null;
+        }
+
+        var spokenWords = OriginalWords(text);
+
+        void Find(string name, string kind, string key, bool capitalisedOnly = false)
         {
             var needle = Normalise(name);
 
@@ -251,6 +347,28 @@ internal static class HonoursWriting
 
             for (var at = said.IndexOf(needle, StringComparison.Ordinal); at >= 0; at = said.IndexOf(needle, at + 1, StringComparison.Ordinal))
             {
+                if (capitalisedOnly)
+                {
+                    // Which word of the read this is: said is " w0 w1 w2 ",
+                    // so the spaces up to and including the one in front of
+                    // it, less the padding, count the words before it.
+                    var index = said.AsSpan(0, at + 1).Count(' ') - 1;
+
+                    if (index < 0 || index >= spokenWords.Count || !char.IsUpper(spokenWords[index].Word[0]))
+                    {
+                        continue;
+                    }
+
+                    // Review (7 Nov 2026): nor at the start of a sentence,
+                    // where every word has a capital - "Will anyone stop
+                    // her?" is not Will Smith. Said in full there ("Will
+                    // Smith takes...") the full name is found on its own.
+                    if (spokenWords[index].OpensSentence)
+                    {
+                        continue;
+                    }
+                }
+
                 // The words only, without the padding either side: two names
                 // said back to back - "Billy Bob, Nail-Biter" - share the
                 // space between them, and are not one overlapping the other.
@@ -260,6 +378,11 @@ internal static class HonoursWriting
 
         var drivers = picks.Select(p => p.Driver).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var badges = picks.SelectMany(p => p.Badges).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var otherNames = (others ?? Array.Empty<string>())
+            .Select(CommentaryFacts.Clean)
+            .Where(o => o.Length > 0 && !drivers.Contains(o))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         foreach (var driver in drivers)
         {
@@ -271,12 +394,52 @@ internal static class HonoursWriting
             Find(badge, "badge", badge);
         }
 
-        foreach (var other in (others ?? Array.Empty<string>())
-                     .Select(CommentaryFacts.Clean)
-                     .Where(o => o.Length > 0 && !drivers.Contains(o))
-                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var other in otherNames)
         {
             Find(other, "other", other);
+        }
+
+        // Bug hunt 14 (7 Nov 2026), H1: a driver called by their FIRST name.
+        // "Jane Doe takes Hat-Trick - and Billy matches her with Personal
+        // Best" gave Personal Best to Jane, because "Billy" was nobody to the
+        // check, and the room heard it go to Billy. So each pick's first name
+        // counts as them - but only where it can be nobody else: not another
+        // pick's name or any word of it, not anybody else's name, not a
+        // word of any badge, and only said with a capital, so "will" is never
+        // Will Smith. Where the full name is said, the longer match wins
+        // (below), so "Jane Doe" is still Jane Doe and not "Jane" and "Doe".
+        // Everybody else's first name is held to the same rule as theirs.
+        var firstNames = drivers.Select(FirstWord).Where(w => w.Length > 0).ToList();
+        var otherWords = otherNames.SelectMany(NameWords).ToHashSet(StringComparer.Ordinal);
+        var badgeWords = badges.SelectMany(NameWords).ToHashSet(StringComparer.Ordinal);
+        var driverWords = drivers.SelectMany(NameWords).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var driver in drivers)
+        {
+            var first = FirstWord(driver);
+
+            if (first.Length > 0
+                && NameWords(driver).Count > 1
+                && firstNames.Count(f => f == first) == 1
+                && !drivers.Any(d => !string.Equals(d, driver, StringComparison.OrdinalIgnoreCase) && NameWords(d).Contains(first))
+                && !otherWords.Contains(first)
+                && !badgeWords.Contains(first))
+            {
+                Find(first, "driver", driver, capitalisedOnly: true);
+            }
+        }
+
+        foreach (var other in otherNames)
+        {
+            var first = FirstWord(other);
+
+            if (first.Length > 0
+                && NameWords(other).Count > 1
+                && !driverWords.Contains(first)
+                && !badgeWords.Contains(first))
+            {
+                Find(first, "other", other, capitalisedOnly: true);
+            }
         }
 
         // Longest first where two overlap - a badge called "Jane's Cup" is the
@@ -364,6 +527,70 @@ internal static class HonoursWriting
 
         return text;
     }
+
+    /// <summary>
+    /// The read's words as they were written, capitals and all - word for
+    /// word the words of <see cref="Normalise"/>, which breaks on anything
+    /// that is not a letter or a digit, so the Nth word of one is the Nth of
+    /// the other (bug hunt 14, H1: is a first name said with a capital?).
+    /// </summary>
+    /// <remarks>
+    /// Each word comes with whether it opens a sentence - the reply's first
+    /// word, or the first after a . ! or ? (quotes and spaces between
+    /// skipped) - since a capital there says nothing about a name.
+    /// </remarks>
+    private static List<(string Word, bool OpensSentence)> OriginalWords(string text)
+    {
+        var words = new List<(string, bool)>();
+        var word = new StringBuilder();
+        var opens = true;
+        var sentenceEnded = true;
+
+        foreach (var c in text)
+        {
+            if (char.IsLetterOrDigit(c))
+            {
+                if (word.Length == 0)
+                {
+                    opens = sentenceEnded;
+                    sentenceEnded = false;
+                }
+
+                word.Append(c);
+                continue;
+            }
+
+            if (word.Length > 0)
+            {
+                words.Add((word.ToString(), opens));
+                word.Clear();
+            }
+
+            if (c is '.' or '!' or '?')
+            {
+                sentenceEnded = true;
+            }
+            else if (!char.IsWhiteSpace(c) && c is not ('"' or '“' or '”' or '\'' or '‘' or '’' or '*' or '_'))
+            {
+                // A comma, a dash, a bracket: the sentence carries on.
+                sentenceEnded = false;
+            }
+        }
+
+        if (word.Length > 0)
+        {
+            words.Add((word.ToString(), opens));
+        }
+
+        return words;
+    }
+
+    /// <summary>A name's words, normalised - "Billy Bob" is "billy" and "bob".</summary>
+    private static IReadOnlyList<string> NameWords(string name) =>
+        Normalise(name).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>A name's first word, normalised - "billy" for "Billy Bob"; empty for no name.</summary>
+    private static string FirstWord(string name) => NameWords(name) is { Count: > 0 } words ? words[0] : string.Empty;
 
     /// <summary>" nail biter " for "Nail-Biter" - padded, so a match is always whole words.</summary>
     private static string Normalise(string text)
