@@ -705,13 +705,14 @@ public sealed class RcpTrackEditorForm : Form
 
         var lines = new[]
         {
-            "1 to 8 - Floor, Rails, Turns, Markings, Route, Erase, Photo, Select",
+            "1, 2, 3 - a plain tile, a rail tile, an outer curve tile",
+            "4 to 8 - Markings, Route, Erase, Photo, Select",
             "L - Lane, C - Corners, T - Tile label, V - the angled view",
             "Space and drag - move the view (or drag with the middle button, or Shift and the right button)",
             "Wheel - zoom (with Photo, size the photo)",
             "F - fit the whole plan in view",
             "G - show or hide the grid",
-            "R - turn the next marking",
+            "R - turn the next piece or marking",
             "Shift+R - run the racing line the other way",
             "Click the zoom in the corner of the board - back to 100%",
             "Right-click, or Ctrl and click - take off what is under the pointer",
@@ -773,11 +774,12 @@ public sealed class RcpTrackEditorForm : Form
             return button;
         }
 
-        var floor = Add("Floor", "Lay the foam. Drag to fill an area. (1)", () => SetTool(RcpTool.Floor));
-        var lane = Add("Lane", "Paint a lane: floor under it and rails down both sides that follow it. Set its width and turns on the Pieces tab. (L)", () => SetTool(RcpTool.Lane));
-        var wall = Add("Rails", "Stand a rail along a seam. Click it again to double it. (2)", () => SetTool(RcpTool.Wall));
-        var curve = Add("Turns", "Swing a run of rail through 90 degrees. (3)", () => SetTool(RcpTool.Curve));
-        var corners = Add("Corners", "Click a corner to make it a one-tile turn, a two-tile turn or square, in turn. (C)", () => SetTool(RcpTool.Corner));
+        // Pieces: a tile with its rail on, as it goes down on a real track
+        // (railed tiles, Phase 2, 7 Nov 2026). It took the place of Floor,
+        // and of Rails and Turns, which laid rails on the seams afterwards.
+        var floor = Add("Pieces", "Lay a tile with its rail already on - pick the piece on the Pieces tab. 1 a plain tile, 2 a rail tile, 3 an outer curve tile; R turns it.", ChoosePieces);
+        var lane = Add("Lane", "Paint a lane: rail tiles down both sides that follow it, and an outer curve tile round every bend. Set its width on the Pieces tab. (L)", () => SetTool(RcpTool.Lane));
+        var corners = Add("Corners", "Click a corner to make it an outer curve tile or square, in turn. (C)", () => SetTool(RcpTool.Corner));
         var marker = Add("Markings", "The line, grid boxes, curbs, posts. R turns them. (4)", () => SetTool(RcpTool.Marker));
         var route = Add("Route", "Draw the racing line. (5)", () => SetTool(RcpTool.Route));
         var erase = Add("Erase", "Take things off. Ctrl+click or right-click does this with any tool. (6)", () => SetTool(RcpTool.Erase));
@@ -786,12 +788,12 @@ public sealed class RcpTrackEditorForm : Form
 
         _toolButtons = new[]
         {
-            (floor, RcpTool.Floor), (lane, RcpTool.Lane), (wall, RcpTool.Wall), (curve, RcpTool.Curve),
+            (floor, RcpTool.Floor), (floor, RcpTool.Piece), (lane, RcpTool.Lane),
             (corners, RcpTool.Corner), (marker, RcpTool.Marker), (route, RcpTool.Route), (erase, RcpTool.Erase),
             (photo, RcpTool.Backdrop), (select, RcpTool.Select),
         };
 
-        var wallEdge = Add("Wall the edge", "Put a rail round every open edge of the floor.", () => _canvas.WallThePerimeter());
+        var wallEdge = Add("Rail the edge", "Make every tile round the edge of the floor a rail tile facing out, and its outside corners outer curve tiles.", () => _canvas.WallThePerimeter());
         var traceRoute = Add("Trace route", "Follow the corridor between the rails and lay the racing line down the middle of it, however wide. Traced, it follows the track as you change it, until you move a point of it by hand.", () => _canvas.AutoRoute());
         var reverseRoute = Add("Reverse", "Turn the racing line round, so it runs the way the cars do - its arrows show which way. Sectors are measured in that direction. (Shift+R)", () => _canvas.ReverseRoute());
 
@@ -908,7 +910,7 @@ public sealed class RcpTrackEditorForm : Form
         SetTool(RcpTool.Floor);
 
         var toolbar = new FieldRow();
-        toolbar.Add(null, new ButtonBar(tight: true).With(floor, lane, wall, curve, corners, marker, route, erase, photo, select));
+        toolbar.Add(null, new ButtonBar(tight: true).With(floor, lane, corners, marker, route, erase, photo, select));
         toolbar.Add(null, new ButtonBar(tight: true).With(wallEdge, traceRoute, reverseRoute, _btnPlay));
         toolbar.Add(null, new ButtonBar(tight: true).With(undo, redo, fit, clear));
         toolbar.Add(null, new ButtonBar(tight: true).With(turn, flipAcross, flipDown, duplicate, remove));
@@ -936,28 +938,48 @@ public sealed class RcpTrackEditorForm : Form
 
         _canvas.Tool = tool;
 
-        foreach (var (button, owned) in _toolButtons)
+        // A button can stand for more than one tool - Pieces lays a plain
+        // tile (Floor) and the railed pieces (Piece) - so it is lit when any
+        // of its tools is in hand.
+        var lit = _toolButtons.Where(pair => pair.Tool == tool).Select(pair => pair.Button).ToHashSet();
+
+        foreach (var button in _toolButtons.Select(pair => pair.Button).Distinct())
         {
-            button.BackColor = owned == tool ? AppTheme.Primary : AppTheme.SecondaryButton;
-            button.ForeColor = owned == tool ? AppTheme.OnPrimary : AppTheme.TextDark;
+            button.BackColor = lit.Contains(button) ? AppTheme.Primary : AppTheme.SecondaryButton;
+            button.ForeColor = lit.Contains(button) ? AppTheme.OnPrimary : AppTheme.TextDark;
             button.FlatAppearance.BorderSize = 0;
         }
 
         _lblStatus.Text = ToolHint(tool);
     }
 
+    /// <summary>The Pieces button: the piece picked last on the Pieces tab, or a rail tile when the palette is on something else.</summary>
+    private void ChoosePieces()
+    {
+        PickPiece(RcpTiles.Pieces.Contains(_canvas.Item) ? _canvas.Item : RcpPaletteItem.RailTile);
+    }
+
+    /// <summary>Picks a piece as its palette entry would - for the Pieces button and the 1, 2 and 3 keys.</summary>
+    private void PickPiece(RcpPaletteItem item)
+    {
+        _canvas.Item = item;
+        SetTool(RcpTiles.ToolFor(item));
+        HighlightPalette();
+    }
+
     /// <summary>How a tool works, as the status line says when it is picked.</summary>
     private static string ToolHint(RcpTool tool) => tool switch
     {
-        RcpTool.Floor => "Drag to paint floor tiles - the whole track sits on these. Ctrl-drag takes them back off.",
+        RcpTool.Floor => "Drag to lay plain tiles - no rail on them. Ctrl-drag takes them back up.",
+        RcpTool.Piece => "Click to lay the piece with its rail on - near an edge for a rail tile, in a corner for an outer curve. Drag to lay a row. R turns it; click it again for a plain tile.",
         RcpTool.Wall => "Drag along the grid to run rail; a turn rail drops in wherever you round a corner. Click a seam to add, double or remove one.",
         RcpTool.Curve => "Click near a corner of the grid - the arc follows whichever way the pointer is.",
         RcpTool.Marker => "Click to drop a marking. Click it again, or press R, to turn it.",
         RcpTool.Route => "Click to drop points along the racing line. Drag one to move it, right-click to remove it.",
-        RcpTool.Erase => "Click to take off whatever is under the pointer.",
+        RcpTool.Erase => "Click a tile to take it up with its rail. Click right on a rail to take just the rail off its tile.",
         RcpTool.Select => "Drag a box round part of the plan to pick it up - the rails round a block of tiles come too. Then drag it to move, arrows to nudge, ] to turn, Delete to take it off.",
-        RcpTool.Lane => "Drag to paint a lane - its rails follow it, with turns round its bends. Start on a lane to carry it on. Ring: drag a box for a whole circuit.",
-        RcpTool.Corner => "Click a corner: a one-tile turn, then a two-tile turn, then square. What you set here, the lanes leave alone.",
+        RcpTool.Lane => "Drag to paint a lane - rail tiles down both sides, an outer curve tile round every bend. Start on a lane to carry it on. Ring: drag a box for a whole circuit.",
+        RcpTool.Corner => "Click a corner: an outer curve tile, then square. What you set here, the lanes leave alone.",
         _ => "Drag the photo into place and use the wheel to size it until its tiles line up with the grid.",
     };
 
@@ -1022,52 +1044,23 @@ public sealed class RcpTrackEditorForm : Form
         }
 
         var lanes = BuildLanesCard(out var laneRows);
-        var floor = Group("Floor", "One continuous field of tiles. Lay it first.", RcpTiles.Floor);
-        var barriers = Group("Barriers", "Rails stand ON the floor, along the seams.", RcpTiles.Barriers, gapAfterLast: UiLayout.RowGap);
 
-        // Turn radius, since a sweeper and a hairpin are the same piece here.
-        var lblRadius = new Label
-        {
-            Text = "Turn radius, in tiles:",
-            AutoSize = true,
-            Font = AppTheme.SmallFont,
-            ForeColor = AppTheme.TextMuted,
-        };
-
-        var radii = new[] { 0.5f, 1f, 1.5f, 2f };
-        var buttons = new List<(Button, float)>();
-
-        foreach (var radius in radii)
-        {
-            var button = new Button { Text = radius.ToString("0.#") };
-
-            var captured = radius;
-
-            button.Click += (_, _) =>
-            {
-                _canvas.CurveRadius = captured;
-                SetTool(RcpTool.Curve);
-                HighlightRadius();
-                _canvas.Focus();
-            };
-
-            buttons.Add((button, radius));
-        }
-
-        _radiusButtons = buttons.ToArray();
-
-        // Only as wide as their numbers, and the four on one line: the
-        // panel is never narrower than they need (SideWidth).
-        var radiusRow = new ButtonBar(tight: true).With(_radiusButtons.Select(pair => (Control)pair.Button).ToArray());
-
-        barriers.Add(lblRadius, gapBelow: UiLayout.HintGap);
-        barriers.Add(radiusRow, gapBelow: 0);
+        // The pieces, each a tile with its rail already on, as a real RCP
+        // track goes down (railed tiles, Phase 2, 7 Nov 2026). This used to
+        // be a Floor card ("Lay it first") and a Barriers card of rails,
+        // dividers and turns at four radii laid on the seams afterwards.
+        var pieces = Group(
+            "Pieces",
+            "Each tile goes down with its rail on, as it does on the floor. A divider is two rail tiles back to back; the inner corner tile is worked out at every bend.",
+            RcpTiles.Pieces);
 
         var markings = Group("Markings", "Flat things stuck on the floor.", RcpTiles.Markings);
 
         HighlightPalette();
 
-        return (new[] { lanes, floor, barriers, markings }, radiusRow, laneRows);
+        // The lane card's first row stands in for the turn radii's row the
+        // panel used to be measured against (SideWidth).
+        return (new[] { lanes, pieces, markings }, laneRows[0], laneRows);
     }
 
     /// <summary>
@@ -1124,25 +1117,19 @@ public sealed class RcpTrackEditorForm : Form
             }), width))
             .ToArray();
 
-        _laneTurnButtons = new[] { (1, "1 tile"), (2, "2 tiles"), (0, "Square") }
-            .Select(pair => (Choice(pair.Item2, pair.Item1 == 0
-                    ? "The outside of the lanes' bends left square: two rails meeting."
-                    : $"Turn rails of {pair.Item2} round the outside of every bend the lanes make.",
-                () => _canvas.SetLaneTurnRadius(pair.Item1)), pair.Item1))
-            .ToArray();
-
+        // No choice of turns any more (railed tiles, Phase 2, 7 Nov 2026):
+        // the one-tile outer curve tile is the only turn a club has, and a
+        // square outside corner would be two rails on one tile. A plan saved
+        // with two-tile or square lane turns keeps them.
         var shapeRow = new ButtonBar(tight: true).With(_btnLanePaint, _btnLaneRing);
         var widthRow = new ButtonBar(tight: true).With(_laneWidthButtons.Select(pair => (Control)pair.Button).ToArray());
-        var turnRow = new ButtonBar(tight: true).With(_laneTurnButtons.Select(pair => (Control)pair.Button).ToArray());
 
-        card.Add(Note("Paint a lane and its rails go down both sides by themselves, turns and all."), gapBelow: UiLayout.HintGap);
+        card.Add(Note("Paint a lane and its rail tiles go down both sides by themselves, with an outer curve tile round every bend."), gapBelow: UiLayout.HintGap);
         card.Add(shapeRow, gapBelow: UiLayout.RowGap);
         card.Add(Note("Width, in tiles:"), gapBelow: UiLayout.HintGap);
-        card.Add(widthRow, gapBelow: UiLayout.RowGap);
-        card.Add(Note("Turns round the bends:"), gapBelow: UiLayout.HintGap);
-        card.Add(turnRow, gapBelow: 0);
+        card.Add(widthRow, gapBelow: 0);
 
-        rows = new[] { shapeRow, widthRow, turnRow };
+        rows = new[] { shapeRow, widthRow };
         return card;
     }
 
@@ -1354,6 +1341,11 @@ public sealed class RcpTrackEditorForm : Form
             Readout(railed, lengthTiles: 160f, tileSizeMm: 500, lapSeconds: _canvas.LapSeconds,
                 sectors: (null, "Draw the racing line (or press Trace route) through the finish line and the split loops."),
                 railsWithNoFloor: 12),
+
+            // ...and custom tiles too, two lines more (railed tiles, Phase 2).
+            Readout(railed, lengthTiles: 160f, tileSizeMm: 500, lapSeconds: _canvas.LapSeconds,
+                sectors: (null, "Draw the racing line (or press Trace route) through the finish line and the split loops."),
+                railsWithNoFloor: 12, customTiles: 12),
         };
 
         var lapCard = new Section("The lap");
@@ -2415,7 +2407,8 @@ public sealed class RcpTrackEditorForm : Form
             Result.TileSizeMm,
             _canvas.LapSeconds,
             RcpPlan.MeasureSectors(Result),
-            RcpPlan.RailsWithNoFloor(Result));
+            RcpPlan.RailsWithNoFloor(Result),
+            _canvas.PieceReport.CustomTiles.Count);
 
         RefreshKitCheck(inventory);
         RefreshRoomFit();
@@ -2447,7 +2440,7 @@ public sealed class RcpTrackEditorForm : Form
     /// or what stops them being measured; null with no split loops.
     /// </param>
     private static string Readout(RcpInventory inventory, float lengthTiles, double tileSizeMm, double lapSeconds,
-        (float[]? Sectors, string? Problem)? sectors = null, int railsWithNoFloor = 0)
+        (float[]? Sectors, string? Problem)? sectors = null, int railsWithNoFloor = 0, int customTiles = 0)
     {
         var metres = lengthTiles * tileSizeMm / 1000.0;
         var feet = metres * 3.28084;
@@ -2503,7 +2496,7 @@ public sealed class RcpTrackEditorForm : Form
         if (inventory.Tiles > 0 && inventory.StraightRails == 0)
         {
             lines.Add(string.Empty);
-            lines.Add("No rails yet - try Wall the edge, then add the dividers.");
+            lines.Add("No rails yet - try Rail the edge, then lay rail tiles back to back for the dividers.");
         }
 
         // A rail bolts through the tile it runs along, so one out past the
@@ -2515,6 +2508,16 @@ public sealed class RcpTrackEditorForm : Form
             lines.Add(railsWithNoFloor == 1
                 ? "1 rail has no floor under it - a rail bolts onto a tile, so it needs one."
                 : $"{railsWithNoFloor} rails have no floor under them - a rail bolts onto a tile, so it needs one.");
+        }
+
+        // A tile with a second rail: no piece RCP sells, so the club makes
+        // it (Asher, 7 Nov 2026). Marked on the board too.
+        if (customTiles > 0)
+        {
+            lines.Add(string.Empty);
+            lines.Add(customTiles == 1
+                ? "1 custom tile, marked on the board: it carries a second rail - cut two more bolt holes and trim a rail to fit."
+                : $"{customTiles} custom tiles, marked on the board: each carries a second rail - cut two more bolt holes and trim a rail to fit.");
         }
 
         return string.Join(Environment.NewLine, lines);
@@ -2784,11 +2787,25 @@ public sealed class RcpTrackEditorForm : Form
             return true;
         }
 
+        // 1, 2 and 3 pick the pieces (railed tiles, Phase 2, 7 Nov 2026): a
+        // plain tile, a rail tile, an outer curve tile - the same keys that
+        // picked Floor, Rails and Turns, which they took the place of.
+        var piece = keyData switch
+        {
+            Keys.D1 => RcpPaletteItem.Floor,
+            Keys.D2 => RcpPaletteItem.RailTile,
+            Keys.D3 => RcpPaletteItem.CurveTile,
+            _ => (RcpPaletteItem?)null,
+        };
+
+        if (piece is { } pickedPiece)
+        {
+            PickPiece(pickedPiece);
+            return true;
+        }
+
         var tool = keyData switch
         {
-            Keys.D1 => RcpTool.Floor,
-            Keys.D2 => RcpTool.Wall,
-            Keys.D3 => RcpTool.Curve,
             Keys.D4 => RcpTool.Marker,
             Keys.D5 => RcpTool.Route,
             Keys.D6 => RcpTool.Erase,

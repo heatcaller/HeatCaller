@@ -10,25 +10,29 @@ A driver profile ties a transponder to a person. When the decoder reports a tran
 
 ![Driver Hub: the roster on the left with Terry Byte selected, and their card on the right with class badges, Checked in, and the Profile tab's race-day and profile details](../assets/images/driver-hub.png)
 
-The page has two views. **Drivers** and **Garage** in the upper left switch between them, and the page opens on the one you used last. The banner for [unknown transponders](../timing/transponders.md#unknown-transponders) is across the top of both.
+The page has three views: **Card**, **Table** and **Garage**, in the upper left. The page opens on the one you used last. The banner for [unknown transponders](../timing/transponders.md#unknown-transponders) is across the top of all three.
 
-### Drivers view
+<a id="drivers-view"></a>
+
+### Card view
 
 The roster is down the left and the driver you pick is beside it.
 
-**The roster** lists your drivers by name and number. **Find** filters it as you type: it matches the driver name, announcer name, any of their transponders, race number, class, team, sponsors, home track and any car in the driver's garage. You can select several rows with <kbd>Ctrl</kbd>+click or <kbd>Shift</kbd>+click (useful for deleting several drivers at once).
+**The roster** lists your drivers by name and number. **+ Add** at its top adds a driver (see [Add a driver](#add-a-driver)). The search box filters it as you type: it matches the driver name, announcer name, any of their transponders, race number, class, team, sponsors, home track and any car in the driver's garage. You can select several rows with <kbd>Ctrl</kbd>+click or <kbd>Shift</kbd>+click (useful for deleting several drivers at once). Under the list it says how many drivers there are and how many are checked in tonight.
 
-**The driver's header** shows their photo (or initials), large, then their name and, as chips, their number, class (in the class's color), and whether they're checked in tonight, a rental or outside records and points. A name the announcer says differently shows under it. Click the photo to change it.
+**Import** under the roster opens a menu of jobs for the whole list: **Paste a Table**, **Import from CSV** and **Download Template** (see [Import drivers from a spreadsheet](#import-drivers-from-a-spreadsheet)), and **Check Names**, which reads the roster's names out loud in the club's announcer voice so you can hear what will be said tonight (see [Check how names are read](#check-how-names-are-read)).
 
-**The buttons along the bottom** are grouped by what they act on:
+**The driver's header** shows their photo (or initials), then their name and, as chips, their number, class (in the class's color), and whether they're checked in tonight, a rental or outside records and points. A name the announcer says differently shows under it. Click the photo to change it. Beside the name:
 
-- Under the roster: **Add Driver** (see [Add a driver](#add-a-driver)) and **Delete**, for the drivers selected.
-- Under the driver: **Edit Profile**, which opens the profile form (double-clicking a driver in the roster does the same), and **Photo**.
-- On the right, for the whole list: **Import from CSV**, **Paste a Table** and **Download Template** (see [Import drivers from a spreadsheet](#import-drivers-from-a-spreadsheet)), and **Check Names**, which reads the roster's names out loud in the club's announcer voice so you can hear what will be said tonight (see [Check how names are read](#check-how-names-are-read)).
+- **Edit** opens the profile form. Double-clicking a driver in the roster does the same.
+- **Photo** changes their photo.
+- **⋯** has **Report Card** for tonight and **Delete**, for the drivers selected.
+
+Under the header, four tiles show **Tonight** (checked in or not), **Tech**, **Race days** and **Best lap**.
 
 The driver has six tabs:
 
-- **Profile**: when they were added and first timed, tonight's race day (check-in, tech, handicap), their honors, and what's on their profile — car, number, class, team, sponsors, home track, skill level, transponders — and notes. Empty fields are left out.
+- **Profile**: what's on their profile — car, number, class, team, sponsors, home track, skill level, transponders — their handicap and setup sheets, and notes, beside when they were added and first timed and their honors. On a narrow window it's one column. Empty fields are left out.
   - **Track records** lists each layout whose lap record is theirs now, with the lap and when it was set, and the layouts they've held it on before.
   - **Sector records** lists the [sector records](#track-layouts) they hold now, layout by layout, for example "S1 3.41".
   - **Badges** shows every badge they've earned as medallions, then the latest twelve with what each was for and when; the rest are on the **Achievements** page.
@@ -40,11 +44,23 @@ The driver has six tabs:
 
 On the **Stats** tab, under the driver's recent form, **Recent activity** lists the latest eight things they've done, newest first: each race with their place, the size of the field and their best lap (or "did not finish"), each personal best, and each setup logged under their name in the **Garage** with what it changed from the setup before it on the same car. Personal bests are in the theme's heading color.
 
+### Table view
+
+Every driver in one table, with the columns **Driver**, **No.**, **Classes**, **Car**, **Transponder** and **Tonight**. It's the quickest way to scan a big roster on race night.
+
+- Click a column heading to sort by it; click it again to sort the other way.
+- **All**, **In tonight** and **Not in** show every driver, only those checked in tonight, or only those who aren't.
+- The search box filters the table the same way the Card view's does.
+- **+ Add Driver** and **Import** are at the top right.
+- Double-click a driver to edit them, or press <kbd>Delete</kbd> to delete them.
+
+The driver you pick is in a panel on the right: their photo, name, number and classes, **Edit**, **Photo** and **⋯**, their car, transponder, and tonight's check-in and tech. **Open on the card** has a button for each of the driver's tabs; it switches to the Card view on that tab.
+
 ### Garage view
 
-One driver's cars fill the page. Pick whose in **Driver** at the top left, where **Find** is in the Drivers view; the Drivers view follows, so switching back shows the same driver. It's the same garage as the **Garage** tab, only bigger. Their transponders are on the **Transponders** tab in the Drivers view.
+One driver's cars fill the page. Pick whose in **Driver** at the top left, where the search box is in the Card view; the Card and Table views follow, so switching back shows the same driver. It's the same garage as the **Garage** tab, only bigger. Their transponders are on the **Transponders** tab in the Card view.
 
-**Driver** also has **Everyone's cars** and **The club's own cars** at the top of its list. They show every car in the garage, or the club's own, as cards that say whose each car is, as on the [Garage](#garage) page. Retired cars are left out. **Add a Car** adds a car for the club, or for a driver you pick in **Owner:**. Picking one of these doesn't change the driver in the Drivers view, and switching to the Drivers view and back shows that driver's cars again.
+**Driver** also has **Everyone's cars** and **The club's own cars** at the top of its list. They show every car in the garage, or the club's own, as cards that say whose each car is, as on the [Garage](#garage) page. Retired cars are left out. **Add a Car** adds a car for the club, or for a driver you pick in **Owner:**. Picking one of these doesn't change the driver in the Card view, and switching to the Card view and back shows that driver's cars again.
 
 ### A driver's garage
 
@@ -145,7 +161,7 @@ Before this version a pack was recorded for a whole session, not for each driver
 
 ### Add a driver
 
-1. On the **Driver Hub** page, click **Add Driver**.
+1. On the **Driver Hub** page, click **+ Add** at the top of the roster (in the Table view, **+ Add Driver**).
 2. Enter the **Transponder:** number exactly as your decoder reports it. This is the only required field.
 3. Fill in the other fields you want (see below).
 4. Click **Save**.
@@ -156,8 +172,8 @@ You can also add a driver from a transponder that crossed the line with no profi
 
 ### Edit or delete a driver
 
-- To edit, double-click a driver in the roster, or pick one and click **Edit Profile** at the bottom.
-- To delete, select one or more drivers and click **Delete**. You can bring them back with the **Undo** button in the sidebar. A deleted driver's photo file is kept so that Undo can restore it.
+- To edit, double-click a driver in the roster or the table, or pick one and click **Edit** beside their name.
+- To delete, select one or more drivers and choose **Delete** from the **⋯** menu beside their name (in the Table view, select one and press <kbd>Delete</kbd>). You can bring them back with the **Undo** button in the sidebar. A deleted driver's photo file is kept so that Undo can restore it.
 
 Undo never overwrites a driver who has one of the deleted driver's transponders now, as their main or alternate transponder, and never puts two drivers on one transponder. A deleted driver whose transponder has been taken since stays deleted:
 
@@ -217,7 +233,7 @@ The second use is the one clubs miss: the box takes a phonetic spelling. Put "Zh
 
 To try a spelling before you save it:
 
-1. Open the driver's profile: pick them in the roster and click **Edit Profile**, or double-click them.
+1. Open the driver's profile: pick them in the roster and click **Edit** beside their name, or double-click them.
 2. Type the name the way it sounds in **Announcer name:**.
 3. Click **Hear It**, under the box.
 4. Not right? Change the spelling and click **Hear It** again. Click **Save** when it is.
@@ -230,11 +246,11 @@ For the voices themselves and how one is chosen, see [Voice announcements](../an
 
 ### Check how names are read
 
-**Check Names**, at the bottom right of the **Drivers** view, opens **Check How Names Are Read**: the roster with the name the announcer will say for each driver, read out one press at a time. Do it before the doors open, so a name that comes out wrong is found by you and not by a room full of people.
+**Check Names**, in the **Import** menu under the roster, opens **Check How Names Are Read**: the roster with the name the announcer will say for each driver, read out one press at a time. Do it before the doors open, so a name that comes out wrong is found by you and not by a room full of people.
 
 <!-- screenshot: Check How Names Are Read, the roster listed with the line saying what is being read under it -->
 
-1. On the **Driver Hub** page, click **Check Names**.
+1. On the **Driver Hub** page, click **Import** under the roster and choose **Check Names**.
 2. Leave **Only the drivers checked in tonight** ticked to hear just tonight's drivers, or untick it for everyone in the list.
 3. Click **Say the Next One** over and over to work down the list. To hear one driver, pick their row and click **Say It** — double-clicking the row does the same.
 4. Note the ones that come out wrong, click **Close**, and fix each in that driver's **Announcer name:** box (see [The name the announcer says](#the-name-the-announcer-says)).
@@ -303,14 +319,14 @@ The same **PRIVACY** group has a **Big Screen:** row with one tick, **Keep their
 
 If you have your drivers in a spreadsheet, or in the timing software your club used before, you can import them from a CSV file instead of typing each one in. Any CSV will do: HeatCaller shows you the file's columns first and you say what each one is. If your old software exports its championship standings, the points can come in too, as each driver's starting total.
 
-1. Click **Import from CSV** and pick the file. Comma-, semicolon- and tab-separated files all work; the first row must be the column headings.
+1. Click **Import** under the roster, choose **Import from CSV** and pick the file. Comma-, semicolon- and tab-separated files all work; the first row must be the column headings.
 2. HeatCaller shows the file's first rows, with a list at the top of each column. Each list has a guess at what that column is, taken from its heading. Change any that are wrong, and set the columns you don't want to **(ignore)**.
 3. If a column is **Points so far**, pick the championship they go into under **Points so far go into:**. With a **Class** column picked, you can choose **The championship for each driver's class**.
 4. Click **Import**.
 
 <!-- screenshot: the import preview with a list above each column and Points so far go into -->
 
-**From a web page or a spreadsheet, without a file:** if your old timing software only shows its driver list on a web page, select the whole table there and copy it (Ctrl+C), or copy the rows out of a spreadsheet. Then click **Paste a Table**. HeatCaller reads the table from the clipboard and opens the same preview as a CSV file, so steps 2 to 4 are the same. A few things it does for you:
+**From a web page or a spreadsheet, without a file:** if your old timing software only shows its driver list on a web page, select the whole table there and copy it (Ctrl+C), or copy the rows out of a spreadsheet. Then click **Import** and choose **Paste a Table**. HeatCaller reads the table from the clipboard and opens the same preview as a CSV file, so steps 2 to 4 are the same. A few things it does for you:
 
 - If the copy took in more than one table, the biggest one is used, along with every other table that has the same headings (a page with one table per class).
 - Links, bold and line breaks inside a cell become plain words.
@@ -392,7 +408,7 @@ When you delete a class, drivers keep the class name on their profile, but it no
 
 A driver who races two cars in two classes, a stock car and a modified one, say, keeps one profile, so their history and personal bests stay in one place.
 
-1. In **Driver Hub**, pick the driver and click **Edit Profile**.
+1. In **Driver Hub**, pick the driver and click **Edit** beside their name.
 2. Pick their main class in **Class:**.
 3. Click **Choose** beside **Also races:**. The **Other Classes** window lists the club's classes except the main one: tick the others they race and click **Save**.
 4. Click **Save** on the profile.

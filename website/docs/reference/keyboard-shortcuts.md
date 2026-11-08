@@ -136,9 +136,9 @@ In the **Track Designer** (**Track Layouts** → **Track Designer**; see [Track 
 
 | Key | What it does |
 |---|---|
-| <kbd>1</kbd> | **Floor** tool |
-| <kbd>2</kbd> | **Rails** tool |
-| <kbd>3</kbd> | **Turns** tool |
+| <kbd>1</kbd> | **Pieces** tool with a plain **Floor tile** |
+| <kbd>2</kbd> | **Pieces** tool with a **Rail tile** |
+| <kbd>3</kbd> | **Pieces** tool with an **Outer curve tile** |
 | <kbd>4</kbd> | **Markings** tool |
 | <kbd>5</kbd> | **Route** tool |
 | <kbd>6</kbd> | **Erase** tool |
@@ -148,7 +148,7 @@ In the **Track Designer** (**Track Layouts** → **Track Designer**; see [Track 
 | <kbd>C</kbd> | **Corners** tool |
 | <kbd>T</kbd> | **Markings** tool with **Tile label**, to name a tile |
 | <kbd>V</kbd> | Shows the track in 3D, or goes back to the flat plan (same as **View**) |
-| <kbd>R</kbd> | Turns markings 90 degrees |
+| <kbd>R</kbd> | Turns the next piece, or markings, 90 degrees |
 | <kbd>Shift</kbd>+<kbd>R</kbd> | Runs the racing line the other way (same as **Reverse**) |
 | <kbd>F</kbd> | Fits the whole plan in view (same as **Fit**) |
 | <kbd>G</kbd> | Shows or hides the grid |

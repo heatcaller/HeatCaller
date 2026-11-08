@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Me Hero Buttons</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap">
+<style>
+/* A review sheet for the three buttons on Me > Tonight's "Up next" hero
+   card: pack (quick swap), transponder (check) and setup (log). Today they
+   are 34px chips; each option below makes them real buttons, 52px or more.
+   Every phone works: tap a button that is waiting and it turns ready; tap
+   the pack when it is set and it swaps to the next pack. Phone colours are
+   the club look tokens (Pit Wall kit). */
+:root {
+  --page: #F3F1F7; --ink: #1B1530; --soft: #615A78; --line: #DDD8E8; --card: #FFFFFF; --hi: #D81B7A;
+  --f-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page: #0E0A1A; --ink: #EEEAF7; --soft: #A39BBD; --line: #2B2443; --card: #171128; --hi: #FF5FAE; color-scheme: dark } }
+:root[data-theme="dark"] { --page: #0E0A1A; --ink: #EEEAF7; --soft: #A39BBD; --line: #2B2443; --card: #171128; --hi: #FF5FAE; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.55 var(--f-body); }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 28px 16px 80px; }
+h1, h2 { font-family: var(--f-display); letter-spacing: .01em; text-wrap: balance; }
+h1 { font-size: 2.6rem; line-height: 1; margin: 0 0 8px; }
+.eyebrow { font-weight: 600; font-size: .72rem; text-transform: uppercase; letter-spacing: .14em; color: var(--hi); margin-bottom: 6px; }
+.lede { color: var(--soft); max-width: 75ch; margin: 0; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin: 22px 0 8px; }
+.box { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; }
+.box h2 { font-size: 1.2rem; margin: 0 0 4px; }
+.box ul { margin: 4px 0 0; padding-left: 18px; }
+.box li { margin: 3px 0; font-size: .92rem; }
+
+.ctl { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center;
+  margin: 22px -16px 0; padding: 10px 16px; background: color-mix(in srgb, var(--page) 88%, transparent); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line); }
+.ctl b { font-family: var(--f-display); font-size: 1.05rem; }
+.seg { display: inline-flex; padding: 3px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+.seg button { border: 0; background: none; color: var(--soft); font: inherit; font-weight: 600; font-size: .88rem; padding: 7px 12px;
+  border-radius: 9px; cursor: pointer; min-height: 36px; }
+.seg button[aria-pressed="true"] { background: var(--hi); color: #fff; }
+.ctl label { display: inline-flex; gap: 6px; align-items: center; font-weight: 600; font-size: .9rem; cursor: pointer; }
+.ctl input { width: 18px; height: 18px; accent-color: var(--hi); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 34px 26px; justify-items: center; margin-top: 30px; }
+.slot { display: grid; gap: 10px; justify-items: center; width: 100%; max-width: 360px; align-content: start; }
+.cap { width: 100%; display: grid; gap: 4px; }
+.cap .eb { font-weight: 700; font-size: .7rem; text-transform: uppercase; letter-spacing: .14em; color: var(--hi); }
+.cap b { font-family: var(--f-display); font-size: 1.45rem; line-height: 1.05; }
+.cap > span { color: var(--soft); font-size: .92rem; }
+.meas { font-variant-numeric: tabular-nums; font-size: .8rem; font-weight: 600; color: var(--ink); background: var(--card);
+  border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; justify-self: start; }
+.notes { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: .86rem; }
+.notes div { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+.notes h3 { margin: 0 0 2px; font-size: .7rem; text-transform: uppercase; letter-spacing: .12em; color: var(--soft); }
+.notes ul { margin: 0; padding-left: 16px; }
+.slot.today { opacity: .92; }
+.slot.rec .cap b::after { content: "My pick"; font-family: var(--f-body); font-size: .68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .1em; color: #fff; background: var(--hi); border-radius: 999px; padding: 2px 8px; margin-left: 8px; vertical-align: 4px; }
+
+/* ---- the phone: club look tokens, and the hero card as mespaces.ts draws it */
+.phone {
+  --bg: #0F0722; --surface: #1A0F3A; --row-alt: #150B2E; --primary: #FF2E9A; --accent: #2EE6FF; --text: #F7F2FF;
+  --muted: #9E8AC7; --border: #33215C; --good: #3DD68C; --warn: #F5B83D; --on-primary: #FFFFFF; --ring: var(--accent);
+  width: 360px; max-width: 100%; border-radius: 34px; padding: 10px; background: #05020C; box-shadow: 0 18px 40px -18px rgba(20, 0, 40, .55);
+  color-scheme: dark; position: relative;
+}
+.scr { background: var(--bg); color: var(--text); border-radius: 26px; overflow: hidden; padding: 14px 16px 18px;
+  font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; position: relative; min-height: 600px; }
+.sb { display: flex; justify-content: space-between; font-size: .72rem; font-weight: 600; color: var(--muted); padding: 0 4px 10px; }
+.who { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.who b { font-family: var(--f-display); font-size: 1.5rem; font-weight: 800; }
+.who span { font-size: .75rem; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; }
+.sw { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; border-radius: 16px; background: var(--surface);
+  border: 1px solid var(--border); margin-bottom: 12px; }
+.sw span { text-align: center; font-weight: 700; font-size: .85rem; color: var(--muted); padding: 9px 0; border-radius: 12px; }
+.sw span.on { background: var(--primary); color: var(--on-primary); }
+
+.me-hero { border-radius: 16px; padding: 16px; display: grid; gap: 10px; text-align: left;
+  background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--accent) 38%, transparent), transparent 60%),
+              linear-gradient(160deg, color-mix(in srgb, var(--primary) 30%, var(--surface)), var(--surface));
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border)); }
+.me-hero .k { font-size: .72rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--primary); }
+.me-hero .big { font-size: 2.3rem; line-height: .98; font-weight: 800; letter-spacing: -.01em; }
+.me-hero .big small { font-size: 1.05rem; color: var(--muted); font-weight: 700; }
+.me-mini { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.me-mini div { background: color-mix(in srgb, var(--bg) 55%, transparent); border-radius: 12px; padding: 8px 10px; display: grid; gap: 2px; min-width: 0; }
+.me-mini small { color: var(--muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; }
+.me-mini b { font-size: 1.02rem; font-variant-numeric: tabular-nums; }
+.golink { display: block; text-align: center; padding: 13px; border-radius: 14px; font-weight: 700; min-height: 48px;
+  background: color-mix(in srgb, var(--bg) 40%, transparent); color: var(--text); border: 1px solid var(--border); }
+.below { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.below div { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); min-height: 86px; padding: 12px; }
+.below small { font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+
+.phone button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.phone button:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.phone svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.phone button:active { transform: scale(.97); }
+@media (prefers-reduced-motion: reduce) { .phone button:active { transform: none; } }
+
+/* Today: the 34px chips */
+.me-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font-size: .82rem;
+  font-weight: 600; white-space: nowrap; background: var(--surface); border: 1px solid var(--border); }
+.me-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.me-chip.ok::before { background: var(--good); }
+.me-chip.wait::before { background: var(--warn); }
+.row0 { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* A - three tiles */
+.oa { display: grid; gap: 8px; }
+.oa button { min-height: 92px; border-radius: 14px; padding: 10px 4px 12px; position: relative; display: grid; justify-items: center;
+  align-content: center; gap: 3px; text-align: center; min-width: 0;
+  background: color-mix(in srgb, var(--bg) 55%, transparent); border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); }
+.oa .ic { width: 32px; height: 32px; border-radius: 12px; display: grid; place-items: center; margin-bottom: 2px;
+  background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.oa .wait .ic { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+.oa .wait { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.oa .n { font-size: .66rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.oa .s { font-weight: 800; font-size: .9rem; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; padding: 0 4px; }
+.oa .badge { position: absolute; top: 7px; right: 7px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--good); color: var(--bg); }
+.oa .badge svg { width: 12px; height: 12px; stroke-width: 3.2; }
+.oa .wait .badge { background: var(--warn); }
+
+/* B - checklist rows */
+.ob { display: grid; border-radius: 14px; overflow: hidden; background: color-mix(in srgb, var(--bg) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent); }
+.ob button { min-height: 60px; display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 12px; padding: 8px 10px 8px 12px;
+  border: 0; background: none; text-align: left; }
+.ob button + button { border-top: 1px solid color-mix(in srgb, var(--text) 10%, transparent); }
+.ob .st { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--good); color: var(--bg); }
+.ob .st svg { width: 18px; height: 18px; stroke-width: 3; }
+.ob .wait .st { background: none; border: 2.5px solid var(--warn); color: var(--warn); }
+.ob .wait .st svg { width: 16px; height: 16px; stroke-width: 2.4; }
+.ob .tx { display: grid; min-width: 0; }
+.ob .tx b { font-size: 1rem; }
+.ob .tx small { color: var(--muted); font-size: .82rem; }
+.ob .wait .tx small { color: var(--warn); }
+.ob .vb { min-width: 70px; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 2px; padding: 0 10px 0 14px;
+  border-radius: 12px; font-weight: 800; font-size: .92rem; background: color-mix(in srgb, var(--text) 10%, transparent); }
+.ob .vb svg { width: 18px; height: 18px; }
+.ob .wait .vb { background: var(--primary); color: var(--on-primary); }
+
+/* C - one segmented bar */
+.oc { display: grid; gap: 4px; padding: 4px; border-radius: 18px; background: color-mix(in srgb, var(--bg) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent); }
+.oc button { min-height: 66px; border: 0; border-radius: 14px; background: color-mix(in srgb, var(--surface) 80%, transparent);
+  display: grid; justify-items: center; align-content: center; gap: 3px; padding: 8px 2px 12px; position: relative; min-width: 0; }
+.oc button::after { content: ""; position: absolute; left: 22%; right: 22%; bottom: 6px; height: 4px; border-radius: 4px; background: var(--good); }
+.oc .wait::after { background: var(--warn); }
+.oc .row { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; font-size: .95rem; }
+.oc .row svg { width: 20px; height: 20px; }
+.oc small { font-size: .74rem; color: var(--muted); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; padding: 0 4px; }
+.oc .wait small { color: var(--warn); }
+
+/* D - fix first */
+.od { display: grid; gap: 8px; }
+.od .p { min-height: 60px; border: 0; border-radius: 14px; background: var(--primary); color: var(--on-primary);
+  display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 8px 14px; text-align: left;
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--primary) 80%, transparent); }
+.od .p b { font-size: 1.06rem; display: block; }
+.od .p small { font-size: .8rem; opacity: .85; }
+.od .okrow { display: grid; gap: 8px; }
+.od .t { min-height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 6px 4px;
+  background: color-mix(in srgb, var(--bg) 55%, transparent); border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  font-weight: 700; font-size: .9rem; min-width: 0; }
+.od .t svg { width: 18px; height: 18px; color: var(--good); }
+.od .t span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.od .allok { display: flex; align-items: center; gap: 6px; font-size: .78rem; color: var(--good); font-weight: 700; letter-spacing: .04em; }
+.od .allok svg { width: 16px; height: 16px; stroke-width: 3; }
+
+/* E - pack first */
+.oe { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.oe button { border-radius: 14px; min-width: 0; background: color-mix(in srgb, var(--bg) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); text-align: left; }
+.oe .pk { grid-column: span 2; min-height: 78px; display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 10px 12px 10px 14px; }
+.oe .pk .bat { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.oe .pk .bat svg { width: 28px; height: 28px; }
+.oe .pk.wait .bat { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+.oe .pk.wait { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.oe .pk small { display: block; font-size: .66rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.oe .pk b { display: block; font-family: var(--f-display); font-size: 1.85rem; line-height: 1; font-weight: 800; letter-spacing: .01em; }
+.oe .pk .go { min-height: 44px; padding: 0 16px; border-radius: 12px; display: inline-flex; align-items: center; font-weight: 800;
+  background: var(--primary); color: var(--on-primary); }
+.oe .sm { min-height: 62px; display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; padding: 8px 12px; }
+.oe .sm.solo { grid-column: span 2; }
+.oe .sm svg { color: var(--good); }
+.oe .sm.wait svg { color: var(--warn); }
+.oe .sm.wait { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.oe .sm b { display: block; font-size: .95rem; line-height: 1.15; }
+.oe .sm small { display: block; font-size: .78rem; color: var(--muted); }
+.oe .sm.wait small { color: var(--warn); }
+
+.toast { position: absolute; left: 16px; right: 16px; bottom: 16px; background: var(--text); color: var(--bg); border-radius: 12px;
+  padding: 10px 12px; font-size: .85rem; font-weight: 600; opacity: 0; transform: translateY(8px); transition: .18s; pointer-events: none; }
+.toast.on { opacity: 1; transform: none; }
+
+.ph { display: flex; justify-content: center; }
+footer { margin-top: 40px; color: var(--soft); font-size: .88rem; max-width: 75ch; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Relay · Me › Tonight · Up next card</div>
+  <h1>Bigger pack, transponder and setup buttons</h1>
+  <p class="lede">Today the three ways to fix what the hero card says are 34px chips with a 7px dot. Each option below turns them into real buttons
+    at least 52px tall, in the Pit Wall kit and the club's own colours. The rest of the card stays as it is. Every phone works: tap one that is
+    waiting and it turns ready, and tap the pack once it's set to swap to the next pack.</p>
+
+  <div class="cols">
+    <div class="box"><h2>What they do (unchanged)</h2><ul>
+      <li><b>Pack</b> opens the quick pack swap sheet</li>
+      <li><b>Transponder</b> starts the check on Tonight</li>
+      <li><b>Setup</b> opens Log setup in the Garage. It only shows when there's a car tonight</li></ul></div>
+    <div class="box"><h2>Rules every option keeps</h2><ul>
+      <li>Every tap target 52px tall or more. Today's chips are 34px</li>
+      <li>Ready is green with a tick, waiting is amber. Colour is never the only sign: there's a word and an icon too</li>
+      <li>Colours come from look tokens only, so club looks and light mode still apply</li></ul></div>
+    <div class="box"><h2>Try</h2><ul>
+      <li>Switch between <b>Before the race</b> and <b>All ready</b> at the top</li>
+      <li>Untick <b>Car tonight</b> to see two buttons instead of three</li>
+      <li>The grey pill under each name is the measured tap height</li></ul></div>
+  </div>
+
+  <div class="ctl">
+    <b>State</b>
+    <div class="seg" id="segState">
+      <button type="button" data-v="mixed" aria-pressed="true">Before the race</button>
+      <button type="button" data-v="none" aria-pressed="false">Nothing done</button>
+      <button type="button" data-v="ok" aria-pressed="false">All ready</button>
+    </div>
+    <label><input type="checkbox" id="car" checked> Car tonight</label>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <footer>Built against <code>meMoment()</code> in relay/src/mespaces.ts, where the three <code>meChip</code> calls sit in the "Up next" branch.
+    Whichever you pick replaces the <code>.row</code> of chips only. The click handlers (<code>mePackSheet</code>, <code>meToTransponder</code>,
+    <code>meLogSetup</code>) stay as they are.</footer>
+</div>
+
+<script>
+const ICON = {
+  pack: '<svg viewBox="0 0 24 24"><rect x="2" y="7" width="17" height="10" rx="2.2"/><path d="M22 10.5v3"/><path d="M6 10.5v3M9.5 10.5v3M13 10.5v3"/></svg>',
+  tp: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.8"/><path d="M8.6 15.4a4.8 4.8 0 0 1 0-6.8M15.4 8.6a4.8 4.8 0 0 1 0 6.8M5.7 18.3a8.9 8.9 0 0 1 0-12.6M18.3 5.7a8.9 8.9 0 0 1 0 12.6"/></svg>',
+  setup: '<svg viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg>',
+  tick: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  bang: '<svg viewBox="0 0 24 24"><path d="M12 6v7"/><path d="M12 17.5v.01"/></svg>',
+  chev: '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>',
+};
+const PACKS = ['LiPo 2', 'LiPo 3', 'LiPo 1'];
+
+let base = 'mixed';
+let car = true;
+// One state per phone, so tapping in one doesn't move the others.
+const phones = {};
+
+function fresh() {
+  if (base === 'ok') return { pack: 0, tp: true, setup: true };
+  if (base === 'none') return { pack: -1, tp: false, setup: false };
+  return { pack: -1, tp: true, setup: false };
+}
+
+function items(s) {
+  const list = [
+    { id: 'pack', name: 'Pack', ok: s.pack >= 0,
+      okS: s.pack >= 0 ? PACKS[s.pack] : '', waitS: 'None set',
+      okLong: (s.pack >= 0 ? PACKS[s.pack] : '') + ' in the car', waitLong: 'No pack set',
+      verbOk: 'Swap', verbWait: 'Pick', title: 'Pack in the car', fix: 'Pick tonight’s pack',
+      toast: 'Opens the quick pack swap' },
+    { id: 'tp', name: 'Transponder', ok: s.tp, okS: 'Heard 7:42', waitS: 'Not heard',
+      okLong: 'Transponder heard', waitLong: 'Transponder not heard',
+      verbOk: 'Check', verbWait: 'Check', title: 'Transponder', fix: 'Check your transponder',
+      toast: 'Starts the transponder check on Tonight' },
+  ];
+  if (car) list.push({ id: 'setup', name: 'Setup', ok: s.setup, okS: 'Logged', waitS: 'None yet',
+      okLong: 'Setup logged', waitLong: 'No setup logged',
+      verbOk: 'View', verbWait: 'Log', title: 'Setup', fix: 'Log tonight’s setup',
+      toast: 'Opens Log setup in the Garage' });
+  return list;
+}
+
+function h(html) { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; }
+
+// ---- each option draws the actions block from the items
+const OPTS = [
+  { key: 'today', eb: 'Today', name: 'Three chips', one: 'What ships now: a row of pills, 34px tall, with a 7px dot for the state.',
+    draw(it) {
+      const r = h('<div class="row0"></div>');
+      it.forEach((i) => r.appendChild(h(`<button type="button" class="me-chip ${i.ok ? 'ok' : 'wait'}" data-id="${i.id}">${i.ok ? i.okLong : i.waitLong}</button>`)));
+      return r;
+    },
+    good: [], watch: ['Hard to hit in a hurry or with gloves', 'The dot is the only sign of state'] },
+
+  { key: 'a', eb: 'Option A', name: 'Three tiles', rec: true,
+    one: 'Three square buttons side by side, each with a big icon, what it is and where it stands. Ready gets a green tick, waiting goes amber.',
+    draw(it) {
+      const g = h(`<div class="oa" style="grid-template-columns:repeat(${it.length},minmax(0,1fr))"></div>`);
+      it.forEach((i) => g.appendChild(h(`<button type="button" class="${i.ok ? 'ok' : 'wait'}" data-id="${i.id}">
+        <span class="badge">${i.ok ? ICON.tick : ICON.bang}</span>
+        <span class="ic">${ICON[i.id]}</span><span class="n">${i.name}</span><span class="s">${i.ok ? i.okS : i.waitS}</span></button>`)));
+      return g;
+    },
+    good: ['About 100px tall, three times today’s chips', 'Reads at a glance from arm’s length', 'Only one row more than today'],
+    watch: ['A long pack name wraps to two lines', 'No verb, so the icon has to say "tap me"'] },
+
+  { key: 'b', eb: 'Option B', name: 'Checklist', one: 'A pre-race checklist, one full-width row each: a status circle, what it says, and a verb button (Swap, Check, Log) that goes pink while it’s waiting.',
+    draw(it) {
+      const g = h('<div class="ob"></div>');
+      it.forEach((i) => g.appendChild(h(`<button type="button" class="${i.ok ? 'ok' : 'wait'}" data-id="${i.id}">
+        <span class="st">${i.ok ? ICON.tick : ICON[i.id]}</span>
+        <span class="tx"><b>${i.title}</b><small>${i.ok ? i.okS : i.waitS}</small></span>
+        <span class="vb">${i.ok ? i.verbOk : i.verbWait}${ICON.chev}</span></button>`)));
+      return g;
+    },
+    good: ['The whole row is the target, the full card wide', 'The verb says what a tap does', 'Room for long pack names'],
+    watch: ['The tallest: 3 × 60px pushes Grid and Best down', 'Feels more like a form than a dashboard'] },
+
+  { key: 'c', eb: 'Option C', name: 'Segmented bar', one: 'One joined bar, like the Tonight / Races / Garage switch above it but chunkier. Each part has an icon and its name, the state underneath and a coloured bar.',
+    draw(it) {
+      const g = h(`<div class="oc" style="grid-template-columns:repeat(${it.length},minmax(0,1fr))"></div>`);
+      it.forEach((i) => g.appendChild(h(`<button type="button" class="${i.ok ? 'ok' : 'wait'}" data-id="${i.id}">
+        <span class="row">${ICON[i.id]}${i.id === 'tp' ? 'Tx' : i.name}</span><small>${i.ok ? i.okS : i.waitS}</small></button>`)));
+      return g;
+    },
+    good: ['Compact: 66px, one row', 'Matches the kit’s segmented control', 'Reads as one set of three'],
+    watch: ['"Transponder" has to shorten to "Tx"', 'Might be taken for tabs rather than actions'] },
+
+  { key: 'd', eb: 'Option D', name: 'Fix first', one: 'Whatever is waiting becomes a big pink button that says what to do ("Pick tonight’s pack"). What’s already done shrinks to quiet buttons side by side.',
+    draw(it) {
+      const g = h('<div class="od"></div>');
+      const wait = it.filter((i) => !i.ok), ok = it.filter((i) => i.ok);
+      wait.forEach((i) => g.appendChild(h(`<button type="button" class="p" data-id="${i.id}">${ICON[i.id]}
+        <span><b>${i.fix}</b><small>${i.waitLong}</small></span>${ICON.chev}</button>`)));
+      if (wait.length === 0) g.appendChild(h(`<span class="allok">${ICON.tick} READY TO RACE</span>`));
+      if (ok.length) {
+        const r = h(`<div class="okrow" style="grid-template-columns:repeat(${ok.length},minmax(0,1fr))"></div>`);
+        ok.forEach((i) => r.appendChild(h(`<button type="button" class="t" data-id="${i.id}">${ICON[i.id]}<span>${i.id === 'pack' ? i.okS : i.id === 'tp' ? 'Heard' : 'Logged'}</span></button>`)));
+        g.appendChild(r);
+      }
+      return g;
+    },
+    good: ['The thing to do is the biggest thing on the card', 'Tells them what to do, not just what’s wrong', '"Ready to race" when everything’s done'],
+    watch: ['Moves around as things get done', 'Three waiting means three pink buttons'] },
+
+  { key: 'e', eb: 'Option E', name: 'Pack first', one: 'The pack gets a wide button of its own, the name big in the race font with a Swap button, since it changes most often. Transponder and setup share the row below.',
+    draw(it) {
+      const g = h('<div class="oe"></div>');
+      const [p, ...rest] = it;
+      g.appendChild(h(`<button type="button" class="pk ${p.ok ? 'ok' : 'wait'}" data-id="pack"><span class="bat">${ICON.pack}</span>
+        <span><small>${p.ok ? 'In the car' : 'Pack'}</small><b>${p.ok ? p.okS : 'None set'}</b></span><span class="go">${p.ok ? 'Swap' : 'Pick'}</span></button>`));
+      rest.forEach((i) => g.appendChild(h(`<button type="button" class="sm ${i.ok ? 'ok' : 'wait'}${rest.length === 1 ? ' solo' : ''}" data-id="${i.id}">
+        ${i.ok ? ICON.tick : ICON[i.id]}<span><b>${i.name}</b><small>${i.ok ? i.okS : i.waitS}</small></span></button>`)));
+      return g;
+    },
+    good: ['Quick swap is 78px tall and the full card wide', 'The pack name is readable from the pits', 'Others still 62px'],
+    watch: ['Two rows: about 70px taller than today', 'Puts the pack ahead of the other two'] },
+];
+
+function hero(o, s) {
+  const card = h(`<div class="me-hero">
+    <span class="k">Up next</span>
+    <div class="big">Heat 4<br><small>2WD Buggy · called in 2 · ~12 min</small></div>
+    <div class="acts"></div>
+    <div class="me-mini"><div><small>Grid</small><b>3rd</b></div><div><small>Best tonight</small><b>21.384</b></div><div><small>Marshal</small><b>Heat 6</b></div></div>
+    <span class="golink">See the running order</span></div>`);
+  card.querySelector('.acts').replaceWith(o.draw(items(s)));
+  return card;
+}
+
+function render() {
+  const grid = document.getElementById('grid');
+  grid.textContent = '';
+  for (const o of OPTS) {
+    phones[o.key] = fresh();
+    const slot = h(`<section class="slot ${o.key === 'today' ? 'today' : ''} ${o.rec ? 'rec' : ''}">
+      <div class="cap"><span class="eb">${o.eb}</span><b>${o.name}</b><span>${o.one}</span><span class="meas"></span></div>
+      <div class="ph"><div class="phone"><div class="scr">
+        <div class="sb"><span>7:46</span><span>●●● 5G</span></div>
+        <div class="who"><b>Asher K.</b><span>● Signed in</span></div>
+        <div class="sw"><span class="on">Tonight</span><span>Races</span><span>Garage</span><span>Stats</span></div>
+        <div class="hold"></div>
+        <div class="below"><div><small>Car tonight</small></div><div><small>Last result</small></div></div>
+        <div class="toast" role="status"></div>
+      </div></div></div>
+      ${o.good.length || o.watch.length ? `<div class="notes"><div><h3>Good</h3><ul>${o.good.map((x) => `<li>${x}</li>`).join('') || '<li>—</li>'}</ul></div>
+        <div><h3>Watch out</h3><ul>${o.watch.map((x) => `<li>${x}</li>`).join('')}</ul></div></div>` : ''}
+    </section>`);
+    grid.appendChild(slot);
+    draw(o, slot);
+  }
+}
+
+function draw(o, slot) {
+  const hold = slot.querySelector('.hold');
+  hold.textContent = '';
+  hold.appendChild(hero(o, phones[o.key]));
+  requestAnimationFrame(() => {
+    const hs = [...hold.querySelectorAll('[data-id]')].map((b) => Math.round(b.getBoundingClientRect().height));
+    const lo = Math.min(...hs), hi = Math.max(...hs);
+    slot.querySelector('.meas').textContent = 'Tap height ' + (lo === hi ? lo + 'px' : lo + '–' + hi + 'px');
+  });
+}
+
+document.getElementById('grid').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-id]');
+  if (!b) return;
+  const slot = b.closest('.slot');
+  const o = OPTS[[...slot.parentNode.children].indexOf(slot)];
+  const s = phones[o.key];
+  const id = b.dataset.id;
+  const it = items(s).find((i) => i.id === id);
+  let msg = it.toast;
+  if (id === 'pack') { s.pack = (s.pack + 1) % PACKS.length; msg += ' → ' + PACKS[s.pack] + ' in the car'; }
+  else if (!s[id]) { s[id] = true; msg += ' → done'; }
+  draw(o, slot);
+  const t = slot.querySelector('.toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove('on'), 1600);
+});
+
+document.getElementById('segState').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  base = b.dataset.v;
+  for (const x of e.currentTarget.children) x.setAttribute('aria-pressed', String(x === b));
+  render();
+});
+document.getElementById('car').addEventListener('change', (e) => { car = e.target.checked; render(); });
+
+render();
+</script>
+</body>
+</html>

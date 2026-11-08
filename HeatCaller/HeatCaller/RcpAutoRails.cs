@@ -468,6 +468,10 @@ public static class RcpCorners
     /// <summary>What the corner becomes: a turn of Radius tiles in Quadrant, or square when Radius is 0.</summary>
     public sealed record Step(RcpQuadrant Quadrant, int Radius, bool Double, string Said);
 
+    /// <summary>What a square outside corner is on the floor: two rails on one tile, which is custom work.</summary>
+    private const string Square =
+        "Square: two rails meeting - at an outside corner that's two rails on one tile, a custom tile (two more bolt holes, a rail trimmed to fit).";
+
     /// <summary>
     /// What a click at <paramref name="at"/> would do - or null, with
     /// <paramref name="why"/> saying why nothing would. Asked by the hover
@@ -479,21 +483,19 @@ public static class RcpCorners
 
         if (design.CurveAt(at.X, at.Y) is { } curve)
         {
-            var wanted = curve.Radius < 0.99f ? 1 : curve.Radius < 1.99f ? 2 : 0;
+            // A one-tile turn, then square, then back: the one-tile turn is
+            // the only turn a club has (Asher, 7 Nov 2026), so the two-tile
+            // step is gone. A smaller turn goes up to one tile.
+            var wanted = curve.Radius < 0.99f ? 1 : 0;
 
             if (wanted > 0 && !HasRoom(design, curve, at, curve.Quadrant, wanted))
             {
-                return new Step(curve.Quadrant, 0, curve.Double, wanted == 2
-                    ? "No room for a two-tile turn there - it needs two tiles of straight each way - so it's square: two rails meeting."
-                    : "Square: two rails meeting.");
+                return new Step(curve.Quadrant, 0, curve.Double, Square);
             }
 
-            return new Step(curve.Quadrant, wanted, curve.Double, wanted switch
-            {
-                1 => "A one-tile turn - the corner piece that comes in the box.",
-                2 => "A two-tile turn - a sweeper.",
-                _ => "Square: two rails meeting.",
-            });
+            return new Step(curve.Quadrant, wanted, curve.Double, wanted == 1
+                ? "An outer curve tile - the one-tile turn that comes in the box."
+                : Square);
         }
 
         // A square corner: one rail out of the point each way, at right angles.
@@ -528,7 +530,7 @@ public static class RcpCorners
         }
 
         return new Step(quadrant, 1, across[0].Wall!.Double || down[0].Wall!.Double,
-            "A one-tile turn - the corner piece that comes in the box.");
+            "An outer curve tile - the one-tile turn that comes in the box.");
     }
 
     /// <summary>

@@ -120,7 +120,41 @@ public sealed class RcpTile
     /// </summary>
     public int Lane { get; set; }
 
-    public RcpTile Clone() => new() { Col = Col, Row = Row, Kind = Kind, Turns = Turns, Label = Label, Lane = Lane };
+    /// <summary>
+    /// Which of RCP's pieces this tile is - a plain tile, or a tile with its
+    /// rail already bolted on (see RcpPiece). On a real track a rail never
+    /// stands on its own: it is bolted to one edge of its tile and stays
+    /// there, and the two go down as one piece (Asher, 7 Nov 2026 - plans\
+    /// track-designer-railed-tiles-plan.md). Plain in every plan saved before
+    /// this existed. For now it is worked out from the rails on the seams
+    /// (RcpPieces.Adopt); the editor lays pieces directly from Phase 2.
+    /// </summary>
+    public RcpPiece Piece { get; set; }
+
+    /// <summary>The edge a rail, finish or arched rail tile has its rail on - its bolt-hole edge.</summary>
+    public RcpEdge Facing { get; set; }
+
+    /// <summary>
+    /// The corner of the tile its rail is in: where an outer curve tile's
+    /// pink arc runs across (the bare room beyond it is that corner), or
+    /// where an inner corner tile's small red piece sits. An outer curve
+    /// tile's turn rail is anchored at this corner and bulges the opposite
+    /// way (RcpCurve.Quadrant is the opposite quadrant).
+    /// </summary>
+    public RcpQuadrant Corner { get; set; }
+
+    public RcpTile Clone() => new()
+    {
+        Col = Col,
+        Row = Row,
+        Kind = Kind,
+        Turns = Turns,
+        Label = Label,
+        Lane = Lane,
+        Piece = Piece,
+        Facing = Facing,
+        Corner = Corner,
+    };
 }
 
 /// <summary>

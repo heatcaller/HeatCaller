@@ -1,14 +1,14 @@
 # Track Designer
 
-The Track Designer lets you draw an RCP-style tile track: lay the foam floor, stand rails along the seams, add turns and markings, and draw the racing line. It works out the parts the track takes, checks them against what your club owns, gives the lap a time, lays out tracks that fit your room, prints the plan to scale with a build list, and shows the track in 3D.
+The Track Designer lets you draw an RCP-style tile track: lay the tiles with their rails already on, as they go down on a real track, add markings, and draw the racing line. It works out the parts the track takes, checks them against what your club owns, gives the lap a time, lays out tracks that fit your room, prints the plan to scale with a build list, and shows the track in 3D.
 
 On the **Track Layouts** page, select a layout and click **Track Designer**, or click it with nothing selected to draw a new track. See [Track Layouts](drivers-and-classes.md#track-layouts).
 
 <!-- screenshot: Track Designer with a traced photo underneath and rails drawn over it -->
 
-The toolbar tools are **Floor**, **Lane**, **Rails**, **Turns**, **Corners**, **Markings**, **Route**, **Erase**, **Photo** and **Select** (keys <kbd>1</kbd> to <kbd>8</kbd> for Floor to Select, <kbd>L</kbd> for Lane and <kbd>C</kbd> for Corners). The status line under the drawing area explains how the current tool works. Before you click, the drawing shows what the click would make, in orange: the lane, the rail or the turn. The seam or corner it will land on is ringed. Other toolbar buttons:
+The toolbar tools are **Pieces**, **Lane**, **Corners**, **Markings**, **Route**, **Erase**, **Photo** and **Select** (<kbd>1</kbd>, <kbd>2</kbd> and <kbd>3</kbd> pick a plain tile, a rail tile and an outer curve tile; <kbd>4</kbd> to <kbd>8</kbd> are Markings to Select; <kbd>L</kbd> is Lane and <kbd>C</kbd> is Corners). The status line under the drawing area explains how the current tool works. Before you click, the drawing shows what the click would make, in orange: the tile with its rail, the lane, or the turn. Other toolbar buttons:
 
-- **Wall the edge** puts a rail round every open edge of the floor.
+- **Rail the edge** makes every tile round the edge of the floor a rail tile facing out, and its outside corners outer curve tiles.
 - **Trace route** follows the corridor between the rails and lays the racing line down the middle of it, however many tiles wide the track is. A traced line follows the track as you change it (see [Lanes](#draw-with-lanes)).
 - **Reverse** (<kbd>Shift</kbd>+<kbd>R</kbd>) turns the racing line round, so it runs the way the cars go.
 - **Play** sends a car round the line at the lap time shown, with the lap it's on and its speed in the corner of the drawing; **Stop** ends it. Set it to run at half speed, as timed or double on the **Lap** tab.
@@ -20,19 +20,40 @@ The toolbar tools are **Floor**, **Lane**, **Rails**, **Turns**, **Corners**, **
 
 The drawing area is a dark floor, whatever look HeatCaller is in, so the tiles and rails always look the same. Its top-left corner shows how big the plan is, in feet or meters (whichever you gave the room in), and the lap length with its lap time (see [The lap time](#the-lap-time)). Each tile is drawn with the seven T-shaped teeth a real RCP tile locks to the next with; zoomed out, the joints are a plain line. Hold <kbd>Space</kbd> and drag to move the view with any tool (the middle button and <kbd>Shift</kbd>+right-drag do the same), and use the mouse wheel to zoom. The zoom shows in the bottom-right corner; click it to go back to 100%.
 
-In any tool, <kbd>Ctrl</kbd>+click or right-click erases. <kbd>T</kbd> takes **Markings** with **Tile label** (see [Name a tile](#name-a-tile)). <kbd>R</kbd> turns markings 90 degrees, and <kbd>G</kbd> shows or hides the grid. The tool keys only work while the drawing area has focus, so they don't interfere with typing the track name.
+In any tool, <kbd>Ctrl</kbd>+click or right-click erases. <kbd>T</kbd> takes **Markings** with **Tile label** (see [Name a tile](#name-a-tile)). <kbd>R</kbd> turns the next piece, or markings, 90 degrees, and <kbd>G</kbd> shows or hides the grid. The tool keys only work while the drawing area has focus, so they don't interfere with typing the track name.
 
-The panel on the right has six tabs: **Pieces**, **Plan**, **Room**, **Lap**, **Stock** and **Keys**. It opens on the tab you last used. **Pieces** holds lanes (see below), floor pieces, barriers (with **Turn radius, in tiles:** buttons for 0.5, 1, 1.5 and 2) and markings. **Keys** lists every key the designer answers to.
+The panel on the right has six tabs: **Pieces**, **Plan**, **Room**, **Lap**, **Stock** and **Keys**. It opens on the tab you last used. **Pieces** holds lanes (see below), the pieces (see [Lay pieces](#lay-pieces)) and markings. **Keys** lists every key the designer answers to.
+
+<a id="lay-pieces"></a>
+
+## Lay pieces
+
+On a real RCP track a rail is bolted to one edge of its tile and stays on, so a tile and its rail go down together as one piece. A tile carries one rail. The **Pieces** card on the **Pieces** tab holds:
+
+- **Floor tile**: a plain tile, no rail (<kbd>1</kbd>).
+- **Rail tile**: a tile with a straight rail on one edge (<kbd>2</kbd>).
+- **Outer curve tile**: the tile with the one-tile turn rail on it, for the outside of a bend (<kbd>3</kbd>).
+- **Finish rail tile**: a tile with the finish-line rail.
+- **Arched rail tile**: a rail tile whose rail arches into the lane, for a straight.
+- **Blank tile**: a tile with no bolt holes, for infield and lane widening. It takes no rail.
+- **Blocked out**: floor you can't use, such as a pillar or a table leg.
+
+With a rail tile, click near the edge you want the rail on. With an outer curve tile, click in the corner the turn goes across. In the middle of a tile, the piece goes the way <kbd>R</kbd> last turned it. Drag to lay a row: the whole row takes the side you pressed near. Click a piece again to make it a plain tile. Two rail tiles laid with their rails back to back are a divider. The inner corner tile, with its small red corner piece, isn't laid by hand: it's worked out at the inside of every bend.
+
+**Erase** takes up a whole piece, the tile and its rail. To take just the rail off a tile, erase right on the rail.
+
+A tile that needs a second rail, such as where a divider meets the outside wall, isn't a piece RCP sells. The club makes it: cut two more bolt holes in the tile and trim a rail to fit. The designer lets you draw it, marks the tile on the board with a dashed amber ring and **custom**, and says how many there are on the **Lap** tab.
 
 <a id="draw-with-lanes"></a>
 
 ## Draw with lanes
 
-On a real track you think in lanes, not in seams. Take the **Lane** tool (<kbd>L</kbd>) and drag where the track goes. Floor goes down under it, and rails go down both sides of it by themselves. Round the outside of every bend goes a turn rail. The inside of a bend stays square: two rails meeting, with an inner corner piece, as on RCP's own layouts. The **Lanes** card at the top of the **Pieces** tab sets:
+On a real track you think in lanes, not in seams. Take the **Lane** tool (<kbd>L</kbd>) and drag where the track goes. The tiles go down with their rails on: rail tiles down both sides, and an outer curve tile round the outside of every bend. The inside of a bend is an inner corner tile, as on RCP's own layouts. The **Lanes** card at the top of the **Pieces** tab sets:
 
 - **Lane** or **Ring**. With **Ring**, drag a box and a closed lane goes round just inside it, which is the quickest way from nothing to a track. The box needs room for an island in the middle; while it's too small it's drawn in red.
 - **Width, in tiles:** **1**, **2** or **3**. It starts at 2, since a real RCP lane is never narrower.
-- **Turns round the bends:** **1 tile**, **2 tiles** or **Square**. This is for the whole plan: change it and every lane's turns follow. A turn only gets the radius there's room for. It takes that much straight on each side, and where the next bend is close, the two share the straight between them. If there isn't room for a one-tile turn, the corner stays square.
+
+Every lane's bends get the one-tile turn, the only turn a club has. A plan saved with two-tile or square lane turns keeps them.
 
 The rails follow the lane as you change it:
 
@@ -42,11 +63,11 @@ The rails follow the lane as you change it:
 - The eraser takes a lane's floor rather than its rails, and the rails follow the floor in.
 - **Blocked out** floor painted onto a lane gets railed round.
 
-Rails you put down by hand are never moved. A hand rail on a lane's edge stays as you set it. Clicking one of a lane's own rails with the **Rails** tool makes it a hand rail: one click doubles it, and the next takes it off. Taken off a lane's edge, the lane puts its own rail back. To open a lane up, paint the floor beyond it into the lane. Plans drawn before lanes existed have no lanes, so nothing in them changes.
+Pieces you lay by hand are never moved. A piece laid on a lane's tile takes that tile out of the lane, and the lane's rails are worked out again round it. To open a lane up, paint the floor beyond it into the lane. Plans drawn before lanes existed have no lanes, so nothing in them changes.
 
 ## Corners
 
-Take the **Corners** tool (<kbd>C</kbd>) and click a corner to make it a one-tile turn, then a two-tile turn, then square, and round again. This works on a corner where two rails meet at a right angle, and on any turn rail. A two-tile turn needs two tiles of straight each way; where there isn't room, the click goes straight to square. A corner set with this tool is a hand piece, so the lanes leave it as you set it. A half-tile hairpin is still placed with the **Turns** tool.
+Take the **Corners** tool (<kbd>C</kbd>) and click a corner to switch it between an outer curve tile and square, and back. This works on a corner where two rails meet at a right angle, and on any turn rail. A square outside corner is two rails on one tile, so it's a custom tile (see [Lay pieces](#lay-pieces)). A corner set with this tool is a hand piece, so the lanes leave it as you set it. A two-tile turn from an older plan goes to square on the first click.
 
 ## A racing line that follows the track
 
@@ -156,7 +177,7 @@ Click **View** on the toolbar, or press <kbd>V</kbd>, to see the track tipped an
 - Use the mouse wheel to go closer or further away.
 - Click **View** again, or pick any tool, to go back to the flat plan.
 
-The angled view is for looking. Clicks, drags and keys like <kbd>Delete</kbd> and the arrows do nothing to the plan while it shows, and the toolbar buttons that change the plan (such as **Remove** or **Wall the edge**) go back to the flat plan first. **Undo** and **Redo** stay in the angled view, so you can see the result. The size and lap still show in the top-left corner, and clicking the lap shows where its time comes from.
+The angled view is for looking. Clicks, drags and keys like <kbd>Delete</kbd> and the arrows do nothing to the plan while it shows, and the toolbar buttons that change the plan (such as **Remove** or **Rail the edge**) go back to the flat plan first. **Undo** and **Redo** stay in the angled view, so you can see the result. The size and lap still show in the top-left corner, and clicking the lap shows where its time comes from.
 
 ## Split loops
 

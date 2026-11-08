@@ -52,8 +52,6 @@ export const ME_CSS = `
 .me-hero .k { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--primary); }
 .me-hero .big { font-size: 2.3rem; line-height: 0.98; font-weight: 800; letter-spacing: -0.01em; }
 .me-hero .big small { font-size: 1.05rem; color: var(--muted); font-weight: 700; }
-.me-hero .row { display: flex; gap: 6px; flex-wrap: wrap; }
-.me-hero .row .me-chip[tabindex="-1"] { cursor: default; }
 .me-mini { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .me-mini div { background: color-mix(in srgb, var(--bg) 55%, transparent); border-radius: 12px; padding: 8px 10px; display: grid; gap: 2px; min-width: 0; }
 .me-mini small { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; }
@@ -65,6 +63,30 @@ export const ME_CSS = `
 .me-qual-up { color: var(--muted); font-size: 0.85rem; }
 .me-hero .acts { display: flex; gap: 8px; flex-wrap: wrap; }
 .me-hero .acts button { flex: 1 1 8rem; }
+/* THREE TILES (7 Nov 2026, Asher: "make the buttons to quickswap a pack,
+   record a setup, and check responder on the hero card on ME tonight bigger
+   and easier to press", option A of relay/mockups/me-hero-actions.html).
+   The pack, transponder and setup chips become square buttons side by side,
+   each with an icon, what it is and where it stands: a green tick when it is
+   ready, amber while it waits. Two across when there is no car tonight. */
+.me-acts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.me-acts.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.me-act { min-height: 92px; border-radius: 14px; padding: 10px 4px 12px; position: relative; display: grid; justify-items: center;
+  align-content: center; gap: 3px; text-align: center; min-width: 0; font: inherit; color: var(--text); cursor: pointer;
+  background: color-mix(in srgb, var(--bg) 55%, transparent); border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); }
+.me-act.wait { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.me-act svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.me-act .ic { width: 32px; height: 32px; border-radius: 12px; display: grid; place-items: center; margin-bottom: 2px;
+  background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.me-act.wait .ic { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+.me-act .ic svg { width: 24px; height: 24px; }
+.me-act .n { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.me-act .s { font-weight: 800; font-size: 0.9rem; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%; padding: 0 4px; }
+.me-act .badge { position: absolute; top: 7px; right: 7px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--good); color: var(--bg); }
+.me-act.wait .badge { background: var(--warn); }
+.me-act .badge svg { width: 12px; height: 12px; stroke-width: 3.2; }
 
 .me-switch { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 10px 0 12px; padding: 4px; border-radius: 16px;
@@ -166,16 +188,16 @@ html.framed .me-sheet .in { padding-bottom: calc(22px + 58px + var(--sa-b, 0px))
 /* PIT WALL ON ME (5 Nov 2026, Asher: "pit wall for all... for the me tab
    just update the look"). The relay kit's focus ring and small press on
    every control the Me spaces added; nothing here moves or hides anything. */
-.me-chip, .me-switch button, .me-tile, .me-swap button {
+.me-chip, .me-switch button, .me-tile, .me-swap button, .me-act {
   -webkit-tap-highlight-color: transparent;
   transition: transform 0.08s ease, background-color 0.15s ease, border-color 0.15s ease; }
-.me-chip:active, .me-switch button:active, .me-tile:active, .me-swap button:active { transform: scale(0.97); }
+.me-chip:active, .me-switch button:active, .me-tile:active, .me-swap button:active, .me-act:active { transform: scale(0.97); }
 .me-chip:focus-visible, .me-switch button:focus-visible, .me-tile:focus-visible,
-.me-swap button:focus-visible { outline: 3px solid var(--ring, var(--accent)); outline-offset: 2px; }
-@media (hover: hover) { .me-tile:hover, .me-swap button:hover, .me-chip:hover { border-color: var(--primary); } }
+.me-swap button:focus-visible, .me-act:focus-visible { outline: 3px solid var(--ring, var(--accent)); outline-offset: 2px; }
+@media (hover: hover) { .me-tile:hover, .me-swap button:hover, .me-chip:hover, .me-act:hover { border-color: var(--primary); } }
 @media (prefers-reduced-motion: reduce) {
-  .me-chip, .me-switch button, .me-tile, .me-swap button { transition: none; }
-  .me-chip:active, .me-switch button:active, .me-tile:active, .me-swap button:active { transform: none; }
+  .me-chip, .me-switch button, .me-tile, .me-swap button, .me-act { transition: none; }
+  .me-chip:active, .me-switch button:active, .me-tile:active, .me-swap button:active, .me-act:active { transform: none; }
 }
 `;
 
@@ -408,11 +430,44 @@ function meSeen() {
   return Number.isFinite(at) ? at : NaN;
 }
 
-function meChip(text, state, onTap) {
-  const c = el('button', 'me-chip ' + (state || ''), text);
-  c.type = 'button';
-  if (onTap) c.addEventListener('click', onTap); else c.tabIndex = -1;
-  return c;
+
+// The moment card's three tiles (7 Nov 2026): line icons drawn as paths,
+// built node by node like the pack-health spark, never from markup.
+const ME_ICON = {
+  pack: 'M4.2 7h12.6a2.2 2.2 0 0 1 2.2 2.2v5.6a2.2 2.2 0 0 1-2.2 2.2H4.2A2.2 2.2 0 0 1 2 14.8V9.2A2.2 2.2 0 0 1 4.2 7zM22 10.5v3M6 10.5v3M9.5 10.5v3M13 10.5v3',
+  tp: 'M13.8 12a1.8 1.8 0 1 1-3.6 0a1.8 1.8 0 1 1 3.6 0zM8.6 15.4a4.8 4.8 0 0 1 0-6.8M15.4 8.6a4.8 4.8 0 0 1 0 6.8M5.7 18.3a8.9 8.9 0 0 1 0-12.6M18.3 5.7a8.9 8.9 0 0 1 0 12.6',
+  setup: 'M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M17 6a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM11 12a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM19 18a2 2 0 1 1-4 0a2 2 0 1 1 4 0z',
+  tick: 'M5 12.5l4.5 4.5L19 7.5',
+  bang: 'M12 6v7M12 17.5v.01',
+};
+
+function meIcon(name) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(NS, 'path');
+  path.setAttribute('d', ME_ICON[name]);
+  svg.appendChild(path);
+  return svg;
+}
+
+// One tile: what it is, where it stands, and the old chip's whole sentence
+// ("No pack set") as its name for a screen reader.
+function meAct(icon, name, status, ok, says, onTap) {
+  const b = el('button', 'me-act ' + (ok ? 'ok' : 'wait'));
+  b.type = 'button';
+  b.setAttribute('aria-label', says);
+  const badge = el('span', 'badge');
+  badge.appendChild(meIcon(ok ? 'tick' : 'bang'));
+  b.appendChild(badge);
+  const ic = el('span', 'ic');
+  ic.appendChild(meIcon(icon));
+  b.appendChild(ic);
+  b.appendChild(el('span', 'n', name));
+  b.appendChild(el('span', 's', status));
+  b.addEventListener('click', onTap);
+  return b;
 }
 
 // ---- the moment card
@@ -492,15 +547,22 @@ function meMoment() {
     big.appendChild(el('br'));
     big.appendChild(el('small', '', callWords(n) + (eta ? ' · ' + eta : '')));
     hero.appendChild(big);
-    const row = el('div', 'row');
+    const row = el('div', 'me-acts');
     const pack = mePackNow();
+    const seen = meSeen();
     // Each one a way to fix what it says (7 Nov 2026, Asher): the pack to
     // the quick pack change, the transponder to its check on Tonight, the
-    // setup to Log setup in the Garage.
-    row.appendChild(meChip(pack !== '' ? pack + ' in the car' : 'No pack set', pack !== '' ? 'ok' : 'wait', mePackSheet));
-    row.appendChild(meChip(Number.isFinite(meSeen()) ? 'Transponder heard' : 'Transponder not heard', Number.isFinite(meSeen()) ? 'ok' : 'wait', meToTransponder));
+    // setup to Log setup in the Garage. Tiles, not chips, since the same day.
+    row.appendChild(meAct('pack', 'Pack', pack !== '' ? pack : 'None set', pack !== '',
+      pack !== '' ? pack + ' in the car' : 'No pack set', mePackSheet));
+    row.appendChild(meAct('tp', 'Transponder', Number.isFinite(seen) ? 'Heard ' + hm(seen) : 'Not heard', Number.isFinite(seen),
+      Number.isFinite(seen) ? 'Transponder heard' : 'Transponder not heard', meToTransponder));
     const car = meCarTonight();
-    if (car) row.appendChild(meChip(meSetupLoggedTonight(car) ? 'Setup logged' : 'No setup logged', meSetupLoggedTonight(car) ? 'ok' : 'wait', meLogSetup));
+    if (car) {
+      const logged = meSetupLoggedTonight(car);
+      row.appendChild(meAct('setup', 'Setup', logged ? 'Logged' : 'None yet', logged, logged ? 'Setup logged' : 'No setup logged', meLogSetup));
+    }
+    if (!car) row.className = 'me-acts two';
     hero.appendChild(row);
     const best = races.reduce((b, r) => (num(r.bestMs) > 0 && (b === 0 || num(r.bestMs) < b) ? num(r.bestMs) : b), 0);
     const m = live && live.marshal && typeof live.marshal === 'object' && typeof live.marshal.race === 'string' ? live.marshal : null;

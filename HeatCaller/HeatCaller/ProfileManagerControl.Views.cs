@@ -65,8 +65,31 @@ public sealed partial class ProfileManagerControl
     private const string HubView = "Hub";
     private const string GarageView = "Garage";
 
-    /// <summary>The picture in the header at the normal text size - big enough to know the driver by.</summary>
-    private const int HeaderAvatar = 144;
+    /// <summary>The setting's value for the table view (7 Nov 2026).</summary>
+    private const string TableView = "Table";
+
+    /// <summary>
+    /// The page's three views (7 Nov 2026, the Driver Hub rework): Card -
+    /// the roster beside one driver's card; Table - every driver in a
+    /// sortable table, the one picked in a drawer beside it; and Garage.
+    /// Card and Table took the place of the one Drivers view.
+    /// </summary>
+    private enum DriverView
+    {
+        Card,
+        Table,
+        Garage,
+    }
+
+    private DriverView _view = DriverView.Card;
+
+    /// <summary>
+    /// The picture in the header at the normal text size. 72, down from
+    /// 144 (7 Nov 2026): an initials disc that size took a fifth of the
+    /// page's height, and the empty band beside it was the first thing
+    /// anyone saw.
+    /// </summary>
+    private const int HeaderAvatar = 72;
 
     /// <summary>Null on a page built without them: then there are no views or tabs, and the card is the whole driver, as before.</summary>
     private readonly DriverGarageSources? _garageSources;
@@ -124,8 +147,10 @@ public sealed partial class ProfileManagerControl
     /// <summary>Set while the Garage view's driver picker is being filled or moved to follow the roster, so that changes nothing.</summary>
     private bool _syncingPicker;
 
-    /// <summary>The view asked for - kept apart from Visible, which reads false while the page itself is hidden.</summary>
-    private bool _garageViewWanted;
+    /// <summary>Whether the Garage view is the one asked for - kept apart from Visible, which reads false while the page itself is hidden.</summary>
+    private bool _garageViewWanted => _view == DriverView.Garage;
+
+    private Button? _btnTableView;
 
     /// <summary>Whether the painted card shows the driver's record (Stats tab, or no tabs at all).</summary>
     private bool ShowsStats => _garageSources is null || _cardTab == CardTab.Stats;
@@ -148,18 +173,22 @@ public sealed partial class ProfileManagerControl
     }
 
     /// <summary>
-    /// The row across the top of the page: the Drivers | Garage switch in
-    /// the upper left.
+    /// The row across the top of the page: the Card | Table | Garage switch
+    /// in the upper left (7 Nov 2026 - Card and Table took the place of
+    /// Drivers).
     /// </summary>
     private ButtonBar BuildTopRow()
     {
-        _btnHub = new Button { Text = "Drivers" };
-        _btnHub.Click += (_, _) => SelectView(garage: false);
+        _btnHub = new Button { Text = "Card" };
+        _btnHub.Click += (_, _) => SelectView(DriverView.Card);
+
+        _btnTableView = new Button { Text = TableView };
+        _btnTableView.Click += (_, _) => SelectView(DriverView.Table);
 
         _btnGarageView = new Button { Text = GarageView };
-        _btnGarageView.Click += (_, _) => SelectView(garage: true);
+        _btnGarageView.Click += (_, _) => SelectView(DriverView.Garage);
 
-        return new ButtonBar(tight: true).With(_btnHub, _btnGarageView);
+        return new ButtonBar(tight: true).With(_btnHub, _btnTableView, _btnGarageView);
     }
 
     private (Font Font, int Count, int Width)? _garageDriverWidth;
@@ -293,6 +322,8 @@ public sealed partial class ProfileManagerControl
 
         _btnCardEdit.Enabled = CardProfile() is not null;
         _btnCardPhoto.Enabled = CardProfile() is not null;
+        RefreshHeaderTiles();
+        RefreshRosterCount();
         _header.Changed();
     }
 
@@ -407,24 +438,34 @@ public sealed partial class ProfileManagerControl
 
     // ----------------------------------------------------------- the views
 
-    /// <summary>The two views, one showing: the roster beside the driver's card, or the Garage view.</summary>
-    private Panel BuildViews(Beside band, Control bottomBar)
+    /// <summary>The three views, one showing: the roster beside the driver's card, every driver in a table, or the Garage view.</summary>
+    private Panel BuildViews(Beside band, Control? bottomBar)
     {
         _band = band;
         _bottomBar = bottomBar;
         _driversView = band;
         _garageView = BuildGarageView();
+        _tableView = BuildTableView();
 
         var views = new Panel { Tag = AppTheme.KeepBackColor };
 
         _driversView.Dock = DockStyle.Fill;
         _garageView.Dock = DockStyle.Fill;
+        _tableView.Dock = DockStyle.Fill;
 
         views.Controls.Add(_driversView);
+        views.Controls.Add(_tableView);
         views.Controls.Add(_garageView);
 
-        // The view used last - the Drivers view on a new install.
-        _garageViewWanted = string.Equals(_settings?.DriversPageView, GarageView, StringComparison.OrdinalIgnoreCase);
+        // The view used last - the Card view on a new install, and for the
+        // "Hub" saved before Card and Table were two.
+        _view = _settings?.DriversPageView switch
+        {
+            { } saved when string.Equals(saved, GarageView, StringComparison.OrdinalIgnoreCase) => DriverView.Garage,
+            { } saved when string.Equals(saved, TableView, StringComparison.OrdinalIgnoreCase) => DriverView.Table,
+            _ => DriverView.Card,
+        };
+
         ApplyView();
 
         return views;
@@ -438,8 +479,12 @@ public sealed partial class ProfileManagerControl
     }
 
     /// <summary>The least height the views can do with at this width: the roster and card's, or a garage wall's.</summary>
-    private int ViewsLeastHeight(int width) =>
-        _garageViewWanted || _band is null ? UiLayout.AtTextSize(300) : _band.LeastHeight(width);
+    private int ViewsLeastHeight(int width) => _view switch
+    {
+        DriverView.Table when _tableBand is not null => _tableBand.LeastHeight(width),
+        DriverView.Card when _band is not null => _band.LeastHeight(width),
+        _ => UiLayout.AtTextSize(300),
+    };
 
     /// <summary>
     /// The Garage view: the driver picked where the Drivers view has its
@@ -457,7 +502,7 @@ public sealed partial class ProfileManagerControl
         // Batteries tab.
         _bigGarage.OpenBatteries += () =>
         {
-            SelectView(garage: false);
+            SelectView(DriverView.Card);
             SelectCardTab(CardTab.Batteries);
         };
 
@@ -578,7 +623,7 @@ public sealed partial class ProfileManagerControl
         }
     }
 
-    /// <summary>Shows the view asked for, and the Drivers view's buttons along the foot only with it.</summary>
+    /// <summary>Shows the view asked for.</summary>
     private void ApplyView()
     {
         if (_driversView is null || _garageView is null)
@@ -586,38 +631,53 @@ public sealed partial class ProfileManagerControl
             return;
         }
 
-        _driversView.Visible = !_garageViewWanted;
-        _garageView.Visible = _garageViewWanted;
+        _driversView.Visible = _view == DriverView.Card;
+        _garageView.Visible = _view == DriverView.Garage;
+
+        if (_tableView is not null)
+        {
+            _tableView.Visible = _view == DriverView.Table;
+        }
 
         if (_bottomBar is not null)
         {
-            _bottomBar.Visible = !_garageViewWanted;
+            _bottomBar.Visible = _view == DriverView.Card;
+        }
+
+        if (_view == DriverView.Table)
+        {
+            RefreshTable();
         }
 
         StyleSegments();
     }
 
-    /// <summary>Drivers or Garage, remembered for next time.</summary>
-    private void SelectView(bool garage)
+    /// <summary>Card, Table or Garage, remembered for next time.</summary>
+    private void SelectView(DriverView view)
     {
         if (_driversView is null || _garageView is null)
         {
             return;
         }
 
-        _garageViewWanted = garage;
+        _view = view;
         ApplyView();
 
-        // The Drivers view is about one driver: coming back to the Garage
-        // view from it shows theirs.
-        if (!garage)
+        // Card and Table are about one driver: coming back to the Garage
+        // view from either shows theirs.
+        if (view != DriverView.Garage)
         {
             _garageGroup = null;
         }
 
         if (_settings is not null)
         {
-            var name = garage ? GarageView : HubView;
+            var name = view switch
+            {
+                DriverView.Garage => GarageView,
+                DriverView.Table => TableView,
+                _ => HubView,
+            };
 
             if (!string.Equals(_settings.DriversPageView, name, StringComparison.Ordinal))
             {
@@ -633,14 +693,23 @@ public sealed partial class ProfileManagerControl
     /// <summary>The chosen view as the accent button, the other plain.</summary>
     private void StyleSegments()
     {
+        static AppTheme.ButtonKind Lit(bool on) => on ? AppTheme.ButtonKind.Primary : AppTheme.ButtonKind.Secondary;
+
         if (_btnHub is not null && _btnGarageView is not null)
         {
-            AppTheme.StyleButton(_btnHub, _garageViewWanted ? AppTheme.ButtonKind.Secondary : AppTheme.ButtonKind.Primary);
-            AppTheme.StyleButton(_btnGarageView, _garageViewWanted ? AppTheme.ButtonKind.Primary : AppTheme.ButtonKind.Secondary);
+            AppTheme.StyleButton(_btnHub, Lit(_view == DriverView.Card));
+            AppTheme.StyleButton(_btnGarageView, Lit(_view == DriverView.Garage));
+        }
+
+        if (_btnTableView is not null)
+        {
+            AppTheme.StyleButton(_btnTableView, Lit(_view == DriverView.Table));
         }
 
         AppTheme.StyleButton(_btnCardEdit, AppTheme.ButtonKind.Secondary);
         AppTheme.StyleButton(_btnCardPhoto, AppTheme.ButtonKind.Secondary);
+
+        StyleTableButtons();
     }
 
     // ------------------------------------------------------ the driver shown
@@ -656,6 +725,9 @@ public sealed partial class ProfileManagerControl
         {
             return;
         }
+
+        // The table's drawer is the driver shown, in brief.
+        RefreshDrawer();
 
         if (_garageViewWanted)
         {
