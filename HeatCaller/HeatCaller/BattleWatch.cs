@@ -13,7 +13,44 @@ namespace HeatCaller;
 /// <param name="Position">Where the car ahead is running. 1 is the lead.</param>
 /// <param name="GapSeconds">The gap at the line, as RaceGaps measures it. NaN when it cannot be measured this tick.</param>
 /// <param name="LapsDown">How many laps behind the car behind is. Anything but zero is not a fight.</param>
-public readonly record struct PairGap(string AheadId, string BehindId, int Position, double GapSeconds, int LapsDown);
+/// <param name="BehindLaps">
+/// Laps the car behind has completed, or nought from a feed that does not
+/// say. The gap at the line only changes when THIS car crosses (RaceGaps),
+/// so it is what RaceHorizon keys its samples on (8 Nov 2026) - keyed on
+/// the leader's laps, the sample after the leader crossed repeated the old
+/// gap under a new lap and the rate came out about a third too low.
+/// </param>
+/// <param name="AheadPenaltyMs">Penalty the car ahead is carrying - already inside its race time, and so inside the gap.</param>
+/// <param name="BehindPenaltyMs">
+/// Penalty the car behind is carrying. Both are here so a change in either
+/// can end the gap's history (8 Nov 2026): a gap measured across a penalty
+/// moves by the penalty, and a one second penalty was read as "going out
+/// by a second a lap".
+/// </param>
+public readonly record struct PairGap(
+    string AheadId,
+    string BehindId,
+    int Position,
+    double GapSeconds,
+    int LapsDown,
+    int BehindLaps = 0,
+    long AheadPenaltyMs = 0,
+    long BehindPenaltyMs = 0)
+{
+    /// <summary>The penalty one of the two cars carries, by id - zero for anyone else.</summary>
+    internal long PenaltyOf(string id) =>
+        string.Equals(id, AheadId, StringComparison.Ordinal) ? AheadPenaltyMs
+        : string.Equals(id, BehindId, StringComparison.Ordinal) ? BehindPenaltyMs
+        : 0;
+
+    /// <summary>
+    /// Whether either car's penalty differs from <paramref name="before"/> -
+    /// compared by car, not by place, so a pair that has swapped is still
+    /// compared like with like.
+    /// </summary>
+    internal bool PenaltiesChangedSince(PairGap before) =>
+        before.PenaltyOf(AheadId) != AheadPenaltyMs || before.PenaltyOf(BehindId) != BehindPenaltyMs;
+}
 
 /// <summary>
 /// A fight that has lasted long enough to be worth a word.
@@ -78,6 +115,9 @@ public sealed class BattleWatch
         public double Closest { get; set; }
         public double Now { get; set; }
         public int LeadChanges { get; set; }
+
+        /// <summary>The pair as last measured, for its penalties - see the penalty note in Observe.</summary>
+        public PairGap LastPair { get; set; }
     }
 
     private readonly Func<DateTime> _clock;
@@ -174,6 +214,17 @@ public sealed class BattleWatch
 
             seen.Add(key);
 
+            // A PENALTY IS NOT RACING (8 Nov 2026). The gap is race time and
+            // race time carries the penalties, so a penalty given mid-fight
+            // moved the gap by the penalty - enough to drop the penalised
+            // car behind and count a "lead change" nobody saw on track, and
+            // to keep a closest gap from before it in a fight measured
+            // after. The fight starts again from this tick, as it now stands.
+            if (_streaks.TryGetValue(key, out var before) && pair.PenaltiesChangedSince(before.LastPair))
+            {
+                _streaks.Remove(key);
+            }
+
             if (!_streaks.TryGetValue(key, out var streak))
             {
                 _streaks[key] = new Streak
@@ -186,6 +237,7 @@ public sealed class BattleWatch
                     Samples = 1,
                     Closest = pair.GapSeconds,
                     Now = pair.GapSeconds,
+                    LastPair = pair,
                 };
 
                 continue;
@@ -202,6 +254,7 @@ public sealed class BattleWatch
             }
 
             streak.Position = pair.Position;
+            streak.LastPair = pair;
             streak.Last = now;
             streak.Samples++;
             streak.Now = pair.GapSeconds;

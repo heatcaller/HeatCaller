@@ -492,4 +492,42 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
         Assert.Contains("_director.RaceFactsNow = _announcer.RaceFactsNow;", host, StringComparison.Ordinal);
         Assert.Contains("facts: said.Facts", host, StringComparison.Ordinal);
     }
+
+    // --- Playing a segment again (8 Nov 2026) -----------------------------
+
+    private static SpokenSegment InRace(RaceFactsStamp? facts) =>
+        new(SegmentKind.Horizon, "Dave is a second behind Carl, with nine laps left.", Array.Empty<ExchangeTurn>()) { Facts = facts };
+
+    [Fact]
+    public void An_in_race_segment_the_race_has_moved_past_is_not_played_again()
+    {
+        var why = RaceControlControl.WhyNotToReplay(InRace(Facts()), Facts(leaderLaps: 8));
+
+        Assert.Equal("the leader has done 3 more laps since it was written", why);
+    }
+
+    [Fact]
+    public void An_in_race_segment_still_true_may_be_played_again()
+    {
+        var then = Facts(sayBy: 130_000);
+
+        Assert.Null(RaceControlControl.WhyNotToReplay(InRace(then), then with { AtMs = 110_000 }));
+    }
+
+    [Fact]
+    public void A_segment_from_between_races_is_always_true_to_play_again()
+    {
+        Assert.Null(RaceControlControl.WhyNotToReplay(InRace(null), Facts(race: 9, leaderLaps: 0)));
+    }
+
+    [Fact]
+    public void A_replay_carries_its_facts_to_the_speaker_and_says_why_it_will_not()
+    {
+        var replay = Source("RaceControlControl.Broadcast.cs");
+
+        Assert.Contains("WhyNotToReplay(last, _announcer.RaceFactsNow())", replay, StringComparison.Ordinal);
+        Assert.Contains("[show] Not playing {named} again - {untrue}.", replay, StringComparison.Ordinal);
+        Assert.Contains("_announcer.SpeakReminder(last.Text, showOnScreens: true, onAir: named, facts: last.Facts);", replay, StringComparison.Ordinal);
+        Assert.Contains("facts: last.Facts);", replay, StringComparison.Ordinal);
+    }
 }

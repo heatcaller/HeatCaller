@@ -283,4 +283,48 @@ public sealed class BattleWatchTests
         Assert.NotNull(watch.Pick());
         Assert.NotNull(watch.Pick());
     }
+
+    [Fact]
+    public void A_penalty_that_swaps_them_is_not_a_lead_change()
+    {
+        // 8 Nov 2026. The gap is race time, which carries penalties: half a
+        // second given to A put B "ahead" with nothing happening on track,
+        // and the fight was called as having changed hands.
+        var clock = new Clock();
+        var watch = new BattleWatch(clock.Read);
+
+        Circulate(watch, clock, Close("A", "B", 0.3), ticks: 5);
+
+        Assert.NotNull(watch.Pick());
+
+        Circulate(watch, clock, new PairGap("B", "A", 1, 0.2, 0, 0, 0, 500), ticks: 5);
+
+        var battle = watch.Pick();
+
+        Assert.NotNull(battle);
+        Assert.Equal(0, battle!.LeadChanges);
+        Assert.Equal(5, battle.Samples);
+    }
+
+    [Fact]
+    public void A_penalty_starts_the_fight_again_from_where_it_now_stands()
+    {
+        var clock = new Clock();
+        var watch = new BattleWatch(clock.Read);
+
+        Circulate(watch, clock, Close("A", "B", 0.1), ticks: 5);
+
+        // B takes a half second: the gap they are racing at is now 0.6, and
+        // a closest of 0.1 from before it is not a gap anyone can see.
+        Circulate(watch, clock, new PairGap("A", "B", 1, 0.6, 0, 0, 0, 500), ticks: 2);
+
+        Assert.Null(watch.Pick());
+
+        Circulate(watch, clock, new PairGap("A", "B", 1, 0.6, 0, 0, 0, 500), ticks: 3);
+
+        var battle = watch.Pick();
+
+        Assert.NotNull(battle);
+        Assert.Equal(0.6, battle!.ClosestSeconds, 3);
+    }
 }

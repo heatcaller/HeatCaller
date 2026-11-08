@@ -3115,7 +3115,7 @@ public sealed class CommentaryService
         // it again here is sometimes wanted for a recap, sometimes just a
         // repeat, so it's a choice rather than baked into the prompt either way.
         var fastest = _settings.CommentarySummaryMentionFastestLap
-            ? session.Results.Where(r => r.FastLapMs > 0).OrderBy(r => r.FastLapMs).FirstOrDefault()
+            ? FastestLapOf(session.Results)
             : null;
 
         // Rivalries with their ACTUAL outcome, not just the pairing - the
@@ -4301,7 +4301,7 @@ public sealed class CommentaryService
         // The winner's own fastest lap only. The race's, when somebody else
         // set it, is left out: two lap times on two drivers is exactly what
         // the recap found a small model hands to the wrong one.
-        var fastestOfRace = ordered.Where(r => r.FastLapMs > 0).OrderBy(r => r.FastLapMs).FirstOrDefault();
+        var fastestOfRace = FastestLapOf(ordered);
         var winnerFastest = winner.FastLapMs > 0
             ? $"Winner's fastest lap: {LapSeconds(winner.FastLapMs)}s"
               + (ReferenceEquals(fastestOfRace, winner) ? " - the fastest lap of the race" : string.Empty) + "\n"
@@ -5879,6 +5879,27 @@ public sealed class CommentaryService
     // CarFor, which had no summary of its own.
 
     /// <summary>
+    /// Whether a result row is a classified finisher - laps on the board, and
+    /// neither a DNF nor a DQ. The rule the recap's placings go by.
+    /// </summary>
+    internal static bool Classified(SessionResultEntry entry) =>
+        entry.Laps > 0 && ResultEditor.NormaliseOutcome(entry.Outcome) is not (ResultEditor.Dq or ResultEditor.Dnf);
+
+    /// <summary>
+    /// The row holding the race's fastest lap, or null when nobody set one.
+    ///
+    /// NOT A DISQUALIFIED DRIVER'S (8 Nov 2026). The recap took the quickest
+    /// lap across every row, so a car thrown out of the race could be named
+    /// as setting its fastest lap - in the same prompt that tells the model
+    /// it was disqualified. A DNF's laps were raced and still count.
+    /// </summary>
+    internal static SessionResultEntry? FastestLapOf(IEnumerable<SessionResultEntry> results) =>
+        results
+            .Where(r => r.FastLapMs > 0 && ResultEditor.NormaliseOutcome(r.Outcome) != ResultEditor.Dq)
+            .OrderBy(r => r.FastLapMs)
+            .FirstOrDefault();
+
+    /// <summary>
     /// A plain-language read on the winning margin, so the recap can be
     /// calibrated to the race instead of assuming every one was a thriller.
     ///
@@ -5891,6 +5912,23 @@ public sealed class CommentaryService
         {
             return "only one finisher - there was no contest to describe";
         }
+
+        // AGAINST A CLASSIFIED FINISHER ONLY (8 Nov 2026). Second in the
+        // list can be a DNF or a DQ - they sort underneath, but in a field
+        // of two they ARE ordered[1] - and a margin measured to a car that
+        // retired, or to one thrown out, is not a margin anybody raced: a
+        // DNF that stopped two laps short was "dominant", and a DQ that
+        // crossed a tenth behind was "a photo finish". Margins are between
+        // the cars the result classifies.
+        var classified = ordered.Where(Classified).ToList();
+
+        if (classified.Count < 2)
+        {
+            return "only one classified finisher - everyone else did not finish or was disqualified, "
+                + "so there was no finishing margin. Don't describe it as close";
+        }
+
+        ordered = classified;
 
         var winner = ordered[0];
         var second = ordered[1];

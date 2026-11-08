@@ -37,6 +37,7 @@ public sealed class RaceHorizonTests
     {
         var watch = Watching();
 
+        Tick(watch, 4, 6, Pair("carl", "dave", 1.40));
         Tick(watch, 5, 5, Pair("carl", "dave", 1.20));
 
         var horizon = Tick(watch, 6, 4, Pair("carl", "dave", 1.00));
@@ -58,6 +59,7 @@ public sealed class RaceHorizonTests
         // this gap. That is a sum, not a claim.
         var watch = Watching();
 
+        Tick(watch, 4, 3, Pair("carl", "dave", 1.20));
         Tick(watch, 5, 3, Pair("carl", "dave", 0.80));
 
         var horizon = Tick(watch, 6, 3, Pair("carl", "dave", 0.40));
@@ -72,6 +74,7 @@ public sealed class RaceHorizonTests
     {
         var watch = Watching();
 
+        Tick(watch, 4, 6, Pair("carl", "dave", 0.10));
         Tick(watch, 5, 5, Pair("carl", "dave", 0.40));
 
         var horizon = Tick(watch, 6, 4, Pair("carl", "dave", 0.70));
@@ -118,6 +121,7 @@ public sealed class RaceHorizonTests
     {
         var watch = Watching();
 
+        Tick(watch, 8, 3, Pair("carl", "dave", 1.20));
         Tick(watch, 9, 2, Pair("carl", "dave", 0.90));
 
         Assert.NotNull(Tick(watch, 10, 1, Pair("carl", "dave", 0.60)));
@@ -188,6 +192,13 @@ public sealed class RaceHorizonTests
 
         Tick(
             watch,
+            4,
+            5,
+            Pair("carl", "dave", 1.10),
+            Pair("eve", "fred", 0.40, position: 7));
+
+        Tick(
+            watch,
             5,
             4,
             Pair("carl", "dave", 0.90),
@@ -210,6 +221,7 @@ public sealed class RaceHorizonTests
     {
         var watch = Watching();
 
+        Tick(watch, 4, 6, Pair("carl", "dave", 1.40));
         Tick(watch, 5, 5, Pair("carl", "dave", 1.20));
 
         var horizon = Tick(watch, 6, 4, Pair("carl", "dave", 1.00));
@@ -238,11 +250,14 @@ public sealed class RaceHorizonTests
 
         Assert.Equal(1, watch.Watching);
 
-        Assert.Null(Tick(watch, 7, 2, Pair("carl", "dave", 0.20)));
+        Assert.Null(Tick(watch, 7, 2, Pair("carl", "dave", 0.30)));
 
         Assert.Equal(1, watch.Watching);
 
-        var horizon = Tick(watch, 8, 2, Pair("carl", "dave", 0.10));
+        // Two readings since the swap are not yet a rate - see LeastSamples.
+        Assert.Null(Tick(watch, 8, 2, Pair("carl", "dave", 0.20)));
+
+        var horizon = Tick(watch, 9, 2, Pair("carl", "dave", 0.10));
 
         Assert.NotNull(horizon);
         Assert.Equal("carl", horizon!.AheadId);
@@ -270,6 +285,7 @@ public sealed class RaceHorizonTests
         // and GapSpoken calls anything under a twentieth "nothing".
         var watch = Watching();
 
+        Tick(watch, 4, 6, Pair("carl", "dave", 0.63));
         Tick(watch, 5, 5, Pair("carl", "dave", 0.60));
 
         var horizon = Tick(watch, 6, 4, Pair("carl", "dave", 0.57));
@@ -310,14 +326,17 @@ public sealed class RaceHorizonTests
         var cases = new List<Horizon>();
 
         var closing = Watching();
+        Tick(closing, 4, 6, Pair("carl", "dave", 1.40));
         Tick(closing, 5, 5, Pair("carl", "dave", 1.20));
         cases.Add(Tick(closing, 6, 4, Pair("carl", "dave", 1.00))!);
 
         var reach = Watching();
+        Tick(reach, 4, 3, Pair("carl", "dave", 1.20));
         Tick(reach, 5, 3, Pair("carl", "dave", 0.80));
         cases.Add(Tick(reach, 6, 3, Pair("carl", "dave", 0.40))!);
 
         var slipping = Watching();
+        Tick(slipping, 4, 6, Pair("carl", "dave", 0.10));
         Tick(slipping, 5, 5, Pair("carl", "dave", 0.40));
         cases.Add(Tick(slipping, 6, 4, Pair("carl", "dave", 0.70))!);
 
@@ -343,6 +362,7 @@ public sealed class RaceHorizonTests
     {
         var watch = Watching();
 
+        Tick(watch, 4, 6, Pair("carl", "dave", 1.40));
         Tick(watch, 5, 5, Pair("carl", "dave", 1.20));
 
         var horizon = Tick(watch, 6, 4, Pair("carl", "dave", 1.00));
@@ -360,12 +380,14 @@ public sealed class RaceHorizonTests
     public void A_fight_further_back_is_named_by_its_position_and_the_lead_by_its_name()
     {
         var lead = Watching();
+        Tick(lead, 4, 3, Pair("carl", "dave", 1.20));
         Tick(lead, 5, 3, Pair("carl", "dave", 0.80));
         var leadLine = RaceHorizon.Say(Tick(lead, 6, 3, Pair("carl", "dave", 0.40))!, "Carl", "Dave");
 
         Assert.Contains("the lead", leadLine);
 
         var back = Watching();
+        Tick(back, 4, 3, Pair("eve", "fred", 1.20, position: 4));
         Tick(back, 5, 3, Pair("eve", "fred", 0.80, position: 4));
         var backLine = RaceHorizon.Say(Tick(back, 6, 3, Pair("eve", "fred", 0.40, position: 4))!, "Eve", "Fred");
 
@@ -447,6 +469,7 @@ public sealed class RaceHorizonTests
         // the clock ends is said in time.
         var watch = Watching();
 
+        watch.Observe(new[] { Pair("carl", "dave", 1.00) }, 4, 5, estimated: true, timeLeft: TimeSpan.FromSeconds(25));
         watch.Observe(new[] { Pair("carl", "dave", 0.80) }, 5, 4, estimated: true, timeLeft: TimeSpan.FromSeconds(20));
         watch.Observe(new[] { Pair("carl", "dave", 0.60) }, 6, 3, estimated: true, timeLeft: TimeSpan.FromSeconds(15));
 
@@ -467,6 +490,7 @@ public sealed class RaceHorizonTests
     {
         var watch = Watching();
 
+        watch.Observe(new[] { Pair("carl", "dave", 1.00) }, 4, 5);
         watch.Observe(new[] { Pair("carl", "dave", 0.80) }, 5, 4);
         watch.Observe(new[] { Pair("carl", "dave", 0.60) }, 6, 3);
 
@@ -474,5 +498,86 @@ public sealed class RaceHorizonTests
 
         Assert.Contains("three laps", line);
         Assert.DoesNotContain("about", line);
+    }
+
+    // ------------------------------------------------------------------
+    //  8 Nov 2026 - a rate the room can trust
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void One_bobble_is_not_a_trend()
+    {
+        // Two readings a lap apart were a rate: one slow lap by the car in
+        // front came out as "the gap is going out by 0.70s a lap".
+        var watch = Watching();
+
+        Tick(watch, 5, 5, Pair("carl", "dave", 0.40));
+
+        Assert.Null(Tick(watch, 6, 4, Pair("carl", "dave", 1.10)));
+
+        // A third reading over a second lap makes it one.
+        Assert.NotNull(Tick(watch, 7, 3, Pair("carl", "dave", 1.20)));
+    }
+
+    [Fact]
+    public void The_rate_is_taken_over_the_chasing_car_s_laps()
+    {
+        // The gap only changes when the car BEHIND crosses. Keyed on the
+        // leader's laps, the reading taken after the leader crossed was the
+        // old gap under a new lap, and two tenths a lap came out as 0.13.
+        var watch = Watching();
+
+        PairGap At(double gap, int behindLaps) => new("carl", "dave", 1, gap, 0, behindLaps);
+
+        Tick(watch, 5, 6, At(1.40, 4));
+        Tick(watch, 6, 5, At(1.40, 4));
+        Tick(watch, 6, 5, At(1.20, 5));
+        Tick(watch, 7, 4, At(1.20, 5));
+        Tick(watch, 7, 4, At(1.00, 6));
+
+        var horizon = Tick(watch, 8, 3, At(1.00, 6));
+
+        Assert.NotNull(horizon);
+        Assert.Equal(0.20, horizon!.PerLap, 3);
+        Assert.Equal(3, horizon.Samples);
+    }
+
+    [Fact]
+    public void A_penalty_is_not_read_as_pace()
+    {
+        // Race time carries the penalty, so the gap jumps by it. Without a
+        // restart one second's penalty to dave was "going out by a second
+        // a lap".
+        var watch = Watching();
+
+        PairGap At(double gap, int behindLaps, long behindPenaltyMs = 0) =>
+            new("carl", "dave", 1, gap, 0, behindLaps, 0, behindPenaltyMs);
+
+        Tick(watch, 4, 6, At(0.40, 4));
+        Tick(watch, 5, 5, At(0.40, 5));
+        Tick(watch, 6, 4, At(0.40, 6));
+
+        Assert.Null(Tick(watch, 6, 4, At(1.40, 6, behindPenaltyMs: 1_000)));
+        Assert.Null(Tick(watch, 7, 3, At(1.40, 7, behindPenaltyMs: 1_000)));
+        Assert.Equal(1, watch.Watching);
+
+        // And the rate built after it is the racing alone - steady here.
+        Assert.Null(Tick(watch, 8, 2, At(1.40, 8, behindPenaltyMs: 1_000)));
+    }
+
+    [Fact]
+    public void A_penalty_to_the_car_ahead_restarts_the_rate_too()
+    {
+        var watch = Watching();
+
+        PairGap At(double gap, int behindLaps, long aheadPenaltyMs = 0) =>
+            new("carl", "dave", 1, gap, 0, behindLaps, aheadPenaltyMs, 0);
+
+        Tick(watch, 4, 6, At(1.60, 4));
+        Tick(watch, 5, 5, At(1.60, 5));
+
+        // Carl's second takes the gap from 1.60 to 0.60 - "closing at half a
+        // second a lap" if it were read across the penalty.
+        Assert.Null(Tick(watch, 6, 4, At(0.60, 6, aheadPenaltyMs: 1_000)));
     }
 }
