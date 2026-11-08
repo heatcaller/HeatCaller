@@ -8,6 +8,7 @@ import {
   readVoiceConfig,
   readVoicePlan,
   stripAudioTags,
+  readsAudioTags,
   VoiceService,
   type CatalogueVoice,
   type RenderFn,
@@ -586,6 +587,13 @@ describe("the HeatCaller voice", () => {
 
       assert.equal(plan.monthlyChars, 4_242);
       assert.equal(plan.enabled, true);
+    });
+  });
+
+  describe("readsAudioTags", () => {
+    it("is true for the v3 and v4 families and false for the rest", () => {
+      for (const model of ["eleven_v3", "eleven_v4", "eleven_v4_turbo", "ELEVEN_V4"]) assert.equal(readsAudioTags(model), true, model);
+      for (const model of ["eleven_flash_v2_5", "eleven_turbo_v2_5", "eleven_multilingual_v2", ""]) assert.equal(readsAudioTags(model), false, model);
     });
   });
 

@@ -64,6 +64,7 @@ public sealed class RoadmapDVoiceEnergyTests
     {
         Assert.True(DeliveryEnergies.AppliesTo(new VoiceProfile { Engine = VoiceEngine.ElevenLabs, ModelId = "eleven_flash_v2_5" }));
         Assert.False(DeliveryEnergies.AppliesTo(new VoiceProfile { Engine = VoiceEngine.ElevenLabs, ModelId = "eleven_v3" }));
+        Assert.False(DeliveryEnergies.AppliesTo(new VoiceProfile { Engine = VoiceEngine.ElevenLabs, ModelId = "eleven_v4_turbo" }));
         Assert.False(DeliveryEnergies.AppliesTo(new VoiceProfile { Engine = VoiceEngine.HeatCaller, ModelId = "eleven_flash_v2_5" }));
         Assert.False(DeliveryEnergies.AppliesTo(new VoiceProfile { Engine = VoiceEngine.Kokoro, ModelId = "eleven_flash_v2_5" }));
     }
@@ -102,6 +103,8 @@ public sealed class RoadmapDVoiceEnergyTests
     {
         Assert.True(VoiceSettingsControl.EnergyBoxApplies(true, "eleven_flash_v2_5"));
         Assert.False(VoiceSettingsControl.EnergyBoxApplies(true, "eleven_v3"));
+        Assert.False(VoiceSettingsControl.EnergyBoxApplies(true, "eleven_v4"));
+        Assert.False(VoiceSettingsControl.EnergyBoxApplies(true, "eleven_v4_turbo"));
         Assert.False(VoiceSettingsControl.EnergyBoxApplies(false, "eleven_flash_v2_5"));
     }
 

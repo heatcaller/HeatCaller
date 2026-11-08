@@ -24,10 +24,10 @@ const TEXT = new Map(lapClips().map((c) => [c.name, c.text]));
 const NAMES = [...TEXT.keys()];
 
 describe("lap voice: the clips", () => {
-  it("is Daniel, Steady Broadcaster, on Flash, for every club", () => {
+  it("is Daniel, Steady Broadcaster, on v3, for every club", () => {
     assert.equal(LAP_VOICE.voiceId, "onwK4e9ZLuTAKqWW03F9");
     assert.equal(LAP_VOICE.name, "Daniel");
-    assert.equal(LAP_VOICE.modelId, "eleven_flash_v2_5");
+    assert.equal(LAP_VOICE.modelId, "eleven_v3");
     assert.equal(LAP_VOICE.cloned, false);
   });
 
@@ -80,11 +80,11 @@ describe("lap voice: the clips", () => {
     assert.equal(new Set(NAMES).size, NAMES.length, "every name once");
   });
 
-  it("costs about a dollar and a half to make once", () => {
+  it("costs under four dollars to make once on v3", () => {
     const cost = lapClipCost();
     assert.equal(cost.clips, 2744);
     assert.equal(cost.chars, 45755);
-    assert.equal(cost.dollars, 1.83);
+    assert.equal(cost.dollars, 3.66);
   });
 });
 

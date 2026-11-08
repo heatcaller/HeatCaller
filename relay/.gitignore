@@ -13,3 +13,5 @@ relay-backups/
 # lap-voice-render.cmd, and carried to the relay by fly deploy, not by git.
 lap-voice/*.mp3
 lap-voice/*.part
+# The Flash set, kept to go back to (8 Nov 2026).
+lap-voice-flash/

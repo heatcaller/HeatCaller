@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { LAP_VOICE, LAP_VOICE_DIR, lapClipCost, lapClips, type LapClip } from "./lapvoice.js";
+import { LAP_DOLLARS_PER_1K, LAP_VOICE, LAP_VOICE_DIR, lapClipCost, lapClips, type LapClip } from "./lapvoice.js";
 import { elevenLabsRenderer, VoiceUpstreamError } from "./voice.js";
 
 /**
@@ -136,7 +136,7 @@ async function main(argv: readonly string[]): Promise<number> {
   const left = lapClipCost(missing);
 
   console.log(`The lap voice: ${LAP_VOICE.name} (${LAP_VOICE.what}), ElevenLabs voice ${LAP_VOICE.voiceId}, model ${LAP_VOICE.modelId}.`);
-  console.log(`All of it: ${cost.clips} clips, ${cost.chars.toLocaleString("en-US")} characters, about $${cost.dollars.toFixed(2)} at Flash's $0.04 per 1,000.`);
+  console.log(`All of it: ${cost.clips} clips, ${cost.chars.toLocaleString("en-US")} characters, about $${cost.dollars.toFixed(2)} at $${LAP_DOLLARS_PER_1K.toFixed(2)} per 1,000 on ${LAP_VOICE.modelId}.`);
   console.log(missing.length === 0
     ? `Every clip is already in ${dir}.`
     : `Still to make: ${left.clips} clips, ${left.chars.toLocaleString("en-US")} characters, about $${left.dollars.toFixed(2)}.`);

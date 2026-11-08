@@ -337,16 +337,18 @@ The **Model:** box offers these presets. You can also type any ElevenLabs model 
 | Model | Notes |
 |---|---|
 | `eleven_multilingual_v2` | The default. |
-| `eleven_v3` | The expressive model. The only one that understands audio tags (see below). |
+| `eleven_v4` | The newest expressive model. Understands audio tags (see below). Ignores **Speed:**. |
+| `eleven_v4_turbo` | v4 tuned for speed, at half v4's price. Understands audio tags and ignores **Speed:**. |
+| `eleven_v3` | The previous expressive model. Understands audio tags and ignores **Speed:**. |
 | `eleven_turbo_v2_5` | |
 | `eleven_flash_v2_5` | |
 | `eleven_monolingual_v1` | |
 
-The hint on the page puts it plainly: on the v2 models, **Style** varies the energy but won't turn the voice into a radio personality, and above about 0.6 it starts to distort. If you want a real performance, use `eleven_v3`.
+The hint on the page puts it plainly: on the v2 models, **Style** varies the energy but won't turn the voice into a radio personality, and above about 0.6 it starts to distort. If you want a real performance, use `eleven_v3` or one of the v4 models.
 
 ### Audio tags
 
-With `eleven_v3` (any model ID containing "v3"), you can put a tag in square brackets in a line to color how it's delivered. With that model chosen, the note above the rows on the **Race Calls** tab lists these tags:
+With `eleven_v3`, `eleven_v4` or `eleven_v4_turbo` (any model ID containing "v3" or "v4"), you can put a tag in square brackets in a line to color how it's delivered. With that model chosen, the note above the rows on the **Race Calls** tab lists these tags:
 
 `[excited]` `[cheerful]` `[sad]` `[angry]` `[whispers]` `[laughs]` `[sighs]` `[awe]` `[sarcastic]` `[curious]` `[crying]` `[shouting]`
 
@@ -354,7 +356,7 @@ One tag per line is usually enough. Stacked tags fight each other.
 
 On any other model, a tag would be read out word for word, so HeatCaller strips anything in square brackets before the line is spoken. That means you can leave tags in your lines and switch models without the announcer saying "bracket excited". The built-in lines already use tags, so switching to `eleven_v3` makes them more lively.
 
-Kokoro can't perform a tag either — it would read it out as words — so tags are always taken out before it speaks, whatever model is set for ElevenLabs. With Kokoro chosen, the note above the rows on the **Race Calls** tab says so: "Audio tags like [excited] only work with ElevenLabs' eleven_v3 model - the Kokoro voice would read them out as words, so they're taken out before anything is spoken. Your lines can keep them for ElevenLabs."
+Kokoro can't perform a tag either — it would read it out as words — so tags are always taken out before it speaks, whatever model is set for ElevenLabs. With Kokoro chosen, the note above the rows on the **Race Calls** tab says so: "Audio tags like [excited] only work with ElevenLabs' eleven_v3 and v4 models - the Kokoro voice would read them out as words, so they're taken out before anything is spoken. Your lines can keep them for ElevenLabs."
 
 With the HeatCaller voice, the line goes to the relay with its tags still in it. The relay knows which model each of its voices uses and takes the tags out for the ones that can't perform them, so a voice that understands tags gets them and the rest never read them aloud. Nothing on the laptop has to be set either way.
 
@@ -371,7 +373,7 @@ To hear them, press **Test Voice** beside **ElevenLabs voice:** at the top of **
 | **Stability:** | 0 to 1. Lower gives a more varied, emotional read. Higher is steadier. | 0.50 |
 | **Similarity boost:** | 0 to 1. How closely the output sticks to the original voice. | 0.75 |
 | **Style:** | 0 to 1. Style exaggeration. Higher is more dramatic. Past about 0.6 it can distort. | 0.00 |
-| **Speed:** | 0.70 to 1.20. Overall speaking rate. `eleven_v3` doesn't take a speed, so with that model a note under the box says ElevenLabs ignores it. | 1.00 |
+| **Speed:** | 0.70 to 1.20. Overall speaking rate. `eleven_v3`, `eleven_v4` and `eleven_v4_turbo` don't take a speed, so with those models a note under the box says ElevenLabs ignores it. | 1.00 |
 | **Text normalize:** | `auto`, `on` or `off`. Whether ElevenLabs spells out numbers and similar text. `auto` is right for almost everyone. | `auto` |
 | **Language:** | A two-letter language code such as `en` or `es`, to force a language. Leave it blank for automatic detection. | blank |
 | **Output format:** | ElevenLabs audio format, for example `mp3_44100_128`. Higher-quality formats need a paid ElevenLabs plan, so leave it blank unless you know you have one. | blank (your plan's default) |

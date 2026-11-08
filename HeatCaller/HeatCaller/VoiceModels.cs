@@ -834,7 +834,18 @@ public sealed class VoiceProfile
     public bool SupportsAudioTags =>
         EffectiveEngine == VoiceEngine.HeatCaller
         || (EffectiveEngine == VoiceEngine.ElevenLabs
-            && ModelId.Contains("v3", StringComparison.OrdinalIgnoreCase));
+            && ReadsAudioTags(ModelId));
+
+    /// <summary>
+    /// Whether an ElevenLabs model performs audio tags like [excited] instead
+    /// of reading them out: the v3 and v4 families (eleven_v3, eleven_v4,
+    /// eleven_v4_turbo). They are also the models that ignore Speed and take
+    /// no Style. The relay's readsAudioTags is the same rule.
+    /// </summary>
+    internal static bool ReadsAudioTags(string? modelId) =>
+        !string.IsNullOrEmpty(modelId)
+        && (modelId.Contains("v3", StringComparison.OrdinalIgnoreCase)
+            || modelId.Contains("v4", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Prepares text for this model: keeps audio tags when the model can
