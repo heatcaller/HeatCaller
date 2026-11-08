@@ -140,9 +140,17 @@ public static class RcpTrackPainter
 
         // Rails last and in one pass, so a run reads as one continuous
         // barrier standing on the floor rather than as a tile decoration.
+        //
+        // Each on the tile it is bolted to (railed tiles, 8 Nov 2026): a
+        // rail sits flush on its own tile's edge, not across the seam - so
+        // a divider's two rails stand one on each lane's tile, and two
+        // turns that meet at one point end a rail's width apart, as they
+        // do on the floor, rather than in a single point.
+        var sides = RailSides(design);
+
         foreach (var wall in design.Walls)
         {
-            DrawWall(g, wall, scale, origin, detailed);
+            DrawWall(g, wall, scale, origin, detailed, sides.GetValueOrDefault((wall.Col, wall.Row, wall.Vertical)));
         }
 
         foreach (var curve in design.Curves)
@@ -152,7 +160,13 @@ public static class RcpTrackPainter
 
         foreach (var (at, vertical, twin) in RcpPlan.OpenEnds(design))
         {
-            DrawEndCap(g, at, vertical, twin, scale, origin);
+            // Which way the rail runs from the end: the cap bulges the
+            // other way, out past the end - it used to face one fixed way,
+            // so at a run's right-hand or top end it sat back over the rails.
+            var forward = design.WallAt(at.X, at.Y, vertical) is not null;
+            var seam = forward ? (at.X, at.Y, vertical) : vertical ? (at.X, at.Y - 1, true) : (at.X - 1, at.Y, false);
+
+            DrawEndCap(g, at, vertical, twin, outward: !forward, sides.GetValueOrDefault(seam), scale, origin);
         }
 
         if (showRoute)
@@ -398,7 +412,50 @@ public static class RcpTrackPainter
     /// from the next - which is why a plan of a real track has rails running
     /// down the middle of the floor with racing on both sides.
     /// </summary>
-    private static void DrawWall(Graphics g, RcpWall wall, float scale, PointF origin, bool detailed)
+    /// <summary>
+    /// Which side of its seam each single rail stands on: -1 on the tile
+    /// north or west of it, +1 on the tile south or east, 0 across the
+    /// seam. The tile it is bolted to (RcpTile.Piece, worked out by
+    /// RcpPieces.Adopt) says; a rail no tile claims - a custom second rail,
+    /// or a plan never opened since pieces existed - goes on the floor's
+    /// side when only one side is floor, and across the seam otherwise.
+    /// </summary>
+    internal static Dictionary<(int Col, int Row, bool Vertical), int> RailSides(RcpTrackDesign design)
+    {
+        var sides = new Dictionary<(int, int, bool), int>();
+
+        foreach (var tile in design.Tiles.Where(t => RcpPieces.HasStraight(t.Piece)))
+        {
+            // A tile facing east or south is the west or north one of the seam.
+            var side = tile.Facing is RcpEdge.East or RcpEdge.South ? -1 : 1;
+            sides.TryAdd(RcpPlan.EdgeLine(tile.Col, tile.Row, tile.Facing), side);
+        }
+
+        bool Floor(int col, int row) => design.At(col, row) is { } t && t.Kind != RcpTileKind.Infield;
+
+        foreach (var wall in design.Walls.Where(w => !w.Double))
+        {
+            var seam = (wall.Col, wall.Row, wall.Vertical);
+
+            if (sides.ContainsKey(seam))
+            {
+                continue;
+            }
+
+            var (aCol, aRow) = wall.Vertical ? (wall.Col - 1, wall.Row) : (wall.Col, wall.Row - 1);
+            var before = Floor(aCol, aRow);
+            var after = Floor(wall.Col, wall.Row);
+
+            sides[seam] = before && !after ? -1 : after && !before ? 1 : 0;
+        }
+
+        return sides;
+    }
+
+    /// <summary>How far a rail on its own tile sits from the seam, in pixels: the same as each of a divider's two rails.</summary>
+    private static float RailInset(float scale) => (Math.Max(2f, scale * RailThickness) + scale * DividerGap) / 2f;
+
+    private static void DrawWall(Graphics g, RcpWall wall, float scale, PointF origin, bool detailed, int side)
     {
         var from = Grid(wall.Col, wall.Row, scale, origin);
         var to = Grid(wall.To.X, wall.To.Y, scale, origin);
@@ -407,11 +464,11 @@ public static class RcpTrackPainter
 
         if (!wall.Double)
         {
-            DrawRailBar(g, from, to, wall.Vertical, 0f, thickness, RailFace, RailEdge, detailed, scale);
+            DrawRailBar(g, from, to, wall.Vertical, side * RailInset(scale), thickness, RailFace, RailEdge, detailed, scale);
             return;
         }
 
-        var offset = (thickness + scale * DividerGap) / 2f;
+        var offset = RailInset(scale);
 
         DrawRailBar(g, from, to, wall.Vertical, -offset, thickness, RailFace, RailEdge, detailed, scale);
         DrawRailBar(g, from, to, wall.Vertical, offset, thickness, RailFace, RailEdge, detailed, scale);
@@ -570,14 +627,22 @@ public static class RcpTrackPainter
             g.DrawArc(pen, centre.X - r, centre.Y - r, r * 2f, r * 2f, start, 90f);
         }
 
+        // A single turn rail sits on its own tile - the quarter-circle outer
+        // curve tile - flush with its curved edge, so a rail's inset inside
+        // the arc the grid lines make (8 Nov 2026). Its ends then land on
+        // the rails beside it, which sit on their own tiles too; drawn on
+        // the grid lines, two turns sharing a point met in a cusp.
+        var inset = curve.Double || radius <= RailInset(scale) * 2f ? 0f : RailInset(scale);
+        var drawn = radius - inset;
+
         if (detailed)
         {
-            Arc(radius, RailShadow, thickness * 1.45f);
+            Arc(drawn, RailShadow, thickness * 1.45f);
         }
 
         if (curve.Double)
         {
-            var offset = (thickness + scale * DividerGap) / 2f;
+            var offset = RailInset(scale);
 
             Arc(radius - offset, TurnFace, thickness);
             Arc(radius + offset, TurnFace, thickness);
@@ -586,8 +651,8 @@ public static class RcpTrackPainter
         }
         else
         {
-            Arc(radius, TurnFace, thickness);
-            Arc(radius, Color.FromArgb(120, TurnEdge), thickness * 0.3f);
+            Arc(drawn, TurnFace, thickness);
+            Arc(drawn, Color.FromArgb(120, TurnEdge), thickness * 0.3f);
         }
 
         if (!detailed || scale < 40f)
@@ -607,7 +672,7 @@ public static class RcpTrackPainter
         }
         else
         {
-            DrawArcBolts(g, centre, radius, start, thickness, scale);
+            DrawArcBolts(g, centre, drawn, start, thickness, scale);
         }
     }
 
@@ -618,10 +683,19 @@ public static class RcpTrackPainter
     /// turns two rails back to back into a hairpin you can drive round
     /// instead of a blunt end you hit.
     /// </summary>
-    private static void DrawEndCap(Graphics g, Point at, bool vertical, bool twin, float scale, PointF origin)
+    /// <param name="outward">The cap bulges east or south of the end (the rail runs away west or north); false, the other way.</param>
+    /// <param name="side">Which side of its seam a single rail stands on - see RailSides.</param>
+    private static void DrawEndCap(Graphics g, Point at, bool vertical, bool twin, bool outward, int side, float scale, PointF origin)
     {
         var centre = Grid(at.X, at.Y, scale, origin);
         var thickness = Math.Max(2f, scale * RailThickness);
+
+        // A single rail's cap on the rail, on its own tile.
+        if (!twin && side != 0)
+        {
+            var shift = side * RailInset(scale);
+            centre = vertical ? new PointF(centre.X + shift, centre.Y) : new PointF(centre.X, centre.Y + shift);
+        }
 
         var span = twin ? thickness * 2f + scale * DividerGap : thickness;
         var radius = span / 2f;
@@ -632,10 +706,19 @@ public static class RcpTrackPainter
             EndCap = LineCap.Round,
         };
 
-        // A half circle capping the rail, turned to face along it.
+        // A half circle capping the rail, bulging out past its end. Angles
+        // run clockwise from east: 90 is south, 180 west, 270 north.
         var box = new RectangleF(centre.X - radius, centre.Y - radius, radius * 2f, radius * 2f);
 
-        g.DrawArc(face, box, vertical ? 0f : 90f, 180f);
+        var start = (vertical, outward) switch
+        {
+            (true, true) => 0f,      // a rail ending at its south end: round below it
+            (true, false) => 180f,   // ending at its north end: round above it
+            (false, true) => 270f,   // ending at its east end: round to the right
+            _ => 90f,                // ending at its west end: round to the left
+        };
+
+        g.DrawArc(face, box, start, 180f);
 
         if (twin)
         {
