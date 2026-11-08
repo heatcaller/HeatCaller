@@ -34,6 +34,26 @@ namespace HeatCaller;
 /// </summary>
 internal static class RaceNumbers
 {
+    /// <summary>
+    /// "A-Main", "A Main" or "A-Mains" - the capital A on its own in front
+    /// of "main". Lowercase "a main event" is the article and is left alone.
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex AMain = new(
+        @"(?<![\w'])A[\s-]+(?=[Mm]ains?\b)",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// A round's letter said as a letter (8 Nov 2026, Asher: "when A main is
+    /// spoken, it's the letter A, not a soft ah"). Every voice read "A-Main"
+    /// as the article - Kokoro's own phonemes for it are "ɐmˌAn" - while
+    /// "B-Main" was always "bee main". Written as an initial, "A. Main", it
+    /// is the letter in both voices ("ði ˈA mˈAn" in Kokoro, with no pause
+    /// for the full stop) and "the" in front of it becomes "thee". For the
+    /// voice only: the screens keep "A-Main".
+    /// </summary>
+    internal static string SpokenRoundNames(string text) =>
+        string.IsNullOrEmpty(text) ? text : AMain.Replace(text, "A. ");
+
     private static readonly string[] Small =
     {
         "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",

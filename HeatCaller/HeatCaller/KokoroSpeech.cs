@@ -457,7 +457,11 @@ internal static class KokoroSpeech
 
         var voiceName = string.IsNullOrWhiteSpace(profile.KokoroVoiceName) ? DefaultVoice : profile.KokoroVoiceName.Trim();
         var speed = (float)Math.Clamp(profile.Speed, 0.7, 1.2);
-        var key = $"{voiceName}|{speed:0.###}|{spoken}";
+        // At the level of the ElevenLabs voice it is heard beside (8 Nov
+        // 2026) - in the key, so a take made for one level is not played at
+        // the other. See KokoroLoudness.
+        var targetDb = KokoroLoudness.TargetDbFor(profile);
+        var key = $"{voiceName}|{speed:0.###}|{targetDb:0.0}|{spoken}";
 
         if (LineCache.TryGet(key) is { } kept)
         {
@@ -568,6 +572,14 @@ internal static class KokoroSpeech
         if (pcm.Length < 4800)
         {
             throw new InvalidOperationException("The Kokoro voice produced no usable audio for that line.");
+        }
+
+        // Brought up to the ElevenLabs voice beside it - the model's own audio
+        // only: a test's stand-in model hands back marker bytes that say who
+        // spoke, not sound. See KokoroLoudness.
+        if (ModelForTests is null)
+        {
+            pcm = KokoroLoudness.Match(pcm, KokoroPlayback.waveFormat.SampleRate, targetDb);
         }
 
         var wav = EncodeWav(pcm, KokoroPlayback.waveFormat);

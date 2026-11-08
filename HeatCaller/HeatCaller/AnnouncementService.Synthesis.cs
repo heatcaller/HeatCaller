@@ -435,6 +435,11 @@ public sealed partial class AnnouncementService
             StatusMessage?.Invoke("[voice] Passed over a recorded voice line - its HeatCaller voice's consent has been taken back.");
         }
 
+        // "A-Main" said as the letter, not "ah main" (8 Nov 2026) - for every
+        // engine, after the recordings (which are matched by the words as
+        // written). See RaceNumbers.SpokenRoundNames.
+        text = RaceNumbers.SpokenRoundNames(text);
+
         if (profile.EffectiveEngine == VoiceEngine.Kokoro)
         {
             return await RenderWithKokoroAsync(profile, text);

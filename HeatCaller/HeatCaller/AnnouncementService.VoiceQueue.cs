@@ -553,7 +553,7 @@ public sealed partial class AnnouncementService
         // - and they are what made every call on a 5.5s track a lap late.
         if (rendering.ElapsedMilliseconds >= 1_500)
         {
-            StatusMessage?.Invoke($"[voice] Rendered in {Seconds(rendering.ElapsedMilliseconds)} ({currentProfile.EffectiveEngine}{(currentProfile.EffectiveEngine == VoiceEngine.ElevenLabs ? " " + currentProfile.ModelId : string.Empty)}, {(synthesis.FromLibrary ? "saved take" : "new")}).");
+            StatusMessage?.Invoke($"[voice] Rendered in {Seconds(rendering.ElapsedMilliseconds)} ({RenderedBy(synthesis.Source, currentProfile)}).");
         }
 
         // A race-control call with its own sound - the start horn, the

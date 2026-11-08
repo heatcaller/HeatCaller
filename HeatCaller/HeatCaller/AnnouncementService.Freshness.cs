@@ -322,6 +322,21 @@ public sealed partial class AnnouncementService
         }
     }
 
+    /// <summary>
+    /// Who actually made a line, for the render-time log (8 Nov 2026). It
+    /// named the chosen engine, so with the ElevenLabs credits gone every
+    /// Kokoro stand-in was logged as "ElevenLabs eleven_v3, new".
+    /// </summary>
+    private static string RenderedBy(LineSource source, VoiceProfile profile) => source switch
+    {
+        LineSource.ElevenLabs => $"ElevenLabs {profile.ModelId}",
+        LineSource.Library => "a saved take",
+        LineSource.HeatCaller => "the HeatCaller voice",
+        LineSource.StandIn => $"Kokoro standing in for {(profile.EffectiveEngine == VoiceEngine.HeatCaller ? "the HeatCaller voice" : "ElevenLabs " + profile.ModelId)}",
+        LineSource.Kokoro => "Kokoro",
+        _ => source.ToString(),
+    };
+
     private static string Seconds(long ms) =>
         (ms / 1000.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "s";
 }
