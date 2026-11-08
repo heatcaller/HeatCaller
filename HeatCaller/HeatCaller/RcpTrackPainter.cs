@@ -158,6 +158,8 @@ public static class RcpTrackPainter
             DrawCurve(g, curve, scale, origin, detailed);
         }
 
+        DrawInnerCornerPieces(g, design, scale, origin, detailed);
+
         foreach (var (at, vertical, twin) in RcpPlan.OpenEnds(design))
         {
             // Which way the rail runs from the end: the cap bulges the
@@ -848,24 +850,60 @@ public static class RcpTrackPainter
     /// </summary>
     private static void DrawPost(Graphics g, RectangleF rect, bool detailed)
     {
-        var radius = rect.Width * 0.17f;
+        var radius = rect.Width * PostRadius;
 
         // The intersection itself.
         var centre = new PointF(0f, 0f);
 
         using (var shadow = new SolidBrush(RailShadow))
         {
-            g.FillEllipse(shadow, centre.X - radius + radius * 0.16f, centre.Y - radius + radius * 0.16f, radius * 2f, radius * 2f);
+            g.FillEllipse(shadow, centre.X - radius + radius * 0.12f, centre.Y - radius + radius * 0.12f, radius * 2f, radius * 2f);
+        }
+
+        // Four quarters, one on each tile round the corner, each held by
+        // one bolt through its middle (Asher, 8 Nov 2026: the bolts go
+        // through the red part, not on the tiles round it as they were
+        // drawn). The same quarter is the inner corner piece - see
+        // DrawPostQuarter.
+        for (var quarter = 0; quarter < 4; quarter++)
+        {
+            DrawPostQuarter(g, centre, radius, quarter * 90f, detailed, shadow: false);
+        }
+
+        // The square socket in the middle, where the quarters meet.
+        using var socket = new SolidBrush(Color.FromArgb(220, 20, 20, 22));
+        g.FillRectangle(socket, centre.X - radius * 0.2f, centre.Y - radius * 0.2f, radius * 0.4f, radius * 0.4f);
+    }
+
+    /// <summary>The rail post's radius as a share of a tile, measured off Asher's floor photos - the inner corner piece is a quarter of it.</summary>
+    private const float PostRadius = 0.2f;
+
+    /// <summary>
+    /// One quarter of a rail post: a pink quarter disc on one tile, with its
+    /// edges along the seams and one bolt through its middle. Four make the
+    /// post; one on its own is the inner corner piece, filling the gap where
+    /// two rails meet square round the inside of a bend (Asher, 8 Nov 2026).
+    /// </summary>
+    /// <param name="start">The quarter's first edge, in degrees clockwise from east - 0 for the quarter south-east of the point.</param>
+    private static void DrawPostQuarter(Graphics g, PointF centre, float radius, float start, bool detailed, bool shadow)
+    {
+        var box = new RectangleF(centre.X - radius, centre.Y - radius, radius * 2f, radius * 2f);
+
+        if (shadow)
+        {
+            using var shade = new SolidBrush(RailShadow);
+            g.FillPie(shade, box.X + radius * 0.12f, box.Y + radius * 0.12f, box.Width, box.Height, start, 90f);
         }
 
         using (var fill = new SolidBrush(TurnFace))
         {
-            g.FillEllipse(fill, centre.X - radius, centre.Y - radius, radius * 2f, radius * 2f);
+            g.FillPie(fill, box.X, box.Y, box.Width, box.Height, start, 90f);
         }
 
-        using (var rim = new Pen(TurnEdge, Math.Max(1f, radius * 0.16f)))
+        // Its rim and the split along the seams.
+        using (var rim = new Pen(TurnEdge, Math.Max(1f, radius * 0.08f)))
         {
-            g.DrawEllipse(rim, centre.X - radius, centre.Y - radius, radius * 2f, radius * 2f);
+            g.DrawPie(rim, box.X, box.Y, box.Width, box.Height, start, 90f);
         }
 
         if (!detailed)
@@ -873,33 +911,41 @@ public static class RcpTrackPainter
             return;
         }
 
-        // One mount per tile, pushed far enough out along each diagonal to
-        // sit clearly on its own tile rather than on the join.
-        var reach = radius * 1.55f;
-        var plate = radius * 0.52f;
+        // The bolt, in the middle of the quarter.
+        var angle = (start + 45f) * MathF.PI / 180f;
+        var at = new PointF(centre.X + MathF.Cos(angle) * radius * 0.56f, centre.Y + MathF.Sin(angle) * radius * 0.56f);
+        var head = radius * 0.34f;
 
-        using var mount = new SolidBrush(Color.FromArgb(235, 226, 228, 236));
-        using var mountEdge = new Pen(Color.FromArgb(200, 40, 34, 58), Math.Max(1f, radius * 0.1f));
-        using var bolt = new SolidBrush(Color.FromArgb(210, 20, 20, 22));
+        using var brush = new SolidBrush(RailScrew);
+        using var slot = new Pen(Color.FromArgb(150, 0, 0, 0), Math.Max(1f, head * 0.18f));
 
-        for (var i = 0; i < 4; i++)
+        DrawBolt(g, brush, slot, at, head);
+    }
+
+    /// <summary>
+    /// The inner corner pieces: on each inner corner tile, a quarter of a
+    /// rail post in the corner where the bend's two rails meet square
+    /// (RcpTile.Corner, worked out by RcpPieces.Adopt).
+    /// </summary>
+    private static void DrawInnerCornerPieces(Graphics g, RcpTrackDesign design, float scale, PointF origin, bool detailed)
+    {
+        foreach (var tile in design.Tiles.Where(t => t.Piece == RcpPiece.InnerCorner))
         {
-            var angle = MathF.PI / 4f + i * MathF.PI / 2f;
+            var point = RcpPieces.CornerPoint(tile.Col, tile.Row, tile.Corner);
+            var centre = Grid(point.X, point.Y, scale, origin);
 
-            var at = new PointF(
-                centre.X + MathF.Cos(angle) * reach,
-                centre.Y + MathF.Sin(angle) * reach);
+            // The quarter that lies on this tile: the one facing back from
+            // the corner into the tile.
+            var start = RcpPieces.Opposite(tile.Corner) switch
+            {
+                RcpQuadrant.SouthEast => 0f,
+                RcpQuadrant.SouthWest => 90f,
+                RcpQuadrant.NorthWest => 180f,
+                _ => 270f,
+            };
 
-            g.FillEllipse(mount, at.X - plate / 2f, at.Y - plate / 2f, plate, plate);
-            g.DrawEllipse(mountEdge, at.X - plate / 2f, at.Y - plate / 2f, plate, plate);
-
-            var head = plate * 0.38f;
-            g.FillEllipse(bolt, at.X - head / 2f, at.Y - head / 2f, head, head);
+            DrawPostQuarter(g, centre, scale * PostRadius, start, detailed, shadow: detailed);
         }
-
-        // The socket in the middle of the post, where the rail drops in.
-        using var socket = new SolidBrush(Color.FromArgb(200, 20, 20, 22));
-        g.FillRectangle(socket, centre.X - radius * 0.22f, centre.Y - radius * 0.22f, radius * 0.44f, radius * 0.44f);
     }
 
     /// <summary>A red-and-white apex kerb, of the sort that gets dropped on the floor to mark a line.</summary>
