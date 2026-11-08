@@ -302,9 +302,21 @@ public sealed class CommentaryService
     {
         var written = await writing.ConfigureAwait(false);
 
+        return FiguresRefused(written, facts, label, figures) ? null : written;
+    }
+
+    /// <summary>
+    /// True when a figure in <paramref name="written"/> is not in
+    /// <paramref name="facts"/> - said through <see cref="Log"/>, with the
+    /// line itself - for the paths whose answer is not a single line handed
+    /// straight back (a hand-off's two halves, an achievements read that is
+    /// checked again after). See <see cref="FiguresCheckedAsync"/>.
+    /// </summary>
+    private bool FiguresRefused(string? written, string facts, string label, FiguresChecked? figures = null)
+    {
         if (string.IsNullOrWhiteSpace(written))
         {
-            return written;
+            return false;
         }
 
         string terms;
@@ -320,30 +332,87 @@ public sealed class CommentaryService
 
         if (CommentaryNumberCheck.Unsupported(written, facts + "\n" + terms) is not { } figure)
         {
-            return written;
-        }
-
-        try
-        {
-            // With the line's own words (8 Nov 2026): a recap was dropped for
-            // "six", and with nothing but the figure logged there was no telling
-            // a number the model made up from a word the check misread.
-            Log?.Invoke(figures is not null
-                ? $"[commentary] Refused for \"{figure}\": \"{written}\""
-                : $"[commentary] Dropped the {label.ToLowerInvariant()} - it says {figure}, which is not in its facts: \"{written}\"");
-        }
-        catch
-        {
-            // The console is a courtesy; a failing log never costs anything else.
+            return false;
         }
 
         if (figures is not null)
         {
             figures.Refused = figure;
+            figures.Line = written;
+        }
+        else
+        {
+            try
+            {
+                // With the line (8 Nov 2026): "Dropped the race recap - it
+                // says six" left nobody able to tell whether the recap was
+                // wrong or the check was. See FiguresChecked.Line.
+                Log?.Invoke($"[commentary] Dropped the {label.ToLowerInvariant()} - it says {figure}, which is not in its facts: \"{OneLine(written)}\"");
+            }
+            catch
+            {
+                // The console is a courtesy; a failing log never costs anything else.
+            }
         }
 
-        return null;
+        return true;
     }
+
+    /// <summary>
+    /// Counts a prompt's facts imply but never state (8 Nov 2026), for the
+    /// number check only - the model is not shown them. A race recap was
+    /// dropped for "six" and its words were not kept, so which honest
+    /// sentence it was cannot be known; but one honest way to say a number
+    /// the facts never state is the size of the field. The recap lists only
+    /// the top few finishers (the club's setting, five unless changed) and
+    /// never counts the field, so "all six drivers" or "a six-car field" -
+    /// true - had nothing to stand on. The same for a round intro, whose
+    /// facts name the drivers on track one by one.
+    /// </summary>
+    /// <param name="field">Every car in the race.</param>
+    /// <param name="listed">How many of them the facts list, when that is fewer.</param>
+    /// <param name="classified">How many were classified at the finish (not a DNF or a DQ).</param>
+    /// <param name="retired">How many did not finish.</param>
+    /// <param name="disqualified">How many were disqualified.</param>
+    internal static string ImpliedCounts(int field, int? listed = null, int? classified = null, int? retired = null, int? disqualified = null)
+    {
+        var counts = new List<string> { $"{field} drivers in the race" };
+
+        if (listed is { } l && l != field)
+        {
+            counts.Add($"{l} drivers listed");
+        }
+
+        if (classified is { } c && c != field)
+        {
+            counts.Add($"{c} drivers classified");
+        }
+
+        if (retired is > 0)
+        {
+            counts.Add($"{retired} drivers did not finish");
+        }
+
+        if (disqualified is > 0)
+        {
+            counts.Add($"{disqualified} drivers disqualified");
+        }
+
+        return "Counts: " + string.Join(", ", counts) + ".";
+    }
+
+    /// <summary>The counts a race's results imply - see <see cref="ImpliedCounts"/>. Ghost cars are not drivers.</summary>
+    internal static string RecapCounts(SessionRecord session, int listed)
+    {
+        var field = session.Results.Where(r => !GhostService.IsGhost(r.Transponder)).ToList();
+        var retired = field.Count(r => ResultEditor.NormaliseOutcome(r.Outcome) == ResultEditor.Dnf);
+        var disqualified = field.Count(r => ResultEditor.NormaliseOutcome(r.Outcome) == ResultEditor.Dq);
+
+        return ImpliedCounts(field.Count, listed, field.Count(Classified), retired, disqualified);
+    }
+
+    /// <summary>A line as one line, for the console.</summary>
+    internal static string OneLine(string text) => Regex.Replace(text.Trim(), @"\s+", " ");
 
     /// <summary>The sentence the system prompt gains when the facts give anybody's pronouns.</summary>
     internal const string PronounsRule =
@@ -1632,9 +1701,19 @@ public sealed class CommentaryService
                   + "shortening it."
                 : string.Empty);
 
-        var answer = await Ask(Client,
-            BuildSystemPrompt(), facts, maxTokens: MaxTokensForWordLimit(), temperature: Variety, ct: ct,
-            timeout: BetweenRacesTimeout);
+        // Its figures checked against its facts, as the model wrote it
+        // (8 Nov 2026) - before TidyIntro, and before the plain line that
+        // stands in for a roll call. Dropped, it is no intro, as one that
+        // never came back is: the opening goes on without it.
+        var answer = await FiguresCheckedAsync(
+            Ask(Client,
+                BuildSystemPrompt(), facts, maxTokens: MaxTokensForWordLimit(), temperature: Variety, ct: ct,
+                timeout: BetweenRacesTimeout),
+            // And the size of the field, which the facts list by name but
+            // never count - "six drivers on the grid" is true and was not in
+            // them. See ImpliedCounts.
+            CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose) + "\n" + ImpliedCounts(names.Count),
+            "round intro");
 
         if (!string.IsNullOrWhiteSpace(answer))
         {
@@ -1805,9 +1884,14 @@ public sealed class CommentaryService
                 ? " Do not mention any sponsor - the introductions' sponsor is credited just before your words."
                 : string.Empty);
 
-        var answer = await Ask(Client,
-            BuildSystemPrompt(extraWords), facts, maxTokens: MaxTokensForWordLimit(extraWords), temperature: Variety, ct: ct,
-            timeout: BetweenRacesTimeout);
+        // Its figures checked first, as the model wrote them (8 Nov 2026) -
+        // before the sponsor's credit, which is the club's own words. Dropped,
+        // there are no introductions, as when none came back.
+        var answer = await FiguresCheckedAsync(
+            Ask(Client,
+                BuildSystemPrompt(extraWords), facts, maxTokens: MaxTokensForWordLimit(extraWords), temperature: Variety, ct: ct,
+                timeout: BetweenRacesTimeout),
+            CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose), "driver introductions");
 
         // ONCE THROUGH THE GRID (19 Oct 2026). Given room for a few words a
         // driver, a model that reached the back row could go round again -
@@ -3575,7 +3659,11 @@ public sealed class CommentaryService
                     BuildBroadcastSystemPrompt(extraWords), facts,
                     maxTokens: MaxTokensForWordLimit(extraWords),
                     temperature: Variety, ct: ct, timeout: BetweenRacesTimeout),
-                CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose), "race recap"),
+                // With the counts the results imply but do not state (8 Nov
+                // 2026) - the field, as the facts list only the top few
+                // finishers. See ImpliedCounts.
+                CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose) + "\n" + RecapCounts(session, ordered.Count),
+                "race recap"),
             // The names the facts use too (6 Nov 2026), not only the saved
             // ones: the winner's team and sponsors, the names the prompt
             // calls the drivers, their cars and the race. Left off, the
@@ -3850,10 +3938,14 @@ public sealed class CommentaryService
             + ". The result has already been told: name the winner once at most and add nothing else about the race. "
             + $"One or two short sentences, under {ClosingWords + 10} words.";
 
-        var line = await Ask(Client,
-            BuildBroadcastSystemPrompt(0), facts,
-            maxTokens: MaxTokensForWordLimit(),
-            temperature: Variety, ct: ct, timeout: BetweenRacesTimeout);
+        // Its figures checked against its facts (8 Nov 2026). Dropped, the
+        // show's own sign-off goes out, as for the check below.
+        var line = await FiguresCheckedAsync(
+            Ask(Client,
+                BuildBroadcastSystemPrompt(0), facts,
+                maxTokens: MaxTokensForWordLimit(),
+                temperature: Variety, ct: ct, timeout: BetweenRacesTimeout),
+            CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose), "broadcast closing");
 
         // And checked, not only asked (3 Nov 2026): a sign-off that names
         // the race just run without the one that is next has it as next.
@@ -3986,10 +4078,15 @@ public sealed class CommentaryService
             + (said.Count > 0 ? "Make it sound fresh: don't reuse the wording or the shape of the throws already used tonight. " : "Make it sound fresh, not stock. ")
             + "One or two short sentences, under 30 words. Only the words to say.";
 
-        return await RecordAndReturn("Throw to break", Ask(Client,
-            BuildBroadcastSystemPrompt(0), facts,
-            maxTokens: MaxTokensForWordLimit(),
-            temperature: Math.Max(Variety, 0.9), ct: ct, timeout: BetweenRacesTimeout));
+        // Its figures checked against its facts (8 Nov 2026). Dropped, it is
+        // no throw, as one that never came back is - and StopSetThrow's own
+        // line goes out instead.
+        return await RecordAndReturn("Throw to break", FiguresCheckedAsync(
+            Ask(Client,
+                BuildBroadcastSystemPrompt(0), facts,
+                maxTokens: MaxTokensForWordLimit(),
+                temperature: Math.Max(Variety, 0.9), ct: ct, timeout: BetweenRacesTimeout),
+            CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose), "throw to break"));
     }
 
     /// <summary>
@@ -4073,6 +4170,23 @@ public sealed class CommentaryService
 
         var notes = new List<string>();
         var written = HandOff.Check(StripAudioTags(reply), brief, notes);
+
+        // Each half's figures checked against the facts, as the model wrote
+        // that half (8 Nov 2026) - a half with a number the facts cannot
+        // back goes the way of a half that will not do: the built-in line is
+        // said for it. See CommentaryNumberCheck.
+        var (rawThrow, rawBack) = HandOff.Split(StripAudioTags(reply));
+        var handOffFacts = CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose);
+
+        if (written.Throw is not null && FiguresRefused(rawThrow, handOffFacts, "hand-off throw"))
+        {
+            written = written with { Throw = null };
+        }
+
+        if (written.Back is not null && FiguresRefused(rawBack, handOffFacts, "hand-off hand back"))
+        {
+            written = written with { Back = null };
+        }
 
         if (notes.Count > 0)
         {
@@ -4211,6 +4325,17 @@ public sealed class CommentaryService
         var numbersFrom =
             (race.Length > 0 ? $"Race: {race}\n" : string.Empty) +
             string.Join("\n", badgeFacts.Select(block => Field(block, MaxNightFactChars * 2)).Where(b => b.Length > 0));
+
+        // The number check every other written line has (8 Nov 2026), on the
+        // read as the model wrote it and against the same facts as the check
+        // below - which holds counts and ordinals, but not a decimal, a
+        // fraction or a lap time in words. Dropped, the built-in read goes
+        // out, as for any read that will not do.
+        if (FiguresRefused(reply, numbersFrom, "achievements read"))
+        {
+            log?.Invoke("Achievements: the built-in read goes out - the AI's read has a number its facts cannot back.");
+            return null;
+        }
 
         var notes = new List<string>();
         var read = HonoursWriting.Check(StripAudioTags(reply), picks, others, numbersFrom, notes);
@@ -4451,9 +4576,14 @@ public sealed class CommentaryService
             + "Every name, time and number in the facts is exact - use them as written or not at all. "
             + "No quotes, no stage directions, no square-bracket tags, and nothing before the first HOST line.";
 
-        var answer = await Ask(Client,
-            BuildInterviewSystemPrompt(), facts,
-            maxTokens: 360, temperature: Variety, ct: ct, timeout: BetweenRacesTimeout);
+        // Its figures checked against its facts, both voices, as the model
+        // wrote them (8 Nov 2026). Dropped, there is no interview, as when
+        // none came back - see CommentaryNumberCheck.
+        var answer = await FiguresCheckedAsync(
+            Ask(Client,
+                BuildInterviewSystemPrompt(), facts,
+                maxTokens: 360, temperature: Variety, ct: ct, timeout: BetweenRacesTimeout),
+            CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose), "technical lead interview");
 
         if (string.IsNullOrWhiteSpace(answer))
         {
@@ -4765,7 +4895,8 @@ public sealed class CommentaryService
 
         return await AskForInterviewAsync(
             facts, name, PrincipalLabels, new[] { driver, name, car, team, Field(session.Label) },
-            BetweenRacesTimeout, log, ct, PrincipalExchanges, interviewer);
+            BetweenRacesTimeout, log, ct, PrincipalExchanges, interviewer,
+            impliedCounts: RecapCounts(session, ordered.Count));
     }
 
     /// <summary>
@@ -4926,7 +5057,8 @@ public sealed class CommentaryService
 
         var exchanges = await AskForInterviewAsync(
             facts, name, PrincipalLabels, new[] { driver, name, car, team, Field(round.RoundLabel) },
-            timeout: null, log, ct, interviewer: interviewer);
+            timeout: null, log, ct, interviewer: interviewer,
+            impliedCounts: ImpliedCounts(grid.Count));
 
         // HELD TO IT (19 Oct 2026): asked for hopes and respect for the
         // rivals, a principal answered "with Al, Terry, Ela and Dee all
@@ -4967,7 +5099,8 @@ public sealed class CommentaryService
         Action<string>? log,
         CancellationToken ct,
         int? mostExchanges = null,
-        string? interviewer = null)
+        string? interviewer = null,
+        string? impliedCounts = null)
     {
         if (Client is null)
         {
@@ -4979,10 +5112,16 @@ public sealed class CommentaryService
         // middle of the third answer, which ParseInterview then drops -
         // so the principal's longer interview would have failed silently
         // and looked like a model that would not follow the form.
-        var answer = await Ask(Client,
-            BuildInterviewSystemPrompt(), facts,
-            maxTokens: 180 * Math.Max(2, mostExchanges ?? MaxInterviewExchanges),
-            temperature: Variety, ct: ct, timeout: timeout);
+        // Its figures checked against its facts, both voices, as the model
+        // wrote them (8 Nov 2026). Dropped, there is no interview, as when
+        // none came back - see CommentaryNumberCheck.
+        var answer = await FiguresCheckedAsync(
+            Ask(Client,
+                BuildInterviewSystemPrompt(), facts,
+                maxTokens: 180 * Math.Max(2, mostExchanges ?? MaxInterviewExchanges),
+                temperature: Variety, ct: ct, timeout: timeout),
+            CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose) + (impliedCounts is null ? string.Empty : "\n" + impliedCounts),
+            "team principal interview");
 
         if (string.IsNullOrWhiteSpace(answer))
         {

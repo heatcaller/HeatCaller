@@ -409,3 +409,420 @@ public sealed class CommentaryNumberCheckDirectorTests : IDisposable
         Assert.NotNull(await commentary.BuildSegmentAsync(SegmentKind.BattleWatch, facts));
     }
 }
+
+/// <summary>
+/// The kinds a fact's figures are given, and the rule that only two of the
+/// same kind make a sum or a difference (8 Nov 2026) - a gap and a lap time
+/// backed an invented "four point nine" before. See CommentaryNumberCheck.
+/// </summary>
+public sealed class CommentaryNumberCheckKindsTests
+{
+    [Fact]
+    public void The_race_facts_figures_are_given_their_kinds()
+    {
+        var kinds = CommentaryNumberCheck.KindsIn(
+            "Terry leads Dee by 1.1s. Terry's last lap 6039 ms; Dee's last lap 6753 ms. "
+            + "The race is to 12 laps and Terry is on lap 3.");
+
+        Assert.Equal(
+            new (double, CommentaryNumberCheck.FigureKind)[]
+            {
+                (1.1, CommentaryNumberCheck.FigureKind.Gap),
+                (6039, CommentaryNumberCheck.FigureKind.Time),
+                (6.039, CommentaryNumberCheck.FigureKind.Time),
+                (6753, CommentaryNumberCheck.FigureKind.Time),
+                (6.753, CommentaryNumberCheck.FigureKind.Time),
+                (12, CommentaryNumberCheck.FigureKind.Count),
+                (3, CommentaryNumberCheck.FigureKind.Count),
+            },
+            kinds);
+    }
+
+    [Theory]
+    [InlineData("Sam is P4", 4, "Position")]
+    [InlineData("from grid position 6", 6, "Position")]
+    [InlineData("His previous best was 5.743s", 5.743, "Time")]
+    [InlineData("Sam has just set 5.425s", 5.425, "Time")]
+    [InlineData("Dee is losing 0.7s a lap", 0.7, "Gap")]
+    [InlineData("Bill has been within 0.30s of Sam", 0.3, "Gap")]
+    [InlineData("with 4 laps to go", 4, "Count")]
+    [InlineData("Sam has 45 points", 45, "Other")]
+    [InlineData("Bill 3 points behind", 3, "Other")]
+    [InlineData("Sam won 4 heats tonight", 4, "Other")]
+    [InlineData("rated 87.5", 87.5, "Other")]
+    [InlineData("the fastest lap, set by Sam at 5.425s", 5.425, "Time")]
+    public void A_fact_s_kind_comes_from_the_words_round_it(string facts, double value, string kind)
+    {
+        Assert.Contains((value, Enum.Parse<CommentaryNumberCheck.FigureKind>(kind)), CommentaryNumberCheck.KindsIn(facts));
+    }
+
+    [Fact]
+    public void A_gap_and_a_lap_time_no_longer_back_their_difference()
+    {
+        // The 8 Nov loophole: 6.039 - 1.1 = 4.939.
+        Assert.Equal("four point nine", CommentaryNumberCheck.Unsupported("Dee's a four point nine back!", "gap 1.1s. lap 6.039s"));
+        Assert.Equal("four point nine", CommentaryNumberCheck.Unsupported(
+            "Terry's on a four point nine",
+            "Terry leads Dee by 1.1s. Terry's last lap 6039 ms; Dee's last lap 6753 ms."));
+
+        // ...nor their sum (7.139).
+        Assert.NotNull(CommentaryNumberCheck.Unsupported("a seven point one", "gap 1.1s. lap 6.039s"));
+    }
+
+    [Fact]
+    public void Two_lap_times_still_back_their_difference_as_a_gap()
+    {
+        const string facts = "Sam's best lap 5.425s. Bill's best lap 5.743s.";
+
+        // 5.743 - 5.425 = 0.318.
+        Assert.Null(CommentaryNumberCheck.Unsupported("Bill's three tenths off Sam's pace", facts));
+        Assert.Null(CommentaryNumberCheck.Unsupported("nearly a third of a second between them", facts));
+        Assert.NotNull(CommentaryNumberCheck.Unsupported("Bill's six tenths off Sam's pace", facts));
+    }
+
+    [Fact]
+    public void A_count_and_a_time_never_combine()
+    {
+        const string facts = "The race is to 12 laps. Sam's best lap 5.4s.";
+
+        // 12 - 5.4 and 12 + 5.4.
+        Assert.Equal("six point six", CommentaryNumberCheck.Unsupported("Sam's lapping at six point six", facts));
+        Assert.Equal("seventeen point four", CommentaryNumberCheck.Unsupported("a seventeen point four", facts));
+
+        // Each on its own is still fine.
+        Assert.Null(CommentaryNumberCheck.Unsupported("twelve laps, and Sam's on a five point four", facts));
+    }
+
+    [Fact]
+    public void Two_gaps_add_up()
+    {
+        Assert.Null(CommentaryNumberCheck.Unsupported(
+            "Dee's eight tenths off the lead", "Sam leads Bill by 0.3s. Bill leads Dee by 0.5s."));
+    }
+
+    [Fact]
+    public void Two_counts_of_laps_still_give_the_laps_left()
+    {
+        Assert.Null(CommentaryNumberCheck.Unsupported("NINE laps left", "The race is to 12 laps and Terry is on lap 3."));
+        Assert.Null(CommentaryNumberCheck.Unsupported("fifteen laps in all", "10 laps done, 5 to go"));
+    }
+
+    [Fact]
+    public void Places_gained_are_two_positions_apart()
+    {
+        Assert.Null(CommentaryNumberCheck.Unsupported("Sam gained four places", "Sam started P6 and finished P2."));
+    }
+
+    [Fact]
+    public void Points_still_combine_with_points()
+    {
+        Assert.Null(CommentaryNumberCheck.Unsupported(
+            "Sam's three points clear", "Championship: P1 Sam 45 points, P2 Bill 42 points."));
+    }
+
+    [Fact]
+    public void A_count_of_laps_and_a_count_of_points_do_not_combine()
+    {
+        // 45 - 12 = 33.
+        Assert.Equal("thirty-three", CommentaryNumberCheck.Unsupported(
+            "thirty-three to find", "The race is to 12 laps. Sam has 45 points."));
+    }
+
+    [Fact]
+    public void The_parts_of_a_lap_time_in_words_back_themselves_but_never_a_sum()
+    {
+        // "five four twenty-five" is 5.425, and its words 5, 4 and 25.
+        var facts = "Sam's best lap " + RaceNumbers.LapSpoken(5425) + ".";
+
+        Assert.Null(CommentaryNumberCheck.Unsupported("a five four twenty-five for Sam", facts));
+        Assert.Equal("twenty-nine", CommentaryNumberCheck.Unsupported("twenty-nine of them", facts));
+    }
+
+    [Fact]
+    public void A_class_s_halves_back_themselves_but_never_a_sum()
+    {
+        const string facts = "Heat 3 of the 17.5 Stock class.";
+
+        Assert.Null(CommentaryNumberCheck.Unsupported("In seventeen five stock", facts));
+        Assert.Equal("twenty-two", CommentaryNumberCheck.Unsupported("twenty-two of them", facts));
+    }
+
+    // ------------------------------------------------------------------
+    // Counts the facts imply but never state
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void The_size_of_a_field_listed_only_in_part_backs_a_count_of_it()
+    {
+        // The recap lists the top five (the club's setting); the race had six.
+        const string results = "Final results:\nP1 Sam - 12 laps\nP2 Bill - 12 laps\nP3 Dee - 12 laps\nP4 Jo - 11 laps\nP5 Al - 11 laps\n";
+        var counted = results + CommentaryService.ImpliedCounts(6, 5);
+
+        Assert.Equal("six", CommentaryNumberCheck.Unsupported("Sam beat a six-car field", results));
+        Assert.Null(CommentaryNumberCheck.Unsupported("Sam beat a six-car field", counted));
+        Assert.Null(CommentaryNumberCheck.Unsupported("all six drivers home", counted));
+        Assert.Equal("seven", CommentaryNumberCheck.Unsupported("a seven-car field", counted));
+    }
+
+    [Fact]
+    public void The_counts_of_a_race_are_its_drivers_its_finishers_and_its_retirements()
+    {
+        var race = new SessionRecord
+        {
+            Results =
+            {
+                new SessionResultEntry { Transponder = "A", Position = 1, Laps = 12 },
+                new SessionResultEntry { Transponder = "B", Position = 2, Laps = 12 },
+                new SessionResultEntry { Transponder = "GHOST-1", Position = 3, Laps = 12 },
+                new SessionResultEntry { Transponder = "C", Position = 4, Laps = 11 },
+                new SessionResultEntry { Transponder = "D", Position = 5, Laps = 3, Outcome = ResultEditor.Dnf },
+            },
+        };
+
+        Assert.Equal(
+            "Counts: 4 drivers in the race, 2 drivers listed, 3 drivers classified, 1 drivers did not finish.",
+            CommentaryService.RecapCounts(race, 2));
+    }
+}
+
+/// <summary>
+/// The number check on the AI-written lines it did not cover until 8 Nov
+/// 2026: the round intro, the driver introductions, the Technical Lead and
+/// Team Principal interviews, the achievements read, the broadcast closing,
+/// the throw to break and the hand-off. Each drops a line with a figure its
+/// facts cannot back, says so in the log with the line, and does what it
+/// does when the model sends nothing.
+/// </summary>
+public sealed class CommentaryNumberCheckPathsTests : IDisposable
+{
+    private readonly TempAppData _data = new();
+
+    public void Dispose() => _data.Dispose();
+
+    private sealed class Brain : ICommentaryBrain
+    {
+        public string? Answer { get; set; }
+
+        public string Facts { get; private set; } = string.Empty;
+
+        public event Action<string>? StatusMessage;
+
+        public string Describe => "the test";
+
+        public Task<string?> GenerateAsync(
+            string systemPrompt,
+            string userPrompt,
+            int maxTokens,
+            double temperature = 0.7,
+            CancellationToken ct = default,
+            TimeSpan? timeout = null)
+        {
+            Facts = userPrompt;
+            StatusMessage?.Invoke(string.Empty);
+            return Task.FromResult(Answer);
+        }
+
+        public Task WarmUpAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task<string?> TestAsync(CancellationToken ct = default) => Task.FromResult<string?>("ok");
+    }
+
+    private static (CommentaryService Desk, Brain Model, List<string> Log) Desk(int finishers = 5)
+    {
+        var model = new Brain();
+        var log = new List<string>();
+        var desk = new CommentaryService(
+            ProfileStore.Load(),
+            new AppSettings { CommentaryEnabled = true, CommentaryMaxWords = 60, CommentarySummaryFinishers = finishers })
+        {
+            Client = model,
+            Log = log.Add,
+        };
+
+        return (desk, model, log);
+    }
+
+    private static SessionRecord Race(int cars = 2)
+    {
+        var race = new SessionRecord
+        {
+            Label = "A-Main",
+            SessionType = RaceSessionType.Race,
+            StartedAtUtc = new DateTime(2026, 11, 8, 19, 0, 0, DateTimeKind.Utc),
+            EndedAtUtc = new DateTime(2026, 11, 8, 19, 10, 0, DateTimeKind.Utc),
+        };
+
+        for (var p = 1; p <= cars; p++)
+        {
+            race.Results.Add(new SessionResultEntry
+            {
+                Transponder = $"T{p}",
+                DriverName = $"Driver {(char)('A' + p - 1)}",
+                Position = p,
+                Laps = 12,
+                ElapsedMs = 300_000 + (p * 450),
+                FastLapMs = 24_000 + (p * 200),
+            });
+        }
+
+        return race;
+    }
+
+    private static RoundDefinition Round(params string[] roster) => new()
+    {
+        RoundLabel = "A-Main",
+        ClassName = "Stock Buggy",
+        Kind = RoundKind.Main,
+        MainTier = 0,
+        AssignedTransponders = roster.ToList(),
+    };
+
+    private const string Invented = "four point nine";
+
+    private static void Dropped(List<string> log, string label) =>
+        Assert.Contains(log, line => line.Contains($"Dropped the {label} - it says {Invented}, which is not in its facts: \"", StringComparison.OrdinalIgnoreCase));
+
+    [Fact]
+    public async Task A_round_intro_with_an_invented_figure_is_dropped_and_said_with_its_text()
+    {
+        var (desk, model, log) = Desk();
+        model.Answer = "The A-Main is here, and the record is a four point nine!";
+
+        Assert.Null(await desk.BuildRoundIntroAsync(Round("sam", "bill", "dee")));
+        Dropped(log, "round intro");
+        Assert.Contains(log, line => line.Contains("the record is a four point nine!", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_round_intro_may_count_the_drivers_it_was_handed_by_name()
+    {
+        var (desk, model, log) = Desk();
+        model.Answer = "Three drivers line up for the A-Main!";
+
+        Assert.NotNull(await desk.BuildRoundIntroAsync(Round("sam", "bill", "dee")));
+        Assert.Empty(log);
+
+        // Not shown to the model - the count is the check's, not a fact to say.
+        Assert.DoesNotContain("Counts:", model.Facts, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Driver_introductions_with_an_invented_figure_are_dropped_before_the_credit()
+    {
+        var (desk, model, log) = Desk();
+        model.Answer = "Sam on pole with a four point nine best, Bill alongside!";
+
+        Assert.Null(await desk.BuildDriverIntroductionsAsync(
+            "A-Main",
+            new[] { new IntroDriver("1", 1, "Sam", "Sam"), new IntroDriver("2", 2, "Bill", "Bill") },
+            presentedBy: "Joe's Hobby Shop"));
+        Dropped(log, "driver introductions");
+
+        model.Answer = "Sam, racing number seven, on pole - Bill alongside!";
+        Assert.NotNull(await desk.BuildDriverIntroductionsAsync(
+            "A-Main",
+            new[] { new IntroDriver("1", 1, "Sam", "Sam", "7"), new IntroDriver("2", 2, "Bill", "Bill") }));
+    }
+
+    [Fact]
+    public async Task A_recap_may_count_a_field_it_lists_only_the_top_of()
+    {
+        var (desk, model, log) = Desk(finishers: 5);
+        model.Answer = "Driver A wins it from a six-car field!";
+
+        Assert.NotNull(await desk.BuildRaceSummaryAsync(Race(cars: 6)));
+        Assert.Empty(log);
+        Assert.DoesNotContain("P6", model.Facts, StringComparison.Ordinal);
+        Assert.DoesNotContain("Counts:", model.Facts, StringComparison.Ordinal);
+
+        model.Answer = "Driver A wins it from a seven-car field!";
+        Assert.Null(await desk.BuildRaceSummaryAsync(Race(cars: 6)));
+        Assert.Contains(log, line => line.Contains(
+            "Dropped the race recap - it says seven, which is not in its facts: \"Driver A wins it from a seven-car field!\"",
+            StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_broadcast_closing_with_an_invented_figure_is_dropped()
+    {
+        var (desk, model, log) = Desk();
+        model.Answer = "That's four point nine seconds of pure magic - good night from Race Night Live!";
+
+        Assert.Null(await desk.BuildBroadcastClosingAsync(
+            Race(), new CommentaryService.RecapContext(null, false, true, "Race Night Live", null)));
+        Dropped(log, "broadcast closing");
+    }
+
+    [Fact]
+    public async Task A_throw_to_break_with_an_invented_figure_is_dropped()
+    {
+        var (desk, model, log) = Desk();
+        model.Answer = "Race Night Live - the recap with Jo is back in four point nine!";
+
+        Assert.Null(await desk.BuildStopSetThrowAsync(
+            Race(), StopSetThrow.Names.Of("Race Night Live", "Jo", "Rick"),
+            Array.Empty<string>(), Array.Empty<string>(), breakFollows: true));
+        Dropped(log, "throw to break");
+        Assert.Null(desk.LastLine);
+    }
+
+    [Fact]
+    public async Task A_hand_off_half_with_an_invented_figure_goes_to_the_built_in_line()
+    {
+        var (desk, model, log) = Desk();
+        model.Answer = "THROW: A four point nine finish! Jess, you're with Sam's team.\nBACK: Back to you, Rick.";
+
+        var written = await desk.BuildHandOffAsync(new HandOff.Brief(
+            Host: "Rick Marshal",
+            HostRole: "the race announcer, up in the booth",
+            Guest: "Jess",
+            GuestRole: "the co-host, down in pit lane",
+            About: "a quick word with Sam's team"));
+
+        Assert.NotNull(written);
+        Assert.Null(written!.Throw);
+        Assert.Equal("Back to you, Rick.", written.Back);
+        Dropped(log, "hand-off throw");
+    }
+
+    [Fact]
+    public async Task An_achievements_read_with_an_invented_figure_goes_to_the_built_in_read()
+    {
+        var (desk, model, log) = Desk();
+        var notes = new List<string>();
+        model.Answer = "Sam takes Nail-Biter, by four point nine!";
+
+        Assert.Null(await desk.BuildHonoursReadAsync(
+            new[] { new HonoursPick("Sam", "sam", new[] { "Nail-Biter" }, Array.Empty<AchievementUnlock>()) },
+            new[] { "Sam earned Nail-Biter: finished within a second of the car next to you." },
+            "Alex", "A-Main", log: notes.Add));
+        Dropped(log, "achievements read");
+        Assert.Contains(notes, note => note.Contains("built-in read goes out", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_technical_lead_interview_with_an_invented_figure_is_dropped()
+    {
+        var (desk, model, log) = Desk();
+        model.Answer = "HOST: Guiseppi, how was it?\nTECH LEAD: We found four point nine all night.\n"
+                       + "HOST: And the car?\nTECH LEAD: Same as ever.";
+
+        Assert.Null(await desk.BuildMechanicInterviewAsync(Race(), "Guiseppi", Array.Empty<string>(), null));
+        Dropped(log, "technical lead interview");
+    }
+
+    [Fact]
+    public async Task A_team_principal_interview_with_an_invented_figure_is_dropped_before_and_after()
+    {
+        var (desk, model, log) = Desk();
+        model.Answer = "HOST: Pat, what a night.\nTEAM PRINCIPAL: Four point nine clear, we're thrilled.\n"
+                       + "HOST: And next?\nTEAM PRINCIPAL: More of the same.";
+
+        Assert.Null(await desk.BuildPrincipalAfterAsync(Race(), "Pat", null, null));
+        Dropped(log, "team principal interview");
+
+        log.Clear();
+        Assert.Null(await desk.BuildPrincipalBeforeAsync(Round("sam", "bill"), "sam", "Pat", null, null));
+        Dropped(log, "team principal interview");
+    }
+}

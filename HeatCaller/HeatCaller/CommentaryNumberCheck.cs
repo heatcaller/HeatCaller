@@ -21,13 +21,36 @@ namespace HeatCaller;
 /// because a repaired line is the app guessing at what the model meant.
 ///
 /// WHAT COUNTS AS BACKED. A figure is backed when it is one of the facts'
-/// own figures, or the sum or difference of two of them - "losing seven
-/// tenths a lap" is two lap times subtracted, "nine laps left" is the limit
-/// less the leader's lap. Within a tolerance for a figure with a decimal in
-/// it (0.05 either way, or 5% of the fact), exactly for a whole number - or
+/// own figures, or the sum or difference of two of them OF THE SAME KIND
+/// (below) - "losing seven tenths a lap" is two lap times subtracted, "nine
+/// laps left" is the limit less the leader's lap. Within a tolerance for a
+/// figure with a decimal in it (0.05 either way), exactly for a whole number - or
 /// a whole number that one of the facts' own decimals rounds to ("about
 /// three seconds" for 2.8s). Hedges such as "about", "nearly" and "just
 /// over" are not read: only the figure matters.
+///
+/// ONLY LIKE WITH LIKE (8 Nov 2026). Any two facts used to back their sum
+/// or difference, so facts of a 1.1s gap and a 6.039s lap backed an
+/// invented "four point nine" - 6.039 less 1.1 - which is no quantity in
+/// the race at all. Each figure in the facts is now given a KIND from the
+/// words round it, and only two of the same kind combine:
+///   * TIME - a lap or sector time: seconds, or a decimal near "lap",
+///     "best", "fastest". Two times give a gap ("seven-tenths a lap" from
+///     two last laps, "a third of a second better" from two bests);
+///   * GAP - a margin: near "gap", "behind", "ahead", "margin", "by",
+///     "clear", "losing"... Two gaps add up ("Sam is 0.3 on Bill, who is
+///     0.5 on Dee");
+///   * COUNT - a whole number of laps: near "lap", "laps", "to go",
+///     "left". The limit less the laps done is the laps left;
+///   * POSITION - P4, 4th, "grid position 4": places gained;
+///   * OTHER - anything the words round it do not settle (points, wins,
+///     a class's 17.5), which combines only with OTHER, so the counts and
+///     points a line used to work out still work out.
+/// Never a time with a gap, never a count with a time. A figure used
+/// directly is backed whatever its kind - the kinds only decide which
+/// pairs make a new number. The parts of a lap time in words ("five",
+/// "four", "twenty-five" of "five four twenty-five") and the halves of a
+/// class ("17" and "5" of "17.5") back themselves only, never a sum.
 ///
 /// HOW A FIGURE IS READ, on both sides - the facts are mostly digits, but
 /// some are already words (a lap time read out by RaceNumbers.LapSpoken):
@@ -119,7 +142,40 @@ internal static class CommentaryNumberCheck
 
         /// <summary>Could be a year said in words ("twenty twenty-six"), so let go if nothing else backs it.</summary>
         public bool MaybeYear { get; init; }
+
+        /// <summary>What a FACT's figure is, from the words round it - null until read, and then OTHER. See <see cref="FigureKind"/>.</summary>
+        public FigureKind? Kind { get; init; }
     }
+
+    /// <summary>
+    /// What a figure in the facts measures, as far as the words round it say
+    /// (8 Nov 2026) - only two of the same kind make a sum or a difference
+    /// that backs a figure. See the class's own summary.
+    /// </summary>
+    internal enum FigureKind
+    {
+        /// <summary>Not settled by the words round it. Combines only with another OTHER.</summary>
+        Other,
+
+        /// <summary>A lap or sector time, in seconds.</summary>
+        Time,
+
+        /// <summary>A gap or margin between two cars.</summary>
+        Gap,
+
+        /// <summary>A whole number of laps.</summary>
+        Count,
+
+        /// <summary>A place: P4, 4th, grid position 4.</summary>
+        Position,
+
+        /// <summary>A piece of another figure (a lap time's words, a class's halves) - backs itself, never a sum.</summary>
+        Part,
+    }
+
+    /// <summary>The kind of every figure <see cref="FiguresIn"/> reads from <paramref name="facts"/>, for the tests.</summary>
+    internal static IReadOnlyList<(double Value, FigureKind Kind)> KindsIn(string facts) =>
+        FiguresIn(facts, forFacts: true).Select(f => (Math.Round(f.Value, 3), f.Kind ?? FigureKind.Other)).ToList();
 
     // ------------------------------------------------------------------
     // Backing: the facts' figures, and every sum and difference of two
@@ -131,32 +187,61 @@ internal static class CommentaryNumberCheck
         private const int MostFigures = 400;
 
         private readonly List<double> _direct = new();
+        private readonly List<FigureKind> _kinds = new();
         private readonly List<double> _all = new();
 
         public Backing(IEnumerable<Figure> figures)
         {
-            var seen = new HashSet<long>();
+            var seen = new HashSet<(long, FigureKind)>();
 
-            foreach (var figure in figures.SelectMany(f => f.Apart.Prepend(f)))
+            // The words of a lap time ("five", "four", "twenty-five") are
+            // parts of it, and back themselves only - see FigureKind.Part.
+            var flat = figures.SelectMany(f => f.Apart
+                .Select(part => part with { Kind = FigureKind.Part })
+                .Prepend(f));
+
+            foreach (var figure in flat)
             {
                 if (_direct.Count >= MostFigures)
                 {
                     break;
                 }
 
-                if (double.IsFinite(figure.Value) && seen.Add((long)Math.Round(figure.Value * 1_000_000)))
+                var kind = figure.Kind ?? FigureKind.Other;
+
+                if (double.IsFinite(figure.Value) && seen.Add(((long)Math.Round(figure.Value * 1_000_000), kind)))
                 {
                     _direct.Add(figure.Value);
+                    _kinds.Add(kind);
                 }
             }
 
             _all.AddRange(_direct);
 
+            // Only like with like (8 Nov 2026): a gap and a lap time made
+            // "four point nine" out of nothing. See FigureKind.
             for (var i = 0; i < _direct.Count; i++)
             {
+                if (_kinds[i] == FigureKind.Part)
+                {
+                    continue;
+                }
+
                 for (var j = i + 1; j < _direct.Count; j++)
                 {
-                    _all.Add(_direct[i] + _direct[j]);
+                    if (_kinds[j] != _kinds[i])
+                    {
+                        continue;
+                    }
+
+                    // Two places apart is places gained; two places added
+                    // up is nothing - P1 and P5 made a "six" of the recap's
+                    // top five.
+                    if (_kinds[i] != FigureKind.Position)
+                    {
+                        _all.Add(_direct[i] + _direct[j]);
+                    }
+
                     _all.Add(Math.Abs(_direct[i] - _direct[j]));
                 }
             }
@@ -290,9 +375,11 @@ internal static class CommentaryNumberCheck
 
     // Where one figure cannot run into the next: punctuation, a dash with
     // space round it, a full stop that is not a decimal point, a colon that
-    // is not in a clock time.
+    // is not in a clock time - and the end of a line (8 Nov 2026), so the
+    // words of one line of the facts are not read as saying what a figure
+    // on the line before it is.
     private static readonly Regex Breaks = new(
-        @"[,;!?""()“”–—…]|\.(?![0-9])|:(?![0-9])|\s-+\s|\s-+$|^-+\s",
+        @"[,;!?""()“”–—…\r\n]|\.(?![0-9])|:(?![0-9])|\s-+\s|\s-+$|^-+\s",
         RegexOptions.Compiled);
 
     private static readonly Regex DigitFigure = new(
@@ -362,11 +449,175 @@ internal static class CommentaryNumberCheck
 
             for (var i = 0; i < words.Count;)
             {
-                i += Math.Max(1, ReadAt(words, i, forFacts, found));
+                var from = found.Count;
+                var took = Math.Max(1, ReadAt(words, i, forFacts, found));
+
+                // A fact's figures are given their kind from the words round
+                // them, so only like combines with like (8 Nov 2026).
+                if (forFacts && found.Count > from)
+                {
+                    var kind = KindAt(words, i, took, found[from]);
+
+                    for (var f = from; f < found.Count; f++)
+                    {
+                        if (found[f].Kind is null)
+                        {
+                            found[f] = found[f] with { Kind = kind };
+                        }
+                    }
+                }
+
+                i += took;
             }
         }
 
         return found;
+    }
+
+    // ------------------------------------------------------------------
+    // What a fact's figure measures (8 Nov 2026) - see FigureKind
+    // ------------------------------------------------------------------
+
+    private enum Cue
+    {
+        None,
+        Gap,
+        Time,
+        Lap,
+        Place,
+        Else,
+    }
+
+    private static readonly HashSet<string> GapWords = new(StringComparer.Ordinal)
+    {
+        "gap", "gaps", "behind", "ahead", "margin", "margins", "clear", "back", "losing", "gaining", "lost", "gained",
+        "closing", "quicker", "faster", "slower", "deficit", "advantage", "interval", "apart", "off", "within",
+        "lead", "leads", "leading", "cushion", "difference", "adrift", "between",
+    };
+
+    private static readonly HashSet<string> TimeWords = new(StringComparer.Ordinal)
+    {
+        "best", "fastest", "quickest", "slowest", "pb", "record", "time", "lapped", "clocked", "average",
+        "avg", "personal", "sector",
+    };
+
+    private static readonly HashSet<string> LapWords = new(StringComparer.Ordinal)
+    {
+        "lap", "laps", "circuit", "circuits", "go", "left", "remaining", "done", "completed", "tours",
+    };
+
+    private static readonly HashSet<string> PlaceWords = new(StringComparer.Ordinal)
+    {
+        "position", "positions", "place", "places", "grid", "pole",
+    };
+
+    // Words that say a number is about something else - points, wins,
+    // starts - so a "laps" further off does not claim it.
+    private static readonly HashSet<string> ElseWords = new(StringComparer.Ordinal)
+    {
+        "points", "pts", "pt", "rating", "rated", "percent", "wins", "win", "heats", "heat", "races", "race",
+        "starts", "podiums", "titles", "achievements", "drivers", "cars", "minutes", "minute", "mins", "years",
+        "nights", "meetings", "mains", "rounds", "round", "seasons", "hours",
+    };
+
+    private static readonly HashSet<string> SecondsWords = new(StringComparer.Ordinal)
+    {
+        "s", "sec", "secs", "second", "seconds", "ms", "millisecond", "milliseconds",
+    };
+
+    private static Cue CueOf(string word, bool before, int distance)
+    {
+        // "by" only right in front: "by 1.1s", "by just 1.1s" - and not the
+        // "set by Sam at 5.425s" of a fastest lap.
+        if (word == "by")
+        {
+            return before && distance <= 2 ? Cue.Gap : Cue.None;
+        }
+
+        // "times" is a lap time's plural and a count's ("three times") alike: not a cue.
+        if (word == "times")
+        {
+            return Cue.None;
+        }
+
+        return GapWords.Contains(word) ? Cue.Gap
+            : TimeWords.Contains(word) ? Cue.Time
+            : LapWords.Contains(word) ? Cue.Lap
+            : PlaceWords.Contains(word) ? Cue.Place
+            : ElseWords.Contains(word) ? Cue.Else
+            : Cue.None;
+    }
+
+    /// <summary>The nearest word round the figure that says what it is - after it first, at each distance.</summary>
+    private static Cue NearestCue(List<Word> ws, int i, int took)
+    {
+        for (var d = 1; d <= 4; d++)
+        {
+            var after = i + took - 1 + d;
+
+            if (after < ws.Count && CueOf(ws[after].Low, before: false, d) is not Cue.None and var a)
+            {
+                return a;
+            }
+
+            var before = i - d;
+
+            if (before >= 0 && CueOf(ws[before].Low, before: true, d) is not Cue.None and var b)
+            {
+                return b;
+            }
+        }
+
+        return Cue.None;
+    }
+
+    /// <summary>What the figure read at word <paramref name="i"/> of the facts measures. When in doubt, OTHER.</summary>
+    private static FigureKind KindAt(List<Word> ws, int i, int took, Figure first)
+    {
+        var token = ws[i].Low;
+
+        if (token.StartsWith('p') && Position.IsMatch(token) || DigitOrdinal.IsMatch(token))
+        {
+            return FigureKind.Position;
+        }
+
+        if (token.EndsWith('%'))
+        {
+            return FigureKind.Other;
+        }
+
+        var m = DigitFigure.Match(token);
+        var seconds = (m.Success && m.Groups["unit"].Value is { Length: > 0 } unit && unit != "%")
+                      || (i + 1 < ws.Count && SecondsWords.Contains(ws[i + 1].Low));
+        var cue = NearestCue(ws, i, took);
+
+        if (cue == Cue.Else)
+        {
+            return FigureKind.Other;
+        }
+
+        if (!first.Whole || seconds)
+        {
+            return cue switch
+            {
+                Cue.Gap => FigureKind.Gap,
+                Cue.Time or Cue.Lap => FigureKind.Time,
+                _ => seconds ? FigureKind.Time : FigureKind.Other,
+            };
+        }
+
+        return cue switch
+        {
+            Cue.Lap => FigureKind.Count,
+            Cue.Place => FigureKind.Position,
+            Cue.Gap => FigureKind.Gap,
+
+            // "This one was close", "one of the best": a nought, one or two
+            // in words that nothing round it makes a count backs itself and
+            // nothing else - 6 drivers and "this one" made a "seven".
+            _ when first.Value <= 2 && !token.Any(char.IsDigit) => FigureKind.Part,
+            _ => FigureKind.Other,
+        };
     }
 
     /// <summary>Reads whatever figure starts at word <paramref name="i"/>, and says how many words it took.</summary>
@@ -511,10 +762,12 @@ internal static class CommentaryNumberCheck
                 var minutes = Parse(clock.Groups["m"].Value);
                 var seconds = Parse(clock.Groups["s"].Value);
 
-                found.Add(new Figure(w, minutes, true, 1));
-                found.Add(new Figure(w, seconds, true, 1));
-                found.Add(new Figure(w, (minutes * 60) + seconds, true, 1));
-                found.Add(new Figure(w, minutes + (seconds / 60), false, 0.01));
+                // OTHER, whatever is near it (8 Nov 2026): time on a clock
+                // is neither a lap time nor a count of laps.
+                found.Add(new Figure(w, minutes, true, 1) { Kind = FigureKind.Other });
+                found.Add(new Figure(w, seconds, true, 1) { Kind = FigureKind.Other });
+                found.Add(new Figure(w, (minutes * 60) + seconds, true, 1) { Kind = FigureKind.Other });
+                found.Add(new Figure(w, minutes + (seconds / 60), false, 0.01) { Kind = FigureKind.Other });
                 return 1;
             }
 
@@ -568,8 +821,8 @@ internal static class CommentaryNumberCheck
         // facts back its two halves too. Never a time: a time has its "s".
         if (forFacts && frac.Length == 1 && unit.Length == 0)
         {
-            found.Add(new Figure(ws[i].Raw, Parse(whole), true, 1));
-            found.Add(new Figure(ws[i].Raw, Parse(frac), true, 1));
+            found.Add(new Figure(ws[i].Raw, Parse(whole), true, 1) { Kind = FigureKind.Part });
+            found.Add(new Figure(ws[i].Raw, Parse(frac), true, 1) { Kind = FigureKind.Part });
         }
 
         return 1;
@@ -837,4 +1090,11 @@ public sealed class FiguresChecked
 {
     /// <summary>The figure the facts could not back, as the line said it; null while nothing has been dropped.</summary>
     public string? Refused { get; internal set; }
+
+    /// <summary>
+    /// The line it was in, as the model wrote it (8 Nov 2026): a race recap
+    /// was dropped for "six" and nobody could say what it had said, so the
+    /// figure alone was no help in telling a wrong line from a good one.
+    /// </summary>
+    public string? Line { get; internal set; }
 }
