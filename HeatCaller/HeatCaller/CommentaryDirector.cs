@@ -2774,7 +2774,9 @@ public sealed class CommentaryDirector
             // rather than a gap:
             //
             //   BadgesEarned and Honours are built by HeatCaller out of
-            //   the badges themselves - see RaceHonours. Order() skips the
+            //   the badges themselves - see RaceHonours - and the reader's
+            //   AI-written read is asked for by Race Control's recap
+            //   sequence, not here (HonoursWriting). Order() skips the
             //   Essentials, so BadgesEarned never arrives here at all.
             //
             //   MechanicInterview has a path of its own, written beside

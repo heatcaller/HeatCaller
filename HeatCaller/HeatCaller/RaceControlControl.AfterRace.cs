@@ -223,7 +223,7 @@ public sealed partial class RaceControlControl
             // they are called one at a time as they always were.
             if (Commentary?.Invoke()?.Held != true)
             {
-                _honours = PlanHonours(unlocks);
+                _honours = PlanHonours(unlocks, record);
             }
             else
             {
@@ -1269,13 +1269,32 @@ public sealed partial class RaceControlControl
                 // request at a time, and the recap is wanted first. So the
                 // interview and the sign-off are written - and rendered -
                 // while the teaser and the recap play.
+                //
+                // THE ACHIEVEMENTS READ, WRITTEN (7 Nov 2026, asked for by
+                // Asher: "give the achievement segment its due and the same AI
+                // treatment as the other segments. full on"). Asked for the
+                // moment the recap has been written and AHEAD of the Team
+                // Principal and the sign-off - the achievements are said
+                // before either, and the model on this PC answers one request
+                // at a time. The built-in read is rendered below regardless
+                // and goes out if this is not in hand. See HonoursWriting.
+                var honoursRead = honours is not null && generation is not null
+                    ? WriteHonoursRead(honours, generation, followOnWork.Token)
+                    : null;
+
+                if (honours is not null)
+                {
+                    honours.Read = honoursRead;
+                }
+
                 // THE BOOTH INTERVIEW (18 Oct 2026): the winner's Team
                 // Principal, in the booth with the recap show's host later
                 // that night - no longer down in pit lane. Written once the
-                // recap has been, one request at a time.
-                var principalTask = generation is not null && plan is { Principal: true }
+                // recap has been - and the achievements read, when there is
+                // one - one request at a time.
+                var principalTask =generation is not null && plan is { Principal: true }
                     ? WritePrincipalAsync(
-                        generation, generation, record, plan, championship, delivery, boothBrief,
+                        (Task?)honoursRead?.Written ?? generation, generation, record, plan, championship, delivery, boothBrief,
                         written => Volatile.Write(ref principalWords, written), followOnWork.Token)
                     : null;
 
@@ -1289,7 +1308,9 @@ public sealed partial class RaceControlControl
                     ? RenderFlagHandBackAsync(followOnWork.Token)
                     : null;
 
-                Task closingAfter = principalTask is not null ? (Task)principalTask : (Task)generation!;
+                Task closingAfter = principalTask is not null
+                    ? principalTask
+                    : (Task?)honoursRead?.Written ?? generation!;
 
                 var closingTask = generation is not null && plan is { SeparateClosing: true }
                     ? WriteClosingAsync(closingAfter, generation, record, plan, delivery, followOnWork.Token)
@@ -1342,7 +1363,7 @@ public sealed partial class RaceControlControl
                 if (honours is { Voice: not null } honoursAhead && generation is not null)
                 {
                     honoursAhead.HandOff = WriteHonoursHandOff(
-                        honoursAhead, generation, (Task?)closingTask ?? principalTask, delivery, followOnWork.Token);
+                        honoursAhead, generation, (Task?)closingTask ?? principalTask ?? (Task?)honoursRead?.Written, delivery, followOnWork.Token);
                 }
 
                 // The honours with no recap for them to be a segment OF -
@@ -2470,6 +2491,21 @@ public sealed partial class RaceControlControl
         public volatile bool Started;
 
         /// <summary>
+        /// WHY (7 Nov 2026, asked for by Asher: "give the achievement segment
+        /// its due and the same AI treatment as the other segments"): what the
+        /// AI is told for the reader's own read - who is read out for what
+        /// (RaceHonours.Picked), the badges' facts off the store
+        /// (HonoursWriting.Facts), everybody else in the race, the race's
+        /// name, the reader's name and tonight's earlier reads. All of it read
+        /// HERE, on the UI thread, by PlanHonours - the read is written on the
+        /// thread pool. Null when there is nothing to write it from.
+        /// </summary>
+        public HonoursReadBrief? ReadBrief { get; init; }
+
+        /// <summary>The AI's read being written and voiced - swapped in for the built-in read by SpeakHonoursAsync when it is in hand. Null with no recap or no AI.</summary>
+        public HonoursReadJob? Read { get; set; }
+
+        /// <summary>
         /// WHY (26 Oct 2026, asked for by Asher): the AI's throw to the
         /// reader and the reader's hand back to the host, written once the
         /// recap has been and voiced while it plays - swapped in for the
@@ -2478,6 +2514,32 @@ public sealed partial class RaceControlControl
         /// </summary>
         public HandOffJob? HandOff { get; set; }
     }
+
+    /// <summary>What the AI's achievements read is written from - see HonoursPlan.ReadBrief.</summary>
+    private sealed record HonoursReadBrief(
+        IReadOnlyList<HonoursPick> Picks,
+        IReadOnlyList<string> Facts,
+        IReadOnlyList<string> Others,
+        string RaceLabel,
+        string ReaderName,
+        IReadOnlyList<string> EarlierTonight,
+        string Night);
+
+    /// <summary>
+    /// The AI's read being written and voiced: <paramref name="Written"/> settles
+    /// once the model has answered and the read has been checked (null for one
+    /// that will not do), <paramref name="Voiced"/> once it is rendered in the
+    /// reader's voice too. The HandOffJob arrangement, for one line.
+    /// </summary>
+    private sealed record HonoursReadJob(Task<SpokenLine?> Voiced, Task<string?> Written);
+
+    /// <summary>The achievements reads heard tonight, latest first - see HonoursReadBrief.EarlierTonight. Under the lock: written by the sequence, read on the UI thread.</summary>
+    private readonly List<string> _honoursReadsTonight = new();
+
+    /// <summary>Which night <see cref="_honoursReadsTonight"/> is for - PrincipalNightKey's 6am-to-6am night.</summary>
+    private string _honoursReadsNight = string.Empty;
+
+    private readonly object _honoursReadsGate = new();
 
     /// <summary>
     /// Builds the honours segment for a race's badges - the throw, the read
@@ -2506,7 +2568,7 @@ public sealed partial class RaceControlControl
     /// called out one at a time, and "neither" must never be something a
     /// club has to work out for themselves.
     /// </summary>
-    private HonoursPlan? PlanHonours(IReadOnlyList<AchievementUnlock> unlocks)
+    private HonoursPlan? PlanHonours(IReadOnlyList<AchievementUnlock> unlocks, SessionRecord? record = null)
     {
         // Nothing said and nothing logged when the club has not asked for
         // the segment: that is not a club missing out on something, it is
@@ -2596,7 +2658,10 @@ public sealed partial class RaceControlControl
                     : $" in the announcer's own voice - no achievements reader's voice is picked for {EngineName(engine)} on Voice > Cast")
                 + $" - \"{turns[1].Line}\"");
 
-            return new HonoursPlan(turns, voice, RaceHonours.Read(unlocks)?.Badges ?? 0, unlocks.ToList());
+            return new HonoursPlan(turns, voice, RaceHonours.Read(unlocks)?.Badges ?? 0, unlocks.ToList())
+            {
+                ReadBrief = HonoursReadBriefFor(unlocks, record),
+            };
         }
         catch (Exception ex)
         {
@@ -2607,6 +2672,65 @@ public sealed partial class RaceControlControl
             StatusMessage?.Invoke(
                 $"{AppTime.LogStampNow()}  [achievements] No achievements segment - it could not be set up: {ex.Message}. "
                 + "The achievements are called out one at a time instead.");
+
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// What the AI's achievements read is written from (7 Nov 2026) - see
+    /// HonoursPlan.ReadBrief. On the UI thread, beside PlanHonours, because
+    /// it reads the achievements store and the profiles. Null when nothing
+    /// could be read out, or reading the stores failed - and then the
+    /// built-in read goes out, as it always did.
+    /// </summary>
+    private HonoursReadBrief? HonoursReadBriefFor(IReadOnlyList<AchievementUnlock> unlocks, SessionRecord? record)
+    {
+        try
+        {
+            var picks = RaceHonours.Picked(unlocks);
+
+            if (picks.Count == 0)
+            {
+                return null;
+            }
+
+            var facts = HonoursWriting.Facts(picks, unlocks, _achievements);
+
+            // Everybody else in the race, by every name they might be called
+            // - the read may name nobody who is not being read out.
+            var reading = picks.Select(p => p.Transponder).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var others = (record?.Results ?? new List<SessionResultEntry>())
+                .Where(r => !string.IsNullOrWhiteSpace(r.Transponder) && !reading.Contains(r.Transponder))
+                .SelectMany(r => new[] { r.DriverName, _profiles.Get(r.Transponder)?.SpokenName, _profiles.Get(r.Transponder)?.DriverName })
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => name!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var night = PrincipalNightKey(_events?.Active?.Id, DateTime.Now);
+            IReadOnlyList<string> earlier;
+
+            lock (_honoursReadsGate)
+            {
+                if (!string.Equals(_honoursReadsNight, night, StringComparison.Ordinal))
+                {
+                    _honoursReadsTonight.Clear();
+                    _honoursReadsNight = night;
+                }
+
+                earlier = _honoursReadsTonight.Take(HonoursWriting.MostEarlierReads).ToList();
+            }
+
+            return new HonoursReadBrief(
+                picks, facts, others, record?.Label ?? string.Empty,
+                (_settings.RecapHonoursName ?? string.Empty).Trim(), earlier, night);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [achievements] The AI will not write the achievements read for this race - {ex.Message}. "
+                + "The built-in read goes out.");
 
             return null;
         }
@@ -3916,6 +4040,23 @@ public sealed partial class RaceControlControl
         var reader = (_settings.RecapHonoursName ?? string.Empty).Trim();
         var badges = plan.Badges <= 1 ? "one achievement" : $"{plan.Badges} achievements";
 
+        // The AI's read when there is one (7 Nov 2026), so the hand back
+        // reacts to what the reader is most likely to have said. It is
+        // written ahead of everything this waits behind, so this is no wait.
+        string? aiRead = null;
+
+        if (plan.Read is { } readJob)
+        {
+            try
+            {
+                aiRead = await readJob.Written;
+            }
+            catch
+            {
+                // Its own failure is its own to report.
+            }
+        }
+
         var brief = new HandOff.Brief(
             Host: _settings.HostNameForRecapShow,
             HostRole: "the host of the race recap show, who has just finished the recap",
@@ -3923,10 +4064,131 @@ public sealed partial class RaceControlControl
             GuestRole: "reads out the achievements the drivers earned in that race",
             About: $"reading out the achievements from that race - {badges} to hand out",
             JustSaid: recap,
-            GuestCovers: plan.Turns.Count > 1 ? plan.Turns[1].Line : null,
+            GuestCovers: aiRead ?? (plan.Turns.Count > 1 ? plan.Turns[1].Line : null),
             Next: "the host carries on with the rest of the recap show");
 
         return await WriteHandOffAsync(brief, RecapHostVoice, delivery, plan.Voice, behind, modelDone, cancel);
+    }
+
+    /// <summary>
+    /// The achievements reader's own read written by the AI (7 Nov 2026) -
+    /// asked for as soon as the recap has been written, AHEAD of the Team
+    /// Principal and the sign-off, because the achievements are said before
+    /// either of them and the local model answers one request at a time.
+    /// Checked (HonoursWriting.Check) and voiced in the reader's voice while
+    /// the recap plays; the built-in read, rendered already, goes out if this
+    /// is not in hand in time or would not do. Null with no brief to write
+    /// it from.
+    /// </summary>
+    private HonoursReadJob? WriteHonoursRead(HonoursPlan plan, Task<string?> recapWritten, CancellationToken cancel)
+    {
+        if (plan.ReadBrief is not { } brief || _commentary is null)
+        {
+            return null;
+        }
+
+        var written = WriteHonoursReadTextAsync(brief, recapWritten, cancel);
+
+        return new HonoursReadJob(VoiceHonoursReadAsync(written, plan.Voice, cancel), written);
+    }
+
+    private async Task<string?> WriteHonoursReadTextAsync(HonoursReadBrief brief, Task<string?> recapWritten, CancellationToken cancel)
+    {
+        try
+        {
+            string? recap;
+
+            try
+            {
+                recap = await recapWritten;
+            }
+            catch
+            {
+                // The recap's own failure is its own to report.
+                return null;
+            }
+
+            // No recap, no read: the model has just come back with nothing,
+            // and the built-in read is already rendered. The same rule the
+            // hand-over keeps.
+            if (string.IsNullOrWhiteSpace(recap)
+                || cancel.IsCancellationRequested
+                || _commentary is not { IsAvailable: true } commentary)
+            {
+                return null;
+            }
+
+            return await commentary.BuildHonoursReadAsync(
+                brief.Picks,
+                brief.Facts,
+                brief.ReaderName,
+                brief.RaceLabel,
+                brief.Others,
+                brief.EarlierTonight,
+                note => StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [achievements] {note}"),
+                cancel);
+        }
+        catch (Exception ex)
+        {
+            if (!cancel.IsCancellationRequested)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [achievements] The built-in read goes out - {ex.Message}");
+            }
+
+            return null;
+        }
+    }
+
+    /// <summary>The AI's read with its audio, in the reader's voice - or null, and then the built-in read goes. Only handed back WITH its audio, as the hand-over's lines are.</summary>
+    private async Task<SpokenLine?> VoiceHonoursReadAsync(Task<string?> written, SecondVoice? voice, CancellationToken cancel)
+    {
+        try
+        {
+            if (await written is not { Length: > 0 } text || cancel.IsCancellationRequested)
+            {
+                return null;
+            }
+
+            // The reader talks the way their voice does - no delivery, as in
+            // RenderHonoursAsync.
+            return await _announcer.PrepareReminderAsync(text, null, voice, cancel) is { } audio
+                ? new SpokenLine(text, voice, null, audio)
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The AI's read if it is in hand - written, checked and voiced - within
+    /// <see cref="HandOffGrace"/> of the honours being reached, or null and
+    /// then the built-in read goes. No grace for one the model has not
+    /// finished writing: HandOffInTimeAsync's rule, for its reason. Said in
+    /// the console either way.
+    /// </summary>
+    private async Task<SpokenLine?> HonoursReadInTimeAsync(HonoursReadJob job, CancellationToken cancel)
+    {
+        var (timedOut, line) = job.Written.IsCompleted
+            ? await WithinAsync(job.Voiced, HandOffGrace, cancel)
+            : (true, job.Voiced.IsCompletedSuccessfully ? job.Voiced.Result : null);
+
+        if (!cancel.IsCancellationRequested)
+        {
+            var wrote = job.Written.IsCompletedSuccessfully && job.Written.Result is { Length: > 0 };
+
+            StatusMessage?.Invoke(line is not null
+                ? $"{AppTime.LogStampNow()}  [achievements] The achievements read written by the AI."
+                : $"{AppTime.LogStampNow()}  [achievements] The built-in achievements read, "
+                  + (!job.Written.IsCompleted
+                      ? "because the AI's was not written in time."
+                      : wrote
+                          ? (timedOut ? "because the AI's was not voiced in time." : "because the AI's could not be voiced.")
+                          : "because the AI wrote none that would do - there was no recap for it to follow, or a line above says why."));
+        }
+
+        return line;
     }
 
     /// <summary>
@@ -4008,6 +4270,28 @@ public sealed partial class RaceControlControl
             // be rendered is not then called one at a time by a later stop.
             plan.Started = true;
             return;
+        }
+
+        // WHY (7 Nov 2026, asked for by Asher: "give the achievement segment
+        // its due"): the reader's read written by the AI from the badges' own
+        // facts, checked against who got what, and voiced while the recap
+        // played - in for the built-in read, which is already rendered and
+        // goes out if this is not in hand by now. The read is always turn 1:
+        // the throw is 0, with or without the reader's hand back after it.
+        if (plan.Read is { } readJob && lines.Count == plan.Turns.Count && lines.Count > 1)
+        {
+            var aiRead = await HonoursReadInTimeAsync(readJob, nextRace);
+
+            if (nextRace.IsCancellationRequested)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [achievements] {Stopped()}");
+                return;
+            }
+
+            if (aiRead is not null)
+            {
+                lines = new List<SpokenLine>(lines) { [1] = aiRead };
+            }
         }
 
         // WHY (26 Oct 2026, asked for by Asher): the AI's throw to the reader
@@ -4097,7 +4381,31 @@ public sealed partial class RaceControlControl
                 OnAirParts.Achievements);
         }
 
-        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [achievements] Achievements spoken: \"{plan.Turns[1].Line}\"");
+        // The read as it went out - the AI's or the built-in one - kept for
+        // the night, so the next race's read is told how this one went and
+        // does not open the same way (7 Nov 2026).
+        var read = lines.Count > 1 ? lines[1].Text : plan.Turns[1].Line;
+
+        if (plan.ReadBrief is { } brief)
+        {
+            lock (_honoursReadsGate)
+            {
+                if (!string.Equals(_honoursReadsNight, brief.Night, StringComparison.Ordinal))
+                {
+                    _honoursReadsTonight.Clear();
+                    _honoursReadsNight = brief.Night;
+                }
+
+                _honoursReadsTonight.Insert(0, read);
+
+                if (_honoursReadsTonight.Count > HonoursWriting.MostEarlierReads)
+                {
+                    _honoursReadsTonight.RemoveRange(HonoursWriting.MostEarlierReads, _honoursReadsTonight.Count - HonoursWriting.MostEarlierReads);
+                }
+            }
+        }
+
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [achievements] Achievements spoken: \"{read}\"");
     }
 
     /// <summary>

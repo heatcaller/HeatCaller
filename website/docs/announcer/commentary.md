@@ -426,6 +426,28 @@ Most corrections are made after the race's own recap has gone out. Those are pic
 - **Behind the lines that matter more.** On the model on this PC, which answers one request at a time, the interview is always asked for before its hand-over, and the achievements' hand-over is written after the booth interview and the sign-off - so a hand-over never makes those late. On that model the achievements often get the built-in hand-over for that reason.
 - **Only where there's someone to hand to.** No co-host, and the announcer asks the pit lane questions himself; no voice picked for the achievements reader, and the reader doesn't hand back (it would be the host handing back to himself).
 
+#### The achievements read
+
+With commentary on, the AI writes what the achievements reader says, the way it writes for the Technical Lead and the Team Principal. It's given the reader's own facts about each achievement:
+
+- **What it's for**, from the achievement's description on the **Achievements** page, and its tier (bronze, silver, gold or legend).
+- **How rare it is at your club**: how many drivers hold it, and whether anybody had it before tonight.
+- **Where the driver is with them**: their first achievement ever, or how many they have now.
+- **What the reader said earlier tonight**, so each race's read opens differently.
+
+It leads with the biggest one, such as a club first, a gold or legend achievement, or somebody's first ever, and says in a few words what each was for.
+
+A read is only used after HeatCaller has checked it:
+
+- **Every driver and every achievement is in it**: the same drivers and achievements as the built-in read (four drivers at most, three achievements each).
+- **Each achievement is said after the name of a driver who earned it**, so it can't go to the wrong person. When two drivers share one, both names come first.
+- **Nobody else from the race is named**, and no number is used that isn't in the facts.
+- **It doesn't hand back to the host itself.** The hand back is a line of its own.
+
+A read that fails any of these isn't used, and HeatCaller's own read goes out instead. So does a read that isn't written and voiced by the time the achievements come round. HeatCaller's own read is made ready while the recap plays, so the achievements are never late. The console says which read went out, and why.
+
+The read is written as soon as the recap is, before the booth interview and the sign-off, because the achievements play before them. On the model on this PC, which answers one request at a time, the Team Principal is written after it.
+
 #### The commercial break
 
 The model takes real time to write a recap - half a minute is normal and a slow night is longer. The teaser covers the start of that wait; the commercial break covers the rest of it. Your sponsor slides take the crowd's screen, one slide straight into the next, which is what a station does with that gap and what the club was paid for.
@@ -497,7 +519,7 @@ Both are on **Voice → Cast**, a card each. The Technical Lead has the car; the
 | **Heats as well as mains** | Gives the heats a Team Principal as well as the mains. | On |
 | **Only for drivers with a team on their profile** | A driver with a team gets that team's principal; one without gets their own, unless this is ticked. | Off |
 | **Name:** / **Voice:** (Team Principal card) | As for the Technical Lead. Blank is "the team principal". | Blank / the announcer's own voice |
-| **After a race, a third voice reads out the achievements it unlocked** (Achievements reader card) | The achievements the race just unlocked, read out as a segment of the recap rather than called out one at a time at the flag: the announcer throws to the reader, they go over who got what, and it comes back. This one needs no model. | Off |
+| **After a race, a third voice reads out the achievements it unlocked** (Achievements reader card) | The achievements the race just unlocked, read out as a segment of the recap rather than called out one at a time at the flag: the announcer throws to the reader, they go over who got what, and it comes back. With commentary on, the AI writes the reader's words. See [The achievements read](#the-achievements-read). Without it, HeatCaller's own read goes out ("Billy Bob picks up Nail-Biter."), so this works with no model. | Off |
 | **Name:** / **Voice:** (Achievements reader card) | What the announcer calls the reader, and the voice they read in. Blank and they're thrown to but never named. With no voice picked, the announcer's own voice reads them. | Blank / the announcer's own voice |
 
 The two pit-lane tick boxes and the booth tick box are also on the AI Commentary tab - the Team Principal's throw on **Before the start**, the Technical Lead's on **After the flag** and the booth on **Recap show**; ticking either copy ticks both.
@@ -522,7 +544,7 @@ A voice is kept for each engine, so if you switch engine on **Voice → Voice**,
 
 ### Recap show
 
-The recap, and what dresses it up as a TV broadcast. The model writes each part from the race's facts, like the recap itself, so they need commentary to be able to write - the relay or the built-in model - except the honors, which are built from the badges and need no model at all.
+The recap, and what dresses it up as a TV broadcast. The model writes each part from the race's facts, like the recap itself, so they need commentary to be able to write - the relay or the built-in model - except the honors, which have HeatCaller's own read to fall back on and so need no model at all.
 
 | Setting | What it does | Default |
 |---|---|---|
