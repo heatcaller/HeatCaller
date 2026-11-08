@@ -71,6 +71,12 @@ public readonly record struct HonoursRead(string Said, int Badges);
 /// somebody renamed with a line break in it is read out exactly as typed
 /// otherwise.
 ///
+/// THE AI'S READ (7 Nov 2026) is written beside this one, not in here - see
+/// HonoursWriting. It is about the same drivers and badges (<see cref="Picked"/>),
+/// it is checked against them before it may replace the read built here,
+/// and the read built here is what goes out whenever it does not. Both
+/// reasons above still stand; that is why the check exists.
+///
 /// ONE THREAD, like the rotation it uses. See ContinuityVoice: nothing in
 /// here locks anything, and the caller is responsible for picking on the
 /// thread that owns the voice - RaceControlControl.PlanHonours does it in
@@ -222,13 +228,55 @@ public static class RaceHonours
     /// </summary>
     public static HonoursRead? Read(IReadOnlyList<AchievementUnlock>? unlocks)
     {
-        if (unlocks is null || unlocks.Count == 0)
+        var picks = Picked(unlocks);
+
+        if (picks.Count == 0)
         {
             return null;
         }
 
+        var said = new List<string>(picks.Count);
+
+        // DISTINCT BADGE NAMES, not driver-and-badge pairs - see
+        // HonoursRead.Badges, which carries the whole reason. The dedupe in
+        // Picked is per driver, because that is the list being read out;
+        // this one is across the read, because that is what the throw is
+        // about to promise.
+        var titles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        for (var i = 0; i < picks.Count; i++)
+        {
+            foreach (var badge in picks[i].Badges)
+            {
+                titles.Add(badge);
+            }
+
+            said.Add($"{picks[i].Driver} {Verbs[i % Verbs.Length]} {AndList(picks[i].Badges)}.");
+        }
+
+        return new HonoursRead(string.Join(" ", said), titles.Count);
+    }
+
+    /// <summary>
+    /// Who is read out, for what - the drivers and badges <see cref="Read"/>
+    /// names, cleaned and capped (see MostDrivers and MostEach), in the
+    /// evaluator's order. Empty when nothing could be read out.
+    ///
+    /// ITS OWN METHOD (7 Nov 2026) so that the AI's read (HonoursWriting) is
+    /// written about exactly the people and badges the built-in one names:
+    /// the throw promises how many there are "to hand out", and whichever of
+    /// the two reads goes out has to keep that promise.
+    /// </summary>
+    public static IReadOnlyList<HonoursPick> Picked(IReadOnlyList<AchievementUnlock>? unlocks)
+    {
+        if (unlocks is null || unlocks.Count == 0)
+        {
+            return Array.Empty<HonoursPick>();
+        }
+
         var order = new List<string>();
         var byDriver = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var behind = new Dictionary<string, (string Transponder, List<AchievementUnlock> Unlocks)>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var unlock in unlocks)
         {
@@ -257,6 +305,7 @@ public static class RaceHonours
 
                 badges = new List<string>();
                 byDriver[who] = badges;
+                behind[who] = (unlock.Transponder, new List<AchievementUnlock>());
                 order.Add(who);
             }
 
@@ -267,36 +316,13 @@ public static class RaceHonours
             if (badges.Count < MostEach && !badges.Contains(badge, StringComparer.OrdinalIgnoreCase))
             {
                 badges.Add(badge);
+                behind[who].Unlocks.Add(unlock);
             }
         }
 
-        if (order.Count == 0)
-        {
-            return null;
-        }
-
-        var said = new List<string>(order.Count);
-
-        // DISTINCT BADGE NAMES, not driver-and-badge pairs - see
-        // HonoursRead.Badges, which carries the whole reason. The dedupe a
-        // few lines up is per driver, because that is the list being read
-        // out; this one is across the read, because that is what the throw
-        // is about to promise.
-        var titles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        for (var i = 0; i < order.Count; i++)
-        {
-            var badges = byDriver[order[i]];
-
-            foreach (var badge in badges)
-            {
-                titles.Add(badge);
-            }
-
-            said.Add($"{order[i]} {Verbs[i % Verbs.Length]} {AndList(badges)}.");
-        }
-
-        return new HonoursRead(string.Join(" ", said), titles.Count);
+        return order
+            .Select(who => new HonoursPick(who, behind[who].Transponder, byDriver[who], behind[who].Unlocks))
+            .ToList();
     }
 
     /// <summary>

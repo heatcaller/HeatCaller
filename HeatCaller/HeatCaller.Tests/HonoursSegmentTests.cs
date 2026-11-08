@@ -578,7 +578,7 @@ public sealed class HonoursSegmentTests
         // hand: with one, it returns before the individual calls.
         var source = AfterRaceSource;
 
-        var decided = source.IndexOf("_honours = PlanHonours(unlocks);", StringComparison.Ordinal);
+        var decided = source.IndexOf("_honours = PlanHonours(unlocks, record);", StringComparison.Ordinal);
         var calledOut = source.IndexOf("_announcer.NotifyAchievement(unlock.Transponder, unlock.Badge.Name);", StringComparison.Ordinal);
 
         Assert.True(decided > 0, "AwardAchievements no longer builds the honours segment the way this test reads it.");
