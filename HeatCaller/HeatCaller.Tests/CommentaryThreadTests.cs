@@ -1310,6 +1310,11 @@ public sealed class CommentaryThreadTests : IDisposable
             wonLastTonight: true,
             nightOver: true);
 
+        // WHY (8 Nov 2026): the rig's usual "Three heats in" is a figure
+        // these facts do not have, and the number check drops it - see
+        // CommentaryNumberCheck. A line with no figure in it.
+        rig.Model.Answer = "And Dave closes out the night the way it started.";
+
         var said = await rig.Director.NextAsync();
 
         Assert.NotNull(said);

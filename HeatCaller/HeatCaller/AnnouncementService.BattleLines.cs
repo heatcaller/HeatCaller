@@ -399,7 +399,11 @@ public sealed partial class AnnouncementService
             // already given the air, and this is the end of that line.
             var at = HeldOverSlot(_voiceQueue.Select(waiting => waiting.Type).ToList());
 
-            _voiceQueue.Insert(at, new QueuedVoiceItem(type, cut.Pair.BehindId, OnAir: "Battle", Work: async () =>
+            // With the few seconds every lap call has (8 Nov 2026): straight
+            // in, it skipped EnqueueVoiceWork and so the deadline, and "Sam
+            // takes the lead" could be heard behind a queue of v3 renders.
+            _voiceQueue.Insert(at, new QueuedVoiceItem(type, cut.Pair.BehindId, OnAir: "Battle",
+                SayByMs: LapSeenAt(cut.Pair.BehindId) + LapCallSayWithinMs, ShownText: words, Work: async () =>
             {
                 try
                 {

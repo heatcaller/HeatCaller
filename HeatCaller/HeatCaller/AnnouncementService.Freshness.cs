@@ -11,7 +11,15 @@ namespace HeatCaller;
 /// <param name="LeaderLaps">The leader's lap count.</param>
 /// <param name="AtMs">When, on TimingClock.</param>
 /// <param name="SayByMs">The segment's own deadline on TimingClock (its NeedsBy), or null for none.</param>
-public sealed record RaceFactsStamp(long Race, long FastestLaps, long LeadChanges, int LeaderLaps, long AtMs, long? SayByMs = null);
+/// <param name="LeaderLapsAllowed">
+/// How many more laps the leader may complete before the line is out of
+/// date: 1 for a line about the lead or the gaps and laps to go, more for a
+/// fight further back, null for a line no lap by the leader can make untrue
+/// (a record lap, a record in danger). 8 Nov 2026 - see WhyNoLongerTrue.
+/// </param>
+/// <param name="LeadMatters">False for a line a lead change cannot make untrue - a fight for fifth, a record lap.</param>
+public sealed record RaceFactsStamp(long Race, long FastestLaps, long LeadChanges, int LeaderLaps, long AtMs, long? SayByMs = null,
+    int? LeaderLapsAllowed = 1, bool LeadMatters = true);
 
 /// <summary>
 /// Lines that are no longer true by the time they would be heard (8 Nov
@@ -59,6 +67,48 @@ public sealed partial class AnnouncementService
     /// as it comes off the queue and again just before the speaker.
     /// </summary>
     internal const long LapCallSayWithinMs = 6_000;
+
+    /// <summary>
+    /// When each car last crossed the line, on TimingClock - so a call about
+    /// that lap is timed from the crossing, not from when it reached the
+    /// queue (the per-lap batch, the field window and a busy window all sit
+    /// in between). Any thread.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> _lapSeenAtMs = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// While a lap is being handed over: when the timing engine raised it
+    /// (threaded mode), set by the screen delivering it. Null inline, where
+    /// the lap is being handled as it happens. UI thread.
+    /// </summary>
+    public long? LapRaisedAtMs { get; set; }
+
+    /// <summary>
+    /// A standing that comes from a penalty, a lap added or removed by hand -
+    /// Race Control marks these "adjusted" (OnStandingAdjusted). Not a
+    /// crossing: nobody passed anybody on track.
+    /// </summary>
+    internal static bool IsHandAdjustment(RaceStanding standing) =>
+        string.Equals(standing.Status, "adjusted", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Notes a car's crossing - see _lapSeenAtMs.</summary>
+    private void NoteLapSeen(string transponder) =>
+        _lapSeenAtMs[transponder] = LapRaisedAtMs is { } raised && raised <= TimingClock.NowMs ? raised : TimingClock.NowMs;
+
+    /// <summary>
+    /// When the lap a call about this car is about was crossed: its last
+    /// crossing, when that was recent, otherwise now.
+    /// </summary>
+    private long LapSeenAt(string? transponder)
+    {
+        var now = TimingClock.NowMs;
+
+        return transponder is not null
+            && _lapSeenAtMs.TryGetValue(transponder, out var seen)
+            && now - seen is >= 0 and < 2 * LapCallSayWithinMs
+            ? seen
+            : now;
+    }
 
     private long _factsRace;
     private long _factsFastestLaps;
@@ -141,14 +191,17 @@ public sealed partial class AnnouncementService
             return "a quicker lap has been set since it was written";
         }
 
-        if (now.LeadChanges != then.LeadChanges)
+        if (then.LeadMatters && now.LeadChanges != then.LeadChanges)
         {
             return "the lead has changed hands since it was written";
         }
 
         // Its gaps, its laps-to-go and its "last time by" were all read off
-        // the lap before. One lap on, the board says something else.
-        if (now.LeaderLaps > then.LeaderLaps)
+        // the lap before. One lap on, the board says something else - for a
+        // line about the front. A fight further back is given longer, and a
+        // record lap is not made untrue by a lap at all (8 Nov 2026: the
+        // first cut dropped nearly every AI line on a 5.5 s track).
+        if (then.LeaderLapsAllowed is { } allowed && now.LeaderLaps - then.LeaderLaps >= allowed)
         {
             return now.LeaderLaps - then.LeaderLaps == 1
                 ? "the leader has started another lap since it was written"
@@ -173,14 +226,14 @@ public sealed partial class AnnouncementService
 
         if (sayByMs is { } sayBy && TimingClock.NowMs is var now && now > sayBy)
         {
-            return $"it would have started {Seconds(now - sayBy + LapCallSayWithinMs)} after its lap";
+            return $"it was {Seconds(now - sayBy)} past the latest it could still be said";
         }
 
         return null;
     }
 
     /// <summary>The line being said's deadline and facts - set by the voice loop, read once the line is rendered.</summary>
-    private readonly AsyncLocal<(long? SayByMs, RaceFactsStamp? Facts)> _dequeuedFreshness = new();
+    private readonly AsyncLocal<(long? SayByMs, RaceFactsStamp? Facts, string? Shown)> _dequeuedFreshness = new();
 
     /// <summary>
     /// Why the line this voice-loop iteration took off the queue has gone
@@ -188,7 +241,7 @@ public sealed partial class AnnouncementService
     /// </summary>
     private string? WhyDequeuedLineIsStale()
     {
-        var (sayBy, facts) = _dequeuedFreshness.Value;
+        var (sayBy, facts, _) = _dequeuedFreshness.Value;
         return sayBy is null && facts is null ? null : WhyStale(sayBy, facts);
     }
 
@@ -235,6 +288,7 @@ public sealed partial class AnnouncementService
     {
         List<Action>? giveBack = null;
         List<string>? why = null;
+        List<string?>? shown = null;
         int binned;
 
         var now = RaceFactsNow();
@@ -249,11 +303,17 @@ public sealed partial class AnnouncementService
                 }
 
                 (why ??= new List<string>()).Add(reason);
+                (shown ??= new List<string?>()).Add(item.ShownText);
                 return true;
             }, ref giveBack);
         }
 
         GiveBackLost(giveBack);
+
+        foreach (var text in shown ?? [])
+        {
+            WithdrawAnnouncementText(text);
+        }
 
         if (binned > 0)
         {

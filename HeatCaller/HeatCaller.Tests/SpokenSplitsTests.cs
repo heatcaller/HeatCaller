@@ -111,6 +111,27 @@ public sealed class SpokenSplitsTests
         Assert.Equal("level", AnnouncementService.DeltaShown(20));
     }
 
+    [Theory]
+    [InlineData(1300, "down one point three", "down 1.3s")]
+    [InlineData(-1150, "up one point two", "up 1.2s")]
+    [InlineData(2700, "down two point seven", "down 2.7s")]
+    public void The_coach_says_the_tenth_the_screen_shows(long deltaMs, string spoken, string shown)
+    {
+        // 8 Nov 2026: "down 1.3s" on the screen was "down a second and a
+        // half" from the speaker - GapSpoken's halves.
+        Assert.Equal(spoken, AnnouncementService.DeltaSpoken(deltaMs));
+        Assert.Equal(shown, AnnouncementService.DeltaShown(deltaMs));
+    }
+
+    [Theory]
+    [InlineData(1300, "one point three behind your ghost", "+1.3s")]
+    [InlineData(-200, "two tenths ahead of your ghost", "-0.2s")]
+    public void The_ghost_gap_is_said_to_the_tenth_it_is_shown_to(long gapMs, string spoken, string shown)
+    {
+        Assert.Equal(spoken, CoachingWords.GhostGapSpoken(gapMs));
+        Assert.Equal(shown, CoachingWords.GhostGapShown(gapMs));
+    }
+
     [Fact]
     public void A_line_opened_by_a_value_starts_with_a_capital_after_its_tag()
     {

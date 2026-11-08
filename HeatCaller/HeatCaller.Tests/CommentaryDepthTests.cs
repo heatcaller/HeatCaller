@@ -769,6 +769,11 @@ public sealed class CommentaryDepthTests : IDisposable
 
         _rig.Director.OnThisDay = () => new[] { new ClubRaceDay(1, 9, 22, "A-Main", "Sam") };
 
+        // WHY (8 Nov 2026): the rig's usual "Three heats in" is a figure
+        // these facts do not have, and the number check drops it - see
+        // CommentaryNumberCheck. A line with no figure in it.
+        _rig.Model.Answer = "Sam took the A-Main on this day at the club.";
+
         var said = await _rig.Director.NextAsync();
 
         Assert.NotNull(said);

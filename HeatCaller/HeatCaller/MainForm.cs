@@ -1009,6 +1009,10 @@ public partial class MainForm : Form
         _heatCallerVoice = new HeatCallerVoiceClient(_settings);
         _commentary = new CommentaryService(_profiles, _settings, _rivalryStore);
 
+        // A recap or a night's piece the number check dropped (8 Nov 2026)
+        // says so in the console, as a segment the director drops does.
+        _commentary.Log = line => OnClientRawMessage($"{AppTime.LogStampNow()}  {line}");
+
         // Read live, so switching the model on the Voice Settings page takes
         // effect immediately rather than needing a restart.
         _commentary.VoiceSupportsAudioTagsProvider = () => _voiceStore.Current.SupportsAudioTags;

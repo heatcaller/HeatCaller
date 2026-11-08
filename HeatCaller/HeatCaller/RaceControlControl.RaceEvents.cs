@@ -92,7 +92,18 @@ public sealed partial class RaceControlControl
         {
             if (InvokeRequired) { BeginInvoke(() => OnLapProcessed(standing, isValid, isFastestLap)); return; }
             if (_race.DeliveringIsStale) { _announcer.WhileLapCallsAreStale(() => OnLapProcessed(standing, isValid, isFastestLap), _race.DeliveringAgeMs); return; }
-            OnLapProcessed(standing, isValid, isFastestLap);
+
+            // When the engine raised it (8 Nov 2026), so a call about this lap
+            // is timed from the crossing - see AnnouncementService.Freshness.
+            _announcer.LapRaisedAtMs = _race.DeliveringEventRaisedAtMs;
+            try
+            {
+                OnLapProcessed(standing, isValid, isFastestLap);
+            }
+            finally
+            {
+                _announcer.LapRaisedAtMs = null;
+            }
         };
         _race.LapProcessed += _lapProcessedHandler;
 

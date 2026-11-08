@@ -1997,6 +1997,29 @@ public sealed class CommentaryDirector
     internal static bool OpensTheNight(SegmentKind kind) => kind == SegmentKind.ColdOpen;
 
     /// <summary>True for the segments that only make sense while cars are on track.</summary>
+    /// <summary>
+    /// How many laps by the leader an in-race line of this kind outlives
+    /// (8 Nov 2026). A line about the front, the gaps or the laps to go is
+    /// out of date the moment the leader starts another lap; a fight further
+    /// back is given two; a record lap or a record in danger is not made
+    /// untrue by a lap at all - a quicker lap is what does that, and it is
+    /// checked separately. See RaceFactsStamp.
+    /// </summary>
+    internal static int? LeaderLapsAllowedFor(SegmentKind kind, Battle? calling) => kind switch
+    {
+        SegmentKind.PaceNote or SegmentKind.RecordWatch => null,
+        SegmentKind.BattleWatch when calling is { Position: > 1 } => 2,
+        _ => 1,
+    };
+
+    /// <summary>Whether a lead change makes an in-race line of this kind untrue - see LeaderLapsAllowedFor.</summary>
+    internal static bool LeadMattersFor(SegmentKind kind, Battle? calling) => kind switch
+    {
+        SegmentKind.PaceNote or SegmentKind.RecordWatch => false,
+        SegmentKind.BattleWatch when calling is { Position: > 1 } => false,
+        _ => true,
+    };
+
     internal static bool InRace(SegmentKind kind) =>
         kind is SegmentKind.BattleWatch or SegmentKind.PaceNote or SegmentKind.Horizon or SegmentKind.RecordWatch;
 
@@ -2117,7 +2140,12 @@ public sealed class CommentaryDirector
         // with the segment's own deadline, counted to when it is HEARD rather
         // than to when the answer comes back. See AnnouncementService.Freshness.
         var factsAsked = InRace(kind) && RaceFactsNow?.Invoke() is { } stamp
-            ? stamp with { SayByMs = stamp.AtMs + (long)spec.NeedsBy.TotalMilliseconds }
+            ? stamp with
+            {
+                SayByMs = stamp.AtMs + (long)spec.NeedsBy.TotalMilliseconds,
+                LeaderLapsAllowed = LeaderLapsAllowedFor(kind, _calling),
+                LeadMatters = LeadMattersFor(kind, _calling),
+            }
             : null;
 
         // WHY (2026-11-05, Bug hunt 11): the segment's sponsor credit, counted
@@ -2144,9 +2172,30 @@ public sealed class CommentaryDirector
             // once - the relay kept both, so tonight keeps them too.
             RelayCommentaryClient.Charging = charges;
 
-            var written = await WriteAsync(kind, spec, pack, ct, sponsors).ConfigureAwait(false);
+            // WHY (8 Nov 2026): where the number check says which figure it
+            // dropped the line over - see CommentaryNumberCheck.
+            var figures = new FiguresChecked();
+
+            var written = await WriteAsync(kind, spec, pack, ct, sponsors, figures).ConfigureAwait(false);
 
             Budget.Charged(verdict.Ticket, charges.Lines);
+
+            // A NUMBER THAT IS NOT IN ITS FACTS (8 Nov 2026). The line came
+            // back and was thrown away for a figure its facts cannot back -
+            // a lap time nobody set, a count of laps the race does not have.
+            // Never repaired: dropped, like every line below that cannot be
+            // trusted, and said in the console so a club can see why a
+            // moment went quiet. Not recorded, so there is no line to forget.
+            if (written is null && figures.Refused is { } invented)
+            {
+                // The relay kept the charge for this written line, so the budget keeps it too - see below.
+                Budget.Release(verdict.Ticket, written: true);
+                Account.DroppedAfterWriting();
+                sponsors.Unheard();
+
+                Say($"[brain] Dropped {spec.Title.ToLowerInvariant()} - it says {invented}, which is not in its facts.");
+                return null;
+            }
 
             if (written is null)
             {
@@ -2397,7 +2446,7 @@ public sealed class CommentaryDirector
     /// it is worth saying plainly: it only happens when the model ignored
     /// the format, and silence would cost more.
     /// </summary>
-    private async Task<SpokenSegment?> WriteAsync(SegmentKind kind, SegmentSpec spec, PackedFacts pack, CancellationToken ct, SponsorCreditsHeld sponsors)
+    private async Task<SpokenSegment?> WriteAsync(SegmentKind kind, SegmentSpec spec, PackedFacts pack, CancellationToken ct, SponsorCreditsHeld sponsors, FiguresChecked figures)
     {
         // ON THE RECAP SHOW THE SPONSOR IS CREDITED AT THE TOP of the
         // segment (21 Oct 2026), not at its end - see
@@ -2467,8 +2516,16 @@ public sealed class CommentaryDirector
             var turns = await _commentary
                 .BuildExchangeAsync(
                     kind, pack, host, _settings.CommentaryCoHostName,
-                    _settings.CommentaryExchangeTurns, ct, creditFirst, sponsors)
+                    _settings.CommentaryExchangeTurns, ct, creditFirst, sponsors, figures)
                 .ConfigureAwait(false);
+
+            // Dropped for a figure its facts cannot back (8 Nov 2026): not
+            // asked again in one voice - the same facts would be read the
+            // same way, and it would be a second charge for the same moment.
+            if (figures.Refused is not null)
+            {
+                return null;
+            }
 
             if (turns.Count > 0)
             {
@@ -2490,7 +2547,7 @@ public sealed class CommentaryDirector
             Say($"[brain] {spec.Title} came back in one piece rather than two - saying it in one voice.");
         }
 
-        var line = await _commentary.BuildSegmentAsync(kind, pack, ct, creditFirst, sponsors).ConfigureAwait(false);
+        var line = await _commentary.BuildSegmentAsync(kind, pack, ct, creditFirst, sponsors, figures).ConfigureAwait(false);
 
         return string.IsNullOrWhiteSpace(line)
             ? null

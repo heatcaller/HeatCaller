@@ -1517,6 +1517,25 @@ function readFirst(load) {
   return done;
 }
 
+// THE RELAY'S CLOCK (8 Nov 2026, timing review): a snapshot's answer
+// carries the relay's time to the millisecond (x-relay-now), so a page can
+// tell how long ago something the relay stamped happened - a lap's lapAt -
+// whatever this phone's own clock says. relayAhead is the relay's clock
+// minus this phone's, taken at the middle of the read; null until an
+// answer has said.
+let relayAhead = null;
+function learnRelayClock(response, asked, answered) {
+  try {
+    const raw = response && response.headers && typeof response.headers.get === 'function' ? response.headers.get('x-relay-now') : null;
+    const at = raw === null || raw === undefined || raw === '' ? NaN : Number(raw);
+    if (Number.isFinite(at) && at > 0) relayAhead = at - (asked + answered) / 2;
+  } catch (e) { /* not told: what is known stays */ }
+}
+// The relay's time now, or null when no answer has said what it is.
+function relayClock() {
+  return relayAhead === null ? null : Date.now() + relayAhead;
+}
+
 // waitMs (26 Oct 2026): give up after that long, for a view that waits
 // for one read to answer before it asks again (the live page's captions).
 // A read that never came back - a phone moving between networks, venue
@@ -1536,8 +1555,10 @@ async function grab(path, waitMs) {
   const stop = waitMs && typeof AbortController === 'function' ? new AbortController() : null;
   const timer = stop ? setTimeout(() => stop.abort(), waitMs) : 0;
   try {
+    const asked = Date.now();
     const response = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + path,
       stop ? { cache: 'no-store', signal: stop.signal } : { cache: 'no-store' });
+    learnRelayClock(response, asked, Date.now());
     if (!response.ok) {
       // Nothing published yet is an answer worth keeping too; busy or
       // broken is not.
@@ -4278,6 +4299,9 @@ const lapVoice = (function () {
   const WAKE_MS = 300;
   // A call older than this when its turn comes is history, and is dropped.
   const STALE_MS = LATE_MS + WAKE_MS + 1000;
+  // And a lap older than this - counted from when it reached the relay, its
+  // lapAt - is history too: STALE_MS and the second between two reads.
+  const LAP_STALE_MS = STALE_MS + 1000;
   // A twentieth of a second of silence, looped while lap times are on - see holdOn().
   const SILENT = ${JSON.stringify(SILENT_MP3)};
 
@@ -4455,7 +4479,9 @@ const lapVoice = (function () {
   }
 
   // parts: [{ text, clips }] - clips null when there is none for those words.
-  function say(parts, speak) {
+  // lapAt: when the lap reached the relay, on the relay's clock (the row's
+  // lapAt, else the board's publishedAt) - left out for "Lap times on".
+  function say(parts, speak, lapAt) {
     const text = parts.map((p) => p.text).join(', ');
     const groups = parts.map((p) => p.clips);
 
@@ -4467,10 +4493,24 @@ const lapVoice = (function () {
     // only while it is fresh, and the page going away drops whatever is
     // waiting (see the listeners below). The page's next read says the
     // newest lap.
+    //
+    // WHY THE LAP'S OWN TIME TOO (8 Nov 2026, timing review): "made" is
+    // when this page read the lap, so a lap that took its time reaching
+    // the relay, or a read that came back late, was still fresh here - and
+    // its gaps and time left, read with it, were as old. So a call is
+    // fresh only while the lap itself is under LAP_STALE_MS old on the
+    // relay's clock (relayClock(), from the relay's answers). With no
+    // lapAt, or no word yet of the relay's clock, only "made" counts.
     const made = Date.now();
-    const fresh = () => !document.hidden && Date.now() - made <= STALE_MS;
+    const lapAge = () => {
+      const now = relayClock();
+      return now === null || !(typeof lapAt === 'number' && lapAt > 0) ? 0 : now - lapAt;
+    };
+    const fresh = () => !document.hidden && Date.now() - made <= STALE_MS && lapAge() <= LAP_STALE_MS;
     const fallback = () => { if (fresh()) speak(text); };
     if (document.hidden) { stop(); return; }
+    // A lap that is history already is not said at all, in either voice.
+    if (!fresh()) return;
 
     // The list of clips still on its way - "Lap times on", the moment lap
     // times are turned on: waited for, up to LATE_MS, rather than said in
@@ -4479,7 +4519,7 @@ const lapVoice = (function () {
       stop();
       const mine = playing;
       let went = false;
-      waiting.push(() => { if (went || mine !== playing) return; went = true; if (fresh()) say(parts, speak); });
+      waiting.push(() => { if (went || mine !== playing) return; went = true; if (fresh()) say(parts, speak, lapAt); });
       setTimeout(() => { if (went || mine !== playing) return; went = true; fallback(); }, LATE_MS);
       return;
     }
@@ -4763,6 +4803,14 @@ function lvTarget(last, target) {
   return cs <= 200 ? ['tg-m' + cs, off < 0 ? 'tg-under' : 'tg-off'] : null;
 }
 
+// When a row's newest lap reached the relay, on the relay's clock: the
+// relay's own lapAt on the row (8 Nov 2026), else when the board it came
+// in reached the relay (at, its publishedAt), else 0 for not known.
+function lapAtOf(row, at) {
+  if (row && typeof row.lapAt === 'number' && row.lapAt > 0) return row.lapAt;
+  return typeof at === 'number' && at > 0 ? at : 0;
+}
+
 // What the next lap may want: its number, and times near this one.
 function lvAhead(lapNumber, ms) {
   const names = ['best', 'lap' + (lapNumber + 1)];
@@ -4850,8 +4898,8 @@ const lapTalk = (function () {
   }
 
   // A call in the lap voice's clips, or the phone's voice - see LAPVOICE_JS.
-  function call(parts) {
-    lapVoice.say(parts, speak);
+  function call(parts, lapAt) {
+    lapVoice.say(parts, speak, lapAt);
   }
 
   function wake() {
@@ -4919,7 +4967,7 @@ const lapTalk = (function () {
     return cell && typeof cell === 'object' ? String(cell.text || '') : '';
   }
 
-  function take(state) {
+  function take(state, at) {
     show();
     const who = memory;
     if (!on || !unlocked || !who) { heardFor = ''; absent = ''; return; }
@@ -4971,7 +5019,7 @@ const lapTalk = (function () {
       const left = lvLeftPart(say, state);
       if (left) one.push(left);
       lapVoice.warm(['lap2', 'best']);
-      if (one.length > 0) call(one);
+      if (one.length > 0) call(one, lapAtOf(row, at));
       return;
     }
 
@@ -4999,7 +5047,7 @@ const lapTalk = (function () {
     if (left) parts.push(left);
     lapVoice.warm(lvAhead(count + 1, last).concat(lvPlace(pos) || []));
 
-    if (parts.length > 0) call(parts);
+    if (parts.length > 0) call(parts, lapAtOf(row, at));
   }
 
   if (canSpeak && btn) {
@@ -5705,7 +5753,7 @@ function raceMsOf(row) {
 // is no board, and no last race to keep up either.
 function render(state, seen, at, empty) {
   // A copy's laps are not news: only a fresh read is counted for speaking.
-  if (!seen) lapTalk.take(state);
+  if (!seen) lapTalk.take(state, at);
   const rows = Array.isArray(state.standings) ? state.standings : [];
   const running = String(state.state || 'Idle');
 
@@ -10685,8 +10733,8 @@ const nightTalk = (function () {
   }
 
   // A call in the lap voice's clips, or the phone's voice - see LAPVOICE_JS.
-  function call(parts) {
-    lapVoice.say(parts, speak);
+  function call(parts, lapAt) {
+    lapVoice.say(parts, speak, lapAt);
   }
 
   function wake() {
@@ -10752,7 +10800,7 @@ const nightTalk = (function () {
     return (n >= 1 ? n.toFixed(2) : String(n)) + (off < 0 ? ' under target' : ' off target');
   }
 
-  function take(state) {
+  function take(state, at) {
     if (!on || !unlocked) { heardTag = ''; absent = false; return; }
 
     const mineCars = cars();
@@ -10811,7 +10859,7 @@ const nightTalk = (function () {
       const left = lvLeftPart(say, state);
       if (left) one.push(left);
       lapVoice.warm(['lap2', 'best']);
-      if (one.length > 0) call(one);
+      if (one.length > 0) call(one, lapAtOf(row, at));
       return;
     }
 
@@ -10839,7 +10887,7 @@ const nightTalk = (function () {
     if (left) parts.push(left);
     lapVoice.warm(lvAhead(count + 1, last).concat(lvPlace(pos) || []));
 
-    if (parts.length > 0) call(parts);
+    if (parts.length > 0) call(parts, lapAtOf(row, at));
   }
 
   async function read() {
@@ -10847,7 +10895,7 @@ const nightTalk = (function () {
     reading = true;
     try {
       const a = await grab('/snapshot/state', 5000);
-      if (a && a.body && a.body.body) take(a.body.body);
+      if (a && a.body && a.body.body) take(a.body.body, Date.parse(a.body.publishedAt) || 0);
     } catch (e) {
       // A read that failed is tried again in a second; nothing is lost,
       // because the next one still has every lap.

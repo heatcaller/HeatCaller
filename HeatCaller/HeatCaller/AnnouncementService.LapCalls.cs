@@ -616,6 +616,7 @@ public sealed partial class AnnouncementService
                     // and the screens are given the new words. See
                     // PositionReportOrder.
                     var said = text;
+                    IReadOnlyList<PositionReportOrder.Row> worded = rows;
 
                     if (RunningOrderNow(depth) is { Count: >= 2 } now && PositionReportOrder.Moved(rows, now))
                     {
@@ -624,6 +625,7 @@ public sealed partial class AnnouncementService
                         if (reworded.Length > 0)
                         {
                             said = (reworded + sponsorTag).Trim();
+                            worded = now;
                             StatusMessage?.Invoke(
                                 "[voice] Position report worded again - the order moved while it waited for the speaker (\""
                                 + text + "\" is now \"" + said + "\").");
@@ -631,7 +633,13 @@ public sealed partial class AnnouncementService
                         }
                     }
 
+                    // And again once it is rendered (8 Nov 2026): on eleven_v3
+                    // that is seconds, long enough for the order or its gaps to
+                    // move again. Not worded a third time - dropped.
                     await SynthesizeAndPlayAsync(said, "[voice] Position report", speedOverride: reportSpeed,
+                        whyNotNow: () => RunningOrderNow(depth) is { Count: >= 2 } after && PositionReportOrder.Moved(worded, after)
+                            ? "the order moved while it was being rendered"
+                            : null,
                         spoken: () =>
                         {
                             heard = true;
@@ -928,6 +936,13 @@ public sealed partial class AnnouncementService
 
     private void HandleStandingUpdated(RaceStanding standing)
     {
+        // A crossing - not a correction by hand - starts the clock on every
+        // call about it (8 Nov 2026). See AnnouncementService.Freshness.
+        if (!IsHandAdjustment(standing))
+        {
+            NoteLapSeen(standing.Transponder);
+        }
+
         _standings[standing.Transponder] = standing;
 
         // The copy for readers off this thread is taken here, on the one

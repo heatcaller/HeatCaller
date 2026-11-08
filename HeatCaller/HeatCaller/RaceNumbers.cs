@@ -288,9 +288,14 @@ internal static class RaceNumbers
         // is given in minutes by anybody saying it out loud. Under a
         // second it is a decoder fault or a session clock being read as a
         // lap, and "zero forty-five" is not a lap time in any language.
+        //
+        // WHY (8 Nov 2026): to the thousandth when there is one, not
+        // Plainly's hundredths. A 61.235 lap was said "sixty-one point two
+        // four seconds" under a screen that showed 61.235s - the same
+        // mismatch the 31 Oct note above fixed for every shorter lap.
         if (ms < 0 || whole is <= 0 or >= 60)
         {
-            return Plainly(ms);
+            return PlainlyToTheThousandth(ms);
         }
 
         if (thousandths == 0)
@@ -320,7 +325,43 @@ internal static class RaceNumbers
         var tenthSaid = tenth == 0 ? "oh" : Words(tenth);
         var pairSaid = pair < 10 ? $"oh {Words(pair)}" : Words(pair);
 
-        return $"{Words(whole)} {tenthSaid} {pairSaid}";
+        // A "POINT" AFTER TWENTY, THIRTY, FORTY AND FIFTY when the tenth
+        // follows as a lone digit (8 Nov 2026). Heard, the hyphen is not
+        // there: 30.425 read "thirty four twenty-five" is exactly 34.250's
+        // "thirty-four twenty-five", and 20.506's "twenty five oh six" is
+        // 25.060. "Thirty point four twenty-five" cannot be anything else -
+        // no other lap reading says "point" - and every other whole number
+        // ends in a word that no single digit can be joined onto.
+        // RaceNumbersTests checks every lap from 1.000 to 59.999.
+        var point = whole >= 20 && whole % 10 == 0 && tenth != 0 ? " point" : string.Empty;
+
+        return $"{Words(whole)}{point} {tenthSaid} {pairSaid}";
+    }
+
+    /// <summary>
+    /// <see cref="Plainly"/> with the thousandth kept when there is one -
+    /// "sixty-one point two three five seconds" - for a time a screen shows
+    /// to the thousandth (8 Nov 2026): a lap outside the lap-time
+    /// convention, and a heat's run time. With nothing in the thousandth it
+    /// is Plainly's reading, word for word.
+    /// </summary>
+    internal static string PlainlyToTheThousandth(long ms)
+    {
+        if (ms < 0)
+        {
+            return "minus " + PlainlyToTheThousandth(-ms);
+        }
+
+        if (ms % 10 == 0)
+        {
+            return Plainly(ms);
+        }
+
+        var digits = (ms % 1000)
+            .ToString("000", System.Globalization.CultureInfo.InvariantCulture)
+            .Select(ch => Small[ch - '0']);
+
+        return $"{Words(ms / 1000)} point {string.Join(" ", digits)} seconds";
     }
 
     /// <summary>
@@ -334,6 +375,14 @@ internal static class RaceNumbers
     /// </summary>
     internal static string Plainly(long ms)
     {
+        // WHY (8 Nov 2026): a negative time gave "point - five zero" - the
+        // sign landed in the digits, which are spelled one character at a
+        // time. A minus is said as a word, before the figure.
+        if (ms < 0)
+        {
+            return "minus " + Plainly(-ms);
+        }
+
         var centiseconds = (long)Math.Round(ms / 10.0);
         var whole = centiseconds / 100;
         var hundredths = centiseconds % 100;
@@ -489,6 +538,61 @@ internal static class RaceNumbers
         var after = string.Join(" ", digits.Select(ch => ch == '0' ? "oh" : Small[ch - '0']));
 
         return whole == 0 ? $"point {after}" : $"{Words(whole)} point {after}";
+    }
+
+    /// <summary>
+    /// A gap in whole tenths, half up, from the milliseconds - the one
+    /// rounding a gap shown as "1.3s" and the same gap said both use
+    /// (8 Nov 2026). Integer arithmetic, because "0.0" on ms / 1000.0 rounds
+    /// a 1.150 to "1.1" (the double is 1.1499...) and a 1.250 to "1.3".
+    /// </summary>
+    internal static long TenthsOf(long ms) => (Math.Abs(ms) + 50) / 100;
+
+    /// <summary>A gap of <paramref name="tenths"/> tenths on a screen: "1.3s".</summary>
+    internal static string TenthsShown(long tenths) =>
+        $"{tenths / 10}.{tenths % 10}s";
+
+    /// <summary>
+    /// A gap of <paramref name="tenths"/> tenths SAID, agreeing with
+    /// <see cref="TenthsShown"/> to the tenth: "a tenth", "half a second",
+    /// "a second", "one point three", "a second and a half", "twelve point
+    /// three".
+    ///
+    /// WHY (8 Nov 2026): the split and ghost lines showed "down 1.3s" and
+    /// said it through <see cref="GapSpoken"/>, which rounds past a second
+    /// to the half - "down a second and a half" under a screen that said
+    /// 1.3. That is the mistake the position report made and GapExactly
+    /// fixed: rounding is heard as the wrong gap. The tenths are said as
+    /// GapExactly says its digits, with no "seconds" after a point.
+    /// </summary>
+    internal static string GapInTenths(long tenths)
+    {
+        tenths = Math.Abs(tenths);
+
+        if (tenths == 0)
+        {
+            return "nothing";
+        }
+
+        if (tenths < 10)
+        {
+            return tenths switch
+            {
+                1 => "a tenth",
+                5 => "half a second",
+                _ => $"{Words(tenths)} tenths",
+            };
+        }
+
+        var whole = tenths / 10;
+        var tenth = tenths % 10;
+
+        return tenth switch
+        {
+            0 => whole == 1 ? "a second" : $"{Words(whole)} seconds",
+            5 => whole == 1 ? "a second and a half" : $"{Words(whole)} and a half seconds",
+            _ => $"{Words(whole)} point {Small[tenth]}",
+        };
     }
 
     /// <summary>

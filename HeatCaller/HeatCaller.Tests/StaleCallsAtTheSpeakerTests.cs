@@ -87,6 +87,111 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
             AnnouncementService.WhyNoLongerTrue(Facts(), Facts(fastest: 4, leaderLaps: 6)));
     }
 
+    // --- How long each kind of AI line lasts (8 Nov 2026, second pass) -------
+
+    [Fact]
+    public void A_record_lap_line_is_not_made_untrue_by_laps_or_a_new_leader()
+    {
+        var then = Facts(leaderLaps: 3) with { LeaderLapsAllowed = null, LeadMatters = false };
+
+        Assert.Null(AnnouncementService.WhyNoLongerTrue(then, Facts(leaderLaps: 9, leads: 4)));
+
+        // A quicker lap still does.
+        Assert.NotNull(AnnouncementService.WhyNoLongerTrue(then, Facts(leaderLaps: 4, fastest: 4)));
+    }
+
+    [Fact]
+    public void A_fight_further_back_outlives_one_lap_by_the_leader_but_not_two()
+    {
+        var then = Facts(leaderLaps: 3) with { LeaderLapsAllowed = 2, LeadMatters = false };
+
+        Assert.Null(AnnouncementService.WhyNoLongerTrue(then, Facts(leaderLaps: 4, leads: 2)));
+        Assert.Equal("the leader has done 2 more laps since it was written",
+            AnnouncementService.WhyNoLongerTrue(then, Facts(leaderLaps: 5)));
+    }
+
+    [Theory]
+    [InlineData(SegmentKind.PaceNote, 0, null, false)]
+    [InlineData(SegmentKind.RecordWatch, 0, null, false)]
+    [InlineData(SegmentKind.Horizon, 0, 1, true)]
+    [InlineData(SegmentKind.BattleWatch, 1, 1, true)]
+    [InlineData(SegmentKind.BattleWatch, 3, 2, false)]
+    public void Each_kind_of_in_race_line_gets_its_own_life(SegmentKind kind, int battleFor, int? lapsAllowed, bool leadMatters)
+    {
+        var battle = battleFor > 0 ? new Battle("A", "B", battleFor, 6, TimeSpan.FromSeconds(30), 0.2, 0.3, 0) : null;
+
+        Assert.Equal(lapsAllowed, CommentaryDirector.LeaderLapsAllowedFor(kind, battle));
+        Assert.Equal(leadMatters, CommentaryDirector.LeadMattersFor(kind, battle));
+    }
+
+    // --- Screens show the real name ------------------------------------------
+
+    [Fact]
+    public void The_screens_get_the_real_name_back_from_the_voices_spelling()
+    {
+        var profiles = new[]
+        {
+            new DriverProfile { Transponder = "1", DriverName = "Ella Vator", AnnouncerName = "Ela vayter" },
+            new DriverProfile { Transponder = "2", DriverName = "Al Gorithim", AnnouncerName = "Yo yo yo" },
+            new DriverProfile { Transponder = "3", DriverName = "Terry Byte" },
+        };
+
+        Assert.Equal("Ella Vator finds another gear - 7.253s.",
+            AnnouncementService.WithScreenNames("Ela vayter finds another gear - 7.253s.", profiles));
+        Assert.Equal("Al Gorithim beats their own time, Terry Byte leads.",
+            AnnouncementService.WithScreenNames("Yo yo yo beats their own time, Terry Byte leads.", profiles));
+    }
+
+    [Fact]
+    public void Only_whole_words_are_given_back()
+    {
+        var profiles = new[] { new DriverProfile { Transponder = "1", DriverName = "Maxine Power", AnnouncerName = "Max" } };
+
+        Assert.Equal("Maximum attack from Maxine Power!",
+            AnnouncementService.WithScreenNames("Maximum attack from Max!", profiles));
+    }
+
+    [Fact]
+    public void A_hand_correction_is_not_a_crossing()
+    {
+        Assert.True(AnnouncementService.IsHandAdjustment(new RaceStanding { Transponder = "1", Status = "adjusted" }));
+        Assert.False(AnnouncementService.IsHandAdjustment(new RaceStanding { Transponder = "1", Status = "active" }));
+    }
+
+    [Fact]
+    public void The_feed_marks_a_line_that_was_dropped_unheard()
+    {
+        Assert.Equal("13:11:37   Best lap - Terry Byte   (not said - out of date)",
+            AnnouncerControl.FeedLineNotSaid("13:11:37   Best lap - Terry Byte"));
+    }
+
+    [Fact]
+    public void Dropped_lines_are_taken_back_off_the_screens_and_the_order_is_checked_after_rendering()
+    {
+        var queue = Source("AnnouncementService.VoiceQueue.cs");
+
+        Assert.Contains("WithdrawAnnouncementText(shown);", queue, StringComparison.Ordinal);
+        Assert.Contains("WithdrawAnnouncementText(_dequeuedFreshness.Value.Shown);", queue, StringComparison.Ordinal);
+        Assert.Contains("_announcer.AnnouncementTextWithdrawn += OnAnnouncementTextWithdrawn;", Source("BigScreenForm.cs"), StringComparison.Ordinal);
+        Assert.Contains("announcer.AnnouncementTextWithdrawn += OnAnnouncementTextWithdrawn;", Source("AnnouncerControl.cs"), StringComparison.Ordinal);
+        Assert.Contains("\"the order moved while it was being rendered\"", Source("AnnouncementService.LapCalls.cs"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_battle_pass_call_has_the_few_seconds_every_lap_call_has()
+    {
+        Assert.Contains("SayByMs: LapSeenAt(cut.Pair.BehindId) + LapCallSayWithinMs", Source("AnnouncementService.BattleLines.cs"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_scheduled_line_no_longer_bins_the_lap_calls()
+    {
+        var queue = Source("AnnouncementService.VoiceQueue.cs");
+
+        Assert.Contains("&& !(type == AnnouncementEventType.Reminder && IsLapBoundCall(item.Type))", queue, StringComparison.Ordinal);
+        Assert.Contains("waiting.Facts is not null || waiting.Type == AnnouncementEventType.Reminder", queue, StringComparison.Ordinal);
+    }
+
     // --- Which calls are about the lap just done ----------------------------
 
     [Theory]
@@ -367,7 +472,7 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
         Assert.Contains("if (WhyDequeuedLineIsStale() is { } stale)", queue, StringComparison.Ordinal);
 
         // A lap call gets its deadline when none is given.
-        Assert.Contains("sayByMs ??= IsLapBoundCall(type) ? TimingClock.NowMs + LapCallSayWithinMs : null;", queue, StringComparison.Ordinal);
+        Assert.Contains("sayByMs ??= IsLapBoundCall(type) ? LapSeenAt(transponder) + LapCallSayWithinMs : null;", queue, StringComparison.Ordinal);
 
         // An AI line no longer bins the lap calls ahead of it.
         Assert.Contains("if (isPriority && facts is null)", queue, StringComparison.Ordinal);
@@ -386,5 +491,43 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
 
         Assert.Contains("_director.RaceFactsNow = _announcer.RaceFactsNow;", host, StringComparison.Ordinal);
         Assert.Contains("facts: said.Facts", host, StringComparison.Ordinal);
+    }
+
+    // --- Playing a segment again (8 Nov 2026) -----------------------------
+
+    private static SpokenSegment InRace(RaceFactsStamp? facts) =>
+        new(SegmentKind.Horizon, "Dave is a second behind Carl, with nine laps left.", Array.Empty<ExchangeTurn>()) { Facts = facts };
+
+    [Fact]
+    public void An_in_race_segment_the_race_has_moved_past_is_not_played_again()
+    {
+        var why = RaceControlControl.WhyNotToReplay(InRace(Facts()), Facts(leaderLaps: 8));
+
+        Assert.Equal("the leader has done 3 more laps since it was written", why);
+    }
+
+    [Fact]
+    public void An_in_race_segment_still_true_may_be_played_again()
+    {
+        var then = Facts(sayBy: 130_000);
+
+        Assert.Null(RaceControlControl.WhyNotToReplay(InRace(then), then with { AtMs = 110_000 }));
+    }
+
+    [Fact]
+    public void A_segment_from_between_races_is_always_true_to_play_again()
+    {
+        Assert.Null(RaceControlControl.WhyNotToReplay(InRace(null), Facts(race: 9, leaderLaps: 0)));
+    }
+
+    [Fact]
+    public void A_replay_carries_its_facts_to_the_speaker_and_says_why_it_will_not()
+    {
+        var replay = Source("RaceControlControl.Broadcast.cs");
+
+        Assert.Contains("WhyNotToReplay(last, _announcer.RaceFactsNow())", replay, StringComparison.Ordinal);
+        Assert.Contains("[show] Not playing {named} again - {untrue}.", replay, StringComparison.Ordinal);
+        Assert.Contains("_announcer.SpeakReminder(last.Text, showOnScreens: true, onAir: named, facts: last.Facts);", replay, StringComparison.Ordinal);
+        Assert.Contains("facts: last.Facts);", replay, StringComparison.Ordinal);
     }
 }

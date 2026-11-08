@@ -138,8 +138,14 @@ public sealed class RaceHorizon
 
         public int Position { get; set; }
 
-        /// <summary>The samples kept, oldest first, each with the lap it was taken on.</summary>
+        /// <summary>
+        /// The samples kept, oldest first, each with the lap it was taken on -
+        /// the CHASING car's lap where the feed says it, see Observe.
+        /// </summary>
         public List<(int Lap, double Gap)> Seen { get; } = new();
+
+        /// <summary>The pair as last seen, for its penalties - see the penalty note in Observe.</summary>
+        public PairGap LastPair { get; set; }
     }
 
     private readonly Dictionary<string, Trail> _trails = new(StringComparer.Ordinal);
@@ -160,6 +166,21 @@ public sealed class RaceHorizon
     /// rate off two samples is one lap's noise reported as a trend.
     /// </summary>
     public int Window { get; set; } = 4;
+
+    /// <summary>
+    /// The fewest samples a rate is taken over - and they must span at least
+    /// <see cref="LeastLapsSpanned"/> laps.
+    ///
+    /// THE WINDOW'S OWN RULE, NOW KEPT (8 Nov 2026). Read gave a rate off
+    /// two samples a lap apart, which is the "one lap's noise reported as a
+    /// trend" the window note warns about: one bobble came out as "the gap
+    /// is going out by 0.70s a lap". Three readings over two laps at least
+    /// is a direction, not a moment.
+    /// </summary>
+    public const int LeastSamples = 3;
+
+    /// <summary>The fewest laps a rate is taken over. See <see cref="LeastSamples"/>.</summary>
+    public const int LeastLapsSpanned = 2;
 
     /// <summary>
     /// The smallest per-lap change that counts as a trend rather than
@@ -197,8 +218,9 @@ public sealed class RaceHorizon
     /// </summary>
     /// <param name="pairs">Adjacent pairs as this tick sees them.</param>
     /// <param name="lapsRun">
-    /// The leader's lap count. The clock the rate is measured against - see
-    /// the per-lap note on the class.
+    /// The leader's lap count. The clock the rate is measured against when
+    /// a pair does not carry <see cref="PairGap.BehindLaps"/> - see the
+    /// per-lap note on the class, and Observe's note on whose lap it is.
     /// </param>
     /// <param name="lapsLeft">
     /// How many laps are left to run, as the race knows it. Nought or
@@ -243,9 +265,21 @@ public sealed class RaceHorizon
 
             if (!_trails.TryGetValue(key, out var trail))
             {
-                trail = new Trail { AheadId = pair.AheadId, BehindId = pair.BehindId };
+                trail = new Trail { AheadId = pair.AheadId, BehindId = pair.BehindId, LastPair = pair };
                 _trails[key] = trail;
             }
+
+            // A PENALTY IS NOT PACE (8 Nov 2026). The gap is race time, which
+            // carries the penalties, so a sample before a penalty and one
+            // after differ by the penalty: a one second penalty read as "the
+            // gap is going out by a second a lap". The rate starts again from
+            // the race as it now stands; the trail and its cooldown are kept.
+            if (pair.PenaltiesChangedSince(trail.LastPair))
+            {
+                trail.Seen.Clear();
+            }
+
+            trail.LastPair = pair;
 
             // KEPT IN THE ORDER THE TICK SEES THEM, so a pair that swaps
             // places is still the same trail. The key is order-independent
@@ -271,16 +305,27 @@ public sealed class RaceHorizon
             // ONE SAMPLE PER LAP. The ticks are a half-second timer, so
             // without this the window would hold two seconds of history
             // and the rate would be taken over no laps at all.
-            if (trail.Seen.Count > 0 && trail.Seen[^1].Lap == lapsRun)
+            //
+            // THE CHASING CAR'S LAP, NOT THE LEADER'S (8 Nov 2026). The gap
+            // at the line only changes when the car behind crosses
+            // (RaceGaps), so keyed on the leader's laps the sample taken
+            // just after the leader crossed was the previous gap again under
+            // a new lap number - the rate was divided by a lap that had not
+            // been measured, about a third too low over four samples. Keyed
+            // on the car behind, each sample is a new reading. The leader's
+            // count is the fallback for a feed that does not say.
+            var lap = pair.BehindLaps > 0 ? pair.BehindLaps : lapsRun;
+
+            if (trail.Seen.Count > 0 && trail.Seen[^1].Lap == lap)
             {
-                trail.Seen[^1] = (lapsRun, pair.GapSeconds);
+                trail.Seen[^1] = (lap, pair.GapSeconds);
             }
             else
             {
-                trail.Seen.Add((lapsRun, pair.GapSeconds));
+                trail.Seen.Add((lap, pair.GapSeconds));
             }
 
-            while (trail.Seen.Count > Math.Max(2, Window))
+            while (trail.Seen.Count > Math.Max(LeastSamples, Window))
             {
                 trail.Seen.RemoveAt(0);
             }
@@ -360,7 +405,8 @@ public sealed class RaceHorizon
 
     private Horizon? Read(Trail trail)
     {
-        if (trail.Seen.Count < 2)
+        // Three readings over two laps at least - see LeastSamples.
+        if (trail.Seen.Count < LeastSamples)
         {
             return null;
         }
@@ -371,7 +417,7 @@ public sealed class RaceHorizon
 
         // A rate needs laps to be a rate - see the per-lap note on the
         // class. Several samples taken on the same lap are one sample.
-        if (laps <= 0)
+        if (laps < LeastLapsSpanned)
         {
             return null;
         }

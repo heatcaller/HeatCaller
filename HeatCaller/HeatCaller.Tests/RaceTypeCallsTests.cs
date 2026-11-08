@@ -85,7 +85,10 @@ public sealed class RaceTypeCallsTests
             _ => (0.40, 0.90),
         };
 
-        watch.Observe(new[] { new PairGap("carl", "dave", 1, first, 0) }, 5, road.Laps, road.Estimated, road.TimeLeft);
+        // Three readings over two laps - the fewest a rate is taken over
+        // since 8 Nov 2026 (RaceHorizon.LeastSamples).
+        watch.Observe(new[] { new PairGap("carl", "dave", 1, first, 0) }, 4, road.Laps, road.Estimated, road.TimeLeft);
+        watch.Observe(new[] { new PairGap("carl", "dave", 1, (first + second) / 2, 0) }, 5, road.Laps, road.Estimated, road.TimeLeft);
         watch.Observe(new[] { new PairGap("carl", "dave", 1, second, 0) }, 6, road.Laps, road.Estimated, road.TimeLeft);
 
         var horizon = watch.Pick();

@@ -2167,7 +2167,10 @@ public partial class AnnouncerControl
                 ordered[i + 1].TransponderId,
                 i + 1,
                 gap.GapMs is { } ms ? ms / 1000.0 : double.NaN,
-                gap.LapsDown));
+                gap.LapsDown,
+                ordered[i + 1].Laps,
+                ordered[i].PenaltyMs,
+                ordered[i + 1].PenaltyMs));
         }
 
         return pairs;

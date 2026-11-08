@@ -50,7 +50,8 @@ public sealed partial class AnnouncementService
     /// </param>
     /// <param name="SayByMs">The TimingClock time it must start by or not be said - a lap call's, or a clock call's. See AnnouncementService.Freshness.</param>
     /// <param name="Facts">For an AI line written during a race, the race it was written against. See AnnouncementService.Freshness.</param>
-    private sealed record QueuedVoiceItem(AnnouncementEventType Type, string? Transponder, Func<Task> Work, string? OnAir = null, BattleLine? Battle = null, long? SayByMs = null, RaceFactsStamp? Facts = null);
+    /// <param name="ShownText">What was put on the screens for it when it was queued - taken back if it is dropped as out of date. See AnnouncementTextWithdrawn.</param>
+    private sealed record QueuedVoiceItem(AnnouncementEventType Type, string? Transponder, Func<Task> Work, string? OnAir = null, BattleLine? Battle = null, long? SayByMs = null, RaceFactsStamp? Facts = null, string? ShownText = null);
 
     private readonly List<QueuedVoiceItem> _voiceQueue = new();
     private readonly object _voiceQueueLock = new();
@@ -668,7 +669,7 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        var clean = VoiceProfile.StripAudioTags(text);
+        var clean = ForTheScreens(text);
 
         // A line that was nothing but tags has nothing to show.
         if (string.IsNullOrWhiteSpace(clean))
@@ -677,6 +678,72 @@ public sealed partial class AnnouncementService
         }
 
         AnnouncementTextReady?.Invoke(clean);
+    }
+
+    /// <summary>A line as the screens show it: no audio tags, real names. See WithScreenNames.</summary>
+    private string ForTheScreens(string text) =>
+        WithScreenNames(VoiceProfile.StripAudioTags(text), _profiles.AllIncludingGhosts);
+
+    /// <summary>
+    /// Puts each driver's real name back where the line has the name the
+    /// voice is given instead (8 Nov 2026, review). A club sets an announcer
+    /// name - a nickname, or a respelling like "Ela vayter" so the voice says
+    /// it right - and every call built for the voice carried it to the Big
+    /// Screen and the feed, though ScreenNameFor already says a screen must
+    /// show the real name. Done here, once, because some twenty calls build
+    /// one string for both. Whole words only, longest first.
+    /// </summary>
+    internal static string WithScreenNames(string text, IEnumerable<DriverProfile> profiles)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return text;
+        }
+
+        foreach (var profile in profiles
+                     .Where(p => !string.IsNullOrWhiteSpace(p.AnnouncerName) && !string.IsNullOrWhiteSpace(p.DriverName)
+                                 && !string.Equals(p.AnnouncerName.Trim(), p.DriverName.Trim(), StringComparison.Ordinal))
+                     .OrderByDescending(p => p.AnnouncerName.Trim().Length))
+        {
+            var said = profile.AnnouncerName.Trim();
+
+            if (!text.Contains(said, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            text = System.Text.RegularExpressions.Regex.Replace(
+                text,
+                $@"(?<![\w']){System.Text.RegularExpressions.Regex.Escape(said)}(?![\w'])",
+                profile.DriverName.Trim().Replace("$", "$$", StringComparison.Ordinal));
+        }
+
+        return text;
+    }
+
+    /// <summary>
+    /// A line put on the screens (AnnouncementTextReady) that is then dropped
+    /// unheard because the race made it untrue - so the Big Screen stops
+    /// showing it and the Announcer feed stops listing it as said. The same
+    /// text AnnouncementTextReady carried. Any thread. 8 Nov 2026 - see
+    /// AnnouncementService.Freshness.
+    /// </summary>
+    public event Action<string>? AnnouncementTextWithdrawn;
+
+    /// <summary>Takes back a line RaiseAnnouncementText put up - see AnnouncementTextWithdrawn.</summary>
+    private void WithdrawAnnouncementText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        var clean = ForTheScreens(text);
+
+        if (!string.IsNullOrWhiteSpace(clean))
+        {
+            AnnouncementTextWithdrawn?.Invoke(clean);
+        }
     }
 
     /// <summary>
@@ -1415,6 +1482,7 @@ public sealed partial class AnnouncementService
                 if (WhyDequeuedLineIsStale() is { } stale)
                 {
                     StatusMessage?.Invoke($"[voice] Reminder (prepared): dropped \"{prepared.Text}\" - {stale}.");
+                    WithdrawAnnouncementText(prepared.DisplayText);
                     return;
                 }
 
@@ -1507,10 +1575,17 @@ public sealed partial class AnnouncementService
                 // second only the words that cannot follow a lap make it
                 // one - "5.06s down from 5.2s" is a lap time going down.
                 var after = match.Groups["post"].Value;
+                var before = match.Groups["pre"].Value;
 
+                // WHY (8 Nov 2026): "just", "only", "mere" and "barely" go in
+                // front of a lap as often as a gap - "a best lap of just
+                // 5.06s" was said "five seconds", a lap rounded to the half
+                // second. Over a second they make a gap only with a gap word
+                // after ("only 1.2s behind"), as LapCanBe's words do.
                 var readsAsGap = whole == 0
                     || (GapWordsAfter.Contains(after) && (whole < 1 || !LapCanBe(after)))
-                    || GapWordsBefore.Contains(match.Groups["pre"].Value);
+                    || GapWordsBefore.Contains(before)
+                    || (GapOrLapWordsBefore.Contains(before) && GapWordsAfter.Contains(after));
 
                 return readsAsGap
                     ? RaceNumbers.MarginSpoken(ms / 1000.0)
@@ -1540,7 +1615,7 @@ public sealed partial class AnnouncementService
 
     /// <summary>
     /// Words that, straight BEFORE a figure, make it a gap: "by 0.04s",
-    /// "within 0.3s", "just 0.2s".
+    /// "within 0.3s".
     ///
     /// NOT "of" and NOT "under", which both look like gap words and are
     /// far commoner in front of a lap: "a best lap of 5.06s", "the first
@@ -1549,7 +1624,18 @@ public sealed partial class AnnouncementService
     /// </summary>
     private static readonly HashSet<string> GapWordsBefore = new(StringComparer.OrdinalIgnoreCase)
     {
-        "by", "within", "just", "only", "mere", "barely",
+        "by", "within",
+    };
+
+    /// <summary>
+    /// Words that go in front of a gap OR a lap - "just 0.2s", "only 1.2s
+    /// behind", but also "a best lap of just 5.06s" - so they make a gap
+    /// only under a second or with a gap word after (8 Nov 2026). They were
+    /// in <see cref="GapWordsBefore"/>, and the lap came out "five seconds".
+    /// </summary>
+    private static readonly HashSet<string> GapOrLapWordsBefore = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "just", "only", "mere", "barely",
     };
 
     public AnnouncementService(ProfileStore profiles, VoiceSettingsStore voiceStore, SoundEffectsStore soundStore, RivalryStore? rivalries = null)

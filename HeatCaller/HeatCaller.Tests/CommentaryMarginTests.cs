@@ -51,4 +51,65 @@ public sealed class CommentaryMarginTests
         Assert.StartsWith("comfortable", text);
         Assert.Contains("8.000s", text);
     }
+
+    // ------------------------------------------------------------------
+    //  8 Nov 2026 - a margin and a fastest lap only from classified cars
+    // ------------------------------------------------------------------
+
+    private static SessionResultEntry Out(SessionResultEntry entry, string outcome)
+    {
+        entry.Outcome = outcome;
+        return entry;
+    }
+
+    [Theory]
+    [InlineData(ResultEditor.Dq)]
+    [InlineData(ResultEditor.Dnf)]
+    public void A_margin_is_not_measured_to_a_car_that_was_not_classified(string outcome)
+    {
+        // A DQ a hundredth behind the winner was "a photo finish".
+        var text = CommentaryService.DescribeMargin(new List<SessionResultEntry>
+        {
+            Finisher(1, 6_000),
+            Out(Finisher(2, 6_010), outcome),
+        });
+
+        Assert.DoesNotContain("photo finish", text);
+        Assert.DoesNotContain("0.010s", text);
+        Assert.Contains("only one classified finisher", text);
+    }
+
+    [Fact]
+    public void A_margin_skips_an_unclassified_car_to_the_next_finisher()
+    {
+        var text = CommentaryService.DescribeMargin(new List<SessionResultEntry>
+        {
+            Finisher(1, 6_000),
+            Out(Finisher(2, 6_010), ResultEditor.Dq),
+            Finisher(3, 14_000),
+        });
+
+        Assert.StartsWith("comfortable", text);
+        Assert.Contains("8.000s", text);
+    }
+
+    [Fact]
+    public void The_fastest_lap_of_the_race_is_never_a_disqualified_driver_s()
+    {
+        var winner = Finisher(1, 6_000);
+        winner.Transponder = "win";
+        winner.FastLapMs = 5_400;
+
+        var thrownOut = Out(Finisher(2, 6_100), "dsq");
+        thrownOut.Transponder = "dq";
+        thrownOut.FastLapMs = 5_100;
+
+        var retired = Out(Finisher(3, 6_200), ResultEditor.Dnf);
+        retired.Transponder = "dnf";
+        retired.FastLapMs = 5_300;
+
+        Assert.Equal("dnf", CommentaryService.FastestLapOf(new[] { winner, thrownOut, retired })!.Transponder);
+        Assert.Equal("win", CommentaryService.FastestLapOf(new[] { winner, thrownOut })!.Transponder);
+        Assert.Null(CommentaryService.FastestLapOf(new[] { thrownOut }));
+    }
 }

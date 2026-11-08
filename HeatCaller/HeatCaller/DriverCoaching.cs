@@ -113,7 +113,10 @@ internal static class CoachingWords
             return "on target";
         }
 
-        var gap = RaceNumbers.GapSpoken(Math.Abs(delta) / 1000.0);
+        // WHY (8 Nov 2026): to the tenth PaceShown gives, not GapSpoken's
+        // halves - "a second and a half off" under "+1.3s" was the voice
+        // getting the gap wrong. See RaceNumbers.GapInTenths.
+        var gap = RaceNumbers.GapInTenths(RaceNumbers.TenthsOf(delta));
 
         return delta > 0 ? $"{gap} off" : $"{gap} under";
     }
@@ -131,16 +134,18 @@ internal static class CoachingWords
             return "level with your ghost";
         }
 
-        var gap = RaceNumbers.GapSpoken(Math.Abs(gapMs) / 1000.0);
+        // WHY (8 Nov 2026): to the tenth GhostGapShown gives - see PaceSpoken.
+        var gap = RaceNumbers.GapInTenths(RaceNumbers.TenthsOf(gapMs));
 
         return gapMs > 0 ? $"{gap} behind your ghost" : $"{gap} ahead of your ghost";
     }
 
     /// <summary>The same, on a screen: "level", "+0.2s", "-0.1s" (behind is plus).</summary>
+    // The spoken form's rounding (8 Nov 2026), so the two agree at every tenth.
     internal static string GhostGapShown(long gapMs) =>
         Math.Abs(gapMs) < OnTargetMs
             ? "level"
-            : (gapMs > 0 ? "+" : "-") + (Math.Abs(gapMs) / 1000.0).ToString("0.0", CultureInfo.InvariantCulture) + "s";
+            : (gapMs > 0 ? "+" : "-") + RaceNumbers.TenthsShown(RaceNumbers.TenthsOf(gapMs));
 
     /// <summary>The same, on a screen: "on target", "+0.2s", "-0.1s".</summary>
     internal static string PaceShown(long lapMs, long targetMs)
@@ -152,7 +157,8 @@ internal static class CoachingWords
             return "on target";
         }
 
-        return (delta > 0 ? "+" : "-") + (Math.Abs(delta) / 1000.0).ToString("0.0", CultureInfo.InvariantCulture) + "s";
+        // The spoken form's rounding (8 Nov 2026), so the two agree at every tenth.
+        return (delta > 0 ? "+" : "-") + RaceNumbers.TenthsShown(RaceNumbers.TenthsOf(delta));
     }
 
     /// <summary>
@@ -224,12 +230,15 @@ internal static class CoachingWords
     }
 
     /// <summary>A spread as said: "a tenth" at the least, since "within nothing" is not something a driver can do.</summary>
+    // WHY (8 Nov 2026): to the tenth SpreadShown gives, not GapSpoken's
+    // halves past a second - see PaceSpoken.
     internal static string SpreadSpoken(long spreadMs) =>
-        spreadMs < 100 ? "a tenth" : RaceNumbers.GapSpoken(spreadMs / 1000.0);
+        spreadMs < 100 ? "a tenth" : RaceNumbers.GapInTenths(RaceNumbers.TenthsOf(spreadMs));
 
     /// <summary>The spread on a screen: "0.3s".</summary>
+    // The spoken form's rounding (8 Nov 2026).
     internal static string SpreadShown(long spreadMs) =>
-        (Math.Max(0, spreadMs) / 1000.0).ToString("0.0", CultureInfo.InvariantCulture) + "s";
+        RaceNumbers.TenthsShown(RaceNumbers.TenthsOf(Math.Max(0, spreadMs)));
 
     /// <summary>
     /// The tone a lap earns: a new best first, whatever the target; then

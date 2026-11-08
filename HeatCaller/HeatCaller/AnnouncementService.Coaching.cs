@@ -119,7 +119,9 @@ public sealed partial class AnnouncementService
         EnqueueVoice(AnnouncementEventType.GhostGap, standing, null, extras: new Dictionary<string, (string, string)>
         {
             ["ghostgap"] = (spoken, shown),
-            ["gap"] = (RaceNumbers.GapSpoken(Math.Abs(gapMs) / 1000.0), CoachingWords.GhostGapShown(gapMs)),
+            // WHY (8 Nov 2026): said to the tenth it is shown to, not
+            // GapSpoken's halves ("a second and a half" under "+1.3s").
+            ["gap"] = (RaceNumbers.GapInTenths(RaceNumbers.TenthsOf(gapMs)), CoachingWords.GhostGapShown(gapMs)),
         });
     }
 

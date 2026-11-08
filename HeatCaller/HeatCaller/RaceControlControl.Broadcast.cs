@@ -35,6 +35,18 @@ public sealed partial class RaceControlControl
     private const string PlayingItAgain = "a segment being played again";
 
     /// <summary>
+    /// Why the last segment must not be played again, or null when it may
+    /// (8 Nov 2026). A segment written between races carries no facts and is
+    /// as true now as it was; one written during a race is held to the race
+    /// it was written against, the test every in-race line meets on its way
+    /// to the speaker (AnnouncementService.WhyNoLongerTrue).
+    /// </summary>
+    internal static string? WhyNotToReplay(SpokenSegment last, RaceFactsStamp now) =>
+        last.Facts is { } facts && AnnouncementService.WhyNoLongerTrue(facts, now) is { } untrue
+            ? untrue
+            : null;
+
+    /// <summary>
     /// Puts the last segment out again, with its own show round it where
     /// the club scores that segment.
     ///
@@ -75,6 +87,20 @@ public sealed partial class RaceControlControl
         }
 
         var named = ShowBlock.NameFor(last.Kind);
+
+        // AN IN-RACE LINE IS ONLY TRUE FOR ITS MOMENT (8 Nov 2026). The
+        // replay went out with no facts, so "out front by just over a second,
+        // nine laps left" was said again three laps later with every number
+        // wrong. Refused here when the race has moved past it, and its facts
+        // ride with it below so one that goes stale in the queue is dropped
+        // like any other in-race line.
+        if (WhyNotToReplay(last, _announcer.RaceFactsNow()) is { } untrue)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [show] Not playing {named} again - {untrue}.");
+
+            return;
+        }
 
         // The floor, so the announcer screen's director does not start a
         // segment of its own over the top of this one - the same claim the
@@ -123,13 +149,14 @@ public sealed partial class RaceControlControl
                             lead: run.FollowsAnother
                                 ? AnnouncementService.SpeechLead.FollowsOn
                                 : AnnouncementService.SpeechLead.Normal,
-                            onAir: named);
+                            onAir: named,
+                            facts: last.Facts);
                     }
 
                     return;
                 }
 
-                _announcer.SpeakReminder(last.Text, showOnScreens: true, onAir: named);
+                _announcer.SpeakReminder(last.Text, showOnScreens: true, onAir: named, facts: last.Facts);
             }
 
             var treatment = ShowMusic?.Invoke();

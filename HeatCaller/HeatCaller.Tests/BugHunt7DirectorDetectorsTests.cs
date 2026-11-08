@@ -109,6 +109,23 @@ public sealed class BugHunt7DirectorDetectorsTests
         Assert.True(double.IsNaN(pair.GapSeconds));
     }
 
+    [Fact]
+    public void A_pair_carries_the_chasing_car_s_laps_and_both_penalties()
+    {
+        // 8 Nov 2026: what RaceHorizon keys its samples on, and what ends a
+        // gap's history when race control changes it.
+        var a = Car("A", Laps(10, 9_000));
+        a.PenaltyMs = 2_000;
+        var b = Car("B", Laps(9, 9_100));
+        b.PenaltyMs = 1_000;
+
+        var pair = Assert.Single(AnnouncerControl.PairsFrom(new List<RacerStanding> { a, b }));
+
+        Assert.Equal(9, pair.BehindLaps);
+        Assert.Equal(2_000, pair.AheadPenaltyMs);
+        Assert.Equal(1_000, pair.BehindPenaltyMs);
+    }
+
     // ------------------------------------------------------------------
     //  Ghosts are not part of the race being called
     // ------------------------------------------------------------------
