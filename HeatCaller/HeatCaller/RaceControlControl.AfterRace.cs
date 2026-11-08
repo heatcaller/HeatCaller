@@ -1292,7 +1292,7 @@ public sealed partial class RaceControlControl
                 // that night - no longer down in pit lane. Written once the
                 // recap has been - and the achievements read, when there is
                 // one - one request at a time.
-                var principalTask =generation is not null && plan is { Principal: true }
+                var principalTask = generation is not null && plan is { Principal: true }
                     ? WritePrincipalAsync(
                         (Task?)honoursRead?.Written ?? generation, generation, record, plan, championship, delivery, boothBrief,
                         written => Volatile.Write(ref principalWords, written), followOnWork.Token)
