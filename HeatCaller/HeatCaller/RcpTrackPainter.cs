@@ -828,51 +828,32 @@ public static class RcpTrackPainter
     }
 
     /// <summary>
-    /// A rail post, drawn where a rail post actually goes: on the corner
-    /// where four tiles meet, not in the middle of one.
+    /// A rail post's quarter: the pink quarter disc in one corner of this
+    /// tile, with its bolt through its middle and its quarter of the square
+    /// socket at the corner.
     ///
-    /// The post is a disc that straddles the join, and it is bolted down
-    /// with one piece of hardware on EACH of the four tiles around it -
-    /// that is what holds the join together. Drawing it in the centre of a
-    /// single tile, with its four screws inside its own disc, made it look
-    /// like a thing you drop on the floor rather than a thing that pins
-    /// four tiles to each other.
+    /// A rail post on the floor is four separate quarters, each bolted to
+    /// its own tile round the corner where four tiles meet - so a post laid
+    /// on a tile is that tile's quarter only, and four of them, one on each
+    /// tile, make the whole disc (Asher, 8 Nov 2026). It used to draw the
+    /// whole disc from one tile, hanging over three tiles that might not be
+    /// there.
     ///
-    /// Drawn at (0, 0), which is this tile's top-left corner, so it
-    /// deliberately overhangs into the three neighbours. Decals are not
-    /// clipped to their tile, which is what makes that possible.
-    ///
-    /// The decal's rotation still works and is now useful: the transform
-    /// turns about the tile's centre, so each quarter turn carries the post
-    /// round to the next corner of this tile. The disc is radially
-    /// symmetric, so nothing looks rotated - the turns just choose which
-    /// corner.
+    /// Drawn at (0, 0), this tile's top-left corner, into the tile. The
+    /// decal's quarter turns carry it round to the other corners - the
+    /// transform turns about the tile's centre.
     /// </summary>
     private static void DrawPost(Graphics g, RectangleF rect, bool detailed)
     {
         var radius = rect.Width * PostRadius;
+        var corner = new PointF(0f, 0f);
 
-        // The intersection itself.
-        var centre = new PointF(0f, 0f);
+        // The quarter south-east of the corner: the one on this tile.
+        DrawPostQuarter(g, corner, radius, 0f, detailed, shadow: detailed);
 
-        using (var shadow = new SolidBrush(RailShadow))
-        {
-            g.FillEllipse(shadow, centre.X - radius + radius * 0.12f, centre.Y - radius + radius * 0.12f, radius * 2f, radius * 2f);
-        }
-
-        // Four quarters, one on each tile round the corner, each held by
-        // one bolt through its middle (Asher, 8 Nov 2026: the bolts go
-        // through the red part, not on the tiles round it as they were
-        // drawn). The same quarter is the inner corner piece - see
-        // DrawPostQuarter.
-        for (var quarter = 0; quarter < 4; quarter++)
-        {
-            DrawPostQuarter(g, centre, radius, quarter * 90f, detailed, shadow: false);
-        }
-
-        // The square socket in the middle, where the quarters meet.
+        // Its quarter of the square socket, at the corner.
         using var socket = new SolidBrush(Color.FromArgb(220, 20, 20, 22));
-        g.FillRectangle(socket, centre.X - radius * 0.2f, centre.Y - radius * 0.2f, radius * 0.4f, radius * 0.4f);
+        g.FillRectangle(socket, corner.X, corner.Y, radius * 0.2f, radius * 0.2f);
     }
 
     /// <summary>The rail post's radius as a share of a tile, measured off Asher's floor photos - the inner corner piece is a quarter of it.</summary>
