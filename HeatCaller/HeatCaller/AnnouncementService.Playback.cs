@@ -49,6 +49,79 @@ public sealed partial class AnnouncementService
         }
     }
 
+    /// <summary>When the playing line's words began (TimingClock), past its lead-in silence. Under ActiveOutputLock.</summary>
+    private static long _activeLineWordsAtMs;
+
+    /// <summary>How much of a cut-off line's words are heard at least - see StopCurrentPlaybackAfterABeat.</summary>
+    internal const long CutLineHeardAtLeastMs = 1_800;
+
+    /// <summary>And the beat left before the cut, however much has been heard.</summary>
+    internal const long CutBeatMs = 500;
+
+    /// <summary>
+    /// How long to wait before cutting a line whose words began at
+    /// <paramref name="wordsAtMs"/>, at <paramref name="nowMs"/>: until
+    /// CutLineHeardAtLeastMs of its words have been heard, and never less
+    /// than CutBeatMs.
+    /// </summary>
+    internal static long CutDelayMs(long wordsAtMs, long nowMs) =>
+        Math.Max(CutBeatMs, wordsAtMs + CutLineHeardAtLeastMs - nowMs);
+
+    /// <summary>
+    /// Stops the line playing now, but after a beat (8 Nov 2026, Asher: "the
+    /// first call would stop playing so quick you don't know what was about
+    /// to be said. it should wait a beat or so for some info to drop before
+    /// the correction cuts it off"). A battle line overtaken by a pass, or a
+    /// ruling, was cut the instant the board changed - often in its first
+    /// word, so the room heard a syllable and then the pass call. Now at
+    /// least CutLineHeardAtLeastMs of its words go out, and a beat more
+    /// whatever has been heard, and then the cut. Only that line: one that
+    /// ends by itself first is not followed by the stop, and nor is the
+    /// next one. The pass call queued behind it plays straight after.
+    /// Returns true when there was a line to cut.
+    /// </summary>
+    public static bool StopCurrentPlaybackAfterABeat()
+    {
+        CancellationTokenSource? line;
+        long wordsAt;
+
+        lock (ActiveOutputLock)
+        {
+            line = _activeLine;
+            wordsAt = _activeLineWordsAtMs;
+        }
+
+        if (line is null)
+        {
+            return false;
+        }
+
+        _ = Task.Delay(TimeSpan.FromMilliseconds(CutDelayMs(wordsAt, TimingClock.NowMs))).ContinueWith(
+            _ =>
+            {
+                lock (ActiveOutputLock)
+                {
+                    // Ended by itself meanwhile - nothing of ours to stop.
+                    if (!ReferenceEquals(_activeLine, line))
+                    {
+                        return;
+                    }
+                }
+
+                try
+                {
+                    line.Cancel();
+                }
+                catch
+                {
+                    // Finished and disposed in between.
+                }
+            },
+            TaskScheduler.Default);
+
+        return true;
+    }
+
     /// <summary>
     /// The silence wrapped around every line. The LEADING pad is the fix for
     /// the device-startup clipping bug and is not safe to shorten. The
@@ -465,6 +538,10 @@ public sealed partial class AnnouncementService
         lock (ActiveOutputLock)
         {
             _activeLine = stop;
+
+            // When its words begin, past the lead-in silence - see
+            // StopCurrentPlaybackAfterABeat.
+            _activeLineWordsAtMs = TimingClock.NowMs + (long)leadFor.TotalMilliseconds;
         }
 
         // Whether the line played to its end, for the captions below.

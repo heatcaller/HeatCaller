@@ -2520,7 +2520,7 @@ public partial class MainForm
         }
 
         return (
-            DriverNightExtras.Races(who, tonight, roundOf, runs),
+            DriverNightExtras.Races(who, tonight, roundOf, runs, _settings.RelayAbbreviateNames),
             DriverNightExtras.Improvement(who, paces),
             DriverNightExtras.Progress(who, history, latest?.TrackLayoutName, _pbResets, nowLocal));
     }

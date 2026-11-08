@@ -60,7 +60,8 @@ internal static class DriverNightExtras
         string? transponder,
         IEnumerable<SessionRecord>? tonight,
         Func<string, RoundDefinition?>? roundOf,
-        IEnumerable<SessionRecord>? runs = null)
+        IEnumerable<SessionRecord>? runs = null,
+        bool abbreviate = false)
     {
         var who = transponder?.Trim();
 
@@ -186,6 +187,7 @@ internal static class DriverNightExtras
                 Pen = pen.Count > 0 ? pen.ToList() : null,
                 Out = practice ? null : OutOf(row),
                 Rating = rating,
+                Field = kind is null ? null : FieldOf(results, practice, abbreviate),
             });
         }
 
@@ -461,6 +463,68 @@ internal static class DriverNightExtras
     /// <summary><see cref="NightRace.Kind"/> for a practice run.</summary>
     internal const string PracticeKind = "practice";
 
+    /// <summary>
+    /// THE FIELD FOR A DEMO OR PRACTICE RUN (8 Nov 2026, asked for by Asher:
+    /// "I want that functionality on a demo and practice"). The phone's Lap
+    /// chart draws Just me and Compare with from the race's public result,
+    /// and a demo never has one - a rehearsal never goes on the results
+    /// page (PublishSessionToRelay) - so its chart showed only their own
+    /// line with nobody to compare with. The field rides in their own night
+    /// instead, in the public result row's shape ({pos, name, qual, lapsMs,
+    /// posAt}) so the page reads it the same way, with names made public
+    /// the same way (RelayPublisher.DisplayNames and the club's initials
+    /// setting) and no transponders. Ghosts are left out, as in "of".
+    /// Practice carries no places: it is not a race for them. Null for a
+    /// field of one - there is nobody to compare with.
+    /// </summary>
+    internal static List<NightFieldRow>? FieldOf(IReadOnlyList<SessionResultEntry> results, bool practice, bool abbreviate)
+    {
+        var rows = results.Where(r => r is not null && !Ghosts.IsGhost(r.Transponder)).ToList();
+
+        if (rows.Count < 2)
+        {
+            return null;
+        }
+
+        var places = practice ? null : LapByLap.Positions(results);
+        var names = RelayPublisher.DisplayNames(
+            rows.Select(r => RelayDocuments.PublicNameOrUnnamed(r.DriverName, r.Transponder)).ToList(),
+            abbreviate,
+            rows.Select(r => (string?)r.Transponder).ToList());
+
+        return rows.Select((r, i) =>
+        {
+            var at = places?[IndexOfRow(results, r)];
+            var flying = (r.LapTimesMs ?? new List<long>()).Skip(1)
+                .Select((ms, k) => (Ms: ms, Pos: at is not null && k < at.Length ? at[k] : 0))
+                .Where(lap => lap.Ms > 0)
+                .Take(MostLaps)
+                .ToList();
+
+            return new NightFieldRow
+            {
+                Pos = practice ? null : r.Position,
+                Name = names[i],
+                Qual = !practice && r.StartPosition > 0 ? r.StartPosition : null,
+                LapsMs = flying.Count > 0 ? flying.Select(lap => lap.Ms).ToList() : null,
+                PosAt = at is not null && flying.Count > 0 && flying.All(lap => lap.Pos > 0) ? flying.Select(lap => lap.Pos).ToList() : null,
+            };
+        }).ToList();
+    }
+
+    private static int IndexOfRow(IReadOnlyList<SessionResultEntry> results, SessionResultEntry row)
+    {
+        for (var i = 0; i < results.Count; i++)
+        {
+            if (ReferenceEquals(results[i], row))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
     /// <summary>"demo", "practice", or null for a race that counts (and for an imported result, which never goes).</summary>
     private static string? KindOf(SessionRecord session)
     {
@@ -654,6 +718,39 @@ internal sealed record NightRace
     [JsonPropertyName("rating")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? Rating { get; init; }
+
+    /// <summary>
+    /// Everyone in a demo or practice run - DriverNightExtras.FieldOf - for
+    /// the Lap chart's Just me and Compare with, which a race reads from its
+    /// public result instead. Left out for a race, and the first thing
+    /// dropped when a night is over the relay's size limit.
+    /// </summary>
+    [JsonPropertyName("field")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<NightFieldRow>? Field { get; init; }
+}
+
+/// <summary>One driver in `races[].field`: {pos?, name, qual?, lapsMs?, posAt?} - the public result row's shape.</summary>
+internal sealed record NightFieldRow
+{
+    [JsonPropertyName("pos")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Pos { get; init; }
+
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    [JsonPropertyName("qual")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Qual { get; init; }
+
+    [JsonPropertyName("lapsMs")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<long>? LapsMs { get; init; }
+
+    [JsonPropertyName("posAt")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<int>? PosAt { get; init; }
 }
 
 /// <summary>

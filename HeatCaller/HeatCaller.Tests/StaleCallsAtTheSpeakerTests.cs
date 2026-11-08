@@ -180,7 +180,7 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
     [Fact]
     public void A_battle_pass_call_has_the_few_seconds_every_lap_call_has()
     {
-        Assert.Contains("SayByMs: LapSeenAt(cut.Pair.BehindId) + LapCallSayWithinMs", Source("AnnouncementService.BattleLines.cs"), StringComparison.Ordinal);
+        Assert.Contains("SayByMs: LapSeenAt(behindId) + LapCallSayWithinMs", Source("AnnouncementService.BattleLines.cs"), StringComparison.Ordinal);
     }
 
     [Fact]

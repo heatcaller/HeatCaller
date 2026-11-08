@@ -51,6 +51,17 @@ internal sealed class BattleLine
 
     /// <summary>True the first time only, so one pass is called once.</summary>
     public bool MarkOvertaken() => Interlocked.Exchange(ref _overtaken, 1) == 0;
+
+    private int _excused;
+
+    /// <summary>
+    /// The pair was put the other way round by a correction by hand while
+    /// this line was being said - see AnnouncementService.SettleBattleLinesAfterCorrection.
+    /// Never judged overtaken after that: nobody passed anybody.
+    /// </summary>
+    public bool Excused => Volatile.Read(ref _excused) == 1;
+
+    public void Excuse() => Interlocked.Exchange(ref _excused, 1);
 }
 
 /// <summary>What the board did to the battle lines in the air - see <see cref="AnnouncementService.JudgeBattleLines"/>.</summary>
@@ -206,7 +217,7 @@ public sealed partial class AnnouncementService
     /// </summary>
     internal static BattleVerdict JudgeBattleLines(BattleLine? onAir, IEnumerable<BattleLine> queued, Func<string, RaceStanding?> standingOf)
     {
-        var cut = onAir is { Overtaken: false } line && HasPassed(line.Pair, standingOf) && line.MarkOvertaken()
+        var cut = onAir is { Overtaken: false, Excused: false } line && HasPassed(line.Pair, standingOf) && line.MarkOvertaken()
             ? line
             : null;
 
@@ -358,7 +369,7 @@ public sealed partial class AnnouncementService
         // the call for that pass - already coming - says the rest.
         if (!cut.Pair.CallsThePass)
         {
-            var stopped = StopCurrentPlayback();
+            var stopped = StopCurrentPlaybackAfterABeat();
 
             StatusMessage?.Invoke(
                 $"[voice] Call {(stopped ? "cut off mid-sentence" : "dropped before it spoke")} - "
@@ -374,7 +385,7 @@ public sealed partial class AnnouncementService
             place = cut.Pair.Position;
         }
 
-        var wasSpeaking = StopCurrentPlayback();
+        var wasSpeaking = StopCurrentPlaybackAfterABeat();
         var driver = DisplayNameFor(cut.Pair.BehindId);
 
         StatusMessage?.Invoke(
@@ -386,10 +397,21 @@ public sealed partial class AnnouncementService
             return false;
         }
 
-        var words = BattlePassWords(driver, place);
+        QueueBattlePass(cut.Pair.BehindId, BattlePassWords(driver, place), place);
+
+        return place <= 1;
+    }
+
+    /// <summary>
+    /// Puts a battle's pass call next in the queue - after a cut-off line,
+    /// for a pass on track (CallTheBattlePass) or a ruling
+    /// (SettleBattleLinesAfterCorrection).
+    /// </summary>
+    private void QueueBattlePass(string behindId, string words, int place)
+    {
         var type = place <= 1 ? AnnouncementEventType.LeaderChange : AnnouncementEventType.CloseBattle;
 
-        RaiseAnnouncementText(words, cut.Pair.BehindId);
+        RaiseAnnouncementText(words, behindId);
 
         lock (_voiceQueueLock)
         {
@@ -402,8 +424,8 @@ public sealed partial class AnnouncementService
             // With the few seconds every lap call has (8 Nov 2026): straight
             // in, it skipped EnqueueVoiceWork and so the deadline, and "Sam
             // takes the lead" could be heard behind a queue of v3 renders.
-            _voiceQueue.Insert(at, new QueuedVoiceItem(type, cut.Pair.BehindId, OnAir: "Battle",
-                SayByMs: LapSeenAt(cut.Pair.BehindId) + LapCallSayWithinMs, ShownText: words, Work: async () =>
+            _voiceQueue.Insert(at, new QueuedVoiceItem(type, behindId, OnAir: "Battle",
+                SayByMs: LapSeenAt(behindId) + LapCallSayWithinMs, ShownText: words, Work: async () =>
             {
                 try
                 {
@@ -417,7 +439,119 @@ public sealed partial class AnnouncementService
         }
 
         _voiceQueueSignal.Release();
+    }
 
-        return place <= 1;
+    /// <summary>The pass call when a ruling, not the track, swaps a battle for the lead.</summary>
+    internal const string RulingPassForTheLead = "[excited] And with that ruling, {driver} takes the lead!";
+
+    /// <summary>The same for any other place. {place} is the spoken ordinal - "third".</summary>
+    internal const string RulingPassForAPlace = "[excited] And with that ruling, {driver} is up into {place}!";
+
+    /// <summary>
+    /// The pass call for a battle a correction by hand swapped (8 Nov 2026,
+    /// Asher: "add a takes the lead call. it's a battle. it should have some
+    /// spice"). As excited as the pass call, but it says it was a ruling: on
+    /// track nobody passed anybody, and the room saw that.
+    /// </summary>
+    internal static string RulingPassWords(string driver, int place) =>
+        place <= 1
+            ? RulingPassForTheLead.Replace("{driver}", driver, StringComparison.Ordinal)
+            : RulingPassForAPlace
+                .Replace("{driver}", driver, StringComparison.Ordinal)
+                .Replace("{place}", LeadTracker.SpokenOrdinal(place), StringComparison.Ordinal);
+
+    /// <summary>
+    /// CallTheBattlePass for a correction by hand: the board has put a pair
+    /// the other way round, but nobody passed anybody.
+    /// </summary>
+    /// <remarks>
+    /// WHY (8 Nov 2026): a penalty used to go through CallTheBattlePass like
+    /// a crossing, so a 10 s penalty could cut the line on air and call
+    /// "And Sam takes the lead!" for a pass nobody made. Left alone instead,
+    /// the next real crossing would have found the pair swapped and made the
+    /// same call then. Now the line being said is cut off and marked
+    /// overtaken, so no later crossing cuts it again, and a pass call worded
+    /// as the ruling it was goes next ("And with that ruling, Sam takes the
+    /// lead!" - RulingPassWords). Lines still waiting about the pair are
+    /// binned unheard, since they describe an order the board no longer shows.
+    /// </remarks>
+    private void SettleBattleLinesAfterCorrection()
+    {
+        List<BattleLine> stale;
+        List<Action>? giveBack = null;
+        BattleLine? cut = null;
+
+        lock (_voiceQueueLock)
+        {
+            if (_battleOnAir is null && !_voiceQueue.Any(item => item.Battle is not null))
+            {
+                return;
+            }
+
+            RaceStanding? StandingOf(string transponder) => _standings.TryGetValue(transponder, out var standing) ? standing : null;
+
+            // Cut off (8 Nov 2026, Asher - it used to be let finish): the
+            // line being said now contradicts the board, so it stops
+            // mid-sentence like one a real pass overtakes, and the ruling
+            // is called after it - see below. Marked overtaken, so the next
+            // real crossing does not cut it again.
+            if (_battleOnAir is { Overtaken: false } onAir && !CutSinceTaken(onAir) && HasPassed(onAir.Pair, StandingOf)
+                && onAir.MarkOvertaken())
+            {
+                cut = onAir;
+            }
+
+            stale = _voiceQueue
+                .Select(item => item.Battle)
+                .OfType<BattleLine>()
+                .Where(waiting => !waiting.Overtaken && HasPassed(waiting.Pair, StandingOf))
+                .Distinct()
+                .Where(waiting => waiting.MarkOvertaken())
+                .ToList();
+
+            if (stale.Count > 0)
+            {
+                BinQueuedLocked(item => item.Battle is { } line && stale.Contains(line), ref giveBack);
+            }
+        }
+
+        GiveBackLost(giveBack);
+
+        if (cut is not null)
+        {
+            var wasSpeaking = StopCurrentPlaybackAfterABeat();
+
+            var driver = DisplayNameFor(cut.Pair.BehindId);
+
+            StatusMessage?.Invoke(
+                $"[voice] Battle line {(wasSpeaking ? "cut off mid-sentence" : "dropped before it spoke")} - a correction by hand "
+                + $"put {driver} ahead of {DisplayNameFor(cut.Pair.AheadId)}.");
+
+            // And the call for it, with its spice (8 Nov 2026) - worded as the
+            // ruling it was. See RulingPassWords.
+            if (!Muted && !_postRaceQuiet)
+            {
+                var ordered = _standings.Values
+                    .Where(standing => !MutedGhost(standing.Transponder))
+                    .OrderByDescending(standing => standing.Laps)
+                    .ThenBy(standing => standing.ElapsedMs)
+                    .ToList();
+
+                var place = 1 + ordered.FindIndex(standing => standing.Transponder == cut.Pair.BehindId);
+
+                QueueBattlePass(cut.Pair.BehindId, RulingPassWords(driver, place < 1 ? cut.Pair.Position : place), place < 1 ? cut.Pair.Position : place);
+            }
+        }
+
+        foreach (var pair in stale.Select(line => line.Pair).Distinct())
+        {
+            SayBattleLineDropped(pair);
+        }
+
+        if (stale.Count > 0)
+        {
+            StatusMessage?.Invoke(
+                $"[voice] Dropped {Plural.Of(stale.Count, "waiting line")} - a correction by hand put the two cars it is about the other way round.");
+        }
     }
 }

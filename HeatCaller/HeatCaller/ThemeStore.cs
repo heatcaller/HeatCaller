@@ -605,6 +605,10 @@ public sealed class ThemeStore
         voiceCopy.RaceCallsInPractice = current.RaceCallsInPractice;
         voiceCopy.OutputFormat = current.OutputFormat;
 
+        // And the model the race calls render on (8 Nov 2026): it is chosen
+        // for how fast this club's track runs, not for how a style sounds.
+        voiceCopy.RaceCallModelId = current.RaceCallModelId;
+
         // The language follows the same rule as the voice: kept, unless the
         // style carries one of its own. The built-in styles have none.
         if (string.IsNullOrWhiteSpace(voiceCopy.LanguageCode))

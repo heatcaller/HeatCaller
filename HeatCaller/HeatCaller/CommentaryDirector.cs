@@ -2193,7 +2193,9 @@ public sealed class CommentaryDirector
                 Account.DroppedAfterWriting();
                 sponsors.Unheard();
 
-                Say($"[brain] Dropped {spec.Title.ToLowerInvariant()} - it says {invented}, which is not in its facts.");
+                // With the line as written (8 Nov 2026) - see FiguresChecked.Line.
+                Say($"[brain] Dropped {spec.Title.ToLowerInvariant()} - it says {invented}, which is not in its facts"
+                    + (figures.Line is { } said ? $": \"{CommentaryService.OneLine(said)}\"" : "."));
                 return null;
             }
 

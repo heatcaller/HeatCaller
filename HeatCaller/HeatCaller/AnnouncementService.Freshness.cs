@@ -167,6 +167,37 @@ public sealed partial class AnnouncementService
         return isAiLine.Count;
     }
 
+    /// <summary>
+    /// The calls about the race as it is running - the lap-bound ones, the
+    /// running order and the time left - that render on the race-calls model
+    /// when one is set (VoiceProfile.RaceCallModelId, 8 Nov 2026). Not the
+    /// flags (rendered ahead, so already instant), and not the show.
+    /// </summary>
+    internal static bool IsRaceCall(AnnouncementEventType type) =>
+        IsLapBoundCall(type) || IsTimeLeftCall(type) || type == AnnouncementEventType.PositionReport;
+
+    /// <summary>The call the voice loop took off the queue this iteration - for the race-calls model.</summary>
+    private readonly AsyncLocal<AnnouncementEventType?> _dequeuedCall = new();
+
+    /// <summary>
+    /// <paramref name="profile"/> on the race-calls model, when the line being
+    /// said is a race call (IsRaceCall), ElevenLabs is speaking and a
+    /// different model is set for them - otherwise the profile itself.
+    /// </summary>
+    internal static VoiceProfile ForRaceCall(VoiceProfile profile, AnnouncementEventType? call, double? speedOverride = null)
+    {
+        if (call is not { } type || !IsRaceCall(type)
+            || profile.EffectiveEngine != VoiceEngine.ElevenLabs
+            || string.Equals(profile.RaceCallModel, profile.ModelId, StringComparison.OrdinalIgnoreCase))
+        {
+            return profile;
+        }
+
+        var onRaceModel = profile.CloneForDelivery(profile.Stability, profile.Style, speedOverride);
+        onRaceModel.ModelId = profile.RaceCallModel;
+        return onRaceModel;
+    }
+
     /// <summary>The race as it is now, for an AI line about to be written. Any thread.</summary>
     public RaceFactsStamp RaceFactsNow() => new(
         Interlocked.Read(ref _factsRace),
@@ -321,6 +352,21 @@ public sealed partial class AnnouncementService
                 $"[voice] Dropped {Plural.Of(binned, "waiting AI line")} unheard - {why![0]}.");
         }
     }
+
+    /// <summary>
+    /// Who actually made a line, for the render-time log (8 Nov 2026). It
+    /// named the chosen engine, so with the ElevenLabs credits gone every
+    /// Kokoro stand-in was logged as "ElevenLabs eleven_v3, new".
+    /// </summary>
+    private static string RenderedBy(LineSource source, VoiceProfile profile) => source switch
+    {
+        LineSource.ElevenLabs => $"ElevenLabs {profile.ModelId}",
+        LineSource.Library => "a saved take",
+        LineSource.HeatCaller => "the HeatCaller voice",
+        LineSource.StandIn => $"Kokoro standing in for {(profile.EffectiveEngine == VoiceEngine.HeatCaller ? "the HeatCaller voice" : "ElevenLabs " + profile.ModelId)}",
+        LineSource.Kokoro => "Kokoro",
+        _ => source.ToString(),
+    };
 
     private static string Seconds(long ms) =>
         (ms / 1000.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "s";

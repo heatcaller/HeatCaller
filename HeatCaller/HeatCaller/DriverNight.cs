@@ -279,6 +279,19 @@ internal static class DriverNight
             return document;
         }
 
+        // The demo and practice fields go first (8 Nov 2026): they are only
+        // someone to compare with, and a driver's own laps matter more.
+        if (races is not null && races.Any(r => r.Field is not null))
+        {
+            races = races.Select(r => r with { Field = null }).ToList();
+            document = JsonSerializer.Serialize(Built(races, cars));
+
+            if (Fits(document))
+            {
+                return document;
+            }
+        }
+
         if (races is not null && races.Any(r => r.LapsMs is not null))
         {
             races = races.Select(r => r with { LapsMs = null, PosAt = null, StartMs = null }).ToList();

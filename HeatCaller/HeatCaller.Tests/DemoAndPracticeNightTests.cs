@@ -93,6 +93,50 @@ public sealed class DemoAndPracticeNightTests
         Assert.False(night.GetProperty("races")[0].TryGetProperty("kind", out _));
     }
 
+    /// <summary>
+    /// 8 Nov 2026 (asked for by Asher: Just me and Compare with on a demo and
+    /// practice): a demo never has a public result for the phone to read the
+    /// field from, so demo and practice runs carry it in the night - races
+    /// still read theirs from the result, and a run alone carries none.
+    /// </summary>
+    [Fact]
+    public void Demo_and_practice_carry_their_field_and_races_do_not()
+    {
+        var heat = Race("Heat 1", Tonight.AddHours(-2), Row(Sam, 2), Row("3099999", 1));
+        var demo = Race("[DEMO] Heat 2", Tonight.AddHours(-1), Row(Sam, 1), Row("DEMO01", 2));
+        demo.IsDemo = true;
+        demo.Results[0].DriverName = "Sam Parker";
+        demo.Results[1].DriverName = "Robo Racer";
+        var practice = Race("", Tonight.AddHours(-3), Row(Sam, 1), Row("3099999", 2));
+        practice.SessionType = RaceSessionType.Practice;
+        var alone = Race("", Tonight.AddHours(-4), Row(Sam, 1));
+        alone.SessionType = RaceSessionType.Practice;
+
+        var races = DriverNightExtras.Races(Sam, new[] { heat }, null, new[] { demo, practice, alone });
+
+        Assert.Null(races.Single(r => r.Kind is null).Field);
+        Assert.Null(races[0].Field);
+
+        var rehearsal = races.Single(r => r.Kind == "demo").Field!;
+        Assert.Equal(new[] { "Sam Parker", "Robo Racer" }, rehearsal.Select(f => f.Name));
+        Assert.Equal(new long[] { 9000, 8800, 8900 }, rehearsal[1].LapsMs!);
+        Assert.Equal(2, rehearsal[1].Pos);
+        Assert.NotNull(rehearsal[1].PosAt);
+
+        var run = races[1].Field!;
+        Assert.Equal("practice", races[1].Kind);
+        Assert.Equal(2, run.Count);
+        Assert.All(run, f => { Assert.Null(f.Pos); Assert.Null(f.PosAt); });
+
+        var night = JsonDocument.Parse(DriverNight.Document(new NightParts("Sam Parker", Tonight, null, Facts("Raced."), At)
+        {
+            Races = races,
+        })!).RootElement;
+        var sent = night.GetProperty("races").EnumerateArray().Single(r => r.TryGetProperty("kind", out var k) && k.GetString() == "demo");
+        Assert.Equal("Robo Racer", sent.GetProperty("field")[1].GetProperty("name").GetString());
+        Assert.False(sent.GetProperty("field")[1].TryGetProperty("transponder", out _));
+    }
+
     private static PackedFacts Facts(params string[] lines) =>
         new(string.Join('\n', lines), Array.Empty<string>(), 0);
 

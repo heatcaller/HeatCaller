@@ -132,6 +132,32 @@ public sealed class LeadTracker
         }
     }
 
+    /// <summary>
+    /// The car in front after a correction by hand - a penalty, or a lap
+    /// added or taken away. Remembered as the leader, so the next crossing
+    /// is not seen as a change, but not counted as one: the lead was not
+    /// taken from anybody on track.
+    /// </summary>
+    /// <remarks>
+    /// WHY (8 Nov 2026): a penalty went through Observe like a pass, so it
+    /// put up a lead change and added to the count on the broadcast tower and
+    /// in "that's the fourth lead change". Not observing it at all was no
+    /// better - the new leader's next crossing then counted it, a lap late.
+    /// </remarks>
+    public void Correct(string? leader)
+    {
+        if (string.IsNullOrWhiteSpace(leader))
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            _leader = leader;
+            _timesLed[leader] = Math.Max(1, _timesLed.GetValueOrDefault(leader));
+        }
+    }
+
     /// <summary>A new race: nobody has led and nothing has changed hands.</summary>
     public void Reset()
     {

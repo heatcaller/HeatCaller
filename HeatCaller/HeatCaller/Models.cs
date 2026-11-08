@@ -35,6 +35,22 @@ public sealed class RaceStanding
     /// </summary>
     public long PenaltyMs { get; init; }
 
+    /// <summary>
+    /// Every lap time the session holds for this car (RacerStanding.LapTimesMs,
+    /// copied), or null from a source that does not carry them.
+    ///
+    /// WHY (8 Nov 2026): the announcer kept its own book of when each car
+    /// crossed each lap, writing the elapsed time against the lap count on
+    /// every update - corrections included. A penalty then moved only the
+    /// current lap's crossing and a lap added by hand got a "crossing" at the
+    /// same time as the lap before, while the board works every crossing out
+    /// from the lap times (RaceGaps.CrossingMs): penalty applied to all of
+    /// them, a hand-added lap left out. The voice said "two seconds back"
+    /// under a board showing "-". With the lap times here the announcer
+    /// works its crossings out by the board's own rule.
+    /// </summary>
+    public IReadOnlyList<long>? LapTimesMs { get; init; }
+
     /// <summary>Driver-facing label: prefer Name, fall back to the transponder id.</summary>
     public string DisplayName => string.IsNullOrWhiteSpace(Name) ? Transponder : Name!;
 }
