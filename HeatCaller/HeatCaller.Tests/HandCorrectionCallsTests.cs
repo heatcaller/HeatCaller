@@ -260,7 +260,7 @@ public sealed class HandCorrectionCallsTests : IDisposable
     }
 
     [Fact]
-    public void A_penalty_that_swaps_a_battle_lines_cars_does_not_cut_it_or_call_a_pass()
+    public void A_penalty_that_swaps_a_battle_lines_cars_cuts_it_off_once_and_calls_the_ruling()
     {
         var (announcer, shown, log) = Announcer();
         var samChasingBill = new BattlePair(AheadId: "102", BehindId: "101", Position: 1);
@@ -274,9 +274,57 @@ public sealed class HandCorrectionCallsTests : IDisposable
         announcer.OnStandingUpdated(Car("101", 5, 50_400).Announced);
         announcer.Muted = true;
 
-        Assert.DoesNotContain(log, line => line.StartsWith("[voice] Battle line ", StringComparison.Ordinal));
-        Assert.DoesNotContain(shown, text => text.Contains("takes the lead", StringComparison.Ordinal));
-        Assert.Empty(shown);
+        // Cut off by the correction (8 Nov 2026: it used to be let finish),
+        // once, and not again on the crossing after.
+        Assert.Single(log, line => line.StartsWith("[voice] Battle line ", StringComparison.Ordinal)
+            && line.Contains("a correction by hand", StringComparison.Ordinal));
+
+        // And the call, with its spice - worded as the ruling it was, once
+        // (Asher, 8 Nov 2026: "add a takes the lead call. it's a battle").
+        Assert.Equal(new[] { "And with that ruling, Sam takes the lead!" }, shown.ToList());
+    }
+
+    [Theory]
+    // Words began 200 ms ago: wait until 1.8 s of them have been heard.
+    [InlineData(10_000, 10_200, 1_600)]
+    // Lead-in silence still playing (words start in 0.5 s): 0.5 + 1.8.
+    [InlineData(10_500, 10_000, 2_300)]
+    // Three seconds in already: still a beat before the cut.
+    [InlineData(10_000, 13_000, 500)]
+    public void A_cut_off_line_is_heard_for_a_beat_first(long wordsAtMs, long nowMs, long expectedDelayMs)
+    {
+        // Asher, 8 Nov 2026: "the first call would stop playing so quick you
+        // don't know what was about to be said. it should wait a beat".
+        Assert.Equal(expectedDelayMs, AnnouncementService.CutDelayMs(wordsAtMs, nowMs));
+    }
+
+    [Fact]
+    public void Battle_lines_are_cut_after_a_beat_and_flags_still_cut_at_once()
+    {
+        var battles = File.ReadAllText(Path.Combine(RepoRootForSource(), "HeatCaller", "HeatCaller", "AnnouncementService.BattleLines.cs"));
+        var flags = File.ReadAllText(Path.Combine(RepoRootForSource(), "HeatCaller", "HeatCaller", "AnnouncementService.RaceEvents.cs"));
+
+        Assert.DoesNotContain("StopCurrentPlayback()", battles, StringComparison.Ordinal);
+        Assert.Equal(3, System.Text.RegularExpressions.Regex.Matches(battles, @"StopCurrentPlaybackAfterABeat\(\)").Count);
+        Assert.Contains("StopCurrentPlayback();", flags, StringComparison.Ordinal);
+    }
+
+    private static string RepoRootForSource()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "check.cmd")))
+        {
+            dir = dir.Parent;
+        }
+
+        return dir?.FullName ?? throw new InvalidOperationException("Couldn't find check.cmd.");
+    }
+
+    [Fact]
+    public void A_ruling_for_another_place_says_the_place()
+    {
+        Assert.Equal("[excited] And with that ruling, Sam is up into third!", AnnouncementService.RulingPassWords("Sam", 3));
+        Assert.Equal("[excited] And with that ruling, Sam takes the lead!", AnnouncementService.RulingPassWords("Sam", 1));
     }
 
     [Fact]
