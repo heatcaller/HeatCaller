@@ -129,7 +129,7 @@ internal static class DeliveryEnergies
     /// <summary>Whether this voice is one the step applies to - see the remarks on <see cref="DeliveryEnergy"/>.</summary>
     internal static bool AppliesTo(VoiceProfile profile) =>
         profile.EffectiveEngine == VoiceEngine.ElevenLabs
-        && !profile.ModelId.Contains("v3", StringComparison.OrdinalIgnoreCase);
+        && !VoiceProfile.ReadsAudioTags(profile.ModelId);
 
     /// <summary>The other two steps, for looking up a take already saved.</summary>
     internal static DeliveryEnergy[] Others(DeliveryEnergy energy) =>

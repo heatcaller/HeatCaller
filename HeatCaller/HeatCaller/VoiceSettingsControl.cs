@@ -1923,18 +1923,18 @@ public sealed partial class VoiceSettingsControl : UserControl
         _lblKokoroStatus.ForeColor = outcomeColour;
     }
 
-    /// <summary>What the Speed box says under it while ElevenLabs speaks with eleven_v3.</summary>
+    /// <summary>What the Speed box says under it while ElevenLabs speaks with a v3 or v4 model.</summary>
     internal const string SpeedNoteForV3 =
-        "eleven_v3 doesn't take a speed - ElevenLabs ignores this box on that model. Pick eleven_multilingual_v2, "
+        "eleven_v3 and v4 don't take a speed - ElevenLabs ignores this box on those models. Pick eleven_multilingual_v2, "
         + "turbo or flash above to change how fast the voice talks (Kokoro uses it too).";
 
-    /// <summary>Whether the Speed box does nothing for this engine and model: ElevenLabs on any v3 model.</summary>
+    /// <summary>Whether the Speed box does nothing for this engine and model: ElevenLabs on any v3 or v4 model.</summary>
     internal static bool SpeedIgnored(bool elevenLabs, string? modelId) =>
-        elevenLabs && (modelId ?? string.Empty).Contains("v3", StringComparison.OrdinalIgnoreCase);
+        elevenLabs && VoiceProfile.ReadsAudioTags(modelId);
 
-    /// <summary>Whether the race-energy box does anything: ElevenLabs on a model that takes stability as a number (not v3).</summary>
+    /// <summary>Whether the race-energy box does anything: ElevenLabs on a model that takes stability as a number (not v3 or v4).</summary>
     internal static bool EnergyBoxApplies(bool elevenLabs, string? modelId) =>
-        elevenLabs && !(modelId ?? string.Empty).Contains("v3", StringComparison.OrdinalIgnoreCase);
+        elevenLabs && !VoiceProfile.ReadsAudioTags(modelId);
 
     /// <summary>Shows the race-energy box only while it does something - see EnergyBoxApplies. UI thread.</summary>
     private void ShowEnergyBox()
@@ -3316,7 +3316,7 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         // --- Model ---
         _cmbModel.DropDownStyle = ComboBoxStyle.DropDown;
-        _cmbModel.Items.AddRange(new object[] { "eleven_v3", "eleven_multilingual_v2", "eleven_turbo_v2_5", "eleven_flash_v2_5", "eleven_monolingual_v1" });
+        _cmbModel.Items.AddRange(new object[] { "eleven_v4", "eleven_v4_turbo", "eleven_v3", "eleven_multilingual_v2", "eleven_turbo_v2_5", "eleven_flash_v2_5", "eleven_monolingual_v1" });
         _cmbModel.Text = string.IsNullOrWhiteSpace(current.ModelId) ? "eleven_multilingual_v2" : current.ModelId;
 
         var fields = new FieldGrid();

@@ -41,9 +41,11 @@ export const LAP_VOICE: CatalogueVoice = Object.freeze({
   name: "Daniel",
   what: "Steady Broadcaster",
   voiceId: "onwK4e9ZLuTAKqWW03F9",
-  // Flash: the cheapest model ElevenLabs has ($0.04 per 1,000 characters on
-  // 29 Oct 2026), and the one the relay's voice already uses.
-  modelId: "eleven_flash_v2_5",
+  // v3 (8 Nov 2026, was Flash): the announcer's model, $0.08 per 1,000
+  // characters. It ignores the speed below, so its clips run about twice as
+  // long as Flash's did. The Flash set is kept in lap-voice-flash/ to go
+  // back to.
+  modelId: "eleven_v3",
   // A little steadier than the announcer's lines: a clip is one of two
   // thousand and they are heard next to each other, so they should match.
   stability: 0.6,
@@ -74,8 +76,8 @@ export const MINUTES_LEFT_MAX = 60;
 /** How far off a target lap gets a clip, in hundredths: 2.00. */
 export const TARGET_MARGIN_MAX_CS = 200;
 
-/** ElevenLabs' Flash price per 1,000 characters, US dollars, read on 29 Oct 2026. */
-export const FLASH_DOLLARS_PER_1K = 0.04;
+/** ElevenLabs' price per 1,000 characters for LAP_VOICE's model (v3), US dollars, read on 8 Nov 2026. */
+export const LAP_DOLLARS_PER_1K = 0.08;
 
 export interface LapClip {
   /** The file name without ".mp3": letters, digits and hyphens only. */
@@ -252,7 +254,7 @@ function gapClips(clips: LapClip[], prefix: string, tail: string): void {
 /** What one set of clips costs to make: ElevenLabs counts every character, spaces included. */
 export function lapClipCost(clips: readonly LapClip[] = lapClips()): { clips: number; chars: number; dollars: number } {
   const chars = clips.reduce((sum, clip) => sum + clip.text.length, 0);
-  return { clips: clips.length, chars, dollars: Math.round((chars / 1000) * FLASH_DOLLARS_PER_1K * 100) / 100 };
+  return { clips: clips.length, chars, dollars: Math.round((chars / 1000) * LAP_DOLLARS_PER_1K * 100) / 100 };
 }
 
 const CLIP_NAME = /^[a-z0-9-]{1,16}$/;

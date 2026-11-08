@@ -608,10 +608,10 @@ export class VoiceService {
       };
     }
 
-    // Tags like [excited] are v3's; every other model reads them out as
+    // Tags like [excited] are v3's and v4's; every other model reads them out as
     // words. The laptop cannot know which model a HeatCaller voice uses -
     // that is deliberately not published - so the tags are taken out here.
-    const spoken = voice.modelId.toLowerCase().includes("v3") ? text.trim() : stripAudioTags(text);
+    const spoken = readsAudioTags(voice.modelId) ? text.trim() : stripAudioTags(text);
 
     if (spoken.length === 0) {
       return { ok: false, refusal: "text", status: 400, message: "There was nothing to say." };
@@ -1084,7 +1084,7 @@ export class VoiceService {
       };
     }
 
-    const spoken = voice.modelId.toLowerCase().includes("v3") ? text.trim() : stripAudioTags(text);
+    const spoken = readsAudioTags(voice.modelId) ? text.trim() : stripAudioTags(text);
 
     if (spoken.length === 0) {
       return { ok: false, refusal: "text", status: 400, message: "There was nothing to preview." };
@@ -2157,6 +2157,15 @@ function revisionOf(voice: CatalogueVoice): string {
 /** Where a rendered line is kept. The words and everything that shapes them, and nothing else. */
 function cacheKey(voice: CatalogueVoice, text: string): string {
   return createHash("sha256").update(`${revisionOf(voice)}|${voice.id}|${text}`, "utf8").digest("hex");
+}
+
+/**
+ * Whether a model performs audio tags like [excited] rather than reading them
+ * out: ElevenLabs' v3 and v4 families (eleven_v3, eleven_v4, eleven_v4_turbo).
+ * The same rule as VoiceProfile.ReadsAudioTags on the laptop.
+ */
+export function readsAudioTags(modelId: string): boolean {
+  return /v[34]/i.test(modelId);
 }
 
 /** "[excited] Green flag!" -> "Green flag!", for the models that would read the tag out loud. */

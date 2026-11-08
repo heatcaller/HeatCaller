@@ -405,13 +405,13 @@ public sealed partial class VoiceSettingsControl
         _lblAudioTags.ForeColor = AppTheme.Accent;
         textSize.Wear(_lblAudioTags, () => AppTheme.SmallFont);
         _lblAudioTags.Text = current.EffectiveEngine == VoiceEngine.Kokoro
-            ? "Audio tags like [excited] only work with ElevenLabs' eleven_v3 model - the Kokoro voice would read them out as "
+            ? "Audio tags like [excited] only work with ElevenLabs' eleven_v3 and v4 models - the Kokoro voice would read them out as "
               + "words, so they're taken out before anything is spoken. Your lines can keep them for ElevenLabs."
             : current.SupportsAudioTags
             ? "Audio tags are ON for this model. Put one in a line to color the delivery: [excited] [cheerful] [sad] "
               + "[angry] [whispers] [laughs] [sighs] [awe] [sarcastic] [curious] [crying] [shouting]. "
               + "One per line is usually plenty - stacked tags fight each other."
-            : "Audio tags like [excited] need eleven_v3 - on this model they'd be read out literally, so they're "
+            : "Audio tags like [excited] need eleven_v3 or v4 - on this model they'd be read out literally, so they're "
               + "stripped before anything is spoken. Switch the model on the Voice tab to use them.";
 
         // --- The rows ---
