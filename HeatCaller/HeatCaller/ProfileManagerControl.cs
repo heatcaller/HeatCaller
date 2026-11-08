@@ -295,6 +295,12 @@ public sealed partial class ProfileManagerControl : UserControl
     /// </summary>
     private void BuildLayout()
     {
+        if (_garageSources is not null)
+        {
+            BuildRoomyLayout();
+            return;
+        }
+
         // --- The roster: names and numbers, and Find over them ---
         var lblFind = new Label
         {
@@ -630,6 +636,10 @@ public sealed partial class ProfileManagerControl : UserControl
         }
 
         OnSelectionChanged();
+
+        // The Table view reads the same drivers (7 Nov 2026).
+        RefreshTable();
+        RefreshRosterCount();
     }
 
     private static bool Matches(DriverProfile p, string filter) =>
@@ -1227,15 +1237,34 @@ public sealed partial class ProfileManagerControl : UserControl
         // record; without them (no garage sources), the card is both.
         if (ShowsProfile)
         {
-            RenderOnFile(c, stats, profile);
-            RenderRaceDay(c, stats?.RaceDay);
-            RenderHonours(c, stats);
-            RenderProfileDetails(c, profile);
+            // Two columns when the card is wide enough (7 Nov 2026, the
+            // Driver Hub rework): who they are and what they race on the
+            // left, what is on file and their honours on the right. One
+            // column stretched across a wide screen left the page half empty.
+            var gap = UiLayout.AtTextSize(28);
+            var half = (inner - gap) / 2f;
 
-            if (!string.IsNullOrWhiteSpace(profile.Notes))
+            if (_garageSources is not null && half >= UiLayout.AtTextSize(280))
             {
-                Heading(c, "Notes");
-                Paragraph(c, profile.Notes.Trim(), AppTheme.BodyFont, AppTheme.TextDark);
+                var left = new CardCursor(g, draw, CardPad, half) { Y = c.Y };
+                var right = new CardCursor(g, draw, CardPad + half + gap, half) { Y = c.Y };
+
+                RenderProfileDetails(left, profile);
+                RenderRaceDay(left, stats?.RaceDay);
+                RenderNotes(left, profile);
+
+                RenderOnFile(right, stats, profile);
+                RenderHonours(right, stats);
+
+                c.Y = Math.Max(left.Y, right.Y);
+            }
+            else
+            {
+                RenderOnFile(c, stats, profile);
+                RenderRaceDay(c, stats?.RaceDay);
+                RenderHonours(c, stats);
+                RenderProfileDetails(c, profile);
+                RenderNotes(c, profile);
             }
         }
 
@@ -1686,14 +1715,24 @@ public sealed partial class ProfileManagerControl : UserControl
             return;
         }
 
+        // With the header's tiles (the page with the garage), check-in, tech
+        // and race days are said there already, so only the rest is here -
+        // and no heading over nothing.
+        var tiles = _garageSources is not null;
+
+        if (tiles && day.Handicap is null && day.SetupSheets == 0)
+        {
+            return;
+        }
+
         Heading(c, "Race day");
 
-        if (day.CheckedIn is { } checkedIn)
+        if (!tiles && day.CheckedIn is { } checkedIn)
         {
             KeyValue(c, "Checked in", checkedIn ? "Yes" : "Not yet", checkedIn ? AppTheme.Success : AppTheme.TextMuted);
         }
 
-        if (day.Tech is { } tech)
+        if (!tiles && day.Tech is { } tech)
         {
             KeyValue(c, "Tech", tech, day.TechFailed ? AppTheme.Danger : null);
         }
@@ -1703,7 +1742,7 @@ public sealed partial class ProfileManagerControl : UserControl
             KeyValue(c, "Handicap", handicap);
         }
 
-        if (day.EventsAttended > 0)
+        if (!tiles && day.EventsAttended > 0)
         {
             KeyValue(c, "Race days attended", day.EventsAttended.ToString("N0"));
         }
@@ -1714,10 +1753,22 @@ public sealed partial class ProfileManagerControl : UserControl
         }
     }
 
+    /// <summary>The driver's notes, under a heading of their own, when there are any.</summary>
+    private static void RenderNotes(CardCursor c, DriverProfile profile)
+    {
+        if (!string.IsNullOrWhiteSpace(profile.Notes))
+        {
+            Heading(c, "Notes");
+            Paragraph(c, profile.Notes.Trim(), AppTheme.BodyFont, AppTheme.TextDark);
+        }
+    }
+
     /// <summary>What is stored on the profile, blanks skipped - a card full of empty headings is a form, and this is meant to be a poster.</summary>
     private void RenderProfileDetails(CardCursor c, DriverProfile profile)
     {
-        Heading(c, "Profile");
+        // "Car and classes", not "Profile": on the Profile tab a heading of
+        // the same name said nothing (7 Nov 2026).
+        Heading(c, _garageSources is null ? "Profile" : "Car and classes");
 
         var others = profile.AllCars.Count - 1;
 
@@ -1849,10 +1900,19 @@ public sealed partial class ProfileManagerControl : UserControl
         c.Y += height + 4f;
     }
 
+    /// <summary>The label column's widest, at the normal text size - see KeyValue.</summary>
+    private const int KeyColumn = 190;
+
     /// <summary>
-    /// A label on the left and its value on the right, on one line when
-    /// they fit. When they don't, the value drops under its label and wraps
-    /// - a long class list or sponsor line is still read in full.
+    /// A label and its value on one line when they fit: the label in a
+    /// column of its own, the value starting just past it. When they don't,
+    /// the value drops under its label and wraps - a long class list or
+    /// sponsor line is still read in full.
+    ///
+    /// WHY (7 Nov 2026, the Driver Hub rework): the value used to be pushed
+    /// hard against the card's right-hand edge, which on a wide screen put
+    /// "Transponder" and its number some 1,200 pixels apart - the eye had to
+    /// cross the page to pair them. Now the pair reads as one.
     /// </summary>
     private static void KeyValue(CardCursor c, string label, string value, Color? valueColour = null)
     {
@@ -1871,14 +1931,18 @@ public sealed partial class ProfileManagerControl : UserControl
         using var labelBrush = new SolidBrush(AppTheme.TextMuted);
         using var valueBrush = new SolidBrush(valueColour ?? AppTheme.TextDark);
 
-        if (labelSize.Width + 16f + valueSize.Width <= c.Width)
+        // The label column: never more than 45% of the card, and wide
+        // enough for this label.
+        var column = Math.Max(labelSize.Width + 16f, Math.Min(c.Width * 0.45f, UiLayout.AtTextSize(KeyColumn)));
+
+        if (column + valueSize.Width <= c.Width)
         {
             if (c.Draw)
             {
-                using var right = new StringFormat { Alignment = StringAlignment.Far, FormatFlags = StringFormatFlags.NoWrap };
+                using var oneLine = new StringFormat { FormatFlags = StringFormatFlags.NoWrap };
 
                 c.G.DrawString(label, labelFont, labelBrush, c.Left, c.Y);
-                c.G.DrawString(value, valueFont, valueBrush, new RectangleF(c.Left, c.Y, c.Width, lineHeight + 1f), right);
+                c.G.DrawString(value, valueFont, valueBrush, new RectangleF(c.Left + column, c.Y, c.Width - column, lineHeight + 1f), oneLine);
             }
 
             c.Y += lineHeight + 5f;
