@@ -399,9 +399,18 @@ public static class RcpPieces
         {
             var turn = TurnFor(col, row, corner);
 
-            // The two straights it stands in place of, on this tile's edges.
+            // The two straights it stands in place of, on this tile's edges -
+            // not a rail bolted to the tile across the seam, which stands on
+            // that tile beside the turn (8 Nov 2026: the rail along the top
+            // of a T where a divider drops from another went every time a
+            // turn under it was laid).
             foreach (var (c, r, vertical) in RcpAutoRails.Swept(turn))
             {
+                if (RailAcross(design, col, row, c, r, vertical))
+                {
+                    continue;
+                }
+
                 if (design.WallAt(c, r, vertical) is { } wall)
                 {
                     if (wall.Double)
@@ -420,6 +429,31 @@ public static class RcpPieces
         }
 
         return (removedWalls, removedCurves);
+    }
+
+    /// <summary>Whether the single rail on this seam is the tile across's own - a rail tile on the far side, facing the seam.</summary>
+    private static bool RailAcross(RcpTrackDesign design, int col, int row, int seamCol, int seamRow, bool vertical)
+    {
+        if (design.WallAt(seamCol, seamRow, vertical) is not { Double: false })
+        {
+            return false;
+        }
+
+        foreach (var edge in Enum.GetValues<RcpEdge>())
+        {
+            if (RcpPlan.EdgeLine(col, row, edge) != (seamCol, seamRow, vertical))
+            {
+                continue;
+            }
+
+            var across = RcpPlan.Neighbour(col, row, edge);
+
+            return design.At(across.X, across.Y) is { } tile
+                && HasStraight(tile.Piece)
+                && RcpPlan.EdgeLine(tile.Col, tile.Row, tile.Facing) == (seamCol, seamRow, vertical);
+        }
+
+        return false;
     }
 
     /// <summary>

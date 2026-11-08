@@ -344,6 +344,20 @@ Each phase is one commit, with the full suite green before the next. 2 and 3 can
   - three earlier Corners tests changed from the 2-tile step to "goes square".
   - 339 designer, map, sector and window-layout tests pass, and 94 docs and keyboard-shortcut tests.
 
+## Phase 5, first part - as built (8 Nov 2026)
+
+Asher circled three spots on his "Drift 2.0" plan and sent two photos of the floor (the "Track" email; they show a T where a divider drops from another, with a turn either side and bare floor between):
+
+- **Two turns sharing a point met in a cusp.** The painter drew every rail centred on its seam and every turn's rail on the grid lines.
+  - Now each single rail is drawn on the tile it is bolted to, flush with that tile's edge (`RcpTrackPainter.RailSides`, from the pieces; a rail no tile claims goes on the floor's side).
+  - Each single turn is drawn inside its outer curve tile, a rail's inset in from the grid lines.
+  - So the two turns at a T end a rail's width apart and run into the vertical divider's two rails, as on the floor. A divider's two rails already sat one on each tile.
+- **A stub of straight rail inside a divider's bend.** It is the other lane's rail. Drawn on its own tile, it now sits outside the bend.
+- **An end cap faced back over its rails at a run's right-hand or top end.** It always bulged one fixed way. Now it bulges out past whichever end it caps.
+- **Laying a turn took away the rail across the seam,** for example the rail along the top of a T. Now a turn only removes rails bolted to its own tile (`RcpPieces.Lay`).
+- **Not done yet:** the outer curve tile's floor is still drawn square, not as a quarter circle, and the angled view still extrudes rails on their seams.
+- **Tests:** two in `RcpPieceToolTests`; 341 designer, map, sector and layout tests pass.
+
 ## Answers (Asher, 7 Nov 2026)
 
 - **The rails stay on** between race nights. The cupboard holds pieces (Phase 4).
