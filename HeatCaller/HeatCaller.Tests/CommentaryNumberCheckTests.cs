@@ -826,3 +826,89 @@ public sealed class CommentaryNumberCheckPathsTests : IDisposable
         Dropped(log, "team principal interview");
     }
 }
+
+/// <summary>
+/// A long piece keeps its good sentences (8 Nov 2026, Asher: "the intro needs
+/// to stay. one wrong number shouldn't kill it"). See
+/// CommentaryNumberCheck.WithoutUnsupportedSentences.
+/// </summary>
+public sealed class CommentaryNumberCheckRepairTests
+{
+    private const string Facts = "Grid: Annie Wayout, Dee Ploy, Ella Vator, Terry Byte, Al Gorithim. Race of 12 laps. Annie's best lap 5.425s.";
+
+    [Fact]
+    public void Only_the_sentence_with_the_invented_figure_is_cut()
+    {
+        const string intro = "Welcome to the A-Main, folks! Annie Wayout starts from pole after a 5.425 best. She has won nine straight heats. Let's go racing!";
+
+        var kept = CommentaryNumberCheck.WithoutUnsupportedSentences(intro, Facts, out var cut);
+
+        Assert.Equal("Welcome to the A-Main, folks! Annie Wayout starts from pole after a 5.425 best. Let's go racing!", kept);
+        Assert.Equal("She has won nine straight heats.", Assert.Single(cut).Sentence);
+        Assert.Equal("nine", cut[0].Figure);
+    }
+
+    [Fact]
+    public void A_line_with_nothing_wrong_comes_back_as_it_was()
+    {
+        const string intro = "Twelve laps of Drift tonight, and Annie Wayout is on pole.";
+
+        Assert.Same(intro, CommentaryNumberCheck.WithoutUnsupportedSentences(intro, Facts, out var cut));
+        Assert.Empty(cut);
+    }
+
+    [Fact]
+    public void A_driver_whose_whole_introduction_is_wrong_refuses_the_lot()
+    {
+        // Lines are drivers: one left with nothing is a driver with no introduction.
+        const string intros = "1. Annie Wayout is on pole.\n2. Dee Ploy has nine wins this year.";
+
+        Assert.Null(CommentaryNumberCheck.WithoutUnsupportedSentences(intros, Facts, out _));
+    }
+
+    [Fact]
+    public void A_numbered_line_is_not_split_at_its_number()
+    {
+        const string intros = "1. Annie Wayout is on pole. She has nine wins.\n2. Dee Ploy lines up second.";
+
+        Assert.Equal("1. Annie Wayout is on pole.\n2. Dee Ploy lines up second.",
+            CommentaryNumberCheck.WithoutUnsupportedSentences(intros, "1. Annie Wayout\n2. Dee Ploy\n" + Facts, out _));
+    }
+
+    [Fact]
+    public void Cutting_more_than_half_refuses_the_lot()
+    {
+        const string intro = "Annie has nine wins. Dee has eight podiums. Ella has seven poles. Here we go.";
+
+        Assert.Null(CommentaryNumberCheck.WithoutUnsupportedSentences(intro, Facts, out _));
+    }
+
+    [Fact]
+    public void A_lap_time_is_never_split_into_two_sentences()
+    {
+        const string intro = "Annie Wayout set a 5.425 in qualifying. She has nine wins. Twelve laps to go.";
+
+        Assert.Equal("Annie Wayout set a 5.425 in qualifying. Twelve laps to go.",
+            CommentaryNumberCheck.WithoutUnsupportedSentences(intro, Facts, out _));
+    }
+
+    [Fact]
+    public void The_five_long_pieces_are_mended_and_the_rest_still_dropped()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "check.cmd")))
+        {
+            dir = dir.Parent;
+        }
+
+        var service = File.ReadAllText(Path.Combine(dir!.FullName, "HeatCaller", "HeatCaller", "CommentaryService.cs"));
+
+        foreach (var label in new[] { "\"round intro\", repair: true", "\"driver introductions\", repair: true", "\"race recap\", repair: true",
+                     "\"technical lead interview\", repair: true", "\"team principal interview\", repair: true" })
+        {
+            Assert.Contains(label, service, StringComparison.Ordinal);
+        }
+
+        Assert.Equal(5, System.Text.RegularExpressions.Regex.Matches(service, "repair: true").Count);
+    }
+}

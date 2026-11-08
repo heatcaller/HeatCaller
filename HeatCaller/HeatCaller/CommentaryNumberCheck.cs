@@ -85,6 +85,85 @@ namespace HeatCaller;
 internal static class CommentaryNumberCheck
 {
     /// <summary>
+    /// Where a sentence ends: a full stop, ! or ? (and any closing quote or
+    /// bracket) after a letter, then a space. Not after a digit, so "1. Annie
+    /// is on pole" stays one sentence and a time is never split.
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex SentenceEnd = new(
+        @"(?<=[^\d\s][.!?…][""'”’)\]]?)\s+(?=\S)",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// <paramref name="answer"/> with only the sentences that carry a figure
+    /// the facts cannot back taken out (8 Nov 2026, Asher: "the intro needs
+    /// to stay. one wrong number shouldn't kill it"). Null when that would
+    /// leave a line of it empty (a driver's introduction, one turn of an
+    /// interview) or keep less than half its words - then the line is too
+    /// broken to say, and is refused whole as before. The answer itself when
+    /// nothing needed cutting. <paramref name="cut"/> lists each sentence
+    /// taken out and the figure it was for.
+    /// </summary>
+    public static string? WithoutUnsupportedSentences(string answer, string? facts, out IReadOnlyList<(string Sentence, string Figure)> cut)
+    {
+        var removed = new List<(string Sentence, string Figure)>();
+        cut = removed;
+
+        if (string.IsNullOrWhiteSpace(answer) || Unsupported(answer, facts) is null)
+        {
+            return answer;
+        }
+
+        var lines = answer.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var kept = new List<string>(lines.Length);
+
+        foreach (var line in lines)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                kept.Add(line);
+                continue;
+            }
+
+            var sentences = SentenceEnd.Split(line);
+            var keep = new List<string>(sentences.Length);
+
+            foreach (var sentence in sentences)
+            {
+                if (Unsupported(sentence, facts) is { } figure)
+                {
+                    removed.Add((sentence.Trim(), figure));
+                }
+                else
+                {
+                    keep.Add(sentence);
+                }
+            }
+
+            // A line with nothing left is a driver with no introduction, or a
+            // question with no answer - too broken to say.
+            if (keep.Count == 0)
+            {
+                return null;
+            }
+
+            kept.Add(string.Join(" ", keep));
+        }
+
+        var result = string.Join("\n", kept);
+
+        static int Words(string text) => text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
+
+        if (Words(result) * 2 < Words(answer))
+        {
+            return null;
+        }
+
+        // A figure only the whole line made unbacked (one split across two
+        // sentences): refused whole rather than guessed at.
+        return Unsupported(result, facts) is null ? result : null;
+    }
+
+    /// <summary>
     /// The first figure in <paramref name="answer"/> that <paramref name="facts"/>
     /// cannot back, as the line words it ("four point nine", "eleven") - or
     /// null when every figure is backed, when there are none, or when the

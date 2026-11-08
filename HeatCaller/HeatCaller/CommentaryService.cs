@@ -298,11 +298,69 @@ public sealed class CommentaryService
     /// was written, and charged), where the refused figure is left for it.
     /// Null: said here, through <see cref="Log"/>.
     /// </param>
-    private async Task<string?> FiguresCheckedAsync(Task<string?> writing, string facts, string label, FiguresChecked? figures = null)
+    /// <param name="repair">
+    /// For a long piece - the round intro, the driver introductions, the
+    /// recap, an interview (8 Nov 2026, Asher: "the intro needs to stay. one
+    /// wrong number shouldn't kill it"): only the sentences with a figure the
+    /// facts cannot back are taken out, and the rest is said. Refused whole
+    /// only when that would leave a line empty or keep less than half of it -
+    /// see CommentaryNumberCheck.WithoutUnsupportedSentences.
+    /// </param>
+    private async Task<string?> FiguresCheckedAsync(Task<string?> writing, string facts, string label, FiguresChecked? figures = null, bool repair = false)
     {
         var written = await writing.ConfigureAwait(false);
 
+        if (repair && Repaired(written, facts, label) is { } kept)
+        {
+            return kept;
+        }
+
         return FiguresRefused(written, facts, label, figures) ? null : written;
+    }
+
+    /// <summary>
+    /// <paramref name="written"/> with any sentence carrying an unbacked
+    /// figure cut out, each cut said through <see cref="Log"/> - or null when
+    /// it cannot be mended that way (then FiguresRefused refuses it whole).
+    /// </summary>
+    private string? Repaired(string? written, string facts, string label)
+    {
+        if (string.IsNullOrWhiteSpace(written))
+        {
+            return written;
+        }
+
+        string terms;
+
+        try
+        {
+            terms = RaceTermsNowLine();
+        }
+        catch
+        {
+            terms = string.Empty;
+        }
+
+        var kept = CommentaryNumberCheck.WithoutUnsupportedSentences(written, facts + "\n" + terms, out var cut);
+
+        if (kept is null)
+        {
+            return null;
+        }
+
+        foreach (var (sentence, figure) in cut)
+        {
+            try
+            {
+                Log?.Invoke($"[commentary] Cut a sentence from the {label.ToLowerInvariant()} - it says {figure}, which is not in its facts: \"{OneLine(sentence)}\"");
+            }
+            catch
+            {
+                // The console is a courtesy.
+            }
+        }
+
+        return kept;
     }
 
     /// <summary>
@@ -1703,8 +1761,9 @@ public sealed class CommentaryService
 
         // Its figures checked against its facts, as the model wrote it
         // (8 Nov 2026) - before TidyIntro, and before the plain line that
-        // stands in for a roll call. Dropped, it is no intro, as one that
-        // never came back is: the opening goes on without it.
+        // stands in for a roll call. A sentence with a figure the facts cannot
+        // back is cut and the rest said (repair); only an intro too broken for
+        // that is refused - then it is no intro, as one that never came back.
         var answer = await FiguresCheckedAsync(
             Ask(Client,
                 BuildSystemPrompt(), facts, maxTokens: MaxTokensForWordLimit(), temperature: Variety, ct: ct,
@@ -1713,7 +1772,7 @@ public sealed class CommentaryService
             // never count - "six drivers on the grid" is true and was not in
             // them. See ImpliedCounts.
             CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose) + "\n" + ImpliedCounts(names.Count),
-            "round intro");
+            "round intro", repair: true);
 
         if (!string.IsNullOrWhiteSpace(answer))
         {
@@ -1885,13 +1944,14 @@ public sealed class CommentaryService
                 : string.Empty);
 
         // Its figures checked first, as the model wrote them (8 Nov 2026) -
-        // before the sponsor's credit, which is the club's own words. Dropped,
-        // there are no introductions, as when none came back.
+        // before the sponsor's credit, which is the club's own words. A
+        // sentence with an unbacked figure is cut (repair); refused whole, there
+        // are no introductions, as when none came back.
         var answer = await FiguresCheckedAsync(
             Ask(Client,
                 BuildSystemPrompt(extraWords), facts, maxTokens: MaxTokensForWordLimit(extraWords), temperature: Variety, ct: ct,
                 timeout: BetweenRacesTimeout),
-            CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose), "driver introductions");
+            CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose), "driver introductions", repair: true);
 
         // ONCE THROUGH THE GRID (19 Oct 2026). Given room for a few words a
         // driver, a model that reached the back row could go round again -
@@ -3652,7 +3712,8 @@ public sealed class CommentaryService
         // Calmed as the intros are (3 Nov 2026) - see CalmRecapAsync.
         // Its figures checked against its facts first (8 Nov 2026), before
         // the sponsor's lead-in goes on the front - see FiguresCheckedAsync.
-        // A recap dropped here is no recap, as one the model never sent is.
+        // A sentence with an unbacked figure is cut (repair); a recap refused whole
+        // is no recap, as one the model never sent is.
         var writing = CalmRecapAsync(
             FiguresCheckedAsync(
                 Ask(Client,
@@ -3663,7 +3724,7 @@ public sealed class CommentaryService
                 // 2026) - the field, as the facts list only the top few
                 // finishers. See ImpliedCounts.
                 CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose) + "\n" + RecapCounts(session, ordered.Count),
-                "race recap"),
+                "race recap", repair: true),
             // The names the facts use too (6 Nov 2026), not only the saved
             // ones: the winner's team and sponsors, the names the prompt
             // calls the drivers, their cars and the race. Left off, the
@@ -4577,13 +4638,13 @@ public sealed class CommentaryService
             + "No quotes, no stage directions, no square-bracket tags, and nothing before the first HOST line.";
 
         // Its figures checked against its facts, both voices, as the model
-        // wrote them (8 Nov 2026). Dropped, there is no interview, as when
-        // none came back - see CommentaryNumberCheck.
+        // wrote them (8 Nov 2026). A sentence with an unbacked figure is cut
+        // (repair); refused whole, there is no interview, as when none came back.
         var answer = await FiguresCheckedAsync(
             Ask(Client,
                 BuildInterviewSystemPrompt(), facts,
                 maxTokens: 360, temperature: Variety, ct: ct, timeout: BetweenRacesTimeout),
-            CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose), "technical lead interview");
+            CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose), "technical lead interview", repair: true);
 
         if (string.IsNullOrWhiteSpace(answer))
         {
@@ -5113,15 +5174,15 @@ public sealed class CommentaryService
         // so the principal's longer interview would have failed silently
         // and looked like a model that would not follow the form.
         // Its figures checked against its facts, both voices, as the model
-        // wrote them (8 Nov 2026). Dropped, there is no interview, as when
-        // none came back - see CommentaryNumberCheck.
+        // wrote them (8 Nov 2026). A sentence with an unbacked figure is cut
+        // (repair); refused whole, there is no interview, as when none came back.
         var answer = await FiguresCheckedAsync(
             Ask(Client,
                 BuildInterviewSystemPrompt(), facts,
                 maxTokens: 180 * Math.Max(2, mostExchanges ?? MaxInterviewExchanges),
                 temperature: Variety, ct: ct, timeout: timeout),
             CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose) + (impliedCounts is null ? string.Empty : "\n" + impliedCounts),
-            "team principal interview");
+            "team principal interview", repair: true);
 
         if (string.IsNullOrWhiteSpace(answer))
         {
