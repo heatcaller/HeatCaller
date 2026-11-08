@@ -272,6 +272,76 @@ public sealed class CommentaryService
         return brain.GenerateAsync(system, user, maxTokens, temperature, ct, timeout);
     }
 
+    /// <summary>
+    /// Where this class says what it did with a line nobody asked it about -
+    /// today only a line the number check dropped (8 Nov 2026). The console,
+    /// in the app; nothing, in a test that does not listen.
+    /// </summary>
+    public Action<string>? Log { get; set; }
+
+    /// <summary>
+    /// What <paramref name="writing"/> comes back with, or null when a figure
+    /// in it is not in <paramref name="facts"/> (8 Nov 2026) - see
+    /// <see cref="CommentaryNumberCheck"/>, which says why a line with an
+    /// invented number is dropped and not repaired.
+    ///
+    /// Checked as the MODEL wrote it, before anything of HeatCaller's goes
+    /// round it: a sponsor's credit and tagline are the club's own words and
+    /// can carry a number the facts never had ("20% off this weekend").
+    ///
+    /// The facts given to the check are the facts block plus the race's own
+    /// terms (its lap count or its clock), which every live prompt carries in
+    /// the system prompt and a line may legitimately use - see RaceTermsNowLine.
+    /// </summary>
+    /// <param name="figures">
+    /// When a caller can account for the drop itself (the director: the line
+    /// was written, and charged), where the refused figure is left for it.
+    /// Null: said here, through <see cref="Log"/>.
+    /// </param>
+    private async Task<string?> FiguresCheckedAsync(Task<string?> writing, string facts, string label, FiguresChecked? figures = null)
+    {
+        var written = await writing.ConfigureAwait(false);
+
+        if (string.IsNullOrWhiteSpace(written))
+        {
+            return written;
+        }
+
+        string terms;
+
+        try
+        {
+            terms = RaceTermsNowLine();
+        }
+        catch
+        {
+            terms = string.Empty;
+        }
+
+        if (CommentaryNumberCheck.Unsupported(written, facts + "\n" + terms) is not { } figure)
+        {
+            return written;
+        }
+
+        if (figures is not null)
+        {
+            figures.Refused = figure;
+        }
+        else
+        {
+            try
+            {
+                Log?.Invoke($"[commentary] Dropped the {label.ToLowerInvariant()} - it says {figure}, which is not in its facts.");
+            }
+            catch
+            {
+                // The console is a courtesy; a failing log never costs anything else.
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>The sentence the system prompt gains when the facts give anybody's pronouns.</summary>
     internal const string PronounsRule =
         " When the facts give a driver's pronouns, always use those pronouns for that driver, "
@@ -3493,11 +3563,16 @@ public sealed class CommentaryService
                     : string.Empty);
 
         // Calmed as the intros are (3 Nov 2026) - see CalmRecapAsync.
+        // Its figures checked against its facts first (8 Nov 2026), before
+        // the sponsor's lead-in goes on the front - see FiguresCheckedAsync.
+        // A recap dropped here is no recap, as one the model never sent is.
         var writing = CalmRecapAsync(
-            Ask(Client,
-                BuildBroadcastSystemPrompt(extraWords), facts,
-                maxTokens: MaxTokensForWordLimit(extraWords),
-                temperature: Variety, ct: ct, timeout: BetweenRacesTimeout),
+            FiguresCheckedAsync(
+                Ask(Client,
+                    BuildBroadcastSystemPrompt(extraWords), facts,
+                    maxTokens: MaxTokensForWordLimit(extraWords),
+                    temperature: Variety, ct: ct, timeout: BetweenRacesTimeout),
+                CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose), "race recap"),
             // The names the facts use too (6 Nov 2026), not only the saved
             // ones: the winner's team and sponsors, the names the prompt
             // calls the drivers, their cars and the race. Left off, the
@@ -5299,7 +5374,12 @@ public sealed class CommentaryService
     /// waits until the caller knows whether the line was said - see
     /// <see cref="SponsorCreditsHeld"/>. Null counts it once written, as before.
     /// </param>
-    public async Task<string?> BuildSegmentAsync(SegmentKind kind, PackedFacts facts, CancellationToken ct = default, bool creditFirst = false, SponsorCreditsHeld? holdCredit = null)
+    /// <param name="figures">
+    /// Where the number check leaves the figure it dropped the line over
+    /// (8 Nov 2026), for a caller that accounts for the drop itself - see
+    /// <see cref="FiguresCheckedAsync"/>.
+    /// </param>
+    public async Task<string?> BuildSegmentAsync(SegmentKind kind, PackedFacts facts, CancellationToken ct = default, bool creditFirst = false, SponsorCreditsHeld? holdCredit = null, FiguresChecked? figures = null)
     {
         if (Client is null || facts.Empty)
         {
@@ -5364,8 +5444,13 @@ public sealed class CommentaryService
                 ? " Do not mention any sponsor - this segment's sponsor is credited just after your words."
                 : string.Empty);
 
-        var writing = Ask(Client,
-            BuildSegmentSystemPrompt(gapExtraWords), body, maxTokens: MaxTokensForWordLimit(gapExtraWords), temperature: Variety, ct: ct);
+        // Every figure in it checked against its facts before the credit
+        // goes round it (8 Nov 2026) - see FiguresCheckedAsync. A line
+        // dropped here is null below, so its sponsor's ration goes back and
+        // nothing is recorded for Repeat.
+        var writing = FiguresCheckedAsync(
+            Ask(Client, BuildSegmentSystemPrompt(gapExtraWords), body, maxTokens: MaxTokensForWordLimit(gapExtraWords), temperature: Variety, ct: ct),
+            facts.Text, LabelFor(kind), figures);
 
         // On the recap show the credit goes in front, before the line is
         // recorded, so the line held (and compared by ForgetLine) is the one
@@ -5441,13 +5526,13 @@ public sealed class CommentaryService
         // see NightRecap.ExtraWordsOver.
         var extra = NightRecap.ExtraWordsOver(_settings.CommentaryMaxWords);
 
-        return await RecordAndReturn("Night recap", Ask(Client,
+        return await RecordAndReturn("Night recap", FiguresCheckedAsync(Ask(Client,
             BuildSystemPrompt(extra),
             body,
             maxTokens: MaxTokensForWordLimit(extra),
             temperature: Variety,
             ct: ct,
-            timeout: LongPieceTimeout));
+            timeout: LongPieceTimeout), facts.Text, "night recap"));
     }
 
     /// <summary>
@@ -5500,13 +5585,13 @@ public sealed class CommentaryService
 
         var extra = DriverCut.ExtraWordsOver(_settings.CommentaryMaxWords);
 
-        return await RecordAndReturn("Driver's night", Ask(Client,
+        return await RecordAndReturn("Driver's night", FiguresCheckedAsync(Ask(Client,
             BuildSystemPrompt(extra),
             body,
             maxTokens: MaxTokensForWordLimit(extra),
             temperature: Variety,
             ct: ct,
-            timeout: LongPieceTimeout));
+            timeout: LongPieceTimeout), facts.Text, "driver's night"));
     }
 
     /// <summary>
@@ -5531,13 +5616,13 @@ public sealed class CommentaryService
 
         var extra = Math.Max(0, SeasonPiece.Words - Math.Max(0, _settings.CommentaryMaxWords));
 
-        return await RecordAndReturn("Season piece", Ask(Client,
+        return await RecordAndReturn("Season piece", FiguresCheckedAsync(Ask(Client,
             BuildSystemPrompt(extra),
             body,
             maxTokens: MaxTokensForWordLimit(extra),
             temperature: Variety,
             ct: ct,
-            timeout: LongPieceTimeout));
+            timeout: LongPieceTimeout), facts.Text, "season piece"));
     }
 
     /// <summary>
@@ -5580,13 +5665,13 @@ public sealed class CommentaryService
 
         var extra = NightBefore.ExtraWordsOver(_settings.CommentaryMaxWords);
 
-        return await RecordAndReturn("Night before", Ask(Client,
+        return await RecordAndReturn("Night before", FiguresCheckedAsync(Ask(Client,
             BuildSystemPrompt(extra),
             body,
             maxTokens: MaxTokensForWordLimit(extra),
             temperature: Variety,
             ct: ct,
-            timeout: LongPieceTimeout));
+            timeout: LongPieceTimeout), facts.Text, "night-before preview"));
     }
 
     /// <summary>
@@ -5654,7 +5739,8 @@ public sealed class CommentaryService
         int turns = 2,
         CancellationToken ct = default,
         bool creditFirst = false,
-        SponsorCreditsHeld? holdCredit = null)
+        SponsorCreditsHeld? holdCredit = null,
+        FiguresChecked? figures = null)
     {
         if (Client is null || facts.Empty || !CommentaryBudget.Spec(kind).CanBeExchange)
         {
@@ -5679,9 +5765,13 @@ public sealed class CommentaryService
         var extra = Math.Max(0, _settings.CommentaryMaxWords)
             * Math.Clamp(turns - 1, 1, CommentaryExchange.MostTurns - 1) * 2 / 3;
 
-        var written = await Ask(Client,
-            BuildSegmentSystemPrompt(extra, forExchange: true), body,
-            maxTokens: MaxTokensForWordLimit(extra), temperature: Variety, ct: ct);
+        // Both voices checked against the facts as one answer (8 Nov 2026) -
+        // see FiguresCheckedAsync. Dropped, it is no exchange, and the
+        // caller is told why so it does not ask for the one-voice version.
+        var written = await FiguresCheckedAsync(
+            Ask(Client, BuildSegmentSystemPrompt(extra, forExchange: true), body,
+                maxTokens: MaxTokensForWordLimit(extra), temperature: Variety, ct: ct),
+            facts.Text, LabelFor(kind), figures);
 
         // The names go in too: the brief introduces both speakers by name,
         // so a model labelling its turns with those names rather than the
