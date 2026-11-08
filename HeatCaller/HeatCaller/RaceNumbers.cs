@@ -46,13 +46,16 @@ internal static class RaceNumbers
     /// A round's letter said as a letter (8 Nov 2026, Asher: "when A main is
     /// spoken, it's the letter A, not a soft ah"). Every voice read "A-Main"
     /// as the article - Kokoro's own phonemes for it are "ɐmˌAn" - while
-    /// "B-Main" was always "bee main". Written as an initial, "A. Main", it
-    /// is the letter in both voices ("ði ˈA mˈAn" in Kokoro, with no pause
-    /// for the full stop) and "the" in front of it becomes "thee". For the
-    /// voice only: the screens keep "A-Main".
+    /// "B-Main" was always "bee main". Written "Eh-Main" it is the letter,
+    /// run into "main" as one word - Kokoro's phonemes "ˌAmˈAn" - and "the"
+    /// in front of it becomes "thee". Not "A. Main": that was the letter
+    /// too, but ElevenLabs v3 took the full stop as the end of a sentence
+    /// and left a gap before "main" (Asher: "it needs to sound like it's one
+    /// thing"). Not "Ay-Main", which Kokoro says "eye". For the voice only:
+    /// the screens keep "A-Main".
     /// </summary>
     internal static string SpokenRoundNames(string text) =>
-        string.IsNullOrEmpty(text) ? text : AMain.Replace(text, "A. ");
+        string.IsNullOrEmpty(text) ? text : AMain.Replace(text, "Eh-");
 
     private static readonly string[] Small =
     {

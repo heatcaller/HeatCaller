@@ -432,7 +432,9 @@ public sealed partial class AnnouncementService
         Action? spoken = null,
         Func<string?>? whyNotNow = null)
     {
-        var currentProfile = _voiceStore.Current;
+        // On the race-calls model when this is a race call and one is set
+        // (8 Nov 2026) - before the overrides below, which copy the model.
+        var currentProfile = ForRaceCall(_voiceStore.Current, _dequeuedCall.Value);
 
         if (deliveryOverride is { } delivery)
         {
@@ -1636,6 +1638,10 @@ public sealed partial class AnnouncementService
             _dequeuedUnderCountdown.Value = countdownGeneration;
             _dequeuedBattle.Value = battle;
             _dequeuedFreshness.Value = (sayBy, facts, shown);
+
+            // Which call it is, so a race call can render on the race-calls
+            // model (8 Nov 2026) - see AnnouncementService.ForRaceCall.
+            _dequeuedCall.Value = work is null ? null : dequeuedType;
 
             // Gone stale while it waited its turn (8 Nov 2026) - a lap call
             // past its few seconds, or an AI line the race has overtaken.

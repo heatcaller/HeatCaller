@@ -710,6 +710,25 @@ public sealed class VoiceProfile
     public string ModelId { get; set; } = "eleven_multilingual_v2";
 
     /// <summary>
+    /// The ElevenLabs model for the race calls - lap times, fastest laps,
+    /// lead changes, battles, the running order, the time left - or empty for
+    /// <see cref="ModelId"/>, as it always was (8 Nov 2026). Everything else -
+    /// the openings, interviews, recaps, AI commentary, flags - stays on
+    /// ModelId. See AnnouncementService.IsRaceCall.
+    /// </summary>
+    /// <remarks>
+    /// WHY: on a 5.5 s track, v3 took 1.8-3.3 s to render each call where
+    /// Flash took under 1.5, and the lap calls that could still be said in
+    /// time fell from 6 of 14 to 3 of 18. The show wants v3's delivery; the
+    /// race wants the call while it is still true.
+    /// </remarks>
+    public string RaceCallModelId { get; set; } = string.Empty;
+
+    /// <summary>The model a race call renders on: RaceCallModelId when one is set, else ModelId.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string RaceCallModel => string.IsNullOrWhiteSpace(RaceCallModelId) ? ModelId : RaceCallModelId.Trim();
+
+    /// <summary>
     /// What speaks: ElevenLabs, the HeatCaller relay's voice, or Kokoro on
     /// this PC.
     ///

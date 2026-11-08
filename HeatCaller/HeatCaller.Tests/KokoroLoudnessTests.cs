@@ -116,10 +116,10 @@ public sealed class KokoroLoudnessTests
     // --- A-Main --------------------------------------------------------------
 
     [Theory]
-    [InlineData("The A-Main for Stock is next.", "The A. Main for Stock is next.")]
-    [InlineData("A Main, Stock - drivers to the stand.", "A. Main, Stock - drivers to the stand.")]
-    [InlineData("Three A-Mains tonight.", "Three A. Mains tonight.")]
-    [InlineData("into the A-main", "into the A. main")]
+    [InlineData("The A-Main for Stock is next.", "The Eh-Main for Stock is next.")]
+    [InlineData("A Main, Stock - drivers to the stand.", "Eh-Main, Stock - drivers to the stand.")]
+    [InlineData("Three A-Mains tonight.", "Three Eh-Mains tonight.")]
+    [InlineData("into the A-main", "into the Eh-main")]
     public void An_a_main_is_said_with_the_letter(string written, string said)
     {
         Assert.Equal(said, RaceNumbers.SpokenRoundNames(written));

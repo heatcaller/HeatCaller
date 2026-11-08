@@ -323,20 +323,23 @@ public sealed class CommentaryService
             return written;
         }
 
+        try
+        {
+            // With the line's own words (8 Nov 2026): a recap was dropped for
+            // "six", and with nothing but the figure logged there was no telling
+            // a number the model made up from a word the check misread.
+            Log?.Invoke(figures is not null
+                ? $"[commentary] Refused for \"{figure}\": \"{written}\""
+                : $"[commentary] Dropped the {label.ToLowerInvariant()} - it says {figure}, which is not in its facts: \"{written}\"");
+        }
+        catch
+        {
+            // The console is a courtesy; a failing log never costs anything else.
+        }
+
         if (figures is not null)
         {
             figures.Refused = figure;
-        }
-        else
-        {
-            try
-            {
-                Log?.Invoke($"[commentary] Dropped the {label.ToLowerInvariant()} - it says {figure}, which is not in its facts.");
-            }
-            catch
-            {
-                // The console is a courtesy; a failing log never costs anything else.
-            }
         }
 
         return null;

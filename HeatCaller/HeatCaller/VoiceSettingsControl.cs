@@ -229,6 +229,12 @@ public sealed partial class VoiceSettingsControl : UserControl
 
     private readonly ComboBox _cmbModel = new();
 
+    /// <summary>The model for the race calls - see VoiceProfile.RaceCallModelId. Its first entry is SameAsModel.</summary>
+    private readonly ComboBox _cmbRaceCallModel = new();
+
+    /// <summary>The race-calls list's "use the Model above" entry, saved as an empty RaceCallModelId.</summary>
+    internal const string SameAsModel = "(same as Model)";
+
     private readonly NumericUpDown _numStability = new();
     private readonly NumericUpDown _numSimilarity = new();
     private readonly NumericUpDown _numStyle = new();
@@ -3334,6 +3340,27 @@ public sealed partial class VoiceSettingsControl : UserControl
             "Pick a preset or type any ElevenLabs model id. eleven_v3 is the expressive one; on v2, Style past "
             + "about 0.6 distorts rather than excites.");
 
+        // --- Race calls model (8 Nov 2026) ---
+        // A list, not a box to type in: a pick is whole, so it saves at once
+        // like any other list on the page.
+        _cmbRaceCallModel.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbRaceCallModel.Items.Add(SameAsModel);
+        _cmbRaceCallModel.Items.AddRange(new object[] { "eleven_flash_v2_5", "eleven_turbo_v2_5", "eleven_v4_turbo", "eleven_v4", "eleven_v3", "eleven_multilingual_v2" });
+
+        if (!string.IsNullOrWhiteSpace(current.RaceCallModelId) && !_cmbRaceCallModel.Items.Contains(current.RaceCallModelId.Trim()))
+        {
+            _cmbRaceCallModel.Items.Add(current.RaceCallModelId.Trim());
+        }
+
+        _cmbRaceCallModel.SelectedItem = string.IsNullOrWhiteSpace(current.RaceCallModelId) ? SameAsModel : current.RaceCallModelId.Trim();
+
+        Flush(fields.AddRow("Race calls:", _cmbRaceCallModel));
+        fields.AddHint(
+            "The model for the calls about the race as it runs - lap times, fastest laps, lead changes, battles, "
+            + "the running order and the time left. eleven_flash_v2_5 says them about two seconds sooner than v3 "
+            + "(it ignores audio tags like [excited]), and the show - openings, interviews, recaps, AI commentary - "
+            + "stays on the Model above.");
+
         var card = new Section("ElevenLabs connection");
 
         card.Add(lblUsedWhen);
@@ -3341,6 +3368,7 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         // Simple mode (1 Nov 2026) keeps the API key; the model is Advanced.
         SimpleMode.HideRow(fields, _cmbModel);
+        SimpleMode.HideRow(fields, _cmbRaceCallModel);
 
         return (card, fields);
     }
@@ -4327,6 +4355,7 @@ public sealed partial class VoiceSettingsControl : UserControl
                 : ReferenceEquals(selectedVoice, _voiceNotInAccount) ? _voiceNotInAccountName
                 : selectedVoice.Name,
             ModelId = string.IsNullOrWhiteSpace(_cmbModel.Text) ? "eleven_multilingual_v2" : _cmbModel.Text.Trim(),
+            RaceCallModelId = _cmbRaceCallModel.SelectedItem is string raceModel && raceModel != SameAsModel ? raceModel : string.Empty,
             Stability = (double)_numStability.Value,
             SimilarityBoost = (double)_numSimilarity.Value,
             Style = (double)_numStyle.Value,
