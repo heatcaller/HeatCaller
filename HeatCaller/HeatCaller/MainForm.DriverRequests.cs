@@ -126,6 +126,12 @@ public partial class MainForm
             OnClientRawMessage($"[driver requests] A change from a phone couldn't be applied: {ex.Message}");
         }
 
+        // The Desk button on Race Control's flag row (7 Nov 2026) - every
+        // tick, before the "nothing changed" return below: it does nothing
+        // itself while the count is the same, and it must catch the first
+        // tick after Race Control is built.
+        _raceControlControl?.SetDeskWaiting(store.WaitingCount);
+
         var shown = _settings.RelayDriverRequests || store.WaitingCount > 0;
         var version = store.Version;
 

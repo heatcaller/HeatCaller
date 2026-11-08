@@ -190,10 +190,14 @@ public sealed partial class RaceControlControl
         // which is always there so nothing moves when a hold starts.
         var flagBar = new ButtonBar(tight: true, sameWidth: true).With(
             _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered,
-            _btnBarSkip, _btnBarHoldTalk, _btnBarCallUp, _btnBarEditResult, _btnReset);
+            _btnBarSkip, _btnBarHoldTalk, _btnBarCallUp, _btnBarEditResult, _btnReset, _btnBarDesk);
 
         // After the flag (25 Oct 2026): Edit Result goes to Race History.
         _btnBarEditResult.Click += (_, _) => EditResultRequested?.Invoke();
+
+        // Desk (7 Nov 2026): on the row only while drivers' requests are
+        // waiting - see RaceControlControl.Desk.
+        BuildDeskButton();
 
         // Between races (31 Oct 2026) - see RaceControlControl.BetweenRaces.
         BuildTalkButtons();
@@ -1405,6 +1409,7 @@ public sealed partial class RaceControlControl
         shortcutTips.SetToolTip(_btnBarHoldTalk, "No talk between races - filler, sponsor reads, call-ups and the countdown - until you press Resume Talk. Shortcut: F10");
         shortcutTips.SetToolTip(_btnBarCallUp, "Calls the next race's drivers and marshals now. Right-click to push the race back a minute, call two races out, marshals only or who is not checked in. Shortcut: F12");
         shortcutTips.SetToolTip(_btnBarEditResult, "The race just run, in Race History, with Edit Result open - a penalty, a missed lap, a DNF.");
+        shortcutTips.SetToolTip(_btnBarDesk, "Drivers' requests from their phones are waiting. Click to open Driver Requests and approve or decline them.");
         shortcutTips.SetToolTip(_btnBigScreen, "Shortcut: B");
         shortcutTips.SetToolTip(_btnReadiness, "Shortcut: R");
         shortcutTips.SetToolTip(_btnAnnouncer, "Shortcut: A  -  press ? for every shortcut");
@@ -1452,7 +1457,7 @@ public sealed partial class RaceControlControl
         // draws over a flag colour looks like a fault besides.
         AppTheme.ReleaseFocusAfterClick(
             _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered,
-            _btnBarSkip, _btnBarHoldTalk, _btnBarCallUp, _btnBarEditResult, _btnReset);
+            _btnBarSkip, _btnBarHoldTalk, _btnBarCallUp, _btnBarEditResult, _btnReset, _btnBarDesk);
 
         // The chip wraps to the card's width - the value can run long - and
         // wears the window's font.

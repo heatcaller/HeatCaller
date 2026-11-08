@@ -247,6 +247,10 @@ public partial class MainForm
         // The flag row's Results and Edit Result after the flag (25 Oct 2026).
         raceControl.EditResultRequested += () => ShowLatestRaceInHistory(edit: true);
 
+        // The Desk button on the flag row (7 Nov 2026): Driver Requests,
+        // where the waiting requests are approved or declined.
+        raceControl.DeskRequested += ShowDriverRequests;
+
         raceControl.SessionSaved += () =>
         {
             // The heat just recorded comes off the timetable here, open or

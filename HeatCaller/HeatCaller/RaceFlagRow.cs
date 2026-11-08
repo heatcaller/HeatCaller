@@ -269,10 +269,17 @@ internal sealed class FlagRow : Panel
         // wrapping where the racing row of four does not and the board
         // jumping at every phase. Every button on the bar is one width.
         // How many lines the most buttons take in a middle this wide.
+        // And more than that while extra buttons are up - the Desk button
+        // (7 Nov 2026) comes and goes with the desk, not the race, and makes
+        // six on the racing row: the row makes room for it while it is there
+        // and gives the room back when it goes.
+        var showing = _bar.Visible ? _bar.Controls.OfType<Control>().Count(c => c.Visible) : 0;
+        var mostButtons = Math.Max(RaceBar.MostShown, showing);
+
         int Lines(int across)
         {
             var perLine = Math.Max(1, oneButton > 0 ? Math.Max(1, across) / oneButton : 1);
-            return (RaceBar.MostShown + perLine - 1) / perLine;
+            return (mostButtons + perLine - 1) / perLine;
         }
 
         var nowWidth = _metersInRow ? _meters.Measure().Width : 0;
