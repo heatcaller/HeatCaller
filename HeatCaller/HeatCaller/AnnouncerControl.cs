@@ -174,6 +174,7 @@ public sealed partial class AnnouncerControl : UserControl
         // spoken lines double as the feed rather than duplicating that logic
         // with a second set of rules that could disagree.
         announcer.AnnouncementTextReady += OnAnnouncementText;
+        announcer.AnnouncementTextWithdrawn += OnAnnouncementTextWithdrawn;
 
         // Raised from inside the lap handler, which is the decoder's thread
         // rather than the UI's - so it goes through the same marshaling as
@@ -815,6 +816,27 @@ public sealed partial class AnnouncerControl : UserControl
     }
 
     private void OnAnnouncementText(string text) => RunOnUiThread(() => AddFeedLine(text));
+
+    /// <summary>
+    /// A line dropped unheard as out of date (8 Nov 2026): marked in the feed,
+    /// which is otherwise the list of what was said. The newest entry with
+    /// that text only. See AnnouncementService.AnnouncementTextWithdrawn.
+    /// </summary>
+    private void OnAnnouncementTextWithdrawn(string text) => RunOnUiThread(() =>
+    {
+        var at = _feed.FindIndex(line => line.EndsWith("   " + text, StringComparison.Ordinal));
+
+        if (at < 0)
+        {
+            return;
+        }
+
+        _feed[at] = FeedLineNotSaid(_feed[at]);
+        RefreshTalkingPoints();
+    });
+
+    /// <summary>A feed entry marked as dropped unheard - see OnAnnouncementTextWithdrawn.</summary>
+    internal static string FeedLineNotSaid(string line) => line + "   (not said - out of date)";
 
     /// <summary>
     /// Runs <paramref name="action"/> on the UI thread: at once when already

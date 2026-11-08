@@ -459,6 +459,7 @@ public sealed class BigScreenForm : Form
         _race.StateChanged += _stateChangedHandler;
         _race.FlagChanged += _flagChangedHandler;
         _announcer.AnnouncementTextReady += OnAnnouncementTextReady;
+        _announcer.AnnouncementTextWithdrawn += OnAnnouncementTextWithdrawn;
 
         _warningIssuedHandler = (standing, warning) => SafeInvoke(() => ShowWarningBanner(standing, warning));
         _race.WarningIssued += _warningIssuedHandler;
@@ -552,6 +553,7 @@ public sealed class BigScreenForm : Form
             _race.SectorsRecorded -= _sectorsRecordedHandler;
             _race.SplitCrossed -= _splitCrossedHandler;
             _announcer.AnnouncementTextReady -= OnAnnouncementTextReady;
+            _announcer.AnnouncementTextWithdrawn -= OnAnnouncementTextWithdrawn;
             UnsubscribeDisplays();
             UnsubscribeOnAir();
         };
@@ -2341,6 +2343,24 @@ public sealed class BigScreenForm : Form
             _sayingAbout = ShowOnAir.Playing || _onAir.Visible
                 ? LowerThird.Line(LowerThird.NamesIn(text, WhoCouldBeNamed()))
                 : string.Empty;
+        });
+    }
+
+    /// <summary>
+    /// A line the announcer dropped unheard because the race made it untrue
+    /// (8 Nov 2026): taken down if it is still the one showing, so the
+    /// screen never shows what the room was spared hearing. See
+    /// AnnouncementService.AnnouncementTextWithdrawn.
+    /// </summary>
+    private void OnAnnouncementTextWithdrawn(string text)
+    {
+        SafeInvoke(() =>
+        {
+            if (string.Equals(_lblAnnouncement.Text, text, StringComparison.Ordinal))
+            {
+                _lblAnnouncement.Text = string.Empty;
+                _sayingAbout = string.Empty;
+            }
         });
     }
 

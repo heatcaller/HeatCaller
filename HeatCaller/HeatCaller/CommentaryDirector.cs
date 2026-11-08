@@ -1997,6 +1997,29 @@ public sealed class CommentaryDirector
     internal static bool OpensTheNight(SegmentKind kind) => kind == SegmentKind.ColdOpen;
 
     /// <summary>True for the segments that only make sense while cars are on track.</summary>
+    /// <summary>
+    /// How many laps by the leader an in-race line of this kind outlives
+    /// (8 Nov 2026). A line about the front, the gaps or the laps to go is
+    /// out of date the moment the leader starts another lap; a fight further
+    /// back is given two; a record lap or a record in danger is not made
+    /// untrue by a lap at all - a quicker lap is what does that, and it is
+    /// checked separately. See RaceFactsStamp.
+    /// </summary>
+    internal static int? LeaderLapsAllowedFor(SegmentKind kind, Battle? calling) => kind switch
+    {
+        SegmentKind.PaceNote or SegmentKind.RecordWatch => null,
+        SegmentKind.BattleWatch when calling is { Position: > 1 } => 2,
+        _ => 1,
+    };
+
+    /// <summary>Whether a lead change makes an in-race line of this kind untrue - see LeaderLapsAllowedFor.</summary>
+    internal static bool LeadMattersFor(SegmentKind kind, Battle? calling) => kind switch
+    {
+        SegmentKind.PaceNote or SegmentKind.RecordWatch => false,
+        SegmentKind.BattleWatch when calling is { Position: > 1 } => false,
+        _ => true,
+    };
+
     internal static bool InRace(SegmentKind kind) =>
         kind is SegmentKind.BattleWatch or SegmentKind.PaceNote or SegmentKind.Horizon or SegmentKind.RecordWatch;
 
@@ -2117,7 +2140,12 @@ public sealed class CommentaryDirector
         // with the segment's own deadline, counted to when it is HEARD rather
         // than to when the answer comes back. See AnnouncementService.Freshness.
         var factsAsked = InRace(kind) && RaceFactsNow?.Invoke() is { } stamp
-            ? stamp with { SayByMs = stamp.AtMs + (long)spec.NeedsBy.TotalMilliseconds }
+            ? stamp with
+            {
+                SayByMs = stamp.AtMs + (long)spec.NeedsBy.TotalMilliseconds,
+                LeaderLapsAllowed = LeaderLapsAllowedFor(kind, _calling),
+                LeadMatters = LeadMattersFor(kind, _calling),
+            }
             : null;
 
         // WHY (2026-11-05, Bug hunt 11): the segment's sponsor credit, counted
