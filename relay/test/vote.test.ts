@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { MemoryStore } from "../src/store.js";
 import { ACME_TOKEN, BROOK_TOKEN, call, start, type Harness } from "./helpers.js";
+import { VOTERS_PER_ADDRESS, VOTE_SENDS_PER_ADDRESS } from "../src/server.js";
 
 /**
  * The room's vote on who wins, taken in from anybody with the club's link.
@@ -53,6 +54,11 @@ async function ballot() {
 
 async function vote(driver: string) {
   return call(harness, "POST", `${VOTE}/send`, { json: { d: driver } });
+}
+
+/** A vote from one phone, as the page sends it: with the id that phone made up and keeps. */
+async function voteFrom(phone: string, driver: string) {
+  return call(harness, "POST", `${VOTE}/send`, { json: { d: driver, p: phone } });
 }
 
 async function inbox(token = ACME_TOKEN) {
@@ -321,6 +327,94 @@ describe("one vote per voter", () => {
   });
 });
 
+// 7 Nov 2026, bug hunt 14: a room of phones on the venue Wi-Fi is one
+// address, and keyed by address alone it was one voter - each phone's vote
+// replaced the last. Each phone now sends an id of its own.
+describe("a room of phones on one address", () => {
+  it("counts two phones as two voters", async () => {
+    await openOn();
+
+    assert.equal((await voteFrom("phoneAAAAAAA", BILL.id)).status, 200);
+    assert.equal((await voteFrom("phoneBBBBBBB", SAM.id)).status, 200);
+
+    const items = (await inbox()).body.items as { v: string; d: string }[];
+
+    assert.equal(items.length, 2);
+    assert.deepEqual(items.map((one) => one.d).sort(), [BILL.id, SAM.id]);
+    for (const one of items) assert.match(one.v, /^[0-9a-f]{32}$/);
+  });
+
+  it("still holds one vote per phone, changed rather than added to", async () => {
+    await openOn();
+
+    await voteFrom("phoneAAAAAAA", BILL.id);
+    await voteFrom("phoneAAAAAAA", SAM.id);
+
+    const items = (await inbox()).body.items as { v: string; d: string }[];
+
+    assert.equal(items.length, 1);
+    assert.equal(items[0]?.d, SAM.id);
+  });
+
+  it("never puts the phone's own id in the key", async () => {
+    await openOn();
+    await voteFrom("phoneAAAAAAA", BILL.id);
+
+    const key = (await inbox()).body.items[0].v as string;
+
+    assert.ok(!key.includes("phoneAAAAAAA"));
+  });
+
+  it("treats a phone id that is not one the page makes as no id at all", async () => {
+    await openOn();
+
+    await vote(BILL.id);
+    await voteFrom("../../x", SAM.id);
+    await voteFrom("short", DAVE.id);
+
+    const items = (await inbox()).body.items as { v: string; d: string }[];
+
+    assert.equal(items.length, 1);
+    assert.equal(items[0]?.d, DAVE.id);
+  });
+
+  it("is what Live's Who wins? card sends: a kept id of the shape the relay takes", async () => {
+    const { DEFAULT_CONTEXT, livePage } = await import("../src/pages.js");
+    const page = livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_CONTEXT.look, vote: true } });
+
+    assert.match(page, /JSON\.stringify\(\{ d: id, p: voter\(\) \}\)/);
+    assert.match(page, /'hg-voter-' \+ CLUB/);
+    assert.match(page, /\/\^\[A-Za-z0-9_-\]\{8,40\}\$\//);
+    // Twelve random bytes in hex: twenty-four characters, inside 8 to 40.
+    assert.match(page, /new Uint8Array\(12\)/);
+  });
+
+  it("will not let one address be more than a room's worth of voters", async () => {
+    await openOn();
+
+    for (let at = 0; at < VOTERS_PER_ADDRESS; at++) {
+      const answer = await voteFrom(`phone-${String(at).padStart(4, "0")}`, BILL.id);
+      assert.equal(answer.status, 200, JSON.stringify(answer.body));
+    }
+
+    // One more made-up phone is turned away...
+    const extra = await voteFrom("phone-extra-one", BILL.id);
+    assert.equal(extra.status, 429);
+
+    // ...and so is the address voting without one, which counts against
+    // the same address...
+    assert.equal((await vote(BILL.id)).status, 429);
+
+    // ...but a phone already held can still change its mind.
+    assert.equal((await voteFrom("phone-0000", SAM.id)).status, 200);
+
+    const items = (await inbox()).body.items as { v: string; d: string }[];
+
+    assert.equal(items.length, VOTERS_PER_ADDRESS);
+    assert.equal(items.filter((one) => one.d === SAM.id).length, 1);
+  });
+});
+
 describe("moving to the next race", () => {
   it("starts the new vote empty", async () => {
     // Without this, opening the B-main's vote would start it with the
@@ -405,20 +499,48 @@ describe("the laptop's own route", () => {
 });
 
 describe("too many votes too fast", () => {
-  it("turns one sender away after a handful", async () => {
+  it("turns one sender away after a flood", async () => {
+    // A flood brake since bug hunt 14 (7 Nov 2026): a room of phones
+    // shares the venue's one address, so a handful was the seventh phone.
     await openOn();
 
     const answers = [];
 
-    for (let at = 0; at < 9; at++) {
+    for (let at = 0; at < VOTE_SENDS_PER_ADDRESS + 3; at++) {
       answers.push((await vote(at % 2 === 0 ? BILL.id : SAM.id)).status);
     }
+
+    assert.deepEqual(answers.slice(0, VOTE_SENDS_PER_ADDRESS).filter((s) => s !== 200), []);
 
     assert.ok(answers.includes(429), `No request was turned away: ${answers.join(",")}`);
 
     // And the ones that got through left exactly one vote, because they
     // were all the same sender.
     assert.equal((await inbox()).body.items.length, 1);
+  });
+
+  it("tells a phone turned away by the brake to try again, not that it changed its mind (bug hunt 14)", async () => {
+    // A room shares the address, so the phone that meets it may be voting
+    // for the first time.
+    await openOn();
+
+    for (let at = 0; at < VOTE_SENDS_PER_ADDRESS; at++) {
+      await voteFrom(`phone-${String(at).padStart(4, "0")}`, BILL.id);
+    }
+
+    const refused = await voteFrom("first-time-phone", BILL.id);
+
+    assert.equal(refused.status, 429);
+    assert.equal(refused.body.error, "Too many votes from this connection just now - try again in a minute.");
+    assert.doesNotMatch(String(refused.body.error), /changed your mind/);
+  });
+
+  it("shows the relay's own words when a vote is turned away", async () => {
+    // Live's Who wins? card puts the refusal's error on screen as it is.
+    const { DEFAULT_CONTEXT, livePage } = await import("../src/pages.js");
+    const page = livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_CONTEXT.look, vote: true } });
+
+    assert.match(page, /said\.textContent = \(d && typeof d\.error === 'string' && d\.error\) \|\| 'Could not send that\.';/);
   });
 });
 

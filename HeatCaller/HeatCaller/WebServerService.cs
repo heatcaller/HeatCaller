@@ -277,13 +277,30 @@ public sealed partial class WebServerService
     /// </summary>
     private readonly object _rosterGate = new();
 
-    /// <summary>Hands the check-in page a fresh roster. Called from the UI thread.</summary>
-    public void PublishRoster(IReadOnlyList<CheckInEntry> roster)
+    /// <summary>
+    /// Why a phone's check-in is refused because the current race day is
+    /// closed, or null when it is open. Published with the roster - see
+    /// PublishRoster.
+    ///
+    /// Bug hunt 14 (7 Nov 2026): a phone tapping in on a closed day was
+    /// answered "ok" and shown "checked in" while the laptop refused the
+    /// change (MainForm.ApplyPhoneCheckIn) - so the driver walked off
+    /// thinking they were in. The request thread cannot ask the event store
+    /// itself (it belongs to the UI thread), so the host says so here.
+    /// </summary>
+    private volatile string? _checkInDayClosedReason;
+
+    /// <summary>
+    /// Hands the check-in page a fresh roster, and why the day it is for is
+    /// closed (null while it is open). Called from the UI thread.
+    /// </summary>
+    public void PublishRoster(IReadOnlyList<CheckInEntry> roster, string? dayClosedReason = null)
     {
         lock (_rosterGate)
         {
             _roster = roster;
             _rosterView = BuildRosterView(roster, _rosterKey);
+            _checkInDayClosedReason = dayClosedReason;
         }
     }
 
@@ -2230,6 +2247,19 @@ public sealed partial class WebServerService
         if (known.CheckedIn == wanted)
         {
             WriteJson(context, "{\"ok\":true}");
+            return;
+        }
+
+        // Bug hunt 14 (7 Nov 2026): not onto a closed day - see
+        // _checkInDayClosedReason. Refused here, before it is handed over or
+        // assumed, so the phone says why instead of "checked in". After the
+        // driver's own PIN, as every answer about a driver is. The laptop
+        // still refuses it too (MainForm.ApplyPhoneCheckIn), for a day
+        // closed since the last publish.
+        if (_checkInDayClosedReason is { } dayClosed)
+        {
+            context.Response.StatusCode = 503;
+            WriteJson(context, JsonSerializer.Serialize(new { ok = false, error = dayClosed }));
             return;
         }
 

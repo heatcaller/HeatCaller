@@ -404,6 +404,21 @@ public sealed partial class AnnouncementService
 
         GiveBackLost(giveBack);
 
+        // WHY (7 Nov 2026, bug hunt 14): a position report still waiting for
+        // the cars it names has its own timer, and when that ran out after a
+        // reset it read the abandoned race's order to the room - queued under
+        // the new generation, so nothing above silenced it - up to a minute
+        // after the director pressed Reset. Only on a reset (SilenceNow), as
+        // that is the cut that leaves the race behind. The lap counter and
+        // the crossings are left alone, so undoing the reset still has them.
+        if (alsoFlagCalls)
+        {
+            lock (_positionReportLock)
+            {
+                _waitingPositionReport = null;
+            }
+        }
+
         int clearedSounds;
 
         lock (_soundQueueLock)
@@ -1153,7 +1168,20 @@ public sealed partial class AnnouncementService
 
     /// <summary>A timed race has one minute left - fired once by the session.</summary>
     public void NotifyFinalMinute() =>
-        EnqueueVoice(AnnouncementEventType.FinalMinute, null, null);
+        // Bug hunt 14 (7 Nov 2026): with a say-by time, as the other time
+        // calls have had since 28 Oct. It waits its turn behind a line
+        // already playing, and without one "one minute to go" could be heard
+        // with twenty or thirty seconds left.
+        EnqueueVoice(AnnouncementEventType.FinalMinute, null, null,
+            sayByMs: TimingClock.NowMs + FinalMinuteSayWithinMs);
+
+    /// <summary>
+    /// How long after the minute "one minute to go" is still worth saying.
+    /// Longer than the last-minute calls' (the next one, forty-five seconds,
+    /// is fifteen seconds behind it and replaces it anyway), shorter than the
+    /// minutes-left calls', because a quarter of the minute gone makes it wrong.
+    /// </summary>
+    internal const long FinalMinuteSayWithinMs = 15_000;
 
     /// <summary>
     /// How long after its mark a minutes-left call is still worth saying.

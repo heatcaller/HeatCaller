@@ -650,6 +650,7 @@ public sealed partial class RaceControlControl
         var skip = new HoldToAct(_btnBarSkip, "end the recap show", SkipWholeShow);
 
         skip.Changed += h => _holdStrip.Follow(h);
+        skip.Changed += _ => MoveDeskIfOwed();
         skip.CalledOff += h =>
         {
             _holdStrip.Follow(h);

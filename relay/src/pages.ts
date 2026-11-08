@@ -6062,6 +6062,32 @@ function picksWords() {
 
   const API = '/api/v1/c/' + encodeURIComponent(CLUB) + '/vote';
 
+  // WHICH PHONE THIS IS (7 Nov 2026, bug hunt 14): a made-up id this phone
+  // keeps and sends with its vote, so the relay counts two phones on the
+  // venue's one Wi-Fi address as two voters rather than one. It says
+  // nothing about the phone - it is random, and the relay only ever keeps
+  // it hashed with the race's own salt. One that cannot be kept is made
+  // again for this visit, which is one voter for as long as the page is open.
+  const VOTER_KEY = 'hg-voter-' + CLUB;
+  let voterId = '';
+  function voter() {
+    if (voterId) return voterId;
+    try { voterId = localStorage.getItem(VOTER_KEY) || ''; } catch (e) { voterId = ''; }
+    if (!/^[A-Za-z0-9_-]{8,40}$/.test(voterId)) {
+      let made = '';
+      try {
+        const bytes = new Uint8Array(12);
+        crypto.getRandomValues(bytes);
+        made = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+      } catch (e) {
+        made = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      }
+      voterId = made.slice(0, 40);
+      try { localStorage.setItem(VOTER_KEY, voterId); } catch (e) { /* this visit only */ }
+    }
+    return voterId;
+  }
+
   // Which ballot is showing: the race and its grid. A new one is a new
   // race, and this phone has picked nobody in it yet. (The relay keeps
   // the laptop's own race id to itself; two classes' A-mains have the
@@ -6154,7 +6180,7 @@ function picksWords() {
       r = await fetch(API + '/send', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ d: id }),
+        body: JSON.stringify({ d: id, p: voter() }),
         cache: 'no-store',
       });
       d = await r.json().catch(() => ({}));
@@ -6383,13 +6409,24 @@ const SPONSORS_JS = `
     try { localStorage.setItem(SEEN_KEY, JSON.stringify(o)); } catch (e) { /* counted again next time */ }
   }
 
+  // What the relay made of it (bug hunt 14): 'done' when it counted it or
+  // turned it down for good (a sponsor no longer published - sending it
+  // again would get the same no), 'again' when it was busy (429), broken
+  // (5xx) or out of reach, so a view it never took is not written down.
   function tell(what) {
     try {
-      fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/sponsors/seen', {
+      return fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/sponsors/seen', {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(what), cache: 'no-store', keepalive: true,
-      }).catch(() => {});
-    } catch (e) { /* not counted */ }
+      }).then((r) => (r.status === 429 || r.status >= 500 ? 'again' : 'done'), () => 'again');
+    } catch (e) { return Promise.resolve('again'); }
   }
+
+  // Ids not to send yet, with when they may go: forever while one is on
+  // its way (the scroll fires many times a second), then a minute after a
+  // busy or broken answer, so a room of phones does not pile straight back
+  // onto a relay that has just said wait.
+  const AGAIN_AFTER_MS = 60000;
+  const notBefore = new Map();
 
   // On screen now: in the window, on a page that is not hidden.
   function onScreen() {
@@ -6404,13 +6441,29 @@ const SPONSORS_JS = `
     if (shown.length === 0 || !onScreen()) return;
     const was = seenRead();
     const now = Date.now();
-    const due = shown.filter((id) => !(Number(was[id]) > now - AGAIN_MS));
+    const due = shown.filter((id) => !(notBefore.get(id) > now) && !(Number(was[id]) > now - AGAIN_MS));
     if (due.length === 0) return;
-    const kept = {};
-    for (const id of Object.keys(was)) if (Number(was[id]) > now - AGAIN_MS) kept[id] = was[id];
-    for (const id of due) kept[id] = now;
-    seenWrite(kept);
-    tell({ seen: due });
+    // WRITTEN DOWN ONLY ONCE ANSWERED (7 Nov 2026, bug hunt 14): this used
+    // to stamp the half hour before it sent, and ignore the answer - so a
+    // view the relay turned away (a room of phones on one address used to
+    // meet its limit) was never sent again and the sponsor never got it.
+    // Now a busy or failed send leaves it due, tried again a minute on; a
+    // yes, or a no that would never change, is stamped as before.
+    for (const id of due) notBefore.set(id, Infinity);
+    tell({ seen: due }).then((answer) => {
+      if (answer !== 'done') {
+        const later = Date.now() + AGAIN_AFTER_MS;
+        for (const id of due) notBefore.set(id, later);
+        return;
+      }
+      for (const id of due) notBefore.delete(id);
+      const at = Date.now();
+      const latest = seenRead();
+      const kept = {};
+      for (const id of Object.keys(latest)) if (Number(latest[id]) > at - AGAIN_MS) kept[id] = latest[id];
+      for (const id of due) kept[id] = now;
+      seenWrite(kept);
+    });
   }
 
   function web(url) {
@@ -7653,25 +7706,49 @@ function drawUpdates() {
 const SP_SEEN_KEY = 'hg-spseen-' + CLUB;
 let spList = [];
 
+// What the relay made of it, as on Live (bug hunt 14): 'done' for a yes or
+// a no that would never change, 'again' for busy (429), broken (5xx) or
+// out of reach.
 function spTell(what) {
   try {
-    fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/sponsors/seen', {
+    return fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/sponsors/seen', {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(what), cache: 'no-store', keepalive: true,
-    }).catch(() => {});
-  } catch (e) { /* not counted */ }
+    }).then((r) => (r.status === 429 || r.status >= 500 ? 'again' : 'done'), () => 'again');
+  } catch (e) { return Promise.resolve('again'); }
 }
 
+function spSeenRead() {
+  try { const o = JSON.parse(localStorage.getItem(SP_SEEN_KEY) || '{}'); if (o && typeof o === 'object' && !Array.isArray(o)) return o; } catch (e) { /* none */ }
+  return {};
+}
+
+// Ids not to send yet, with when they may go: forever while one is on its
+// way, then a minute after a busy or broken answer.
+const SP_AGAIN_AFTER_MS = 60000;
+const spNotBefore = new Map();
+
+// WRITTEN DOWN ONLY ONCE ANSWERED (7 Nov 2026, bug hunt 14), as on Live:
+// the half-hour stamp used to go in before the view was sent, so one the
+// relay turned away was never sent again. A busy or failed send now leaves
+// it due, tried again a minute on.
 function spCount(id) {
-  if (document.hidden) return;
-  let was = {};
-  try { const o = JSON.parse(localStorage.getItem(SP_SEEN_KEY) || '{}'); if (o && typeof o === 'object' && !Array.isArray(o)) was = o; } catch (e) { /* none */ }
   const now = Date.now();
-  if (Number(was[id]) > now - 30 * 60000) return;
-  const kept = {};
-  for (const k of Object.keys(was)) if (Number(was[k]) > now - 30 * 60000) kept[k] = was[k];
-  kept[id] = now;
-  try { localStorage.setItem(SP_SEEN_KEY, JSON.stringify(kept)); } catch (e) { /* counted again next time */ }
-  spTell({ seen: [id] });
+  if (document.hidden || spNotBefore.get(id) > now) return;
+  if (Number(spSeenRead()[id]) > now - 30 * 60000) return;
+  spNotBefore.set(id, Infinity);
+  spTell({ seen: [id] }).then((answer) => {
+    if (answer !== 'done') {
+      spNotBefore.set(id, Date.now() + SP_AGAIN_AFTER_MS);
+      return;
+    }
+    spNotBefore.delete(id);
+    const was = spSeenRead();
+    const at = Date.now();
+    const kept = {};
+    for (const k of Object.keys(was)) if (Number(was[k]) > at - 30 * 60000) kept[k] = was[k];
+    kept[id] = now;
+    try { localStorage.setItem(SP_SEEN_KEY, JSON.stringify(kept)); } catch (e) { /* counted again next time */ }
+  });
 }
 
 function drawSponsor() {

@@ -117,6 +117,11 @@ public sealed partial class WebServerService
         return JsonSerializer.Serialize(new
         {
             ok = true,
+            // Bug hunt 14 (7 Nov 2026): whether there is a vote at all, open
+            // or closed. "open" alone could not tell "closed" from "never
+            // opened", and the page said "Voting has closed." all evening
+            // before the first vote was opened.
+            running = vote.OnPollId is not null,
             open = vote.Taking,
             race = vote.OnRace ?? string.Empty,
             drivers = vote.Options.Select(one => new { id = RosterId(key, one.Id), name = one.Name }).ToArray(),
@@ -278,6 +283,15 @@ public sealed partial class WebServerService
         var shown = null;
 
         function draw(d) {
+          // Bug hunt 14: no vote opened yet is not a closed one, so it is
+          // said as the not-ok answer in ballot() says it.
+          if (!d.running) {
+            shown = null;
+            race.textContent = '';
+            list.innerHTML = '';
+            msg.textContent = 'No vote is running at the moment.';
+            return;
+          }
           race.textContent = d.race || 'Tonight';
           open = !!d.open;
           // This phone's pick as the laptop holds it, not as this page

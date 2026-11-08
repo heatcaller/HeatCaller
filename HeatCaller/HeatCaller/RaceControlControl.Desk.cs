@@ -84,10 +84,41 @@ public partial class RaceControlControl
 
         if (wasShown != count > 0)
         {
-            _btnBarDesk.Visible = count > 0;
+            _deskMoveOwed = true;
+            MoveDeskIfOwed();
+        }
+    }
+
+    /// <summary>The Desk button came or went while a hold was under way, and is still to be put on or taken off the row.</summary>
+    private bool _deskMoveOwed;
+
+    /// <summary>
+    /// Puts the Desk button on the row, or takes it off, once nothing on the
+    /// row is being held. Laying the row out moves the buttons along - under
+    /// a held Red, Checkered or Reset that is the cursor leaving the button,
+    /// which calls the hold off. So it waits for the let-go: every hold's
+    /// Changed runs this again.
+    /// </summary>
+    private void MoveDeskIfOwed()
+    {
+        if (!_deskMoveOwed || IsDisposed || Disposing || !DeskMayMoveRow(_holds))
+        {
+            return;
+        }
+
+        _deskMoveOwed = false;
+
+        var show = _deskWaiting > 0;
+
+        if (_btnBarDesk.Visible != show)
+        {
+            _btnBarDesk.Visible = show;
             _flagRow?.Rearrange();
         }
     }
+
+    /// <summary>Whether the row may be laid out again now: nothing on it is being held.</summary>
+    internal static bool DeskMayMoveRow(IEnumerable<IShownHold> holds) => holds.All(h => h.Progress is null);
 
     /// <summary>The badge's words: the count, or "99+" past that.</summary>
     internal static string DeskBadgeText(int count) => count > 99 ? "99+" : count.ToString(System.Globalization.CultureInfo.InvariantCulture);

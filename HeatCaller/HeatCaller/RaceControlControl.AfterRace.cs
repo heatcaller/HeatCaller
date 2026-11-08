@@ -43,6 +43,51 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>
+    /// Forgets a recap that never went to air (bug hunt 14, 7 Nov 2026, R1) -
+    /// once its writing has finished, since it may still be on its way out -
+    /// and leaves a queued one alone, which is the last race summary and what
+    /// OnAirFollowsTheRecap and HistorySpoken stand on. Null when there is
+    /// nothing to forget; otherwise the continuation, for a test to wait on.
+    /// </summary>
+    /// <remarks>
+    /// WHY: with the teaser off, a Skip or a Stage during the result read
+    /// left BuildRecapAsync to answer nothing for a recap the model had
+    /// already written - and RecordAndReturn had already kept it as the last
+    /// race summary - so the "no recap" way out said "called off before it
+    /// was written" and returned without forgetting it, and the Announcer
+    /// page offered to repeat a recap nobody had heard. A failure part-way
+    /// through the sequence did the same. Safe to call more than once:
+    /// ForgetRaceSummary clears only the line it is given, and a blank line
+    /// is never kept.
+    /// </remarks>
+    internal static Task? ForgetRecapUnlessQueued(Task<string?>? writing, bool queued, Action<string?> forget)
+    {
+        if (writing is null || queued)
+        {
+            return null;
+        }
+
+        return writing.ContinueWith(
+            written => forget(written.Result),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnRanToCompletion,
+            TaskScheduler.Default);
+    }
+
+    /// <summary>
+    /// Whether the achievements reader's AI-written hand back may go out
+    /// (bug hunt 14, 7 Nov 2026, H2). It is written reacting to the AI's read
+    /// when there is one (WriteHonoursHandOff's GuestCovers), and to the
+    /// built-in read when there is not - so it goes with the read it was
+    /// written for: always when the AI wrote no read, and otherwise only when
+    /// that read is the one being said.
+    /// </summary>
+    /// <param name="aiReadWritten">The AI's read as written and checked, or null for none.</param>
+    /// <param name="aiReadSaid">Whether that read replaced the built-in one.</param>
+    internal static bool KeepsAiHandBack(string? aiReadWritten, bool aiReadSaid) =>
+        string.IsNullOrWhiteSpace(aiReadWritten) || aiReadSaid;
+
+    /// <summary>
     /// How many badge calls a single race may make out loud.
     ///
     /// A driver's first ever race can unlock several at once, and reading
@@ -1116,6 +1161,13 @@ public sealed partial class RaceControlControl
             // never heard.
             IReadOnlyList<CommentaryService.InterviewExchange>? principalWords = null;
 
+            // Bug hunt 14 (7 Nov 2026), R1: the recap's writing, and whether
+            // it was queued to air - out here so the finally can forget a
+            // recap that was written and never heard, however the sequence
+            // ended (a failure part-way included). See ForgetRecapUnlessQueued.
+            Task<string?>? recapWriting = null;
+            var recapWasQueued = false;
+
             try
             {
                 var sequenceStarted = DateTime.UtcNow;
@@ -1237,6 +1289,8 @@ public sealed partial class RaceControlControl
                         handicap: raceHandicap)
                     : null;
 
+                recapWriting = generation;
+
                 // A recap that was written but never spoken is not "the last
                 // race summary". It used to be kept as one regardless, and
                 // during the next heat the Announcer page offered to repeat
@@ -1244,11 +1298,7 @@ public sealed partial class RaceControlControl
                 // writing to finish, since it may still be on its way out.
                 void ForgetUnheardRecap()
                 {
-                    generation?.ContinueWith(
-                        written => _commentary!.ForgetRaceSummary(written.Result),
-                        CancellationToken.None,
-                        TaskContinuationOptions.OnlyOnRanToCompletion,
-                        TaskScheduler.Default);
+                    ForgetRecapUnlessQueued(generation, queued: false, _commentary!.ForgetRaceSummary);
                 }
 
                 if (generation is not null)
@@ -1780,10 +1830,17 @@ public sealed partial class RaceControlControl
                     // Silence was the only symptom before: the recap simply
                     // never arrived and nothing said why. Called off by the
                     // next race is said as such, not blamed on the model.
+                    // Bug hunt 14 (7 Nov 2026), R1: "before it was spoken" -
+                    // BuildRecapAsync answers nothing once the next race is
+                    // called even for a recap the model HAD written, which is
+                    // why it is forgotten here: kept, the Announcer page
+                    // offered to repeat a recap the room never heard.
                     StatusMessage?.Invoke(nextRace.IsCancellationRequested
-                        ? $"{AppTime.LogStampNow()}  [commentary] Recap called off after {tookSeconds:0.0}s - {CalledOff()} before it was written."
+                        ? $"{AppTime.LogStampNow()}  [commentary] Recap called off after {tookSeconds:0.0}s - {CalledOff()} before it was spoken."
                         : $"{AppTime.LogStampNow()}  [commentary] No recap after {tookSeconds:0.0}s - the model returned nothing. "
                           + "Any [llm] line above says whether it timed out, refused, or wasn't reachable.");
+
+                    ForgetUnheardRecap();
 
                     // The honours did not need the model either, so a race
                     // the model had nothing to say about still hands out
@@ -1908,6 +1965,8 @@ public sealed partial class RaceControlControl
                     ForgetUnheardRecap();
                     return;
                 }
+
+                recapWasQueued = true;
 
                 StatusMessage?.Invoke(
                     $"{AppTime.LogStampNow()}  [commentary] Recap queued {(DateTime.UtcNow - teaserEnded).TotalSeconds:0.0}s after the teaser finished "
@@ -2102,6 +2161,15 @@ public sealed partial class RaceControlControl
                 // The after-the-flag bed, if a way out above skipped taking
                 // it away. Safe twice.
                 flagBed?.Finish();
+
+                // Bug hunt 14 (7 Nov 2026), R1: a recap written and never
+                // queued to air is not the last race summary - for every way
+                // out above, the failure in the catch included. Never one that
+                // was queued. Safe twice - see ForgetRecapUnlessQueued.
+                if (_commentary is { } forgetting)
+                {
+                    _ = ForgetRecapUnlessQueued(recapWriting, recapWasQueued, forgetting.ForgetRaceSummary);
+                }
 
                 // And the write-aheads' gate, for a way out that never got as
                 // far as asking (20 Oct 2026). Safe twice - see _flagLinesAsked.
@@ -3380,7 +3448,9 @@ public sealed partial class RaceControlControl
             CoHostInterviews ? (_settings.CommentaryCoHostName ?? string.Empty).Trim() : string.Empty,
             principal: false,
             technicalLead: true,
-            record.Results.OrderBy(r => r.Position).FirstOrDefault() is { } winner ? WinnerName(winner) : string.Empty);
+            // Bug hunt 14 (7 Nov 2026), R2: the same winner as the result
+            // read and the AI's throw (FlagHandOffBrief) - never a DQ.
+            FlagResultRows(record).Podium is { Count: > 0 } podium ? WinnerName(podium[0]) : string.Empty);
 
         if (cancel.IsCancellationRequested)
         {
@@ -3625,7 +3695,9 @@ public sealed partial class RaceControlControl
     private HandOff.Brief FlagHandOffBrief(SessionRecord record, string? resultRead)
     {
         var coHost = (_settings.CommentaryCoHostName ?? string.Empty).Trim();
-        var winner = record.Results.OrderBy(r => r.Position).FirstOrDefault() is { } first ? WinnerName(first) : string.Empty;
+        // Bug hunt 14 (7 Nov 2026), R2: the winner the result read names -
+        // a DQ'd or no-lap car placed first is nobody's win to talk about.
+        var winner = FlagResultRows(record).Podium is { Count: > 0 } podium ? WinnerName(podium[0]) : string.Empty;
         var team = winner.Length > 0 ? $"{winner}'s team" : "the winning team";
 
         return new HandOff.Brief(
@@ -3648,17 +3720,51 @@ public sealed partial class RaceControlControl
     /// </summary>
     private string? FlagResultFor(SessionRecord record)
     {
-        var ordered = record.Results.OrderBy(r => r.Position).ToList();
+        var (podium, fastest) = FlagResultRows(record);
 
-        if (ordered.Count == 0)
+        if (podium.Count == 0)
         {
             return null;
         }
 
-        var podium = ordered.Take(3).Select(r => SpokenDriverName(r.Transponder)).ToList();
-        var fastest = ordered.Where(r => r.FastLapMs > 0).OrderBy(r => r.FastLapMs).FirstOrDefault();
+        return FlagResult(
+            podium.Select(r => SpokenDriverName(r.Transponder)).ToList(),
+            fastest is null ? null : SpokenDriverName(fastest.Transponder));
+    }
 
-        return FlagResult(podium, fastest is null ? null : SpokenDriverName(fastest.Transponder));
+    /// <summary>
+    /// Who the unofficial result at the flag names (bug hunt 14, 7 Nov 2026,
+    /// R2): the top three who actually FINISHED - laps on the board and no
+    /// DNF or DQ, RoomVoteWinner's rule - and the fastest lap of anybody not
+    /// disqualified. No podium at all when position one is not a finisher:
+    /// a DQ'd car placed first is no winner to call.
+    /// </summary>
+    /// <remarks>
+    /// WHY: the black flags are applied before the result is read, and the
+    /// re-order puts a DQ, a DNF or a car with no laps at the bottom but
+    /// keeps it - so a three-car race with one disqualified read "taking the
+    /// win ahead of B and C" with C the DQ, and a one-car DQ race called C
+    /// the winner. A DNF's fastest lap was still set on track, so it stands;
+    /// a DQ's is struck with the rest of their race.
+    /// </remarks>
+    internal static (IReadOnlyList<SessionResultEntry> Podium, SessionResultEntry? Fastest) FlagResultRows(SessionRecord record)
+    {
+        static bool Finished(SessionResultEntry r) => string.IsNullOrWhiteSpace(r.Outcome) && r.Laps > 0;
+
+        var ordered = record.Results.OrderBy(r => r.Position).ToList();
+
+        if (ordered.Count == 0 || !Finished(ordered[0]))
+        {
+            return (Array.Empty<SessionResultEntry>(), null);
+        }
+
+        var podium = ordered.Where(Finished).Take(3).ToList();
+        var fastest = ordered
+            .Where(r => r.FastLapMs > 0 && !string.Equals(r.Outcome?.Trim(), ResultEditor.Dq, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(r => r.FastLapMs)
+            .FirstOrDefault();
+
+        return (podium, fastest);
     }
 
     /// <summary>
@@ -4278,6 +4384,8 @@ public sealed partial class RaceControlControl
         // played - in for the built-in read, which is already rendered and
         // goes out if this is not in hand by now. The read is always turn 1:
         // the throw is 0, with or without the reader's hand back after it.
+        var aiReadSaid = false;
+
         if (plan.Read is { } readJob && lines.Count == plan.Turns.Count && lines.Count > 1)
         {
             var aiRead = await HonoursReadInTimeAsync(readJob, nextRace);
@@ -4291,6 +4399,7 @@ public sealed partial class RaceControlControl
             if (aiRead is not null)
             {
                 lines = new List<SpokenLine>(lines) { [1] = aiRead };
+                aiReadSaid = true;
             }
         }
 
@@ -4317,7 +4426,13 @@ public sealed partial class RaceControlControl
                     lines[0] = thrown;
                 }
 
-                if (written.Back is { } back)
+                // Bug hunt 14 (7 Nov 2026), H2: the AI's hand back was
+                // written reacting to the AI's read whenever there was one -
+                // so with that read written but not voiced in time, and the
+                // built-in read going out instead, it reacted to things the
+                // room never heard. The built-in hand back goes then.
+                if (written.Back is { } back
+                    && KeepsAiHandBack(plan.Read is { Written.IsCompletedSuccessfully: true } job ? job.Written.Result : null, aiReadSaid))
                 {
                     lines[2] = back;
                 }

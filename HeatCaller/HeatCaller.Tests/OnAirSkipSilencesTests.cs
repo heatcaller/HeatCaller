@@ -31,10 +31,18 @@ public sealed class OnAirSkipSilencesTests
     {
         var onAir = WithoutComments(Source("RaceControlControl.OnAir.cs"));
 
-        // The "pressed again" branch of RunOnAirAsync.
-        var pressedAgain = MethodBody(onAir, "_onAirStageNow = true;\n            running.Cancel();", "return;");
+        // The "pressed again" branch of RunOnAirAsync. Anchored inside the
+        // method since bug hunt 14 (7 Nov 2026), when the cancel there became
+        // CancelAsync - see On_Air_skips_cancel_without_running_On_Air_inline.
+        var runOnAir = MethodBody(onAir, "private async Task RunOnAirAsync(", "private async Task RunOnAirHoldingPracticeAsync(");
+        var pressedAgain = MethodBody(runOnAir, "_onAirStageNow = true;", "return;");
 
-        Assert.Contains("SilenceOnAir(", pressedAgain, StringComparison.Ordinal);
+        var cancelled = pressedAgain.IndexOf("running.CancelAsync()", StringComparison.Ordinal);
+        var silenced = pressedAgain.IndexOf("SilenceOnAir(", StringComparison.Ordinal);
+
+        Assert.True(cancelled > 0 && silenced > cancelled,
+            "Pressing On Air again must cancel On Air and then silence what it had queued.");
+        Assert.DoesNotContain("running.Cancel();", pressedAgain, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -43,11 +51,119 @@ public sealed class OnAirSkipSilencesTests
         var skip = WithoutComments(MethodBody(Source("RaceControlControl.OnAir.cs"),
             "private bool SkipOnAirToTheDemo(", "private static readonly Color OnAirRed"));
 
-        var cancelled = skip.IndexOf("running.Cancel();", StringComparison.Ordinal);
+        // CancelAsync since bug hunt 14 (7 Nov 2026) - see
+        // On_Air_skips_cancel_without_running_On_Air_inline.
+        var cancelled = skip.IndexOf("running.CancelAsync()", StringComparison.Ordinal);
         var silenced = skip.IndexOf("SilenceOnAir(", StringComparison.Ordinal);
 
         Assert.True(cancelled > 0 && silenced > cancelled,
             "Skipping a demo's On Air must cancel On Air and then silence what it had queued.");
+        Assert.DoesNotContain("running.Cancel();", skip, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// WHY THE SKIPS USE CancelAsync (7 Nov 2026, bug hunt 14). On Air awaits
+    /// on the UI thread. Cancel completes the cancelled wait on the caller's
+    /// thread and runs the awaiting code inline, so On Air's catch staged the
+    /// race - and queued its staging call - before Cancel came back, and the
+    /// SilenceOnAir straight after then wiped that call. CancelAsync leaves
+    /// the awaiting code to come back through the SynchronizationContext,
+    /// after the press handler (and its SilenceOnAir) has finished.
+    ///
+    /// The mechanism, shown on a thread with a SynchronizationContext.
+    /// </summary>
+    [Fact]
+    public void On_Air_skips_cancel_without_running_On_Air_inline()
+    {
+        // The wait On Air is in for the jingle and the bumper to reach their
+        // post: jingle.AtPost.WaitAsync(cts.Token). (A Task.Delay does not
+        // inline, so the WaitForAudioAsync stretch was never hit - the
+        // jingle's is.)
+        static Task ToThePost(CancellationToken token) => new TaskCompletionSource().Task.WaitAsync(token);
+
+        Assert.True(RanInline(cts => cts.Cancel(), ToThePost), "Cancel should run the awaiting code inline - the bug.");
+        Assert.False(RanInline(cts => _ = cts.CancelAsync(), ToThePost), "CancelAsync must not run the awaiting code inline.");
+    }
+
+    /// <summary>
+    /// Whether code awaiting a cancelled wait ran before the cancel call came
+    /// back, on a thread whose awaits resume through a queue of its own - the
+    /// shape of the UI thread On Air runs on.
+    /// </summary>
+    private static bool RanInline(Action<CancellationTokenSource> cancel, Func<CancellationToken, Task> wait)
+    {
+        var ranInline = false;
+        Exception? failure = null;
+
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var context = new QueueContext();
+                SynchronizationContext.SetSynchronizationContext(context);
+
+                using var cts = new CancellationTokenSource();
+                var staged = false;
+
+                async Task OnAir()
+                {
+                    try
+                    {
+                        await wait(cts.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        staged = true;
+                    }
+                }
+
+                var run = OnAir();
+
+                cancel(cts);
+                ranInline = staged;
+
+                // Let the posted continuation run, so nothing is left behind.
+                var until = DateTime.UtcNow.AddSeconds(5);
+
+                while (!run.IsCompleted && DateTime.UtcNow < until)
+                {
+                    context.RunPending();
+                    Thread.Sleep(1);
+                }
+            }
+            catch (Exception ex)
+            {
+                failure = ex;
+            }
+        });
+
+        thread.Start();
+        thread.Join();
+
+        if (failure is not null)
+        {
+            throw new InvalidOperationException("The cancel test thread failed.", failure);
+        }
+
+        return ranInline;
+    }
+
+    /// <summary>A SynchronizationContext that runs what is posted to it only when asked - a UI thread's message queue.</summary>
+    private sealed class QueueContext : SynchronizationContext
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<(SendOrPostCallback Callback, object? State)> _queue = new();
+
+        public override void Post(SendOrPostCallback d, object? state) => _queue.Enqueue((d, state));
+
+        public override void Send(SendOrPostCallback d, object? state) => d(state);
+
+        public void RunPending()
+        {
+            while (_queue.TryDequeue(out var item))
+            {
+                item.Callback(item.State);
+            }
+        }
     }
 
     [Fact]

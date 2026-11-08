@@ -286,7 +286,20 @@ public sealed partial class RaceControlControl
             + "skipping the rest of the opening and starting the demo, which stages and goes green by itself.");
 
         _onAirStageNow = true;
-        running.Cancel();
+
+        // CancelAsync, not Cancel (7 Nov 2026, bug hunt 14) - see the same
+        // in RunOnAirAsync: Cancel ran On Air's continuation inline, which
+        // staged the race, and the SilenceOnAir below then wiped the call
+        // that staging had just queued.
+        try
+        {
+            _ = running.CancelAsync();
+        }
+        catch (ObjectDisposedException)
+        {
+            // On Air had already finished.
+        }
+
         SilenceOnAir($"On Air skipped to the demo ({flag} pressed)");
         return true;
     }
@@ -821,7 +834,23 @@ public sealed partial class RaceControlControl
 
             // Pressed again: the rest of it is skipped and the race staged now.
             _onAirStageNow = true;
-            running.Cancel();
+
+            // WHY (7 Nov 2026, bug hunt 14): CancelAsync, not Cancel. On Air
+            // awaits on the UI thread, and Cancel runs its continuation
+            // INLINE - so On Air's catch staged the race, and its staging
+            // call was queued, before Cancel came back. SilenceOnAir below
+            // then wiped that call. CancelAsync completes the cancelled
+            // waits off this thread, and their continuations come back to
+            // the UI thread after this handler, so the silencing goes
+            // first, as the note below always meant.
+            try
+            {
+                _ = running.CancelAsync();
+            }
+            catch (ObjectDisposedException)
+            {
+                // On Air had already finished.
+            }
 
             // And what On Air has already queued stops with it - see
             // SilenceOnAir. Before the hand-over's Stage, which runs once
@@ -1076,6 +1105,16 @@ public sealed partial class RaceControlControl
             // the race is still to be staged. Holding 0 skips the rest, which
             // the strip says too.
             ShowOnAirLive(true);
+
+            // WHY (7 Nov 2026, bug hunt 14): a sponsor video still running on
+            // the Big Screen kept its sound over the jingle and the opening -
+            // the screen only stops one once the race is called, which On
+            // Air has not done yet. The spot comes off first, as Stop the
+            // Broadcast takes it off.
+            if (_bigScreen is { IsDisposed: false } screen)
+            {
+                screen.StopSponsorSpot("On Air");
+            }
 
             // 2. The jingle, to its post.
             jingle = BroadcastImaging.Start(ImagingCue.TopOfRace);

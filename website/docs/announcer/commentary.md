@@ -1175,7 +1175,7 @@ Open and close it on the **Votes** button in the **Broadcast** window (the **Bro
 |---|---|
 | Call the race to the grid | The window offers **Open voting on &lt;this race&gt;**, with the drivers actually staged on the ballot |
 | Open it | Phones can vote. The **Votes** button carries the count as it climbs, in your look's accent |
-| Before the start | Press **Close voting** — or don't; it closes itself when the result comes in |
+| Before the start | Press **Close voting** — or don't; it closes itself when that race goes green |
 | After the race | The announcer works the verdict in as a segment of its own, **The Room's Verdict** on the Big Screen's band |
 
 The ballot is the cars **actually staged**, not the program's assigned list: a driver who didn't turn up must not be on it. The program's list is the fallback for a vote opened before anybody has crossed the loop.
@@ -1232,7 +1232,7 @@ Most of the care in this feature is in the silence, because a claim about what "
 
 **Keyed to the round, not its name.** A club running Stock and Mod has two rounds both labeled "A-Main". Matched on the label, the room's Stock prediction would be read out over the Mod A-main — a verdict about the wrong race, said with complete confidence. The vote carries the round's own id so that cannot happen.
 
-**It closes itself twice over**: when the result comes in, and in any case twenty minutes after it opened, whatever anybody pressed. A poll left open through two more heats would be collecting votes for a race that had already been run and then telling the room what it "predicted".
+**It closes itself three times over**: when that race goes green — a guess made after the flag isn't a prediction — when its result is filed, if it's somehow still open then, and in any case twenty minutes after it opened, whatever anybody pressed. A poll left open through two more heats would be collecting votes for a race that had already been run and then telling the room what it "predicted".
 
 ### What the model is told
 

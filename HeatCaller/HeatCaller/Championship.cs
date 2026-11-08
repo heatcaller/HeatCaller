@@ -42,7 +42,11 @@ public sealed class ChampionshipMove
     /// <summary>Points carried in from before HeatCaller (Season.CarriedPoints), already inside TotalPoints.</summary>
     public int CarriedIn { get; init; }
 
-    /// <summary>Rounds they were entered in and completed no laps.</summary>
+    /// <summary>
+    /// Races they were entered in and did not finish: no laps, or marked DNF
+    /// or DQ in Edit Result (which keeps the laps and the points). Bug hunt
+    /// 14, 7 Nov 2026: this said "completed no laps", which only the first is.
+    /// </summary>
     public int Dnfs { get; init; }
 
     /// <summary>Places gained (positive) or lost (negative). Zero for a first appearance.</summary>
@@ -208,5 +212,38 @@ public static class Championship
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The season's planned length and the rounds held so far, for the
+    /// public standings' "what it takes" card (7 Nov 2026, bug hunt 14).
+    ///
+    /// The rounds held are race DAYS, counted the way the commentary counts
+    /// them (CommentaryReaders.RoundsCountedSoFar), not the most rounds any
+    /// driver has raced. That figure had each driver's dropped rounds added
+    /// a second time, and a night with two counting races was two rounds.
+    ///
+    /// When the races cannot be put on days - a session ticked in by hand
+    /// with no round, or two counting races on one night - planned comes
+    /// back 0, which keeps the page quiet. A held of 0 would not: the page
+    /// would then say every round is still to go. The page also prices each
+    /// remaining round as one race, so two races a night would under-price
+    /// every rival anyway.
+    /// </summary>
+    internal static (int Planned, int Held) WhatItTakesLength(
+        Season season,
+        IReadOnlyList<SessionRecord> counted,
+        RaceEventStore? events)
+    {
+        var scored = counted.Where(s => !s.IsNotScored()).ToList();
+
+        if (scored.Count == 0)
+        {
+            return (season.PlannedRounds, 0);
+        }
+
+        return CommentaryReaders.RoundsCountedSoFar(scored, events, null) is { } days
+            ? (season.PlannedRounds, days)
+            : (0, 0);
     }
 }

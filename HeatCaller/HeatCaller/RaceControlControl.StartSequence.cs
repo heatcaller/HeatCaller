@@ -1050,6 +1050,12 @@ public sealed partial class RaceControlControl
     /// here was thrown during this start. It used to read the abandoned
     /// race's own yellow as one, and a countdown confirmed over a race under
     /// caution stopped before the green every time.
+    ///
+    /// Bug hunt 14 (7 Nov 2026): so does a countdown started straight from a
+    /// finished or idle session, for a yellow or red left out from before it
+    /// (thrown after the finish with F4/F5 or from the phone). That one also
+    /// used to be read here as a caution thrown during this start, and the
+    /// start stalled. A checkered left from the finished race is still kept.
     /// </summary>
     private bool AutoStartMayContinue(int generation, RaceState waitingIn)
     {

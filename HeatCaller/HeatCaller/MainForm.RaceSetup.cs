@@ -342,8 +342,17 @@ public partial class MainForm
         // Not onto a closed day: picking last week's day to look at its
         // results leaves it current, and phones tapping in tonight used to
         // land on last week's sheet - see CheckInStore.ClosedCurrentDay.
-        // Refused the way this path refuses anything: nothing changes, the
-        // phone's next poll shows it unchanged, and the console says why.
+        // Refused the way this path refuses anything: nothing changes and
+        // the console says why.
+        //
+        // Bug hunt 14 (7 Nov 2026): this said the phone's next poll shows it
+        // unchanged. It did not: the LAN server had already answered "ok"
+        // and marked its own copy of the roster, so the phone showed
+        // "checked in" until the next publish. The LAN server now refuses a
+        // closed day itself, with the reason (WebServerService.HandleCheckIn,
+        // told by PublishCheckInRoster); this is the backstop for a day
+        // closed since that publish, and for the other callers (the race-day
+        // manager, the relay sign-up desk).
         if (CheckInStore.ClosedCurrentDay(_raceEvents) is { } closedDay)
         {
             var whoProfile = _profiles.Get(transponder);

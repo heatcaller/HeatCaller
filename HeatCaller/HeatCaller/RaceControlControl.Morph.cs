@@ -48,6 +48,7 @@ public partial class RaceControlControl
         var hold = new HoldToAct(button, doing, act);
 
         hold.Changed += h => _holdStrip.Follow(h);
+        hold.Changed += _ => MoveDeskIfOwed();
         hold.CalledOff += _ => _holdStrip.CalledOff();
 
         if (button is FlagButton flag)

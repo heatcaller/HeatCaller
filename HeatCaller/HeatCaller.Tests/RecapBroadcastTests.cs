@@ -580,7 +580,7 @@ public sealed class RecapBroadcastTests : IDisposable
         var facts = model.Facts;
 
         Assert.Contains("Sam is making their first ever Box Stock start at this club.", facts);
-        Assert.Contains("Championship as it stands BEFORE this race: Winter Series, 4 rounds counted so far", facts);
+        Assert.Contains("Championship as it stands BEFORE this race: Winter Series, 4 races counted so far", facts);
         Assert.Contains("P1 Bill, in this race - 61 points, leads the championship", facts);
         Assert.Contains("P2 Sam, in this race - 54 points, 7 points behind the leader", facts);
 
@@ -590,6 +590,55 @@ public sealed class RecapBroadcastTests : IDisposable
         // What this race decides is NOT this app's to call.
         Assert.Contains("do not predict a winner or a champion", facts);
         Assert.Contains("Do not state a win, a podium, a start, a run of results or a first that is not listed", facts);
+    }
+
+    /// <summary>
+    /// Bug hunt 14 (7 Nov 2026): the count a championship line gives is the
+    /// RACES it counts, and a club's round is a night - two mains a night
+    /// for three nights is six races and three rounds. Said as races.
+    /// </summary>
+    [Fact]
+    public async Task The_championship_lines_count_races_not_rounds()
+    {
+        var (desk, model) = Desk();
+
+        static ChampionshipMove Move(string name, int position, int points, int behind) => new()
+        {
+            DriverName = name,
+            Position = position,
+            PreviousPosition = position,
+            TotalPoints = points,
+            PointsBehindLeader = behind,
+            RacedThisTime = true,
+        };
+
+        var bill = Move("Bill", 1, 61, 0);
+
+        // Two races a night on three nights.
+        await desk.BuildRaceSummaryAsync(
+            ARace(Finisher("Sam", 1, 12), Finisher("Bill", 2, 12, 300_450)),
+            championship: new ChampionshipSwing
+            {
+                SeasonName = "Winter Series",
+                Moves = new[] { bill, Move("Sam", 2, 54, 7) },
+                Leader = bill,
+                RoundsCounted = 6,
+            });
+
+        Assert.Contains("Championship after this race: Winter Series, 6 races counted", model.Facts);
+        Assert.DoesNotContain("rounds counted", model.Facts);
+
+        await desk.BuildRoundIntroAsync(
+            AMain("Sam", "Bill"),
+            stake: new ChampionshipAtStake(
+                "Winter Series",
+                6,
+                "Bill",
+                LeaderInThisRace: true,
+                new[] { new ChampionshipStanding("Bill", "Bill", 1, 1, 61, 0) }));
+
+        Assert.Contains("Winter Series, 6 races counted so far", model.Facts);
+        Assert.DoesNotContain("rounds counted", model.Facts);
     }
 
     [Fact]
