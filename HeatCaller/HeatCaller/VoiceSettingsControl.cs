@@ -392,6 +392,9 @@ public sealed partial class VoiceSettingsControl : UserControl
     private (Font Font, int Count, int Width)? _kokoroVoiceWidth;
     private (Font Font, int Count, int Width)? _voiceWidth;
     private (Font Font, int Count, int Width)? _modelWidth;
+
+    /// <summary>The race-calls list's measured width, as _modelWidth is for the Model box.</summary>
+    private (Font Font, int Count, int Width)? _raceCallModelWidth;
     private (Font Font, int Count, int Width)? _normalizationWidth;
     private (Font Font, int Count, int Width)? _savedLinesWidth;
 
@@ -867,6 +870,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         FitVoicePicker(_cmbVoice, ref _voiceWidth);
 
         Fit(_cmbModel, Math.Max(field, Pieces.PickerWidth(_cmbModel, ref _modelWidth)));
+        Fit(_cmbRaceCallModel, Math.Max(field, Pieces.PickerWidth(_cmbRaceCallModel, ref _raceCallModelWidth)));
         Fit(_cmbTextNormalization, Math.Max(UiLayout.AtTextSize(NormalizationPickerWidth), Pieces.PickerWidth(_cmbTextNormalization, ref _normalizationWidth)));
 
         Fit(_txtVoiceRelayUrl, UiLayout.AtTextSize(UiLayout.WideFieldWidth));

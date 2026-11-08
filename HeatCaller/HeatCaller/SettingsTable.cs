@@ -505,6 +505,7 @@ internal static class SettingsTable
         {
             // The ElevenLabs model, the Voice parameters card, Race Calls.
             nameof(VoiceProfile.ModelId),
+            nameof(VoiceProfile.RaceCallModelId),
             nameof(VoiceProfile.KokoroStandsIn),
             nameof(VoiceProfile.Stability),
             nameof(VoiceProfile.SimilarityBoost),
