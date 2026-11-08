@@ -177,11 +177,13 @@ public sealed class CommentaryNumberCheckTests
     }
 
     [Fact]
-    public void Five_percent_of_a_lap_time_is_inside_the_tolerance()
+    public void A_lap_time_must_be_within_five_hundredths_of_the_fact()
     {
         // Pinned so a change to the tolerance is a decision, not an
-        // accident: 6.50 is 0.253 from 6.753, inside 5% of it (0.338).
-        Assert.Null(CommentaryNumberCheck.Unsupported("on a six fifty", RaceFacts));
+        // accident (8 Nov 2026): 5% of a 6.753 lap (0.338) let "a six
+        // fifty" through, so the tolerance is 0.05 alone.
+        Assert.Equal("six fifty", CommentaryNumberCheck.Unsupported("on a six fifty", "lap 6.753s"));
+        Assert.Null(CommentaryNumberCheck.Unsupported("on a six seventy-five", "lap 6.753s"));
         Assert.NotNull(CommentaryNumberCheck.Unsupported("on a six twenty", "lap 6.753s"));
     }
 

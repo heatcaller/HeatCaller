@@ -192,10 +192,11 @@ internal static class CommentaryNumberCheck
 
             // "A second and a half" is how RaceNumbers.GapSpoken says
             // anything from 1.25 to 1.75, so a half is backed by what rounds
-            // to it; everything else within 0.05, or 5% of the fact.
+            // to it; everything else within 0.05. Not 5% of the fact as well
+            // (8 Nov 2026): on a 6.753 lap that let "a six fifty" through.
             var near = figure.Step >= 0.5 ? (figure.Step / 2) + 1e-9 : 0.05 + 1e-9;
 
-            return _all.Any(v => Math.Abs(v - figure.Value) <= near || Math.Abs(v - figure.Value) <= (0.05 * Math.Abs(v)) + 1e-9);
+            return _all.Any(v => Math.Abs(v - figure.Value) <= near);
         }
     }
 
