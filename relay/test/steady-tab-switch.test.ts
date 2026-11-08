@@ -97,7 +97,7 @@ describe("a club page drawn from what this phone last read", () => {
 
   it("never speaks a lap on Live from a copy", () => {
     const live = livePage("acme-rc", "Acme RC");
-    assert.match(live, /function render\(state, seen, at, empty\) \{[\s\S]{0,120}if \(!seen\) lapTalk\.take\(state\);/);
+    assert.match(live, /function render\(state, seen, at, empty\) \{[\s\S]{0,120}if \(!seen\) lapTalk\.take\(state, at\);/);
     assert.match(live, /render\(state, answer\.seen === true, /);
   });
 });

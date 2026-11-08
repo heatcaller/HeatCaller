@@ -22,7 +22,7 @@ export interface Sent {
  * AbortController. Not waited for by settle, which would otherwise wait for
  * ever.
  */
-export type Answerer = (url: string, body: Record<string, unknown>) => Promise<{ status: number; body?: unknown; date?: string; hang?: boolean }>;
+export type Answerer = (url: string, body: Record<string, unknown>) => Promise<{ status: number; body?: unknown; date?: string; headers?: Record<string, string>; hang?: boolean }>;
 
 export class FakeNode {
   tagName: string;
@@ -293,7 +293,7 @@ export class FakePage {
             status: got.status,
             ok: got.status >= 200 && got.status < 300,
             json: async () => got.body ?? {},
-            headers: { get: (name: string) => (name.toLowerCase() === "date" ? got.date ?? null : null) },
+            headers: { get: (name: string) => (name.toLowerCase() === "date" ? got.date ?? null : got.headers?.[name.toLowerCase()] ?? null) },
           };
         })();
         page.inFlight.add(answered);

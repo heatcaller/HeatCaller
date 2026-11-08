@@ -2995,13 +2995,18 @@ export class Relay {
         return { applied: false, seq: existing.seq };
       }
 
+      const at = this.now();
       const doc: StoredDocument = {
         seq,
-        publishedAt: this.now().toISOString(),
+        publishedAt: at.toISOString(),
         // Heat line-ups are the roster split by heat, so they follow the
         // relay's roster switch too - taken out here, so the names never
-        // reach the disk. See withoutLineups.
-        body: spec.name === "programme" && who.publishRoster !== true ? withoutLineups(body) : body,
+        // reach the disk. See withoutLineups. The live board's rows get
+        // the time each car's newest lap reached the relay - see
+        // withLapTimes.
+        body: spec.name === "programme" && who.publishRoster !== true
+          ? withoutLineups(body)
+          : spec.name === "state" ? withLapTimes(existing?.body, body, at.getTime()) : body,
       };
 
       if (spec.kind === "snapshot") {
@@ -3477,8 +3482,14 @@ export class Relay {
     const key = this.listingKey(club, channel, false);
     const held = this.listings.get(key);
 
+    // The relay's clock, to the millisecond, on every answer (8 Nov 2026,
+    // timing review): a page reading out lap times compares each row's
+    // lapAt with it (see withLapTimes). The Date header is only to the
+    // second, and a phone's own clock can be out by minutes.
+    const clock = (): Record<string, string> => ({ "x-relay-now": String(this.now().getTime()) });
+
     if (held !== undefined) {
-      sendPublicBytes(response, 200, held);
+      sendPublicBytes(response, 200, held, clock());
       return;
     }
 
@@ -3507,7 +3518,7 @@ export class Relay {
       return;
     }
 
-    sendPublicBytes(response, 200, bytes);
+    sendPublicBytes(response, 200, bytes, clock());
   }
 
   /**
@@ -9155,6 +9166,87 @@ function withoutLineups(body: unknown): unknown {
   };
 }
 
+/**
+ * The live board with "lapAt" on each row: when, on the relay's clock in
+ * milliseconds, that car's newest lap first reached the relay.
+ *
+ * WHY (8 Nov 2026, timing review): a phone reading out lap times dropped a
+ * call that was more than 2.3 s old - but counted from when the PAGE read
+ * the lap, so the time the lap spent reaching the relay, waiting for the
+ * phone's next read and coming down to it was not counted, and a call
+ * could be heard well after the car crossed the line, with its gaps and
+ * time left from then. The laptop sends a board a second with nothing on
+ * a row to say when its lap was done, and the frame's publishedAt is when
+ * THIS frame came in - a phone whose reads fell behind sees a lap first in
+ * a later frame, which would make it look new. So the relay notes it per
+ * row: a car whose crossings (lap, its laps, and the first of them) are as
+ * they were in the frame before keeps that frame's lapAt; anything else is
+ * a new lap, stamped now.
+ *
+ * A row is found in the frame before by its tag, else by name; a key on
+ * two rows matches nothing. Anything not shaped as a board is left as it
+ * is, so this never throws.
+ */
+export function withLapTimes(before: unknown, body: unknown, nowMs: number): unknown {
+  if (!isPlainObject(body) || !Array.isArray(body["standings"])) {
+    return body;
+  }
+
+  const keyOf = (row: Record<string, unknown>): string | undefined =>
+    typeof row["tag"] === "string" && row["tag"] !== ""
+      ? "t:" + row["tag"]
+      : typeof row["name"] === "string" && row["name"] !== "" ? "n:" + row["name"] : undefined;
+
+  const crossings = (row: Record<string, unknown>): string => {
+    const laps = Array.isArray(row["laps"]) ? row["laps"].filter((v) => typeof v === "number" && v > 0) : [];
+    return `${typeof row["lap"] === "number" ? row["lap"] : ""}|${laps.length}|${laps.length > 0 ? laps[0] : ""}`;
+  };
+
+  // The frame before's rows by key, with what their crossings were.
+  const was = new Map<string, { crossings: string; lapAt: unknown } | null>();
+  const old = isPlainObject(before) && Array.isArray(before["standings"]) ? before["standings"] : [];
+
+  for (const row of old) {
+    if (!isPlainObject(row)) {
+      continue;
+    }
+
+    const key = keyOf(row);
+
+    if (key !== undefined) {
+      was.set(key, was.has(key) ? null : { crossings: crossings(row), lapAt: row["lapAt"] });
+    }
+  }
+
+  const seen = new Map<string, number>();
+
+  for (const row of body["standings"]) {
+    const key = isPlainObject(row) ? keyOf(row) : undefined;
+
+    if (key !== undefined) {
+      seen.set(key, (seen.get(key) ?? 0) + 1);
+    }
+  }
+
+  return {
+    ...body,
+    standings: body["standings"].map((row: unknown) => {
+      if (!isPlainObject(row)) {
+        return row;
+      }
+
+      const key = keyOf(row);
+      const prior = key !== undefined && seen.get(key) === 1 ? was.get(key) : undefined;
+      const kept = prior !== undefined && prior !== null && prior.crossings === crossings(row)
+        && typeof prior.lapAt === "number" && Number.isFinite(prior.lapAt) && prior.lapAt <= nowMs
+        ? prior.lapAt
+        : nowMs;
+
+      return { ...row, lapAt: kept };
+    }),
+  };
+}
+
 /** The laptop's manage document, cleaned. Undefined when there is none, or it is not an object - readCheckin's twin, much simpler: nothing here but whether it is on and what it is guarded by. */
 function readManage(club: string, doc: StoredDocument | undefined, key: Buffer): ManageView | undefined {
   const manage = isPlainObject(doc?.body) ? doc.body : undefined;
@@ -10315,9 +10407,10 @@ function newestOfMeta(listing: Buffer, limit: number): Buffer {
   return Buffer.from(JSON.stringify({ items: parsed.items.slice(0, limit), meta: true }), "utf8");
 }
 
-function sendPublicBytes(response: ServerResponse, status: number, bytes: Buffer): void {
+function sendPublicBytes(response: ServerResponse, status: number, bytes: Buffer, extra: Record<string, string> = {}): void {
   response.writeHead(status, {
     ...BASE_HEADERS,
+    ...extra,
     "content-type": "application/json; charset=utf-8",
     "content-length": bytes.length,
     "cache-control": "no-store",
