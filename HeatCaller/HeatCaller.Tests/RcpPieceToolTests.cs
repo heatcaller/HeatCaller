@@ -199,6 +199,44 @@ public sealed class RcpPieceToolTests
         Assert.Equal(0, second.Radius);
     }
 
+    [Fact]
+    public void Laying_a_turn_keeps_the_rail_the_tile_across_has_on_that_seam()
+    {
+        // The top of a T, as on Asher's floor (8 Nov 2026): a rail along the
+        // lane above, on its own tile, and the turn laid on the tile below.
+        var design = new RcpTrackDesign();
+
+        RcpPieces.Lay(design, 4, 2, RcpPiece.Rail, RcpEdge.South, RcpQuadrant.NorthWest);
+        RcpPieces.Adopt(design);
+        RcpPieces.Lay(design, 4, 3, RcpPiece.OuterCurve, RcpEdge.North, RcpQuadrant.NorthWest);
+        RcpPieces.Adopt(design);
+
+        Assert.NotNull(design.WallAt(4, 3, false));
+        Assert.Equal((RcpPiece.Rail, RcpEdge.South), (design.At(4, 2)!.Piece, design.At(4, 2)!.Facing));
+        Assert.Equal(RcpPiece.OuterCurve, design.At(4, 3)!.Piece);
+    }
+
+    [Fact]
+    public void Each_rail_is_drawn_on_the_side_of_its_seam_its_tile_is()
+    {
+        var design = new RcpTrackDesign();
+
+        // A rail tile facing south: the north tile of its seam. One facing
+        // west: the east tile of its seam. A rail at the edge of the floor
+        // no tile claims: the floor's side.
+        RcpPieces.Lay(design, 0, 0, RcpPiece.Rail, RcpEdge.South, RcpQuadrant.NorthWest);
+        RcpPieces.Lay(design, 5, 0, RcpPiece.Rail, RcpEdge.West, RcpQuadrant.NorthWest);
+        design.Tiles.Add(new RcpTile { Col = 9, Row = 9 });
+        design.Walls.Add(new RcpWall { Col = 9, Row = 9, Vertical = false });
+        RcpPieces.Adopt(design);
+
+        var sides = RcpTrackPainter.RailSides(design);
+
+        Assert.Equal(-1, sides[(0, 1, false)]);
+        Assert.Equal(1, sides[(5, 0, true)]);
+        Assert.Equal(1, sides[(9, 9, false)]);
+    }
+
     // --- on the board -------------------------------------------------------
 
     private static Point CellCentre(int col, int row) => new(40 + 64 * col + 32, 40 + 64 * row + 32);
