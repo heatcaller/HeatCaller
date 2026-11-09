@@ -12,6 +12,17 @@ public enum CommentaryTone
     Enthusiastic,
     Neutral,
     DryUnderstated,
+
+    // The character tones (8 Nov 2026) - their wording is in CommentaryTones.
+    Noir,
+    Eulogy,
+    Eldritch,
+    TrueCrime,
+    Villain,
+    Pirate,
+    WildlifeDoc,
+    TownCrier,
+    Haiku,
 }
 
 /// <summary>
@@ -809,8 +820,12 @@ public sealed class CommentaryService
         const string noTagsLine =
             " Do not write any square-bracket tags or stage directions - delivery cues are added separately.";
 
+        var character = CommentaryTones.Find(_settings.CommentaryToneStyle);
+
         var coaching = _settings.CommentaryToneStyle switch
         {
+            _ when character is not null => forExchange ? character.Exchange : character.Segment,
+
             // Left alone, exactly as the recap leaves it. Someone who picked
             // dry wants the asides dry too.
             CommentaryTone.DryUnderstated => string.Empty,
@@ -853,6 +868,13 @@ public sealed class CommentaryService
         // others. Tags are now added in code by PrepareSummaryForSpeech.
         const string noTagsLine =
             " Do not write any square-bracket tags or stage directions - delivery cues are added separately.";
+
+        if (CommentaryTones.Find(_settings.CommentaryToneStyle) is { } character)
+        {
+            return basePrompt + character.Close +
+                   " Never mention being an announcer and never address the drivers directly." +
+                   noTagsLine;
+        }
 
         switch (_settings.CommentaryToneStyle)
         {
@@ -958,15 +980,28 @@ public sealed class CommentaryService
         if (clean.Length == 0
             || !_settings.CommentaryVoiceTags
             || !VoiceSupportsAudioTags
-            || _settings.CommentaryToneStyle != CommentaryTone.Enthusiastic)
+            || !CommentaryTones.ReadsTags(_settings.CommentaryToneStyle))
         {
             return clean;
+        }
+
+        // A character tone (8 Nov 2026) brings its own cues: a noir line
+        // opens on a sigh and is otherwise left to the voice, a whispered
+        // one whispers throughout. The cold open's [shouting] lift is an
+        // Enthusiastic thing and is not laid over a character's own opener.
+        string? first = opener ?? "[excited]";
+        string? rest = "[excited]";
+
+        if (CommentaryTones.Find(_settings.CommentaryToneStyle) is { } character)
+        {
+            first = character.Opener ?? character.Sentence;
+            rest = character.Sentence;
         }
 
         var sentences = SentenceBreak.Split(clean)
             .Select(s => s.Trim())
             .Where(s => s.Length > 0)
-            .Select((s, at) => $"{(at == 0 ? opener ?? "[excited]" : "[excited]")} {s}");
+            .Select((s, at) => (at == 0 ? first : rest) is { } tag ? $"{tag} {s}" : s);
 
         return string.Join(" ", sentences);
     }
@@ -998,8 +1033,11 @@ public sealed class CommentaryService
     /// </param>
     private string BuildSystemPrompt(int extraWords = 0)
     {
+        var character = CommentaryTones.Find(_settings.CommentaryToneStyle);
+
         var toneLine = _settings.CommentaryToneStyle switch
         {
+            _ when character is not null => character.ToneLine + CommentaryTones.CharacterRule,
             CommentaryTone.DryUnderstated =>
                 "Be dry and understated - deadpan delivery, no exclamation marks, closer to a wry aside than hype.",
             CommentaryTone.Neutral =>
@@ -5206,8 +5244,11 @@ public sealed class CommentaryService
 
     private string BuildInterviewSystemPrompt()
     {
+        var character = CommentaryTones.Find(_settings.CommentaryToneStyle);
+
         var hostTone = _settings.CommentaryToneStyle switch
         {
+            _ when character is not null => character.Host + CommentaryTones.CharacterRule,
             CommentaryTone.DryUnderstated => "The host is dry and understated.",
             CommentaryTone.Neutral => "The host is calm and clear.",
             _ => "The host is excited and punchy, like a trackside TV reporter.",

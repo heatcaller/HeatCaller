@@ -740,7 +740,11 @@ public sealed class CommentaryControl : UserControl
             new ToneItem(CommentaryTone.Enthusiastic, "Enthusiastic - trackside hype"),
             new ToneItem(CommentaryTone.Neutral, "Neutral - calm play-by-play"),
             new ToneItem(CommentaryTone.DryUnderstated, "Dry - understated, deadpan"),
-        };
+        }
+        // The character tones (8 Nov 2026), labelled with their group -
+        // "Dark: Noir - ..." - since a dropdown list has no headings.
+        .Concat(CommentaryTones.All.Select(tone => new ToneItem(tone.Tone, tone.Label)))
+        .ToArray();
 
         _cmbTone.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbTone.Items.AddRange(toneItems);
@@ -778,7 +782,7 @@ public sealed class CommentaryControl : UserControl
         // from the width of "words" before it.
         var styleGrid = new FieldGrid();
 
-        Check(_chkVoiceTags, "Mark the lines excited when they're spoken");
+        Check(_chkVoiceTags, "Give the lines their tone's delivery when they're spoken");
         _chkVoiceTags.Checked = _settings.CommentaryVoiceTags;
         _chkVoiceTags.CheckedChanged += (_, _) =>
         {
@@ -789,7 +793,7 @@ public sealed class CommentaryControl : UserControl
 
         Flush(styleGrid.AddRow("Writing tone:", _cmbTone));
         Flush(styleGrid.AddRow(string.Empty, _chkVoiceTags));
-        styleGrid.AddHint("Needs an ElevenLabs v3 voice and the Enthusiastic tone.");
+        styleGrid.AddHint("Needs an ElevenLabs v3 voice, and a tone with a delivery of its own - not Neutral or Dry.");
 
         // Each figure's meaning beside it (22 Oct 2026, page tidy), rather
         // than in a paragraph under the card explaining both.
@@ -1646,7 +1650,7 @@ public sealed class CommentaryControl : UserControl
         // CommentaryService.Tagged makes. Unknown (nothing wired)
         // reads as supported, so the box is never greyed on a guess.
         var voiceReadsTags = _commentary.VoiceSupportsAudioTagsProvider?.Invoke() ?? true;
-        _chkVoiceTags.Enabled = on && voiceReadsTags && _settings.CommentaryToneStyle == CommentaryTone.Enthusiastic;
+        _chkVoiceTags.Enabled = on && voiceReadsTags && CommentaryTones.ReadsTags(_settings.CommentaryToneStyle);
 
         _chkIntros.Enabled = on;
         _chkIntrosSelective.Enabled = on && _chkIntros.Checked;
