@@ -742,7 +742,7 @@ public sealed class CommentaryControl : UserControl
             new ToneItem(CommentaryTone.DryUnderstated, "Dry - understated, deadpan"),
         }
         // The character tones (8 Nov 2026), labelled with their group -
-        // "Dark: Noir - ..." - since a dropdown list has no headings.
+        // "Dark: Villain - ..." - since a dropdown list has no headings.
         .Concat(CommentaryTones.All.Select(tone => new ToneItem(tone.Tone, tone.Label)))
         .ToArray();
 

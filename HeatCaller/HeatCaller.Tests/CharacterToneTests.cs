@@ -192,23 +192,46 @@ public sealed class CharacterToneTests : IDisposable
     // ------------------------------------------------------------------
 
     [Fact]
-    public void Eldritch_whispers_every_sentence()
+    public void The_town_crier_shouts_every_sentence()
     {
-        var (desk, _) = Desk(CommentaryTone.Eldritch);
+        var (desk, _) = Desk(CommentaryTone.TownCrier);
 
         Assert.Equal(
-            "[whispers] The hairpin stirs. [whispers] Sam is four tenths clear.",
-            desk.PrepareSummaryForSpeech("The hairpin stirs. Sam is four tenths clear."));
+            "[shouting] Hear ye! [shouting] Sam doth lead.",
+            desk.PrepareSummaryForSpeech("Hear ye! Sam doth lead."));
     }
 
     [Fact]
-    public void Noir_sighs_once_and_leaves_the_rest_to_the_voice()
+    public void The_pirate_laughs_once_then_is_excited()
     {
-        var (desk, _) = Desk(CommentaryTone.Noir);
+        var (desk, _) = Desk(CommentaryTone.Pirate);
 
         Assert.Equal(
-            "[sighs] Lap twelve. Sam's four tenths up.",
-            desk.PrepareSummaryForSpeech("Lap twelve. Sam's four tenths up."));
+            "[laughs] Arr. [excited] Sam be clear.",
+            desk.PrepareSummaryForSpeech("Arr. Sam be clear."));
+    }
+
+    [Fact]
+    public void The_kept_tones_keep_the_numbers_they_were_saved_under()
+    {
+        // Six of the nine went the evening they came in (8 Nov 2026); a
+        // club that had saved Pirate must still get Pirate.
+        Assert.Equal(7, (int)CommentaryTone.Villain);
+        Assert.Equal(8, (int)CommentaryTone.Pirate);
+        Assert.Equal(10, (int)CommentaryTone.TownCrier);
+        Assert.Equal(3, CommentaryTones.All.Count);
+    }
+
+    [Fact]
+    public async Task A_setting_left_on_a_retired_tone_writes_as_enthusiastic()
+    {
+        // 3 was Noir.
+        var (desk, model) = Desk((CommentaryTone)3);
+
+        await desk.BuildSegmentAsync(SegmentKind.BattleWatch, Facts("Sam leads Bill by 0.4s on lap 12."));
+
+        Assert.Contains("Be LOUD and thrilled", model.SystemPrompt);
+        Assert.Null(CommentaryTones.Find((CommentaryTone)3));
     }
 
     [Fact]
@@ -244,7 +267,7 @@ public sealed class CharacterToneTests : IDisposable
     [Fact]
     public void No_tags_without_a_v3_voice_or_with_the_box_unticked()
     {
-        Assert.Equal("The hairpin stirs.", Desk(CommentaryTone.Eldritch, v3: false).Desk.PrepareSummaryForSpeech("The hairpin stirs."));
-        Assert.Equal("The hairpin stirs.", Desk(CommentaryTone.Eldritch, tags: false).Desk.PrepareSummaryForSpeech("The hairpin stirs."));
+        Assert.Equal("Hear ye.", Desk(CommentaryTone.TownCrier, v3: false).Desk.PrepareSummaryForSpeech("Hear ye."));
+        Assert.Equal("Hear ye.", Desk(CommentaryTone.TownCrier, tags: false).Desk.PrepareSummaryForSpeech("Hear ye."));
     }
 }

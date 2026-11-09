@@ -38,11 +38,13 @@ internal static class KokoroLoudness
     /// <summary>Never more than this - a line that was nearly silent is not turned into noise.</summary>
     private const double MostGainDb = 12;
 
-    /// <summary>The level a Kokoro line should be brought to for this profile - see the remarks.</summary>
-    internal static double TargetDbFor(VoiceProfile profile) =>
-        profile.EffectiveEngine != VoiceEngine.Kokoro && VoiceProfile.ReadsAudioTags(profile.ModelId)
-            ? ExpressiveDb
-            : StandardDb;
+    /// <summary>
+    /// The level a Kokoro line should be brought to. One level for every
+    /// profile since 8 Nov 2026: every ElevenLabs line is now brought to it
+    /// too (see VoiceLevel), so Kokoro matches it whatever it stands in for.
+    /// Flash's own level used to be the target beside Flash.
+    /// </summary>
+    internal static double TargetDbFor(VoiceProfile profile) => VoiceLevel.TargetDb;
 
     /// <summary>The speech level of 16-bit mono PCM, in dBFS, or null when there is no speech in it.</summary>
     internal static double? SpeechDb(byte[] pcm, int sampleRate)

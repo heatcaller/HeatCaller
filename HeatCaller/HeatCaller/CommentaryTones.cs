@@ -1,7 +1,7 @@
 namespace HeatCaller;
 
 /// <summary>
-/// One of the character tones (8 Nov 2026) - the dark and silly ones beyond
+/// One of the character tones (8 Nov 2026) - Villain, Pirate and Town crier, beyond
 /// the original three. Everything a tone changes lives in its one entry, so
 /// adding another is one more row in <see cref="CommentaryTones.All"/>
 /// rather than another case in each of the five places the prompt is built.
@@ -64,77 +64,6 @@ public static class CommentaryTones
         // ------------------------------------------------------------- dark
 
         new ToneProfile(
-            CommentaryTone.Noir,
-            "Dark: Noir - a hardboiled detective in the rain",
-            "Narrate like a hardboiled detective in a black-and-white film - world-weary, clipped, first person "
-            + "now and then, rain on the window. Short flat sentences and one dry simile at most. No exclamation marks. "
-            + "Example of the VOICE wanted: given \"P1 leads P2 by 0.4s on lap 12\", write something like "
-            + "\"Lap twelve. Sam's four tenths up, and Bill's got the look of a man who's run out of road.\" - not "
-            + "\"Sam leads Bill by 0.4 seconds.\"",
-            " Talk like the detective filling the quiet between cases - one observation, said low, like it cost "
-            + "you something. Let the fact sit there; don't explain it.",
-            " Two tired detectives comparing notes at a bar after hours. Each turn picks up the last one's thread "
-            + "and turns it a shade darker; the second voice adds a fact the first didn't give. Short turns.",
-            " Close the race like the last page of a detective story - who came out on top, by how much, and what "
-            + "it cost the rest. Plain, weary, specific. End on a line that sounds like the case is closed.",
-            "The host is a world-weary noir detective - clipped questions, low and flat.",
-            "[sighs]",
-            null),
-
-        new ToneProfile(
-            CommentaryTone.Eulogy,
-            "Dark: Eulogy - mourns every lost lead",
-            "Speak as if delivering a solemn eulogy - not for any person, but for leads lost, chances gone and "
-            + "places dropped. Hushed, reverent, a little over the top. No exclamation marks. "
-            + "Example of the VOICE wanted: given \"P1 leads P2 by 0.4s on lap 12\", write something like "
-            + "\"We gather to remember Bill's chances. They were with us for eleven laps. Sam leads by four tenths.\" - "
-            + "not \"Sam is ahead of Bill.\"",
-            " A short, solemn word between races, as if at a graveside - for what the last race took from somebody: "
-            + "a lead, a streak, a podium. Mourn the moment, never the driver.",
-            " Two mourners at the back of the chapel, murmuring. Each turn answers the last - one remembers, the other "
-            + "adds what was lost - and nobody repeats a number already said.",
-            " Close the race as a farewell - the result read like the order of service, the margin said with gravity, "
-            + "and a last respectful word for the lead or chance that did not survive.",
-            "The host is a solemn funeral director - hushed, kind, gravely sincere.",
-            "[sighs]",
-            "[sad]"),
-
-        new ToneProfile(
-            CommentaryTone.Eldritch,
-            "Dark: Eldritch - the track is old, and hungry",
-            "Narrate as if the track itself were an ancient, watchful thing older than racing - corners that wait, "
-            + "a surface that remembers. Ominous, slow, a little cosmic; spooky, never gory. No exclamation marks. "
-            + "Example of the VOICE wanted: given \"P1 leads P2 by 0.4s on lap 12\", write something like "
-            + "\"The hairpin stirs. Sam is four tenths clear of it... for now. Bill feels it breathing.\" - "
-            + "not \"Sam leads Bill by 0.4 seconds.\"",
-            " A short, uneasy aside between races - what the track has seen tonight, said as if it might be listening.",
-            " Two old keepers of the track trading warnings in low voices. Each turn answers the last and adds something "
-            + "new from the facts; keep it eerie and short.",
-            " Close the race as the track settling back to sleep - who it let through first, by how much, and who it "
-            + "kept waiting. Ominous but exact.",
-            "The host is an unsettling oracle who seems to know what the track wants - slow, quiet, eerie.",
-            "[whispers]",
-            "[whispers]"),
-
-        new ToneProfile(
-            CommentaryTone.TrueCrime,
-            "Dark: True crime - a hushed podcast host",
-            "Narrate like the host of a true-crime podcast - hushed, measured, building suspense, treating each moment "
-            + "as a clue in a case. Foreshadow only what the facts already show; never hint at anything they don't. "
-            + "Example of the VOICE wanted: given \"P1 leads P2 by 0.4s on lap 12\", write something like "
-            + "\"At lap twelve, Sam led by four tenths. Bill had no idea what was coming.\" - "
-            + "not \"Sam leads Bill by 0.4 seconds.\"",
-            " A short segment-style aside, the way a podcast host recaps the evidence so far - calm, deliberate, "
-            + "one detail at a time.",
-            " Two podcast co-hosts going over the case. Each turn reacts to the last - a question, then the detail that "
-            + "answers it - and nobody repeats a number already said.",
-            " Close the race like the end of an episode - lay out what happened in order, the margin as the key piece "
-            + "of evidence, and end on a quiet line that makes the listener want the next one.",
-            "The host is a true-crime podcaster - soft-spoken, probing, every question a little loaded.",
-            "[whispers]",
-            null),
-
-        new ToneProfile(
             CommentaryTone.Villain,
             "Dark: Villain - cheers whoever leads like a tyrant",
             "Narrate like a gleeful theatrical villain who backs whoever is leading as their conquering champion - "
@@ -173,24 +102,6 @@ public static class CommentaryTones
             "[excited]"),
 
         new ToneProfile(
-            CommentaryTone.WildlifeDoc,
-            "Silly: Wildlife doc - a hushed nature film",
-            "Narrate like a hushed, reverent nature documentary - the drivers' cars as creatures in their habitat, the "
-            + "track as their territory. Soft, fascinated, a little too serious about it. "
-            + "Example of the VOICE wanted: given \"P1 leads P2 by 0.4s on lap 12\", write something like "
-            + "\"Here, the young Sam, four tenths ahead. Behind, Bill waits for any sign of weakness.\" - "
-            + "not \"Sam leads Bill by 0.4 seconds.\"",
-            " A quiet aside between races, as the narrator observing the herd at rest - one behavior worth noting, "
-            + "from the facts.",
-            " Two nature filmmakers whispering in the hide. Each turn answers the last and adds one new observation "
-            + "from the facts. Keep it hushed and short.",
-            " Close the race like the end of the episode - the season's struggle resolved: who prevailed, by how much, "
-            + "and how the rest of the herd fared.",
-            "The host is a hushed nature-documentary narrator, fascinated by the creature in front of them.",
-            "[whispers]",
-            "[whispers]"),
-
-        new ToneProfile(
             CommentaryTone.TownCrier,
             "Silly: Town crier - hear ye, hear ye",
             "Proclaim it like a medieval town crier in the market square - hear ye, doth, 'tis, upon the - grand and "
@@ -206,27 +117,6 @@ public static class CommentaryTones
             "The host is a medieval town crier - booming, formal, very pleased with every answer.",
             "[shouting]",
             "[shouting]"),
-
-        // --------------------------------------------------------- distorted
-
-        new ToneProfile(
-            CommentaryTone.Haiku,
-            "Distorted: Haiku - five, seven, five",
-            // Each line its own full stop, not its own row: the line is
-            // flattened to one row on the way to the voice, and the full
-            // stops are what keep the three lines three beats when spoken.
-            "Write it as a haiku - three short lines of about five, seven and five syllables, each ending in a "
-            + "full stop. Calm and spare. Keep at least one name and one number from the facts. "
-            + "This overrides any wish for fragments or more sentences: just the three lines. "
-            + "Example of the FORM wanted: given \"P1 leads P2 by 0.4s on lap 12\", write something like "
-            + "\"Lap twelve, Sam ahead. Four tenths of a second's breath. Bill fills the mirror.\"",
-            " One haiku between races, on the one detail worth it.",
-            " Each turn is its own three-line haiku answering the one before. Keep each to three lines.",
-            " Close the race with the result in one plain sentence - who won and by how much - then one haiku about "
-            + "the race, three lines, each ending in a full stop.",
-            "The host speaks calmly and briefly, like a poet, but asks plain questions.",
-            "[thoughtful]",
-            null),
     };
 
     private static readonly Dictionary<CommentaryTone, ToneProfile> ByTone = All.ToDictionary(p => p.Tone);

@@ -87,22 +87,24 @@ public sealed class KokoroLoudnessTests
     }
 
     [Fact]
-    public void Kokoro_matches_the_model_it_stands_in_for()
+    public void Kokoro_matches_the_one_level_every_voice_is_brought_to()
     {
+        // Since 8 Nov 2026 every ElevenLabs line is levelled to one level
+        // (VoiceLevel), so Kokoro is too, whatever it stands in for.
         var v3 = VoiceProfile.CreateDefault();
         v3.Engine = VoiceEngine.ElevenLabs;
         v3.ModelId = "eleven_v3";
-        Assert.Equal(KokoroLoudness.ExpressiveDb, KokoroLoudness.TargetDbFor(v3));
+        Assert.Equal(VoiceLevel.TargetDb, KokoroLoudness.TargetDbFor(v3));
 
         var flash = VoiceProfile.CreateDefault();
         flash.Engine = VoiceEngine.ElevenLabs;
         flash.ModelId = "eleven_flash_v2_5";
-        Assert.Equal(KokoroLoudness.StandardDb, KokoroLoudness.TargetDbFor(flash));
+        Assert.Equal(VoiceLevel.TargetDb, KokoroLoudness.TargetDbFor(flash));
 
         var kokoro = VoiceProfile.CreateDefault();
         kokoro.Engine = VoiceEngine.Kokoro;
         kokoro.ModelId = "eleven_v3";
-        Assert.Equal(KokoroLoudness.StandardDb, KokoroLoudness.TargetDbFor(kokoro));
+        Assert.Equal(VoiceLevel.TargetDb, KokoroLoudness.TargetDbFor(kokoro));
     }
 
     [Fact]

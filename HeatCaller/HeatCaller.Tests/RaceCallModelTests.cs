@@ -87,9 +87,11 @@ public sealed class RaceCallModelTests
     [Fact]
     public void Kokoro_standing_in_for_a_flash_race_call_matches_flash()
     {
+        // Flash is levelled to the one voice level now (VoiceLevel, 8 Nov
+        // 2026), so that is where Kokoro beside it goes too.
         var flash = AnnouncementService.ForRaceCall(OnV3("eleven_flash_v2_5"), AnnouncementEventType.FastLap);
 
-        Assert.Equal(KokoroLoudness.StandardDb, KokoroLoudness.TargetDbFor(flash));
+        Assert.Equal(VoiceLevel.TargetDb, KokoroLoudness.TargetDbFor(flash));
     }
 
     // --- Wiring -------------------------------------------------------------

@@ -14,15 +14,13 @@ public enum CommentaryTone
     DryUnderstated,
 
     // The character tones (8 Nov 2026) - their wording is in CommentaryTones.
-    Noir,
-    Eulogy,
-    Eldritch,
-    TrueCrime,
-    Villain,
-    Pirate,
-    WildlifeDoc,
-    TownCrier,
-    Haiku,
+    // Numbered by hand: nine went in and six came out the same evening
+    // (Noir 3, Eulogy 4, Eldritch 5, True crime 6, Wildlife doc 9, Haiku 11),
+    // so the three kept stay where they were saved. A setting left on a
+    // retired number reads as Enthusiastic. Never reuse those numbers.
+    Villain = 7,
+    Pirate = 8,
+    TownCrier = 10,
 }
 
 /// <summary>

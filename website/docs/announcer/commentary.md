@@ -237,21 +237,15 @@ With **Give the lines their tone's delivery when they're spoken** ticked, the **
 
 #### Character tones
 
-Nine more tones put the whole night in character: every line, the recap, the segments between races and the pit-lane interviews. Each one is told to keep every name, position and number exactly as given, so the call underneath can still be trusted. The dark ones are about mood, not menace. Nothing gory, nobody really gets hurt, and no driver is ever mocked.
+Three more tones put the whole night in character: every line, the recap, the segments between races and the pit-lane interviews. Each one is told to keep every name, position and number exactly as given, so the call underneath can still be trusted. Villain is a cartoon villain, not a nasty one. Nothing gory, nobody really gets hurt, and no driver is ever mocked.
 
 | Tone | Sounds like | Audio tags (v3) |
 |---|---|---|
-| **Dark: Noir** | A hardboiled detective in the rain. "Lap twelve. Sam's four tenths up, and Bill's got the look of a man who's run out of road." | A sigh to open |
-| **Dark: Eulogy** | A solemn farewell to every lost lead. "We gather to remember Bill's chances. They were with us for eleven laps." | A sigh, then sad |
-| **Dark: Eldritch** | The track as something old and hungry. "The hairpin stirs. Sam is four tenths clear of it... for now." | Whispered throughout |
-| **Dark: True crime** | A hushed podcast host. "At lap twelve, Sam led by four tenths. Bill had no idea what was coming." | A whisper to open |
 | **Dark: Villain** | Backs whoever leads, like a cartoon tyrant. "Yes... yes. Four tenths, Sam. Let them watch it shrink in the mirror." | A laugh, then mischievous |
 | **Silly: Pirate** | Arr. "Arr, Sam be four tenths clear o' Bill on lap twelve, and the sea be angry!" | A laugh, then excited |
-| **Silly: Wildlife doc** | A hushed nature film. "Here, the young Sam, four tenths ahead. Behind, Bill waits for any sign of weakness." | Whispered throughout |
 | **Silly: Town crier** | Hear ye, hear ye. "Hear ye! Upon the twelfth lap, Sam doth lead Bill by four tenths of a second!" | Shouted throughout |
-| **Distorted: Haiku** | Five, seven, five. "Lap twelve, Sam ahead. Four tenths of a second's breath. Bill fills the mirror." The recap gives the result in a plain sentence first, then the haiku. | Thoughtful to open |
 
-A character tone is the model's to play, so a small local model can drift out of character, or take more than one try to get the haiku's shape. The truth rules and the number check still apply to every line, whichever tone is on.
+A character tone is the model's to play, so a small local model can drift out of character. The truth rules and the number check still apply to every line, whichever tone is on.
 
 ### Who writes it
 
