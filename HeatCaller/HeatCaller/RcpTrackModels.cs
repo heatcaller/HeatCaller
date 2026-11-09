@@ -569,11 +569,19 @@ public sealed class RcpInventory
     public int PostQuarters { get; set; }
 
     /// <summary>
-    /// Inner corner pieces: one at the inside of every bend, on its inner
-    /// corner tile - whether that corner is drawn square or with a turn -
-    /// and every rail post quarter laid by hand, which is the same part.
+    /// The quarter pieces that close the open ends of dividers: two at each,
+    /// one on each lane's tile, making a half disc flush with the two rails
+    /// (Asher, 8 Nov 2026). Counted as end caps before.
     /// </summary>
-    public int InnerCornerPieces => InnerCornerTiles + PostQuarters;
+    public int DividerEndQuarters { get; set; }
+
+    /// <summary>
+    /// Inner corner pieces - the quarter rail piece: one at the inside of
+    /// every bend, on its inner corner tile (whether that corner is drawn
+    /// square or with a turn), two at each divider's open end, and every
+    /// rail post quarter laid by hand. They are all the same part.
+    /// </summary>
+    public int InnerCornerPieces => InnerCornerTiles + PostQuarters + DividerEndQuarters;
 
     /// <summary>The plain floor: every tile that is neither corner tile.</summary>
     public int PlainTiles => Math.Max(0, Tiles - OuterCurveTiles - InnerCornerTiles);
@@ -825,7 +833,11 @@ public static class RcpPlan
         };
 
         inventory.StraightRails = design.Walls.Sum(w => w.Double ? 2 : 1);
-        inventory.EndCaps = OpenEnds(design).Count;
+        // A divider's open end is two corner rail pieces, one on each lane's
+        // tile (Asher, 8 Nov 2026); a single rail's end keeps its end cap.
+        var ends = OpenEnds(design);
+        inventory.EndCaps = ends.Count(e => !e.Double);
+        inventory.DividerEndQuarters = ends.Count(e => e.Double) * 2;
         inventory.PostQuarters = design.Decals.Count(d => d.Kind == RcpDecalKind.Post);
 
         var corners = CornerTiles(design);

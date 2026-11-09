@@ -303,10 +303,19 @@ public static class RcpBuildList
 
         if (dividers > 0)
         {
-            steps.Add(new RcpBuildStep("Put in the dividers", new[]
+            var lines = new List<string>
             {
                 $"{Plural.Of(dividers, "divider")} between the lanes - each one two straight rails back to back, so {dividers * 2} rails.",
-            }));
+            };
+
+            // Each open end of a divider: two corner rail pieces, one on each
+            // lane's tile, the rails plugged into them (Asher, 8 Nov 2026).
+            if (inventory.DividerEndQuarters > 0)
+            {
+                lines.Add($"{Plural.Of(inventory.DividerEndQuarters, "corner rail piece")} closing the dividers' open ends, two at each - the inner corner piece.");
+            }
+
+            steps.Add(new RcpBuildStep("Put in the dividers", lines));
         }
 
         // --- The turns ---------------------------------------------------------

@@ -260,6 +260,27 @@ public sealed class RcpPieceToolTests
         Assert.DoesNotContain(RcpPaletteItem.Post, RcpTiles.Markings);
     }
 
+    [Fact]
+    public void A_dividers_open_end_counts_two_corner_rail_pieces_and_no_end_cap()
+    {
+        // Two lanes, a divider between them three tiles long, open at both
+        // ends: two quarters at each end (Asher, 8 Nov 2026).
+        var design = new RcpTrackDesign();
+
+        for (var col = 0; col < 3; col++)
+        {
+            design.Tiles.Add(new RcpTile { Col = col, Row = 0 });
+            design.Tiles.Add(new RcpTile { Col = col, Row = 1 });
+            design.Walls.Add(new RcpWall { Col = col, Row = 1, Double = true });
+        }
+
+        var inventory = RcpPlan.Count(design);
+
+        Assert.Equal(4, inventory.DividerEndQuarters);
+        Assert.Equal(0, inventory.EndCaps);
+        Assert.Equal(4, inventory.InnerCornerPieces);
+    }
+
     // --- on the board -------------------------------------------------------
 
     private static Point CellCentre(int col, int row) => new(40 + 64 * col + 32, 40 + 64 * row + 32);
