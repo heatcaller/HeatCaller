@@ -37,6 +37,7 @@ On a real RCP track a rail is bolted to one edge of its tile and stays on, so a 
 - **Arched rail tile**: a rail tile whose rail arches into the lane, for a straight.
 - **Blank tile**: a tile with no bolt holes, for infield and lane widening. It takes no rail.
 - **Blocked out**: floor you can't use, such as a pillar or a table leg.
+- **Corner rail piece**: the pink quarter rail piece that joins rails at a corner. Click the corner of the tile it goes in. Four, one on each tile round a corner, make the round pink post. It's the same part as the inner corner piece, and it's counted with them.
 
 With a rail tile, click near the edge you want the rail on. With an outer curve tile, click in the corner the turn goes across. In the middle of a tile, the piece goes the way <kbd>R</kbd> last turned it. Drag to lay a row: the whole row takes the side you pressed near. Click a piece again to make it a plain tile. Two rail tiles laid with their rails back to back are a divider. The inner corner tile, with its small red corner piece, isn't laid by hand: it's worked out at the inside of every bend.
 

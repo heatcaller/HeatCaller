@@ -2301,8 +2301,49 @@ public sealed class RcpTrackCanvas : Control
         RaiseChanged();
     }
 
-    private void PlaceMarker(Point cell)
+    /// <summary>
+    /// A rail post's quarter goes in the corner of its tile the pointer is
+    /// in (8 Nov 2026): as Turns, the corner it is turned to - 0 the
+    /// north-west, then clockwise. Null in the middle of the tile.
+    /// </summary>
+    private int? PostTurnsAt(Point pixel)
     {
+        var tile = ToTile(pixel);
+        var dx = tile.X - MathF.Floor(tile.X) - 0.5f;
+        var dy = tile.Y - MathF.Floor(tile.Y) - 0.5f;
+
+        if (MathF.Abs(dx) < 0.15f && MathF.Abs(dy) < 0.15f)
+        {
+            return null;
+        }
+
+        return dx < 0
+            ? dy < 0 ? 0 : 3
+            : dy < 0 ? 1 : 2;
+    }
+
+    private void PlaceMarker(Point cell, Point? pixel = null)
+    {
+        // A rail post's quarter in the corner clicked, rather than turned
+        // round to it one click at a time.
+        if (Item == RcpPaletteItem.Post && pixel is { } at && PostTurnsAt(at) is { } corner)
+        {
+            var post = _design.Decals.FirstOrDefault(d => d.Col == cell.X && d.Row == cell.Y);
+
+            if (post is null || post.Kind != RcpDecalKind.Post || post.Turns != corner)
+            {
+                MarkerTurns = corner;
+
+                if (post is { Kind: RcpDecalKind.Post })
+                {
+                    Remember();
+                    post.Turns = corner;
+                    RaiseChanged();
+                    return;
+                }
+            }
+        }
+
         var kind = Item switch
         {
             RcpPaletteItem.FinishLine => RcpDecalKind.FinishLine,
@@ -3458,7 +3499,7 @@ public sealed class RcpTrackCanvas : Control
                 break;
 
             case RcpTool.Marker:
-                PlaceMarker(ToCell(e.Location));
+                PlaceMarker(ToCell(e.Location), e.Location);
                 break;
 
             case RcpTool.Lane:
@@ -4881,7 +4922,7 @@ public static class RcpTiles
         RcpPaletteItem.Turn => "Turn rail",
         RcpPaletteItem.FinishLine => "Finish line",
         RcpPaletteItem.GridBox => "Grid box",
-        RcpPaletteItem.Post => "Rail post",
+        RcpPaletteItem.Post => "Corner rail piece",
         RcpPaletteItem.Kerb => "Apex curb",
         RcpPaletteItem.Split1 => "Split 1 loop",
         RcpPaletteItem.Split2 => "Split 2 loop",
@@ -4909,7 +4950,7 @@ public static class RcpTiles
         RcpPaletteItem.Turn => "A corner by hand, at whatever radius you set.",
         RcpPaletteItem.FinishLine => "The checkered line across the track.",
         RcpPaletteItem.GridBox => "One staggered starting box.",
-        RcpPaletteItem.Post => "The pink disc.",
+        RcpPaletteItem.Post => "The quarter rail piece that joins rails at a corner. Click the tile's corner it goes in.",
         RcpPaletteItem.Kerb => "Red and white, for marking an apex.",
         RcpPaletteItem.Split1 or RcpPaletteItem.Split2 or RcpPaletteItem.Split3 =>
             "Where a split loop lies across the track. With the racing line through it, it measures each sector for sector speeds.",
@@ -4941,6 +4982,10 @@ public static class RcpTiles
         RcpPaletteItem.ArchedTile,
         RcpPaletteItem.BlankTile,
         RcpPaletteItem.Blocked,
+
+        // A rail part, not a marking (Asher, 8 Nov 2026): the quarter that
+        // joins rails at a corner - the inner corner piece.
+        RcpPaletteItem.Post,
     };
 
     public static IReadOnlyList<RcpPaletteItem> Floor { get; } = new[]
@@ -4960,7 +5005,6 @@ public static class RcpTiles
     {
         RcpPaletteItem.FinishLine,
         RcpPaletteItem.GridBox,
-        RcpPaletteItem.Post,
         RcpPaletteItem.Kerb,
         RcpPaletteItem.Furniture,
         RcpPaletteItem.Split1,

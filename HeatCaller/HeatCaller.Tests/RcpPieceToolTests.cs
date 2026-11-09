@@ -237,6 +237,29 @@ public sealed class RcpPieceToolTests
         Assert.Equal(1, sides[(9, 9, false)]);
     }
 
+    [Fact]
+    public void A_rail_post_quarter_is_counted_as_an_inner_corner_piece_not_a_marking()
+    {
+        // The quarter that joins rails at a corner is a rail part - the
+        // inner corner piece (Asher, 8 Nov 2026).
+        var design = new RcpTrackDesign
+        {
+            Tiles = { new RcpTile { Col = 0, Row = 0 }, new RcpTile { Col = 1, Row = 0 } },
+            Decals =
+            {
+                new RcpDecal { Col = 0, Row = 0, Kind = RcpDecalKind.Post },
+                new RcpDecal { Col = 1, Row = 0, Kind = RcpDecalKind.Post, Turns = 3 },
+            },
+        };
+
+        var inventory = RcpPlan.Count(design);
+
+        Assert.Equal(2, inventory.PostQuarters);
+        Assert.Equal(2, inventory.InnerCornerPieces);
+        Assert.Contains(RcpPaletteItem.Post, RcpTiles.Pieces);
+        Assert.DoesNotContain(RcpPaletteItem.Post, RcpTiles.Markings);
+    }
+
     // --- on the board -------------------------------------------------------
 
     private static Point CellCentre(int col, int row) => new(40 + 64 * col + 32, 40 + 64 * row + 32);
