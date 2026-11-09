@@ -3,7 +3,7 @@
 HeatCaller is a Windows app for running an RC car race night from one laptop. It reads lap crossings from your timing decoder, runs the race, calls it out loud, and keeps the results. This section gets you from nothing to a first race.
 
 !!! note "HeatCaller is in beta"
-    The current version is **BETA 0.61.0**. The version number is shown on the startup screen and in the window's title bar. Please quote it in any bug report. Expect some rough edges, and back up before a big event (see [Backups](../admin/backups.md)).
+    The current version is **BETA 0.62.0**. The version number is shown on the startup screen and in the window's title bar. Please quote it in any bug report. Expect some rough edges, and back up before a big event (see [Backups](../admin/backups.md)).
 
 ## What it does
 

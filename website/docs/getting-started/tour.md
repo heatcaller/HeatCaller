@@ -6,7 +6,7 @@ HeatCaller has one main window with a sidebar of pages on the left and the curre
 
 ## The title bar
 
-The title bar shows the app name and version, for example **HeatCaller - BETA 0.61.0**. Quote this version in any bug report.
+The title bar shows the app name and version, for example **HeatCaller - BETA 0.62.0**. Quote this version in any bug report.
 
 While HeatCaller runs, its icon is also in the Windows system tray, by the clock. Double-click it, or right-click it and choose **Show HeatCaller**, to bring the window to the front. **Exit** closes HeatCaller just as the window's X does, asking first if a race is running. Closing the window never leaves it running in the tray.
 
