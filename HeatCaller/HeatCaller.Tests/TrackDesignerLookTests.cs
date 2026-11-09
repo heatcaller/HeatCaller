@@ -5,7 +5,7 @@ namespace HeatCaller.Tests;
 
 /// <summary>
 /// The Track Designer's new look (Track Designer overhaul, Phase 2, 25 Oct
-/// 2026): the board's chips, the panel's tabs (a sixth, Stock, in Phase 4) and the Panel switch.
+/// 2026): the board's chips, the inspector's sections (8 Nov 2026, in place of the panel's tabs), the bar over the board and the P switch.
 /// </summary>
 public sealed class TrackDesignerLookTests
 {
@@ -83,29 +83,62 @@ public sealed class TrackDesignerLookTests
     }
 
     [Fact]
-    public void The_panel_has_its_six_tabs_and_the_Panel_button_hides_it()
+    public void The_inspector_opens_one_section_at_a_time_and_the_tool_picks_the_bar_over_the_board()
     {
         var seen = StaThread.Run(() =>
         {
-            using var form = new RcpTrackEditorForm(null, "Club Hall", null);
+            using var form = new RcpTrackEditorForm(null, "Club Hall", null)
+            {
+                StartPosition = FormStartPosition.Manual,
+                Location = new Point(-32000, -32000),
+                ShowInTaskbar = false,
+            };
 
-            var tabs = ((Array)typeof(RcpTrackEditorForm)
-                    .GetField("_tabs", BindingFlags.Instance | BindingFlags.NonPublic)!
-                    .GetValue(form)!)
+            // On screen, so what is hidden reads as hidden - before it is shown,
+            // everything in it says it is.
+            form.Show();
+
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+
+            var sections = ((Array)typeof(RcpTrackEditorForm).GetField("_tabs", flags)!.GetValue(form)!)
                 .Cast<object>()
-                .Select(pair => (Button)pair.GetType().GetField("Item1")!.GetValue(pair)!)
+                .Select(entry => (
+                    Name: (string)entry.GetType().GetField("Item1")!.GetValue(entry)!,
+                    Header: (Control)entry.GetType().GetField("Item2")!.GetValue(entry)!,
+                    Cards: (Section[])entry.GetType().GetField("Item3")!.GetValue(entry)!))
                 .ToList();
 
-            var names = tabs.Select(tab => tab.Text).ToList();
+            var names = sections.Select(section => section.Name).ToList();
 
-            var showTab = typeof(RcpTrackEditorForm).GetMethod("ShowTab", BindingFlags.Instance | BindingFlags.NonPublic)!;
-            var toggle = typeof(RcpTrackEditorForm).GetMethod("TogglePanel", BindingFlags.Instance | BindingFlags.NonPublic)!;
-            var shown = typeof(RcpTrackEditorForm).GetField("_panelShown", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var showTab = typeof(RcpTrackEditorForm).GetMethod("ShowTab", flags)!;
+            var toggle = typeof(RcpTrackEditorForm).GetMethod("TogglePanel", flags)!;
+            var shown = typeof(RcpTrackEditorForm).GetField("_panelShown", flags)!;
+            var setTool = typeof(RcpTrackEditorForm).GetMethod("SetTool", flags)!;
+            var strip = (Control)typeof(RcpTrackEditorForm).GetField("_contextBar", flags)!.GetValue(form)!;
 
             // Not remembered, so a designer another test opens at the same
             // time still opens where it would have.
             showTab.Invoke(form, new object[] { "Lap", false });
-            var lit = tabs.Where(tab => tab.BackColor == AppTheme.Primary).Select(tab => tab.Text).ToList();
+
+            var open = sections.Where(section => section.Cards.All(card => card.Visible)).Select(section => section.Name).ToList();
+            var lit = sections.Where(section => section.Header.BackColor == AppTheme.Primary).Select(section => section.Name).ToList();
+
+            // A closed section's header says its headline after its name.
+            var plan = sections.Single(section => section.Name == "Plan").Header;
+            var planHeader = plan.Text + "   ·   " + (string)plan.GetType().GetProperty("Headline")!.GetValue(plan)!;
+
+            // Keys has no header until it is opened.
+            var keysHidden = !sections.Single(section => section.Name == "Keys").Header.Visible;
+
+            // The old Stock tab's name still opens its section.
+            showTab.Invoke(form, new object[] { "Stock", false });
+            var stockOpens = sections.Single(section => section.Name == "Parts").Cards.All(card => card.Visible);
+
+            // Each tool shows its own row over the board, and only that one.
+            setTool.Invoke(form, new object[] { RcpTool.Route });
+            var routeRows = strip.Controls.Cast<Control>().Count(bar => bar.Visible);
+            var routeHasTrace = strip.Controls.Cast<Control>().Single(bar => bar.Visible)
+                .Controls.Cast<Control>().Any(part => part.Text == "Trace it for me");
 
             var before = (bool)shown.GetValue(form)!;
             toggle.Invoke(form, null);
@@ -113,11 +146,17 @@ public sealed class TrackDesignerLookTests
             toggle.Invoke(form, null);
             var back = (bool)shown.GetValue(form)!;
 
-            return (names, lit, before, hidden, back);
+            return (names, open, lit, planHeader, keysHidden, stockOpens, routeRows, routeHasTrace, before, hidden, back);
         }, TimeSpan.FromSeconds(30), () => "opening the Track Designer");
 
-        Assert.Equal(new[] { "Pieces", "Plan", "Room", "Lap", "Stock", "Keys" }, seen.names);
+        Assert.Equal(new[] { "Plan", "Room", "Lap", "Parts", "Auto", "Keys" }, seen.names);
+        Assert.Equal(new[] { "Lap" }, seen.open);
         Assert.Equal(new[] { "Lap" }, seen.lit);
+        Assert.StartsWith("Plan   ·   Club Hall", seen.planHeader);
+        Assert.True(seen.keysHidden);
+        Assert.True(seen.stockOpens);
+        Assert.Equal(1, seen.routeRows);
+        Assert.True(seen.routeHasTrace);
         Assert.True(seen.before);
         Assert.False(seen.hidden);
         Assert.True(seen.back);

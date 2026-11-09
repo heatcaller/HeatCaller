@@ -1088,7 +1088,7 @@ public static class RcpPlan
 
         if (design.Route.Count < 2)
         {
-            return (null, "Draw the racing line (or press Trace route) through the finish line and the split loops.");
+            return (null, "Draw the racing line (or press Trace it for me) through the finish line and the split loops.");
         }
 
         // The last sector runs from the last split loop round to the finish

@@ -26,20 +26,22 @@ internal static partial class WindowCatalog
         ("Track Designer (its traced photo gone)", () => new RcpTrackEditorForm(TrackDesignerPhotoGone(), TrackDesignerLongName(), 14.25)),
         ("Track Designer (a floor and a lap, no rails yet)", () => new RcpTrackEditorForm(TrackDesignerFloorOnly(), "Club Hall", null)),
 
-        // The panel shows one tab at a time (25 Oct 2026, overhaul Phase 2)
-        // and the audit only sees what is showing - so each tab is opened
-        // in its own right. The kit check that lists what the plan is short
-        // of is on Plan; the longest the lap's readout says is on Lap.
-        ("Track Designer (the Plan tab)", () => new RcpTrackEditorForm(TrackDesignerClubLayout(), TrackDesignerLongName(), 14.25, openOnTab: "Plan")),
-        ("Track Designer (the Room tab)", () => new RcpTrackEditorForm(TrackDesignerPhotoGone(), TrackDesignerLongName(), 14.25, openOnTab: "Room")),
-        ("Track Designer (the Lap tab)", () => new RcpTrackEditorForm(TrackDesignerClubLayout(), TrackDesignerLongName(), 14.25, openOnTab: "Lap")),
-        ("Track Designer (the Lap tab, a floor and a lap, no rails yet)", () => new RcpTrackEditorForm(TrackDesignerFloorOnly(), "Club Hall", null, openOnTab: "Lap")),
-        ("Track Designer (the Keys tab)", () => new RcpTrackEditorForm(null, string.Empty, null, openOnTab: "Keys")),
-        ("Track Designer (the Stock tab, nothing owned)", () => new RcpTrackEditorForm(TrackDesignerClubLayout(), TrackDesignerLongName(), 14.25, openOnTab: "Stock")),
-        ("Track Designer (the Stock tab, short of parts)", () => new RcpTrackEditorForm(TrackDesignerClubLayout(), TrackDesignerLongName(), 14.25, openOnTab: "Stock", stock: TrackDesignerSmallStock())),
+        // The inspector opens one section at a time (8 Nov 2026, in place
+        // of the panel's tabs) and the audit only sees what is showing - so
+        // each section is opened in its own right. The kit check that lists
+        // what the plan is short of is in Plan; the longest the lap's
+        // readout says is in Lap.
+        ("Track Designer (the Plan section)", () => new RcpTrackEditorForm(TrackDesignerClubLayout(), TrackDesignerLongName(), 14.25, openOnTab: "Plan")),
+        ("Track Designer (the Room section)", () => new RcpTrackEditorForm(TrackDesignerPhotoGone(), TrackDesignerLongName(), 14.25, openOnTab: "Room")),
+        ("Track Designer (the Lap section)", () => new RcpTrackEditorForm(TrackDesignerClubLayout(), TrackDesignerLongName(), 14.25, openOnTab: "Lap")),
+        ("Track Designer (the Lap section, a floor and a lap, no rails yet)", () => new RcpTrackEditorForm(TrackDesignerFloorOnly(), "Club Hall", null, openOnTab: "Lap")),
+        ("Track Designer (the keys)", () => new RcpTrackEditorForm(null, string.Empty, null, openOnTab: "Keys")),
+        ("Track Designer (the Parts section, nothing owned)", () => new RcpTrackEditorForm(TrackDesignerClubLayout(), TrackDesignerLongName(), 14.25, openOnTab: "Parts")),
+        ("Track Designer (the Parts section, short of parts)", () => new RcpTrackEditorForm(TrackDesignerClubLayout(), TrackDesignerLongName(), 14.25, openOnTab: "Parts", stock: TrackDesignerSmallStock())),
+        ("Track Designer (the Auto section)", () => new RcpTrackEditorForm(TrackDesignerClubLayout(), TrackDesignerLongName(), 14.25, openOnTab: "Auto")),
         ("What the club owns", () => new RcpStockForm(TrackDesignerSmallStock(), 500)),
         ("What the club owns (nothing yet, 30 cm)", () => new RcpStockForm(null, 300)),
-        ("Track Designer (the Lap tab, laps raced)", () => new RcpTrackEditorForm(TrackDesignerClubLayout(), TrackDesignerLongName(), 14.25, openOnTab: "Lap", raced: (13.82, 412), tuning: 1.1, tunedLayouts: 3)),
+        ("Track Designer (the Lap section, laps raced)", () => new RcpTrackEditorForm(TrackDesignerClubLayout(), TrackDesignerLongName(), 14.25, openOnTab: "Lap", raced: (13.82, 412), tuning: 1.1, tunedLayouts: 3)),
         ("Build me a track", () => new RcpBuildForm(TrackDesignerRoom(), TrackDesignerSmallStock(), 2)),
         ("Build me a track (no room given)", () => new RcpBuildForm(new RcpTrackDesign { TileSizeMm = 500 }, null, 2)),
         ("Build me a track (a room nothing fits)", () => new RcpBuildForm(new RcpTrackDesign { TileSizeMm = 500, RoomWidthMm = 2000, RoomDepthMm = 2000 }, null, 3)),

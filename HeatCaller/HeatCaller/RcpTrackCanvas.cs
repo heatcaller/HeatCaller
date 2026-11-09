@@ -1858,7 +1858,7 @@ public sealed class RcpTrackCanvas : Control
             return;
         }
 
-        StatusChanged?.Invoke("Ring laid, with rails down both sides and turns at its corners. Trace route puts the racing line round it.");
+        StatusChanged?.Invoke("Ring laid, with rails down both sides and turns at its corners. Racing line's Trace it for me puts the line round it.");
         RaiseChanged();
     }
 

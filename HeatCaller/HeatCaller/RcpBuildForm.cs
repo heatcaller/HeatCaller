@@ -41,9 +41,9 @@ public sealed class RcpBuildForm : Form
         body.Add(new Label
         {
             Text = !plan.HasRoom
-                ? "Give the room's size on the Room tab first - every layout here is made to fit it, with room to walk round."
+                ? "Give the room's size in the Room section first - every layout here is made to fit it, with room to walk round."
                 : offered.Count == 0
-                    ? "Nothing fits that room at this lane width. Try narrower lanes on the Pieces tab, or check the room's size on the Room tab."
+                    ? "Nothing fits that room at this lane width. Try narrower lanes with the Lane tool, or check the room's size in the Room section."
                     : $"Layouts for a room {RoomFit.Feet(plan.RoomWidthMm)} by {RoomFit.Feet(plan.RoomDepthMm)} - up to {cols} x {rows} tiles, "
                       + $"leaving room to walk round - with lanes {Plural.Of(laneWidth, "tile")} wide. RCP's own that fit come first. "
                       + "The rest are worked out for the room, longest lap first, within what the club owns; they're made of lanes, "
