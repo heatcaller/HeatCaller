@@ -1,6 +1,6 @@
 # HeatCaller beta terms
 
-**Beta version of 28 October 2026.** These terms cover the HeatCaller beta. They will be revised before HeatCaller is generally released, and HeatCaller will ask you to accept the revised version before it opens again.
+**Beta version of 9 November 2026.** These terms cover the HeatCaller beta. They will be revised before HeatCaller is generally released, and HeatCaller will ask you to accept the revised version before it opens again.
 
 There are two parts. **Part 1** is the license agreement for the software. **Part 2** is the privacy notice: what HeatCaller does with information about drivers, and where it sends it. You must accept both to install and use HeatCaller.
 
@@ -11,6 +11,8 @@ This agreement is between HeatCaller LLC, a New York limited liability company t
 ## 1. Beta software
 
 HeatCaller is race timing, scoring and announcing software, provided to you as a beta before it is generally released. It has been tested, but not yet at many club nights, and it will have faults.
+
+The announcer is least accurate on short tracks. Where laps average under 8 seconds, spoken calls and commentary can come late, be skipped, or give a lap time, gap or place that is wrong or out of date. This does not affect lap timing or scoring.
 
 ## 2. Your license
 

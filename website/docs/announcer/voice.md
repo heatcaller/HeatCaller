@@ -656,6 +656,18 @@ The announcer is built so that important calls are never late and routine chatte
 - **Flag lines are prepared ahead of time.** When a race stages, HeatCaller prepares one line each for **Race started**, **Green flag (resumed)**, **Yellow flag**, **Red flag** and **Race completed** (those that are switched on) in the background, in whichever voice will speak them, so pressing a flag button plays audio already on the laptop instead of waiting. Only lines without placeholders can be prepared ahead. After a line is used, another is picked for next time. Lines already saved are read from the laptop rather than rendered again (see [Saved voice lines](#saved-voice-lines)). If you change the voice (switching between the HeatCaller voice, ElevenLabs and Kokoro, or picking another voice within any of them, included), the model, the tuning or the lines, the prepared audio is thrown away, and whatever changed is prepared again. The release calls of a staggered start are prepared the same way at the green.
 - **Release calls follow the voice you chose.** With your own ElevenLabs key, a grid's worth of release calls is rendered as one request and cut into clips, which saves round trips rather than characters. With the HeatCaller voice they go through the relay one line at a time: an old ElevenLabs key still saved on the laptop is never used for them, so nothing on that voice is ever billed to your club.
 
+### On a short track
+
+The announcer is most accurate when laps average 8 seconds or more. Below that, expect it to struggle, whichever voice and model you use, even ElevenLabs' fastest (Flash v2.5):
+
+- **More calls are skipped.** A spoken line takes two or three seconds, so on a 6-second lap a car can cross the line again before the call about its last lap has finished. Routine calls that come up while the announcer is talking are dropped (see above), so on a short track many lap-time calls are never said.
+- **A call can be out of date by the time it's heard.** Just before it speaks, HeatCaller checks the board again for a position report, a time-left call and a fastest-lap call, and rewrites or drops one that's no longer true. It can't do that for every line, so a gap, a place or a lap time can still be a lap old when you hear it.
+- **The commentary can get a number wrong.** On a short lap the lap times sit close together (5.096 and 5.06, say), and the AI commentary can mix them up. HeatCaller checks every number the commentary writes against the race and drops a line that doesn't match, but a near miss can still get through, in the recap as well as during the race.
+
+The 8 seconds leaves some margin: the shorter the lap, the worse it gets.
+
+Lap timing and scoring aren't affected. The laps, results and standings on the screens are right however short the lap; only what's spoken can be wrong. Treat the screens and the results, not the announcer, as the record of the race.
+
 ### When ElevenLabs can't speak a line
 
 With ElevenLabs chosen and **If ElevenLabs can't speak a line - no key, no internet, or the quota is used up - the free Kokoro voice says it instead** ticked (the default), Kokoro stands in, so a flag call is never silent, and each of the cast speaks in their own [stand-in voice](#each-of-the-cast-when-elevenlabs-runs-out). A line that's already [saved](#saved-voice-lines) still plays in your ElevenLabs voice from the laptop, even offline, except while the allowance is used up (the first two rows below). For any other line:
