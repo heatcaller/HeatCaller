@@ -115,6 +115,14 @@ public sealed partial class AnnouncementService
             return;
         }
 
+        // Only the race's fastest lap is called the fastest (8 Nov 2026) -
+        // see FastLapNoLongerTrue.
+        if (type == AnnouncementEventType.FastLap && FastLapNoLongerTrue(standing) is { } beaten)
+        {
+            StatusMessage?.Invoke($"[voice] FastLap not said - {beaten}.");
+            return;
+        }
+
         // THE CLUB'S DIAL, HERE BECAUSE THIS IS THE FUNNEL (14 Oct 2026).
         // Every template-based call comes through EnqueueVoice, and only
         // some of them go through the per-lap candidate gate - so a floor
@@ -360,7 +368,8 @@ public sealed partial class AnnouncementService
                         {
                             said = true;
                             countMention?.Invoke();
-                        });
+                        },
+                        whyNotNow: type == AnnouncementEventType.FastLap ? () => FastLapNoLongerTrue(standing) : null);
                 }
                 finally
                 {

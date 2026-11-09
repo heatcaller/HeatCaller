@@ -222,6 +222,18 @@ internal static class CommentaryNumberCheck
         /// <summary>Could be a year said in words ("twenty twenty-six"), so let go if nothing else backs it.</summary>
         public bool MaybeYear { get; init; }
 
+        /// <summary>
+        /// Words that can only be one lap time - "six oh nine", or joined by
+        /// hyphens, "five-oh-six" - so in an answer they never pass as
+        /// separate numbers (<see cref="Apart"/>). 8 Nov 2026: Terry Byte's
+        /// 5.096 was recapped as "five-oh-six", and its five and six were
+        /// backed by the five cars and Dee Ploy's six laps in front.
+        /// </summary>
+        public bool Joined { get; init; }
+
+        /// <summary>Said the way a lap time is called ("five oh nine six") - held to its own precision, see BacksValue.</summary>
+        public bool LapShaped { get; init; }
+
         /// <summary>What a FACT's figure is, from the words round it - null until read, and then OTHER. See <see cref="FigureKind"/>.</summary>
         public FigureKind? Kind { get; init; }
     }
@@ -335,7 +347,7 @@ internal static class CommentaryNumberCheck
 
             // Words that also read as separate numbers pass when every one
             // of those is backed - or is a 0, 1 or 2, which are never claims.
-            if (figure.Apart.Count > 0 && figure.Apart.All(part => part.Value <= 2 || BacksValue(part)))
+            if (!figure.Joined && figure.Apart.Count > 0 && figure.Apart.All(part => part.Value <= 2 || BacksValue(part)))
             {
                 return true;
             }
@@ -358,7 +370,16 @@ internal static class CommentaryNumberCheck
             // anything from 1.25 to 1.75, so a half is backed by what rounds
             // to it; everything else within 0.05. Not 5% of the fact as well
             // (8 Nov 2026): on a 6.753 lap that let "a six fifty" through.
-            var near = figure.Step >= 0.5 ? (figure.Step / 2) + 1e-9 : 0.05 + 1e-9;
+            //
+            // A lap time called to the hundredth or finer is held to that,
+            // within one step either way - rounded or cut short (8 Nov 2026):
+            // within 0.05, "five-oh-six" (5.06) passed for Terry Byte's 5.096
+            // in the recap. Five oh nine, five ten and five oh nine six still
+            // pass. A gap keeps the 0.05: "1.12 seconds" for a 1.1 is a gap
+            // the facts rounded, not a lap time misread.
+            var near = figure.Step >= 0.5 ? (figure.Step / 2) + 1e-9
+                : figure.LapShaped && figure.Step <= 0.01 ? figure.Step + 1e-9
+                : 0.05 + 1e-9;
 
             return _all.Any(v => Math.Abs(v - figure.Value) <= near);
         }
@@ -801,7 +822,7 @@ internal static class CommentaryNumberCheck
 
         if (LapAt(ws, i, c) is { } lap)
         {
-            found.Add(lap.Figure);
+            found.Add(lap.Figure with { LapShaped = true });
             return lap.Length;
         }
 
@@ -944,6 +965,22 @@ internal static class CommentaryNumberCheck
                 return (new Figure(Said(ws, i, len), c.Value + (tenth / 10.0) + (pair.Value / 1000.0), false, 0.001)
                 {
                     Apart = new[] { whole, new Figure(ws[j].Raw, tenth, true, 1), new Figure(Said(ws, k, pair.Length), pair.Value, true, 1) },
+                    Joined = ws[j].Hyphened,
+                }, len);
+            }
+
+            // "five oh nine six", "five one six nine" - three digits after
+            // the seconds, the way a model writes a thousandth (8 Nov 2026):
+            // "five-oh-nine-six" for 5.096 was read as 5.09 and a stray
+            // "six", and seven true record-lap lines were thrown away.
+            if (k + 1 < ws.Count && DigitWord(ws[k].Low) is { } hundredth3 && DigitWord(ws[k + 1].Low) is { } thousandth)
+            {
+                var len = c.Length + 3;
+
+                return (new Figure(Said(ws, i, len), c.Value + (tenth / 10.0) + (hundredth3 / 100.0) + (thousandth / 1000.0), false, 0.001)
+                {
+                    Apart = new[] { whole, new Figure(ws[j].Raw, tenth, true, 1), new Figure(ws[k].Raw, hundredth3, true, 1), new Figure(ws[k + 1].Raw, thousandth, true, 1) },
+                    Joined = tenth == 0 || ws[j].Hyphened,
                 }, len);
             }
 
@@ -955,6 +992,7 @@ internal static class CommentaryNumberCheck
                 return (new Figure(Said(ws, i, len), c.Value + (tenth / 10.0) + (last / 1000.0), false, 0.001)
                 {
                     Apart = new[] { whole, new Figure(ws[j].Raw, tenth, true, 1), new Figure(ws[k + 1].Raw, last, true, 1) },
+                    Joined = true,
                 }, len);
             }
 
@@ -966,6 +1004,7 @@ internal static class CommentaryNumberCheck
                 return (new Figure(Said(ws, i, len), c.Value + (hundredth / 100.0), false, 0.01)
                 {
                     Apart = new[] { whole, new Figure(ws[k].Raw, hundredth, true, 1) },
+                    Joined = true,
                 }, len);
             }
 
@@ -977,10 +1016,23 @@ internal static class CommentaryNumberCheck
         {
             var len = c.Length + hundredths.Length;
 
+            // "five sixteen nine", "five twenty-five eight" - the hundredths
+            // as a pair, then the thousandth (8 Nov 2026): a model's 5.169
+            // and 5.258, read before as 5.16 and 5.25 and a stray "nine".
+            if (j + hundredths.Length < ws.Count && DigitWord(ws[j + hundredths.Length].Low) is { } thousandth)
+            {
+                return (new Figure(Said(ws, i, len + 1), c.Value + (hundredths.Value / 100.0) + (thousandth / 1000.0), false, 0.001)
+                {
+                    Apart = new[] { whole, new Figure(Said(ws, j, hundredths.Length), hundredths.Value, true, 1), new Figure(ws[j + hundredths.Length].Raw, thousandth, true, 1) },
+                    Joined = ws[j].Hyphened,
+                }, len + 1);
+            }
+
             return (new Figure(Said(ws, i, len), c.Value + (hundredths.Value / 100.0), false, 0.01)
             {
                 Apart = new[] { whole, new Figure(Said(ws, j, hundredths.Length), hundredths.Value, true, 1) },
                 MaybeYear = c.Value is 19 or 20,
+                Joined = ws[j].Hyphened,
             }, len);
         }
 
