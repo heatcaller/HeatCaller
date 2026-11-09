@@ -613,7 +613,7 @@ A venue can't be applied while a race or practice is running, since switching th
 
 Mini-Z and RC tracks are rebuilt often, so HeatCaller lets you name and describe each layout. The track layout also holds the all-time lap record for that layout and how many corner marshal posts it needs.
 
-![The Track Layouts page with one layout listed and the Selected Track card beside it, with Add, Edit, Delete, Reset Record and Track Designer below](../assets/images/track-layouts.png)
+![The Track Layouts page with two layouts listed, one with a 76-tile plan, and the Selected Track card beside it showing that plan, with Add, Edit, Delete, Reset Record and Track Designer below](../assets/images/track-layouts.png)
 
 The list shows **Name**, **Record**, **Attachment** and **Plan** (how many tiles the drawn plan has). Selecting a layout shows its name and picture beside the list, under **Selected track**.
 
