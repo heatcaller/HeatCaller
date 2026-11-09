@@ -26,6 +26,23 @@ public partial class MainForm
     private int SessionTrackWidth() =>
         Math.Max(180, Pieces.PickerWidth(cmbTrackLayout, ref _trackPickerWidth, "(none)"));
 
+    /// <summary>
+    /// Shows the short-track warning under the Session row while the track
+    /// picked averages under 8 seconds a lap (ShortTrack), and hides it
+    /// otherwise. Asked when the pick changes, when the layouts change and
+    /// when a race is filed, since a filed race can move the median lap.
+    /// </summary>
+    private void ShowShortTrackWarning()
+    {
+        var name = cmbTrackLayout.SelectedItem as string;
+        var track = name is null or "(none)" ? null : _trackLayouts.All.FirstOrDefault(t => t.Name == name);
+        var warning = ShortTrack.Warning(ShortTrack.LapFor(track, _sessionHistory.Saved));
+
+        lblShortTrack.ForeColor = AppTheme.Warning;
+        lblShortTrack.Text = warning ?? string.Empty;
+        lblShortTrack.Visible = warning is not null;
+    }
+
     /// <summary>The Session row's Name box: wide enough to show its hint, and never under the 170px it always had.</summary>
     private int SessionNameWidth() =>
         Math.Max(170, TextRenderer.MeasureText(txtSessionLabel.PlaceholderText, txtSessionLabel.Font).Width + 16);
@@ -825,5 +842,12 @@ public partial class MainForm
         // or a race is filed against a name that no longer exists. Null
         // on the first call, which comes before Race Control is built.
         _raceControlControl?.RefreshTrackLayouts();
+
+        // An average lap edited on Track Layouts changes the warning too.
+        // Null on the first call, before the Session card is made.
+        if (lblShortTrack is not null && _sessionHistory is not null)
+        {
+            ShowShortTrackWarning();
+        }
     }
 }

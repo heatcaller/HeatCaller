@@ -1867,6 +1867,26 @@ public partial class MainForm : Form
             var selected = cmbTrackLayout.SelectedItem as string;
             _settings.LastTrackLayoutName = selected is null or "(none)" ? string.Empty : selected;
             _settings.Save();
+            ShowShortTrackWarning();
+        };
+        ShowShortTrackWarning();
+
+        // A filed race can move the layout's median lap either way.
+        _sessionHistory.SessionAdded += _ =>
+        {
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            if (InvokeRequired)
+            {
+                BeginInvoke(ShowShortTrackWarning);
+            }
+            else
+            {
+                ShowShortTrackWarning();
+            }
         };
         _decoderClient.StatusChanged += OnDecoderStatusChanged;
         _decoderClient.RawMessage += OnClientRawMessage;
