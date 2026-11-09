@@ -291,6 +291,36 @@ public sealed partial class AnnouncementService
         BinStaleCommentary();
     }
 
+    /// <summary>
+    /// Why a fastest-lap call for <paramref name="standing"/> is no longer
+    /// true - another car's best on the board is quicker - or null while it
+    /// still is. Asked as the call is queued and again as it reaches the
+    /// speaker.
+    /// </summary>
+    /// <remarks>
+    /// WHY (8 Nov 2026): Dee Ploy's 5.807 and Annie Wayout's 5.783 were
+    /// both fastest laps, 200 ms apart. Each driver's calls wait a moment to
+    /// be weighed against each other (ConsiderPerLapAction), and Dee's wait
+    /// was stretched by another call on the same lap, so Annie's reached the
+    /// queue first. "A newer one replaces any still waiting" then binned the
+    /// quicker lap's call, and the room heard "best lap of the race so far -
+    /// Dee Ploy, five eight oh seven" with Annie's 5.783 already on the
+    /// board. Arrival order is not lap order; the board is.
+    /// </remarks>
+    private string? FastLapNoLongerTrue(RaceStanding? standing) =>
+        standing is { FastLapMs: > 0 } && QuickerBest(standing.Transponder, standing.FastLapMs, _lapCrossings.Board) is { } quicker
+            ? $"{quicker.DisplayName}'s {quicker.FastLapMs / 1000.0:0.000} is quicker than its {standing.FastLapMs / 1000.0:0.000}"
+            : null;
+
+    /// <summary>The car on <paramref name="board"/> whose best beats <paramref name="lapMs"/>, if any - never a ghost (they do not hold the race's fastest lap).</summary>
+    internal static RaceStanding? QuickerBest(string? transponder, long lapMs, IEnumerable<RaceStanding> board) =>
+        board
+            .Where(s => s.FastLapMs > 0 && s.FastLapMs < lapMs
+                        && !string.Equals(s.Transponder, transponder, StringComparison.OrdinalIgnoreCase)
+                        && !GhostService.IsGhost(s.Transponder))
+            .OrderBy(s => s.FastLapMs)
+            .FirstOrDefault();
+
     /// <summary>The lead just changed hands.</summary>
     private void NoteLeadChangeForFacts()
     {
