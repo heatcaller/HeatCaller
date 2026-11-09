@@ -206,7 +206,12 @@ public sealed class DemoModeControl : UserControl
         // it are where they belong from the start, and a track picked later
         // never moves them (SteadyLabel). It used to be measured once, at
         // build, against a width worked out by hand.
-        _lblPaceHint.Wordings = new[] { NoPaceHint, "Pacing laps around 999.99s (this track's average)." };
+        _lblPaceHint.Wordings = new[]
+        {
+            NoPaceHint,
+            "Pacing laps around 999.99s (this track's average).",
+            "Pacing laps around 999.99s (Club Main Layout, Race Control's track).",
+        };
 
         _numStagingSeconds.Minimum = 1;
         _numStagingSeconds.Maximum = 60;
@@ -528,12 +533,12 @@ public sealed class DemoModeControl : UserControl
     }
 
     /// <summary>
-    /// The track the demo is run on - the layout picked on this page, or
-    /// null for the generic made-up pace. The host hands it to the ghost
-    /// cars at the green, so a PB or track-record ghost in a demo is paced
-    /// from the same track as the simulated cars. It used to be given Race
-    /// Control's track, which has nothing to do with the demo. The picker
-    /// is locked while a demo runs, so this cannot change under one.
+    /// The track the demo is run on - the layout picked on this page, else
+    /// Race Control's (8 Nov 2026, see SelectedTrack), or null for the
+    /// generic made-up pace. The host hands it to the ghost cars at the
+    /// green, so a PB or track-record ghost in a demo is paced from the same
+    /// track as the simulated cars. The picker is locked while a demo runs,
+    /// so this cannot change under one.
     ///
     /// UI thread only, as the picker is.
     /// </summary>
@@ -640,7 +645,7 @@ public sealed class DemoModeControl : UserControl
     {
         var previous = _cmbTrackLayout.SelectedItem as string ?? (_settings.LastDemoTrackName.Length > 0 ? _settings.LastDemoTrackName : null);
         _cmbTrackLayout.Items.Clear();
-        _cmbTrackLayout.Items.Add("(none - use a generic made-up pace)");
+        _cmbTrackLayout.Items.Add("(none - use Race Control's track)");
         foreach (var t in _trackLayouts.All)
         {
             _cmbTrackLayout.Items.Add(t.Name);
@@ -684,8 +689,27 @@ public sealed class DemoModeControl : UserControl
         _settings.Save();
     }
 
+    /// <summary>
+    /// The layout the demo is paced on: the one picked here, or - left on
+    /// the first entry - Race Control's, or null for the generic pace when
+    /// Race Control has none either.
+    /// </summary>
+    /// <remarks>
+    /// WHY (8 Nov 2026): Asher had Home Track (a 12 s average) picked on
+    /// Race Control and ran a heat as a demo from the program. This page's
+    /// own picker was still on "(none)", so the demo ran the generic 5-7.5 s
+    /// pace - half the track's lap. A pick made here still wins.
+    /// </remarks>
     private TrackLayout? SelectedTrack() =>
-        _cmbTrackLayout.SelectedIndex > 0 ? _trackLayouts.All.FirstOrDefault(t => t.Name == (string)_cmbTrackLayout.SelectedItem!) : null;
+        _cmbTrackLayout.SelectedIndex > 0
+            ? _trackLayouts.All.FirstOrDefault(t => t.Name == (string)_cmbTrackLayout.SelectedItem!)
+            : RaceControlTrack();
+
+    /// <summary>The layout picked on Race Control, or null.</summary>
+    private TrackLayout? RaceControlTrack() =>
+        _settings.LastRaceControlTrackName is { Length: > 0 } name
+            ? _trackLayouts.All.FirstOrDefault(t => t.Name == name)
+            : null;
 
     /// <summary>
     /// The longest the pace hint ever gets, and the one the layout reserves
@@ -699,7 +723,9 @@ public sealed class DemoModeControl : UserControl
     {
         var track = SelectedTrack();
         _lblPaceHint.Text = track?.AverageLapSeconds is > 0
-            ? $"Pacing laps around {track.AverageLapSeconds:0.00}s (this track's average)."
+            ? _cmbTrackLayout.SelectedIndex > 0
+                ? $"Pacing laps around {track.AverageLapSeconds:0.00}s (this track's average)."
+                : $"Pacing laps around {track.AverageLapSeconds:0.00}s ({track.Name}, Race Control's track)."
             : NoPaceHint;
     }
 
