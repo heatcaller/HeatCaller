@@ -177,7 +177,7 @@ public static class RcpTrackPainter
             var forward = design.WallAt(at.X, at.Y, vertical) is not null;
             var seam = forward ? (at.X, at.Y, vertical) : vertical ? (at.X, at.Y - 1, true) : (at.X - 1, at.Y, false);
 
-            DrawEndCap(g, at, vertical, twin, outward: !forward, sides.GetValueOrDefault(seam), scale, origin);
+            DrawEndCap(g, at, vertical, twin, outward: !forward, sides.GetValueOrDefault(seam), scale, origin, detailed);
         }
 
         if (showRoute)
@@ -696,10 +696,16 @@ public static class RcpTrackPainter
     /// </summary>
     /// <param name="outward">The cap bulges east or south of the end (the rail runs away west or north); false, the other way.</param>
     /// <param name="side">Which side of its seam a single rail stands on - see RailSides.</param>
-    private static void DrawEndCap(Graphics g, Point at, bool vertical, bool twin, bool outward, int side, float scale, PointF origin)
+    private static void DrawEndCap(Graphics g, Point at, bool vertical, bool twin, bool outward, int side, float scale, PointF origin, bool detailed = true)
     {
         var centre = Grid(at.X, at.Y, scale, origin);
         var thickness = Math.Max(2f, scale * RailThickness);
+
+        if (twin)
+        {
+            DrawDividerEnd(g, centre, vertical, outward, thickness, scale, detailed);
+            return;
+        }
 
         // A single rail's cap on the rail, on its own tile.
         if (!twin && side != 0)
@@ -731,13 +737,77 @@ public static class RcpTrackPainter
 
         g.DrawArc(face, box, start, 180f);
 
-        if (twin)
+        using var dot = new SolidBrush(TurnFace);
+        g.FillEllipse(dot, centre.X - thickness / 2f, centre.Y - thickness / 2f, thickness, thickness);
+    }
+
+    /// <summary>
+    /// The end of a divider: two corner rail pieces - two quarters of a post -
+    /// one on each lane's tile, making a half disc flush with the outside of
+    /// the two rails, each held by its bolt. Each grey rail plugs into its
+    /// quarter with the T-shaped tooth on its end, as a rail does into the
+    /// next (Asher, 8 Nov 2026). It used to be a thin pink ring.
+    /// </summary>
+    private static void DrawDividerEnd(Graphics g, PointF centre, bool vertical, bool outward, float thickness, float scale, bool detailed)
+    {
+        // Flush with the rails' outside faces: each rail's centre is a rail
+        // inset from the seam, and its face half a rail further out.
+        var radius = RailInset(scale) + thickness / 2f;
+
+        // Which way out past the end, and across it.
+        var (dx, dy) = (vertical, outward) switch
+        {
+            (true, true) => (0f, 1f),
+            (true, false) => (0f, -1f),
+            (false, true) => (1f, 0f),
+            _ => (-1f, 0f),
+        };
+
+        // The two quarters, from one rail's side round to the other's.
+        var first = (vertical, outward) switch
+        {
+            (true, true) => 0f,
+            (true, false) => 180f,
+            (false, true) => 270f,
+            _ => 90f,
+        };
+
+        DrawPostQuarter(g, centre, radius, first, detailed, shadow: detailed);
+        DrawPostQuarter(g, centre, radius, first + 90f, detailed, shadow: detailed);
+
+        if (!detailed)
         {
             return;
         }
 
-        using var dot = new SolidBrush(TurnFace);
-        g.FillEllipse(dot, centre.X - thickness / 2f, centre.Y - thickness / 2f, thickness, thickness);
+        // The tooth on each rail's end, plugged into its quarter: a narrow
+        // neck and a wider head, in the rail's grey.
+        using var tooth = new SolidBrush(RailFace);
+        using var edge = new Pen(RailEdge, Math.Max(1f, thickness * 0.08f));
+
+        foreach (var side in new[] { -1f, 1f })
+        {
+            var across = side * RailInset(scale);
+            var root = new PointF(centre.X - dy * across, centre.Y + dx * across);
+
+            PointF At(float along, float wide) =>
+                new(root.X + dx * along - dy * wide, root.Y + dy * along + dx * wide);
+
+            var neck = thickness * 0.18f;
+            var head = thickness * 0.36f;
+            // Short enough to leave the quarter's bolt clear.
+            var neckLength = radius * 0.14f;
+            var headLength = radius * 0.32f;
+
+            var outline = new[]
+            {
+                At(0f, -neck), At(neckLength, -neck), At(neckLength, -head), At(headLength, -head),
+                At(headLength, head), At(neckLength, head), At(neckLength, neck), At(0f, neck),
+            };
+
+            g.FillPolygon(tooth, outline);
+            g.DrawPolygon(edge, outline);
+        }
     }
 
     // --- Flat markings -------------------------------------------------------
