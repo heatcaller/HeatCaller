@@ -2,9 +2,9 @@
 
 HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whole feature lands, *c* for fixes and smaller additions.
 
-## Since 0.61.0
+## 0.62.0
 
-Not released yet.
+Released 9 Nov 2026. Everything since 0.61.0, newest first.
 
 - **Short tracks are called out (9 November).** The announcer is least accurate where laps average under 8 seconds: calls are skipped, can be a lap old when heard, and the commentary can mix up close lap times. Timing and scoring aren't affected. The user guide says so under [On a short track](announcer/voice.md#on-a-short-track), and so do the beta terms, so HeatCaller asks you to accept them again the next time it opens. HeatCaller also warns you: an amber line under the **Session** card on **Race Control** while the track picked is a short one, judged by its real laps once 10 have been raced, or the average typed on **Track Layouts**, where the same warning shows as you type it.
 - **Three character tones for the commentary (8 November).** **Writing tone:** on **AI Commentary** adds **Villain**, **Pirate** and **Town crier**. Each one changes the words of every line, the recap, the segments between races and the pit-lane interviews. Each is still told to keep every name, position and number exactly as given, and to keep it family-friendly. With an ElevenLabs v3 voice, each tone has its own audio tags (a laugh, a shout) under **Give the lines their tone's delivery when they're spoken**, which was **Mark the lines excited**. See [Character tones](announcer/commentary.md#character-tones).

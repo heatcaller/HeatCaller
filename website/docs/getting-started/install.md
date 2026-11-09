@@ -53,7 +53,7 @@ If you put it somewhere else, use the full path to the `HeatCaller.csproj` in it
 
 ## The startup screen
 
-A dark startup screen with the **HEATCALLER** name and the version (for example **BETA 0.61.0**) shows while the app loads its pages. It shows short progress lines:
+A dark startup screen with the **HEATCALLER** name and the version (for example **BETA 0.62.0**) shows while the app loads its pages. It shows short progress lines:
 
 - "Starting up..."
 - "Loading settings and driver profiles..."

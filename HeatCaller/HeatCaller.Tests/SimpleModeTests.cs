@@ -474,9 +474,11 @@ public sealed class SimpleModeTests : IDisposable
         "ChassisTemplateForm.cs|Other tuning fields (not on the diagram)", "ChassisTemplateForm.cs|Selected point",
         "RcpStockForm.cs|Boxed sets", "RcpStockForm.cs|Loose parts", "RcpPrintForm.cs|Parts", "RcpPrintForm.cs|Scale",
         "RcpTrackEditorForm.cs|Build me a track", "RcpTrackEditorForm.cs|Check against a kit", "RcpTrackEditorForm.cs|Keys",
-        "RcpTrackEditorForm.cs|Lanes", "RcpTrackEditorForm.cs|Plan file", "RcpTrackEditorForm.cs|Start from a kit",
+        // Lanes, Plan file and Trace a photo went with the rethought window (8 Nov 2026), and Rail the edge,
+        // which was a toolbar button, became a card of its own in the Auto section.
+        "RcpTrackEditorForm.cs|Rail the edge", "RcpTrackEditorForm.cs|Start from a kit",
         "RcpTrackEditorForm.cs|The lap", "RcpTrackEditorForm.cs|The room it goes in", "RcpTrackEditorForm.cs|Tile size",
-        "RcpTrackEditorForm.cs|Trace a photo", "RcpTrackEditorForm.cs|Track name", "RcpTrackEditorForm.cs|What the club owns",
+        "RcpTrackEditorForm.cs|Track name", "RcpTrackEditorForm.cs|What the club owns",
     };
 
     [Fact]
