@@ -9,6 +9,8 @@ Between [HEATCALLER OPERATOR NAME - CHECK] ("we") and [CLUB NAME] ("the club").
 
 The club is testing HeatCaller, race timing and announcing software, before it is generally released. It is **beta software**: it has been tested at solo rehearsals but not yet at many club nights, and it will have faults.
 
+The announcer is least accurate on short tracks. Where laps average under 8 seconds, spoken calls and commentary can come late, be skipped, or give a lap time, gap or place that is wrong or out of date. This does not affect lap timing or scoring. (Added 9 Nov 2026, to match section 1 of the terms in force.)
+
 ## 2. No charge and no warranty
 
 During the beta the software is provided free of charge [CHECK: and the HeatCaller voice allowance], **as is, without any warranty**, express or implied, including fitness for a particular purpose. [CHECK: exclusion and limitation of liability wording for the applicable law.]

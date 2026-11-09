@@ -1583,6 +1583,7 @@ See [Security and privacy](../admin/security-and-privacy.md).
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | "Enable commentary first." | **Test Connection** was pressed with commentary off. | Tick **Enable AI commentary**. |
+| A lap time, gap or place in a line or the recap is slightly wrong, or comes a lap late | The track's laps average under 8 seconds. | Expected on a short track: the lap times are close together and the race moves on while a line is spoken. The results on screen are still right. See [On a short track](voice.md#on-a-short-track). |
 | The commentary has gone plainer, and the form guide, cold open and the like have stopped | This month's relay lines are used up, and the model on this PC is writing. | Normal. Check **This month:** on the **Who writes it** card, and press **Ask for More** if the month has a while to run. See [The month's allowance](#the-months-allowance). |
 | "[llm] The built-in model is not being used: no model file is installed" | `commentary.gguf` is missing from beside `HeatCaller.exe`, or this is the portable copy. | Reinstall HeatCaller with the installer, which puts the model back. |
 | "[llm] The built-in model is not being used: this PC has ... GB of memory" | The PC has less than 2 GB of memory. | Use the relay: set up the [Club Website page](../online/setup.md). |

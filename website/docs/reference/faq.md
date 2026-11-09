@@ -133,6 +133,10 @@ Check these in order:
 
 **Sounds → Mixer** shows "NO VOICE:" and the reason when the announcer can't speak, and **Voice → Voice** shows a red "NOTHING CAN SPEAK -" line when there's no Kokoro voice file either. In Advanced mode, the Developer Console on the **Connection** page tells you more: choose the **Voice** filter and look for lines like "Skipped announcement - ElevenLabs API key or voice not configured." or "NO VOICE -" and a reason. See [Voice announcements](../announcer/voice.md).
 
+### Our track is short. Why does the announcer skip laps or get times wrong?
+
+The announcer is most accurate when laps average 8 seconds or more. On a shorter lap, a car can cross the line again before the call about its last lap has finished, so many lap-time calls are skipped, and a gap, place or lap time can be a lap old when it's heard. The commentary can also mix up lap times that sit close together. Lap timing and scoring aren't affected: the screens and results are right however short the lap. See [On a short track](../announcer/voice.md#on-a-short-track).
+
 ### Where do I find the results?
 
 Every race is saved to **Race History** automatically when it finishes. A results card image is also saved to `Documents\HeatCaller Results`. From **Race History** you can export results and make an event report. Season points are on the **Championship** page. See [Results and championships](../race-control/results-and-championships.md).
