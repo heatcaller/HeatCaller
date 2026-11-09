@@ -302,7 +302,7 @@ public sealed class RcpPrintPlanTests
     }
 
     [Fact]
-    public void The_export_menu_offers_the_picture_print_and_plan_file()
+    public void The_file_menu_offers_the_picture_print_plan_files_and_clear()
     {
         var items = StaThread.Run(() =>
         {
@@ -316,6 +316,6 @@ public sealed class RcpPrintPlanTests
                 .ToList();
         }, TimeSpan.FromSeconds(30), () => "opening the Track Designer");
 
-        Assert.Equal(new[] { "Save picture (4)", "Copy picture", "Print track and parts list...", "Save plan file..." }, items);
+        Assert.Equal(new[] { "Save picture (4)", "Copy picture", "Print track and parts list...", "Open plan file...", "Save plan file...", "Clear the plan..." }, items);
     }
 }

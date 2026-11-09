@@ -140,24 +140,25 @@ In the **Track Designer** (**Track Layouts** → **Track Designer**; see [Track 
 | <kbd>2</kbd> | **Pieces** tool with a **Rail tile** |
 | <kbd>3</kbd> | **Pieces** tool with an **Outer curve tile** |
 | <kbd>4</kbd> | **Markings** tool |
-| <kbd>5</kbd> | **Route** tool |
+| <kbd>5</kbd> | **Racing line** tool |
 | <kbd>6</kbd> | **Erase** tool |
 | <kbd>7</kbd> | **Photo** tool |
 | <kbd>8</kbd> | **Select** tool |
 | <kbd>L</kbd> | **Lane** tool |
 | <kbd>C</kbd> | **Corners** tool |
 | <kbd>T</kbd> | **Markings** tool with **Tile label**, to name a tile |
-| <kbd>V</kbd> | Shows the track in 3D, or goes back to the flat plan (same as **View**) |
+| <kbd>V</kbd> | Shows the track in 3D, or goes back to the flat plan (same as **3D**) |
 | <kbd>R</kbd> | Turns the next piece, or markings, 90 degrees |
 | <kbd>Shift</kbd>+<kbd>R</kbd> | Runs the racing line the other way (same as **Reverse**) |
 | <kbd>F</kbd> | Fits the whole plan in view (same as **Fit**) |
 | <kbd>G</kbd> | Shows or hides the grid |
-| <kbd>P</kbd> | Hides or shows the panel on the right (same as **Panel**) |
+| <kbd>P</kbd> | Hides or shows the column on the right |
+| <kbd>?</kbd> | Shows or hides every key the designer answers to (same as **?**) |
 | <kbd>Space</kbd> + drag | Moves the view, with any tool |
 | <kbd>Ctrl</kbd>+<kbd>Z</kbd> | Undo |
 | <kbd>Ctrl</kbd>+<kbd>Y</kbd> | Redo |
 
-The number keys, <kbd>L</kbd>, <kbd>C</kbd>, <kbd>T</kbd>, <kbd>V</kbd>, <kbd>R</kbd>, <kbd>F</kbd>, <kbd>G</kbd>, <kbd>P</kbd> and <kbd>Space</kbd> only work while the plan has the focus, so they never get in the way of typing a track name. Click the plan first if they don't respond. <kbd>Ctrl</kbd>+<kbd>Z</kbd> and <kbd>Ctrl</kbd>+<kbd>Y</kbd> work anywhere in the Track Designer window.
+The number keys, <kbd>L</kbd>, <kbd>C</kbd>, <kbd>T</kbd>, <kbd>V</kbd>, <kbd>R</kbd>, <kbd>F</kbd>, <kbd>G</kbd>, <kbd>P</kbd>, <kbd>?</kbd> and <kbd>Space</kbd> only work while the plan has the focus, so they never get in the way of typing a track name. Click the plan first if they don't respond. <kbd>Ctrl</kbd>+<kbd>Z</kbd> and <kbd>Ctrl</kbd>+<kbd>Y</kbd> work anywhere in the Track Designer window.
 
 With the mouse:
 

@@ -15,17 +15,18 @@ namespace HeatCaller;
 /// To get a real layout in exactly, drop a photo of it underneath with
 /// Trace photo and draw over the top.
 ///
-/// On the layout pieces (DialogFit): the toolbar along the top - the tools,
-/// then Wall the edge, Trace route and Play, then Undo, Redo, Fit and Clear,
-/// then what acts on a selection, then Export and Panel - each group a row
-/// of buttons only as wide as their captions, a group that does not fit on
-/// the line starting the next (a FieldRow). Under it the board takes the
-/// room, with the status line under it, and one panel down its right (a
-/// Beside): a row of tabs - Pieces, Plan, Room, Lap, Keys - over a column of
-/// cards that scrolls by itself when the window is too short for all of it.
-/// Panel (or P) hides the panel and gives the board the whole width. At the
-/// foot, against the right-hand edge: the main-picture box, Save Layout and
-/// Cancel.
+/// On the layout pieces (DialogFit), as rethought on 8 Nov 2026 (it had
+/// become a pile of buttons - five rows of them over six tabs): a slim top
+/// bar - the plan's name, Undo, Redo, Fit, Play, 3D, the File menu (with
+/// Clear in it, in red) and "?" for the keys, and Save Layout and Cancel
+/// against the right-hand edge. Under it, the tools in a rail down the left
+/// (a Beside with its column on the left), the one in hand lit; beside them
+/// the bar of that tool's options only (ContextStrip), the board, and the
+/// status line under it; and down the right the inspector (a Beside): one
+/// column of sections - Plan, Room, Lap, Parts, Auto - one open at a time,
+/// each closed one's header saying its headline, which scrolls by itself
+/// when the window is too short for it. P hides the inspector and gives the
+/// board the whole width.
 ///
 /// The new look (25 Oct 2026, Track Designer overhaul Phase 2): the palette
 /// used to be a column of its own down the left, and every card a column
@@ -126,19 +127,30 @@ public sealed class RcpTrackEditorForm : Form
     private readonly CheckBox _chkClosedRoute = new ThemedCheckBox();
     private readonly CheckBox _chkUseAsPhoto = new ThemedCheckBox();
 
-    /// <summary>The Export menu's button, and the menu it opens - see BuildToolbar.</summary>
-    private readonly Button _btnExport = new() { Text = "Export..." };
+    /// <summary>The File menu's button, and the menu it opens - see BuildTopBar.</summary>
+    private readonly Button _btnExport = new() { Text = "File ▾" };
     private readonly ContextMenuStrip _exportMenu = new();
 
-    /// <summary>Hides and shows the panel down the board's right - see TogglePanel.</summary>
-    private readonly Button _btnPanel = new() { Text = "Panel" };
-    private readonly Button _btnView = new() { Text = "View" };
+    private readonly Button _btnView = new() { Text = "3D" };
 
-    /// <summary>The panel's tabs and what each shows, in order - see BuildTabs.</summary>
-    private (Button Tab, Control Column)[] _tabs = Array.Empty<(Button, Control)>();
+    /// <summary>The "?" in the top bar, which opens the Keys section - lit while it shows.</summary>
+    private readonly Button _btnKeys = new() { Text = "?" };
 
-    /// <summary>The panel's two parts - its row of tabs and the column under it - hidden together by TogglePanel.</summary>
+    /// <summary>The plan's name along the top bar, following the name box.</summary>
+    private readonly Label _lblTitle = new();
+
+    /// <summary>
+    /// The inspector's sections and what each holds, in order - see
+    /// BuildInspector: a header button that opens and closes it, saying the
+    /// section's headline while it is closed, and the cards under it.
+    /// </summary>
+    private (string Name, SectionHeader Header, Section[] Cards)[] _tabs = Array.Empty<(string, SectionHeader, Section[])>();
+
+    /// <summary>The panel's parts - the inspector's column - hidden together by TogglePanel.</summary>
     private Control[] _panelParts = Array.Empty<Control>();
+
+    /// <summary>The bar over the board that holds the tool in hand's options - see BuildContextBar.</summary>
+    private ContextStrip? _contextBar;
 
     /// <summary>
     /// Whether the panel is showing. Kept here rather than read off its
@@ -153,14 +165,14 @@ public sealed class RcpTrackEditorForm : Form
     /// The tab last looked at, kept while HeatCaller runs - so opening the
     /// designer for the next track goes back to it rather than to Pieces.
     /// </summary>
-    private static string _lastTab = TabPieces;
+    private static string _lastTab = TabPlan;
 
-    private const string TabPieces = "Pieces";
     private const string TabPlan = "Plan";
     private const string TabRoom = "Room";
     private const string TabLap = "Lap";
     private const string TabKeys = "Keys";
-    private const string TabStock = "Stock";
+    private const string TabStock = "Parts";
+    private const string TabAuto = "Auto";
 
     // The Stock tab (Track Designer overhaul, Phase 4): the plan against
     // what the club owns, part by part.
@@ -298,7 +310,6 @@ public sealed class RcpTrackEditorForm : Form
         // Lit after the theme pass, which gives every button its own
         // colours - as the tools' and the tile size's are below.
         ShowTab(_openOnTab ?? _lastTab, remember: _openOnTab is null);
-        HighlightPanelButton();
         HighlightViewButton();
 
         // Nothing else owns the menu, so it goes with the window.
@@ -329,6 +340,7 @@ public sealed class RcpTrackEditorForm : Form
         HighlightLanes();
         HighlightPace();
         RefreshReadouts();
+        SetTool(RcpTool.Floor);
 
         // The plan framed in the board. It used to be framed here, in a
         // window already at its full size; the board has its size only once
@@ -368,59 +380,67 @@ public sealed class RcpTrackEditorForm : Form
     /// <summary>The window's page, built as the class notes describe. Returned for DialogFit to size the window to.</summary>
     private FillPage BuildLayout()
     {
-        var toolbar = BuildToolbar();
-        var (pieces, radiusRow, laneRows) = BuildPalette();
-        var (plan, room, lap, traceButtons) = BuildSidePanel();
-        var keys = new[] { BuildKeysCard() };
+        var topBar = BuildTopBar();
+        var rail = BuildToolRail();
+        var (pieceEntries, markingEntries) = BuildPalette();
+        var (plan, room, lap, auto, photoParts) = BuildSidePanel();
+        var context = BuildContextBar(pieceEntries, markingEntries, photoParts);
         var stock = new[] { BuildStockCard() };
-        var footer = BuildFooter();
+        var keys = new[] { BuildKeysCard() };
 
         // Under the board and as wide as it, and as tall as the longest a
         // tool says there - so picking a tool never resizes the board.
         _lblStatus.ForeColor = AppTheme.TextMuted;
         _lblStatus.Wordings = Enum.GetValues<RcpTool>().Select(tool => ToolHint(tool)).ToArray();
 
-        var (strip, columns) = BuildTabs(new (string, IReadOnlyList<Section>)[]
+        var inspector = BuildInspector(new (string, Section[])[]
         {
-            (TabPieces, pieces),
             (TabPlan, plan),
             (TabRoom, room),
             (TabLap, lap),
             (TabStock, stock),
+            (TabAuto, auto),
             (TabKeys, keys),
         });
 
-        var everyCard = pieces.Concat(plan).Concat(room).Concat(lap).Concat(stock).Concat(keys).ToList();
+        var everyCard = plan.Concat(room).Concat(lap).Concat(stock).Concat(auto).Concat(keys).ToList();
 
-        // The board and its status line, with the panel down their right:
-        // its tabs, then the column of the tab showing, which takes the
-        // height the tabs leave it.
-        var board = new Beside(() => SideWidth(traceButtons, radiusRow, laneRows, strip, everyCard));
+        // The tool's options over the board, the board, and the line under
+        // it, with the inspector down their right - one column of sections
+        // that scrolls by itself when the window is too short for it.
+        var board = new Beside(() => SideWidth(everyCard));
+        board.Add(context, gapBelow: UiLayout.RowGap);
         board.AddFill(_canvas, _ => UiLayout.AtTextSize(CanvasLeastHeight), gapBelow: UiLayout.RowGap);
         board.Add(_lblStatus, gapBelow: 0);
-        board.AddSideMeasured(strip, gapBelow: UiLayout.RowGap);
-        board.AddSideFill(columns, _ => UiLayout.AtTextSize(ColumnLeastHeight), gapBelow: 0);
+        board.AddSideFill(inspector, _ => UiLayout.AtTextSize(ColumnLeastHeight), gapBelow: 0);
 
         _board = board;
-        _panelParts = new Control[] { strip, columns };
+        _panelParts = new Control[] { inspector };
+
+        // The tools down the left, one under another, as wide as the
+        // widest caption needs - and the rest beside them.
+        var railed = new Beside { SideOnLeft = true };
+
+        for (var i = 0; i < rail.Length; i++)
+        {
+            railed.AddSide(rail[i], gapBelow: i < rail.Length - 1 ? UiLayout.TightButtonGap : 0);
+        }
+
+        railed.AddFill(board, board.LeastHeight, gapBelow: 0);
 
         var page = new FillPage();
-        page.Add(toolbar, gapBelow: UiLayout.RowGap);
-        page.AddFill(board, board.LeastHeight, gapBelow: UiLayout.RowGap);
-        page.Add(footer, gapBelow: 0);
+        page.Add(topBar, gapBelow: UiLayout.RowGap);
+        page.AddFill(railed, railed.LeastHeight, gapBelow: 0);
 
-        // The order Tab takes from the panel to the toolbar and the buttons at
-        // the foot, as it always did. The board has the focus as the window
-        // opens (Shown) and keeps Tab for itself (it takes every key, see
-        // RcpTrackCanvas.IsInputKey). The toolbar is at the top of the page,
-        // so it is put after the board here.
-        if (board.Parent is { } boardHolder)
+        // The board has the focus as the window opens (Shown) and keeps Tab
+        // for itself (it takes every key, see RcpTrackCanvas.IsInputKey);
+        // the top bar comes after it in Tab's order, as the toolbar did.
+        if (railed.Parent is { } boardHolder)
         {
             boardHolder.TabIndex = 0;
         }
 
-        toolbar.TabIndex = 1;
-        footer.TabIndex = 2;
+        topBar.TabIndex = 1;
 
         Controls.Add(page);
 
@@ -430,70 +450,68 @@ public sealed class RcpTrackEditorForm : Form
     }
 
     /// <summary>
-    /// The panel's tabs: a row of buttons, only as wide as their captions,
-    /// over a holder with one column of cards for each - the one whose tab
-    /// is lit showing, the others hidden. A column scrolls by itself when the
-    /// window is too short for all of it.
+    /// The inspector (8 Nov 2026, in place of six tabs): one column - the
+    /// sections' headers, one under another, then the open section's cards.
+    /// The headers stay at the top whichever is open, so every section can
+    /// be seen and reached without scrolling; a closed one's header says its
+    /// headline - the plan's name, whether it fits the room, the lap, the
+    /// parts - so most questions are answered without opening anything. One
+    /// is open at a time, and its header again closes it. Keys has no
+    /// header until the "?" opens it.
     /// </summary>
-    private (ButtonBar Strip, Panel Columns) BuildTabs(IReadOnlyList<(string Name, IReadOnlyList<Section> Cards)> tabs)
+    private PageStack BuildInspector(IReadOnlyList<(string Name, Section[] Cards)> sections)
     {
-        var holder = new Panel
+        var column = CardColumn();
+        var made = new List<(string, SectionHeader, Section[])>();
+
+        foreach (var (name, cards) in sections)
         {
-            Margin = Padding.Empty,
-            Padding = Padding.Empty,
-            Tag = AppTheme.KeepBackColor,
-        };
-
-        var made = new List<(Button, Control)>();
-
-        foreach (var (name, cards) in tabs)
-        {
-            var column = CardColumn();
-            column.Dock = DockStyle.Fill;
-            column.Visible = false;
-
-            for (var i = 0; i < cards.Count; i++)
-            {
-                column.Add(cards[i], gapBelow: i < cards.Count - 1 ? UiLayout.RowGap : 0);
-            }
-
-            holder.Controls.Add(column);
-
-            var tab = new Button { Text = name };
+            var header = new SectionHeader(name);
             var captured = name;
 
-            tab.Click += (_, _) =>
+            header.Click += (_, _) =>
             {
-                ShowTab(captured);
+                ShowTab(_openTab == captured ? string.Empty : captured);
                 _canvas.Focus();
             };
 
-            _tips.SetToolTip(tab, TabTip(name));
+            _tips.SetToolTip(header, TabTip(name));
 
-            made.Add((tab, column));
+            column.Add(header, gapBelow: UiLayout.TightButtonGap);
+            made.Add((name, header, cards));
+        }
+
+        foreach (var (_, cards) in sections)
+        {
+            foreach (var card in cards)
+            {
+                column.Add(card, gapBelow: UiLayout.RowGap);
+            }
         }
 
         _tabs = made.ToArray();
 
-        var strip = new ButtonBar(tight: true).With(_tabs.Select(pair => (Control)pair.Tab).ToArray());
-
-        return (strip, holder);
+        return column;
     }
 
     private static string TabTip(string tab) => tab switch
     {
-        TabPieces => "The floor, the rails and the markings to draw with.",
-        TabPlan => "Start from one of RCP's layouts, the track's name, the tile size and the kit it is checked against.",
-        TabRoom => "The room the track goes in, and a photo to trace over.",
-        TabLap => "The racing line, the lap, the split loops' sectors, and what the plan comes to.",
+        TabPlan => "The track's name, starting from one of RCP's layouts, the tile size and the kit it is checked against.",
+        TabRoom => "The room the track goes in.",
+        TabLap => "The lap, the split loops' sectors, and what the plan comes to.",
         TabStock => "The plan against what the club owns: each part used, owned and left.",
+        TabAuto => "Rail the edge of the floor, or have layouts made to fit the room.",
         _ => "Every key the designer answers to.",
     };
 
+    /// <summary>The inspector's section open now - empty with all of them closed.</summary>
+    private string _openTab = string.Empty;
+
     /// <summary>
-    /// Shows one tab's column and lights its tab; an unknown name shows the
-    /// first. Remembered for the next window unless <paramref name="remember"/>
-    /// says not.
+    /// Opens one of the inspector's sections and closes the rest; empty
+    /// closes them all, and an unknown name opens the first. Remembered for
+    /// the next window unless <paramref name="remember"/> says not - never
+    /// Keys, which is looked up, not worked in.
     /// </summary>
     private void ShowTab(string name, bool remember = true)
     {
@@ -502,32 +520,116 @@ public sealed class RcpTrackEditorForm : Form
             return;
         }
 
-        if (!_tabs.Any(pair => pair.Tab.Text == name))
+        // The names the tabs had, which a window may still be asked to open
+        // on: Stock is Parts now, and the pieces went to the bar over the board.
+        name = name switch
         {
-            name = _tabs[0].Tab.Text;
+            "Stock" => TabStock,
+            "Pieces" => TabPlan,
+            _ => name,
+        };
+
+        if (name.Length > 0 && !_tabs.Any(tab => tab.Name == name))
+        {
+            name = _tabs[0].Name;
         }
 
-        if (remember)
+        if (remember && name != TabKeys)
         {
             _lastTab = name;
         }
 
-        foreach (var (tab, column) in _tabs)
+        _openTab = name;
+
+        foreach (var (tabName, header, cards) in _tabs)
         {
-            var active = tab.Text == name;
+            var open = tabName == name;
 
-            column.Visible = active;
+            foreach (var card in cards)
+            {
+                card.Visible = open;
+            }
 
-            tab.BackColor = active ? AppTheme.Primary : AppTheme.SecondaryButton;
-            tab.ForeColor = active ? AppTheme.OnPrimary : AppTheme.TextDark;
-            tab.FlatAppearance.BorderSize = 0;
+            header.Visible = tabName != TabKeys || open;
+            header.BackColor = open ? AppTheme.Primary : AppTheme.SecondaryButton;
+            header.ForeColor = open ? AppTheme.OnPrimary : AppTheme.TextDark;
+            header.Invalidate();
         }
+
+        // A card's gap under the last header showing, a button's gap
+        // between the headers.
+        var lastHeader = _tabs.Last(tab => tab.Name != TabKeys || tab.Name == name).Header;
+
+        foreach (var (_, header, _) in _tabs)
+        {
+            var gap = ReferenceEquals(header, lastHeader) ? UiLayout.RowGap : UiLayout.TightButtonGap;
+
+            if (header.Margin.Bottom != gap)
+            {
+                header.Margin = new Padding(header.Margin.Left, header.Margin.Top, header.Margin.Right, gap);
+            }
+        }
+
+        _btnKeys.BackColor = name == TabKeys ? AppTheme.Primary : AppTheme.SecondaryButton;
+        _btnKeys.ForeColor = name == TabKeys ? AppTheme.OnPrimary : AppTheme.TextDark;
+        _btnKeys.FlatAppearance.BorderSize = 0;
+
+        RefreshHeadlines();
     }
 
     /// <summary>
-    /// Hides the panel down the board's right, or brings it back. Hidden,
-    /// it takes no room at all: the board has the window's whole width
-    /// (Beside leaves out a column whose parts are all hidden).
+    /// Each header says its section's name, and - closed - its headline:
+    /// the first thing its cards say. Asked after every change to the plan
+    /// (RefreshReadouts) and to its name.
+    /// </summary>
+    private void RefreshHeadlines()
+    {
+        _lblTitle.Text = string.IsNullOrWhiteSpace(TrackName) ? "A new track" : TrackName;
+
+        foreach (var (name, header, _) in _tabs)
+        {
+            var open = name == _openTab;
+            var headline = open ? string.Empty : Headline(name);
+
+            header.Headline = headline;
+        }
+    }
+
+    /// <summary>What a closed section's header says after its name.</summary>
+    private string Headline(string section) => section switch
+    {
+        TabPlan => (string.IsNullOrWhiteSpace(TrackName) ? "no name yet" : TrackName)
+                   + $", {Result.TileSizeMm / 10:0} cm tiles",
+        TabRoom => FirstSentence(_lblRoomFit.Text),
+        // The lap as the board's corner says it - "Lap 86.1 ft · 14.3s as
+        // entered" - or, with no line yet, the first thing the readout says.
+        TabLap => _canvas.Chips.FirstOrDefault(chip => chip.StartsWith("Lap", StringComparison.Ordinal)) is { } chip
+            ? chip["Lap".Length..].Trim()
+            : FirstLine(_lblStats.Text),
+        TabStock => FirstSentence(_lblOwned.Text),
+        TabAuto => "rail the edge, build me a track",
+        _ => string.Empty,
+    };
+
+    private static string FirstLine(string text)
+    {
+        var end = text.IndexOfAny(new[] { '\r', '\n' });
+
+        return (end < 0 ? text : text[..end]).Trim();
+    }
+
+    private static string FirstSentence(string text)
+    {
+        var line = FirstLine(text);
+        var end = line.IndexOf(". ", StringComparison.Ordinal);
+
+        return (end < 0 ? line : line[..end]).TrimEnd('.');
+    }
+
+    /// <summary>
+    /// Hides the inspector down the board's right, or brings it back.
+    /// Hidden, it takes no room at all: the board has the window's whole
+    /// width (Beside leaves out a column whose parts are all hidden).
     /// </summary>
     private void TogglePanel()
     {
@@ -538,12 +640,11 @@ public sealed class RcpTrackEditorForm : Form
             part.Visible = _panelShown;
         }
 
-        HighlightPanelButton();
         _board?.PerformLayout();
         _canvas.Focus();
     }
 
-    /// <summary>The View button lit while the board shows the angled view.</summary>
+    /// <summary>The 3D button lit while the board shows the angled view.</summary>
     private void HighlightViewButton()
     {
         _btnView.BackColor = _canvas.Angled ? AppTheme.Primary : AppTheme.SecondaryButton;
@@ -551,12 +652,30 @@ public sealed class RcpTrackEditorForm : Form
         _btnView.FlatAppearance.BorderSize = 0;
     }
 
-    /// <summary>The Panel button lit while the panel shows, as a tool's button is while it is in hand.</summary>
-    private void HighlightPanelButton()
+    /// <summary>
+    /// A button for the bars round the board. Every one but Undo and Redo
+    /// changes the plan, which is done on the flat plan where it can be seen
+    /// - so from the angled view they go back to it first. Undo and Redo
+    /// show their result either way.
+    /// </summary>
+    private Button BarButton(string text, string tip, Action click, bool flat = true)
     {
-        _btnPanel.BackColor = _panelShown ? AppTheme.Primary : AppTheme.SecondaryButton;
-        _btnPanel.ForeColor = _panelShown ? AppTheme.OnPrimary : AppTheme.TextDark;
-        _btnPanel.FlatAppearance.BorderSize = 0;
+        var button = new Button { Text = text };
+
+        button.Click += (_, _) =>
+        {
+            if (flat && _canvas.Angled)
+            {
+                _canvas.ToggleAngled();
+            }
+
+            click();
+            _canvas.Focus();
+        };
+
+        _tips.SetToolTip(button, tip);
+
+        return button;
     }
 
     /// <summary>
@@ -706,14 +825,15 @@ public sealed class RcpTrackEditorForm : Form
         var lines = new[]
         {
             "1, 2, 3 - a plain tile, a rail tile, an outer curve tile",
-            "4 to 8 - Markings, Route, Erase, Photo, Select",
-            "L - Lane, C - Corners, T - Tile label, V - the angled view",
+            "4 to 8 - Markings, Racing line, Erase, Photo, Select",
+            "L - Lane, C - Corners, T - Tile label, V - the 3D view",
             "Space and drag - move the view (or drag with the middle button, or Shift and the right button)",
             "Wheel - zoom (with Photo, size the photo)",
             "F - fit the whole plan in view",
             "G - show or hide the grid",
             "R - turn the next piece or marking",
             "Shift+R - run the racing line the other way",
+            "Rail the edge and Build me a track are in the Auto section; Clear is in the File menu",
             "Click the zoom in the corner of the board - back to 100%",
             "Right-click, or Ctrl and click - take off what is under the pointer",
             "Ctrl+Z / Ctrl+Y - undo / redo",
@@ -724,7 +844,8 @@ public sealed class RcpTrackEditorForm : Form
             "[ and ] - turn what is picked",
             "Delete or Backspace - take off what is picked",
             "Esc - put down what is picked",
-            "P - hide or show this panel",
+            "P - hide or show this column",
+            "? - show or hide these keys",
             "Click the board first: the keys other than Ctrl+Z and Ctrl+Y work while it has the focus, so typing a track name is never taken for a key.",
         };
 
@@ -743,59 +864,30 @@ public sealed class RcpTrackEditorForm : Form
     }
 
     /// <summary>
-    /// The toolbar: the seven tools, then Wall the edge, Trace route and
-    /// Play, then Undo, Redo, Fit and Clear - each group a row of buttons
-    /// only as wide as their captions (a tight ButtonBar), the three a
-    /// section gap apart, and a group that does not fit on the line starting
-    /// the next (a FieldRow).
+    /// The top bar: the plan's name, then Undo, Redo and Fit, then Play and
+    /// 3D, then the File menu and the "?" for the keys - each group a row of
+    /// buttons only as wide as their captions, a group that does not fit on
+    /// the line starting the next (a FieldRow) - and Save and Cancel against
+    /// the right-hand edge.
     /// </summary>
-    private FieldRow BuildToolbar()
+    private FieldRow BuildTopBar()
     {
-        // Every button but Undo and Redo changes the plan, which is done on
-        // the flat plan where it can be seen - so from the angled view they
-        // go back to it first. Undo and Redo show their result either way.
-        Button Add(string text, string tip, Action click, bool flat = true)
-        {
-            var button = new Button { Text = text };
+        _lblTitle.AutoSize = true;
+        _lblTitle.Font = AppTheme.BoldFont;
+        _lblTitle.ForeColor = AppTheme.TextDark;
+        _lblTitle.Anchor = AnchorStyles.Left;
+        _lblTitle.MaximumSize = new Size(UiLayout.AtTextSize(360), 0);
+        _lblTitle.Text = string.IsNullOrWhiteSpace(_trackName) ? "A new track" : _trackName;
 
-            button.Click += (_, _) =>
-            {
-                if (flat && _canvas.Angled)
-                {
-                    _canvas.ToggleAngled();
-                }
+        var undo = BarButton("Undo", "Ctrl+Z", () => _canvas.Undo(), flat: false);
+        var redo = BarButton("Redo", "Ctrl+Y", () => _canvas.Redo(), flat: false);
 
-                click();
-                _canvas.Focus();
-            };
-
-            _tips.SetToolTip(button, tip);
-
-            return button;
-        }
-
-        // Pieces: a tile with its rail on, as it goes down on a real track
-        // (railed tiles, Phase 2, 7 Nov 2026). It took the place of Floor,
-        // and of Rails and Turns, which laid rails on the seams afterwards.
-        var floor = Add("Pieces", "Lay a tile with its rail already on - pick the piece on the Pieces tab. 1 a plain tile, 2 a rail tile, 3 an outer curve tile; R turns it.", ChoosePieces);
-        var lane = Add("Lane", "Paint a lane: rail tiles down both sides that follow it, and an outer curve tile round every bend. Set its width on the Pieces tab. (L)", () => SetTool(RcpTool.Lane));
-        var corners = Add("Corners", "Click a corner to make it an outer curve tile or square, in turn. (C)", () => SetTool(RcpTool.Corner));
-        var marker = Add("Markings", "The line, grid boxes, curbs, posts. R turns them. (4)", () => SetTool(RcpTool.Marker));
-        var route = Add("Route", "Draw the racing line. (5)", () => SetTool(RcpTool.Route));
-        var erase = Add("Erase", "Take things off. Ctrl+click or right-click does this with any tool. (6)", () => SetTool(RcpTool.Erase));
-        var photo = Add("Photo", "Drag the traced photo into place; the wheel sizes it. (7)", () => SetTool(RcpTool.Backdrop));
-        var select = Add("Select", "Drag a box round a piece of the plan, then move it, turn it, mirror it or copy it. (8)", () => SetTool(RcpTool.Select));
-
-        _toolButtons = new[]
-        {
-            (floor, RcpTool.Floor), (floor, RcpTool.Piece), (lane, RcpTool.Lane),
-            (corners, RcpTool.Corner), (marker, RcpTool.Marker), (route, RcpTool.Route), (erase, RcpTool.Erase),
-            (photo, RcpTool.Backdrop), (select, RcpTool.Select),
-        };
-
-        var wallEdge = Add("Rail the edge", "Make every tile round the edge of the floor a rail tile facing out, and its outside corners outer curve tiles.", () => _canvas.WallThePerimeter());
-        var traceRoute = Add("Trace route", "Follow the corridor between the rails and lay the racing line down the middle of it, however wide. Traced, it follows the track as you change it, until you move a point of it by hand.", () => _canvas.AutoRoute());
-        var reverseRoute = Add("Reverse", "Turn the racing line round, so it runs the way the cars do - its arrows show which way. Sectors are measured in that direction. (Shift+R)", () => _canvas.ReverseRoute());
+        // Grey when there is nothing to take back. The canvas has always
+        // known (CanUndo / CanRedo) and the buttons never asked, so they
+        // looked live on an untouched plan and did nothing when pressed.
+        _btnUndo = undo;
+        _btnRedo = redo;
+        var fit = BarButton("Fit", "Frame the whole plan. (F)", () => _canvas.Fit());
 
         _btnPlay.Text = "Play";
         _btnPlay.Click += (_, _) =>
@@ -806,40 +898,98 @@ public sealed class RcpTrackEditorForm : Form
 
         _tips.SetToolTip(_btnPlay, "Send a car round the line at the lap time on the board.");
 
-
         // As wide saying Stop as saying Play, so the buttons after it never
         // move as it changes - it was a fixed 76px for the same reason. Its
         // row sizes it to its caption; this keeps it to the wider of the two,
         // measured the way the row measures (UiLayout.TightButtonSizeFor).
         _btnPlay.MinimumSize = new Size(Math.Max(TightWidth("Play"), TightWidth("Stop")), 0);
 
-        var undo = Add("Undo", "Ctrl+Z", () => _canvas.Undo(), flat: false);
-        var redo = Add("Redo", "Ctrl+Y", () => _canvas.Redo(), flat: false);
+        // The angled view (Phase 8): the same plan tipped and turned, to see
+        // how it will look. Picking a tool goes back to the flat plan.
+        _btnView.Click += (_, _) =>
+        {
+            _canvas.ToggleAngled();
+            _canvas.Focus();
+        };
+        _canvas.AngledChanged += HighlightViewButton;
+        _tips.SetToolTip(_btnView, "See the track tipped and turned, in 3D: drag to turn it round and tip it, wheel to zoom. Lit while it shows; press again, or pick a tool, to draw. (V)");
 
-        // Grey when there is nothing to take back. The canvas has always
-        // known (CanUndo / CanRedo) and the buttons never asked, so they
-        // looked live on an untouched plan and did nothing when pressed.
-        _btnUndo = undo;
-        _btnRedo = redo;
-        var fit = Add("Fit", "Frame the whole plan. (F)", () => _canvas.Fit());
-        var clear = Add("Clear", "Start again.", ClearAll);
+        BuildFileMenu();
 
-        // What to do with whatever is picked. Every one of these turns or
-        // mirrors it WHERE IT STANDS - the box round it keeps its top-left
-        // corner, so a turn never slides a layout off the floor it was
-        // lined up with (RcpSelection).
-        var turn = Add("Turn", "Turn what's picked a quarter clockwise, where it stands. (])", () => _canvas.TurnSelection(1));
-        var flipAcross = Add("Flip across", "Mirror what's picked left to right.", () => _canvas.MirrorSelection(leftToRight: true));
-        var flipDown = Add("Flip down", "Mirror what's picked top to bottom.", () => _canvas.MirrorSelection(leftToRight: false));
-        var duplicate = Add("Duplicate", "A second copy, one tile along, ready to drag where it belongs. (Ctrl+D)", () => _canvas.DuplicateSelection());
-        var remove = Add("Remove", "Take what's picked off the plan. (Delete)", () => _canvas.DeleteSelection());
+        _btnKeys.Click += (_, _) =>
+        {
+            ShowTab(_openTab == TabKeys ? _lastTab : TabKeys, remember: false);
+            _canvas.Focus();
+        };
+        _tips.SetToolTip(_btnKeys, "Every key the designer answers to. (?)");
 
-        _selectionButtons = new[] { turn, flipAcross, flipDown, duplicate, remove };
+        var btnSave = new Button { Text = "Save Layout" };
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        // One menu for everything that leaves the designer (Phase 7): the
-        // picture at a size chosen, the picture copied, the plan printed to
-        // scale with its parts and build lists, and the plan as a file
-        // another club can open.
+        btnSave.Click += (_, _) =>
+        {
+            // 17 Oct 2026, Bug Hunt 8, A31-1: a nudge clicked away from
+            // within its 350 ms settle would otherwise be saved with the
+            // nudged pieces stacked on what they hit.
+            _canvas.LandPendingNudge();
+
+            if (string.IsNullOrWhiteSpace(TrackName))
+            {
+                AppDialog.Show(this,
+                    "Give the track a name first - that's what it's saved and listed under.",
+                    "Name needed", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                // The name box is in the Plan section, which may be closed.
+                ShowTab(TabPlan);
+                _txtName.Focus();
+                return;
+            }
+
+            // The plan's own lap setting is what is saved. This used to copy
+            // the checkbox into it here, and the checkbox could be behind the
+            // plan: Trace route closes the lap in the plan, and Undo or Redo
+            // bring back whatever the lap was then, so unticking the box and
+            // pressing Trace route drew a closed lap and saved an open one.
+            // The box now follows the plan (SyncSidePanel), and ticking it
+            // writes straight into the plan, so there is nothing to copy.
+            DialogResult = DialogResult.OK;
+            Close();
+        };
+
+        AcceptButton = btnSave;
+        CancelButton = btnCancel;
+
+        // Right to left: Cancel furthest right, Save beside it.
+        var answer = new ButtonBar(alignRight: true, tight: true).With(btnCancel, btnSave);
+
+        var bar = new FieldRow();
+        bar.Add(null, _lblTitle);
+        bar.Add(null, new ButtonBar(tight: true).With(undo, redo, fit));
+        bar.Add(null, new ButtonBar(tight: true).With(_btnPlay, _btnView));
+        bar.Add(null, new ButtonBar(tight: true).With(_btnExport, _btnKeys));
+        bar.AddLast(null, answer, () => answer.OneLineWidth);
+
+        _txtName.TextChanged += (_, _) => RefreshHeadlines();
+
+        return bar;
+
+        static int TightWidth(string caption)
+        {
+            using var probe = new Button { Text = caption };
+
+            return UiLayout.TightButtonSizeFor(probe).Width;
+        }
+    }
+
+    /// <summary>
+    /// The File menu (Phase 7, Export as was): everything that leaves the
+    /// designer - the picture at a size chosen, the picture copied, the plan
+    /// printed to scale with its parts and build lists, the plan as a file
+    /// another club can open or one opened from another club - and, last and
+    /// in red, Clear, which used to sit among the tools.
+    /// </summary>
+    private void BuildFileMenu()
+    {
         var savePicture = new ToolStripMenuItem("Save picture");
         var pictureSizes = new List<(ToolStripMenuItem Item, string Name, int PixelsPerTile)>();
 
@@ -858,12 +1008,29 @@ public sealed class RcpTrackEditorForm : Form
         var print = new ToolStripMenuItem("Print track and parts list...");
         print.Click += (_, _) => PrintPlan();
 
+        var openPlan = new ToolStripMenuItem("Open plan file...");
+        openPlan.Click += (_, _) => OpenPlanFile();
+        openPlan.ToolTipText = "Open a .hctrack plan another club sent, in place of what is drawn. Ctrl+Z puts this back.";
+
         var savePlan = new ToolStripMenuItem("Save plan file...");
         savePlan.Click += (_, _) => SavePlanFile();
+        savePlan.ToolTipText = "Save this plan as a .hctrack file - floor, rails, lanes, markings and line - to send to another club or keep.";
 
+        var clear = new ToolStripMenuItem("Clear the plan...") { Tag = AppTheme.DangerMenuItem };
+        clear.Click += (_, _) =>
+        {
+            if (_canvas.Angled)
+            {
+                _canvas.ToggleAngled();
+            }
+
+            ClearAll();
+        };
+
+        _exportMenu.ShowItemToolTips = true;
         _exportMenu.Items.AddRange(new ToolStripItem[]
         {
-            savePicture, copyPicture, new ToolStripSeparator(), print, new ToolStripSeparator(), savePlan,
+            savePicture, copyPicture, print, new ToolStripSeparator(), openPlan, savePlan, new ToolStripSeparator(), clear,
         });
 
         // Each size says what it comes out at, worked out as the menu opens;
@@ -872,7 +1039,7 @@ public sealed class RcpTrackEditorForm : Form
         {
             var empty = Result.IsEmpty;
 
-            foreach (var item in new[] { savePicture, copyPicture, print, savePlan })
+            foreach (var item in new[] { savePicture, copyPicture, print, savePlan, clear })
             {
                 item.Enabled = !empty;
             }
@@ -890,198 +1057,140 @@ public sealed class RcpTrackEditorForm : Form
         _btnExport.Click += (_, _) => _exportMenu.Show(_btnExport, new Point(0, _btnExport.Height));
 
         // Back to the board when the menu goes, as every other button's
-        // click does - or Space would press Export again, not move the view.
+        // click does - or Space would press File again, not move the view.
         _exportMenu.Closed += (_, _) => _canvas.Focus();
-        _tips.SetToolTip(_btnExport, "Save or copy a picture of the plan, print it to scale with its parts list, or save it as a plan file to share.");
+        _tips.SetToolTip(_btnExport, "Save or copy a picture of the plan, print it to scale with its parts list, open or save a plan file, or clear the plan.");
+    }
 
-        _btnPanel.Click += (_, _) => TogglePanel();
+    /// <summary>
+    /// The tool rail down the board's left: Select, then the tools that lay
+    /// things down, then Erase and Photo - one under another, the one in
+    /// hand lit.
+    /// </summary>
+    private Button[] BuildToolRail()
+    {
+        // Pieces: a tile with its rail on, as it goes down on a real track
+        // (railed tiles, Phase 2, 7 Nov 2026). It took the place of Floor,
+        // and of Rails and Turns, which laid rails on the seams afterwards.
+        var select = BarButton("Select", "Drag a box round a piece of the plan, then move it, turn it, mirror it or copy it. (8)", () => SetTool(RcpTool.Select));
+        var pieces = BarButton("Pieces", "Lay a tile with its rail already on - pick the piece in the bar over the board. 1 a plain tile, 2 a rail tile, 3 an outer curve tile; R turns it.", ChoosePieces);
+        var lane = BarButton("Lane", "Paint a lane: rail tiles down both sides that follow it, and an outer curve tile round every bend. (L)", () => SetTool(RcpTool.Lane));
+        var corners = BarButton("Corners", "Click a corner to make it an outer curve tile or square, in turn. (C)", () => SetTool(RcpTool.Corner));
+        var marker = BarButton("Markings", "The line, grid boxes, curbs, split loops, labels. R turns them. (4)", () => SetTool(RcpTool.Marker));
+        var route = BarButton("Racing line", "Draw the racing line, or have it traced for you. (5)", () => SetTool(RcpTool.Route));
+        var erase = BarButton("Erase", "Take things off. Ctrl+click or right-click does this with any tool. (6)", () => SetTool(RcpTool.Erase));
+        var photo = BarButton("Photo", "Trace a photo of the real track: drag it into place; the wheel sizes it. (7)", () => SetTool(RcpTool.Backdrop));
 
-        // The angled view (Phase 8): the same plan tipped and turned, to see
-        // how it will look. Picking a tool goes back to the flat plan.
-        _btnView.Click += (_, _) =>
+        _toolButtons = new[]
         {
-            _canvas.ToggleAngled();
-            _canvas.Focus();
+            (select, RcpTool.Select), (pieces, RcpTool.Floor), (pieces, RcpTool.Piece), (lane, RcpTool.Lane),
+            (corners, RcpTool.Corner), (marker, RcpTool.Marker), (route, RcpTool.Route), (erase, RcpTool.Erase),
+            (photo, RcpTool.Backdrop),
         };
-        _canvas.AngledChanged += HighlightViewButton;
-        _tips.SetToolTip(_btnView, "See the track tipped and turned, in 3D: drag to turn it round and tip it, wheel to zoom. Lit while it shows; press again, or pick a tool, to draw. (V)");
-        _tips.SetToolTip(_btnPanel, "Hide the panel on the right to give the board the whole width, or bring it back. Lit while it shows. (P)");
 
-        SetTool(RcpTool.Floor);
-
-        var toolbar = new FieldRow();
-        toolbar.Add(null, new ButtonBar(tight: true).With(floor, lane, corners, marker, route, erase, photo, select));
-        toolbar.Add(null, new ButtonBar(tight: true).With(wallEdge, traceRoute, reverseRoute, _btnPlay));
-        toolbar.Add(null, new ButtonBar(tight: true).With(undo, redo, fit, clear));
-        toolbar.Add(null, new ButtonBar(tight: true).With(turn, flipAcross, flipDown, duplicate, remove));
-        toolbar.Add(null, new ButtonBar(tight: true).With(_btnView, _btnExport, _btnPanel));
-
-        HighlightSelectionButtons();
-
-        return toolbar;
-
-        static int TightWidth(string caption)
-        {
-            using var probe = new Button { Text = caption };
-
-            return UiLayout.TightButtonSizeFor(probe).Width;
-        }
-    }
-
-    private void SetTool(RcpTool tool)
-    {
-        // A tool is for drawing, which is done on the flat plan.
-        if (_canvas.Angled)
-        {
-            _canvas.ToggleAngled();
-        }
-
-        _canvas.Tool = tool;
-
-        // A button can stand for more than one tool - Pieces lays a plain
-        // tile (Floor) and the railed pieces (Piece) - so it is lit when any
-        // of its tools is in hand.
-        var lit = _toolButtons.Where(pair => pair.Tool == tool).Select(pair => pair.Button).ToHashSet();
-
-        foreach (var button in _toolButtons.Select(pair => pair.Button).Distinct())
-        {
-            button.BackColor = lit.Contains(button) ? AppTheme.Primary : AppTheme.SecondaryButton;
-            button.ForeColor = lit.Contains(button) ? AppTheme.OnPrimary : AppTheme.TextDark;
-            button.FlatAppearance.BorderSize = 0;
-        }
-
-        _lblStatus.Text = ToolHint(tool);
-    }
-
-    /// <summary>The Pieces button: the piece picked last on the Pieces tab, or a rail tile when the palette is on something else.</summary>
-    private void ChoosePieces()
-    {
-        PickPiece(RcpTiles.Pieces.Contains(_canvas.Item) ? _canvas.Item : RcpPaletteItem.RailTile);
-    }
-
-    /// <summary>Picks a piece as its palette entry would - for the Pieces button and the 1, 2 and 3 keys.</summary>
-    private void PickPiece(RcpPaletteItem item)
-    {
-        _canvas.Item = item;
-        SetTool(RcpTiles.ToolFor(item));
-        HighlightPalette();
-    }
-
-    /// <summary>How a tool works, as the status line says when it is picked.</summary>
-    private static string ToolHint(RcpTool tool) => tool switch
-    {
-        RcpTool.Floor => "Drag to lay plain tiles - no rail on them. Ctrl-drag takes them back up.",
-        RcpTool.Piece => "Click to lay the piece with its rail on - near an edge for a rail tile, in a corner for an outer curve. Drag to lay a row. R turns it; click it again for a plain tile.",
-        RcpTool.Wall => "Drag along the grid to run rail; a turn rail drops in wherever you round a corner. Click a seam to add, double or remove one.",
-        RcpTool.Curve => "Click near a corner of the grid - the arc follows whichever way the pointer is.",
-        RcpTool.Marker => "Click to drop a marking. Click it again, or press R, to turn it.",
-        RcpTool.Route => "Click to drop points along the racing line. Drag one to move it, right-click to remove it.",
-        RcpTool.Erase => "Click a tile to take it up with its rail. Click right on a rail to take just the rail off its tile.",
-        RcpTool.Select => "Drag a box round part of the plan to pick it up - the rails round a block of tiles come too. Then drag it to move, arrows to nudge, ] to turn, Delete to take it off.",
-        RcpTool.Lane => "Drag to paint a lane - rail tiles down both sides, an outer curve tile round every bend. Start on a lane to carry it on. Ring: drag a box for a whole circuit.",
-        RcpTool.Corner => "Click a corner: an outer curve tile, then square. What you set here, the lanes leave alone.",
-        _ => "Drag the photo into place and use the wheel to size it until its tiles line up with the grid.",
-    };
-
-    /// <summary>Greys the buttons that act on a selection while there isn't one.</summary>
-    private void HighlightSelectionButtons()
-    {
-        foreach (var button in _selectionButtons)
-        {
-            button.Enabled = _canvas.HasSelection;
-        }
+        return new[] { select, pieces, lane, corners, marker, route, erase, photo };
     }
 
     /// <summary>
-    /// The palette - the Pieces tab: the floor, the barriers - with the turn
-    /// radius under them - and the markings, each a card of entries under a
-    /// line of help. Returns the cards, and the turn radii's row, which the
-    /// panel is never narrower than (SideWidth).
+    /// The bar over the board (8 Nov 2026): only the options of the tool in
+    /// hand - the pieces to lay, a lane's width, the markings, the racing
+    /// line's buttons, the photo's, what to do with a selection. It is as
+    /// tall as the tallest of them at the board's width, so picking a tool
+    /// never moves the board.
     /// </summary>
-    private (IReadOnlyList<Section> Cards, ButtonBar Radii, IReadOnlyList<ButtonBar> LaneRows) BuildPalette()
+    private ContextStrip BuildContextBar(IReadOnlyList<PaletteButton> pieceEntries, IReadOnlyList<PaletteButton> markingEntries, IReadOnlyList<Control> photoParts)
     {
-        PaletteButton Entry(RcpPaletteItem item)
+        static Label Caption(string text) => new()
         {
-            // As wide as its card, and as tall as its name and two lines of
-            // its hint need (PaletteButton.EntryHeight) - it draws itself to
-            // the size it is given.
-            var button = new PaletteButton(item) { Height = PaletteButton.EntryHeight() };
+            Text = text,
+            AutoSize = true,
+            Font = AppTheme.BoldFont,
+            ForeColor = AppTheme.TextDark,
+            Anchor = AnchorStyles.Left,
+        };
 
-            button.Chosen += chosen =>
-            {
-                _canvas.Item = chosen;
-                SetTool(RcpTiles.ToolFor(chosen));
-                HighlightPalette();
-                _canvas.Focus();
-            };
-
-            _paletteButtons.Add(button);
-
-            return button;
-        }
-
-        // A card for each group: its caption, a line of help, and its
-        // entries as close together as they always were - with room under
-        // the last for whatever the card goes on to hold.
-        Section Group(string caption, string note, IReadOnlyList<RcpPaletteItem> items, int gapAfterLast = 0)
-        {
-            var card = new Section(caption);
-
-            card.Add(new Label
-            {
-                Text = note,
-                AutoSize = true,
-                Font = AppTheme.SmallFont,
-                ForeColor = AppTheme.TextMuted,
-            });
-
-            for (var i = 0; i < items.Count; i++)
-            {
-                card.Add(Entry(items[i]), gapBelow: i < items.Count - 1 ? UiLayout.TightButtonGap : gapAfterLast);
-            }
-
-            return card;
-        }
-
-        var lanes = BuildLanesCard(out var laneRows);
-
-        // The pieces, each a tile with its rail already on, as a real RCP
-        // track goes down (railed tiles, Phase 2, 7 Nov 2026). This used to
-        // be a Floor card ("Lay it first") and a Barriers card of rails,
-        // dividers and turns at four radii laid on the seams afterwards.
-        var pieces = Group(
-            "Pieces",
-            "Each tile goes down with its rail on, as it does on the floor. A divider is two rail tiles back to back; the inner corner tile is worked out at every bend.",
-            RcpTiles.Pieces);
-
-        var markings = Group("Markings", "Flat things stuck on the floor.", RcpTiles.Markings);
-
-        HighlightPalette();
-
-        // The lane card's first row stands in for the turn radii's row the
-        // panel used to be measured against (SideWidth).
-        return (new[] { lanes, pieces, markings }, laneRows[0], laneRows);
-    }
-
-    /// <summary>
-    /// The Lanes card, at the top of the Pieces tab (Track Designer overhaul,
-    /// Phase 3, 25 Oct 2026): paint a lane or drag a ring, how many tiles
-    /// wide, and the turns the lanes put round their bends - each a row of
-    /// buttons only as wide as their captions, the one in use lit. Hands back
-    /// the rows, which the panel is never narrower than (SideWidth).
-    /// </summary>
-    private Section BuildLanesCard(out IReadOnlyList<ButtonBar> rows)
-    {
-        var card = new Section("Lanes");
-
-        Label Note(string text) => new()
+        static Label Hint(string text) => new()
         {
             Text = text,
             AutoSize = true,
             Font = AppTheme.SmallFont,
             ForeColor = AppTheme.TextMuted,
+            Anchor = AnchorStyles.Left,
         };
 
+        ButtonBar Bar(string caption, params Control[] parts) =>
+            new ButtonBar(tight: true).With(new Control[] { Caption(caption) }.Concat(parts).ToArray());
+
+        var strip = new ContextStrip();
+
+        strip.AddBar(ContextPieces, Bar("Pieces", pieceEntries.Cast<Control>().Append(Hint("R turns it")).ToArray()));
+
+        strip.AddBar(ContextLane, BuildLaneBar(Caption("Lane"), Hint));
+
+        strip.AddBar(ContextCorners, Bar("Corners", Hint("Click a corner: an outer curve tile, then square. What you set here, the lanes leave alone.")));
+
+        strip.AddBar(ContextMarkings, Bar("Markings", markingEntries.Cast<Control>().Append(Hint("R turns it")).ToArray()));
+
+        var traceRoute = BarButton("Trace it for me", "Follow the corridor between the rails and lay the racing line down the middle of it, however wide. Traced, it follows the track as you change it, until you move a point of it by hand.", () => _canvas.AutoRoute());
+        var reverseRoute = BarButton("Reverse", "Turn the racing line round, so it runs the way the cars do - its arrows show which way. Sectors are measured in that direction. (Shift+R)", () => _canvas.ReverseRoute());
+
+        _chkClosedRoute.Anchor = AnchorStyles.Left;
+        strip.AddBar(ContextRoute, Bar("Racing line", traceRoute, reverseRoute, _chkClosedRoute));
+
+        strip.AddBar(ContextErase, Bar("Erase", Hint("Click a tile to take it up with its rail, or right on a rail for just the rail. Right-click erases with any tool.")));
+
+        strip.AddBar(ContextPhoto, Bar("Photo", photoParts.ToArray()));
+
+        // What to do with whatever is picked. Every one of these turns or
+        // mirrors it WHERE IT STANDS - the box round it keeps its top-left
+        // corner, so a turn never slides a layout off the floor it was
+        // lined up with (RcpSelection).
+        var turn = BarButton("Turn", "Turn what's picked a quarter clockwise, where it stands. (])", () => _canvas.TurnSelection(1));
+        var flipAcross = BarButton("Flip across", "Mirror what's picked left to right.", () => _canvas.MirrorSelection(leftToRight: true));
+        var flipDown = BarButton("Flip down", "Mirror what's picked top to bottom.", () => _canvas.MirrorSelection(leftToRight: false));
+        var duplicate = BarButton("Duplicate", "A second copy, one tile along, ready to drag where it belongs. (Ctrl+D)", () => _canvas.DuplicateSelection());
+        var remove = BarButton("Remove", "Take what's picked off the plan. (Delete)", () => _canvas.DeleteSelection());
+
+        _selectionButtons = new[] { turn, flipAcross, flipDown, duplicate, remove };
+
+        strip.AddBar(ContextSelect, Bar("Select", turn, flipAcross, flipDown, duplicate, remove, Hint("Drag a box round part of the plan first")));
+
+        _contextBar = strip;
+
+        HighlightSelectionButtons();
+
+        return strip;
+    }
+
+    private const string ContextPieces = "pieces";
+    private const string ContextLane = "lane";
+    private const string ContextCorners = "corners";
+    private const string ContextMarkings = "markings";
+    private const string ContextRoute = "route";
+    private const string ContextErase = "erase";
+    private const string ContextPhoto = "photo";
+    private const string ContextSelect = "select";
+
+    /// <summary>Which of the bar's rows a tool shows.</summary>
+    private static string ContextFor(RcpTool tool) => tool switch
+    {
+        RcpTool.Lane => ContextLane,
+        RcpTool.Corner => ContextCorners,
+        RcpTool.Marker => ContextMarkings,
+        RcpTool.Route => ContextRoute,
+        RcpTool.Erase => ContextErase,
+        RcpTool.Backdrop => ContextPhoto,
+        RcpTool.Select => ContextSelect,
+        _ => ContextPieces,
+    };
+
+    /// <summary>
+    /// The Lane tool's row in the bar over the board (the Lanes card, Phase
+    /// 3, 25 Oct 2026, as was): paint a lane or drag a ring, and how many
+    /// tiles wide - the one in use lit.
+    /// </summary>
+    private ButtonBar BuildLaneBar(Label caption, Func<string, Label> hint)
+    {
         Button Choice(string text, string tip, Action chosen)
         {
             var button = new Button { Text = text };
@@ -1121,16 +1230,110 @@ public sealed class RcpTrackEditorForm : Form
         // the one-tile outer curve tile is the only turn a club has, and a
         // square outside corner would be two rails on one tile. A plan saved
         // with two-tile or square lane turns keeps them.
-        var shapeRow = new ButtonBar(tight: true).With(_btnLanePaint, _btnLaneRing);
-        var widthRow = new ButtonBar(tight: true).With(_laneWidthButtons.Select(pair => (Control)pair.Button).ToArray());
+        return new ButtonBar(tight: true).With(new Control[] { caption, _btnLanePaint, _btnLaneRing, hint("Width") }
+            .Concat(_laneWidthButtons.Select(pair => (Control)pair.Button))
+            .Append(hint("tiles - rail tiles go down both sides, an outer curve tile round every bend"))
+            .ToArray());
+    }
 
-        card.Add(Note("Paint a lane and its rail tiles go down both sides by themselves, with an outer curve tile round every bend."), gapBelow: UiLayout.HintGap);
-        card.Add(shapeRow, gapBelow: UiLayout.RowGap);
-        card.Add(Note("Width, in tiles:"), gapBelow: UiLayout.HintGap);
-        card.Add(widthRow, gapBelow: 0);
+    private void SetTool(RcpTool tool)
+    {
+        // A tool is for drawing, which is done on the flat plan.
+        if (_canvas.Angled)
+        {
+            _canvas.ToggleAngled();
+        }
 
-        rows = new[] { shapeRow, widthRow };
-        return card;
+        _canvas.Tool = tool;
+
+        // A button can stand for more than one tool - Pieces lays a plain
+        // tile (Floor) and the railed pieces (Piece) - so it is lit when any
+        // of its tools is in hand.
+        var lit = _toolButtons.Where(pair => pair.Tool == tool).Select(pair => pair.Button).ToHashSet();
+
+        foreach (var button in _toolButtons.Select(pair => pair.Button).Distinct())
+        {
+            button.BackColor = lit.Contains(button) ? AppTheme.Primary : AppTheme.SecondaryButton;
+            button.ForeColor = lit.Contains(button) ? AppTheme.OnPrimary : AppTheme.TextDark;
+            button.FlatAppearance.BorderSize = 0;
+        }
+
+        _lblStatus.Text = ToolHint(tool);
+        _contextBar?.ShowBar(ContextFor(tool));
+    }
+
+    /// <summary>The Pieces button: the piece picked last in the bar over the board, or a rail tile when the palette is on something else.</summary>
+    private void ChoosePieces()
+    {
+        PickPiece(RcpTiles.Pieces.Contains(_canvas.Item) ? _canvas.Item : RcpPaletteItem.RailTile);
+    }
+
+    /// <summary>Picks a piece as its palette entry would - for the Pieces button and the 1, 2 and 3 keys.</summary>
+    private void PickPiece(RcpPaletteItem item)
+    {
+        _canvas.Item = item;
+        SetTool(RcpTiles.ToolFor(item));
+        HighlightPalette();
+    }
+
+    /// <summary>How a tool works, as the status line says when it is picked.</summary>
+    private static string ToolHint(RcpTool tool) => tool switch
+    {
+        RcpTool.Floor => "Drag to lay plain tiles - no rail on them. Ctrl-drag takes them back up.",
+        RcpTool.Piece => "Click to lay the piece with its rail on - near an edge for a rail tile, in a corner for an outer curve. Drag to lay a row. R turns it; click it again for a plain tile.",
+        RcpTool.Wall => "Drag along the grid to run rail; a turn rail drops in wherever you round a corner. Click a seam to add, double or remove one.",
+        RcpTool.Curve => "Click near a corner of the grid - the arc follows whichever way the pointer is.",
+        RcpTool.Marker => "Click to drop a marking. Click it again, or press R, to turn it.",
+        RcpTool.Route => "Click to drop points along the racing line. Drag one to move it, right-click to remove it.",
+        RcpTool.Erase => "Click a tile to take it up with its rail. Click right on a rail to take just the rail off its tile.",
+        RcpTool.Select => "Drag a box round part of the plan to pick it up - the rails round a block of tiles come too. Then drag it to move, arrows to nudge, ] to turn, Delete to take it off.",
+        RcpTool.Lane => "Drag to paint a lane - rail tiles down both sides, an outer curve tile round every bend. Start on a lane to carry it on. Ring: drag a box for a whole circuit.",
+        RcpTool.Corner => "Click a corner: an outer curve tile, then square. What you set here, the lanes leave alone.",
+        _ => "Drag the photo into place and use the wheel to size it until its tiles line up with the grid.",
+    };
+
+    /// <summary>Greys the buttons that act on a selection while there isn't one.</summary>
+    private void HighlightSelectionButtons()
+    {
+        foreach (var button in _selectionButtons)
+        {
+            button.Enabled = _canvas.HasSelection;
+        }
+    }
+
+    /// <summary>
+    /// The pieces and the markings, for the bar over the board: an entry
+    /// for each, its picture beside its name, its hint as its tooltip, the
+    /// one in hand lit.
+    /// </summary>
+    private (IReadOnlyList<PaletteButton> Pieces, IReadOnlyList<PaletteButton> Markings) BuildPalette()
+    {
+        PaletteButton Entry(RcpPaletteItem item)
+        {
+            var button = new PaletteButton(item, compact: true);
+
+            button.Chosen += chosen =>
+            {
+                _canvas.Item = chosen;
+                SetTool(RcpTiles.ToolFor(chosen));
+                HighlightPalette();
+                _canvas.Focus();
+            };
+
+            _tips.SetToolTip(button, RcpTiles.HintOf(item));
+            _paletteButtons.Add(button);
+
+            return button;
+        }
+
+        // The pieces, each a tile with its rail already on, as a real RCP
+        // track goes down (railed tiles, Phase 2, 7 Nov 2026).
+        var pieces = RcpTiles.Pieces.Select(Entry).ToList();
+        var markings = RcpTiles.Markings.Select(Entry).ToList();
+
+        HighlightPalette();
+
+        return (pieces, markings);
     }
 
     /// <summary>Lights the Lanes card's choices in use - the plan's turns follow Undo, so this runs after every change.</summary>
@@ -1179,19 +1382,25 @@ public sealed class RcpTrackEditorForm : Form
     }
 
     /// <summary>
-    /// The panel's other cards, by the tab they go under: Plan - start from
-    /// a kit, the track's name, the tile size and the kit it is checked
-    /// against; Room - the room and the photo being traced; Lap - the lap and
-    /// what the plan comes to. Returns them, and the photo's row of buttons,
-    /// which the panel is never narrower than (SideWidth).
+    /// The inspector's cards, by the section they go under: Plan - the
+    /// track's name, start from a kit, the tile size and the kit it is
+    /// checked against; Room - the room; Lap - the lap and what the plan
+    /// comes to; Auto - rail the edge and build me a track. Returns them,
+    /// and the photo's controls, for the Photo tool's row over the board.
     /// </summary>
-    private (IReadOnlyList<Section> Plan, IReadOnlyList<Section> Room, IReadOnlyList<Section> Lap, ButtonBar TraceButtons) BuildSidePanel()
+    private (Section[] Plan, Section[] Room, Section[] Lap, Section[] Auto, IReadOnlyList<Control> PhotoParts) BuildSidePanel()
     {
         // --- Track name ---
         _txtName.Text = _trackName;
 
+        // The main-picture box with the name, as it was at the foot.
+        _chkUseAsPhoto.Text = "Show this plan as the track's main picture";
+        _chkUseAsPhoto.AutoSize = true;
+        _chkUseAsPhoto.Checked = true;
+
         var nameCard = new Section("Track name");
-        nameCard.Add(_txtName, gapBelow: 0);
+        nameCard.Add(_txtName);
+        nameCard.Add(_chkUseAsPhoto, stretch: false, gapBelow: 0);
         Pieces.KeepHeightTold(_txtName);
 
         // --- Tile size ---
@@ -1246,12 +1455,8 @@ public sealed class RcpTrackEditorForm : Form
         var btnDropPhoto = new Button { Text = "Remove" };
         btnDropPhoto.Click += (_, _) => { _canvas.ClearBackdrop(); _canvas.Focus(); };
 
-        // Only as wide as their captions, and the three on one line: the
-        // side panel is never narrower than they need (SideWidth).
-        var traceButtons = new ButtonBar(tight: true).With(btnTrace, btnHide, btnDropPhoto);
-
-        // As wide as the card, and as tall as it always was, at the text size
-        // in use - it draws its track and handle in the middle of that.
+        // As tall as it always was, at the text size in use - it draws its
+        // track and handle in the middle of that.
         _barBackdrop.Height = UiLayout.AtTextSize(SliderHeight);
         _barBackdrop.Minimum = 5;
         _barBackdrop.Maximum = 100;
@@ -1284,16 +1489,11 @@ public sealed class RcpTrackEditorForm : Form
 
         var lblTraceHint = new Label
         {
-            Text = "Choose a photo of the real track, line its tiles up with the grid using the Photo tool, then draw over it.",
+            Text = "Drag the photo to line its tiles up with the grid; the wheel sizes it.",
             AutoSize = true,
             Font = AppTheme.SmallFont,
             ForeColor = AppTheme.TextMuted,
         };
-
-        var traceCard = new Section("Trace a photo");
-        traceCard.Add(traceButtons);
-        traceCard.Add(_barBackdrop);
-        traceCard.Add(lblTraceHint, gapBelow: 0);
 
         // --- The lap ---
         _chkClosedRoute.Text = "The line closes into a lap";
@@ -1332,24 +1532,23 @@ public sealed class RcpTrackEditorForm : Form
 
             // ...or the longest thing it says about why they can't be measured.
             Readout(railed, lengthTiles: 160f, tileSizeMm: 500, lapSeconds: _canvas.LapSeconds,
-                sectors: (null, "Draw the racing line (or press Trace route) through the finish line and the split loops.")),
+                sectors: (null, "Draw the racing line (or press Trace it for me) through the finish line and the split loops.")),
 
             // And the same again with rails standing on nothing, which is
             // two more lines under all of it. Left out, the card below
             // would jump down the moment somebody drew a rail past the
             // edge of the floor - which is exactly when it should not.
             Readout(railed, lengthTiles: 160f, tileSizeMm: 500, lapSeconds: _canvas.LapSeconds,
-                sectors: (null, "Draw the racing line (or press Trace route) through the finish line and the split loops."),
+                sectors: (null, "Draw the racing line (or press Trace it for me) through the finish line and the split loops."),
                 railsWithNoFloor: 12),
 
             // ...and custom tiles too, two lines more (railed tiles, Phase 2).
             Readout(railed, lengthTiles: 160f, tileSizeMm: 500, lapSeconds: _canvas.LapSeconds,
-                sectors: (null, "Draw the racing line (or press Trace route) through the finish line and the split loops."),
+                sectors: (null, "Draw the racing line (or press Trace it for me) through the finish line and the split loops."),
                 railsWithNoFloor: 12, customTiles: 12),
         };
 
         var lapCard = new Section("The lap");
-        lapCard.Add(_chkClosedRoute, stretch: false);
         lapCard.Add(_lblStats, gapBelow: UiLayout.RowGap);
 
         // How fast Play goes (Phase 6): half speed, as the lap time, or double.
@@ -1485,7 +1684,14 @@ public sealed class RcpTrackEditorForm : Form
         var roomCard = new Section("The room it goes in");
         roomCard.Add(new ButtonBar(tight: true).With(_btnRoomFeet, _btnRoomMetres));
         roomCard.Add(FieldGrid.Inline(_numRoomWidth, lblBy, _numRoomDepth, _lblRoomUnits));
-        roomCard.Add(_lblRoomFit, gapBelow: 0);
+        roomCard.Add(_lblRoomFit, gapBelow: UiLayout.HintGap);
+        roomCard.Add(new Label
+        {
+            Text = "To trace a photo of the real track, pick Photo on the left.",
+            AutoSize = true,
+            Font = AppTheme.SmallFont,
+            ForeColor = AppTheme.TextMuted,
+        }, gapBelow: 0);
 
         LoadRoom();
 
@@ -1519,7 +1725,7 @@ public sealed class RcpTrackEditorForm : Form
         var buildCard = new Section("Build me a track");
         var btnBuild = new Button { Text = "Build me a track..." };
         btnBuild.Click += (_, _) => BuildMeATrack();
-        _tips.SetToolTip(btnBuild, "Layouts that fit the room on the Room tab, at the Lane tool's width - RCP's own that fit, then ones worked out within what the club owns.");
+        _tips.SetToolTip(btnBuild, "Layouts that fit the room in the Room section, at the Lane tool's width - RCP's own that fit, then ones worked out within what the club owns.");
 
         buildCard.Add(new Label
         {
@@ -1530,42 +1736,51 @@ public sealed class RcpTrackEditorForm : Form
         }, gapBelow: UiLayout.HintGap);
         buildCard.Add(new ButtonBar(tight: true).With(btnBuild), gapBelow: 0);
 
-        // The plan as a file of its own (Phase 7), to send to another club
-        // or keep beside the club's.
-        var fileCard = new Section("Plan file");
-        var btnOpenPlan = new Button { Text = "Open plan file..." };
-        var btnSavePlan = new Button { Text = "Save plan file..." };
-        btnOpenPlan.Click += (_, _) => OpenPlanFile();
-        btnSavePlan.Click += (_, _) => SavePlanFile();
-        _tips.SetToolTip(btnOpenPlan, "Open a .hctrack plan another club sent, in place of what is drawn. Ctrl+Z puts this back.");
-        _tips.SetToolTip(btnSavePlan, "Save this plan as a .hctrack file, to send to another club or keep.");
+        // Rail the edge, which used to be a toolbar button among the tools.
+        var railCard = new Section("Rail the edge");
+        var btnRail = BarButton("Rail the edge", "Make every tile round the edge of the floor a rail tile facing out, and its outside corners outer curve tiles.", () => _canvas.WallThePerimeter());
 
-        fileCard.Add(new Label
+        railCard.Add(new Label
         {
-            Text = "A .hctrack file holds the whole plan - floor, rails, lanes, markings and line - for another club's HeatCaller to open.",
+            Text = "Every tile round the edge of the floor becomes a rail tile facing out, its outside corners outer curve tiles.",
             AutoSize = true,
             Font = AppTheme.SmallFont,
             ForeColor = AppTheme.TextMuted,
         }, gapBelow: UiLayout.HintGap);
-        fileCard.Add(new ButtonBar(tight: true).With(btnOpenPlan, btnSavePlan), gapBelow: 0);
+        railCard.Add(new ButtonBar(tight: true).With(btnRail), gapBelow: 0);
+
+        // The photo's controls, for the Photo tool's row over the board -
+        // they were the Room tab's Trace a photo card.
+        _barBackdrop.Width = UiLayout.AtTextSize(160);
+        _barBackdrop.Anchor = AnchorStyles.Left;
+
+        var lblSeeThrough = new Label
+        {
+            Text = "See-through:",
+            AutoSize = true,
+            Font = AppTheme.SmallFont,
+            ForeColor = AppTheme.TextMuted,
+            Anchor = AnchorStyles.Left,
+        };
+
+        lblTraceHint.Anchor = AnchorStyles.Left;
 
         return (
-            new[] { buildCard, stockCard, nameCard, tileCard, kitCard, fileCard },
-            new[] { roomCard, traceCard },
+            new[] { nameCard, stockCard, tileCard, kitCard },
+            new[] { roomCard },
             new[] { lapCard },
-            traceButtons);
+            new[] { railCard, buildCard },
+            new Control[] { btnTrace, btnHide, btnDropPhoto, lblSeeThrough, _barBackdrop, lblTraceHint });
     }
 
     /// <summary>
-    /// The panel's width: as wide as the side panel always was, at the text
-    /// size in use - or, when one needs more, as a palette entry as it always
-    /// was, the turn radii, the photo's three buttons or the tabs on one
-    /// line, the kit drop-down's longest choice or a card's caption, in its
-    /// card, beside the scrollbar the column takes its width from when it
-    /// scrolls. Asked whenever the panel is placed, so it follows the faces
-    /// the theme pass gives them.
+    /// The inspector's width: as wide as the side panel always was, at the
+    /// text size in use - or, when one needs more, the kit drop-down's
+    /// longest choice or a card's caption, in its card, beside the scrollbar
+    /// the column takes its width from when it scrolls. Asked whenever the
+    /// inspector is placed, so it follows the faces the theme pass gives them.
     /// </summary>
-    private int SideWidth(ButtonBar traceButtons, ButtonBar radii, IReadOnlyList<ButtonBar> laneRows, ButtonBar tabs, IReadOnlyList<Section> cards)
+    private int SideWidth(IReadOnlyList<Section> cards)
     {
         // The layout picker as well as the kit's: "30cm Double Oval Wide"
         // is longer than any kit name, and a drop-down whose choices are
@@ -1576,16 +1791,12 @@ public sealed class RcpTrackEditorForm : Form
 
         var widest = new[]
         {
-            traceButtons.OneLineWidth,
             pickers,
             cards.Max(card => card.CaptionWidth),
-            UiLayout.AtTextSize(PaletteEntryWidth),
-            radii.OneLineWidth,
-            laneRows.Max(row => row.OneLineWidth),
         }.Max();
 
         return Math.Max(
-            Math.Max(UiLayout.AtTextSize(SidePanelWidth), tabs.OneLineWidth),
+            UiLayout.AtTextSize(SidePanelWidth),
             widest + Section.Inset.Horizontal + SystemInformation.VerticalScrollBarWidth);
     }
 
@@ -1602,65 +1813,6 @@ public sealed class RcpTrackEditorForm : Form
         ScrollTheming.NoRoomBelow(column);
 
         return column;
-    }
-
-    /// <summary>
-    /// The foot: the main-picture box, Save Layout and Cancel against the
-    /// right-hand edge, Cancel furthest right, as they were (Save as PNG went
-    /// into the toolbar's Export menu). The bar holds them right to left, in
-    /// the order they are added, so Tab's order is set back to left to
-    /// right, as it was.
-    /// </summary>
-    private ButtonBar BuildFooter()
-    {
-        var btnSave = new Button { Text = "Save Layout" };
-        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
-
-        btnSave.Click += (_, _) =>
-        {
-            // 17 Oct 2026, Bug Hunt 8, A31-1: a nudge clicked away from
-            // within its 350 ms settle would otherwise be saved with the
-            // nudged pieces stacked on what they hit.
-            _canvas.LandPendingNudge();
-
-            if (string.IsNullOrWhiteSpace(TrackName))
-            {
-                AppDialog.Show(this,
-                    "Give the track a name first - that's what it's saved and listed under.",
-                    "Name needed", MessageBoxButtons.OK, MessageBoxIcon.Information);
-
-                _txtName.Focus();
-                return;
-            }
-
-            // The plan's own lap setting is what is saved. This used to copy
-            // the checkbox into it here, and the checkbox could be behind the
-            // plan: Trace route closes the lap in the plan, and Undo or Redo
-            // bring back whatever the lap was then, so unticking the box and
-            // pressing Trace route drew a closed lap and saved an open one.
-            // The box now follows the plan (SyncSidePanel), and ticking it
-            // writes straight into the plan, so there is nothing to copy.
-            DialogResult = DialogResult.OK;
-            Close();
-        };
-
-        _chkUseAsPhoto.Text = "Show this plan as the track's main picture";
-        _chkUseAsPhoto.AutoSize = true;
-        _chkUseAsPhoto.Checked = true;
-
-        // Level with the middle of the buttons beside it (see FieldGrid.Inline).
-        _chkUseAsPhoto.Anchor = AnchorStyles.Left;
-
-        var footer = new ButtonBar(alignRight: true).With(btnCancel, btnSave, _chkUseAsPhoto);
-
-        _chkUseAsPhoto.TabIndex = 0;
-        btnSave.TabIndex = 1;
-        btnCancel.TabIndex = 2;
-
-        AcceptButton = btnSave;
-        CancelButton = btnCancel;
-
-        return footer;
     }
 
     // --- Behaviour ------------------------------------------------------------
@@ -2196,7 +2348,7 @@ public sealed class RcpTrackEditorForm : Form
         {
             File.WriteAllText(dialog.FileName, RcpPlanFile.Write(plan, TrackName));
 
-            _lblStatus.Text = $"Saved to {Path.GetFileName(dialog.FileName)}. Another club opens it from Open plan file on the Plan tab.";
+            _lblStatus.Text = $"Saved to {Path.GetFileName(dialog.FileName)}. Another club opens it from Open plan file in the File menu.";
         }
         catch (Exception ex)
         {
@@ -2283,7 +2435,7 @@ public sealed class RcpTrackEditorForm : Form
         // it - so the file's name is only said.
         _lblStatus.Text = $"Opened {Path.GetFileName(dialog.FileName)}"
                           + (name.Length > 0 ? $" (\"{name}\")." : ".")
-                          + (roomFromFile ? " Its room came with it - check it on the Room tab." : string.Empty);
+                          + (roomFromFile ? " Its room came with it - check it in the Room section." : string.Empty);
 
         _canvas.Focus();
     }
@@ -2414,6 +2566,7 @@ public sealed class RcpTrackEditorForm : Form
         RefreshRoomFit();
         RefreshChips(lengthTiles);
         RefreshStock(inventory);
+        RefreshHeadlines();
 
         if (_btnUndo is not null)
         {
@@ -2463,7 +2616,7 @@ public sealed class RcpTrackEditorForm : Form
             string.Empty,
             lengthTiles > 0
                 ? $"Lap: {metres:0.00} m  /  {feet:0.0} ft"
-                : "Lap: draw the racing line, or press Trace route",
+                : "Lap: draw the racing line, or press Trace it for me",
         };
 
         // The corner tiles among them (Phase 4): RCP sells them apart.
@@ -2582,7 +2735,7 @@ public sealed class RcpTrackEditorForm : Form
                 RcpLapSource.Entered => $"{_lap.Seconds:0.00}s, the average lap entered on Track Layouts",
                 RcpLapSource.Estimate when _lap.Tuned > 0 => $"About {_lap.Seconds:0.0}s, estimated - tuned to {Plural.Of(_lap.Tuned, "layout")} raced here",
                 RcpLapSource.Estimate => $"About {_lap.Seconds:0.0}s, estimated for a stock Mini-Z - it tunes itself once layouts are raced",
-                _ => "No lap time - draw the racing line, or press Trace route",
+                _ => "No lap time - draw the racing line, or press Trace it for me",
             },
         };
 
@@ -2759,6 +2912,13 @@ public sealed class RcpTrackEditorForm : Form
             return true;
         }
 
+        // ? - the keys, as the top bar's "?" opens them.
+        if (keyData == (Keys.Shift | Keys.OemQuestion))
+        {
+            ShowTab(_openTab == TabKeys ? _lastTab : TabKeys, remember: false);
+            return true;
+        }
+
         if (keyData == Keys.V)
         {
             _canvas.ToggleAngled();
@@ -2922,10 +3082,27 @@ public sealed class RcpTrackEditorForm : Form
 
         public event Action<RcpPaletteItem>? Chosen;
 
-        public PaletteButton(RcpPaletteItem item)
+        /// <summary>
+        /// A chip for the bar over the board (8 Nov 2026): the picture
+        /// beside the name on one line, as tall as a button and as wide as
+        /// its name needs, the hint left to its tooltip.
+        /// </summary>
+        public bool Compact { get; }
+
+        public PaletteButton(RcpPaletteItem item, bool compact = false)
         {
             Item = item;
+            Compact = compact;
             _sample = RcpTiles.Sample(item);
+
+            if (compact)
+            {
+                using var probe = new Button { Text = "Ag", Font = AppTheme.BodyFont };
+                var height = UiLayout.TightButtonSizeFor(probe).Height;
+                var nameWidth = TextRenderer.MeasureText(RcpTiles.NameOf(item), AppTheme.BodyFont).Width;
+
+                Size = new Size(CompactEdge + (height - 2 * CompactInset) + UiLayout.AtTextSize(6) + nameWidth + CompactEdge, height);
+            }
 
             SetStyle(ControlStyles.OptimizedDoubleBuffer
                      | ControlStyles.AllPaintingInWmPaint
@@ -2980,6 +3157,12 @@ public sealed class RcpTrackEditorForm : Form
                 g.FillPath(wash, path);
             }
 
+            if (Compact)
+            {
+                PaintCompact(g);
+                return;
+            }
+
             // The room round the sample, and either side of the words, at the
             // text size in use - see the class notes. The sample is the size
             // it always was, at the top: the entry is taller than that now,
@@ -3029,6 +3212,30 @@ public sealed class RcpTrackEditorForm : Form
                 hintFormat);
         }
 
+        private static int CompactInset => UiLayout.AtTextSize(4);
+        private static int CompactEdge => UiLayout.AtTextSize(6);
+
+        /// <summary>The chip: the picture at the left, the name beside it, both on the middle line.</summary>
+        private void PaintCompact(Graphics g)
+        {
+            var size = Math.Max(1, Height - 2 * CompactInset);
+            var origin = new PointF(CompactEdge, CompactInset);
+
+            var state = g.Save();
+            g.SetClip(new RectangleF(origin.X - 2, origin.Y - 2, size + 4, size + 4));
+
+            RcpTrackPainter.Draw(g, _sample, size, origin, showRoute: false, showLabels: false, detailThreshold: 20f);
+
+            g.Restore(state);
+
+            var textLeft = (int)(origin.X + size + UiLayout.AtTextSize(6));
+
+            TextRenderer.DrawText(g, RcpTiles.NameOf(Item), AppTheme.BodyFont,
+                new Rectangle(textLeft, 0, Math.Max(1, Width - textLeft - CompactEdge / 2), Height),
+                AppTheme.TextDark,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        }
+
         /// <summary>How many lines of its hint an entry shows.</summary>
         private const int HintLines = 2;
 
@@ -3051,5 +3258,173 @@ public sealed class RcpTrackEditorForm : Form
 
             return Math.Max(UiLayout.AtTextSize(PaletteEntryHeight), wanted);
         }
+    }
+
+    /// <summary>
+    /// A section's header in the inspector (8 Nov 2026): its name in bold
+    /// at the left, and - closed - its headline after it, muted, cut short
+    /// with "..." where the column ends. Drawn rather than a button's
+    /// caption, since the headline is meant to be cut short and a button
+    /// whose caption does not fit is a fault (LayoutAudit). Clicking it
+    /// opens or closes the section.
+    /// </summary>
+    private sealed class SectionHeader : Control
+    {
+        private string _headline = string.Empty;
+        private bool _hovered;
+
+        public SectionHeader(string title)
+        {
+            Text = title;
+
+            SetStyle(ControlStyles.OptimizedDoubleBuffer
+                     | ControlStyles.AllPaintingInWmPaint
+                     | ControlStyles.UserPaint
+                     | ControlStyles.ResizeRedraw, true);
+
+            DoubleBuffered = true;
+            Cursor = Cursors.Hand;
+            TabStop = false;
+            Tag = AppTheme.KeepBackColor;
+
+            using var probe = new Button { Text = title, Font = AppTheme.BoldFont };
+            Height = UiLayout.ButtonSizeFor(probe).Height;
+        }
+
+        /// <summary>What it says after its name; empty for none.</summary>
+        public string Headline
+        {
+            get => _headline;
+            set
+            {
+                if (_headline != value)
+                {
+                    _headline = value;
+                    Invalidate();
+                }
+            }
+        }
+
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            base.OnMouseEnter(e);
+            _hovered = true;
+            Invalidate();
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _hovered = false;
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            using (var page = new SolidBrush(Parent?.BackColor ?? AppTheme.Background))
+            {
+                g.FillRectangle(page, ClientRectangle);
+            }
+
+            var lit = BackColor == AppTheme.Primary;
+            var fill = _hovered && !lit ? ControlPaint.Dark(BackColor, 0.05f) : BackColor;
+
+            using (var brush = new SolidBrush(fill))
+            using (var path = AppTheme.RoundedRect(new RectangleF(0, 0, Width - 1, Height - 1), AppTheme.CornerRadius))
+            {
+                g.FillPath(brush, path);
+            }
+
+            var edge = UiLayout.AtTextSize(12);
+            var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPrefix
+                        | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding;
+
+            var titleWidth = TextRenderer.MeasureText(g, Text, AppTheme.BoldFont, Size.Empty, flags).Width;
+            TextRenderer.DrawText(g, Text, AppTheme.BoldFont, new Rectangle(edge, 0, Math.Max(1, Width - 2 * edge), Height), ForeColor, flags);
+
+            if (_headline.Length == 0)
+            {
+                return;
+            }
+
+            var left = edge + titleWidth + UiLayout.AtTextSize(10);
+
+            TextRenderer.DrawText(g, _headline, AppTheme.SmallFont,
+                new Rectangle(left, 0, Math.Max(1, Width - left - edge), Height),
+                lit ? AppTheme.OnPrimary : AppTheme.TextMuted,
+                flags | TextFormatFlags.EndEllipsis);
+        }
+    }
+
+    /// <summary>
+    /// The bar over the board (8 Nov 2026): one row of options for each
+    /// tool, only the tool in hand's showing. It is as tall as the tallest
+    /// row at its width, whichever is showing, so picking a tool never
+    /// moves the board under it; each row wraps at the bar's width.
+    /// </summary>
+    private sealed class ContextStrip : Panel
+    {
+        private readonly List<(string Key, Control Bar)> _bars = new();
+
+        public ContextStrip()
+        {
+            LayoutFreeze.Adopt(this);
+
+            AutoSize = true;
+            AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            Margin = Padding.Empty;
+            Padding = Padding.Empty;
+            Tag = AppTheme.KeepBackColor;
+        }
+
+        /// <summary>Adds a tool's row, hidden until ShowBar asks for it.</summary>
+        public void AddBar(string key, Control bar)
+        {
+            // Sized here, to the bar's width, so it wraps there rather than
+            // growing to one long line.
+            bar.AutoSize = false;
+            bar.Margin = Padding.Empty;
+            bar.Visible = _bars.Count == 0;
+
+            _bars.Add((key, bar));
+            Controls.Add(bar);
+        }
+
+        /// <summary>Shows the row for <paramref name="key"/> and hides the others.</summary>
+        public void ShowBar(string key)
+        {
+            foreach (var (barKey, bar) in _bars)
+            {
+                bar.Visible = barKey == key;
+            }
+        }
+
+        public override Size GetPreferredSize(Size proposedSize)
+        {
+            var width = proposedSize.Width is > 0 and < int.MaxValue / 4 ? proposedSize.Width : Width;
+
+            return new Size(width, Tallest(width));
+        }
+
+        protected override void OnLayout(LayoutEventArgs levent)
+        {
+            foreach (var (_, bar) in _bars)
+            {
+                var bounds = new Rectangle(0, 0, ClientSize.Width, bar.GetPreferredSize(new Size(Math.Max(1, ClientSize.Width), 0)).Height);
+
+                if (bar.Bounds != bounds)
+                {
+                    bar.Bounds = bounds;
+                }
+            }
+
+            base.OnLayout(levent);
+        }
+
+        private int Tallest(int width) =>
+            _bars.Count == 0 ? 0 : _bars.Max(pair => pair.Bar.GetPreferredSize(new Size(Math.Max(1, width), 0)).Height);
     }
 }

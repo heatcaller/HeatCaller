@@ -387,3 +387,13 @@ So a second rail on a tile is **custom work, not impossible.** What changes:
 - **Phase 4, stock:** a custom tile uses one rail tile plus one more rail. It can be counted as made once the club has made it, since it stays made.
 - **The same treatment** applies to any other tile that needs a second rail: a one-tile spur, or a square outside corner. Each is custom, and each is said so. Turns other than the 1-tile one stay as reported, since a turn rail can't be cut from a straight.
 - **The starter layouts:** the serpentines and the Wide L keep their dividers, now with custom tiles where the divider meets the wall. The other problems (one-tile-wide lanes, two-tile turns) are still redrawn from pieces in Phase 2.
+
+## The window rethought (option A, 8 Nov 2026)
+
+Asher: "this interface is a nightmare". The window had become five rows of toolbar buttons over six tabs. Three options were mocked up; Asher picked **A, a tool rail and an inspector**. As built:
+- **Top bar:** the plan's name, Undo, Redo, Fit, Play, 3D, **File ▾** and **?**, with Save Layout and Cancel on the right. File holds the picture sizes, Copy picture, Print, Open and Save plan file, and **Clear the plan...** in red. Clear used to sit among the tools.
+- **Tool rail, down the left:** Select, Pieces, Lane, Corners, Markings, Racing line, Erase, Photo. The keys are unchanged.
+- **The bar over the board** shows only the tool in hand's options: the pieces as small chips (picture and name, hint as tooltip), Lane/Ring and width, the markings, Trace it for me / Reverse / closes into a lap, the photo's controls, and Select's Turn/Flip/Duplicate/Remove. It is as tall as its tallest row, so the board never moves when a tool is picked.
+- **Inspector, down the right:** Plan, Room, Lap, Parts (the Stock tab as was) and Auto (Rail the edge, Build me a track). The section headers stay at the top of the column, with the open section's cards under them, so every section can be reached without scrolling. One section is open at a time. A closed section's header shows its headline: the name and tile size, whether the plan fits the room, the lap, or whether the club has enough parts. The Pieces tab is gone; its contents moved to the bar.
+- **Keys** sit behind **?** (or the ? key), as a sixth section that shows only while open.
+- `openOnTab` still opens a section, and the old names "Stock" and "Pieces" still work.

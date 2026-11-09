@@ -450,7 +450,7 @@ internal static class RcpPlanPrinter
             lines.Add(new PrintLine($"Turn rails: {used.OuterTurnRails}"));
             lines.Add(new PrintLine($"Inner corner pieces: {used.InnerCornerPieces}"));
             lines.Add(new PrintLine($"End caps: {used.EndCaps}"));
-            lines.Add(new PrintLine("What the club owns isn't entered, so nothing is checked against it - the Stock tab says what's in the cupboard."));
+            lines.Add(new PrintLine("What the club owns isn't entered, so nothing is checked against it - the Track Designer's Parts section says what's in the cupboard."));
         }
 
         if (used.TwoTileTurns > 0)

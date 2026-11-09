@@ -489,7 +489,7 @@ public sealed class RcpTrackCanvas : Control
         Cursor = Angled ? Cursors.SizeAll : Cursors.Default;
 
         StatusChanged?.Invoke(Angled
-            ? "The angled view: drag to turn the track round and tip it, wheel to zoom. Press View, or pick a tool, to draw again."
+            ? "The angled view: drag to turn the track round and tip it, wheel to zoom. Press 3D again, or pick a tool, to draw again."
             : "Back to the plan.");
 
         AngledChanged?.Invoke();
@@ -1858,7 +1858,7 @@ public sealed class RcpTrackCanvas : Control
             return;
         }
 
-        StatusChanged?.Invoke("Ring laid, with rails down both sides and turns at its corners. Trace route puts the racing line round it.");
+        StatusChanged?.Invoke("Ring laid, with rails down both sides and turns at its corners. Racing line's Trace it for me puts the line round it.");
         RaiseChanged();
     }
 
