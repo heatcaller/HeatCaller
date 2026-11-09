@@ -4,7 +4,7 @@ The Track Designer lets you draw an RCP-style tile track: lay the tiles with the
 
 On the **Track Layouts** page, select a layout and click **Track Designer**, or click it with nothing selected to draw a new track. See [Track Layouts](drivers-and-classes.md#track-layouts).
 
-<!-- screenshot: Track Designer with a traced photo underneath and rails drawn over it -->
+![The Track Designer with a 12 by 7 tile plan: rail tiles round the edge, pink outer curve tiles in the corners, a divider, a finish line and grid boxes, and a dashed blue racing line with arrows. The tools run down the left with Pieces in hand, the pieces in a bar over the board, and the Parts section open on the right](../assets/images/track-designer.png)
 
 The window has four parts:
 
@@ -78,6 +78,8 @@ Take the **Corners** tool (<kbd>C</kbd>) and click a corner to switch it between
 ## The lap time
 
 The lap in the corner of the drawing shows the racing line's length and a lap time, and says where the time comes from:
+
+![The Lap section open: the floor's 76 tiles, the rail counts, a lap of 19.50 m (64.0 ft) and its speed at an 8.9s lap, and one custom tile. The Racing line tool is in hand, its bar offering Trace it for me, Reverse and The line closes into a lap](../assets/images/track-designer-lap.png)
 
 - **from N laps raced**: the middle lap of every race saved on this track layout since its racing line last changed, once there are at least 10 laps. Demo races and laps three times the usual (a crash, a car fetched off the floor) are left out.
 - **as entered**: the average lap typed in on **Track Layouts**, when there aren't enough races yet.
@@ -174,6 +176,8 @@ To name a tile, for example "Pit lane" or "Marshal", pick **Tile label** at the 
 
 Click **3D** on the top bar, or press <kbd>V</kbd>, to see the track tipped and turned, as you would standing at the end of the hall. The floor shows its joints, the rails stand up at their real height with their shadows, and the turn rails, markings and racing line are all there. **Play** drives the car round it too.
 
+![The same track in the angled view: the floor tipped and turned, the rails standing up round it, and the racing line drawn on the floor. The 3D button is lit](../assets/images/track-designer-angled.png)
+
 - Drag to turn the track round and tip it, from straight down to a low angle.
 - Use the mouse wheel to go closer or further away.
 - Click **3D** again, or pick any tool, to go back to the flat plan.
@@ -187,6 +191,8 @@ The markings include **Split 1 loop**, **Split 2 loop** and **Split 3 loop**: a 
 ## The Plan, Room, Lap and Auto sections
 
 The **Plan**, **Room**, **Lap** and **Auto** sections, and the **Photo** tool, have:
+
+![The Plan section open: the track name with Show this plan as the track's main picture, Start from a kit, the tile size set to 50 cm, and Check against a kit. The Select tool is in hand, its bar over the board offering Turn, Flip across, Flip down, Duplicate and Remove](../assets/images/track-designer-plan.png)
 
 - **Track name** (Plan), with **Show this plan as the track's main picture** under it — required before you can save.
 - **Tile size** (Plan) — **30 cm**, **50 cm**, or any size in mm.

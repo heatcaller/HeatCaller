@@ -93,7 +93,11 @@ public sealed class LineStartClippingTests
 
         Assert.Equal(rawFormat.AverageBytesPerSecond, format.AverageBytesPerSecond);
 
-        var lostMs = (LoudSamples(raw) - LoudSamples(trimmed)) * 1000.0 / format.SampleRate / format.Channels;
+        // Decoding also brings the line to one level since 8 Nov 2026
+        // (VoiceLevel), so the untrimmed decode is levelled the same way
+        // before the loud samples are compared. Its leading silence is not
+        // measured, so both come out at the same gain.
+        var lostMs = (LoudSamples(VoiceLevel.Level(raw, rawFormat)) - LoudSamples(trimmed)) * 1000.0 / format.SampleRate / format.Channels;
 
         Assert.True(lostMs < 1, $"DecodeMp3 cut {lostMs:F0} ms of loud audio off the front of the line.");
     }
@@ -112,6 +116,7 @@ public sealed class LineStartClippingTests
 
         return loud;
     }
+
 
     private static byte[] DecodeUntrimmed(byte[] mp3, out WaveFormat format)
     {

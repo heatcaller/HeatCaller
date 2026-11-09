@@ -489,7 +489,7 @@ public sealed class RcpTrackCanvas : Control
         Cursor = Angled ? Cursors.SizeAll : Cursors.Default;
 
         StatusChanged?.Invoke(Angled
-            ? "The angled view: drag to turn the track round and tip it, wheel to zoom. Press View, or pick a tool, to draw again."
+            ? "The angled view: drag to turn the track round and tip it, wheel to zoom. Press 3D again, or pick a tool, to draw again."
             : "Back to the plan.");
 
         AngledChanged?.Invoke();

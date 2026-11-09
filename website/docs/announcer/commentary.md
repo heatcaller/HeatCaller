@@ -226,14 +226,26 @@ The second card on the page, under **Who writes it**. These apply to every line 
 
 | Setting | What it does | Default |
 |---|---|---|
-| **Writing tone:** | **Enthusiastic - trackside hype**, **Neutral - calm play-by-play** or **Dry - understated, deadpan**. | Enthusiastic |
-| **Mark the lines excited when they're spoken** | Marks the recap and the segments as excited, and opens the cold open and sign-off on a shout. Needs an ElevenLabs v3 voice and the **Enthusiastic** tone. | On |
+| **Writing tone:** | **Enthusiastic - trackside hype**, **Neutral - calm play-by-play** or **Dry - understated, deadpan**, or one of the character tones below. | Enthusiastic |
+| **Give the lines their tone's delivery when they're spoken** | Adds the tone's audio tags to the recap and the segments. For Enthusiastic, every sentence is excited and the cold open and sign-off open on a shout; the character tones use their own (see below). Needs an ElevenLabs v3 voice, and does nothing for Neutral or Dry. | On |
 | **Max length:** | 8 to 300 words. Up to 30 gives one sentence, up to 70 gives two, beyond that a full paragraph. It's spoken aloud, so a long one takes a while. The recap is allowed a little more than this, and more again for a broadcast opening or sign-off. If the model still runs long, the answer is trimmed back to its last complete sentence, so a recap is never cut off mid-sentence, and the console says "[llm] The answer ran past its length limit - kept it up to the last complete sentence." | 45 |
 | **Phrasing variety:** | 0.2 to 1.3. Low is consistent, safe wording. High is more varied, with the occasional odd sentence. | 0.7 |
 
 Whatever the tone, the model is told to write for the ear: contractions ("he's", "they're") and, where they fit, short commentator fragments ("Into the hairpin. Side by side."). **Max length:** still decides how much it writes.
 
-With **Mark the lines excited when they're spoken** ticked, the **Enthusiastic** tone and an `eleven_v3` voice, the recap is delivered with the `[excited]` audio tag on each sentence so the energy holds to the end. With the Kokoro voice chosen, the recap gets no audio tags, since that voice can't use them. See [Audio tags](voice.md#audio-tags).
+With **Give the lines their tone's delivery when they're spoken** ticked, the **Enthusiastic** tone and an `eleven_v3` voice, the recap is delivered with the `[excited]` audio tag on each sentence so the energy holds to the end. With the Kokoro voice chosen, the recap gets no audio tags, since that voice can't use them. See [Audio tags](voice.md#audio-tags).
+
+#### Character tones
+
+Three more tones put the whole night in character: every line, the recap, the segments between races and the pit-lane interviews. Each one is told to keep every name, position and number exactly as given, so the call underneath can still be trusted. Villain is a cartoon villain, not a nasty one. Nothing gory, nobody really gets hurt, and no driver is ever mocked.
+
+| Tone | Sounds like | Audio tags (v3) |
+|---|---|---|
+| **Dark: Villain** | Backs whoever leads, like a cartoon tyrant. "Yes... yes. Four tenths, Sam. Let them watch it shrink in the mirror." | A laugh, then mischievous |
+| **Silly: Pirate** | Arr. "Arr, Sam be four tenths clear o' Bill on lap twelve, and the sea be angry!" | A laugh, then excited |
+| **Silly: Town crier** | Hear ye, hear ye. "Hear ye! Upon the twelfth lap, Sam doth lead Bill by four tenths of a second!" | Shouted throughout |
+
+A character tone is the model's to play, so a small local model can drift out of character. The truth rules and the number check still apply to every line, whichever tone is on.
 
 ### Who writes it
 
