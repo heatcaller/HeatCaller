@@ -308,7 +308,10 @@ public sealed partial class AnnouncementService
         // start of the first word. Now it stops where the words begin.
         var skip = QuietStartToSkip(whole, format);
 
-        return (whole[skip..], format, skip / (double)Math.Max(1, format.AverageBytesPerSecond));
+        // Levelled AFTER the skip is found (8 Nov 2026): the onset test is
+        // against the level the words arrived at. Gain changes no length,
+        // so the skip still lines up with the API's timings. See VoiceLevel.
+        return (VoiceLevel.Level(whole[skip..], format), format, skip / (double)Math.Max(1, format.AverageBytesPerSecond));
     }
 
     /// <summary>
@@ -369,7 +372,8 @@ public sealed partial class AnnouncementService
             pcm.Write(buffer, 0, bytesRead);
         }
 
-        return (pcm.ToArray(), format);
+        // A saved cut is levelled as the MP3 it came from is - see VoiceLevel.
+        return (VoiceLevel.Level(pcm.ToArray(), format), format);
     }
 
     /// <summary>
