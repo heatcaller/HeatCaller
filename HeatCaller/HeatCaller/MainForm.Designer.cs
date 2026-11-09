@@ -47,6 +47,10 @@ partial class MainForm
     private Label lblTrack = new() { Text = "Track:", AutoSize = true };
     private Label lblActiveRound = new() { Text = "Round:", AutoSize = true };
 
+    // Under the Session row, only while the track picked is a short one -
+    // see ShortTrack and MainForm.RaceSetup's ShowShortTrackWarning.
+    private Label lblShortTrack = new() { AutoSize = true, Visible = false, UseMnemonic = false };
+
     // The developer console, on the Connection page.
     private TextBox txtConsole = new();
     private CheckBox chkAutoScroll = new ThemedCheckBox();
@@ -170,6 +174,7 @@ partial class MainForm
         sessionRow.AddLast(lblActiveRound, cmbActiveRound, SessionRoundLeastWidth);
 
         grpSession.Add(sessionRow);
+        grpSession.Add(lblShortTrack);
 
         // The Leaderboard box that used to sit here is gone, and so is the
         // grid inside it.

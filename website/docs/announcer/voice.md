@@ -658,7 +658,7 @@ The announcer is built so that important calls are never late and routine chatte
 
 ### On a short track
 
-The announcer is most accurate when laps average 8 seconds or more. Below that, expect it to struggle, whichever voice and model you use, even ElevenLabs' fastest (Flash v2.5):
+The announcer is at its best when laps average 8 seconds or more, which covers most Mini-Z clubs on RCP track (typically 9 to 10 seconds a lap), dirt off-road and most road courses. Below that, the race can move faster than anyone can talk, whichever voice and model you use, even ElevenLabs' fastest (Flash v2.5). Ovals, at 3 to 7 seconds a lap, are the usual case:
 
 - **More calls are skipped.** A spoken line takes two or three seconds, so on a 6-second lap a car can cross the line again before the call about its last lap has finished. Routine calls that come up while the announcer is talking are dropped (see above), so on a short track many lap-time calls are never said.
 - **A call can be out of date by the time it's heard.** Just before it speaks, HeatCaller checks the board again for a position report, a time-left call and a fastest-lap call, and rewrites or drops one that's no longer true. It can't do that for every line, so a gap, a place or a lap time can still be a lap old when you hear it.
@@ -667,6 +667,8 @@ The announcer is most accurate when laps average 8 seconds or more. Below that, 
 The 8 seconds leaves some margin: the shorter the lap, the worse it gets.
 
 Lap timing and scoring aren't affected. The laps, results and standings on the screens are right however short the lap; only what's spoken can be wrong. Treat the screens and the results, not the announcer, as the record of the race.
+
+HeatCaller lets you know. While the track picked on the **Session** card on **Race Control** averages under 8 seconds a lap, an amber line under the card says so: "Short laps (5.8s here): under 8 seconds a lap, the announcer skips some calls and can fall a lap behind. Timing and results aren't affected." The lap it goes by is the middle lap of the races saved on that layout once there are at least 10 laps (demo races left out), or else the **Average lap time (sec):** typed on **Track Layouts**, which shows the same warning as you type a lap under 8 seconds.
 
 ### When ElevenLabs can't speak a line
 
