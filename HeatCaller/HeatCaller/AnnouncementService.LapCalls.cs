@@ -595,65 +595,129 @@ public sealed partial class AnnouncementService
         // The text goes up only if the report is accepted - see
         // EnqueueVoiceWork. A report turned down (or kept and then lost)
         // gives the sponsor's ration back (20 Oct 2026, Bug Hunt 8).
-        var accepted = EnqueueVoiceWork(AnnouncementEventType.PositionReport, leader.Transponder,
-            async () =>
+        // The report's work, for the words it was queued with. Its own
+        // function (9 Nov 2026) so a report dropped while it was rendered -
+        // the order moved under it - can be queued once more, worded from
+        // the board as it then stands, rather than leave the room waiting
+        // laps for the next one. Nothing of the first was heard, so the
+        // second is an ordinary report, not a correction.
+        Func<Task> Work(IReadOnlyList<PositionReportOrder.Row> queuedRows, string queuedText, bool isRetry) => async () =>
+        {
+            // WHY (23 Oct 2026, bug hunt 10): counted only once the line is
+            // certain to be heard (SynthesizeAndPlayAsync's spoken); a line
+            // dropped for no voice, a flag, the countdown or a mute - or
+            // whose synthesis threw - gives the reservation back instead.
+            var heard = false;
+            var movedWhileRendered = false;
+            var handedOn = false;
+            PositionReportOnAir? onAir = null;
+
+            try
             {
-                // WHY (23 Oct 2026, bug hunt 10): counted only once the line is
-                // certain to be heard (SynthesizeAndPlayAsync's spoken); a line
-                // dropped for no voice, a flag, the countdown or a mute - or
-                // whose synthesis threw - gives the reservation back instead.
-                var heard = false;
+                // Read again just before it is said (1 Nov 2026). The
+                // words were written when the last car named crossed,
+                // and the board can still move while the report waits
+                // for the speaker - a penalty, or a car further back
+                // getting by and over the line. When anything
+                // in the order has moved, it is worded again from the
+                // board as it stands, in the same line the club wrote,
+                // and the screens are given the new words. See
+                // PositionReportOrder.
+                var said = queuedText;
+                IReadOnlyList<PositionReportOrder.Row> worded = queuedRows;
 
-                try
+                if (RunningOrderNow(depth) is { Count: >= 2 } now && PositionReportOrder.Moved(queuedRows, now))
                 {
-                    // Read again just before it is said (1 Nov 2026). The
-                    // words were written when the last car named crossed,
-                    // and the board can still move while the report waits
-                    // for the speaker - a penalty, or a car further back
-                    // getting by and over the line. When anything
-                    // in the order has moved, it is worded again from the
-                    // board as it stands, in the same line the club wrote,
-                    // and the screens are given the new words. See
-                    // PositionReportOrder.
-                    var said = text;
-                    IReadOnlyList<PositionReportOrder.Row> worded = rows;
+                    var reworded = WordRunningOrder(now, template, sayGaps);
 
-                    if (RunningOrderNow(depth) is { Count: >= 2 } now && PositionReportOrder.Moved(rows, now))
+                    if (reworded.Length > 0)
                     {
-                        var reworded = WordRunningOrder(now, template, sayGaps);
+                        said = (reworded + sponsorTag).Trim();
+                        worded = now;
+                        StatusMessage?.Invoke(
+                            "[voice] Position report worded again - the order moved while it waited for the speaker (\""
+                            + queuedText + "\" is now \"" + said + "\").");
+                        RaiseAnnouncementText(said, now[0].Standing.Transponder);
+                    }
+                }
 
-                        if (reworded.Length > 0)
+                // And again once it is rendered (8 Nov 2026): on eleven_v3
+                // that is seconds, long enough for the order or its gaps to
+                // move again. Dropped - and queued once more, below.
+                await SynthesizeAndPlayAsync(said, isRetry ? "[voice] Position report (again)" : "[voice] Position report", speedOverride: reportSpeed,
+                    whyNotNow: () =>
+                    {
+                        if (RunningOrderNow(depth) is { Count: >= 2 } after && PositionReportOrder.Moved(worded, after))
                         {
-                            said = (reworded + sponsorTag).Trim();
-                            worded = now;
-                            StatusMessage?.Invoke(
-                                "[voice] Position report worded again - the order moved while it waited for the speaker (\""
-                                + text + "\" is now \"" + said + "\").");
-                            RaiseAnnouncementText(said, now[0].Standing.Transponder);
+                            movedWhileRendered = true;
+                            return "the order moved while it was being rendered";
                         }
-                    }
 
-                    // And again once it is rendered (8 Nov 2026): on eleven_v3
-                    // that is seconds, long enough for the order or its gaps to
-                    // move again. Not worded a third time - dropped.
-                    await SynthesizeAndPlayAsync(said, "[voice] Position report", speedOverride: reportSpeed,
-                        whyNotNow: () => RunningOrderNow(depth) is { Count: >= 2 } after && PositionReportOrder.Moved(worded, after)
-                            ? "the order moved while it was being rendered"
-                            : null,
-                        spoken: () =>
-                        {
-                            heard = true;
-                            countMention?.Invoke();
-                        });
-                }
-                finally
-                {
-                    if (!heard)
+                        return null;
+                    },
+                    spoken: () =>
                     {
-                        releaseMention?.Invoke();
-                    }
+                        heard = true;
+                        countMention?.Invoke();
+
+                        // From here the board can cut it off and correct
+                        // it (9 Nov 2026) - see AnnouncementService.PositionReportCut.
+                        onAir = PutPositionReportOnAir(OrderOf(worded), depth);
+                    });
+
+                if (movedWhileRendered && !heard && !isRetry)
+                {
+                    handedOn = RequeuePositionReport();
                 }
-            },
+            }
+            finally
+            {
+                TakePositionReportOffAir(onAir);
+
+                // A report queued again carries the sponsor's ration on.
+                if (!heard && !handedOn)
+                {
+                    releaseMention?.Invoke();
+                }
+            }
+        };
+
+        // Once only: a second report the order moves under is dropped, as
+        // every report was before - on a busy short track it could otherwise
+        // be rendered and thrown away for the rest of the race.
+        bool RequeuePositionReport()
+        {
+            // The same gates the report itself passed - a caution or the dial
+            // may have come in while it was rendered.
+            if (Muted || _postRaceQuiet
+                || HeldByCaution(AnnouncementEventType.PositionReport, config)
+                || !DialLetsItSpeak(AnnouncementEventType.PositionReport, config)
+                || RunningOrderNow(depth) is not { Count: >= 2 } again)
+            {
+                return false;
+            }
+
+            var againText = WordRunningOrder(again, template, sayGaps);
+
+            if (againText.Length == 0)
+            {
+                return false;
+            }
+
+            againText = (againText + sponsorTag).Trim();
+
+            var queued = EnqueueVoiceWork(AnnouncementEventType.PositionReport, again[0].Standing.Transponder,
+                Work(again, againText, isRetry: true), displayText: againText, lost: releaseMention);
+
+            StatusMessage?.Invoke(queued
+                ? "[voice] Position report queued again, worded from the board as it stands now."
+                : "[voice] Position report not queued again - the queue turned it down.");
+
+            return queued;
+        }
+
+        var accepted = EnqueueVoiceWork(AnnouncementEventType.PositionReport, leader.Transponder,
+            Work(rows, text, isRetry: false),
             displayText: text,
             lost: releaseMention);
 
@@ -674,7 +738,12 @@ public sealed partial class AnnouncementService
     /// leader crosses, and again from the board as it stands when the order
     /// moved while the report waited for the speaker. See PositionReportOrder.
     /// </remarks>
-    private string WordRunningOrder(IReadOnlyList<PositionReportOrder.Row> rows, string template, bool sayGaps)
+    /// <param name="placesOnly">
+    /// Each car by its place alone, no gap or laps down - for the correction
+    /// after a report is cut off, where the gaps would be a lap old
+    /// (AnnouncementService.PositionReportCut).
+    /// </param>
+    private string WordRunningOrder(IReadOnlyList<PositionReportOrder.Row> rows, string template, bool sayGaps, bool placesOnly = false)
     {
         var parts = new List<string>();
 
@@ -716,7 +785,7 @@ public sealed partial class AnnouncementService
 
             order.Add((name, gap));
 
-            if (sayGaps)
+            if (sayGaps || placesOnly)
             {
                 // Everything about how far back this car is goes into
                 // {gaps}, so the order itself reads as places. Said in
@@ -1029,6 +1098,10 @@ public sealed partial class AnnouncementService
         if (IsHandAdjustment(standing))
         {
             KeepInStepWithCorrection(ordered);
+
+            // A report being read out that the ruling has made wrong is cut
+            // and corrected as the ruling it was (9 Nov 2026).
+            CorrectPositionReportOnAir(byRuling: true);
             return;
         }
 
@@ -1053,6 +1126,11 @@ public sealed partial class AnnouncementService
         // change call, because for a fight for the lead the pass call IS
         // the lead change call, and one crossing must not queue both.
         var passCalledTheLead = CallTheBattlePass(ordered);
+
+        // And a position report being read out when a car it names has
+        // changed place (9 Nov 2026) - its correction says a new leader the
+        // same way. See AnnouncementService.PositionReportCut.
+        passCalledTheLead |= CorrectPositionReportOnAir(byRuling: false);
 
         // In a most-laps qualifier the lead IS provisional pole, called from
         // the same crossing (CallProvisionalPoleIfTaken). Saying both put two

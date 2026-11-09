@@ -108,10 +108,11 @@ internal sealed record BattleVerdict(BattleLine? Cut, IReadOnlyList<BattleLine> 
 /// BattlePair.CallsThePass. A line kept for the end of the last one keeps
 /// its tag when it is offered again (EnqueueVoiceWork).
 ///
-/// NOT THE RUNNING ORDER. A position report is worded again from the board
-/// just before it is said (PositionReportOrder), so one waiting is never out
-/// of date, and one being read out is let finish: a rundown stopped halfway
-/// is worse than one a car moved in, and the next report puts it right.
+/// THE RUNNING ORDER has its own version (9 Nov 2026). A position report is
+/// worded again from the board just before it is said (PositionReportOrder),
+/// so one waiting is never out of date; one being read out used to be let
+/// finish, but the next report can be laps away, so now it is cut off and
+/// corrected too - see AnnouncementService.PositionReportCut.
 /// </summary>
 public sealed partial class AnnouncementService
 {

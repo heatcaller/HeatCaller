@@ -48,14 +48,17 @@ public sealed class PositionReportLimitTests
             "private string WordRunningOrder(");
 
         var queued = report.IndexOf("EnqueueVoiceWork(AnnouncementEventType.PositionReport", StringComparison.Ordinal);
-        var reread = report.IndexOf("RunningOrderNow(depth)", StringComparison.Ordinal);
-        var spoken = report.IndexOf("await SynthesizeAndPlayAsync(said, \"[voice] Position report\"", StringComparison.Ordinal);
+        // Inside the work the voice runs (its own function since 9 Nov 2026,
+        // so a report dropped while rendered can be queued again).
+        var work = report.IndexOf("Func<Task> Work(", StringComparison.Ordinal);
+        var reread = report.IndexOf("RunningOrderNow(depth)", work < 0 ? 0 : work, StringComparison.Ordinal);
+        var spoken = report.IndexOf("await SynthesizeAndPlayAsync(said, isRetry ? \"[voice] Position report (again)\" : \"[voice] Position report\"", StringComparison.Ordinal);
 
         // The words it was queued with may be out of date after the wait;
         // they are checked against the board once the voice reaches them -
         // see PositionReportOrderTests.
         Assert.True(queued >= 0, "the report is no longer queued for the voice");
-        Assert.True(reread > queued && spoken > reread, "the running order is no longer read again just before it is spoken");
+        Assert.True(work >= 0 && reread > work && spoken > reread, "the running order is no longer read again just before it is spoken");
     }
 
     [Fact]
