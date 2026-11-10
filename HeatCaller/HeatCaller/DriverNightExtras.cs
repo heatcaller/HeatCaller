@@ -175,8 +175,15 @@ internal static class DriverNightExtras
                 Pos = practice ? 0 : row.Position,
 
                 // Ghosts are recordings racing alongside, not drivers, so
-                // "4th of 6" counts the people.
-                Of = results.Count(r => r is not null && !Ghosts.IsGhost(r.Transponder)),
+                // "4th of 6" counts the people. And only the cars that turned
+                // a lap, as Driver Hub's "P N of field" does (DriverStats): a
+                // hand-released grid files the whole roster at the green, and
+                // a DQ has its laps cut to 0, so counting rows read "1st of 6"
+                // for a heat three cars ran. Never below their own place, so a
+                // driver who never ran is not "5th of 3".
+                Of = Math.Max(
+                    results.Count(r => r is not null && !Ghosts.IsGhost(r.Transponder) && r.Laps >= 1),
+                    practice ? 0 : row.Position),
                 Start = !practice && grid > 0 ? grid : null,
                 Laps = row.Laps,
                 BestMs = row.FastLapMs,
