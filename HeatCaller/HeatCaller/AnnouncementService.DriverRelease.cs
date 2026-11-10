@@ -145,11 +145,35 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>
+    /// The driver's part of a release call's words - who is said, in which
+    /// car, with which team and sponsors - whatever template was picked.
+    ///
+    /// WHY (9 Nov 2026, bug hunt 15): a prepared release clip was checked
+    /// against the voice only. One primed but never taken (the race reset
+    /// before that car's delay was up) stayed keyed by transponder, and at
+    /// the next staggered green it was kept as still current - so a
+    /// corrected Announcer name, or a club transponder handed to another
+    /// driver, still called the car away under the old words. Held with
+    /// the clip and compared when it is kept and when it is taken.
+    /// </summary>
+    private string ReleaseWordsFor(string transponderId)
+    {
+        var driverProfile = _profiles.Get(transponderId);
+
+        return string.Join("\u001f",
+            DisplayNameFor(transponderId),
+            _profiles.CarModelFor(transponderId),
+            driverProfile?.Team ?? string.Empty,
+            driverProfile?.Sponsors ?? string.Empty);
+    }
+
+    /// <summary>
     /// A release call held as decoded audio, ready to play as-is. Source
     /// says who spoke it, so a take Kokoro made standing in is not played
-    /// once ElevenLabs can speak again - see PreparedTakeMatches.
+    /// once ElevenLabs can speak again - see PreparedTakeMatches. Words is
+    /// ReleaseWordsFor at the time the text was built.
     /// </summary>
-    private sealed record PreparedClip(string Text, byte[] Pcm, WaveFormat Format, string Signature, LineSource Source);
+    private sealed record PreparedClip(string Text, byte[] Pcm, WaveFormat Format, string Signature, LineSource Source, string Words);
 
     private readonly Dictionary<string, PreparedClip> _releaseLines = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _releaseLinesLock = new();
@@ -180,7 +204,8 @@ public sealed partial class AnnouncementService
     private async Task<bool> TryRenderReleaseBatchAsync(
         IReadOnlyList<(string Transponder, string Text)> lines,
         VoiceProfile renderProfile,
-        string signature)
+        string signature,
+        IReadOnlyDictionary<string, string> words)
     {
         if (lines.Count < 2)
         {
@@ -284,7 +309,7 @@ public sealed partial class AnnouncementService
 
             lock (_releaseLinesLock)
             {
-                _releaseLines[lines[i].Transponder] = new PreparedClip(lines[i].Text, clip, format, signature, LineSource.ElevenLabs);
+                _releaseLines[lines[i].Transponder] = new PreparedClip(lines[i].Text, clip, format, signature, LineSource.ElevenLabs, words[lines[i].Transponder]);
             }
 
             // Saved as the clip it was cut to, under the same key a render
@@ -352,14 +377,19 @@ public sealed partial class AnnouncementService
 
         var toRender = new List<string>();
 
+        // Who each car is now - see ReleaseWordsFor.
+        var words = grid.ToDictionary(t => t, ReleaseWordsFor, StringComparer.OrdinalIgnoreCase);
+
         lock (_releaseLinesLock)
         {
             foreach (var key in _releaseLines.Keys.ToList())
             {
                 // Including a stand-in take once ElevenLabs can speak again,
-                // so the grid is rendered afresh in ElevenLabs.
+                // so the grid is rendered afresh in ElevenLabs - and a take
+                // made for words since changed (bug hunt 15).
                 if (!PreparedTakeMatches(_releaseLines[key].Signature, _releaseLines[key].Source, signature, profile)
-                    || !grid.Contains(key, StringComparer.OrdinalIgnoreCase))
+                    || !words.TryGetValue(key, out var now)
+                    || !string.Equals(_releaseLines[key].Words, now, StringComparison.Ordinal))
                 {
                     _releaseLines.Remove(key);
                 }
@@ -438,7 +468,7 @@ public sealed partial class AnnouncementService
 
                     lock (_releaseLinesLock)
                     {
-                        _releaseLines[key] = new PreparedClip(line, pcm, format, signature, LineSource.Library);
+                        _releaseLines[key] = new PreparedClip(line, pcm, format, signature, LineSource.Library, words[key]);
                     }
                 }
                 catch (Exception ex)
@@ -498,7 +528,7 @@ public sealed partial class AnnouncementService
             {
                 try
                 {
-                    if (await TryRenderReleaseBatchAsync(missing, renderProfile, signature))
+                    if (await TryRenderReleaseBatchAsync(missing, renderProfile, signature, words))
                     {
                         return;
                     }
@@ -530,7 +560,8 @@ public sealed partial class AnnouncementService
                     // A batch that half-succeeded, or a re-prime, shouldn't
                     // re-render what is already in hand.
                     if (_releaseLines.TryGetValue(key, out var existing)
-                        && PreparedTakeMatches(existing.Signature, existing.Source, signature, profile))
+                        && PreparedTakeMatches(existing.Signature, existing.Source, signature, profile)
+                        && string.Equals(existing.Words, words[key], StringComparison.Ordinal))
                     {
                         continue;
                     }
@@ -546,7 +577,7 @@ public sealed partial class AnnouncementService
 
                     lock (_releaseLinesLock)
                     {
-                        _releaseLines[key] = new PreparedClip(line, pcm, format, signature, rendered.Source);
+                        _releaseLines[key] = new PreparedClip(line, pcm, format, signature, rendered.Source, words[key]);
                     }
 
                     StatusMessage?.Invoke(rendered.Source == LineSource.StandIn
@@ -565,19 +596,27 @@ public sealed partial class AnnouncementService
 
     /// <summary>
     /// Takes this driver's prepared release call, if one is ready and still
-    /// matches the current voice. Removed as it's taken: a release happens
-    /// once per car per race.
+    /// matches the current voice and the driver's words. Removed as it's
+    /// taken: a release happens once per car per race. One for words since
+    /// changed is thrown away, and the call synthesised live (bug hunt 15).
     /// </summary>
     private PreparedClip? TakePreparedRelease(string transponderId, AnnouncementEventConfig config)
     {
         var profile = _voiceStore.Current;
         var signature = VoiceSignature(profile, config);
+        var words = ReleaseWordsFor(transponderId);
 
         lock (_releaseLinesLock)
         {
             if (!_releaseLines.TryGetValue(transponderId, out var prepared)
                 || !PreparedTakeMatches(prepared.Signature, prepared.Source, signature, profile))
             {
+                return null;
+            }
+
+            if (!string.Equals(prepared.Words, words, StringComparison.Ordinal))
+            {
+                _releaseLines.Remove(transponderId);
                 return null;
             }
 
