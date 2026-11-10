@@ -64,10 +64,11 @@ public sealed partial class RaceControlControl
     private bool _openingSaidByOnAir;
 
     /// <summary>
-    /// "Start races On Air" - see <see cref="StartWithOnAir"/>. Under the
-    /// flag row, at On Air's end of it.
+    /// "Start races: Stage | On Air" - see <see cref="StartWithOnAir"/>. At
+    /// the foot of the board. A segmented switch since 9 Nov 2026, in place
+    /// of the "Start races On Air" tick box, so both choices are on show.
     /// </summary>
-    private readonly ThemedCheckBox _chkStartWithOnAir = new();
+    private readonly SegmentedSwitch _chkStartWithOnAir = new("Start races:", "Stage", "On Air");
 
     /// <summary>
     /// Whether a race started any way but the Stage button goes through On
@@ -86,9 +87,9 @@ public sealed partial class RaceControlControl
                 _settings.Save();
             }
 
-            if (_chkStartWithOnAir.Checked != value)
+            if (_chkStartWithOnAir.On != value)
             {
-                _chkStartWithOnAir.Checked = value;
+                _chkStartWithOnAir.On = value;
             }
         }
     }
@@ -177,17 +178,15 @@ public sealed partial class RaceControlControl
     /// <summary>Wires On Air's switch and timers. Called from BuildLayout. The button went on 25 Oct 2026.</summary>
     private void BuildOnAirButton()
     {
-        _chkStartWithOnAir.Text = "Start races On Air";
-        _chkStartWithOnAir.AutoSize = true;
-        _chkStartWithOnAir.Checked = _settings.RaceStartWithOnAir;
-        _chkStartWithOnAir.CheckedChanged += (_, _) => StartWithOnAir = _chkStartWithOnAir.Checked;
+        _chkStartWithOnAir.On = _settings.RaceStartWithOnAir;
+        _chkStartWithOnAir.OnChanged += (_, _) => StartWithOnAir = _chkStartWithOnAir.On;
 
         var tip = new ToolTip();
         AppTheme.StyleToolTip(tip, keep: true);
         tip.SetToolTip(_chkStartWithOnAir,
-            "Ticked, Start Next, the program's Start, F1, the phone and the day schedule all go through On Air first: "
+            "On Air: Start Next, the program's Start, F1, the phone and the day schedule all go through On Air first: "
             + "the soundscape's jingle or sweeper, the opening, a bumper, then Stage. 0 starts it by hand; while it runs, "
-            + "hold 0 for a second to skip to Stage. Unticked, they stage straight away. The Stage button always stages straight away.");
+            + "hold 0 for a second to skip to Stage. Stage: they stage straight away. The Stage button always stages straight away.");
 
         // The strip's bar and countdown while the opening is got ready.
         _onAirProgressTimer.Interval = 150;
