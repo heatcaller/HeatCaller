@@ -506,7 +506,9 @@ public sealed class TrackLayoutEditForm : Form
         }
         catch (Exception ex)
         {
-            AppDialog.Show(this, $"Couldn't attach that file: {ex.Message}", "Attach failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            AppDialog.Show(this,
+                _pendingAttachPath is null ? $"Couldn't remove the photo: {ex.Message}" : $"Couldn't attach that file: {ex.Message}",
+                _pendingAttachPath is null ? "Remove failed" : "Attach failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
 
@@ -870,10 +872,12 @@ public sealed class TrackLayoutManagerControl : UserControl
                         // The old photo back, over the one the edit attached.
                         TrackAttachmentStore.RestoreForTrack(trackId, setAside);
                     }
-                    else
+                    else if (before.AttachmentFileName is null)
                     {
                         // There was no photo before: the one the edit attached
                         // goes aside (the undo holding folder clears it later).
+                        // Only then - with a name before and nothing set
+                        // aside, the folder there now is that photo's own.
                         TrackAttachmentStore.StashForTrack(trackId);
                     }
 
