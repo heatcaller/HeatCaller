@@ -1655,6 +1655,18 @@ public sealed partial class RaceControlSession
 
             standing.LapTimesMs.RemoveAt(lastIndex);
 
+            // The only timed lap had nothing to fold into, so its crossing
+            // is gone too. Left as the lap reference, the next crossing was
+            // timed from it rather than from the green: a misread at 4s
+            // taken off, then a real start lap at 12s, booked an 8s start
+            // lap against a 12s elapsed time. The last pass seen is kept, so
+            // the minimum lap time still judges the next one.
+            if (standing.LapTimesMs.Count == 0)
+            {
+                standing.LastLapDeviceTimeMs = 0;
+                standing.ClearSplitReads();
+            }
+
             // The removed index no longer exists; nothing may point at it.
             standing.RecoveryLapIndexes.RemoveAll(index => index >= standing.LapTimesMs.Count);
 
@@ -2085,6 +2097,13 @@ public sealed partial class RaceControlSession
         // credit (see AdjustLaps), and putting the laps back needs it back.
         internal bool StartLapCreditedBefore { get; init; }
 
+        // Taking off a car's only timed lap clears the crossing its next lap
+        // is timed from (see AdjustLaps), so the next lap is timed from the
+        // green instead. Undo puts the crossing back, or - when a lap has
+        // been counted since - takes the restored lap's time back out of it.
+        internal long LastLapDeviceTimeBefore { get; init; }
+        internal bool LapReferenceCleared { get; set; }
+
         // Stamped once the correction has been made.
         internal int LapsAfter { get; set; }
         internal List<long> LapTimesAfter { get; set; } = new();
@@ -2147,6 +2166,7 @@ public sealed partial class RaceControlSession
             OwedJumpStartBefore = _pendingJumpStartPenalties.TryGetValue(transponderId, out var owed) ? (long?)owed : null,
             TookTheFlagBefore = _tookTheFlag.Contains(standing.TransponderId),
             StartLapCreditedBefore = standing.StartLapCredited,
+            LastLapDeviceTimeBefore = standing.LastLapDeviceTimeMs,
         };
 
         if (!change())
@@ -2165,6 +2185,7 @@ public sealed partial class RaceControlSession
         edit.WarningPenaltiesAfter = edit.WarningsBefore.Select(w => w.PenaltyMs).ToList();
         edit.OwedJumpStartCleared = edit.OwedJumpStartBefore is not null && !_pendingJumpStartPenalties.ContainsKey(transponderId);
         edit.TookTheFlagAfter = _tookTheFlag.Contains(standing.TransponderId);
+        edit.LapReferenceCleared = edit.LastLapDeviceTimeBefore > 0 && standing.LastLapDeviceTimeMs == 0;
 
         var nothingChanged = !edit.LapsChanged
                              && edit.PenaltyAfter == edit.PenaltyBefore
@@ -2227,6 +2248,21 @@ public sealed partial class RaceControlSession
             var shift = edit.LapTimesBefore.Count - afterCount;
             var newRecovery = standing.RecoveryLapIndexes.Where(i => i >= afterCount).Select(i => i + shift).ToList();
             var lapsCountedSince = standing.Laps - edit.LapsAfter;
+
+            // See StandingEdit.LapReferenceCleared: the first lap counted
+            // since was timed from the green, so it also covers the laps
+            // going back in front of it.
+            if (edit.LapReferenceCleared)
+            {
+                if (newTimes.Count > 0)
+                {
+                    newTimes[0] = Math.Max(0, newTimes[0] - edit.LapTimesBefore.Sum());
+                }
+                else if (standing.LastLapDeviceTimeMs == 0)
+                {
+                    standing.LastLapDeviceTimeMs = edit.LastLapDeviceTimeBefore;
+                }
+            }
 
             standing.LapTimesMs.Clear();
             standing.LapTimesMs.AddRange(edit.LapTimesBefore);
