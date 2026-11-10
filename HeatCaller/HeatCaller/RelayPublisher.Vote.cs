@@ -284,6 +284,30 @@ public sealed partial class RelayPublisher
     }
 
     /// <summary>
+    /// What decides whether the ballot goes up again: see PublishTheBallot.
+    /// </summary>
+    internal static string BallotFingerprint(
+        bool enabled,
+        bool open,
+        string raceKey,
+        string race,
+        string ballot,
+        string key,
+        IEnumerable<VoteOption> options,
+        bool abbreviate,
+        List<object> drivers) =>
+        $"{enabled}|{open}|{raceKey}|{race}|{ballot}|{RelayVoteId(string.Empty, string.Empty, key)}|{string.Join(",", options.Select(one => one.Id))}"
+        // The name setting too (22 Oct 2026, bug hunt), so changing it
+        // puts the ballot up again with the names it asks for.
+        + $"|{abbreviate}"
+        // AND THE NAMES AS PUBLISHED (9 Nov 2026, bug hunt 15). They come
+        // through PublicPrivacy.Current as well as the setting, so a driver
+        // ticked "initials only online", or renamed, while the vote was open
+        // left the fingerprint as it was - and the public ballot went on
+        // showing the full name after every other document had "S.P.".
+        + $"|{JsonSerializer.Serialize(drivers)}";
+
+    /// <summary>
     /// The way back: the relay's id for each driver on the ballot, to the
     /// option it stands for. An id that is not here was never on this
     /// poll's ballot and is refused.
@@ -619,11 +643,7 @@ public sealed partial class RelayPublisher
         // check-in key minted or reissued - changes every relay id, and the
         // ballot has to go up again with the new ones or no vote from the
         // relay would match. A mark made from the key, not the key itself.
-        var fingerprint =
-            $"{enabled}|{open}|{raceKey}|{race}|{ballot}|{RelayVoteId(string.Empty, string.Empty, key)}|{string.Join(",", vote.Options.Select(one => one.Id))}"
-            // The name setting too (22 Oct 2026, bug hunt), so changing it
-            // puts the ballot up again with the names it asks for.
-            + $"|{_settings.RelayAbbreviateNames}";
+        var fingerprint = BallotFingerprint(enabled, open, raceKey, race, ballot, key, vote.Options, _settings.RelayAbbreviateNames, drivers);
 
         if (string.Equals(_ballotAsPublished, fingerprint, StringComparison.Ordinal))
         {

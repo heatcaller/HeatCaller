@@ -322,5 +322,8 @@ public sealed class StreamDecoderClientTests : IDisposable
 
         Assert.Equal("4385919", _passes.First().TransponderId);
         Assert.Equal(DecoderConnection.MyLapsP3, _passes.First().Decoder);
+
+        // Bug Hunt 15, B2: marked, so it never joins the real transponder's health record.
+        Assert.True(_passes.First().IsSimulated);
     }
 }

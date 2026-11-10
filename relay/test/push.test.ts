@@ -15,7 +15,7 @@ import {
   type PushPoster,
 } from "../src/push.js";
 import { Relay } from "../src/server.js";
-import { MemoryStore } from "../src/store.js";
+import { MemoryStore, StoreReadError } from "../src/store.js";
 import { ACME_TOKEN, call, tenants, type Harness } from "./helpers.js";
 
 /**
@@ -289,5 +289,35 @@ describe("push: through the relay", () => {
     await settle();
     assert.deepEqual(sent.map((s) => s.url), [b.json.endpoint]);
     assert.equal(await store.getItem("acme-rc", "pushsubs", BILL), undefined, "gone, so forgotten");
+  });
+
+  it("does not write over a driver's phones when their list could not be read this time (Bug Hunt 15)", async () => {
+    const a = phone("https://fcm.googleapis.com/fcm/send/aaa");
+    const b = phone("https://web.push.apple.com/bbb");
+    assert.equal((await call(h(), "POST", `${API}/push/subscribe`, { json: { id: BILL, sub: a.json } })).status, 200);
+
+    // One read of the list fails - EMFILE, a hiccup on the volume.
+    const getItem = store.getItem.bind(store);
+    let fail = true;
+    store.getItem = async (club, channel, id) => {
+      if (channel === "pushsubs" && fail) {
+        fail = false;
+        throw new StoreReadError(`${club}/${channel}/${id}.json`, false, new Error("EMFILE"));
+      }
+
+      return getItem(club, channel, id);
+    };
+
+    const up = await call(h(), "POST", `${API}/push/subscribe`, { json: { id: BILL, sub: b.json } });
+    assert.equal(up.status, 503, "try again, not a list of one");
+
+    const kept = (await store.getItem("acme-rc", "pushsubs", BILL))?.body as { subs: { endpoint: string }[] };
+    assert.deepEqual(kept.subs.map((s) => s.endpoint), [a.json.endpoint], "the first phone is still signed up");
+
+    // Tried again, it works, and both phones hear.
+    assert.equal((await call(h(), "POST", `${API}/push/subscribe`, { json: { id: BILL, sub: b.json } })).status, 200);
+    await live({ next: { race: "Q2 Heat 1 (Stock)", away: 0 } });
+    await settle();
+    assert.deepEqual(sent.map((s) => s.url).sort(), [b.json.endpoint, a.json.endpoint].sort());
   });
 });

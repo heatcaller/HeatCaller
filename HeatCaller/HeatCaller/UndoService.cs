@@ -18,7 +18,11 @@ public sealed class UndoService
     /// <summary>How many steps back can be undone.</summary>
     public const int MaxDepth = 25;
 
-    private sealed record UndoEntry(string Description, Action Action);
+    private sealed record UndoEntry(long Id, string Description, Action Action);
+
+    // Stamps each entry with its own id, so a list shown to the user can be
+    // checked against the stack when they pick from it.
+    private long _nextId;
 
     // Index 0 is the most recent - undo works from the front.
     private readonly List<UndoEntry> _entries = new();
@@ -40,13 +44,20 @@ public sealed class UndoService
     public IReadOnlyList<string> PendingDescriptions => _entries.Select(e => e.Description).ToList();
 
     /// <summary>
+    /// The id of each pending step, newest first, lined up with
+    /// PendingDescriptions - for a list the user picks from later, to hand
+    /// back to UndoThrough.
+    /// </summary>
+    public IReadOnlyList<long> PendingIds => _entries.Select(e => e.Id).ToList();
+
+    /// <summary>
     /// Pushes an action onto the undo stack. Call this immediately BEFORE
     /// performing the destructive change, capturing whatever state is
     /// needed to put things back.
     /// </summary>
     public void Capture(string description, Action undoAction)
     {
-        _entries.Insert(0, new UndoEntry(description, undoAction));
+        _entries.Insert(0, new UndoEntry(++_nextId, description, undoAction));
 
         // Drop anything past the cap.
         while (_entries.Count > MaxDepth)
@@ -115,6 +126,35 @@ public sealed class UndoService
         }
 
         return undone;
+    }
+
+    /// <summary>
+    /// Undoes the steps a list showed the user, newest first, through the
+    /// one they picked: <paramref name="shownIds"/> are the ids from
+    /// PendingIds at the moment the list was shown, newest down to the
+    /// picked one. The list stays open while other work runs - a phone can
+    /// log a setup in the meantime - so nothing is undone unless the newest
+    /// steps on the stack are still exactly those: otherwise the pick would
+    /// take off a step the user never saw, or stop short of the one they
+    /// chose. Returns null when the stack has changed, else what was undone
+    /// (as UndoSteps).
+    /// </summary>
+    public IReadOnlyList<string>? UndoThrough(IReadOnlyList<long> shownIds)
+    {
+        if (shownIds.Count == 0 || shownIds.Count > _entries.Count)
+        {
+            return null;
+        }
+
+        for (var i = 0; i < shownIds.Count; i++)
+        {
+            if (_entries[i].Id != shownIds[i])
+            {
+                return null;
+            }
+        }
+
+        return UndoSteps(shownIds.Count);
     }
 
     public void Clear()

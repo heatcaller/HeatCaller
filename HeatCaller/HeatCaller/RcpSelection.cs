@@ -349,6 +349,13 @@ public sealed class RcpSelection
             // and a cell is named by its top-left one.
             (tile.Col, tile.Row) = (-tile.Row - 1, tile.Col);
             tile.Turns = (tile.Turns + 1) % 4;
+
+            // The tile's rail goes round with it. Adopt works these out
+            // again for a rail, curve or corner tile, but keeps a finish or
+            // arched tile as laid - so left alone, its Facing would still
+            // name the old edge and Unbolt would take up the wrong rail.
+            tile.Facing = (RcpEdge)(((int)tile.Facing + 1) % 4);
+            tile.Corner = Turned(tile.Corner);
         }
 
         foreach (var decal in _decals)
@@ -405,6 +412,13 @@ public sealed class RcpSelection
         {
             tile.Col = -tile.Col - 1;
             tile.Turns = Unturned(tile.Turns);
+            tile.Facing = tile.Facing switch
+            {
+                RcpEdge.East => RcpEdge.West,
+                RcpEdge.West => RcpEdge.East,
+                _ => tile.Facing,
+            };
+            tile.Corner = MirroredLeftRight(tile.Corner);
         }
 
         foreach (var decal in _decals)
@@ -449,6 +463,13 @@ public sealed class RcpSelection
         {
             tile.Row = -tile.Row - 1;
             tile.Turns = Unturned(tile.Turns);
+            tile.Facing = tile.Facing switch
+            {
+                RcpEdge.North => RcpEdge.South,
+                RcpEdge.South => RcpEdge.North,
+                _ => tile.Facing,
+            };
+            tile.Corner = MirroredTopBottom(tile.Corner);
         }
 
         foreach (var decal in _decals)

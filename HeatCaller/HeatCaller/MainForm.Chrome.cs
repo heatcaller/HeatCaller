@@ -1078,7 +1078,28 @@ public partial class MainForm
     /// refreshes the page in front of the user once. <paramref name="via"/>
     /// is tacked onto each line to say how it was asked for (" (Ctrl+Z)").
     /// </summary>
-    private void UndoSteps(int count, string via)
+    private void UndoSteps(int count, string via) => UndoSteps(() => _undo.UndoSteps(count), via);
+
+    /// <summary>
+    /// Undoes the steps the Undo list showed, through the one picked - or
+    /// nothing, with a note to open it again, when the stack has changed
+    /// since the list opened (a phone change landing while it was open).
+    /// </summary>
+    private void UndoShownSteps(IReadOnlyList<long> shownIds, string via) =>
+        UndoSteps(() =>
+        {
+            var undone = _undo.UndoThrough(shownIds);
+
+            if (undone is null)
+            {
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [undo] The undo list changed while it was open - nothing was undone. Open it again.");
+                return Array.Empty<string>();
+            }
+
+            return undone;
+        }, via);
+
+    private void UndoSteps(Func<IReadOnlyList<string>> undoNow, string via)
     {
         if (!_undo.CanUndo)
         {
@@ -1088,7 +1109,7 @@ public partial class MainForm
 
         // Stops at the first step that fails; that failure is logged by
         // UndoFailed, and whatever did come off before it is logged here.
-        var undone = _undo.UndoSteps(count);
+        var undone = undoNow();
 
         if (undone.Count == 0)
         {
@@ -1117,6 +1138,11 @@ public partial class MainForm
     {
         var pending = _undo.PendingDescriptions;
 
+        // Each item is tied to the steps it showed, not to a count: the
+        // menu doesn't block, so a phone change can land on the stack while
+        // it is open, and a bare count would then undo that instead.
+        var pendingIds = _undo.PendingIds;
+
         if (pending.Count == 0)
         {
             return;
@@ -1134,7 +1160,8 @@ public partial class MainForm
                 item.ToolTipText = $"Also undoes the {Plural.Of(i, "newer step")} above it - {Plural.Of(steps, "step")} in all.";
             }
 
-            item.Click += (_, _) => UndoSteps(steps, steps > 1 ? " (from the Undo list)" : string.Empty);
+            var shownIds = pendingIds.Take(steps).ToList();
+            item.Click += (_, _) => UndoShownSteps(shownIds, steps > 1 ? " (from the Undo list)" : string.Empty);
             menu.Items.Add(item);
         }
 

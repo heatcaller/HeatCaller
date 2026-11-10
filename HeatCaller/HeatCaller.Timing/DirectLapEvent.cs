@@ -25,6 +25,14 @@ public sealed class DirectLapEvent
     public bool IsSynthetic { get; init; }
 
     /// <summary>
+    /// True for a pass from a simulated decoder (DecoderTransport.Simulated):
+    /// made up, though under the club's real transponder numbers - so it is
+    /// raced like any other, but never kept as a night of that transponder's
+    /// health (TransponderHealthStore).
+    /// </summary>
+    public bool IsSimulated { get; init; }
+
+    /// <summary>
     /// When the pass reached the app, on TimingClock - 0 when nobody stamped
     /// it (a ghost, a test). What places a pass from one decoder against a
     /// pass from another; the race itself keeps using DeviceTimeMs.
@@ -49,6 +57,21 @@ public sealed class DirectLapEvent
         SignalHits = SignalHits,
         SignalStrength = SignalStrength,
         IsSynthetic = IsSynthetic,
+        IsSimulated = IsSimulated,
+        ReceivedMs = ReceivedMs,
+        Decoder = Decoder,
+        Point = Point,
+    };
+
+    /// <summary>A copy marked as from a simulated decoder - see <see cref="IsSimulated"/>.</summary>
+    public DirectLapEvent AsSimulated() => new()
+    {
+        TransponderId = TransponderId,
+        DeviceTimeMs = DeviceTimeMs,
+        SignalHits = SignalHits,
+        SignalStrength = SignalStrength,
+        IsSynthetic = IsSynthetic,
+        IsSimulated = true,
         ReceivedMs = ReceivedMs,
         Decoder = Decoder,
         Point = Point,
@@ -62,6 +85,7 @@ public sealed class DirectLapEvent
         SignalHits = SignalHits,
         SignalStrength = SignalStrength,
         IsSynthetic = IsSynthetic,
+        IsSimulated = IsSimulated,
         ReceivedMs = receivedMs,
         Decoder = decoder,
         Point = point,

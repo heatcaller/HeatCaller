@@ -113,7 +113,18 @@ public sealed partial class RaceControlControl
         {
             if (InvokeRequired) { BeginInvoke(() => OnSplitCrossed(standing, point)); return; }
             if (_race.DeliveringIsStale) { _announcer.WhileLapCallsAreStale(() => OnSplitCrossed(standing, point), _race.DeliveringAgeMs); return; }
-            OnSplitCrossed(standing, point);
+
+            // Its calls are timed from the split crossing (9 Nov 2026, Bug
+            // hunt 15, B7) - see AnnouncementService.SplitSayBy.
+            _announcer.LapRaisedAtMs = _race.DeliveringEventRaisedAtMs;
+            try
+            {
+                OnSplitCrossed(standing, point);
+            }
+            finally
+            {
+                _announcer.LapRaisedAtMs = null;
+            }
         };
         _race.SplitCrossed += _splitCrossedHandler;
 
@@ -466,7 +477,14 @@ public sealed partial class RaceControlControl
         switch (state)
         {
             case RaceState.Staging:
-                _announcer.NotifyRaceStaging();
+                // Not while a snapshot is put back (an undone Reset): the
+                // start sequence that followed it is gone, so its calls are
+                // not replayed - see StartPutBackNotice.
+                if (!_suppressFlagAnnouncements)
+                {
+                    _announcer.NotifyRaceStaging();
+                }
+
                 UpdateClockDisplay(force: true);
 
                 // Here rather than in the Stage button, so the automatic
@@ -477,7 +495,18 @@ public sealed partial class RaceControlControl
                 // Set only while the automatic start opens the countdown -
                 // it alone knows when the green will drop. See
                 // _countdownGreenIn.
-                _announcer.NotifyCountdownStarted(_countdownGreenIn);
+                //
+                // Bug hunt 15 (9 Nov 2026): not while a snapshot is put back.
+                // Undoing a Reset made during the countdown raised Countdown
+                // again, and the ticks played from the start with nothing
+                // armed to drop the green at their end - drivers who went on
+                // the last tick were booked as jump starts. The director is
+                // told what to press instead (StartPutBackNotice).
+                if (!_suppressFlagAnnouncements)
+                {
+                    _announcer.NotifyCountdownStarted(_countdownGreenIn);
+                }
+
                 break;
         }
     }
@@ -668,6 +697,31 @@ public sealed partial class RaceControlControl
         }
 
         RenderLeaderboard();
+    }
+
+    /// <summary>
+    /// A race put back - an undone Stage or Reset, or a crash restore - into
+    /// the announcer's running order, quietly. Stage resets the announcer,
+    /// and RestoreSnapshot raises no lap events, so without this the first
+    /// crossings after the green rebuilt the order from nothing and made
+    /// false lead change, lapped and position calls (9 Nov 2026, Bug hunt
+    /// 15) - see AnnouncementService.SeedStandings.
+    /// </summary>
+    private void SeedAnnouncerFromRace()
+    {
+        _announcer.SeedStandings(_race.GetOrderedStandings().Select(standing => new RaceStanding
+        {
+            Transponder = standing.TransponderId,
+            Name = _profiles.Get(standing.TransponderId)?.DriverName,
+            Laps = standing.Laps,
+            FastLapMs = standing.FastestLapMs,
+            ElapsedMs = standing.ElapsedMs,
+            Status = "active",
+            Id = standing.TransponderId,
+            LapsLed = standing.LapsLed,
+            PenaltyMs = standing.PenaltyMs,
+            LapTimesMs = standing.LapTimesMs.ToArray(),
+        }).ToList());
     }
 
     /// <summary>

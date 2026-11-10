@@ -37,7 +37,7 @@ function call(page: FakePage, expression: string): unknown {
 describe("lap stats and pace", () => {
   it("projects pace exactly as LiveRC's lap list does", async () => {
     const page = await resultsScript();
-    const rows = call(page, `lapRows(${JSON.stringify(LIVERC_FIRST_THREE)}, null, 0, 180)`) as { pace: string }[];
+    const rows = call(page, `lapRows(${JSON.stringify(LIVERC_FIRST_THREE)}, null, null, 180)`) as { pace: string }[];
 
     assert.deepEqual(rows.map((r) => r.pace), ["18/3:02.034", "19/3:00.586", "20/3:06.240"]);
   });
@@ -68,15 +68,58 @@ describe("lap stats and pace", () => {
 
   it("numbers from 1 when no start lap was sent", async () => {
     const page = await resultsScript();
-    const rows = call(page, "lapRows([9000, 8000], [2, 1], 0, 0)") as { n: number; start?: boolean }[];
+    const rows = call(page, "lapRows([9000, 8000], [2, 1], null, 0)") as { n: number; start?: boolean }[];
 
     assert.deepEqual(rows.map((r) => r.n), [1, 2]);
     assert.equal(rows.some((r) => r.start), false);
   });
 
+  it("counts a start lap of 0 as lap 1 (a qualifier, a credited jump-starter)", async () => {
+    // Bug hunt 15: a 12-lap qualifier sends startMs 0 and 11 flying laps,
+    // and the list said "Lap times (11)" numbered 1 to 11.
+    const page = await resultsScript();
+    const rows = call(page, "lapRows([31200, 30800, 30900], [2, 1, 1], 0, 300)") as
+      { n: number; ms: number; best: boolean; pos: number; start?: boolean }[];
+
+    assert.deepEqual(rows.map((r) => r.n), [1, 2, 3, 4]);
+    assert.equal(rows[0]!.start, true);
+    assert.equal(rows[0]!.ms, 0);
+    assert.deepEqual(rows.map((r) => r.pos), [0, 2, 1, 1]);
+    assert.equal(call(page, "lap(0)"), "-");
+
+    // The position graph and the night's chart put the first flying lap at lap 2 too.
+    assert.equal(call(page, "lxHasStart(0)"), true);
+    assert.equal(call(page, "lxHasStart(null)"), false);
+    assert.equal(call(page, "lxHasStart(undefined)"), false);
+  });
+
+  it("marks the laptop's best lap, not a credited jump-starter's run from before the green", async () => {
+    // The laptop keeps that run out of the best; the row's fastLapMs says so.
+    const page = await resultsScript();
+    const rows = call(page, "lapRows([8100, 8500, 8400], null, 0, 0, 8400)") as { best: boolean }[];
+
+    assert.deepEqual(rows.map((r) => r.best), [false, false, false, true]);
+    assert.equal((call(page, "lapStats([8100, 8500, 8400], 8400)") as { fast: number }).fast, 8400);
+    // A best that is not one of the laps falls back to the quickest.
+    assert.equal((call(page, "lapStats([8100, 8500, 8400], 7000)") as { fast: number }).fast, 8100);
+  });
+
+  it("draws a qualifier's places from lap 2 on the position graph", async () => {
+    const page = await resultsScript();
+    const field = [
+      { pos: 1, name: "A", laps: 3, startMs: 0, lapsMs: [9000, 9000], posAt: [1, 1] },
+      { pos: 2, name: "B", laps: 3, startMs: 0, lapsMs: [9500, 9500], posAt: [2, 2] },
+    ];
+    const svg = call(page, `positionGraph(${JSON.stringify(field)})`) as string;
+
+    // Laps 0 to 3 across 554 px from x=34: the first place sent is after
+    // lap 2 (x 403.3), not lap 1, and the last after lap 3 (x 588.0).
+    assert.match(svg, /points="403\.3,[\d.]+ 588\.0,/);
+  });
+
   it("has no pace without a time limit, and no positions that are out of step", async () => {
     const page = await resultsScript();
-    const rows = call(page, "lapRows([9000, 8000, 8500], [2, 1], 0, undefined)") as { pace: string; pos: number }[];
+    const rows = call(page, "lapRows([9000, 8000, 8500], [2, 1], null, undefined)") as { pace: string; pos: number }[];
 
     assert.deepEqual(rows.map((r) => r.pace), ["", "", ""]);
     assert.deepEqual(rows.map((r) => r.pos), [0, 0, 0]);
@@ -84,7 +127,7 @@ describe("lap stats and pace", () => {
 
   it("marks the best lap once and keeps each lap's position on its own row", async () => {
     const page = await resultsScript();
-    const rows = call(page, "lapRows([9000, 0, 8000, 8000], [3, 3, 2, 1], 0, 0)") as { n: number; best: boolean; pos: number }[];
+    const rows = call(page, "lapRows([9000, 0, 8000, 8000], [3, 3, 2, 1], null, 0)") as { n: number; best: boolean; pos: number }[];
 
     assert.deepEqual(rows.map((r) => r.n), [1, 2, 3]);
     assert.deepEqual(rows.map((r) => r.best), [false, true, false]);
@@ -115,7 +158,7 @@ describe("lap stats and pace", () => {
 
     assert.equal(call(page, "lapStats(undefined)"), null);
     assert.equal(call(page, "lapStats(['8000', null, -5])"), null);
-    assert.deepEqual(call(page, "lapRows('nope', null, 0, 180)"), []);
+    assert.deepEqual(call(page, "lapRows('nope', null, null, 180)"), []);
   });
 });
 

@@ -51,6 +51,16 @@ public partial class AnnouncerControl
     private readonly Dictionary<string, int> _lapsFed = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Set each time _lapsFed is cleared for a race, and taken by the next
+    /// FeedLaps (bug hunt 15). At a real green the standings hold no laps
+    /// yet, so nothing is caught up. After a reset is undone, a race is
+    /// recovered or the AI is switched on mid-race they hold the whole race
+    /// so far, and those laps prime PaceWatch and RecordWatch silently
+    /// rather than being called as though they had just been run.
+    /// </summary>
+    private bool _lapsFedFromScratch;
+
+    /// <summary>
     /// The index behind PersonalBestBeforeTonight, and what it was built for -
     /// the layout, the race night, the history's revision and the
     /// personal-best resets' revision. Under its own
@@ -1867,6 +1877,7 @@ public partial class AnnouncerControl
             _directorDay = day;
             _directorGeneration = -1;
             _lapsFed.Clear();
+            _lapsFedFromScratch = true;
             _recordWatch?.Reset();
             _handedOver = string.Empty;
 
@@ -1915,6 +1926,7 @@ public partial class AnnouncerControl
         {
             _directorGeneration = _race.SessionGeneration;
             _lapsFed.Clear();
+            _lapsFedFromScratch = true;
             _recordWatch?.Reset();
 
             // The session number alone repeats after a restart - it starts
@@ -2087,6 +2099,7 @@ public partial class AnnouncerControl
                 // here as the AI branch clears it; FeedLaps is not called on
                 // this path, so it then feeds this race from lap one.
                 _lapsFed.Clear();
+                _lapsFedFromScratch = true;
                 _recordWatch?.Reset();
 
                 director.RaceStarted($"{_race.SessionGeneration}@{DateTime.Now.Ticks}", RaceClassName?.Invoke());
@@ -2334,7 +2347,19 @@ public partial class AnnouncerControl
         var watch = _recordWatch ??= new RecordWatch
         {
             LayoutRecord = () => PaceHistory.LayoutRecordFor(Layouts?.Invoke()?.All, _settings?.LastRaceControlTrackName),
+
+            // WHY (9 Nov 2026, Bug hunt 15): wired as _director.Pace is, so
+            // record danger is never called on a lap that could not count.
+            CanHoldRecord = transponder => AchievementEvaluator.CanHoldTrackRecord(transponder, _profiles),
+            RecordWouldStand = (transponder, lapSeconds, recordSeconds) =>
+                RecordPlausibility.WouldTake(_race, transponder,
+                    (long)Math.Round(lapSeconds * 1000), (long)Math.Round(recordSeconds * 1000)),
         };
+
+        // The first feed since the count was cleared: whatever laps the
+        // standings already hold were run before this - see _lapsFedFromScratch.
+        var catchingUp = _lapsFedFromScratch;
+        _lapsFedFromScratch = false;
 
         foreach (var standing in ordered)
         {
@@ -2367,7 +2392,9 @@ public partial class AnnouncerControl
                     }
                 }
 
-                director.Pace.Forget(standing.TransponderId, surviving);
+                // And a record lap or threat raised from it is not said
+                // (bug hunt 15) - see CommentaryDirector.ForgetLaps.
+                director.ForgetLaps(standing.TransponderId, surviving);
                 continue;
             }
 
@@ -2380,6 +2407,17 @@ public partial class AnnouncerControl
             {
                 if (!IsPaceLap(standing, i))
                 {
+                    continue;
+                }
+
+                // Laps run before this race was being watched - a reset
+                // undone, a recovered race, the AI switched on mid-race -
+                // rebuild the bests and the windows, and say nothing
+                // (bug hunt 15): every note would be stamped now.
+                if (catchingUp)
+                {
+                    director.LapAlreadyRun(standing.TransponderId, laps[i] / 1000.0);
+                    _ = watch.Saw(new LapSeen(standing.TransponderId, laps[i] / 1000.0));
                     continue;
                 }
 

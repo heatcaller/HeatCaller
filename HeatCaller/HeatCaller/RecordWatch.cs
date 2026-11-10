@@ -123,6 +123,21 @@ public sealed class RecordWatch
     public Func<(double Seconds, string Holder)?>? LayoutRecord { get; set; }
 
     /// <summary>
+    /// Whether this driver could ever hold the layout record - false for a
+    /// ghost, a rental or a profile excluded from records. The same hook as
+    /// <see cref="PaceWatch.CanHoldRecord"/>; unwired, everyone can.
+    /// </summary>
+    public Func<string, bool>? CanHoldRecord { get; set; }
+
+    /// <summary>
+    /// Whether Race Control would write a lap of this time onto the layout
+    /// against that record (driver, lap seconds, record seconds) - false in
+    /// a demo or practice run. The same hook as
+    /// <see cref="PaceWatch.RecordWouldStand"/>; unwired, it would.
+    /// </summary>
+    public Func<string, double, double, bool>? RecordWouldStand { get; set; }
+
+    /// <summary>
     /// How many of a driver's most recent laps make up their "pace".
     ///
     /// Three. Two is a pair of laps and could still be one good stint
@@ -208,6 +223,17 @@ public sealed class RecordWatch
         Remember(lap);
 
         if (record is not { Seconds: > 0 } mark)
+        {
+            return null;
+        }
+
+        // WHY (9 Nov 2026, Bug hunt 15): nothing asked whether this lap could
+        // ever BE the record. A rental, an excluded guest, a ghost, or anyone
+        // in a demo or practice run was told "one more like that and it is
+        // gone" about a record Race Control would never give them. The same
+        // two checks PaceWatch makes (Bug hunt 11/11b), judged on their best.
+        if (CanHoldRecord?.Invoke(lap.DriverId) == false
+            || RecordWouldStand?.Invoke(lap.DriverId, _bestThisRace[lap.DriverId], mark.Seconds) == false)
         {
             return null;
         }

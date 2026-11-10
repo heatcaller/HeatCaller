@@ -354,16 +354,23 @@ public partial class RaceControlControl
     // be said with the ghost two seconds up the road. Now each car's elapsed
     // has its penalties taken off and its own zero put back, so both are
     // measured from the green.
-    internal static long SinceGreenAtLastCrossingMs(RacerStanding s, RaceStartType startType, StaggerClock staggerClock)
-    {
-        var zeroMs = startType == RaceStartType.Qualifier
+    internal static long SinceGreenAtLastCrossingMs(RacerStanding s, RaceStartType startType, StaggerClock staggerClock) =>
+        s.ElapsedMs - Math.Max(0, s.PenaltyMs) + ClockZeroSinceGreenMs(s, startType, staggerClock);
+
+    /// <summary>
+    /// Where a car's own clock started, in ms after the green: what its lap
+    /// times have to be moved on by to be on the green's clock. A
+    /// qualifier's first crossing; under OwnRelease a real car's release; and
+    /// zero otherwise - on SharedGreen the first lap is timed from the green,
+    /// whatever the car was held for, and a ghost always reports from the
+    /// green. The engine's own rule (JudgePass's releaseZeroMs).
+    /// </summary>
+    internal static long ClockZeroSinceGreenMs(RacerStanding s, RaceStartType startType, StaggerClock staggerClock) =>
+        startType == RaceStartType.Qualifier
             ? Math.Max(0, s.QualifyingZeroMs)
             : staggerClock == StaggerClock.OwnRelease && !GhostService.IsGhost(s.TransponderId)
                 ? s.ReleaseOffsetMs
                 : 0;
-
-        return s.ElapsedMs - Math.Max(0, s.PenaltyMs) + zeroMs;
-    }
 
     /// <summary>The ghost's lap time: its last lap, or its best before it has a last one.</summary>
     private static long GhostLapMs(RacerStanding ghost) =>

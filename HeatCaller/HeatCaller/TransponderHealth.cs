@@ -60,11 +60,29 @@ public sealed class TransponderHealthStore
         public long TotalStrength { get; set; }
         public long TotalHits { get; set; }
 
+        /// <summary>
+        /// Passes that carried a strength figure - TotalStrength is theirs
+        /// alone. An OpenStint gives hits but no strength (DecoderProtocols
+        /// leaves its RSSI out), and those passes used to add 0 to the
+        /// total, so a night of them read as a transponder gone dead.
+        /// </summary>
+        public int StrengthReadings { get; set; }
+
         /// <summary>Passes with fewer hits than TransponderWatch.WeakHits - only just caught.</summary>
         public int WeakPasses { get; set; }
 
         [System.Text.Json.Serialization.JsonIgnore]
-        public double AverageStrength => Readings == 0 ? 0 : TotalStrength / (double)Readings;
+        public double AverageStrength => StrengthCount == 0 ? 0 : TotalStrength / (double)StrengthCount;
+
+        /// <summary>Enough passes with a strength figure to compare this night's strength at all.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool HasStrength => StrengthCount >= LeastReadings;
+
+        /// <summary>
+        /// StrengthReadings - or, for a night saved before it was counted
+        /// (when only a decoder giving strength left a total), every reading.
+        /// </summary>
+        private int StrengthCount => StrengthReadings > 0 ? StrengthReadings : TotalStrength > 0 ? Readings : 0;
         [System.Text.Json.Serialization.JsonIgnore]
         public double WeakShare => Readings == 0 ? 0 : WeakPasses / (double)Readings;
     }
@@ -162,7 +180,9 @@ public sealed class TransponderHealthStore
 
     internal void Record(DirectLapEvent lap, DateTime local)
     {
-        if (lap.IsSynthetic || lap.SignalHits <= 0 || string.IsNullOrWhiteSpace(lap.TransponderId))
+        // A simulated decoder's pass is made up, under a real transponder's
+        // number: never a night of its health (Bug Hunt 15, B2).
+        if (lap.IsSynthetic || lap.IsSimulated || lap.SignalHits <= 0 || string.IsNullOrWhiteSpace(lap.TransponderId))
         {
             return;
         }
@@ -191,8 +211,16 @@ public sealed class TransponderHealthStore
             }
 
             night.Readings++;
-            night.TotalStrength += lap.SignalStrength;
             night.TotalHits += lap.SignalHits;
+
+            // 9 Nov 2026, Bug Hunt 15, B2: only a pass that carried a
+            // strength figure counts toward the strength average. Hits
+            // without one (an OpenStint's) still count for the weak share.
+            if (lap.SignalStrength > 0)
+            {
+                night.StrengthReadings++;
+                night.TotalStrength += lap.SignalStrength;
+            }
 
             if (lap.SignalHits < TransponderWatch.WeakHits)
             {
@@ -240,7 +268,14 @@ public sealed class TransponderHealthStore
             return new Health(transponder, Verdict.NotEnoughData, latest, 0, 0, usable.Count);
         }
 
-        var usual = Median(earlier.Select(n => n.AverageStrength));
+        // Strength is compared only between nights that had a strength
+        // figure: a night from a decoder that gives none (an OpenStint) is
+        // not "100% weaker" than one from an EasyLap - it says nothing about
+        // strength, and the weak-share test below still sees it.
+        var earlierWithStrength = earlier.Where(n => n.HasStrength).ToList();
+        var usual = latest.HasStrength && earlierWithStrength.Count >= LeastEarlierNights
+            ? Median(earlierWithStrength.Select(n => n.AverageStrength))
+            : 0;
         var usualWeak = Median(earlier.Select(n => n.WeakShare));
         var drop = usual <= 0 ? 0 : 1 - latest.AverageStrength / usual;
 
@@ -329,6 +364,7 @@ public sealed class TransponderHealthStore
         Readings = n.Readings,
         TotalStrength = n.TotalStrength,
         TotalHits = n.TotalHits,
+        StrengthReadings = n.StrengthReadings,
         WeakPasses = n.WeakPasses,
     };
 

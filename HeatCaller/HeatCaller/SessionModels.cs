@@ -321,6 +321,47 @@ public sealed class SessionRecord
     /// file loads as this empty one.
     /// </summary>
     public List<ResultEdit> Edits { get; set; } = new();
+
+    /// <summary>
+    /// The handicap this race was scored on, as it stood when it was filed
+    /// against its round - see <see cref="SessionHandicap"/>. Null on a race
+    /// saved with no round, and on every race saved before 9 Nov 2026; those
+    /// still read today's handicaps.
+    /// </summary>
+    public SessionHandicap? Handicap { get; set; }
+}
+
+/// <summary>
+/// The class's handicap mode and each driver's credit at the time a race was
+/// filed (9 Nov 2026, Bug Hunt 15, B52).
+///
+/// Handicaps were only ever read from the live store, so once Suggest
+/// Handicaps changed the credits after a meeting - the normal weekly routine -
+/// every past handicapped race was re-ranked on this week's credits, and an
+/// event report regenerated for an old meeting named a different class
+/// winner. Kept with the race, the result it was scored on stays the result.
+/// The class name says which class it was scored for, so a race linked to a
+/// round of another class later goes back to that class's live handicaps.
+/// </summary>
+public sealed class SessionHandicap
+{
+    public string ClassName { get; set; } = string.Empty;
+    public HandicapMode Mode { get; set; }
+
+    /// <summary>Only the drivers with a credit; anybody not listed had none.</summary>
+    public List<SessionHandicapCredit> Credits { get; set; } = new();
+
+    /// <summary>The credit kept for this transponder, or null when it had none.</summary>
+    public SessionHandicapCredit? For(string transponder) =>
+        Credits.FirstOrDefault(c => string.Equals(c.Transponder, transponder, StringComparison.OrdinalIgnoreCase));
+}
+
+/// <summary>One driver's credit as it stood when the race was filed. See <see cref="SessionHandicap"/>.</summary>
+public sealed class SessionHandicapCredit
+{
+    public string Transponder { get; set; } = string.Empty;
+    public double TimeCreditSeconds { get; set; }
+    public int LapCredit { get; set; }
 }
 
 /// <summary>

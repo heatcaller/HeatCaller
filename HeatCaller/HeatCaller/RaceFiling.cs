@@ -265,6 +265,7 @@ internal static class RaceFiling
                 {
                     AtUtc = w.AtUtc,
                     RaceTimeMs = w.RaceTimeMs,
+                    SinceGreenMs = w.SinceGreenMs,
                     Number = w.Number,
                     Reason = w.Reason,
                     Action = w.Action,

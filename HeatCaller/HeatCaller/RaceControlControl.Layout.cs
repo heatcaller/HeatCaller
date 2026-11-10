@@ -1231,6 +1231,8 @@ public sealed partial class RaceControlControl
                     // is written again now rather than at its next crossing.
                     WriteJournal(force: true);
 
+                    // See SeedAnnouncerFromRace.
+                    SeedAnnouncerFromRace();
                     RenderLeaderboard();
                     UpdateClockDisplay();
 
@@ -1243,6 +1245,10 @@ public sealed partial class RaceControlControl
                             $"{AppTime.LogStampNow()}  [race] The race is back, held under a red flag - no laps were counted while it was gone. "
                             + "Green when the cars are ready to go again.");
                     }
+
+                    // Back at Staging or Countdown, with the start sequence
+                    // the reset cancelled not put back - say what to press.
+                    NoteStartPutBack();
 
                     // The format line (and the auto-advance setting read
                     // from it) back in step with the round now in the box.

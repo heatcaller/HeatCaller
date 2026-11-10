@@ -1,7 +1,7 @@
 import { createECDH, createPrivateKey, generateKeyPairSync, hkdfSync, randomBytes, sign, createCipheriv, type KeyObject } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { Store } from "./store.js";
+import { StoreReadError, type Store } from "./store.js";
 
 /**
  * PUSH ALERTS (6 Nov 2026, Asher: "Build real push alerts", after "They
@@ -454,8 +454,22 @@ export class PushService {
     return b64url((await this.vapid()).publicRaw);
   }
 
+  /**
+   * A driver's phones. A file that is there but could not be read this
+   * time throws (9 Nov 2026, Bug Hunt 15): answered as "no phones", a
+   * sign-up from a tablet wrote a list of just the tablet over the file and
+   * the driver's other phones stopped hearing anything. Only a missing
+   * file, or one that is not JSON - which only a new write mends - is an
+   * empty list.
+   */
   private async subsOf(club: string, id: string): Promise<PushSub[]> {
-    const doc = await this.store.getItem(club, PUSH_CHANNEL, id).catch(() => undefined);
+    const doc = await this.store.getItem(club, PUSH_CHANNEL, id).catch((error: unknown) => {
+      if (error instanceof StoreReadError && error.corrupt) {
+        return undefined;
+      }
+
+      throw error;
+    });
     const list = doc && isObject(doc.body) && Array.isArray(doc.body["subs"]) ? doc.body["subs"] : [];
     return list.filter((s): s is PushSub => isObject(s) && typeof s["endpoint"] === "string" && typeof s["p256dh"] === "string" && typeof s["auth"] === "string") as PushSub[];
   }
@@ -521,7 +535,9 @@ export class PushService {
     const mine = await this.subsOf(club, id);
 
     if (!mine.some((s) => s.endpoint === sub.endpoint)) {
-      const all = await this.store.listItems(club, PUSH_CHANNEL).catch(() => []);
+      // Not caught (Bug Hunt 15): a listing that failed is not a club
+      // with no phones, and would have let the ceiling be passed.
+      const all = await this.store.listItems(club, PUSH_CHANNEL);
       const count = all.reduce((n, item) => n + (isObject(item.doc.body) && Array.isArray(item.doc.body["subs"]) ? item.doc.body["subs"].length : 0), 0);
 
       if (count >= PUSH_SUBS_PER_CLUB) {
@@ -643,6 +659,8 @@ export class PushService {
 
     // The list read again, inside the lock: what was read before the posts
     // may since have gained a phone, or gone with the club.
+    // A list that could not be read this time is left as it is: the gone
+    // phone is forgotten on a later alert instead.
     if (gone.length > 0) {
       await this.withLock(club, async () => {
         const now = await this.subsOf(club, id);
@@ -651,7 +669,7 @@ export class PushService {
         if (left.length !== now.length) {
           await this.keep(club, id, left);
         }
-      });
+      }).catch((e: unknown) => this.log(`[push] "${club}": could not forget a gone phone: ${String(e)}`));
     }
 
     // Accepted ones logged too (7 Nov 2026): with only refusals in the log,

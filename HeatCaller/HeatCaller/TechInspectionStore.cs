@@ -95,8 +95,14 @@ public sealed class TechInspectionStore
                 var loaded = JsonSerializer.Deserialize<List<TechInspection>>(SafeFile.ReadAllTextWithRetry(FilePath));
                 if (loaded is not null)
                 {
-                    return new TechInspectionStore(loaded);
+                    return new TechInspectionStore(Repaired(loaded));
                 }
+
+                // A file holding the literal "null" parses to nothing without
+                // throwing. It used to fall through to the empty store below
+                // with the flag left false, so the first inspection of the
+                // night replaced every earlier day's (as HandicapStore).
+                unreadable = true;
             }
         }
         catch (Exception ex)
@@ -108,6 +114,32 @@ public sealed class TechInspectionStore
         }
 
         return new TechInspectionStore(new List<TechInspection>()) { LoadedUnreadable = unreadable };
+    }
+
+    /// <summary>
+    /// Drops null entries (and ones with no transponder) and fills null
+    /// lists and strings, which the deserializer returns as they are from a
+    /// hand edit or a restored backup. Without this one null entry made every
+    /// "is this car cleared?" throw - Who's Racing and staging a race with it.
+    /// </summary>
+    private static List<TechInspection> Repaired(List<TechInspection> inspections)
+    {
+        inspections.RemoveAll(i => i is null || string.IsNullOrWhiteSpace(i.Transponder));
+
+        foreach (var i in inspections)
+        {
+            i.Id ??= Guid.NewGuid().ToString("N");
+            i.DriverName ??= string.Empty;
+            i.ClassName ??= string.Empty;
+            i.CarModel ??= string.Empty;
+            i.ItemsPassed ??= new();
+            i.ItemsFailed ??= new();
+            i.Inspector ??= string.Empty;
+            i.Notes ??= string.Empty;
+            i.EventId ??= string.Empty;
+        }
+
+        return inspections;
     }
 
     /// <summary>
@@ -594,7 +626,7 @@ public sealed class TechInspectionStore
             }
 
             _inspections.Clear();
-            _inspections.AddRange(restored);
+            _inspections.AddRange(Repaired(restored));
             Save();
         }
         catch

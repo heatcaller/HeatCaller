@@ -32,6 +32,7 @@ internal static class BatteryActions
         // Handed the stored pack, it changed it before the undo could note
         // the old values - Undo put back the edited pack and did nothing -
         // and Cancel left half an edit in memory.
+        var opened = existing is null ? null : BatteryPackStore.CopyOf(existing);
         using var form = new BatteryPackEditForm(existing is null ? null : BatteryPackStore.CopyOf(existing), ownerTransponder);
 
         if (form.ShowDialog(owner) != DialogResult.OK)
@@ -39,14 +40,71 @@ internal static class BatteryActions
             return null;
         }
 
-        var saved = form.Result;
+        if (Save(store, undo, opened, form.Result) is { } saved)
+        {
+            return saved;
+        }
+
+        AppDialog.Show(owner,
+            $"Pack {form.Result.DisplayName} was removed while it was open here, so the edit was not saved.",
+            "Pack removed", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        return null;
+    }
+
+    /// <summary>
+    /// What Add or Edit writes once the dialog says OK: a new pack as it
+    /// is, or the desk's edit over the pack as it is stored now
+    /// (MergeEdit). Null, saving nothing, when an edited pack has been
+    /// removed since the dialog opened.
+    ///
+    /// Bug hunt 15 (2026-11-09): the roster tick applies a phone's pack
+    /// edits under a modal dialog, so the stored pack may have changed
+    /// since the dialog took its copy. Saving that copy whole un-retired a
+    /// pack the phone had just retired, and added back one it had removed.
+    /// </summary>
+    internal static BatteryPack? Save(BatteryPackStore store, UndoService undo, BatteryPack? opened, BatteryPack edited)
+    {
+        var saved = edited;
+
+        if (opened is not null)
+        {
+            if (store.Get(edited.Id) is not { } live)
+            {
+                return null;
+            }
+
+            saved = MergeEdit(opened, edited, live);
+        }
+
         var name = saved.DisplayName;
         var before = store.Remember(saved.Id);
 
-        undo.Capture(existing is null ? $"Add battery pack {name}" : $"Edit pack {name}", () => UndoChange(store, before, name));
+        undo.Capture(opened is null ? $"Add battery pack {name}" : $"Edit pack {name}", () => UndoChange(store, before, name));
 
         store.Upsert(saved);
         return saved;
+    }
+
+    /// <summary>
+    /// The desk's edit (<paramref name="edited"/>, made from
+    /// <paramref name="opened"/>) laid over the pack as it is stored now
+    /// (<paramref name="live"/>): each field the desk changed takes the
+    /// desk's value, every other field - and whose it is - keeps what is
+    /// stored now. As GarageForms.MergeEdit does for cars.
+    /// </summary>
+    internal static BatteryPack MergeEdit(BatteryPack opened, BatteryPack edited, BatteryPack live)
+    {
+        static string Pick(string was, string desk, string now) =>
+            string.Equals(was, desk, StringComparison.Ordinal) ? now : desk;
+
+        var merged = BatteryPackStore.CopyOf(live);
+
+        merged.Label = Pick(opened.Label, edited.Label, live.Label);
+        merged.Chemistry = Pick(opened.Chemistry, edited.Chemistry, live.Chemistry);
+        merged.Notes = Pick(opened.Notes, edited.Notes, live.Notes);
+        merged.Retired = opened.Retired == edited.Retired ? live.Retired : edited.Retired;
+
+        return merged;
     }
 
     /// <summary>

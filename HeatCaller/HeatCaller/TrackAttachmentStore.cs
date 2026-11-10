@@ -358,6 +358,20 @@ public static class TrackAttachmentStore
     public static string? RemoveAttachment(TrackLayout track)
     {
         var stashed = StashForTrack(track.Id);
+
+        // The same guard as Attach: nothing set aside, yet the folder is
+        // still there - it couldn't be moved (a PDF open in Acrobat, say).
+        // Clearing the name anyway left the file behind with nothing
+        // pointing at it, and the edit's undo, reading "nothing set aside"
+        // as "there was no photo before", then moved that original photo
+        // into the undo holding folder for good. The caller shows this.
+        if (stashed is null && FolderFor(track.Id) is { } folder && Directory.Exists(folder))
+        {
+            throw new InvalidOperationException(
+                "the track's current photo couldn't be moved aside to keep it for Undo, so nothing was changed. "
+                + "If it is open in another program, close it and try again.");
+        }
+
         track.AttachmentFileName = null;
         return stashed;
     }

@@ -258,7 +258,7 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
         Id = transponder,
     };
 
-    private static (AnnouncementService Announcer, ConcurrentQueue<string> Shown, ConcurrentQueue<string> Log) Announcer()
+    private static (AnnouncementService Announcer, ConcurrentQueue<string> Shown, ConcurrentQueue<string> Log) Announcer(params AnnouncementEventType[] on)
     {
         var profiles = ProfileStore.Load();
         profiles.Upsert(new DriverProfile { Transponder = "101", DriverName = "Terry" });
@@ -269,6 +269,12 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
         {
             config.Enabled = false;
             config.EnabledInPractice = false;
+        }
+
+        foreach (var type in on)
+        {
+            voice.Current.Events[type.ToString()].Enabled = true;
+            voice.Current.Events[type.ToString()].EnabledInPractice = true;
         }
 
         var sounds = SoundEffectsStore.Load();
@@ -312,6 +318,61 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
         announcer.OnStandingUpdated(Car("102", 5, 25_000));
         Assert.Equal("the lead has changed hands since it was written",
             AnnouncementService.WhyNoLongerTrue(beforePass, announcer.RaceFactsNow()));
+    }
+
+    [Fact]
+    public void A_split_call_is_timed_from_the_split_not_from_the_line_crossed_seven_seconds_before()
+    {
+        // 9 Nov 2026, Bug hunt 15, B7: a loop halfway round a 14-second lap
+        // is crossed 7s after the line - past a deadline counted from the
+        // line, so every split call was dropped before it was queued.
+        var (announcer, shown, log) = Announcer(AnnouncementEventType.SplitTime);
+
+        // Terry crossed the line 7s ago.
+        announcer.LapRaisedAtMs = TimingClock.NowMs - 7_000;
+        announcer.OnStandingUpdated(Car("101", 3, 16_000));
+        announcer.LapRaisedAtMs = null;
+
+        // And the split loop now.
+        announcer.NotifySplitTime(Car("101", 3, 16_000), "the split", 7_000);
+        announcer.Muted = true;
+
+        Assert.DoesNotContain(log, line => line.Contains("Dropped SplitTime", StringComparison.Ordinal));
+        Assert.Contains(shown, line => line.Contains("Terry", StringComparison.Ordinal) || line.Contains("7.00", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_lap_taken_off_by_hand_makes_a_line_untrue()
+    {
+        // Bug hunt 15: a stray hit split Terry's lap into 2.1 + 3.4, and the
+        // 2.1 was written up as a layout record. -1 lap folds it back - the
+        // fastest-lap count never moves for that, so this one has to.
+        // Terry is behind Dee, so the leader's lap count does not catch it.
+        var (announcer, _, _) = Announcer();
+        announcer.Muted = true;
+
+        RaceStanding Adjusted(int laps, long elapsedMs) => new()
+        {
+            Transponder = "101",
+            Laps = laps,
+            ElapsedMs = elapsedMs,
+            Status = "adjusted",
+            Id = "101",
+        };
+
+        announcer.OnStandingUpdated(Car("102", 9, 45_000));
+        announcer.OnStandingUpdated(Car("101", 5, 25_000));
+        announcer.OnStandingUpdated(Car("101", 6, 27_100));
+        var written = announcer.RaceFactsNow();
+
+        // A penalty with the laps left alone does not.
+        announcer.OnStandingUpdated(Adjusted(6, 30_100));
+        Assert.Null(AnnouncementService.WhyNoLongerTrue(written, announcer.RaceFactsNow()));
+
+        announcer.OnStandingUpdated(Adjusted(5, 30_100));
+
+        Assert.Equal("a lap has been taken off by hand since it was written",
+            AnnouncementService.WhyNoLongerTrue(written, announcer.RaceFactsNow()));
     }
 
     [Fact]
@@ -431,6 +492,35 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
         // With its own deadline, counted from when it was asked for.
         var needsBy = (long)CommentaryBudget.Spec(said.Kind).NeedsBy.TotalMilliseconds;
         Assert.Equal(50_000 + needsBy, said.Facts.SayByMs);
+    }
+
+    [Fact]
+    public async Task A_line_tried_after_an_earlier_one_was_dropped_keeps_the_race_its_facts_were_read_from()
+    {
+        // Bug hunt 15 (B46): the pass reads every kind's facts at its start,
+        // so the stamp must be the board as it was then - not the board after
+        // the battle call before it spent seconds being written.
+        var (director, model, console) = DirectorInAFight();
+
+        for (var i = 0; i < 4; i++)
+        {
+            director.Lap($"warm-{i}", 20.0 + i);
+        }
+
+        director.Lap("A", 5.42);
+
+        var race = Facts(leaderLaps: 3, atMs: 50_000);
+        director.RaceFactsNow = () => race;
+
+        // Terry sets a 4.936 while the battle call is being written.
+        model.During = () => race = race with { FastestLaps = race.FastestLaps + 1, AtMs = 52_000 };
+
+        var said = await director.NextAsync();
+
+        Assert.Null(said);
+        Assert.Equal(2, model.Asked);
+        Assert.Equal(0, director.Said.Count);
+        Assert.Equal(2, console.Count(line => line.Contains("a quicker lap has been set since it was written", StringComparison.Ordinal)));
     }
 
     [Fact]

@@ -2311,10 +2311,7 @@ public sealed class RaceProgramControl : UserControl
 
         var raceClass = ClassByName(className);
 
-        var ranked = QualifyingCalculator
-            .Compute(className, _rounds, _sessionHistory, _profiles, raceClass, QualifyingRoundFilter())
-            .Select(e => e.Transponder)
-            .ToList();
+        var ranked = SeedingOrder(className, raceClass);
 
         if (ranked.Count == 0)
         {
@@ -2368,6 +2365,30 @@ public sealed class RaceProgramControl : UserControl
     }
 
     /// <summary>
+    /// The order the finals are seeded from: the qualifying ranking, kept to
+    /// the drivers in the class's roster (RosterFor). The ranking holds
+    /// everyone who ran a heat in the class today - on a checked-in-only day
+    /// that includes a driver who went home and was un-checked-in, and on any
+    /// day a car with no profile or a driver whose class has changed since.
+    /// Seeding from the whole ranking let them take main places from drivers
+    /// who are there (Bug hunt 15, B53); MainRoundForm's "from Qualifying"
+    /// already kept to the roster. One helper for the question and the
+    /// build, so the count asked about is the count seeded.
+    /// </summary>
+    private List<string> SeedingOrder(string className, RaceClass? raceClass)
+    {
+        var inRoster = RosterFor(className)
+            .Select(p => p.Transponder)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return QualifyingCalculator
+            .Compute(className, _rounds, _sessionHistory, _profiles, raceClass, QualifyingRoundFilter())
+            .Select(e => e.Transponder)
+            .Where(inRoster.Contains)
+            .ToList();
+    }
+
+    /// <summary>
     /// Seeds a class's mains straight from the qualifying order, lowest tier
     /// first so bump-ups are possible - no questions asked; the caller has
     /// asked (PlanSeedMains). Re-checked here, so a qualifier run or a main
@@ -2385,10 +2406,7 @@ public sealed class RaceProgramControl : UserControl
 
         var raceClass = ClassByName(className);
 
-        var ranked = QualifyingCalculator
-            .Compute(className, _rounds, _sessionHistory, _profiles, raceClass, QualifyingRoundFilter())
-            .Select(e => e.Transponder)
-            .ToList();
+        var ranked = SeedingOrder(className, raceClass);
 
         var mainSize = Math.Max(2, raceClass?.MainSize ?? 8);
         var bumpUp = Math.Max(0, raceClass?.BumpUpCount ?? 0);

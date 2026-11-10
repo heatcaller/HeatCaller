@@ -1028,7 +1028,8 @@ public sealed class AmbienceService : IDisposable
         _current = Intensity.Peak;
         _surgePeak = Intensity.Peak;
         _surgeTotalSeconds = seconds;
-        _surgeUntilUtc = DateTime.UtcNow.AddSeconds(seconds);
+        var until = DateTime.UtcNow.AddSeconds(seconds);
+        _surgeUntilUtc = until;
         SurgeReason = "Checkered flag - finish celebration";
         LastSurgeUtc = DateTime.UtcNow;
         StatusMessage?.Invoke($"[ambience] Surge: {SurgeReason} - up to Peak for {seconds}s.");
@@ -1045,7 +1046,13 @@ public sealed class AmbienceService : IDisposable
                 // Only settle if the race is still finished - if another
                 // race has since started, that set its own intensity and
                 // dropping to idle now would mute the new race.
-                if (_current == Intensity.Peak)
+                //
+                // Nor if a later celebration has taken over (it moved the
+                // end time on), the same token Surge checks. A finish undone
+                // and then given again inside the window used to have the
+                // first one's timer settle the crowd mid-way through the
+                // real finish's cheer (9 Nov 2026, Bug Hunt 15, B16).
+                if (_current == Intensity.Peak && _surgeUntilUtc == until)
                 {
                     _surgeUntilUtc = DateTime.MinValue;
                     _current = Intensity.Idle;

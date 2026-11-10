@@ -48,6 +48,43 @@ public sealed class LapByLapTests
     }
 
     [Fact]
+    public void A_driver_credited_with_the_start_lap_is_placed_where_they_crossed_the_line()
+    {
+        // Bug hunt 15: J rolled over the loop 1.5 s before the green and was
+        // credited with the start lap, so the start slot is 0 and the next
+        // lap is timed from the pre-green crossing (11.5 s for a 10.0 s run
+        // from the green). J crosses at 10.0 s and 20.0 s since the green,
+        // A at 11.0 s and 20.5 s: J leads both laps, as the board said.
+        var jumper = Row("J", 0, 11500, 10000);
+        jumper.ElapsedMs = 20000;
+        var a = Row("A", 1000, 10000, 9500);
+        a.ElapsedMs = 20500;
+
+        var places = LapByLap.Positions(new[] { jumper, a });
+
+        Assert.Equal(new[] { 1, 1 }, places[0]);
+        Assert.Equal(new[] { 2, 2 }, places[1]);
+    }
+
+    [Fact]
+    public void A_penalty_in_the_elapsed_time_does_not_move_a_car_on_the_road()
+    {
+        // P leads on the road but carries 5 s of race penalty and 3 s added
+        // afterwards, both already in ElapsedMs, so it finished second.
+        var other = Row("O", 1200, 10000, 10000);
+        other.ElapsedMs = 21200;
+        var penalised = Row("P", 1000, 10000, 10000);
+        penalised.RacePenaltyMs = 5000;
+        penalised.TimePenaltyMs = 3000;
+        penalised.ElapsedMs = 21000 + 8000;
+
+        var places = LapByLap.Positions(new[] { other, penalised });
+
+        Assert.Equal(new[] { 2, 2 }, places[0]);
+        Assert.Equal(new[] { 1, 1 }, places[1]);
+    }
+
+    [Fact]
     public void Ghosts_get_no_positions_and_take_none()
     {
         var ghost = Row(Ghosts.Prefix + "1", 500, 8000, 8000);

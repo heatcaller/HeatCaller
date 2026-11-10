@@ -204,6 +204,22 @@ public sealed class RaceEventStore
     public event EventHandler? CurrentChanged;
 
     /// <summary>
+    /// Raised after Upsert saves the event that is current - the day now
+    /// open having its own settings edited, rather than a different day
+    /// becoming current (that is CurrentChanged). Raised on whatever thread
+    /// called Upsert.
+    ///
+    /// WHY (bug hunt 15, 9 Nov 2026): Race Control's Track box follows the
+    /// day's TrackLayoutName, and only heard about it on CurrentChanged. The
+    /// Set Up Tonight wizard starts the new day (CurrentChanged, while the
+    /// day still carries the previous day's track) and only then writes the
+    /// track it picked, through Upsert - so the box stayed on last week's
+    /// layout and every freeform race and practice that night was filed
+    /// under it. Editing the layout on The Day did the same.
+    /// </summary>
+    public event EventHandler? CurrentEdited;
+
+    /// <summary>
     /// Raised when a day is closed off by somebody closing it - never by an
     /// undo putting back a close (Close with a finishedUtc), which would
     /// otherwise do what closing the day does a second time. After the save
@@ -508,6 +524,11 @@ public sealed class RaceEventStore
         }
 
         Save();
+
+        if (raceEvent.Id == CurrentId)
+        {
+            CurrentEdited?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     public void Delete(string id)
@@ -596,8 +617,8 @@ public sealed class RaceEventStore
     /// Returns the ids of the events that listed the old name, for the
     /// undo (see UndoRenameClass).
     ///
-    /// Raises nothing: like Upsert, this edits events in place, and
-    /// CurrentChanged is only for WHICH event is current changing.
+    /// Raises nothing: this edits events in place, and CurrentChanged is
+    /// only for WHICH event is current changing.
     /// </summary>
     public IReadOnlyList<string> RenameClass(string oldName, string newName)
     {

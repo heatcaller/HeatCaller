@@ -383,6 +383,21 @@ public sealed class RaceFilingService
             _trackLayouts.All.FirstOrDefault(t => !string.IsNullOrEmpty(record.TrackLayoutName) && t.Name == record.TrackLayoutName),
             results);
 
+        // The handicap it is scored on, kept with it (9 Nov 2026, Bug Hunt
+        // 15, B52): read live later, the credits Suggest Handicaps sets after
+        // the meeting re-ranked this race and changed its class winner.
+        if (record.RoundId is not null && round is not null)
+        {
+            try
+            {
+                record.Handicap = HandicapCalculator.Snapshot(results, HandicapStore.Load(), round.ClassName);
+            }
+            catch (Exception ex)
+            {
+                StatusMessage($"[session] The handicaps could not be read to keep with this race - it will be scored on the live ones: {ex.Message}");
+            }
+        }
+
         // A black flag from the warning ladder becomes a DQ on the saved
         // result, logged as a correction so it can be seen and reversed in
         // Race History like any other.

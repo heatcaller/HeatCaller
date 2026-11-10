@@ -473,6 +473,9 @@ public sealed partial class RaceControlControl
             ApplyEffectiveFormat();
 
             WriteJournal(force: true);
+
+            // Staging reset the announcer - see SeedAnnouncerFromRace.
+            SeedAnnouncerFromRace();
             RenderLeaderboard();
             UpdateClockDisplay(force: true);
 
@@ -484,8 +487,44 @@ public sealed partial class RaceControlControl
                     $"{AppTime.LogStampNow()}  [race] The race is back, held under a red flag - no laps were counted while it was gone. "
                     + "Green when the cars are ready to go again.");
             }
+
+            NoteStartPutBack();
         });
     }
+
+    /// <summary>
+    /// After an undo has put a race back: tells the director, when it came
+    /// back at Staging or Countdown, that the start will not carry on by
+    /// itself.
+    /// </summary>
+    private void NoteStartPutBack()
+    {
+        if (StartPutBackNotice(_race.State) is { } notice)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] {notice}");
+        }
+    }
+
+    /// <summary>
+    /// What the director is told when an undo puts a race back at Staging or
+    /// Countdown; null for any other state.
+    ///
+    /// Bug hunt 15 (9 Nov 2026): the start sequence running then - the
+    /// automatic start's chain, or the green armed after the countdown - was
+    /// cancelled by the Reset and is not put back, so the restored start
+    /// would just sit there. Its calls are not replayed either (see the
+    /// _suppressFlagAnnouncements checks in OnRaceStateChanged): the
+    /// countdown ticks used to play again from the start and end on no green.
+    /// </summary>
+    internal static string? StartPutBackNotice(RaceState state) => state switch
+    {
+        RaceState.Staging =>
+            "The race is back at Staging. The start does not carry on by itself - press Countdown when the cars are ready.",
+        RaceState.Countdown =>
+            "The race is back at Countdown, but no countdown is running and no green will drop by itself. "
+            + "Press Countdown to run the start again, or Green to start the race now.",
+        _ => null,
+    };
 
     /// <summary>
     /// True - after saying why - when open practice is running.

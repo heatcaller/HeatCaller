@@ -821,9 +821,14 @@ public sealed class RecordingControl : UserControl
 
         // Only when it has actually changed: refilling a ComboBox closes
         // its own drop-down, and this runs from the event that opens it.
+        // Names too, as FillSeasons does: a driver renamed on the Drivers
+        // page keeps the transponder, and the piece and its file must take
+        // the new name, not the one cached here.
         if (fresh.Count == _driversTonight.Count
             && fresh.Select(one => one.Transponder).SequenceEqual(
-                _driversTonight.Select(one => one.Transponder), StringComparer.OrdinalIgnoreCase))
+                _driversTonight.Select(one => one.Transponder), StringComparer.OrdinalIgnoreCase)
+            && fresh.Select(one => one.Name.Trim()).SequenceEqual(
+                _driversTonight.Select(one => one.Name.Trim()), StringComparer.Ordinal))
         {
             return;
         }

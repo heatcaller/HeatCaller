@@ -581,7 +581,70 @@ public static class HandicapCalculator
     public static List<Adjusted> Apply(
         IReadOnlyList<SessionResultEntry> results,
         HandicapStore handicaps,
-        HandicapMode mode)
+        HandicapMode mode) =>
+        Apply(results, mode, handicaps.TimeCreditMsFor, handicaps.LapCreditFor);
+
+    /// <summary>
+    /// The same, on the credits kept with the race when it was filed (see
+    /// <see cref="SessionHandicap"/>) rather than on today's.
+    /// </summary>
+    public static List<Adjusted> Apply(IReadOnlyList<SessionResultEntry> results, SessionHandicap kept) =>
+        Apply(results, kept.Mode,
+            t => (kept.For(t)?.TimeCreditSeconds ?? 0) * 1000.0,
+            t => kept.For(t)?.LapCredit ?? 0);
+
+    /// <summary>
+    /// A saved race's handicap mode and order, for a race of
+    /// <paramref name="className"/> (null for a race with no round): what was
+    /// kept with the race when it was filed, so later changes to the credits
+    /// or the class's mode do not re-rank it (9 Nov 2026, Bug Hunt 15, B52).
+    /// Today's handicaps only for a race saved before that was kept, or since
+    /// linked to a round of another class. Adjusted is null for no handicap.
+    /// </summary>
+    public static (HandicapMode Mode, List<Adjusted>? Adjusted) ForSession(
+        SessionRecord session, string? className, HandicapStore? live)
+    {
+        if (className is null)
+        {
+            return (HandicapMode.None, null);
+        }
+
+        if (session.Handicap is { } kept && string.Equals(kept.ClassName, className, StringComparison.OrdinalIgnoreCase))
+        {
+            return kept.Mode == HandicapMode.None ? (HandicapMode.None, null) : (kept.Mode, Apply(session.Results, kept));
+        }
+
+        var mode = live?.ModeFor(className) ?? HandicapMode.None;
+        return mode == HandicapMode.None ? (HandicapMode.None, null) : (mode, Apply(session.Results, live!, mode));
+    }
+
+    /// <summary>
+    /// What to keep with a race filed against a round of
+    /// <paramref name="className"/>: the class's mode now, and the credit of
+    /// each driver in it who has one. See <see cref="SessionHandicap"/>.
+    /// </summary>
+    public static SessionHandicap Snapshot(IEnumerable<SessionResultEntry> results, HandicapStore handicaps, string className) => new()
+    {
+        ClassName = className,
+        Mode = handicaps.ModeFor(className),
+        Credits = results
+            .Select(r => handicaps.Get(r.Transponder))
+            .Where(h => h is { HasAny: true })
+            .GroupBy(h => h!.Transponder, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new SessionHandicapCredit
+            {
+                Transponder = g.First()!.Transponder,
+                TimeCreditSeconds = g.First()!.TimeCreditSeconds,
+                LapCredit = g.First()!.LapCredit,
+            })
+            .ToList(),
+    };
+
+    private static List<Adjusted> Apply(
+        IReadOnlyList<SessionResultEntry> results,
+        HandicapMode mode,
+        Func<string, double> timeCreditMsFor,
+        Func<string, int> lapCreditFor)
     {
         var raw = results.OrderBy(r => r.Position).ToList();
 
@@ -592,13 +655,13 @@ public static class HandicapCalculator
 
         if (mode == HandicapMode.TimeCredit)
         {
-            return ApplyTimeCredit(raw, handicaps);
+            return ApplyTimeCredit(raw, timeCreditMsFor);
         }
 
         var scored = raw.Select((r, i) =>
         {
             var creditLaps = mode == HandicapMode.LapCredit
-                ? handicaps.LapCreditFor(r.Transponder)
+                ? lapCreditFor(r.Transponder)
                 : 0;
 
             return new
@@ -663,7 +726,7 @@ public static class HandicapCalculator
     /// A pursuit (handicap-stagger) start does not come through here: its
     /// credits were spent as the head start on track.
     /// </summary>
-    private static List<Adjusted> ApplyTimeCredit(List<SessionResultEntry> raw, HandicapStore handicaps)
+    private static List<Adjusted> ApplyTimeCredit(List<SessionResultEntry> raw, Func<string, double> timeCreditMsFor)
     {
         // 6 Nov 2026, Bug hunt 11: the winner's distance and the end of the
         // racing come from the finishers only - the same group-0 drivers who
@@ -697,7 +760,7 @@ public static class HandicapCalculator
         var scored = measured.Select(m =>
         {
             var r = m.Result;
-            var creditMs = (long)handicaps.TimeCreditMsFor(r.Transponder);
+            var creditMs = (long)timeCreditMsFor(r.Transponder);
             var hasLaps = r.Laps > 0;
 
             // Projecting to the leader's distance at the driver's own pace

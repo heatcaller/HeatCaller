@@ -398,13 +398,30 @@ public static class EventSpine
     /// that has gone, or an earlier one, leaves this race counting - which
     /// is also what keeps a race being filed now (saved a moment before its
     /// round is pointed at it) in the table straight after the flag.
+    ///
+    /// With the round itself gone - its race day deleted with the races kept
+    /// (RaceDayDeleter, "Delete saved races" unticked) - there is no link
+    /// left to read, and the thrown-away run began counting again beside its
+    /// re-run (9 Nov 2026, bug hunt 15, B18). Both still carry the round's
+    /// id, so the later scored race of that round stands in for the link.
     /// </summary>
-    public static bool SupersededByRerun(SessionRecord session, RoundDefinitionStore rounds, SessionHistoryStore history) =>
-        !string.IsNullOrEmpty(session.RoundId)
-        && rounds.Get(session.RoundId) is { LinkedSessionId: { Length: > 0 } linked }
-        && !string.Equals(linked, session.Id, StringComparison.Ordinal)
-        && history.Get(linked) is { } later
-        && later.StartedAtUtc > session.StartedAtUtc;
+    public static bool SupersededByRerun(SessionRecord session, RoundDefinitionStore rounds, SessionHistoryStore history)
+    {
+        if (string.IsNullOrEmpty(session.RoundId))
+        {
+            return false;
+        }
+
+        if (rounds.Get(session.RoundId) is not { } round)
+        {
+            return history.LaterRunOfRound(session) is not null;
+        }
+
+        return round.LinkedSessionId is { Length: > 0 } linked
+            && !string.Equals(linked, session.Id, StringComparison.Ordinal)
+            && history.Get(linked) is { } later
+            && later.StartedAtUtc > session.StartedAtUtc;
+    }
 
     /// <summary>
     /// Whether a recorded race is one this championship's rule would take.

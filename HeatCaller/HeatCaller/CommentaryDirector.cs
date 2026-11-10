@@ -979,6 +979,13 @@ public sealed class CommentaryDirector
 
         // Last race's record threat is not this race's.
         _threat = null;
+
+        // Nor is its record lap (Bug hunt 15): a fastest lap still waiting
+        // when a heat was reset and restarted inside the note's deadline was
+        // called in the restart, under the new race's key.
+        _pending = null;
+        _pendingAt = default;
+        _paceCalling = null;
     }
 
     /// <summary>
@@ -999,6 +1006,10 @@ public sealed class CommentaryDirector
     {
         _racing = false;
         _afterARace = true;
+
+        // A record lap waiting at the flag is never in-race again.
+        _pending = null;
+
         _onAirsAtFlag = BroadcastImaging.OnAirsBegun;
         _breaksAtFlag = CommercialBreak.BreaksBegun;
     }
@@ -1140,6 +1151,53 @@ public sealed class CommentaryDirector
 
             _pending = note;
             _pendingAt = _clock();
+        }
+    }
+
+    /// <summary>
+    /// A lap that was run before the director started watching this race
+    /// - a reset undone, a race recovered from the journal, the AI switched
+    /// on mid-race (bug hunt 15). PaceWatch learns it, so the bests are the
+    /// race's own, but nothing is held to be said: the note would be
+    /// stamped now for a lap from minutes ago.
+    /// </summary>
+    public void LapAlreadyRun(string driverId, double seconds)
+    {
+        if (!_racing)
+        {
+            return;
+        }
+
+        _ = Pace.Saw(new LapSeen(driverId, seconds));
+    }
+
+    /// <summary>
+    /// A lap of this driver's was taken off by hand (bug hunt 15). PaceWatch
+    /// rebuilds its bests from <paramref name="survivingLapSeconds"/>, and a
+    /// pace note or record threat raised from the lap that is gone is
+    /// dropped rather than said - "the fastest lap ever set on this layout"
+    /// about a phantom split that is no longer on the board.
+    /// </summary>
+    public void ForgetLaps(string driverId, IReadOnlyCollection<double> survivingLapSeconds)
+    {
+        Pace.Forget(driverId, survivingLapSeconds);
+
+        bool Gone(double seconds) => !survivingLapSeconds.Any(s => Math.Abs(s - seconds) < 1e-9);
+
+        // Their own lap, or another driver's note about beating it.
+        if (_pending is { } note
+            && ((string.Equals(note.DriverId, driverId, StringComparison.Ordinal) && Gone(note.LapSeconds))
+                || (string.Equals(note.PreviousHolder, driverId, StringComparison.Ordinal) && note.Beaten is { } beaten && Gone(beaten))))
+        {
+            Interlocked.CompareExchange(ref _pending, null, note);
+            Interlocked.CompareExchange(ref _paceCalling, null, note);
+        }
+
+        // Their running pace is not what it was: the threat goes with it.
+        if (_threat is { } threat && string.Equals(threat.DriverId, driverId, StringComparison.Ordinal))
+        {
+            Interlocked.CompareExchange(ref _threat, null, threat);
+            Interlocked.CompareExchange(ref _threatCalling, null, threat);
         }
     }
 
@@ -1392,6 +1450,14 @@ public sealed class CommentaryDirector
 
         _pass = pass;
 
+        // The race these facts were read from (Bug hunt 15), taken beside
+        // them and before the first await. Taken per kind inside TryAsync,
+        // a kind tried after an earlier one spent seconds being written and
+        // was dropped carried facts from the start of the pass stamped with
+        // the race as it stood afterwards - so a 5.42 was called as fastest
+        // with the 4.936 set during that write already on the board.
+        _passFacts = RaceFactsNow?.Invoke();
+
         // Where the night's spend is written, for the same reason - see
         // SaveOn.
         var ui = SynchronizationContext.Current;
@@ -1432,6 +1498,7 @@ public sealed class CommentaryDirector
         finally
         {
             _pass = null;
+            _passFacts = null;
         }
 
         return null;
@@ -1442,6 +1509,13 @@ public sealed class CommentaryDirector
     /// await. Null between passes.
     /// </summary>
     private Dictionary<SegmentKind, IReadOnlyList<FactBlock>>? _pass;
+
+    /// <summary>
+    /// The race as it stood when _pass was gathered - what an in-race line
+    /// written from _pass is stamped with. Null between passes, and when
+    /// there is no race to read.
+    /// </summary>
+    private RaceFactsStamp? _passFacts;
 
     /// <summary>
     /// Tonight's moments as this pass sees them. Empty between passes and
@@ -2139,7 +2213,9 @@ public sealed class CommentaryDirector
         // The race this line is about, as the facts were read (8 Nov 2026) -
         // with the segment's own deadline, counted to when it is HEARD rather
         // than to when the answer comes back. See AnnouncementService.Freshness.
-        var factsAsked = InRace(kind) && RaceFactsNow?.Invoke() is { } stamp
+        // Inside a pass, the race as the pass's facts were read - see _passFacts.
+        var factsRead = _pass is not null ? _passFacts : RaceFactsNow?.Invoke();
+        var factsAsked = InRace(kind) && factsRead is { } stamp
             ? stamp with
             {
                 SayByMs = stamp.AtMs + (long)spec.NeedsBy.TotalMilliseconds,

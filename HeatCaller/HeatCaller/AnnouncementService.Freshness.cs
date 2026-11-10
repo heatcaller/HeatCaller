@@ -18,8 +18,9 @@ namespace HeatCaller;
 /// (a record lap, a record in danger). 8 Nov 2026 - see WhyNoLongerTrue.
 /// </param>
 /// <param name="LeadMatters">False for a line a lead change cannot make untrue - a fight for fifth, a record lap.</param>
+/// <param name="LapsTakenOff">How many times a lap had been taken off by hand (bug hunt 15).</param>
 public sealed record RaceFactsStamp(long Race, long FastestLaps, long LeadChanges, int LeaderLaps, long AtMs, long? SayByMs = null,
-    int? LeaderLapsAllowed = 1, bool LeadMatters = true);
+    int? LeaderLapsAllowed = 1, bool LeadMatters = true, long LapsTakenOff = 0);
 
 /// <summary>
 /// Lines that are no longer true by the time they would be heard (8 Nov
@@ -77,9 +78,10 @@ public sealed partial class AnnouncementService
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> _lapSeenAtMs = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// While a lap is being handed over: when the timing engine raised it
-    /// (threaded mode), set by the screen delivering it. Null inline, where
-    /// the lap is being handled as it happens. UI thread.
+    /// While a lap or a split-loop crossing is being handed over: when the
+    /// timing engine raised it (threaded mode), set by the screen delivering
+    /// it. Null inline, where the lap is being handled as it happens. UI
+    /// thread.
     /// </summary>
     public long? LapRaisedAtMs { get; set; }
 
@@ -94,6 +96,23 @@ public sealed partial class AnnouncementService
     /// <summary>Notes a car's crossing - see _lapSeenAtMs.</summary>
     private void NoteLapSeen(string transponder) =>
         _lapSeenAtMs[transponder] = LapRaisedAtMs is { } raised && raised <= TimingClock.NowMs ? raised : TimingClock.NowMs;
+
+    /// <summary>
+    /// The say-by for a call about a split-loop crossing: a few seconds from
+    /// the split crossing itself (LapRaisedAtMs while Race Control hands one
+    /// over, otherwise now). Not LapSeenAt - that is the car's last crossing
+    /// of the LINE, and a loop halfway round a 14-second lap is crossed 7
+    /// seconds after it, already past a deadline counted from there (9 Nov
+    /// 2026, Bug hunt 15, B7: every split call was dropped before it was
+    /// queued). Nor is the split noted as a crossing: the lap calls still
+    /// waiting from the line keep their own clock.
+    /// </summary>
+    private long SplitSayBy()
+    {
+        var now = TimingClock.NowMs;
+
+        return (LapRaisedAtMs is { } raised && raised <= now ? raised : now) + LapCallSayWithinMs;
+    }
 
     /// <summary>
     /// When the lap a call about this car is about was crossed: its last
@@ -114,6 +133,7 @@ public sealed partial class AnnouncementService
     private long _factsFastestLaps;
     private long _factsLeadChanges;
     private int _factsLeaderLaps;
+    private long _factsLapsTakenOff;
 
     /// <summary>
     /// The calls that are about the lap just completed - its time, its
@@ -204,7 +224,8 @@ public sealed partial class AnnouncementService
         Interlocked.Read(ref _factsFastestLaps),
         Interlocked.Read(ref _factsLeadChanges),
         Volatile.Read(ref _factsLeaderLaps),
-        TimingClock.NowMs);
+        TimingClock.NowMs,
+        LapsTakenOff: Interlocked.Read(ref _factsLapsTakenOff));
 
     /// <summary>
     /// Why a line written against <paramref name="then"/> is no longer true
@@ -220,6 +241,16 @@ public sealed partial class AnnouncementService
         if (now.FastestLaps != then.FastestLaps)
         {
             return "a quicker lap has been set since it was written";
+        }
+
+        // WHY (bug hunt 15): -1 lap folds a phantom split back into the lap
+        // before it. A record lap written about that split - "the fastest
+        // lap ever set on this layout: 2.100s" - is about a lap that is no
+        // longer on the board, and the fastest-lap count never moves for a
+        // lap taken away.
+        if (now.LapsTakenOff != then.LapsTakenOff)
+        {
+            return "a lap has been taken off by hand since it was written";
         }
 
         if (then.LeadMatters && now.LeadChanges != then.LeadChanges)
@@ -308,9 +339,34 @@ public sealed partial class AnnouncementService
     /// board. Arrival order is not lap order; the board is.
     /// </remarks>
     private string? FastLapNoLongerTrue(RaceStanding? standing) =>
-        standing is { FastLapMs: > 0 } && QuickerBest(standing.Transponder, standing.FastLapMs, _lapCrossings.Board) is { } quicker
-            ? $"{quicker.DisplayName}'s {quicker.FastLapMs / 1000.0:0.000} is quicker than its {standing.FastLapMs / 1000.0:0.000}"
+        FastLapBeatenOnBoard(standing, _lapCrossings.Board);
+
+    /// <summary>The board-side half of <see cref="FastLapNoLongerTrue"/>.</summary>
+    /// <remarks>
+    /// The driver's own row counts too (bug hunt 15): the call's standing is a
+    /// snapshot from queue time, so if the same car goes quicker while the call
+    /// is rendering, its own best on the board is now below the lap being
+    /// announced. On a 5.5 s track a 5-6 s render outlasts the next lap. The
+    /// strict &lt; keeps the call true while its lap is still the car's best.
+    /// </remarks>
+    internal static string? FastLapBeatenOnBoard(RaceStanding? standing, IEnumerable<RaceStanding> board)
+    {
+        if (standing is not { FastLapMs: > 0 })
+        {
+            return null;
+        }
+
+        var rows = board as IReadOnlyCollection<RaceStanding> ?? board.ToList();
+        if (QuickerBest(standing.Transponder, standing.FastLapMs, rows) is { } quicker)
+        {
+            return $"{quicker.DisplayName}'s {quicker.FastLapMs / 1000.0:0.000} is quicker than its {standing.FastLapMs / 1000.0:0.000}";
+        }
+
+        return rows.FirstOrDefault(s => string.Equals(s.Transponder, standing.Transponder, StringComparison.OrdinalIgnoreCase)) is { FastLapMs: > 0 } own
+               && own.FastLapMs < standing.FastLapMs
+            ? $"its own {own.FastLapMs / 1000.0:0.000} has beaten its {standing.FastLapMs / 1000.0:0.000}"
             : null;
+    }
 
     /// <summary>The car on <paramref name="board"/> whose best beats <paramref name="lapMs"/>, if any - never a ghost (they do not hold the race's fastest lap).</summary>
     internal static RaceStanding? QuickerBest(string? transponder, long lapMs, IEnumerable<RaceStanding> board) =>
@@ -320,6 +376,13 @@ public sealed partial class AnnouncementService
                         && !GhostService.IsGhost(s.Transponder))
             .OrderBy(s => s.FastLapMs)
             .FirstOrDefault();
+
+    /// <summary>A lap was just taken off by hand - see WhyNoLongerTrue.</summary>
+    private void NoteLapTakenOffForFacts()
+    {
+        Interlocked.Increment(ref _factsLapsTakenOff);
+        BinStaleCommentary();
+    }
 
     /// <summary>The lead just changed hands.</summary>
     private void NoteLeadChangeForFacts()

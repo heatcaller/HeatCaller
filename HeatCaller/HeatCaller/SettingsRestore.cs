@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -228,12 +229,13 @@ internal static class SettingsRestore
         var folder = CopiesFolder(root);
         Directory.CreateDirectory(folder);
 
-        var zip = Path.Combine(folder, $"settings {when:yyyy-MM-dd HH-mm-ss}.zip");
+        var stamp = when.ToString(StampFormat, CultureInfo.InvariantCulture);
+        var zip = Path.Combine(folder, $"settings {stamp}.zip");
 
         // Two in one second: the second gets a number rather than replacing the first.
         for (var n = 2; File.Exists(zip); n++)
         {
-            zip = Path.Combine(folder, $"settings {when:yyyy-MM-dd HH-mm-ss} ({n}).zip");
+            zip = Path.Combine(folder, $"settings {stamp} ({n}).zip");
         }
 
         using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
@@ -268,7 +270,19 @@ internal static class SettingsRestore
         return zip;
     }
 
-    /// <summary>The copies there are, newest first.</summary>
+    /// <summary>The time in a copy's name, as SaveCopy writes it.</summary>
+    private const string StampFormat = "yyyy-MM-dd HH-mm-ss";
+
+    /// <summary>
+    /// The copies there are, newest first.
+    ///
+    /// 2026-11-09, Bug hunt 15: dated by the time in the name, not the
+    /// file's modified time. The copies live in the data folder, so a full
+    /// backup carries them, and a restore writes every one fresh - each then
+    /// read the restore's minute, and pruning went by extraction order.
+    /// Falls back to the modified time only for a name without a readable
+    /// time, as BackupService.BackupTime does; " (n)" breaks a tie.
+    /// </summary>
     internal static IReadOnlyList<(string Path, DateTime When)> Copies(string root)
     {
         var folder = CopiesFolder(root);
@@ -276,9 +290,31 @@ internal static class SettingsRestore
         return !Directory.Exists(folder)
             ? Array.Empty<(string, DateTime)>()
             : Directory.GetFiles(folder, "settings *.zip")
-                .Select(path => (Path: path, When: File.GetLastWriteTime(path)))
-                .OrderByDescending(copy => copy.When)
+                .Select(path => (Path: path, Stamp: CopyStamp(path)))
+                .OrderByDescending(copy => copy.Stamp.When)
+                .ThenByDescending(copy => copy.Stamp.N)
+                .Select(copy => (copy.Path, copy.Stamp.When))
                 .ToList();
+    }
+
+    /// <summary>When a copy was made, and its " (n)" (1 for none), from its name.</summary>
+    private static (DateTime When, int N) CopyStamp(string path)
+    {
+        var name = Path.GetFileNameWithoutExtension(path)["settings ".Length..];
+        var n = 1;
+
+        // "settings yyyy-MM-dd HH-mm-ss (n)": the number off the end first.
+        var open = name.LastIndexOf(" (", StringComparison.Ordinal);
+        if (open > 0 && name.EndsWith(')')
+            && int.TryParse(name[(open + 2)..^1], NumberStyles.None, CultureInfo.InvariantCulture, out var number))
+        {
+            name = name[..open];
+            n = number;
+        }
+
+        return DateTime.TryParseExact(name, StampFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var when)
+            ? (when, n)
+            : (File.GetLastWriteTime(path), n);
     }
 
     /// <summary>

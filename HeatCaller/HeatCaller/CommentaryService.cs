@@ -4594,6 +4594,12 @@ public sealed class CommentaryService
         var ordered = session.Results.OrderBy(r => r.Position).ToList();
         var winner = ordered[0];
 
+        // No classified finisher, no winner to talk about - see ClassifiedWinner.
+        if (!Classified(winner))
+        {
+            return null;
+        }
+
         var name = Field(mechanicName);
         var car = Field(CarFor(winner));
         var team = Field(_profiles.Get(winner.Transponder)?.Team);
@@ -4811,6 +4817,12 @@ public sealed class CommentaryService
 
         var ordered = session.Results.OrderBy(r => r.Position).ToList();
         var winner = ordered[0];
+
+        // No classified finisher, no winner to talk about - see ClassifiedWinner.
+        if (!Classified(winner))
+        {
+            return null;
+        }
 
         var name = Field(principalName);
         var driver = PromptName(winner.Transponder);
@@ -6216,6 +6228,19 @@ public sealed class CommentaryService
     /// </summary>
     internal static bool Classified(SessionResultEntry entry) =>
         entry.Laps > 0 && ResultEditor.NormaliseOutcome(entry.Outcome) is not (ResultEditor.Dq or ResultEditor.Dnf);
+
+    /// <summary>
+    /// The race's winner - position 1 when it is a classified finisher - or
+    /// null when nobody finished (bug hunt 15, 9 Nov 2026). ApplyBlackFlags
+    /// moves a DQ to the bottom, so position 1 is a non-finisher only when the
+    /// race has no finisher at all: a one-car main black-flagged, every car
+    /// out, nobody turned a lap. The flag read and the pit-lane throw already
+    /// named nobody then (FlagResultRows); the Team Principal and Technical
+    /// Lead interviews, and the principal's diary, still took position 1 as
+    /// the winner and celebrated a win that was struck off.
+    /// </summary>
+    internal static SessionResultEntry? ClassifiedWinner(SessionRecord session) =>
+        session.Results.OrderBy(r => r.Position).FirstOrDefault() is { } first && Classified(first) ? first : null;
 
     /// <summary>
     /// The row holding the race's fastest lap, or null when nobody set one.

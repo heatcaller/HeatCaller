@@ -29,6 +29,13 @@ internal static class TopUpRequest
     internal static Action<string> OpenMailTo { get; set; } = AppSupport.Open;
 
     /// <summary>
+    /// Raised, on any thread, when the relay answered the ask with an
+    /// automatic top-up there and then - so the window can read the meters
+    /// again and stop resting the voice on a month that is no longer spent.
+    /// </summary>
+    internal static event Action<MeterKind>? AutoToppedUp;
+
+    /// <summary>
     /// Records the request and tells the operator. Returns one plain
     /// sentence for the window. Reads settings before its first await, so
     /// call it from the UI thread. Never throws (a cancel included).
@@ -79,6 +86,17 @@ internal static class TopUpRequest
             ? await RecordAsync(relay, meter.Kind, text, ct).ConfigureAwait(false)
             : new Recorded(false, false, "This PC isn't connected to the club's relay.");
 
+        // 2026-11-09 Bug hunt 15: the relay can answer an ask on the spot
+        // (autoTopUp in its reply). It was never read, so support was still
+        // emailed - and an operator acting on that email gave the same
+        // top-up twice - and a re-ask it answered said "still open".
+        if (recorded.AutoGiven > 0)
+        {
+            AutoToppedUp?.Invoke(meter.Kind);
+
+            return $"HeatCaller gave this club {recorded.AutoGiven.ToString("N0", CultureInfo.InvariantCulture)} more {meter.Unit} of {what} for this month straight away - nothing more to do.";
+        }
+
         if (recorded.Already)
         {
             // The operator already has it, and was told the first time.
@@ -112,7 +130,7 @@ internal static class TopUpRequest
     }
 
     /// <summary>What the relay said to the request.</summary>
-    private sealed record Recorded(bool Ok, bool Already, string Why);
+    private sealed record Recorded(bool Ok, bool Already, string Why, long AutoGiven = 0);
 
     private static async Task<Recorded> RecordAsync(
         (string Root, string Club, string Token) target,
@@ -169,11 +187,23 @@ internal static class TopUpRequest
                 var text = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
                 using var json = JsonDocument.Parse(text);
 
-                var already = json.RootElement.ValueKind == JsonValueKind.Object
-                    && json.RootElement.TryGetProperty("already", out var flag)
+                var root = json.RootElement;
+                var isObject = root.ValueKind == JsonValueKind.Object;
+
+                var already = isObject
+                    && root.TryGetProperty("already", out var flag)
                     && flag.ValueKind == JsonValueKind.True;
 
-                return new Recorded(true, already, string.Empty);
+                // What the relay gave there and then, when it answered the ask itself.
+                var autoGiven = isObject
+                    && root.TryGetProperty("autoTopUp", out var auto)
+                    && auto.ValueKind == JsonValueKind.Number
+                    && auto.TryGetInt64(out var amount)
+                    && amount > 0
+                        ? amount
+                        : 0;
+
+                return new Recorded(true, already, string.Empty, autoGiven);
             }
             catch (Exception ex) when (ex is JsonException or InvalidOperationException)
             {

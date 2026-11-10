@@ -6745,7 +6745,7 @@ export class Relay {
     }
 
     const known = (await this.liveEntryOf(club, id)) !== undefined
-      || (await this.store.getItem(club, NIGHTS_CHANNEL, id).catch(() => undefined)) !== undefined;
+      || (await this.store.getItem(club, NIGHTS_CHANNEL, id)) !== undefined;
 
     if (!known) {
       sendJson(response, 404, { ok: false, error: "Not found" });
@@ -6833,8 +6833,15 @@ export class Relay {
     // The page's twenty-second poll: only the live entry. A night with no
     // live entry (the laptop has gone home) still answers ok, so the page
     // keeps what it has rather than reading the poll as "not found".
+    //
+    // A night that will not read is not a missing one (9 Nov 2026, Bug
+    // Hunt 15): both reads below used to swallow the StoreReadError and
+    // answer 404, which the page takes as "not found" - the poll cleared
+    // the live strip and the full read showed the refusal, never asking
+    // again. Left to throw, it reaches the top-level 503, and the page's
+    // >= 500 branch keeps what it has and tries again.
     if (liveOnly) {
-      if (live === undefined && (await this.store.getItem(club, NIGHTS_CHANNEL, id).catch(() => undefined)) === undefined) {
+      if (live === undefined && (await this.store.getItem(club, NIGHTS_CHANNEL, id)) === undefined) {
         sendJson(response, 404, { ok: false, error: "Not found" });
         return;
       }
@@ -6843,7 +6850,7 @@ export class Relay {
       return;
     }
 
-    const doc = await this.store.getItem(club, NIGHTS_CHANNEL, id).catch(() => undefined);
+    const doc = await this.store.getItem(club, NIGHTS_CHANNEL, id);
 
     if (doc === undefined && live === undefined) {
       sendJson(response, 404, { ok: false, error: "Not found" });

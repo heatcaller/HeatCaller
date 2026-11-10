@@ -43,6 +43,22 @@ public partial class MainForm
         UsageMeters.Shared.Changed += usageChanged;
         Disposed += (_, _) => UsageMeters.Shared.Changed -= usageChanged;
 
+        // The relay answered an Ask for More with a top-up there and then
+        // (Bug hunt 15): the month is no longer spent, so the meters are read
+        // again now, not at the next probe, and a voice resting on Kokoro
+        // over the spent allowance is tried again on its next line.
+        Action<MeterKind> autoToppedUp = kind => TryPost(() =>
+        {
+            if (kind == MeterKind.HeatCallerVoice)
+            {
+                _announcer.ResetHeatCallerVoiceState("the relay gave this month's HeatCaller voice a top-up");
+            }
+
+            RefreshUsage();
+        });
+        TopUpRequest.AutoToppedUp += autoToppedUp;
+        Disposed += (_, _) => TopUpRequest.AutoToppedUp -= autoToppedUp;
+
         // Once the window is up: the first ask goes to the relay, which a
         // window still being built has no business waiting on.
         Shown += (_, _) =>

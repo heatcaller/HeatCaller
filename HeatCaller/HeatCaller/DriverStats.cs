@@ -1049,8 +1049,16 @@ public sealed class DriverStats
 
             // Never a ghost standing in for them: a ghost can be given any
             // name, a real driver's included - the Head to Head page's rule.
+            //
+            // 9 Nov 2026, Bug Hunt 15, B38: and only cars that turned a lap,
+            // on both sides - Head to Head's A30-3 rule. A hand-released grid
+            // saves 0-lap rows for cars that never moved; counting them made
+            // a driver who sat on the line "behind" everyone, gave him a
+            // "win" over anyone else who did, and inflated the meetings the
+            // rival is picked by.
             var me = session.Results.FirstOrDefault(r =>
                 !GhostService.IsGhost(r.Transponder)
+                && r.Laps >= 1
                 && string.Equals(r.DriverName, driverName, StringComparison.OrdinalIgnoreCase));
 
             if (me is null)
@@ -1064,6 +1072,7 @@ public sealed class DriverStats
             {
                 if (string.IsNullOrWhiteSpace(other.DriverName)
                     || GhostService.IsGhost(other.Transponder)
+                    || other.Laps < 1
                     || string.Equals(other.DriverName, driverName, StringComparison.OrdinalIgnoreCase)
                     || !seen.Add(other.DriverName))
                 {

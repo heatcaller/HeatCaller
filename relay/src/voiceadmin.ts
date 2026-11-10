@@ -86,6 +86,12 @@ export interface VoiceStanding {
   readonly used: number;
   /** Earlier months' totals, by "YYYY-MM", oldest first. */
   readonly history: Readonly<Record<string, number>>;
+  /**
+   * False when the club's usage file is there but will not read, so `used`
+   * and `history` are stand-in zeros and the relay is not spending against
+   * it. Absent means known - the same as the brain's own usageFor.
+   */
+  readonly known?: false;
 }
 
 /** What the relay gave a club automatically for one meter. */
@@ -100,7 +106,7 @@ export async function brainStandings(config: RelayConfig, now: Date): Promise<Vo
 
   for (const tenant of config.tenants) {
     const plan = tenant.brain?.monthlyLines ?? config.brain.monthlyLines;
-    const usage = readUsageRecord(await readJson(brainUsagePath(config.dataDir, tenant.club)), month);
+    const usage = await readUsage(brainUsagePath(config.dataDir, tenant.club), month);
     const auto = sum(await autoGiven(config.dataDir, tenant.club, month), "commentary");
     const topUp = (readTopUps(await readJson(brainTopUpPath(config.dataDir, tenant.club)))[month] ?? 0) + auto;
 
@@ -114,6 +120,7 @@ export async function brainStandings(config: RelayConfig, now: Date): Promise<Vo
       allowance: plan + topUp,
       used: usage.used,
       history: usage.history,
+      ...(usage.known ? {} : { known: false as const }),
     });
   }
 
@@ -127,7 +134,7 @@ export async function voiceStandings(config: RelayConfig, now: Date): Promise<Vo
 
   for (const tenant of config.tenants) {
     const plan = tenant.voice?.monthlyChars ?? config.voice.monthlyChars;
-    const usage = readUsageRecord(await readJson(voiceUsagePath(config.dataDir, tenant.club)), month);
+    const usage = await readUsage(voiceUsagePath(config.dataDir, tenant.club), month);
     const auto = sum(await autoGiven(config.dataDir, tenant.club, month), "voice");
     const topUp = (readTopUps(await readJson(voiceTopUpPath(config.dataDir, tenant.club)))[month] ?? 0) + auto;
 
@@ -141,6 +148,7 @@ export async function voiceStandings(config: RelayConfig, now: Date): Promise<Vo
       allowance: plan + topUp,
       used: usage.used,
       history: usage.history,
+      ...(usage.known ? {} : { known: false as const }),
     });
   }
 
@@ -165,7 +173,8 @@ export function formatStandings(
   const month = monthOf(now);
   const earlier = previousMonths(month, 3);
   const shown = standings.filter(
-    (standing) => standing.enabled || standing.used > 0 || Object.keys(standing.history).length > 0,
+    (standing) =>
+      standing.enabled || standing.known === false || standing.used > 0 || Object.keys(standing.history).length > 0,
   );
 
   const lines: string[] = [];
@@ -193,15 +202,21 @@ export function formatStandings(
   }
 
   const header = ["club", words.column, "plan", "top-up", "used", "left", "%", ...earlier.map(shortMonth)];
+  // A usage file that will not read is "?", never 0: the relay is not
+  // spending against it, and a zero would be billed from (Bug hunt 15).
   const rows = shown.map((standing) => [
     standing.club,
     standing.enabled ? "on" : "off",
     grouped(standing.plan),
     standing.topUp > 0 ? grouped(standing.topUp) : "-",
-    grouped(standing.used),
-    grouped(Math.max(0, standing.allowance - standing.used)),
-    standing.allowance > 0 ? `${Math.floor((standing.used * 100) / standing.allowance)}%` : "-",
-    ...earlier.map((past) => grouped(standing.history[past] ?? 0)),
+    ...(standing.known === false
+      ? ["?", "?", "?", ...earlier.map(() => "?")]
+      : [
+          grouped(standing.used),
+          grouped(Math.max(0, standing.allowance - standing.used)),
+          standing.allowance > 0 ? `${Math.floor((standing.used * 100) / standing.allowance)}%` : "-",
+          ...earlier.map((past) => grouped(standing.history[past] ?? 0)),
+        ]),
   ]);
 
   const widths = header.map((title, column) => Math.max(title.length, ...rows.map((row) => (row[column] ?? "").length)));
@@ -218,8 +233,16 @@ export function formatStandings(
   }
 
   const used = shown.reduce((sum, standing) => sum + standing.used, 0);
+  const unknown = shown.filter((standing) => standing.known === false).map((standing) => standing.club);
   lines.push("");
-  lines.push(`All clubs: ${grouped(used)} ${words.unit} this month.`);
+  lines.push(`All clubs: ${grouped(used)} ${words.unit} this month${unknown.length > 0 ? `, not counting ${unknown.join(", ")}` : ""}.`);
+
+  for (const club of unknown) {
+    lines.push(
+      `? ${club}: its usage file is there but will not read, so what it has used is unknown and the relay is not ` +
+        `spending against it. Mend the file, or move it aside, before billing or topping up.`,
+    );
+  }
 
   return lines.join("\n") + "\n";
 }
@@ -231,6 +254,8 @@ export type TopUpResult =
       readonly topUp: number;
       readonly allowance: number;
       readonly used: number;
+      /** False when the club's usage file will not read, so `used` is a stand-in 0. Absent means known. */
+      readonly known?: false;
       /** The meter is not included for this club, so the top-up does nothing until it is. */
       readonly voiceOff: boolean;
       /** The club's open asks for more of this meter this month, now marked done. */
@@ -338,7 +363,7 @@ export async function topUp(
     ? (tenant.voice?.monthlyChars ?? config.voice.monthlyChars)
     : (tenant.brain?.monthlyLines ?? config.brain.monthlyLines);
   const usagePath = meter === "voice" ? voiceUsagePath(config.dataDir, club) : brainUsagePath(config.dataDir, club);
-  const usage = readUsageRecord(await readJson(usagePath), month);
+  const usage = await readUsage(usagePath, month);
   const on = meter === "voice" ? tenant.voice?.enabled === true : tenant.brain?.enabled === true;
 
   // Giving more answers the club's ask for more; taking some back does not.
@@ -357,7 +382,16 @@ export async function topUp(
   // The relay's automatic top-ups count towards what the club may use, though they live in its own file.
   const auto = sum(await autoGiven(config.dataDir, club, month), meter);
 
-  return { ok: true, month, topUp: given + auto, allowance: plan + given + auto, used: usage.used, voiceOff: !on, closed };
+  return {
+    ok: true,
+    month,
+    topUp: given + auto,
+    allowance: plan + given + auto,
+    used: usage.used,
+    ...(usage.known ? {} : { known: false as const }),
+    voiceOff: !on,
+    closed,
+  };
 }
 
 /**
@@ -601,7 +635,10 @@ export async function voiceAdmin(
 
   out(
     `${club}: ${result.topUp > 0 ? `${grouped(result.topUp)} ${words.unit} on top of its plan` : "no top-up"} for ${monthName(result.month)}. ` +
-      `It may ${meter === "voice" ? "speak" : "have"} ${grouped(result.allowance)} this month and has used ${grouped(result.used)}.\n` +
+      `It may ${meter === "voice" ? "speak" : "have"} ${grouped(result.allowance)} this month and ` +
+      (result.known === false
+        ? `what it has used is unknown - its usage file will not read, so the relay is not spending against it. Mend it, or move it aside.\n`
+        : `has used ${grouped(result.used)}.\n`) +
       (result.voiceOff
         ? meter === "voice"
           ? `The HeatCaller voice is not switched on for ${club}, so this does nothing until it is ("voice": { "enabled": true } in the config).\n`
@@ -621,6 +658,8 @@ export interface MeterStanding {
   readonly allowance: number;
   readonly used: number;
   readonly history: Readonly<Record<string, number>>;
+  /** False when the usage file will not read, so `used` and `history` are stand-in zeros. Absent means known. */
+  readonly known?: false;
 }
 
 /** One club, as admin-snapshot gives it. */
@@ -693,6 +732,7 @@ export async function adminSnapshot(
     allowance: standing?.allowance ?? 0,
     used: standing?.used ?? 0,
     history: standing?.history ?? {},
+    ...(standing?.known === false ? { known: false as const } : {}),
   });
 
   const clubs = config.tenants.map((tenant) => ({
@@ -823,6 +863,25 @@ async function readJson(path: string): Promise<unknown> {
 }
 
 const UNREADABLE = Symbol("unreadable");
+
+/**
+ * A club's usage this month, for a report. A file that is there but will
+ * not read - or is not a usage record at all - is known: false, never a
+ * zero: the relay will not spend against it (voice.ts readUsageFile), and
+ * "0 used, no history" would be billed from (Bug hunt 15).
+ */
+async function readUsage(
+  path: string,
+  month: string,
+): Promise<{ used: number; history: Readonly<Record<string, number>>; known: boolean }> {
+  const raw = await readJsonStrict(path);
+
+  if (raw === UNREADABLE || (raw !== undefined && (typeof raw !== "object" || raw === null || Array.isArray(raw)))) {
+    return { used: 0, history: {}, known: false };
+  }
+
+  return { ...readUsageRecord(raw, month), known: true };
+}
 
 /**
  * readJson for a file about to be written over: undefined only when there

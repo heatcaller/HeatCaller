@@ -215,11 +215,11 @@ public sealed partial class AnnouncementService
 
     /// <summary>A driver crossed the split loop up on their own best lap by <paramref name="upMs"/>.</summary>
     public void NotifySplitPace(RaceStanding standing, string split, long upMs) =>
-        EnqueueVoice(AnnouncementEventType.SplitPace, standing, null, extras: SplitExtras(split, upMs));
+        EnqueueVoice(AnnouncementEventType.SplitPace, standing, null, extras: SplitExtras(split, upMs), sayByMs: SplitSayBy());
 
     /// <summary>A driver crossed the split loop ahead of the track record lap there by <paramref name="upMs"/>.</summary>
     public void NotifySplitRecordPace(RaceStanding standing, string split, long upMs) =>
-        EnqueueVoice(AnnouncementEventType.SplitRecordPace, standing, null, extras: SplitExtras(split, upMs));
+        EnqueueVoice(AnnouncementEventType.SplitRecordPace, standing, null, extras: SplitExtras(split, upMs), sayByMs: SplitSayBy());
 
     /// <summary>{split} and {gap} - a gap to the tenth, said as "two tenths".</summary>
     private static Dictionary<string, (string, string)> SplitExtras(string split, long upMs)
@@ -847,6 +847,14 @@ public sealed partial class AnnouncementService
         // or the badges would sit in silence for no reason.
         if (ReferenceEquals(Interlocked.CompareExchange(ref _finishCallHoldToClaim, null, hold), hold))
         {
+            // WHY (9 Nov 2026, bug hunt 15): the decks are cleared at the
+            // checkered only by the finish call itself, so with it off (a
+            // club using the fanfare alone) whatever was already queued or
+            // rendering - an AI line, a running order - was still said over
+            // the finish, as PlayFlagSound found for the flags. Spares the
+            // fanfare (see LeadInSoundKindFor).
+            ClearTheDecksFor(AnnouncementEventType.RaceCompleted);
+
             hold.TrySetResult();
         }
 

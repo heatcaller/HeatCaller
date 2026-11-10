@@ -90,4 +90,21 @@ public sealed class LapTimesAsWrittenTests
 
         Assert.Null(AnnouncementService.QuickerBest("sfewf", 5807, board));
     }
+
+    [Fact]
+    public void The_drivers_own_quicker_lap_since_the_call_was_queued_beats_it()
+    {
+        // Terry's 5.42 call is rendering when Terry crosses again with 4.94.
+        var board = new[] { Car("Terry Byte", 4940), Car("Dee Ploy", 5600) };
+
+        Assert.NotNull(AnnouncementService.FastLapBeatenOnBoard(Car("Terry Byte", 5420), board));
+    }
+
+    [Fact]
+    public void A_call_is_still_true_while_its_lap_is_the_drivers_best()
+    {
+        var board = new[] { Car("Terry Byte", 5420), Car("Dee Ploy", 5600) };
+
+        Assert.Null(AnnouncementService.FastLapBeatenOnBoard(Car("Terry Byte", 5420), board));
+    }
 }

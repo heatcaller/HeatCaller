@@ -273,7 +273,9 @@ public sealed class StreamDecoderClient : IDisposable
                         return;
                     }
 
-                    LapEventReceived?.Invoke(pass);
+                    // Marked, so a rehearsal's made-up laps never become a
+                    // real transponder's health history (Bug Hunt 15, B2).
+                    LapEventReceived?.Invoke(options.Transport == DecoderTransport.Simulated ? pass.AsSimulated() : pass);
                 }
             }
         }

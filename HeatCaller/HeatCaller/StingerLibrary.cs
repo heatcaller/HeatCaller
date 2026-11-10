@@ -505,7 +505,16 @@ public sealed class StingerLibrary
         try
         {
             var path = PathFor(entry);
-            return path is not null && File.Exists(path) ? (File.ReadAllBytes(path), entry) : null;
+            if (path is null || !File.Exists(path))
+            {
+                return null;
+            }
+
+            // An empty or zero-filled take - what a power cut can leave under
+            // the name - is no recording: speak the line live instead of
+            // failing to play it every time (9 Nov 2026, Bug Hunt 15, B32).
+            var audio = File.ReadAllBytes(path);
+            return Array.TrueForAll(audio, b => b == 0) ? null : (audio, entry);
         }
         catch
         {
@@ -531,11 +540,12 @@ public sealed class StingerLibrary
             // Written beside it and then moved into place (20 Oct 2026, Bug
             // Hunt 8): a crash part-way through a straight write left a
             // recording cut short under the line's name, which then failed
-            // to play every time the line came round.
+            // to play every time the line came round. Flushed to the disk
+            // before the move, under a temp name of its own (9 Nov 2026, Bug
+            // Hunt 15, B32): NTFS can commit the rename before the data, so a
+            // power cut left the flushed index pointing at an empty take.
             var path = Path.Combine(_folder, file);
-            var tmp = path + ".tmp";
-            File.WriteAllBytes(tmp, audio);
-            File.Move(tmp, path, overwrite: true);
+            VoiceLibrary.WriteAtomically(path, audio);
         }
         catch
         {

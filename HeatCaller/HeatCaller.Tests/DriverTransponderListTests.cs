@@ -98,6 +98,31 @@ public sealed class DriverTransponderListTests : IDisposable
     }
 
     [Fact]
+    public void Add_driver_refuses_an_extra_two_drivers_already_list()
+    {
+        // An older file: 5521 is an extra on both Alex and Ben, so the
+        // timing index leaves it out and Get finds nobody.
+        var store = ProfileStore.Load();
+        var alex = new DriverProfile { Transponder = "100", DriverName = "Alex" };
+        alex.Transponders.Add(new OwnedTransponder { Id = "5521" });
+        var ben = new DriverProfile { Transponder = "200", DriverName = "Ben" };
+        ben.Transponders.Add(new OwnedTransponder { Id = "5521" });
+        store.Upsert(alex);
+        store.Upsert(ben);
+        Assert.Null(store.Get("5521"));
+
+        // The Add Driver window's check still names a claimant ...
+        var ownerName = QuickDriverForm.OwnerNameIn(store);
+        Assert.Contains(ownerName("5521"), new[] { "Alex", "Ben" });
+        Assert.Null(ownerName("999"));
+
+        // ... and the save behind it refuses rather than making it Chris's main.
+        Assert.False(store.TryAdd(new DriverProfile { Transponder = "5521", DriverName = "Chris" }, out var refusal));
+        Assert.NotEmpty(refusal);
+        Assert.NotEqual("Chris", store.OwnerOf("5521")?.DriverName);
+    }
+
+    [Fact]
     public void A_retired_main_transponder_stays_the_drivers_key()
     {
         var store = ProfileStore.Load();

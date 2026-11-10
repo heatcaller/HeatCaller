@@ -120,6 +120,11 @@ public sealed class DemoAndPracticeNightTests
         var rehearsal = races.Single(r => r.Kind == "demo").Field!;
         Assert.Equal(new[] { "Sam Parker", "Robo Racer" }, rehearsal.Select(f => f.Name));
         Assert.Equal(new long[] { 9000, 8800, 8900 }, rehearsal[1].LapsMs!);
+
+        // Bug hunt 15: the start lap taken off goes with them, as with their
+        // own race, so the phone draws a rival's laps from lap 2 too.
+        Assert.Equal(1400, rehearsal[1].StartMs);
+        Assert.Equal(races.Single(r => r.Kind == "demo").StartMs, rehearsal[0].StartMs);
         Assert.Equal(2, rehearsal[1].Pos);
         Assert.NotNull(rehearsal[1].PosAt);
 
@@ -134,6 +139,7 @@ public sealed class DemoAndPracticeNightTests
         })!).RootElement;
         var sent = night.GetProperty("races").EnumerateArray().Single(r => r.TryGetProperty("kind", out var k) && k.GetString() == "demo");
         Assert.Equal("Robo Racer", sent.GetProperty("field")[1].GetProperty("name").GetString());
+        Assert.Equal(1400, sent.GetProperty("field")[1].GetProperty("startMs").GetInt64());
         Assert.False(sent.GetProperty("field")[1].TryGetProperty("transponder", out _));
     }
 

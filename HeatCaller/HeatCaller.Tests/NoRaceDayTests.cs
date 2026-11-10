@@ -102,6 +102,11 @@ public sealed class NoRaceDayTests : IDisposable
         OpenDay("Tonight");
         var q1 = RunHeat("Q1", ("A", 10), ("B", 9));
 
+        // In the class's roster: the finals are seeded only from drivers who
+        // are (Bug hunt 15, B53).
+        Assert.True(_profiles.TryAdd(new DriverProfile { Transponder = "A", DriverName = "A", ClassName = Stock }, out _));
+        Assert.True(_profiles.TryAdd(new DriverProfile { Transponder = "B", DriverName = "B", ClassName = Stock }, out _));
+
         using var program = ProgramPage();
         var answer = program.PlanSeedMains(Stock);
 
