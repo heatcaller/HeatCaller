@@ -1246,6 +1246,10 @@ public sealed partial class RaceControlControl
                             + "Green when the cars are ready to go again.");
                     }
 
+                    // Back at Staging or Countdown, with the start sequence
+                    // the reset cancelled not put back - say what to press.
+                    NoteStartPutBack();
+
                     // The format line (and the auto-advance setting read
                     // from it) back in step with the round now in the box.
                     // Racing, so this writes nothing to the session - the

@@ -466,7 +466,14 @@ public sealed partial class RaceControlControl
         switch (state)
         {
             case RaceState.Staging:
-                _announcer.NotifyRaceStaging();
+                // Not while a snapshot is put back (an undone Reset): the
+                // start sequence that followed it is gone, so its calls are
+                // not replayed - see StartPutBackNotice.
+                if (!_suppressFlagAnnouncements)
+                {
+                    _announcer.NotifyRaceStaging();
+                }
+
                 UpdateClockDisplay(force: true);
 
                 // Here rather than in the Stage button, so the automatic
@@ -477,7 +484,18 @@ public sealed partial class RaceControlControl
                 // Set only while the automatic start opens the countdown -
                 // it alone knows when the green will drop. See
                 // _countdownGreenIn.
-                _announcer.NotifyCountdownStarted(_countdownGreenIn);
+                //
+                // Bug hunt 15 (9 Nov 2026): not while a snapshot is put back.
+                // Undoing a Reset made during the countdown raised Countdown
+                // again, and the ticks played from the start with nothing
+                // armed to drop the green at their end - drivers who went on
+                // the last tick were booked as jump starts. The director is
+                // told what to press instead (StartPutBackNotice).
+                if (!_suppressFlagAnnouncements)
+                {
+                    _announcer.NotifyCountdownStarted(_countdownGreenIn);
+                }
+
                 break;
         }
     }

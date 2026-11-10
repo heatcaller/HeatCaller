@@ -135,7 +135,7 @@ public sealed partial class RaceControlControl : UserControl
     /// </summary>
     private bool _currentRaceIsDemo;
 
-    /// <summary>Set while restoring a snapshot: RestoreSnapshot re-raises StateChanged/FlagChanged, which would otherwise re-announce "race started" just for undoing a reset.</summary>
+    /// <summary>Set while restoring a snapshot: RestoreSnapshot re-raises StateChanged/FlagChanged, which would otherwise re-announce "race started" just for undoing a reset - and, at Staging or Countdown, replay the staging call or the countdown ticks with no start sequence behind them.</summary>
     private bool _suppressFlagAnnouncements;
 
     // Only refreshes the clock's displayed text - the actual race-ending
@@ -1165,6 +1165,8 @@ public sealed partial class RaceControlControl : UserControl
                     $"{AppTime.LogStampNow()}  [race] The race is back, held under a red flag - no laps were counted while it was gone. "
                     + "Green when the cars are ready to go again.");
             }
+
+            NoteStartPutBack();
         };
     }
 
