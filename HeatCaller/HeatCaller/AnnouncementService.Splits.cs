@@ -52,7 +52,7 @@ public sealed partial class AnnouncementService
         {
             ["split"] = (split, split),
             ["splittime"] = (spoken, display),
-        });
+        }, sayByMs: SplitSayBy());
     }
 
     /// <summary>
@@ -100,7 +100,7 @@ public sealed partial class AnnouncementService
         {
             ["split"] = (split, split),
             ["delta"] = (CapitalisedFirst(spoken), CapitalisedFirst(display)),
-        });
+        }, sayByMs: SplitSayBy());
     }
 
     /// <summary>
@@ -166,7 +166,7 @@ public sealed partial class AnnouncementService
             ["gap"] = (spoken, display),
             ["split"] = (split, split),
             ["battle"] = (battle, battle),
-        });
+        }, sayByMs: SplitSayBy());
     }
 
     /// <summary>

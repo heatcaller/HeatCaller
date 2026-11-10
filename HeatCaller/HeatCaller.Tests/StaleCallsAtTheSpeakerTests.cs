@@ -258,7 +258,7 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
         Id = transponder,
     };
 
-    private static (AnnouncementService Announcer, ConcurrentQueue<string> Shown, ConcurrentQueue<string> Log) Announcer()
+    private static (AnnouncementService Announcer, ConcurrentQueue<string> Shown, ConcurrentQueue<string> Log) Announcer(params AnnouncementEventType[] on)
     {
         var profiles = ProfileStore.Load();
         profiles.Upsert(new DriverProfile { Transponder = "101", DriverName = "Terry" });
@@ -269,6 +269,12 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
         {
             config.Enabled = false;
             config.EnabledInPractice = false;
+        }
+
+        foreach (var type in on)
+        {
+            voice.Current.Events[type.ToString()].Enabled = true;
+            voice.Current.Events[type.ToString()].EnabledInPractice = true;
         }
 
         var sounds = SoundEffectsStore.Load();
@@ -312,6 +318,27 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
         announcer.OnStandingUpdated(Car("102", 5, 25_000));
         Assert.Equal("the lead has changed hands since it was written",
             AnnouncementService.WhyNoLongerTrue(beforePass, announcer.RaceFactsNow()));
+    }
+
+    [Fact]
+    public void A_split_call_is_timed_from_the_split_not_from_the_line_crossed_seven_seconds_before()
+    {
+        // 9 Nov 2026, Bug hunt 15, B7: a loop halfway round a 14-second lap
+        // is crossed 7s after the line - past a deadline counted from the
+        // line, so every split call was dropped before it was queued.
+        var (announcer, shown, log) = Announcer(AnnouncementEventType.SplitTime);
+
+        // Terry crossed the line 7s ago.
+        announcer.LapRaisedAtMs = TimingClock.NowMs - 7_000;
+        announcer.OnStandingUpdated(Car("101", 3, 16_000));
+        announcer.LapRaisedAtMs = null;
+
+        // And the split loop now.
+        announcer.NotifySplitTime(Car("101", 3, 16_000), "the split", 7_000);
+        announcer.Muted = true;
+
+        Assert.DoesNotContain(log, line => line.Contains("Dropped SplitTime", StringComparison.Ordinal));
+        Assert.Contains(shown, line => line.Contains("Terry", StringComparison.Ordinal) || line.Contains("7.00", StringComparison.Ordinal));
     }
 
     [Fact]

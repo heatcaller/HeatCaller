@@ -77,9 +77,10 @@ public sealed partial class AnnouncementService
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> _lapSeenAtMs = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// While a lap is being handed over: when the timing engine raised it
-    /// (threaded mode), set by the screen delivering it. Null inline, where
-    /// the lap is being handled as it happens. UI thread.
+    /// While a lap or a split-loop crossing is being handed over: when the
+    /// timing engine raised it (threaded mode), set by the screen delivering
+    /// it. Null inline, where the lap is being handled as it happens. UI
+    /// thread.
     /// </summary>
     public long? LapRaisedAtMs { get; set; }
 
@@ -94,6 +95,23 @@ public sealed partial class AnnouncementService
     /// <summary>Notes a car's crossing - see _lapSeenAtMs.</summary>
     private void NoteLapSeen(string transponder) =>
         _lapSeenAtMs[transponder] = LapRaisedAtMs is { } raised && raised <= TimingClock.NowMs ? raised : TimingClock.NowMs;
+
+    /// <summary>
+    /// The say-by for a call about a split-loop crossing: a few seconds from
+    /// the split crossing itself (LapRaisedAtMs while Race Control hands one
+    /// over, otherwise now). Not LapSeenAt - that is the car's last crossing
+    /// of the LINE, and a loop halfway round a 14-second lap is crossed 7
+    /// seconds after it, already past a deadline counted from there (9 Nov
+    /// 2026, Bug hunt 15, B7: every split call was dropped before it was
+    /// queued). Nor is the split noted as a crossing: the lap calls still
+    /// waiting from the line keep their own clock.
+    /// </summary>
+    private long SplitSayBy()
+    {
+        var now = TimingClock.NowMs;
+
+        return (LapRaisedAtMs is { } raised && raised <= now ? raised : now) + LapCallSayWithinMs;
+    }
 
     /// <summary>
     /// When the lap a call about this car is about was crossed: its last

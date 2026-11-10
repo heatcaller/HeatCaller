@@ -215,11 +215,11 @@ public sealed partial class AnnouncementService
 
     /// <summary>A driver crossed the split loop up on their own best lap by <paramref name="upMs"/>.</summary>
     public void NotifySplitPace(RaceStanding standing, string split, long upMs) =>
-        EnqueueVoice(AnnouncementEventType.SplitPace, standing, null, extras: SplitExtras(split, upMs));
+        EnqueueVoice(AnnouncementEventType.SplitPace, standing, null, extras: SplitExtras(split, upMs), sayByMs: SplitSayBy());
 
     /// <summary>A driver crossed the split loop ahead of the track record lap there by <paramref name="upMs"/>.</summary>
     public void NotifySplitRecordPace(RaceStanding standing, string split, long upMs) =>
-        EnqueueVoice(AnnouncementEventType.SplitRecordPace, standing, null, extras: SplitExtras(split, upMs));
+        EnqueueVoice(AnnouncementEventType.SplitRecordPace, standing, null, extras: SplitExtras(split, upMs), sayByMs: SplitSayBy());
 
     /// <summary>{split} and {gap} - a gap to the tenth, said as "two tenths".</summary>
     private static Dictionary<string, (string, string)> SplitExtras(string split, long upMs)

@@ -113,7 +113,18 @@ public sealed partial class RaceControlControl
         {
             if (InvokeRequired) { BeginInvoke(() => OnSplitCrossed(standing, point)); return; }
             if (_race.DeliveringIsStale) { _announcer.WhileLapCallsAreStale(() => OnSplitCrossed(standing, point), _race.DeliveringAgeMs); return; }
-            OnSplitCrossed(standing, point);
+
+            // Its calls are timed from the split crossing (9 Nov 2026, Bug
+            // hunt 15, B7) - see AnnouncementService.SplitSayBy.
+            _announcer.LapRaisedAtMs = _race.DeliveringEventRaisedAtMs;
+            try
+            {
+                OnSplitCrossed(standing, point);
+            }
+            finally
+            {
+                _announcer.LapRaisedAtMs = null;
+            }
         };
         _race.SplitCrossed += _splitCrossedHandler;
 
