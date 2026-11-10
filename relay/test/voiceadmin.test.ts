@@ -295,5 +295,31 @@ describe("metering the HeatCaller voice", () => {
       assert.equal((await run("voice-usage", ["--all"])).code, 1);
       assert.equal((await run("voice-usage", [], { RELAY_DATA: folder, RELAY_CONFIG_JSON: "{oops" })).code, 1);
     });
+
+    // Bug hunt 15: a usage file that is there but will not read is one the
+    // relay refuses to spend against - the report used to show it as
+    // "0 used, no history", a zero the operator would bill from.
+    it("shows a usage file that will not read as unknown, never as nothing used", async () => {
+      await service().speak("acme-rc", PLAN, "clubhouse", "Twelve chars", false);
+      await writeFile(voiceUsagePath(folder, "acme-rc"), "{\"month\": \"2026-09\", \"us");
+
+      const report = await run("voice-usage", []);
+      assert.equal(report.code, 0, report.err);
+      assert.match(report.out, /acme-rc\s+on\s+100\s+-\s+\?\s+\?\s+\?\s+\?\s+\?\s+\?/);
+      assert.match(report.out, /All clubs: 0 characters this month, not counting acme-rc\./);
+      assert.match(report.out, /acme-rc: its usage file is there but will not read/);
+
+      const json = JSON.parse((await run("voice-usage", ["--json"])).out) as { clubs: { club: string; known?: boolean }[] };
+      assert.deepEqual(json.clubs.map((club) => [club.club, club.known]), [["acme-rc", false], ["brookside", undefined]]);
+
+      // Not a usage record at all reads the same way; no file is still a known zero.
+      await writeFile(voiceUsagePath(folder, "acme-rc"), "null");
+      assert.match((await run("voice-usage", [])).out, /acme-rc\s+on\s+100\s+-\s+\?/);
+
+      const given = await run("voice-topup", ["acme-rc", "50", "--json"]);
+      assert.equal(given.code, 0, given.err);
+      assert.equal((JSON.parse(given.out) as { known?: boolean }).known, false);
+      assert.match((await run("voice-topup", ["acme-rc", "1"])).out, /what it has used is unknown - its usage file will not read/);
+    });
   });
 });

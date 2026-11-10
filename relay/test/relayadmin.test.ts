@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, afterEach, beforeEach, describe, it } from "node:test";
+import { brainUsagePath } from "../src/brain.js";
 import { loadConfig } from "../src/config.js";
 import { hashToken, isActive, TenantRegistry } from "../src/tenancy.js";
 import { TopUpRequests } from "../src/topuprequests.js";
@@ -212,6 +213,20 @@ describe("relay admin: the admin commands", () => {
         snapshot.requests.map((request: { club: string; meter: string; note: string }) => [request.club, request.meter, request.note]),
         [["acme-rc", "commentary", "More recaps please"]],
       );
+    });
+
+    // Bug hunt 15: a usage file that will not read is known: false, not a quiet month of zeros.
+    it("marks a meter whose usage file will not read as unknown", async () => {
+      await mkdir(dirname(brainUsagePath(folder, "acme-rc")), { recursive: true });
+      await writeFile(brainUsagePath(folder, "acme-rc"), "{ broken");
+
+      const snapshot = JSON.parse((await run("admin-snapshot", ["--json"])).out);
+      assert.equal(snapshot.clubs[0].commentary.known, false);
+      assert.equal(snapshot.clubs[0].voice.known, undefined, "no voice file at all is a known zero");
+      assert.equal(snapshot.clubs[1].commentary.known, undefined);
+
+      const report = await run("brain-usage", []);
+      assert.match(report.out, /acme-rc\s+on\s+40\s+-\s+\?/);
     });
 
     it("answers JSON even without --json, since it is read by the app", async () => {
