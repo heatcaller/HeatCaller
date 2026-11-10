@@ -2322,6 +2322,25 @@ function lxLaps(list) {
   return Array.isArray(list) ? list.filter((ms) => typeof ms === 'number' && isFinite(ms) && ms > 0) : [];
 }
 
+// Whether a start lap was sent: any number in startMs, zero included
+// (bug hunt 15). A qualifier's first crossing zeroes their clock and is
+// counted as a lap of 0, and a car credited with the start lap at the green
+// has 0 there too - both are lap 1 on the card, so their flying laps are
+// lap 2 on. Only no startMs at all means no start lap.
+function lxHasStart(startMs) {
+  return typeof startMs === 'number' && isFinite(startMs) && startMs >= 0;
+}
+
+// The lap to mark best: the laptop's own best (the row's fastLapMs, or a
+// night's bestMs) when it is one of the laps, else the quickest of them.
+// The laptop keeps some laps out of the best - a credited jump-starter's
+// run from before the green, the lap through a crash stoppage - so its
+// figure is the one the result shows (bug hunt 15).
+function lxBest(good, bestMs) {
+  if (typeof bestMs === 'number' && isFinite(bestMs) && bestMs > 0 && good.indexOf(bestMs) >= 0) return bestMs;
+  return good.length > 0 ? Math.min.apply(null, good) : 0;
+}
+
 // THE THEORETICAL BEST (4 Nov 2026, from the relay roadmap): their best
 // time in every sector of the split loop, added up - the lap they would
 // have done had their best sectors all come on one lap. The laptop sends a
@@ -2352,7 +2371,7 @@ function lxConsecutive(list, k) {
 // LiveRC's lap stats, in ms (consistency in percent), or null with no laps.
 // A figure that needs more laps than they did (the top 15 of a 12-lap race)
 // is null rather than the average of fewer.
-function lapStats(raw) {
+function lapStats(raw, bestMs) {
   const laps = lxLaps(raw);
   if (laps.length === 0) return null;
 
@@ -2362,7 +2381,7 @@ function lapStats(raw) {
   const sd = Math.sqrt(laps.reduce((a, ms) => a + (ms - avg) * (ms - avg), 0) / laps.length);
 
   return {
-    fast: sorted[0],
+    fast: lxBest(sorted, bestMs),
     avg,
     top5: top(5),
     top10: top(10),
@@ -2397,13 +2416,14 @@ function lapStatLines(stats) {
 // with a time limit to project over, otherwise ''; pos is the place after
 // that lap, or 0 when it is not known. The laps are taken as sent, in
 // step with posAt, so a lap's position stays on its own row.
-function lapRows(raw, posAt, startMs, lengthS) {
+function lapRows(raw, posAt, startMs, lengthS, bestMs) {
   const list = Array.isArray(raw) ? raw : [];
   const places = Array.isArray(posAt) && posAt.length === list.length ? posAt : null;
   const limitMs = typeof lengthS === 'number' && lengthS > 0 ? lengthS * 1000 : 0;
   const good = lxLaps(list);
-  const quickest = good.length > 0 ? Math.min.apply(null, good) : 0;
-  const start = typeof startMs === 'number' && isFinite(startMs) && startMs > 0 ? startMs : 0;
+  const quickest = lxBest(good, bestMs);
+  const hasStart = lxHasStart(startMs);
+  const start = hasStart ? startMs : 0;
   let total = start;
   let counted = 0;
   let marked = false;
@@ -2417,9 +2437,11 @@ function lapRows(raw, posAt, startMs, lengthS) {
   // card, the result and the announcer all use. So the start lap is the
   // first row, and the flying laps are numbered from 2. It is never the
   // best lap and takes no part in the stats or the pace: it is shorter
-  // than a lap and starts from the grid.
-  if (start > 0) rows.push({ n: 1, ms: start, best: false, pace: '', pos: 0, start: true });
-  const first = start > 0 ? 2 : 1;
+  // than a lap and starts from the grid. A start lap of 0 (a qualifier's
+  // first crossing, a jump-starter credited at the green) is lap 1 all the
+  // same, shown as '-'.
+  if (hasStart) rows.push({ n: 1, ms: start, best: false, pace: '', pos: 0, start: true });
+  const first = hasStart ? 2 : 1;
 
   list.forEach((ms, i) => {
     const real = typeof ms === 'number' && isFinite(ms) && ms > 0;
@@ -2650,10 +2672,10 @@ let lengthOf = 0;
 // One driver's lap stats and lap list, as LiveRC's View Laps shows them.
 // Their lap chart is on their own night - see raceDetail there.
 function lapPanel(r, lengthS) {
-  const stats = lapStatLines(lapStats(r.lapsMs));
+  const stats = lapStatLines(lapStats(r.lapsMs, r.fastLapMs));
   const theory = lxTheoretical(r.sectorsMs);
   if (theory !== null) stats.push(['Theoretical best', lap(theory)]);
-  const list = lapRows(r.lapsMs, r.posAt, r.startMs, lengthS);
+  const list = lapRows(r.lapsMs, r.posAt, r.startMs, lengthS, r.fastLapMs);
   const pace = list.some((x) => x.pace !== '');
   const pos = list.some((x) => x.pos > 0);
 
@@ -2687,7 +2709,7 @@ function positionGraph(results) {
   const field = Math.max(drivers.length, ...drivers.map((r) => Math.max.apply(null, r.posAt)));
   // posAt is one place per FLYING lap (LapByLap), so with a start lap sent
   // the first of them is the place after lap 2, not lap 1 - see lapRows.
-  const first = (r) => Number(r.startMs) > 0 ? 2 : 1;
+  const first = (r) => lxHasStart(r.startMs) ? 2 : 1;
   const most = Math.max(...drivers.map((r) => r.posAt.length - 1 + first(r)));
   const W = 600;
   const H = 40 + field * 34;
@@ -11540,7 +11562,7 @@ function sameLaps(a, b) {
 // off the same way as their own laps, so a row of it sent without startMs
 // (a laptop from before 9 Nov) is drawn from their own first lap.
 function meLines(r, field) {
-  const own = { name: 'You', me: true, posAt: r.posAt, start: num(r.start), laps: lxLaps(r.lapsMs), first: num(r.startMs) > 0 ? 2 : 1 };
+  const own = { name: 'You', me: true, posAt: r.posAt, start: num(r.start), laps: lxLaps(r.lapsMs), first: lxHasStart(r.startMs) ? 2 : 1 };
   const night = Array.isArray(field) && field === r.field;
   const list = Array.isArray(field) ? field.filter((x) => x && typeof x === 'object') : [];
   let at = list.findIndex((x) => sameLaps(lxLaps(x.lapsMs), own.laps));
@@ -11556,7 +11578,7 @@ function meLines(r, field) {
     : {
       name: String(x.name || 'Unnamed driver'), me: false, colour: ME_COLOURS[i % ME_COLOURS.length],
       posAt: x.posAt, start: num(x.qual), laps: lxLaps(x.lapsMs),
-      first: num(x.startMs) > 0 ? 2 : night && x.startMs == null ? own.first : 1,
+      first: lxHasStart(x.startMs) ? 2 : night && x.startMs == null ? own.first : 1,
     });
 }
 
@@ -12272,7 +12294,7 @@ function raceDetail(r, stats, own) {
   const facts = raceFacts(r);
   if (facts) c.appendChild(el('div', 'rc-facts', facts));
 
-  const list = lapRows(r.lapsMs, r.posAt, r.startMs, r.lenS);
+  const list = lapRows(r.lapsMs, r.posAt, r.startMs, r.lenS, r.bestMs);
   const tabs = [];
 
   if (list.length > 0) {
@@ -12387,7 +12409,7 @@ function racesPart(into, id, title, all, clipsOf) {
     part.appendChild(el('p', 'note', 'Only demo races and practice so far. Untick to see them.'));
     return;
   }
-  const stats = races.map((r) => lapStats(r.lapsMs));
+  const stats = races.map((r) => lapStats(r.lapsMs, r.bestMs));
 
   const values = races.map((r, i) => pickValue(r, stats[i], view.pick));
   const good = values.filter((v) => v !== null);
