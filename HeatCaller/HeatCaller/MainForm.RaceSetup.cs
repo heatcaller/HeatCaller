@@ -587,6 +587,10 @@ public partial class MainForm
     /// </remarks>
     private void SyncTrackLayoutToRaceDay()
     {
+        // What the box last followed, so OnCurrentDayEdited can tell the
+        // day's track changing from an unrelated edit to the day.
+        _followedDayTrack = _raceEvents.Current.TrackLayoutName;
+
         // A round's own layout is more specific than the day's default, and
         // the box is locked to it while one is chosen.
         if (_activeRound is not null)
@@ -608,6 +612,36 @@ public partial class MainForm
         if (idx >= 0 && cmbTrackLayout.SelectedIndex != idx)
         {
             cmbTrackLayout.SelectedIndex = idx;
+        }
+    }
+
+    /// <summary>The day's TrackLayoutName when SyncTrackLayoutToRaceDay last ran.</summary>
+    private string? _followedDayTrack;
+
+    /// <summary>
+    /// The day now open was saved (RaceEventStore.CurrentEdited). The Track
+    /// box follows it only when the day's own track is what changed, so a
+    /// track picked by hand for one session is not put back by somebody
+    /// editing the day's notes or classes.
+    /// </summary>
+    /// <remarks>
+    /// Bug hunt 15 (9 Nov 2026): the wizard's new day was made current
+    /// still carrying last week's track and only then given tonight's, and
+    /// nothing told the box - freeform races and practice were filed under
+    /// last week's layout all night. Not while a race is under way, for the
+    /// reason the CurrentChanged handler gives; the box then catches up on
+    /// the next edit, round change or day switch.
+    /// </remarks>
+    private void OnCurrentDayEdited()
+    {
+        if (IsDisposed || RaceUnderWay)
+        {
+            return;
+        }
+
+        if (!string.Equals(_raceEvents.Current.TrackLayoutName, _followedDayTrack, StringComparison.Ordinal))
+        {
+            SyncTrackLayoutToRaceDay();
         }
     }
 

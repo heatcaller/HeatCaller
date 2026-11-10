@@ -880,6 +880,21 @@ public partial class MainForm
             }
         };
 
+        // The day now open having its own settings saved - the Set Up
+        // Tonight wizard writing the track it picked, The Day's layout box.
+        // See OnCurrentDayEdited.
+        _raceEvents.CurrentEdited += (_, _) =>
+        {
+            if (InvokeRequired)
+            {
+                TryPost(OnCurrentDayEdited);
+            }
+            else
+            {
+                OnCurrentDayEdited();
+            }
+        };
+
         return (raceProgram, achievements);
     }
 
