@@ -591,12 +591,15 @@ internal sealed class UsageMeters
         }
 
         var requests = new List<TopUpAsk>();
-        var askedAny = false;
+
+        // The meters whose relay was asked and didn't answer: their requests
+        // from the last answer are kept, so one relay failing doesn't hide
+        // the other relay's open asks (bug hunt 15, 9 Nov 2026).
+        var unanswered = new HashSet<MeterKind>();
         string? problem = null;
 
         if (commentaryTarget is { } commentary && (commentaryOn || (voiceOn && sameRelay)))
         {
-            askedAny = true;
             var (answer, why) = await GetUsageAsync(commentary, ct).ConfigureAwait(false);
 
             if (answer is not null)
@@ -617,12 +620,21 @@ internal sealed class UsageMeters
             else
             {
                 problem = why;
+
+                if (commentaryOn)
+                {
+                    unanswered.Add(MeterKind.Commentary);
+                }
+
+                if (voiceOn && sameRelay)
+                {
+                    unanswered.Add(MeterKind.HeatCallerVoice);
+                }
             }
         }
 
         if (voiceTarget is { } voiceRelay && voiceOn && !sameRelay)
         {
-            askedAny = true;
             var (answer, why) = await GetUsageAsync(voiceRelay, ct).ConfigureAwait(false);
 
             if (answer is not null)
@@ -633,10 +645,11 @@ internal sealed class UsageMeters
             else
             {
                 problem ??= why;
+                unanswered.Add(MeterKind.HeatCallerVoice);
             }
         }
 
-        SetRequests(requests, askedAny, problem);
+        SetRequests(requests, unanswered, problem);
 
         if (elevenLabsKey.Length > 0)
         {
@@ -706,26 +719,22 @@ internal sealed class UsageMeters
     internal const string ElevenLabsCantReadPlan =
         "This key can't read its plan - give it the User: read permission on elevenlabs.io to see it here.";
 
-    private void SetRequests(List<TopUpAsk> requests, bool asked, string? problem)
+    private void SetRequests(List<TopUpAsk> requests, HashSet<MeterKind> unanswered, string? problem)
     {
         bool changed;
 
         lock (_gate)
         {
-            // A relay that didn't answer leaves the list as it was; one that
-            // was not asked at all (nothing switched on) has nothing to list.
-            if (asked && problem is not null && requests.Count == 0)
-            {
-                changed = LastProblem != problem;
-                LastProblem = problem;
-            }
-            else
-            {
-                var next = requests.OrderByDescending(r => r.AskedUtc).ToList();
-                changed = !next.SequenceEqual(_requests) || LastProblem != problem;
-                _requests = next;
-                LastProblem = problem;
-            }
+            // A relay that didn't answer leaves its meters' requests as they
+            // were, whatever the other relay said; one that was not asked at
+            // all (nothing switched on) has nothing to list.
+            var next = requests
+                .Concat(_requests.Where(r => unanswered.Contains(r.Kind)))
+                .OrderByDescending(r => r.AskedUtc)
+                .ToList();
+            changed = !next.SequenceEqual(_requests) || LastProblem != problem;
+            _requests = next;
+            LastProblem = problem;
         }
 
         if (changed)
