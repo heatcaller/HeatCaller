@@ -419,10 +419,11 @@ public sealed class RaceHistoryControl : UserControl
         // Handicaps apply at presentation, never to the recorded result - so
         // the raw position stays in its own column and the adjusted one sits
         // beside it. Both visible, or the result can't be checked.
-        var mode = HandicapModeFor(session);
-        var adjusted = mode == HandicapMode.None || _handicaps is null
+        // On the credits kept with the race when it was filed (B52) - today's
+        // only for a race saved before they were kept.
+        var adjusted = _handicaps is null
             ? null
-            : HandicapCalculator.Apply(session.Results, _handicaps, mode)
+            : HandicapCalculator.ForSession(session, HandicapClassFor(session), _handicaps).Adjusted?
                 .ToDictionary(a => a.Result.Transponder, a => a, StringComparer.OrdinalIgnoreCase);
 
         _detailGrid.Columns["adj"]!.Visible = adjusted is not null;
@@ -578,17 +579,9 @@ public sealed class RaceHistoryControl : UserControl
                 ? $"\u2691 Black flag ({r.Warnings.Count})"
                 : $"\u26A0 {r.Warnings.Count}";
 
-    /// <summary>The handicap mode for whichever class this session's round belongs to.</summary>
-    private HandicapMode HandicapModeFor(SessionRecord session)
-    {
-        if (_handicaps is null || _rounds is null || session.RoundId is null)
-        {
-            return HandicapMode.None;
-        }
-
-        var round = _rounds.Get(session.RoundId);
-        return round is null ? HandicapMode.None : _handicaps.ModeFor(round.ClassName);
-    }
+    /// <summary>The class this session's round belongs to, for its handicap - null with no round.</summary>
+    private string? HandicapClassFor(SessionRecord session) =>
+        _rounds is null || session.RoundId is null ? null : _rounds.Get(session.RoundId)?.ClassName;
 
     private void SaveNotes()
     {

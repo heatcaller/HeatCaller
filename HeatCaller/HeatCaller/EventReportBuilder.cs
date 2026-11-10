@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text;
 
@@ -254,7 +255,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
         if (fastest.r is not null)
         {
             var name = NameFor(fastest.r.Transponder, fastest.r.DriverName, profiles);
-            sb.AppendLine($"<div class=\"card\"><div class=\"k\">{fastest.r.FastLapMs / 1000.0:0.000}s</div>"
+            sb.AppendLine($"<div class=\"card\"><div class=\"k\">{Secs(fastest.r.FastLapMs)}s</div>"
                           + $"<div class=\"l\">Fastest lap - {Esc(name)}</div></div>");
         }
 
@@ -329,11 +330,10 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
                               + (string.IsNullOrWhiteSpace(session.TrackLayoutName) ? "" : $" &middot; {Esc(session.TrackLayoutName)}")
                               + "</p>");
 
-                var mode = handicaps is null || round is null ? HandicapMode.None : handicaps.ModeFor(round.ClassName);
-                var adjusted = mode == HandicapMode.None
-                    ? null
-                    : HandicapCalculator.Apply(session.Results, handicaps!, mode)
-                        .ToDictionary(a => a.Result.Transponder, a => a, StringComparer.OrdinalIgnoreCase);
+                // On the credits kept with the race when it was filed, so an
+                // old meeting's report still names the winner it had (B52).
+                var adjusted = HandicapCalculator.ForSession(session, round?.ClassName, handicaps).Adjusted?
+                    .ToDictionary(a => a.Result.Transponder, a => a, StringComparer.OrdinalIgnoreCase);
 
                 // The DNF or DQ set in Edit Result, and why. Left out, a DNF
                 // printed as an ordinary finisher and a DQ as a row of no laps
@@ -364,7 +364,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
                     var adjCell = adj is null
                         ? string.Empty
                         : $"<td class=\"num\">P{adj.AdjustedPosition}"
-                          + (adj.CreditLaps != 0 ? $" (+{adj.CreditLaps}L)" : adj.CreditSeconds != 0 ? $" (-{adj.CreditSeconds:0.0}s)" : string.Empty)
+                          + (adj.CreditLaps != 0 ? $" (+{adj.CreditLaps}L)" : adj.CreditSeconds != 0 ? $" (-{adj.CreditSeconds.ToString("0.0", CultureInfo.InvariantCulture)}s)" : string.Empty)
                           + "</td>";
 
                     sb.AppendLine($"<tr{winner}>"
@@ -372,8 +372,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
                                   + $"<td>{Esc(name)}</td>"
                                   + $"<td>{Esc(string.IsNullOrWhiteSpace(result.CarModel) ? "-" : result.CarModel)}</td>"
                                   + $"<td class=\"num\">{HandCountedLaps.LapsText(result.Laps, HandCountedLaps.In(result))}</td>"
-                                  + $"<td class=\"num\">{result.ElapsedMs / 1000.0:0.000}s</td>"
-                                  + $"<td class=\"num\">{(result.FastLapMs > 0 ? $"{result.FastLapMs / 1000.0:0.000}s" : "-")}</td>"
+                                  + $"<td class=\"num\">{Secs(result.ElapsedMs)}s</td>"
+                                  + $"<td class=\"num\">{(result.FastLapMs > 0 ? $"{Secs(result.FastLapMs)}s" : "-")}</td>"
                                   + (hasOutcome ? $"<td>{Esc(OutcomeOf(result))}</td>" : string.Empty)
                                   + adjCell
                                   + "</tr>");
@@ -471,8 +471,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
                               + $"<td class=\"num\">{i + 1}</td>"
                               + $"<td>{Esc(e.DriverName)}</td>"
                               + $"<td class=\"num\">{e.BestLaps}</td>"
-                              + (consecutive ? $"<td class=\"num\">{(e.BestConsecutiveMs > 0 ? $"{e.BestConsecutiveMs / 1000.0:0.000}s" : "-")}</td>" : string.Empty)
-                              + $"<td class=\"num\">{(e.BestFastLapMs > 0 ? $"{e.BestFastLapMs / 1000.0:0.000}s" : "-")}</td>"
+                              + (consecutive ? $"<td class=\"num\">{(e.BestConsecutiveMs > 0 ? $"{Secs(e.BestConsecutiveMs)}s" : "-")}</td>" : string.Empty)
+                              + $"<td class=\"num\">{(e.BestFastLapMs > 0 ? $"{Secs(e.BestFastLapMs)}s" : "-")}</td>"
                               + $"<td>{Esc(e.SourceRoundLabel)}</td>"
                               + "</tr>");
             }
@@ -519,7 +519,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
         {
             var name = NameFor(bests[i].Transponder, bests[i].DriverName, profiles);
             sb.AppendLine($"<tr><td class=\"num\">{i + 1}</td><td>{Esc(name)}</td>"
-                          + $"<td class=\"num\">{bests[i].FastLapMs / 1000.0:0.000}s</td></tr>");
+                          + $"<td class=\"num\">{Secs(bests[i].FastLapMs)}s</td></tr>");
         }
 
         sb.AppendLine("</table>");
@@ -612,7 +612,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
             foreach (var result in session.Results.Where(r => r.LapTimesMs.Count > 0).OrderBy(r => r.Position))
             {
                 var name = NameFor(result.Transponder, result.DriverName, profiles);
-                var laps = string.Join(", ", result.LapTimesMs.Select(l => $"{l / 1000.0:0.000}"));
+                var laps = string.Join(", ", result.LapTimesMs.Select(l => Secs(l)));
                 sb.AppendLine($"<p><strong>{Esc(name)}</strong><br><span style=\"font-size:13px;color:#555\">{Esc(laps)}</span></p>");
             }
         }
@@ -643,4 +643,13 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
     /// <summary>HTML-escapes a value. Driver names and notes are free text and can contain anything.</summary>
     private static string Esc(string? value) => WebUtility.HtmlEncode(value ?? string.Empty);
+
+    /// <summary>
+    /// Milliseconds as "12.345", whatever the PC's culture (9 Nov 2026, Bug
+    /// Hunt 15, B35). On a decimal-comma PC every time came out "12,345", and
+    /// the lap-by-lap list - joined with ", " - read "12,345, 13,456", where
+    /// a lap's comma and the comma between laps were the same character.
+    /// Invariant, as TonightAtTheTrack.Lap and the CSV export already are.
+    /// </summary>
+    private static string Secs(long ms) => (ms / 1000.0).ToString("0.000", CultureInfo.InvariantCulture);
 }
