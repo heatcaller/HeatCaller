@@ -224,7 +224,7 @@ public partial class MainForm
         {
             _transponderHealth.Record(lap);
 
-            if (lap.IsSynthetic || lap.SignalHits <= 0)
+            if (lap.IsSynthetic || lap.IsSimulated || lap.SignalHits <= 0)
             {
                 return;
             }
