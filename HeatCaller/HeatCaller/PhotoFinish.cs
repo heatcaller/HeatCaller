@@ -106,7 +106,13 @@ public sealed class PhotoFinish
                 return;
             }
 
-            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            // WHY (9 Nov 2026, Bug Hunt 15, B3): with timing on its own
+            // thread this is told of the crossing whenever the UI gets to
+            // it - after a busy window, seconds late - and the camera keeps
+            // only half a second after the moment asked for, so a shot
+            // stamped "now" was of an empty line. Dated back by how long the
+            // crossing waited for the UI, as PracticeModeControl does.
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - Math.Max(0L, race.DeliveringAgeMs ?? 0L);
             var finish = IsFinishCrossing(race.IsFinishing, race.Flag, race.LapLimit, standing.Laps);
             Crossed(standing.TransponderId, PositionOf(race, standing), standing.Laps, now, finish);
         };

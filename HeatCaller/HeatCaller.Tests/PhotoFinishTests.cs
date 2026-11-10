@@ -94,6 +94,64 @@ public sealed class PhotoFinishTests : IDisposable
     }
 
     [Fact]
+    public void A_crossing_the_window_hears_of_late_is_shot_at_the_moment_the_car_crossed()
+    {
+        using var host = new TimingHost();
+        var ui = new QueueingSynchronizationContext();
+        var race = new RaceTiming(new RaceControlSession(), host, ui, false);
+        var photo = new PhotoFinish();
+        photo.Attach(race);
+
+        long crossedAt = 0;
+        OffTheUi(() =>
+        {
+            race.Stage();
+            race.GreenFlag(10_000);
+            crossedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            race.ProcessLapEvent(new DirectLapEvent
+            {
+                TransponderId = "101",
+                DeviceTimeMs = 21_000,
+                SignalHits = 1,
+                SignalStrength = 100,
+                Decoder = DecoderConnection.EasyLap,
+            });
+        });
+
+        // The window busy for well over the half-second the camera keeps after the moment.
+        Thread.Sleep(1_500);
+        ui.Pump();
+
+        var shot = Assert.Single(photo.After(0));
+        Assert.InRange(shot.AtUnixMs, crossedAt - 250, crossedAt + 250);
+    }
+
+    /// <summary>Runs <paramref name="work"/> on a new thread and waits - the timing side, off the test's "UI thread".</summary>
+    private static void OffTheUi(Action work)
+    {
+        Exception? failed = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                work();
+            }
+            catch (Exception ex)
+            {
+                failed = ex;
+            }
+        });
+
+        thread.Start();
+        thread.Join();
+
+        if (failed is not null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failed).Throw();
+        }
+    }
+
+    [Fact]
     public void A_frame_name_sorts_in_time_order_and_reads_back()
     {
         Assert.Equal("-0400.jpg", PhotoFinish.FrameName(-400));
