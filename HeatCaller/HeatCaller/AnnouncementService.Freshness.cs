@@ -18,8 +18,9 @@ namespace HeatCaller;
 /// (a record lap, a record in danger). 8 Nov 2026 - see WhyNoLongerTrue.
 /// </param>
 /// <param name="LeadMatters">False for a line a lead change cannot make untrue - a fight for fifth, a record lap.</param>
+/// <param name="LapsTakenOff">How many times a lap had been taken off by hand (bug hunt 15).</param>
 public sealed record RaceFactsStamp(long Race, long FastestLaps, long LeadChanges, int LeaderLaps, long AtMs, long? SayByMs = null,
-    int? LeaderLapsAllowed = 1, bool LeadMatters = true);
+    int? LeaderLapsAllowed = 1, bool LeadMatters = true, long LapsTakenOff = 0);
 
 /// <summary>
 /// Lines that are no longer true by the time they would be heard (8 Nov
@@ -132,6 +133,7 @@ public sealed partial class AnnouncementService
     private long _factsFastestLaps;
     private long _factsLeadChanges;
     private int _factsLeaderLaps;
+    private long _factsLapsTakenOff;
 
     /// <summary>
     /// The calls that are about the lap just completed - its time, its
@@ -222,7 +224,8 @@ public sealed partial class AnnouncementService
         Interlocked.Read(ref _factsFastestLaps),
         Interlocked.Read(ref _factsLeadChanges),
         Volatile.Read(ref _factsLeaderLaps),
-        TimingClock.NowMs);
+        TimingClock.NowMs,
+        LapsTakenOff: Interlocked.Read(ref _factsLapsTakenOff));
 
     /// <summary>
     /// Why a line written against <paramref name="then"/> is no longer true
@@ -238,6 +241,16 @@ public sealed partial class AnnouncementService
         if (now.FastestLaps != then.FastestLaps)
         {
             return "a quicker lap has been set since it was written";
+        }
+
+        // WHY (bug hunt 15): -1 lap folds a phantom split back into the lap
+        // before it. A record lap written about that split - "the fastest
+        // lap ever set on this layout: 2.100s" - is about a lap that is no
+        // longer on the board, and the fastest-lap count never moves for a
+        // lap taken away.
+        if (now.LapsTakenOff != then.LapsTakenOff)
+        {
+            return "a lap has been taken off by hand since it was written";
         }
 
         if (then.LeadMatters && now.LeadChanges != then.LeadChanges)
@@ -338,6 +351,13 @@ public sealed partial class AnnouncementService
                         && !GhostService.IsGhost(s.Transponder))
             .OrderBy(s => s.FastLapMs)
             .FirstOrDefault();
+
+    /// <summary>A lap was just taken off by hand - see WhyNoLongerTrue.</summary>
+    private void NoteLapTakenOffForFacts()
+    {
+        Interlocked.Increment(ref _factsLapsTakenOff);
+        BinStaleCommentary();
+    }
 
     /// <summary>The lead just changed hands.</summary>
     private void NoteLeadChangeForFacts()

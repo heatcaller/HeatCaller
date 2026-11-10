@@ -342,6 +342,40 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
     }
 
     [Fact]
+    public void A_lap_taken_off_by_hand_makes_a_line_untrue()
+    {
+        // Bug hunt 15: a stray hit split Terry's lap into 2.1 + 3.4, and the
+        // 2.1 was written up as a layout record. -1 lap folds it back - the
+        // fastest-lap count never moves for that, so this one has to.
+        // Terry is behind Dee, so the leader's lap count does not catch it.
+        var (announcer, _, _) = Announcer();
+        announcer.Muted = true;
+
+        RaceStanding Adjusted(int laps, long elapsedMs) => new()
+        {
+            Transponder = "101",
+            Laps = laps,
+            ElapsedMs = elapsedMs,
+            Status = "adjusted",
+            Id = "101",
+        };
+
+        announcer.OnStandingUpdated(Car("102", 9, 45_000));
+        announcer.OnStandingUpdated(Car("101", 5, 25_000));
+        announcer.OnStandingUpdated(Car("101", 6, 27_100));
+        var written = announcer.RaceFactsNow();
+
+        // A penalty with the laps left alone does not.
+        announcer.OnStandingUpdated(Adjusted(6, 30_100));
+        Assert.Null(AnnouncementService.WhyNoLongerTrue(written, announcer.RaceFactsNow()));
+
+        announcer.OnStandingUpdated(Adjusted(5, 30_100));
+
+        Assert.Equal("a lap has been taken off by hand since it was written",
+            AnnouncementService.WhyNoLongerTrue(written, announcer.RaceFactsNow()));
+    }
+
+    [Fact]
     public void A_new_race_moves_the_facts_on()
     {
         var (announcer, _, _) = Announcer();

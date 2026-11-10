@@ -409,6 +409,86 @@ public sealed class CommentaryDirectorTests : IDisposable
         Assert.Equal(0, _rig.Model.Asked);
     }
 
+    [Fact]
+    public async Task A_record_lap_taken_off_by_hand_is_not_called()
+    {
+        // Bug hunt 15: a stray hit split a lap, the short piece was a
+        // record, and -1 lap folded it back before it was said.
+        for (var i = 0; i < 4; i++)
+        {
+            _rig.Director.Lap($"warm-{i}", 20.0 + i);
+        }
+
+        _rig.Director.Lap("A", 20.5);
+        _rig.Director.Lap("A", 12.0);
+
+        _rig.Director.ForgetLaps("A", new[] { 20.5 });
+
+        var said = await _rig.Director.NextAsync();
+
+        Assert.True(said is null || said.Kind != SegmentKind.PaceNote);
+    }
+
+    [Fact]
+    public async Task A_record_lap_survives_another_drivers_lap_being_taken_off()
+    {
+        for (var i = 0; i < 4; i++)
+        {
+            _rig.Director.Lap($"warm-{i}", 20.0 + i);
+        }
+
+        _rig.Director.Lap("A", 12.0);
+
+        _rig.Director.ForgetLaps("warm-1", Array.Empty<double>());
+
+        var said = await _rig.Director.NextAsync();
+
+        Assert.NotNull(said);
+        Assert.Equal(SegmentKind.PaceNote, said!.Kind);
+    }
+
+    [Fact]
+    public async Task A_record_threat_goes_with_a_lap_taken_off()
+    {
+        _rig.Director.RecordThreatened(new RecordThreat(
+            "A", RecordThreatLevel.OnTheDoorstep, 12.05, 12.0, "Jen", 0.05, 2, 6, true));
+
+        _rig.Director.ForgetLaps("A", new[] { 20.5 });
+
+        var said = await _rig.Director.NextAsync();
+
+        Assert.True(said is null || said.Kind != SegmentKind.RecordWatch);
+    }
+
+    [Fact]
+    public async Task Laps_run_before_the_director_was_watching_are_learned_not_called()
+    {
+        // Bug hunt 15: a reset undone, a recovered race or the AI switched
+        // on mid-race hands over the race so far in one tick. A record lap
+        // from ten minutes ago is not "just gone fastest".
+        for (var i = 0; i < 4; i++)
+        {
+            _rig.Director.LapAlreadyRun($"warm-{i}", 20.0 + i);
+        }
+
+        _rig.Director.LapAlreadyRun("A", 12.0);
+
+        Assert.Null(await _rig.Director.NextAsync());
+        Assert.Equal(0, _rig.Model.Asked);
+
+        // But they are the bar: a slower lap after them is nothing, and a
+        // quicker one is the race's fastest.
+        _rig.Director.Lap("B", 12.5);
+        Assert.Null(await _rig.Director.NextAsync());
+
+        _rig.Director.Lap("B", 11.5);
+
+        var said = await _rig.Director.NextAsync();
+
+        Assert.NotNull(said);
+        Assert.Equal(SegmentKind.PaceNote, said!.Kind);
+    }
+
     // ------------------------------------------------------------------
     // Two voices
     // ------------------------------------------------------------------

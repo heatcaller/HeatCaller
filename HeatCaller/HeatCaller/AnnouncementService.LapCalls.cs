@@ -1082,6 +1082,12 @@ public sealed partial class AnnouncementService
         {
             NoteLapSeen(standing.Transponder);
         }
+        else if (_standings.TryGetValue(standing.Transponder, out var before) && standing.Laps < before.Laps)
+        {
+            // A lap taken off by hand (bug hunt 15): an AI line written
+            // about it is no longer true - see NoteLapTakenOffForFacts.
+            NoteLapTakenOffForFacts();
+        }
 
         _standings[standing.Transponder] = standing;
 

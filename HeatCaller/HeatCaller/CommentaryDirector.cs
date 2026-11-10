@@ -1154,6 +1154,53 @@ public sealed class CommentaryDirector
         }
     }
 
+    /// <summary>
+    /// A lap that was run before the director started watching this race
+    /// - a reset undone, a race recovered from the journal, the AI switched
+    /// on mid-race (bug hunt 15). PaceWatch learns it, so the bests are the
+    /// race's own, but nothing is held to be said: the note would be
+    /// stamped now for a lap from minutes ago.
+    /// </summary>
+    public void LapAlreadyRun(string driverId, double seconds)
+    {
+        if (!_racing)
+        {
+            return;
+        }
+
+        _ = Pace.Saw(new LapSeen(driverId, seconds));
+    }
+
+    /// <summary>
+    /// A lap of this driver's was taken off by hand (bug hunt 15). PaceWatch
+    /// rebuilds its bests from <paramref name="survivingLapSeconds"/>, and a
+    /// pace note or record threat raised from the lap that is gone is
+    /// dropped rather than said - "the fastest lap ever set on this layout"
+    /// about a phantom split that is no longer on the board.
+    /// </summary>
+    public void ForgetLaps(string driverId, IReadOnlyCollection<double> survivingLapSeconds)
+    {
+        Pace.Forget(driverId, survivingLapSeconds);
+
+        bool Gone(double seconds) => !survivingLapSeconds.Any(s => Math.Abs(s - seconds) < 1e-9);
+
+        // Their own lap, or another driver's note about beating it.
+        if (_pending is { } note
+            && ((string.Equals(note.DriverId, driverId, StringComparison.Ordinal) && Gone(note.LapSeconds))
+                || (string.Equals(note.PreviousHolder, driverId, StringComparison.Ordinal) && note.Beaten is { } beaten && Gone(beaten))))
+        {
+            Interlocked.CompareExchange(ref _pending, null, note);
+            Interlocked.CompareExchange(ref _paceCalling, null, note);
+        }
+
+        // Their running pace is not what it was: the threat goes with it.
+        if (_threat is { } threat && string.Equals(threat.DriverId, driverId, StringComparison.Ordinal))
+        {
+            Interlocked.CompareExchange(ref _threat, null, threat);
+            Interlocked.CompareExchange(ref _threatCalling, null, threat);
+        }
+    }
+
     private PaceNote? _pending;
     private DateTime _pendingAt;
 
