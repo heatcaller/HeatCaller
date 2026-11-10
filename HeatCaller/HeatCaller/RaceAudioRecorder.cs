@@ -224,6 +224,12 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         _minFreeBytes = minFreeBytes;
         StartedUtc = startedUtc;
 
+        // The same instant as startedUtc, on the Stopwatch - which is what
+        // the drift padding and the captions measure from, as RecapBed does
+        // (9 Nov 2026, Bug Hunt 15, B14). See ElapsedMs.
+        _startTicks = System.Diagnostics.Stopwatch.GetTimestamp()
+            - (long)((DateTime.UtcNow - startedUtc).TotalSeconds * System.Diagnostics.Stopwatch.Frequency);
+
         _writer = new Thread(WriteLoop)
         {
             IsBackground = true,
@@ -238,6 +244,21 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
 
     /// <summary>When this recording started, which is where its clock zeroes.</summary>
     public DateTime StartedUtc { get; }
+
+    /// <summary>StartedUtc on the Stopwatch - see ElapsedMs.</summary>
+    private readonly long _startTicks;
+
+    /// <summary>
+    /// How long this recording has been running, on a clock a Windows time
+    /// sync cannot move.
+    /// </summary>
+    // WHY (9 Nov 2026, Bug Hunt 15, B14): this used to be DateTime.UtcNow -
+    // StartedUtc. A laptop that joined a hotspot mid-heat had its clock
+    // stepped forward 8 s, the drift padding saw the file as 8 s behind and
+    // wrote 8 s of silence that never happened, and every clip cut after
+    // that started 8 s early - the marks it lines up with are on monotonic
+    // clocks (the race clock, lap device times), as RecapBed's bed is.
+    private long ElapsedMs => (long)System.Diagnostics.Stopwatch.GetElapsedTime(_startTicks).TotalMilliseconds;
 
     /// <summary>How far into the recording the green dropped, or null until the race has started.</summary>
     public long? GreenAtMs { get; private set; }
@@ -438,7 +459,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             return;
         }
 
-        _heard.Enqueue(new HeardLine((long)(DateTime.UtcNow - StartedUtc).TotalMilliseconds, text.Trim()));
+        _heard.Enqueue(new HeardLine(ElapsedMs, text.Trim()));
     }
 
     /// <summary>
@@ -569,6 +590,35 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             // recording stops; the race does not notice.
             Latch($"writing stopped ({ex.Message})");
         }
+        finally
+        {
+            // WHY (9 Nov 2026, Bug Hunt 15, B15): only this thread ever
+            // touches the file. Stop used to flush and close it itself, even
+            // when its wait for this thread had run out with a stalled disk -
+            // and WaveFileWriter is not thread-safe: Flush seeks back to the
+            // header, so a write still pending here and the header rewrite
+            // could land on one stream position and put audio over the
+            // header. The last header and the close are done here instead,
+            // whenever the disk lets this get here.
+            try
+            {
+                _wav.Flush();
+            }
+            catch (Exception ex)
+            {
+                _problem ??= $"the recording could not be finished off ({ex.Message})";
+            }
+
+            try
+            {
+                _wav.Dispose();
+            }
+            catch
+            {
+                // The header was just flushed, so the file is playable even
+                // if closing it complained.
+            }
+        }
     }
 
     /// <summary>
@@ -613,7 +663,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         // (queued as well as written), not only what is written - a writer
         // backlog is late audio, not missing audio. See _samplesAccepted.
         var accepted = Math.Max(written, Interlocked.Read(ref _samplesAccepted));
-        var elapsedMs = (long)(DateTime.UtcNow - StartedUtc).TotalMilliseconds;
+        var elapsedMs = ElapsedMs;
         var gap = SilenceSamplesNeeded(elapsedMs, accepted, SampleRate, DriftSlackMs);
 
         if (gap <= 0)
@@ -776,6 +826,8 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             return _result ?? Describe();
         }
 
+        var writerStuck = false;
+
         try
         {
             // Generous, and bounded. The queue holds about twelve seconds of
@@ -784,6 +836,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             // answering cannot hold a thread for the rest of the night.
             if (_writer.IsAlive && !_writer.Join(TimeSpan.FromSeconds(15)))
             {
+                writerStuck = true;
                 _problem ??= "the last few seconds could not be written";
             }
         }
@@ -792,32 +845,32 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             // A thread that never started.
         }
 
-        try
+        // The writer thread flushes and closes the file itself as it ends -
+        // see WriteLoop's finally (Bug Hunt 15, B15). Still stuck in a write,
+        // it is left to do that when the disk recovers: neither the file nor
+        // the queue it is reading is touched from here. Otherwise the close
+        // is a no-op on a closed writer, and only does anything for a thread
+        // that never ran.
+        if (!writerStuck)
         {
-            _wav.Flush();
-        }
-        catch (Exception ex)
-        {
-            _problem ??= $"the recording could not be finished off ({ex.Message})";
-        }
+            try
+            {
+                _wav.Dispose();
+            }
+            catch
+            {
+                // The header was already flushed, so the file is playable even
+                // if closing it complained.
+            }
 
-        try
-        {
-            _wav.Dispose();
-        }
-        catch
-        {
-            // The header was already flushed, so the file is playable even
-            // if closing it complained.
-        }
-
-        try
-        {
-            _pending.Dispose();
-        }
-        catch
-        {
-            // Nothing left to do about it.
+            try
+            {
+                _pending.Dispose();
+            }
+            catch
+            {
+                // Nothing left to do about it.
+            }
         }
 
         // The bed's last seconds and its header. Its own bounded wait, on
