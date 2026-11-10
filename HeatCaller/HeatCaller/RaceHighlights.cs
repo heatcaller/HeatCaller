@@ -132,9 +132,11 @@ internal static class RaceHighlights
     /// The running total of a driver's lap times: the moment of each
     /// crossing, in milliseconds after the green.
     ///
-    /// <paramref name="offsetMs"/> is the driver's release offset, which is
-    /// zero in an ordinary race and is how long after the green a staggered
-    /// or qualifying start let this driver go (RacerStanding.ReleaseOffsetMs).
+    /// <paramref name="offsetMs"/> is where the driver's own clock started,
+    /// in ms after the green: zero in an ordinary race and on one clock from
+    /// the green (SharedGreen, a handicap start - the hold is already in the
+    /// first lap), the release under OwnRelease, and the first crossing in a
+    /// qualifier. See RaceControlControl.ClockZeroSinceGreenMs.
     /// A negative lap time - which should not happen, but a corrected result
     /// could carry one - is treated as zero rather than winding the timeline
     /// backwards.
@@ -198,14 +200,15 @@ internal static class RaceHighlights
     /// <summary>
     /// A driver's release offset, or zero.
     ///
-    /// Zero in an ordinary race. In a staggered or qualifying start each
-    /// driver is let go at their own moment and their lap times run from
-    /// there, so without this every one of their moments would land that
-    /// much too early in the recording - up to a minute for the back of a
-    /// staggered grid. The offsets are not on the saved result, so the
-    /// caller reads them off the board at the flag
-    /// (RacerStanding.ReleaseOffsetMs, which the crash journal stores too)
-    /// and hands them in.
+    /// Zero in an ordinary race. Where a driver's lap times run from their
+    /// own zero - their release on each driver's own clock (OwnRelease), their
+    /// first crossing in a qualifier - without this every one of their
+    /// moments would land that much too early in the recording - up to a
+    /// minute for the back of a staggered grid. On one clock from the green
+    /// (SharedGreen) it is zero: the hold is already in the first lap. The
+    /// offsets are not on the saved result, so the caller works them out off
+    /// the board at the flag (RaceControlControl.ClockZeroSinceGreenMs) and
+    /// hands them in.
     /// </summary>
     private static long OffsetOf(IReadOnlyDictionary<string, long>? releaseOffsetsMs, string transponder) =>
         releaseOffsetsMs is not null && releaseOffsetsMs.TryGetValue(transponder, out var offset) ? offset : 0;

@@ -913,7 +913,7 @@ public sealed partial class RaceControlControl
 
         if (plan is { Principal: true })
         {
-            var boothWinner = record.Results.OrderBy(r => r.Position).FirstOrDefault()?.Transponder;
+            var boothWinner = CommentaryService.ClassifiedWinner(record)?.Transponder;
             boothBrief = BoothBrief.Nothing with { WinnerTransponder = boothWinner };
 
             try
@@ -2422,8 +2422,11 @@ public sealed partial class RaceControlControl
         // is an occasion, and after every heat it would be a routine.
         // Unless the club has asked for it after heats too (21 Oct 2026,
         // Cast > Technical Lead).
+        // And only with a winner to talk about (bug hunt 15): nobody
+        // finished, nobody to celebrate - see CommentaryService.ClassifiedWinner.
         var interview = _settings.RecapMechanicInterview
-            && (round?.Kind == RoundKind.Main || _settings.RecapMechanicInterviewHeats);
+            && (round?.Kind == RoundKind.Main || _settings.RecapMechanicInterviewHeats)
+            && CommentaryService.ClassifiedWinner(record) is not null;
         var closing = _settings.RecapBroadcastClosing;
 
         // THE TEAM PRINCIPAL (17 Oct 2026): after the Technical Lead when
@@ -2849,10 +2852,20 @@ public sealed partial class RaceControlControl
             return false;
         }
 
+        // Nobody finished - a one-car main black-flagged, every car out -
+        // so there is no winner for him to be proud of (bug hunt 15). The
+        // flag read and the throw already name nobody; see ClassifiedWinner.
+        var winner = CommentaryService.ClassifiedWinner(record);
+
+        if (winner is null)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] No Team Principal after this race - nobody finished it.");
+            return false;
+        }
+
         if (_settings.PrincipalTeamsOnly)
         {
-            var winner = record.Results.OrderBy(r => r.Position).First();
-
             if (string.IsNullOrWhiteSpace(_profiles.Get(winner.Transponder)?.Team))
             {
                 StatusMessage?.Invoke(
@@ -3170,7 +3183,7 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        var winner = record.Results.OrderBy(r => r.Position).FirstOrDefault();
+        var winner = CommentaryService.ClassifiedWinner(record);
 
         if (winner is null || string.IsNullOrWhiteSpace(winner.Transponder))
         {
@@ -6146,13 +6159,16 @@ public sealed partial class RaceControlControl
     /// Each driver's release offset, read off the board at the flag,
     /// alongside <see cref="_raceAudioRecord"/>.
     ///
-    /// Zero for everybody in an ordinary race. In a staggered or qualifying
-    /// start each driver is let go at their own moment and their lap times
-    /// run from there, so their moments in the recording are that much later
-    /// than the lap times alone say - up to a minute for the back of a
-    /// staggered grid. The saved result does not carry the offset (only the
-    /// crash journal does, as ReleaseOffsetsMs), so it is taken from the
-    /// standings here, where they are still the ones that ran the race.
+    /// Zero for everybody in an ordinary race. Strictly each car's clock zero
+    /// since the green (ClockZeroSinceGreenMs): a staggered start on each
+    /// driver's own clock (OwnRelease) times each from their release, and a
+    /// qualifier from their first crossing, so their moments in the
+    /// recording are that much later than the lap times alone say - up to a
+    /// minute for the back of a staggered grid. On one clock from the green
+    /// (SharedGreen, every handicap start) the lap times already run from the
+    /// green, and the zero is nought however long the car was held. The saved
+    /// result does not carry it, so it is taken from the standings here,
+    /// where they are still the ones that ran the race.
     /// </summary>
     private Dictionary<string, long>? _raceAudioReleaseOffsets;
 
@@ -8148,9 +8164,20 @@ public sealed partial class RaceControlControl
                 // result does not carry it - see _raceAudioReleaseOffsets. Read here,
                 // where these rows are still the ones that ran the race: by the time
                 // the recording is written out the board has moved on.
+                //
+                // Each car's real clock zero, not its release offset (bug hunt
+                // 15): on SharedGreen - every handicap start - the first lap is
+                // timed from the green, so adding the hold counted it twice and
+                // put the scratch driver's every crossing 30 s late. And a
+                // qualifier's clock starts at its first crossing, which the
+                // release offset (zero there) never covered. The mode is the
+                // one the race ran with: a handicap's override is only put back
+                // when the next start is built.
+                var startType = _race.StartType;
+                var staggerClock = _race.StaggerClockMode;
                 _raceAudioReleaseOffsets = racers.ToDictionary(
                     s => s.TransponderId,
-                    s => s.ReleaseOffsetMs,
+                    s => ClockZeroSinceGreenMs(s, startType, staggerClock),
                     StringComparer.OrdinalIgnoreCase);
 
                 // The filing whose recap is coming - see WriteTheNextIntroAhead,
