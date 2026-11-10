@@ -838,9 +838,10 @@ internal sealed class VoiceLibrary
     /// Written to a temporary file beside it, flushed to the disk, then
     /// moved into place - so a crash or a power cut mid-save leaves either
     /// the old file or the new one, never half of one that would then be
-    /// played as noise.
+    /// played as noise. Also used by StingerLibrary for recorded soundscape
+    /// lines (9 Nov 2026, Bug Hunt 15, B32).
     /// </summary>
-    private static void WriteAtomically(string path, byte[] bytes)
+    internal static void WriteAtomically(string path, byte[] bytes)
     {
         var temp = path + "." + Guid.NewGuid().ToString("N") + TempExtension;
 
