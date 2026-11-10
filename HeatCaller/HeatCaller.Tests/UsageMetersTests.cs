@@ -626,6 +626,41 @@ public sealed class UsageMetersTests : IDisposable
         Assert.Empty(opened);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task An_ask_the_relay_answered_itself_emails_no_one_and_says_it_was_given(bool already)
+    {
+        // Bug hunt 15: the relay's automatic top-up was never read, so support
+        // was emailed anyway (and could give it again), and a re-ask it
+        // answered said "still open".
+        UsageMeters.Http = new HttpClient(new FakeServer(
+            HttpStatusCode.OK,
+            $$"""{ "ok": true, "request": { "id": "r_2", "status": "done" }, "already": {{(already ? "true" : "false")}}, "autoTopUp": 25000 }"""));
+
+        var opened = new List<string>();
+        TopUpRequest.OpenMailTo = opened.Add;
+
+        var toppedUp = new List<MeterKind>();
+        Action<MeterKind> heard = toppedUp.Add;
+        TopUpRequest.AutoToppedUp += heard;
+
+        try
+        {
+            var voice = new Meter(MeterKind.HeatCallerVoice, true, 95000, 100000, 0, null, DateTime.UtcNow, 0, null);
+            var said = await TopUpRequest.SendAsync(RelaySettings(), voice, null);
+
+            Assert.Empty(opened);
+            Assert.DoesNotContain("Already asked", said);
+            Assert.Contains("25,000 more characters", said);
+            Assert.Equal(MeterKind.HeatCallerVoice, Assert.Single(toppedUp));
+        }
+        finally
+        {
+            TopUpRequest.AutoToppedUp -= heard;
+        }
+    }
+
     [Fact]
     public async Task The_clubs_own_elevenlabs_plan_is_not_topped_up_here()
     {
