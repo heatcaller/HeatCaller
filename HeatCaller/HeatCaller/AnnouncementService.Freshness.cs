@@ -339,9 +339,34 @@ public sealed partial class AnnouncementService
     /// board. Arrival order is not lap order; the board is.
     /// </remarks>
     private string? FastLapNoLongerTrue(RaceStanding? standing) =>
-        standing is { FastLapMs: > 0 } && QuickerBest(standing.Transponder, standing.FastLapMs, _lapCrossings.Board) is { } quicker
-            ? $"{quicker.DisplayName}'s {quicker.FastLapMs / 1000.0:0.000} is quicker than its {standing.FastLapMs / 1000.0:0.000}"
+        FastLapBeatenOnBoard(standing, _lapCrossings.Board);
+
+    /// <summary>The board-side half of <see cref="FastLapNoLongerTrue"/>.</summary>
+    /// <remarks>
+    /// The driver's own row counts too (bug hunt 15): the call's standing is a
+    /// snapshot from queue time, so if the same car goes quicker while the call
+    /// is rendering, its own best on the board is now below the lap being
+    /// announced. On a 5.5 s track a 5-6 s render outlasts the next lap. The
+    /// strict &lt; keeps the call true while its lap is still the car's best.
+    /// </remarks>
+    internal static string? FastLapBeatenOnBoard(RaceStanding? standing, IEnumerable<RaceStanding> board)
+    {
+        if (standing is not { FastLapMs: > 0 })
+        {
+            return null;
+        }
+
+        var rows = board as IReadOnlyCollection<RaceStanding> ?? board.ToList();
+        if (QuickerBest(standing.Transponder, standing.FastLapMs, rows) is { } quicker)
+        {
+            return $"{quicker.DisplayName}'s {quicker.FastLapMs / 1000.0:0.000} is quicker than its {standing.FastLapMs / 1000.0:0.000}";
+        }
+
+        return rows.FirstOrDefault(s => string.Equals(s.Transponder, standing.Transponder, StringComparison.OrdinalIgnoreCase)) is { FastLapMs: > 0 } own
+               && own.FastLapMs < standing.FastLapMs
+            ? $"its own {own.FastLapMs / 1000.0:0.000} has beaten its {standing.FastLapMs / 1000.0:0.000}"
             : null;
+    }
 
     /// <summary>The car on <paramref name="board"/> whose best beats <paramref name="lapMs"/>, if any - never a ghost (they do not hold the race's fastest lap).</summary>
     internal static RaceStanding? QuickerBest(string? transponder, long lapMs, IEnumerable<RaceStanding> board) =>
