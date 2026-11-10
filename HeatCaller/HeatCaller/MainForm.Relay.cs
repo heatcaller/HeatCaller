@@ -1118,6 +1118,15 @@ public partial class MainForm
                 continue;
             }
 
+            // Only the drivers the finals are built from (Bug hunt 15, B53):
+            // a driver who went home and was un-checked-in, or a car no
+            // longer in the class, is not seeded into a main by the program,
+            // so this page does not seed them either.
+            var inRoster = _raceProgram.ClassRoster(raceClass.Name)
+                .Select(p => p.Transponder)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            entries = entries.Where(e => inRoster.Contains(e.Transponder)).ToList();
+
             if (entries.Count == 0)
             {
                 continue;
