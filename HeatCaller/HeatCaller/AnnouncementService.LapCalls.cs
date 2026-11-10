@@ -1279,6 +1279,79 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>
+    /// A race put back - an undone Stage or Reset, or one restored after a
+    /// crash - loaded into the running order quietly: its standings, the
+    /// leader, the lappings already shown and the report lap, with no call.
+    /// </summary>
+    /// <remarks>
+    /// WHY (9 Nov 2026, Bug hunt 15): Stage over a running race resets the
+    /// announcer, and the undo put the race back on the board but not here.
+    /// After the green the first car over - a back-marker, say - was the
+    /// whole field to the announcer and its silent "leader", so the real
+    /// leader crossing next was called as taking the lead, every lapped car
+    /// was called lapped again, and a position report could be read off the
+    /// few cars seen so far. Routing the standings through OnStandingUpdated
+    /// would make exactly those calls, so this sets them as
+    /// KeepInStepWithCorrection does a correction.
+    /// </remarks>
+    public void SeedStandings(IEnumerable<RaceStanding> standings)
+    {
+        lock (_voiceQueueLock)
+        {
+            _standings.Clear();
+            _lapCrossings.Clear();
+
+            foreach (var standing in standings)
+            {
+                _standings[standing.Transponder] = standing;
+            }
+
+            var board = _standings.Values.ToArray();
+            foreach (var standing in board)
+            {
+                _lapCrossings.Record(standing, board);
+            }
+
+            var ordered = board
+                .OrderByDescending(s => s.Laps)
+                .ThenBy(s => s.ElapsedMs)
+                .ToList();
+
+            // The report's leader by its own rule - see MaybeAnnouncePositions -
+            // so the lap the race is on is not read out again at the green.
+            var reportLeader = AnnounceGhostsProvider?.Invoke() == false
+                ? ordered.FirstOrDefault(s => !MutedGhost(s.Transponder))
+                : ordered.FirstOrDefault();
+            _lastPositionReportLap = reportLeader?.Laps ?? -1;
+
+            var field = ordered.Where(s => !MutedGhost(s.Transponder)).ToList();
+            if (field.FirstOrDefault() is not { } leader)
+            {
+                _currentLeaderTransponder = null;
+                return;
+            }
+
+            NoteLeaderLapsForFacts(leader.Laps);
+
+            _leads.Correct(leader.Transponder);
+            _currentLeaderTransponder = leader.Transponder;
+
+            // Only ever up, as in CheckLapped.
+            foreach (var car in field.Skip(1))
+            {
+                var lapsDown = GapBetween(car, leader).LapsDown;
+
+                if (lapsDown > _lappedAnnounced.GetValueOrDefault(car.Transponder))
+                {
+                    _lappedAnnounced[car.Transponder] = lapsDown;
+                }
+            }
+
+            CheckRivalries(field, call: false);
+        }
+    }
+
+    /// <summary>
     /// The lead changes of this race - how many, among how many drivers.
     /// Read by the broadcast graphics (WebServerService) as well as used for
     /// the lead change call, so the two always say the same number.

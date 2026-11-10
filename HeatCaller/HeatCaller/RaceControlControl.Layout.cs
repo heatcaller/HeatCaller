@@ -1231,6 +1231,8 @@ public sealed partial class RaceControlControl
                     // is written again now rather than at its next crossing.
                     WriteJournal(force: true);
 
+                    // See SeedAnnouncerFromRace.
+                    SeedAnnouncerFromRace();
                     RenderLeaderboard();
                     UpdateClockDisplay();
 

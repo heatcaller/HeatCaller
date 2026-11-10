@@ -671,6 +671,31 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>
+    /// A race put back - an undone Stage or Reset, or a crash restore - into
+    /// the announcer's running order, quietly. Stage resets the announcer,
+    /// and RestoreSnapshot raises no lap events, so without this the first
+    /// crossings after the green rebuilt the order from nothing and made
+    /// false lead change, lapped and position calls (9 Nov 2026, Bug hunt
+    /// 15) - see AnnouncementService.SeedStandings.
+    /// </summary>
+    private void SeedAnnouncerFromRace()
+    {
+        _announcer.SeedStandings(_race.GetOrderedStandings().Select(standing => new RaceStanding
+        {
+            Transponder = standing.TransponderId,
+            Name = _profiles.Get(standing.TransponderId)?.DriverName,
+            Laps = standing.Laps,
+            FastLapMs = standing.FastestLapMs,
+            ElapsedMs = standing.ElapsedMs,
+            Status = "active",
+            Id = standing.TransponderId,
+            LapsLed = standing.LapsLed,
+            PenaltyMs = standing.PenaltyMs,
+            LapTimesMs = standing.LapTimesMs.ToArray(),
+        }).ToList());
+    }
+
+    /// <summary>
     /// A ghost switched off mid-race, taken off the board. Off the
     /// announcer's running order too, and out of the crash journal.
     /// </summary>

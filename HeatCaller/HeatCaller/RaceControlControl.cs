@@ -1152,6 +1152,8 @@ public sealed partial class RaceControlControl : UserControl
             // or finished session, which has nothing to protect.
             WriteJournal(force: true);
 
+            // See SeedAnnouncerFromRace.
+            SeedAnnouncerFromRace();
             RenderLeaderboard();
             UpdateClockDisplay(force: true);
 

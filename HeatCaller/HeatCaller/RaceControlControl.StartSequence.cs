@@ -473,6 +473,9 @@ public sealed partial class RaceControlControl
             ApplyEffectiveFormat();
 
             WriteJournal(force: true);
+
+            // Staging reset the announcer - see SeedAnnouncerFromRace.
+            SeedAnnouncerFromRace();
             RenderLeaderboard();
             UpdateClockDisplay(force: true);
 

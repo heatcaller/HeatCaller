@@ -8453,6 +8453,8 @@ public sealed partial class RaceControlControl
             // wrong ones.
             WriteJournal(force: true);
 
+            // See SeedAnnouncerFromRace.
+            SeedAnnouncerFromRace();
             RenderLeaderboard();
             UpdateClockDisplay(force: true);
 
