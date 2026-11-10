@@ -1893,22 +1893,25 @@ internal sealed class RaceDaySetupWizard : Form
         // through Stock who meets a new face is adding a Stock driver.
         var startClass = _cmbWhoClass.SelectedIndex > 0 ? _cmbWhoClass.SelectedItem as string : null;
 
-        using var form = new QuickDriverForm(classes, startClass, transponder =>
-            _profiles.Get(transponder) is { } existing
-                ? (string.IsNullOrWhiteSpace(existing.DriverName) ? "someone else" : existing.DriverName)
-                : null);
+        using var form = new QuickDriverForm(classes, startClass, QuickDriverForm.OwnerNameIn(_profiles));
 
         if (form.ShowDialog(this) != DialogResult.OK)
         {
             return;
         }
 
-        _profiles.Upsert(new DriverProfile
+        // TryAdd, not Upsert: a create, refused rather than saved over
+        // anybody - the backstop if the window's check let a clash by.
+        if (!_profiles.TryAdd(new DriverProfile
+            {
+                Transponder = form.Transponder,
+                DriverName = form.DriverName,
+                ClassName = form.ClassName,
+            }, out var refusal))
         {
-            Transponder = form.Transponder,
-            DriverName = form.DriverName,
-            ClassName = form.ClassName,
-        });
+            AppDialog.Show(this, refusal, "Transponder already in use", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
 
         // Checked in as well - they are standing at the desk. Only with a
         // day open: check-ins are per day, and there is none to record it on.
@@ -2464,6 +2467,21 @@ internal sealed class QuickDriverForm : Form
 
     /// <summary>Who already has a transponder, or null when nobody does.</summary>
     private readonly Func<string, string?> _ownerOf;
+
+    /// <summary>
+    /// The check both Add Driver windows hand this: the name of whoever
+    /// already has a transponder, or null when nobody does.
+    ///
+    /// WHY (9 Nov 2026): on OwnerOf, not Get. Get leaves out an extra that
+    /// two drivers both list (see ProfileStore.RebuildAlternateIndex), so
+    /// such an id passed, became the newcomer's MAIN transponder - and a
+    /// main always wins, so every lap from either older driver's second car
+    /// went to the newcomer.
+    /// </summary>
+    public static Func<string, string?> OwnerNameIn(ProfileStore profiles) => transponder =>
+        profiles.OwnerOf(transponder) is { } existing
+            ? (string.IsNullOrWhiteSpace(existing.DriverName) ? "someone else" : existing.DriverName)
+            : null;
 
     public string DriverName => _txtName.Text.Trim();
     public string Transponder => _txtTransponder.Text.Trim();

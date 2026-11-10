@@ -812,22 +812,25 @@ public sealed class CheckInControl : UserControl
         // Stock who meets a new face is adding a Stock driver.
         var startClass = _cmbClassFilter.SelectedIndex > 0 ? _cmbClassFilter.SelectedItem as string : null;
 
-        using var form = new QuickDriverForm(classes, startClass, transponder =>
-            _profiles.Get(transponder) is { } existing
-                ? (string.IsNullOrWhiteSpace(existing.DriverName) ? "someone else" : existing.DriverName)
-                : null);
+        using var form = new QuickDriverForm(classes, startClass, QuickDriverForm.OwnerNameIn(_profiles));
 
         if (form.ShowDialog(this) != DialogResult.OK)
         {
             return;
         }
 
-        _profiles.Upsert(new DriverProfile
+        // TryAdd, not Upsert: a create, refused rather than saved over
+        // anybody - the backstop if the window's check let a clash by.
+        if (!_profiles.TryAdd(new DriverProfile
+            {
+                Transponder = form.Transponder,
+                DriverName = form.DriverName,
+                ClassName = form.ClassName,
+            }, out var refusal))
         {
-            Transponder = form.Transponder,
-            DriverName = form.DriverName,
-            ClassName = form.ClassName,
-        });
+            AppDialog.Show(this, refusal, "Transponder already in use", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
 
         _checkIns.SetCheckedIn(form.Transponder, true);
         CheckInChangedAtDesk?.Invoke(form.Transponder);
