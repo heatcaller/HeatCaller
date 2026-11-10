@@ -230,7 +230,7 @@ public sealed class PositionReportCutTests : IDisposable
         Assert.Contains("if (movedWhileRendered && !heard && !isRetry)", source, StringComparison.Ordinal);
 
         // Worded again from the board as it then stands, as an ordinary report.
-        Assert.Contains("var againText = WordRunningOrder(again, template, sayGaps);", source, StringComparison.Ordinal);
+        Assert.Contains("var againText = WordRunningOrder(again, template, sayGaps, placesOnly);", source, StringComparison.Ordinal);
         Assert.Contains("Work(again, againText, isRetry: true)", source, StringComparison.Ordinal);
     }
 

@@ -554,7 +554,15 @@ public sealed partial class AnnouncementService
         var sayGaps = config.PositionReportSayGaps
             && template.Contains("{gaps}", StringComparison.OrdinalIgnoreCase);
 
-        var text = WordRunningOrder(rows, template, sayGaps);
+        // And with the box unticked, no gaps at all - just the places
+        // (9 Nov 2026). The box is labelled "Say each car's gap to the
+        // leader", but unticked it only moved the gaps from {gaps} back
+        // into the order, so a club that turned it off still heard "Bill
+        // one point two three four back" on every report. Ticked with no
+        // {gaps} in the line, they are said after each name as before.
+        var placesOnly = !config.PositionReportSayGaps;
+
+        var text = WordRunningOrder(rows, template, sayGaps, placesOnly);
 
         if (text.Length == 0)
         {
@@ -628,7 +636,7 @@ public sealed partial class AnnouncementService
 
                 if (RunningOrderNow(depth) is { Count: >= 2 } now && PositionReportOrder.Moved(queuedRows, now))
                 {
-                    var reworded = WordRunningOrder(now, template, sayGaps);
+                    var reworded = WordRunningOrder(now, template, sayGaps, placesOnly);
 
                     if (reworded.Length > 0)
                     {
@@ -697,7 +705,7 @@ public sealed partial class AnnouncementService
                 return false;
             }
 
-            var againText = WordRunningOrder(again, template, sayGaps);
+            var againText = WordRunningOrder(again, template, sayGaps, placesOnly);
 
             if (againText.Length == 0)
             {
