@@ -406,16 +406,23 @@ public sealed class SessionHistoryStore
         }
     }
 
-    /// <summary>Removes a session. False when the write did not reach disk, so it is back on the next launch.</summary>
+    /// <summary>
+    /// Removes a session. False when the write did not reach disk - and then
+    /// a session that was on disk is left listed, as the file still has it.
+    ///
+    /// WHY (2026-11-09, Bug hunt 15, B24): it used to come out of memory
+    /// either way. The file still held it, so it was back at the next launch
+    /// - unless any later save landed first, which then wrote the history
+    /// without it after all. Its caller could not tell which, so whether it
+    /// unlinked the round or not, one of the two outcomes left race history
+    /// and rounds.json disagreeing. Now a false means nothing was deleted.
+    /// A record Add never managed to file (see _unsaved) is not on disk, so
+    /// that one goes regardless.
+    /// </summary>
     public bool Delete(string id)
     {
-        // Remembered as never filed - see _deletedUnfiled. Races only: a
-        // practice has no crash journal and nothing in Race Control waiting
-        // to file it, so its undo goes on restoring it with Add.
-        foreach (var unfiled in _unsaved.Where(s => s.Id == id && s.SessionType != RaceSessionType.Practice))
-        {
-            _deletedUnfiled.Add(unfiled);
-        }
+        var before = _sessions.ToList();
+        var unsavedBefore = _unsaved.Where(s => s.Id == id).ToList();
 
         var removed = _sessions.Where(s => s.Id == id).ToList();
 
@@ -423,11 +430,27 @@ public sealed class SessionHistoryStore
         _unsaved.RemoveWhere(s => s.Id == id);
         var saved = Save();
 
+        if (!saved)
+        {
+            // Back as it was, less what was never on disk.
+            _sessions.Clear();
+            _sessions.AddRange(before.Where(s => s.Id != id || !unsavedBefore.Contains(s)));
+            removed = removed.Where(s => unsavedBefore.Contains(s)).ToList();
+        }
+
+        // Remembered as never filed - see _deletedUnfiled. Races only: a
+        // practice has no crash journal and nothing in Race Control waiting
+        // to file it, so its undo goes on restoring it with Add.
+        foreach (var unfiled in unsavedBefore.Where(s => s.SessionType != RaceSessionType.Practice))
+        {
+            _deletedUnfiled.Add(unfiled);
+        }
+
         // WHY (2026-11-05, Bug hunt 11: a deleted race's penalty lines and
         // report cards stayed on the Wi-Fi phone pages until the next race
-        // was filed - nothing told MainForm a race had gone). Raised whether
-        // or not the write landed: the race is out of All either way, and
-        // All is what the listeners read back.
+        // was filed - nothing told MainForm a race had gone). Raised for
+        // each record that is out of All, which is what the listeners read
+        // back - after a failed write, only one that was never on disk.
         foreach (var record in removed)
         {
             RaiseEach(SessionDeleted, record);

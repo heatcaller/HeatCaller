@@ -802,8 +802,8 @@ public sealed class RaceHistoryControl : UserControl
             return;
         }
 
-        // One undo for the batch rather than one per session.
-        var history = _history;
+        // One undo for the batch rather than one per session - see
+        // CaptureDeleteUndo.
         var rounds = _rounds;
 
         // Which round each of these sessions recorded, read BEFORE anything
@@ -817,6 +817,65 @@ public sealed class RaceHistoryControl : UserControl
                     .Where(r => string.Equals(r.LinkedSessionId, session.Id, StringComparison.Ordinal))
                     .Select(r => (RoundId: r.Id, SessionId: session.Id)))
                 .ToList();
+
+        // WHY (2026-11-09, Bug hunt 15, B24): Delete's answer was thrown
+        // away, and the round was unlinked whether or not race-history.json
+        // took the delete - so a backup tool holding the file open left the
+        // race back after a restart with its heat reading as unrun, offered
+        // again and filed twice. A delete that did not reach disk now changes
+        // nothing (the store keeps the session listed): its round stays
+        // linked, no undo step is taken for it, and the director is told.
+        var notDeleted = new List<SessionRecord>();
+
+        foreach (var session in removed)
+        {
+            if (!_history.Delete(session.Id))
+            {
+                notDeleted.Add(session);
+                continue;
+            }
+
+            // The round it recorded is unrun again. Left linked, it points
+            // at a session nobody can fetch: the heat cannot be re-run
+            // because it is not offered anywhere, the programme shows it
+            // done with no result behind it, and qualifying counts the
+            // round while scoring nothing for it.
+            _rounds?.ClearRecorded(session.Id);
+        }
+
+        if (notDeleted.Count > 0)
+        {
+            removed = removed.Where(s => !notDeleted.Contains(s)).ToList();
+            relink = relink.Where(r => removed.Any(s => string.Equals(s.Id, r.SessionId, StringComparison.Ordinal))).ToList();
+        }
+
+        if (removed.Count > 0)
+        {
+            CaptureDeleteUndo(removed, relink);
+        }
+
+        RefreshList();
+
+        if (notDeleted.Count > 0)
+        {
+            var which = notDeleted.Count == 1
+                ? $"\"{notDeleted[0].Label}\" was"
+                : $"{notDeleted.Count} of the sessions were";
+
+            AppDialog.Show(this,
+                $"{which} not deleted - the race history file couldn't be written. Something else on this PC may have it "
+                + "open, or the disk may be full.\r\n\r\nNothing has been changed for "
+                + (notDeleted.Count == 1 ? "it" : "them")
+                + ". Close anything that might be reading the HeatCaller folder and delete again.",
+                "Session not deleted", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    /// <summary>One undo step that puts back the sessions DeleteSelected did delete, and relinks their rounds.</summary>
+    private void CaptureDeleteUndo(List<SessionRecord> removed, List<(string RoundId, string SessionId)> relink)
+    {
+        var history = _history;
+        var rounds = _rounds;
 
         _undo.Capture(removed.Count == 1 ? $"Delete session '{removed[0].Label}'" : $"Delete {removed.Count} sessions", () =>
         {
@@ -952,20 +1011,6 @@ public sealed class RaceHistoryControl : UserControl
                 }
             });
         });
-
-        foreach (var session in removed)
-        {
-            _history.Delete(session.Id);
-
-            // The round it recorded is unrun again. Left linked, it points
-            // at a session nobody can fetch: the heat cannot be re-run
-            // because it is not offered anywhere, the programme shows it
-            // done with no result behind it, and qualifying counts the
-            // round while scoring nothing for it.
-            _rounds?.ClearRecorded(session.Id);
-        }
-
-        RefreshList();
     }
 
     /// <summary>
@@ -1254,8 +1299,22 @@ public sealed class RaceHistoryControl : UserControl
 
         _undo.Capture($"Paste result '{session.Label}'", () =>
         {
-            history.Delete(id);
-            RefreshList();
+            // Bug hunt 15, B24: a delete that did not reach disk leaves the
+            // race in place (see SessionHistoryStore.Delete), so say so
+            // rather than let the undo look done.
+            var deleted = history.Delete(id);
+
+            if (!IsDisposed)
+            {
+                RefreshList();
+            }
+
+            if (!deleted)
+            {
+                throw new InvalidOperationException(
+                    "The pasted race couldn't be taken out - the race history file couldn't be written. Something else on this "
+                    + "PC may have it open, or the disk may be full. It is still in Race History; delete it there once the file can be written.");
+            }
         });
 
         RefreshListAndSelect(id);
