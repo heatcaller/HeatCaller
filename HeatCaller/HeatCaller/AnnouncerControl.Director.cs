@@ -2347,6 +2347,13 @@ public partial class AnnouncerControl
         var watch = _recordWatch ??= new RecordWatch
         {
             LayoutRecord = () => PaceHistory.LayoutRecordFor(Layouts?.Invoke()?.All, _settings?.LastRaceControlTrackName),
+
+            // WHY (9 Nov 2026, Bug hunt 15): wired as _director.Pace is, so
+            // record danger is never called on a lap that could not count.
+            CanHoldRecord = transponder => AchievementEvaluator.CanHoldTrackRecord(transponder, _profiles),
+            RecordWouldStand = (transponder, lapSeconds, recordSeconds) =>
+                RecordPlausibility.WouldTake(_race, transponder,
+                    (long)Math.Round(lapSeconds * 1000), (long)Math.Round(recordSeconds * 1000)),
         };
 
         // The first feed since the count was cleared: whatever laps the
