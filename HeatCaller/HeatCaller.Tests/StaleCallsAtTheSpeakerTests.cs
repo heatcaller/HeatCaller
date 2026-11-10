@@ -461,6 +461,35 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_line_tried_after_an_earlier_one_was_dropped_keeps_the_race_its_facts_were_read_from()
+    {
+        // Bug hunt 15 (B46): the pass reads every kind's facts at its start,
+        // so the stamp must be the board as it was then - not the board after
+        // the battle call before it spent seconds being written.
+        var (director, model, console) = DirectorInAFight();
+
+        for (var i = 0; i < 4; i++)
+        {
+            director.Lap($"warm-{i}", 20.0 + i);
+        }
+
+        director.Lap("A", 5.42);
+
+        var race = Facts(leaderLaps: 3, atMs: 50_000);
+        director.RaceFactsNow = () => race;
+
+        // Terry sets a 4.936 while the battle call is being written.
+        model.During = () => race = race with { FastestLaps = race.FastestLaps + 1, AtMs = 52_000 };
+
+        var said = await director.NextAsync();
+
+        Assert.Null(said);
+        Assert.Equal(2, model.Asked);
+        Assert.Equal(0, director.Said.Count);
+        Assert.Equal(2, console.Count(line => line.Contains("a quicker lap has been set since it was written", StringComparison.Ordinal)));
+    }
+
+    [Fact]
     public async Task Without_the_race_to_read_a_line_goes_out_unstamped_as_before()
     {
         var (director, _, _) = DirectorInAFight();

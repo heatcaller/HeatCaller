@@ -273,4 +273,23 @@ public sealed class BugHunt7DirectorTimingTests : IDisposable
         Assert.True(_rig.Director.Said.Spent("pace:heat-1:SessionBest:A"));
         Assert.False(_rig.Director.Said.Spent("pace:heat-1:PersonalBest:warm-0"));
     }
+
+    [Fact]
+    public async Task A_record_lap_from_a_race_that_was_reset_is_not_called_in_the_restart()
+    {
+        // Bug hunt 15 (B10): Sam's fastest lap was still waiting when the heat
+        // was reset and restarted inside the note's deadline.
+        _rig.WarmUp();
+        _rig.Director.Lap("A", 12.0);
+
+        _rig.Director.RaceFinished();
+        _rig.Clock.Advance(TimeSpan.FromSeconds(10));
+        _rig.Director.RaceStarted("heat-1-restart", "Box Stock");
+
+        var said = await _rig.Director.NextAsync();
+
+        Assert.Null(said);
+        Assert.Equal(0, _rig.Model.Asked);
+        Assert.False(_rig.Director.Said.Spent("pace:heat-1-restart:SessionBest:A"));
+    }
 }
