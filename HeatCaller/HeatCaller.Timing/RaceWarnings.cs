@@ -51,6 +51,14 @@ public sealed class RaceWarning
     /// <summary>How far into the race it was given, in ms. Zero before the green.</summary>
     public long RaceTimeMs { get; set; }
 
+    /// <summary>
+    /// How long after the green it was given, in ms, red flags included -
+    /// the clock the lap crossings and the race recording run on, where
+    /// RaceTimeMs stands still while the red is out. Zero before the green,
+    /// and on a warning saved before this was kept. See RaceHighlights.MarksFrom.
+    /// </summary>
+    public long SinceGreenMs { get; set; }
+
     /// <summary>1 for the driver's first warning of the race, 2 for the second...</summary>
     public int Number { get; set; }
 

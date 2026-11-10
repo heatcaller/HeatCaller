@@ -255,14 +255,19 @@ internal static class RaceHighlights
                 marks.Add(new Mark(row.Transponder, Moment.FastestLap, times[best], best + 1));
             }
 
-            // Already timestamped by whoever gave it, in the same clock -
-            // RaceWarning.RaceTimeMs is "how far into the race it was given,
-            // in ms", and zero means before the green, which is not a moment.
+            // Already timestamped by whoever gave it. RaceWarning.RaceTimeMs
+            // is the race clock, which stands still under a red flag, so after
+            // a red it is early against the crossings (laps include the
+            // stoppage) and the recording. SinceGreenMs is the same clock as
+            // those; a warning saved before it was kept has only RaceTimeMs,
+            // right for any race without a red. Zero RaceTimeMs means before
+            // the green, which is not a moment.
             foreach (var warning in row.Warnings)
             {
                 if (warning.RaceTimeMs > 0)
                 {
-                    marks.Add(new Mark(row.Transponder, Moment.Warning, warning.RaceTimeMs));
+                    var at = warning.SinceGreenMs > 0 ? warning.SinceGreenMs : warning.RaceTimeMs;
+                    marks.Add(new Mark(row.Transponder, Moment.Warning, at));
                 }
             }
         }

@@ -1993,6 +1993,9 @@ public sealed partial class RaceControlSession
             RaceTimeMs = RaceStartUtc.HasValue && State is RaceState.Racing or RaceState.Finished
                 ? (long)ElapsedRaceTime.TotalMilliseconds
                 : 0,
+            SinceGreenMs = RaceStartUtc.HasValue && State is RaceState.Racing or RaceState.Finished
+                ? Math.Max(0, MsSinceGreen)
+                : 0,
             Number = number,
             Reason = (reason ?? string.Empty).Trim(),
             Action = step.Action,
