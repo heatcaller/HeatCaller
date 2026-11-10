@@ -298,9 +298,16 @@ public sealed class ThemeStore
 
     public Theme? Get(string id) => _themes.FirstOrDefault(t => t.Id == id);
 
+    /// <summary>
+    /// The applied-soundscape marker's file name, at the top of the data
+    /// folder. A restore clears it when the backup has none (see
+    /// BackupService.RestoreBackup).
+    /// </summary>
+    internal const string ActiveFileName = "soundscape-active.txt";
+
     private static string ActiveFilePath => Path.Combine(
         AppPaths.Root,
-        "soundscape-active.txt");
+        ActiveFileName);
 
     /// <summary>
     /// The soundscape applied last - on the Soundscapes page or by a venue -

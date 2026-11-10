@@ -742,6 +742,18 @@ public static class BackupService
                 TryDelete(journalPath);
             }
 
+            // And for the applied-soundscape marker (ThemeStore's own
+            // file, not a .json store, so the sweep below misses it). A
+            // backup made with the sound on lap times only has none, and
+            // this laptop's would have the restored data play the old
+            // soundscape's theme music and imaging - built-ins have the
+            // same id in every themes.json, so it still resolves.
+            var soundscapeMarkerPath = Path.GetFullPath(Path.Combine(DataDirectory, ThemeStore.ActiveFileName));
+            if (!staged.Values.Any(destination => string.Equals(destination, soundscapeMarkerPath, StringComparison.OrdinalIgnoreCase)))
+            {
+                TryDelete(soundscapeMarkerPath);
+            }
+
             // The same again for every other store file the backup has no
             // copy of. A restore that only adds and replaces left this
             // laptop's garage, seasons, check-in, relay results and so on
