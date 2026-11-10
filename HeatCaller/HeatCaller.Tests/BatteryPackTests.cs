@@ -267,4 +267,81 @@ public sealed class BatteryPackTests : IDisposable
         Assert.Equal("100", again.Get("m1")!.OwnerTransponder);
         Assert.Equal(new[] { "500" }, again.InCarsOf("club"));
     }
+
+    // Bug hunt 15 (2026-11-09): the Edit Pack dialog is modal and the
+    // roster tick applies a phone's pack edits under it. Saving the copy it
+    // opened on wrote back over them.
+    [Fact]
+    public void Saving_an_edit_keeps_a_retire_from_the_phone_that_arrived_while_the_dialog_was_open()
+    {
+        var w = new World();
+        w.Add("3", "100");
+        w.Packs.SetCurrent("100", "3");
+
+        var opened = BatteryPackStore.CopyOf(w.Packs.Get("3")!);
+        var edited = BatteryPackStore.CopyOf(opened);
+        edited.Notes = "Puffy cell";
+
+        // The phone retires it while the desk has the dialog open.
+        var phone = BatteryPackStore.CopyOf(w.Packs.Get("3")!);
+        phone.Retired = true;
+        w.Packs.Upsert(phone);
+
+        var saved = BatteryActions.Save(w.Packs, w.Undo, opened, edited);
+
+        Assert.NotNull(saved);
+        var now = w.Packs.Get("3")!;
+        Assert.True(now.Retired);
+        Assert.Equal("Puffy cell", now.Notes);
+        Assert.Null(w.Packs.CurrentPackId("100"));
+    }
+
+    [Fact]
+    public void Saving_an_edit_of_a_pack_the_phone_removed_while_the_dialog_was_open_does_not_add_it_back()
+    {
+        var w = new World();
+        w.Add("3", "100");
+
+        var opened = BatteryPackStore.CopyOf(w.Packs.Get("3")!);
+        var edited = BatteryPackStore.CopyOf(opened);
+        edited.Notes = "Puffy cell";
+
+        w.Packs.Delete("3");
+
+        Assert.Null(BatteryActions.Save(w.Packs, w.Undo, opened, edited));
+        Assert.Null(w.Packs.Get("3"));
+    }
+
+    [Fact]
+    public void Merging_an_edit_takes_the_fields_the_desk_changed_and_keeps_the_rest_as_stored_now()
+    {
+        var opened = new BatteryPack { Id = "3", Label = "3", Chemistry = "NiMH", Notes = "old", OwnerTransponder = "100" };
+        var edited = BatteryPackStore.CopyOf(opened);
+        edited.Notes = "desk";
+        var live = BatteryPackStore.CopyOf(opened);
+        live.Label = "3b";
+        live.Chemistry = "LiPo";
+        live.OwnerTransponder = "500";
+
+        var merged = BatteryActions.MergeEdit(opened, edited, live);
+
+        Assert.Equal("3b", merged.Label);
+        Assert.Equal("LiPo", merged.Chemistry);
+        Assert.Equal("desk", merged.Notes);
+        Assert.Equal("500", merged.OwnerTransponder);
+
+        // A Retired the desk did change wins.
+        edited.Retired = true;
+        Assert.True(BatteryActions.MergeEdit(opened, edited, live).Retired);
+    }
+
+    [Fact]
+    public void Adding_a_pack_still_saves_it_as_is()
+    {
+        var w = new World();
+        var added = new BatteryPack { Id = "n1", Label = "New", OwnerTransponder = "100" };
+
+        Assert.Same(added, BatteryActions.Save(w.Packs, w.Undo, null, added));
+        Assert.Equal("New", w.Packs.Get("n1")!.Label);
+    }
 }
