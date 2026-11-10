@@ -77,7 +77,66 @@ public sealed class BroadcastFeaturesTests
     public void The_count_is_said_from_the_second_change_on()
     {
         Assert.Equal(string.Empty, LeadTracker.Tail(new LeadChange("B", "A", 1, 2, 1)));
-        Assert.Equal(" That's the fourth lead change, among three drivers.", LeadTracker.Tail(new LeadChange("B", "A", 4, 3, 2)));
+        Assert.Equal(" That's the fourth lead change, among three drivers.",
+            LeadTracker.Tail(new LeadChange("B", "A", 4, 3, 2), pick: lines => lines[0]));
+    }
+
+    [Theory]
+    [InlineData(2, 2, 1)]
+    [InlineData(4, 3, 1)]
+    [InlineData(4, 3, 2)]
+    [InlineData(9, 8, 3)]
+    [InlineData(12, 11, 1)]
+    public void Every_way_of_saying_the_count_is_words_and_true(int number, int leaders, int timesLed)
+    {
+        var change = new LeadChange("B", "A", number, leaders, timesLed);
+        var said = LeadTracker.TailTemplates(change)
+            .Where(t => t.Length > 0)
+            .Select(t => LeadTracker.FillTail(t, change))
+            .ToList();
+
+        Assert.True(said.Count >= 4);
+
+        foreach (var line in said)
+        {
+            Assert.DoesNotContain('{', line);
+            Assert.DoesNotMatch("[0-9]", line);
+            Assert.True(char.IsUpper(line[0]), line);
+            Assert.EndsWith(".", line);
+            Assert.True(line.Contains(LeadTracker.SpokenOrdinal(number), StringComparison.OrdinalIgnoreCase)
+                || line.Contains(RaceNumbers.Words(number), StringComparison.OrdinalIgnoreCase)
+                || line.StartsWith("Back in front", StringComparison.Ordinal), line);
+        }
+    }
+
+    [Fact]
+    public void A_driver_who_has_led_before_is_never_called_a_new_leader()
+    {
+        var change = new LeadChange("B", "A", 4, 3, 2);
+
+        Assert.DoesNotContain(LeadTracker.TailTemplates(change), t => t.Contains("{leadersnth}", StringComparison.Ordinal));
+        Assert.Contains(LeadTracker.TailTemplates(change), t => t.Contains("{timesnth}", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_count_is_sometimes_left_out_early_but_always_said_from_the_fifth_change()
+    {
+        Assert.Contains(string.Empty, LeadTracker.TailTemplates(new LeadChange("B", "A", 3, 3, 1)));
+        Assert.DoesNotContain(string.Empty, LeadTracker.TailTemplates(new LeadChange("B", "A", 5, 3, 1)));
+    }
+
+    [Fact]
+    public void The_same_count_line_is_not_heard_twice_running()
+    {
+        string? last = null;
+
+        for (var n = 5; n < 40; n++)
+        {
+            var said = LeadTracker.Tail(new LeadChange("B", "A", 5, 3, 1));
+
+            Assert.NotEqual(last, said);
+            last = said;
+        }
     }
 
     [Fact]
