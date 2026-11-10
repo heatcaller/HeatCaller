@@ -11535,9 +11535,13 @@ function sameLaps(a, b) {
 // [{name, colour, me, posAt, start, laps, first}], in the order they
 // finished. first is the lap number of their first flying lap: 2 when the
 // start lap was sent apart (startMs), so posAt and laps are drawn at the
-// laps the card and the result count - see lapRows.
+// laps the card and the result count - see lapRows. A demo or practice
+// field (races[].field, DriverNightExtras.FieldOf) has its start lap taken
+// off the same way as their own laps, so a row of it sent without startMs
+// (a laptop from before 9 Nov) is drawn from their own first lap.
 function meLines(r, field) {
   const own = { name: 'You', me: true, posAt: r.posAt, start: num(r.start), laps: lxLaps(r.lapsMs), first: num(r.startMs) > 0 ? 2 : 1 };
+  const night = Array.isArray(field) && field === r.field;
   const list = Array.isArray(field) ? field.filter((x) => x && typeof x === 'object') : [];
   let at = list.findIndex((x) => sameLaps(lxLaps(x.lapsMs), own.laps));
   if (at < 0 && num(r.pos) > 0) at = list.findIndex((x) => num(x.pos) === num(r.pos));
@@ -11551,7 +11555,8 @@ function meLines(r, field) {
     })
     : {
       name: String(x.name || 'Unnamed driver'), me: false, colour: ME_COLOURS[i % ME_COLOURS.length],
-      posAt: x.posAt, start: num(x.qual), laps: lxLaps(x.lapsMs), first: num(x.startMs) > 0 ? 2 : 1,
+      posAt: x.posAt, start: num(x.qual), laps: lxLaps(x.lapsMs),
+      first: num(x.startMs) > 0 ? 2 : night && x.startMs == null ? own.first : 1,
     });
 }
 

@@ -508,6 +508,10 @@ internal static class DriverNightExtras
                 Qual = !practice && r.StartPosition > 0 ? r.StartPosition : null,
                 LapsMs = flying.Count > 0 ? flying.Select(lap => lap.Ms).ToList() : null,
                 PosAt = at is not null && flying.Count > 0 && flying.All(lap => lap.Pos > 0) ? flying.Select(lap => lap.Pos).ToList() : null,
+
+                // The start lap taken off above, as NightRace.StartMs: the
+                // phone draws these laps from lap 2, beside their own.
+                StartMs = flying.Count > 0 && r.LapTimesMs is { Count: > 1 } ? r.LapTimesMs[0] : null,
             };
         }).ToList();
     }
@@ -730,7 +734,7 @@ internal sealed record NightRace
     public List<NightFieldRow>? Field { get; init; }
 }
 
-/// <summary>One driver in `races[].field`: {pos?, name, qual?, lapsMs?, posAt?} - the public result row's shape.</summary>
+/// <summary>One driver in `races[].field`: {pos?, name, qual?, lapsMs?, posAt?, startMs?} - the public result row's shape.</summary>
 internal sealed record NightFieldRow
 {
     [JsonPropertyName("pos")]
@@ -751,6 +755,11 @@ internal sealed record NightFieldRow
     [JsonPropertyName("posAt")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<int>? PosAt { get; init; }
+
+    /// <summary>The start lap left out of LapsMs, so its laps are drawn from lap 2.</summary>
+    [JsonPropertyName("startMs")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? StartMs { get; init; }
 }
 
 /// <summary>
