@@ -170,27 +170,118 @@ public sealed class LeadTracker
     }
 
     /// <summary>
-    /// "That's the fourth lead change among three drivers." - or nothing,
-    /// for the first change of a race, where a count of one tells the room
-    /// nothing the call itself did not.
+    /// The count added to a lead change call - "That's the fourth lead
+    /// change, among three drivers.", "The lead has changed hands four
+    /// times, between three drivers." and so on - or nothing: always for the
+    /// first change of a race, where a count of one tells the room nothing
+    /// the call itself did not, and now and then early in a race.
+    ///
+    /// WHY THERE ARE SEVERAL (9 Nov 2026): it was one fixed sentence, added
+    /// to every lead change from the second on, so however the call itself
+    /// varied the room heard the same words after it every time. The lines
+    /// are dealt by TemplateBag like a call's own templates, so none comes
+    /// round again until the rest have had a turn.
+    ///
+    /// The bag is dealt the templates with their placeholders still in, not
+    /// the filled lines: TemplateBag keys its bags by contents, and "fourth"
+    /// and "fifth" would be a new bag every change - a plain random pick.
+    ///
+    /// Up to the fourth change a couple of empty slots are in the bag, so
+    /// the count is sometimes left unsaid - nobody in a booth recites the
+    /// tally on every pass, and the tower shows it anyway. From the fifth,
+    /// a race swapping the lead that often is the story, so it is always said.
     ///
     /// Spoken words rather than numerals ("fourth", "three"), for the reason
     /// RaceNumbers gives: a numeral is read by the voice engine however it
     /// likes, and "4th" has been heard as "four tee aitch".
     /// </summary>
-    public static string Tail(LeadChange change)
+    /// <param name="pick">Chooses one template; TemplateBag.Pick unless a test wants a fixed one.</param>
+    public static string Tail(LeadChange change, Func<IReadOnlyList<string>, string>? pick = null)
     {
-        if (change.Number < 2)
+        var templates = TailTemplates(change);
+
+        if (templates.Count == 0)
         {
             return string.Empty;
         }
 
-        var nth = SpokenOrdinal(change.Number);
+        var template = (pick ?? TemplateBag.Pick)(templates);
 
-        return change.Leaders >= 2
-            ? $" That's the {nth} lead change, among {SpokenCount(change.Leaders)} drivers."
-            : $" That's the {nth} lead change.";
+        return template.Length == 0 ? string.Empty : " " + FillTail(template, change);
     }
+
+    /// <summary>
+    /// Every line <see cref="Tail"/> could say for this change, unfilled. An
+    /// empty entry is a turn where the count is left out. Empty for the first
+    /// change of a race.
+    /// </summary>
+    internal static IReadOnlyList<string> TailTemplates(LeadChange change)
+    {
+        if (change.Number < 2)
+        {
+            return [];
+        }
+
+        var lines = new List<string>();
+
+        if (change.Leaders >= 2)
+        {
+            lines.Add("That's the {nth} lead change, among {leaders} drivers.");
+            lines.Add("{Nth} change at the front, {leaders} different leaders now.");
+            lines.Add("The lead has changed hands {count} times, between {leaders} drivers.");
+            lines.Add("{Leaders} drivers have led now, and that's {count} lead changes.");
+
+            // Only true of a driver leading for the first time: they are
+            // the third different leader only if they had not led before.
+            // "the", not "a" - "a eighth" is what "a" gives you.
+            if (change.TimesLed == 1)
+            {
+                lines.Add("Lead change number {count}, and the {leadersnth} different leader.");
+            }
+        }
+        else
+        {
+            lines.Add("That's the {nth} lead change.");
+            lines.Add("{Count} lead changes now.");
+            lines.Add("The lead has swapped {count} times.");
+        }
+
+        // A driver taking it back - the booth would say so as often as the tally.
+        if (change.TimesLed >= 2)
+        {
+            lines.Add("Back in front for the {timesnth} time.");
+            lines.Add("Their {timesnth} spell at the front - the {nth} lead change of the race.");
+        }
+
+        if (change.Number < 5)
+        {
+            lines.Add(string.Empty);
+            lines.Add(string.Empty);
+        }
+
+        return lines;
+    }
+
+    /// <summary>A <see cref="TailTemplates"/> line with its numbers said as words.</summary>
+    internal static string FillTail(string template, LeadChange change)
+    {
+        var nth = SpokenOrdinal(change.Number);
+        var count = SpokenCount(change.Number);
+        var leaders = SpokenCount(change.Leaders);
+
+        return template
+            .Replace("{Nth}", Capitalise(nth), StringComparison.Ordinal)
+            .Replace("{nth}", nth, StringComparison.Ordinal)
+            .Replace("{Count}", Capitalise(count), StringComparison.Ordinal)
+            .Replace("{count}", count, StringComparison.Ordinal)
+            .Replace("{Leaders}", Capitalise(leaders), StringComparison.Ordinal)
+            .Replace("{leaders}", leaders, StringComparison.Ordinal)
+            .Replace("{leadersnth}", SpokenOrdinal(change.Leaders), StringComparison.Ordinal)
+            .Replace("{timesnth}", SpokenOrdinal(change.TimesLed), StringComparison.Ordinal);
+    }
+
+    private static string Capitalise(string word) =>
+        word.Length == 0 ? word : char.ToUpperInvariant(word[0]) + word[1..];
 
     /// <summary>"Back in front for the second time" for a driver retaking it, empty otherwise.</summary>
     public static string BackInFront(LeadChange change) =>

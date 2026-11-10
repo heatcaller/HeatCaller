@@ -1228,7 +1228,7 @@ public sealed partial class VoiceSettingsControl
             // Named like the fast-lap tick names {time}: a club that writes
             // the count into its own lines needs to know the word that
             // stops it being said twice.
-            _chkLeadChangeCount.Text = "Add the count (\"the fourth lead change, among three drivers\") unless the line says {leadchanges}";
+            _chkLeadChangeCount.Text = "Add the count (\"the fourth lead change, among three drivers\", said a few different ways) unless the line says {leadchanges}";
             _chkLeadChangeCount.AutoSize = true;
             _chkLeadChangeCount.Checked = config.IncludeLeadChangeCount;
 
