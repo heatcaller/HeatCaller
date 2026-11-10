@@ -10,7 +10,7 @@ import { nightPage } from "../src/pages.js";
  */
 function meLines(): (r: unknown, field: unknown) => Array<{ me: boolean; first: number }> {
   const html = nightPage("acme-rc", "Acme RC");
-  const parts = ["lxLaps", "num", "sameLaps", "meLines"].map((name) => {
+  const parts = ["lxLaps", "lxHasStart", "num", "sameLaps", "meLines"].map((name) => {
     const match = new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}`).exec(html);
     assert.ok(match, `the page has ${name}()`);
     return match[0];
