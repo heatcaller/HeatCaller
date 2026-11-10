@@ -241,7 +241,7 @@ public sealed partial class RaceControlControl
         // the Columns button are Advanced - see SimpleMode.
         var footer = new ButtonBar().With(SimpleMode.Hide(_chkStartWithOnAir), _btnFormat, SimpleMode.Hide(btnColumns));
 
-        // The tick box is shorter than the buttons beside it; the bar lines
+        // The switch is shorter than the buttons beside it; the bar lines
         // everything up along the top, so it is brought down to their middle.
         footer.Layout += (_, _) =>
         {
