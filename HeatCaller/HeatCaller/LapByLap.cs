@@ -39,7 +39,7 @@ internal static class LapByLap
         // When each row crossed the line for the k-th time, k = 0 being the
         // start-lap slot. Null for a row that does not race for places.
         var crossings = rows
-            .Select(r => r is null || Ghosts.IsGhost(r.Transponder) ? null : CrossingsOf(r.LapTimesMs))
+            .Select(r => r is null || Ghosts.IsGhost(r.Transponder) ? null : CrossingsOf(r))
             .ToList();
 
         var answer = new List<int[]>(rows.Count);
@@ -91,9 +91,28 @@ internal static class LapByLap
         return answer;
     }
 
-    /// <summary>The running total of a row's lap times: when it crossed the line each time, from the green flag.</summary>
-    private static long[] CrossingsOf(List<long>? lapTimesMs)
+    /// <summary>
+    /// When a row crossed the line each time, from the green flag: the
+    /// running total of its lap times, lined up with its elapsed time.
+    /// </summary>
+    /// <remarks>
+    /// Bug hunt 15 (2026-11-09): the running total alone is not time since
+    /// the green for a driver credited with the start lap at the green
+    /// (CreditStartLap). Their start slot is 0 and their next lap is timed
+    /// from their pre-green crossing, so every later total ran the size of
+    /// the jump late, and a jumper who led all race showed a place down on
+    /// the graph against a board and a result that had them in front.
+    /// ElapsedMs is time since the green plus the penalties the result
+    /// carries - the board's RaceGaps.CrossingMs leans on it the same way -
+    /// so the gap between it, less those penalties, and the total is moved
+    /// back in from the first crossing on. The penalties stay out: this is
+    /// where cars were on the road. A row with no elapsed time is left as it
+    /// was.
+    /// </remarks>
+    private static long[] CrossingsOf(SessionResultEntry row)
     {
+        var lapTimesMs = row.LapTimesMs;
+
         if (lapTimesMs is null || lapTimesMs.Count == 0)
         {
             return Array.Empty<long>();
@@ -106,6 +125,15 @@ internal static class LapByLap
         {
             sum += Math.Max(0, lapTimesMs[i]);
             at[i] = sum;
+        }
+
+        var shift = row.ElapsedMs > 0
+            ? row.ElapsedMs - Math.Max(0, row.RacePenaltyMs) - Math.Max(0, row.TimePenaltyMs) - sum
+            : 0;
+
+        for (var i = 1; i < at.Length; i++)
+        {
+            at[i] += shift;
         }
 
         return at;
