@@ -2301,7 +2301,10 @@ public sealed partial class ProfileManagerControl : UserControl
                 });
             }
 
-            _store.Upsert(form.Result);
+            // A phone's "racing tonight" pick can land while the dialog is
+            // open (it needs no desk step); a field the desk didn't touch
+            // keeps what is on file now rather than what the dialog opened on.
+            _store.Upsert(ProfileStore.KeepChangesMadeSince(before, form.Result, _store.Get(transponder)));
             RefreshAll();
         }
     }

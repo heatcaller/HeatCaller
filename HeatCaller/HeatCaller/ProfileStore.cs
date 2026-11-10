@@ -921,6 +921,57 @@ public sealed class ProfileStore : IDriverLookup
     }
 
     /// <summary>
+    /// What a dialog's save should store when the profile may have changed
+    /// on file while the dialog was open: <paramref name="edited"/>, except
+    /// that every field the dialog left as it was in <paramref name="before"/>
+    /// takes the value <paramref name="now"/> holds instead.
+    ///
+    /// WHY (9 Nov 2026, bug hunt 15): a phone's "racing tonight" pick is
+    /// applied on the roster tick with no desk step, so it can land while the
+    /// Edit Profile dialog is open - and saving the dialog, built from the
+    /// profile as it was when it opened, put the old car straight back. Cars
+    /// added on file meanwhile are kept even when the desk did change the
+    /// list. Null <paramref name="now"/> (removed meanwhile) keeps the edit.
+    /// </summary>
+    public static DriverProfile KeepChangesMadeSince(DriverProfile before, DriverProfile edited, DriverProfile? now)
+    {
+        if (now is null)
+        {
+            return edited;
+        }
+
+        var was = JsonSerializer.SerializeToNode(before)!.AsObject();
+        var onFile = JsonSerializer.SerializeToNode(now)!.AsObject();
+        var merged = JsonSerializer.SerializeToNode(edited)!.AsObject();
+
+        foreach (var name in merged.Select(pair => pair.Key).ToList())
+        {
+            if (was.TryGetPropertyValue(name, out var old)
+                && onFile.TryGetPropertyValue(name, out var current)
+                && System.Text.Json.Nodes.JsonNode.DeepEquals(merged[name], old))
+            {
+                merged[name] = current?.DeepClone();
+            }
+        }
+
+        var result = merged.Deserialize<DriverProfile>()!;
+        result.Cars ??= new List<string>();
+
+        // A car added on file meanwhile, when the desk changed the list too.
+        foreach (var car in now.Cars ?? new List<string>())
+        {
+            if (!string.IsNullOrWhiteSpace(car)
+                && !(before.Cars ?? new List<string>()).Contains(car, StringComparer.OrdinalIgnoreCase)
+                && !result.Cars.Contains(car, StringComparer.OrdinalIgnoreCase))
+            {
+                result.Cars.Add(car);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// The undo half of an edit or an import, in one save: each profile in
     /// <paramref name="before"/> goes back over the one stored under its
     /// main transponder, and each transponder in <paramref name="added"/>
