@@ -1103,8 +1103,13 @@ export class VoiceService {
       };
     }
 
-    const key = cacheKey(voice, spoken);
-    const cached = await this.readCache(club, false, key);
+    // A key of its own, never one speak reads: a preview is charged to the
+    // day's previews, not the month, so a line first heard here and kept
+    // under speak's key was spoken free on race night from then on, never
+    // counted against the club's allowance (9 Nov 2026, Bug hunt 15, B39).
+    // A line speak has already paid for is still free to hear here.
+    const key = previewCacheKey(voice, spoken);
+    const cached = (await this.readCache(club, false, cacheKey(voice, spoken))) ?? (await this.readCache(club, false, key));
 
     if (cached !== undefined) {
       // Free, like any other cache hit: a club listening to the same
@@ -1389,7 +1394,17 @@ export class VoiceService {
       return { usage: { used: 0, allowance, resetsAt: resetOf(this.now()), known: false }, known: false };
     }
 
-    this.usageCache.set(club, { month, used: read.used, history: read.history });
+    // A count left in memory for an earlier month is newer than the file
+    // too: a reserve at the very end of that month sets it before its write
+    // lands, and a read across midnight can see the file from before that
+    // write. Kept as that month's line of history, or the next line stored
+    // wrote the older figure over it (9 Nov 2026, Bug hunt 15, B30).
+    const history =
+      meanwhile !== undefined && meanwhile.month < month && meanwhile.used > 0
+        ? trimHistory({ ...read.history, [meanwhile.month]: meanwhile.used })
+        : read.history;
+
+    this.usageCache.set(club, { month, used: read.used, history });
 
     return { usage: { used: read.used, allowance, resetsAt: resetOf(this.now()) }, known: true };
   }
@@ -2157,6 +2172,14 @@ function revisionOf(voice: CatalogueVoice): string {
 /** Where a rendered line is kept. The words and everything that shapes them, and nothing else. */
 function cacheKey(voice: CatalogueVoice, text: string): string {
   return createHash("sha256").update(`${revisionOf(voice)}|${voice.id}|${text}`, "utf8").digest("hex");
+}
+
+/**
+ * Where a preview is kept: a hash of speak's key, so no text speak is ever
+ * asked to say can land on it. See preview.
+ */
+function previewCacheKey(voice: CatalogueVoice, text: string): string {
+  return createHash("sha256").update(`preview|${cacheKey(voice, text)}`, "utf8").digest("hex");
 }
 
 /**
