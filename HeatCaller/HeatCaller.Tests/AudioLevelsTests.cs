@@ -261,10 +261,10 @@ public sealed class AudioLevelsTests
                 Thread.Sleep(33);
             }
 
-            return (strips.Bars.Count, loudDb: strips.Bars[0].Db, quietDb: strips.Bars[2].Db, size: strips.Measure());
+            return (strips.Bars.Count, loudDb: strips.Bars[0].Db, quietDb: strips.Bars[1].Db, size: strips.Measure());
         }, TimeSpan.FromSeconds(30), () => "stepping the channel strips");
 
-        Assert.Equal(4, seen.Count);
+        Assert.Equal(2, seen.Count);
         Assert.True(seen.loudDb > -1f, $"loud: {seen.loudDb}");
         Assert.Equal(ChannelStrips.FloorDb, seen.quietDb);
         Assert.True(seen.size.Width > 0 && seen.size.Height > 0);
@@ -312,8 +312,8 @@ public sealed class AudioLevelsTests
         }, TimeSpan.FromSeconds(30), () => "building the boards");
 
         Assert.Equal("Level meters: voice, sfx, music, crowd", seen.full);
-        Assert.Equal(8, seen.fullBars);
-        Assert.Equal(8, seen.compactBars);
+        Assert.Equal(4, seen.fullBars);
+        Assert.Equal(4, seen.compactBars);
         Assert.True(seen.compactSize.Height < seen.fullSize.Height, $"{seen.compactSize} against {seen.fullSize}");
     }
 

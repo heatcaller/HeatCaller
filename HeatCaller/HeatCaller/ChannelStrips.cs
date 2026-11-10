@@ -5,21 +5,34 @@ namespace HeatCaller;
 
 /// <summary>
 /// Channel strips like a radio board's (25 Oct 2026): VOICE, SFX, MUSIC and
-/// CROWD (SFX split off VOICE on 26 Oct), each a pair of bars, left and
-/// right - in the Broadcast window beside what is on air, and compact at the
-/// right of Race Control's flag row (ForRaceControl). See AudioLevels for
-/// where the levels come from.
+/// CROWD (SFX split off VOICE on 26 Oct), one bar each - in the Broadcast
+/// window beside what is on air, and compact at the right of Race Control's
+/// flag row (ForRaceControl). See AudioLevels for where the levels come from.
 ///
 /// A VU, AS ASKED ("smooth vu"): each bar shows how loud the sound is over
 /// a fraction of a second - its power, not its peaks - and moves like a
 /// VU's needle, settling on a new level in about 300ms both up and down,
 /// so speech reads as a steady swing rather than a flicker. Scaled as a
-/// digital VU is, so a full-scale tone reads 0: -40 at the foot, green to
-/// -9, amber to -3, red above. A line over each bar holds the highest the
-/// bar has been for a second and a half, then falls.
+/// digital VU is, so a full-scale tone reads 0: -40 at the foot, the bar's
+/// own colour to -9, the look's warning colour to -3, its danger colour
+/// above. The segment the bar has reached highest in the last second and a
+/// half is lit white, then falls.
 ///
-/// DARK WHATEVER THE LOOK, as a board's meters are: the bars are read by
-/// their colour, and green, amber and red only read on dark.
+/// THE REWORK (9 Nov 2026, asked for by Asher). It was two 7px bars a
+/// channel in fixed slate and green, so in Race Control's tall column it
+/// was a big empty box, the left and right bars of a mono voice always
+/// matched, a silent board looked broken, and it was the one thing in the
+/// window that ignored the look. Now:
+///   - ONE BAR A CHANNEL, the power of left and right averaged. The voice,
+///     effects and crowd are mono in all but name.
+///   - LIT SEGMENTS, an LED ladder, with the unlit ones a dim tint of their
+///     own colour, so the scale can be read with nothing playing.
+///   - IN THE LOOK'S COLOURS (BarColour), on the look's sidebar colour,
+///     which is dark in every look - green, amber and red only read on dark,
+///     so a light look gets a dark inset, as a board's meters are.
+///   - WIDE, in a share of the width rather than a fixed 7px.
+///   - "quiet" in a bar with nothing in it, when there is room, and its
+///     caption greyed.
 ///
 /// ONLY WHILE IT IS ON SCREEN. It redraws about 30 times a second from a
 /// timer that runs only while the strips can be seen - the window shut, it
@@ -55,14 +68,78 @@ internal sealed class ChannelStrips : Control
     /// <summary>How long the peak line holds before it falls too.</summary>
     internal static readonly TimeSpan PeakHold = TimeSpan.FromSeconds(1.5);
 
-    private static readonly Color Panel = Color.FromArgb(0x0F, 0x17, 0x2A);
-    private static readonly Color Lane = Color.FromArgb(0x1E, 0x29, 0x3B);
-    private static readonly Color Green = Color.FromArgb(0x22, 0xC5, 0x5E);
-    private static readonly Color Amber = Color.FromArgb(0xF5, 0x9E, 0x0B);
-    private static readonly Color Red = Color.FromArgb(0xEF, 0x44, 0x44);
-    private static readonly Color Caption = Color.FromArgb(0xCB, 0xD5, 0xE1);
-    private static readonly Color ScaleText = Color.FromArgb(0x94, 0xA3, 0xB8);
+    /// <summary>Segments in a bar: the board's, and the flag row's shorter one.</summary>
+    internal const int Segments = 16;
+
+    internal const int CompactSegments = 10;
+
+    /// <summary>How much of its own colour an unlit segment keeps, over the panel.</summary>
+    private const float UnlitShare = 0.2f;
+
+    /// <summary>A bar under this is "quiet" - nothing a room would hear.</summary>
+    internal const float QuietDb = FloorDb + 2f;
+
     private static readonly Color HoldLine = Color.FromArgb(0xF8, 0xFA, 0xFC);
+
+    // The look's, read at paint: the app restarts to change its look, but
+    // reading them each frame costs nothing and keeps the tests honest.
+    private static Color Panel => AppTheme.SidebarBackground;
+    private static Color Edge => AppTheme.SidebarBorder;
+    private static Color Caption => AppTheme.SidebarText;
+    private static Color ScaleText => AppTheme.SidebarTextMuted;
+
+    /// <summary>
+    /// The colour of a bar below the warning part of the scale, for the look
+    /// in use: its primary colour, unless that could be taken for the
+    /// warning or danger colour the top of the bar turns - then its accent,
+    /// then its "good" green, then plain green.
+    /// </summary>
+    /// <remarks>
+    /// WHY NOT ALWAYS THE PRIMARY: the top of every bar turns the look's
+    /// amber and then its red, and a bar is read by that change. Midnight's
+    /// and Daylight's primary is an orange, Pit Lane's a yellow, Rosso's a
+    /// red - each would read as already too loud at a normal level.
+    /// </remarks>
+    internal static Color BarColour(Color primary, Color accent, Color good, Color warning, Color danger)
+    {
+        foreach (var candidate in new[] { primary, accent, good })
+        {
+            if (Distinct(candidate, warning) && Distinct(candidate, danger))
+            {
+                return candidate;
+            }
+        }
+
+        return Color.FromArgb(0x22, 0xC5, 0x5E);
+    }
+
+    /// <summary>Far enough round the colour wheel from <paramref name="other"/>, and coloured enough, not to be taken for it.</summary>
+    private static bool Distinct(Color colour, Color other)
+    {
+        if (colour.GetSaturation() < 0.3f)
+        {
+            return false;
+        }
+
+        var apart = Math.Abs(colour.GetHue() - other.GetHue());
+        return Math.Min(apart, 360f - apart) >= LeastHueApart;
+    }
+
+    /// <summary>
+    /// How far round the wheel a bar's colour must be from the warning and
+    /// danger colours. Synthwave's pink is 22 degrees from its red and Race
+    /// Wall's lime 31 from its amber, and both read apart; the oranges of
+    /// Midnight and Daylight are 16 and 17 from their amber, and do not.
+    /// </summary>
+    internal const float LeastHueApart = 20f;
+
+    private static Color Base => BarColour(AppTheme.Primary, AppTheme.Accent, AppTheme.Success, AppTheme.Warning, AppTheme.Danger);
+
+    /// <summary>A colour <paramref name="share"/> of the way from the panel to <paramref name="colour"/>.</summary>
+    private static Color Over(Color colour, float share, Color under) => Color.FromArgb(
+        (int)Math.Round((colour.R * share) + (under.R * (1 - share))),
+        (int)Math.Round((colour.G * share) + (under.G * (1 - share))),
+        (int)Math.Round((colour.B * share) + (under.B * (1 - share))));
 
     /// <summary>The marks down the left: where each is on the scale.</summary>
     private static readonly float[] Marks = { 0f, -10f, -20f, -30f, -40f };
@@ -141,7 +218,7 @@ internal sealed class ChannelStrips : Control
     {
         _compact = compact;
         _meters = meters;
-        _bars = new Bar[meters.Length * 2];
+        _bars = new Bar[meters.Length];
 
         for (var i = 0; i < _bars.Length; i++)
         {
@@ -207,7 +284,7 @@ internal sealed class ChannelStrips : Control
         }
     }
 
-    /// <summary>For the tests: each bar, two to a strip, left then right.</summary>
+    /// <summary>For the tests: each bar, one to a strip.</summary>
     internal IReadOnlyList<Bar> Bars => _bars;
 
     /// <summary>A power (scaled mean square, 1 at full scale) as dB on this scale: never under the foot or over the top.</summary>
@@ -232,9 +309,10 @@ internal sealed class ChannelStrips : Control
 
         for (var i = 0; i < _meters.Length; i++)
         {
+            // Left and right as one: their power averaged, so a sound in
+            // one side only reads 3 dB down rather than not at all.
             var (left, right, _) = _meters[i].Heard(since, nowTicks);
-            changed |= Advance(_bars[i * 2], left * SineCalibration, now, elapsed);
-            changed |= Advance(_bars[(i * 2) + 1], right * SineCalibration, now, elapsed);
+            changed |= Advance(_bars[i], (left + right) / 2 * SineCalibration, now, elapsed);
         }
 
         if (changed)
@@ -253,9 +331,21 @@ internal sealed class ChannelStrips : Control
     // --- Sizes, at the text size in use ---
 
     private int Pad => UiLayout.AtTextSize(_compact ? 4 : 10);
-    private int BarWidth => UiLayout.AtTextSize(_compact ? 7 : 8);
-    private int BarGap => UiLayout.AtTextSize(_compact ? 2 : 3);
+    /// <summary>A bar's width at its own size; spread, a share of the width instead (SpreadBarWidth).</summary>
+    private int BarWidth => UiLayout.AtTextSize(_compact ? 12 : 22);
     private int StripGap => UiLayout.AtTextSize(_compact ? 8 : 12);
+
+    /// <summary>Spread, each bar takes this much of its strip's share of the width, between these.</summary>
+    private const float SpreadBarShare = 0.6f;
+
+    private static int LeastSpreadBarWidth => UiLayout.AtTextSize(16);
+
+    private static int MostSpreadBarWidth => UiLayout.AtTextSize(46);
+
+    private int SegmentCount => _compact && !_spread ? CompactSegments : Segments;
+
+    /// <summary>The gap between segments: none to speak of in a short bar, so the lit part still reads.</summary>
+    private int SegmentGap(int barHeight) => barHeight / SegmentCount >= 6 ? 2 : 1;
     private int BarHeight => !_compact
         ? UiLayout.AtTextSize(72)
         : _spread
@@ -308,7 +398,7 @@ internal sealed class ChannelStrips : Control
     {
         _scaleWidth = _compact ? 0 : TextRenderer.MeasureText("-40", CaptionFont).Width;
         var widestName = _meters.Length == 0 ? 0 : _meters.Max(m => TextRenderer.MeasureText(m.Name, CaptionFont).Width);
-        _stripWidth = Math.Max((BarWidth * 2) + BarGap, widestName);
+        _stripWidth = Math.Max(BarWidth, widestName);
     }
 
     /// <summary>The size it draws at: worked out from the text size, never stretched.</summary>
@@ -419,9 +509,14 @@ internal sealed class ChannelStrips : Control
         var size = Measure();
 
         using (var panel = Rounded(new Rectangle(0, 0, size.Width - 1, size.Height - 1), UiLayout.AtTextSize(10)))
-        using (var brush = new SolidBrush(Panel))
         {
-            g.FillPath(brush, panel);
+            using (var brush = new SolidBrush(Panel))
+            {
+                g.FillPath(brush, panel);
+            }
+
+            using var edge = new Pen(Edge, 1f);
+            g.DrawPath(edge, panel);
         }
 
         g.SmoothingMode = SmoothingMode.None;
@@ -445,66 +540,97 @@ internal sealed class ChannelStrips : Control
 
         var x = scaleRight + ScaleGap;
 
-        // Spread: each strip an equal share of the width, centred in it.
+        // Spread: each strip an equal share of the width, its bar centred in it.
         var share = _spread && _meters.Length > 0
             ? Math.Max(StripWidth, (size.Width - x - Pad) / _meters.Length)
             : StripWidth + StripGap;
-        var stripLeft = _spread ? (share - StripWidth) / 2 : 0;
+        var barWidth = _spread
+            ? Math.Clamp((int)(share * SpreadBarShare), Math.Min(LeastSpreadBarWidth, share), Math.Min(MostSpreadBarWidth, share))
+            : BarWidth;
+        var colours = new Palette(Base, AppTheme.Warning, AppTheme.Danger, Panel);
+        var count = SegmentCount;
+        var gap = SegmentGap(BarHeight);
+
+        // The flag row's bars are too short for a word in them.
+        var roomForWord = !_compact || _spread;
 
         for (var i = 0; i < _meters.Length; i++)
         {
-            var pairWidth = (BarWidth * 2) + BarGap;
-            var barsLeft = x + stripLeft + ((StripWidth - pairWidth) / 2);
+            var stripWidth = _spread ? share : StripWidth;
+            var lane = new Rectangle(x + ((stripWidth - barWidth) / 2), top, barWidth, BarHeight);
+            var quiet = _bars[i].Db < QuietDb;
 
-            DrawBar(g, _bars[i * 2], new Rectangle(barsLeft, top, BarWidth, BarHeight));
-            DrawBar(g, _bars[(i * 2) + 1], new Rectangle(barsLeft + BarWidth + BarGap, top, BarWidth, BarHeight));
+            DrawBar(g, _bars[i], lane, count, gap, colours);
+
+            // "quiet" across the foot of a silent bar, when it fits - so an
+            // empty board reads as nothing playing, not as broken.
+            if (quiet && roomForWord)
+            {
+                var word = TextRenderer.MeasureText("quiet", AppTheme.MicroFont);
+                var spare = UiLayout.AtTextSize(2);
+
+                if (word.Width <= lane.Width + (2 * spare) && word.Height * 3 <= lane.Height)
+                {
+                    var wordBox = new Rectangle(lane.Left - spare, lane.Bottom - word.Height - spare, lane.Width + (2 * spare), word.Height);
+                    TextRenderer.DrawText(g, "quiet", AppTheme.MicroFont, wordBox, ScaleText, TextFormatFlags.HorizontalCenter | TextFormatFlags.Top | TextFormatFlags.NoPadding);
+                }
+            }
 
             var captionBox = _spread
                 ? new Rectangle(x, foot + CaptionGap, share, CaptionFont.Height)
                 : new Rectangle(x - (StripGap / 2), foot + CaptionGap, StripWidth + StripGap, CaptionFont.Height);
-            TextRenderer.DrawText(g, _meters[i].Name, CaptionFont, captionBox, Caption, TextFormatFlags.HorizontalCenter | TextFormatFlags.Top | TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, _meters[i].Name, CaptionFont, captionBox, quiet ? ScaleText : Caption, TextFormatFlags.HorizontalCenter | TextFormatFlags.Top | TextFormatFlags.NoPadding);
 
             x += share;
         }
     }
 
-    private static void DrawBar(Graphics g, Bar bar, Rectangle lane)
+    /// <summary>A bar's colours for one paint: lit, and unlit as a dim tint of the same over the panel.</summary>
+    private readonly record struct Palette(Color Base, Color Warning, Color Danger, Color Panel)
     {
-        using (var back = new SolidBrush(Lane))
-        {
-            g.FillRectangle(back, lane);
-        }
+        public Color Lit(float db) => db > RedDb ? Danger : db > AmberDb ? Warning : Base;
 
-        // Each colour's part of the scale, as far up as the reading goes.
-        var reached = lane.Bottom - (int)Math.Round(Fraction(bar.Db) * lane.Height);
-
-        Fill(g, lane, reached, FloorDb, AmberDb, Green);
-        Fill(g, lane, reached, AmberDb, RedDb, Amber);
-        Fill(g, lane, reached, RedDb, 0f, Red);
-
-        // The peak line, once there is one.
-        if (bar.HoldDb > FloorDb + 0.5f)
-        {
-            var y = lane.Bottom - (int)Math.Round(Fraction(bar.HoldDb) * lane.Height);
-            y = Math.Clamp(y, lane.Top, lane.Bottom - 2);
-
-            using var hold = new SolidBrush(HoldLine);
-            g.FillRectangle(hold, lane.Left, y, lane.Width, 2);
-        }
+        public Color Unlit(float db) => Over(Lit(db), UnlitShare, Panel);
     }
 
-    private static void Fill(Graphics g, Rectangle lane, int reached, float fromDb, float toDb, Color colour)
+    /// <summary>The dB at the top of segment <paramref name="index"/> of <paramref name="count"/>, 0 the foot.</summary>
+    internal static float SegmentTopDb(int index, int count) => FloorDb + ((index + 1) * -FloorDb / count);
+
+    /// <summary>
+    /// How many segments a reading lights: to the nearest segment, so a bar
+    /// does not always show one too few.
+    /// </summary>
+    internal static int LitSegments(float db, int count) =>
+        Math.Clamp((int)Math.Round(Fraction(db) * count), 0, count);
+
+    private static void DrawBar(Graphics g, Bar bar, Rectangle lane, int count, int gap, Palette colours)
     {
-        var bottom = lane.Bottom - (int)Math.Round(Fraction(fromDb) * lane.Height);
-        var top = Math.Max(reached, lane.Bottom - (int)Math.Round(Fraction(toDb) * lane.Height));
+        var lit = LitSegments(bar.Db, count);
 
-        if (top >= bottom)
+        // The peak: the top segment the bar has reached lately, white - only
+        // above the lit part, where it says something the bar does not.
+        var held = bar.HoldDb > FloorDb + 0.5f ? LitSegments(bar.HoldDb, count) - 1 : -1;
+
+        for (var s = 0; s < count; s++)
         {
-            return;
-        }
+            // Each segment's edges worked out on their own, so the rounding
+            // spreads over the bar instead of piling up at the top.
+            var bottom = lane.Bottom - (int)Math.Round((double)s * lane.Height / count);
+            var top = lane.Bottom - (int)Math.Round((double)(s + 1) * lane.Height / count) + (s < count - 1 ? gap : 0);
 
-        using var brush = new SolidBrush(colour);
-        g.FillRectangle(brush, lane.Left, top, lane.Width, bottom - top);
+            if (top >= bottom)
+            {
+                top = bottom - 1;
+            }
+
+            var db = SegmentTopDb(s, count);
+            var colour = s == held && s >= lit
+                ? HoldLine
+                : s < lit ? colours.Lit(db) : colours.Unlit(db);
+
+            using var brush = new SolidBrush(colour);
+            g.FillRectangle(brush, lane.Left, top, lane.Width, bottom - top);
+        }
     }
 
     private static GraphicsPath Rounded(Rectangle box, int radius)
