@@ -222,6 +222,20 @@ public sealed class SessionHistoryStore
     public SessionRecord? Get(string id) => _sessions.FirstOrDefault(s => s.Id == id);
 
     /// <summary>
+    /// A scored race of the same round as this one, started after it - the
+    /// re-run that replaced it. For EventSpine.SupersededByRerun once the
+    /// round itself has gone. A scan rather than All, which sorts a copy.
+    /// </summary>
+    public SessionRecord? LaterRunOfRound(SessionRecord session) =>
+        string.IsNullOrEmpty(session.RoundId)
+            ? null
+            : _sessions.FirstOrDefault(s => !ReferenceEquals(s, session)
+                && !string.Equals(s.Id, session.Id, StringComparison.Ordinal)
+                && string.Equals(s.RoundId, session.RoundId, StringComparison.Ordinal)
+                && s.StartedAtUtc > session.StartedAtUtc
+                && !s.IsNotScored());
+
+    /// <summary>
     /// Raised after a session has been added and written to disk.
     ///
     /// It exists because more than one place finishes a race - Race
