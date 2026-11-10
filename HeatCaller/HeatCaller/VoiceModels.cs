@@ -218,19 +218,23 @@ public sealed class AnnouncementEventConfig
 
     /// <summary>
     /// For PositionReport: whether the gaps (each car's gap to the leader,
-    /// exactly - see RaceNumbers.GapExactly) are said in {gaps}, wherever
-    /// the club put it in its phrasing, rather than after each name.
+    /// exactly - see RaceNumbers.GapExactly) are said at all. Off, the order
+    /// is read as places alone - "Sam leads, Bill second, Frank third". On,
+    /// they are said in {gaps}, wherever the club put it in its phrasing,
+    /// or after each name when the line has no {gaps}.
     ///
-    /// OFF by default - which is also what every settings file saved before
-    /// this one deserialises to, so no club's report changes wording until
-    /// somebody turns it on. A running order is already the longest line the
+    /// OFF by default. A running order is already the longest line the
     /// announcer reads, and a figure after every name is another second or
     /// two of talking per place; on a short indoor lap that is the next lap
     /// gone.
     ///
-    /// Turning it on moves the gap OUT of the running order and into
-    /// {gaps}: the order then reads as places, and the times are said once,
-    /// in the club's own words. Said in both, the announcer gave every
+    /// WHY OFF MEANS NONE (9 Nov 2026): off used to mean "after each name"
+    /// rather than "in {gaps}", so with the box - "Say each car's gap to
+    /// the leader" - unticked, the gaps were still said. Settings saved
+    /// before then read as off too, so they now hear places only.
+    ///
+    /// With {gaps} the gap comes OUT of the running order and the times are
+    /// said once, in the club's own words. Said in both, the announcer gave every
     /// interval twice in one breath. See
     /// AnnouncementService.MaybeAnnouncePositions, where both are worded.
     /// </summary>
@@ -1944,7 +1948,7 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
         AnnouncementEventType.PassedByGhost => ("Passed by a ghost", "A virtual opponent got past you - the one that actually stings. Placeholders: {driver} for you, {rival} for the ghost."),
         AnnouncementEventType.CloseBattle => ("Close battle", "Two drivers on the same lap running within a second of each other. Fires once per pair per race - a long scrap would otherwise trigger this every lap. Placeholders: {driver} {car} {team} {sponsors} for the car in front, {rival} for the one chasing, {battle} for what it is for (\"for the lead\", \"for third\"). A fight for the lead that the line does not mention starts \"Battle for the lead!\"."),
         AnnouncementEventType.Lapped => ("Car gets lapped", "The leader puts a full lap on another driver. Placeholders: {driver} {car} {team} {sponsors} for the leader, {rival} for the car being lapped."),
-        AnnouncementEventType.PositionReport => ("Position report", "Reads out the current running order during a race - \"Sam leads, Bill one point two three four back, Frank two point three oh five back\". Use the settings below to choose how often it fires and how far down the order it reads. The driver names are inserted automatically, so a line here is the WRAPPER around them - use {positions} for where the list goes. It is read once the last car it names has crossed the line too, so every gap is up to date. Each car is given its gap to the leader exactly, to the thousandth, the same as the board's Gap to P1 - \"Bill one point two three four back\", and \"a lap down\" for anyone who is. Tick \"Say each car's gap to the leader\" and put {gaps} where the times should go to have the order read as places and the gaps said after it."),
+        AnnouncementEventType.PositionReport => ("Position report", "Reads out the current running order during a race - \"Sam leads, Bill second, Frank third\". Use the settings below to choose how often it fires and how far down the order it reads. The driver names are inserted automatically, so a line here is the WRAPPER around them - use {positions} for where the list goes. It is read once the last car it names has crossed the line too, so the order is up to date. Tick \"Say each car's gap to the leader\" to have each car given its gap exactly, to the thousandth, the same as the board's Gap to P1 - \"Bill one point two three four back\", and \"a lap down\" for anyone who is. With it ticked, put {gaps} in the line to have the order read as places and the gaps said after it."),
         AnnouncementEventType.YellowFlag => ("Yellow flag", "A yellow/caution flag was called during the race."),
         AnnouncementEventType.RedFlag => ("Red flag", "A red flag was called - racing is stopped."),
         AnnouncementEventType.FastestSector => ("Fastest sector", "With a split loop: a driver goes quicker through a sector than anyone has this session - the line to the split is sector 1, the split back to the line sector 2. Not for the first sector times of a session, which are fastest by default. Placeholders: {driver} {car} {team} {sponsors} {sector} (its number) {sectortime}."),

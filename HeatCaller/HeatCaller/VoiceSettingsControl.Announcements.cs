@@ -1417,7 +1417,7 @@ public sealed partial class VoiceSettingsControl
             // tick box names {time}: a tick that quietly needs a word
             // typed into the box above it reads as a tick that does
             // nothing.
-            _chkPositionGaps.Text = "Say each car's gap to the leader (put {gaps} in the line)";
+            _chkPositionGaps.Text = "Say each car's gap to the leader (put {gaps} in the line to say them after the order)";
             _chkPositionGaps.AutoSize = true;
             _chkPositionGaps.Checked = config.PositionReportSayGaps;
 
