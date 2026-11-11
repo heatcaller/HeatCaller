@@ -104,7 +104,7 @@ internal static partial class WindowCatalog
             Background = new SoundscapeBackground
             {
                 AmbienceBed = "PitLane",
-                MusicPlaylist = new List<string> { "Neon Grid", "Victory Lane", "Our Club Anthem (2026 remaster)", "Last Lap Lights" },
+                MusicPlaylist = new List<string> { "Horizon Line", "Afterburn", "Our Club Anthem (2026 remaster)", "Last Lap Lights" },
             },
         };
     }

@@ -133,7 +133,7 @@ These are on the **Reactions** card, under the layers. How loud the ambience is 
 
 ## Music
 
-**Sounds → Music** is a soundtrack for between races. Eleven tracks are included: Horizon Line, Chasing Sunset, Grid Runner, Afterglow, Cooldown Lap, Vanishing Point, Last Lap Lights, Redline Memory, One More Run, Back to the Grid and Long Way Home. The soundscapes' own music is included too, Victory Lane and Race Day Live among it; see [Theme music](#theme-music).
+**Sounds → Music** is a soundtrack for between races. Eleven tracks are included: Horizon Line, Chasing Sunset, Grid Runner, Afterglow, Cooldown Lap, Vanishing Point, Last Lap Lights, Redline Memory, One More Run, Back to the Grid and Long Way Home. The soundscapes' own music is included too; see [Theme music](#theme-music).
 
 ![Sounds, Music tab: Enable music and Shuffle ticked, Theme music picked, the player stopped and the library of included and the club's own tracks, with Add Track, Include / Exclude, Remove, Open Music Folder and Restore Included Tracks](../assets/images/sounds-music.png)
 
@@ -151,7 +151,7 @@ How loud the music plays is the **Music** fader on the [Mixer](#mixer) (default 
 - **Theme music** plays the music of the soundscape you applied last, for example Podium's four songs for **Podium**. Your ticks under **My music** aren't changed; they're kept for when you switch back.
 - **My music** plays the tracks ticked **Yes** in the **My music** column of the library: your own uploads and the included tracks.
 
-If **Theme music** has nothing to play, your music plays instead, and the sentence under the choice says why (in amber). That happens when no soundscape has been applied yet, when the soundscape has no music of its own (every built-in one has; a soundscape of your own may not), or when its tracks aren't in your library or their files are missing. **Restore Included Tracks** puts the shipped tracks back.
+If **Theme music** has nothing to play, your music plays instead, and the sentence under the choice says why (in amber). That happens when no soundscape has been applied yet, when the soundscape has no music of its own (every built-in one has except **Arcade**; a soundscape of your own may not), or when its tracks aren't in your library or their files are missing. **Restore Included Tracks** puts the shipped tracks back.
 
 Switching is heard straight away: music that's playing moves over to the new choice. Paused music is stopped, so **Play** starts the new choice rather than resuming the old one. The choice is saved, and stays as you left it when you apply another soundscape.
 
@@ -308,7 +308,7 @@ Tick **Don't ask about the sound again**, under the drop-down, and neither wizar
 |---|---|
 | **Name:** | Required, and no two soundscapes can share one ("There's already a soundscape called "*name*" - pick another name."). |
 | **Description:** | Shown on the soundscape's card. |
-| **Background:** | The crowd: **Leave Ambience as it is**, **No soundscape crowd**, or one of the packs' crowds (for example **Podium crowd**). Then **Music:**: **No music of its own**, or one of the packs' music (for example "Arcade music - "Insert Coin"", or "Podium music - 4 tracks"; "(not in your library yet)" is added when none of its tracks are in your music library). See [Soundscape crowd and music](#soundscape-crowd-and-music). |
+| **Background:** | The crowd: **Leave Ambience as it is**, **No soundscape crowd**, or one of the packs' crowds (for example **Podium crowd**). Then **Music:**: **No music of its own**, or one of the packs' music (for example "Podium music - 4 tracks"; "(not in your library yet)" is added when none of its tracks are in your music library). See [Soundscape crowd and music](#soundscape-crowd-and-music). |
 | The **Sounds** card | **Set all to:** puts one pack on every sound. Under it, each sound has its own pack list and a ▶ button that plays it. A sound that plays a file of your own says "own file": the file plays instead of the pack. The editor only picks packs; change or clear a file on **Sounds → Effects**. |
 | The **Announcer** card | **Stability:**, **Style:** and **Speed:** for the delivery (Stability and Style only change ElevenLabs voices). Under them, a list of race moments. For the moment you pick, **Announce this moment** switches it on or off, and the box beside it holds its lines, one per line, picked at random. `{driver}`, `{time}`, `{lap}` and `{streak}` are filled in, and tags like `[excited]` steer ElevenLabs delivery and are dropped for other voices. |
 
@@ -395,9 +395,9 @@ A soundscape's music is what **Sounds → Music** plays when it's set to **Theme
 
 | Soundscape | Theme music |
 |---|---|
-| **Classic** | **Neon Grid** and the eleven included tracks, its own four songs (**Chrome Apex**, **Midnight Pit Wall**, **Starlight Straight** and **Afterburn**), and **Victory Lane** and **Race Day Live**. |
+| **Classic** | The eleven included tracks and its own three songs: **Chrome Apex**, **Starlight Straight** and **Afterburn**. |
 | **Podium** | Its own four songs: **Full Throttle**, **Top Step**, **Burnout** and **Champagne Spray**. |
-| **Arcade** | **Insert Coin**: chiptune. |
+| **Arcade** | No music of its own: **Theme music** plays your **My music** tracks. |
 | **Broadcast** | Its own four songs: **Prime Time**, **Highlight Reel**, **Under the Lights** and **Post-Race Show**. |
 | **Pit Lane** | Its own four songs: **Gravel and Gasoline**, **Dirt Road Dash**, **Pit Stop Two-Step** and **Back Forty Straight**. |
 
