@@ -1730,10 +1730,10 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 65,
             Templates = new List<string>
             {
-                "[excited] {driver} - quicker than last time out, by {margin}!",
-                "[excited] {time} for {driver}, and that beats last time here.",
-                "[excited] {driver} has found {margin} on last time out!",
-                "[excited] Better than last time for {driver} - {time}.",
+                "[cheerful] {driver} - quicker than last time out, by {margin}!",
+                "[cheerful] {time} for {driver}, and that beats last time here.",
+                "[cheerful] {driver} has found {margin} on last time out!",
+                "[cheerful] Better than last time for {driver} - {time}.",
             },
         };
 
@@ -1743,10 +1743,10 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 70,
             Templates = new List<string>
             {
-                "[excited] {driver}'s back on form - {time}, best in a while!",
-                "[excited] That's more like it from {driver} - {time}.",
-                "[excited] {driver}'s quickest here in weeks - {time}!",
-                "[excited] Back to their best, {driver} - {time}!",
+                "[cheerful] {driver}'s back on form - {time}, best in a while!",
+                "[cheerful] That's more like it from {driver} - {time}.",
+                "[cheerful] {driver}'s quickest here in weeks - {time}!",
+                "[cheerful] Back to their best, {driver} - {time}!",
             },
         };
 
@@ -1756,10 +1756,10 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 70,
             Templates = new List<string>
             {
-                "[excited] That's {driver}'s {milestone} at the club!",
-                "[excited] A big one for {driver} - their {milestone} here!",
-                "[excited] {driver} brings up their {milestone}!",
-                "[excited] Give it up for {driver} - {milestone} at the club!",
+                "[cheerful] That's {driver}'s {milestone} at the club!",
+                "[cheerful] A big one for {driver} - their {milestone} here!",
+                "[cheerful] {driver} brings up their {milestone}!",
+                "[cheerful] Give it up for {driver} - {milestone} at the club!",
             },
         };
 
