@@ -266,10 +266,16 @@ public static class AppDialog
             // curve is under the page.
             Padding = new Padding(RimRoom);
 
+            // An '&' in the title or the message is text, the way Windows'
+            // own message box shows it - a season or venue named "Smith &
+            // Sons" being deleted lost its '&' and had the S underlined, as
+            // a Label takes a single '&' for a shortcut key by default
+            // (10 Nov 2026, bug hunt 16).
             var lblCaption = new Label
             {
                 Text = Text,
                 AutoSize = true,
+                UseMnemonic = false,
                 Font = AppTheme.BoldFont,
                 ForeColor = _accent,
             };
@@ -278,6 +284,7 @@ public static class AppDialog
             {
                 Text = text,
                 AutoSize = true,
+                UseMnemonic = false,
                 ForeColor = AppTheme.TextDark,
             };
 
@@ -354,8 +361,11 @@ public static class AppDialog
             var measure = UiLayout.AtTextSize(Measure);
             var beside = hasIcon ? UiLayout.AtTextSize(IconSize) + UiLayout.RowGap : 0;
 
-            var message = Math.Min(measure, TextRenderer.MeasureText(lblText.Text, lblText.Font).Width);
-            var title = Math.Min(beside + measure, TextRenderer.MeasureText(lblCaption.Text, lblCaption.Font).Width);
+            // Measured with the '&'s drawn, as the labels now draw them
+            // (10 Nov 2026, bug hunt 16).
+            var unbounded = new Size(int.MaxValue, int.MaxValue);
+            var message = Math.Min(measure, TextRenderer.MeasureText(lblText.Text, lblText.Font, unbounded, TextFormatFlags.NoPrefix).Width);
+            var title = Math.Min(beside + measure, TextRenderer.MeasureText(lblCaption.Text, lblCaption.Font, unbounded, TextFormatFlags.NoPrefix).Width);
 
             var content = Math.Max(Math.Max(beside + message, title), bar.OneLineWidth);
 

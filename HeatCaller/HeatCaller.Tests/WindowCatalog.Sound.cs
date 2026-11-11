@@ -51,6 +51,7 @@ internal static partial class WindowCatalog
             heatCallerVoice ? new VoiceProfile { Engine = VoiceEngine.HeatCaller } : VoiceProfile.CreateDefault(),
             (_, _) => Task.CompletedTask,
             () => { },
+            () => 0.9f,
             library);
 
     /// <summary>

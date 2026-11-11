@@ -851,15 +851,63 @@ public partial class MainForm
         }
     }
 
+    /// <summary>
+    /// The Id of each layout in the Track box, in the order shown (the box's
+    /// item 1 is entry 0 - item 0 is "(none)"). Filled by
+    /// RefreshTrackLayoutCombo, so a selection can be followed through a
+    /// rename.
+    /// </summary>
+    private readonly List<string> _shownTrackLayoutIds = new();
+
+    /// <summary>
+    /// The name the Track box should keep selected after it is rebuilt: the
+    /// CURRENT name of the layout that was selected, found by its Id.
+    /// </summary>
+    /// <remarks>
+    /// (10 Nov 2026, bug hunt 16) The box used to keep its selection by the
+    /// name it showed. Renaming the selected layout on Track Layouts saves
+    /// the store, which rebuilds the box - and the old name was no longer in
+    /// the list, so the box fell to "(none)" with nothing said. Race Control
+    /// then filed the race against no track, and with a round chosen the box
+    /// is locked, so it could not even be put back by hand. The Id does not
+    /// change on a rename, so the layout is found again under its new name.
+    /// A layout that was deleted is not found, and the shown name is
+    /// returned as before (it will not be in the list either).
+    /// </remarks>
+    internal static string? TrackNameToKeep(
+        string? shownName,
+        int shownIndex,
+        IReadOnlyList<string> shownIds,
+        IEnumerable<TrackLayout> layouts)
+    {
+        if (shownName is not null && shownIndex >= 1 && shownIndex - 1 < shownIds.Count)
+        {
+            var id = shownIds[shownIndex - 1];
+            if (layouts.FirstOrDefault(t => t.Id == id) is { } layout)
+            {
+                return layout.Name;
+            }
+        }
+
+        return shownName;
+    }
+
     /// <summary>Repopulates the track layout dropdown, preserving the current selection if it still exists, or falling back to the last one used (persisted across restarts) if there's no in-memory selection yet.</summary>
     private void RefreshTrackLayoutCombo()
     {
-        var previous = cmbTrackLayout.SelectedItem as string ?? (_settings.LastTrackLayoutName.Length > 0 ? _settings.LastTrackLayoutName : null);
+        var previous = TrackNameToKeep(
+            cmbTrackLayout.SelectedItem as string,
+            cmbTrackLayout.SelectedIndex,
+            _shownTrackLayoutIds,
+            _trackLayouts.All)
+            ?? (_settings.LastTrackLayoutName.Length > 0 ? _settings.LastTrackLayoutName : null);
         cmbTrackLayout.Items.Clear();
         cmbTrackLayout.Items.Add("(none)");
+        _shownTrackLayoutIds.Clear();
         foreach (var t in _trackLayouts.All)
         {
             cmbTrackLayout.Items.Add(t.Name);
+            _shownTrackLayoutIds.Add(t.Id);
         }
 
         var idx = previous is not null ? cmbTrackLayout.Items.IndexOf(previous) : -1;

@@ -442,6 +442,12 @@ internal sealed class GapState
     private string? _nextId;
     private int _callUps;
     private DateTime? _lastCallUpUtc;
+
+    // The last call-up actually said, for WhyNotCallUpAgain only.
+    // (10 Nov 2026, bug hunt 16) _lastCallUpUtc also moves on a Skip, so the
+    // repeat waits its full time - but a skip puts nothing on air, so Call Up
+    // pressed after it was refused as "Already called up" when it never was.
+    private DateTime? _lastSaidCallUpUtc;
     private DateTime? _callUpWaitingSinceUtc;
     private DateTime? _callUpsNotBeforeUtc;
     private bool _marshalsSaid;
@@ -537,6 +543,7 @@ internal sealed class GapState
             _nextId = nextId;
             _callUps = 0;
             _lastCallUpUtc = null;
+            _lastSaidCallUpUtc = null;
             _callUpsNotBeforeUtc = null;
             _callUpWaitingSinceUtc = null;
             _marshalsSaid = false;
@@ -677,6 +684,7 @@ internal sealed class GapState
                 case GapLine.CallUp:
                     _callUps++;
                     _lastCallUpUtc = nowUtc;
+                    _lastSaidCallUpUtc = nowUtc;
                     break;
                 case GapLine.Marshals:
                     _marshalsSaid = true;
@@ -802,7 +810,8 @@ internal sealed class GapState
                 return $"Already called up {round} - it's still waiting to be said.";
             }
 
-            if (_lastCallUpUtc is { } last && nowUtc >= last
+            // The last one said, not skipped - a skip said nothing (10 Nov 2026, bug hunt 16).
+            if (_lastSaidCallUpUtc is { } last && nowUtc >= last
                 && nowUtc - last < TimeSpan.FromSeconds(CallUpAgainAfterSeconds))
             {
                 return $"Already called up {round} {(nowUtc - last).TotalSeconds:0}s ago.";
@@ -1568,4 +1577,32 @@ internal static class GapPreview
         steps.Count == 0
             ? "Nothing would be said in this gap with these settings."
             : string.Join(" · ", steps.Select(s => $"{(int)s.At.TotalMinutes}:{s.At.Seconds:00} {Name(s.Kind)}"));
+}
+
+/// <summary>
+/// "Start the countdown by itself from the run sheet" has two ticks - the
+/// Between races card and the Timetable's Reminder countdown card - over the
+/// one setting. Both write it here and both hear it here, so each shows what
+/// the other did (10 Nov 2026, bug hunt 16). Before, each read the setting
+/// once when it was built: a tick on the Timetable stayed wrong on the card,
+/// and the card's next unrelated edit saved its stale tick back over it, so
+/// the run sheet's countdown calls stopped without a word.
+/// </summary>
+internal static class AutoCountdownTick
+{
+    /// <summary>The setting changed, for these settings. A control showing other settings leaves its tick alone.</summary>
+    public static event Action<AppSettings>? Changed;
+
+    /// <summary>Saves the tick and tells every control showing it. Nothing happens when it already says so.</summary>
+    public static void Set(AppSettings settings, bool on)
+    {
+        if (settings.BetweenRacesAutoCountdown == on)
+        {
+            return;
+        }
+
+        settings.BetweenRacesAutoCountdown = on;
+        settings.Save();
+        Changed?.Invoke(settings);
+    }
 }

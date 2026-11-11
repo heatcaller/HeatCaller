@@ -269,6 +269,28 @@ public sealed class HonoursWritingTests
     }
 
     [Fact]
+    public void A_ghost_cars_leftover_award_does_not_stop_a_club_first()
+    {
+        // Bug hunt 16 (10 Nov 2026): a ghost's award from before ghosts were
+        // left out is still in the file. It is not a club driver's, so Jane
+        // is still the first at the club to earn the badge.
+        var store = AchievementStore.Load();
+        var jane = $"hw-{Guid.NewGuid():N}";
+        var ghost = Ghosts.Prefix + Guid.NewGuid().ToString("N")[..6];
+        var badge = Def("Nail-Biter");
+
+        Assert.True(GhostService.IsGhost(ghost));
+        store.Award(ghost, badge.Id);
+        store.Award(jane, badge.Id);
+
+        var unlocks = new[] { new AchievementUnlock(jane, "Jane Doe", badge, string.Empty) };
+        var facts = string.Join("\n", HonoursWriting.Facts(RaceHonours.Picked(unlocks), unlocks, store));
+
+        Assert.Contains("Nobody at the club had earned it before tonight.", facts, StringComparison.Ordinal);
+        Assert.DoesNotContain("hold it now", facts, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void With_no_store_the_facts_still_say_what_each_badge_is_for()
     {
         var unlocks = new[] { Unlock("Billy Bob", NailBiter) };

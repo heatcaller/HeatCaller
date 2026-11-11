@@ -201,7 +201,7 @@ Choose the start type in **Start:** in the race format.
 
 ### Where the grid comes from
 
-A staggered start needs a grid order. HeatCaller uses the selected round's roster, in the order the drivers were assigned. With no round selected, it uses the finishing order of the last race. If neither exists, it starts everyone together and says so in the console.
+A staggered start needs a grid order. HeatCaller uses the selected round's roster, in the order the drivers were assigned. With no round selected, it uses the finishing order of the last race, if that race was run in the last 12 hours. Drivers from that race who are not checked in or have not been heard by the decoder lately are left out, so nobody waits for them and their release is not called. If neither exists, it starts everyone together and says so in the console.
 
 The grid also records where everyone started, which the **Gained** column uses. See [The leaderboard](#the-leaderboard).
 

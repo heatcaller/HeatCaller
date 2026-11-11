@@ -170,8 +170,11 @@ internal sealed class UnsaidLinesForm : Form
             .Reverse()
             .ToList();
 
-        var oldCount = _list.Items.Count;
         var top = _list.Items.Count > 0 ? _list.TopIndex : 0;
+
+        // The card at the top of the view, so the reader can be put back on
+        // it after the refill (10 Nov 2026, bug hunt 16).
+        var anchor = top > 0 && top < _list.Items.Count ? _list.Items[top] as UnsaidLine : null;
 
         _list.BeginUpdate();
 
@@ -186,13 +189,11 @@ internal sealed class UnsaidLinesForm : Form
 
             // Reading further down when new lines came in at the top: stay
             // on the same card rather than being thrown back up.
-            if (top > 0 && !force && lines.Count > oldCount)
+            var keep = TopAfterRefill(anchor, top, lines);
+
+            if (keep > 0)
             {
-                _list.TopIndex = Math.Min(lines.Count - 1, top + (lines.Count - oldCount));
-            }
-            else if (top > 0 && top < lines.Count)
-            {
-                _list.TopIndex = top;
+                _list.TopIndex = keep;
             }
         }
         finally
@@ -214,6 +215,39 @@ internal sealed class UnsaidLinesForm : Form
         {
             _lblCount.Text += $" (the last {AnnouncerLoad.MostKept} kept)";
         }
+    }
+
+    /// <summary>
+    /// Where the view should start after the list is rebuilt: on the card
+    /// the reader was looking at, wherever it has moved to, or the same row
+    /// if that card has gone. 0 means leave it at the top.
+    ///
+    /// This used to shift the row by how much the list had grown, which
+    /// stopped working once 300 lines were kept: each new line pushes the
+    /// oldest out, the count stays the same, and the card the reader was on
+    /// slid down a row with every new line (10 Nov 2026, bug hunt 16). The
+    /// card is found by reference, since the lines are records and two can
+    /// read the same.
+    /// </summary>
+    internal static int TopAfterRefill(UnsaidLine? anchor, int oldTop, IReadOnlyList<UnsaidLine> lines)
+    {
+        if (oldTop <= 0 || lines.Count == 0)
+        {
+            return 0;
+        }
+
+        if (anchor is not null)
+        {
+            for (var i = 0; i < lines.Count; i++)
+            {
+                if (ReferenceEquals(lines[i], anchor))
+                {
+                    return i;
+                }
+            }
+        }
+
+        return Math.Min(oldTop, lines.Count - 1);
     }
 
     private int TextWidth() =>

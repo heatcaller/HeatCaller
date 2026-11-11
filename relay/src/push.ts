@@ -712,11 +712,23 @@ self.addEventListener('push', (e) => {
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
   const url = (e.notification.data && e.notification.data.url) || '/';
+  // An open club page is taken to the alert's own page too (10 Nov 2026,
+  // bug hunt 16): only focused, a phone left on Live or Results came back
+  // to that page and the driver never saw the race the alert was about.
+  // navigate() needs a page this worker controls; one it does not is left
+  // as it is and the alert's page opens in a new window instead.
+  const target = new URL(url, self.registration.scope).href;
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((all) => {
     for (const c of all) {
-      if (c.url.indexOf(self.registration.scope) === 0 && 'focus' in c) return c.focus();
+      if (c.url.indexOf(self.registration.scope) === 0 && 'focus' in c) {
+        return c.focus().then((w) => {
+          const page = w || c;
+          if (page.url === target || !('navigate' in page)) return page;
+          return Promise.resolve(page.navigate(target)).catch(() => self.clients.openWindow(target));
+        });
+      }
     }
-    return self.clients.openWindow(url);
+    return self.clients.openWindow(target);
   }));
 });
 `;

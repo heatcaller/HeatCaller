@@ -176,6 +176,36 @@ public partial class MainForm
         _race.IsPracticeMode || _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing;
 
     /// <summary>
+    /// A restore's dialog shown and answered, then the race checked again
+    /// (10 Nov 2026, bug hunt 16): the dialog greys its button only for a
+    /// race running when it opens, and practice can start at the gate while
+    /// it is on screen. Restoring then restarted over it - frozen first, so
+    /// the practice and its laps could not be saved on the way out. Now it is
+    /// said and refused, as the line-up window does. True only when the
+    /// dialog was confirmed and nothing has started since.
+    /// </summary>
+    internal static bool ConfirmedWithNothingStarted(Func<bool> showAndConfirm, Func<bool> raceUnderWay, Action sayStarted)
+    {
+        if (!showAndConfirm())
+        {
+            return false;
+        }
+
+        if (raceUnderWay())
+        {
+            sayStarted();
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>What a restore says when a practice or race started while its dialog was open.</summary>
+    internal const string StartedWhileOpenLine =
+        "A practice or race started while the window was open, so nothing was changed. "
+        + "Try again once it has finished - this restarts HeatCaller, which would end it.";
+
+    /// <summary>
     /// Restore Default Settings (round 4): asks (RestoreDefaultsForm), saves
     /// what every store holds so the copy is current, zips the settings files
     /// into Settings Backups, puts back what Simple hides in the files
@@ -191,16 +221,26 @@ public partial class MainForm
             return;
         }
 
-        bool alsoShown;
+        bool alsoShown = false;
 
-        using (var form = new RestoreDefaultsForm(RaceUnderWayForRestore()))
-        {
-            if (form.ShowDialog(this) != DialogResult.OK)
+        if (!ConfirmedWithNothingStarted(
+            () =>
             {
-                return;
-            }
+                using var form = new RestoreDefaultsForm(RaceUnderWayForRestore());
 
-            alsoShown = form.AlsoShown;
+                if (form.ShowDialog(this) != DialogResult.OK)
+                {
+                    return false;
+                }
+
+                alsoShown = form.AlsoShown;
+                return true;
+            },
+            RaceUnderWayForRestore,
+            () => AppDialog.Show(this, StartedWhileOpenLine,
+                SettingsRestore.ConfirmTitle, MessageBoxButtons.OK, MessageBoxIcon.Information)))
+        {
+            return;
         }
 
         SaveEverySettingsStore();
@@ -260,16 +300,26 @@ public partial class MainForm
     /// </summary>
     internal void PutBackEarlierSettings()
     {
-        string? picked;
+        string picked = string.Empty;
 
-        using (var form = new PutBackSettingsForm(SettingsRestore.Copies(AppPaths.Root), RaceUnderWayForRestore()))
-        {
-            if (form.ShowDialog(this) != DialogResult.OK || form.Picked is not { } path)
+        if (!ConfirmedWithNothingStarted(
+            () =>
             {
-                return;
-            }
+                using var form = new PutBackSettingsForm(SettingsRestore.Copies(AppPaths.Root), RaceUnderWayForRestore());
 
-            picked = path;
+                if (form.ShowDialog(this) != DialogResult.OK || form.Picked is not { } path)
+                {
+                    return false;
+                }
+
+                picked = path;
+                return true;
+            },
+            RaceUnderWayForRestore,
+            () => AppDialog.Show(this, StartedWhileOpenLine,
+                "Put back earlier settings", MessageBoxButtons.OK, MessageBoxIcon.Information)))
+        {
+            return;
         }
 
         SaveEverySettingsStore();

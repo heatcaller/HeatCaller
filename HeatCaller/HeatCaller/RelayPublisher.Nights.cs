@@ -214,6 +214,17 @@ public sealed partial class RelayPublisher
                 return false;
             }
 
+            // Told the club it was sent to, which may not be this one any
+            // more (10 Nov 2026, bug hunt 16 - the guard bug hunt 12 #25
+            // gave shout-outs): a Save while this was in flight cleared the
+            // flag for the new club, and marking it told here put it back,
+            // so the new club refused every driver's night.
+            if (target != _target)
+            {
+                _nextNightsOpenTick = 0;
+                return true;
+            }
+
             _nightsOpenAsTold = wanted;
             _nightsOpenTold = true;
             _nextNightsOpenTick = 0;
@@ -266,7 +277,9 @@ public sealed partial class RelayPublisher
             return;
         }
 
-        if (TellTheRelayNightsAreOpen(target, Uri.EscapeDataString(target.Club), wanted: false, token))
+        // Only while it is still the club it was sent to (10 Nov 2026, bug
+        // hunt 16) - see SendNotesClose.
+        if (TellTheRelayNightsAreOpen(target, Uri.EscapeDataString(target.Club), wanted: false, token) && target == _target)
         {
             _nightsClosePending = false;
         }

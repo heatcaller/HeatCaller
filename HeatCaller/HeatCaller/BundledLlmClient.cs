@@ -152,6 +152,39 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
     /// </summary>
     private ModelParams? _parameters;
 
+    /// <summary>
+    /// Which shared weights this client chose (see <see cref="WeightsKey"/>),
+    /// set once it has been handed them. The static set can be swapped by
+    /// another client, so the fast path checks the set is still this one
+    /// (10 Nov 2026, bug hunt 16).
+    /// </summary>
+    private string? _weightsKey;
+
+    /// <summary>
+    /// The key one loaded set of weights is shared under. Threads and context
+    /// size are in it as well as the path: they are baked into the loaded
+    /// model, so a client asking for different ones cannot be handed this copy.
+    /// </summary>
+    private string WeightsKey(string path) => string.Join('\u001f', path, ContextSize, Threads);
+
+    /// <summary>
+    /// True when a client may write with the weights the process holds
+    /// without going through the load path: they must be the ones it chose,
+    /// and no other load may be pending - that load has to hear about this
+    /// request first (10 Nov 2026, bug hunt 16).
+    /// </summary>
+    internal static bool CanUseHeldWeights(string? loadedKey, string? clientKey, bool loadPending) =>
+        clientKey is not null && loadedKey == clientKey && !loadPending;
+
+    /// <summary>
+    /// True when asking for the model already held means a different load
+    /// still under way has been overtaken and must not install itself - it
+    /// would dispose the held weights under a line using them
+    /// (10 Nov 2026, bug hunt 16).
+    /// </summary>
+    internal static bool OvertakesPendingLoad(string? loadedKey, string? loadingKey, string key) =>
+        loadedKey == key && loadingKey is not null && loadingKey != key;
+
     // ------------------------------------------------------------------
     // The weights are loaded ONCE PER PROCESS, not once per client.
     //
@@ -513,18 +546,29 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
     /// </summary>
     private async Task<(LLamaWeights Weights, ModelParams Parameters)?> GetWeightsAsync(CancellationToken ct)
     {
-        if (_loadedWeights is not null && _parameters is not null)
+        // Only the weights THIS client chose, and only while no other load is
+        // pending (10 Nov 2026, bug hunt 16). The static set can be swapped
+        // by another client's load, and this used to hand back whatever was
+        // held - so a client whose settings name the bundled model went on
+        // writing every line with someone else's override all night. While
+        // a load is pending, the slow path's SharedWeightsAsync must see this
+        // client's request, so it can mark that load overtaken.
+        var held = _loadedWeights;
+
+        if (held is not null && _parameters is not null && CanUseHeldWeights(_loadedKey, _weightsKey, _loading is not null))
         {
-            return (_loadedWeights, _parameters);
+            return (held, _parameters);
         }
 
         await _gate.WaitAsync(ct).ConfigureAwait(false);
 
         try
         {
-            if (_loadedWeights is not null && _parameters is not null)
+            held = _loadedWeights;
+
+            if (held is not null && _parameters is not null && CanUseHeldWeights(_loadedKey, _weightsKey, _loading is not null))
             {
-                return (_loadedWeights, _parameters);
+                return (held, _parameters);
             }
 
             if (_unavailable)
@@ -570,6 +614,7 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
             var weights = await SharedWeightsAsync(path, parameters, ct).ConfigureAwait(false);
 
             _parameters = parameters;
+            _weightsKey = WeightsKey(path);
 
             return (weights, parameters);
         }
@@ -612,9 +657,11 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
         // Threads and context size are in the key as well as the path: they
         // are baked into the loaded model, so a client asking for different
         // ones cannot be handed this copy.
-        var key = string.Join('\u001f', path, ContextSize, Threads);
+        var key = WeightsKey(path);
 
-        if (_loadedKey == key && _loadedWeights is not null)
+        // Ungated only while nothing is loading: a pending load has to hear
+        // about this request (below), so that case takes the gate.
+        if (_loadedKey == key && _loadedWeights is not null && _loading is null)
         {
             return _loadedWeights;
         }
@@ -627,6 +674,21 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
         {
             if (_loadedKey == key && _loadedWeights is not null)
             {
+                // The model already held is now the latest request, so a
+                // load of a different one still under way is OVERTAKEN
+                // (10 Nov 2026, bug hunt 16). Without this, a line that timed
+                // out waiting for a big override left its load running; the
+                // operator cleared the path, the new client was served the
+                // held weights at once and started writing, and then the
+                // stale load landed, installed itself and disposed the
+                // weights mid-line. Clearing the pending key makes that load
+                // hand its weights to its own waiters and install nothing.
+                if (OvertakesPendingLoad(_loadedKey, _loadingKey, key))
+                {
+                    _loading = null;
+                    _loadingKey = null;
+                }
+
                 return _loadedWeights;
             }
 

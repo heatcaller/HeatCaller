@@ -943,7 +943,8 @@ public sealed class ThemesControl : UserControl
         }
 
         var library = _musicStore?.Current.Tracks.Select(t => t.DisplayName.Trim()).ToList() ?? new List<string>();
-        using var editor = new SoundscapeEditorForm(working, isNew, _themeStore, _voiceStore.Current, PlayPreviewAsync, StopPreviewFromEditor, library);
+        using var editor = new SoundscapeEditorForm(working, isNew, _themeStore, _voiceStore.Current, PlayPreviewAsync, StopPreviewFromEditor,
+            () => (float)_soundStore.Current.Volume, library);
         var answer = editor.ShowDialog(this);
 
         // Delete lives in the editor, to keep the cards to one row of buttons.

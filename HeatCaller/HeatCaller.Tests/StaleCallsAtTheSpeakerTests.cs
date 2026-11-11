@@ -151,6 +151,35 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
             AnnouncementService.WithScreenNames("Maximum attack from Max!", profiles));
     }
 
+    // 10 Nov 2026, bug hunt 16: a nickname that is a word of another
+    // driver's name must not rewrite that name, and a real name put back
+    // must not be caught again by a shorter nickname.
+    [Fact]
+    public void A_nickname_does_not_rewrite_another_drivers_name()
+    {
+        var profiles = new[]
+        {
+            new DriverProfile { Transponder = "1", DriverName = "Samantha Lee", AnnouncerName = "Sam" },
+            new DriverProfile { Transponder = "2", DriverName = "Sam Jones" },
+        };
+
+        Assert.Equal("Sam Jones is all over the back of Samantha Lee!",
+            AnnouncementService.WithScreenNames("Sam Jones is all over the back of Sam!", profiles));
+    }
+
+    [Fact]
+    public void A_name_put_back_is_not_rewritten_again()
+    {
+        var profiles = new[]
+        {
+            new DriverProfile { Transponder = "1", DriverName = "Samantha Lee", AnnouncerName = "Sam" },
+            new DriverProfile { Transponder = "3", DriverName = "Sam Jones", AnnouncerName = "Speedy" },
+        };
+
+        Assert.Equal("Sam Jones takes the lead from Samantha Lee",
+            AnnouncementService.WithScreenNames("Speedy takes the lead from Sam", profiles));
+    }
+
     [Fact]
     public void A_hand_correction_is_not_a_crossing()
     {
@@ -180,7 +209,13 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
     [Fact]
     public void A_battle_pass_call_has_the_few_seconds_every_lap_call_has()
     {
-        Assert.Contains("SayByMs: LapSeenAt(behindId) + LapCallSayWithinMs", Source("AnnouncementService.BattleLines.cs"), StringComparison.Ordinal);
+        // Timed from the chaser's crossing for a pass on track - and from the
+        // ruling for a correction (10 Nov 2026, bug hunt 16), which is no crossing.
+        var battles = Source("AnnouncementService.BattleLines.cs");
+
+        Assert.Contains("SayByMs: sayByMs,", battles, StringComparison.Ordinal);
+        Assert.Contains("place, LapSeenAt(cut.Pair.BehindId) + LapCallSayWithinMs);", battles, StringComparison.Ordinal);
+        Assert.Contains("TimingClock.NowMs + LapCallSayWithinMs);", battles, StringComparison.Ordinal);
     }
 
     [Fact]

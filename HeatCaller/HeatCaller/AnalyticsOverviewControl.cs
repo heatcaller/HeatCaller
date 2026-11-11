@@ -102,6 +102,10 @@ public sealed class AnalyticsOverviewControl : UserControl
         // Who set the best lap, where and when - under the tiles, which have
         // room for a number and not for a sentence.
         _lblBestWho.AutoSize = true;
+
+        // A driver's or a layout's name is text: an '&' in it was dropped and
+        // the letter after it underlined (10 Nov 2026, bug hunt 16).
+        _lblBestWho.UseMnemonic = false;
         _lblBestWho.ForeColor = AppTheme.TextMuted;
         _textSize.Wear(_lblBestWho, () => AppTheme.SmallFont);
 

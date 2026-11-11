@@ -197,7 +197,9 @@ public sealed class BugHunt7ListenAppTests
         Assert.Contains("_listenClosePending = true;", close);
 
         var send = Between(listen, "private void SendListenClose(", "\n}");
-        Assert.Matches(@"if \(TellTheRelayListeningIsOpen\(target, club, wanted: false, token\)\)\s*\{\s*_listenClosePending = false;", send);
+        // Also only while it is still the club it was sent to (10 Nov 2026,
+        // bug hunt 16) - see SendNotesClose.
+        Assert.Matches(@"if \(TellTheRelayListeningIsOpen\(target, club, wanted: false, token\) && target == _target\)\s*\{\s*_listenClosePending = false;", send);
 
         Assert.Contains("if (_listenClosePending)", SourceOf("RelayPublisher.cs"));
     }

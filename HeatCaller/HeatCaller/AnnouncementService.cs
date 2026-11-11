@@ -692,6 +692,18 @@ public sealed partial class AnnouncementService
     /// Screen and the feed, though ScreenNameFor already says a screen must
     /// show the real name. Done here, once, because some twenty calls build
     /// one string for both. Whole words only, longest first.
+    ///
+    /// All in ONE pass, and real names already in the line are left as they
+    /// are (10 Nov 2026, bug hunt 16). It used to run one replace per
+    /// nickname, each over the last one's output, so a nickname that is also
+    /// a word of someone else's name rewrote that name too: with "Sam" the
+    /// nickname of Samantha Lee, "Sam Jones" (no nickname, so said in full)
+    /// came up as "Samantha Lee Jones" - and a real name just put back for
+    /// "Speedy" could be caught again by "Sam". Now each spot in the line is
+    /// matched once, against every nickname and every real name, longest
+    /// first; a real name maps to itself, and nothing put in is looked at
+    /// again. Where a nickname is also someone's real name, the nickname
+    /// wins, as before.
     /// </summary>
     internal static string WithScreenNames(string text, IEnumerable<DriverProfile> profiles)
     {
@@ -700,25 +712,52 @@ public sealed partial class AnnouncementService
             return text;
         }
 
-        foreach (var profile in profiles
-                     .Where(p => !string.IsNullOrWhiteSpace(p.AnnouncerName) && !string.IsNullOrWhiteSpace(p.DriverName)
-                                 && !string.Equals(p.AnnouncerName.Trim(), p.DriverName.Trim(), StringComparison.Ordinal))
-                     .OrderByDescending(p => p.AnnouncerName.Trim().Length))
-        {
-            var said = profile.AnnouncerName.Trim();
+        var all = profiles as IReadOnlyCollection<DriverProfile> ?? profiles.ToList();
+        var swaps = new Dictionary<string, string>(StringComparer.Ordinal);
 
-            if (!text.Contains(said, StringComparison.Ordinal))
+        foreach (var profile in all)
+        {
+            if (string.IsNullOrWhiteSpace(profile.AnnouncerName) || string.IsNullOrWhiteSpace(profile.DriverName))
             {
                 continue;
             }
 
-            text = System.Text.RegularExpressions.Regex.Replace(
-                text,
-                $@"(?<![\w']){System.Text.RegularExpressions.Regex.Escape(said)}(?![\w'])",
-                profile.DriverName.Trim().Replace("$", "$$", StringComparison.Ordinal));
+            var said = profile.AnnouncerName.Trim();
+            var real = profile.DriverName.Trim();
+
+            if (!string.Equals(said, real, StringComparison.Ordinal) && text.Contains(said, StringComparison.Ordinal))
+            {
+                swaps.TryAdd(said, real);
+            }
         }
 
-        return text;
+        // No nickname in the line: nothing to put back.
+        if (swaps.Count == 0)
+        {
+            return text;
+        }
+
+        foreach (var profile in all)
+        {
+            var real = profile.DriverName?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(real) && text.Contains(real, StringComparison.Ordinal))
+            {
+                swaps.TryAdd(real, real);
+            }
+        }
+
+        // .NET tries the choices left to right at each spot, so longest first
+        // means "Sam Jones" is taken whole before "Sam" is tried.
+        var choices = string.Join("|", swaps.Keys
+            .OrderByDescending(k => k.Length)
+            .ThenBy(k => k, StringComparer.Ordinal)
+            .Select(System.Text.RegularExpressions.Regex.Escape));
+
+        return System.Text.RegularExpressions.Regex.Replace(
+            text,
+            $@"(?<![\w'])(?:{choices})(?![\w'])",
+            m => swaps[m.Value]);
     }
 
     /// <summary>

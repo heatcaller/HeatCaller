@@ -87,6 +87,21 @@ public sealed class RecapAndBattleFixTests
         Assert.Equal(written, RaceNumbers.DigitsFromSpelledTimes(written));
     }
 
+    // 10 Nov 2026, bug hunt 16: a heat's run time from the intros, which
+    // the model is told to copy word for word, was put back into figures
+    // and then read as a lap - "five minutes and two three fifteen".
+    [Theory]
+    [InlineData(302_315)]
+    [InlineData(48_512)]
+    [InlineData(60_001)]
+    public void A_qualifying_run_time_in_the_intros_is_said_as_written(long ms)
+    {
+        var line = $"Sam Parker takes pole with thirty-four laps in {DriverIntros.DurationSpoken(ms)}.";
+
+        Assert.Equal(line, RaceNumbers.DigitsFromSpelledTimes(line));
+        Assert.Equal(line, AnnouncementService.SpellOutTimesForSpeech(line));
+    }
+
     [Fact]
     public void The_voice_no_longer_reads_the_digits_out()
     {

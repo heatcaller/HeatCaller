@@ -46,7 +46,10 @@ public sealed partial class AnnouncementService
         }
 
         var spoken = CapitalisedFirst(RaceNumbers.Plainly(toHereMs));
-        var display = (toHereMs / 1000.0).ToString("0.00", CultureInfo.InvariantCulture) + "s";
+        // WHY (10 Nov 2026, bug hunt 16): "0.00" on a double rounded a
+        // 5.125 up and a 5.135 down, while the voice rounded both the other
+        // way. Both forms now come from the same whole hundredths.
+        var display = RaceNumbers.HundredthsShown(toHereMs);
 
         EnqueueVoice(AnnouncementEventType.SplitTime, standing, null, extras: new Dictionary<string, (string, string)>
         {

@@ -225,7 +225,7 @@ internal sealed class PackChartControl : UserControl
         {
             var text = at.ToLocalTime().ToString("M/d");
             var width = g.MeasureString(text, AppTheme.SmallFont).Width;
-            var x = Math.Clamp(XFor(at) - width / 2, plot.Left, plot.Right - width);
+            var x = DateLabelLeft(XFor(at), width, plot.Left, plot.Right);
             g.DrawString(text, AppTheme.SmallFont, labelBrush, x, plot.Bottom + labelGap);
         }
 
@@ -256,6 +256,17 @@ internal sealed class PackChartControl : UserControl
     }
 
     /// <summary>Five gridlines with their values down the left, and the axes.</summary>
+    /// <summary>
+    /// Where a Trend date label starts: centred on its date, kept inside the
+    /// plot. (10 Nov 2026, bug hunt 16) This was Math.Clamp(centre - width / 2,
+    /// left, right - width), which throws when the plot is narrower than the
+    /// label - a narrow card at a large text size - and the throw came out of
+    /// OnPaint. When the label does not fit it now starts at the plot's left
+    /// edge and draws cramped instead.
+    /// </summary>
+    internal static float DateLabelLeft(float centre, float width, float left, float right) =>
+        Math.Max(left, Math.Min(centre - width / 2, right - width));
+
     private static void Grid(Graphics g, Rectangle bounds, Rectangle plot, ChartPalette palette, double low, double range, Func<double, string> text)
     {
         using var gridPen = new Pen(palette.Grid);

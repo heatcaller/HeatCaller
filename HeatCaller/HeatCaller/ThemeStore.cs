@@ -438,7 +438,7 @@ public sealed class ThemeStore
     ///
     /// What doesn't: the things Apply itself leaves as this PC has them - the
     /// API key, the voice and sound volumes, the wireless speaker, the output
-    /// format and which engine speaks - are taken from whatever they are when
+    /// format, which engine speaks and the race-call model - are taken from whatever they are when
     /// Undo is pressed, so undoing an apply never reverts a level set on the
     /// Mixer since. The club's own ambience layers are never touched either.
     ///
@@ -509,6 +509,13 @@ public sealed class ThemeStore
                 voice.HeatCallerVoice = now.HeatCallerVoice;
                 voice.HeatCallerVoiceName = now.HeatCallerVoiceName;
                 voice.HeatCallerRev = now.HeatCallerRev;
+
+                // The race-call model too (10 Nov 2026, bug hunt 16): Apply
+                // keeps it as this PC has it, since it is picked for how fast
+                // the club's track runs. Left out here, an undo pressed after
+                // a faster model was picked on the Voice page quietly put the
+                // slower one back.
+                voice.RaceCallModelId = now.RaceCallModelId;
                 voiceStore.Save(voice);
             }
 

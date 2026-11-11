@@ -16,6 +16,30 @@ internal sealed record PositionReportOnAir(IReadOnlyList<string> Order, int Dept
     public bool MarkCut() => Interlocked.Exchange(ref _cut, 1) == 0;
 
     public bool Cut => Volatile.Read(ref _cut) == 1;
+
+    private IReadOnlyList<string>? _stillOnTheBoard;
+
+    /// <summary>
+    /// The cars it names that are still on the board, leader first - Order
+    /// less any taken off since it was read (a ghost switched off).
+    /// </summary>
+    public IReadOnlyList<string> StillOnTheBoard => Volatile.Read(ref _stillOnTheBoard) ?? Order;
+
+    /// <summary>
+    /// A car it names has been taken off the board (10 Nov 2026, bug hunt
+    /// 15). Kept on this same report rather than a copy, because the
+    /// report's work takes it off air by reference.
+    /// </summary>
+    public void LeftTheBoard(string transponder)
+    {
+        var before = StillOnTheBoard;
+
+        if (before.Contains(transponder, StringComparer.OrdinalIgnoreCase))
+        {
+            Volatile.Write(ref _stillOnTheBoard,
+                before.Where(car => !string.Equals(car, transponder, StringComparison.OrdinalIgnoreCase)).ToList());
+        }
+    }
 }
 
 /// <summary>
@@ -128,6 +152,14 @@ public sealed partial class AnnouncementService
         }
     }
 
+    /// <summary>
+    /// A car taken off the board mid-race (a ghost switched off) is taken
+    /// out of the report being read too - see CorrectPositionReportOnAir.
+    /// Under _voiceQueueLock, from OnStandingRemoved.
+    /// </summary>
+    private void ForgetInPositionReportOnAir(string transponder) =>
+        _positionReportOnAir?.LeftTheBoard(transponder);
+
     /// <summary>The report has finished, been cut or been dropped.</summary>
     private void TakePositionReportOffAir(PositionReportOnAir? report)
     {
@@ -180,7 +212,21 @@ public sealed partial class AnnouncementService
             return false;
         }
 
-        var place = FirstChangedPlace(report.Order, OrderOf(now));
+        // A car taken off the board while it was read (a ghost switched
+        // off) has not been passed: the car behind it moving up into its
+        // slot was called as a pass, or as taking a lead it was simply left
+        // (10 Nov 2026, bug hunt 16). So it is compared without that car,
+        // and against no more cars than are left of what it read - the car
+        // pulled up from beyond its depth has not got through either.
+        var read = report.StillOnTheBoard;
+        var nowOrder = OrderOf(now);
+
+        if (read.Count < report.Order.Count && nowOrder.Count > read.Count)
+        {
+            nowOrder = nowOrder.Take(read.Count).ToList();
+        }
+
+        var place = FirstChangedPlace(read, nowOrder);
 
         if (place < 0 || !report.MarkCut())
         {

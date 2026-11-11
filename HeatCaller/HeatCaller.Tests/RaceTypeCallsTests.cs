@@ -393,7 +393,7 @@ public sealed class RaceTypeCallsTests
         var main = Source("MainForm.cs");
 
         Assert.Contains("is { } secondsLeft\n                && ClockEndsTheRace())", main.Replace("\r\n", "\n"));
-        Assert.Contains("if (ClockEndsTheRace()) _announcer.NotifyFinalMinute();", main);
+        Assert.Contains("if (ClockEndsTheRace()) _announcer.NotifyFinalMinute(FinalMinuteTimeLeft());", main);
     }
 
     private static string Source(string fileName) =>

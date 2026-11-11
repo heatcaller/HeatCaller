@@ -1292,6 +1292,33 @@ public partial class MainForm
     }
 
     /// <summary>
+    /// The documents PublishExtrasToRelay forgets it sent every ten minutes,
+    /// so one the relay refused or lost goes again.
+    ///
+    /// WHY (10 Nov 2026, bug hunt 16): Qualifying and Sponsors were left
+    /// out - the same mistake as Standings before them. A sponsors or
+    /// qualifying PUT refused by a relay from before those channels (the
+    /// publisher drops a refusal and never retries it), or lost to a relay
+    /// restart, stayed missing all night: sponsors hardly ever change at a
+    /// meeting, and qualifying is unchanged between rounds. Sponsors still
+    /// go only when RelaySponsors.Publishable says so, and their logos are
+    /// cached, so the extra send is cheap.
+    /// </summary>
+    internal static readonly RelayChannel[] RelayDocumentsForgottenOnRefresh =
+    [
+        RelayChannel.Site,
+        RelayChannel.Programme,
+        RelayChannel.Achievements,
+        RelayChannel.Tracks,
+        RelayChannel.CheckIn,
+        RelayChannel.Manage,
+        RelayChannel.Signup,
+        RelayChannel.Standings,
+        RelayChannel.Qualifying,
+        RelayChannel.Sponsors,
+    ];
+
+    /// <summary>
     /// The schedule, badges and tracks pages' documents.
     ///
     /// Rides the roster's two-second tick. The schedule is cheap and is
@@ -1343,13 +1370,12 @@ public partial class MainForm
             // otherwise stay missing until it next changed - which for the
             // tracks or the site look can be never.
             _relayCachesResetUtc = DateTime.UtcNow;
-            _lastRelayDocuments.Remove(RelayChannel.Site);
-            _lastRelayDocuments.Remove(RelayChannel.Programme);
-            _lastRelayDocuments.Remove(RelayChannel.Achievements);
-            _lastRelayDocuments.Remove(RelayChannel.Tracks);
-            _lastRelayDocuments.Remove(RelayChannel.CheckIn);
-            _lastRelayDocuments.Remove(RelayChannel.Manage);
-            _lastRelayDocuments.Remove(RelayChannel.Signup);
+
+            foreach (var channel in RelayDocumentsForgottenOnRefresh)
+            {
+                _lastRelayDocuments.Remove(channel);
+            }
+
             _lastRelayRoster = string.Empty;
 
             // Standings and the results index were left out, and both change
@@ -1360,8 +1386,8 @@ public partial class MainForm
             // pass anyway, so forgetting them costs one send. The index is
             // sent again for every year sent this run, and this year's
             // whatever happened - not every year of history, which is the
-            // burst RepublishRecentResults was written to avoid.
-            _lastRelayDocuments.Remove(RelayChannel.Standings);
+            // burst RepublishRecentResults was written to avoid. Standings
+            // are in RelayDocumentsForgottenOnRefresh.
 
             var years = new HashSet<string>(_relayIndexSent.Keys, StringComparer.Ordinal)
             {

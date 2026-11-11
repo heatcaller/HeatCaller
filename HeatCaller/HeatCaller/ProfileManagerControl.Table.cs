@@ -194,7 +194,8 @@ public sealed partial class ProfileManagerControl
             _miReportCard.Visible = ReportCardFor is not null;
             _miReportCard.Text = $"Report Card for {named}...";
 
-            var picked = _list.SelectedItems.Count;
+            // The same drivers Delete will act on (10 Nov 2026, bug hunt 16).
+            var picked = DeleteTargets().Count;
             _miDelete.Text = picked > 1 ? $"Delete {Plural.Of(picked, "Driver")}..." : $"Delete {named}...";
         };
 

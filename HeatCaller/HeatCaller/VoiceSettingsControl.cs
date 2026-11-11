@@ -43,6 +43,25 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// </summary>
     private string SavedTextFor(string text) =>
         Announcer is { } announcer ? announcer.TextForCloudVoice(text) : text;
+
+    /// <summary>
+    /// The words the race actually sends a voice for this line (10 Nov 2026,
+    /// bug hunt 16): "A-Main" respelt as the letter for every engine, then,
+    /// for the online voices only, names shortened as the race shortens them
+    /// - the same two steps as AnnouncementService.RenderLineAsync. The Test
+    /// buttons and the HeatCaller Preview sent the line as written, so the
+    /// club heard the soft "ah main" the race no longer says, and a Test take
+    /// was saved under words the race never looks up. Screens keep the line
+    /// as written; this is for the voice only.
+    /// </summary>
+    internal static string TextTheRaceSpeaks(string text, bool kokoro, Func<string, string>? forCloudVoice)
+    {
+        var said = RaceNumbers.SpokenRoundNames(text);
+        return kokoro || forCloudVoice is null ? said : forCloudVoice(said);
+    }
+
+    private string TextTheRaceSpeaks(string text, bool kokoro) =>
+        TextTheRaceSpeaks(text, kokoro, Announcer is { } announcer ? announcer.TextForCloudVoice : null);
     private readonly Label _lblSaveStatus = new();
 
     // --- Speak With (see BuildEngineCard) ---
@@ -3166,7 +3185,9 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         await HearAsync(
             "Asking the relay to say your line...",
-            async (client, voiceId) => await client.PreviewAsync(voiceId, line),
+            // As the race would send it - "Eh-Main" and shortened names
+            // (10 Nov 2026, bug hunt 16): see TextTheRaceSpeaks.
+            async (client, voiceId) => await client.PreviewAsync(voiceId, TextTheRaceSpeaks(line, kokoro: false)),
             name => $"That was your line in {name}. Previews come out of a small daily allowance of their own - your race-night voice is untouched.");
     }
 
@@ -4614,6 +4635,12 @@ public sealed partial class VoiceSettingsControl : UserControl
         // brackets aloud and look like a bug.
         spoken = testProfile.SanitiseForModel(spoken);
 
+        // And respelt and shortened as the race does it, so the take is
+        // saved under the words the race looks up (10 Nov 2026, bug hunt
+        // 15) - see TextTheRaceSpeaks.
+        // The screen keeps "A-Main" and the names as written.
+        var sent = TextTheRaceSpeaks(spoken, kokoro);
+
         // Disabling the button that was just clicked makes WinForms hand
         // focus to the next control in the tab order, and the scrolling
         // panel this page lives in dutifully scrolls THAT into view - which,
@@ -4636,7 +4663,7 @@ public sealed partial class VoiceSettingsControl : UserControl
                 // Kokoro, as a race would use it. Nothing is saved and
                 // nothing held for the race is let go - there is no
                 // ElevenLabs take involved.
-                audio = await KokoroSpeech.RenderAsync(testProfile, spoken);
+                audio = await KokoroSpeech.RenderAsync(testProfile, sent);
             }
             else
             {
@@ -4648,7 +4675,7 @@ public sealed partial class VoiceSettingsControl : UserControl
                 //
                 // ElevenLabs only, never the stand-in: a test has to show
                 // what ElevenLabs said, error and all.
-                audio = await AnnouncementService.SynthesizeThroughGateAsync(_elevenLabs, testProfile, spoken, reuseSaved: false);
+                audio = await AnnouncementService.SynthesizeThroughGateAsync(_elevenLabs, testProfile, sent, reuseSaved: false);
 
                 // Anything already rendered and held for the race - the next
                 // flag line, the grid's release calls - is let go, so it is

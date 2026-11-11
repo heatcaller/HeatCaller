@@ -292,11 +292,23 @@ public static class RcpPieces
                 continue;
             }
 
-            if (sides.FirstOrDefault(s => Floor(s.Item1, s.Item2)) is var (cCol, cRow, _) && Floor(cCol, cRow))
+            // The first side that is floor - none, and the rail has no tile.
+            // (10 Nov 2026, bug hunt 16: FirstOrDefault gave the default
+            // (0, 0) side when neither was floor, so tile (0,0) - nothing to
+            // do with this rail - was made a custom tile.)
+            var onFloor = false;
+
+            foreach (var (col, row, _) in sides)
             {
-                Custom(cCol, cRow);
+                if (Floor(col, row))
+                {
+                    Custom(col, row);
+                    onFloor = true;
+                    break;
+                }
             }
-            else
+
+            if (!onFloor)
             {
                 railsWithNoTile++;
             }
@@ -384,10 +396,24 @@ public static class RcpPieces
         {
             var (c, r, vertical) = RcpPlan.EdgeLine(col, row, facing);
 
+            // Checked before anything changes: RailAcross reads the seam as
+            // it is now.
+            var across = RailAcross(design, col, row, c, r, vertical);
+
             if (design.WallAt(c, r, vertical) is { } there)
             {
-                // The tile across has its rail on this seam: back to back.
-                there.Double = true;
+                // Only the tile across having its rail on this seam makes two
+                // back to back - a divider. A rail with no tile under it (one
+                // drawn by hand before the floor), or a custom second rail,
+                // becomes this tile's own: the user is putting a tile under
+                // the one rail that is there, not adding another (10 Nov 2026,
+                // bug hunt 16: it was made a divider every time, so the 3D
+                // view and the stock count had a rail too many).
+                if (across)
+                {
+                    there.Double = true;
+                }
+
                 there.Auto = false;
             }
             else

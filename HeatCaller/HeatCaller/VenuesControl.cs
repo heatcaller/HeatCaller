@@ -46,6 +46,11 @@ public sealed class VenuesControl : UserControl
 
     private bool _suppressEvents;
 
+    // True once the operator has picked a decoder for the venue on show,
+    // so a number this version does not offer is kept until they do (10 Nov
+    // 2026, bug hunt 16). See DecoderToSave.
+    private bool _decoderPicked;
+
     /// <summary>Raised when "Apply This Venue" is clicked, so the host (MainForm) can push the settings into the Connection page, apply the theme, and update Race Control's defaults.</summary>
     public event Action<VenueProfile>? VenueApplied;
 
@@ -140,7 +145,14 @@ public sealed class VenuesControl : UserControl
 
         _cmbConnectionType.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbConnectionType.Items.AddRange(DecoderConnection.Items());
-        _cmbConnectionType.SelectedIndexChanged += (_, _) => { if (!_suppressEvents) SaveCurrentFromUi(); };
+        _cmbConnectionType.SelectedIndexChanged += (_, _) =>
+        {
+            if (!_suppressEvents)
+            {
+                _decoderPicked = true;
+                SaveCurrentFromUi();
+            }
+        };
 
         _cmbTrackLayout.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbTrackLayout.SelectedIndexChanged += (_, _) => { if (!_suppressEvents) SaveCurrentFromUi(); };
@@ -412,6 +424,28 @@ public sealed class VenuesControl : UserControl
         _ => string.Empty,
     };
 
+    /// <summary>
+    /// The decoder number to save (10 Nov 2026, bug hunt 16). A number the
+    /// picker does not offer - one from a newer version, or the retired Neon
+    /// API - shows as the first entry, EasyLap. Saving that position on an
+    /// unrelated edit (the lap limit, or just leaving the Name box) quietly
+    /// turned the venue into an EasyLap one, though the host leaves a newer
+    /// version's number as it is in case that version comes back. So the
+    /// stored number is kept until the operator picks a decoder themselves,
+    /// as NameToSave does for the track and soundscape.
+    /// </summary>
+    internal static int DecoderToSave(int selectedIndex, int stored, bool picked) =>
+        picked || DecoderConnection.IsOffered(stored) ? DecoderConnection.ValueAt(selectedIndex) : stored;
+
+    /// <summary>
+    /// A race default to save from its spinner (10 Nov 2026, bug hunt 16). A
+    /// stored value outside the spinner's range is shown clamped; while the
+    /// spinner still shows that clamped value the stored one is kept, so an
+    /// unrelated edit does not cut it down. Any other value is the operator's.
+    /// </summary>
+    internal static double SpinnerToSave(double shown, double stored, double min, double max) =>
+        (stored < min || stored > max) && shown == Math.Clamp(stored, min, max) ? stored : shown;
+
     private VenueProfile? SelectedVenue() => (_list.SelectedItem as VenueListItem)?.Venue;
 
     private void RefreshList(string? selectId = null)
@@ -486,6 +520,7 @@ public sealed class VenuesControl : UserControl
         {
             SetEditEnabled(true);
 
+            _decoderPicked = false;
             _txtName.Text = venue.Name;
             _cmbConnectionType.SelectedIndex = DecoderConnection.IndexOf(venue.ConnectionType);
             SelectStoredName(_cmbTrackLayout, venue.PreferredTrackLayoutName);
@@ -517,13 +552,17 @@ public sealed class VenuesControl : UserControl
         // The saved number, not the picker position - see DecoderConnection.
         // Host and Port are left as they were: they were Next Level
         // Timing's address, and nothing reads them now.
-        venue.ConnectionType = DecoderConnection.ValueAt(_cmbConnectionType.SelectedIndex);
+        // A number this version does not offer is kept until the operator
+        // picks one (10 Nov 2026, bug hunt 16) - see DecoderToSave.
+        venue.ConnectionType = DecoderToSave(_cmbConnectionType.SelectedIndex, venue.ConnectionType, _decoderPicked);
         venue.PreferredTrackLayoutName = NameToSave(_cmbTrackLayout, venue.PreferredTrackLayoutName);
         venue.PreferredThemeName = NameToSave(_cmbTheme, venue.PreferredThemeName);
-        venue.RaceLapLimit = (int)_numLapLimit.Value;
-        venue.RaceTimeLimitMinutes = (int)_numTimeLimitMinutes.Value;
-        venue.RaceMinLapTimeMs = (int)_numMinLapTimeMs.Value;
-        venue.RaceStreakSlowMultiplier = (double)_numStreakSlowMultiplier.Value;
+        // Out-of-range race defaults are kept until changed, not saved
+        // clamped (10 Nov 2026, bug hunt 16) - see SpinnerToSave.
+        venue.RaceLapLimit = (int)SpinnerToSave((double)_numLapLimit.Value, venue.RaceLapLimit, (double)_numLapLimit.Minimum, (double)_numLapLimit.Maximum);
+        venue.RaceTimeLimitMinutes = (int)SpinnerToSave((double)_numTimeLimitMinutes.Value, venue.RaceTimeLimitMinutes, (double)_numTimeLimitMinutes.Minimum, (double)_numTimeLimitMinutes.Maximum);
+        venue.RaceMinLapTimeMs = (int)SpinnerToSave((double)_numMinLapTimeMs.Value, venue.RaceMinLapTimeMs, (double)_numMinLapTimeMs.Minimum, (double)_numMinLapTimeMs.Maximum);
+        venue.RaceStreakSlowMultiplier = SpinnerToSave((double)_numStreakSlowMultiplier.Value, venue.RaceStreakSlowMultiplier, (double)_numStreakSlowMultiplier.Minimum, (double)_numStreakSlowMultiplier.Maximum);
 
         _venues.Upsert(venue);
 

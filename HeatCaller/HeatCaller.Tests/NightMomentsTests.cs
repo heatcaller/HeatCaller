@@ -346,6 +346,33 @@ public sealed class NightMomentsTests : IDisposable
         Assert.Equal(9000, quickest.FigureMs);
     }
 
+    [Fact]
+    public void Taking_the_place_back_from_a_ghost_is_not_a_lead_change()
+    {
+        // (10 Nov 2026, bug hunt 16) Bill leads, the ghost gets ahead at
+        // 18000, and Bill crosses lap 3 at 30000 while the ghost is still on
+        // two laps. With the ghost left on the timeline Bill was handed a
+        // last-lap lead change - from nobody, since he never lost it to a
+        // real car.
+        var withAGhost = Race(
+            Row("Bill", 1, new long[] { 9000, 12000, 9000 }, startPosition: 1, lapsLed: 3),
+            new SessionResultEntry
+            {
+                Transponder = Ghosts.Prefix + "pace",
+                DriverName = "Ghost",
+                Position = 0,
+                Laps = 3,
+                LapTimesMs = new List<long> { 10000, 8000, 14000 },
+                StartPosition = 0,
+            });
+
+        var found = NightMoments.ForRace(withAGhost);
+
+        Assert.DoesNotContain(
+            found,
+            one => one.What is NightMoments.Kind.LeadChange or NightMoments.Kind.LastLapLead);
+    }
+
     // ------------------------------------------------------------------
     //  The moment of the night
     // ------------------------------------------------------------------

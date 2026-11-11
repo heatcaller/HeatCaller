@@ -197,7 +197,6 @@ public sealed class MusicPlayer : IDisposable
         }
 
         var steps = Math.Max(1, (int)(Math.Clamp(seconds, 0.5, 30) * 20));
-        var startVolume = Settings.Volume;
 
         // What the music was doing when the fade began. Once it has been
         // started, stopped or skipped by something else - Play or Next
@@ -211,7 +210,7 @@ public sealed class MusicPlayer : IDisposable
         lock (_lock)
         {
             generation = _generation;
-            fade = ++_fadeToken;
+            fade = BeginFadeLocked();
         }
 
         try
@@ -230,7 +229,13 @@ public sealed class MusicPlayer : IDisposable
                     // that retry off. The fade used to give up here without
                     // stopping, and the retry then started the next track
                     // after the broadcast had finished.
-                    if (!_running || _volume is null)
+                    //
+                    // The next track being opened is not that: the end of the
+                    // last one fell inside the fade. It carries on, and the
+                    // new track starts at the faded level (10 Nov 2026, bug
+                    // hunt 16). A step landing in the open used to stop the
+                    // music outright here.
+                    if (!_opening && (!_running || _volume is null))
                     {
                         break;
                     }
@@ -240,7 +245,7 @@ public sealed class MusicPlayer : IDisposable
                     var progress = (double)i / steps;
                     var eased = 1 - progress * progress;
 
-                    _volume.Volume = (float)Math.Clamp(startVolume * eased, 0f, 1f);
+                    SetFadeLevelLocked((float)eased);
                 }
 
                 await Task.Delay(50);
@@ -276,6 +281,76 @@ public sealed class MusicPlayer : IDisposable
     /// next track - calling off a fade must not do that.
     /// </summary>
     private int _fadeToken;
+
+    /// <summary>
+    /// How far a fade has brought the music down, as a share of the set
+    /// level, and the fade (_fadeToken) and music (_generation) it belongs
+    /// to. It only counts while both are still current - see
+    /// FadeShareLocked - so a fade called off, or Play or Next pressed,
+    /// puts the music back at its set level without anything resetting it.
+    ///
+    /// Kept here rather than only written into the playing track's volume
+    /// (10 Nov 2026, bug hunt 16). A track that ended during the fade-out
+    /// after the recap had the next one opened at the full set level, and
+    /// the device queued its first 400ms at that level before the fade's
+    /// next step: half a second of a new song at full volume in the middle
+    /// of a fade to silence. Moving the Music fader mid-fade did the same
+    /// to the track already on, for one step.
+    /// </summary>
+    private float _fadeLevel = 1f;
+    private int _fadeLevelOf;
+    private int _fadeLevelGeneration;
+
+    /// <summary>Starts a fade: a new _fadeToken, at the full level.</summary>
+    private int BeginFadeLocked()
+    {
+        var fade = ++_fadeToken;
+        _fadeLevel = 1f;
+        _fadeLevelOf = fade;
+        _fadeLevelGeneration = _generation;
+        return fade;
+    }
+
+    private void SetFadeLevelLocked(float share)
+    {
+        _fadeLevel = Math.Clamp(share, 0f, 1f);
+        ApplyVolumeLocked();
+    }
+
+    private float FadeShareLocked() =>
+        _fadeLevelOf == _fadeToken && _fadeLevelGeneration == _generation ? _fadeLevel : 1f;
+
+    /// <summary>
+    /// The level the music is set to now, fade and all: what the track on
+    /// is given, and what one being opened starts at.
+    /// </summary>
+    private float MusicLevelLocked() => Math.Clamp(Settings.Volume * FadeShareLocked(), 0f, 1f);
+
+    /// <inheritdoc cref="MusicLevelLocked"/>
+    internal float MusicLevelForTests
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return MusicLevelLocked();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Puts the player where FadeOutAsync is part-way through, at
+    /// <paramref name="share"/> of the set level, without the sound device
+    /// a real fade needs playing.
+    /// </summary>
+    internal void HoldFadeForTests(float share)
+    {
+        lock (_lock)
+        {
+            BeginFadeLocked();
+            SetFadeLevelLocked(share);
+        }
+    }
 
     /// <summary>
     /// Calls off a fade that is under way and puts the music back at its
@@ -690,7 +765,7 @@ public sealed class MusicPlayer : IDisposable
     {
         if (_volume is not null)
         {
-            _volume.Volume = Math.Clamp(Settings.Volume, 0f, 1f);
+            _volume.Volume = MusicLevelLocked();
         }
 
         ApplyDuckLocked();
@@ -872,7 +947,10 @@ public sealed class MusicPlayer : IDisposable
                 // is started: it must not play one whole buffer at full
                 // volume first. ApplyVolumeLocked runs again once the output
                 // is published, to pick up anything that changed meanwhile.
-                startVolume = Math.Clamp(Settings.Volume, 0f, 1f);
+                // With a fade-out's level in it (10 Nov 2026, bug hunt 16):
+                // a track ending during the fade used to have the next one
+                // open at the full set level - see _fadeLevel.
+                startVolume = MusicLevelLocked();
                 startDuck = DuckFactorLocked();
             }
         }

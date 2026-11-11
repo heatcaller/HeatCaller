@@ -398,7 +398,7 @@ public sealed partial class AnnouncementService
             return false;
         }
 
-        QueueBattlePass(cut.Pair.BehindId, BattlePassWords(driver, place), place);
+        QueueBattlePass(cut.Pair.BehindId, BattlePassWords(driver, place), place, LapSeenAt(cut.Pair.BehindId) + LapCallSayWithinMs);
 
         return place <= 1;
     }
@@ -406,9 +406,11 @@ public sealed partial class AnnouncementService
     /// <summary>
     /// Puts a battle's pass call next in the queue - after a cut-off line,
     /// for a pass on track (CallTheBattlePass) or a ruling
-    /// (SettleBattleLinesAfterCorrection).
+    /// (SettleBattleLinesAfterCorrection). sayByMs is the latest it can
+    /// start: a few seconds from the chaser's crossing for a pass on track,
+    /// from the ruling itself for a correction.
     /// </summary>
-    private void QueueBattlePass(string behindId, string words, int place)
+    private void QueueBattlePass(string behindId, string words, int place, long sayByMs)
     {
         var type = place <= 1 ? AnnouncementEventType.LeaderChange : AnnouncementEventType.CloseBattle;
 
@@ -425,8 +427,12 @@ public sealed partial class AnnouncementService
             // With the few seconds every lap call has (8 Nov 2026): straight
             // in, it skipped EnqueueVoiceWork and so the deadline, and "Sam
             // takes the lead" could be heard behind a queue of v3 renders.
+            // The deadline is the caller's (10 Nov 2026, bug hunt 16): it was
+            // always timed from the chaser's last crossing, so a ruling made
+            // 6-12 s after that went in already past it - and was dropped
+            // unheard straight after the battle line was cut off.
             _voiceQueue.Insert(at, new QueuedVoiceItem(type, behindId, OnAir: "Battle",
-                SayByMs: LapSeenAt(behindId) + LapCallSayWithinMs, ShownText: words, Work: async () =>
+                SayByMs: sayByMs, ShownText: words, Work: async () =>
             {
                 try
                 {
@@ -540,7 +546,15 @@ public sealed partial class AnnouncementService
 
                 var place = 1 + ordered.FindIndex(standing => standing.Transponder == cut.Pair.BehindId);
 
-                QueueBattlePass(cut.Pair.BehindId, RulingPassWords(driver, place < 1 ? cut.Pair.Position : place), place < 1 ? cut.Pair.Position : place);
+                // Timed from the ruling, not from the chaser's last crossing
+                // (10 Nov 2026, bug hunt 16): a correction by hand is not a
+                // crossing, so LapSeenAt still gave the one up to 12 s before,
+                // and the call was dropped unheard as out of date.
+                QueueBattlePass(
+                    cut.Pair.BehindId,
+                    RulingPassWords(driver, place < 1 ? cut.Pair.Position : place),
+                    place < 1 ? cut.Pair.Position : place,
+                    TimingClock.NowMs + LapCallSayWithinMs);
             }
         }
 

@@ -453,7 +453,13 @@ public sealed partial class RelayPublisher
         // full - and leaving the old value behind would have the relay
         // holding "off and full", which is two reasons to refuse where
         // there is one.
-        if (TellTheRelayNotesAreOpen(target, club, wanted: false, full: false, token))
+        //
+        // AND ONLY WHILE IT IS STILL THE CLUB IT WAS SENT TO (10 Nov 2026,
+        // bug hunt 16): a Save moving the relay or club while this was in
+        // flight armed a close for the NEW club, and the old club's answer
+        // clearing it here meant the new one was never told - so it went
+        // on taking strangers' shout-outs all evening.
+        if (TellTheRelayNotesAreOpen(target, club, wanted: false, full: false, token) && target == _target)
         {
             _notesClosePending = false;
         }

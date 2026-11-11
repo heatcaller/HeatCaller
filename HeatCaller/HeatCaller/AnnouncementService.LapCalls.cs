@@ -2409,7 +2409,16 @@ public sealed partial class AnnouncementService
                         ? $"switched off for {(IsPracticeMode ? "practice" : "races")}"
                         : streakVoiceCfg.EffectiveTemplates.Count == 0
                             ? "no lines configured"
-                            : "a flag is out";
+                            // VoiceCandidateCanSpeak also holds a call the
+                            // chattiness dial rules out, and that used to
+                            // fall through to here too, so every streak a
+                            // quiet dial held was logged as held by a flag
+                            // that was not out. Name the dial, the way the
+                            // other dial-held lines do (10 Nov 2026, bug
+                            // hunt 16).
+                            : HeldByCaution(AnnouncementEventType.Streak, streakVoiceCfg)
+                                ? "a flag is out"
+                                : $"the announcer is set to {ShowChatter.For(Chatter).Name}";
 
                     StatusMessage?.Invoke($"[voice] Streak for {DisplayNameFor(transponder)} not announced - {reason}.");
                 }

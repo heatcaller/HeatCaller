@@ -349,6 +349,22 @@ public sealed class BetweenRaceCallsTests
         Assert.Null(gap.WhyNotCallUpAgain("A-Main", T0));
     }
 
+    /// <summary>
+    /// 10 Nov 2026, bug hunt 16: Skip in the Broadcast window counted as a
+    /// call-up for Call Up's double-press guard, so pressing Call Up 10 s
+    /// later was refused with "Already called up" though nothing was said.
+    /// </summary>
+    [Fact]
+    public void Call_Up_pressed_after_a_skip_still_calls()
+    {
+        var gap = OpenGap(Next());
+        gap.SkipCallUp(T0.AddSeconds(10));
+
+        Assert.Null(gap.WhyNotCallUpAgain("A-Main", T0.AddSeconds(20)));
+        // The skip still pushes the automatic repeat back, as before.
+        Assert.Equal(1, gap.CallUps);
+    }
+
     [Fact]
     public void Call_Up_waits_while_the_last_call_up_is_still_queued()
     {

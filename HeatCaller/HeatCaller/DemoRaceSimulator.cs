@@ -701,21 +701,7 @@ public sealed class DemoRaceSimulator : IDisposable
 
         racer.NextLapDueAtMs = crossingMs + lapSeconds * 1000;
 
-        // WHERE ROUND THE NEXT LAP THIS CAR MEETS EACH LOOP. Evenly spaced
-        // on paper - one loop sits at half distance, two at a third and two
-        // thirds - with a few per cent of wander on each, because the whole
-        // point of rehearsing the sector calls is that the sectors DIFFER:
-        // loops placed at exactly the same fraction every lap would give
-        // every car the same two sector times all race, and a sector best
-        // would be set once on lap two and never again.
-        for (var slot = 0; slot < racer.SplitDueAtMs.Length; slot++)
-        {
-            var evenly = (slot + 1.0) / (racer.SplitDueAtMs.Length + 1.0);
-            var wander = (_random.NextDouble() - 0.5) * 0.08;
-            var through = Math.Clamp(evenly + wander, 0.05, 0.95);
-
-            racer.SplitDueAtMs[slot] = crossingMs + lapSeconds * 1000 * through;
-        }
+        BookSplits(racer.SplitDueAtMs, crossingMs, lapSeconds, glitch: roll < 0.05, _random);
 
         _race.ProcessLapEvent(new DirectLapEvent
         {
@@ -731,6 +717,43 @@ public sealed class DemoRaceSimulator : IDisposable
         });
 
         LogMessage?.Invoke($"{racer.TransponderId} lap: {lapSeconds:0.000}s");
+    }
+
+    /// <summary>
+    /// WHERE ROUND THE NEXT LAP THIS CAR MEETS EACH LOOP. Evenly spaced
+    /// on paper - one loop sits at half distance, two at a third and two
+    /// thirds - with a few per cent of wander on each, because the whole
+    /// point of rehearsing the sector calls is that the sectors DIFFER:
+    /// loops placed at exactly the same fraction every lap would give
+    /// every car the same two sector times all race, and a sector best
+    /// would be set once on lap two and never again.
+    ///
+    /// NOT FOR A GLITCH (10 Nov 2026, bug hunt 16). A glitch "lap" of
+    /// 0.3-0.7s is line noise the session throws away; the car has not
+    /// really come round again, so it is not at the split loop a third of
+    /// a second later either. Booking splits inside the glitch put a read
+    /// 0.14-0.38s after the last counted crossing: the session took it as
+    /// a 0.35s sector best nothing could beat, or kept both it and the
+    /// real read and logged a "possible missed lap" that never happened,
+    /// or remembered it and dropped the real read as a repeat. On a glitch
+    /// the bookings are left alone; the pass after it books the next real
+    /// lap's splits as usual.
+    /// </summary>
+    internal static void BookSplits(double[] splitDueAtMs, long crossingMs, double lapSeconds, bool glitch, Random random)
+    {
+        if (glitch)
+        {
+            return;
+        }
+
+        for (var slot = 0; slot < splitDueAtMs.Length; slot++)
+        {
+            var evenly = (slot + 1.0) / (splitDueAtMs.Length + 1.0);
+            var wander = (random.NextDouble() - 0.5) * 0.08;
+            var through = Math.Clamp(evenly + wander, 0.05, 0.95);
+
+            splitDueAtMs[slot] = crossingMs + lapSeconds * 1000 * through;
+        }
     }
 
     private void OnRaceCompleted()

@@ -359,16 +359,17 @@ public sealed class DayScheduleControl : UserControl
 
         // With it ticked, Race Control says the marks itself between races,
         // from the next race's time on this sheet - see Between races.
+        // Written and heard through AutoCountdownTick, so the Between races
+        // card's own tick follows this one and this one follows it (10 Nov
+        // 2026, bug hunt 16).
         _chkAutoCountdown.CheckedChanged += (_, _) =>
         {
-            if (_settings is null || _settings.BetweenRacesAutoCountdown == _chkAutoCountdown.Checked)
+            if (_settings is not null)
             {
-                return;
+                AutoCountdownTick.Set(_settings, _chkAutoCountdown.Checked);
             }
-
-            _settings.BetweenRacesAutoCountdown = _chkAutoCountdown.Checked;
-            _settings.Save();
         };
+        AutoCountdownTick.Changed += AutoCountdownTicked;
 
         reminder.Add(lblFor);
         reminder.Add(minutesRow);
@@ -1446,10 +1447,25 @@ public sealed class DayScheduleControl : UserControl
         _lblCountdown.Text = $"{(int)span.TotalMinutes:00}:{span.Seconds:00}";
     }
 
+    /// <summary>The automatic countdown was ticked or unticked, here or on the Between races card: shown here too.</summary>
+    private void AutoCountdownTicked(AppSettings settings)
+    {
+        if (!ReferenceEquals(settings, _settings) || IsDisposed)
+        {
+            return;
+        }
+
+        // Its CheckedChanged finds the setting already says so and saves nothing.
+        _chkAutoCountdown.Checked = settings.BetweenRacesAutoCountdown;
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
+            // A static event would keep this control alive (10 Nov 2026, bug hunt 16).
+            AutoCountdownTick.Changed -= AutoCountdownTicked;
+
             // A WinForms timer holds a reference to this control through
             // its Tick handler. Left undisposed it keeps the control alive
             // and can fire against a disposed one, which throws from a

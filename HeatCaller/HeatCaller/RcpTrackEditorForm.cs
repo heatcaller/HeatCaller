@@ -2553,11 +2553,16 @@ public sealed class RcpTrackEditorForm : Form
         var inventory = RcpPlan.Count(Result);
         var lengthTiles = RcpPlan.RouteLengthInTiles(Result);
 
+        // The lap chosen, as the chip has it - never the 12s stand-in Play
+        // drives at without one. That made the card say "At a 12.0s lap"
+        // while the chip said there was no lap time, and put 12.0s in place
+        // of an entered time on a line of fewer than 3 points (10 Nov 2026,
+        // bug hunt 16).
         _lblStats.Text = Readout(
             inventory,
             lengthTiles,
             Result.TileSizeMm,
-            _canvas.LapSeconds,
+            _lap.Seconds > 0 ? _lap.Seconds : 0,
             RcpPlan.MeasureSectors(Result),
             RcpPlan.RailsWithNoFloor(Result),
             _canvas.PieceReport.CustomTiles.Count);

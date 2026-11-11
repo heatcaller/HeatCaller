@@ -292,4 +292,23 @@ public sealed class BugHunt7DirectorTimingTests : IDisposable
         Assert.Equal(0, _rig.Model.Asked);
         Assert.False(_rig.Director.Said.Spent("pace:heat-1-restart:SessionBest:A"));
     }
+
+    [Fact]
+    public async Task A_record_lap_from_a_race_abandoned_without_a_flag_is_not_called_in_the_restart()
+    {
+        // Bug hunt 16 (10 Nov 2026): a false start or an early red flag goes
+        // straight to a new session number with no RaceFinished in between,
+        // so only RaceStarted is there to clear the waiting pace note.
+        _rig.WarmUp();
+        _rig.Director.Lap("A", 12.0);
+
+        _rig.Clock.Advance(TimeSpan.FromSeconds(10));
+        _rig.Director.RaceStarted("heat-1-restart", "Box Stock");
+
+        var said = await _rig.Director.NextAsync();
+
+        Assert.Null(said);
+        Assert.Equal(0, _rig.Model.Asked);
+        Assert.False(_rig.Director.Said.Spent("pace:heat-1-restart:SessionBest:A"));
+    }
 }

@@ -2335,14 +2335,43 @@ public sealed partial class ProfileManagerControl : UserControl
         NameCheckForm.ShowFor(this, drivers, SpeakName, _sources?.CheckIns);
     }
 
+    /// <summary>
+    /// The drivers Delete acts on: the roster's highlighted rows only while
+    /// the Card view shows them and there are several, otherwise the one
+    /// driver the card, drawer and table are showing.
+    /// </summary>
+    /// <remarks>
+    /// (10 Nov 2026, bug hunt 16) Delete used to read only the roster's
+    /// highlighted rows, but the Table view, the drawer and the "..." menu
+    /// show CardProfile(). Rows Ctrl-clicked in the Card view stayed
+    /// highlighted behind the Table, so Delete on one table row offered to
+    /// delete all of them; and a roster search matching nobody left nothing
+    /// highlighted, so "Delete Sam..." on the card did nothing at all.
+    /// </remarks>
+    internal static List<DriverProfile> DeleteTargets(bool cardView, IReadOnlyList<DriverProfile> highlighted, DriverProfile? shown)
+    {
+        if (cardView && highlighted.Count > 1)
+        {
+            return highlighted.ToList();
+        }
+
+        return shown is null ? new List<DriverProfile>() : new List<DriverProfile> { shown };
+    }
+
+    private List<DriverProfile> DeleteTargets() =>
+        DeleteTargets(
+            _view == DriverView.Card,
+            _list.SelectedItems
+                .Cast<ListViewItem>()
+                .Select(i => _store.Get((string)i.Tag!))
+                .Where(p => p is not null)
+                .Select(p => p!)
+                .ToList(),
+            CardProfile());
+
     private void DeleteSelected()
     {
-        var removed = _list.SelectedItems
-            .Cast<ListViewItem>()
-            .Select(i => _store.Get((string)i.Tag!))
-            .Where(p => p is not null)
-            .Select(p => p!)
-            .ToList();
+        var removed = DeleteTargets();
 
         if (removed.Count == 0)
         {

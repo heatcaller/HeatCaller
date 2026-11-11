@@ -217,7 +217,20 @@ internal sealed class BetweenRacesCard
         what.AddHint("Sponsor reads are switched on or off on the Sponsors page. These boxes only shape the gap - "
                      + "what plays during races is set above.");
 
-        Tick(_chkAutoCountdown, "Start the countdown by itself from the run sheet, at");
+        // Not Tick: this one is shared with the Timetable's Reminder countdown
+        // card, so it is saved and heard through AutoCountdownTick rather than
+        // with the rest of the card (10 Nov 2026, bug hunt 16).
+        _chkAutoCountdown.Text = "Start the countdown by itself from the run sheet, at";
+        _chkAutoCountdown.AutoSize = true;
+        _chkAutoCountdown.CheckedChanged += (_, _) =>
+        {
+            if (!_loading)
+            {
+                AutoCountdownTick.Set(_settings, _chkAutoCountdown.Checked);
+            }
+        };
+        AutoCountdownTick.Changed += AutoCountdownTicked;
+        card.Disposed += (_, _) => AutoCountdownTick.Changed -= AutoCountdownTicked;
         var marks = new List<Control> { _chkAutoCountdown };
 
         foreach (var mark in GapRules.AllMarks)
@@ -369,7 +382,9 @@ internal sealed class BetweenRacesCard
         CallUpsWithOnAir = _chkWithOnAir.Checked,
         LongBreakNotice = _chkLongBreak.Checked,
         LongBreakMinutes = (int)_numLongBreak.Value,
-        AutoCountdown = _chkAutoCountdown.Checked,
+        // The setting, not this card's tick: the Timetable may have changed it
+        // since, and every save of the card writes it back (10 Nov 2026, bug hunt 16).
+        AutoCountdown = _settings.BetweenRacesAutoCountdown,
         CountdownMarks = _chkMarks.Where(m => m.Value.Checked).Select(m => m.Key).OrderByDescending(m => m).ToList(),
         CountdownTimesUp = _chkTimesUp.Checked,
         CallUps = _chkCallUps.Checked,
@@ -402,6 +417,26 @@ internal sealed class BetweenRacesCard
         try
         {
             ShowPreset(rules);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    /// <summary>The automatic countdown was ticked or unticked, here or on the Timetable: shown here too, saving nothing.</summary>
+    private void AutoCountdownTicked(AppSettings settings)
+    {
+        if (!ReferenceEquals(settings, _settings))
+        {
+            return;
+        }
+
+        _loading = true;
+
+        try
+        {
+            _chkAutoCountdown.Checked = settings.BetweenRacesAutoCountdown;
         }
         finally
         {

@@ -137,6 +137,12 @@ internal static class CommentaryOfficialFacts
 
         var blackFlagged = false;
 
+        // A black flag is only "and disqualified" while the result still
+        // says DQ. The warning stays on the entry when the DQ was refused at
+        // filing or taken back off in Edit Result, and the recap must say
+        // the result as it stands (10 Nov 2026, bug hunt 16).
+        var stillDq = ResultEditor.NormaliseOutcome(entry.Outcome) == ResultEditor.Dq;
+
         foreach (var warning in warnings)
         {
             var why = Reason(warning.Reason);
@@ -149,8 +155,8 @@ internal static class CommentaryOfficialFacts
                     break;
 
                 case WarningAction.BlackFlag:
-                    blackFlagged = true;
-                    parts.Add($"black-flagged on warning {warning.Number}{forWhat}, and disqualified");
+                    blackFlagged = stillDq;
+                    parts.Add($"black-flagged on warning {warning.Number}{forWhat}" + (stillDq ? ", and disqualified" : string.Empty));
                     break;
 
                 default:
@@ -516,8 +522,11 @@ internal static class CommentaryOfficialFacts
                 var flagged = (entry.Warnings ?? new List<RaceWarning>()).FirstOrDefault(w => w?.Action == WarningAction.BlackFlag);
 
                 // Without the reason, for AfterTheRace's: a black flag's
-                // reason was typed about a named driver too.
-                if (flagged is not null)
+                // reason was typed about a named driver too. Only while the
+                // result is still a DQ: a DQ cleared in Edit Result leaves the
+                // warning behind, and the night must say the corrected result
+                // through AfterTheRace instead (10 Nov 2026, bug hunt 16).
+                if (flagged is not null && ResultEditor.NormaliseOutcome(entry.Outcome) == ResultEditor.Dq)
                 {
                     lines.Add($"{where}, {name} was black-flagged and disqualified.");
                     continue;
