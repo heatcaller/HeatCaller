@@ -36,8 +36,47 @@ public sealed class VoiceSettingsStore
     /// 4 (10 Nov 2026): every line retagged for Eleven v4 - [shouting] and
     /// [excited] only on the moments that earn them (see AudioTagTiers) -
     /// and every saved voice moved to eleven_v4_turbo.
+    ///
+    /// 5 (11 Nov 2026): a driver's own bests - personal bests, streaks,
+    /// qualifying improvements, achievements - lose [excited] and [shouting]
+    /// (AudioTagTiers.Unlifted); their [cheerful] and [awe] stay. A file on 4
+    /// only has those two tags taken out of those calls; it is not refreshed.
+    /// One older than 4 is, as before.
     /// </summary>
-    internal const int CurrentTemplateVersion = 4;
+    internal const int CurrentTemplateVersion = 5;
+
+    private static readonly System.Text.RegularExpressions.Regex LoudTag =
+        new(@"\[(excited|shouting)\] ?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Takes [excited] and [shouting] out of the lines of a driver's own
+    /// bests (AudioTagTiers.Unlifted), club-written lines included - for
+    /// those calls the loud tag is the thing being removed, not the wording.
+    /// Any other tag ([cheerful], [awe]) stays. True when anything changed.
+    /// </summary>
+    internal static bool StripLoudTagsFromUnliftedCalls(VoiceProfile profile)
+    {
+        var changed = false;
+
+        foreach (var type in AudioTagTiers.Unlifted)
+        {
+            if (!profile.Events.TryGetValue(type.ToString(), out var config) || config is null)
+            {
+                continue;
+            }
+
+            var plain = config.EffectiveTemplates.Select(line => LoudTag.Replace(line, string.Empty).Trim()).ToList();
+
+            if (!plain.SequenceEqual(config.EffectiveTemplates, StringComparer.Ordinal))
+            {
+                config.Templates = plain;
+                config.Template = string.Empty;
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
 
     /// <summary>
     /// Built-in lines that have been reworded since a club's file was saved
@@ -178,31 +217,43 @@ public sealed class VoiceSettingsStore
                         // model moves with them. The race-call model goes
                         // back to "same as Model" - v4 Turbo is quick enough
                         // for race calls, which is all Flash was there for.
-                        if (loaded.TemplateVersion < 4)
+                        //
+                        // Version 5 (11 Nov 2026) is NOT a refresh: a file
+                        // already on 4 has the v4 lines, so only a driver's
+                        // own bests lose [excited] and [shouting] (see
+                        // StripLoudTagsFromUnliftedCalls),
+                        // and every other line a club wrote stays as it is.
+                        var fullRefresh = loaded.TemplateVersion < 4;
+
+                        if (fullRefresh)
                         {
                             loaded.ModelId = VoiceProfile.DefaultModelId;
                             loaded.RaceCallModelId = string.Empty;
-                        }
 
-                        // Replace ONLY the spoken lines. Enabled, Weight and
-                        // every per-event toggle are deliberately untouched -
-                        // this is a phrasing refresh, not a settings reset.
-                        foreach (var (key, defaultConfig) in defaults.Events)
-                        {
-                            if (loaded.Events.TryGetValue(key, out var existing))
+                            // Replace ONLY the spoken lines. Enabled, Weight and
+                            // every per-event toggle are deliberately untouched -
+                            // this is a phrasing refresh, not a settings reset.
+                            foreach (var (key, defaultConfig) in defaults.Events)
                             {
-                                existing.Templates = defaultConfig.Templates.ToList();
+                                if (loaded.Events.TryGetValue(key, out var existing))
+                                {
+                                    existing.Templates = defaultConfig.Templates.ToList();
 
-                                // Clear the legacy single-template field too,
-                                // or it would shadow the list if that were
-                                // ever emptied later.
-                                existing.Template = string.Empty;
+                                    // Clear the legacy single-template field too,
+                                    // or it would shadow the list if that were
+                                    // ever emptied later.
+                                    existing.Template = string.Empty;
+                                }
                             }
+                        }
+                        else
+                        {
+                            StripLoudTagsFromUnliftedCalls(loaded);
                         }
 
                         loaded.TemplateVersion = CurrentTemplateVersion;
 
-                        var store = new VoiceSettingsStore(loaded) { RefreshedLines = true };
+                        var store = new VoiceSettingsStore(loaded) { RefreshedLines = fullRefresh };
                         store.Save(loaded);
                         return store;
                     }
