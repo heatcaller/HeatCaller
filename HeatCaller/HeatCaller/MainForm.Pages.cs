@@ -1785,7 +1785,12 @@ public partial class MainForm
 
         // Wired here rather than beside RoundStartRequested above, because
         // demoMode doesn't exist yet at that point in this method.
-        raceProgram.RoundDemoRequested += async round =>
+        //
+        // ONE DEMO PATH (11 Nov 2026): the race programme's Demo, and Start
+        // Next on Race Control's Next Up bar held for a second (see
+        // StartNextHold), both run a round as a demo through this - so a
+        // held Start Next keeps every demo rule the programme's does.
+        Func<RoundDefinition, Task> runRoundAsDemo = async round =>
         {
             // A demo drives the same session practice is running on, and
             // would wipe the practice laps just as a real start would.
@@ -1909,6 +1914,9 @@ public partial class MainForm
                 _raceControlControl.RefreshFormat();
             }
         };
+
+        raceProgram.RoundDemoRequested += async round => await runRoundAsDemo(round);
+        raceControl.NextRoundDemoRequested += async round => await runRoundAsDemo(round);
 
         return pageGhosts;
     }
