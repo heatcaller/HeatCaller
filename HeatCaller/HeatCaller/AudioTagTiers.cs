@@ -11,9 +11,9 @@ namespace HeatCaller;
 ///
 ///  - [shouting]: the start and the checkered flag, a new leader, records,
 ///    and the flags and jump starts (urgency, not hype).
-///  - [excited]: passes and battles, personal bests and streaks, and the
-///    last lap and final seconds.
-///  - everything else is read plain.
+///  - [excited]: passes and battles, and the last lap and final seconds.
+///  - everything else is read plain, a driver's own bests included (see
+///    Unlifted).
 ///
 /// Every line of one call takes the same tag, so the same moment is never
 /// shouted one time and flat the next. Character tags ([cheerful], [awe],
@@ -55,10 +55,22 @@ internal static class AudioTagTiers
         AnnouncementEventType.GhostPassed,
         AnnouncementEventType.PassedByGhost,
         AnnouncementEventType.Lapped,
-        AnnouncementEventType.PersonalBestLap,
+        AnnouncementEventType.LastLap,
+        AnnouncementEventType.FinalMinute,
+        AnnouncementEventType.FinalSeconds,
+    };
 
-        // A personal best of a bigger kind, and several said as one (10 Nov 2026) -
-        // a driver's own, not the track's, so lifted rather than shouted.
+    /// <summary>
+    /// A driver's own bests (11 Nov 2026, Asher): personal bests, a best ever
+    /// here, several personal bests said as one, streaks, qualifying
+    /// improvements and achievements. No [excited] or [shouting] - the
+    /// night's lift stays with the race itself - but the character tags
+    /// ([cheerful], [awe]) they have stay. VoiceSettingsStore takes the loud
+    /// tags out of these calls' saved lines too (template version 5).
+    /// </summary>
+    internal static readonly IReadOnlySet<AnnouncementEventType> Unlifted = new HashSet<AnnouncementEventType>
+    {
+        AnnouncementEventType.PersonalBestLap,
         AnnouncementEventType.BestEverHere,
 
         // What their saved races say (11 Nov 2026) - their own news, so lifted.
@@ -71,9 +83,6 @@ internal static class AudioTagTiers
         AnnouncementEventType.StreakLead,
         AnnouncementEventType.QualifyingImprovement,
         AnnouncementEventType.AchievementUnlocked,
-        AnnouncementEventType.LastLap,
-        AnnouncementEventType.FinalMinute,
-        AnnouncementEventType.FinalSeconds,
     };
 
     /// <summary>The loud tag this call's lines take: [shouting], [excited], or null for a plain read.</summary>

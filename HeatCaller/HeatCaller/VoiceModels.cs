@@ -1361,17 +1361,17 @@ public sealed class VoiceProfile
             Weight = 45,
             Templates = new List<string>
             {
-                "[excited] Personal best for {driver}!",
+                "Personal best for {driver}!",
                 "[cheerful] {driver} improves on their own time - {time}.",
-                "[excited] That's {driver}'s quickest lap so far.",
-                "[excited] {driver} finds a bit more - new personal best.",
-                "[excited] {driver} goes quicker than before - {time}.",
-                "[excited] New best for {driver}: {time}.",
-                "[excited] {driver} chips away at it - personal best.",
-                "[excited] Improvement from {driver} - {time}.",
-                "[excited] {driver} beats their own mark.",
+                "That's {driver}'s quickest lap so far.",
+                "{driver} finds a bit more - new personal best.",
+                "{driver} goes quicker than before - {time}.",
+                "New best for {driver}: {time}.",
+                "{driver} chips away at it - personal best.",
+                "Improvement from {driver} - {time}.",
+                "{driver} beats their own mark.",
                 "[cheerful] {driver} is finding pace - new personal best.",
-                "[excited] Better again from {driver}, {time}.",
+                "Better again from {driver}, {time}.",
                 "[cheerful] {driver} moves their own bar up.",
             },
         };
@@ -1468,18 +1468,18 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 70,
             Templates = new List<string>
             {
-                "[excited] {driver} is on a {streak} lap streak!",
-                "[excited] {driver}'s on fire - {streak} good laps in a row!",
-                "[excited] Consistency from {driver} - {streak} in a row!",
-                "[excited] {driver} keeps it clean, {streak} laps running!",
-                "[excited] {streak} clean laps on the bounce for {driver}!",
-                "[excited] {driver} is dialed in - {streak} straight!",
-                "[excited] No mistakes from {driver} - {streak} in a row!",
-                "[excited] Metronomic from {driver}, {streak} consecutive!",
-                "[excited] {driver} strings together {streak} good ones!",
-                "[excited] That's {streak} clean for {driver}!",
-                "[excited] {driver} is in the groove - {streak} laps running!",
-                "[excited] Rock solid from {driver} - {streak} straight!"
+                "{driver} is on a {streak} lap streak!",
+                "{driver}'s on fire - {streak} good laps in a row!",
+                "Consistency from {driver} - {streak} in a row!",
+                "{driver} keeps it clean, {streak} laps running!",
+                "{streak} clean laps on the bounce for {driver}!",
+                "{driver} is dialed in - {streak} straight!",
+                "No mistakes from {driver} - {streak} in a row!",
+                "Metronomic from {driver}, {streak} consecutive!",
+                "{driver} strings together {streak} good ones!",
+                "That's {streak} clean for {driver}!",
+                "{driver} is in the groove - {streak} laps running!",
+                "Rock solid from {driver} - {streak} straight!"
             },
         };
         p.Events[nameof(AnnouncementEventType.StreakLead)] = new AnnouncementEventConfig
@@ -1490,18 +1490,18 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 72,
             Templates = new List<string>
             {
-                "[excited] {driver} has the longest run going right now - {streak} clean laps!",
-                "[excited] Longest streak on track belongs to {driver}, {streak} in a row!",
-                "[excited] {driver} takes over the longest run - {streak} straight!",
-                "[excited] Nobody on track is cleaner than {driver} right now - {streak}!",
-                "[excited] {driver} goes clear of {rival} for the longest run, {streak} laps!",
-                "[excited] {driver} heads the clean runs now - {streak} laps!",
-                "[excited] {driver} leads the consistency charts, {streak} in a row!",
-                "[excited] The longest streak out there is {driver}'s - {streak} laps!",
-                "[excited] {driver} now has the longest clean run on track - {streak}!",
-                "[excited] {driver} takes the streak lead from {rival} - {streak} laps!",
-                "[excited] {streak} in a row - nobody has a longer run than {driver}!",
-                "[excited] Longest run in the field - {driver}, {streak} laps!",
+                "{driver} has the longest run going right now - {streak} clean laps!",
+                "Longest streak on track belongs to {driver}, {streak} in a row!",
+                "{driver} takes over the longest run - {streak} straight!",
+                "Nobody on track is cleaner than {driver} right now - {streak}!",
+                "{driver} goes clear of {rival} for the longest run, {streak} laps!",
+                "{driver} heads the clean runs now - {streak} laps!",
+                "{driver} leads the consistency charts, {streak} in a row!",
+                "The longest streak out there is {driver}'s - {streak} laps!",
+                "{driver} now has the longest clean run on track - {streak}!",
+                "{driver} takes the streak lead from {rival} - {streak} laps!",
+                "{streak} in a row - nobody has a longer run than {driver}!",
+                "Longest run in the field - {driver}, {streak} laps!",
             },
         };
         p.Events[nameof(AnnouncementEventType.GhostPassed)] = new AnnouncementEventConfig
@@ -1683,10 +1683,10 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 55,
             Templates = new List<string>
             {
-                "[excited] Personal bests for {drivers}!",
-                "[excited] {drivers} all go quicker!",
-                "[excited] New personal bests - {drivers}.",
-                "[excited] Everyone's finding time - {drivers}!",
+                "Personal bests for {drivers}!",
+                "{drivers} all go quicker!",
+                "New personal bests - {drivers}.",
+                "Everyone's finding time - {drivers}!",
             },
         };
 
@@ -1699,10 +1699,10 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 75,
             Templates = new List<string>
             {
-                "[excited] {driver}'s quickest ever lap here - {time}!",
-                "[excited] {driver} has never been faster on this track - {time}!",
-                "[excited] A lifetime best here for {driver} - {time}, beating {previous}.",
-                "[excited] That's the best lap {driver} has ever done here - {time}!",
+                "{driver}'s quickest ever lap here - {time}!",
+                "{driver} has never been faster on this track - {time}!",
+                "A lifetime best here for {driver} - {time}, beating {previous}.",
+                "That's the best lap {driver} has ever done here - {time}!",
             },
         };
 
@@ -1781,12 +1781,12 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Enabled = true,
             Templates = new List<string>
             {
-                "[excited] {driver} unlocks {achievement}!",
+                "{driver} unlocks {achievement}!",
                 "[cheerful] Achievement for {driver} - {achievement}.",
-                "[excited] That's {achievement} for {driver}!",
+                "That's {achievement} for {driver}!",
                 "[cheerful] {driver} has earned {achievement}.",
-                "[excited] New one for {driver} - {achievement}!",
-                "[excited] {achievement}! Take a bow, {driver}!"
+                "New one for {driver} - {achievement}!",
+                "{achievement}! Take a bow, {driver}!"
             },
         };
 
@@ -1938,18 +1938,18 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 40,
             Templates = new List<string>
             {
-                "[excited] {driver} improves - {time}!",
-                "[excited] {driver} finds more time! {time}!",
-                "[excited] Better from {driver} - {time}!",
-                "[excited] Improvement for {driver} - {time}!",
-                "[excited] {driver} goes quicker - {time}!",
-                "[excited] {driver} moves up the order! {time}!",
-                "[excited] {driver} steps it up - {time}!",
-                "[excited] {driver} banks a better one - {time}!",
-                "[excited] More pace from {driver} - {time}!",
-                "[excited] {driver} lowers the bar - {time}!",
-                "[excited] {driver} keeps pushing - {time}!",
-                "[excited] Quicker again from {driver} - {time}!"
+                "{driver} improves - {time}!",
+                "{driver} finds more time! {time}!",
+                "Better from {driver} - {time}!",
+                "Improvement for {driver} - {time}!",
+                "{driver} goes quicker - {time}!",
+                "{driver} moves up the order! {time}!",
+                "{driver} steps it up - {time}!",
+                "{driver} banks a better one - {time}!",
+                "More pace from {driver} - {time}!",
+                "{driver} lowers the bar - {time}!",
+                "{driver} keeps pushing - {time}!",
+                "Quicker again from {driver} - {time}!"
             },
         };
 

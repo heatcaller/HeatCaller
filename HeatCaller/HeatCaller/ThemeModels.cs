@@ -55,8 +55,11 @@ public sealed class Theme
     /// 14: every soundscape's lines retagged for Eleven v4 - [shouting] and
     /// [excited] only on the moments that earn them (10 Nov 2026, see
     /// AudioTagTiers).
+    /// 15: a driver's own bests - personal bests, streaks, qualifying
+    /// improvements, achievements - lose [excited] and [shouting]; their
+    /// [cheerful] and [awe] stay (11 Nov 2026).
     /// </summary>
-    public const int CurrentBuiltInVersion = 14;
+    public const int CurrentBuiltInVersion = 15;
 
     /// <summary>
     /// Built-ins that were renamed when the packs arrived, old name to new.
@@ -458,18 +461,18 @@ public sealed class Theme
             "[shouting] Top of the board - {driver}!",
             "[shouting] {driver} steals first place!");
         Lines(v, AnnouncementEventType.Streak, true, 70,
-            "[excited] {driver} is on a combo streak - {streak}x!",
-            "[excited] Combo x{streak} for {driver}!",
-            "[excited] {driver}'s on a hot streak, {streak} in a row!",
-            "[excited] {driver} keeps the combo alive - {streak}!",
-            "[excited] {streak}-hit combo for {driver}!",
-            "[excited] No dropped inputs from {driver} - {streak} straight!",
-            "[excited] Combo bonus for {driver} - {streak}!",
-            "[excited] {driver} chains {streak} perfect laps!",
-            "[excited] {streak}x multiplier for {driver}!",
-            "[excited] Perfect run - {driver}, {streak} laps!",
-            "[excited] {driver} won't break the combo - {streak}!",
-            "[excited] Flawless chain from {driver} - {streak} in a row!");
+            "{driver} is on a combo streak - {streak}x!",
+            "Combo x{streak} for {driver}!",
+            "{driver}'s on a hot streak, {streak} in a row!",
+            "{driver} keeps the combo alive - {streak}!",
+            "{streak}-hit combo for {driver}!",
+            "No dropped inputs from {driver} - {streak} straight!",
+            "Combo bonus for {driver} - {streak}!",
+            "{driver} chains {streak} perfect laps!",
+            "{streak}x multiplier for {driver}!",
+            "Perfect run - {driver}, {streak} laps!",
+            "{driver} won't break the combo - {streak}!",
+            "Flawless chain from {driver} - {streak} in a row!");
         Lines(v, AnnouncementEventType.RaceTimeOver, true, null,
             "[shouting] Final lap! Time's almost up!",
             "[shouting] Hurry up! Last lap!",
@@ -762,16 +765,16 @@ public sealed class Theme
         Lines(v, AnnouncementEventType.Streak, true, 70,
             "[cheerful] {driver} is in the groove - {streak} clean laps.",
             "[cheerful] {streak} in a row for {driver}. Keep that rhythm.",
-            "[excited] {driver} is on fire - {streak} straight!",
+            "{driver} is on fire - {streak} straight!",
             "[cheerful] {driver} riding the wave - {streak} clean laps.",
-            "[excited] {streak} straight for {driver}, smooth as neon!",
+            "{streak} straight for {driver}, smooth as neon!",
             "[cheerful] That's {streak} clean on the trot for {driver}.",
             "[cheerful] {driver} keeps the beat going - {streak} clean.",
             "[cheerful] {streak} smooth laps for {driver}.",
-            "[excited] {driver} is cruising - {streak} in a row!",
+            "{driver} is cruising - {streak} in a row!",
             "[cheerful] Clean and steady - {driver}, {streak} laps.",
             "[cheerful] {driver} stays in tune - {streak} straight.",
-            "[excited] {streak} clean for {driver} - keep it rolling!");
+            "{streak} clean for {driver} - keep it rolling!");
         Lines(v, AnnouncementEventType.RaceTimeOver, true, null,
             "[shouting] That's time - one last lap under the lights!",
             "[shouting] Final lap! Leave it all out there!",
@@ -870,18 +873,18 @@ public sealed class Theme
             "[shouting] {driver} WITH THE FASTEST LAP!",
             "[shouting] LISTEN TO THAT - {driver}, {time}!");
         Lines(v, AnnouncementEventType.PersonalBestLap, false, 45,
-            "[excited] Personal best for {driver}!",
-            "[excited] {driver} finds more speed - {time}!",
-            "[excited] New personal best for {driver}!",
-            "[excited] {driver} goes faster than ever - {time}!",
-            "[excited] Personal best - way to go, {driver}!",
-            "[excited] {driver} beats their own best - {time}!",
-            "[excited] Big improvement for {driver}!",
-            "[excited] {driver} is getting quicker - {time}!",
-            "[excited] Personal best! Give it up for {driver}!",
-            "[excited] {driver} found more - {time}!",
-            "[excited] That's a new best for {driver}!",
-            "[excited] {driver} just topped their own best - {time}!");
+            "Personal best for {driver}!",
+            "{driver} finds more speed - {time}!",
+            "New personal best for {driver}!",
+            "{driver} goes faster than ever - {time}!",
+            "Personal best - way to go, {driver}!",
+            "{driver} beats their own best - {time}!",
+            "Big improvement for {driver}!",
+            "{driver} is getting quicker - {time}!",
+            "Personal best! Give it up for {driver}!",
+            "{driver} found more - {time}!",
+            "That's a new best for {driver}!",
+            "{driver} just topped their own best - {time}!");
         Lines(v, AnnouncementEventType.TrackRecord, true, 100,
             "[shouting] {driver} JUST SMASHED THE TRACK RECORD!",
             "[shouting] TRACK RECORD! {driver}, {time}! MAKE SOME NOISE!",
@@ -909,18 +912,18 @@ public sealed class Theme
             "[shouting] {driver} STORMS INTO P1!",
             "[shouting] {driver} HAS THE LEAD!");
         Lines(v, AnnouncementEventType.Streak, true, 70,
-            "[excited] {driver} IS UNSTOPPABLE - {streak} IN A ROW!",
-            "[excited] {driver}'S ON A RAMPAGE, {streak} CLEAN LAPS RUNNING!",
-            "[excited] NOBODY CAN TOUCH {driver} - {streak} STRAIGHT!",
-            "[excited] {streak} CLEAN LAPS FOR {driver}!",
-            "[excited] {driver} WON'T MISS - {streak} IN A ROW!",
-            "[excited] {driver} KEEPS STACKING THEM - {streak}!",
-            "[excited] {streak} IN A ROW FOR {driver}!",
-            "[excited] {driver} IS CLEAN AS A WHISTLE - {streak} LAPS!",
-            "[excited] {driver} - {streak} AND COUNTING!",
-            "[excited] LOOK AT {driver} GO - {streak} STRAIGHT!",
-            "[excited] {streak} CLEAN ONES FOR {driver}!",
-            "[excited] {driver} CAN'T MISS - {streak} LAPS!");
+            "{driver} IS UNSTOPPABLE - {streak} IN A ROW!",
+            "{driver}'S ON A RAMPAGE, {streak} CLEAN LAPS RUNNING!",
+            "NOBODY CAN TOUCH {driver} - {streak} STRAIGHT!",
+            "{streak} CLEAN LAPS FOR {driver}!",
+            "{driver} WON'T MISS - {streak} IN A ROW!",
+            "{driver} KEEPS STACKING THEM - {streak}!",
+            "{streak} IN A ROW FOR {driver}!",
+            "{driver} IS CLEAN AS A WHISTLE - {streak} LAPS!",
+            "{driver} - {streak} AND COUNTING!",
+            "LOOK AT {driver} GO - {streak} STRAIGHT!",
+            "{streak} CLEAN ONES FOR {driver}!",
+            "{driver} CAN'T MISS - {streak} LAPS!");
         Lines(v, AnnouncementEventType.RaceTimeOver, true, null,
             "[shouting] THERE'S THE BELL - LAST LAP!",
             "[shouting] TIME'S UP! ONE MORE LAP TO SETTLE THIS!",
