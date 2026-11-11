@@ -27,7 +27,7 @@ Each class also needs drivers: a driver is in a class when their profile says so
 - **The top half** says where the day has got to: the day's name, the next-step card, the **Ready to race** card and the day so far.
 - **The bottom half** is **Tonight's program**: every round of the day, with the commands that act on them. See [Tonight's program](#tonights-program).
 
-Drag the bar between the two halves to give either more room. HeatCaller remembers where you leave it. The bottom half never gets so short that its buttons go out of sight; on a small screen the top half scrolls instead.
+Drag the handle across the top of **Tonight's program** up or down to give either half more room; the two halves follow the mouse as you drag. HeatCaller remembers where you leave it. Double-click the handle to put it back, with the top half just tall enough for **Next Steps**. The bottom half never gets so short that its buttons go out of sight; on a small screen the top half scrolls instead.
 
 ![Race Day, Next Steps tab: the Next step card with Next up: A-Main and Start A-Main, Ready to race at 5 of 6, the day so far tiles, and Tonight's program listing recorded heats](../assets/images/race-day-next-steps.png)
 

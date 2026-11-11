@@ -422,7 +422,7 @@ public sealed partial class AnnouncementService
             // waiting, the slot a kept call gets (HeldOverSlot). Straight
             // in, past the pacing gate: the battle line it replaces was
             // already given the air, and this is the end of that line.
-            var at = HeldOverSlot(_voiceQueue.Select(waiting => waiting.Type).ToList());
+            var at = Math.Max(HeldOverSlot(_voiceQueue.Select(waiting => waiting.Type).ToList()), PastWaitingCorrectionsLocked());
 
             // With the few seconds every lap call has (8 Nov 2026): straight
             // in, it skipped EnqueueVoiceWork and so the deadline, and "Sam

@@ -450,7 +450,20 @@ public sealed partial class RaceControlControl
         // loudly, it just clips the new caption on the one screen the
         // director watches all night.
         _btnStartNext.Text = ProgramCaptions.StartNext;
-        _btnStartNext.Click += (_, _) => StartNext();
+
+        // A click starts the next race, as it always has (the keyboard's
+        // Space and Enter too); held for a second, it runs that round as a
+        // demo instead (11 Nov 2026) - see BuildStartNextHold. The click a
+        // completed hold's let-go makes is swallowed, so a demo never
+        // starts the race for real as well.
+        _btnStartNext.Click += (_, _) =>
+        {
+            if (_startNextClicks.ClickActs())
+            {
+                StartNext();
+            }
+        };
+        BuildStartNextHold();
 
         // Was "Re-seed Remaining...". It rebuilds the rosters of the heats
         // that have not run yet from who is checked in now, which is what
@@ -1400,6 +1413,88 @@ public sealed partial class RaceControlControl
         }
     }
 
+    /// <summary>Swallows the click a completed Start Next hold's let-go makes - see HeldClickFilter.</summary>
+    private readonly HeldClickFilter _startNextClicks = new();
+
+    /// <summary>
+    /// HOLD START NEXT FOR A DEMO RUN (11 Nov 2026). Start Next held for the
+    /// second Red takes runs the next round as a demo - see StartNextHold.
+    /// Built the way Skip's click-and-hold is (BuildTalkButtons): the clock
+    /// on the button and the bar along its foot while it is held, and the
+    /// strip under the flag row saying "Keep holding to run it as a demo".
+    /// A let-go before then is just the click, so nothing says "let go too
+    /// soon".
+    /// </summary>
+    private void BuildStartNextHold()
+    {
+        _btnStartNext.AccessibleDescription = StartNextHold.AccessibleDescription;
+
+        var hold = new HoldToAct(_btnStartNext, StartNextHold.Doing, () =>
+        {
+            _startNextClicks.Held();
+            StartNextAsDemo();
+        });
+
+        hold.Changed += h => _holdStrip.Follow(h);
+        hold.Changed += _ => MoveDeskIfOwed();
+        hold.CalledOff += h => _holdStrip.Follow(h);
+
+        _btnStartNext.MouseDown += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                _startNextClicks.Pressed();
+            }
+        };
+
+        // Once the let-go - and the click it makes - has been handled, the
+        // next click is a click again whatever happened to this one.
+        _btnStartNext.MouseUp += (_, _) =>
+        {
+            if (IsHandleCreated && !IsDisposed)
+            {
+                BeginInvoke(_startNextClicks.Pressed);
+            }
+        };
+
+        _btnStartNext.Paint += (_, e) => hold.PaintOver(e.Graphics, _btnStartNext.ClientRectangle, _btnStartNext.ForeColor, null);
+        _holds.Add(hold);
+    }
+
+    /// <summary>
+    /// Start Next held: the next round as a demo, through MainForm's demo
+    /// path (NextRoundDemoRequested), refused for the same reasons Start Next
+    /// refuses - see StartNextHold.Decide.
+    /// </summary>
+    private void StartNextAsDemo()
+    {
+        var next = _barStep is null ? NextRound() : null;
+
+        switch (StartNextHold.Decide(_race.State, OnAirRunning, _barStep is not null, next is not null))
+        {
+            case StartNextHoldOutcome.RunDemo when next is not null:
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [day] Start Next held: running \"{next.RoundLabel}\" as a demo - it is not filed as a result and scores nothing.");
+                NextRoundDemoRequested?.Invoke(next);
+                break;
+
+            case StartNextHoldOutcome.RaceUnderWay:
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [day] Start Next held: a session is already under way - finish or reset it first.");
+                break;
+
+            case StartNextHoldOutcome.OnAirOpening:
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [day] Start Next held: On Air is opening the race already.");
+                break;
+
+            case StartNextHoldOutcome.StepOwed:
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [day] Start Next held: the program owes \"{_barStep?.ActionCaption}\" first, so there is no grid to demo yet. Click to do it.");
+                break;
+
+            default:
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [day] Start Next held: nothing left to run as a demo - the program is complete.");
+                break;
+        }
+    }
+
     /// <summary>
     /// The flag row's and the clock column's shortcut tooltips.
     ///
@@ -1424,6 +1519,7 @@ public sealed partial class RaceControlControl
         shortcutTips.SetToolTip(_btnRed, "Press and hold for a second. Shortcut: F5");
         shortcutTips.SetToolTip(_btnCheckered, "Press and hold for a second. Shortcut: F6");
         shortcutTips.SetToolTip(_btnReset, "Press and hold for a second. Shortcut: F7 (asks first if a race is running)");
+        shortcutTips.SetToolTip(_btnStartNext, StartNextHold.Tip);
         shortcutTips.SetToolTip(_btnQuickRace, "Shortcut: F8");
         shortcutTips.SetToolTip(_btnBarSkip, "Click to stop the line on air and go on to the next part of the show; press and hold to end the recap show. Shortcut: F9");
         shortcutTips.SetToolTip(_btnBarHoldTalk, "No talk between races - filler, sponsor reads, call-ups and the countdown - until you press Resume Talk. Shortcut: F10");

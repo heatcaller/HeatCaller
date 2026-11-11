@@ -1421,7 +1421,13 @@ public partial class MainForm
             // position behind the director's back.
             FixedPanel = FixedPanel.Panel1,
 
-            SplitterWidth = 6,
+            // A hairline, and not draggable itself (11 Nov 2026): the handle
+            // is the grip on top of Tonight's program below, as on Race
+            // Calls. A SplitContainer's own drag only draws a ghost line
+            // and moves the halves when the mouse is let go, which felt
+            // stuck; the grip moves them as the mouse moves.
+            SplitterWidth = 1,
+            IsSplitterFixed = true,
         };
 
         // The bar between the two halves. The SplitContainer itself is not a
@@ -1438,13 +1444,31 @@ public partial class MainForm
         // turned scrolling on for the WHOLE split, which put a second pair of
         // scrollbars round the entire tab.
 
+        // THE HANDLE (11 Nov 2026, asked for by Asher: "just like the race
+        // calls page, add the ability to click and drag a handle to resize
+        // the tonights program card. make it smooth"). The Race Calls grip,
+        // across the top of the program: dragged, the line between the
+        // halves follows the mouse as it moves; let go, where it was left
+        // is remembered; double-clicked, back to fitting Next Steps.
+        var programGrip = new ResizeGrip
+        {
+            Dock = DockStyle.Top,
+            TipText = "Drag to make Tonight's program taller or shorter. Double-click to put it back.",
+        };
+
         todaySplit.Panel1.Controls.Add(today);
+
+        // The program fills what the grip leaves: docked after it, so in
+        // front of it.
         todaySplit.Panel2.Controls.Add(raceProgram);
+        todaySplit.Panel2.Controls.Add(programGrip);
+        raceProgram.BringToFront();
 
         // The program's least, at the width the split gives it - the lower
-        // half is as wide as the split - and never under the panel's own
-        // 25px, which the arithmetic below relies on to stay in range.
-        int TodayBottomMin() => Math.Max(todaySplit.Panel2MinSize, raceProgram.LeastPaneHeight(todaySplit.Width));
+        // half is as wide as the split - with the grip over it, and never
+        // under the panel's own 25px, which the arithmetic below relies on
+        // to stay in range.
+        int TodayBottomMin() => Math.Max(todaySplit.Panel2MinSize, raceProgram.LeastPaneHeight(todaySplit.Width) + programGrip.Height);
 
         // The most the top half can have and still leave the program its
         // least. Under the top half's own 25px when the window is too short
@@ -1605,6 +1629,47 @@ public partial class MainForm
             {
                 BeginInvoke(new Action(KeepProgramInView));
             }
+        };
+
+        // The grip works in the top half's height - the line between the
+        // halves - so dragging it down gives the program less room. Moved
+        // as "fitting" while the mouse moves, so nothing is written to disk
+        // on every pixel; saved once, when the drag ends. Never so far down
+        // that the program loses its least.
+        programGrip.CurrentHeight = () => todaySplit.SplitterDistance;
+
+        programGrip.Dragged += asked =>
+        {
+            if (!todaySplitPlaced || todaySplit.IsDisposed)
+            {
+                return;
+            }
+
+            MoveTodaySplitter(ResizeGrip.Clamp(asked, todaySplit.Panel1MinSize, TodayTopMost()));
+
+            // Painted now rather than when the drag next pauses, so the
+            // halves keep up with the mouse instead of trailing it.
+            ResizeGrip.PaintNow(todaySplit);
+        };
+
+        programGrip.Finished += () =>
+        {
+            if (!todaySplitPlaced || todaySplit.IsDisposed)
+            {
+                return;
+            }
+
+            _settings.TodayProgrammeSplit = todaySplit.SplitterDistance;
+            _settings.Save();
+            KeepProgramInView();
+        };
+
+        // Double-click: forget the drag, and fit Next Steps again.
+        programGrip.Reset += () =>
+        {
+            _settings.TodayProgrammeSplit = 0;
+            _settings.Save();
+            FitTodayToContent();
         };
 
         subPageToday.Controls.Add(todaySplit);
@@ -1795,7 +1860,12 @@ public partial class MainForm
 
         // Wired here rather than beside RoundStartRequested above, because
         // demoMode doesn't exist yet at that point in this method.
-        raceProgram.RoundDemoRequested += async round =>
+        //
+        // ONE DEMO PATH (11 Nov 2026): the race programme's Demo, and Start
+        // Next on Race Control's Next Up bar held for a second (see
+        // StartNextHold), both run a round as a demo through this - so a
+        // held Start Next keeps every demo rule the programme's does.
+        Func<RoundDefinition, Task> runRoundAsDemo = async round =>
         {
             // A demo drives the same session practice is running on, and
             // would wipe the practice laps just as a real start would.
@@ -1919,6 +1989,9 @@ public partial class MainForm
                 _raceControlControl.RefreshFormat();
             }
         };
+
+        raceProgram.RoundDemoRequested += async round => await runRoundAsDemo(round);
+        raceControl.NextRoundDemoRequested += async round => await runRoundAsDemo(round);
 
         return pageGhosts;
     }

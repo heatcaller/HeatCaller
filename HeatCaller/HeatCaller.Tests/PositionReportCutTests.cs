@@ -57,6 +57,45 @@ public sealed class PositionReportCutTests : IDisposable
             AnnouncementService.ReportCorrectionTemplate("Sam", 1, byRuling: true));
     }
 
+    // --- Said in the cut line's place (11 Nov 2026) --------------------------
+
+    [Fact]
+    public void The_correction_goes_ahead_of_race_moments_and_reminders_already_waiting()
+    {
+        // The 14:44 race: an AI reminder, then the race's fastest lap, were
+        // waiting - and the correction went behind them.
+        Assert.Equal(0, AnnouncementService.CorrectionSlot([AnnouncementEventType.Reminder, AnnouncementEventType.LapTime]));
+        Assert.Equal(0, AnnouncementService.CorrectionSlot([AnnouncementEventType.FastLap, AnnouncementEventType.LastLap]));
+        Assert.Equal(0, AnnouncementService.CorrectionSlot([]));
+    }
+
+    [Fact]
+    public void The_correction_waits_only_behind_an_instruction_to_a_driver()
+    {
+        Assert.Equal(2, AnnouncementService.CorrectionSlot(
+            [AnnouncementEventType.DriverRelease, AnnouncementEventType.GridCall, AnnouncementEventType.FastLap]));
+    }
+
+    [Fact]
+    public void Nothing_queued_after_a_correction_goes_ahead_of_it()
+    {
+        Assert.Equal(0, AnnouncementService.PastWaitingCorrections([false, false]));
+        Assert.Equal(1, AnnouncementService.PastWaitingCorrections([true, false, false]));
+        Assert.Equal(2, AnnouncementService.PastWaitingCorrections([false, true, false]));
+
+        // A kept call, a lap call and a battle's pass call all honour it.
+        Assert.Contains("at = Math.Max(at, PastWaitingCorrectionsLocked());", Source("AnnouncementService.VoiceQueue.cs"), StringComparison.Ordinal);
+        Assert.Contains("PastWaitingCorrectionsLocked())", Source("AnnouncementService.BattleLines.cs"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_priority_line_does_not_bin_a_waiting_correction()
+    {
+        var source = Source("AnnouncementService.VoiceQueue.cs");
+        Assert.Contains("!item.IsCorrection\n                    && !IsPriorityAnnouncement(item.Type)", source.Replace("\r\n", "\n"), StringComparison.Ordinal);
+        Assert.Contains("IsCorrection = true,", Source("AnnouncementService.PositionReportCut.cs"), StringComparison.Ordinal);
+    }
+
     // --- In the announcer ---------------------------------------------------
 
     /// <summary>An announcer with every call and sound off, Sam (101), Bill (102) and Frank (103) on file, and what it puts on the screens.</summary>
