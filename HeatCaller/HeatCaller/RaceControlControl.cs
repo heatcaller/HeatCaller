@@ -860,7 +860,7 @@ public sealed partial class RaceControlControl : UserControl
     /// A failure inside the command is reported to the phone and the console
     /// rather than thrown.
     /// </summary>
-    /// <param name="action">stage, countdown, green, yellow, red, checkered or reset, or between races skip, holdtalk or callup - anything else is refused.</param>
+    /// <param name="action">stage, countdown, green, yellow, red, checkered or reset, or between races skip, holdtalk, callup, autohold (Auto start's Hold / Resume) or autoplus (+1 min) - anything else is refused.</param>
     /// <param name="confirmedOverRunningRace">
     /// The phone has asked its user whether to abandon the running race and
     /// been told yes (its force=1). Without it, a Stage or Countdown over a
@@ -891,7 +891,7 @@ public sealed partial class RaceControlControl : UserControl
         }
 
         if (action is not ("stage" or "countdown" or "green" or "yellow" or "red" or "checkered" or "reset"
-                or "skip" or "holdtalk" or "callup"))
+                or "skip" or "holdtalk" or "callup" or "autohold" or "autoplus"))
         {
             return RemoteCommandOutcome.Refused("Unknown command.");
         }
@@ -981,6 +981,18 @@ public sealed partial class RaceControlControl : UserControl
                     break;
 
                 case "callup": talkAnswer = CallUpNow(); break;
+
+                // Auto start (11 Nov 2026): Hold / Resume, and +1 min.
+                case "autohold":
+                case "autoplus":
+                    talkAnswer = (action == "autohold" ? RemoteAutoHold(out var autoRefused) : RemoteAutoPlus(out autoRefused)) ?? string.Empty;
+
+                    if (autoRefused is not null)
+                    {
+                        NoteRemoteRefusal(autoRefused);
+                    }
+
+                    break;
             }
 
             if (_remoteRefusal is { } refusal)
@@ -1014,7 +1026,7 @@ public sealed partial class RaceControlControl : UserControl
                 "red" => "Red flag out.",
                 "checkered" => "Checkered flag out.",
                 "reset" => "Race reset.",
-                "skip" or "holdtalk" or "callup" => talkAnswer,
+                "skip" or "holdtalk" or "callup" or "autohold" or "autoplus" => talkAnswer,
                 _ => "Done.",
             });
         }

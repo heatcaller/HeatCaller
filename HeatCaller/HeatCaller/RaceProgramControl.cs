@@ -2008,8 +2008,18 @@ public sealed class RaceProgramControl : UserControl
             _events?.RemoveRound(gone.Id);
         }
 
+        // The drivers of the race that runs last before each new round, for
+        // the rest-friendly order below.
+        IReadOnlyCollection<string>? lastHeat = null;
+        var backToBacksAvoided = 0;
+
         for (var round = 0; round < roundCount; round++)
         {
+            // This round's heats, across every class, gathered first and
+            // added in rest-friendly order (11 Nov 2026, Phase 1's rest-time
+            // guard) - see RestOrder.
+            var roundHeats = new List<RoundDefinition>();
+
             foreach (var raceClass in classes)
             {
                 // A round this class has already run is left alone - see
@@ -2062,15 +2072,29 @@ public sealed class RaceProgramControl : UserControl
                         AssignedTransponders = heats[heat],
                     };
 
-                    _rounds.Add(definition);
-                    created.Add(definition);
+                    roundHeats.Add(definition);
                 }
+            }
+
+            var rosters = roundHeats.Select(r => (IReadOnlyCollection<string>)r.AssignedTransponders).ToList();
+            var order = RestOrder.Arrange(rosters, lastHeat);
+            backToBacksAvoided += RestOrder.BackToBacks(rosters, lastHeat)
+                                  - RestOrder.BackToBacks(order.Select(i => rosters[i]).ToList(), lastHeat);
+
+            foreach (var index in order)
+            {
+                _rounds.Add(roundHeats[index]);
+                created.Add(roundHeats[index]);
+                lastHeat = roundHeats[index].AssignedTransponders;
             }
         }
 
         _events?.AddRoundsToActive(created.Select(r => r.Id));
 
-        var done = $"Built {Plural.Of(created.Count, RoundWord)} across {Plural.Of(classes.Count, "class", "classes")}.";
+        var done = $"Built {Plural.Of(created.Count, RoundWord)} across {Plural.Of(classes.Count, "class", "classes")}."
+                   + (backToBacksAvoided > 0
+                       ? $" Ordered so {Plural.Of(backToBacksAvoided, "driver")} in two classes {(backToBacksAvoided == 1 ? "doesn't" : "don't")} race back to back."
+                       : string.Empty);
         _lblStatus.Text = done;
         RefreshAll();
 

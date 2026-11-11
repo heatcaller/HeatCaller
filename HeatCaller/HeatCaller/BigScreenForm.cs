@@ -328,6 +328,13 @@ public sealed class BigScreenForm : Form
     /// while it is.
     /// </summary>
     private readonly Func<IfItEndedNow?>? _ifItEndedNow;
+
+    /// <summary>
+    /// "NEXT RACE IN 1:42" between races, from Race Control's Auto start (11
+    /// Nov 2026, race-night build plan, Phase 1). Shown in the countdown band
+    /// only while the race itself has nothing there. Null from Practice.
+    /// </summary>
+    private readonly Func<string>? _nextRaceIn;
     private bool _tickerShowing;
 
     /// <summary>
@@ -378,8 +385,10 @@ public sealed class BigScreenForm : Form
         QualifyingProjector? projector = null, Func<AchievementStore?>? achievements = null,
         TransponderWatch? watch = null, Func<IReadOnlyList<string>>? roster = null,
         Func<(TrackLine? Line, IReadOnlyList<TrackPositions.Car> Cars)>? trackMap = null,
-        Func<IReadOnlyList<AttractCard>>? attract = null, Func<IfItEndedNow?>? ifItEndedNow = null)
+        Func<IReadOnlyList<AttractCard>>? attract = null, Func<IfItEndedNow?>? ifItEndedNow = null,
+        Func<string>? nextRaceIn = null)
     {
+        _nextRaceIn = nextRaceIn;
         _trackMap = trackMap;
         _attract = attract;
         _ifItEndedNow = ifItEndedNow;
@@ -2686,7 +2695,16 @@ public sealed class BigScreenForm : Form
             _lblWarning.Visible = false;
             _warningShownUtc = null;
         }
-        _lblCountdown.Text = _race.GetCountdownText();
+        var countdown = _race.GetCountdownText();
+
+        // Between races the band is the race's own blank: Auto start's
+        // count to the next race goes there (11 Nov 2026).
+        if (countdown.Length == 0 && _race.State is RaceState.Idle or RaceState.Finished && _nextRaceIn?.Invoke() is { Length: > 0 } next)
+        {
+            countdown = next;
+        }
+
+        _lblCountdown.Text = countdown;
         _lblElapsed.Text = ElapsedText();
 
         UpdateRollCall();

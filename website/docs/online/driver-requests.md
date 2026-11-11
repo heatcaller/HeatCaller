@@ -87,6 +87,15 @@ A driver can send at most 10 queries in a night. One more is declined at once wi
 
 **Let drivers query a result** on the Club Website page turns this off on its own. Unticked, **Something wrong?** goes from every race card within a few seconds, a query sent from a page that still shows it is refused with "Your club is not taking result queries online. Ask at the desk.", and the driver's other requests carry on.
 
+### More time, or skip my race
+
+While their race is next up, the **Up next** card on **Me** has two buttons:
+
+- **Need 5 more minutes** asks the desk to hold their next race for 5 minutes, for a battery still charging or a quick fix.
+- **Car broken - skip me** asks the desk to take them out of their next race.
+
+Each asks "Ask the desk to...?" first, and the request then shows under the driver's requests as **More time** or **Skip my race**. The desk approves it (see [More time and skip my race at the desk](#more-time-and-skip-my-race-at-the-desk)), and the phone shows what happened.
+
 ### How each request is getting on
 
 Once a driver has sent something, the **Right now** card on their night page lists **Your requests to the desk**, for up to a day afterward, folded to a count such as **Your requests to the desk (2, 1 answered)**. Each line gives the reference, how it stands, and any answer:
@@ -188,6 +197,15 @@ Select the query and click **Noted**. HeatCaller adds a line to that race's note
 and the driver's phone shows "noted by the desk". **Noting never changes the result.** If the result is wrong, correct it in the usual way; see [Correcting a saved result](../race-control/corrections-and-recovery.md#correcting-a-saved-result). **Undo** takes the note back out and puts the query back on the waiting list.
 
 When the laptop doesn't have the race the query is about, **Noted** says "This laptop doesn't have the race that query is about, so there are no notes to add it to. Decline it with a reason instead."
+
+### More time and skip my race at the desk
+
+Select the request and click **Approve**, then **Yes**. The **Desk** button on Race Control lights up for these, as for every request.
+
+- **More time:** when the driver's race is the next one out, it goes back 5 minutes, and with [Auto start](../race-control/running-a-race.md#auto-start-between-races) on, its count moves with it. The phone shows "Q2 Heat 3 goes back 5 minutes for you." When their race isn't next yet, nothing is held and the phone says to ask again when it's next.
+- **Skip my race:** the driver comes out of their next race that hasn't run, and the phone shows "You're out of Q2 Heat 3. Tell the desk when your car is fixed." **Undo** puts them back in.
+
+Neither happens until the desk approves it. To say no, **Decline** it with a reason.
 
 ### Declining
 

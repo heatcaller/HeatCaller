@@ -73,6 +73,7 @@ public sealed partial class RaceControlControl
         if (_race.State != RaceState.Finished || _race.IsPracticeMode || _race.IsWarmingUp || OnAirRunning)
         {
             Gap.Close();
+            CloseAutoStart();
             ShowGapInBroadcast(string.Empty);
             return;
         }
@@ -105,6 +106,16 @@ public sealed partial class RaceControlControl
         Gap.Publish(rules, facts, held, onAirHasTheGap);
 
         ShowGapInBroadcast(Gap.DueNext(rules, now, facts, held, onAirHasTheGap));
+
+        // Auto start (11 Nov 2026): counts the gap down and starts the next
+        // race. Before the muted return: a muted announcer still runs races.
+        AutoStartTick(now, facts, busy);
+
+        if (_race.State != RaceState.Finished)
+        {
+            // It started the race.
+            return;
+        }
 
         if (_announcer.Muted || busy)
         {
@@ -285,6 +296,14 @@ public sealed partial class RaceControlControl
     /// <summary>When the round is due by the run sheet and how late the day is running, plus any push-back - null when the sheet gives no time, or it passed more than a countdown mark's window ago (DueStill).</summary>
     private DateTime? DueFor(RoundDefinition round, DateTime now)
     {
+        // Auto start's own start, when it is counting for this race: the
+        // call-ups and countdown marks are then timed to the race actually
+        // starting, run sheet or not (11 Nov 2026).
+        if (AutoStartsAtUtc(round.Id, now) is { } autoStart)
+        {
+            return DueStill(autoStart, now);
+        }
+
         if (_daySchedule is null)
         {
             return null;

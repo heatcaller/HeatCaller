@@ -12927,6 +12927,8 @@ function kindWords(kind) {
   if (kind === 'pack') return 'Battery pack';
   if (kind === 'query') return 'Race query';
   if (kind === 'setup') return 'Setup log';
+  if (kind === 'late') return 'More time';
+  if (kind === 'skip') return 'Skip my race';
   return 'Request';
 }
 

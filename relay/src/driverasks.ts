@@ -133,9 +133,14 @@ export function cleanAskNotes(value: unknown, max: number): string {
 /** Plain enough to be an address and nothing else - the desk mails a notice to the OLD one before it changes. */
 const EMAIL = /^[^\s@<>()",;:\\[\]]+@[^\s@<>()",;:\\[\]]+\.[^\s@<>()",;:\\[\]]+$/;
 
-export type DriverAskKind = "details" | "pack" | "query" | "setup" | "packedit" | "car";
+// "late" and "skip" (11 Nov 2026, race-night build plan, Phase 1): "I need 5
+// more minutes" and "my car's broken - skip me", both for the desk to approve.
+export type DriverAskKind = "details" | "pack" | "query" | "setup" | "packedit" | "car" | "late" | "skip";
 
-export const DRIVER_ASK_KINDS: readonly DriverAskKind[] = ["details", "pack", "query", "setup", "packedit", "car"];
+export const DRIVER_ASK_KINDS: readonly DriverAskKind[] = ["details", "pack", "query", "setup", "packedit", "car", "late", "skip"];
+
+/** The longest note a "late" or "skip" can carry. */
+export const ASK_MAX_RACE_NOTE = 120;
 
 /** Which proof came with the ask: the personal PIN's pass, or the badge code alone. */
 export type DriverAskProof = "pin" | "badge";
@@ -238,6 +243,18 @@ export function askFieldsFrom(kind: string, f: unknown, withPin: boolean): AskCh
     }
 
     return { ok: true, f: { race, m } };
+  }
+
+  // More time, or skip my race: a short note, nothing else. Which race is the
+  // laptop's to know - the next one the driver is in.
+  if (kind === "late" || kind === "skip") {
+    const m = cleanAskText(input["m"], ASK_MAX_RACE_NOTE + 1);
+
+    if (m.length > ASK_MAX_RACE_NOTE) {
+      return refuse(400, `Keep it under ${ASK_MAX_RACE_NOTE} characters.`);
+    }
+
+    return { ok: true, f: m.length > 0 ? { m } : {} };
   }
 
   if (kind === "setup" && (input["car"] !== undefined || input["sheet"] !== undefined)) {
