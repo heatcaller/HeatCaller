@@ -49,13 +49,16 @@ public static class LateEntry
     }
 }
 
-/// <summary>"Who's the late entry?" - the class's drivers who aren't in any of its heats still to run.</summary>
-internal sealed class LateEntryForm : Form
+/// <summary>
+/// Pick one driver from a list - "Who's the late entry?", "Who covers this
+/// post?". The words are the caller's.
+/// </summary>
+internal sealed class PickDriverForm : Form
 {
     private const int LeastRows = 8;
 
     private readonly ListBox _lstDrivers = new();
-    private readonly Button _btnAdd = new() { Text = "Add to Heats" };
+    private readonly Button _btnAdd = new();
 
     /// <summary>The driver picked, by transponder. Set on OK.</summary>
     public string? Picked { get; private set; }
@@ -65,16 +68,16 @@ internal sealed class LateEntryForm : Form
         public override string ToString() => Label;
     }
 
-    public LateEntryForm(string className, IEnumerable<(string Transponder, string Name)> drivers)
+    public PickDriverForm(string title, string prompt, string buttonText, IEnumerable<(string Transponder, string Name)> drivers)
     {
-        Text = $"Late entry - {className}";
+        Text = title;
+        _btnAdd.Text = buttonText;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
         var lblWhat = new Label
         {
-            Text = "Pick the driver who's arrived. They go into the smallest heat of each round still to run, "
-                   + "and nobody else in the heats moves. Undo takes them out again.",
+            Text = prompt,
             AutoSize = true,
             MaximumSize = new Size(480, 0),
         };

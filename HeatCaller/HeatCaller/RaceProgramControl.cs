@@ -3413,7 +3413,10 @@ public sealed class RaceProgramControl : UserControl
             return;
         }
 
-        using var form = new LateEntryForm(className, candidates);
+        using var form = new PickDriverForm($"Late entry - {className}",
+            "Pick the driver who's arrived. They go into the smallest heat of each round still to run, "
+            + "and nobody else in the heats moves. Undo takes them out again.",
+            "Add to Heats", candidates);
 
         if (form.ShowDialog(this) != DialogResult.OK || form.Picked is not { } transponder)
         {
@@ -4253,10 +4256,83 @@ public sealed class RaceProgramControl : UserControl
             ? null
             : _trackLayouts.All.FirstOrDefault(l => string.Equals(l.Name, layoutName, StringComparison.OrdinalIgnoreCase));
 
-        var assignments = MarshalAssigner.Assign(rounds, layout, _profiles);
+        // Shown again after each swap, so the roster on screen is the new one.
+        while (true)
+        {
+            var assignments = MarshalAssigner.Assign(rounds, layout, _profiles);
 
-        using var form = new MarshalAssignmentsForm(className, assignments);
-        form.ShowDialog(this);
+            using var form = new MarshalAssignmentsForm(className, assignments, SwapMarshal);
+
+            if (form.ShowDialog(this) != DialogResult.Retry)
+            {
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Swap... in the Marshals window (11 Nov 2026, race-night build plan,
+    /// Phase 4): who covers this driver's post for this round. Anybody racing
+    /// tonight who isn't driving in it can. One undo. True when it changed.
+    /// </summary>
+    private bool SwapMarshal(MarshalAssigner.Assignment assignment, MarshalAssigner.Post post)
+    {
+        if (post.Transponder is not { } marshal || _rounds.Get(assignment.Round.Id) is not { } round)
+        {
+            return false;
+        }
+
+        // Whose post it really is, when somebody is covering it already.
+        var owner = round.MarshalCovers?.FirstOrDefault(kv => string.Equals(kv.Value, marshal, StringComparison.OrdinalIgnoreCase)).Key ?? marshal;
+        var driving = round.AssignedTransponders.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var candidates = _profiles.AllRaceable
+            .Where(p => !driving.Contains(p.Transponder) && !string.Equals(p.Transponder, owner, StringComparison.OrdinalIgnoreCase))
+            .Select(p => (p.Transponder, string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName))
+            .OrderBy(c => c.Item2, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        var ownerName = _profiles.Get(owner) is { DriverName.Length: > 0 } profile ? profile.DriverName : owner;
+
+        using var pick = new PickDriverForm($"Cover {post.Name} - {round.RoundLabel}",
+            $"Who covers {ownerName}'s post ({post.Name}) for {round.RoundLabel}? Pick {ownerName} back to undo a swap. "
+            + "The marshal call, the phones and this sheet all follow it.",
+            "Swap", candidates.Prepend((owner, ownerName + " (their own post)")));
+
+        if (pick.ShowDialog(this) != DialogResult.OK || pick.Picked is not { } cover)
+        {
+            return false;
+        }
+
+        var before = round.MarshalCovers is null ? null : new Dictionary<string, string>(round.MarshalCovers, StringComparer.OrdinalIgnoreCase);
+        var covers = round.MarshalCovers ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        if (string.Equals(cover, owner, StringComparison.OrdinalIgnoreCase))
+        {
+            covers.Remove(owner);
+        }
+        else
+        {
+            covers[owner] = cover;
+        }
+
+        round.MarshalCovers = covers.Count == 0 ? null : covers;
+        _rounds.Update(round);
+
+        _undo.Capture($"Marshal swap in {round.RoundLabel}", () =>
+        {
+            if (_rounds.Get(round.Id) is { } current)
+            {
+                current.MarshalCovers = before;
+                _rounds.Update(current);
+            }
+        });
+
+        var coverName = _profiles.Get(cover) is { DriverName.Length: > 0 } c ? c.DriverName : cover;
+        StatusMessage?.Invoke(string.Equals(cover, owner, StringComparison.OrdinalIgnoreCase)
+            ? $"[program] {ownerName} is back on {post.Name} for {round.RoundLabel}."
+            : $"[program] {coverName} covers {ownerName}'s post ({post.Name}) for {round.RoundLabel}.");
+        return true;
     }
 
     /// <summary>

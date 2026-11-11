@@ -396,6 +396,8 @@ For each round, the **Corner Marshals** window lists **Round**, **Marshaled By**
 - The first round has no previous heat, so its posts are left for you to assign by hand.
 - If there aren't enough free drivers, the uncovered posts are shown and the round is highlighted, for example "Q1 Heat 2 has 3 drivers free for 4 posts - 1 corner uncovered. (1 more is driving in Q2 Heat 1.)"
 
+**Swap...** covers a post with somebody else: a driver who needs to fix their car can swap their marshal duty with a friend. Select the post's row, click **Swap...**, and pick who covers it (anybody racing tonight who isn't driving in that round). The roster then reads, for example, "Sam (covering Jo)", and the announcer's marshal call, the Next Up bar and drivers' phones all follow it. Pick the original driver again to put them back, or use **Undo**. A swap is for that one round.
+
 **Copy as Text** copies the whole roster as plain text, ready to print or paste into a group chat.
 
 The same marshal list is what the announcer reads out for the `{marshals}` placeholder in grid calls. See [Voice announcements](../announcer/voice.md). The Next Up bar on **Race Control** also names the round that marshals the next one.

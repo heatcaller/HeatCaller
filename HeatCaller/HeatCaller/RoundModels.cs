@@ -56,6 +56,14 @@ public sealed class RoundDefinition
     /// </summary>
     public RaceFormat? FormatOverride { get; set; }
 
+    /// <summary>
+    /// Marshal swaps for this round (11 Nov 2026, race-night build plan,
+    /// Phase 4): the driver whose post it was, to the driver covering it.
+    /// Null or empty - the usual case - is the heat before marshalling as
+    /// always. See MarshalAssigner.Assign.
+    /// </summary>
+    public Dictionary<string, string>? MarshalCovers { get; set; }
+
     public bool IsRecorded => !string.IsNullOrEmpty(LinkedSessionId);
 
     /// <summary>A, B, C... derived from the tier. Falls back to the stored label for untiered mains.</summary>

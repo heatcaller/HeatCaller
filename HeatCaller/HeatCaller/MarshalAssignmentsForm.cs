@@ -17,7 +17,13 @@ public sealed class MarshalAssignmentsForm : Form
     /// <summary>The list shows its headings and at least this many rows before the window scrolls instead.</summary>
     private const int LeastRows = 4;
 
-    public MarshalAssignmentsForm(string className, IReadOnlyList<MarshalAssigner.Assignment> assignments)
+    /// <param name="swap">
+    /// Swap... (11 Nov 2026, Phase 4): asks who covers the picked post and
+    /// records it, true when it did - the window then closes with Retry so
+    /// its opener shows the roster again. Null: no Swap button.
+    /// </param>
+    public MarshalAssignmentsForm(string className, IReadOnlyList<MarshalAssigner.Assignment> assignments,
+        Func<MarshalAssigner.Assignment, MarshalAssigner.Post, bool>? swap = null)
     {
         Text = $"Corner Marshals - {className}";
         Font = AppTheme.BodyFont;
@@ -73,6 +79,8 @@ public sealed class MarshalAssignmentsForm : Form
                         i == 0 ? assignment.MarshalledBy?.RoundLabel ?? "(not assigned)" : string.Empty,
                         post.Name,
                         post.IsFilled ? post.DriverName ?? string.Empty : "- UNCOVERED -");
+
+                    grid.Rows[rowIndex].Tag = (assignment, post);
 
                     if (!post.IsFilled)
                     {
@@ -137,6 +145,27 @@ public sealed class MarshalAssignmentsForm : Form
             };
 
             buttons.With(btnCopy);
+        }
+
+        if (swap is not null && grid is not null)
+        {
+            var btnSwap = new Button { Text = "Swap...", Enabled = false };
+            var list = grid;
+
+            (MarshalAssigner.Assignment, MarshalAssigner.Post)? Picked() =>
+                list.SelectedRows.Count > 0 && list.SelectedRows[0].Tag is ValueTuple<MarshalAssigner.Assignment, MarshalAssigner.Post> tag ? tag : null;
+
+            list.SelectionChanged += (_, _) => btnSwap.Enabled = Picked() is { } p && p.Item2.IsFilled && p.Item1.MarshalledBy is not null;
+            btnSwap.Click += (_, _) =>
+            {
+                if (Picked() is { } p && swap(p.Item1, p.Item2))
+                {
+                    DialogResult = DialogResult.Retry;
+                    Close();
+                }
+            };
+
+            buttons.With(btnSwap);
         }
 
         Controls.Add(page);

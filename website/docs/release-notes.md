@@ -4,6 +4,7 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Marshal swaps (11 November).** **Swap...** in the **Corner Marshals** window covers a driver's post for one round with somebody else, and the marshal call, the Next Up bar and drivers' phones follow it. See [Corner marshals](race-day/program-and-mains.md#corner-marshals).
 - **Money at the desk (11 November).** New **Entry fee:** and **Each extra class:** on **Race Day → Setup**. With a fee set, **Who's Racing** shows a **Paid** column (what each driver owes), and right-clicking marks drivers **Paid Cash**, **Paid Card**, **Comp** (marshal, volunteer, junior) or **Still Owing**, with Undo. The event report gets a **Money at the desk** section (cash, card, comps, and who still owes), and the closing list on Next Steps names drivers who still owe. HeatCaller only records it; it never takes a payment. See [Money at the desk](race-day/events-and-entries.md#money-at-the-desk). Update HeatCaller on the race PC; nothing changes on the relay.
 
 - **Fair results and quick mains (11 November).** Four additions:
