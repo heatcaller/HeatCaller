@@ -70,6 +70,7 @@ public static class EventReportBuilder
         }
 
         WriteSummary(sb, sessions, profiles);
+        WriteNightPace(sb, sessions, rounds, ReportEvent(options));
 
         // Outstanding items first when there are any - the point of putting
         // them in a report is that someone acts on them, and nobody acts on
@@ -260,6 +261,61 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
         }
 
         sb.AppendLine("</div>");
+    }
+
+    /// <summary>
+    /// How the night ran (11 Nov 2026, race-night build plan, Phase 0):
+    /// green to green, the longest gaps and what happened in them, and the
+    /// share of the night spent racing. Left out with fewer than two races,
+    /// where there are no gaps to speak of. See NightPace.
+    /// </summary>
+    private static void WriteNightPace(StringBuilder sb, List<SessionRecord> sessions, RoundDefinitionStore rounds, RaceEvent? raceEvent)
+    {
+        if (NightPace.For(sessions, rounds.All, raceEvent?.RoundIds) is not { } pace)
+        {
+            return;
+        }
+
+        sb.AppendLine("<h2>Night pace</h2>");
+        sb.AppendLine("<div class=\"cards\">");
+
+        if (pace.MedianGreenToGreen is { } g2g)
+        {
+            sb.AppendLine($"<div class=\"card\"><div class=\"k\">{NightPace.Clock(g2g)}</div><div class=\"l\">Green to green (typical)</div></div>");
+        }
+
+        if (pace.MedianGap is { } gap)
+        {
+            sb.AppendLine($"<div class=\"card\"><div class=\"k\">{NightPace.Clock(gap)}</div><div class=\"l\">Finish to next green (typical)</div></div>");
+        }
+
+        if (pace.OnTrackShare is { } share)
+        {
+            sb.AppendLine($"<div class=\"card\"><div class=\"k\">{NightPace.Percent(share)}</div><div class=\"l\">Of the night on track</div></div>");
+        }
+
+        if (pace.RoundsRun is { } run && pace.RoundsPlanned is { } planned)
+        {
+            sb.AppendLine($"<div class=\"card\"><div class=\"k\">{run} of {planned}</div><div class=\"l\">Races run</div></div>");
+        }
+
+        sb.AppendLine("</div>");
+
+        if (pace.LongestGaps.Count == 0)
+        {
+            return;
+        }
+
+        sb.AppendLine("<h3>Longest gaps</h3>");
+        sb.AppendLine("<table><tr><th>After</th><th>Before</th><th class=\"num\">Gap</th><th>What happened</th></tr>");
+
+        foreach (var longest in pace.LongestGaps)
+        {
+            sb.AppendLine($"<tr><td>{Esc(longest.Before.Label)}</td><td>{Esc(longest.After.Label)}</td>"
+                          + $"<td class=\"num\">{NightPace.Clock(longest.Length)}</td><td>{Esc(longest.CauseText)}</td></tr>");
+        }
+
+        sb.AppendLine("</table>");
     }
 
     /// <summary>

@@ -377,18 +377,41 @@ internal static class ProgramNextStep
         }
 
         // 8. Nothing left. Said plainly rather than left blank, because a
-        //    banner that goes quiet reads as broken.
+        //    banner that goes quiet reads as broken. With it, how the night
+        //    ran (11 Nov 2026, night pace) - the moment a director has time
+        //    to read it, and the number that says whether tonight was quick.
         return new ProgramStep(
             ProgramStage.Complete,
             "The program is complete.",
-            dayRounds.Count == 1
+            (dayRounds.Count == 1
                 ? "The one round on today's program has been run and recorded."
-                : $"All {dayRounds.Count} rounds on today's program have been run and recorded.",
+                : $"All {dayRounds.Count} rounds on today's program have been run and recorded.")
+            + PaceNote(dayRounds, history),
 
             // There is no TQ on a club night, so the same list is just
             // tonight's order. Same form either way, different word for it.
             clubNight ? "Tonight's Standings..." : "Qualifying Standings...",
             ClassName: classes.Count > 0 ? classes[0].Name : string.Empty);
+    }
+
+    /// <summary>
+    /// " Night pace: green to green 6:10 · ..." for the finished day's
+    /// races, or empty with fewer than two of them. See NightPace.
+    /// </summary>
+    private static string PaceNote(IReadOnlyList<RoundDefinition> dayRounds, SessionHistoryStore history)
+    {
+        var roundIds = dayRounds.Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
+        var linked = dayRounds
+            .Where(r => !string.IsNullOrEmpty(r.LinkedSessionId))
+            .Select(r => r.LinkedSessionId!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var sessions = history.All
+            .Where(s => (s.RoundId is not null && roundIds.Contains(s.RoundId)) || linked.Contains(s.Id));
+
+        return NightPace.For(sessions, dayRounds, roundIds) is { } pace
+            ? $" Night pace: {NightPace.Line(pace)}."
+            : string.Empty;
     }
 
     /// <summary>

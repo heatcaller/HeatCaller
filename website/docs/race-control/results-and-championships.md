@@ -148,7 +148,17 @@ The club's website (the relay) doesn't show the mark yet: its live board and res
 
 The line above the buttons says how many sessions the chosen day has, and how many rentals are still out.
 
-The report starts with the day's totals: sessions, drivers, laps run and the fastest lap. Rentals still out come next, so they get noticed. After that come the qualifying standings (worked out the same way as the race program's **Standings**, which is **Tonight's Standings** on a club night; see [Qualifying standings](../race-day/program-and-mains.md#qualifying-standings)), the results grouped by class, the fastest laps of the day, the tech inspection summary and, if you ticked it, every lap. Races with no round are listed under "Other sessions". Each result shows the driver name saved with it, so a transponder that has since changed hands still shows who raced.
+The report starts with the day's totals: sessions, drivers, laps run and the fastest lap. **Night pace** comes next (see below). Rentals still out come after that, so they get noticed. After that come the qualifying standings (worked out the same way as the race program's **Standings**, which is **Tonight's Standings** on a club night; see [Qualifying standings](../race-day/program-and-mains.md#qualifying-standings)), the results grouped by class, the fastest laps of the day, the tech inspection summary and, if you ticked it, every lap. Races with no round are listed under "Other sessions". Each result shows the driver name saved with it, so a transponder that has since changed hands still shows who raced.
+
+**Night pace.** How quickly the night ran, worked out from the races saved:
+
+- **Green to green (typical):** how far apart the races started. It's the median, so one long break doesn't hide a quick night.
+- **Finish to next green (typical):** the usual time from one race's finish to the next race's green. This is the dead time between races.
+- **Of the night on track:** the share of the time from the first green to the last finish when cars were racing.
+- **Races run:** how many of the race day's heats and mains have a race, out of the program.
+- **Longest gaps:** the three longest waits between races, and what HeatCaller saw happen in each one: *building heats*, *building the finals*, *correcting a result*, or *waiting at the grid* (the time from staging the race to its green, when that's 3 minutes or more). "Nothing recorded" means none of those happened, for example while waiting for drivers who hadn't been called yet.
+
+Practice, demo races and pasted results aren't counted. A break of more than 3 hours (an afternoon session, then an evening program) splits the night in two and doesn't count as a gap. The section is left out with fewer than two races. When every round has been run, the same numbers appear on one line on the race program's next-step card. Times at the grid are saved from this version on, so older races show the other causes only.
 
 **Which races the report covers.** When a race day (event) set up on **Race Day → Setup** raced on the chosen day, the report covers that race day's own rounds, including any that ran past midnight. Practice and races with no round are included when they ran on a day that race day raced. Otherwise the report covers everything saved on that date. If more than one race day raced on the chosen date, the report covers everything recorded on the date and says so at the top. The tech inspection summary always covers the same races as the rest of the report. Saved demo races and pasted results are always left out (and a day with only those isn't offered under **Day:**), and ghost cars never appear in the fastest laps or the driver count.
 

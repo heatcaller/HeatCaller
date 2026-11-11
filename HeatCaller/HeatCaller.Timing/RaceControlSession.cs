@@ -891,6 +891,14 @@ public sealed partial class RaceControlSession
     public FlagState Flag { get; private set; } = FlagState.None;
     public DateTime? RaceStartUtc { get; private set; }
 
+    /// <summary>
+    /// When the race now on (or last run) was first staged or counted down
+    /// from rest, in UTC - null when it went straight to green, or nothing
+    /// has been staged yet. Kept through the finish so the saved result can
+    /// carry it (SessionRecord.StagedAtUtc), and replaced by the next stage.
+    /// </summary>
+    public DateTime? StagedAtUtc { get; private set; }
+
     /// <summary>Total time already spent under red flag this race.</summary>
     private TimeSpan _accumulatedRedTime;
 
@@ -4467,6 +4475,21 @@ public sealed partial class RaceControlSession
         if (state is not (RaceState.Idle or RaceState.Finished))
         {
             EndWarmUp($"Warm-up ended - {state.ToString().ToLowerInvariant()}.");
+        }
+
+        // When this race was first called to the grid (11 Nov 2026, night
+        // pace): the first move into staging or the countdown from rest. A
+        // countdown after a stage keeps the stage's time - the grid wait is
+        // from when the drivers were called, not from the last press.
+        if (state is RaceState.Staging or RaceState.Countdown && State is RaceState.Idle or RaceState.Finished)
+        {
+            StagedAtUtc = UtcNow;
+        }
+        else if (state is RaceState.Racing && State is RaceState.Idle or RaceState.Finished)
+        {
+            // Straight to green: this race was never staged, and the last
+            // race's stage is not its.
+            StagedAtUtc = null;
         }
 
         State = state;
