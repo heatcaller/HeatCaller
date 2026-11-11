@@ -192,7 +192,12 @@ public sealed class TimeLeftCallsTests : IDisposable
     {
         Assert.Equal(AnnouncementEventType.GhostGap + 1, AnnouncementEventType.MinutesLeft);
         Assert.Equal(AnnouncementEventType.MinutesLeft + 1, AnnouncementEventType.FinalSeconds);
-        Assert.Equal(AnnouncementEventType.FinalSeconds, Enum.GetValues<AnnouncementEventType>().Max());
+
+        // And every call added since, after them (10 Nov 2026).
+        Assert.Equal(AnnouncementEventType.FinalSeconds + 1, AnnouncementEventType.WinnerCalled);
+        Assert.Equal(AnnouncementEventType.WinnerCalled + 1, AnnouncementEventType.PersonalBestsTogether);
+        Assert.Equal(AnnouncementEventType.PersonalBestsTogether + 1, AnnouncementEventType.BestEverHere);
+        Assert.Equal(AnnouncementEventType.BestEverHere, Enum.GetValues<AnnouncementEventType>().Max());
     }
 
     [Fact]

@@ -55,6 +55,9 @@ public sealed partial class AnnouncementService
     {
         /// <summary>When it was queued, on TimingClock - for its line's timing (VoiceLineTiming, 10 Nov 2026).</summary>
         public long QueuedAtMs { get; init; } = TimingClock.NowMs;
+
+        /// <summary>Renders its words early, while the line before it plays - or null for a line that cannot be. See AnnouncementService.RenderAhead.</summary>
+        public Func<Task>? RenderAhead { get; init; }
     }
 
     /// <summary>
@@ -1555,6 +1558,9 @@ public sealed partial class AnnouncementService
                     timing.Characters = prepared.Text.Length;
                     timing.GotTheSpeaker(TimingClock.NowMs);
                 }
+
+                // The next line renders while this one plays - see RenderAhead.
+                RenderTheNextLineAhead();
 
                 // Listeners at home hear a prepared line (recap, teaser, a
                 // two-hander's turn) too - offered just before the speaker,

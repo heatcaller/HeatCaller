@@ -107,7 +107,52 @@ The slowest 10% got worse, and it isn't the render. The slowest calls were lead 
 
 Expected result (an estimate, to be checked with Phase 0): lap to first word drops from ~1.9 s to ~1.0 s, and dead air per call from ~1.9 s to ~0.4 s. The same race could then fit roughly 40–50% more calls, and most dropped chimes come back.
 
+### Phase 1 item 5: not doing it (10 Nov 2026)
+
+Shrinking the device buffer from 300 ms to ~150 ms would save about 0.1 s per call. The code's own note says some drivers play nothing at all from a very short buffer, so it would need a new Voice-page setting and a restart to apply. That's the most risk for the least gain on the list. Revisit only if the measurements show it's the biggest piece left.
+
 ## Phase 2 — pick the best call when the speaker comes free (3–5 days)
+
+**What the Phase 1 race changed here.** The pacing dial re-checks every kept call when it's offered again. So a bigger pool of kept calls would mostly turn "lost" into "held by the dial" on Balanced, not into more calls said; it matters only on Busy and Wall to wall. The slowest calls were ready when the speaker came free and then rendered for 0.6–1 s in silence. So the first Phase 2 step is rendering the next call while the current one plays.
+
+### Phase 2, step 1: render the next line ahead (built 10 Nov 2026, not yet measured)
+
+`AnnouncementService.RenderAhead.cs`. When a line is about to be heard, the call that will be said next (the front of the queue, else the call kept for the end of this line) starts rendering. It uses the same profile builder the real render uses. When its turn comes it takes the early render only for exactly the same words and settings, and waits for it if it's still under way. Otherwise it renders as before. A call due before the playing line can end isn't rendered. The race summary says how many early renders were used, since an unused one is a paid request nobody heard.
+
+**First race with it (21:55): it rendered nothing ahead.** It only started as each line began, before the calls made during that line existed, and only the main lap-call path carried the hook. That race's numbers (1.26 s median, 2.12 s at 90%, over only 12 lap calls) are race-to-race variation, not this change. Fixed the same night:
+- It also starts when a call is queued or kept while a line is speaking.
+- Six more paths carry the hook: longest streak, battles, rivalries, race events, milestones, live release calls. Streak calls can't, since their words are chosen when said.
+- Up to three early renders are kept, so a call queued in front of one doesn't throw it away.
+
+### Phase 2, step 2: places-only position reports survive a crossing (10 Nov 2026)
+
+`PositionReportOrder.Moved` dropped a report whenever a car it named crossed the line again, because its gap would then be a lap old. A places-only report ("Bill leads, Sam second") has no gaps to go stale. With the gaps box unticked (the default), only a different car or another order now counts. With three cars named on 8 s laps and ~1 s of render, this was dropping about one report in three.
+
+### Where Phase 2 and Phase 3 stand
+
+| Item | State | Why |
+|---|---|---|
+| Render the next line ahead | Built, not yet measured | — |
+| Places-only reports survive a crossing | Done | — |
+| Bigger pool of kept calls | Not doing | On Balanced the dial holds what a pool keeps, so it would turn "lost" into "held", not into calls said |
+| Combine lost personal bests | Built 10 Nov, not measured | `AnnouncementService.CombinedCalls.cs`. Two or more lost behind one line, still inside their lap's 6 s, become one line as it ends ("Personal bests for Dee Ploy and Al gorerhythm!"). Built-in words, not a theme's; goes with the personal-best call |
+| Shorter wording when busy | Built 10 Nov, not measured | `BusyWording.cs`. Busy = a line speaking, one waiting or kept, or 2+ routine calls in 6 s. Picks from the shorter half of the theme's own templates and drops the lead-change count tail. No new words, so no Voice-page change. Instructions keep their wording |
+| Streaming endpoint | Built 10 Nov, off by default, not measured | `AnnouncementService.Streaming.cs`, `StreamingVoiceLine.cs`. A Voice-page tick (ElevenLabs only). Streams only lines with no saved take, recording or early render, and only for a voice whose level is known from its whole clips. Checks run before a word is heard; any failure before audio renders whole. Gaps from a slow connection are logged. Streamed lines reach listen-along only while the whole mix is streamed |
+| Winner named on the line | Built 10 Nov, not measured | `AnnouncementService.Winner.cs`. On the last lap (or at time-up) the winner's line is rendered for the top two. At the flag it goes first in the queue, right after the finish call. Built-in words; goes with the finish call. The unofficial result still follows after the cheering |
+| Editable new lines | Done 10 Nov | "Winner named" and "Personal bests together" are rows of their own on the Race Calls tab: lines, ticks, speed, weight. Applying an older style keeps them as this PC has them |
+| Fill the library at staging | Not doing | Render-ahead now covers the calls that wait, for no extra cost; this would buy every driver × template × call type the first night. Prepare Lines is still there by hand |
+| Recap sentence by sentence | Measuring first | The old "written and rendered in" line was timed to after the break, so it said nothing. A `[timing] Recap:` line now gives the writing and the rendering apart; decide from that |
+| Rework follow along | Added 10 Nov 2026, to scope | See below |
+
+### Rework follow along (asked for 10 Nov 2026)
+
+Follow along is how racers follow the race on their phones: the local phone pages on the club Wi-Fi, and the club's online pages through the relay. Listen-along is part of it: the room's calls offered to listeners just before the speaker (`AnnouncementService.ListenAlong`). Now that calls reach the room in ~1.3–1.6 s, the phones should keep up.
+
+To do, in order:
+1. **Measure the lag.** Time from a call being heard in the room to it appearing on a phone: captions, the timing board, and listen-along audio. Do it on both the club Wi-Fi and the relay. Extend the `[timing]` lines to say when each line was offered to listeners.
+2. **Fit it to streaming.** Listen-along takes the whole clip before the line plays (`OfferLineToListeners(text, audio, ...)`). Streaming playback has to send audio to listeners as it arrives, or listeners fall behind the room.
+3. **Rework what the phone shows.** Decide with Asher what follow along should do differently: show calls as they're said, the driver's own calls first, lap times as they cross. This is the "race engineer on the driver's phone" idea from Phase 4, and the natural place for it.
+4. **Relay changes need a fly deploy** from `relay/` and a restart of the app, or phones keep the old page.
 
 Replace "first come, first served, drop if busy" with a small pool of candidate calls:
 
@@ -130,6 +175,12 @@ The rules stay the same, so we still drop rather than say a call late. They just
 - **Speed up the recap.** At the moment it's written and rendered whole (36–38 s after the flag). Render it sentence by sentence and start playing the first sentence while the rest render. The teaser then has to cover only the AI writing time.
 
 ## Phase 4 — what will dazzle a driver
+
+**Started 10 Nov 2026.** Done so far:
+- #3, the winner named on the line (see the Phase 3 table).
+- #4, history-aware calls: **"Fastest ever here (driver)"**. A personal best that also beats the driver's quickest lap ever on the layout picked in Race Control is said as that instead: "Dee Ploy has never been faster on this track - seven two five!". It has a `{previous}` placeholder for the old best. It happens once per driver per race, and needs at least one earlier race for that driver on the layout. Demos, rentals, ghosts and excluded guests are left out, as for the track record. Its own row, on by default. Files: `BestEverHere.cs` and `RaceControlControl.BestEverHere.cs`, plus a hook ahead of the personal best in `NotifyPersonalBestLap`.
+
+Next in Phase 4: #2, passes called while side by side (render "takes the lead" ahead for a car within ~0.5 s). This needs the lead-change wording chosen at prediction time and kept, so the render matches. Then #5, the gap countdown, and #7, the booth live in a quiet stretch. #6, the race engineer on the phone, belongs with "Rework follow along".
 
 Once calls take about a second, HeatCaller can call the race as it happens, not just afterwards.
 

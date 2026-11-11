@@ -271,6 +271,9 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// ShowEnergyBox.
     /// </summary>
     private readonly CheckBox _chkEnergyFollowsRace = new ThemedCheckBox();
+
+    /// <summary>AppSettings.StreamLiveCalls (10 Nov 2026) - race calls played while ElevenLabs is still sending them. Shown with the ElevenLabs engine only.</summary>
+    private readonly CheckBox _chkStreamLiveCalls = new ThemedCheckBox();
     private readonly ComboBox _cmbTextNormalization = new();
     private readonly TextBox _txtLanguageCode = new();
     private readonly TextBox _txtOutputFormat = new();
@@ -3531,6 +3534,35 @@ public sealed partial class VoiceSettingsControl : UserControl
         _cmbModel.SelectedIndexChanged += (_, _) => ShowEnergyBox();
         _rdoElevenLabs.CheckedChanged += (_, _) => ShowEnergyBox();
         ShowEnergyBox();
+
+        // STREAMED RACE CALLS (10 Nov 2026, voice speed plan, phase 3).
+        // AppSettings, saved as it is ticked, like the box above. See
+        // AnnouncementService.Streaming for what it does and does not stream.
+        _chkStreamLiveCalls.Text = "Start race calls while ElevenLabs is still sending them (new)";
+        _chkStreamLiveCalls.AutoSize = true;
+        _chkStreamLiveCalls.Checked = _appSettings.StreamLiveCalls;
+        _chkStreamLiveCalls.CheckedChanged += (_, _) =>
+        {
+            if (_appSettings.StreamLiveCalls == _chkStreamLiveCalls.Checked)
+            {
+                return;
+            }
+
+            _appSettings.StreamLiveCalls = _chkStreamLiveCalls.Checked;
+            _appSettings.Save();
+        };
+
+        var streamTip = new ToolTip();
+        AppTheme.StyleToolTip(streamTip);
+        streamTip.SetToolTip(_chkStreamLiveCalls,
+            "A race call starts playing as the first of it arrives, instead of after the whole line - a fraction of a "
+            + "second sooner. Only for lines not already made: a saved take, a prepared line or one made while the last "
+            + "line played is played whole as before. Listeners at home hear streamed calls only while the whole mix "
+            + "is streamed. Untick it if calls stutter on a slow connection.");
+
+        tuning.AddField(_chkStreamLiveCalls);
+        _rdoElevenLabs.CheckedChanged += (_, _) => _chkStreamLiveCalls.Visible = _rdoElevenLabs.Checked;
+        _chkStreamLiveCalls.Visible = _rdoElevenLabs.Checked;
 
         var card = new Section("Voice parameters");
 

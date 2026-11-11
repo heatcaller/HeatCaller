@@ -146,6 +146,8 @@ public sealed partial class AnnouncementService
     internal static bool IsLapBoundCall(AnnouncementEventType type) => type is
         AnnouncementEventType.FastLap or
         AnnouncementEventType.PersonalBestLap or
+        AnnouncementEventType.BestEverHere or
+        AnnouncementEventType.PersonalBestsTogether or
         AnnouncementEventType.LeaderChange or
         AnnouncementEventType.LapCompleted or
         AnnouncementEventType.LapTime or

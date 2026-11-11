@@ -274,6 +274,7 @@ internal static class SettingsTable
             nameof(AppSettings.AnnouncerDensity),
             nameof(AppSettings.SayFullNamesWithOnlineVoices),
             nameof(AppSettings.VoiceEnergyFollowsRace),
+            nameof(AppSettings.StreamLiveCalls),
             nameof(AppSettings.VoiceRelayBaseUrl),
 
             // Race Control's Race Format box, and Race Day's auto start.

@@ -82,7 +82,17 @@ internal static class PositionReportOrder
     /// a penalty. Any of those, and the words already written are no longer
     /// what the screen shows.
     /// </summary>
-    internal static bool Moved(IReadOnlyList<Row> read, IReadOnlyList<Row> now)
+    /// <param name="placesOnly">
+    /// The report says places and no gaps - "Bill leads, Sam second" - so a
+    /// car over the line again, or a penalty that leaves it where it was,
+    /// does not make a word of it untrue. Only a different car or another
+    /// order does (10 Nov 2026, voice speed plan, phase 2). Places only is
+    /// what a club gets with the gaps box unticked, which it is by default -
+    /// and with three cars named on eight-second laps, a second of render
+    /// threw away about one report in three for a car merely crossing the
+    /// line in the same place.
+    /// </param>
+    internal static bool Moved(IReadOnlyList<Row> read, IReadOnlyList<Row> now, bool placesOnly = false)
     {
         if (read.Count != now.Count)
         {
@@ -94,9 +104,12 @@ internal static class PositionReportOrder
             var was = read[i].Standing;
             var nowCar = now[i].Standing;
 
-            if (!string.Equals(was.Transponder, nowCar.Transponder, StringComparison.OrdinalIgnoreCase)
-                || was.Laps != nowCar.Laps
-                || was.ElapsedMs != nowCar.ElapsedMs)
+            if (!string.Equals(was.Transponder, nowCar.Transponder, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (!placesOnly && (was.Laps != nowCar.Laps || was.ElapsedMs != nowCar.ElapsedMs))
             {
                 return true;
             }

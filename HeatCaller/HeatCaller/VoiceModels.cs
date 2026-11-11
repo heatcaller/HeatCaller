@@ -189,6 +189,30 @@ public enum AnnouncementEventType
     /// Appended at the END. Placeholder: {seconds}.
     /// </summary>
     FinalSeconds,
+
+    /// <summary>
+    /// The winner named the moment the finish call has been said (10 Nov
+    /// 2026) - rendered on the last lap for the top two, so it follows the
+    /// finish call without a pause. See AnnouncementService.Winner.
+    /// Appended at the END. Placeholders: {winner} (also {driver}).
+    /// </summary>
+    WinnerCalled,
+
+    /// <summary>
+    /// Personal bests lost behind a line, said together once it ends (10 Nov
+    /// 2026) - "Personal bests for Dee and Al!". See
+    /// AnnouncementService.CombinedCalls. Appended at the END. Placeholder:
+    /// {drivers}.
+    /// </summary>
+    PersonalBestsTogether,
+
+    /// <summary>
+    /// A personal best that is also the driver's quickest lap ever on the
+    /// layout picked in Race Control (10 Nov 2026) - said instead of the
+    /// personal best. See BestEverHere. Appended at the END. Placeholders:
+    /// {driver} {car} {team} {sponsors} {time} {previous}.
+    /// </summary>
+    BestEverHere,
 }
 
 public sealed class AnnouncementEventConfig
@@ -1595,6 +1619,54 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             },
         };
 
+        // The winner, straight after the finish call (10 Nov 2026) - see
+        // AnnouncementService.Winner. Heard only with the finish call on too.
+        p.Events[nameof(AnnouncementEventType.WinnerCalled)] = new AnnouncementEventConfig
+        {
+            Enabled = true,
+            Weight = 95,
+            Templates = new List<string>
+            {
+                "[shouting] {winner} wins it!",
+                "[shouting] And it's {winner} who takes the win!",
+                "[shouting] {winner} takes the checkered flag first!",
+                "[shouting] Victory for {winner}!",
+                "[shouting] {winner} brings it home first!",
+            },
+        };
+
+        // Personal bests lost behind a line, said as one (10 Nov 2026) - see
+        // AnnouncementService.CombinedCalls. Only ever heard with Personal
+        // best lap on, since only those calls are gathered.
+        p.Events[nameof(AnnouncementEventType.PersonalBestsTogether)] = new AnnouncementEventConfig
+        {
+            Enabled = true,
+            Weight = 55,
+            Templates = new List<string>
+            {
+                "[excited] Personal bests for {drivers}!",
+                "[excited] {drivers} all go quicker!",
+                "[excited] New personal bests - {drivers}.",
+                "[excited] Everyone's finding time - {drivers}!",
+            },
+        };
+
+        // A driver's quickest lap ever on this layout (10 Nov 2026) - see
+        // BestEverHere. On by default, unlike Personal best lap: it is rare,
+        // once a driver a race at most, and it is the lap they remember.
+        p.Events[nameof(AnnouncementEventType.BestEverHere)] = new AnnouncementEventConfig
+        {
+            Enabled = true,
+            Weight = 75,
+            Templates = new List<string>
+            {
+                "[excited] {driver}'s quickest ever lap here - {time}!",
+                "[excited] {driver} has never been faster on this track - {time}!",
+                "[excited] A lifetime best here for {driver} - {time}, beating {previous}.",
+                "[excited] That's the best lap {driver} has ever done here - {time}!",
+            },
+        };
+
         p.Events[nameof(AnnouncementEventType.AchievementUnlocked)] = new AnnouncementEventConfig
         {
             Enabled = true,
@@ -1959,6 +2031,9 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
         AnnouncementEventType.StreakLead => ("Longest streak taken over", "A driver's clean run passes every other run CURRENTLY going, so the longest streak on track changes hands. It is the longest run in progress, not the longest anyone has managed all race - a driver whose 12-lap run ended is no longer in the comparison. Fires once when it changes hands, not every lap. Placeholders: {driver} {car} {team} {sponsors} {streak} for the new leader, {rival} and {rivalstreak} for whoever they passed."),
         AnnouncementEventType.RaceTimeOver => ("Race time over", "The race time limit was reached - last lap warning."),
         AnnouncementEventType.RaceCompleted => ("Race completed", "The race has finished."),
+        AnnouncementEventType.WinnerCalled => ("Winner named", "Said the moment the finish call has been - the winner's name, while the room is still cheering. Made ready on the last lap (or when time is up) for the top two, so there is no pause after the finish call. Only with Race completed on too. The unofficial result is still read after the cheering. Placeholder: {winner} (or {driver})."),
+        AnnouncementEventType.BestEverHere => ("Fastest ever here (driver)", "A personal best that is also the driver's quickest lap EVER on the track layout picked in Race Control - said instead of the personal best, whether or not Personal best lap is on. Once per driver per race. Needs a layout picked and at least one earlier race for that driver on it; not for demos, rentals or excluded guests. Placeholders: {driver} {car} {team} {sponsors} {time} for the new lap, {previous} for their old best."),
+        AnnouncementEventType.PersonalBestsTogether => ("Personal bests together", "When two or three drivers' personal bests are lost because the announcer was mid-line, they are said together once it ends - \"Personal bests for Dee and Al!\" - while those laps are still news. Only with Personal best lap on. Placeholder: {drivers}."),
         AnnouncementEventType.AchievementUnlocked => ("Achievement unlocked", "A driver just earned an achievement. Fires after a race, once the result is saved and the achievements have been worked out - at most a few per race, so a big night doesn't turn into a list. Placeholders: {driver} {car} {team} {sponsors} {achievement}."),
         AnnouncementEventType.LastLap => ("Last lap", "The leader starts the final lap of a lap-limited race. Fires once. Placeholders: {driver} {car} {team} {sponsors}."),
         AnnouncementEventType.FinalMinute => ("Final minute", "A timed race has one minute left. Fires once. No placeholders."),

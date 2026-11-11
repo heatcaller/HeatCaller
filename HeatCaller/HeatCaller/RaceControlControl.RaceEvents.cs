@@ -175,6 +175,10 @@ public sealed partial class RaceControlControl
         _timeLimitReachedHandler = () => _announcer.NotifyRaceTimeOver();
         _race.TimeLimitReached += _timeLimitReachedHandler;
 
+        // A personal best that is also the driver's quickest ever here, asked
+        // as each personal best comes in (10 Nov 2026) - see BestEverHere.
+        _announcer.BestEverHereBefore = BestEverHereBefore;
+
         // The call first, the save whatever the call does - see RaceFiling.AfterTheFlag.
         _raceCompletedHandler = () => RaceFiling.AfterTheFlag(
             _announcer.NotifyRaceCompleted,

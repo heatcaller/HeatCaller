@@ -721,6 +721,62 @@ public sealed partial class AnnouncementService
         }
     }
 
+    /// <summary>
+    /// Plays a line while it is still arriving (10 Nov 2026, voice speed
+    /// plan, phase 3) - registered as the playing line exactly as
+    /// PlayPcmAsync registers one, so a flag, the countdown or the mute cuts
+    /// it off the same way. Its silences are already in it (StreamingVoiceLine).
+    /// </summary>
+    internal static async Task PlayStreamAsync(
+        StreamingVoiceLine line, double volume, double leadingSilenceSeconds,
+        Func<bool>? stillWanted = null, bool onAir = false, VoiceLineTiming? timing = null)
+    {
+        using var stop = new CancellationTokenSource();
+        var heardToTheEnd = false;
+
+        lock (ActiveOutputLock)
+        {
+            _activeLine = stop;
+            _activeLineWordsAtMs = TimingClock.NowMs + (long)(leadingSilenceSeconds * 1000);
+        }
+
+        try
+        {
+            // See PlayPcmAsync: asked again once registered.
+            if (stillWanted is not null && !stillWanted())
+            {
+                return;
+            }
+
+            ISampleProvider source = timing is null
+                ? line
+                : new FirstReadSampleProvider(line, () => timing.FirstPulled(TimingClock.NowMs));
+
+            await AudioBus.PlayAsync(source, (float)Math.Clamp(volume, 0.0, AudioBus.MaxBoost), stop.Token, allowBoost: true, voice: true, offAir: !onAir);
+
+            heardToTheEnd = !stop.IsCancellationRequested;
+        }
+        finally
+        {
+            lock (ActiveOutputLock)
+            {
+                if (ReferenceEquals(_activeLine, stop))
+                {
+                    _activeLine = null;
+                }
+            }
+
+            if (heardToTheEnd)
+            {
+                CaptionLog.Shared.SaidInFull();
+            }
+            else
+            {
+                CaptionLog.Shared.Unsaid();
+            }
+        }
+    }
+
     /// <summary>How long after the bus has mixed a line's tail the device is still playing its last word - the buffer less the tail. See PlayPcmAsync.</summary>
     internal static int GraceAfterLineMs(double trailingSilenceSeconds) =>
         Math.Max(0, AudioBus.OutputLatencyMs - (int)(trailingSilenceSeconds * 1000));

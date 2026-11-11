@@ -715,6 +715,19 @@ public sealed class ThemeStore
         // style's lines are the ones wanted; that is what applying it means.
         voiceCopy.TemplateVersion = VoiceSettingsStore.CurrentTemplateVersion;
 
+        // A call added since the style was saved (the winner named, the
+        // personal bests together - 10 Nov 2026) is in this PC's settings and
+        // not the style's. Kept as this PC has it, so applying an older style
+        // never switches a newer call off; the next launch's merge
+        // (VoiceSettingsStore.Load) would only bring it back as the default.
+        foreach (var (key, config) in current.Events)
+        {
+            if (!voiceCopy.Events.TryGetValue(key, out var present) || present is null)
+            {
+                voiceCopy.Events[key] = config;
+            }
+        }
+
         voiceStore.Save(voiceCopy);
 
         var soundCopy = JsonSerializer.Deserialize<SoundEffectsProfile>(JsonSerializer.Serialize(theme.SoundEffects))!;

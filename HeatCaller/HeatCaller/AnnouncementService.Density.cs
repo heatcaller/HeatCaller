@@ -141,13 +141,15 @@ public sealed partial class AnnouncementService
     /// line, queued as a LeaderChange (23 Oct 2026, bug hunt 10). Null for
     /// the type's own.
     /// </param>
-    private bool RoutineCallGetsTheAir(AnnouncementEventType type, out bool kept, Func<bool>? holdOver = null, bool alreadyCounted = false, Action? lost = null, string? transponder = null, string? words = null, Action? paced = null, int? routineWeight = null)
+    /// <param name="renderAhead">Renders the call's words early if it is kept - see AnnouncementService.RenderAhead.</param>
+    private bool RoutineCallGetsTheAir(AnnouncementEventType type, out bool kept, Func<bool>? holdOver = null, bool alreadyCounted = false, Action? lost = null, string? transponder = null, string? words = null, Action? paced = null, int? routineWeight = null, Func<Task>? renderAhead = null)
     {
         kept = false;
 
         if (!alreadyCounted)
         {
             Load.NoteOffered();
+            NoteRoutineCallOffered();
         }
 
         // A change of lead is never held for pacing, whatever weight the
@@ -169,7 +171,7 @@ public sealed partial class AnnouncementService
             // - and only with pacing on. Wall to wall is the announcer
             // exactly as it was, and it never kept anything.
             if (gap > 0 && holdOver is not null
-                && _heldOver.Offer(new HeldCall(type, holdOver, lost, transponder, words), weight, WeightBeingSpoken(), out var displaced))
+                && _heldOver.Offer(new HeldCall(type, holdOver, lost, transponder, words, renderAhead), weight, WeightBeingSpoken(), out var displaced))
             {
                 if (displaced is not null)
                 {
@@ -180,6 +182,10 @@ public sealed partial class AnnouncementService
                 }
 
                 StatusMessage?.Invoke($"[voice] Keeping {type} for the end of this line - it outranks what is being said.");
+
+                // It goes next once this line ends, so its words can be
+                // rendered while this line is still being said (10 Nov 2026).
+                RenderAheadIfALineIsSpeaking();
 
                 kept = true;
                 return false;
@@ -194,6 +200,13 @@ public sealed partial class AnnouncementService
             // it is what a club searching an old log will be looking for -
             // and because it is still precisely true.
             StatusMessage?.Invoke($"[voice] Dropped {type} announcement - still speaking the previous one.");
+
+            // Remembered, so the personal bests lost behind this line can be
+            // said together once it ends (10 Nov 2026) - see CombinedCalls.
+            if (type == AnnouncementEventType.PersonalBestLap)
+            {
+                NoteLostPersonalBest(transponder);
+            }
 
             return false;
         }
@@ -239,6 +252,45 @@ public sealed partial class AnnouncementService
         return true;
     }
 
+    /// <summary>When each recent routine call was offered (TimingClock), oldest first - for BusyWording. Under _pacingLock.</summary>
+    private readonly Queue<long> _recentRoutineCallsMs = new();
+
+    private void NoteRoutineCallOffered()
+    {
+        lock (_pacingLock)
+        {
+            _recentRoutineCallsMs.Enqueue(TimingClock.NowMs);
+            ForgetOldRoutineCallsLocked();
+        }
+    }
+
+    private void ForgetOldRoutineCallsLocked()
+    {
+        var since = TimingClock.NowMs - (long)BusyWording.Window.TotalMilliseconds;
+
+        while (_recentRoutineCallsMs.Count > 0 && _recentRoutineCallsMs.Peek() < since)
+        {
+            _recentRoutineCallsMs.Dequeue();
+        }
+    }
+
+    /// <summary>
+    /// Whether the track is busy enough for shorter wording (10 Nov 2026) -
+    /// see BusyWording. Asked as a call's template is chosen.
+    /// </summary>
+    private bool TrackIsBusy()
+    {
+        int recent;
+
+        lock (_pacingLock)
+        {
+            ForgetOldRoutineCallsLocked();
+            recent = _recentRoutineCallsMs.Count;
+        }
+
+        return BusyWording.IsBusy(_isVoiceSpeaking, QueueHasAnything() || _heldOver.IsHolding, recent);
+    }
+
     /// <summary>The Weight the club gave a kind of call on the Voice page, or nought for one it has no entry for.</summary>
     private int WeightOf(AnnouncementEventType type) =>
         _voiceStore.Current.Events.GetValueOrDefault(type.ToString())?.Weight ?? 0;
@@ -276,7 +328,7 @@ public sealed partial class AnnouncementService
     /// it is lost instead (20 Oct 2026, Bug Hunt 8 - see the lost parameter
     /// of RoutineCallGetsTheAir).
     /// </summary>
-    private sealed record HeldCall(AnnouncementEventType Type, Func<bool> Reoffer, Action? Lost, string? Transponder = null, string? Words = null);
+    private sealed record HeldCall(AnnouncementEventType Type, Func<bool> Reoffer, Action? Lost, string? Transponder = null, string? Words = null, Func<Task>? RenderAhead = null);
 
     /// <summary>
     /// The one call kept back while the speaker was busy - see
@@ -335,6 +387,12 @@ public sealed partial class AnnouncementService
     /// </summary>
     private void ForgetTheHeldOverCall(bool count)
     {
+        // And whatever was rendered ahead for it or the queue (10 Nov 2026) -
+        // every flag, countdown and new race comes through here - and the
+        // personal bests lost behind a line, no longer news.
+        ForgetRenderedAhead();
+        ForgetLostPersonalBests();
+
         if (_heldOver.Clear() is not { } gone)
         {
             return;
@@ -533,6 +591,9 @@ public sealed partial class AnnouncementService
         // And where each line's time went, for the same race (10 Nov 2026).
         Timings.Reset();
 
+        // And the last race's winner's calls, never said (10 Nov 2026).
+        ForgetTheWinnerCalls();
+
         // Not counted: the count it would go into has just been cleared,
         // and a call kept from the last race is nothing this race offered.
         ForgetTheHeldOverCall(count: false);
@@ -541,6 +602,7 @@ public sealed partial class AnnouncementService
         {
             _lastRoutineAcceptedUtc = DateTime.MinValue;
             _lastRoutineWeight = 0;
+            _recentRoutineCallsMs.Clear();
         }
     }
 }

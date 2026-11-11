@@ -212,6 +212,7 @@ public sealed partial class AnnouncerControl : UserControl
         _announcer.ShortenNamesForCloudVoices = () => settings.RelayAbbreviateNames;
         _announcer.SayFullNamesWithCloudVoices = () => settings.SayFullNamesWithOnlineVoices;
         _announcer.EnergyFollowsTheRace = () => settings.VoiceEnergyFollowsRace;
+        _announcer.StreamLiveCalls = () => settings.StreamLiveCalls;
 
         var gate = _announcer.SponsorMentions;
         gate.Restore(settings.SponsorMentionsNight);

@@ -2136,6 +2136,14 @@ public sealed class AppSettings
     /// </summary>
     public bool VoiceEnergyFollowsRace { get; set; } = true;
 
+    /// <summary>
+    /// Race calls start playing while ElevenLabs is still sending them,
+    /// rather than once the whole line is in (10 Nov 2026, voice speed plan,
+    /// phase 3) - see AnnouncementService.Streaming. Off by default: a club's
+    /// own ElevenLabs voice only, and new.
+    /// </summary>
+    public bool StreamLiveCalls { get; set; }
+
     // The last relay settings that were PROVED to work, by a test that
     // came back connected. Kept beside the live ones rather than instead
     // of them: the live ones are what publishing uses and may be

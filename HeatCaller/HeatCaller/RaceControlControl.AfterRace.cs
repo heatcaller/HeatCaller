@@ -17,7 +17,13 @@ public sealed partial class RaceControlControl
     private async Task<(string? Spoken, AnnouncementService.PreparedSpeech? Audio)> BuildRecapAsync(
         Task<string?> generation, (double, double)? delivery, CancellationToken nextRace = default)
     {
+        // Where the recap's time goes (10 Nov 2026, voice speed plan, phase
+        // 3): the "written and rendered in" line is timed to when the
+        // sequence comes for the recap, after the break, so it says nothing
+        // about which of the two is slow. These two say each step's own.
+        var writing = System.Diagnostics.Stopwatch.StartNew();
         var line = await generation;
+        writing.Stop();
 
         // Not rendered once the next race is called (22 Oct 2026, bug hunt):
         // nobody will hear it, and a long recap's render held one of the two
@@ -37,7 +43,16 @@ public sealed partial class RaceControlControl
         // In the recap host's voice - the recap is the host's (16 Oct 2026).
         // The token too (22 Oct 2026, known issues): a render already under
         // way when the next race is called is stopped, not run to the end.
+        var rendering = System.Diagnostics.Stopwatch.StartNew();
         var audio = await _announcer.PrepareReminderAsync(spoken, delivery, RecapHostVoice, nextRace);
+        rendering.Stop();
+
+        StatusMessage?.Invoke(
+            $"{AppTime.LogStampNow()}  [timing] Recap: written in {writing.Elapsed.TotalSeconds:0.0}s, "
+            + (audio is null
+                ? "not rendered ahead (said as it is made)"
+                : $"rendered in {rendering.Elapsed.TotalSeconds:0.0}s")
+            + $" - {spoken.Length} characters.");
 
         return (spoken, audio);
     }
@@ -1853,6 +1868,8 @@ public sealed partial class RaceControlControl
                     return;
                 }
 
+                // Ready by now, from when the programme started - the break
+                // included. The [timing] Recap line says each step's own time.
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Recap written and rendered in {tookSeconds:0.0}s.");
 
                 // 4b. On air - the opener goes HERE: after the recap is

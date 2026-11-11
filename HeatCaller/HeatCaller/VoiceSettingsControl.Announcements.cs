@@ -316,12 +316,19 @@ public sealed partial class VoiceSettingsControl
     internal static AnnouncementEventType[] AnnouncementTypes()
     {
         var types = Enum.GetValues<AnnouncementEventType>()
-            .Where(t => t is not (AnnouncementEventType.Reminder or AnnouncementEventType.MinutesLeft or AnnouncementEventType.FinalSeconds))
+            .Where(t => t is not (AnnouncementEventType.Reminder or AnnouncementEventType.MinutesLeft or AnnouncementEventType.FinalSeconds
+                or AnnouncementEventType.WinnerCalled or AnnouncementEventType.PersonalBestsTogether or AnnouncementEventType.BestEverHere))
             .ToList();
 
         var finalMinute = types.IndexOf(AnnouncementEventType.FinalMinute);
         types.Insert(finalMinute + 1, AnnouncementEventType.FinalSeconds);
         types.Insert(finalMinute, AnnouncementEventType.MinutesLeft);
+
+        // Each beside the call it follows (10 Nov 2026), not at the foot of
+        // the list where being added last would put them.
+        types.Insert(types.IndexOf(AnnouncementEventType.RaceCompleted) + 1, AnnouncementEventType.WinnerCalled);
+        types.Insert(types.IndexOf(AnnouncementEventType.PersonalBestLap) + 1, AnnouncementEventType.PersonalBestsTogether);
+        types.Insert(types.IndexOf(AnnouncementEventType.PersonalBestLap) + 1, AnnouncementEventType.BestEverHere);
 
         return types.ToArray();
     }

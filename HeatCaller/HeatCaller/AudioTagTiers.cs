@@ -31,6 +31,9 @@ internal static class AudioTagTiers
         AnnouncementEventType.RaceStarted,
         AnnouncementEventType.RaceTimeOver,
         AnnouncementEventType.RaceCompleted,
+
+        // The checkered flag's own moment, said straight after its call (10 Nov 2026).
+        AnnouncementEventType.WinnerCalled,
         AnnouncementEventType.LeaderChange,
         AnnouncementEventType.TrackRecord,
         AnnouncementEventType.FastLap,
@@ -50,6 +53,11 @@ internal static class AudioTagTiers
         AnnouncementEventType.PassedByGhost,
         AnnouncementEventType.Lapped,
         AnnouncementEventType.PersonalBestLap,
+
+        // A personal best of a bigger kind, and several said as one (10 Nov 2026) -
+        // a driver's own, not the track's, so lifted rather than shouted.
+        AnnouncementEventType.BestEverHere,
+        AnnouncementEventType.PersonalBestsTogether,
         AnnouncementEventType.Streak,
         AnnouncementEventType.StreakLead,
         AnnouncementEventType.QualifyingImprovement,

@@ -135,6 +135,46 @@ public sealed class ElevenLabsClient
 
     public async Task<byte[]> SynthesizeAsync(VoiceProfile profile, string text, CancellationToken ct = default)
     {
+        using var request = SpeechRequest(profile, text, stream: false);
+
+        using var response = await Http.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            throw new InvalidOperationException($"ElevenLabs speech request failed ({(int)response.StatusCode}): {body}");
+        }
+
+        return await response.Content.ReadAsByteArrayAsync(ct);
+    }
+
+    /// <summary>
+    /// The same request as <see cref="SynthesizeAsync"/>, to the stream
+    /// endpoint, answered as soon as the headers are in (10 Nov 2026, voice
+    /// speed plan, phase 3). The body is raw 16-bit mono PCM at 22.05 kHz
+    /// (StreamingVoiceLine.ElevenLabsFormat), read as it arrives. The caller
+    /// disposes the response. Throws, like SynthesizeAsync, for a refusal.
+    /// </summary>
+    internal async Task<HttpResponseMessage> OpenSpeechStreamAsync(VoiceProfile profile, string text, CancellationToken ct = default)
+    {
+        using var request = SpeechRequest(profile, text, stream: true);
+
+        var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            using (response)
+            {
+                var body = await response.Content.ReadAsStringAsync(ct);
+                throw new InvalidOperationException($"ElevenLabs speech request failed ({(int)response.StatusCode}): {body}");
+            }
+        }
+
+        return response;
+    }
+
+    /// <summary>One speech request - whole (the club's output format, MP3 by default) or streamed (always PCM, see OpenSpeechStreamAsync).</summary>
+    private static HttpRequestMessage SpeechRequest(VoiceProfile profile, string text, bool stream)
+    {
         if (string.IsNullOrWhiteSpace(profile.VoiceId))
         {
             throw new InvalidOperationException("No ElevenLabs voice selected.");
@@ -176,24 +216,21 @@ public sealed class ElevenLabsClient
         // Escaped: the voice id comes from settings, and a stray '/', '?' or
         // '#' in it would otherwise silently retarget the request.
         var url = $"v1/text-to-speech/{Uri.EscapeDataString(profile.VoiceId)}";
-        if (!string.IsNullOrWhiteSpace(profile.OutputFormat))
+        if (stream)
+        {
+            url += $"/stream?output_format={StreamingVoiceLine.ElevenLabsFormat}";
+        }
+        else if (!string.IsNullOrWhiteSpace(profile.OutputFormat))
         {
             url += $"?output_format={Uri.EscapeDataString(profile.OutputFormat)}";
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        var request = new HttpRequestMessage(HttpMethod.Post, url);
         request.Headers.Add("xi-api-key", profile.ApiKey);
-        request.Headers.Add("Accept", "audio/mpeg");
+        request.Headers.Add("Accept", stream ? "audio/pcm" : "audio/mpeg");
         request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
-        using var response = await Http.SendAsync(request, ct);
-        if (!response.IsSuccessStatusCode)
-        {
-            var body = await response.Content.ReadAsStringAsync(ct);
-            throw new InvalidOperationException($"ElevenLabs speech request failed ({(int)response.StatusCode}): {body}");
-        }
-
-        return await response.Content.ReadAsByteArrayAsync(ct);
+        return request;
     }
 
     /// <summary>
