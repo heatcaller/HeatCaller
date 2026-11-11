@@ -296,6 +296,7 @@ From then on the phone shows its own notifications, page open or not:
 
 | Notification | When | Under it |
 |---|---|---|
+| "Your race is in about 5 minutes" | Their next race's estimated start (Race Control's [Auto start](../race-control/running-a-race.md#auto-start-between-races), or the timetable) has just come inside 5 minutes. Once per race, and not when "Your race is next" goes at the same moment | The race |
 | "Your race is next" | Their race has just become the next one | The race and their grid slot |
 | "Your race is staged - to the driver stand" | Their race has just been staged | The race and their grid slot |
 | "Marshal duty next" | The race they marshal is next | The race and their post |

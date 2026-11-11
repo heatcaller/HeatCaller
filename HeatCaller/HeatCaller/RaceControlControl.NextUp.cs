@@ -381,7 +381,8 @@ public sealed partial class RaceControlControl
             var isOnTrack = ReferenceEquals(round, onTrackRound);
 
             // Nothing to estimate for the race already on track.
-            var eta = isOnTrack ? null : RaceEta.For(round.Id, before, onTrack, schedule, late, starts, nowUtc);
+            // Auto start's own start beats any estimate (11 Nov 2026).
+            var eta = isOnTrack ? null : AutoStartsAtUtc(round.Id, nowUtc) ?? RaceEta.For(round.Id, before, onTrack, schedule, late, starts, nowUtc);
 
             upcoming.Add(new UpcomingRace(
                 RoundTitle(round), round.AssignedTransponders.ToList(), isOnTrack,
@@ -489,6 +490,14 @@ public sealed partial class RaceControlControl
             if (index > 0)
             {
                 parts += $" · marshals: {program[index - 1].RoundLabel}";
+            }
+
+            // Auto start's count, first after the name so it is never the
+            // part cut off (11 Nov 2026).
+            if (AutoStartWords(DateTime.UtcNow) is { Length: > 0 } auto)
+            {
+                parts = $"{RoundTitle(next)} · {auto}" + parts[RoundTitle(next).Length..];
+                warning |= _autoStartState is AutoStartState.WaitingForCars or AutoStartState.Held;
             }
 
             nextText = parts;

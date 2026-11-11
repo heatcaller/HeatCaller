@@ -1069,6 +1069,14 @@ internal sealed partial class DriverRequestDesk
                 lines.Add("Setup change: " + SetupWords(request));
                 break;
 
+            case DriverAsk.Late:
+                lines.Add($"Needs {RaceControlControl.LateMinutes} more minutes before their next race" + NoteWords(request));
+                break;
+
+            case DriverAsk.Skip:
+                lines.Add("Car broken - skip them in their next race" + NoteWords(request));
+                break;
+
             default:
                 lines.Add(WriteWords(request));
                 break;
@@ -1134,6 +1142,8 @@ internal sealed partial class DriverRequestDesk
         DriverAsk.PackEdit => "Their packs",
         DriverAsk.Car => "Their garage",
         DriverAsk.Photo => "Car photo",
+        DriverAsk.Late => "More time",
+        DriverAsk.Skip => "Skip my race",
         _ => kind,
     };
 
@@ -1678,6 +1688,61 @@ internal sealed partial class DriverRequestDesk
         }
 
         return notes[..start] + notes[end..];
+    }
+
+    // ------------------------------------------------------------ more time, skip my race
+
+    /// <summary>
+    /// Does what an approved "Need 5 minutes" or "Skip me" asks, in Race
+    /// Control: (kind, transponder, name) to what happened, in words for the
+    /// driver. Set by MainForm (11 Nov 2026, race-night build plan, Phase 1).
+    /// </summary>
+    public Func<string, string, string, string>? RaceAsk { get; set; }
+
+    /// <summary>" - "their note"", or empty with no note.</summary>
+    private static string NoteWords(DriverRequest request) =>
+        request.Text("m") is { Length: > 0 } note ? $" - \"{note}\"" : string.Empty;
+
+    /// <summary>
+    /// Approves a "Need 5 minutes" or a "Skip me": Race Control acts on it,
+    /// and the driver's phone is told what happened.
+    /// </summary>
+    public bool ApproveRaceAsk(DriverRequest request, out string refusal)
+    {
+        if (request.Kind is not (DriverAsk.Late or DriverAsk.Skip) || !_store.IsWaiting(request.Id))
+        {
+            refusal = "That request has already been answered.";
+            return false;
+        }
+
+        if (DriverOf(request) is not { } profile)
+        {
+            refusal = "Nobody on this laptop has that badge. Discard it.";
+            return false;
+        }
+
+        if (RaceAsk is not { } act)
+        {
+            refusal = "Race Control isn't open, so nothing can be changed for it yet.";
+            return false;
+        }
+
+        var said = act(request.Kind, profile.Transponder, NameOf(profile));
+
+        if (said.Length > DriverAsk.SaidMaxChars)
+        {
+            said = said[..DriverAsk.SaidMaxChars];
+        }
+
+        if (!_store.Answer(request.Id, DriverAsk.Approved, said, DateTime.UtcNow))
+        {
+            refusal = "That request has already been answered.";
+            return false;
+        }
+
+        _log($"[driver requests] {KindWords(request.Kind)} for {NameOf(profile)}: {said}");
+        refusal = string.Empty;
+        return true;
     }
 
     // ------------------------------------------------------------ the rest

@@ -529,7 +529,7 @@ public partial class MainForm
         // Who's Racing IS the merged roster: present, tech and inspect
         // per row. The Tech Log tab keeps the scrutineer's full record
         // list; the gate itself is one sheet.
-        var checkIn = new CheckInControl(_profiles, _checkInStore, _raceClasses, _settings, _undo, _techInspections, _webServer, _raceEvents, _batteryPacks) { Dock = DockStyle.Fill };
+        var checkIn = new CheckInControl(_profiles, _checkInStore, _raceClasses, _settings, _undo, _techInspections, _webServer, _raceEvents, _batteryPacks, _payments) { Dock = DockStyle.Fill };
         _checkInControl = checkIn;
 
         // The banner this page shows when check-ins have nowhere to go.
@@ -746,6 +746,16 @@ public partial class MainForm
         raceProgram.ProgrammeChanged += () => _todayControl?.RefreshAll();
 
         raceControl.NextStepProvider = () => raceProgram.NextStep();
+
+        // The night planned (11 Nov 2026, race-night build plan, Phase 2):
+        // "We're done after this round" is told to the room, and the end of
+        // the night lists what is left before lights out.
+        raceProgram.NightCutShort += text =>
+        {
+            _announcer.SpeakReminder(text, showOnScreens: true, onAir: "Notice");
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [program] Announced: \"{text}\"");
+        };
+        raceProgram.ClosingFacts = NightClosingFacts;
         raceControl.RunProgramStepRequested += step => raceProgram.RunStep(step);
 
         // --- Today ---

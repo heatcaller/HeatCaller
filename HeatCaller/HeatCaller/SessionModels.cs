@@ -212,6 +212,14 @@ public sealed class SessionRecord
     public string? RoundId { get; set; }
     public DateTime StartedAtUtc { get; set; }
     public DateTime EndedAtUtc { get; set; }
+
+    /// <summary>
+    /// When the race was first called to the grid - staged, or counted down
+    /// from rest - in UTC (11 Nov 2026, night pace). Null when it went
+    /// straight to green, and on every race saved before this existed. The
+    /// night-pace report reads the wait at the grid from it (NightPace).
+    /// </summary>
+    public DateTime? StagedAtUtc { get; set; }
     public List<SessionResultEntry> Results { get; set; } = new();
 
     /// <summary>

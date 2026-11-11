@@ -105,6 +105,32 @@ public sealed class RaceEvent
     public int DriversPerHeat { get; set; }
 
     /// <summary>
+    /// How the first qualifying round is seeded (11 Nov 2026, race-night build
+    /// plan, Phase 3): by recent pace - similar pace together, so a rookie is
+    /// not lapped four times by the A-main drivers - alphabetically (as every
+    /// build was before), or at random. A class where nobody has a recent lap
+    /// is dealt alphabetically whatever this says.
+    /// </summary>
+    public FirstRoundSeeding FirstRoundSeeding { get; set; } = FirstRoundSeeding.Pace;
+
+    /// <summary>
+    /// Minutes a class's qualifying results stay provisional after its last
+    /// qualifier is recorded, for queries and protests before the finals are
+    /// built (11 Nov 2026, Phase 3). 0 for none. See ProtestWindow.
+    /// </summary>
+    public int ProtestMinutes { get; set; } = ProtestWindow.DefaultMinutes;
+
+    /// <summary>
+    /// The entry fee for a driver's first class tonight, in the club's money
+    /// (11 Nov 2026, Phase 4 - see DeskMoney). Zero: the club doesn't track
+    /// money in HeatCaller, and nothing about it is shown.
+    /// </summary>
+    public decimal EntryFee { get; set; }
+
+    /// <summary>The fee for each class after the first - often a discount. See DeskMoney.FeeFor.</summary>
+    public decimal ExtraClassFee { get; set; }
+
+    /// <summary>
     /// The Between races preset for this day alone (GapPreset.Key), over the
     /// club's own settings - so a monthly big event can be Big event without
     /// changing the weekly club night. Blank uses the club's settings.
@@ -134,6 +160,14 @@ public sealed class RaceEvent
 
     /// <summary>When the first race is meant to go out. Local time of day; the run sheet measures drift against it.</summary>
     public TimeSpan? FirstRaceLocalTime { get; set; }
+
+    /// <summary>
+    /// When the club has to be out of the venue: a local time of day, or null
+    /// for none (11 Nov 2026, race-night build plan, Phase 2). The Next Steps
+    /// card measures the projected finish against it and suggests what would
+    /// bring the night back inside it (NightPlan).
+    /// </summary>
+    public TimeSpan? OutByLocalTime { get; set; }
 
     // --- Rolling into the next race -------------------------------------
     //

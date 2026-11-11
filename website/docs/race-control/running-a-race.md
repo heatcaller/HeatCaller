@@ -14,7 +14,7 @@ From top to bottom, the page has:
 - **The Session row.** Choose the round, the track and the session name.
 - **The Next Up bar.** Shows what's running now, what's next, and how the day is going.
 - **The Race Control card.** Holds one row of flag buttons, all the same width and centered across the card over the On Air bar under them. The lit flag button and the board show where the race is. Only the buttons that mean something at that moment are shown (see [The flag row](#the-flag-row)). The lit button shows the flag in effect. **Red**, **Checkered** and **Reset** have to be pressed and held for a second (see [Press and hold](#press-and-hold)); the line under the row says so, and shows the hold as it fills. The same line is the **On Air bar** while anything is going out (see [The On Air bar](#the-on-air-bar)).
-- **The Leaderboard card.** Takes up the rest of the page. Click a driver to open their corrections drawer under their row (see [The leaderboard](#the-leaderboard)). Along its foot are the format chip, the **Start races On Air** tick box, **Race Format** and **Columns**. **Start races On Air** and **Columns** are shown in Advanced mode only (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)).
+- **The Leaderboard card.** Takes up the rest of the page. Click a driver to open their corrections drawer under their row (see [The leaderboard](#the-leaderboard)). Along its foot are the format chip, the **Start races On Air** tick box, the **Auto start** switch (see [Auto start between races](#auto-start-between-races)), **Race Format** and **Columns**. **Start races On Air** and **Columns** are shown in Advanced mode only (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)).
 - **The clock column** on the right. It holds the race clock, then **Quick Race**, **Big Screen**, **Announcer Screen**, **Qualifying Projection**, **Pre-race check**, **Mission Control** and **Broadcast**, with the level meters under **Broadcast** (see [Level meters](#level-meters)).
 
 ## The flag row
@@ -439,6 +439,27 @@ If the next round's class runs tech and someone in it hasn't passed tech today, 
 **Start Next** loads the next round and stages it (the announcer makes the grid call first). While a session is running, the button reads **Race Running** and is grayed out, so a stray click can't launch the next heat.
 
 **Hold for a demo run.** Press and hold **Start Next** for about a second to run the next round as a demo instead: the same simulated race [Demo Mode](practice-and-ghosts.md#demo-mode) runs, with that round's drivers, format and show, through On Air like a real start. While you hold, a clock shows on the button, a bar fills along its foot, and the strip under the flag row says "Keep holding to run it as a demo". Let go before the bar is full and it's an ordinary click, which starts the race for real. A held **Start Next** follows the same rules as **Start as Demo...** in the program: the demo never scores, never sets records, and is never filed as the round's real result (see [Demo results](practice-and-ghosts.md#demo-results)). The hold does nothing while a race is running, while On Air is opening one, or while the button is doing an owed step instead of starting a round.
+
+With [Auto start](#auto-start-between-races) on, **NEXT** also says when the next race starts, for example "Q2 Heat 3 (Stock) · starts in 1:42", and **Hold** beside **Start Next** holds and resumes the count.
+
+### Auto start between races
+
+After each race, HeatCaller counts down a gap and starts the next race by itself, so nobody has to press **Start Next**. It's on by default. The switch is at the foot of the leaderboard: **Auto start: Off | On**.
+
+- **When it counts.** From the checkered flag of a race on the program. It doesn't count after a demo, a Quick Race or a race kept on its own, and it doesn't start the first race of the night. The gap is 2:30 unless you choose another: right-click the switch for 1:30 to 5:00.
+- **The call-ups follow it.** The call-ups are timed to the real start, whether or not the timetable has times, and so is the spoken countdown ("one minute") when it's ticked on the **Between races** card. Phones show the start time too.
+- **A rest for back-to-back drivers.** When a driver in the next race raced the race just run (two classes, or a bump-up), that race waits an extra 2 minutes, and **NEXT** says who the rest is for.
+- **Hold.** **Hold** on the Next Up bar stops the count, and **Resume** carries on from where it stood. Right-click **Hold** for **+1 min** (the same as Call Up's) and **Start now**.
+- **The announcer comes first.** If the count runs out while the recap is still being spoken, the race starts the moment it ends.
+- **A car not seen by the loop.** About 45 seconds before the start, HeatCaller looks for every car in the next race on the loop, the same way the roll call does. If one hasn't been heard when the count runs out, the race waits:
+    - A banner says "Frank not seen by the loop - Q2 Heat 3 is waiting."
+    - The announcer asks Frank once to get the car on the track.
+    - **Start without them** starts the race, **Wait** holds it, and a car that turns up clears the banner by itself.
+    - With no decoder connected, or in a demo, cars aren't looked for.
+- **The start itself** is **Start Next**'s, so it goes through On Air when **Start races On Air** is on, and it never runs a step that's owed first. When bump-ups or the finals are due, the count stops and **Start Next** offers them for you to do.
+- **Off is for tonight only.** Switch it off and races wait for **Start Next** until tomorrow's racing. To keep it off, right-click the switch and choose **Off until I switch it on again**.
+- **On the Big Screen**, the countdown band says "NEXT RACE IN 1:42" between races, "NEXT RACE ON HOLD" while it's held, and "NEXT RACE SOON" at zero. A missing car isn't named there.
+- **From the phone:** the remote's **HOLD START** and **+1 MIN** (see [Phone remote](../screens/phone-and-web.md)). A driver can ask the desk for 5 more minutes or to be skipped, and once you approve, the count moves or they come out of the race (see [More time, or skip my race](../online/driver-requests.md#more-time-or-skip-my-race)). A driver whose race is about 5 minutes away gets a "Your race is in about 5 minutes" alert on their phone.
 
 If something is owed before the next race can go out, the bar says so in place of the next round and the button does it instead: **Move the top finishers up** when a lower main has finished and its bump-ups are due, or **Build the finals from qualifying** when a class has finished qualifying. That way the upper main can't go out before its bump-ups. See [Program and mains](../race-day/program-and-mains.md#the-next-step-card).
 

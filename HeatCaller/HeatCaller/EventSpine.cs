@@ -235,6 +235,15 @@ public static class EventSpine
             raceEvent.DriversPerHeat = driversPerHeat;
         }
 
+        // The venue's out-by time carries over (11 Nov 2026, race-night
+        // build plan, Phase 2): it belongs to the building, not the night,
+        // so the last day at the same venue that had one is the best guess.
+        raceEvent.OutByLocalTime = events.Real
+            .Where(e => e.OutByLocalTime is not null
+                        && string.Equals(e.VenueName ?? string.Empty, venueName ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(e => e.StartedUtc)
+            .FirstOrDefault()?.OutByLocalTime;
+
         events.Upsert(raceEvent);
         events.SetActive(raceEvent.Id);
 

@@ -367,6 +367,23 @@ function meSwipe() {
   }, { passive: true });
 }
 
+// "Need 5 more minutes" and "Car broken - skip me" (11 Nov 2026): asked once,
+// after a yes, and sent to the desk - which approves it, and the answer
+// comes back on the live card's requests.
+async function meRaceAsk(kind) {
+  const q = kind === 'late'
+    ? 'Ask the desk to hold your next race for 5 more minutes?'
+    : 'Ask the desk to take you out of your next race?';
+  if (!window.confirm(q)) return;
+  const got = await sendAsk(kind, {});
+  if (got.ok) {
+    meToast(kind === 'late' ? 'Asked for 5 more minutes - the desk will answer here' : 'Asked to skip your next race - the desk will answer here');
+    meRefresh();
+  } else {
+    meToast(got.words, true);
+  }
+}
+
 // ---- what the moment and the tiles read
 
 function meNext() {
@@ -571,6 +588,14 @@ function meMoment() {
     // card's old first lines (6 Nov 2026) with the rest of what they said.
     const go = typeof goLink === 'function' ? goLink(n) : null;
     if (go) hero.appendChild(go);
+    // Not ready (11 Nov 2026, race-night build plan, Phase 1): ask the desk for
+    // five more minutes, or to be skipped with a broken car. The desk approves.
+    if (typeof asksOpen !== 'undefined' && asksOpen && me) {
+      const late = el('div', 'acts');
+      late.appendChild(tapButton('Need 5 more minutes', '', () => meRaceAsk('late')));
+      late.appendChild(tapButton('Car broken - skip me', '', () => meRaceAsk('skip')));
+      hero.appendChild(late);
+    }
   } else if (races.length > 0) {
     hero.appendChild(el('span', 'k', 'Your night'));
     const best = races.reduce((b, r) => (num(r.bestMs) > 0 && (b === 0 || num(r.bestMs) < b) ? num(r.bestMs) : b), 0);
