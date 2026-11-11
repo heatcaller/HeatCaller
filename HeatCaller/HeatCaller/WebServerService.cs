@@ -1656,6 +1656,7 @@ public sealed partial class WebServerService
         {
             "remote" => "remote",
             "manager" => "manager",
+            "standby" => "standby PC",
             _ => "check-in",
         };
 
@@ -1694,6 +1695,7 @@ public sealed partial class WebServerService
         {
             "remote" => _remotePinLockout,
             "manager" => _managerPinLockout,
+            "standby" => _standbyPinLockout,
             _ => _checkInPinLockout,
         };
 
@@ -1736,6 +1738,9 @@ public sealed partial class WebServerService
                     "manager" => $"[web] WARNING: {lockout.MaxWrong} wrong manager PINs in five minutes - somebody may be trying to guess it. "
                         + "The manager PIN is refused for five minutes, except on phones that already entered it. "
                         + "Consider a longer PIN on the Local Screens page.",
+                    "standby" => $"[web] WARNING: {lockout.MaxWrong} wrong standby PC PINs in five minutes - something on this network "
+                        + "may be trying to copy the race data. The standby PIN is refused for five minutes. "
+                        + "Check which PCs are set up as a standby on Backup & Restore.",
                     _ => $"[web] WARNING: {lockout.MaxWrong} wrong check-in PINs in five minutes. "
                         + "The check-in PIN is refused for five minutes, except on phones that already entered it.",
                 });
@@ -1794,6 +1799,11 @@ public sealed partial class WebServerService
                 break;
             case "/manage":
                 WriteHtml(context, BuildManagePage());
+                break;
+            case WarmStandby.SnapshotPath:
+                // The warm standby's copy (11 Nov 2026, Phase 6.2) - see
+                // WebServerService.Standby.
+                HandleStandbySnapshot(context);
                 break;
             case "/api/manage":
                 // HandleRequest runs on its own thread-pool thread per

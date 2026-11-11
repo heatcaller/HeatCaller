@@ -6,7 +6,7 @@ namespace HeatCaller;
 /// See BackupService for what a "backup" actually is (a zip of the whole
 /// app data folder).
 /// </summary>
-public sealed class BackupRestoreControl : UserControl
+public sealed partial class BackupRestoreControl : UserControl
 {
     private readonly AppSettings _settings;
 
@@ -213,6 +213,7 @@ public sealed class BackupRestoreControl : UserControl
         page.Add(BuildManualCard());
         page.Add(BuildAutoCard());
         page.Add(BuildPasswordCard());
+        page.Add(BuildStandbyCard());
         page.Add(BuildModeCard());
         page.Add(BuildSupportCard());
 
@@ -1209,6 +1210,21 @@ public sealed class BackupRestoreControl : UserControl
             return;
         }
 
+        RunRestore(zipPath, keepAsTheyAre: null, refused: null);
+    }
+
+    /// <summary>
+    /// The restore itself, once asked and allowed: shared by Restore and by
+    /// the standby PC's Take Over (11 Nov 2026, Phase 6.2 - see
+    /// BackupRestoreControl.Standby), so Take Over gets every protection a
+    /// restore has - the safety backup, the files let go, saving frozen at
+    /// the point of no return, the restart. <paramref name="keepAsTheyAre"/>
+    /// goes to BackupService.RestoreBackup; <paramref name="refused"/> runs
+    /// when the restore was refused with nothing touched, for Take Over to
+    /// put back what it changed first.
+    /// </summary>
+    private void RunRestore(string zipPath, IReadOnlyCollection<string>? keepAsTheyAre, Action? refused)
+    {
         // Set the moment the restore reaches the point of no return. After
         // that the app restarts whatever happens, success or not.
         var filesTouched = false;
@@ -1244,12 +1260,22 @@ public sealed class BackupRestoreControl : UserControl
 
         try
         {
-            result = BackupService.RestoreBackup(zipPath, CurrentFolder(), BeforeReplacing);
+            result = BackupService.RestoreBackup(zipPath, CurrentFolder(), BeforeReplacing, keepAsTheyAre);
         }
         catch (Exception ex)
         {
             if (!filesTouched)
             {
+                try
+                {
+                    refused?.Invoke();
+                }
+                catch
+                {
+                    // Putting the caller's own changes back is a help; the
+                    // refusal below is what matters.
+                }
+
                 // Refused or couldn't unpack: the data folder is exactly as
                 // it was, and the app carries on as if nothing happened.
                 AppDialog.Show(this, $"Restore failed: {ex.Message}", "Restore failed", MessageBoxButtons.OK, MessageBoxIcon.Error);

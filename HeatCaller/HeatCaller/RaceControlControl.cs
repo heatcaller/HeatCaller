@@ -423,6 +423,13 @@ public sealed partial class RaceControlControl : UserControl
     public Func<string?>? TimingProblem { get; set; }
 
     /// <summary>
+    /// The website-offline and standby lines for the Next Up bar, or null
+    /// (11 Nov 2026, Phase 6.3 - see OfflineFirst.BarLine). Worked out by
+    /// the host, which owns the relay and the standby mirror.
+    /// </summary>
+    public Func<string?>? ResilienceLine { get; set; }
+
+    /// <summary>
     /// The live track map - the line of the layout being raced on and every
     /// car placed on it - for the Big Screen this page opens. Null leaves
     /// the Big Screen without one. See MainForm.TrackMap.

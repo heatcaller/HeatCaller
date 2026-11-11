@@ -78,6 +78,7 @@ nav:
       - Hosting the relay: admin/relay-hosting.md
       - Security and privacy: admin/security-and-privacy.md
       - Backups: admin/backups.md
+      - Standby PC: admin/standby-pc.md
       - Where data lives: admin/data-files.md
       - Troubleshooting: admin/troubleshooting.md
   - Reference:

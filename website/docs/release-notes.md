@@ -4,6 +4,11 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **A standby PC, and racing offline said out loud (11 November).** Two additions:
+    - **Standby PC.** A second laptop on the track's network can keep a copy of the timing laptop's race data, fetched every 15 seconds, and **Take Over...** by hand if the timing laptop dies: it restores the copy, restarts, and you plug the decoder in. The copy is one way, only to PCs on the track's own network, guarded by a **Standby PIN** of 8 or more letters or digits, and never carries keys or PINs. Set it up on the new **Standby PC** card on **Backup & Restore**, on both laptops. There's no automatic failover. See [Standby PC](admin/standby-pc.md).
+    - **"Online pages will catch up."** When the club website can't be reached, the **Next Up** bar on Race Control says "Website offline - racing carries on. Online pages will catch up", with how many updates are waiting, and Mission Control's **Website** tile says the same. See [When the internet drops](online/index.md#when-the-internet-drops).
+
+  Update HeatCaller on both PCs; nothing changes on the relay.
 - **Marshal swaps (11 November).** **Swap...** in the **Corner Marshals** window covers a driver's post for one round with somebody else, and the marshal call, the Next Up bar and drivers' phones follow it. See [Corner marshals](race-day/program-and-mains.md#corner-marshals).
 - **Money at the desk (11 November).** New **Entry fee:** and **Each extra class:** on **Race Day → Setup**. With a fee set, **Who's Racing** shows a **Paid** column (what each driver owes), and right-clicking marks drivers **Paid Cash**, **Paid Card**, **Comp** (marshal, volunteer, junior) or **Still Owing**, with Undo. The event report gets a **Money at the desk** section (cash, card, comps, and who still owes), and the closing list on Next Steps names drivers who still owe. HeatCaller only records it; it never takes a payment. See [Money at the desk](race-day/events-and-entries.md#money-at-the-desk). Update HeatCaller on the race PC; nothing changes on the relay.
 

@@ -222,7 +222,9 @@ internal static class MissionControl
         var behind = relay.LastSuccessUtc is not { } last || DateTime.UtcNow - last >= RelayBehind;
 
         return new("website", "Website", "Offline",
-            (relay.LastError ?? "Can't reach the relay.") + (relay.Queued > 0 ? $" {Plural.Of(relay.Queued, "update")} waiting." : string.Empty),
+            (relay.LastError ?? "Can't reach the relay.") + (relay.Queued > 0 ? $" {Plural.Of(relay.Queued, "update")} waiting." : string.Empty)
+            // Offline-first, said out loud (11 Nov 2026, Phase 6.3 - see OfflineFirst).
+            + $" Racing carries on. {OfflineFirst.CatchUp}.",
             behind || relay.Queued > 0 ? Level.Watch : Level.Off);
     }
 

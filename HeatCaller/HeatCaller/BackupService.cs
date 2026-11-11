@@ -416,6 +416,75 @@ public static class BackupService
     }
 
     /// <summary>
+    /// The warm standby's copy (11 Nov 2026, race-night build plan, Phase
+    /// 6.2 - see WarmStandby): the club's stores at the top of the data
+    /// folder, zipped into <paramref name="output"/>, and how many there
+    /// were.
+    ///
+    /// WHY a new entry point and not CreateBackup: a backup zips the whole
+    /// folder - the music library, photos, logs - into a file, and the
+    /// standby asks every fifteen seconds. This is the same consistent read
+    /// every backup's settings files already get (every save held off for
+    /// the instant it takes, so events.json and checkin.json are never from
+    /// either side of a change - see ReadSettingsFilesTogether), limited to
+    /// the stores (WarmStandby.IsMirroredFile) and built in memory, never
+    /// on disk. No secrets file, ever: keys and PINs don't leave this PC in
+    /// the copy. What it makes is an ordinary backup zip of those files, so
+    /// Take Over restores it with RestoreBackup like any other.
+    /// </summary>
+    internal static int WriteStandbySnapshot(Stream output)
+    {
+        var root = new DirectoryInfo(DataDirectory);
+        if (!root.Exists)
+        {
+            throw new InvalidOperationException("No saved data on this PC yet.");
+        }
+
+        var basePath = Path.GetFullPath(root.FullName).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var files = new Dictionary<string, (byte[] Bytes, DateTime LastWrite)>(StringComparer.OrdinalIgnoreCase);
+
+        // Top level only, and listed that way: walking every folder would
+        // walk the music library while every save waited.
+        SafeFile.WhileNoWritesUnderWay(() =>
+        {
+            foreach (var file in root.EnumerateFiles("*.json", SearchOption.TopDirectoryOnly))
+            {
+                var name = EntryNameFor(file.FullName, basePath);
+                if (!WarmStandby.IsMirroredFile(name))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    using var source = OpenShared(file.FullName);
+                    using var buffer = new MemoryStream();
+                    source.CopyTo(buffer, 81920);
+                    files[name] = (buffer.ToArray(), File.GetLastWriteTime(file.FullName));
+                }
+                catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+                {
+                    // Gone since it was listed - left out.
+                }
+            }
+        });
+
+        using (var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var (name, copy) in files)
+            {
+                var entry = archive.CreateEntry(name, CompressionLevel.Fastest);
+                entry.LastWriteTime = ZipSafeTime(copy.LastWrite);
+
+                using var target = entry.Open();
+                target.Write(copy.Bytes, 0, copy.Bytes.Length);
+            }
+        }
+
+        return files.Count;
+    }
+
+    /// <summary>
     /// Opens a file to copy into a backup.
     ///
     /// Not File.OpenRead / CreateEntryFromFile: those open the file
@@ -616,8 +685,18 @@ public static class BackupService
     /// (music, ambience, the decoder's capture log), which Windows won't
     /// let be replaced while they are open. From then on the app must
     /// restart, whatever the result says.
+    ///
+    /// <paramref name="keepAsTheyAre"/> (11 Nov 2026, the warm standby's
+    /// Take Over): store file names at the top of the data folder that are
+    /// left exactly as they are when the backup has no copy of them,
+    /// rather than set aside. The standby's copy leaves out the files that
+    /// belong to the machine - its voice settings, its metering - and
+    /// without this the restore would set the standby's own aside as "not
+    /// in the backup". settings.json is always kept, as before.
     /// </summary>
-    public static RestoreResult RestoreBackup(string zipPath, string? backupFolderForSafetyNet = null, Action? beforeReplacing = null)
+    public static RestoreResult RestoreBackup(
+        string zipPath, string? backupFolderForSafetyNet = null, Action? beforeReplacing = null,
+        IReadOnlyCollection<string>? keepAsTheyAre = null)
     {
         var safetyFolder = string.IsNullOrWhiteSpace(backupFolderForSafetyNet) ? DefaultBackupFolder : backupFolderForSafetyNet;
 
@@ -749,7 +828,8 @@ public static class BackupService
             // soundscape's theme music and imaging - built-ins have the
             // same id in every themes.json, so it still resolves.
             var soundscapeMarkerPath = Path.GetFullPath(Path.Combine(DataDirectory, ThemeStore.ActiveFileName));
-            if (!staged.Values.Any(destination => string.Equals(destination, soundscapeMarkerPath, StringComparison.OrdinalIgnoreCase)))
+            if (!staged.Values.Any(destination => string.Equals(destination, soundscapeMarkerPath, StringComparison.OrdinalIgnoreCase))
+                && keepAsTheyAre?.Contains(ThemeStore.ActiveFileName, StringComparer.OrdinalIgnoreCase) != true)
             {
                 TryDelete(soundscapeMarkerPath);
             }
@@ -766,7 +846,7 @@ public static class BackupService
             // are touched: music, photos, logs and the holding folder are
             // not, and settings.json and RestoredSettings' record (written
             // just above for this restore) are always left in place.
-            SetAsideFilesNotInBackup(root, staged.Values, journalPath, settingsPath, result);
+            SetAsideFilesNotInBackup(root, staged.Values, journalPath, settingsPath, result, keepAsTheyAre);
 
             // The data first, then the music and logs, so that if anything
             // is going to go wrong it is more likely to be with a song than
@@ -823,7 +903,9 @@ public static class BackupService
     /// the result's Failed list, which the Backups page already reads as
     /// "still holds the data from before the restore".
     /// </summary>
-    private static void SetAsideFilesNotInBackup(string root, IEnumerable<string> restoredDestinations, string journalPath, string settingsPath, RestoreResult result)
+    private static void SetAsideFilesNotInBackup(
+        string root, IEnumerable<string> restoredDestinations, string journalPath, string settingsPath, RestoreResult result,
+        IReadOnlyCollection<string>? keepAsTheyAre = null)
     {
         List<string> live;
         try
@@ -846,7 +928,9 @@ public static class BackupService
                 || restored.Contains(fullPath)
                 || IsRestoreRecord(fullPath)
                 || string.Equals(fullPath, settingsPath, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(fullPath, journalPath, StringComparison.OrdinalIgnoreCase))
+                || string.Equals(fullPath, journalPath, StringComparison.OrdinalIgnoreCase)
+                || (keepAsTheyAre is not null
+                    && keepAsTheyAre.Contains(Path.GetFileName(fullPath), StringComparer.OrdinalIgnoreCase)))
             {
                 continue;
             }
