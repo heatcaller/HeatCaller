@@ -2053,10 +2053,14 @@ public sealed class RaceProgramControl : UserControl
                 // The first round seeded the race day's way - by recent pace
                 // unless it says otherwise - and later rounds dealt in turn
                 // from that order (11 Nov 2026, Phase 3; see FirstRound).
+                //
+                // Heads-up (11 Nov 2026, Phase 5.2) builds every round its
+                // own way instead - see HeadsUpHeatsFor.
                 var seeding = SeedingFor(raceClass.Name, roster.Select(d => d.Transponder).ToList(), heatSize);
-                var heats = round == 0 && seeding.FirstRoundHeats is { } seeded
-                    ? seeded
-                    : DealQualifyingHeats(seeding.Order, heatSize, round);
+                var heats = HeadsUpHeatsFor(raceClass.Name, roster.Select(d => d.Transponder).ToList(), heatSize, round, runByClass[raceClass.Name])
+                    ?? (round == 0 && seeding.FirstRoundHeats is { } seeded
+                        ? seeded
+                        : DealQualifyingHeats(seeding.Order, heatSize, round));
 
                 for (var heat = 0; heat < heats.Count; heat++)
                 {
@@ -2114,7 +2118,8 @@ public sealed class RaceProgramControl : UserControl
         var done = $"Built {Plural.Of(created.Count, RoundWord)} across {Plural.Of(classes.Count, "class", "classes")}."
                    + (backToBacksAvoided > 0
                        ? $" Ordered so {Plural.Of(backToBacksAvoided, "driver")} in two classes {(backToBacksAvoided == 1 ? "doesn't" : "don't")} race back to back."
-                       : string.Empty);
+                       : string.Empty)
+                   + HeadsUpBuildNote(classes.Select(c => c.Name).ToList(), roundCount, runByClass);
         _lblStatus.Text = done;
         RefreshAll();
 
@@ -2280,11 +2285,93 @@ public sealed class RaceProgramControl : UserControl
     /// already moves drivers between heats.
     /// </summary>
     /// <summary>
+    /// One round's heats under heads-up qualifying (11 Nov 2026, race-night
+    /// build plan, Phase 5.2), or null when the race day is seeded another
+    /// way. <paramref name="round"/> is 0-based; <paramref name="run"/> is
+    /// the class's rounds already recorded today (1-based).
+    ///
+    /// Seeded on tonight's practice - best three in a row, from the start of
+    /// the race day's calendar day, since practice usually runs before the
+    /// day is opened - with the 60-day best lap for anyone who missed it.
+    /// Round 3 (and later odd rounds) reseeds on points once every round
+    /// before it has run; until then it is built from the practice seed, and
+    /// Build heats pressed again after round 2 rebuilds it on points. The
+    /// points are this race day's rounds only, scored as points whatever the
+    /// class's own method is, because that is what heads-up reseeds on.
+    /// </summary>
+    /// <summary>
+    /// What a heads-up build has to tell the director (11 Nov 2026, Phase
+    /// 5.2): that round 3 is reseeded on points only by building again after
+    /// round 2, and which classes would still seed their mains on something
+    /// other than points. Empty on any other kind of night.
+    /// </summary>
+    private string HeadsUpBuildNote(IReadOnlyList<string> classNames, int roundCount, IReadOnlyDictionary<string, HashSet<int>> runByClass)
+    {
+        if (ActiveDay is not { FirstRoundSeeding: FirstRoundSeeding.HeadsUp })
+        {
+            return string.Empty;
+        }
+
+        var note = string.Empty;
+
+        if (roundCount >= 3 && classNames.Any(c => !(runByClass[c].Contains(1) && runByClass[c].Contains(2))))
+        {
+            note += " Heads-up: Q3 is seeded from practice for now - press Build again after Q2 to reseed it on points.";
+        }
+
+        var notOnPoints = classNames
+            .Where(c => ClassByName(c) is not { QualifyingMethod: QualifyingMethod.RoundPoints })
+            .ToList();
+
+        if (notOnPoints.Count > 0)
+        {
+            note += $" {string.Join(", ", notOnPoints)} {(notOnPoints.Count == 1 ? "isn't" : "aren't")} scored on points per round yet - set it on the class to seed the mains on points.";
+        }
+
+        return note;
+    }
+
+    private List<List<string>>? HeadsUpHeatsFor(string className, List<string> roster, int heatSize, int round, IReadOnlySet<int> run)
+    {
+        if (ActiveDay is not { FirstRoundSeeding: FirstRoundSeeding.HeadsUp } day)
+        {
+            return null;
+        }
+
+        var since = day.StartedUtc.ToLocalTime().Date.ToUniversalTime();
+        var practice = HeadsUpQualifying.PracticeRuns(className, _sessionHistory.All, _rounds.Get, since, _profiles.PrimaryForAlternate);
+        var fallback = HeatSeeding.BestLaps(className, _sessionHistory.All, _rounds.Get, DateTime.UtcNow - HeatSeeding.RecentForm, _profiles.PrimaryForAlternate);
+        var seed = HeadsUpQualifying.Seed(roster, practice, fallback);
+        var heatCount = DealQualifyingHeats(roster, heatSize, 0).Count;
+
+        List<string>? points = null;
+
+        if (round >= 2 && Enumerable.Range(1, round).All(run.Contains))
+        {
+            var asPoints = new RaceClass
+            {
+                Name = className,
+                QualifyingMethod = QualifyingMethod.RoundPoints,
+                CountBestRounds = round,
+            };
+
+            points = QualifyingCalculator
+                .Compute(className, _rounds, _sessionHistory, _profiles, asPoints, QualifyingRoundFilter())
+                .Select(e => e.Transponder)
+                .ToList();
+        }
+
+        return HeadsUpQualifying.Round(round, seed, heatCount, points);
+    }
+
+    /// <summary>
     /// The class's drivers in the order the build deals them, and the first
     /// round's heats when it is seeded by pace - see FirstRound.
     /// </summary>
     private FirstRound.Seeding SeedingFor(string className, List<string> alphabetical, int heatSize)
     {
+        // Heads-up seeds from practice in HeadsUpHeatsFor; the order here is
+        // only the fallback the deal would use, so it is left alphabetical.
         var mode = ActiveDay?.FirstRoundSeeding ?? FirstRoundSeeding.Pace;
 
         var pace = mode == FirstRoundSeeding.Pace
@@ -2665,7 +2752,8 @@ public sealed class RaceProgramControl : UserControl
             _events?.RemoveRound(round.Id);
         }
 
-        created.AddRange(MainsBuilder.BuildRounds(className, plan, DayTrack(), bumpUp));
+        // A double or triple A-main (11 Nov 2026, Phase 5.3) is built as its legs.
+        created.AddRange(MainsBuilder.BuildRounds(className, plan, DayTrack(), bumpUp, raceClass?.AMainLegs ?? 1));
 
         foreach (var round in created)
         {
@@ -2674,7 +2762,11 @@ public sealed class RaceProgramControl : UserControl
 
         _events?.AddRoundsToActive(created.Select(r => r.Id));
 
-        var done = $"Built {Plural.Of(created.Count, "main")} for {className}.";
+        var legs = Math.Clamp(raceClass?.AMainLegs ?? 1, 1, AMainLegs.MaxLegs);
+        var done = $"Built {Plural.Of(created.Count, "main")} for {className}."
+                   + (legs > 1 && plan.Tiers[0].Count > 0
+                       ? $" The A-main runs as {legs} legs; the best {AMainLegs.LegsCounting(legs, raceClass?.AMainLegsCounted ?? 0)} count, fewest points wins."
+                       : string.Empty);
         _lblStatus.Text = done;
         RefreshAll();
 

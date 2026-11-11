@@ -64,6 +64,18 @@ public sealed class RoundDefinition
     /// </summary>
     public Dictionary<string, string>? MarshalCovers { get; set; }
 
+    /// <summary>
+    /// Which leg of a multi-leg A-main this is (11 Nov 2026, race-night build
+    /// plan, Phase 5.3): 1, 2 or 3, or 0 for every other round - including an
+    /// A-main run as one race, the usual case. The legs are scored together
+    /// by AMainLegs; this is how that, the program and the results find them
+    /// without reading the label.
+    /// </summary>
+    public int MainLeg { get; set; }
+
+    /// <summary>How many legs this main's A-main has, beside <see cref="MainLeg"/>. 0 when not a leg.</summary>
+    public int MainLegCount { get; set; }
+
     public bool IsRecorded => !string.IsNullOrEmpty(LinkedSessionId);
 
     /// <summary>A, B, C... derived from the tier. Falls back to the stored label for untiered mains.</summary>

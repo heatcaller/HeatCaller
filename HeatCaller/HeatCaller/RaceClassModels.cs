@@ -16,6 +16,28 @@ public enum QualifyingMethod
     /// otherwise good heat. N is usually 3 or 5.
     /// </summary>
     BestConsecutiveLaps,
+
+    /// <summary>
+    /// Position points per qualifying ROUND, lowest total wins (11 Nov 2026,
+    /// race-night build plan, Phase 5.1 - the ROAR "Qual-Points" style).
+    ///
+    /// WHY: under total laps or best consecutive laps one heat on a green
+    /// track, or one heat run while it rained, is compared directly with a
+    /// heat on a rubbered-in track an hour later - the later heats win on
+    /// conditions, not on driving. Points only ever compare drivers who ran
+    /// the SAME round, so a whole round run in the wet costs everybody the
+    /// same. Each round ranks its drivers across all of that round's heats
+    /// (most laps, then least time - the total-laps rule, inside the round),
+    /// 1st scores 1, 2nd scores 2 and so on, and a driver who did not run
+    /// the round (or was disqualified from it) scores one more than the
+    /// field. CountBestRounds picks the best N rounds. Ties go to the best
+    /// single-round finish, then the best single heat by laps and time.
+    ///
+    /// Added at the END of the enum on purpose: classes are saved with the
+    /// method as a number in older files, and inserting it earlier would
+    /// quietly change every saved class's rule.
+    /// </summary>
+    RoundPoints,
 }
 
 /// <summary>A racing class (e.g. "Stock Buggy", "Mini-Z MR03") used to group drivers for heats/mains.</summary>
@@ -131,6 +153,19 @@ public sealed class RaceClass
     /// straight seeded mains want.
     /// </summary>
     public int BumpUpCount { get; set; } = 2;
+
+    /// <summary>
+    /// How many legs the A-main runs as (11 Nov 2026, Phase 5.3): 1 is a
+    /// single A-main, as always; 2 or 3 is a double or triple A-main, scored
+    /// on points over the best legs - see AMainLegs.
+    /// </summary>
+    public int AMainLegs { get; set; } = 1;
+
+    /// <summary>
+    /// How many A-main legs count, or 0 for the usual rule (all but one:
+    /// best 2 of 3, best 1 of 2) - see AMainLegs.LegsCounting.
+    /// </summary>
+    public int AMainLegsCounted { get; set; }
 
     /// <summary>
     /// The class's colour, as ARGB. Zero means nobody has chosen one, and

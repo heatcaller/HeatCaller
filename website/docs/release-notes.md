@@ -4,6 +4,13 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **More qualifying and mains formats (11 November).** Three additions:
+    - **Points per round.** A third **Qualifying:** choice in the class settings, the ROAR "Qual-Points" style. Each round ranks everyone across its heats on laps then time; 1st scores 1 point, 2nd 2, and so on; a missed or DQ'd round scores the field plus one. **Heats that count:** picks the best rounds, and fewest points wins. Ties go to the best single-round finish, then the best heat. The standings, the projection, the mains preview, the event report and drivers' phones all show the points, for example "6 pts (best 2 of 3)". See [Points per round](race-day/program-and-mains.md#points-per-round).
+    - **Heads-up qualifying (HRQF).** New **First round seeded:** choice on **Race Day → Setup**. It seeds from tonight's practice (best 3 laps in a row), puts every other seed in each heat, reverses the grids in round 2, and reseeds round 3 on points when you build again after round 2. See [Heads-up qualifying](race-day/program-and-mains.md#heads-up-qualifying).
+    - **Double and triple A-mains.** New **A-main:** setting in the class settings. The A-Main is built as legs ("A-Main Leg 1", "Leg 2"...), scored on points over the best legs, and the event report shows the **A-Main overall**. See [Double and triple A-mains](race-day/program-and-mains.md#double-and-triple-a-mains).
+
+    Update HeatCaller on the race PC. Phones show the points after the relay is deployed; until then they show laps and time.
+
 - **Marshal swaps (11 November).** **Swap...** in the **Corner Marshals** window covers a driver's post for one round with somebody else, and the marshal call, the Next Up bar and drivers' phones follow it. See [Corner marshals](race-day/program-and-mains.md#corner-marshals).
 - **Money at the desk (11 November).** New **Entry fee:** and **Each extra class:** on **Race Day → Setup**. With a fee set, **Who's Racing** shows a **Paid** column (what each driver owes), and right-clicking marks drivers **Paid Cash**, **Paid Card**, **Comp** (marshal, volunteer, junior) or **Still Owing**, with Undo. The event report gets a **Money at the desk** section (cash, card, comps, and who still owes), and the closing list on Next Steps names drivers who still owe. HeatCaller only records it; it never takes a payment. See [Money at the desk](race-day/events-and-entries.md#money-at-the-desk). Update HeatCaller on the race PC; nothing changes on the relay.
 

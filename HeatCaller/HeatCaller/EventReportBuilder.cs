@@ -87,6 +87,7 @@ public static class EventReportBuilder
             WriteQualifying(sb, sessions, rounds, classes, profiles, ReportEvent(options));
         }
 
+        WriteAMainLegs(sb, sessions, rounds, classes, profiles);
         WriteResultsByClass(sb, sessions, rounds, classes, profiles, options, handicaps);
         WriteRecords(sb, sessions, trackLayouts, profiles);
 
@@ -520,6 +521,47 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     /// as the Race Program page - so the report can't disagree with what
     /// the mains were seeded from.
     /// </summary>
+    /// <summary>
+    /// The overall result of each double or triple A-main (11 Nov 2026,
+    /// race-night build plan, Phase 5.3): points per leg, best N legs,
+    /// fewest wins, with the tie-breaker printed under it. Each leg's own
+    /// result is in Results as an ordinary race; this is the one that names
+    /// the winner. Only legs in the report's sessions are counted.
+    /// </summary>
+    private static void WriteAMainLegs(StringBuilder sb, List<SessionRecord> sessions,
+        RoundDefinitionStore rounds, RaceClassStore classes, ProfileStore profiles)
+    {
+        var legs = sessions
+            .Where(s => s.RoundId is not null)
+            .Select(s => (Session: s, Round: rounds.Get(s.RoundId!)))
+            .Where(x => x.Round is { Kind: RoundKind.Main, MainLeg: > 0 } && x.Round.LinkedSessionId == x.Session.Id)
+            .GroupBy(x => x.Round!.ClassName, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var group in legs)
+        {
+            var raceClass = classes.All.FirstOrDefault(c => string.Equals(c.Name, group.Key, StringComparison.OrdinalIgnoreCase));
+            var ordered = group.OrderBy(x => x.Round!.MainLeg).Select(x => x.Session).ToList();
+            var legCount = Math.Max(group.Max(x => x.Round!.MainLegCount), ordered.Count);
+            var counting = AMainLegs.LegsCounting(legCount, raceClass?.AMainLegsCounted ?? 0);
+            var overall = AMainLegs.Overall(ordered, counting, profiles.PrimaryForAlternate);
+
+            sb.AppendLine($"<h2>{Esc(group.Key)} A-Main overall</h2>");
+            sb.AppendLine($"<p>{Plural.Of(ordered.Count, "leg")} of {legCount} run; the best {counting} count, fewest points wins. {Esc(AMainLegs.TieBreakWords)}</p>");
+            sb.AppendLine("<table><tr><th class=\"num\">Pos</th><th>Driver</th><th class=\"num\">Points</th><th>Each leg</th></tr>");
+
+            for (var i = 0; i < overall.Count; i++)
+            {
+                var s = overall[i];
+                var name = profiles.Get(s.Transponder)?.DriverName is { Length: > 0 } profileName ? profileName : s.DriverName;
+                sb.AppendLine($"<tr><td class=\"num\">{i + 1}</td><td>{Esc(name)}</td><td class=\"num\">{Esc(s.Words())}</td><td>{Esc(s.Detail)}</td></tr>");
+            }
+
+            sb.AppendLine("</table>");
+        }
+    }
+
     private static void WriteQualifying(StringBuilder sb, List<SessionRecord> sessions,
         RoundDefinitionStore rounds, RaceClassStore classes, ProfileStore profiles, RaceEvent? raceEvent)
     {
@@ -564,8 +606,15 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
             var consecutive = raceClass?.QualifyingMethod == QualifyingMethod.BestConsecutiveLaps;
             var lapCount = Math.Max(1, raceClass?.ConsecutiveLapCount ?? 3);
 
+            // Points qualifying (11 Nov 2026, Phase 5.1): the points decide
+            // the order, so they lead the row, and "Best laps" is the best
+            // single heat - the tie-breaker - not a total.
+            var points = raceClass?.QualifyingMethod == QualifyingMethod.RoundPoints;
+
             sb.AppendLine($"<h3>{Esc(className)}</h3>");
-            sb.AppendLine("<table><tr><th class=\"num\">Pos</th><th>Driver</th><th class=\"num\">Best laps</th>"
+            sb.AppendLine("<table><tr><th class=\"num\">Pos</th><th>Driver</th>"
+                          + (points ? "<th class=\"num\">Points</th>" : string.Empty)
+                          + "<th class=\"num\">Best laps</th>"
                           + (consecutive ? $"<th class=\"num\">Best {lapCount} consec.</th>" : string.Empty)
                           + "<th class=\"num\">Fastest lap</th><th>Counted</th></tr>");
 
@@ -575,6 +624,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
                 sb.AppendLine("<tr>"
                               + $"<td class=\"num\">{i + 1}</td>"
                               + $"<td>{Esc(e.DriverName)}</td>"
+                              + (points ? $"<td class=\"num\">{Esc(e.PointsWords())}</td>" : string.Empty)
                               + $"<td class=\"num\">{e.BestLaps}</td>"
                               + (consecutive ? $"<td class=\"num\">{(e.BestConsecutiveMs > 0 ? $"{Secs(e.BestConsecutiveMs)}s" : "-")}</td>" : string.Empty)
                               + $"<td class=\"num\">{(e.BestFastLapMs > 0 ? $"{Secs(e.BestFastLapMs)}s" : "-")}</td>"

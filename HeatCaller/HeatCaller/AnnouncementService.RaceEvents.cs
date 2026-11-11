@@ -1565,6 +1565,12 @@ public sealed partial class AnnouncementService
     /// time, or under BestConsecutiveLaps the quickest run of that many
     /// flying laps, with drivers yet to complete a run behind on laps and
     /// time. Null for an empty field.
+    ///
+    /// Under RoundPoints (11 Nov 2026, Phase 5.1) the heat is ranked by laps
+    /// then time as well - that is how a round's points are given out - so
+    /// it takes the most-laps path. The leader of this heat is on course for
+    /// the round's fewest points; whether that is pole overall depends on
+    /// the other rounds, which the projection (QualifyingProjector) shows.
     /// </summary>
     internal static string? QualifyingLeader(IEnumerable<RaceStanding> field,
         IReadOnlyDictionary<string, List<long>> flyingLaps, QualifyingMethod method, int consecutiveLaps)

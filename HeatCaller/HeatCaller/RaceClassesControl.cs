@@ -225,9 +225,20 @@ public sealed class RaceClassesControl : UserControl
 
     private static string DescribeQualifying(RaceClass raceClass)
     {
-        var method = raceClass.QualifyingMethod == QualifyingMethod.BestConsecutiveLaps
-            ? $"Best {raceClass.ConsecutiveLapCount} consecutive"
-            : "Most laps, then time";
+        var method = raceClass.QualifyingMethod switch
+        {
+            QualifyingMethod.BestConsecutiveLaps => $"Best {raceClass.ConsecutiveLapCount} consecutive",
+            QualifyingMethod.RoundPoints => "Points per round",
+            _ => "Most laps, then time",
+        };
+
+        // Points count ROUNDS, not heats (11 Nov 2026, Phase 5.1).
+        if (raceClass.QualifyingMethod == QualifyingMethod.RoundPoints)
+        {
+            return raceClass.CountBestRounds <= 1
+                ? $"{method}  ·  best round"
+                : $"{method}  ·  best {raceClass.CountBestRounds} rounds";
+        }
 
         return raceClass.CountBestRounds <= 1
             ? $"{method}  ·  best heat"
@@ -235,9 +246,13 @@ public sealed class RaceClassesControl : UserControl
     }
 
     private static string DescribeMains(RaceClass raceClass) =>
-        raceClass.BumpUpCount <= 0
+        (raceClass.BumpUpCount <= 0
             ? $"{raceClass.MainSize} per main  ·  no bump-ups"
-            : $"{raceClass.MainSize} per main  ·  top {raceClass.BumpUpCount} bump up";
+            : $"{raceClass.MainSize} per main  ·  top {raceClass.BumpUpCount} bump up")
+        // 11 Nov 2026, Phase 5.3: a double or triple A-main says so.
+        + (raceClass.AMainLegs > 1
+            ? $"  ·  A-main in {raceClass.AMainLegs} legs (best {AMainLegs.LegsCounting(raceClass.AMainLegs, raceClass.AMainLegsCounted)})"
+            : string.Empty);
 
     /// <summary>
     /// The race format, and the qualifier's separately when it has one -

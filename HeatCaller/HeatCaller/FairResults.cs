@@ -13,6 +13,14 @@ public enum FirstRoundSeeding
 
     /// <summary>At random, the same random for the same race day so a rebuild gives the same heats.</summary>
     Random,
+
+    /// <summary>
+    /// Heads-up / HRQF (11 Nov 2026, Phase 5.2): seeded from tonight's
+    /// practice, every other seed per heat, round 2 reversed, round 3
+    /// reseeded on points. Not only the first round - see HeadsUpQualifying.
+    /// At the end so a saved race day's choice keeps its number.
+    /// </summary>
+    HeadsUp,
 }
 
 /// <summary>
@@ -84,6 +92,7 @@ public static class FirstRound
     {
         FirstRoundSeeding.Alphabetical => "Alphabetical",
         FirstRoundSeeding.Random => "Random",
+        FirstRoundSeeding.HeadsUp => "Heads-up (HRQF, from practice)",
         _ => "By recent pace",
     };
 }
@@ -178,6 +187,13 @@ public static class MainsPreview
     /// <summary>The counted result in words: "14 laps, 5:02.3 (Q2 Heat 1)", or "best 3 in a row 36.912 (Q1 Heat 2)".</summary>
     public static string ResultWords(QualifyingCalculator.Entry entry, QualifyingMethod method, int consecutiveLaps)
     {
+        // Points qualifying (11 Nov 2026, Phase 5.1): "6 pts (best 2 of 3)" -
+        // the figure the seeding was ordered on, not a heat's laps.
+        if (method == QualifyingMethod.RoundPoints)
+        {
+            return entry.PointsWords();
+        }
+
         var source = string.IsNullOrWhiteSpace(entry.SourceRoundLabel)
             ? string.Empty
             : entry.HeatsCounted > 1 ? $" (best {entry.HeatsCounted} heats)" : $" ({entry.SourceRoundLabel})";

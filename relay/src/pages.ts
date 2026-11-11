@@ -8390,6 +8390,9 @@ const QUAL_JS = `
 // the best run of laps in a row ("3 in 27.512").
 function qualScore(cls, r) {
   if (!r) return '';
+  // Points qualifying (11 Nov 2026, Phase 5.1): the laptop's own words,
+  // "6 pts (best 2 of 3)", so the phone and the desk say it the same way.
+  if (cls && cls.method === 'RoundPoints' && r.pointsText) return String(r.pointsText);
   if (cls && cls.method === 'BestConsecutiveLaps' && Number(r.consecutiveMs) > 0) return (Number(cls.consecutive) || 3) + ' in ' + lap(Number(r.consecutiveMs));
   return Number(r.laps) > 0 ? Number(r.laps) + '/' + lap(Number(r.timeMs)) : '-';
 }
@@ -8402,6 +8405,8 @@ function qualToMoveUp(cls, rows, r) {
   const tier = Math.floor((pos - 1) / size);
   const cut = rows.find((x) => Number(x.pos) === tier * size);
   const above = cut ? String(cut.main || '') : '';
+  // Fewest points wins, so "beat" means fewer - said, so nobody aims high.
+  if (cut && above && cls && cls.method === 'RoundPoints' && Number(cut.points) > 0) return 'Beat ' + Number(cut.points) + ' pts (fewest wins) to make the ' + above + ' main';
   return cut && above ? 'Beat ' + qualScore(cls, cut) + ' to make the ' + above + ' main' : '';
 }
 `;

@@ -212,6 +212,11 @@ public sealed partial class RaceDayService
                 heatsRun = e.HeatsRun,
                 heatsCounted = e.HeatsCounted,
                 from = e.SourceRoundLabel,
+
+                // Points qualifying (11 Nov 2026, Phase 5.1); null otherwise.
+                points = method == QualifyingMethod.RoundPoints ? e.Points : (int?)null,
+                pointsText = method == QualifyingMethod.RoundPoints ? e.PointsWords() : null,
+                rounds = method == QualifyingMethod.RoundPoints ? e.PointsDetail : null,
             }).ToList(),
         });
     }
