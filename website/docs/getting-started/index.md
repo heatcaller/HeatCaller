@@ -95,3 +95,5 @@ Everything else works offline, including the Wi-Fi pages for phones.
 2. Take the [tour of the window](tour.md).
 3. Read about [Simple and Advanced mode](simple-and-advanced-mode.md). HeatCaller starts in Simple mode, which shows what a race night needs; Advanced mode shows every setting.
 4. Follow [Your first race night](first-race-night.md).
+
+Coming from LiveTime? Read [Switching from LiveTime](switching-from-livetime.md) for what its screens are called here and how to bring your drivers across.
