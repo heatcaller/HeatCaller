@@ -58,6 +58,9 @@ public sealed partial class AnnouncementService
 
         /// <summary>Renders its words early, while the line before it plays - or null for a line that cannot be. See AnnouncementService.RenderAhead.</summary>
         public Func<Task>? RenderAhead { get; init; }
+
+        /// <summary>The correction for a cut-off position report - goes next and is not overtaken or binned while it waits. See AnnouncementService.PositionReportCut.</summary>
+        public bool IsCorrection { get; init; }
     }
 
     /// <summary>
