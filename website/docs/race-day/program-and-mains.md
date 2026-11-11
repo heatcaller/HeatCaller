@@ -404,9 +404,9 @@ Each leg is scored like a points round:
 
 Ties are broken by the best finish in any single leg, then by the better finish in the last leg run.
 
-The overall result is in the event report, under **A-Main overall**, with each driver's place and points in every leg. Each leg's own result is in **Results** like any race.
+The overall result is in the event report, under **A-Main overall**, with each driver's place and points in every leg. Each leg's own result is in **Results** like any race. Once the last leg is recorded, the announcer says who won overall straight after that leg's result, for example "Sam wins the A-Main overall, best two of three legs", and the race recap mentions it too.
 
-Each leg takes bump-ups from the B-Main. The next-step card offers them one leg at a time: apply them to every leg before it runs.
+The legs take their bump-ups from the B-Main together. **Move the Top Finishers Up...** (or the next-step card) asks once and puts the B-Main's top finishers into every leg that hasn't run, with one **Undo**. Skipping bump-ups skips them for every leg too. A leg that has already run, or already has its bump-ups, is left alone.
 
 Seeding only looks at the current race day's mains. If the class already has mains today that haven't run, seeding replaces them. If any of today's mains have already been run, seeding stops with **Mains already run** — take the ones you don't want off the program first, so recorded results aren't orphaned. Mains from earlier race days are left alone and never block seeding. A main that's out on track can't be replaced either. Seeding can be undone. As with the qualifying build, any new mains that have been run by the time you undo are kept, along with a main that's on track right now, and a **Some rounds were kept** box lists them.
 

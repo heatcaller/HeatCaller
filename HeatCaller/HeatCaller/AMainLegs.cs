@@ -158,6 +158,102 @@ public static class AMainLegs
             .ToList();
     }
 
+    /// <summary>The overall A-main once its last leg is in: the table, how many legs counted and how many ran.</summary>
+    public sealed record Decided(List<Standing> Table, int Counting, int Legs)
+    {
+        /// <summary>The overall winner - the top of the table.</summary>
+        public Standing Winner => Table[0];
+    }
+
+    /// <summary>
+    /// The overall A-main result when <paramref name="justRun"/> is the LAST
+    /// leg of its A-main to be recorded (11 Nov 2026) - else null: not a leg,
+    /// another leg still to run, or nobody scored. <paramref name="justRunResult"/>
+    /// is the leg just finished, handed in because the caller asks before the
+    /// round is linked to it. The other legs are the class's other legs in
+    /// <paramref name="roundsInScope"/> (tonight's), each read through its
+    /// linked session.
+    /// </summary>
+    public static Decided? AfterLastLeg(
+        RoundDefinition justRun,
+        SessionRecord justRunResult,
+        IEnumerable<RoundDefinition> roundsInScope,
+        Func<string, SessionRecord?> sessionById,
+        int countedSetting,
+        Func<string, string?>? primaryForAlternate = null)
+    {
+        if (justRun is not { Kind: RoundKind.Main, MainTier: <= 0, MainLeg: > 0 })
+        {
+            return null;
+        }
+
+        var siblings = roundsInScope
+            .Where(r => r.Kind == RoundKind.Main
+                        && r.MainTier <= 0
+                        && r.MainLeg > 0
+                        && !string.Equals(r.Id, justRun.Id, StringComparison.Ordinal)
+                        && string.Equals(r.ClassName, justRun.ClassName, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var legs = new List<(int Leg, SessionRecord Result)> { (justRun.MainLeg, justRunResult) };
+
+        foreach (var sibling in siblings)
+        {
+            // A leg still to run means this one is not the last.
+            if (!sibling.IsRecorded || sibling.LinkedSessionId is not { } id || sessionById(id) is not { } result)
+            {
+                return null;
+            }
+
+            legs.Add((sibling.MainLeg, result));
+        }
+
+        var legCount = Math.Max(justRun.MainLegCount, legs.Count);
+
+        if (legs.Count < legCount || legs.Count < 2)
+        {
+            return null;
+        }
+
+        var ordered = legs.OrderBy(l => l.Leg).Select(l => l.Result).ToList();
+        var counting = LegsCounting(legCount, countedSetting);
+        var table = Overall(ordered, counting, primaryForAlternate);
+
+        return table.Count == 0 ? null : new Decided(table, counting, legCount);
+    }
+
+    /// <summary>
+    /// The announcer's line for the overall winner: "Sam wins the A-Main
+    /// overall, best two of three legs." <paramref name="winner"/> is the
+    /// name as it is said.
+    /// </summary>
+    public static string OverallCall(string winner, int counting, int legs)
+    {
+        var how = counting < legs
+            ? $"best {Words(counting)} of {Words(legs)} legs"
+            : $"across all {Words(legs)} legs";
+
+        return $"{winner.Trim()} wins the A-Main overall, {how}.";
+    }
+
+    /// <summary>The recap's fact line for the overall result: winner, points and the next two.</summary>
+    public static string OverallFact(Decided decided, Func<Standing, string> nameOf)
+    {
+        var top = decided.Table.Take(3).Select((s, i) => $"{i + 1}. {nameOf(s)} {s.Words()}");
+
+        return $"This was the last leg of the A-Main, which is scored over {Words(decided.Legs)} legs with the best "
+               + $"{Words(decided.Counting)} counting. Overall: {string.Join(", ", top)}. "
+               + $"{nameOf(decided.Winner)} wins the A-Main overall.";
+    }
+
+    private static string Words(int n) => n switch
+    {
+        1 => "one",
+        2 => "two",
+        3 => "three",
+        _ => n.ToString(System.Globalization.CultureInfo.InvariantCulture),
+    };
+
     /// <summary>The tie-breaker in words, for the results and the docs.</summary>
     public const string TieBreakWords =
         "Level on points goes to the better best single-leg finish, then the better finish in the last leg run.";

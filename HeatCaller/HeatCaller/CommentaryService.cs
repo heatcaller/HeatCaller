@@ -3349,7 +3349,8 @@ public sealed class CommentaryService
         MainsOnLayout? mains = null,
         (int Changes, int Leaders)? leadChanges = null,
         string? presentedBy = null,
-        RaceHandicap? handicap = null)
+        RaceHandicap? handicap = null,
+        string? aMainOverall = null)
     {
         if (Client is null || session.Results.Count == 0)
         {
@@ -3635,6 +3636,8 @@ public sealed class CommentaryService
                 ? "What the penalties did to the result:\n" + string.Join("\n", decidedLines.Select(l => "  " + l)) + "\n"
                 : string.Empty) +
             (handicapLines.Count > 0 ? string.Join("\n", handicapLines) + "\n" : string.Empty) +
+            // 11 Nov 2026: the last leg of a multi-leg A-main decides it overall.
+            (string.IsNullOrWhiteSpace(aMainOverall) ? string.Empty : $"{aMainOverall.Trim()}\n") +
             (targetLines.Count > 0 ? $"Lap targets: {string.Join("; ", targetLines)}\n" : string.Empty) +
             (directorNote.Length > 0 ? $"Race director's note on this race: \"{directorNote}\"\n" : string.Empty) +
             FactsClose + "\n" +
@@ -3745,6 +3748,9 @@ public sealed class CommentaryService
                   + "who is not listed."
                 : string.Empty)
             + RaceControlRule(officialLines.Count > 0, decidedLines.Count > 0, handicapLines.Count > 0, targetLines.Count > 0, directorNote.Length > 0)
+            + (string.IsNullOrWhiteSpace(aMainOverall)
+                ? string.Empty
+                : " This race was the last leg of the A-Main: say who won the A-Main overall, exactly as the overall line says, as well as who won this leg.")
             // THE SPONSOR GOES AT THE TOP (21 Oct 2026), so the model is not
             // handed one at all: left to place the credit itself it put it
             // at the end, and on the recap show a sponsor is credited before

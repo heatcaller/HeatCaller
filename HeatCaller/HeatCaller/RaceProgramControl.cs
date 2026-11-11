@@ -4720,6 +4720,8 @@ public sealed class RaceProgramControl : UserControl
         // MainsBuilder, the same call ApplyBumpUp makes, so the names asked
         // about are the drivers moved - ghosts left out, spare transponders
         // counted as their driver.
+        var legsTaking = MainsBuilder.BumpUpTargets(target, mains);
+        var into = LegsInWords(legsTaking);
         var plan = MainsBuilder.PlanBumpUp(target, feederResults, _profiles);
         var movable = plan.Movable;
         var alreadyThere = plan.AlreadyThere;
@@ -4734,7 +4736,7 @@ public sealed class RaceProgramControl : UserControl
 
             return new BumpUpsAnswer(true, "Nothing to bump",
                 $"Nothing to bump up - every qualifying finisher from {feeder.RoundLabel} is already in {target.RoundLabel}.{who}"
-                + $"\r\n\r\nBump-ups for {target.RoundLabel} are marked as done, so the program can move on.",
+                + $"\r\n\r\nBump-ups for {into} are marked as done, so the program can move on.",
                 target, feeder, true);
         }
 
@@ -4745,8 +4747,8 @@ public sealed class RaceProgramControl : UserControl
             : string.Empty;
 
         return new BumpUpsAnswer(true, ProgramCaptions.BumpUps.TrimEnd('.'),
-            $"Bump {Plural.Of(movable.Count, "driver")} from {feeder.RoundLabel} up into {target.RoundLabel}?\r\n\r\n{names}{skipped}"
-            + $"\r\n\r\n{target.RoundLabel} grows to take them - nobody is moved down into {feeder.RoundLabel}, "
+            $"Bump {Plural.Of(movable.Count, "driver")} from {feeder.RoundLabel} up into {into}?\r\n\r\n{names}{skipped}"
+            + $"\r\n\r\n{(legsTaking.Count > 1 ? "Each leg grows" : target.RoundLabel + " grows")} to take them - nobody is moved down into {feeder.RoundLabel}, "
             + "which has already run.",
             target, feeder, false);
     }
@@ -4778,6 +4780,16 @@ public sealed class RaceProgramControl : UserControl
         // passed - see MainsBuilder.FeederFor.
         var feeder = MainsBuilder.FeederFor(target, mains)!;
         var feederResults = _sessionHistory.Get(feeder.LinkedSessionId!)!;
+
+        // EVERY LEG AT ONCE (11 Nov 2026): a double or triple A-main's legs
+        // share the grid, so the bump-ups go into each leg still to run in
+        // this one step, under one undo - see MainsBuilder.BumpUpTargets.
+        var targets = MainsBuilder.BumpUpTargets(target, mains);
+
+        if (targets.Count > 1)
+        {
+            return ApplyBumpUpsIntoLegs(targets, feeder, feederResults, undoPrefix);
+        }
 
         // Snapshot both rosters - a bump-up changes two rounds at once.
         var targetBefore = target.AssignedTransponders.ToList();
@@ -4850,6 +4862,88 @@ public sealed class RaceProgramControl : UserControl
     }
 
     /// <summary>
+    /// The bump-ups into every leg of a double or triple A-main still to run
+    /// (11 Nov 2026), as one change with one undo - the same rules as the
+    /// single main above: the undo refuses whole once any leg has been run
+    /// or edited by hand since.
+    /// </summary>
+    private ProgramAnswer ApplyBumpUpsIntoLegs(List<RoundDefinition> legs, RoundDefinition feeder, SessionRecord feederResults, string undoPrefix)
+    {
+        var before = legs.ToDictionary(l => l.Id, l => l.AssignedTransponders.ToList(), StringComparer.Ordinal);
+        var feederBefore = feeder.AssignedTransponders.ToList();
+        List<RosterRestore>? restores = null;
+
+        var label = $"{undoPrefix}Bump-ups into {LegsInWords(legs)}";
+
+        Action? undoBumpUps = null;
+        undoBumpUps = () =>
+        {
+            RefuseRosterUndoWhileOnTrack(label, undoBumpUps!, legs.Select(l => l.Id).Append(feeder.Id).ToList());
+
+            if (restores is null)
+            {
+                return;
+            }
+
+            var verdict = CheckRosterUndo(restores, _rounds.Get);
+
+            if (!verdict.CanRestore)
+            {
+                throw new InvalidOperationException(DescribeRosterUndoRefusal(verdict, "bump-ups", "main"));
+            }
+
+            WriteRosters(restores);
+
+            foreach (var leg in legs)
+            {
+                if (_rounds.Get(leg.Id) is { } current)
+                {
+                    current.BumpUpsApplied = false;
+                    _rounds.Update(current);
+                }
+            }
+
+            RefreshAll();
+        };
+
+        _undo.Capture(label, undoBumpUps);
+
+        var promoted = new List<string>();
+
+        foreach (var leg in legs)
+        {
+            var result = MainsBuilder.ApplyBumpUp(leg, feeder, feederResults, _profiles);
+            promoted = promoted.Union(result.Promoted, StringComparer.OrdinalIgnoreCase).ToList();
+            _rounds.Update(leg);
+        }
+
+        _rounds.Update(feeder);
+
+        restores = legs
+            .Select(l => new RosterRestore(l.Id, l.LinkedSessionId, l.AssignedTransponders.ToList(), before[l.Id]))
+            .Append(new RosterRestore(feeder.Id, feeder.LinkedSessionId, feeder.AssignedTransponders.ToList(), feederBefore))
+            .ToList();
+
+        RefreshAll();
+
+        return new ProgramAnswer(true, "Bump-ups applied",
+            $"Promoted {Plural.Of(promoted.Count, "driver")} into {LegsInWords(legs)}.");
+    }
+
+    /// <summary>"A-Main Leg 1, Leg 2 and Leg 3" - the legs a bump-up goes into.</summary>
+    internal static string LegsInWords(IReadOnlyList<RoundDefinition> legs)
+    {
+        if (legs.Count <= 1)
+        {
+            return legs.Count == 1 ? legs[0].RoundLabel : string.Empty;
+        }
+
+        var names = legs.Select((l, i) => i > 0 && l.MainLeg > 0 ? $"Leg {l.MainLeg}" : l.RoundLabel).ToList();
+
+        return string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1];
+    }
+
+    /// <summary>
     /// Marks a main's bump-ups as dealt with without moving anybody - for
     /// "nobody to move" and for "we are not doing bump-ups today". Either
     /// way the banner has to be able to move past it, and it only does that
@@ -4859,15 +4953,26 @@ public sealed class RaceProgramControl : UserControl
     /// </summary>
     public void SkipBumpUps(RoundDefinition target, string undoPrefix = "")
     {
-        _undo.Capture($"{undoPrefix}Skip bump-ups into {target.RoundLabel}", () =>
+        // Every leg of a multi-leg A-main at once, as the bump-ups themselves are.
+        var targets = MainsBuilder.BumpUpTargets(target, DayMainsForClass(target.ClassName));
+
+        _undo.Capture($"{undoPrefix}Skip bump-ups into {LegsInWords(targets)}", () =>
         {
-            target.BumpUpsApplied = false;
-            _rounds.Update(target);
+            foreach (var one in targets)
+            {
+                one.BumpUpsApplied = false;
+                _rounds.Update(one);
+            }
+
             RefreshAll();
         });
 
-        target.BumpUpsApplied = true;
-        _rounds.Update(target);
+        foreach (var one in targets)
+        {
+            one.BumpUpsApplied = true;
+            _rounds.Update(one);
+        }
+
         RefreshAll();
     }
 

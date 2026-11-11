@@ -258,6 +258,111 @@ public sealed class HeadsUpAndAMainLegsTests
         Assert.Equal("A", overall[0].Transponder);
     }
 
+    // 11 Nov 2026: the overall winner after the last leg, and bump-ups into every leg.
+
+    [Fact]
+    public void After_the_last_leg_the_overall_winner_is_decided_from_every_leg()
+    {
+        var sessions = new Dictionary<string, SessionRecord>
+        {
+            ["s1"] = Leg(("A", 1), ("B", 2), ("C", 3)),
+            ["s2"] = Leg(("B", 1), ("A", 2), ("C", 3)),
+        };
+        var legs = LegRounds(3, linked: new[] { "s1", "s2", null });
+
+        var decided = AMainLegs.AfterLastLeg(legs[2], Leg(("A", 1), ("C", 2), ("B", 3)), legs, sessions.GetValueOrDefault, 0);
+
+        Assert.NotNull(decided);
+        Assert.Equal("A", decided!.Winner.Transponder);
+        Assert.Equal(2, decided.Counting);
+        Assert.Equal(3, decided.Legs);
+        Assert.Equal("Sam wins the A-Main overall, best two of three legs.", AMainLegs.OverallCall("Sam", decided.Counting, decided.Legs));
+    }
+
+    [Fact]
+    public void No_overall_while_a_leg_is_still_to_run()
+    {
+        var sessions = new Dictionary<string, SessionRecord> { ["s1"] = Leg(("A", 1), ("B", 2)) };
+        var legs = LegRounds(3, linked: new[] { "s1", null, null });
+
+        Assert.Null(AMainLegs.AfterLastLeg(legs[1], Leg(("B", 1), ("A", 2)), legs, sessions.GetValueOrDefault, 0));
+    }
+
+    [Fact]
+    public void No_overall_for_a_single_a_main()
+    {
+        var main = new RoundDefinition { ClassName = "Buggy", Kind = RoundKind.Main, MainTier = 0, RoundLabel = "A-Main" };
+
+        Assert.Null(AMainLegs.AfterLastLeg(main, Leg(("A", 1)), new[] { main }, _ => null, 0));
+    }
+
+    [Fact]
+    public void Overall_call_counting_every_leg_says_so()
+    {
+        Assert.Equal("Jo wins the A-Main overall, across all two legs.", AMainLegs.OverallCall("Jo", 2, 2));
+        Assert.Equal("Jo wins the A-Main overall, best one of two legs.", AMainLegs.OverallCall("Jo", 1, 2));
+    }
+
+    [Fact]
+    public void Overall_fact_names_the_top_of_the_table()
+    {
+        var legs = new[] { Leg(("A", 1), ("B", 2)), Leg(("B", 1), ("A", 2)) };
+        var decided = new AMainLegs.Decided(AMainLegs.Overall(legs, 1), 1, 2);
+
+        var fact = AMainLegs.OverallFact(decided, s => s.DriverName);
+
+        Assert.Contains("last leg of the A-Main", fact);
+        Assert.Contains("wins the A-Main overall", fact);
+    }
+
+    [Fact]
+    public void Bump_ups_go_into_every_leg_still_to_run()
+    {
+        var b = new RoundDefinition { ClassName = "Buggy", Kind = RoundKind.Main, MainTier = 1, RoundLabel = "B-Main", Order = 1, BumpUpCount = 2 };
+        var legs = LegRounds(3, linked: new string?[] { null, null, null });
+        var mains = new List<RoundDefinition> { legs[0], legs[1], legs[2], b };
+
+        var targets = MainsBuilder.BumpUpTargets(legs[0], mains);
+
+        Assert.Equal(new[] { 1, 2, 3 }, targets.Select(t => t.MainLeg));
+        Assert.Equal("A-Main Leg 1, Leg 2 and Leg 3", RaceProgramControl.LegsInWords(targets));
+    }
+
+    [Fact]
+    public void Bump_ups_leave_a_leg_already_run_or_bumped_alone()
+    {
+        var b = new RoundDefinition { ClassName = "Buggy", Kind = RoundKind.Main, MainTier = 1, RoundLabel = "B-Main", Order = 1, BumpUpCount = 2 };
+        var legs = LegRounds(3, linked: new string?[] { null, "s2", null });
+        legs[2].BumpUpsApplied = true;
+
+        var targets = MainsBuilder.BumpUpTargets(legs[0], new List<RoundDefinition> { legs[0], legs[1], legs[2], b });
+
+        Assert.Single(targets);
+        Assert.Same(legs[0], targets[0]);
+    }
+
+    [Fact]
+    public void A_single_a_main_takes_its_bump_ups_alone()
+    {
+        var a = new RoundDefinition { ClassName = "Buggy", Kind = RoundKind.Main, MainTier = 0, RoundLabel = "A-Main", Order = 2, BumpUpCount = 2 };
+
+        Assert.Equal(new[] { a }, MainsBuilder.BumpUpTargets(a, new List<RoundDefinition> { a }));
+    }
+
+    private static List<RoundDefinition> LegRounds(int count, string?[] linked) =>
+        Enumerable.Range(1, count).Select(leg => new RoundDefinition
+        {
+            ClassName = "Buggy",
+            Kind = RoundKind.Main,
+            MainTier = 0,
+            MainLeg = leg,
+            MainLegCount = count,
+            RoundLabel = AMainLegs.LegLabel(leg),
+            Order = 10 + leg,
+            BumpUpCount = 2,
+            LinkedSessionId = linked[leg - 1],
+        }).ToList();
+
     private static SessionResultEntry R(string transponder, int position) => new()
     {
         Transponder = transponder,

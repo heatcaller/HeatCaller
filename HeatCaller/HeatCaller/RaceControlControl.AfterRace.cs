@@ -818,6 +818,43 @@ public sealed partial class RaceControlControl
             }
         }
 
+        // THE A-MAIN OVERALL (11 Nov 2026): after the last leg of a double
+        // or triple A-main, who won it on points across the legs - said
+        // after the leg's own result, and handed to the recap. Said with
+        // the flag result read off too: it is the night's result, not a
+        // race's. Not under "Lap times only". Guarded like the sectors.
+        AMainLegs.Decided? aMainOverall = null;
+        string? aMainOverallFact = null;
+
+        if (!LapTimesOnly.IsOn(_settings) && round is { MainLeg: > 0 } && _rounds is not null)
+        {
+            try
+            {
+                var scope = _events?.ActiveRoundScope();
+                var raceClass = _raceClasses?.All.FirstOrDefault(c => string.Equals(c.Name, round.ClassName, StringComparison.OrdinalIgnoreCase));
+
+                aMainOverall = AMainLegs.AfterLastLeg(
+                    round,
+                    record,
+                    _rounds.All.Where(r => scope is null || scope.Contains(r.Id)),
+                    _sessionHistory.Get,
+                    raceClass?.AMainLegsCounted ?? 0,
+                    _profiles.PrimaryForAlternate);
+
+                if (aMainOverall is { } decided)
+                {
+                    var overallLine = AMainLegs.OverallCall(SpokenDriverName(decided.Winner.Transponder), decided.Counting, decided.Legs);
+                    aMainOverallFact = AMainLegs.OverallFact(decided, s => SpokenDriverName(s.Transponder));
+                    resultRead = resultRead is null ? overallLine : $"{resultRead} {overallLine}";
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [program] A-Main overall: {decided.Winner.DriverName}, {decided.Winner.Words()}.");
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [program] The A-Main overall could not be worked out: {ex.Message}");
+            }
+        }
+
         if (!wantsTeaser && !commentaryAvailable && honours is null && resultRead is null)
         {
             // Nothing more to say - but the broadcast is only over once the
@@ -1449,7 +1486,8 @@ public sealed partial class RaceControlControl
                         mains: raceMains,
                         leadChanges: recapLeads,
                         presentedBy: recapSponsor?.Name,
-                        handicap: raceHandicap)
+                        handicap: raceHandicap,
+                        aMainOverall: aMainOverallFact)
                     : null;
 
                 recapWriting = generation;
