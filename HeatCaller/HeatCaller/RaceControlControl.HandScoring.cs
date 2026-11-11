@@ -85,7 +85,9 @@ public sealed partial class RaceControlControl
             cars: HandScoringCars,
             lap: (transponder, delta) => HandLap(transponder, delta, "the desk"),
             isOn: () => HandScoringOn,
-            stop: StopHandScoring);
+            stop: StopHandScoring,
+            addable: HandScoringAddable,
+            add: transponder => HandAddCar(transponder, "the desk"));
 
         form.FormClosed += (_, _) =>
         {
@@ -159,6 +161,73 @@ public sealed partial class RaceControlControl
             _race.GetOrderedStandings(),
             transponder => _profiles.Get(transponder)?.DriverName,
             transponder => GhostService.IsGhost(transponder));
+
+    /// <summary>
+    /// The cars that can be put on the grid (11 Nov 2026): this round's
+    /// roster first, then every known transponder - see HandScoring.AddableCars.
+    /// </summary>
+    public IReadOnlyList<HandScoring.Addable> HandScoringAddable() =>
+        HandScoring.AddableCars(
+            _race.Grid,
+            _profiles.All.Select(p => p.Transponder),
+            _race.GetOrderedStandings().Select(s => s.TransponderId),
+            transponder => _profiles.Get(transponder)?.DriverName,
+            transponder => _profiles.PrimaryForAlternate(transponder),
+            transponder => GhostService.IsGhost(transponder));
+
+    /// <summary>
+    /// Puts a car the decoder never saw on the board (11 Nov 2026), so its
+    /// laps can be counted by hand - RaceControlSession.AddStandingByHand.
+    /// Hand scoring is switched on for the race if it isn't. Null when it
+    /// is on the board now, else why not. Undo takes it off again while it
+    /// still has no laps.
+    /// </summary>
+    public string? HandAddCar(string transponder, string from)
+    {
+        var id = (_profiles.PrimaryForAlternate(transponder ?? string.Empty) ?? transponder ?? string.Empty).Trim();
+        var name = DriverNameFor(id);
+        var onBoard = _race.GetOrderedStandings().Any(s =>
+            string.Equals(s.TransponderId, id, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(_profiles.PrimaryForAlternate(s.TransponderId), id, StringComparison.OrdinalIgnoreCase));
+
+        if (id.Length == 0)
+        {
+            return "Pick a car to add.";
+        }
+
+        if (HandScoring.AddRefusal(_race.State, _race.IsPracticeMode, _race.IsFinishing, onBoard, GhostService.IsGhost(id), name) is { } refusal)
+        {
+            return refusal;
+        }
+
+        if (StartHandScoring(from) is { } notOn)
+        {
+            return notOn;
+        }
+
+        if (!_race.AddStandingByHand(id))
+        {
+            return $"{name} couldn't be put on the board - the race didn't take it.";
+        }
+
+        var generation = _race.SessionGeneration;
+
+        _undo.Capture($"Put {name} on the hand-scoring grid", () =>
+        {
+            if (!_race.IsSameRace(generation) || !_race.RemoveHandAddedStanding(id))
+            {
+                throw new InvalidOperationException(
+                    $"{name} has laps counted now, or that race is over - take their laps off with -1 first. Nothing was changed.");
+            }
+
+            RenderLeaderboard();
+        });
+
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] {name} put on the board by hand from {from} - the decoder never saw them. Their laps are counted by hand.");
+
+        RenderLeaderboard();
+        return null;
+    }
 
     /// <summary>
     /// One tap: a lap added (+1) or taken back (-1) for one car, through the

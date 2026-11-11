@@ -945,6 +945,8 @@ public sealed class RaceTiming
 
     public bool RemoveGhostStanding(string transponderId) => Do(e => e.RemoveGhostStanding(transponderId));
     public bool AdjustLaps(string transponderId, int delta) => Do(e => e.AdjustLaps(transponderId, delta));
+    public bool AddStandingByHand(string transponderId) => Do(e => e.AddStandingByHand(transponderId));
+    public bool RemoveHandAddedStanding(string transponderId) => Do(e => e.RemoveHandAddedStanding(transponderId));
     public bool AdjustPenaltyTime(string transponderId, long deltaMs) => Do(e => e.AdjustPenaltyTime(transponderId, deltaMs));
     public long ClearPenalties(string transponderId) => Do(e => e.ClearPenalties(transponderId));
     /// <remarks>Threaded: a copy of the warning given (P4).</remarks>

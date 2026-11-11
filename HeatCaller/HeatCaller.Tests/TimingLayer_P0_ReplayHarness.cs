@@ -593,6 +593,12 @@ internal static class ReplayHarness
             case "SetReleaseSchedule":
                 race.SetReleaseSchedule(record.Offsets ?? new Dictionary<string, long>());
                 break;
+            case "AddByHand":
+                race.AddStandingByHand(id);
+                break;
+            case "RemoveByHand":
+                race.RemoveHandAddedStanding(id);
+                break;
             case "RemoveGhost":
                 race.RemoveGhostStanding(id);
                 break;

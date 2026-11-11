@@ -263,4 +263,130 @@ public sealed class HandScoringTests : IDisposable
             Results = results.ToList(),
         };
     }
+
+    // --- A car the decoder never saw (11 Nov 2026) -------------------------------
+
+    [Fact]
+    public void A_car_that_never_crossed_can_be_put_on_the_board_and_counted_by_hand()
+    {
+        var race = new RaceControlSession { LapLimit = 50 };
+        race.SetGrid(new[] { "A", "B" });
+        race.Stage();
+        race.StartCountdown();
+        race.GreenFlag(100_000);
+
+        Seen(race, "A", 100_500);
+
+        // The loop dies before B ever crossed: B has nothing to tap.
+        Assert.False(race.AdjustLaps("B", +1));
+
+        Assert.True(race.AddStandingByHand("B"));
+        Assert.False(race.AddStandingByHand("B"), "once is enough");
+
+        var b = race.GetOrderedStandings().Single(s => s.TransponderId == "B");
+        Assert.Equal(0, b.Laps);
+        Assert.Equal(2, b.StartPosition);
+
+        Assert.NotNull(race.EditStanding("B", () => race.AdjustLaps("B", +1)));
+        Assert.NotNull(race.EditStanding("B", () => race.AdjustLaps("B", +1)));
+
+        var rows = RaceFiling.ResultsFrom(race.GetOrderedStandings(), ProfileStore.Load());
+        Assert.Equal(2, rows.Single(r => r.Transponder == "B").Laps);
+        Assert.Equal(2, rows.Single(r => r.Transponder == "B").LapsByHand);
+    }
+
+    [Fact]
+    public void The_decoder_coming_back_times_a_hand_added_car_as_if_it_had_never_been_added()
+    {
+        RaceControlSession Race()
+        {
+            var r = new RaceControlSession { LapLimit = 50 };
+            r.Stage();
+            r.StartCountdown();
+            r.GreenFlag(100_000);
+            return r;
+        }
+
+        var added = Race();
+        Assert.True(added.AddStandingByHand("C"));
+        Seen(added, "C", 110_000);
+        Seen(added, "C", 121_000);
+
+        var plain = Race();
+        Seen(plain, "C", 110_000);
+        Seen(plain, "C", 121_000);
+
+        var a = added.GetOrderedStandings().Single();
+        var p = plain.GetOrderedStandings().Single();
+        Assert.Equal(p.Laps, a.Laps);
+        Assert.Equal(p.LapTimesMs, a.LapTimesMs);
+        Assert.Equal(p.FastestLapMs, a.FastestLapMs);
+        Assert.Equal(p.ElapsedMs, a.ElapsedMs);
+    }
+
+    [Fact]
+    public void A_car_is_not_added_outside_a_race_under_the_checkered_or_as_a_ghost()
+    {
+        var idle = new RaceControlSession();
+        Assert.False(idle.AddStandingByHand("A"));
+
+        var race = new RaceControlSession { LapLimit = 50 };
+        race.Stage();
+        race.StartCountdown();
+        race.GreenFlag(100_000);
+        Assert.False(race.AddStandingByHand("  "));
+        Assert.False(race.AddStandingByHand(Ghosts.Prefix + "x"));
+
+        race.CheckeredFlag();
+        Assert.False(race.AddStandingByHand("A"));
+    }
+
+    [Fact]
+    public void Undoing_an_added_car_works_only_while_it_has_no_laps()
+    {
+        var race = new RaceControlSession { LapLimit = 50 };
+        race.Stage();
+        race.StartCountdown();
+        race.GreenFlag(100_000);
+
+        Assert.True(race.AddStandingByHand("B"));
+        Assert.True(race.RemoveHandAddedStanding("B"));
+        Assert.Empty(race.GetOrderedStandings());
+
+        Assert.True(race.AddStandingByHand("B"));
+        race.AdjustLaps("B", +1);
+        Assert.False(race.RemoveHandAddedStanding("B"));
+
+        // A car the decoder did see is never taken off this way.
+        Seen(race, "A", 110_000);
+        Assert.False(race.RemoveHandAddedStanding("A"));
+    }
+
+    [Fact]
+    public void The_cars_offered_are_the_roster_first_then_everyone_else_by_name_never_one_on_the_board()
+    {
+        var names = new Dictionary<string, string> { ["1"] = "Zed", ["2"] = "Amy", ["3"] = "Bea", ["4"] = "Cal", ["4b"] = "Cal" };
+
+        var cars = HandScoring.AddableCars(
+            roster: new[] { "2", "1", "9" },
+            known: new[] { "4", "3", "1", "4b", "ghost" },
+            onBoard: new[] { "9", "4b" },
+            nameOf: t => names.GetValueOrDefault(t),
+            mainOf: t => t == "4b" ? "4" : null,
+            isGhost: t => t == "ghost");
+
+        Assert.Equal(new[] { "2", "1", "3" }, cars.Select(c => c.Transponder));
+        Assert.Equal(new[] { true, true, false }, cars.Select(c => c.OnRoster));
+        Assert.Equal("Amy", cars[0].Name);
+    }
+
+    [Fact]
+    public void Adding_a_car_is_refused_with_a_reason()
+    {
+        Assert.Null(HandScoring.AddRefusal(RaceState.Racing, false, false, false, false, "Sam"));
+        Assert.NotNull(HandScoring.AddRefusal(RaceState.Idle, false, false, false, false, "Sam"));
+        Assert.Contains("checkered", HandScoring.AddRefusal(RaceState.Racing, false, true, false, false, "Sam"));
+        Assert.Contains("on the board already", HandScoring.AddRefusal(RaceState.Racing, false, false, true, false, "Sam"));
+        Assert.NotNull(HandScoring.AddRefusal(RaceState.Racing, false, false, false, true, "Sam"));
+    }
 }

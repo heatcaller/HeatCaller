@@ -5791,6 +5791,10 @@ public sealed partial class WebServerService
                 <button class="btn" id="btnHandUndo">Undo last tap</button>
                 <button class="btn" id="btnHandOff">Stop hand scoring</button>
               </div>
+              <div id="handAddBox" style="display:none">
+                <select id="handAddPick"></select>
+                <button class="btn wide" id="btnHandAdd">Add this car</button>
+              </div>
             </div>
           </div>
 
@@ -6350,6 +6354,20 @@ public sealed partial class WebServerService
             document.getElementById('btnHandOn').style.display = data.on ? 'none' : 'block';
             document.getElementById('handTools').style.display = data.on ? 'grid' : 'none';
             var grid = document.getElementById('handGrid');
+            // A car the decoder never saw (11 Nov 2026): this heat's roster
+            // first, then every known transponder - race.handAdd.
+            var addable = data.on ? (data.addable || []) : [];
+            document.getElementById('handAddBox').style.display = addable.length ? 'block' : 'none';
+            var pick = document.getElementById('handAddPick');
+            var pickKey = addable.map(function(a){ return a.id; }).join('|');
+            if (pick.getAttribute('data-key') !== pickKey) {
+              var was = pick.value;
+              pick.innerHTML = '<option value="">Add a car that never crossed the line...</option>' + addable.map(function(a){
+                return '<option value="' + esc(a.id) + '">' + esc(a.name) + (a.onRoster ? ' (in this heat)' : '') + '</option>';
+              }).join('');
+              pick.value = addable.some(function(a){ return a.id === was; }) ? was : '';
+              pick.setAttribute('data-key', pickKey);
+            }
             if (!data.on) { grid.innerHTML = ''; handShownKey = ''; return; }
             var key = (data.cars || []).map(function(c){ return c.id; }).join('|');
             if (key !== handShownKey) {
@@ -6395,6 +6413,11 @@ public sealed partial class WebServerService
           if (confirm('Stop scoring by hand? Laps are counted from the loop again. The laps counted by hand stay.')) {
             doOp('race.handScoring', { on: false }, refreshHand);
           }
+        });
+        document.getElementById('btnHandAdd').addEventListener('click', function(){
+          var id = document.getElementById('handAddPick').value;
+          if (!id) { say('Pick the car to add first.'); return; }
+          doOp('race.handAdd', { driverId: id }, refreshHand);
         });
         document.getElementById('btnHandUndo').addEventListener('click', function(){
           if (handTaps.length) { handLap(handTaps.pop(), -1); }

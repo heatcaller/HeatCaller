@@ -111,6 +111,95 @@ public static class HandScoring
             : $"{driverName} isn't on the board in this race yet, so there is no count to add a lap to.";
     }
 
+    /// <summary>The button on the grid that puts a missing car on it (11 Nov 2026).</summary>
+    public const string AddCarCaption = "Add a Car...";
+
+    /// <summary>
+    /// A car that can be put on the hand-scoring grid: one the decoder never
+    /// saw before it died. <paramref name="OnRoster"/> when it is in this
+    /// round's line-up, the likely one.
+    /// </summary>
+    public sealed record Addable(string Transponder, string Name, bool OnRoster);
+
+    /// <summary>
+    /// The cars that can be added (11 Nov 2026): this round's roster first,
+    /// in grid order, then every other known transponder by name - each only
+    /// when it is not on the board already. A driver's alternate counts as
+    /// them (<paramref name="mainOf"/>), so a driver is offered once and
+    /// never beside the car they are already counted on. Ghosts never.
+    /// </summary>
+    public static IReadOnlyList<Addable> AddableCars(
+        IEnumerable<string> roster,
+        IEnumerable<string> known,
+        IEnumerable<string> onBoard,
+        Func<string, string?> nameOf,
+        Func<string, string?> mainOf,
+        Func<string, bool> isGhost)
+    {
+        string Main(string t) => (mainOf(t) ?? t).Trim();
+
+        var taken = new HashSet<string>(onBoard.Select(Main), StringComparer.OrdinalIgnoreCase);
+        var result = new List<Addable>();
+
+        void Offer(string transponder, bool onRoster)
+        {
+            var id = Main(transponder);
+
+            if (id.Length == 0 || isGhost(id) || !taken.Add(id))
+            {
+                return;
+            }
+
+            var name = nameOf(id);
+            result.Add(new Addable(id, string.IsNullOrWhiteSpace(name) ? id : name.Trim(), onRoster));
+        }
+
+        foreach (var t in roster)
+        {
+            Offer(t, true);
+        }
+
+        var before = result.Count;
+
+        foreach (var t in known)
+        {
+            Offer(t, false);
+        }
+
+        result.Sort(before, result.Count - before, Comparer<Addable>.Create((a, b) =>
+        {
+            var byName = StringComparer.CurrentCultureIgnoreCase.Compare(a.Name, b.Name);
+            return byName != 0 ? byName : StringComparer.Ordinal.Compare(a.Transponder, b.Transponder);
+        }));
+
+        return result;
+    }
+
+    /// <summary>
+    /// Why a car can't be added to the grid now, or null when it can: hand
+    /// scoring for a running race, before the checkered (a car with no
+    /// crossing could never take the flag), and a car not on the board.
+    /// </summary>
+    public static string? AddRefusal(RaceState state, bool practice, bool finishing, bool onBoard, bool ghost, string driverName)
+    {
+        if (StartRefusal(state, practice) is { } notNow)
+        {
+            return notNow;
+        }
+
+        if (finishing)
+        {
+            return "The checkered is out - a car can't join the race now. Add its laps afterwards with Edit Result on Race History.";
+        }
+
+        if (ghost)
+        {
+            return "A ghost car counts its own laps.";
+        }
+
+        return onBoard ? $"{driverName} is on the board already - tap their button to count a lap." : null;
+    }
+
     /// <summary>
     /// A second +1 for the same car this soon after the first is a finger
     /// bouncing on a touch screen, or two people counting the same car -

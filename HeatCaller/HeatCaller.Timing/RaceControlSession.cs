@@ -818,6 +818,81 @@ public sealed partial class RaceControlSession
         return true;
     }
 
+    /// <summary>
+    /// Puts a car on the board that the decoder never saw (11 Nov 2026,
+    /// decoder-down mode): a car on the round's roster, or any known
+    /// transponder, that had not crossed the line when the loop died, so the
+    /// director can count its laps by hand. False when it can't: no race
+    /// running, the checkered already out, a ghost, a blank id, or the car
+    /// already on the board.
+    ///
+    /// SAFE FOR THE DECODER BECAUSE IT IS THE ROW ITS FIRST CROSSING WOULD
+    /// HAVE MADE: the same three fields ProcessLapEvent sets for a car it
+    /// has not seen (its release offset and grid slot, nothing else), with
+    /// no laps and no crossing - the shape a hand-released grid puts on the
+    /// board at the green. So if the decoder comes back, that car's first
+    /// crossing is timed exactly as it would have been, from the green (or
+    /// its release); laps counted by hand meanwhile have no time of their
+    /// own and stay marked as by hand. Not under a checkered: a car with no
+    /// crossing could never take the flag, and the finish would wait for it.
+    /// </summary>
+    public bool AddStandingByHand(string transponderId)
+    {
+        RecordCommand(new TimingRecord { Command = "AddByHand", Transponder = transponderId });
+
+        var id = (transponderId ?? string.Empty).Trim();
+
+        if (State != RaceState.Racing || IsFinishing || id.Length == 0 || Ghosts.IsGhost(id) || _standings.ContainsKey(id))
+        {
+            return false;
+        }
+
+        // The first real car of a race of ghosts - as ProcessLapEvent.
+        if (Ghosts.IsGhost(_raceFastestLapTransponder) && _standings.Keys.All(k => Ghosts.IsGhost(k)))
+        {
+            _raceFastestLapMs = 0;
+            _raceFastestLapTransponder = string.Empty;
+        }
+
+        _standings[id] = new RacerStanding
+        {
+            TransponderId = id,
+            ReleaseOffsetMs = ReleaseOffsetMsFor(id),
+            StartPosition = StartPositionOf(id),
+        };
+
+        Log($"{id} put on the board by hand - not seen by the decoder yet.");
+        return true;
+    }
+
+    /// <summary>
+    /// Takes back <see cref="AddStandingByHand"/> - only while the car is
+    /// still exactly as it was added: no laps, no crossing, no penalty or
+    /// warning. False otherwise (its laps are then taken off one by one).
+    /// </summary>
+    public bool RemoveHandAddedStanding(string transponderId)
+    {
+        RecordCommand(new TimingRecord { Command = "RemoveByHand", Transponder = transponderId });
+
+        if (State != RaceState.Racing
+            || !_standings.TryGetValue((transponderId ?? string.Empty).Trim(), out var standing)
+            || standing.Laps != 0
+            || standing.LapTimesMs.Count != 0
+            || standing.LastLapDeviceTimeMs > 0
+            || standing.LastSeenDeviceTimeMs > 0
+            || standing.PenaltyMs != 0
+            || standing.Warnings.Count != 0
+            || _tookTheFlag.Contains(standing.TransponderId))
+        {
+            return false;
+        }
+
+        _standings.Remove(standing.TransponderId);
+        Log($"{standing.TransponderId} taken off the board - it was put there by hand.");
+        SafeRaise(StandingRemoved, h => h(standing), nameof(StandingRemoved));
+        return true;
+    }
+
     /// <summary>Race ends automatically after this much real time has elapsed. Null = no time limit.</summary>
     public TimeSpan? TimeLimit { get; set; }
 

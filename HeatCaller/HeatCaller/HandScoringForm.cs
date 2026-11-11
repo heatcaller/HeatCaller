@@ -25,6 +25,8 @@ public sealed class HandScoringForm : Form
     private readonly Func<string, int, string?> _lap;
     private readonly Func<bool> _isOn;
     private readonly Action _stop;
+    private readonly Func<IReadOnlyList<HandScoring.Addable>>? _addable;
+    private readonly Func<string, string?>? _add;
 
     private readonly Panel _grid = new() { Dock = DockStyle.Fill };
     private readonly Label _lblStatus = new() { AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
@@ -44,12 +46,16 @@ public sealed class HandScoringForm : Form
         Func<IReadOnlyList<HandScoring.Car>> cars,
         Func<string, int, string?> lap,
         Func<bool> isOn,
-        Action stop)
+        Action stop,
+        Func<IReadOnlyList<HandScoring.Addable>>? addable = null,
+        Func<string, string?>? add = null)
     {
         _cars = cars;
         _lap = lap;
         _isOn = isOn;
         _stop = stop;
+        _addable = addable;
+        _add = add;
 
         Text = "Scoring by hand";
         Font = AppTheme.BodyFont;
@@ -87,11 +93,17 @@ public sealed class HandScoringForm : Form
         var btnClose = new Button { Text = "Close (keep scoring)", AutoSize = true };
         btnClose.Click += (_, _) => Close();
 
+        // A car the decoder never saw before it died (11 Nov 2026) - on the
+        // heat's roster, or any known transponder - has no button until it
+        // is put on the board. See RaceControlControl.HandAddCar.
+        var btnAdd = new Button { Text = HandScoring.AddCarCaption, AutoSize = true, Visible = _addable is not null && _add is not null };
+        btnAdd.Click += (_, _) => AddCar();
+
         var top = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
             AutoSize = true,
-            ColumnCount = 4,
+            ColumnCount = 5,
             RowCount = 2,
             Padding = new Padding(UiLayout.RowGap),
         };
@@ -99,12 +111,14 @@ public sealed class HandScoringForm : Form
         top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         top.Controls.Add(title, 0, 0);
-        top.Controls.Add(_btnUndo, 1, 0);
-        top.Controls.Add(btnStop, 2, 0);
-        top.Controls.Add(btnClose, 3, 0);
+        top.Controls.Add(btnAdd, 1, 0);
+        top.Controls.Add(_btnUndo, 2, 0);
+        top.Controls.Add(btnStop, 3, 0);
+        top.Controls.Add(btnClose, 4, 0);
         top.Controls.Add(_lblStatus, 0, 1);
-        top.SetColumnSpan(_lblStatus, 4);
+        top.SetColumnSpan(_lblStatus, 5);
         _lblStatus.Height = Pieces.LineHeight(AppTheme.SmallFont) + 4;
         _lblStatus.Font = AppTheme.SmallFont;
         _lblStatus.ForeColor = AppTheme.TextMuted;
@@ -143,6 +157,87 @@ public sealed class HandScoringForm : Form
     }
 
     private void Say(string text) => _lblStatus.Text = text;
+
+    /// <summary>
+    /// Add a Car...: pick a car the decoder never saw - this heat's roster
+    /// first - and it gets a button with no laps, ready to be tapped.
+    /// </summary>
+    private void AddCar()
+    {
+        if (_addable is null || _add is null)
+        {
+            return;
+        }
+
+        var choices = _addable();
+
+        if (choices.Count == 0)
+        {
+            Say("Every car on this heat's roster, and every known transponder, is on the grid already.");
+            return;
+        }
+
+        using var picker = new Form
+        {
+            Text = "Add a car to the grid",
+            Font = AppTheme.BodyFont,
+            BackColor = AppTheme.Background,
+            ForeColor = AppTheme.TextDark,
+            StartPosition = FormStartPosition.CenterParent,
+            Size = new Size(460, 520),
+            MinimizeBox = false,
+            MaximizeBox = false,
+            ShowInTaskbar = false,
+        };
+
+        var hint = new Label
+        {
+            Text = "A car that never crossed the line before the decoder stopped. It goes on the grid with no laps; tap it each time it crosses.",
+            Dock = DockStyle.Top,
+            AutoSize = false,
+            Height = Pieces.LineHeight(AppTheme.BodyFont) * 3,
+            Padding = new Padding(UiLayout.RowGap),
+        };
+
+        var list = new ListBox { Dock = DockStyle.Fill, IntegralHeight = false };
+
+        foreach (var choice in choices)
+        {
+            list.Items.Add(choice.OnRoster ? $"{choice.Name}  (in this heat)" : $"{choice.Name}  ({choice.Transponder})");
+        }
+
+        list.SelectedIndex = 0;
+
+        var ok = new Button { Text = "Add", AutoSize = true, DialogResult = DialogResult.OK };
+        var cancel = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel };
+        var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(UiLayout.RowGap) };
+        buttons.Controls.Add(cancel);
+        buttons.Controls.Add(ok);
+        list.DoubleClick += (_, _) => picker.DialogResult = DialogResult.OK;
+
+        picker.Controls.Add(list);
+        picker.Controls.Add(hint);
+        picker.Controls.Add(buttons);
+        picker.AcceptButton = ok;
+        picker.CancelButton = cancel;
+        AppTheme.ApplyRecursively(picker);
+
+        if (picker.ShowDialog(this) != DialogResult.OK || list.SelectedIndex < 0)
+        {
+            return;
+        }
+
+        var chosen = choices[list.SelectedIndex];
+
+        if (_add(chosen.Transponder) is { } refusal)
+        {
+            Say(refusal);
+            return;
+        }
+
+        Say($"{chosen.Name} is on the grid with no laps - tap them each time they cross.");
+        RefreshCars();
+    }
 
     /// <summary>Brings the buttons up to date with the board: new cars, lap counts, and the race ending.</summary>
     private void RefreshCars()
