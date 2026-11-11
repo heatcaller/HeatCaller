@@ -46,8 +46,53 @@ internal sealed class ResizeGrip : Control
         Tag = AppTheme.KeepBackColor;
         Height = Math.Max(10, 14 * DeviceDpi / 96);
 
-        _tip.SetToolTip(this, "Drag to make the list above taller or shorter. Double-click to put it back.");
+        _tip.SetToolTip(this, DefaultTip);
     }
+
+    /// <summary>What it says when hovered, unless the page says otherwise - see <see cref="TipText"/>.</summary>
+    internal const string DefaultTip = "Drag to make the list above taller or shorter. Double-click to put it back.";
+
+    /// <summary>
+    /// What it says when hovered (11 Nov 2026): the Race Calls list's words
+    /// by default, and the page's own where the grip sizes something else -
+    /// Tonight's program on Race Day, which it sits above.
+    /// </summary>
+    public string TipText
+    {
+        get => _tip.GetToolTip(this);
+        set => _tip.SetToolTip(this, value);
+    }
+
+    /// <summary>
+    /// The height asked for, kept between <paramref name="least"/> and
+    /// <paramref name="most"/> - or <paramref name="least"/> when there is
+    /// not room even for that, so a drag never asks for less than the part
+    /// can be.
+    /// </summary>
+    internal static int Clamp(int asked, int least, int most) => most < least ? least : Math.Clamp(asked, least, most);
+
+    /// <summary>
+    /// Paints <paramref name="control"/> and everything in it that is owed a
+    /// paint, here and now. For a drag that resizes a part as the mouse
+    /// moves: WM_PAINT is the lowest-priority message there is, so without
+    /// this the moves pile up ahead of the paints and the part trails the
+    /// mouse, then jumps (as ControlSkins found for scrolling).
+    /// </summary>
+    internal static void PaintNow(Control control)
+    {
+        if (control.IsDisposed || !control.IsHandleCreated)
+        {
+            return;
+        }
+
+        RedrawWindow(control.Handle, IntPtr.Zero, IntPtr.Zero, RdwUpdateNow | RdwAllChildren);
+    }
+
+    private const uint RdwUpdateNow = 0x0100;
+    private const uint RdwAllChildren = 0x0080;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool RedrawWindow(IntPtr hWnd, IntPtr lprcUpdate, IntPtr hrgnUpdate, uint flags);
 
     public override Size GetPreferredSize(Size proposedSize) => new(Math.Max(1, proposedSize.Width), Height);
 
