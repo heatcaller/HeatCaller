@@ -85,6 +85,21 @@ public sealed class QualifyingStandingsForm : Form
             });
         }
 
+        // Points qualifying (11 Nov 2026, Phase 5.1): the points decide the
+        // order, so they sit next to the name, and every round's finish is
+        // spelled out at the right - a total of places is only checkable
+        // when the places are on show. "Best Laps" becomes the best single
+        // heat, which is the second tie-breaker, not a total.
+        var points = method == QualifyingMethod.RoundPoints;
+
+        if (points)
+        {
+            grid.Columns["laps"]!.HeaderText = "Best Heat";
+            grid.Columns["source"]!.HeaderText = "Counted Rounds";
+            grid.Columns.Insert(3, new DataGridViewTextBoxColumn { Name = "points", HeaderText = "Points", FillWeight = 90 });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "rounds", HeaderText = "Each Round", FillWeight = 170 });
+        }
+
         page.AddFill(grid, _ => grid.ColumnHeadersHeight + LeastRows * grid.RowTemplate.Height + 2);
 
         if (entries.Count == 0)
@@ -105,8 +120,14 @@ public sealed class QualifyingStandingsForm : Form
                 i + 1,
                 e.DriverName,
                 string.IsNullOrWhiteSpace(e.CarModel) ? "-" : e.CarModel,
-                e.BestLaps,
             };
+
+            if (points)
+            {
+                values.Add(e.PointsWords());
+            }
+
+            values.Add(e.BestLaps);
 
             if (method == QualifyingMethod.BestConsecutiveLaps)
             {
@@ -120,7 +141,9 @@ public sealed class QualifyingStandingsForm : Form
             values.Add(e.BestFastLapMs > 0 ? $"{e.BestFastLapMs / 1000.0:0.000}s" : "-");
             // "2/3" when some heats were dropped, so it's obvious the
             // figures are a total of a subset rather than everything run.
-            values.Add(e.HeatsCounted < e.HeatsRun ? $"{e.HeatsCounted}/{e.HeatsRun}" : e.HeatsRun.ToString());
+            // Under points the counting is by ROUND and shown in Points, so
+            // this is just the heats run (a counted round can be a DNS).
+            values.Add(!points && e.HeatsCounted < e.HeatsRun ? $"{e.HeatsCounted}/{e.HeatsRun}" : e.HeatsRun.ToString());
             // Label AND time, because the Lap Times session picker lists
             // sessions by time - a round label alone can't be matched to it.
             var sourceCell = string.IsNullOrWhiteSpace(e.SourceRoundLabel)
@@ -134,6 +157,11 @@ public sealed class QualifyingStandingsForm : Form
             if (countBest > 1)
             {
                 values.Add(string.IsNullOrWhiteSpace(e.DroppedSummary) ? "-" : e.DroppedSummary);
+            }
+
+            if (points)
+            {
+                values.Add(string.IsNullOrWhiteSpace(e.PointsDetail) ? "-" : e.PointsDetail);
             }
 
             var rowIndex = grid.Rows.Add(values.ToArray());
@@ -173,6 +201,7 @@ public sealed class QualifyingStandingsForm : Form
                 "windowavg" => OrLast(a.ConsecutiveAverageMs(lapCount)).CompareTo(OrLast(b.ConsecutiveAverageMs(lapCount))),
                 "fromlap" => OrLast(a.ConsecutiveStartLap).CompareTo(OrLast(b.ConsecutiveStartLap)),
                 "fast" => OrLast(a.BestFastLapMs).CompareTo(OrLast(b.BestFastLapMs)),
+                "points" => a.Points.CompareTo(b.Points),
                 "heats" => a.HeatsCounted != b.HeatsCounted
                     ? a.HeatsCounted.CompareTo(b.HeatsCounted)
                     : a.HeatsRun.CompareTo(b.HeatsRun),
@@ -194,7 +223,12 @@ public sealed class QualifyingStandingsForm : Form
         // figures include penalties but nothing said so; the rule now does.
         var lblRule = new Label
         {
-            Text = countBest > 1
+            Text = points
+                ? "Each round ranks everyone in its heats on laps then time: 1st scores 1 point, 2nd 2 and so on, and a round not run "
+                  + "(or a DQ) scores one more than the field. "
+                  + (countBest > 1 ? $"The best {countBest} rounds count. " : string.Empty)
+                  + "Fewest points wins; ties go to the best single-round finish, then the best heat. Double-click a row for detail."
+                : countBest > 1
                 ? (method == QualifyingMethod.BestConsecutiveLaps
                     ? $"Each heat is scored on its quickest unbroken run of {Plural.Of(lapCount, "lap")}, penalties included. The best {countBest} heats "
                       + "are totaled and the rest dropped - \"Heats\" shows counted/run. Double-click a row for detail."
@@ -221,6 +255,21 @@ public sealed class QualifyingStandingsForm : Form
             {
                 return;
             }
+
+            // Points (11 Nov 2026, Phase 5.1): every round's finish and what
+            // it scored, then which rounds counted - the whole sum.
+            if (points)
+            {
+                AppDialog.Show(this,
+                    $"{entry.DriverName}: {entry.PointsWords()}\r\n\r\n"
+                    + $"Each round:\r\n   {entry.PointsDetail}\r\n\r\n"
+                    + $"Counted: {entry.SourceRoundLabel}"
+                    + (string.IsNullOrWhiteSpace(entry.DroppedSummary) ? string.Empty : $"\r\nDropped: {entry.DroppedSummary}")
+                    + $"\r\n\r\nBest single heat (the tie-breaker after best finish): {Plural.Of(entry.BestLaps, "lap")} in {DriverIntros.Clock(entry.BestElapsedMs)}.",
+                    "Where these numbers came from", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(entry.SourceRoundLabel))
             {
                 AppDialog.Show(this,
@@ -278,7 +327,7 @@ public sealed class QualifyingStandingsForm : Form
         // Every heading whole, the rest shared by weight - see Pieces.KeepHeadingsWhole.
         Pieces.KeepHeadingsWhole(grid);
 
-        DialogFit.Keep(this, page, width: (wide ? 980 : 660) + (dropping ? 160 : 0), height: 448);
+        DialogFit.Keep(this, page, width: (wide ? 980 : 660) + (dropping ? 160 : 0) + (points ? 320 : 0), height: 448);
     }
 
     /// <summary>

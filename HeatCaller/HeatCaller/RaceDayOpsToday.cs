@@ -702,6 +702,8 @@ public sealed partial class RaceDayService
             countBestRounds = raceClass.CountBestRounds,
             mainSize = raceClass.MainSize,
             bumpUpCount = raceClass.BumpUpCount,
+            aMainLegs = raceClass.AMainLegs,
+            aMainLegsCounted = AMainLegs.LegsCounting(raceClass.AMainLegs, raceClass.AMainLegsCounted),
             raceFormat = raceClass.Format?.Describe(),
             qualifierFormat = raceClass.QualifierFormat?.Describe(),
         };
@@ -728,7 +730,8 @@ public sealed partial class RaceDayService
             null => null,
             var text when text.Equals("totalLaps", StringComparison.OrdinalIgnoreCase) => QualifyingMethod.TotalLaps,
             var text when text.Equals("bestConsecutiveLaps", StringComparison.OrdinalIgnoreCase) => QualifyingMethod.BestConsecutiveLaps,
-            _ => throw new OpRefused("\"qualifyingMethod\" has to be totalLaps or bestConsecutiveLaps."),
+            var text when text.Equals("roundPoints", StringComparison.OrdinalIgnoreCase) => QualifyingMethod.RoundPoints,
+            _ => throw new OpRefused("\"qualifyingMethod\" has to be totalLaps, bestConsecutiveLaps or roundPoints."),
         };
 
         var consecutive = context.Int("consecutiveLaps", 2, 20);

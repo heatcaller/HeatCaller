@@ -456,8 +456,13 @@ public static class EventSpine
 
         // Class-filtered here rather than afterwards, so a series for one
         // class does not have to sift a mixed day's results back apart.
+        //
+        // A heat the class SHARES counts too (11 Nov 2026, Phase 4.1,
+        // mixed-class heats): MixedHeats.RunsClass. Only the class's own
+        // drivers in it score - ComputeStandings splits it by the class each
+        // result was stamped with.
         if (season.ClassName.Length > 0
-            && !string.Equals(round?.ClassName, season.ClassName, StringComparison.OrdinalIgnoreCase))
+            && (round is null || !MixedHeats.RunsClass(round, season.ClassName)))
         {
             return false;
         }

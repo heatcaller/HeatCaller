@@ -76,8 +76,17 @@ public sealed class RoundDefinitionStore
 
     public IReadOnlyList<RoundDefinition> All => _rounds.OrderBy(r => r.Order).ToList();
 
+    /// <summary>
+    /// Every round this class runs in, in programme order.
+    ///
+    /// WHY (11 Nov 2026, Phase 4.1, mixed-class heats): a heat Stock and Mod
+    /// share is one of Stock's rounds AND one of Mod's, so it is in both
+    /// lists (MixedHeats.RunsClass). Whoever scores from the list scores only
+    /// the class's own drivers in it - see MixedHeats.Counts. For a program
+    /// with no shared heat this is the same list it always was.
+    /// </summary>
     public IReadOnlyList<RoundDefinition> ForClass(string className) =>
-        _rounds.Where(r => string.Equals(r.ClassName, className, StringComparison.OrdinalIgnoreCase))
+        _rounds.Where(r => MixedHeats.RunsClass(r, className))
             .OrderBy(r => r.Order).ToList();
 
     /// <summary>
@@ -227,6 +236,14 @@ public sealed class RoundDefinitionStore
                 round.ClassName = newName;
                 moved.Add(round.Id);
             }
+
+            // WHY (11 Nov 2026, Phase 4.1): a class sharing a heat is named
+            // there too, and in who-runs-in-what. Missed, a renamed Mod would
+            // drop out of every heat it shares with Stock.
+            if (RenameShared(round, oldName, newName) && !moved.Contains(round.Id))
+            {
+                moved.Add(round.Id);
+            }
         }
 
         if (moved.Count > 0)
@@ -235,6 +252,38 @@ public sealed class RoundDefinitionStore
         }
 
         return moved;
+    }
+
+    /// <summary>A class renamed where it shares a heat (Phase 4.1). True when anything changed.</summary>
+    private static bool RenameShared(RoundDefinition round, string from, string to)
+    {
+        var changed = false;
+
+        if (round.SharedClasses is { Count: > 0 } others)
+        {
+            for (var i = 0; i < others.Count; i++)
+            {
+                if (string.Equals(others[i]?.Trim(), from.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    others[i] = to;
+                    changed = true;
+                }
+            }
+        }
+
+        if (round.SharedClassOf is { Count: > 0 } map)
+        {
+            foreach (var key in map.Keys.ToList())
+            {
+                if (string.Equals(map[key]?.Trim(), from.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    map[key] = to;
+                    changed = true;
+                }
+            }
+        }
+
+        return changed;
     }
 
     /// <summary>
@@ -268,6 +317,12 @@ public sealed class RoundDefinitionStore
             changed = true;
         }
 
+        // The shared half of RenameClass (Phase 4.1), by the same rule.
+        foreach (var round in _rounds.Where(r => !keep.Contains(r.Id)))
+        {
+            changed |= RenameShared(round, newName, oldName);
+        }
+
         if (changed)
         {
             Save();
@@ -286,7 +341,9 @@ public sealed class RoundDefinitionStore
     /// </summary>
     public void ClearUnrecordedQualifiers(string className, IReadOnlySet<string>? withinRoundIds = null)
     {
-        _rounds.RemoveAll(r => string.Equals(r.ClassName, className, StringComparison.OrdinalIgnoreCase)
+        // A heat this class shares (11 Nov 2026, Phase 4.1) is one of its
+        // heats, so a rebuild replaces it - and the build makes it again.
+        _rounds.RemoveAll(r => MixedHeats.RunsClass(r, className)
             && r.Kind == RoundKind.Qualifier && !r.IsRecorded
             && (withinRoundIds is null || withinRoundIds.Contains(r.Id)));
         Save();

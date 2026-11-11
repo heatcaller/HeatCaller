@@ -641,9 +641,14 @@ public sealed class DayScheduleControl : UserControl
     /// </summary>
     private List<RoundDefinition> Program() => EventSpine.Programme(_events, _rounds);
 
-    /// <summary>The programme as the timetable needs it: a round's id and the words on its line.</summary>
+    /// <summary>
+    /// The programme as the timetable needs it: a round's id and the words on
+    /// its line. A shared heat's line names both classes, "Stock + Mod"
+    /// (11 Nov 2026, Phase 4.1) - the timetable is what the Big Screen's next
+    /// up and the announcer's "on deck" read.
+    /// </summary>
     private static List<DayScheduleStore.ProgramLine> LinesFor(IEnumerable<RoundDefinition> program) =>
-        program.Select(r => new DayScheduleStore.ProgramLine(r.Id, r.ClassName, r.RoundLabel)).ToList();
+        program.Select(r => new DayScheduleStore.ProgramLine(r.Id, MixedHeats.ClassLabel(r), r.RoundLabel)).ToList();
 
     /// <summary>Raised when the timetable needs the programme that fills it. The host owns getting there - and, now this is a drawer, shutting it on the way.</summary>
     public event Action? GoToProgramTab;

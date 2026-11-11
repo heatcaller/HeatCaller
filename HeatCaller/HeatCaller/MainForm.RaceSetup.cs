@@ -664,7 +664,7 @@ public partial class MainForm
         // but hidden: with a round chosen, this box shows a name derived
         // from the round and refuses to be edited - a field spending a row
         // to repeat what the Round picker beside it already says.
-        txtSessionLabel.Text = $"{round.ClassName} - {round.RoundLabel}";
+        txtSessionLabel.Text = $"{MixedHeats.ClassLabel(round)} - {round.RoundLabel}"; // both classes of a shared heat (Phase 4.1)
         txtSessionLabel.ReadOnly = true;
         SetSessionNameVisible(false);
 
@@ -686,7 +686,7 @@ public partial class MainForm
         public static readonly RoundComboItem None = new(new RoundDefinition { Id = string.Empty, RoundLabel = "(freeform - no race program round)" });
 
         public override string ToString() =>
-            Round.Id == string.Empty ? Round.RoundLabel : $"[{Round.ClassName}] {Round.RoundLabel} ({Round.Kind})";
+            Round.Id == string.Empty ? Round.RoundLabel : $"[{MixedHeats.ClassLabel(Round)}] {Round.RoundLabel} ({Round.Kind})";
     }
 
     /// <summary>

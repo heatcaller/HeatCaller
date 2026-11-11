@@ -1617,8 +1617,12 @@ public sealed class CommentaryService
             FactsOpen + "\n" +
             $"Round: {Field(round.RoundLabel)}\n" +
             (kind is not null ? $"Type: {kind}\n" : string.Empty) +
-            $"Class: {Field(round.ClassName)}\n" +
-            $"Drivers on track: {string.Join(", ", names)}\n" +
+            // Both classes of a shared heat (11 Nov 2026, Phase 4.1), and that
+            // they are scored apart, so the intro does not call it one field.
+            (MixedHeats.IsShared(round)
+                ? $"Classes: {string.Join(" and ", MixedHeats.ClassesOf(round).Select(Field))} share this race, each scored on its own\n"
+                : $"Class: {Field(round.ClassName)}\n") +
+            $"Drivers on track:{string.Join(", ", names)}\n" +
             (string.IsNullOrWhiteSpace(round.TrackLayoutName) ? "" : $"Track: {Field(round.TrackLayoutName)}\n") +
             (rivalries.Count > 0 ? string.Join("\n", rivalries) + "\n" : string.Empty) +
             (details.Count > 0 ? "Driver details:\n" + string.Join("\n", details) + "\n" : string.Empty) +
@@ -3591,6 +3595,10 @@ public sealed class CommentaryService
             $"Race: {spokenLabel}\n" +
             (kind is not null ? $"Type: {kind}\n" : string.Empty) +
             "Final results:\n" + string.Join("\n", lines) + "\n" +
+            // A shared heat (11 Nov 2026, Phase 4.1): who won each class,
+            // read off the classes stamped on the saved result - empty for
+            // every one-class race. See MixedHeats.ClassWinnersFact.
+            (MixedHeats.ClassWinnersFact(session.Results, PromptName) is { } classWinners ? classWinners + "\n" : string.Empty) +
             $"How close it was: {closeness}\n" +
             (winnerDetails.Count > 0 ? $"Winner's details: {winnerDetails[0]}\n" : string.Empty) +
             (fastest is not null
