@@ -128,6 +128,23 @@ public sealed class KokoroLoudnessTests
     }
 
     [Theory]
+    [InlineData("The A-Main for Stock is next.", "The Ay-Main for Stock is next.")]
+    [InlineData("A Main, Stock - drivers to the stand.", "Ay-Main, Stock - drivers to the stand.")]
+    [InlineData("Three A-Mains tonight.", "Three Ay-Mains tonight.")]
+    public void A_cloud_voice_is_sent_ay_main_which_elevenlabs_says_as_the_letter(string written, string said)
+    {
+        Assert.Equal(said, RaceNumbers.SpokenRoundNames(written, cloudVoice: true));
+    }
+
+    [Fact]
+    public void A_cloud_voice_s_line_is_spelt_for_it_by_ForCloudVoice()
+    {
+        var shortNames = File.ReadAllText(Path.Combine(RepoRoot(), "HeatCaller", "HeatCaller", "AnnouncementService.ShortNames.cs"));
+
+        Assert.Contains("RaceNumbers.SpokenRoundNames(ShortensForCloudVoice() ? Shortened(text) : text, cloudVoice: true)", shortNames);
+    }
+
+    [Theory]
     [InlineData("It's a main event tonight.")]
     [InlineData("The B-Main is next.")]
     [InlineData("Stock A-Mainline")]
