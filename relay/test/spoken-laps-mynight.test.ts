@@ -224,7 +224,7 @@ describe("My Night lap times: what is said", () => {
       box.checked = false;
       box.fire("change");
     }
-    assert.equal(n.p.store.get("hg-nighttalk-say-acme-rc"), "time,best,target");
+    assert.equal(n.p.store.get("hg-nighttalk-say-acme-rc"), "time,best,target,lapped", "Leader behind you is on until turned off (11 Nov 2026)");
 
     await turnOn(n);
     await n.p.advance(1000);

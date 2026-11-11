@@ -57,7 +57,8 @@ internal static class NightEmail
     /// transponder as a car of its own (22 Oct 2026): its heading
     /// (<see cref="CarHeading"/>), its facts and its report card.
     /// </summary>
-    internal sealed record EmailCar(string Heading, IReadOnlyList<string> Facts, IReadOnlyList<string>? Coach);
+    /// <remarks>Lines (11 Nov 2026, build plan 7.4): this car's RaceLines.ForEmail, or null.</remarks>
+    internal sealed record EmailCar(string Heading, IReadOnlyList<string> Facts, IReadOnlyList<string>? Coach, IReadOnlyList<string>? Lines = null);
 
     /// <summary>"Main car (B6.4)", or the label alone when the results don't say which car.</summary>
     internal static string CarHeading(string label, string? name) =>
@@ -250,6 +251,12 @@ internal static class NightEmail
     /// <param name="facts">Their races (DriverNight.Lines over DriverCut.FactsFor).</param>
     /// <param name="coach">Their report card, or null.</param>
     /// <param name="nightLink">Their night page (NightLink), or null when there isn't one.</param>
+    /// <param name="raceLines">
+    /// Their own lines race by race (RaceLines.ForEmail, 11 Nov 2026, build
+    /// plan 7.4) - "Heat 2: Held off Sam for 4 laps" - printed under RACE BY
+    /// RACE after their races, or null. Nothing at all is printed without
+    /// one, so an email with none is what it always was.
+    /// </param>
     internal static string Build(
         string firstName,
         string club,
@@ -258,7 +265,8 @@ internal static class NightEmail
         IReadOnlyList<string> facts,
         IReadOnlyList<string>? coach,
         string? nightLink,
-        IReadOnlyList<EmailCar>? cars = null)
+        IReadOnlyList<EmailCar>? cars = null,
+        IReadOnlyList<string>? raceLines = null)
     {
         var nl = Environment.NewLine;
         var text = new StringBuilder();
@@ -279,7 +287,7 @@ internal static class NightEmail
         // races and report card under its own heading, never added up.
         var parts = cars is { Count: > 0 }
             ? cars.Where(car => car is not null).ToList()
-            : new List<EmailCar> { new(string.Empty, facts, coach) };
+            : new List<EmailCar> { new(string.Empty, facts, coach, raceLines) };
 
         foreach (var part in parts)
         {
@@ -287,6 +295,7 @@ internal static class NightEmail
             var suffix = heading.Length > 0 ? $" - {heading}" : string.Empty;
 
             AppendBlock(text, "YOUR RACES" + suffix, part.Facts, nl);
+            AppendBlock(text, "RACE BY RACE" + suffix, part.Lines, nl);
             AppendBlock(text, "YOUR REPORT CARD" + suffix, part.Coach, nl);
         }
 

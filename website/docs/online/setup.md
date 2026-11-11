@@ -129,6 +129,7 @@ The email is headed "Your night at *club* - *Tuesday 22 October*" and has:
 
 - a greeting by first name and the night's date;
 - "YOUR RACES": the night's facts, as on their night page;
+- "RACE BY RACE", when there's something to say: their own lines from each race's card on their night page, such as "A Main: Held off Sam for 4 laps" (see [Race cards](index.md#race-cards)). Left out when there are none;
 - "YOUR REPORT CARD": the same report card as on their night page;
 - a link to their night page, with "This link is yours - it can also check you in, so don't share it." and "Open it once on your phone and Me, on the club's pages, brings you back to it from then on." (see [Getting around](index.md#getting-around));
 - "Live timing, the running order and results:" with your club's home page address;

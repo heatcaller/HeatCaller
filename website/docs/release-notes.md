@@ -4,6 +4,12 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **"Leader behind" and race lines for drivers (11 November).** Two additions on drivers' phones:
+    - **Leader behind you.** When the leader is about to lap a car, that driver's **Lap times in my ear** says "Leader behind" first in the lap's call, once each time the leader comes up to lap them, and never late. It's a new **What to say** box, on until unticked. See [Lap times in my ear](online/index.md#lap-times-in-my-ear).
+    - **Race lines.** A race card on a driver's night page and **Me** can carry a line or two of their own, such as "Held off Sam for 4 laps", "Best lap 0.31s quicker than your Heat 1" or "Best Stock finish this year". The same lines go in their night email under "RACE BY RACE". See [Race cards](online/index.md#race-cards).
+
+  Update HeatCaller on the race PC. **Both need the relay redeployed** (`fly deploy --ha=false`). "Leader behind" is said in the HeatCaller lap voice once its clips are made again (only the one new clip is made); until then that call is in the phone's voice.
+
 - **Marshal swaps (11 November).** **Swap...** in the **Corner Marshals** window covers a driver's post for one round with somebody else, and the marshal call, the Next Up bar and drivers' phones follow it. See [Corner marshals](race-day/program-and-mains.md#corner-marshals).
 - **Money at the desk (11 November).** New **Entry fee:** and **Each extra class:** on **Race Day → Setup**. With a fee set, **Who's Racing** shows a **Paid** column (what each driver owes), and right-clicking marks drivers **Paid Cash**, **Paid Card**, **Comp** (marshal, volunteer, junior) or **Still Owing**, with Undo. The event report gets a **Money at the desk** section (cash, card, comps, and who still owes), and the closing list on Next Steps names drivers who still owe. HeatCaller only records it; it never takes a payment. See [Money at the desk](race-day/events-and-entries.md#money-at-the-desk). Update HeatCaller on the race PC; nothing changes on the relay.
 

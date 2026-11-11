@@ -517,6 +517,10 @@ a.go { text-align: center; text-decoration: none; }
 .rc-facts { color: var(--muted); font-size: 0.9rem; }
 .rc-pen { list-style: none; margin: 8px 0 0; padding: 0; font-size: 0.9rem; color: var(--bad); }
 .rc-pen li { padding: 2px 0; }
+/* A race's own lines (11 Nov 2026): good news, in the good colour. */
+.rc-lines { list-style: none; margin: 6px 0 0; padding: 0; font-size: 0.9rem; color: var(--good); }
+.rc-lines li { padding: 2px 0; }
+.rc-lines li::before { content: "\\2605  "; }
 /* Heat results as LiveRC lays them out (28 Oct 2026): one tbody per
    driver, so View laps opens under its own row and the stripes and the
    winner's colour still go by driver, not by table row. */
@@ -4659,7 +4663,34 @@ const LV_SAY = [
   ['moves', 'Places gained', false], ['gap', 'Gap ahead', true],
   ['behind', 'Gap behind', false], ['leader', 'Gap to P1', false],
   ['left', 'Laps or time left', false],
+  // 11 Nov 2026 (build plan 7.3): on until turned off - see lvLappedPart.
+  ['lapped', 'Leader behind you', true],
 ];
+
+// The parts added since phones began saving their choice (11 Nov 2026),
+// which a choice saved before them never mentions. Saved as "no-lapped"
+// once turned off, so a phone that never saw the box hears it - it is on
+// until turned off - and one that turned it off does not.
+const LV_SAY_LATER = ['lapped'];
+
+// "Leader behind" (11 Nov 2026, build plan 7.3): the race leader is about
+// to lap them. The laptop works it out from every car's crossings
+// (LeaderBehind.cs) and puts "lapping" on the row - which lapping it would
+// be, 1 for the first - only while it is so. Said once per lapping: warned
+// holds the last one said, and the page clears it for a new race, so a
+// leader seen closing on three reads in a row is one warning, and the next
+// time round is another. Never on its own: it rides in the call for the
+// lap it came with, so a call dropped as late (STALE_MS, LAP_STALE_MS)
+// drops it too - a "leader behind" after the leader has gone by is worse
+// than none. Said first, ahead of the lap number: it is the one thing in
+// the call that cannot wait.
+function lvLappedPart(say, row, warned) {
+  if (!say.lapped || !row || typeof row.lapping !== 'number') return null;
+  const n = Math.floor(row.lapping);
+  if (!(n >= 1) || warned.n === n) return null;
+  warned.n = n;
+  return { text: 'Leader behind', clips: ['lead-behind'] };
+}
 
 // Laps or time left (3 Nov 2026, Asher), from the board's own countdown -
 // "5 LAPS TO GO", "1 LAP TO GO", "04:32 REMAINING" - counted from the
@@ -4716,7 +4747,12 @@ function lvSayRead(key, shortKey) {
     const saved = localStorage.getItem(key);
     if (typeof saved === 'string') {
       const on = saved.split(',');
-      LV_SAY.forEach((p) => { say[p[0]] = on.indexOf(p[0]) >= 0; });
+      // A part added after the phone saved its choice keeps its own
+      // default until it is changed: the choice never mentioned it.
+      LV_SAY.forEach((p) => {
+        say[p[0]] = on.indexOf(p[0]) >= 0
+          || (LV_SAY_LATER.indexOf(p[0]) >= 0 && p[2] && on.indexOf('no-' + p[0]) < 0);
+      });
     } else if (localStorage.getItem(shortKey) === '1') {
       say.lap = false; say.pos = false; say.gap = false;
     }
@@ -4725,7 +4761,9 @@ function lvSayRead(key, shortKey) {
 }
 
 function lvSaySave(key, say) {
-  try { localStorage.setItem(key, LV_SAY.filter((p) => say[p[0]]).map((p) => p[0]).join(',')); } catch (e) { /* this visit only */ }
+  const kept = LV_SAY.filter((p) => say[p[0]]).map((p) => p[0])
+    .concat(LV_SAY_LATER.filter((k) => !say[k]).map((k) => 'no-' + k));
+  try { localStorage.setItem(key, kept.join(',')); } catch (e) { /* this visit only */ }
 }
 
 // The boxes for the parts this page says (names), each changing say in place.
@@ -4910,6 +4948,8 @@ const lapTalk = (function () {
   let heardStart = false;
   // Their place when the last lap was said, for Places gained: 0 for none yet.
   let placeAt = 0;
+  // The lapping "Leader behind" was last said for - see lvLappedPart.
+  const warned = { n: 0 };
   // Who has been off the board since this was turned on: arriving is a new race.
   let absent = '';
   // The screen wake lock, and whether the phone gave one (null: not asked).
@@ -5029,6 +5069,7 @@ const lapTalk = (function () {
       const newRace = absent === who || (heardFor === who && first !== firstLap);
       heardFor = who; heardLaps = count; firstLap = first; absent = ''; heardStart = started;
       placeAt = newRace ? 0 : rows.indexOf(row) + 1;
+      warned.n = 0;
       if (!newRace) return;
       if (count === 0) { if (!started) return; lapOne = true; }
     } else if (count === heardLaps) {
@@ -5069,6 +5110,8 @@ const lapTalk = (function () {
 
     // In the order they are said; only the parts ticked in What to say.
     const parts = [];
+    const lapped = lvLappedPart(say, row, warned);
+    if (lapped) parts.push(lapped);
     if (say.lap) parts.push({ text: 'Lap ' + (count + 1), clips: lvLap(count + 1) });
     if (say.time) parts.push({ text: lvTimeText(last), clips: lvTime(last) });
     if (say.best && isBest) parts.push({ text: 'best lap', clips: ['best'] });
@@ -5104,7 +5147,7 @@ const lapTalk = (function () {
       show();
     });
 
-    if (sayRow) sayRow.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'vsbest', 'pos', 'moves', 'gap', 'behind', 'leader', 'left'], 'lapsay-', SAY_KEY));
+    if (sayRow) sayRow.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'vsbest', 'pos', 'moves', 'gap', 'behind', 'leader', 'left', 'lapped'], 'lapsay-', SAY_KEY));
 
     // Any tap lets a page that was on before a reload speak again - and a
     // tap on a name changes who is followed, so the button is redrawn
@@ -10748,6 +10791,8 @@ const nightTalk = (function () {
   let heardStart = false;
   // Their place when the last lap was said, for Places gained: 0 for none yet.
   let placeAt = 0;
+  // The lapping "Leader behind" was last said for - see lvLappedPart.
+  const warned = { n: 0 };
   // Whether their car has been off the board since lap times were turned on.
   let absent = false;
   // The screen wake lock: held, being asked for, and whether the phone gave one.
@@ -10873,6 +10918,7 @@ const nightTalk = (function () {
       const newRace = absent || (heardTag !== '' && (heardTag !== row.tag || first !== firstLap));
       heardTag = row.tag; heardLaps = count; firstLap = first; absent = false; heardStart = started;
       placeAt = newRace ? 0 : rows.indexOf(row) + 1;
+      warned.n = 0;
       if (!newRace) return;
       if (count === 0) { if (!started) return; lapOne = true; }
     } else if (count === heardLaps) {
@@ -10911,6 +10957,8 @@ const nightTalk = (function () {
 
     // In the order they are said; only the parts ticked in What to say.
     const parts = [];
+    const lapped = lvLappedPart(say, row, warned);
+    if (lapped) parts.push(lapped);
     if (say.lap) parts.push({ text: 'Lap ' + (count + 1), clips: lvLap(count + 1) });
     if (say.time) parts.push({ text: lvTimeText(last), clips: lvTime(last) });
     if (say.best && count > 1 && last <= best) parts.push({ text: 'best lap', clips: ['best'] });
@@ -10978,7 +11026,7 @@ const nightTalk = (function () {
     b.setAttribute('aria-pressed', on ? 'true' : 'false');
     p.appendChild(b);
 
-    p.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'vsbest', 'target', 'pos', 'moves', 'gap', 'behind', 'leader', 'left'], 'nt-say-', SAY_KEY));
+    p.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'vsbest', 'target', 'pos', 'moves', 'gap', 'behind', 'leader', 'left', 'lapped'], 'nt-say-', SAY_KEY));
 
     p.appendChild(el('div', 'when', !on
       ? 'Your phone reads out each of your laps as you race: lap, time, best lap, your target when one is set, place and gap. Keep this page open with the screen on.'
@@ -12297,6 +12345,18 @@ function raceDetail(r, stats, own) {
   const c = el('div', 'rc');
   const facts = raceFacts(r);
   if (facts) c.appendChild(el('div', 'rc-facts', facts));
+
+  // Their own lines for the race (11 Nov 2026, build plan 7.4): "Held off
+  // Sam for 4 laps", "Best Stock finish this year" - worked out on the
+  // laptop (RaceLines.cs), only ever good news, and usually none. A night
+  // from an older HeatCaller has none and shows nothing here.
+  const said = lines(r.lines);
+  if (said.length > 0) {
+    const ul = el('ul', 'rc-lines');
+    ul.setAttribute('aria-label', 'Your race');
+    for (const line of said) ul.appendChild(el('li', '', line));
+    c.appendChild(ul);
+  }
 
   const list = lapRows(r.lapsMs, r.posAt, r.startMs, r.lenS, r.bestMs);
   const tabs = [];

@@ -87,8 +87,8 @@ describe("lap voice: the clips", () => {
 
   it("costs under two dollars to make once on v4 Turbo", () => {
     const cost = lapClipCost();
-    assert.equal(cost.clips, 2744);
-    assert.equal(cost.chars, 45755);
+    assert.equal(cost.clips, 2745);
+    assert.equal(cost.chars, 45768);
     assert.equal(cost.dollars, 1.83);
   });
 });
@@ -344,6 +344,8 @@ interface Row {
   ahead?: string;
   /** The gap to P1 (HeatCaller from 3 Nov 2026). */
   leader?: string;
+  /** The leader is about to lap them: which lapping (HeatCaller from 11 Nov 2026, LeaderBehind.cs). */
+  lapping?: number;
   cells?: { text: string; emphasis: string }[];
 }
 
@@ -669,6 +671,54 @@ describe("lap voice: the Live page", () => {
     plain.set(four([9500, 9600, 9520]));
     await plain.p.advance(1000);
     assert.deepEqual(plain.played, ["lap4", "t952", "p3", "g-t4"]);
+  });
+
+  it("says \"Leader behind\" first, once per lapping, when the laptop says the leader is about to lap them (11 Nov 2026)", async () => {
+    assert.equal(TEXT.get("lead-behind"), "Leader behind");
+    const board = (laps: number[], lapping?: number): Board => ({
+      columns: COLUMNS,
+      standings: [
+        row("Sam P.", [9000, 9000, 9000, 9000, 9000, 9000]),
+        row("Asher K.", laps, { ahead: "+7.20", ...(lapping === undefined ? {} : { lapping }) }),
+      ],
+    });
+    const l = await livePageWith(board([9500, 9600]), {}, { "hg-laptalk-say-acme-rc": "lap,time" });
+    l.set(board([9500, 9600, 9520], 1));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["lead-behind", "lap4", "t952"], "said first, though the choice was saved before the box existed");
+
+    // The next read still says the leader is coming: never said twice.
+    l.p.eval("__played.length = 0;");
+    l.set(board([9500, 9600, 9520, 9540], 1));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["lap5", "t954"]);
+
+    // Never on its own, between laps: it rides only in a lap's call.
+    l.p.eval("__played.length = 0;");
+    l.set(board([9500, 9600, 9520, 9540], 2));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, []);
+
+    // Lapped, then the leader comes round again: the second lapping is said.
+    l.p.eval("__played.length = 0;");
+    l.set(board([9500, 9600, 9520, 9540, 9560]));
+    await l.p.advance(1000);
+    l.set(board([9500, 9600, 9520, 9540, 9560, 9580], 2));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["lap6", "t956", "lead-behind", "lap7", "t958"]);
+
+    // In the phone's voice when the clip was not made yet: the whole call, never half.
+    const phone = await livePageWith(board([9500, 9600]), { listed: NAMES.filter((n) => n !== "lead-behind") }, { "hg-laptalk-say-acme-rc": "lap,time" });
+    phone.set(board([9500, 9600, 9520], 1));
+    await phone.p.advance(1000);
+    assert.equal(phone.said.at(-1), "Leader behind, Lap 4, 9.52");
+
+    // Turned off, it is never said - and stays off.
+    const off = await livePageWith(board([9500, 9600]), {}, { "hg-laptalk-say-acme-rc": "lap,time,no-lapped" });
+    off.set(board([9500, 9600, 9520], 1));
+    await off.p.advance(1000);
+    assert.deepEqual(off.played, ["lap4", "t952"]);
+    assert.equal((off.p.get("lapsay-lapped") as unknown as { checked: boolean }).checked, false);
   });
 
   it("never says the gap to P1 for P2 - it is the gap ahead - and no gap behind for the last car", async () => {

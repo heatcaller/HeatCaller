@@ -185,7 +185,7 @@ describe("lap times in my ear: what is said", () => {
       box.checked = false;
       box.fire("change");
     }
-    assert.equal(l.p.store.get("hg-laptalk-say-acme-rc"), "time,best,target");
+    assert.equal(l.p.store.get("hg-laptalk-say-acme-rc"), "time,best,target,lapped", "Leader behind you is on until turned off (11 Nov 2026)");
     await turnOn(l);
     await l.p.advance(1000);
 
