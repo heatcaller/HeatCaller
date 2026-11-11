@@ -1274,7 +1274,7 @@ public sealed class CommentaryThreadTests : IDisposable
     // ==================================================================
 
     [Fact]
-    public async Task The_cold_open_sets_the_nights_thread()
+    public async Task The_tonight_open_sets_the_nights_thread()
     {
         var rig = new Rig();
 
@@ -1282,7 +1282,7 @@ public sealed class CommentaryThreadTests : IDisposable
 
         rig.Director.NightStory = () => Story();
 
-        var said = await rig.Director.NextAsync();
+        var said = await rig.Director.ForTonightOpenAsync();
 
         Assert.NotNull(said);
         Assert.Equal(SegmentKind.ColdOpen, said!.Kind);
@@ -1350,9 +1350,9 @@ public sealed class CommentaryThreadTests : IDisposable
 
         rig.Director.NightStory = () => throw new InvalidOperationException("the history was mid-save");
 
-        Assert.Null(await rig.Director.NextAsync());
+        Assert.Null(await rig.Director.ForTonightOpenAsync());
 
-        Assert.Contains(rig.Console, line => line.Contains("cold open"));
+        Assert.Contains(rig.Console, line => line.Contains("tonight open"));
     }
 
     // ------------------------------------------------------------------

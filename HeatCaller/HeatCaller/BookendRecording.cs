@@ -68,11 +68,11 @@ internal sealed class BookendRecording
 
     /// <summary>
     /// What the file is called - the crowd's own name for the segment, so a
-    /// club looking in the folder sees "Cold Open" and "Sign-Off" beside
+    /// club looking in the folder sees "Tonight Open" and "Sign-Off" beside
     /// the races rather than a SegmentKind.
     /// </summary>
     private static string LabelFor(SegmentKind kind) =>
-        ShowBlock.CaptionFor(kind) ?? (kind == SegmentKind.ColdOpen ? "Cold Open" : "Sign-Off");
+        ShowBlock.CaptionFor(kind) ?? (kind == SegmentKind.ColdOpen ? "Tonight Open" : "Sign-Off");
 
     /// <summary>
     /// Starts recording this bookend, or returns null - which is the

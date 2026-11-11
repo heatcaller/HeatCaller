@@ -1419,6 +1419,43 @@ public sealed class CommentaryDirector
     }
 
     /// <summary>
+    /// The one segment a pass is limited to, or null for the whole ladder -
+    /// see ForTonightOpenAsync.
+    /// </summary>
+    private SegmentKind? _onlyKind;
+
+    /// <summary>
+    /// The night's Tonight Open, for On Air to play in front of the show open
+    /// (11 Nov 2026), or null - switched off, already said tonight, the
+    /// month's relay lines used up, or nothing on the program to open with.
+    ///
+    /// The same budget, facts and once-a-night rule as any segment, with the
+    /// between-races gap lifted as it is for a programme: On Air is the race
+    /// director's own press, and nothing else is on air. Called on the UI thread, as
+    /// NextAsync is, for the same reason - the facts are read before the
+    /// first await.
+    /// </summary>
+    public async Task<SpokenSegment?> ForTonightOpenAsync(CancellationToken ct = default)
+    {
+        await _onePass.WaitAsync(ct).ConfigureAwait(true);
+
+        // Not _forTheProgramme: that names the recap host and credits the
+        // sponsor first, and this is the announcer's own open, not the
+        // recap show's.
+        _onlyKind = SegmentKind.ColdOpen;
+
+        try
+        {
+            return await PassAsync(ct).ConfigureAwait(true);
+        }
+        finally
+        {
+            _onlyKind = null;
+            _onePass.Release();
+        }
+    }
+
+    /// <summary>
     /// The next thing worth saying, or null - which is most of the time.
     ///
     /// Called on the host's own timer rather than pushing: the host knows
@@ -2088,10 +2125,17 @@ public sealed class CommentaryDirector
     /// </summary>
     private IEnumerable<SegmentKind> Order()
     {
+        // THE TONIGHT OPEN IS ASKED FOR, NEVER DUE (11 Nov 2026). On Air asks
+        // for it alone, in front of the show open - see ForTonightOpenAsync.
+        if (_onlyKind is { } only)
+        {
+            return new[] { only };
+        }
+
         var kinds = CommentaryBudget.AllSpecs
             .Where(spec => spec.Tier != SegmentTier.Essential)
             .Where(spec => InRace(spec.Kind) == _racing)
-            .Where(spec => !(_forTheProgramme && OpensTheNight(spec.Kind)))
+            .Where(spec => !OpensTheNight(spec.Kind))
             .OrderBy(spec => spec.Tier)
             // THE HORIZON GOES AFTER THE OTHER LIVE CALLS (15 Oct 2026),
             // whatever its deadline says. It has the shortest life of the
@@ -2111,12 +2155,13 @@ public sealed class CommentaryDirector
     }
 
     /// <summary>
-    /// True for the segment that opens an evening - never asked for INSIDE a
-    /// recap show (3 Nov 2026). The cold open is "Welcome to the track,
-    /// everybody! Tonight we've got five drivers...", and a programme asks
-    /// for whatever the ladder has due, so on a night whose first race was
-    /// a demo it came up between the recap's parts, straight after the
-    /// result it was meant to come before. Between races it can still run.
+    /// True for the segment that opens an evening - the Tonight Open (the
+    /// cold open until 11 Nov 2026). Never on the ladder: it is "Welcome to
+    /// the track, everybody! Tonight we've got five drivers...", and left to
+    /// come up when it was due it fired by itself in whatever gap there was -
+    /// inside a recap show on a night whose first race was a demo (3 Nov
+    /// 2026), or before the race director was ready. On Air asks for it now,
+    /// in front of the show open. See ForTonightOpenAsync.
     /// </summary>
     internal static bool OpensTheNight(SegmentKind kind) => kind == SegmentKind.ColdOpen;
 
@@ -2216,7 +2261,7 @@ public sealed class CommentaryDirector
         // Between races card - its level, line count, spacing, quiet zones
         // and ticks - by the gap Race Control keeps (GapState). Never a
         // programme's own segment: the recap show is not filler.
-        if (!_forTheProgramme && !InRace(kind) && GapRefuses?.Invoke(kind) is { } gapWhy)
+        if (!_forTheProgramme && _onlyKind is null && !InRace(kind) && GapRefuses?.Invoke(kind) is { } gapWhy)
         {
             // Once per reason, the seconds left out so a countdown in the
             // reason does not say it again every pass.
@@ -2232,7 +2277,9 @@ public sealed class CommentaryDirector
             return null;
         }
 
-        var verdict = _forTheProgramme
+        // The Tonight Open is asked for by On Air's press, so the gap since
+        // the last line does not hold it either - see ForTonightOpenAsync.
+        var verdict = _forTheProgramme || _onlyKind is not null
             ? Budget.ReserveForProgramme(kind, _className)
             : Budget.Reserve(kind, _className);
 

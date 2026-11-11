@@ -991,7 +991,7 @@ public sealed class CommentaryBookendTests : IDisposable
     // ==================================================================
 
     [Fact]
-    public async Task The_cold_open_opens_the_night_through_the_director()
+    public async Task The_tonight_open_opens_the_night_when_On_Air_asks_for_it()
     {
         var rig = new Rig();
 
@@ -1006,13 +1006,44 @@ public sealed class CommentaryBookendTests : IDisposable
             scope,
             new RaceEvent { VenueName = "Upstate Mini Z" });
 
-        var said = await rig.Director.NextAsync();
+        var said = await rig.Director.ForTonightOpenAsync();
 
         Assert.NotNull(said);
         Assert.Equal(SegmentKind.ColdOpen, said!.Kind);
 
         // Spent, so the night cannot open twice.
         Assert.True(rig.Director.Said.Spent("coldopen:day-1"));
+
+        // And the next On Air does not open it again.
+        Assert.Null(await rig.Director.ForTonightOpenAsync());
+    }
+
+    [Fact]
+    public async Task The_tonight_open_never_fires_by_itself_between_races()
+    {
+        // WHY (11 Nov 2026): it used to come up in the first quiet gap of
+        // the night, before the race director was ready. Only On Air asks
+        // for it now - see CommentaryDirector.ForTonightOpenAsync.
+        var rig = new Rig();
+
+        rig.BetweenRaces();
+
+        var (rounds, scope) = Programme(
+            ARound("Q1 Heat 1", roster: new[] { "a", "b", "c" }),
+            ARound("A-Main", kind: RoundKind.Main, roster: new[] { "a", "b", "c" }));
+
+        rig.Director.NightAhead = () => CommentaryReaders.NightAhead(
+            rounds,
+            scope,
+            new RaceEvent { VenueName = "Upstate Mini Z" });
+
+        Assert.Null(await rig.Director.NextAsync());
+        Assert.Null(await rig.Director.ForTheProgrammeAsync());
+        Assert.Equal(0, rig.Model.Asked);
+        Assert.False(rig.Director.Said.Spent("coldopen:day-1"));
+
+        // Still there for On Air.
+        Assert.Equal(SegmentKind.ColdOpen, (await rig.Director.ForTonightOpenAsync())?.Kind);
     }
 
     [Fact]
@@ -1070,8 +1101,8 @@ public sealed class CommentaryBookendTests : IDisposable
         opening.BetweenRaces();
         opening.Director.NightAhead = () => throw new InvalidOperationException("the programme was mid-save");
 
-        Assert.Null(await opening.Director.NextAsync());
-        Assert.Contains(opening.Console, line => line.Contains("cold open"));
+        Assert.Null(await opening.Director.ForTonightOpenAsync());
+        Assert.Contains(opening.Console, line => line.Contains("tonight open"));
 
         var closing = new Rig();
 

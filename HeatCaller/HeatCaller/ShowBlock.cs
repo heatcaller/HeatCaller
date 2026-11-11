@@ -654,7 +654,7 @@ internal sealed class ShowBlock
     /// </summary>
     internal static string? CaptionFor(SegmentKind? kind) => kind switch
     {
-        SegmentKind.ColdOpen => "Cold Open",
+        SegmentKind.ColdOpen => "Tonight Open",
         SegmentKind.RaceIntro => "Round Intro",
         SegmentKind.RaceRecap => "Race Recap",
 

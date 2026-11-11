@@ -326,6 +326,13 @@ public sealed partial class RaceControlControl : UserControl
     public Func<CommentaryDirector?>? Commentary { get; set; }
 
     /// <summary>
+    /// Plays the night's Tonight Open through the announcer screen, which
+    /// owns its music and its recording - On Air asks for it in front of the
+    /// show open (11 Nov 2026). False when it was dropped unheard.
+    /// </summary>
+    internal Func<SpokenSegment, Task<bool>>? PlayTonightOpen { get; set; }
+
+    /// <summary>
     /// The show's music, once MainForm has it - a function for the same
     /// reason the director is one: the announcer screen owns it and this
     /// page is made first.

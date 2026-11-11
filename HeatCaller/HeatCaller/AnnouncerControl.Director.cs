@@ -2639,6 +2639,74 @@ public partial class AnnouncerControl
     }
 
     /// <summary>
+    /// True while On Air has the Tonight Open on - see PlayTonightOpenAsync.
+    /// </summary>
+    private bool _playingTonightOpen;
+
+    /// <summary>
+    /// Plays the night's Tonight Open for On Air (11 Nov 2026), in front of
+    /// the show open: as a show where the club ticked it for the music, with
+    /// its own recording, and plainly otherwise - the way any segment is
+    /// said, only asked for by On Air rather than left to come up by itself.
+    ///
+    /// Returns once it has been heard where it runs as a show, and once it is
+    /// queued where it is said plainly - On Air waits for the announcer to go
+    /// quiet before its jingle either way. False when it was dropped unheard.
+    /// The director is told which, so a dropped one can still be asked for at
+    /// the next On Air.
+    /// </summary>
+    internal async Task<bool> PlayTonightOpenAsync(SpokenSegment said)
+    {
+        if (Director is not { } director || IsDisposed)
+        {
+            return false;
+        }
+
+        // Between-race segments wait for it to finish, as they wait for any
+        // other segment on air.
+        var claimed = !_segmentInFlight;
+        _segmentInFlight = true;
+        _playingTonightOpen = true;
+
+        try
+        {
+            if (_announcer.Muted)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [brain] Tonight Open written, then dropped - the announcer is muted.");
+
+                return false;
+            }
+
+            if (!await SpeakAsync(said, director).ConfigureAwait(true))
+            {
+                return false;
+            }
+
+            GapState.Shared.SaidByTheDirector(GapState.LineFor(said.Kind), DateTime.UtcNow);
+            director.Spoken(said);
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [brain] Tonight Open - {ex.GetType().Name}: {ex.Message}");
+
+            return false;
+        }
+        finally
+        {
+            // Does nothing for one already answered for - see SpeakNextSegmentAsync.
+            director.Dropped(said);
+            _playingTonightOpen = false;
+
+            if (claimed)
+            {
+                _segmentInFlight = false;
+            }
+        }
+    }
+
+    /// <summary>
     /// Why a segment that has just been written must not go out now, or
     /// null when it may. The same rules as FeedTheDirector's, asked again
     /// once the write is back, plus the one the director applies to its
@@ -2661,7 +2729,8 @@ public partial class AnnouncerControl
             return "the next race was called to the grid while it was being written";
         }
 
-        if (ShowFloor.Busy)
+        // Not the Tonight Open: On Air holds the floor and plays it itself.
+        if (ShowFloor.Busy && !_playingTonightOpen)
         {
             return $"{ShowFloor.HeldBy ?? "the program"} took the floor while it was being written";
         }

@@ -67,7 +67,7 @@ internal static class CommentarySections
         CommentarySection.BetweenRaces => "Form guide, qualifying report, grid history, club notes, and the room's verdict.",
         CommentarySection.AfterTheFlag => "The unofficial result, achievements, the Technical Lead, teasers, and sponsors as a break.",
         CommentarySection.RecapShow => "Race recaps with the fastest lap, the TV-style open and sign-off, and the booth interview.",
-        _ => "The cold open, this day at the club, halfway standings, and the sign-off numbers.",
+        _ => "The Tonight Open, this day at the club, halfway standings, and the sign-off numbers.",
     };
 
     /// <summary>The pieces of one section.</summary>

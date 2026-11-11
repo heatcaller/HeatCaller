@@ -70,7 +70,7 @@ In Simple mode, **Voice → AI Commentary** shows **Enable AI commentary** and a
 | **Between races** | Form guide, qualifying report, grid history, club notes, and the room's verdict |
 | **After the flag** | The unofficial result, achievements earned, the Technical Lead's interview, teasers, and sponsors as a commercial break |
 | **Recap show** | Race recaps with the fastest lap, the TV-style open and sign-off, and the booth interview |
-| **Opening and closing the night** | The cold open, this day at the club, halfway standings, and the sign-off numbers |
+| **Opening and closing the night** | The Tonight Open, this day at the club, halfway standings, and the sign-off numbers |
 
 How the switches behave:
 
