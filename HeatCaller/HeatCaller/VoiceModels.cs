@@ -1627,11 +1627,11 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 95,
             Templates = new List<string>
             {
-                "[excited] {winner} wins it!",
-                "[excited] And it's {winner} who takes the win!",
-                "[excited] {winner} takes the checkered flag first!",
+                "[shouting] {winner} wins it!",
+                "[shouting] And it's {winner} who takes the win!",
+                "[shouting] {winner} takes the checkered flag first!",
                 "[shouting] Victory for {winner}!",
-                "[excited] {winner} brings it home first!",
+                "[shouting] {winner} brings it home first!",
             },
         };
 
@@ -1644,9 +1644,9 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 55,
             Templates = new List<string>
             {
-                "[cheerful] Personal bests for {drivers}!",
-                "[cheerful] {drivers} all go quicker!",
-                "[cheerful] New personal bests - {drivers}.",
+                "[excited] Personal bests for {drivers}!",
+                "[excited] {drivers} all go quicker!",
+                "[excited] New personal bests - {drivers}.",
                 "[excited] Everyone's finding time - {drivers}!",
             },
         };
@@ -1662,7 +1662,7 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             {
                 "[excited] {driver}'s quickest ever lap here - {time}!",
                 "[excited] {driver} has never been faster on this track - {time}!",
-                "[cheerful] A lifetime best here for {driver} - {time}, beating {previous}.",
+                "[excited] A lifetime best here for {driver} - {time}, beating {previous}.",
                 "[excited] That's the best lap {driver} has ever done here - {time}!",
             },
         };
