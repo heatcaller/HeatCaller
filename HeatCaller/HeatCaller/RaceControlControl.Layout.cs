@@ -96,6 +96,7 @@ public sealed partial class RaceControlControl
         // On Air, in front of Stage: the jingle, the opening and a bumper,
         // then it presses Stage itself. See RaceControlControl.OnAir.cs.
         BuildOnAirButton();
+        BuildAutoStart();
 
         BuildStageButton();
 
@@ -239,18 +240,23 @@ public sealed partial class RaceControlControl
 
         // Simple mode (1 Nov 2026) keeps Race Format; Start races On Air and
         // the Columns button are Advanced - see SimpleMode.
-        var footer = new ButtonBar().With(SimpleMode.Hide(_chkStartWithOnAir), _btnFormat, SimpleMode.Hide(btnColumns));
+        // Auto start (11 Nov 2026) shows in Simple mode too: it decides
+        // whether races start themselves, which a volunteer has to see.
+        var footer = new ButtonBar().With(SimpleMode.Hide(_chkStartWithOnAir), _swAutoStart, _btnFormat, SimpleMode.Hide(btnColumns));
 
-        // The switch is shorter than the buttons beside it; the bar lines
-        // everything up along the top, so it is brought down to their middle.
+        // The switches are shorter than the buttons beside them; the bar lines
+        // everything up along the top, so they are brought down to their middle.
         footer.Layout += (_, _) =>
         {
-            var drop = Math.Max(0, (_btnFormat.Height - _chkStartWithOnAir.Height) / 2);
-            var margin = _chkStartWithOnAir.Margin;
-
-            if (margin.Top != drop)
+            foreach (var control in new Control[] { _chkStartWithOnAir, _swAutoStart })
             {
-                _chkStartWithOnAir.Margin = new Padding(margin.Left, drop, margin.Right, margin.Bottom);
+                var drop = Math.Max(0, (_btnFormat.Height - control.Height) / 2);
+                var margin = control.Margin;
+
+                if (margin.Top != drop)
+                {
+                    control.Margin = new Padding(margin.Left, drop, margin.Right, margin.Bottom);
+                }
             }
         };
 
@@ -369,6 +375,9 @@ public sealed partial class RaceControlControl
         // still built and drawn here, every second, so a hold and the counts
         // stay true whether the window is open or not.
         _page.Add(_unknownBanner, gapBelow: UiLayout.RowGap);
+
+        // Auto start's "not seen by the loop" banner (11 Nov 2026).
+        _page.Add(_carsBanner, gapBelow: UiLayout.RowGap);
         _page.AddFill(body, body.LeastHeight, gapBelow: 0);
 
         Controls.Add(_page);
@@ -449,6 +458,8 @@ public sealed partial class RaceControlControl
         _btnReseed.Text = "Redo Remaining Heats...";
         _btnReseed.Click += (_, _) => ReseedRemaining();
 
+        // Auto start's Hold / Resume, left of Start Next (11 Nov 2026).
+        _nextUpBar.AddButton(_btnAutoHold, HoldCaption, ResumeCaption);
         _nextUpBar.AddButton(_btnStartNext, ProgramCaptions.NextUpBarWidest);
         _nextUpBar.AddButton(_btnReseed);
     }

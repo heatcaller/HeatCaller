@@ -653,6 +653,23 @@ public sealed class AppSettings
     public bool RaceStartWithOnAir { get; set; } = true;
 
     /// <summary>
+    /// Race Control's "Auto start" switch (11 Nov 2026, race-night build plan,
+    /// Phase 1): after each race, count down the gap and start the next race
+    /// by itself. On by default, as decided. See AutoStartClock.
+    /// </summary>
+    public bool AutoStartBetweenRaces { get; set; } = true;
+
+    /// <summary>The gap Auto start counts after each race's checkered flag, in seconds. 150 (2:30) by default.</summary>
+    public int AutoStartGapSeconds { get; set; } = 150;
+
+    /// <summary>
+    /// The night (NightEmail.NightKey) Auto start was turned off for, or
+    /// empty. Turning it off is for tonight only: tomorrow's racing starts
+    /// with it on again.
+    /// </summary>
+    public string AutoStartOffForNight { get; set; } = string.Empty;
+
+    /// <summary>
     /// How long On Air's last few openings took to get ready, in
     /// milliseconds, newest last (21 Oct 2026) - from the press to the
     /// jingle. On Air's button counts down from their average ("On Air in

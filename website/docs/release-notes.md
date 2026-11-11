@@ -4,6 +4,14 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Auto start between races (11 November).** After each race on the program, Race Control counts down a gap (2:30 unless you choose another) and starts the next race by itself, through On Air as **Start Next** does. It's on by default; the new **Auto start** switch at the foot of the leaderboard turns it off for tonight. Some details:
+    - The Next Up bar says "starts in 1:42", and **Hold** beside **Start Next** holds and resumes the count (right-click it for **+1 min** and **Start now**).
+    - The call-ups (and the spoken countdown, when it's on) are timed to the real start, and phones show it.
+    - A driver who raced the race just run gets an extra 2 minutes.
+    - If a car in the next race hasn't been heard by the loop when the count runs out, the race waits for you: a banner offers **Start without them** or **Wait**, and the announcer asks the driver once to get the car on the track.
+
+  See [Auto start between races](race-control/running-a-race.md#auto-start-between-races). Update HeatCaller on the race PC; nothing changes on the relay.
+
 - **Plan the night (11 November).** Four additions:
     - **When the night finishes.** While races are still to run, the next-step card on **Next Steps** says when the night should finish, worked out from each race's length and tonight's own gap between races. **Tonight's program** gets an **About** column with when each race should start. See [When the night finishes](race-day/program-and-mains.md#when-the-night-finishes).
     - **Out of the venue by.** A new **Out of the venue by:** time on **Race Day → Setup**. With it set, the card says whether the night finishes in time and, when it won't, by how much and what would help, biggest saving first: drop the last qualifying round, run qualifiers a minute shorter, or run one main fewer. A new race day takes the time from the last day at the same venue.

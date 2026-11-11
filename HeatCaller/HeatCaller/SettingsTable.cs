@@ -113,6 +113,9 @@ internal static class SettingsTable
         },
         hidden: new[]
         {
+            // Race Control: the gap Auto start counts (11 Nov 2026).
+            nameof(AppSettings.AutoStartGapSeconds),
+
             // Connection.
             nameof(AppSettings.SplitLoopEnabled),
             nameof(AppSettings.SplitLoopOffsetMs),
@@ -196,6 +199,7 @@ internal static class SettingsTable
             nameof(AppSettings.ShowSegments),
             nameof(AppSettings.ShowRejoinEnabled),
             nameof(AppSettings.RaceStartWithOnAir),
+            nameof(AppSettings.AutoStartBetweenRaces),
 
             // Cast: the Co-host's "What they're like", every "If ElevenLabs
             // runs out" Kokoro voice (5 Nov 2026), and the Recap host,
@@ -445,6 +449,9 @@ internal static class SettingsTable
         memory: new[]
         {
             nameof(AppSettings.StartMaximized),
+
+            // Auto start turned off for one night (11 Nov 2026).
+            nameof(AppSettings.AutoStartOffForNight),
 
             // A one-time step done (11 Nov 2026) - see AppSettings.ArrivePitLaneLiveOff.
             nameof(AppSettings.PitLaneLiveArrivedOff),

@@ -8374,6 +8374,13 @@ public sealed partial class RaceControlControl
                 _filedSession = record.IsDemo ? null : (record.Id, record.Label,
                     _race.DeliveringFinishedRace is { } finished ? finished.RaceStartUtc : _race.RaceStartUtc);
 
+                // Auto start counts a gap only after a real program race
+                // (11 Nov 2026): never after a demo, a Quick Race, or a race
+                // kept on its own.
+                _autoStartAfter = !record.IsNotScored() && record.RoundId is not null
+                    ? _race.SessionGeneration
+                    : null;
+
                 // Each driver's pack in the car, recorded for them on this
                 // race or practice - one picked on a row's right-click during
                 // it is already there, and stays. Here, at the flag, rather
