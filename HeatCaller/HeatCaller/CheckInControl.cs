@@ -7,7 +7,7 @@ namespace HeatCaller;
 /// roster that includes everyone who's ever raced a class doesn't get used
 /// wholesale on a day when half of them didn't show up.
 /// </summary>
-public sealed class CheckInControl : UserControl
+public sealed partial class CheckInControl : UserControl
 {
     private readonly ProfileStore _profiles;
     private readonly CheckInStore _checkIns;
@@ -21,6 +21,9 @@ public sealed class CheckInControl : UserControl
     /// (BatteryPackStore.AutoTag). None, and there is no such column.
     /// </summary>
     private readonly BatteryPackStore? _batteries;
+
+    /// <summary>Who paid tonight (11 Nov 2026, Phase 4 - see DeskMoney). Null: no Paid column.</summary>
+    private readonly EntryPaymentStore? _payments;
 
     /// <summary>
     /// The race days, so this page can say when it is filing check-ins
@@ -204,9 +207,10 @@ public sealed class CheckInControl : UserControl
 
     public CheckInControl(ProfileStore profiles, CheckInStore checkIns, RaceClassStore raceClasses, AppSettings settings, UndoService undo,
         TechInspectionStore? tech = null, WebServerService? web = null, RaceEventStore? events = null,
-        BatteryPackStore? batteries = null)
+        BatteryPackStore? batteries = null, EntryPaymentStore? payments = null)
     {
         _batteries = batteries;
+        _payments = payments;
         _web = web;
         _events = events;
         _profiles = profiles;
@@ -370,6 +374,13 @@ public sealed class CheckInControl : UserControl
             // Click it to pick: the pack in the car tonight is what each
             // race they run is recorded on.
             _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "pack", HeaderText = "Pack", FillWeight = 35, ReadOnly = true });
+        }
+
+        if (_payments is not null)
+        {
+            // Money at the desk (11 Nov 2026): shown only on a race day with an
+            // entry fee - see RefreshDriverList. Right-click to settle.
+            _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "paid", HeaderText = "Paid", FillWeight = 35, ReadOnly = true, Visible = false });
         }
         _grid.CellClick += Grid_CellClick;
         _grid.CellDoubleClick += Grid_CellDoubleClick;
@@ -1172,6 +1183,7 @@ public sealed class CheckInControl : UserControl
 
                 _grid.Rows[rowIndex].Tag = profile;
                 ShowPack(_grid.Rows[rowIndex]);
+                ShowPaid(_grid.Rows[rowIndex]);
 
                 if (_tech is not null)
                 {
@@ -1190,6 +1202,12 @@ public sealed class CheckInControl : UserControl
         finally
         {
             _suppressGridEvents = false;
+        }
+
+        // The Paid column only on a race day that charges (11 Nov 2026).
+        if (_grid.Columns["paid"] is { } paidColumn)
+        {
+            paidColumn.Visible = TonightsFees() is { Entry: > 0 };
         }
 
         UpdateSummary();
@@ -1314,6 +1332,8 @@ public sealed class CheckInControl : UserControl
         var checkIn = new ToolStripMenuItem($"Check In {Plural.Of(drivers.Count, "Driver")}");
         checkIn.Click += (_, _) => CheckInDrivers(drivers);
         menu.Items.Add(checkIn);
+
+        AddPaymentItems(menu, drivers);
 
         if (_tech is not null)
         {

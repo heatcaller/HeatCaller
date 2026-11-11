@@ -24,12 +24,14 @@ public static class NightClose
     /// <param name="ResultsNotOnline">Tonight's results the club website hasn't got yet; null when publishing is off.</param>
     /// <param name="LastBackupUtc">When the last backup was taken; null when there has never been one.</param>
     /// <param name="DayOpen">Whether the race day is still open.</param>
+    /// <param name="Owing">Drivers who raced and still owe their entry (11 Nov 2026, Phase 4); null when the day has no fee.</param>
     public sealed record Facts(
         IReadOnlyList<string> RentalsOut,
         int? NightEmailsToSend,
         int? ResultsNotOnline,
         DateTime? LastBackupUtc,
-        bool DayOpen);
+        bool DayOpen,
+        IReadOnlyList<string>? Owing = null);
 
     /// <summary>
     /// The list, as the Next Steps card says it, starting with a space:
@@ -58,6 +60,12 @@ public static class NightClose
             var names = facts.RentalsOut.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             var who = names.Count == 0 ? string.Empty : $" ({string.Join(", ", names.Take(3))}{(names.Count > 3 ? ", ..." : string.Empty)})";
             left.Add($"{Plural.Of(facts.RentalsOut.Count, "rental")} still out{who}");
+        }
+
+        if (facts.Owing is { Count: > 0 } owing)
+        {
+            var names = string.Join(", ", owing.Take(3)) + (owing.Count > 3 ? ", ..." : string.Empty);
+            left.Add($"{Plural.Of(owing.Count, "driver")} still {(owing.Count == 1 ? "owes" : "owe")} their entry ({names})");
         }
 
         if (facts.ResultsNotOnline is > 0 and var owed)

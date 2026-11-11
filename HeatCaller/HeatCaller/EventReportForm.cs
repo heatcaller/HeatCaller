@@ -268,7 +268,7 @@ public sealed class EventReportForm : Form
             // round belongs to no real race day is still reported on the day
             // it ran.
             var html = EventReportBuilder.Build(options, _history, _rounds, _classes,
-                _profiles, _trackLayouts, _tech, _rentals, _handicaps, _events);
+                _profiles, _trackLayouts, _tech, _rentals, _handicaps, _events, EntryPaymentStore.Load());
 
             File.WriteAllText(dialog.FileName, html);
 

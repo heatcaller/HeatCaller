@@ -80,6 +80,7 @@ Once everything on the program has run, the card adds what's left to do:
 - results not on the club website yet (only when publishing is on)
 - night emails still to send (only when night emails are on and the mailbox is set up)
 - **back up tonight's results**, when the last backup is older than the last race
+- drivers who raced and still owe their entry, when the race day has an entry fee (see [Money at the desk](events-and-entries.md#money-at-the-desk))
 - **Close Day**, while the day is still open
 
 For example: "Before lights out: 2 rentals still out (Sam, Jo) · 14 night emails to send · back up tonight's results · Close Day." With nothing left, it says "All wrapped up - lights out."

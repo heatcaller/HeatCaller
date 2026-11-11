@@ -45,7 +45,8 @@ public static class EventReportBuilder
         TechInspectionStore tech,
         RentalTransponderStore rentals,
         HandicapStore? handicaps = null,
-        RaceEventStore? events = null)
+        RaceEventStore? events = null,
+        EntryPaymentStore? payments = null)
     {
         var sessions = SessionsFor(options, history, rounds, events);
 
@@ -71,6 +72,7 @@ public static class EventReportBuilder
 
         WriteSummary(sb, sessions, profiles);
         WriteNightPace(sb, sessions, rounds, ReportEvent(options));
+        WriteMoney(sb, sessions, ReportEvent(options), payments, profiles);
 
         // Outstanding items first when there are any - the point of putting
         // them in a report is that someone acts on them, and nobody acts on
@@ -261,6 +263,53 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
         }
 
         sb.AppendLine("</div>");
+    }
+
+    /// <summary>
+    /// Money at the desk (11 Nov 2026, race-night build plan, Phase 4): what
+    /// was taken by cash and card, the comps, and who is still owing - for
+    /// the drivers who raced. Only for a race day with an entry fee. See
+    /// DeskMoney.
+    /// </summary>
+    private static void WriteMoney(StringBuilder sb, List<SessionRecord> sessions, RaceEvent? raceEvent, EntryPaymentStore? payments, ProfileStore profiles)
+    {
+        if (payments is null || raceEvent is not { EntryFee: > 0 } day)
+        {
+            return;
+        }
+
+        var raced = sessions
+            .Where(s => s.SessionType == RaceSessionType.Race)
+            .SelectMany(s => s.Results.Select(r => r.Transponder))
+            .Where(t => !string.IsNullOrWhiteSpace(t) && !GhostService.IsGhost(t))
+            .Select(t => profiles.PrimaryForAlternate(t) ?? t)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(t => profiles.Get(t))
+            .OfType<DriverProfile>()
+            .ToList();
+
+        var totals = DeskMoney.Count(raced.Select(p =>
+            (string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName, CheckInControl.FeeFor(p, day), payments.Get(day.Id, p.Transponder))));
+
+        sb.AppendLine("<h2>Money at the desk</h2>");
+        sb.AppendLine("<div class=\"cards\">");
+        sb.AppendLine($"<div class=\"card\"><div class=\"k\">{Esc(DeskMoney.Money(totals.Taken))}</div><div class=\"l\">Taken</div></div>");
+        sb.AppendLine($"<div class=\"card\"><div class=\"k\">{Esc(DeskMoney.Money(totals.Cash))}</div><div class=\"l\">Cash</div></div>");
+        sb.AppendLine($"<div class=\"card\"><div class=\"k\">{Esc(DeskMoney.Money(totals.Card))}</div><div class=\"l\">Card</div></div>");
+        sb.AppendLine($"<div class=\"card\"><div class=\"k\">{totals.Comps}</div><div class=\"l\">Comps</div></div>");
+        sb.AppendLine("</div>");
+
+        if (totals.Owing.Count > 0)
+        {
+            sb.AppendLine($"<div class=\"alert\"><h2>Still owing - {Esc(DeskMoney.Money(totals.OwingAmount))}</h2><ul>");
+
+            foreach (var (name, owes) in totals.Owing)
+            {
+                sb.AppendLine($"<li>{Esc(name)} - {Esc(DeskMoney.Money(owes))}</li>");
+            }
+
+            sb.AppendLine("</ul></div>");
+        }
     }
 
     /// <summary>
