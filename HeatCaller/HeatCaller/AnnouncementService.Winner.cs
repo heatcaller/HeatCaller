@@ -43,6 +43,49 @@ public sealed partial class AnnouncementService
                 : null;
     }
 
+    /// <summary>The finish call's lines that name the winner - "{winner}" in them (11 Nov 2026).</summary>
+    internal static IReadOnlyList<string> FinishLinesNamingTheWinner(IReadOnlyList<string> templates) =>
+        templates.Where(NamesTheWinner).ToList();
+
+    private static bool NamesTheWinner(string template) => template.Contains("{winner}", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The finish call's lines for a finish that names nobody - practice, or
+    /// no leader - with any "{winner}" lines left out. A finish row written
+    /// with nothing else says a plain line of its own.
+    /// </summary>
+    internal static IReadOnlyList<string> FinishLinesNamingNobody(IReadOnlyList<string> templates)
+    {
+        var plain = templates.Where(t => !NamesTheWinner(t)).ToList();
+
+        return plain.Count > 0 ? plain : new[] { "[shouting] Checkered flag - that's the race!" };
+    }
+
+    /// <summary>
+    /// Where the winner's name comes from at the flag: the finish call's own
+    /// lines when some have "{winner}" in them (11 Nov 2026, asked for by
+    /// Asher) - one line, said straight after the fanfare, instead of the
+    /// finish and then the Winner named call - else the Winner named row.
+    /// Null when neither is on.
+    /// </summary>
+    private (AnnouncementEventConfig Config, IReadOnlyList<string> Templates, bool AsTheFinish)? WinnerLines()
+    {
+        var finish = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.RaceCompleted));
+
+        if (finish is not null && CallOn(finish) && FinishLinesNamingTheWinner(finish.EffectiveTemplates) is { Count: > 0 } named)
+        {
+            return (finish, named, true);
+        }
+
+        return WinnerCallConfig() is { } winner ? (winner, winner.EffectiveTemplates, false) : null;
+    }
+
+    /// <summary>Whether the lines made ahead are the finish call's own - see WinnerLines. Under _winnerCallsLock.</summary>
+    private bool _winnerCallsAreTheFinish;
+
+    /// <summary>The finish call named the winner this race, so the Winner named call is not said as well. Under _winnerCallsLock.</summary>
+    private bool _finishNamedTheWinner;
+
     /// <summary>The winner's line made ahead for each contender, by transponder: its words and, when it could be rendered, its key and render. Under _winnerCallsLock.</summary>
     private readonly Dictionary<string, (string Text, string? Key, Task<SynthesisResult>? Render)> _winnerCalls = new(StringComparer.OrdinalIgnoreCase);
 
@@ -60,13 +103,25 @@ public sealed partial class AnnouncementService
     {
         try
         {
-            if (IsPracticeMode || Muted || WinnerCallConfig() is not { } config
+            if (IsPracticeMode || Muted || WinnerLines() is not { } lines
                 || RunningOrderNow(WinnerContenders) is not { Count: > 0 } order)
             {
                 return;
             }
 
+            var config = lines.Config;
             var speed = config.SpeedFor(_voiceStore.Current.Speed);
+            var toMake = new List<(string Transponder, string Text)>();
+
+            lock (_winnerCallsLock)
+            {
+                // Lines made as the other kind are for a choice since changed.
+                if (_winnerCallsAreTheFinish != lines.AsTheFinish)
+                {
+                    _winnerCalls.Clear();
+                    _winnerCallsAreTheFinish = lines.AsTheFinish;
+                }
+            }
 
             foreach (var row in order.Take(WinnerContenders))
             {
@@ -82,18 +137,39 @@ public sealed partial class AnnouncementService
 
                 // The words here, on the thread that owns the standings; the
                 // render in the background.
-                var text = WinnerLine(config.EffectiveTemplates, SpokenNameFor(row.Standing));
+                var text = WinnerLine(lines.Templates, SpokenNameFor(row.Standing));
 
                 lock (_winnerCallsLock)
                 {
                     _winnerCalls[transponder] = (text, null, null);
                 }
 
-                // None of the queue's AsyncLocals reach the render - see RenderAhead.
-                using (ExecutionContext.SuppressFlow())
+                toMake.Add((transponder, text));
+            }
+
+            // One after the other, the likelier winner first (11 Nov 2026):
+            // both at once took both of the two synthesis slots on the last
+            // lap, just as the last lap's own calls wanted one.
+            // None of the queue's AsyncLocals reach the render - see RenderAhead.
+            using (ExecutionContext.SuppressFlow())
+            {
+                _ = Task.Run(async () =>
                 {
-                    _ = Task.Run(() => MakeTheWinnerCall(transponder, text, speed));
-                }
+                    foreach (var (transponder, text) in toMake)
+                    {
+                        if (MakeTheWinnerCall(transponder, text, speed) is { } render)
+                        {
+                            try
+                            {
+                                await render;
+                            }
+                            catch
+                            {
+                                // Said where it is taken, or not at all.
+                            }
+                        }
+                    }
+                });
             }
 
             StatusMessage?.Invoke($"[voice] Winner's call made ready for {string.Join(" and ", order.Take(WinnerContenders).Select(r => DisplayNameFor(r.Standing.Transponder)))}.");
@@ -105,14 +181,14 @@ public sealed partial class AnnouncementService
         }
     }
 
-    /// <summary>Starts one contender's render, and notes it against them if the line is still theirs.</summary>
-    private void MakeTheWinnerCall(string transponder, string text, double speed)
+    /// <summary>Starts one contender's render, and notes it against them if the line is still theirs. The render, or null when there is none.</summary>
+    private Task<SynthesisResult>? MakeTheWinnerCall(string transponder, string text, double speed)
     {
         try
         {
             if (LineAsItWillBeAsked(text, AnnouncementEventType.RaceCompleted, speed) is not { } line)
             {
-                return;
+                return null;
             }
 
             var render = RenderLineAsync(line.Profile, line.Text);
@@ -129,10 +205,14 @@ public sealed partial class AnnouncementService
             }
 
             Timings.NoteRenderedAhead();
+
+            return render;
         }
         catch (Exception ex)
         {
             StatusMessage?.Invoke($"[voice] The winner's call could not be made ready ({ex.Message}) - it will be made at the flag.");
+
+            return null;
         }
     }
 
@@ -152,6 +232,24 @@ public sealed partial class AnnouncementService
 
         try
         {
+            lock (_winnerCallsLock)
+            {
+                // Named in the finish call itself - see TrySpeakTheFinishWithTheWinner.
+                if (_finishNamedTheWinner)
+                {
+                    _finishNamedTheWinner = false;
+                    _winnerCalls.Clear();
+                    return;
+                }
+
+                // Made as finish lines, which the finish did not say after all.
+                if (_winnerCallsAreTheFinish)
+                {
+                    _winnerCalls.Clear();
+                    _winnerCallsAreTheFinish = false;
+                }
+            }
+
             var winner = _currentLeaderTransponder;
 
             if (winner is null || IsPracticeMode || Muted || WinnerCallConfig() is not { } config)
@@ -203,12 +301,74 @@ public sealed partial class AnnouncementService
         }
     }
 
+    /// <summary>
+    /// At the flag, the finish call with the winner's name in it, when the
+    /// club's finish lines have "{winner}" - see WinnerLines. Made on the last
+    /// lap for the top two; for anyone else it is made now, while the fanfare
+    /// plays. False when the finish names nobody (practice, no leader, no
+    /// such line), and the finish call goes on as it always did.
+    /// </summary>
+    private bool TrySpeakTheFinishWithTheWinner(AnnouncementEventConfig config)
+    {
+        var winner = _currentLeaderTransponder;
+
+        if (winner is null || IsPracticeMode || FinishLinesNamingTheWinner(config.EffectiveTemplates) is not { Count: > 0 } named)
+        {
+            return false;
+        }
+
+        var profile = _voiceStore.Current;
+        var speed = config.SpeedFor(profile.Speed);
+        (string Text, string? Key, Task<SynthesisResult>? Render) call;
+
+        lock (_winnerCallsLock)
+        {
+            if (!_winnerCallsAreTheFinish || !_winnerCalls.TryGetValue(winner, out call))
+            {
+                call = (WinnerLine(named, _standings.TryGetValue(winner, out var standing) ? SpokenNameFor(standing) : DisplayNameFor(winner)), null, null);
+            }
+
+            _winnerCalls.Clear();
+            _winnerCallsAreTheFinish = false;
+            _finishNamedTheWinner = true;
+        }
+
+        var text = call.Text;
+        var how = "named the winner, made ahead";
+        var take = call.Render;
+
+        if (take is null)
+        {
+            how = "named the winner, made at the flag";
+
+            // None of the queue's AsyncLocals reach the render - see RenderAhead.
+            using (ExecutionContext.SuppressFlow())
+            {
+                take = Task.Run(async () =>
+                {
+                    if (LineAsItWillBeAsked(text, AnnouncementEventType.RaceCompleted, speed) is not { } line)
+                    {
+                        throw new InvalidOperationException("the announcer can't speak just now");
+                    }
+
+                    return await RenderLineAsync(line.Profile, line.Text);
+                });
+            }
+        }
+
+        SpeakFlagTake(AnnouncementEventType.RaceCompleted, text, take, profile, config, how);
+
+        return true;
+    }
+
     /// <summary>A new race: no line made for the last one's winner is about this one's.</summary>
     private void ForgetTheWinnerCalls()
     {
         lock (_winnerCallsLock)
         {
             _winnerCalls.Clear();
+            _winnerCallsAreTheFinish = false;
+            _finishNamedTheWinner = false;
         }
     }
 }

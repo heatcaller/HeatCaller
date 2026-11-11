@@ -8,8 +8,15 @@ The clips are not in git, all but lap6.mp3 (a recut take, force-added so a
 fresh copy keeps it). Make them on your own PC, on your own ElevenLabs key,
 with lap-voice-render.cmd in the relay folder, then run fly deploy from the
 relay folder: the deploy carries this folder up with it. The full set is
-2,744 clips, 45,755 characters (about $1.83 on eleven_v4_turbo; the v3 set is kept in lap-voice-v3, the Flash set in lap-voice-flash); lap-voice-render.cmd
+2,744 clips, 45,755 characters (about $1.83 on eleven_v4_turbo; the v3 set is
+kept in lap-voice-v3, the Flash set in lap-voice-flash). lap-voice-render.cmd
 count says what is missing and what it would cost, and spends nothing.
+
+The MODEL file here says which ElevenLabs model made the set. A set made on
+another model - or before MODEL existed - is made again in full on the lap
+voice's model (LAP_VOICE.modelId in src/lapvoice.ts), and the old set is
+moved beside this folder as lap-voice-<its model> (lap-voice-older for one
+that never said), not deleted.
 
 A relay with no clips here still reads out laps, in the phone's own voice.
 

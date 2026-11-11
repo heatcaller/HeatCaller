@@ -230,7 +230,7 @@ public sealed partial class AnnouncementService
         // and go as they always did.
         if (key.StartsWith("voice:", StringComparison.Ordinal))
         {
-            OfferToTheField(winners);
+            OfferToTheField(winners, key["voice:".Length..]);
 
             return;
         }
@@ -1181,6 +1181,11 @@ public sealed partial class AnnouncementService
 
         if (_currentLeaderTransponder is not null && leader.Transponder != _currentLeaderTransponder)
         {
+            // Made ready while they were nose to tail, when it was this pass
+            // (11 Nov 2026) - its render is handed over and its words kept,
+            // so the call below says the same and plays at once. See PassAhead.
+            var predicted = TakeThePredictedPass(leader.Transponder, leadChange);
+
             // Only offered when they could be heard - see VoiceCandidateCanSpeak.
             var soundCfg = _soundStore.Current.Effects.GetValueOrDefault(nameof(SoundEffectKind.LeaderChange));
             if (SoundCandidateCanPlay(SoundEffectKind.LeaderChange, soundCfg))
@@ -1198,7 +1203,7 @@ public sealed partial class AnnouncementService
                 // the order is the one the change was seen in.
                 var leadExtras = LeadChangeExtras(leadChange);
                 var leadTail = leadChange is not null && voiceCfg.IncludeLeadChangeCount
-                    ? LeadTracker.Tail(leadChange)
+                    ? predicted?.Tail ?? LeadTracker.Tail(leadChange)
                     : string.Empty;
 
                 // Tagged with the two cars (3 Nov 2026), so "Sam takes the
@@ -1219,6 +1224,14 @@ public sealed partial class AnnouncementService
         }
 
         _currentLeaderTransponder = leader.Transponder;
+
+        // The next pass for the lead, made ready if a car is right behind
+        // (11 Nov 2026) - see PassAhead.
+        PredictTheLeadChange(ordered);
+
+        // And the gap for the lead, each lap, at the end of the race (11 Nov
+        // 2026) - see FinalLapsGap.
+        CheckFinalLapsGap(ordered, standing);
 
         CheckLapped(ordered);
         CheckCloseBattles(ordered);
@@ -2320,6 +2333,19 @@ public sealed partial class AnnouncementService
         if (gate.Valid)
         {
             var cfg = sounds.Effects.GetValueOrDefault(nameof(SoundEffectKind.GoodLap));
+
+            // A driver with a lap beep of their own hears THAT as their lap
+            // (11 Nov 2026, voice speed plan, phase 4): the shared chime on
+            // top of it, 0.12 s later, was a second sound on every crossing -
+            // the one the Lap Beeps page itself calls no use to a driver,
+            // since it says a lap happened but not whose. The invalid-lap
+            // buzzer and the stings for a best, a fast lap or a streak still
+            // play: those say something the beep does not.
+            if (LapBeeps?.ToneFor(transponder) is not null)
+            {
+                cfg = null;
+            }
+
             if (SoundCandidateCanPlay(SoundEffectKind.GoodLap, cfg))
             {
                 ConsiderPerLapAction("sound", transponder, cfg.Weight, maxSoundsPerLap,

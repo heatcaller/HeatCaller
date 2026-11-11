@@ -178,7 +178,10 @@ internal static class VoiceLevelMemory
     /// <summary>The most a stream is made louder or quieter.</summary>
     internal const double MostGainDb = 9;
 
-    internal static string KeyFor(VoiceProfile profile) => $"{profile.VoiceId}\n{profile.ModelId}";
+    /// <summary>The voice actually heard: for the HeatCaller voice that is the relay's voice, not the profile's ElevenLabs fields.</summary>
+    internal static string KeyFor(VoiceProfile profile) => profile.EffectiveEngine == VoiceEngine.HeatCaller
+        ? $"heatcaller\n{profile.HeatCallerVoice}"
+        : $"{profile.VoiceId}\n{profile.ModelId}";
 
     /// <summary>A whole clip of this voice measured at <paramref name="speechDb"/>.</summary>
     internal static void Learn(VoiceProfile profile, double speechDb)

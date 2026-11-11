@@ -1601,6 +1601,10 @@ public partial class MainForm : Form
             _announcer.NotifyLastLap(standing.TransponderId);
         };
 
+        // The race's lap limit, for the gap called each lap in its last few
+        // (11 Nov 2026) - see AnnouncementService.FinalLapsGap.
+        _announcer.LapLimitProvider = () => _race.LapLimit;
+
         // Only when the clock is what ends the race (1 Nov 2026): in a race
         // with a lap limit too, "one minute to go" is wrong when the laps
         // will run out first - see ClockEndsTheRace.

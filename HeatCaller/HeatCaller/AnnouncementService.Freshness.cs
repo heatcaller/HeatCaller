@@ -70,6 +70,19 @@ public sealed partial class AnnouncementService
     internal const long LapCallSayWithinMs = 6_000;
 
     /// <summary>
+    /// "Lap time only": the driver's own time, said before they reach the
+    /// first corner or not at all (11 Nov 2026, voice speed plan, phase 4).
+    /// A bare time heard four seconds on, after the next car has crossed,
+    /// is a time the room puts on the wrong driver - and with calls now
+    /// about a second and a half from the lap, two and a half is room enough.
+    /// </summary>
+    internal const long LapTimeSayWithinMs = 2_500;
+
+    /// <summary>How long after its lap a call of this type may still start - see LapCallSayWithinMs.</summary>
+    internal static long SayWithinMsFor(AnnouncementEventType type) =>
+        type is AnnouncementEventType.LapTime or AnnouncementEventType.FinalLapsGap ? LapTimeSayWithinMs : LapCallSayWithinMs;
+
+    /// <summary>
     /// When each car last crossed the line, on TimingClock - so a call about
     /// that lap is timed from the crossing, not from when it reached the
     /// queue (the per-lap batch, the field window and a busy window all sit
@@ -148,6 +161,7 @@ public sealed partial class AnnouncementService
         AnnouncementEventType.PersonalBestLap or
         AnnouncementEventType.BestEverHere or
         AnnouncementEventType.PersonalBestsTogether or
+        AnnouncementEventType.FinalLapsGap or
         AnnouncementEventType.LeaderChange or
         AnnouncementEventType.LapCompleted or
         AnnouncementEventType.LapTime or

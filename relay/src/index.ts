@@ -9,7 +9,7 @@ import { FileStore } from "./store.js";
 import { TenantRegistry } from "./tenancy.js";
 import { removeLeftoverVideos } from "./oldvideos.js";
 import { DiskClipVault } from "./clips.js";
-import { elevenLabsRenderer, migrateVoiceFolder, VoiceService } from "./voice.js";
+import { elevenLabsRenderer, elevenLabsStreamer, migrateVoiceFolder, VoiceService } from "./voice.js";
 import { LAP_VOICE_DIR, LapVoiceLibrary } from "./lapvoice.js";
 import { TopUpRequests } from "./topuprequests.js";
 import { UsageLog } from "./usagelog.js";
@@ -119,6 +119,9 @@ async function serve(): Promise<number> {
           config: config.voice,
           dataDir: config.dataDir,
           render: voiceKey.length > 0 ? elevenLabsRenderer(voiceKey) : undefined,
+          // Race calls streamed as they are made, for a laptop that asks
+          // (11 Nov 2026) - see VoiceService.speakStream.
+          stream: voiceKey.length > 0 ? elevenLabsStreamer(voiceKey) : undefined,
           log: (line) => console.log(line),
         });
 

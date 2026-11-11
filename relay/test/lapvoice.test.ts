@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { LAP_VOICE, LapVoiceLibrary, lapClipCost, lapClips, lapTimeWords, lapTimeWordsMs, marginWords } from "../src/lapvoice.js";
-import { renderLapClips } from "../src/lapvoicerender.js";
+import { clipsModel, madeOnAnotherModel, missingClips, MODEL_FILE, renderLapClips, setAsideDir } from "../src/lapvoicerender.js";
 import { DEFAULT_CONTEXT, livePage, nightPage } from "../src/pages.js";
 import { Relay } from "../src/server.js";
 import { MemoryStore } from "../src/store.js";
@@ -182,6 +182,8 @@ describe("lap voice: making the clips", () => {
   it("makes what is missing and never asks for a clip twice", async () => {
     const dir = await mkdtemp(join(tmpdir(), "lapvoice-make-"));
     try {
+      // A set made on this model, part way.
+      await writeFile(join(dir, MODEL_FILE), `${LAP_VOICE.modelId}\n`);
       await writeFile(join(dir, `${few[0]!.name}.mp3`), "already");
       const asked: string[] = [];
       const report = await renderLapClips({ dir, clips: few, render: async (text) => { asked.push(text); return Buffer.from(text); } });
@@ -195,6 +197,71 @@ describe("lap voice: making the clips", () => {
       const again = await renderLapClips({ dir, clips: few, render: async () => assert.fail("nothing left to make") });
       assert.equal(again.made, 0);
       assert.equal(again.kept, 6);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("says which model made the set it makes", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "lapvoice-make-"));
+    try {
+      await renderLapClips({ dir, clips: few.slice(0, 1), render: async () => Buffer.from("ok") });
+      assert.equal(await clipsModel(dir), LAP_VOICE.modelId);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("makes another model's set again and keeps the old one beside it", async () => {
+    // The 10 Nov bug: LAP_VOICE went to v4 Turbo, the 8 Nov v3 clips were
+    // all "already there", and nothing would ever have made them again.
+    const parent = await mkdtemp(join(tmpdir(), "lapvoice-model-"));
+    const dir = join(parent, "lap-voice");
+    try {
+      await mkdir(dir);
+      await writeFile(join(dir, MODEL_FILE), "eleven_v3\n");
+      for (const clip of few) await writeFile(join(dir, `${clip.name}.mp3`), "v3");
+
+      assert.equal(await madeOnAnotherModel(dir, "eleven_v4_turbo", few), true);
+      assert.equal((await missingClips(dir, few, "eleven_v4_turbo")).length, few.length);
+
+      const report = await renderLapClips({ dir, clips: few, model: "eleven_v4_turbo", render: async () => Buffer.from("v4") });
+
+      assert.equal(report.made, few.length);
+      assert.equal(report.kept, 0);
+      assert.equal(report.setAside, join(parent, "lap-voice-eleven_v3"));
+      assert.equal(await readFile(join(dir, `${few[0]!.name}.mp3`), "utf8"), "v4");
+      assert.equal(await clipsModel(dir), "eleven_v4_turbo");
+      assert.equal(await readFile(join(parent, "lap-voice-eleven_v3", `${few[0]!.name}.mp3`), "utf8"), "v3");
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  it("treats a set from before the folder said its model as another model's", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "lapvoice-model-"));
+    const dir = join(parent, "lap-voice");
+    try {
+      await mkdir(dir);
+      await writeFile(join(dir, `${few[0]!.name}.mp3`), "old");
+
+      assert.equal(await madeOnAnotherModel(dir, LAP_VOICE.modelId, few), true);
+      assert.equal(setAsideDir(dir, undefined), `${dir}-older`);
+
+      const report = await renderLapClips({ dir, clips: few, render: async () => Buffer.from("new") });
+      assert.equal(report.setAside, `${dir}-older`);
+      assert.equal(report.made, few.length);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  it("an empty folder is nobody's, and is not moved", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "lapvoice-make-"));
+    try {
+      assert.equal(await madeOnAnotherModel(dir, LAP_VOICE.modelId, few), false);
+      const report = await renderLapClips({ dir, clips: few.slice(0, 1), render: async () => Buffer.from("ok") });
+      assert.equal(report.setAside, undefined);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

@@ -392,6 +392,7 @@ public sealed partial class AnnouncementService
         // personal bests lost behind a line, no longer news.
         ForgetRenderedAhead();
         ForgetLostPersonalBests();
+        ForgetThePredictedPasses(newRace: false);
 
         if (_heldOver.Clear() is not { } gone)
         {
@@ -451,8 +452,35 @@ public sealed partial class AnnouncementService
     //  The field-wide look-ahead
     // ------------------------------------------------------------------
 
-    /// <summary>The field's per-lap winners, waiting for the window to close. Under _batchLock.</summary>
-    private readonly List<(int Weight, Action Enqueue)> _fieldCalls = new();
+    /// <summary>The field's per-lap winners, waiting for the window to close, with whose they are. Under _batchLock.</summary>
+    private readonly List<(int Weight, Action Enqueue, string? Transponder)> _fieldCalls = new();
+
+    /// <summary>
+    /// When each driver was last named in a line the room heard (TimingClock)
+    /// - so among calls that weigh the same, the driver named longest ago goes
+    /// first (11 Nov 2026, voice speed plan, phase 4). On a busy track the
+    /// slot went to whichever car crossed first, and over a race some drivers
+    /// heard their lap time most laps and others hardly ever.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> _lastNamedMs = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Noted by the voice loop as a line about this driver is heard.</summary>
+    private void NoteNamed(string? transponder)
+    {
+        if (!string.IsNullOrEmpty(transponder))
+        {
+            _lastNamedMs[transponder] = TimingClock.NowMs;
+        }
+    }
+
+    /// <summary>
+    /// The field's calls in the order they are offered: biggest first, and
+    /// among equal weights the driver named longest ago (never named first),
+    /// then the order they crossed. Internal for the tests.
+    /// </summary>
+    internal static IEnumerable<T> InTurn<T>(IEnumerable<T> calls, Func<T, int> weight, Func<T, string?> transponder, Func<string, long?> lastNamed) =>
+        calls.OrderByDescending(weight)
+            .ThenBy(call => transponder(call) is { } t && lastNamed(t) is { } at ? at : long.MinValue);
 
     /// <summary>Whether a flush of <see cref="_fieldCalls"/> is already on its way. Under _batchLock.</summary>
     private bool _fieldFlushPending;
@@ -482,7 +510,7 @@ public sealed partial class AnnouncementService
     /// Nothing changes at Wall to wall, where the announcer is meant to
     /// behave exactly as it did before pacing: calls go straight through.
     /// </summary>
-    private void OfferToTheField(IEnumerable<(int Weight, Action Enqueue)> calls)
+    private void OfferToTheField(IEnumerable<(int Weight, Action Enqueue)> calls, string? transponder = null)
     {
         if (AnnouncerDensity.GapSeconds(Stature, Density) <= 0)
         {
@@ -498,7 +526,7 @@ public sealed partial class AnnouncementService
 
         lock (_batchLock)
         {
-            _fieldCalls.AddRange(calls);
+            _fieldCalls.AddRange(calls.Select(call => (call.Weight, call.Enqueue, transponder)));
 
             if (_fieldFlushPending)
             {
@@ -520,7 +548,7 @@ public sealed partial class AnnouncementService
         // text, and did so from that thread before this window existed.
         await Task.Delay(AnnouncerDensity.FieldWindow);
 
-        List<(int Weight, Action Enqueue)> calls;
+        List<(int Weight, Action Enqueue, string? Transponder)> calls;
 
         lock (_batchLock)
         {
@@ -540,7 +568,10 @@ public sealed partial class AnnouncementService
         // which OrderByDescending keeps. The first through the gate starts
         // it, and the gate then holds the rest - unless one of them clearly
         // outweighs the first, which by this order none can.
-        foreach (var call in calls.OrderByDescending(c => c.Weight))
+        // And among equals, the driver named longest ago (11 Nov 2026) - see
+        // _lastNamedMs and InTurn.
+        foreach (var call in InTurn(calls, c => c.Weight, c => c.Transponder,
+                     t => _lastNamedMs.TryGetValue(t, out var at) ? at : null))
         {
             try
             {
@@ -591,8 +622,11 @@ public sealed partial class AnnouncementService
         // And where each line's time went, for the same race (10 Nov 2026).
         Timings.Reset();
 
-        // And the last race's winner's calls, never said (10 Nov 2026).
+        // And the last race's winner's calls, never said (10 Nov 2026), and
+        // its passes made ready (11 Nov 2026).
         ForgetTheWinnerCalls();
+        ForgetThePredictedPasses(newRace: true);
+        _inTheFinalMinute = false;
 
         // Not counted: the count it would go into has just been cleared,
         // and a call kept from the last race is nothing this race offered.

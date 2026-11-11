@@ -167,7 +167,9 @@ public sealed class VoiceSpeedPhase2And3Tests
         Assert.Contains("events.GetValueOrDefault(nameof(AnnouncementEventType.RaceCompleted)) is { } finish && CallOn(finish)", winner);
         Assert.Contains("events.GetValueOrDefault(nameof(AnnouncementEventType.WinnerCalled)) is { } winner && CallOn(winner)", winner);
         Assert.Contains("if (winner is null || IsPracticeMode || Muted || WinnerCallConfig() is not { } config)", winner);
-        Assert.Contains("if (IsPracticeMode || Muted || WinnerCallConfig() is not { } config", winner);
+        // Made ahead from the finish's own {winner} lines, or else the Winner named row (11 Nov 2026).
+        Assert.Contains("if (IsPracticeMode || Muted || WinnerLines() is not { } lines", winner);
+        Assert.Contains("return WinnerCallConfig() is { } winner ? (winner, winner.EffectiveTemplates, false) : null;", winner);
     }
 
     // ---------------------------------------------------------------- lost personal bests

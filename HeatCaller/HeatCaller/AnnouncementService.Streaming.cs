@@ -2,8 +2,10 @@ namespace HeatCaller;
 
 /// <summary>
 /// Race calls played while ElevenLabs is still sending them (10 Nov 2026,
-/// voice speed plan, phase 3). Off unless the club ticks it on the Voice
-/// page (AppSettings.StreamLiveCalls).
+/// voice speed plan, phase 3) - with the club's own ElevenLabs key or,
+/// since 11 Nov 2026, the HeatCaller voice through the relay, which most
+/// clubs will use. Off unless the club ticks it on the Voice page
+/// (AppSettings.StreamLiveCalls).
 /// </summary>
 /// <remarks>
 /// WHY. A call whose lap comes while the speaker is free is rendered then -
@@ -52,12 +54,22 @@ public sealed partial class AnnouncementService
 
         if (StreamLiveCalls?.Invoke() != true
             || voice is not null
-            || _leadInFor.Value is not null
-            || profile.EffectiveEngine != VoiceEngine.ElevenLabs
-            || !ElevenLabsReady(profile)
-            || ElevenLabsRestingFor(profile)
-            || ElevenLabsSavedLinesPassedOver(profile)
-            || ElevenLabsMeterSpent())
+            || _leadInFor.Value is not null)
+        {
+            return false;
+        }
+
+        var ready = profile.EffectiveEngine switch
+        {
+            VoiceEngine.ElevenLabs => ElevenLabsReady(profile)
+                && !ElevenLabsRestingFor(profile)
+                && !ElevenLabsSavedLinesPassedOver(profile)
+                && !ElevenLabsMeterSpent(),
+            VoiceEngine.HeatCaller => HeatCallerMayStream(profile, ForCloudVoice(text)),
+            _ => false,
+        };
+
+        if (!ready)
         {
             return false;
         }
@@ -90,6 +102,98 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>
+    /// The HeatCaller voice's own reasons not to stream (11 Nov 2026, for the
+    /// clubs with no ElevenLabs key of their own): no voice chosen, resting,
+    /// out of allowance, the consent missing - each the whole-clip path's own
+    /// stand-in rule, left to it. A line every club shares is not streamed
+    /// either: the relay keeps it for all of them, so it answers it whole.
+    /// Nor is one too long for the relay to take at once - the whole-clip
+    /// path splits that into pieces.
+    /// </summary>
+    private bool HeatCallerMayStream(VoiceProfile profile, string cloudText)
+    {
+        if (HeatCallerVoice is null
+            || !profile.HeatCallerReady
+            || HeatCallerSavedLinesPassedOver(profile)
+            || HeatCallerConsentWithheld(profile)
+            || VoiceProfile.StripAudioTags(cloudText).Length > HeatCallerVoiceClient.MaxCharacters
+            || IsFixedLine(cloudText))
+        {
+            return false;
+        }
+
+        lock (_heatCallerLock)
+        {
+            return _heatCallerReason is null && !_heatCallerAllowanceSpent;
+        }
+    }
+
+    /// <summary>
+    /// Asks the relay for the line as a stream. Null when it is to be played
+    /// whole instead: refused (noted, so the whole-clip path goes straight
+    /// to its stand-in rather than asking again), out of time, or answered
+    /// whole - a line the relay already had, or a relay with no stream. A
+    /// whole answer is handed to the whole-clip path to play, not asked for
+    /// twice.
+    /// </summary>
+    private async Task<HttpResponseMessage?> OpenHeatCallerStreamAsync(VoiceProfile profile, string text, string cloudText, CancellationToken token)
+    {
+        if (HeatCallerVoice is not { } client)
+        {
+            return null;
+        }
+
+        NoteVoiceRelayOnce();
+
+        int generation;
+        int resetGeneration;
+
+        lock (_heatCallerLock)
+        {
+            generation = _heatCallerRefusalGeneration;
+            resetGeneration = _heatCallerResetGeneration;
+        }
+
+        HeatCallerStreamAnswer answer;
+
+        try
+        {
+            answer = await client.SpeakStreamAsync(profile.HeatCallerVoice, cloudText, shared: false, token);
+        }
+        catch (HeatCallerVoiceException ex)
+        {
+            // A line's own problem (too long, empty) is the whole-clip path's
+            // to deal with; anything else rests the voice as it would there.
+            if (ex.Refusal != HeatCallerRefusal.Text)
+            {
+                NoteHeatCallerRefusal(ex.AskedBeforeReset || !HeatCallerResetSince(resetGeneration)
+                    ? ex
+                    : new HeatCallerVoiceException(ex.Refusal, ex.Message, ex.Allowance) { AskedBeforeReset = true });
+            }
+
+            return null;
+        }
+        catch (OperationCanceledException)
+        {
+            // This line's short limit, not the relay's 30 s: nothing rests
+            // over it, and the whole-clip path asks again with the full limit.
+            return null;
+        }
+
+        NoteHeatCallerAnswered(answer.Allowance, answer.Cached, generation);
+
+        if (answer.Audio is { } audio)
+        {
+            VoiceLibrary.Shared.Save(profile, cloudText, audio);
+            OfferRenderedAhead(RenderAheadKey(profile, text), Task.FromResult(new SynthesisResult(audio, LineSource.HeatCaller)));
+
+            return null;
+        }
+
+        return answer.Stream;
+    }
+
+    /// <summary>
     /// Streams and plays the line. False when it could not be streamed -
     /// nothing heard, nothing held - and the caller renders it whole. True
     /// when it was played, or dropped by a check (with its reason said).
@@ -114,9 +218,15 @@ public sealed partial class AnnouncementService
             return false;
         }
 
+        var heatCaller = profile.EffectiveEngine == VoiceEngine.HeatCaller;
+        var cloudText = ForCloudVoice(text);
+        var renderedBy = heatCaller ? "streamed - the HeatCaller voice" : $"streamed - ElevenLabs {profile.ModelId}";
+
         try
         {
-            response = await _elevenLabs.OpenSpeechStreamAsync(profile, ForCloudVoice(text), timeout.Token);
+            response = heatCaller
+                ? await OpenHeatCallerStreamAsync(profile, text, cloudText, timeout.Token)
+                : await _elevenLabs.OpenSpeechStreamAsync(profile, cloudText, timeout.Token);
         }
         catch (Exception ex)
         {
@@ -125,6 +235,18 @@ public sealed partial class AnnouncementService
 
             return false;
         }
+
+        if (response is null)
+        {
+            SynthesisGate.Release();
+
+            return false;
+        }
+
+        // Kept once all of it has arrived, as a whole line is - so the next
+        // time it is said it comes from the library, free.
+        Action<byte[]> keep = pcm => VoiceLibrary.Shared.Save(profile, cloudText, EncodeWav(pcm, StreamedPcmFormat));
+        Action answered = heatCaller ? () => { } : NoteElevenLabsAnswered;
 
         // From here the gate and the response are the download's to give back.
         var line = new StreamingVoiceLine(gain, LeadSecondsFor(lead));
@@ -172,7 +294,7 @@ public sealed partial class AnnouncementService
                     if (timing is not null)
                     {
                         timing.DroppedBecause ??= drop;
-                        timing.RenderedBy ??= $"streamed - ElevenLabs {profile.ModelId}";
+                        timing.RenderedBy ??= renderedBy;
                     }
 
                     StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - {drop} (streamed).");
@@ -185,7 +307,7 @@ public sealed partial class AnnouncementService
 
                 if (timing is not null)
                 {
-                    timing.RenderedBy ??= $"streamed - ElevenLabs {profile.ModelId}";
+                    timing.RenderedBy ??= renderedBy;
                     timing.Characters = text.Length;
                     timing.LeadMs = (long)(LeadSecondsFor(lead) * 1000);
                 }
@@ -205,10 +327,10 @@ public sealed partial class AnnouncementService
                 var volume = AnnouncementGain(profile.Volume);
                 var tailSeconds = TailSecondsNow(tail);
                 var onAir = forListeners && StreamingTheMix
-                    && OfferToListenersOnly(text, null, AudioFromShortenedText(LineSource.ElevenLabs, text));
+                    && OfferToListenersOnly(text, null, AudioFromShortenedText(heatCaller ? LineSource.HeatCaller : LineSource.ElevenLabs, text));
 
                 var streaming = response;
-                download = Task.Run(() => DownloadIntoAsync(streaming, line, tailSeconds, timing, stopDownload.Token));
+                download = Task.Run(() => DownloadIntoAsync(streaming, line, tailSeconds, timing, answered, keep, stopDownload.Token));
                 response = null;
 
                 StatusMessage?.Invoke($"{announcingLogPrefix}: \"{text}\" (streamed)");
@@ -261,8 +383,12 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>Reads the stream into the line as it arrives, then ends it. Gives the synthesis slot and the response back however it ends.</summary>
-    private async Task DownloadIntoAsync(HttpResponseMessage response, StreamingVoiceLine line, double tailSeconds, VoiceLineTiming? timing, CancellationToken stop)
+    private async Task DownloadIntoAsync(
+        HttpResponseMessage response, StreamingVoiceLine line, double tailSeconds, VoiceLineTiming? timing,
+        Action answered, Action<byte[]> keep, CancellationToken stop)
     {
+        var all = new MemoryStream();
+
         try
         {
             await using var body = await response.Content.ReadAsStreamAsync(stop);
@@ -279,9 +405,23 @@ public sealed partial class AnnouncementService
                 }
 
                 line.Add(buffer.AsSpan(0, read));
+                all.Write(buffer, 0, read);
             }
 
-            NoteElevenLabsAnswered();
+            answered();
+
+            // All of it - never a line cut short.
+            if (all.Length > 1)
+            {
+                try
+                {
+                    keep(all.ToArray());
+                }
+                catch (Exception ex)
+                {
+                    StatusMessage?.Invoke($"[voice] A streamed line couldn't be kept for next time ({SummariseForLog(ex)}).");
+                }
+            }
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested)
         {
@@ -297,6 +437,9 @@ public sealed partial class AnnouncementService
             GiveBackTheStream(response);
         }
     }
+
+    /// <summary>What the stream sends: 16-bit mono at 22,050 Hz (pcm_22050).</summary>
+    private static readonly NAudio.Wave.WaveFormat StreamedPcmFormat = new(22_050, 16, 1);
 
     private static void GiveBackTheStream(HttpResponseMessage response)
     {

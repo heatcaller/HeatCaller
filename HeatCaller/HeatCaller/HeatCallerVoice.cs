@@ -184,6 +184,13 @@ internal sealed class HeatCallerVoiceException : Exception
 /// HeatCallerVoiceException, which the announcer turns into "the Kokoro
 /// voice says this one".
 /// </summary>
+/// <summary>
+/// A line asked for as a stream (HeatCallerVoiceClient.SpeakStreamAsync):
+/// the response to read as raw PCM when the relay streamed it, or the whole
+/// clip when it answered whole. Exactly one of Audio and Stream is set.
+/// </summary>
+internal sealed record HeatCallerStreamAnswer(byte[]? Audio, HttpResponseMessage? Stream, HeatCallerAllowance? Allowance, bool Cached);
+
 internal sealed class HeatCallerVoiceClient
 {
     /// <summary>
@@ -519,6 +526,125 @@ internal sealed class HeatCallerVoiceClient
         CancellationToken cancel = default,
         bool fresh = false)
     {
+        using var request = SpeakRequest(voiceId, text, shared, fresh, stream: false);
+
+        HttpResponseMessage response;
+
+        try
+        {
+            response = await Http.SendAsync(request, cancel).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancel.IsCancellationRequested)
+        {
+            // HttpClient's own timeout arrives as a TaskCanceledException
+            // with nobody having cancelled anything. That is the relay not
+            // answering, and it has to leave here as a refusal like any
+            // other - the announcer and the Voice Settings page only know
+            // what to do with HeatCallerVoiceException. Only a cancel the
+            // caller asked for goes out as a cancel.
+            throw new HeatCallerVoiceException(HeatCallerRefusal.Unreachable, $"The relay didn't answer ({Plain(ex)}).");
+        }
+
+        using (response)
+        {
+            return await WholeAnswerAsync(response, cancel).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// What the relay sends a streamed line as - its own name for it, and
+    /// ElevenLabs'. A relay that answers anything else has answered whole.
+    /// </summary>
+    internal const string StreamFormat = "pcm_22050";
+
+    /// <summary>
+    /// <see cref="SpeakAsync"/>'s line, asked for as a stream (11 Nov 2026,
+    /// voice speed plan): every check the same, the consent gate included.
+    /// When the relay streams it, the answer's Stream is the response, to be
+    /// read as raw PCM in <see cref="StreamFormat"/> as it arrives and
+    /// disposed by the caller. When it answers whole - a line it already
+    /// had, or a relay from before streaming - Audio is the clip, as
+    /// SpeakAsync gives it. Refusals throw, as SpeakAsync's do.
+    /// </summary>
+    internal async Task<HeatCallerStreamAnswer> SpeakStreamAsync(string voiceId, string text, bool shared, CancellationToken cancel = default)
+    {
+        using var request = SpeakRequest(voiceId, text, shared, fresh: false, stream: true);
+
+        HttpResponseMessage response;
+
+        try
+        {
+            response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancel.IsCancellationRequested)
+        {
+            throw new HeatCallerVoiceException(HeatCallerRefusal.Unreachable, $"The relay didn't answer ({Plain(ex)}).");
+        }
+
+        if (response.IsSuccessStatusCode
+            && string.Equals(Header(response, "x-voice-format"), StreamFormat, StringComparison.OrdinalIgnoreCase))
+        {
+            var allowance = AllowanceFromHeaders(response);
+
+            if (allowance is not null)
+            {
+                ReportToMeters(allowance);
+            }
+
+            return new HeatCallerStreamAnswer(null, response, allowance, Cached: false);
+        }
+
+        using (response)
+        {
+            var (audio, spoken, cached) = await WholeAnswerAsync(response, cancel).ConfigureAwait(false);
+
+            return new HeatCallerStreamAnswer(audio, null, spoken, cached);
+        }
+    }
+
+    /// <summary>A whole answer - the audio, or the refusal it is thrown as. Shared by SpeakAsync and SpeakStreamAsync.</summary>
+    private static async Task<(byte[] Audio, HeatCallerAllowance? Allowance, bool Cached)> WholeAnswerAsync(HttpResponseMessage response, CancellationToken cancel)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            var audio = await response.Content.ReadAsByteArrayAsync(cancel).ConfigureAwait(false);
+
+            if (audio.Length == 0)
+            {
+                throw new HeatCallerVoiceException(HeatCallerRefusal.Unknown, "The relay answered with no audio.");
+            }
+
+            var spoken = AllowanceFromHeaders(response);
+
+            if (spoken is not null)
+            {
+                ReportToMeters(spoken);
+            }
+
+            return (
+                audio,
+                spoken,
+                string.Equals(Header(response, "x-voice-cache"), "hit", StringComparison.OrdinalIgnoreCase));
+        }
+
+        var body = await ReadTextAsync(response, cancel).ConfigureAwait(false);
+        var (refusal, message, allowance) = ReadRefusal(response, body);
+
+        if (allowance is not null)
+        {
+            ReportToMeters(allowance);
+        }
+
+        throw new HeatCallerVoiceException(refusal, message, allowance);
+    }
+
+    /// <summary>
+    /// The request for one line, after every check that comes before it - see
+    /// SpeakAsync for each. Throws HeatCallerVoiceException for a line that
+    /// may not be asked for at all.
+    /// </summary>
+    private HttpRequestMessage SpeakRequest(string voiceId, string text, bool shared, bool fresh, bool stream)
+    {
         if (Target() is not { } target)
         {
             throw NoRelay();
@@ -579,9 +705,11 @@ internal sealed class HeatCallerVoiceClient
         // exactly as it always has.
         var payload = fresh
             ? JsonSerializer.Serialize(new { voice = voiceId, text, shared, fresh = true })
-            : JsonSerializer.Serialize(new { voice = voiceId, text, shared });
+            : stream
+                ? JsonSerializer.Serialize(new { voice = voiceId, text, shared, stream = true })
+                : JsonSerializer.Serialize(new { voice = voiceId, text, shared });
 
-        using var request = new HttpRequestMessage(
+        var request = new HttpRequestMessage(
             HttpMethod.Post,
             $"{target.Root}/api/v1/c/{Uri.EscapeDataString(target.Club)}/voice/speak")
         {
@@ -590,57 +718,7 @@ internal sealed class HeatCallerVoiceClient
 
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", target.Token);
 
-        HttpResponseMessage response;
-
-        try
-        {
-            response = await Http.SendAsync(request, cancel).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException || !cancel.IsCancellationRequested)
-        {
-            // HttpClient's own timeout arrives as a TaskCanceledException
-            // with nobody having cancelled anything. That is the relay not
-            // answering, and it has to leave here as a refusal like any
-            // other - the announcer and the Voice Settings page only know
-            // what to do with HeatCallerVoiceException. Only a cancel the
-            // caller asked for goes out as a cancel.
-            throw new HeatCallerVoiceException(HeatCallerRefusal.Unreachable, $"The relay didn't answer ({Plain(ex)}).");
-        }
-
-        using (response)
-        {
-            if (response.IsSuccessStatusCode)
-            {
-                var audio = await response.Content.ReadAsByteArrayAsync(cancel).ConfigureAwait(false);
-
-                if (audio.Length == 0)
-                {
-                    throw new HeatCallerVoiceException(HeatCallerRefusal.Unknown, "The relay answered with no audio.");
-                }
-
-                var spoken = AllowanceFromHeaders(response);
-
-                if (spoken is not null)
-                {
-                    ReportToMeters(spoken);
-                }
-
-                return (
-                    audio,
-                    spoken,
-                    string.Equals(Header(response, "x-voice-cache"), "hit", StringComparison.OrdinalIgnoreCase));
-            }
-
-            var body = await ReadTextAsync(response, cancel).ConfigureAwait(false);
-            var (refusal, message, allowance) = ReadRefusal(response, body);
-
-            if (allowance is not null)
-            {
-                ReportToMeters(allowance);
-            }
-
-            throw new HeatCallerVoiceException(refusal, message, allowance);
-        }
+        return request;
     }
 
     // --- Hear it before you buy it ------------------------------------------

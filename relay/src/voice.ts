@@ -240,6 +240,30 @@ export interface SpeakNo {
 export type SpeakResult = SpeakOk | SpeakNo;
 
 /**
+ * A line being spoken as it arrives (11 Nov 2026): raw 16-bit mono PCM at
+ * 22.05 kHz (STREAM_FORMAT), piece by piece. Read it to the end, or stop
+ * early - either way the slot is given back and the characters are settled
+ * (refunded when nothing at all came).
+ */
+export interface SpeakStreaming {
+  readonly ok: true;
+  readonly stream: AsyncIterable<Uint8Array>;
+  readonly usage: VoiceUsage;
+  readonly characters: number;
+  readonly model: string;
+  /** Gives the slot and the characters back for a stream that was never read. Safe after it was read, and twice. */
+  readonly cancel: () => Promise<void>;
+}
+
+export type SpeakStreamResult = SpeakResult | SpeakStreaming;
+
+/** What a streamed line is sent as - ElevenLabs' own name for it, which the laptop asks for too. */
+export const STREAM_FORMAT = "pcm_22050";
+
+/** What calls ElevenLabs' stream endpoint: the line's audio as it comes. Swapped in tests; absent when no key is configured. */
+export type StreamFn = (voice: CatalogueVoice, text: string, signal: AbortSignal) => Promise<AsyncIterable<Uint8Array>>;
+
+/**
  * One voice's sample, served to anyone at all.
  *
  * No usage in it, either way: a sample is not charged to a club - there is
@@ -286,6 +310,8 @@ export interface VoiceServiceOptions {
   readonly dataDir: string;
   /** Absent means no key: every request is refused with "off", and nothing is rendered. */
   readonly render?: RenderFn | undefined;
+  /** Streams a line as ElevenLabs makes it - see speakStream. Absent: a stream asked for is answered whole. */
+  readonly stream?: StreamFn | undefined;
   readonly now?: () => Date;
   readonly log?: (line: string) => void;
   /**
@@ -399,6 +425,7 @@ export class VoiceService {
   private readonly config: VoiceConfig;
   private readonly dataDir: string;
   private readonly render: RenderFn | undefined;
+  private readonly streamer: StreamFn | undefined;
   private readonly now: () => Date;
   private readonly log: (line: string) => void;
   private readonly maxInFlight: number;
@@ -461,6 +488,7 @@ export class VoiceService {
     this.config = options.config;
     this.dataDir = options.dataDir;
     this.render = options.render;
+    this.streamer = options.stream;
     this.now = options.now ?? (() => new Date());
     this.log = options.log ?? (() => {});
     this.maxInFlight = options.maxInFlight ?? DEFAULT_MAX_IN_FLIGHT;
@@ -573,6 +601,30 @@ export class VoiceService {
     shared: boolean,
     fresh = false,
   ): Promise<SpeakResult> {
+    const checked = this.checkLine(club, plan, voiceId, text);
+
+    if (!checked.ok) {
+      return checked;
+    }
+
+    const { voice, spoken, render } = checked;
+
+    return this.speakChecked(club, plan, voice, spoken, render, shared, fresh);
+  }
+
+  /**
+   * Whether this club may have this line in this voice at all - the club,
+   * the voice being switched on, the plan, the voice being one of the
+   * club's, the length - and the line as it will be spoken. Shared by speak
+   * and speakStream (11 Nov 2026), so a streamed line is held to exactly
+   * what a whole one is.
+   */
+  private checkLine(
+    club: string,
+    plan: VoicePlan,
+    voiceId: string,
+    text: string,
+  ): SpeakNo | { readonly ok: true; readonly voice: CatalogueVoice; readonly spoken: string; readonly render: RenderFn } {
     if (!isValidClubId(club)) {
       return { ok: false, refusal: "unknown-voice", status: 404, message: "No such club." };
     }
@@ -626,6 +678,19 @@ export class VoiceService {
       };
     }
 
+    return { ok: true, voice, spoken, render };
+  }
+
+  /** The rest of speak, once checkLine has passed the line. */
+  private async speakChecked(
+    club: string,
+    plan: VoicePlan,
+    voice: CatalogueVoice,
+    spoken: string,
+    render: RenderFn,
+    shared: boolean,
+    fresh: boolean,
+  ): Promise<SpeakResult> {
     // A CLONED VOICE IS NEVER KEPT ACROSS CLUBS, whatever the laptop
     // said. See CatalogueVoice.cloned.
     //
@@ -823,6 +888,158 @@ export class VoiceService {
     await this.writeCache(club, keepFor, key, audio);
 
     return { ok: true, audio, cached: false, usage, characters: spoken.length, model: voice.modelId };
+  }
+
+  /**
+   * One line, spoken AS IT IS MADE (11 Nov 2026, voice speed plan) - for a
+   * club laptop with "Start race calls while ElevenLabs is still sending
+   * them" ticked. The first audio reaches the laptop in about a fifth of a
+   * second instead of after the whole line.
+   *
+   * HELD TO EVERYTHING SPEAK IS (checkLine): the club, the plan, the voice
+   * being one of the club's, the length; then the month's allowance is
+   * reserved, and a slot taken, before ElevenLabs is asked. What is not
+   * spoken is given back: all of it when ElevenLabs refuses or nothing at
+   * all arrives.
+   *
+   * ANSWERED WHOLE, as speak would, for anything this cannot stream: a line
+   * shared across clubs (kept once, for all of them, which needs the whole
+   * clip), a fresh take, a line this club's cache already has (free), or a
+   * relay with no stream configured. The laptop plays either.
+   *
+   * A streamed line is not kept in the relay's cache - the laptop keeps its
+   * own copy of what it says, and a line with a driver's name and a lap time
+   * in it is rarely said twice.
+   */
+  async speakStream(
+    club: string,
+    plan: VoicePlan,
+    voiceId: string,
+    text: string,
+    shared: boolean,
+    fresh = false,
+  ): Promise<SpeakStreamResult> {
+    const checked = this.checkLine(club, plan, voiceId, text);
+
+    if (!checked.ok) {
+      return checked;
+    }
+
+    const { voice, spoken, render } = checked;
+    const streamer = this.streamer;
+
+    if (streamer === undefined || fresh || (shared && !voice.cloned)) {
+      return this.speakChecked(club, plan, voice, spoken, render, shared, fresh);
+    }
+
+    const key = cacheKey(voice, spoken);
+    const cached = await this.readCache(club, false, key);
+
+    if (cached !== undefined) {
+      return { ok: true, audio: cached, cached: true, usage: await this.usageFor(club, plan) };
+    }
+
+    const reserved = await this.reserve(club, plan, spoken.length);
+
+    if (!reserved.ok && reserved.unreadable === true) {
+      return {
+        ok: false,
+        refusal: "busy",
+        status: 503,
+        message: "The HeatCaller voice can't check this club's allowance just now. The free Kokoro voice speaks this one.",
+      };
+    }
+
+    if (!reserved.ok) {
+      return {
+        ok: false,
+        refusal: "allowance",
+        status: 402,
+        message:
+          "This club has used its HeatCaller voice allowance for the month. " +
+          "The free Kokoro voice speaks until it resets, and every line already saved is kept.",
+        usage: reserved.usage,
+      };
+    }
+
+    if (!(await this.takeSlot(club))) {
+      await this.refund(club, spoken.length, reserved.month);
+
+      return {
+        ok: false,
+        refusal: "busy",
+        status: 503,
+        message: "The HeatCaller voice is busy. The free Kokoro voice speaks this one.",
+        usage: await this.usageFor(club, plan),
+      };
+    }
+
+    const stop = new AbortController();
+    let upstream: AsyncIterable<Uint8Array>;
+
+    try {
+      upstream = await streamer(voice, spoken, stop.signal);
+    } catch (error) {
+      const status = error instanceof VoiceUpstreamError ? error.status : 0;
+      this.releaseSlot(club);
+      this.log(`[voice] "${club}": ElevenLabs did not stream a line (${status === 0 ? String(error) : status}).`);
+      await this.refund(club, spoken.length, reserved.month);
+
+      return {
+        ok: false,
+        refusal: "upstream",
+        status: 502,
+        message: "The HeatCaller voice couldn't speak that line. The free Kokoro voice says it instead.",
+        usage: await this.usageFor(club, plan),
+      };
+    }
+
+    // The slot and the characters are settled however the reader stops:
+    // played to the end, cut off by the laptop, or a fault part way.
+    let settled = false;
+    const settle = async (sent: number): Promise<void> => {
+      if (settled) return;
+      settled = true;
+      this.releaseSlot(club);
+      stop.abort();
+
+      if (sent === 0) {
+        // Nothing reached the club, so nothing is charged.
+        await this.refund(club, spoken.length, reserved.month);
+      }
+    };
+
+    const log = this.log;
+
+    async function* relay(): AsyncGenerator<Uint8Array> {
+      let sent = 0;
+
+      try {
+        for await (const piece of upstream) {
+          if (piece.length === 0) continue;
+
+          if (sent + piece.length > MAX_AUDIO_BYTES) {
+            log(`[voice] "${club}": a streamed line ran past ${MAX_AUDIO_BYTES} bytes and was cut off.`);
+            break;
+          }
+
+          sent += piece.length;
+          yield piece;
+        }
+      } finally {
+        await settle(sent);
+      }
+    }
+
+    return {
+      ok: true,
+      stream: relay(),
+      usage: reserved.usage,
+      characters: spoken.length,
+      model: voice.modelId,
+      // For a caller that never got to read it: the slot and the characters back.
+      cancel: () => settle(0),
+    };
   }
 
   // --- Hearing a voice before choosing it ---------------------------------
@@ -1956,6 +2173,58 @@ export async function migrateVoiceFolder(
  * fields, same shape - so a line rendered here and one a club rendered for
  * itself sound identical.
  */
+/**
+ * The same request as elevenLabsRenderer, to ElevenLabs' stream endpoint,
+ * answered as soon as the headers are in (11 Nov 2026): raw PCM in
+ * STREAM_FORMAT, read as it arrives. The time limit is on the answer
+ * starting; once audio flows, the caller's signal is what stops it.
+ */
+export function elevenLabsStreamer(apiKey: string, timeoutMs = 30_000): StreamFn {
+  return async (voice, text, signal) => {
+    const url =
+      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice.voiceId)}/stream` +
+      `?output_format=${STREAM_FORMAT}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const stop = (): void => controller.abort();
+    signal.addEventListener("abort", stop, { once: true });
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "xi-api-key": apiKey,
+          "content-type": "application/json",
+          accept: "audio/pcm",
+        },
+        body: JSON.stringify({
+          text,
+          model_id: voice.modelId,
+          apply_text_normalization: "auto",
+          voice_settings: {
+            stability: voice.stability,
+            similarity_boost: voice.similarity,
+            style: voice.style,
+            use_speaker_boost: voice.speakerBoost,
+            speed: voice.speed,
+          },
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok || response.body === null) {
+        const body = await response.text().catch(() => "");
+        throw new VoiceUpstreamError(response.status, `ElevenLabs answered ${response.status}: ${body.slice(0, 200)}`);
+      }
+
+      return response.body as unknown as AsyncIterable<Uint8Array>;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+}
+
 export function elevenLabsRenderer(apiKey: string, timeoutMs = 30_000): RenderFn {
   return async (voice, text) => {
     const format = voice.outputFormat.trim();

@@ -272,7 +272,7 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// </summary>
     private readonly CheckBox _chkEnergyFollowsRace = new ThemedCheckBox();
 
-    /// <summary>AppSettings.StreamLiveCalls (10 Nov 2026) - race calls played while ElevenLabs is still sending them. Shown with the ElevenLabs engine only.</summary>
+    /// <summary>AppSettings.StreamLiveCalls (10 Nov 2026) - race calls played while the voice is still sending them. Shown with the ElevenLabs engine and, since 11 Nov 2026, the HeatCaller voice.</summary>
     private readonly CheckBox _chkStreamLiveCalls = new ThemedCheckBox();
     private readonly ComboBox _cmbTextNormalization = new();
     private readonly TextBox _txtLanguageCode = new();
@@ -3538,7 +3538,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         // STREAMED RACE CALLS (10 Nov 2026, voice speed plan, phase 3).
         // AppSettings, saved as it is ticked, like the box above. See
         // AnnouncementService.Streaming for what it does and does not stream.
-        _chkStreamLiveCalls.Text = "Start race calls while ElevenLabs is still sending them (new)";
+        _chkStreamLiveCalls.Text = "Start race calls while the voice is still sending them (new)";
         _chkStreamLiveCalls.AutoSize = true;
         _chkStreamLiveCalls.Checked = _appSettings.StreamLiveCalls;
         _chkStreamLiveCalls.CheckedChanged += (_, _) =>
@@ -3561,8 +3561,10 @@ public sealed partial class VoiceSettingsControl : UserControl
             + "is streamed. Untick it if calls stutter on a slow connection.");
 
         tuning.AddField(_chkStreamLiveCalls);
-        _rdoElevenLabs.CheckedChanged += (_, _) => _chkStreamLiveCalls.Visible = _rdoElevenLabs.Checked;
-        _chkStreamLiveCalls.Visible = _rdoElevenLabs.Checked;
+        // The HeatCaller voice too (11 Nov 2026): most clubs have no ElevenLabs key.
+        _rdoElevenLabs.CheckedChanged += (_, _) => _chkStreamLiveCalls.Visible = _rdoElevenLabs.Checked || _rdoHeatCaller.Checked;
+        _rdoHeatCaller.CheckedChanged += (_, _) => _chkStreamLiveCalls.Visible = _rdoElevenLabs.Checked || _rdoHeatCaller.Checked;
+        _chkStreamLiveCalls.Visible = _rdoElevenLabs.Checked || _rdoHeatCaller.Checked;
 
         var card = new Section("Voice parameters");
 

@@ -145,12 +145,25 @@ public sealed partial class AnnouncementService
         // take would leave their name off; the live line carries it.
         var sponsoredHere = SponsoredMoments.ForEvent(type) is { } sponsoredMoment && SponsorOf(sponsoredMoment) is not null;
 
+        // The finish with the winner's name in it, when the club's finish
+        // lines have "{winner}" (11 Nov 2026) - see AnnouncementService.Winner.
+        if (type == AnnouncementEventType.RaceCompleted && !sponsoredHere && _dryRun is null && TrySpeakTheFinishWithTheWinner(config))
+        {
+            return;
+        }
+
         if (IsInterruptingAnnouncement(type) && !sponsoredHere && TrySpeakPreparedFlag(type, config))
         {
             return;
         }
 
         var candidates = config.EffectiveTemplates;
+
+        // A finish that names nobody leaves its "{winner}" lines out.
+        if (type == AnnouncementEventType.RaceCompleted)
+        {
+            candidates = FinishLinesNamingNobody(candidates);
+        }
         if (candidates.Count == 0)
         {
             return;
@@ -169,17 +182,25 @@ public sealed partial class AnnouncementService
 
         if (busy && autoTail is not null)
         {
-            StatusMessage?.Invoke($"[voice] {type}: the track is busy - said without its extra (\"{autoTail.Value.Tail.Trim()}\").");
+            if (_dryRun is null)
+            {
+                StatusMessage?.Invoke($"[voice] {type}: the track is busy - said without its extra (\"{autoTail.Value.Tail.Trim()}\").");
+            }
+
             autoTail = null;
         }
+
+        var transponder = standing?.Transponder ?? gate?.Transponder;
 
         // Pick one phrasing at random each time, so an event that can
         // legitimately fire many times in a row (e.g. several new fastest
         // laps back to back) doesn't read out the identical sentence
-        // every single time.
-        var chosenTemplate = candidates.Count == 1 ? candidates[0] : TemplateBag.Pick(candidates);
+        // every single time - unless one was chosen for this driver ahead,
+        // when the call was predicted (11 Nov 2026): then that one, so the
+        // words, and the line rendered for them, match. See PassAhead.
+        var chosenTemplate = KeptTemplateFor(type, transponder, candidates)
+            ?? (candidates.Count == 1 ? candidates[0] : TemplateBag.Pick(candidates));
 
-        var transponder = standing?.Transponder ?? gate?.Transponder;
         var driverProfile = transponder is not null ? _profiles.Get(transponder) : null;
 
         // Diagnostic: this exact lookup has been reported as returning the
@@ -188,9 +209,12 @@ public sealed partial class AnnouncementService
         // enough here to see definitively, on the next test, whether the
         // profile is being found at all and what's actually in it, rather
         // than guessing at a second cause blind.
-        StatusMessage?.Invoke(driverProfile is null
-            ? $"[voice] Driver lookup: transponder=\"{transponder}\" -> NO PROFILE FOUND for this exact key."
-            : $"[voice] Driver lookup: transponder=\"{transponder}\" -> found profile, DriverName=\"{driverProfile.DriverName}\"");
+        if (_dryRun is null)
+        {
+            StatusMessage?.Invoke(driverProfile is null
+                ? $"[voice] Driver lookup: transponder=\"{transponder}\" -> NO PROFILE FOUND for this exact key."
+                : $"[voice] Driver lookup: transponder=\"{transponder}\" -> found profile, DriverName=\"{driverProfile.DriverName}\"");
+        }
 
         // SpokenName prefers the announcer-specific name when one is set -
         // a nickname the crowd knows, or a spelling the voice actually
@@ -213,7 +237,10 @@ public sealed partial class AnnouncementService
         // occurrence, whether "driver" itself is genuinely empty here or
         // something else (e.g. an unusual character in a saved custom
         // template) is going on, rather than guessing again.
-        StatusMessage?.Invoke($"[voice] Template chosen: \"{chosenTemplate}\"  resolved driver=\"{driver}\"");
+        if (_dryRun is null)
+        {
+            StatusMessage?.Invoke($"[voice] Template chosen: \"{chosenTemplate}\"  resolved driver=\"{driver}\"");
+        }
         var car = transponder is null ? string.Empty : _profiles.CarModelFor(transponder);
         var lap = standing?.Laps.ToString() ?? string.Empty;
         var time = standing is { FastLapMs: > 0 } ? FormatSecondsForSpeech(standing.FastLapMs) : string.Empty;
@@ -358,6 +385,18 @@ public sealed partial class AnnouncementService
         {
             text = SponsoredMoments.WithCredit(text, sponsorTag);
             displayText = SponsoredMoments.WithCredit(displayText, sponsorTag);
+        }
+
+        // A dry run (11 Nov 2026) - the words a call WOULD have, worked out
+        // here so they are exactly the ones the real call will build, and
+        // nothing queued or shown. The sponsor's ration goes back. See
+        // AnnouncementService.PassAhead.
+        if (_dryRun is { } dryRun)
+        {
+            dryRun.Text = text;
+            dryRun.Speed = speed;
+            releaseMention?.Invoke();
+            return;
         }
 
         // Screens get the numeral form; the voice engine gets the
@@ -770,12 +809,13 @@ public sealed partial class AnnouncementService
                 // Decoded (and levelled) before PlayAsync returns its task, on
                 // this thread - so what the levelling measured is this line's,
                 // and teaches the voice's level for streamed lines (10 Nov
-                // 2026, see VoiceLevelMemory). ElevenLabs takes only.
+                // 2026, see VoiceLevelMemory). New takes only: ElevenLabs or the
+                // HeatCaller voice, never a stand-in or a recording.
                 VoiceLevel.TakeLastMeasured();
                 var playing = PlayAsync(audio, volume, TailSecondsNow(tail), LeadSecondsFor(lead), StillWantedUnlessOvertaken(honourMute), onAir, timing);
 
                 if (VoiceLevel.TakeLastMeasured() is { } measured
-                    && synthesis.Source == LineSource.ElevenLabs && voice is null)
+                    && synthesis.Source is LineSource.ElevenLabs or LineSource.HeatCaller && voice is null)
                 {
                     VoiceLevelMemory.Learn(currentProfile, measured);
                 }
@@ -1211,7 +1251,7 @@ public sealed partial class AnnouncementService
         // line comes back with the deadline it went in with.
         // Counted from the car's crossing (8 Nov 2026, review): from "now" it
         // left out the per-lap batch, the field window and a busy window.
-        sayByMs ??= IsLapBoundCall(type) ? LapSeenAt(transponder) + LapCallSayWithinMs : null;
+        sayByMs ??= IsLapBoundCall(type) ? LapSeenAt(transponder) + SayWithinMsFor(type) : null;
 
         // Written against a race that has already moved on, or a call kept
         // for the end of a line that ran past its few seconds - nothing to
@@ -1695,6 +1735,7 @@ public sealed partial class AnnouncementService
             var dequeuedType = AnnouncementEventType.Reminder;
             string? shown = null;
             VoiceLineTiming? timing = null;
+            string? named = null;
 
             lock (_voiceQueueLock)
             {
@@ -1702,6 +1743,7 @@ public sealed partial class AnnouncementService
                 {
                     var item = _voiceQueue[0];
                     work = item.Work;
+                    named = item.Transponder;
 
                     // Where its time goes, from here to the room (10 Nov
                     // 2026) - see VoiceLineTiming. A lap call's deadline is
@@ -1710,7 +1752,7 @@ public sealed partial class AnnouncementService
                     timing = new VoiceLineTiming
                     {
                         Type = item.Type,
-                        LapSeenAtMs = IsLapBoundCall(item.Type) && item.SayByMs is { } lapSayBy ? lapSayBy - LapCallSayWithinMs : null,
+                        LapSeenAtMs = IsLapBoundCall(item.Type) && item.SayByMs is { } lapSayBy ? lapSayBy - SayWithinMsFor(item.Type) : null,
                         QueuedAtMs = item.QueuedAtMs,
                         TakenAtMs = TimingClock.NowMs,
                     };
@@ -1865,6 +1907,12 @@ public sealed partial class AnnouncementService
                         timing.DoneAtMs = TimingClock.NowMs;
                         Timings.Add(timing);
                         StatusMessage?.Invoke(timing.Describe());
+
+                        // Heard, so this driver has had a turn - see _lastNamedMs.
+                        if (timing.Played)
+                        {
+                            NoteNamed(named);
+                        }
                     }
                     catch
                     {

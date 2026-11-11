@@ -72,7 +72,7 @@ import { DEFAULT_LOOK, lookFrom, type Look } from "./site.js";
 import { sunIcon } from "./sun.js";
 import { BRAIN_LONG_WORDS_CEILING, BRAIN_PLAN_OFF, type BrainService } from "./brain.js";
 import { LapVoiceLibrary } from "./lapvoice.js";
-import { VOICE_PLAN_OFF, type MeterUsage, type VoiceService } from "./voice.js";
+import { STREAM_FORMAT, VOICE_PLAN_OFF, type MeterUsage, type VoicePlan, type VoiceService } from "./voice.js";
 import { isMeterName, type TopUpRequests } from "./topuprequests.js";
 import type { UsageLog } from "./usagelog.js";
 import { PUSH_CHANNEL, pushSubFrom, SERVICE_WORKER_JS, type PushService } from "./push.js";
@@ -4208,6 +4208,14 @@ export class Relay {
     // (22 Oct 2026). Charged like any line that was not saved.
     const fresh = body["fresh"] === true;
 
+    // Streamed as it is made, when the laptop asks (11 Nov 2026) - see
+    // VoiceService.speakStream. A relay or a line that can't be streamed
+    // answers whole, as it always has, and a laptop plays either.
+    if (body["stream"] === true) {
+      await this.voiceSpeakStreamed(response, club, who.voice ?? VOICE_PLAN_OFF, voiceId, text, shared, fresh);
+      return;
+    }
+
     const started = Date.now();
     const result = await this.voice.speak(club, who.voice ?? VOICE_PLAN_OFF, voiceId, text, shared, fresh);
 
@@ -4244,6 +4252,86 @@ export class Relay {
       "x-voice-allowance": String(result.usage.allowance),
       "x-voice-resets": result.usage.resetsAt,
     });
+  }
+
+  /**
+   * voiceSpeak's line, streamed (11 Nov 2026): raw PCM in STREAM_FORMAT,
+   * written as ElevenLabs sends it, said so in x-voice-format. Refusals and
+   * whole answers go out exactly as voiceSpeak's do.
+   */
+  private async voiceSpeakStreamed(
+    response: ServerResponse,
+    club: string,
+    plan: VoicePlan,
+    voiceId: string,
+    text: string,
+    shared: boolean,
+    fresh: boolean,
+  ): Promise<void> {
+    const voice = this.voice!;
+    const started = Date.now();
+    const result = await voice.speakStream(club, plan, voiceId, text, shared, fresh);
+    const streaming = result.ok && "stream" in result;
+
+    void this.usageLog?.record({
+      at: this.now().toISOString(),
+      club,
+      meter: "voice",
+      kind: fresh ? "reroll" : shared ? "shared" : "line",
+      units: result.ok && (streaming || !result.cached) ? (result.characters ?? 0) : 0,
+      outcome: result.ok ? "ok" : result.refusal,
+      ms: Date.now() - started,
+      voice: loggedVoice(voiceId, result),
+      ...(result.ok && result.model !== undefined ? { model: result.model } : {}),
+      ...(result.ok ? { cached: streaming ? false : result.cached } : {}),
+    });
+
+    if (!result.ok) {
+      sendJson(response, result.status, {
+        ok: false,
+        refusal: result.refusal,
+        error: result.message,
+        ...(result.usage === undefined
+          ? {}
+          : { used: result.usage.used, allowance: result.usage.allowance, resetsAt: result.usage.resetsAt }),
+      });
+      return;
+    }
+
+    const usageHeaders = {
+      "x-voice-used": String(result.usage.used),
+      "x-voice-allowance": String(result.usage.allowance),
+      "x-voice-resets": result.usage.resetsAt,
+    };
+
+    if (!("stream" in result)) {
+      sendAudio(response, result.audio, { "x-voice-cache": result.cached ? "hit" : "miss", ...usageHeaders });
+      return;
+    }
+
+    try {
+      response.writeHead(200, {
+        ...BASE_HEADERS,
+        ...usageHeaders,
+        "x-voice-cache": "miss",
+        "x-voice-format": STREAM_FORMAT,
+        "content-type": "audio/pcm",
+        "cache-control": "no-store",
+      });
+
+      for await (const piece of result.stream) {
+        // The laptop hung up - a flag cut the line off: stop asking ElevenLabs.
+        if (response.destroyed || response.writableEnded) break;
+        response.write(piece);
+      }
+
+      response.end();
+    } catch (error) {
+      this.log(`[voice] "${club}": a streamed line stopped part way (${String(error).slice(0, 160)}).`);
+      response.destroy();
+    } finally {
+      await result.cancel();
+    }
   }
 
   /**

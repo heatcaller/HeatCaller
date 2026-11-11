@@ -16,7 +16,51 @@ import { elevenLabsRenderer, VoiceUpstreamError } from "./voice.js";
  * so a run that stopped half way - the PC slept, the key ran out - carries
  * on where it was and costs only what is left. "count" prints what a run
  * would make and cost, and spends nothing.
+ *
+ * AND THE FOLDER SAYS WHICH MODEL MADE IT (11 Nov 2026). LAP_VOICE moved to
+ * eleven_v4_turbo on 10 Nov, but a clip counted as made if its file was
+ * there - so the 8 Nov v3 takes went on being played under a v4 label, and
+ * nothing would ever have made them again. Now a run writes the model it
+ * made the set on into MODEL_FILE, and a folder made on another model (or
+ * before this file existed) is a set to make again: the old one is moved
+ * aside to lap-voice-<its model>, kept rather than lost, and the set is made
+ * afresh on LAP_VOICE's model. "count" says so first, and spends nothing.
  */
+
+/** The file in the clips folder that says which model made them. */
+export const MODEL_FILE = "MODEL";
+
+/** Which model the clips in <paramref name="dir"/> were made on - undefined when it doesn't say. */
+export async function clipsModel(dir: string): Promise<string | undefined> {
+  try {
+    const said = (await readFile(join(dir, MODEL_FILE), "utf8")).trim();
+    return said.length > 0 ? said : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether the clips in the folder are another model's: some are there, and
+ * the folder says a different model made them, or says nothing at all (a
+ * set made before MODEL_FILE existed). An empty folder is nobody's.
+ */
+export async function madeOnAnotherModel(dir: string, model: string, clips: readonly LapClip[] = lapClips()): Promise<boolean> {
+  const said = await clipsModel(dir);
+  if (said === model) return false;
+
+  for (const clip of clips) {
+    if (await present(join(dir, `${clip.name}.mp3`))) return true;
+  }
+
+  return false;
+}
+
+/** Where a set made on <paramref name="model"/> is kept when it is replaced - "lap-voice-eleven_v3", or "lap-voice-older" for a set that never said. */
+export function setAsideDir(dir: string, model: string | undefined): string {
+  const tag = (model ?? "older").replace(/[^A-Za-z0-9_.-]/g, "-");
+  return `${dir}-${tag}`;
+}
 
 export interface RenderReport {
   made: number;
@@ -26,6 +70,8 @@ export interface RenderReport {
   chars: number;
   /** Why the run stopped early, when it did. */
   stopped?: string;
+  /** Where another model's set was moved to, when there was one. */
+  setAside?: string;
 }
 
 export interface RenderOptions {
@@ -37,9 +83,20 @@ export interface RenderOptions {
   readonly log?: (line: string) => void;
   /** Waits between tries, swappable for tests. */
   readonly wait?: (ms: number) => Promise<void>;
+  /** The model the clips are made on - LAP_VOICE's unless a test says otherwise. Written to MODEL_FILE. */
+  readonly model?: string;
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms));
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function present(path: string): Promise<boolean> {
   try {
@@ -49,8 +106,10 @@ async function present(path: string): Promise<boolean> {
   }
 }
 
-/** The clips the folder is missing. */
-export async function missingClips(dir: string, clips: readonly LapClip[] = lapClips()): Promise<LapClip[]> {
+/** The clips the folder is missing - all of them when it holds another model's set (madeOnAnotherModel). */
+export async function missingClips(dir: string, clips: readonly LapClip[] = lapClips(), model: string = LAP_VOICE.modelId): Promise<LapClip[]> {
+  if (await madeOnAnotherModel(dir, model, clips)) return [...clips];
+
   const missing: LapClip[] = [];
   for (const clip of clips) {
     if (!(await present(join(dir, `${clip.name}.mp3`)))) missing.push(clip);
@@ -62,10 +121,31 @@ export async function renderLapClips(options: RenderOptions): Promise<RenderRepo
   const all = options.clips ?? lapClips();
   const log = options.log ?? (() => {});
   const wait = options.wait ?? sleep;
+  const model = options.model ?? LAP_VOICE.modelId;
   const report: RenderReport = { made: 0, kept: 0, failed: [], chars: 0 };
 
+  // Another model's set is kept, beside it, and this one starts empty.
+  if (await madeOnAnotherModel(options.dir, model, all)) {
+    const was = await clipsModel(options.dir);
+    let aside = setAsideDir(options.dir, was);
+
+    // Never over a set already kept there.
+    for (let n = 2; await exists(aside); n++) {
+      aside = `${setAsideDir(options.dir, was)}-${n}`;
+    }
+
+    await rename(options.dir, aside);
+    report.setAside = aside;
+    log(`The clips there were made on ${was ?? "an older model"}; kept in ${aside}, and made again on ${model}.`);
+  }
+
   await mkdir(options.dir, { recursive: true });
-  const todo = await missingClips(options.dir, all);
+
+  // Said before the first clip, so a run that stops half way carries on as
+  // this model's set rather than starting again.
+  await writeFile(join(options.dir, MODEL_FILE), `${model}\n`);
+
+  const todo = await missingClips(options.dir, all, model);
   report.kept = all.length - todo.length;
 
   let next = 0;
@@ -137,6 +217,12 @@ async function main(argv: readonly string[]): Promise<number> {
 
   console.log(`The lap voice: ${LAP_VOICE.name} (${LAP_VOICE.what}), ElevenLabs voice ${LAP_VOICE.voiceId}, model ${LAP_VOICE.modelId}.`);
   console.log(`All of it: ${cost.clips} clips, ${cost.chars.toLocaleString("en-US")} characters, about $${cost.dollars.toFixed(2)} at $${LAP_DOLLARS_PER_1K.toFixed(2)} per 1,000 on ${LAP_VOICE.modelId}.`);
+
+  if (await madeOnAnotherModel(dir, LAP_VOICE.modelId, all)) {
+    const was = await clipsModel(dir);
+    console.log(`The clips in ${dir} were made on ${was ?? "an older model (before the folder said which)"}, not ${LAP_VOICE.modelId} -`);
+    console.log(`so every one is made again, and the old set is kept in ${setAsideDir(dir, was)}.`);
+  }
   console.log(missing.length === 0
     ? `Every clip is already in ${dir}.`
     : `Still to make: ${left.clips} clips, ${left.chars.toLocaleString("en-US")} characters, about $${left.dollars.toFixed(2)}.`);

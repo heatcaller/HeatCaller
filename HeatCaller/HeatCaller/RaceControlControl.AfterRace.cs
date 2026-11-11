@@ -9,12 +9,121 @@ namespace HeatCaller;
 /// </summary>
 public sealed partial class RaceControlControl
 {
+    /// <summary>A piece of the recap after its first: its words, and its audio once made (null when it could not be, and it is made as it is said).</summary>
+    private sealed record RecapPiece(string Text, Task<AnnouncementService.PreparedSpeech?> Audio);
+
+    /// <summary>The recap as it is handed to the show: all its words, its first piece's audio, and the pieces after it.</summary>
+    private sealed record RecapTake(string? Spoken, AnnouncementService.PreparedSpeech? Audio, IReadOnlyList<RecapPiece> Rest)
+    {
+        internal static readonly RecapTake None = new(null, null, Array.Empty<RecapPiece>());
+    }
+
+    /// <summary>About how long the recap's first piece is - a sentence or two, made in a second or so.</summary>
+    internal const int FirstRecapPieceChars = 160;
+
+    /// <summary>About how long each piece after the first is.</summary>
+    internal const int RecapPieceChars = 450;
+
+    private static readonly System.Text.RegularExpressions.Regex RecapSentenceEnd =
+        new(@"(?<=[.!?])\s+", System.Text.RegularExpressions.RegexOptions.Compiled);
+
     /// <summary>
-    /// Writes the recap AND renders it to audio as one job, so "ready"
-    /// means there is something to play rather than something still to
-    /// synthesise. Returns nulls when the model gave nothing back.
+    /// The recap cut into pieces at sentence ends (11 Nov 2026, voice speed
+    /// plan): a short first piece, so it is made in a second or so, then
+    /// longer ones. Each sentence keeps its own audio tags. Joined back
+    /// together the pieces are the recap as written, spaces aside.
     /// </summary>
-    private async Task<(string? Spoken, AnnouncementService.PreparedSpeech? Audio)> BuildRecapAsync(
+    internal static IReadOnlyList<string> RecapPieces(string spoken)
+    {
+        var pieces = new List<string>();
+        var building = new System.Text.StringBuilder();
+
+        foreach (var sentence in RecapSentenceEnd.Split(spoken.Trim()))
+        {
+            if (sentence.Length == 0)
+            {
+                continue;
+            }
+
+            var most = pieces.Count == 0 ? FirstRecapPieceChars : RecapPieceChars;
+
+            if (building.Length > 0 && building.Length + 1 + sentence.Length > most)
+            {
+                pieces.Add(building.ToString());
+                building.Clear();
+            }
+
+            if (building.Length > 0)
+            {
+                building.Append(' ');
+            }
+
+            building.Append(sentence);
+        }
+
+        if (building.Length > 0)
+        {
+            pieces.Add(building.ToString());
+        }
+
+        return pieces;
+    }
+
+    /// <summary>
+    /// Queues the recap's pieces after its first, each once it is made - or
+    /// as words to be made as it is said, when it could not be. Stops once
+    /// the next race is called.
+    /// </summary>
+    private async Task FeedTheRecapAsync(IReadOnlyList<RecapPiece> rest, (double, double)? delivery, CancellationToken nextRace)
+    {
+        for (var at = 0; at < rest.Count; at++)
+        {
+            var piece = rest[at];
+            AnnouncementService.PreparedSpeech? audio = null;
+
+            try
+            {
+                audio = await piece.Audio;
+            }
+            catch
+            {
+                // Made as it is said instead.
+            }
+
+            var last = at == rest.Count - 1;
+
+            var queued = await QueueUnlessNextRaceCalledAsync(() =>
+            {
+                if (audio is not null)
+                {
+                    _announcer.SpeakPrepared(
+                        audio,
+                        last ? AnnouncementService.SpeechTail.Long : AnnouncementService.SpeechTail.BackToBack,
+                        AnnouncementService.SpeechLead.FollowsOn,
+                        onAir: OnAirParts.Recap);
+                }
+                else
+                {
+                    _announcer.SpeakReminder(piece.Text, delivery, RecapHostVoice, showOnScreens: true, onAir: OnAirParts.Recap);
+                }
+            }, nextRace);
+
+            if (!queued)
+            {
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Writes the recap AND renders its first piece to audio as one job, so
+    /// "ready" means there is something to play rather than something still
+    /// to synthesise. The pieces after it are made one after another behind
+    /// it, while it plays (11 Nov 2026: a 1,300-character recap took 13 s to
+    /// render whole, and the show waited on it). Returns nulls when the model
+    /// gave nothing back.
+    /// </summary>
+    private async Task<RecapTake> BuildRecapAsync(
         Task<string?> generation, (double, double)? delivery, CancellationToken nextRace = default)
     {
         // Where the recap's time goes (10 Nov 2026, voice speed plan, phase
@@ -30,7 +139,7 @@ public sealed partial class RaceControlControl
         // synthesis slots - and spent the characters - well into that race.
         if (string.IsNullOrWhiteSpace(line) || nextRace.IsCancellationRequested)
         {
-            return (null, null);
+            return RecapTake.None;
         }
 
         // Tags added here rather than by the model, so an Enthusiastic
@@ -44,17 +153,56 @@ public sealed partial class RaceControlControl
         // The token too (22 Oct 2026, known issues): a render already under
         // way when the next race is called is stopped, not run to the end.
         var rendering = System.Diagnostics.Stopwatch.StartNew();
-        var audio = await _announcer.PrepareReminderAsync(spoken, delivery, RecapHostVoice, nextRace);
+        var pieces = RecapPieces(spoken);
+        var made = pieces.Select(_ => new TaskCompletionSource<AnnouncementService.PreparedSpeech?>(TaskCreationOptions.RunContinuationsAsynchronously)).ToArray();
+
+        // One after another, first to last, so the recap holds one synthesis
+        // slot as it always did. A first piece that could not be made stops
+        // the rest: the recap is then said whole, as it is made.
+        _ = Task.Run(async () =>
+        {
+            for (var at = 0; at < pieces.Count; at++)
+            {
+                AnnouncementService.PreparedSpeech? audio = null;
+
+                if (!nextRace.IsCancellationRequested && (at == 0 || made[0].Task.Result is not null))
+                {
+                    try
+                    {
+                        audio = await _announcer.PrepareReminderAsync(pieces[at], delivery, RecapHostVoice, nextRace);
+                    }
+                    catch
+                    {
+                        // PrepareReminderAsync reports its own failures; the
+                        // piece is made as it is said instead.
+                    }
+                }
+
+                made[at].TrySetResult(audio);
+            }
+        });
+
+        var first = await made[0].Task;
         rendering.Stop();
 
         StatusMessage?.Invoke(
             $"{AppTime.LogStampNow()}  [timing] Recap: written in {writing.Elapsed.TotalSeconds:0.0}s, "
-            + (audio is null
+            + (first is null
                 ? "not rendered ahead (said as it is made)"
-                : $"rendered in {rendering.Elapsed.TotalSeconds:0.0}s")
+                : pieces.Count == 1
+                    ? $"rendered in {rendering.Elapsed.TotalSeconds:0.0}s"
+                    : $"its first piece of {pieces.Count} rendered in {rendering.Elapsed.TotalSeconds:0.0}s")
             + $" - {spoken.Length} characters.");
 
-        return (spoken, audio);
+        if (first is null)
+        {
+            return new RecapTake(spoken, null, Array.Empty<RecapPiece>());
+        }
+
+        return new RecapTake(
+            spoken,
+            first,
+            pieces.Skip(1).Select((text, at) => new RecapPiece(text, made[at + 1].Task)).ToArray());
     }
 
     /// <summary>
@@ -1963,8 +2111,13 @@ public sealed partial class RaceControlControl
                     if (recap.Audio is not null)
                     {
                         // Long tail: this is the longest line of the night and
-                        // its last words were being clipped.
-                        _announcer.SpeakPrepared(recap.Audio, AnnouncementService.SpeechTail.Long, onAir: OnAirParts.Recap);
+                        // its last words were being clipped. Only on its last
+                        // piece once it is said in pieces (11 Nov 2026) - the
+                        // others run straight on. See FeedTheRecapAsync.
+                        _announcer.SpeakPrepared(
+                            recap.Audio,
+                            recap.Rest.Count == 0 ? AnnouncementService.SpeechTail.Long : AnnouncementService.SpeechTail.BackToBack,
+                            onAir: OnAirParts.Recap);
                     }
                     else
                     {
@@ -1987,7 +2140,13 @@ public sealed partial class RaceControlControl
 
                 StatusMessage?.Invoke(
                     $"{AppTime.LogStampNow()}  [commentary] Recap queued {(DateTime.UtcNow - teaserEnded).TotalSeconds:0.0}s after the teaser finished "
-                    + $"({teaserGap}s gap set, {(recap.Audio is null ? "rendered live" : "already rendered")}).");
+                    + $"({teaserGap}s gap set, {(recap.Audio is null ? "rendered live" : recap.Rest.Count == 0 ? "already rendered" : $"its first piece rendered, {Plural.Of(recap.Rest.Count, "more")} on the way")}).");
+
+                // The rest of it, each piece queued as it is made - long
+                // before the piece in front of it has been said. Awaited here,
+                // so nothing after the recap (a stinger, the honours) is
+                // queued between two of its pieces.
+                await FeedTheRecapAsync(recap.Rest, delivery, nextRace.Token);
 
                 // The recap show is on air for this race - see
                 // OnAirFollowsTheRecap.
