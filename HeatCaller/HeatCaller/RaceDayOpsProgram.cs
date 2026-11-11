@@ -65,7 +65,8 @@ public sealed partial class RaceDayService
 
     private List<RoundDefinition> TodaysRoundsForClass(string className) =>
         _host.Program.TodaysRounds()
-            .Where(r => string.Equals(r.ClassName, className, StringComparison.OrdinalIgnoreCase))
+            // A shared heat is one of each of its classes' rounds (11 Nov 2026, Phase 4.1).
+            .Where(r => MixedHeats.RunsClass(r, className))
             .ToList();
 
     private OpResult ProgramList(OpContext context)
@@ -212,6 +213,11 @@ public sealed partial class RaceDayService
                 heatsRun = e.HeatsRun,
                 heatsCounted = e.HeatsCounted,
                 from = e.SourceRoundLabel,
+
+                // Points qualifying (11 Nov 2026, Phase 5.1); null otherwise.
+                points = method == QualifyingMethod.RoundPoints ? e.Points : (int?)null,
+                pointsText = method == QualifyingMethod.RoundPoints ? e.PointsWords() : null,
+                rounds = method == QualifyingMethod.RoundPoints ? e.PointsDetail : null,
             }).ToList(),
         });
     }

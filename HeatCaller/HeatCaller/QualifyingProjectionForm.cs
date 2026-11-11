@@ -195,11 +195,17 @@ public sealed class QualifyingProjectionForm : Form
 
         _lblHeading.Text = AppTheme.Spaced($"{projection.ClassName.ToUpperInvariant()}  -  IF {projection.RoundLabel.ToUpperInvariant()} ENDED NOW");
 
-        var scoring = projection.Method == QualifyingMethod.BestConsecutiveLaps
-            ? $"Best {projection.ConsecutiveLapCount} consecutive laps"
-            : "Most laps, then lowest time";
+        var scoring = projection.Method switch
+        {
+            QualifyingMethod.BestConsecutiveLaps => $"Best {projection.ConsecutiveLapCount} consecutive laps",
+            // 11 Nov 2026, Phase 5.1: this heat is ranked with the rest of its round.
+            QualifyingMethod.RoundPoints => "Points per round (laps then time across the round's heats), fewest wins",
+            _ => "Most laps, then lowest time",
+        };
 
-        var counting = projection.CountBestRounds == 1
+        var counting = projection.Method == QualifyingMethod.RoundPoints
+            ? projection.CountBestRounds == 1 ? "best single round" : $"best {projection.CountBestRounds} rounds added together"
+            : projection.CountBestRounds == 1
             ? "single best heat"
             : $"best {projection.CountBestRounds} heats added together";
 
@@ -221,7 +227,9 @@ public sealed class QualifyingProjectionForm : Form
                 : row.Change < 0 ? $"▼{-row.Change}"
                 : string.Empty;
 
-            var score = projection.Method == QualifyingMethod.BestConsecutiveLaps
+            var score = projection.Method == QualifyingMethod.RoundPoints
+                ? row.PointsText
+                : projection.Method == QualifyingMethod.BestConsecutiveLaps
                 ? row.BestConsecutiveMs > 0 ? $"{row.BestConsecutiveMs / 1000.0:0.000}s" : "-"
                 : $"{Plural.Of(row.Laps, "lap")}  {row.ElapsedMs / 1000.0:0.00}s";
 

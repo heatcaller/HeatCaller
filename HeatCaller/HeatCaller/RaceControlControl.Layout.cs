@@ -471,6 +471,10 @@ public sealed partial class RaceControlControl
         _btnReseed.Text = "Redo Remaining Heats...";
         _btnReseed.Click += (_, _) => ReseedRemaining();
 
+        // Score by Hand, leftmost, beside the alarm it answers - hidden
+        // unless the decoder is down mid-race (11 Nov 2026, see HandScoring).
+        BuildHandScoreButton();
+
         // Auto start's Hold / Resume, left of Start Next (11 Nov 2026).
         _nextUpBar.AddButton(_btnAutoHold, HoldCaption, ResumeCaption);
         _nextUpBar.AddButton(_btnStartNext, ProgramCaptions.NextUpBarWidest);

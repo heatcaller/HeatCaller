@@ -810,7 +810,7 @@ public static partial class CommentaryReaders
             return Array.Empty<ChampionshipStanding>();
         }
 
-        var live = ChampionshipLive.Live(results, round);
+        var live = ChampionshipLive.Live(results, round, profiles);
 
         // The first championship with a table, as FromCandidates picks it -
         // so the rows and the proof are about the same season.

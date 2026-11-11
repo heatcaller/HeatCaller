@@ -41,7 +41,12 @@ public sealed class QualifyingProjector
         int HeatsCounted,
         bool InLiveHeat,
         int Change,
-        bool IsNew);
+        bool IsNew,
+        // WHY (11 Nov 2026, Phase 5.1): under points qualifying the score
+        // that orders the projection is points, so the row carries the
+        // calculator's words for them ("6 pts (best 2 of 3)"). Empty under
+        // the other rules.
+        string PointsText = "");
 
     /// <summary>The whole picture, or null when nothing qualifying-shaped is running.</summary>
     public sealed record Projection(
@@ -244,7 +249,8 @@ public sealed class QualifyingProjector
                 entry.HeatsCounted,
                 onTrack.ContainsKey(entry.Transponder),
                 change,
-                !known));
+                !known,
+                raceClass?.QualifyingMethod == QualifyingMethod.RoundPoints ? entry.PointsWords() : string.Empty));
 
             if (onTrack.TryGetValue(entry.Transponder, out var rowIdsOnTrack))
             {

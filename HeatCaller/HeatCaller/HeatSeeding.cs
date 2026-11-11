@@ -52,8 +52,11 @@ public static class HeatSeeding
                 continue;
             }
 
+            // A heat the class shared (11 Nov 2026, Phase 4.1, mixed-class
+            // heats) counts too, for its own drivers only - a Mod lap is no
+            // guide to a Stock heat.
             if (roundOf(session.RoundId) is not { } round
-                || !string.Equals(round.ClassName?.Trim(), className.Trim(), StringComparison.OrdinalIgnoreCase))
+                || !MixedHeats.RunsClass(round, className))
             {
                 continue;
             }
@@ -61,6 +64,11 @@ public static class HeatSeeding
             foreach (var result in session.Results)
             {
                 if (result.FastLapMs <= 0 || string.IsNullOrWhiteSpace(result.Transponder) || GhostService.IsGhost(result.Transponder))
+                {
+                    continue;
+                }
+
+                if (!MixedHeats.Counts(round, className, result.Transponder, result.ClassName))
                 {
                     continue;
                 }

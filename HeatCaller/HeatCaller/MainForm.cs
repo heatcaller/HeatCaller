@@ -1506,6 +1506,11 @@ public partial class MainForm : Form
         // matter how a practice session ends - including navigating away
         // without pressing Stop.
         _announcer.PracticeModeProvider = () => _race.IsPracticeMode;
+
+        // A shared heat's classes, so the flag names each class's winner
+        // (11 Nov 2026, Phase 4.1). No profile lookups: this can be read off
+        // the UI thread, and the heat records every driver's class itself.
+        _announcer.SharedHeatClasses = () => MixedHeats.ClassMapFor(_activeRound);
         _announcer.AnnounceGhostsProvider = () => _ghostStore.Current.AnnounceGhosts;
 
         // How chatty the club wants it, asked on demand for the same

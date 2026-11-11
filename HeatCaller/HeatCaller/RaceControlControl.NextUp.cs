@@ -400,7 +400,7 @@ public sealed partial class RaceControlControl
     private static string RoundTitle(RoundDefinition round) =>
         string.IsNullOrWhiteSpace(round.ClassName)
             ? round.RoundLabel
-            : $"{round.RoundLabel} ({round.ClassName})";
+            : $"{round.RoundLabel} ({MixedHeats.ClassLabel(round)})"; // both classes of a shared heat (Phase 4.1)
 
     /// <summary>
     /// The race these controls act on, for the phone remote (27 Sep 2026):
@@ -544,6 +544,15 @@ public sealed partial class RaceControlControl
             day += $"{(day.Length > 0 ? " · " : string.Empty)}{evolution.ClassName}: {char.ToLowerInvariant(words[0])}{words[1..]}";
         }
 
+        // Offline-first, said out loud (11 Nov 2026, Phase 6.3): "Website
+        // offline - racing carries on. Online pages will catch up", and the
+        // standby PC's copy line on a standby - see OfflineFirst. First, so
+        // a long day line never cuts it off; it is only there while true.
+        if (ResilienceLine?.Invoke() is { Length: > 0 } resilience)
+        {
+            day = day.Length > 0 ? $"{resilience} · {day}" : resilience;
+        }
+
         // --- Is anything owed before the next race can go out? ---
         //
         // The rule lives in ProgramNextStep, which puts bump-ups ahead of
@@ -602,6 +611,9 @@ public sealed partial class RaceControlControl
         // and Stage stands in when the talk buttons are off (see
         // RaceBar.ButtonsFor).
         _nextWaiting = _barStep is not null || next is not null;
+
+        // Score by Hand, while the decoder is down mid-race (11 Nov 2026).
+        UpdateHandScoreOffer();
     }
 
     /// <summary>

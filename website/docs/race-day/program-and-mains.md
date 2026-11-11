@@ -167,7 +167,7 @@ The command is grayed out when there's no later qualifying round still to run, a
 HeatCaller builds every planned qualifying round for every class that's racing and has drivers:
 
 - **Heats per round.** Each class's drivers are split into as few heats as the **Drivers per heat:** setting allows. For example, 13 drivers with 8 per heat makes 2 heats (7 and 6). Drivers are dealt into the heats in turn, so heats come out within one driver of each other.
-- **The first round, by recent pace.** With **First round seeded:** on **By recent pace** (the default), Q1 puts similar pace together: each driver's best lap in the class over the last 60 days, the fastest in the last heat, the next fastest in the one before it, and drivers with no lap yet (a rookie, say) in the first heat with the slowest. Later rounds are dealt in turn from that order. A class where nobody has a recent lap is dealt alphabetically, as with **Alphabetical**. **Random** shuffles the field, the same way for every rebuild of that race day.
+- **The first round, by recent pace.** With **First round seeded:** on **By recent pace** (the default), Q1 puts similar pace together: each driver's best lap in the class over the last 60 days, the fastest in the last heat, the next fastest in the one before it, and drivers with no lap yet (a rookie, say) in the first heat with the slowest. Later rounds are dealt in turn from that order. A class where nobody has a recent lap is dealt alphabetically, as with **Alphabetical**. **Random** shuffles the field, the same way for every rebuild of that race day. **Heads-up (HRQF, from practice)** builds every round its own way: see [Heads-up qualifying](#heads-up-qualifying).
 - **Drivers in more than one class** are dealt into each class's heats. See [A driver in more than one class](drivers-and-classes.md#a-driver-in-more-than-one-class).
 - **Rotation.** In each new round, the starting point in the driver list moves on by one heat's worth, so the same drivers aren't first out on a cold track every round. When the heats divide the class exactly (16 drivers in two heats of 8, say), the groups are mixed as well from Q2 on, so the same drivers don't share a heat every round.
 - **Names.** Heats are called "Heat 1", "Heat 2" and so on when there's one qualifying round, or "Q1 Heat 1", "Q2 Heat 3" and so on when there's more than one. On a club night they're races: "Race 1", "Race 2", or "Race 1 Heat 2" when a class is split into groups.
@@ -177,6 +177,16 @@ HeatCaller builds every planned qualifying round for every class that's racing a
 Rebuilding replaces any of today's qualifiers for those classes that haven't been run yet. Recorded rounds, and rounds from earlier race days, are never touched. A qualifying round that already has a recorded heat isn't built again, and its heats still to run stay as they are, so a rebuild after Q1 has started builds only the rounds after it; the summary marks those rounds "already run". If every planned round has already been run, the build is refused with **Qualifying already run**: to fit a driver into a heat still to run, use [Move Drivers Between Heats...](#balance-heats). A heat that's out on track can't be replaced: the build is refused until it has been recorded. You can undo the build with **Undo**.
 
 If some of the new heats have been run by the time you undo, they're kept with their results, and the rest of the build is undone. A heat that's on track right now is kept too. A **Some rounds were kept** box lists them.
+
+### Heads-up qualifying
+
+Set **First round seeded:** to **Heads-up (HRQF, from practice)** on **Setup** to run heads-up qualifying. It works best with three qualifying rounds and the class set to **Points per round** (see [Points per round](#points-per-round)).
+
+- **The seed.** Drivers are seeded on tonight's practice: each driver's best 3 laps in a row in a practice session today, either open practice or a practice round of that class. A driver with no practice run is seeded after those with one, by their best lap in the class over the last 60 days. Anyone left is seeded in roster order.
+- **Round 1.** Each heat takes every other seed. With two heats, seeds 1, 3, 5 and 7 race together and seeds 2, 4, 6 and 8 race together, so every driver is on track with the drivers just quicker and just slower than them. Each grid is in seed order, quickest on pole.
+- **Round 2.** The same heats, with each grid reversed.
+- **Round 3.** The field is reseeded on the points from rounds 1 and 2, then spread the same way. When you first build the program, rounds 1 and 2 haven't run yet, so round 3 is built from the practice seed. Click **Build tonight's heats** again once round 2 is recorded: rounds that have run stay as they are, and round 3 is rebuilt on points. The build's message reminds you.
+- **The mains** are seeded on the class's qualifying order, so set the class to **Points per round** to seed them on points. The build's message names any class that isn't.
 
 !!! note
     Building needs an open race day. With none open, the build opens the Set Up Tonight wizard instead. A closed race day refuses new rounds with **That day is closed**: reopen it on **Setup**, or start a new day for tonight.
@@ -237,6 +247,30 @@ For a driver who turns up after the heats are posted. Right-click the list and c
 
 They go into the smallest heat of each qualifying round still to run that they aren't already in (the first of two the same size), never a heat on track or already run. Nobody else moves, so the heat sheet on the wall and everybody's phones stay right; only the heats they joined change. **Undo** takes them out again. On a day that only counts checked-in drivers, check them in first. To re-deal every heat still to run instead, use **Redo Remaining Heats** on Race Control.
 
+### Mixed-class heats
+
+Two small classes can share a heat: 3 Stock and 4 Mod on track as one race. Each class is still scored on its own. The Stock drivers are ranked against each other and the Mod drivers against each other, with their own qualifying, mains, championship points and recap.
+
+There are two ways to make a shared heat:
+
+- **When you build.** On **Setup**, set **Share a heat under (drivers):** to the size below which a class shares, for example 5. When you build, a class whose round is a single heat with fewer drivers than that shares it with another small class, as long as the two fit in **Drivers per heat:** and nobody is in both. A third small class can join while there's room. 0 (the default) never shares. The build's summary and its message say when heats were shared.
+- **By hand.** Select two heats (Ctrl+click the second), right-click and choose **Run Together...**. The earlier heat keeps its place and name, and the other heat comes off the program. **Undo** puts both heats back as they were, until the shared heat has been run.
+
+**Run Together...** refuses two heats of the same class (use [Move Drivers Between Heats...](#balance-heats)), a driver in both heats, heats from different qualifying rounds (Q1 and Q2), a main, and a heat that has been run or is on track. It warns you if the heat would be bigger than **Drivers per heat:**.
+
+How a shared heat shows up:
+
+- **The program, Race Control, the Timetable and the Big Screen** name both classes, for example "Stock + Mod". Filtering the program to one class shows the shared heat under each of its classes.
+- **The heat sheet** names both classes on the heat and each driver's class in the car column.
+- **The announcer** says both classes at the grid call ("Stock and Mod"). At the flag, after the winner, it names each class's winner: "Sam wins Stock, Alex wins Mod." The recap is told each class's top three.
+- **Qualifying, the projection and the mains** count the shared heat as one heat of each class, with only that class's drivers in it. Under **Points per round**, a driver's place is their place in their class, and the field is their class's.
+- **Championships.** A championship for one class counts the shared race with only that class's drivers, and they score their place in their class: the first Stock driver home scores first place even if a Mod car beat them. A championship for every class scores each class separately.
+- **The event report** lists the shared race under each class, with that class's drivers and their places in it.
+
+Each driver's class in the heat is the class whose heat they came from (or the class they were added to as a late entry). A driver added by hand some other way counts in their main class if it's one of the heat's, otherwise their first other class that is. A driver who races both classes is in one of them for that heat.
+
+The [curfew planner](#tonights-program) can suggest it too: when the night is running late and two classes each run one small heat a round, the next-step card offers "run Stock and Mod together (Run Together on the program) to save ...".
+
 ## Start a round
 
 Click the next-step card's **Start** button, select a round and click **Start Selected**, or double-click the round. HeatCaller asks you to confirm ("Staging and the countdown begin immediately."), then switches to **Race Control**, calls the grid, and begins staging and the countdown straight away. See [Running a race](../race-control/running-a-race.md).
@@ -283,6 +317,27 @@ Ranking by the number of runs first means you can't top qualifying by missing a 
 
 A counted heat where the driver had no valid run is shown with **(no valid run)** after its name, so a total made of fewer runs than heats explains itself.
 
+### Points per round
+
+Points qualifying (the ROAR "Qual-Points" style) scores each qualifying **round**, not each heat. A round is all the heats with the same round number: "Q2 Heat 1" and "Q2 Heat 2" are both round 2.
+
+1. Every driver who ran one of the round's heats is ranked against everyone else in that round: most laps, then lowest time.
+2. Each driver scores their place: 1st scores 1 point, 2nd scores 2, and so on. Two drivers level on laps and time share the place and its points, and the next driver takes the place after them.
+3. A driver who didn't run the round, or was disqualified from it, scores the field plus one. The field is every driver with a qualifying result in the class. For example, in a class of 12, a missed round scores 13.
+4. **Heats that count:** sets how many **rounds** count. Each driver's best (lowest) rounds are added up and the rest are dropped. For example, set it to 2 for "best 2 of 3".
+5. Fewest points wins.
+
+Ties are broken in this order:
+
+1. The best finish in any single round. A driver who won a round beats one who never did.
+2. The best single heat, by most laps then lowest time.
+
+A missed round always scores worse than last place, so missing a round can never beat running it. With best 2 of 3, it is the round that's dropped.
+
+Penalties count, because they're already in the laps and time each round is ranked on. A heat added by hand without a round number ("Extra heat") beside numbered rounds is scored as a round of its own. On a one-round night, all the heats are one round. A driver on their alternate transponder is scored once, under their main transponder.
+
+During a heat, the [qualifying projection](#qualifying-projection) ranks the running heat with the rest of its round. The announcer's provisional pole call follows most laps then time in the heat on track.
+
 ### Qualifying standings
 
 Click **Standings** under the program (or **Qualifying Standings** on the next-step card once the program is complete) to see the class's current qualifying order.
@@ -301,6 +356,10 @@ Click **Standings** under the program (or **Qualifying Standings** on the next-s
 | **Heats** | Heats run, or counted/run (for example "2/3") when some were dropped. |
 | **Counted Heat** | Which heat (and when) the figures came from, or the counted heats joined with "+". |
 | **Dropped** | *Only when more than one heat counts.* The heats that didn't count, and what they scored. |
+| **Points** | *Points classes only.* The points total and how it was counted, for example "6 pts (best 2 of 3)". |
+| **Each Round** | *Points classes only.* Every round's place and points, for example "Q1 1st (1 pt), Q2 DNS (13 pts), Q3 2nd (2 pts)". |
+
+For a points class, **Best Laps** is headed **Best Heat** and shows the driver's best single heat (the second tie-breaker), and **Counted Heat** is headed **Counted Rounds**.
 
 A driver who qualifies on their alternate transponder is ranked once, under their main transponder. If both of their cars ran in the same heat, the better result counts.
 
@@ -322,7 +381,7 @@ If no qualifier is running, the window says so.
 When a class has finished qualifying, the next-step card offers **Build the finals from qualifying** (it's also **Build the Finals from Qualifying...** on the round menu, available at any time: right-click the list).
 
 1. Click **Build the finals from qualifying**.
-2. Check the preview: every driver under the main they go in, in order, with the qualifying result that put them there (for example "14 laps, 5:02.3 (Q2 Heat 1)", or "best 3 in a row 36.912" for best-consecutive qualifying), the places that bump up marked **[bump-up place]**, and whether bump-ups are on. While the class's results are still provisional, it starts by saying so (see [The protest window](#the-protest-window)).
+2. Check the preview: every driver under the main they go in, in order, with the qualifying result that put them there (for example "14 laps, 5:02.3 (Q2 Heat 1)", "best 3 in a row 36.912" for best-consecutive qualifying, or "6 pts (best 2 of 3)" for points qualifying), the places that bump up marked **[bump-up place]**, and whether bump-ups are on. While the class's results are still provisional, it starts by saying so (see [The protest window](#the-protest-window)).
 3. Click **Yes**.
 
 How the mains are built:
@@ -331,6 +390,23 @@ How the mains are built:
 - If the numbers don't divide evenly, the **last** (slowest) main is the short one, never the A-Main.
 - The mains are added to the program **lowest first** — C, then B, then A — so a lower main has run before the one above it and its top finishers can bump up.
 - Each main except the lowest is set to receive the class's **Bump up:** number of drivers from the main below.
+- A class set to a double or triple A-main gets its A-Main as two or three legs. See [Double and triple A-mains](#double-and-triple-a-mains).
+
+### Double and triple A-mains
+
+Set **A-main:** in the class settings to run the A-Main as more than one race, so one bad start doesn't decide the night. Each leg is added to the program as its own main, **A-Main Leg 1**, **A-Main Leg 2** and so on, after the lower mains. Every leg starts with the same seeded grid, and the announcer, Big Screen and results name the leg by its label.
+
+Each leg is scored like a points round:
+
+1. 1st scores 1 point, 2nd scores 2, and so on.
+2. A driver who didn't start a leg, or was disqualified from it, scores the field plus one.
+3. The best legs count: best 1 of 2 or best 2 of 3, or every leg if you chose that. Fewest points wins.
+
+Ties are broken by the best finish in any single leg, then by the better finish in the last leg run.
+
+The overall result is in the event report, under **A-Main overall**, with each driver's place and points in every leg. Each leg's own result is in **Results** like any race.
+
+Each leg takes bump-ups from the B-Main. The next-step card offers them one leg at a time: apply them to every leg before it runs.
 
 Seeding only looks at the current race day's mains. If the class already has mains today that haven't run, seeding replaces them. If any of today's mains have already been run, seeding stops with **Mains already run** — take the ones you don't want off the program first, so recorded results aren't orphaned. Mains from earlier race days are left alone and never block seeding. A main that's out on track can't be replaced either. Seeding can be undone. As with the qualifying build, any new mains that have been run by the time you undo are kept, along with a main that's on track right now, and a **Some rounds were kept** box lists them.
 

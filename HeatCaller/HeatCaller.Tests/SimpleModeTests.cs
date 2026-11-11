@@ -453,7 +453,7 @@ public sealed class SimpleModeTests : IDisposable
         "MainForm.ConnectionPage.cs|Timing decoder",
         "BackupRestoreControl.cs|Manual backup and restore", "BackupRestoreControl.cs|Automatic backups",
         "BackupRestoreControl.cs|Backup password", "BackupRestoreControl.cs|Settings mode", "BackupRestoreControl.cs|Getting help",
-        "BackupRestoreControl.cs|Existing backups",
+        "BackupRestoreControl.cs|Existing backups", "BackupRestoreControl.Standby.cs|Standby PC",
 
         // Themes, Sponsors, Local Screens, Club Website.
         "LooksControl.cs|Looks", "LooksControl.cs|Club logo", "LooksControl.cs|Appearance",

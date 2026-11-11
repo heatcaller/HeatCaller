@@ -393,6 +393,9 @@ internal static class LayoutAudit
         // A CSV file's columns matched to a driver's fields, over its first rows, before an import (CsvMappingForm, titled "Import drivers - <file>").
         "Import drivers",
 
+        // What an entry import will do, row by row, with the check-in and replace ticks under it - from Who's Racing's Import Entries (EntryImportForm, 11 Nov 2026).
+        "Import entries",
+
         // The big editors (30 Sep).
 
         // A club's own look made from a copy of another: its fields and eleven colours beside the preview and the readability warnings (LookEditorForm).

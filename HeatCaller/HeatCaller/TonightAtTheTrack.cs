@@ -156,8 +156,30 @@ public static class TonightAtTheTrack
             .Select(s => (Session: s, Round: string.IsNullOrEmpty(s.RoundId) ? null : roundOf(s.RoundId)))
             .Where(x => x.Round is not null && !string.IsNullOrWhiteSpace(x.Round.ClassName))
             .OrderBy(x => x.Session.StartedAtUtc)
-            .Select(x => (x.Session, x.Round!.ClassName.Trim()))
+            .SelectMany(x => ForEachClass(x.Session, x.Round!))
             .ToList();
+    }
+
+    /// <summary>
+    /// A race under its class - or, for a heat two classes shared (11 Nov
+    /// 2026, Phase 4.1), once under each, holding only that class's drivers
+    /// (MixedHeats.ClassResults, a copy). Tonight's pace, fastest laps and
+    /// track evolution are like with like, and a Mod lap is not a Stock one.
+    /// </summary>
+    private static IEnumerable<(SessionRecord Session, string ClassName)> ForEachClass(SessionRecord session, RoundDefinition round)
+    {
+        if (!MixedHeats.IsShared(round))
+        {
+            yield return (session, round.ClassName.Trim());
+            yield break;
+        }
+
+        foreach (var cls in MixedHeats.ClassesOf(round))
+        {
+            var copy = System.Text.Json.JsonSerializer.Deserialize<SessionRecord>(System.Text.Json.JsonSerializer.Serialize(session))!;
+            copy.Results = MixedHeats.ClassResults(session.Results, round, cls).ToList();
+            yield return (copy, cls);
+        }
     }
 
     /// <summary>Each class's change since its first race tonight - for classes with drivers who have raced twice or more.</summary>

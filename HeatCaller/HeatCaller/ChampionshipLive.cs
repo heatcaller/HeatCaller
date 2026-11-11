@@ -121,7 +121,7 @@ public static class ChampionshipLive
             return null;
         }
 
-        var live = Live(results, round);
+        var live = Live(results, round, profiles);
 
         foreach (var (season, counted) in candidates)
         {
@@ -135,14 +135,25 @@ public static class ChampionshipLive
     }
 
     /// <summary>The race on track as the result it would be filed as.</summary>
-    internal static SessionRecord Live(IReadOnlyList<SessionResultEntry> results, RoundDefinition? round) => new()
+    internal static SessionRecord Live(IReadOnlyList<SessionResultEntry> results, RoundDefinition? round, ProfileStore? profiles = null)
     {
-        Id = LiveSessionId,
-        SessionType = RaceSessionType.Race,
-        RoundId = round?.Id,
-        StartedAtUtc = DateTime.UtcNow,
-        Results = results.ToList(),
-    };
+        var live = new SessionRecord
+        {
+            Id = LiveSessionId,
+            SessionType = RaceSessionType.Race,
+            RoundId = round?.Id,
+            StartedAtUtc = DateTime.UtcNow,
+            Results = results.ToList(),
+        };
+
+        // WHY (11 Nov 2026, Phase 4.1): a shared heat's cars are stamped with
+        // their class as the saved race will be (RaceFilingService), so "if
+        // it ended now" scores each class apart too. Nothing for a one-class
+        // heat.
+        MixedHeats.StampClasses(live.Results, round, profiles);
+
+        return live;
+    }
 
     /// <summary>The table with and without <paramref name="live"/>, read off as the rows to show - apart for testing.</summary>
     internal static IfItEndedNow? Table(Season season, IReadOnlyList<SessionRecord> counted, SessionRecord live, ProfileStore? profiles)

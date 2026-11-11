@@ -13,6 +13,31 @@ The relay is a small server your club (or whoever looks after your IT) hosts on 
 - **One token per club.** The relay admin gives your club a club id and a publish token. The token only works for your club, so it can't publish to, or delete, anyone else's pages.
 - **The relay can also speak.** If the person who runs it has set it up for your club, the same address and token give the announcer the [HeatCaller voice](../announcer/voice.md#the-heatcaller-voice) — a natural announcer voice with no ElevenLabs account, key or bill of your own. There's nothing extra to enter and nothing extra to publish. See [The relay also speaks](setup.md#the-relay-also-speaks).
 
+## When the internet drops
+
+**The race runs with no internet.** HeatCaller does all of its work on the timing laptop, so the online relay is a copy of the night and never part of running it. Everything below keeps working with the venue's internet down, or with no internet at the track at all:
+
+- timing, the decoder and Race Control
+- the night plan, **Start Next** and auto start
+- check-in at the desk, and the Wi-Fi check-in and remote pages on phones at the track
+- results, heats and mains, the Big Screen and printing
+- the announcer, with the free Kokoro voice and any lines already saved on the laptop
+
+When the relay can't be reached, the **Next Up** bar on Race Control says so in one line:
+
+> Website offline - racing carries on. Online pages will catch up (3 updates waiting)
+
+The **Website** tile on Mission Control says the same. Carry on racing; there's nothing to fix before the next heat. The line goes away by itself once the relay is back.
+
+What waits for the internet, and catches up when it's back:
+
+- **Results.** Finished results wait in a queue on the laptop, even across a restart, and go up in order when the connection returns. A live frame that couldn't be sent is replaced by a newer one.
+- **Things that come in through the relay.** Online check-in, driver sign-ups, requests and notes sent from drivers' phones over the internet reach the laptop once it's back online. Phones on the track's own Wi-Fi aren't affected.
+- **Emails.** Night emails and racer PIN emails are sent once there's internet. The closing list on Next Steps reminds you.
+- **The HeatCaller and ElevenLabs voices**, and AI commentary from the relay. While offline, new lines go to the Kokoro voice and the built-in commentary model.
+
+If the laptop itself is the worry rather than the internet, see [Standby PC](../admin/standby-pc.md).
+
 ## Your club's pages
 
 Your club's address is the relay address followed by `/c/` and your club id, for example `https://your-relay.fly.dev/c/your-club`. That address is the one to hand out. It's the home page, and every page has the same tabs, so nobody hits a dead end. See [Getting around](#getting-around). The club name in the heading of every page is the name the relay admin gave your club.
@@ -153,6 +178,7 @@ The **Live** page can read out the laps of the driver you follow, in your phone'
 - **Places gained** says "Up to P2" or "Down to P4" when your place has changed since the last lap read out, and the plain place when it hasn't. **Against your best** says how far a lap was off your best: "9.50, point two off your best". It isn't said on a best lap, or for a lap more than two seconds off. Both are off until you tick them.
 - **Laps or time left** ends each call with what's left of the race, as the big screen counts it from the leader: "five laps to go", "last lap", "four minutes left", "thirty seconds left". When a timed race's clock reaches zero, it says "last lap". It says nothing for more than 50 laps or an hour, or when there's no countdown. It's off until you tick it.
 - Two more parts are off until you tick them. **Gap behind** is the gap to the car behind you: "1.2 seconds clear". **Gap to P1** is how far you are behind the leader: "two and a half seconds off the lead". The gap to P1 is only said from P3 back, since in P2 it's the same as the gap ahead. They come after the gap ahead: "Lap 7, 9.42, P3, four tenths back, a second clear, two and a half seconds off the lead". The gap to P1 needs HeatCaller from 3 November 2026 on the race PC, or a **Gap to P1** column on the club's board.
+- **Leader behind you** (since 11 November) warns a car that's about to be lapped: "Leader behind" comes first in that lap's call, "Leader behind, Lap 9, 10.12, P6". The race PC works it out from every car's laps: the leader is close behind on the track (within about two and a half seconds, or within a lap of how much quicker it is) and catching up. It's said once each time the leader comes up to lap you, never twice for the same lapping. It's only ever said with the lap it belongs to, so a call that would come late is dropped rather than said after the leader has gone by. It's on until you untick it, even on a phone that saved its choice before the box was there. It needs HeatCaller from 11 November 2026 on the race PC and the relay redeployed.
 - A lap is said a second or two after the car crosses the line. While it's on, the page reads the board every second.
 - It stays quiet for laps already run when you turn it on or follow someone new, and starts again from the next one. When a new race starts, or the driver comes onto the board, it reads out their newest lap straight away, even if the board already had it the first time the phone saw it.
 - Tap it again to turn it off and the phone says "Lap times off".
@@ -171,6 +197,7 @@ It reads only what the live board already has: the laps, and the gap to the car 
 When the relay has the lap voice's clips, the laps are read out in one ElevenLabs voice, **Daniel** (a steady broadcaster), the same for every club whatever announcer a club picked in its Cast tab. The phone joins short recorded clips together: "Lap seven, nine forty-two, best lap, P two, four tenths back". Gaps are said the way the announcer calls a gap during a lap call: "half a second back", "a second and a half back", "a lap back". The time is said in full, the way the announcer says it and the screen shows it, with nothing rounded: 6.935 is "six nine thirty-five". The clips cover lap times from 3.000 to 19.999 seconds, laps 1 to 200, places 1 to 30, gaps up to 30 seconds or 9 laps, and up to 2 seconds under or off a target lap.
 
 - If a lap needs a clip there isn't one for (a 2.40 lap, P31), or a clip doesn't arrive within a second, the phone's own voice says the whole line instead. You never hear half of each.
+- "Leader behind" is a clip of its own, added on 11 November. Until the relay's clips are made again to include it, a call with "Leader behind" in it is said in the phone's voice.
 - If you leave the page and come back (another app, the home screen, a locked screen), the voice starts again by itself. You don't need to tap, and you won't hear the phone's voice in its place.
 - The clips are recorded once, so a race night costs nothing, however many drivers listen. Nothing about any driver is sent to ElevenLabs.
 - A relay without the clips reads every lap in the phone's own voice, as before.
@@ -393,6 +420,12 @@ The sections need the relay redeployed after 22 Oct 2026 (see [Updating the rela
 **Your races** (or **Your race**) lists each race they ran tonight, in order. The open race shows:
 
 - How it went, for example "2nd of 8 · started 4th · 12 laps · best 9.214", or "Disqualified" or "Did not finish". Ghost cars aren't counted in "of 8".
+- Under that, in green, up to three lines of their own about the race, when there's something good to say (since 11 November). Most races have none. Each is worked out from the results, so a driver can check it:
+    - "Held off Sam for 4 laps": the car that finished right behind them was within a second at the line on each of the last laps, to the flag, for at least 3 laps. The other driver is named by first name, or by full name when two in the race share it. Never a ghost car.
+    - "Best lap 0.31s quicker than your Heat 1": their best lap beat their best in their first race tonight in the same class, on the same track, by at least 0.05 seconds.
+    - "Best Stock finish this year", or "First Stock win this year": a better finish than every one of their earlier races in that class this calendar year, with at least 3 earlier races to beat.
+
+    Nothing is said for a slower lap or a lost place, or for a demo or practice run. The same lines go in their night email under "RACE BY RACE". They need HeatCaller from 11 November 2026 on the race PC and the relay redeployed.
 - Up to four tabs, the first three as LiveRC's driver window has them:
     - **Lap stats**, first: **Fast lap**, **Avg. lap**, **Top 3 consec.** and **Consistency**, then, in the same grid (since 6 November; they used to be behind **More stats**), **Avg. top 5**, **Avg. top 10** and **Avg. top 15** (the average of their quickest 5, 10 or 15 laps), **Top 2 consec.** (their quickest 2 laps in a row, added up) and **Std. deviation** (how far their laps strayed from their average). **Consistency** is 100% when every lap is the same. A figure needs enough laps: **Avg. top 10** needs 10.
     - **Lap times (12)**: every lap with its time, **Pace** in a timed race, and **Pos**, where they were running after that lap, in a race. Their best lap is highlighted. On a narrow phone the table scrolls sideways in its own box.

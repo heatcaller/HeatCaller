@@ -288,18 +288,66 @@ public sealed partial class AnnouncementService
                 }
             });
 
+            // A shared heat (11 Nov 2026, Phase 4.1, mixed-class heats):
+            // each class's winner, said straight after the overall winner -
+            // see MixedHeats.ClassWinnersLine. Null, and nothing extra, for
+            // every one-class race.
+            QueuedVoiceItem? classWinners = null;
+
+            if (SharedHeatClasses?.Invoke() is { } classOf
+                && MixedHeats.ClassWinnersLine(
+                    _standings.Values
+                        .Where(s => !GhostService.IsGhost(s.Transponder))
+                        .OrderByDescending(s => s.Laps)
+                        .ThenBy(s => s.ElapsedMs)
+                        .Select(s => s.Transponder)
+                        .ToList(),
+                    classOf,
+                    t => _standings.TryGetValue(t, out var s) ? SpokenNameFor(s) : DisplayNameFor(t)) is { } line)
+            {
+                classWinners = new QueuedVoiceItem(AnnouncementEventType.RaceCompleted, winner, OnAir: "Class winners", ShownText: line, Work: async () =>
+                {
+                    try
+                    {
+                        await SynthesizeAndPlayAsync(line, "[voice] Class winners", speedOverride: speed);
+                    }
+                    catch (Exception ex)
+                    {
+                        StatusMessage?.Invoke($"[voice] Playback failed: {ex.Message}");
+                    }
+                });
+            }
+
             lock (_voiceQueueLock)
             {
                 _voiceQueue.Insert(0, queued);
+
+                if (classWinners is not null)
+                {
+                    _voiceQueue.Insert(1, classWinners);
+                }
             }
 
             _voiceQueueSignal.Release();
+
+            if (classWinners is not null)
+            {
+                _voiceQueueSignal.Release();
+            }
         }
         catch (Exception ex)
         {
             StatusMessage?.Invoke($"[voice] The winner's call could not be queued ({ex.Message}).");
         }
     }
+
+    /// <summary>
+    /// Which class each car of the race on track runs in, when it is a shared
+    /// heat (11 Nov 2026, Phase 4.1) - null for a one-class race, which is
+    /// called exactly as before. Set by MainForm from the round on track
+    /// (MixedHeats.ClassMapFor).
+    /// </summary>
+    public Func<IReadOnlyDictionary<string, string>?>? SharedHeatClasses { get; set; }
 
     /// <summary>
     /// At the flag, the finish call with the winner's name in it, when the

@@ -52,6 +52,9 @@ public sealed class ResultEditForm : Form
 
     private bool _refreshing;
 
+    /// <summary>Each driver's laps as raced, by transponder - what the Laps column is worked out from.</summary>
+    private readonly Dictionary<string, int> _racedLaps = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// What to apply, once this form returns DialogResult.OK - one entry per
     /// driver in the result, in total (not as a delta on the last
@@ -109,6 +112,11 @@ public sealed class ResultEditForm : Form
             new DataGridViewTextBoxColumn { Name = "pos", HeaderText = "Pos", FillWeight = 26, ReadOnly = true },
             new DataGridViewTextBoxColumn { Name = "driver", HeaderText = "Driver", FillWeight = 110, ReadOnly = true },
             new DataGridViewTextBoxColumn { Name = "raced", HeaderText = "Raced", FillWeight = 60, ReadOnly = true },
+
+            // The result's lap count, to type straight in (11 Nov 2026,
+            // decoder-down mode): read off a hand-scoring sheet, down the
+            // column with Enter, and Added Laps follows - see SyncLaps.
+            new DataGridViewTextBoxColumn { Name = "laps", HeaderText = "Laps", FillWeight = 45 },
             new DataGridViewTextBoxColumn { Name = "addedLaps", HeaderText = "Added Laps", FillWeight = 55 },
             new DataGridViewTextBoxColumn { Name = "timePenalty", HeaderText = "Time Penalty (s)", FillWeight = 65 },
             new DataGridViewTextBoxColumn { Name = "lapPenalty", HeaderText = "Lap Penalty", FillWeight = 55 });
@@ -133,14 +141,18 @@ public sealed class ResultEditForm : Form
                 entry.Position,
                 string.IsNullOrWhiteSpace(entry.DriverName) ? entry.Transponder : entry.DriverName,
                 Plural.Of(racedLaps, "lap"),
+                HandScoring.TotalLaps(racedLaps, now.AddedLaps, now.LapPenalty),
                 now.AddedLaps,
                 (now.TimePenaltyMs / 1000.0).ToString("0.###"),
                 now.LapPenalty,
                 OutcomeCaption(now.Outcome));
 
             _editGrid.Rows[rowIndex].Tag = entry.Transponder;
+            _racedLaps[entry.Transponder] = racedLaps;
         }
 
+        // Before the preview, so it reads the figures the other column now has.
+        _editGrid.CellEndEdit += (_, e) => SyncLaps(e.RowIndex, e.ColumnIndex);
         _editGrid.CellEndEdit += (_, _) => RefreshPreview();
 
         // The combo box commit below changes the value without ending the
@@ -220,6 +232,46 @@ public sealed class ResultEditForm : Form
         CancelButton = btnCancel;
 
         return page;
+    }
+
+    /// <summary>
+    /// Keeps Laps and Added Laps saying the same thing (11 Nov 2026). A lap
+    /// count typed into Laps sets Added Laps to make the result show it
+    /// (HandScoring.AddedLapsFor, the lap penalty still standing on top);
+    /// a change to Added Laps or Lap Penalty puts the new count in Laps. So
+    /// a result scored by hand can be typed in one go, top to bottom, and
+    /// the laps added show as counted by hand ("12*") in the result, as any
+    /// added lap does. Something that isn't a whole number is left alone -
+    /// ReadAdjustments says what is wrong with it.
+    /// </summary>
+    private void SyncLaps(int rowIndex, int columnIndex)
+    {
+        if (rowIndex < 0 || columnIndex < 0 || _editGrid.Rows[rowIndex].Tag is not string transponder
+            || !_racedLaps.TryGetValue(transponder, out var raced))
+        {
+            return;
+        }
+
+        var row = _editGrid.Rows[rowIndex];
+        var column = _editGrid.Columns[columnIndex].Name;
+
+        if (!int.TryParse(Convert.ToString(row.Cells["lapPenalty"].Value), out var lapPenalty))
+        {
+            return;
+        }
+
+        if (column == "laps")
+        {
+            if (HandScoring.ParseLapCount(Convert.ToString(row.Cells["laps"].Value)) is { } wanted)
+            {
+                row.Cells["addedLaps"].Value = HandScoring.AddedLapsFor(raced, lapPenalty, wanted);
+            }
+        }
+        else if (column is "addedLaps" or "lapPenalty"
+                 && int.TryParse(Convert.ToString(row.Cells["addedLaps"].Value), out var added))
+        {
+            row.Cells["laps"].Value = HandScoring.TotalLaps(raced, added, lapPenalty);
+        }
     }
 
     /// <summary>"Finished", "DNF" or "DQ" - matching the Outcome column's own items exactly, so a cell's text can be read straight back as one of them.</summary>

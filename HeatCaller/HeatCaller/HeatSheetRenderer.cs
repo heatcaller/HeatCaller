@@ -246,7 +246,13 @@ public static class HeatSheetRenderer
             // after it has been folded to the middle.
             g.FillRectangle(accentBrush, Margin, y + 4, 8, 20);
 
-            g.DrawString($"{round.RoundLabel}{trackPart}", roundFont, black, Margin + 18, y);
+            // A shared heat (11 Nov 2026, Phase 4.1) says both classes on
+            // its title, and each driver's class in the car column, so the
+            // paper shows who is scored against whom.
+            var shared = MixedHeats.IsShared(round);
+            var classPart = shared ? $"   ({MixedHeats.ClassLabel(round)})" : string.Empty;
+
+            g.DrawString($"{round.RoundLabel}{classPart}{trackPart}", roundFont, black, Margin + 18, y);
             y += 28;
 
             for (var i = 0; i < headers.Length; i++)
@@ -263,6 +269,11 @@ public static class HeatSheetRenderer
                 var profile = profiles.Get(transponder);
                 var name = !string.IsNullOrWhiteSpace(profile?.DriverName) ? profile!.DriverName : "(unnamed)";
                 var car = string.IsNullOrWhiteSpace(profile?.CarModel) ? "-" : profile!.CarModel;
+
+                if (shared)
+                {
+                    car = $"{MixedHeats.ClassOfDriver(round, transponder, profiles)} - {car}";
+                }
 
                 g.DrawString(slot.ToString(), bodyFont, black, colX[0], y);
                 g.DrawString(Truncate(name, 26), bodyFont, black, colX[1], y);

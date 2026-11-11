@@ -50,6 +50,23 @@ public sealed class RaceClassEditForm : Form
 
     private readonly NumericUpDown _numMainSize = new();
     private readonly NumericUpDown _numBumpUp = new();
+
+    /// <summary>
+    /// Single, double or triple A-main and how many legs count (11 Nov 2026,
+    /// Phase 5.3) - one picker for the two settings, because only five of
+    /// their combinations make sense.
+    /// </summary>
+    private readonly ComboBox _cmbAMainLegs = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+
+    private static readonly (int Legs, int Counted, string Words)[] LegChoices =
+    {
+        (1, 0, "Single A-main"),
+        (2, 1, "Double A-main - best 1 of 2 legs"),
+        (2, 2, "Double A-main - both legs count"),
+        (3, 2, "Triple A-main - best 2 of 3 legs"),
+        (3, 3, "Triple A-main - all 3 legs count"),
+    };
+
     private readonly NumericUpDown _numCountBest = new();
     private readonly CheckBox _chkJumpStart = new ThemedCheckBox();
     private readonly NumericUpDown _numJumpPenalty = new();
@@ -123,6 +140,8 @@ public sealed class RaceClassEditForm : Form
         {
             new MethodItem(QualifyingMethod.TotalLaps, "Most laps, then lowest time"),
             new MethodItem(QualifyingMethod.BestConsecutiveLaps, "Best consecutive laps (fastest clean run)"),
+            // 11 Nov 2026, Phase 5.1: the ROAR Qual-Points style.
+            new MethodItem(QualifyingMethod.RoundPoints, "Points per round (1st = 1 point, fewest wins)"),
         });
         SelectMethod(Result.QualifyingMethod);
 
@@ -137,7 +156,9 @@ public sealed class RaceClassEditForm : Form
         var lblQualHint = new Label
         {
             Text = "Best consecutive scores the quickest unbroken run of N laps. \"Heats that count\" totals each driver's "
-                 + "best that many heats and drops the rest - 2 for \"best 2 of 3\", 1 for their single best heat.",
+                 + "best that many heats and drops the rest - 2 for \"best 2 of 3\", 1 for their single best heat. "
+                 + "Points per round ranks each round's heats together (1st = 1 point, a missed round = field + 1); "
+                 + "there it counts each driver's best that many ROUNDS, and fewest points wins.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
@@ -154,9 +175,18 @@ public sealed class RaceClassEditForm : Form
         _numBumpUp.Maximum = 10;
         _numBumpUp.Value = Math.Clamp(Result.BumpUpCount, 0, 10);
 
+        foreach (var choice in LegChoices)
+        {
+            _cmbAMainLegs.Items.Add(choice.Words);
+        }
+
+        SelectLegs();
+
         var lblMainsHint = new Label
         {
-            Text = "Qualifying is split into A/B/C mains of this size. Bump up is how many finishers move up a tier - set 0 to disable.",
+            Text = "Qualifying is split into A/B/C mains of this size. Bump up is how many finishers move up a tier - set 0 to disable. "
+                 + "A double or triple A-main runs the A-main as legs scored on points (1st = 1), fewest wins; "
+                 + "ties go to the best single-leg finish, then the last leg.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
@@ -289,6 +319,7 @@ public sealed class RaceClassEditForm : Form
         var mains = new FieldGrid();
         mains.AddRow("Drivers per main:", _numMainSize);
         mains.AddRow("Bump up:", _numBumpUp);
+        mains.AddRow("A-main:", _cmbAMainLegs);
         mains.AddWide(lblMainsHint);
 
         // The two ticks run from the left-hand edge, across both columns:
@@ -381,6 +412,9 @@ public sealed class RaceClassEditForm : Form
         (Font Font, int Count, int Width)? qualifyingWidth = null;
         _cmbQualifying.Width = Math.Max(UiLayout.AtTextSize(UiLayout.FieldWidth), Pieces.PickerWidth(_cmbQualifying, ref qualifyingWidth));
 
+        (Font Font, int Count, int Width)? legsWidth = null;
+        _cmbAMainLegs.Width = Math.Max(UiLayout.AtTextSize(UiLayout.FieldWidth), Pieces.PickerWidth(_cmbAMainLegs, ref legsWidth));
+
         var numbers = new[] { _numConsecutive, _numCountBest, _numMainSize, _numBumpUp, _numJumpPenalty };
 
         var width = numbers.Max(number =>
@@ -396,6 +430,16 @@ public sealed class RaceClassEditForm : Form
         {
             number.Width = width;
         }
+    }
+
+    /// <summary>Shows the class's A-main legs on the picker - the closest choice for a hand-edited file.</summary>
+    private void SelectLegs()
+    {
+        var legs = Math.Clamp(Result.AMainLegs, 1, AMainLegs.MaxLegs);
+        var counted = AMainLegs.LegsCounting(legs, Result.AMainLegsCounted);
+        var index = Array.FindIndex(LegChoices, c => c.Legs == legs && (legs == 1 || c.Counted == counted));
+
+        _cmbAMainLegs.SelectedIndex = index >= 0 ? index : Array.FindIndex(LegChoices, c => c.Legs == legs);
     }
 
     private QualifyingMethod CurrentMethod() =>
@@ -480,6 +524,7 @@ public sealed class RaceClassEditForm : Form
         _numCountBest.Value = Math.Clamp(Result.CountBestRounds, _numCountBest.Minimum, _numCountBest.Maximum);
         _numMainSize.Value = Math.Clamp(Result.MainSize, _numMainSize.Minimum, _numMainSize.Maximum);
         _numBumpUp.Value = Math.Clamp(Result.BumpUpCount, _numBumpUp.Minimum, _numBumpUp.Maximum);
+        SelectLegs();
 
         UpdateConsecutiveEnabled();
     }
@@ -617,6 +662,10 @@ public sealed class RaceClassEditForm : Form
         Result.JumpStartCostsTheLap = _chkJumpCostsLap.Checked;
         Result.WarnOnUninspected = _chkWarnUninspected.Checked;
         Result.BumpUpCount = (int)_numBumpUp.Value;
+
+        var legs = LegChoices[Math.Clamp(_cmbAMainLegs.SelectedIndex, 0, LegChoices.Length - 1)];
+        Result.AMainLegs = legs.Legs;
+        Result.AMainLegsCounted = legs.Counted;
         Result.ColorArgb = _colourArgb;
         DialogResult = DialogResult.OK;
         Close();

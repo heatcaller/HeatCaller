@@ -165,6 +165,13 @@ export function lapClips(): LapClip[] {
     { name: "best", text: "best lap" },
     // After a margin clip ("point two"), for a lap slower than their best (3 Nov 2026).
     { name: "pb-off", text: "off your best" },
+    // 11 Nov 2026 (build plan 7.3): the race leader is about to lap them -
+    // said once per lapping, first in that lap's call. Plain, like every
+    // clip (no audio tag): it is a heads-up, not an alarm. A relay whose
+    // clips were made before this has no such clip, and the whole call is
+    // then the phone's voice until lapvoicerender makes it (it makes only
+    // what is missing - this one clip).
+    { name: "lead-behind", text: "Leader behind" },
   ];
 
   for (let cs = LAP_TIME_MIN_CS; cs <= LAP_TIME_MAX_CS; cs++) {

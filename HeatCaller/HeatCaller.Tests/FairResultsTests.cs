@@ -170,7 +170,10 @@ public sealed class FairResultsTests
     {
         var source = Source("RaceProgramControl.cs");
 
-        Assert.Contains("var heats = round == 0 && seeding.FirstRoundHeats is { } seeded", source);
+        // 11 Nov 2026, Phase 5.2: heads-up builds its own heats first, and
+        // every other night falls through to the seeding as before.
+        Assert.Contains("var heats = HeadsUpHeatsFor(", source);
+        Assert.Contains("?? (round == 0 && seeding.FirstRoundHeats is { } seeded", source);
         Assert.Contains("var summary = MainsPreview.Text(plan, entries,", source);
         Assert.Contains("ProtestWindow.Words(finalAt!.Value)", source);
         Assert.Contains("new ToolStripMenuItem(\"Add a Late Entry...\"", source);

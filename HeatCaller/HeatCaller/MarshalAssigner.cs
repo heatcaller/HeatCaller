@@ -234,7 +234,7 @@ public static class MarshalAssigner
     public static string TitleOf(RoundDefinition round) =>
         string.IsNullOrWhiteSpace(round.ClassName)
             ? round.RoundLabel
-            : $"{round.RoundLabel} ({round.ClassName})";
+            : $"{round.RoundLabel} ({MixedHeats.ClassLabel(round)})"; // both classes of a shared heat (Phase 4.1)
 
     private static List<Post> EmptyPosts(TrackLayout layout, int postCount) =>
         Enumerable.Range(0, postCount)

@@ -384,6 +384,15 @@ public sealed class RaceFilingService
             LapLimit = (finished is null ? _race.LapLimit : finished.LapLimit) is > 0 and var laps ? laps : null,
         };
 
+        // WHY (11 Nov 2026, Phase 4.1, mixed-class heats): each driver of a
+        // shared heat is stamped with the class they ran in, so the
+        // championship can score each class apart from the saved result
+        // alone. Does nothing for a one-class heat - see MixedHeats.
+        if (record.RoundId is not null && round is not null)
+        {
+            MixedHeats.StampClasses(record.Results, round, _profiles);
+        }
+
         record.SectorCut = TrackLayout.CutOfResults(
             _trackLayouts.All.FirstOrDefault(t => !string.IsNullOrEmpty(record.TrackLayoutName) && t.Name == record.TrackLayoutName),
             results);

@@ -105,6 +105,17 @@ public sealed class RaceEvent
     public int DriversPerHeat { get; set; }
 
     /// <summary>
+    /// Mixed-class heats (11 Nov 2026, race-night build plan, Phase 4.1): a
+    /// class with fewer drivers than this shares its heat with another small
+    /// class when the qualifying is built - 3 Stock and 4 Mod on track as one
+    /// race, scored apart (see MixedHeats.CombineSmallClasses). Zero, the
+    /// default and every race day saved before this, is off: every class
+    /// gets heats of its own, as it always did. On the race day rather than
+    /// in settings for the same reason as <see cref="DriversPerHeat"/>.
+    /// </summary>
+    public int ShareHeatsUnder { get; set; }
+
+    /// <summary>
     /// How the first qualifying round is seeded (11 Nov 2026, race-night build
     /// plan, Phase 3): by recent pace - similar pace together, so a rookie is
     /// not lapped four times by the A-main drivers - alphabetically (as every

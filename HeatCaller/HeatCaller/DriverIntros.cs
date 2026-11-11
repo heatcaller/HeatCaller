@@ -34,7 +34,11 @@ public sealed record RecapCar(
     long ElapsedMs,
     long ConsecutiveMs,
     long FastLapMs,
-    int HeatsCounted = 1);
+    int HeatsCounted = 1,
+    // WHY (11 Nov 2026, Phase 5.1): a points qualifier is decided on
+    // points, and laps or a time read out instead would name the wrong
+    // reason for pole. Zero under the other rules.
+    int Points = 0);
 
 /// <summary>
 /// The facts behind the broadcast's introductions - each driver on the grid,
@@ -375,6 +379,13 @@ internal static class DriverIntros
     /// <summary>" with twenty-four laps" / " averaging a five oh six over three laps", and the screen's version.</summary>
     private static (string Spoken, string Screen) Score(RecapCar car, QualifyingMethod method, int lapCount)
     {
+        if (method == QualifyingMethod.RoundPoints)
+        {
+            return car.Points > 0
+                ? ($" with {RaceNumbers.Words(car.Points)} {Plural.Word(car.Points, "point")}", $" with {Plural.Of(car.Points, "point")}")
+                : (string.Empty, string.Empty);
+        }
+
         if (method == QualifyingMethod.BestConsecutiveLaps)
         {
             if (car.ConsecutiveMs <= 0)
@@ -453,6 +464,22 @@ internal static class DriverIntros
     /// <summary>", two tenths back" / ", a lap down", and the screen's version - empty when it cannot be measured honestly.</summary>
     private static (string Spoken, string Screen) Margin(RecapCar ahead, RecapCar behind, QualifyingMethod method, int lapCount)
     {
+        // Points (11 Nov 2026, Phase 5.1): the gap is in points, and level
+        // on points means a tie-breaker decided it - said as "level on points".
+        if (method == QualifyingMethod.RoundPoints)
+        {
+            if (ahead.Points <= 0 || behind.Points <= 0)
+            {
+                return (string.Empty, string.Empty);
+            }
+
+            var gap = behind.Points - ahead.Points;
+
+            return gap <= 0
+                ? (", level on points", ", level on points")
+                : ($", {RaceNumbers.Words(gap)} {Plural.Word(gap, "point")} back", $", {Plural.Of(gap, "point")} back");
+        }
+
         if (method == QualifyingMethod.BestConsecutiveLaps)
         {
             if (ahead.ConsecutiveMs <= 0 || behind.ConsecutiveMs <= 0)

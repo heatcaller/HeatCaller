@@ -1435,7 +1435,7 @@ public sealed partial class AnnouncementService
     /// "marshalled" by whoever drove the last heat of last week.
     /// </summary>
     public void NotifyGridCall(RoundDefinition round, RoundDefinitionStore rounds, TrackLayoutStore layouts, RaceEventStore? events = null) =>
-        NotifyGridCall(round.RoundLabel, round.ClassName, SpokenMarshalsFor(round, rounds, layouts, events));
+        NotifyGridCall(round.RoundLabel, MixedHeats.SpokenClasses(round), SpokenMarshalsFor(round, rounds, layouts, events)); // "Stock and Mod" for a shared heat (Phase 4.1)
 
     /// <summary>The marshals for one round as a spoken list; empty when none are assigned.</summary>
     private string SpokenMarshalsFor(RoundDefinition round, RoundDefinitionStore rounds, TrackLayoutStore layouts, RaceEventStore? events)
@@ -1565,6 +1565,12 @@ public sealed partial class AnnouncementService
     /// time, or under BestConsecutiveLaps the quickest run of that many
     /// flying laps, with drivers yet to complete a run behind on laps and
     /// time. Null for an empty field.
+    ///
+    /// Under RoundPoints (11 Nov 2026, Phase 5.1) the heat is ranked by laps
+    /// then time as well - that is how a round's points are given out - so
+    /// it takes the most-laps path. The leader of this heat is on course for
+    /// the round's fewest points; whether that is pole overall depends on
+    /// the other rounds, which the projection (QualifyingProjector) shows.
     /// </summary>
     internal static string? QualifyingLeader(IEnumerable<RaceStanding> field,
         IReadOnlyDictionary<string, List<long>> flyingLaps, QualifyingMethod method, int consecutiveLaps)

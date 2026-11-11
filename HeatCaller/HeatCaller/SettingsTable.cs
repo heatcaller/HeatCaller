@@ -369,6 +369,12 @@ internal static class SettingsTable
             nameof(AppSettings.LastCloudBackupProblem),
             nameof(AppSettings.BackupPassword),
 
+            // The warm standby PC (11 Nov 2026, Phase 6.2): which PC is which is the club's own setup.
+            nameof(AppSettings.StandbyServeEnabled),
+            nameof(AppSettings.StandbyModeEnabled),
+            nameof(AppSettings.StandbyPrimaryAddress),
+            nameof(AppSettings.StandbyPin),
+
             // Keys, accounts and PINs.
             nameof(AppSettings.WebServerPin),
             nameof(AppSettings.WebServerCheckInPin),

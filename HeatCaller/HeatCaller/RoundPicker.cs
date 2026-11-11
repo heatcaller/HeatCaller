@@ -62,7 +62,7 @@ internal static class RoundPicker
                     return unrecorded.FirstOrDefault();
                 }
 
-                var match = unrecorded.FirstOrDefault(r => string.Equals(r.ClassName, pinnedClass, StringComparison.OrdinalIgnoreCase));
+                var match = unrecorded.FirstOrDefault(r => MixedHeats.RunsClass(r, pinnedClass)); // a shared heat runs this class too (Phase 4.1)
                 if (match is null)
                 {
                     log($"[session] The next race is pinned to class \"{pinnedClass}\", which has no unrecorded rounds left.");
@@ -119,7 +119,7 @@ internal static class RoundPicker
                     return unrecorded.FirstOrDefault();
                 }
 
-                var match = unrecorded.FirstOrDefault(r => string.Equals(r.ClassName, className, StringComparison.OrdinalIgnoreCase));
+                var match = unrecorded.FirstOrDefault(r => MixedHeats.RunsClass(r, className)); // a shared heat runs this class too (Phase 4.1)
                 if (match is null)
                 {
                     log($"[session] Class \"{className}\" was racing, but it has no unrecorded rounds left.");

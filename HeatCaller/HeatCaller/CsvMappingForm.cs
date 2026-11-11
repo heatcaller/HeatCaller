@@ -54,6 +54,16 @@ internal sealed class CsvMappingForm : Form
         "Pick the Transponder column - drivers are matched by it. Without one, only points so far can be "
         + "imported, and that needs a name column and a Points so far column.";
 
+    // An entry list's two (Import Entries, 11 Nov 2026).
+
+    private const string NoEntryColumnProblem =
+        "Pick the Transponder column or a name column (Driver name, or First name and Last name) - entries are "
+        + "matched by transponder, or by name when a row has none.";
+
+    private const string EntryPointsProblem =
+        "Points so far aren't imported with entries. Set that column to (ignore), or use Import from CSV on "
+        + "Driver Hub to carry points in.";
+
     private const string NoChampionshipProblem =
         "There's no championship for the points to go into. Make one on Championship → Standings first, "
         + "or set the points column to (ignore).";
@@ -64,6 +74,15 @@ internal sealed class CsvMappingForm : Form
     private readonly SteadyLabel _lblSeasonHint = new();
     private readonly SteadyLabel _lblProblem = new();
     private readonly IReadOnlyList<Season> _seasons;
+
+    /// <summary>
+    /// Opened for Who's Racing's Import Entries rather than Driver Hub's
+    /// roster import (11 Nov 2026, build plan 7.1): the same column picks,
+    /// but a row can be matched by name alone, there are no points to carry
+    /// in, and what happens is shown on the next window (EntryImportForm)
+    /// rather than done at once.
+    /// </summary>
+    private readonly bool _entries;
 
     /// <summary>A choice in "Points so far go into". A null Season is "the championship for each driver's class".</summary>
     private sealed record SeasonChoice(Season? Season, string Label)
@@ -81,11 +100,13 @@ internal sealed class CsvMappingForm : Form
     public bool SeasonPerClass { get; private set; }
 
     /// <param name="rowsAre">Where the rows are, for the line across the top: "in the file", or "in the table" when it was pasted.</param>
-    public CsvMappingForm(string fileName, IReadOnlyList<string> headers, IReadOnlyList<List<string>> rows, IReadOnlyList<ImportColumn> guesses, IReadOnlyList<Season> seasons, string rowsAre = "in the file")
+    /// <param name="entries">True for an entry list (Who's Racing's Import Entries) - see <see cref="_entries"/>.</param>
+    public CsvMappingForm(string fileName, IReadOnlyList<string> headers, IReadOnlyList<List<string>> rows, IReadOnlyList<ImportColumn> guesses, IReadOnlyList<Season> seasons, string rowsAre = "in the file", bool entries = false)
     {
-        _seasons = seasons;
+        _seasons = entries ? Array.Empty<Season>() : seasons;
+        _entries = entries;
 
-        Text = "Import drivers - " + fileName;
+        Text = (entries ? "Import entries - " : "Import drivers - ") + fileName;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
@@ -266,9 +287,12 @@ internal sealed class CsvMappingForm : Form
 
         var lblMatch = new Label
         {
-            Text = "Drivers are matched by transponder: a new one becomes a new driver, and one already here is updated - only "
-                   + "with cells that are filled in. With no transponder column, only points so far are imported, matched by "
-                   + "driver name.",
+            Text = _entries
+                ? "Each row is one driver entered in a class. Drivers are matched by transponder, or by name when a row has "
+                  + "none. Nothing changes yet: the next window shows who is new, who is updated and how, and who is skipped."
+                : "Drivers are matched by transponder: a new one becomes a new driver, and one already here is updated - only "
+                  + "with cells that are filled in. With no transponder column, only points so far are imported, matched by "
+                  + "driver name.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
@@ -305,11 +329,13 @@ internal sealed class CsvMappingForm : Form
             .Select(PickedTwice)
             .Append(NoTransponderProblem)
             .Append(NoChampionshipProblem)
+            .Append(NoEntryColumnProblem)
+            .Append(EntryPointsProblem)
             .ToList();
         _lblProblem.ForeColor = AppTheme.Danger;
         _lblProblem.Font = AppTheme.BodyFont;
 
-        var btnImport = new Button { Text = "Import" };
+        var btnImport = new Button { Text = _entries ? "Next" : "Import" };
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
         btnImport.Click += (_, _) => TryImport();
@@ -320,8 +346,12 @@ internal sealed class CsvMappingForm : Form
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
         page.AddFill(_grid, _ => _grid.ColumnHeadersHeight + LeastRows * _grid.RowTemplate.Height + 2, gapBelow: UiLayout.RowGap);
         page.Add(lblMatch, gapBelow: UiLayout.RowGap);
-        page.Add(seasonRow, gapBelow: UiLayout.HintGap);
-        page.Add(_lblSeasonHint, gapBelow: UiLayout.RowGap);
+        // An entry list carries no points, so it has nowhere for them to go.
+        if (!_entries)
+        {
+            page.Add(seasonRow, gapBelow: UiLayout.HintGap);
+            page.Add(_lblSeasonHint, gapBelow: UiLayout.RowGap);
+        }
         page.Add(_lblProblem, gapBelow: UiLayout.RowGap);
 
         // Against the right-hand edge, Cancel furthest right, as a dialog's
@@ -383,6 +413,25 @@ internal sealed class CsvMappingForm : Form
     /// <summary>What is wrong when one kind of column is picked for two: "Transponder" is picked for more than one column...</summary>
     private static string PickedTwice(ImportColumn column) =>
         $"\"{DriverImport.Caption(column)}\" is picked for more than one column. Pick it for one, and set the others to (ignore).";
+
+    /// <summary>
+    /// What is wrong with an entry list's picks, or null when they make an
+    /// import: a transponder or a name column to match by, and no points
+    /// column - there is nowhere for them to go. One kind picked for two
+    /// columns is checked before this.
+    /// </summary>
+    internal static string? EntryColumnsProblem(IReadOnlyList<ImportColumn> columns)
+    {
+        var hasTransponder = columns.Contains(ImportColumn.Transponder);
+        var hasName = columns.Contains(ImportColumn.DriverName) || columns.Contains(ImportColumn.FirstName) || columns.Contains(ImportColumn.LastName);
+
+        if (!hasTransponder && !hasName)
+        {
+            return NoEntryColumnProblem;
+        }
+
+        return columns.Contains(ImportColumn.PointsSoFar) ? EntryPointsProblem : null;
+    }
 
     /// <summary>What each column is set to now, in the file's order.</summary>
     private List<ImportColumn> CurrentColumns()
@@ -476,6 +525,20 @@ internal sealed class CsvMappingForm : Form
         var hasTransponder = columns.Contains(ImportColumn.Transponder);
         var hasName = columns.Contains(ImportColumn.DriverName) || columns.Contains(ImportColumn.FirstName) || columns.Contains(ImportColumn.LastName);
         var hasPoints = columns.Contains(ImportColumn.PointsSoFar);
+
+        if (_entries)
+        {
+            if (EntryColumnsProblem(columns) is { } problem)
+            {
+                _lblProblem.Text = problem;
+                return;
+            }
+
+            Columns = columns;
+            DialogResult = DialogResult.OK;
+            Close();
+            return;
+        }
 
         if (!hasTransponder && !(hasName && hasPoints))
         {

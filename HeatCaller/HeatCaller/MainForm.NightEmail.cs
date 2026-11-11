@@ -136,7 +136,8 @@ public partial class MainForm
                     .Select((car, i) => new NightEmail.EmailCar(
                         NightEmail.CarHeading(car.Label, car.Name),
                         carFacts[i],
-                        i == 0 ? coach : CoachReportFor(car.Transponder, publicNames: true)))
+                        i == 0 ? coach : CoachReportFor(car.Transponder, publicNames: true),
+                        RaceLinesFor(car.Transponder, tonight)))
                     .ToList()
                 : null;
 
@@ -145,10 +146,32 @@ public partial class MainForm
                 recipient.To,
                 recipient.ToName,
                 NightEmail.Subject(club, nightLocal),
-                NightEmail.Build(recipient.FirstName, club, nightLocal, dayName, facts, coach, link, cars)));
+                NightEmail.Build(recipient.FirstName, club, nightLocal, dayName, facts, coach, link, cars,
+                    RaceLinesFor(driver.Cars[0].Transponder, tonight))));
         }
 
         return new NightEmail.Plan(night, messages, choice.AlreadySent, choice.NoAddress, null);
+    }
+
+    /// <summary>
+    /// One car's own race lines for the email (11 Nov 2026, build plan
+    /// 7.4): the same races, and so the same lines, as their night page's
+    /// race cards (DriverNightExtras.Races with the history). On any failure
+    /// the email goes without them, as it went before they existed.
+    /// </summary>
+    private IReadOnlyList<string>? RaceLinesFor(string transponder, IReadOnlyList<SessionRecord> tonight)
+    {
+        try
+        {
+            var lines = RaceLines.ForEmail(DriverNightExtras.Races(
+                transponder, tonight, id => _rounds.Get(id), null, _settings.RelayAbbreviateNames, _sessionHistory.All));
+            return lines.Count > 0 ? lines : null;
+        }
+        catch (Exception ex)
+        {
+            OnClientRawMessage($"[email] A driver's night email went without its race lines: {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>

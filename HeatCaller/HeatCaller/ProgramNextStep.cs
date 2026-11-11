@@ -340,7 +340,8 @@ internal static class ProgramNextStep
             return new ProgramStep(
                 ProgramStage.RunNext,
                 $"Next up: {next.RoundLabel}",
-                $"{next.ClassName} · {Plural.Of(next.AssignedTransponders.Count, "driver")}{track}"
+                // "Stock + Mod" for a shared heat (11 Nov 2026, Phase 4.1).
+                $"{MixedHeats.ClassLabel(next)} · {Plural.Of(next.AssignedTransponders.Count, "driver")}{track}"
                 + $"    —    {run} of {dayRounds.Count} run, {left} to go.",
                 $"Start {next.RoundLabel}",
                 next,
@@ -356,7 +357,9 @@ internal static class ProgramNextStep
         foreach (var raceClass in clubNight ? Enumerable.Empty<RacingClass>() : classes)
         {
             var rounds = dayRounds
-                .Where(r => string.Equals(r.ClassName, raceClass.Name, StringComparison.OrdinalIgnoreCase))
+                // A shared heat is one of this class's qualifiers too
+                // (11 Nov 2026, Phase 4.1), so Mod still gets its mains.
+                .Where(r => MixedHeats.RunsClass(r, raceClass.Name))
                 .ToList();
 
             var qualifiers = rounds.Count(r => r.Kind == RoundKind.Qualifier && r.IsRecorded);

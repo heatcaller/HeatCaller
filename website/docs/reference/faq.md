@@ -76,6 +76,8 @@ Not to race. Timing, race control, results, the Big Screen, the Wi-Fi pages for 
 
 AI commentary keeps going offline too: the relay writes it when there's internet, and the small model built into HeatCaller writes it on the laptop when there isn't. See [What you need](../getting-started/index.md#internet).
 
+When the internet drops mid-night, the **Next Up** bar says "Website offline - racing carries on. Online pages will catch up", and results go up once it's back. See [When the internet drops](../online/index.md#when-the-internet-drops).
+
 ### I can't find a setting these pages mention. Where is it?
 
 It's probably hidden by Simple mode, which a new install starts in. Type it in the **Search pages...** box: if Simple mode hides it, an **Advanced mode settings** row appears under **IN ADVANCED MODE**. To see every setting, open **Backup & Restore** and click **Turn On Advanced Mode** on the **Settings mode** card. Hidden settings keep working either way. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).

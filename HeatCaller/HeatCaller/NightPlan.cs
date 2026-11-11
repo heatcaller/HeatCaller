@@ -253,6 +253,29 @@ public static class NightPlan
                 saves));
         }
 
+        // 4. Two small classes sharing their heats (11 Nov 2026, Phase 4.1,
+        //    mixed-class heats): one race fewer each round they both still
+        //    have to run, and each class is still scored on its own. Only a
+        //    suggestion - the director puts the heats together with Run
+        //    Together, so nothing here changes the program. The cap is the
+        //    biggest heat tonight or the usual heat size, whichever is more:
+        //    a field that big already runs here.
+        var cap = Math.Max(RaceEventStore.DefaultDriversPerHeat,
+            dayRounds.Where(r => r is { Kind: RoundKind.Qualifier }).Select(r => r.AssignedTransponders.Count).DefaultIfEmpty(0).Max());
+        var shareable = MixedHeats.ShareableClasses(qualifiers.Select(s => s.Round!).ToList(), cap);
+
+        if (shareable.Count > 0)
+        {
+            var (a, b, heatsSaved) = shareable[0];
+            var bLength = qualifiers.Where(s => string.Equals(s.Round!.ClassName, b, StringComparison.OrdinalIgnoreCase)).Select(s => s.Length).DefaultIfEmpty(TimeSpan.Zero).Max();
+            var saves = TimeSpan.FromTicks((bLength + gap).Ticks * heatsSaved);
+
+            if (saves > TimeSpan.Zero)
+            {
+                fixes.Add(new Fix($"run {a} and {b} together (Run Together on the program) to save {Minutes(saves)}", saves));
+            }
+        }
+
         return fixes.OrderByDescending(f => f.Saves).ToList();
     }
 

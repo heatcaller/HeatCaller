@@ -1155,7 +1155,10 @@ public sealed partial class AnnouncementService
         // the same crossing (CallProvisionalPoleIfTaken). Saying both put two
         // lines in the queue for one pass, so the lead change keeps its chime
         // and leaves the words to the pole call while that is switched on.
-        var poleSaysIt = IsQualifyingMode && _qualifyingMethod == QualifyingMethod.TotalLaps
+        // WHY (11 Nov 2026, Phase 5.1): points qualifying ranks a heat the
+        // same way - most laps, then time (QualifyingLeader) - so its lead is
+        // the pole call too.
+        var poleSaysIt = IsQualifyingMode && _qualifyingMethod != QualifyingMethod.BestConsecutiveLaps
             && CallOn(_voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.ProvisionalPole)));
 
         // Counted whatever the call does - the broadcast tower shows the

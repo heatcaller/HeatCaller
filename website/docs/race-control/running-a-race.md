@@ -484,6 +484,8 @@ It checks these, most serious first, and shows only the first that fails:
 
 It only watches real races while they're running: not practice, not a demo, not under a red flag, and not before anyone has been released in a hand-released or staggered start. A car released later is only expected from its own release. After a red flag, or once the decoder is back after a warning, every count starts again. Once the checkered is out, cars that have finished aren't expected to cross, so only a car still out there and silent is named. A black-flagged driver isn't expected either.
 
+When the warning is one of the first three (no laps are being counted for anyone), a **Score by Hand** button appears on the Next Up bar. It opens a full-screen grid with one button per car, so you can keep the count by hand for the rest of the race. See [When the decoder goes down mid-race](corrections-and-recovery.md#when-the-decoder-goes-down-mid-race).
+
 A car whose transponder was flat before the race never crosses at all, so it can't be missed: use **Pre-race check** before the heat for that. See [Transponders](../timing/transponders.md).
 
 ## Mission Control

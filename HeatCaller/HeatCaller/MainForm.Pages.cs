@@ -221,6 +221,10 @@ public partial class MainForm
         // UpdateTimingWatch whichever page is showing.
         raceControl.TimingProblem = () => _timingProblemText;
 
+        // Which problem it is, so Score by Hand is offered for the ones that
+        // mean no laps are being counted (11 Nov 2026, see HandScoring).
+        raceControl.TimingProblemKey = () => _timingProblemText is null ? null : _timingProblemKey;
+
         // What the phone remote says it is controlling - on the UI thread,
         // where the LAN copy of the live state is built.
         //
@@ -746,6 +750,10 @@ public partial class MainForm
         raceProgram.ProgrammeChanged += () => _todayControl?.RefreshAll();
 
         raceControl.NextStepProvider = () => raceProgram.NextStep();
+
+        // "Website offline - racing carries on. Online pages will catch up",
+        // and the standby PC's copy line (11 Nov 2026, Phase 6.3 - see OfflineFirst).
+        raceControl.ResilienceLine = ResilienceLineForBar;
 
         // The night planned (11 Nov 2026, race-night build plan, Phase 2):
         // "We're done after this round" is told to the room, and the end of
@@ -2918,6 +2926,9 @@ public partial class MainForm
                 }
             }
         };
+        // The warm standby PC (11 Nov 2026, Phase 6.2) - see MainForm.Standby.
+        SetUpStandby(backupRestore);
+
         pageBackup.Controls.Add(backupRestore);
     }
 

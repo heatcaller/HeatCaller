@@ -693,7 +693,7 @@ public sealed partial class RaceControlControl
                 : RelayDocuments.UnnamedDriver;
             var spoken = !string.IsNullOrWhiteSpace(profile?.AnnouncerName) ? profile!.AnnouncerName : screen;
 
-            return new RecapCar(spoken, screen, e.BestLaps, e.BestElapsedMs, e.ConsecutiveAverageMs(lapCount) * lapCount, e.BestFastLapMs, e.HeatsCounted);
+            return new RecapCar(spoken, screen, e.BestLaps, e.BestElapsedMs, e.ConsecutiveAverageMs(lapCount) * lapCount, e.BestFastLapMs, e.HeatsCounted, e.Points);
         }).ToList();
 
         var recap = DriverIntros.Recap(cars, raceClass?.QualifyingMethod ?? QualifyingMethod.TotalLaps, lapCount).Spoken;

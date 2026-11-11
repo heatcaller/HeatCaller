@@ -53,13 +53,42 @@ public static class MainsBuilder
     /// first. Without that order a bump-up is impossible - the A-main would
     /// already have run by the time the B-main finished.
     /// </summary>
-    public static List<RoundDefinition> BuildRounds(string className, SeedPlan plan, string trackLayoutName, int bumpUpCount)
+    /// <param name="aMainLegs">
+    /// 11 Nov 2026, Phase 5.3: how many legs the A-main runs as. Above 1 the
+    /// A-main is that many rounds - "A-Main Leg 1", "Leg 2"... - each with the
+    /// same seeded grid and each taking the bump-ups from the main below (its
+    /// feeder is the same B-main, which runs before all of them), and run
+    /// last, one after another. AMainLegs scores them together.
+    /// </param>
+    public static List<RoundDefinition> BuildRounds(string className, SeedPlan plan, string trackLayoutName, int bumpUpCount, int aMainLegs = 1)
     {
         var rounds = new List<RoundDefinition>();
+        var legs = Math.Clamp(aMainLegs, 1, AMainLegs.MaxLegs);
 
         // Iterate from the lowest tier upward so Order ascends with run order.
         for (var tier = plan.TierCount - 1; tier >= 0; tier--)
         {
+            if (tier == 0 && legs > 1)
+            {
+                for (var leg = 1; leg <= legs; leg++)
+                {
+                    rounds.Add(new RoundDefinition
+                    {
+                        ClassName = className,
+                        RoundLabel = AMainLegs.LegLabel(leg),
+                        Kind = RoundKind.Main,
+                        MainTier = 0,
+                        MainLeg = leg,
+                        MainLegCount = legs,
+                        BumpUpCount = bumpUpCount,
+                        TrackLayoutName = trackLayoutName,
+                        AssignedTransponders = plan.Tiers[0].ToList(),
+                    });
+                }
+
+                continue;
+            }
+
             rounds.Add(new RoundDefinition
             {
                 ClassName = className,

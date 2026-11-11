@@ -421,12 +421,13 @@ From then on:
 - **Tech:** **Who's Racing** and the phone look at every class they race that runs tech, and show them cleared only once they're cleared in each, so they agree with the tech warning on Race Control. See [Who still needs inspecting](events-and-entries.md#who-still-needs-inspecting).
 - **The phone race manager** lists them under each class they race. Setting a driver's class there changes their main class only, and keeps the others.
 - **Import from CSV:** a second row for the same driver with a different class adds that class to their others. See [Import drivers from a spreadsheet](#import-drivers-from-a-spreadsheet).
+- **Shared heats:** when two classes they race share a heat, they race in it once, in the class whose heat they came from, and only count for that class. A heat that has them in both classes can't be run together. See [Mixed-class heats](program-and-mains.md#mixed-class-heats).
 
 Changing the main class never drops the others. A class they're ticked for that has since been deleted stays on the list, ticked, until you untick it.
 
 ### Rename a class
 
-Change the **Name:** in **Edit** and click **Save**. The new name is carried to everything that uses the class: drivers (as their main class or one of their [other classes](#a-driver-in-more-than-one-class)), garage cars, rounds, championships, tech inspections, race days, a race day's **Next race is:** when it's set to that class, handicap modes, run sheet lines and remembered filters. A **Class renamed** box counts what moved (drivers, rounds, championships, tech inspections, race days, run sheet lines, cars and race days' auto-advance pins), and one **Undo** puts the old name back everywhere.
+Change the **Name:** in **Edit** and click **Save**. The new name is carried to everything that uses the class: drivers (as their main class or one of their [other classes](#a-driver-in-more-than-one-class)), garage cars, rounds (including heats it [shares with another class](program-and-mains.md#mixed-class-heats)), championships, tech inspections, race days, a race day's **Next race is:** when it's set to that class, handicap modes, run sheet lines and remembered filters. A **Class renamed** box counts what moved (drivers, rounds, championships, tech inspections, race days, run sheet lines, cars and race days' auto-advance pins), and one **Undo** puts the old name back everywhere.
 
 Undoing a rename only puts back the name. Other changes you've made to the class since the rename are kept. Drivers, rounds, championships, tech inspections, race days and run sheet lines added under the new name go back to the old name with it. Race days, run sheet lines, cars, and drivers' main or other classes that already used the new name before the rename are left as they were, and a race day that listed both names keeps both. The class keeps its own handicap mode through a rename, and the undo restores it. Undoing several renames in a row puts back every handicap mode they replaced.
 
@@ -442,11 +443,12 @@ The **Add Class** / **Edit Class** dialog has these settings:
 |---|---|---|
 | **Name:** | Required. The small colored square beside the name is the class color — click it to change it. | — |
 | **Notes:** | Free text. | Empty |
-| **Qualifying:** | **Most laps, then lowest time**, or **Best consecutive laps (fastest clean run)**. See [How qualifying ranks drivers](program-and-mains.md#how-qualifying-ranks-drivers). | Most laps, then lowest time |
+| **Qualifying:** | **Most laps, then lowest time**, **Best consecutive laps (fastest clean run)**, or **Points per round (1st = 1 point, fewest wins)**. See [How qualifying ranks drivers](program-and-mains.md#how-qualifying-ranks-drivers) and [Points per round](program-and-mains.md#points-per-round). | Most laps, then lowest time |
 | **Consecutive laps to count:** | For best-consecutive scoring only: how many laps in a row make a run (2–20). | 3 |
-| **Heats that count:** | How many of each driver's best heats are totaled (1–20). Set 2 for "best 2 of 3". Leave at 1 to count only their single best heat. | 1 |
+| **Heats that count:** | How many of each driver's best heats are totaled (1–20). Set 2 for "best 2 of 3". Leave at 1 to count only their single best heat. For **Points per round**, it's how many rounds count. | 1 |
 | **Drivers per main:** | The largest a main can be when mains are seeded (2–40). Qualifying is split into A, B, C mains of this size. | 8 |
 | **Bump up:** | How many finishers from each main move up into the main above (0–10). Set 0 to turn bump-ups off. | 2 |
+| **A-main:** | **Single A-main**, or a double or triple A-main and how many legs count: **best 1 of 2**, **both legs count**, **best 2 of 3** or **all 3 legs count**. See [Double and triple A-mains](program-and-mains.md#double-and-triple-a-mains). | Single A-main |
 | **Detect jump starts (crossing before the green)** | Watches for cars crossing the line before the green flag. | On |
 | **Automatic penalty:** | Seconds added to a jump-starter's time (0–120). **0** means flag only: the jump start is logged, announced and shown, but what to do about it is up to you. | 0 |
 | **A jump start also costs the lap** | When on, a car that jumps the start loses the lap it jumped on as well as any time penalty. When off, it's credited with the start lap at the green like everyone else. | Off |

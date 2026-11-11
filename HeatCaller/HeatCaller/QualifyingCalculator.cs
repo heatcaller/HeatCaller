@@ -8,6 +8,9 @@ namespace HeatCaller;
 ///  - HOW a single heat is scored:
 ///      TotalLaps           - most laps, then lowest elapsed time
 ///      BestConsecutiveLaps - quickest unbroken run of N laps
+///      RoundPoints         - (11 Nov 2026) not per heat but per ROUND:
+///                            place points across all of a round's heats,
+///                            lowest total wins - see RankByPoints
 ///
 ///  - HOW MANY heats count (CountBestRounds):
 ///      1        - a driver's single best heat decides it
@@ -67,7 +70,13 @@ public static class QualifyingCalculator
         int ConsecutiveStartLap,
         // WHY (23 Oct 2026, bug hunt 10): the penalty share of ConsecutiveMs,
         // so "where these numbers came from" can tell laps from penalties.
-        long ConsecutivePenaltyMs = 0);
+        long ConsecutivePenaltyMs = 0,
+        // WHY (11 Nov 2026, Phase 5.1): which qualifying ROUND the heat is
+        // part of, and what to call it, for points qualifying - which ranks
+        // the drivers of every heat of one round against each other. See
+        // RoundGroupOf.
+        string RoundGroup = "",
+        string RoundGroupName = "");
 
     public sealed record Entry(
         string Transponder,
@@ -102,8 +111,45 @@ public static class QualifyingCalculator
         /// heat's window (bug hunt 10), so the laps can be checked on their own.
         /// Zero when several heats are totalled.
         /// </summary>
-        long ConsecutivePenaltyMs = 0)
+        long ConsecutivePenaltyMs = 0,
+        /// <summary>
+        /// Points qualifying (11 Nov 2026, Phase 5.1): the counted rounds'
+        /// points, totalled - lowest wins. Zero under the other methods.
+        /// </summary>
+        int Points = 0,
+        /// <summary>How many rounds <see cref="Points"/> is a total of (the class's best N).</summary>
+        int PointsRoundsCounted = 0,
+        /// <summary>How many qualifying rounds the class has scored so far - the "of 3" in "best 2 of 3".</summary>
+        int PointsRoundsRun = 0,
+        /// <summary>
+        /// Every round's finish and points, in running order - "Q1 1st (1 pt),
+        /// Q2 DNS (9 pts), Q3 2nd (2 pts)" - so a points total can be checked
+        /// against the heats it came from, the way DroppedSummary lets a
+        /// dropped heat be checked.
+        /// </summary>
+        string PointsDetail = "",
+        /// <summary>The driver's best finish in any one round - the first tie-breaker. Zero when never ranked.</summary>
+        int BestRoundFinish = 0)
     {
+        /// <summary>
+        /// A points total in words: "6 pts (best 2 of 3)", "9 pts (3 rounds)",
+        /// or "1 pt (Q1)" after a single round. The standings, the mains
+        /// preview and the relay all use it, so all three say it the same way.
+        /// </summary>
+        public string PointsWords()
+        {
+            var total = Points == 1 ? "1 pt" : $"{Points} pts";
+
+            if (PointsRoundsRun <= 1)
+            {
+                return string.IsNullOrWhiteSpace(SourceRoundLabel) ? total : $"{total} ({SourceRoundLabel})";
+            }
+
+            return PointsRoundsCounted < PointsRoundsRun
+                ? $"{total} (best {PointsRoundsCounted} of {PointsRoundsRun})"
+                : $"{total} ({PointsRoundsRun} rounds)";
+        }
+
         /// <summary>Average lap within the counted consecutive run(s).</summary>
         public long ConsecutiveAverageMs(int lapCount)
         {
@@ -221,6 +267,7 @@ public static class QualifyingCalculator
         // the full set in hand before anything is dropped.
         var byDriver = new Dictionary<string, List<HeatScore>>(StringComparer.OrdinalIgnoreCase);
         var names = new Dictionary<string, (string Driver, string Car)>(StringComparer.OrdinalIgnoreCase);
+        var disqualified = new HashSet<(string Driver, string Group)>(new DriverGroupComparer());
 
         var qualifiers = rounds.ForClass(className)
             .Where(r => r.Kind == RoundKind.Qualifier && r.IsRecorded)
@@ -228,10 +275,27 @@ public static class QualifyingCalculator
 
             // A heat being re-run is represented by the live scores, not by
             // the result it is about to replace.
-            .Where(r => live is null || !string.Equals(r.Id, live.RoundId, StringComparison.Ordinal));
+            .Where(r => live is null || !string.Equals(r.Id, live.RoundId, StringComparison.Ordinal))
+            .ToList();
+
+        // The heats being scored, the running one included, for deciding
+        // which qualifying ROUND each heat is part of (points qualifying -
+        // see RoundGroupOf). Built for every method because it is cheap and
+        // keeps one code path; only points reads it.
+        var liveRound = live is null
+            ? null
+            : rounds.Get(live.RoundId) ?? new RoundDefinition
+            {
+                Id = live.RoundId,
+                ClassName = className,
+                RoundLabel = live.RoundLabel,
+                Kind = RoundKind.Qualifier,
+            };
+        var scoredHeats = liveRound is null ? qualifiers : qualifiers.Append(liveRound).ToList();
 
         foreach (var round in qualifiers)
         {
+            var (group, groupName) = RoundGroupOf(round, scoredHeats);
             var session = history.Get(round.LinkedSessionId!);
 
             // A DEMO-LINKED HEAT DOES SEED, and that is the point of a
@@ -266,6 +330,16 @@ public static class QualifyingCalculator
                     continue;
                 }
 
+                // WHY (11 Nov 2026, Phase 4.1, mixed-class heats): a heat
+                // this class shares with another is one of its heats, but
+                // only for its own drivers - to Stock, the 3 Stock cars of a
+                // 3 Stock + 4 Mod race are the heat. Always true for a
+                // one-class heat, so nothing else changes.
+                if (!MixedHeats.Counts(round, className, result.Transponder, result.ClassName, profiles))
+                {
+                    continue;
+                }
+
                 // Disqualified from this heat after the race (the result
                 // editor): the heat does not count for them at all. Their
                 // lap times are still on the result - they are what the
@@ -274,6 +348,10 @@ public static class QualifyingCalculator
                 // out of.
                 if (result.Outcome == ResultEditor.Dq)
                 {
+                    // Remembered for points qualifying only, so the round
+                    // reads "DQ" rather than "DNS" in the breakdown. It
+                    // scores the same - see RankByPoints.
+                    disqualified.Add((DriverKey(result.Transponder, profiles), group));
                     continue;
                 }
 
@@ -313,7 +391,7 @@ public static class QualifyingCalculator
                 var driverKey = DriverKey(result.Transponder, profiles);
 
                 AddHeat(byDriver, driverKey, method, new HeatScore(round.Id, round.RoundLabel, round.LinkedSessionId, session.StartedAtUtc,
-                    result.Laps, result.ElapsedMs, result.FastLapMs, windowMs, startLap, penaltyMs));
+                    result.Laps, result.ElapsedMs, result.FastLapMs, windowMs, startLap, penaltyMs, group, groupName));
 
                 var profile = profiles.Get(driverKey);
                 names[driverKey] = (
@@ -324,11 +402,19 @@ public static class QualifyingCalculator
 
         if (live is not null)
         {
+            var (liveGroup, liveGroupName) = RoundGroupOf(liveRound!, scoredHeats);
+
             foreach (var result in live.Results)
             {
                 if (GhostService.IsGhost(result.Transponder))
                 {
                     continue; // same as above - the heat running right now
+                }
+
+                // The running heat's other class's cars, as above (Phase 4.1).
+                if (!MixedHeats.Counts(liveRound!, className, result.Transponder, null, profiles))
+                {
+                    continue;
                 }
 
                 var (windowMs, startLap) = BestFlyingWindow(result.LapTimesMs, lapCount);
@@ -348,7 +434,7 @@ public static class QualifyingCalculator
                 var driverKey = DriverKey(result.Transponder, profiles);
 
                 AddHeat(byDriver, driverKey, method, new HeatScore(live.RoundId, live.RoundLabel, null, live.StartedAtUtc,
-                    result.Laps, result.ElapsedMs, result.FastLapMs, windowMs, startLap, penaltyMs));
+                    result.Laps, result.ElapsedMs, result.FastLapMs, windowMs, startLap, penaltyMs, liveGroup, liveGroupName));
 
                 var liveProfile = profiles.Get(driverKey);
                 names[driverKey] = (
@@ -357,12 +443,228 @@ public static class QualifyingCalculator
             }
         }
 
+        if (method == QualifyingMethod.RoundPoints)
+        {
+            return RankByPoints(byDriver, names, disqualified, countBest);
+        }
+
         var entries = byDriver
             .Select(kv => BuildEntry(kv.Key, names[kv.Key], kv.Value, method, countBest))
             .ToList();
 
         return Rank(entries, method);
     }
+
+    /// <summary>Compares (driver, round) pairs ignoring the case of the transponder, as every driver lookup here does.</summary>
+    private sealed class DriverGroupComparer : IEqualityComparer<(string Driver, string Group)>
+    {
+        public bool Equals((string Driver, string Group) x, (string Driver, string Group) y) =>
+            string.Equals(x.Driver, y.Driver, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(x.Group, y.Group, StringComparison.Ordinal);
+
+        public int GetHashCode((string Driver, string Group) pair) =>
+            HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(pair.Driver), StringComparer.Ordinal.GetHashCode(pair.Group));
+    }
+
+    /// <summary>
+    /// Which qualifying ROUND a heat is part of, and what to call it - for
+    /// points qualifying, which ranks every heat of a round together
+    /// (11 Nov 2026, Phase 5.1).
+    ///
+    /// Read from the label the way the rest of the program reads it
+    /// (HeatBalanceForm.RoundKeyFor): "Q2 Heat 3" and "Race 2 Heat 1" are
+    /// round 2. A one-round night's unnumbered "Heat 1", "Heat 2" are all
+    /// one round. An unnumbered heat BESIDE numbered rounds was added by
+    /// hand and belongs to none of them, so it is scored as a round of its
+    /// own - folding it into Q1 would rank its drivers against heats they
+    /// never shared a track with, and dropping it would throw away a heat
+    /// they really ran.
+    /// </summary>
+    private static (string Key, string Name) RoundGroupOf(RoundDefinition round, IReadOnlyList<RoundDefinition> scoredHeats)
+    {
+        var key = HeatBalanceForm.RoundKeyFor(round, scoredHeats);
+
+        if (key is null)
+        {
+            return ("#" + round.Id, string.IsNullOrWhiteSpace(round.RoundLabel) ? "Extra heat" : round.RoundLabel.Trim());
+        }
+
+        if (key.Length == 0)
+        {
+            return (string.Empty, "Qualifying");
+        }
+
+        // "Race 2" on a club night, "Q2" otherwise - the round named the way
+        // its heats are.
+        var number = key.Substring(1);
+        var name = (round.RoundLabel ?? string.Empty).TrimStart().StartsWith("Race", StringComparison.OrdinalIgnoreCase)
+            ? $"Race {number}"
+            : key;
+
+        return (key, name);
+    }
+
+    /// <summary>
+    /// Points qualifying (11 Nov 2026, race-night build plan, Phase 5.1).
+    ///
+    /// For each qualifying ROUND, every driver who ran one of its heats is
+    /// ranked against everybody else in that round - most laps, then least
+    /// time, which is the total-laps rule applied inside the round - and
+    /// scores their place: 1st = 1 point, 2nd = 2 and so on. Drivers level
+    /// on laps AND time to the millisecond share the place (and its points),
+    /// and the next driver takes the place after them, the way a results
+    /// sheet prints a dead heat.
+    ///
+    /// A driver who did not run a round - late arrival, broken car, or
+    /// disqualified from it in Edit Result - scores the FIELD SIZE PLUS ONE
+    /// for it, the field being every driver with any qualifying result in
+    /// the class. That is worse than last place in any round, so missing a
+    /// round can never beat running it, and with best-N it is simply the
+    /// first round dropped. It also means every driver has a score for every
+    /// round, so totals of the same number of rounds are always compared -
+    /// the trap Rank has to step around for best consecutive laps cannot
+    /// happen here.
+    ///
+    /// CountBestRounds picks each driver's best (lowest) N rounds. Lowest
+    /// total wins. Ties, in order: the best single-round finish (a driver
+    /// who won a round beats one who never did), then the best single heat
+    /// by laps then time, then the order they were found in.
+    ///
+    /// Penalties need nothing new here: race-control penalties, time
+    /// penalties and lap penalties already reach Laps and ElapsedMs, which
+    /// is what each round is ranked on. The running heat (LiveHeat) is
+    /// simply one more heat of its round, so the projection and the
+    /// provisional pole call rank it against the round's finished heats.
+    /// Alternate transponders were folded into their driver before any of
+    /// this (DriverKey, AddHeat).
+    /// </summary>
+    private static List<Entry> RankByPoints(Dictionary<string, List<HeatScore>> byDriver,
+        Dictionary<string, (string Driver, string Car)> names, HashSet<(string Driver, string Group)> disqualified, int countBest)
+    {
+        var field = byDriver.Count;
+        var missed = field + 1;
+
+        // Each driver's one result per round: their better heat if they ran
+        // two heats of it (moved between heats, or a hand-added heat filed
+        // under a round), by the same rule the round is ranked on.
+        var perRound = byDriver.ToDictionary(
+            kv => kv.Key,
+            kv => kv.Value
+                .GroupBy(h => h.RoundGroup, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(h => h.Laps).ThenBy(h => h.ElapsedMs).First(), StringComparer.Ordinal),
+            StringComparer.OrdinalIgnoreCase);
+
+        // The rounds in running order - the earliest heat of each.
+        var groups = byDriver.Values
+            .SelectMany(v => v)
+            .GroupBy(h => h.RoundGroup, StringComparer.Ordinal)
+            .Select(g => (Key: g.Key, Name: g.First().RoundGroupName, Start: g.Min(h => h.StartedAtUtc)))
+            .OrderBy(g => g.Start)
+            .ThenBy(g => g.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // place[driver][round] - zero for a round the driver did not run.
+        var places = byDriver.Keys.ToDictionary(k => k, _ => new Dictionary<string, int>(StringComparer.Ordinal), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var group in groups)
+        {
+            var ranked = perRound
+                .Where(kv => kv.Value.ContainsKey(group.Key))
+                .Select(kv => (Driver: kv.Key, Heat: kv.Value[group.Key]))
+                .OrderByDescending(x => x.Heat.Laps)
+                .ThenBy(x => x.Heat.ElapsedMs)
+                .ToList();
+
+            for (var i = 0; i < ranked.Count; i++)
+            {
+                var tiedWithAbove = i > 0
+                    && ranked[i].Heat.Laps == ranked[i - 1].Heat.Laps
+                    && ranked[i].Heat.ElapsedMs == ranked[i - 1].Heat.ElapsedMs;
+
+                places[ranked[i].Driver][group.Key] = tiedWithAbove ? places[ranked[i - 1].Driver][group.Key] : i + 1;
+            }
+        }
+
+        var entries = new List<Entry>();
+
+        foreach (var (driver, heats) in byDriver)
+        {
+            var scores = groups
+                .Select(g => (Group: g, Place: places[driver].TryGetValue(g.Key, out var p) ? p : 0))
+                .Select(x => (x.Group, x.Place, Points: x.Place > 0 ? x.Place : missed))
+                .ToList();
+
+            // Best N, lowest points first; a tie between two rounds keeps
+            // the earlier one, so the choice is stable.
+            var counted = scores
+                .Select((s, index) => (s, index))
+                .OrderBy(x => x.s.Points)
+                .ThenBy(x => x.index)
+                .Take(Math.Min(countBest, scores.Count))
+                .Select(x => x.s)
+                .ToList();
+            var dropped = scores.Where(s => !counted.Contains(s)).ToList();
+
+            string Finish((string Key, string Name, DateTime Start) group, int place) =>
+                place > 0 ? Ordinal(place)
+                : disqualified.Contains((driver, group.Key)) ? "DQ"
+                : "DNS";
+
+            string PointsText(int points) => points == 1 ? "1 pt" : $"{points} pts";
+
+            var detail = string.Join(", ", scores.Select(s => $"{s.Group.Name} {Finish(s.Group, s.Place)} ({PointsText(s.Points)})"));
+            var droppedSummary = string.Join(", ", dropped.Select(s => $"{s.Group.Name} ({Finish(s.Group, s.Place)}, {PointsText(s.Points)})"));
+
+            var countedHeats = counted
+                .Where(s => s.Place > 0)
+                .Select(s => perRound[driver][s.Group.Key])
+                .ToList();
+
+            // The best single heat anywhere - the second tie-breaker, and
+            // the laps and time shown beside the points.
+            var bestHeat = heats.OrderByDescending(h => h.Laps).ThenBy(h => h.ElapsedMs).First();
+            var bestFinish = scores.Where(s => s.Place > 0).Select(s => s.Place).DefaultIfEmpty(0).Min();
+            var single = countedHeats.Count == 1 && counted.Count == 1 ? countedHeats[0] : null;
+
+            entries.Add(new Entry(
+                driver,
+                names[driver].Driver,
+                names[driver].Car,
+                bestHeat.Laps,
+                bestHeat.ElapsedMs,
+                countedHeats.Where(h => h.FastLapMs > 0).Select(h => h.FastLapMs).DefaultIfEmpty(0).Min(),
+                heats.Count,
+                // In running order, whichever order they were picked in.
+                SourceRoundLabel: string.Join(" + ", scores.Where(counted.Contains).Select(s => s.Group.Name)),
+                SourceSessionId: single?.SessionId,
+                SourceSessionStartedUtc: single?.StartedAtUtc,
+                HeatsCounted: counted.Count,
+                DroppedSummary: droppedSummary,
+                Points: counted.Sum(s => s.Points),
+                PointsRoundsCounted: counted.Count,
+                PointsRoundsRun: groups.Count,
+                PointsDetail: detail,
+                BestRoundFinish: bestFinish));
+        }
+
+        return entries
+            .OrderBy(e => e.Points)
+            .ThenBy(e => e.BestRoundFinish > 0 ? e.BestRoundFinish : int.MaxValue)
+            .ThenByDescending(e => e.BestLaps)
+            .ThenBy(e => e.BestElapsedMs)
+            .ToList();
+    }
+
+    /// <summary>"1st", "2nd", "11th" - a round finish in the points breakdown.</summary>
+    private static string Ordinal(int n) => (n % 100) is 11 or 12 or 13
+        ? $"{n}th"
+        : (n % 10) switch
+        {
+            1 => $"{n}st",
+            2 => $"{n}nd",
+            3 => $"{n}rd",
+            _ => $"{n}th",
+        };
 
     /// <summary>
     /// Who a result belongs to: the driver's MAIN transponder when it was

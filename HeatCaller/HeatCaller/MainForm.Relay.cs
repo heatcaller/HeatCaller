@@ -1166,6 +1166,11 @@ public partial class MainForm
                     consecutiveMs = e.BestConsecutiveMs,
                     fastLapMs = e.BestFastLapMs,
                     heats = e.HeatsRun,
+
+                    // Points qualifying (11 Nov 2026, Phase 5.1): the total
+                    // and the desk's words for it. Null under the other rules.
+                    points = raceClass.QualifyingMethod == QualifyingMethod.RoundPoints ? e.Points : (int?)null,
+                    pointsText = raceClass.QualifyingMethod == QualifyingMethod.RoundPoints ? e.PointsWords() : null,
                 }).ToList(),
             });
         }
@@ -2545,7 +2550,7 @@ public partial class MainForm
         // Like with like: a driver in two classes tonight is measured
         // in the class of the car they last raced, not across both.
         var className = latest is { RoundId: { Length: > 0 } roundId } && roundOf(roundId) is { } round
-            ? round.ClassName.Trim()
+            ? MixedHeats.ClassOfDriver(round, who, _profiles).Trim() // their own class of a shared heat (Phase 4.1)
             : string.Empty;
 
         if (!paceByClass.TryGetValue(className, out var paces))
@@ -2555,7 +2560,7 @@ public partial class MainForm
         }
 
         return (
-            DriverNightExtras.Races(who, tonight, roundOf, runs, _settings.RelayAbbreviateNames),
+            DriverNightExtras.Races(who, tonight, roundOf, runs, _settings.RelayAbbreviateNames, history),
             DriverNightExtras.Improvement(who, paces),
             DriverNightExtras.Progress(who, history, latest?.TrackLayoutName, _pbResets, nowLocal));
     }

@@ -47,6 +47,7 @@ nav:
       - A tour of the window: getting-started/tour.md
       - Simple and Advanced mode: getting-started/simple-and-advanced-mode.md
       - Your first race night: getting-started/first-race-night.md
+      - Switching from LiveTime: getting-started/switching-from-livetime.md
   - Race day:
       - Drivers, classes and venues: race-day/drivers-and-classes.md
       - Track Designer: race-day/track-designer.md
@@ -78,6 +79,7 @@ nav:
       - Hosting the relay: admin/relay-hosting.md
       - Security and privacy: admin/security-and-privacy.md
       - Backups: admin/backups.md
+      - Standby PC: admin/standby-pc.md
       - Where data lives: admin/data-files.md
       - Troubleshooting: admin/troubleshooting.md
   - Reference:

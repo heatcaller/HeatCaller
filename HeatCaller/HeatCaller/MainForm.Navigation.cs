@@ -978,7 +978,7 @@ public partial class MainForm
         }
 
         var programme = EventSpine.Programme(_raceEvents, _rounds)
-            .Select(r => new DayScheduleStore.ProgramLine(r.Id, r.ClassName, r.RoundLabel))
+            .Select(r => new DayScheduleStore.ProgramLine(r.Id, MixedHeats.ClassLabel(r), r.RoundLabel))
             .ToList();
 
         // An empty programme is handed over rather than skipped. Deleting
