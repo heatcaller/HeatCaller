@@ -221,6 +221,10 @@ public partial class MainForm
         // UpdateTimingWatch whichever page is showing.
         raceControl.TimingProblem = () => _timingProblemText;
 
+        // Which problem it is, so Score by Hand is offered for the ones that
+        // mean no laps are being counted (11 Nov 2026, see HandScoring).
+        raceControl.TimingProblemKey = () => _timingProblemText is null ? null : _timingProblemKey;
+
         // What the phone remote says it is controlling - on the UI thread,
         // where the LAN copy of the live state is built.
         //

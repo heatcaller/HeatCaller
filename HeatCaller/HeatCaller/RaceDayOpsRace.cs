@@ -30,6 +30,112 @@ public sealed partial class RaceDayService
         // the flag remote has always sent them regardless. Everything else
         // waits for the laptop to be free.
         Register("race.flag", OpKind.RaceControl, RaceFlag, allowedWhileBusy: true);
+
+        // Scoring by hand when the decoder is down (11 Nov 2026) - see
+        // HandScoring. Wi-Fi only, like the flags: a lap counted from a
+        // phone has to be counted by somebody who can see the track. Taken
+        // while the laptop has a question open, as yellow and red are -
+        // the cars don't stop for a dialog, and a lap is only a lap.
+        Register("race.handCars", OpKind.RaceControl, RaceHandCars, allowedWhileBusy: true);
+        Register("race.handScoring", OpKind.RaceControl, RaceHandScoring, allowedWhileBusy: true);
+        Register("race.handLap", OpKind.RaceControl, RaceHandLap, allowedWhileBusy: true);
+    }
+
+    /// <summary>
+    /// The phone's hand-scoring grid: whether it is on (or on offer), and one
+    /// entry per car in HandScoring's fixed order. Changes nothing.
+    /// </summary>
+    private OpResult RaceHandCars(OpContext context)
+    {
+        var control = _host.RaceControl;
+        var race = _host.Race;
+
+        return OpResult.Read(new
+        {
+            on = control.HandScoringOn,
+            offer = HandScoring.ShouldOffer(control.TimingProblemKey?.Invoke(), race.State, race.IsPracticeMode, control.HandScoringOn),
+            racing = race.State == RaceState.Racing && !race.IsPracticeMode,
+            cars = control.HandScoringCars()
+                .Select(c => new
+                {
+                    id = DriverIdFor(c.Transponder),
+                    name = c.Name,
+                    laps = c.Laps,
+                    lapsText = c.LapsText,
+                })
+                .ToList(),
+        });
+    }
+
+    /// <summary>Switches hand scoring on or off for the race running now - {on: true|false}.</summary>
+    private OpResult RaceHandScoring(OpContext context)
+    {
+        var control = _host.RaceControl;
+        var on = context.Bool("on") ?? throw new OpRefused("\"on\" has to be true or false.");
+
+        if (!on)
+        {
+            if (!control.HandScoringOn)
+            {
+                return OpResult.Read(new { on = false });
+            }
+
+            control.StopHandScoring();
+            return OpResult.Done("Hand scoring off", "Hand scoring is off - laps are counted from the loop again.", new { on = false });
+        }
+
+        if (control.HandScoringOn)
+        {
+            return OpResult.Read(new { on = true });
+        }
+
+        if (control.StartHandScoring("a phone") is { } refusal)
+        {
+            throw new OpRefused(refusal);
+        }
+
+        return OpResult.Done("Hand scoring on", "Scoring by hand - tap a car each time it crosses the line.", new { on = true });
+    }
+
+    /// <summary>
+    /// One tap from the phone's grid - {driverId, delta: 1 or -1} - through
+    /// Race Control's HandLap, the desk's own path. Hand scoring has to be
+    /// on: a stray tap on a phone left on the Race tab must not add laps to
+    /// a race the loop is timing.
+    /// </summary>
+    private OpResult RaceHandLap(OpContext context)
+    {
+        var control = _host.RaceControl;
+
+        if (!control.HandScoringOn)
+        {
+            throw new OpRefused("Hand scoring isn't on for this race - switch it on first.");
+        }
+
+        var delta = context.Int("delta", -1, 1) ?? 1;
+
+        if (delta == 0)
+        {
+            throw new OpRefused("\"delta\" has to be 1 or -1.");
+        }
+
+        var cars = control.HandScoringCars();
+        var transponder = TransponderForDriverId(context.Text("driverId"), cars.Select(c => c.Transponder))
+                          ?? throw new OpRefused("That car isn't on the board any more - look again.");
+
+        if (control.HandLap(transponder, delta, "a phone") is { } refusal)
+        {
+            throw new OpRefused(refusal);
+        }
+
+        var car = control.HandScoringCars().FirstOrDefault(c => string.Equals(c.Transponder, transponder, StringComparison.OrdinalIgnoreCase));
+
+        return OpResult.Read(new
+        {
+            id = DriverIdFor(transponder),
+            laps = car?.Laps ?? 0,
+            lapsText = car?.LapsText ?? string.Empty,
+        });
     }
 
     private OpResult RaceStartRound(OpContext context) =>

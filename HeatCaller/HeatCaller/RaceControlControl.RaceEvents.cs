@@ -93,6 +93,11 @@ public sealed partial class RaceControlControl
             if (InvokeRequired) { BeginInvoke(() => OnLapProcessed(standing, isValid, isFastestLap)); return; }
             if (_race.DeliveringIsStale) { _announcer.WhileLapCallsAreStale(() => OnLapProcessed(standing, isValid, isFastestLap), _race.DeliveringAgeMs); return; }
 
+            // Scoring by hand (11 Nov 2026, decoder-down mode): the board
+            // takes a crossing the loop still sends, the room hears none of
+            // its lap calls - see HandScoring.
+            if (HandScoringOn) { _announcer.WhileHandScoring(() => OnLapProcessed(standing, isValid, isFastestLap)); return; }
+
             // When the engine raised it (8 Nov 2026), so a call about this lap
             // is timed from the crossing - see AnnouncementService.Freshness.
             _announcer.LapRaisedAtMs = _race.DeliveringEventRaisedAtMs;

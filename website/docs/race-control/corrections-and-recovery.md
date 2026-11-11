@@ -120,6 +120,30 @@ Corrections are worked out from the race as it was actually run, not from the la
 
 The race-day manager's **Results** tab makes the same correction from a phone. See [Race-day manager](../screens/phone-and-web.md#race-day-manager).
 
+**Typing a whole result's lap counts.** The **Laps** column shows each driver's laps as the result will have them. Type the lap count straight in and **Added Laps** changes to match, with any **Lap Penalty** still taken off on top. Press <kbd>Enter</kbd> to go down to the next driver, so you can type a whole result off a paper lap sheet in one go. Changing **Added Laps** or **Lap Penalty** updates **Laps**. Laps added this way show as counted by hand ("12*") in the result, like any lap added after the race.
+
+## When the decoder goes down mid-race
+
+If the decoder or the loop stops working during a race, you don't have to stop the race and run it again. Score it by hand instead: one big button per car, and a tap each time a car crosses the line.
+
+**Switching it on.** When the [timing warning](running-a-race.md#timing-warnings) says the decoder isn't connected, has gone quiet, or no car has crossed the line, a **Score by Hand** button appears on the Next Up bar. Click it. You can also right-click any driver on the leaderboard during a race and choose **Score the race by hand (decoder down)...**. HeatCaller doesn't switch to hand scoring by itself, because only you can tell a dead loop from a long pause on track.
+
+**The grid.** A window fills the screen with one button per car, showing the driver's name and their laps. The buttons stay in grid order (the order the cars lined up in), so they never move while you tap, even as the running order changes.
+
+- **Tap** (or click) a car each time it crosses the line. The button flashes green.
+- **Right-click** a car to take a lap off, or use **Undo last tap** (or <kbd>Ctrl</kbd>+<kbd>Z</kbd>) for the last car you tapped.
+- A second tap on the same car within a second is ignored, so a finger bouncing on a touch screen doesn't count two laps.
+- **Close (keep scoring)** hides the grid and leaves hand scoring on. **Score by Hand** on the Next Up bar brings it back.
+- **Stop hand scoring** goes back to counting laps from the loop, for example once the decoder is working again. Laps already counted by hand stay.
+
+Each tap is the same as **+1 Lap** in the drawer: it has no lap time, so it never sets a best lap or a record, it's on the **Undo** list, and a lap that reaches the lap limit brings the checkered flag out as usual. Only cars already on the board can be scored: a car joins the grid once it has crossed the line in this race.
+
+**On a phone or tablet.** On the race-day manager's **Race** tab (on the venue's Wi-Fi), a **Decoder down?** section shows during a race. Tap **SCORE BY HAND**, and the same grid appears on the phone, two cars to a row, with **Undo last tap** and **Stop hand scoring** under it. A tap on the phone is the same lap as a tap at the desk, so two people can share the field, one counting half the cars each. See [Race-day manager](../screens/phone-and-web.md#race-day-manager).
+
+**The announcer.** When you switch it on, the announcer says "Timing is down. Laps are being counted by hand." While it's on, it doesn't call laps from the loop at all, so a flicker from a half-working decoder isn't read out as a lap time or a fastest lap. Everything else, such as the time left and the finish, is announced as normal.
+
+**The result.** Hand scoring lasts until the race ends, and the next race starts with the decoder trusted again. In the saved result, every lap counted by hand is marked with an asterisk ("12*"), the same as any lap added with **+1 Lap**. Cars level on laps are placed by their last real crossing, so check the finishing order afterwards. If anything needs putting right, use **Edit Result**, where you can type the whole result's lap counts in one go (see [Correcting a saved result](#correcting-a-saved-result)).
+
 ## Reset and undo
 
 **Reset** (in the flag row, or <kbd>F7</kbd>) clears the running race: the standings, the clock, the grid and any queued announcements. It also clears the round and the name on the **Session** row, so the next race starts from a clean slate, and it throws away the crash-recovery copy of the race. <kbd>F7</kbd> asks first if a race is staging, counting down or running; the button doesn't.

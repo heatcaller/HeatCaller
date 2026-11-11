@@ -97,6 +97,25 @@ public sealed class NextUpBar : Control
         Fit(button, captions);
     }
 
+    /// <summary>
+    /// Shows or hides a button already added - for one that is only there
+    /// some of the time (11 Nov 2026: Score by Hand, while the decoder is
+    /// down - see HandScoring). A hidden button takes no room, so the text
+    /// keeps the width it always had the rest of the night.
+    /// </summary>
+    public void ShowButton(Button button, bool shown)
+    {
+        if (shown ? _hidden.Remove(button) : _hidden.Add(button))
+        {
+            button.Visible = shown;
+            PerformLayout();
+            Invalidate();
+        }
+    }
+
+    /// <summary>The buttons hidden with <see cref="ShowButton"/>. Kept here rather than read from Visible, which is false for every child while the bar itself is not showing.</summary>
+    private readonly HashSet<Button> _hidden = new();
+
     /// <summary>Where the text under each caption starts.</summary>
     private static int TextTop => CaptionTop + AppTheme.MicroFont.Height + 1;
 
@@ -181,16 +200,24 @@ public sealed class NextUpBar : Control
         var right = Width - Edge;
         var left = right;
 
+        var anyShown = false;
+
         for (var i = _buttons.Count - 1; i >= 0; i--)
         {
             var button = _buttons[i].Button;
 
+            if (_hidden.Contains(button))
+            {
+                continue;
+            }
+
+            anyShown = true;
             left = right - button.Width;
             button.Location = new Point(left, Math.Max(0, (Height - button.Height) / 2));
             right = left - UiLayout.ButtonGap;
         }
 
-        var reserved = _buttons.Count == 0 ? 0 : Width - left + Edge;
+        var reserved = !anyShown ? 0 : Width - left + Edge;
 
         if (ReservedRight != reserved)
         {
