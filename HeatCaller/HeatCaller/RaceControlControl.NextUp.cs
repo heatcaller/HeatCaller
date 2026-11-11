@@ -602,6 +602,9 @@ public sealed partial class RaceControlControl
         // and Stage stands in when the talk buttons are off (see
         // RaceBar.ButtonsFor).
         _nextWaiting = _barStep is not null || next is not null;
+
+        // Score by Hand, while the decoder is down mid-race (11 Nov 2026).
+        UpdateHandScoreOffer();
     }
 
     /// <summary>

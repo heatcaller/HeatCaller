@@ -5689,6 +5689,14 @@ public sealed partial class WebServerService
         .btn.green { background:#1f9d55; } .btn.yellow { background:#c99700; }
         .btn.red { background:#cc2e4d; } .btn.checkered { background:#4a4a4a; }
         .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        /* The hand-scoring grid (11 Nov 2026, decoder-down mode): one big
+           button per car, two to a row, a tap a lap. */
+        .handGrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:8px 0; }
+        .handCar { min-height:84px; padding:10px 6px; border:0; border-radius:12px; background:#2456c9; color:#fff;
+                   font-family:inherit; font-weight:700; cursor:pointer; touch-action:manipulation; }
+        .handCar .n { display:block; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .handCar .l { display:block; font-size:30px; margin-top:4px; }
+        .handCar.hit { background:#1f9d55; } .handCar.miss { background:#c99700; }
 
         .rowActions { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; align-items:center; }
         /* The Program tab's toolbar: the class picker full width on a line of
@@ -5755,6 +5763,15 @@ public sealed partial class WebServerService
             </div>
             <button class="btn wide checkered" id="btnFlag-checkered">CHECKERED</button>
             <button class="btn wide" id="btnReset">RESET</button>
+            <div id="handBox" style="display:none">
+              <div class="kv"><span class="lbl">Decoder down?</span><b id="handState">-</b></div>
+              <button class="btn wide red" id="btnHandOn">SCORE BY HAND</button>
+              <div id="handGrid" class="handGrid"></div>
+              <div class="grid2" id="handTools" style="display:none">
+                <button class="btn" id="btnHandUndo">Undo last tap</button>
+                <button class="btn" id="btnHandOff">Stop hand scoring</button>
+              </div>
+            </div>
           </div>
 
           <div id="tab-results" style="display:none">
@@ -6278,7 +6295,7 @@ public sealed partial class WebServerService
             if (race.roundLabel) { label += '  (' + race.roundLabel + (race.className ? ', ' + race.className : '') + ')'; }
             if (d.data.busy) { label += '  • laptop busy'; }
             document.getElementById('raceState').textContent = label;
-          });
+          }).then(function(){ return refreshHand(); });
         }
         function flag(name){
           var args = { flag: name };
@@ -6294,6 +6311,73 @@ public sealed partial class WebServerService
         });
         document.getElementById('btnReset').addEventListener('click', function(){
           if (confirm('Reset the race? The board is cleared.')) { flag('reset'); }
+        });
+
+        // --- Scoring by hand (Wi-Fi only, 11 Nov 2026) ---------------------------
+        // race.handCars -> {on, offer, racing, cars:[{id,name,laps,lapsText}]};
+        // race.handLap {driverId, delta} -> {id, laps, lapsText}. Shown while a
+        // race runs; the grid only while hand scoring is on. The cars come in
+        // an order that never changes, so a button never moves under a thumb.
+        var handTaps = [];
+        var handShownKey = '';
+        function refreshHand(){
+          return call('race.handCars', {}, null, READ_WAIT).then(function(d){
+            var box = document.getElementById('handBox');
+            if (!d.ok || !d.data || !d.data.racing) { box.style.display = 'none'; return; }
+            var data = d.data;
+            box.style.display = 'block';
+            document.getElementById('handState').textContent = data.on ? 'Scoring by hand' : (data.offer ? 'Laps are not being counted' : 'Decoder counting');
+            document.getElementById('btnHandOn').style.display = data.on ? 'none' : 'block';
+            document.getElementById('handTools').style.display = data.on ? 'grid' : 'none';
+            var grid = document.getElementById('handGrid');
+            if (!data.on) { grid.innerHTML = ''; handShownKey = ''; return; }
+            var key = (data.cars || []).map(function(c){ return c.id; }).join('|');
+            if (key !== handShownKey) {
+              grid.innerHTML = '';
+              (data.cars || []).forEach(function(c){
+                var b = document.createElement('button');
+                b.className = 'handCar';
+                b.id = 'hand-' + c.id;
+                b.innerHTML = '<span class="n">' + esc(c.name) + '</span><span class="l">' + esc(c.lapsText) + '</span>';
+                b.addEventListener('click', function(){ handLap(c.id, 1); });
+                grid.appendChild(b);
+              });
+              if (!(data.cars || []).length) { grid.innerHTML = '<div class="empty">No car is on the board yet.</div>'; }
+              handShownKey = key;
+            } else {
+              (data.cars || []).forEach(function(c){
+                var b = document.getElementById('hand-' + c.id);
+                if (b) { b.querySelector('.l').textContent = c.lapsText; }
+              });
+            }
+          });
+        }
+        function handLap(id, delta){
+          var b = document.getElementById('hand-' + id);
+          call('race.handLap', { driverId: id, delta: delta }).then(function(d){
+            if (!d.ok) {
+              sayFailure(d);
+              if (b) { b.className = 'handCar miss'; setTimeout(function(){ b.className = 'handCar'; }, 400); }
+              return;
+            }
+            if (delta > 0) { handTaps.push(id); }
+            if (b) {
+              b.querySelector('.l').textContent = d.data.lapsText;
+              b.className = 'handCar hit';
+              setTimeout(function(){ b.className = 'handCar'; }, 300);
+            }
+          });
+        }
+        document.getElementById('btnHandOn').addEventListener('click', function(){
+          doOp('race.handScoring', { on: true }, function(){ handTaps = []; refreshHand(); });
+        });
+        document.getElementById('btnHandOff').addEventListener('click', function(){
+          if (confirm('Stop scoring by hand? Laps are counted from the loop again. The laps counted by hand stay.')) {
+            doOp('race.handScoring', { on: false }, refreshHand);
+          }
+        });
+        document.getElementById('btnHandUndo').addEventListener('click', function(){
+          if (handTaps.length) { handLap(handTaps.pop(), -1); }
         });
 
         // --- Results -----------------------------------------------------------------

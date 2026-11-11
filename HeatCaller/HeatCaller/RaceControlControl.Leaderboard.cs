@@ -1594,6 +1594,11 @@ public sealed partial class RaceControlControl
         var removeLap = new ToolStripMenuItem("Remove a lap (-1)");
         removeLap.Click += (_, _) => AdjustSelected(-1, 0);
 
+        // The decoder is down: the whole field, one tap a lap, full screen
+        // (11 Nov 2026) - see HandScoring. Shown only while a race runs.
+        var scoreByHand = new ToolStripMenuItem("Score the race by hand (decoder down)...");
+        scoreByHand.Click += (_, _) => OpenHandScoring();
+
         var penaltyFive = new ToolStripMenuItem("Penalty +5s");
         penaltyFive.Click += (_, _) => AdjustSelected(0, 5000);
 
@@ -1647,6 +1652,7 @@ public sealed partial class RaceControlControl
             new ToolStripSeparator(),
             addLap,
             removeLap,
+            scoreByHand,
             new ToolStripSeparator(),
             penaltyFive,
             penaltyTen,
@@ -1713,6 +1719,9 @@ public sealed partial class RaceControlControl
             releaseDriver.Text = $"Release {name} now";
 
             releaseAll.Visible = canRelease;
+
+            scoreByHand.Visible = _race.State == RaceState.Racing && !_race.IsPracticeMode;
+            scoreByHand.Text = HandScoringOn ? "Open the hand-scoring grid..." : "Score the race by hand (decoder down)...";
 
             var standing = _race.GetOrderedStandings().FirstOrDefault(st =>
                 string.Equals(st.TransponderId, transponder, StringComparison.OrdinalIgnoreCase));

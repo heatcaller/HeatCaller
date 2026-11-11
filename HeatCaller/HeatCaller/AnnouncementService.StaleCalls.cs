@@ -67,6 +67,36 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>
+    /// Runs a lap's handling with every call it would offer left unsaid, as
+    /// <see cref="WhileLapCallsAreStale"/> does - for a crossing that arrives
+    /// while the race is being scored by hand (11 Nov 2026, decoder-down
+    /// mode; see HandScoring). The director has said the loop can't be
+    /// trusted, so a flicker from it must not be called as a lap time or a
+    /// fastest lap; the board and the running order still take it. Nothing
+    /// is logged as "told of late": these calls aren't late, they're held,
+    /// and the console has already said why.
+    /// </summary>
+    internal void WhileHandScoring(Action work)
+    {
+        ArgumentNullException.ThrowIfNull(work);
+
+        var before = _staleCallsSkipped;
+        t_lapCallsStale++;
+
+        try
+        {
+            work();
+        }
+        finally
+        {
+            t_lapCallsStale--;
+
+            // Not counted towards the "skipped as late" line.
+            _staleCallsSkipped = before;
+        }
+    }
+
+    /// <summary>
     /// Notes a call left unsaid because its lap is too old, if this thread is
     /// in WhileLapCallsAreStale. True when it was - the caller then offers
     /// nothing.
