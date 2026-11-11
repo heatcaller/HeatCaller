@@ -2137,10 +2137,11 @@ public sealed class AppSettings
     public bool VoiceEnergyFollowsRace { get; set; } = true;
 
     /// <summary>
-    /// Race calls start playing while ElevenLabs is still sending them,
+    /// Race calls start playing while the voice is still sending them,
     /// rather than once the whole line is in (10 Nov 2026, voice speed plan,
-    /// phase 3) - see AnnouncementService.Streaming. Off by default: a club's
-    /// own ElevenLabs voice only, and new.
+    /// phase 3) - see AnnouncementService.Streaming. The club's own ElevenLabs
+    /// voice, or the HeatCaller voice through the relay (11 Nov 2026). Off by
+    /// default while it is new.
     /// </summary>
     public bool StreamLiveCalls { get; set; }
 

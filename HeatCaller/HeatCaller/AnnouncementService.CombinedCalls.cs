@@ -133,6 +133,11 @@ public sealed partial class AnnouncementService
             () => SynthesizeAndPlayAsync(text, "[voice] Personal bests", speedOverride: speed),
             displayText: display,
             sayByMs: sayBy,
+            // Breaks the pacing dial's gap (11 Nov 2026, asked for by Asher):
+            // it is two or three drivers' news that already waited out a whole
+            // line, and on the Busy dial the gap held it until its moment had
+            // gone. Commanding is the weight the dial always lets through.
+            routineWeight: Math.Max(AnnouncerDensity.Commanding, WeightOf(AnnouncementEventType.PersonalBestLap)),
             renderAhead: () => RenderLineAheadAsync(text, AnnouncementEventType.PersonalBestLap, speed));
     }
 

@@ -67,6 +67,7 @@ public sealed partial class AnnouncementService
             }
 
             var speed = config.SpeedFor(_voiceStore.Current.Speed);
+            var toMake = new List<(string Transponder, string Text)>();
 
             foreach (var row in order.Take(WinnerContenders))
             {
@@ -89,11 +90,32 @@ public sealed partial class AnnouncementService
                     _winnerCalls[transponder] = (text, null, null);
                 }
 
-                // None of the queue's AsyncLocals reach the render - see RenderAhead.
-                using (ExecutionContext.SuppressFlow())
+                toMake.Add((transponder, text));
+            }
+
+            // One after the other, the likelier winner first (11 Nov 2026):
+            // both at once took both of the two synthesis slots on the last
+            // lap, just as the last lap's own calls wanted one.
+            // None of the queue's AsyncLocals reach the render - see RenderAhead.
+            using (ExecutionContext.SuppressFlow())
+            {
+                _ = Task.Run(async () =>
                 {
-                    _ = Task.Run(() => MakeTheWinnerCall(transponder, text, speed));
-                }
+                    foreach (var (transponder, text) in toMake)
+                    {
+                        if (MakeTheWinnerCall(transponder, text, speed) is { } render)
+                        {
+                            try
+                            {
+                                await render;
+                            }
+                            catch
+                            {
+                                // Said where it is taken, or not at all.
+                            }
+                        }
+                    }
+                });
             }
 
             StatusMessage?.Invoke($"[voice] Winner's call made ready for {string.Join(" and ", order.Take(WinnerContenders).Select(r => DisplayNameFor(r.Standing.Transponder)))}.");
@@ -105,14 +127,14 @@ public sealed partial class AnnouncementService
         }
     }
 
-    /// <summary>Starts one contender's render, and notes it against them if the line is still theirs.</summary>
-    private void MakeTheWinnerCall(string transponder, string text, double speed)
+    /// <summary>Starts one contender's render, and notes it against them if the line is still theirs. The render, or null when there is none.</summary>
+    private Task<SynthesisResult>? MakeTheWinnerCall(string transponder, string text, double speed)
     {
         try
         {
             if (LineAsItWillBeAsked(text, AnnouncementEventType.RaceCompleted, speed) is not { } line)
             {
-                return;
+                return null;
             }
 
             var render = RenderLineAsync(line.Profile, line.Text);
@@ -129,10 +151,14 @@ public sealed partial class AnnouncementService
             }
 
             Timings.NoteRenderedAhead();
+
+            return render;
         }
         catch (Exception ex)
         {
             StatusMessage?.Invoke($"[voice] The winner's call could not be made ready ({ex.Message}) - it will be made at the flag.");
+
+            return null;
         }
     }
 

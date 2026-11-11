@@ -596,8 +596,9 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
         // After the render and the speaker's lock.
         Assert.Contains("if (WhyDequeuedLineIsStale() is { } stale)", queue, StringComparison.Ordinal);
 
-        // A lap call gets its deadline when none is given.
-        Assert.Contains("sayByMs ??= IsLapBoundCall(type) ? LapSeenAt(transponder) + LapCallSayWithinMs : null;", queue, StringComparison.Ordinal);
+        // A lap call gets its deadline when none is given - its type's own
+        // since 11 Nov 2026 (a bare lap time's is shorter; see SayWithinMsFor).
+        Assert.Contains("sayByMs ??= IsLapBoundCall(type) ? LapSeenAt(transponder) + SayWithinMsFor(type) : null;", queue, StringComparison.Ordinal);
 
         // An AI line no longer bins the lap calls ahead of it.
         Assert.Contains("if (isPriority && facts is null)", queue, StringComparison.Ordinal);

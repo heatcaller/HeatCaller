@@ -796,12 +796,13 @@ public sealed partial class AnnouncementService
                 // Decoded (and levelled) before PlayAsync returns its task, on
                 // this thread - so what the levelling measured is this line's,
                 // and teaches the voice's level for streamed lines (10 Nov
-                // 2026, see VoiceLevelMemory). ElevenLabs takes only.
+                // 2026, see VoiceLevelMemory). New takes only: ElevenLabs or the
+                // HeatCaller voice, never a stand-in or a recording.
                 VoiceLevel.TakeLastMeasured();
                 var playing = PlayAsync(audio, volume, TailSecondsNow(tail), LeadSecondsFor(lead), StillWantedUnlessOvertaken(honourMute), onAir, timing);
 
                 if (VoiceLevel.TakeLastMeasured() is { } measured
-                    && synthesis.Source == LineSource.ElevenLabs && voice is null)
+                    && synthesis.Source is LineSource.ElevenLabs or LineSource.HeatCaller && voice is null)
                 {
                     VoiceLevelMemory.Learn(currentProfile, measured);
                 }
