@@ -13,6 +13,31 @@ The relay is a small server your club (or whoever looks after your IT) hosts on 
 - **One token per club.** The relay admin gives your club a club id and a publish token. The token only works for your club, so it can't publish to, or delete, anyone else's pages.
 - **The relay can also speak.** If the person who runs it has set it up for your club, the same address and token give the announcer the [HeatCaller voice](../announcer/voice.md#the-heatcaller-voice) — a natural announcer voice with no ElevenLabs account, key or bill of your own. There's nothing extra to enter and nothing extra to publish. See [The relay also speaks](setup.md#the-relay-also-speaks).
 
+## When the internet drops
+
+**The race runs with no internet.** HeatCaller does all of its work on the timing laptop, so the online relay is a copy of the night and never part of running it. Everything below keeps working with the venue's internet down, or with no internet at the track at all:
+
+- timing, the decoder and Race Control
+- the night plan, **Start Next** and auto start
+- check-in at the desk, and the Wi-Fi check-in and remote pages on phones at the track
+- results, heats and mains, the Big Screen and printing
+- the announcer, with the free Kokoro voice and any lines already saved on the laptop
+
+When the relay can't be reached, the **Next Up** bar on Race Control says so in one line:
+
+> Website offline - racing carries on. Online pages will catch up (3 updates waiting)
+
+The **Website** tile on Mission Control says the same. Carry on racing; there's nothing to fix before the next heat. The line goes away by itself once the relay is back.
+
+What waits for the internet, and catches up when it's back:
+
+- **Results.** Finished results wait in a queue on the laptop, even across a restart, and go up in order when the connection returns. A live frame that couldn't be sent is replaced by a newer one.
+- **Things that come in through the relay.** Online check-in, driver sign-ups, requests and notes sent from drivers' phones over the internet reach the laptop once it's back online. Phones on the track's own Wi-Fi aren't affected.
+- **Emails.** Night emails and racer PIN emails are sent once there's internet. The closing list on Next Steps reminds you.
+- **The HeatCaller and ElevenLabs voices**, and AI commentary from the relay. While offline, new lines go to the Kokoro voice and the built-in commentary model.
+
+If the laptop itself is the worry rather than the internet, see [Standby PC](../admin/standby-pc.md).
+
 ## Your club's pages
 
 Your club's address is the relay address followed by `/c/` and your club id, for example `https://your-relay.fly.dev/c/your-club`. That address is the one to hand out. It's the home page, and every page has the same tabs, so nobody hits a dead end. See [Getting around](#getting-around). The club name in the heading of every page is the name the relay admin gave your club.

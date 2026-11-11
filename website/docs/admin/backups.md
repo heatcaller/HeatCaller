@@ -227,6 +227,7 @@ To get data back from an `.unreadable-` copy, close HeatCaller, make a backup of
 
 ## The other cards on the page
 
+- **Standby PC** lets a second laptop on the track's network keep a copy of this one's race data and take over by hand if this one dies. See [Standby PC](standby-pc.md).
 - **Settings mode** switches between Simple and Advanced mode, and has **Restore Default Settings** and **Put Back Earlier Settings**, which reset the settings Simple mode hides without touching your drivers, results or keys. Each saves a copy of your settings first, in the `Settings Backups` folder in the data folder, so it travels in your backups. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md#restore-default-settings).
 - **Getting help** has **Save Support Info** (below), **About HeatCaller** (the version, and the licenses of the components HeatCaller ships) and **License and Privacy** (the license agreement and privacy notice you accepted).
 

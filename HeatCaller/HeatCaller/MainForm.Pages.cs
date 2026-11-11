@@ -751,6 +751,10 @@ public partial class MainForm
 
         raceControl.NextStepProvider = () => raceProgram.NextStep();
 
+        // "Website offline - racing carries on. Online pages will catch up",
+        // and the standby PC's copy line (11 Nov 2026, Phase 6.3 - see OfflineFirst).
+        raceControl.ResilienceLine = ResilienceLineForBar;
+
         // The night planned (11 Nov 2026, race-night build plan, Phase 2):
         // "We're done after this round" is told to the room, and the end of
         // the night lists what is left before lights out.
@@ -2922,6 +2926,9 @@ public partial class MainForm
                 }
             }
         };
+        // The warm standby PC (11 Nov 2026, Phase 6.2) - see MainForm.Standby.
+        SetUpStandby(backupRestore);
+
         pageBackup.Controls.Add(backupRestore);
     }
 

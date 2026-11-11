@@ -2398,6 +2398,33 @@ public sealed class AppSettings
     [JsonIgnore]
     public string BackupPassword { get; set; } = string.Empty;
 
+    // --- Warm standby PC (11 Nov 2026, race-night build plan, Phase 6.2) --
+    //
+    // A second laptop on the track's network keeps a copy of this one's
+    // race data and can take over by hand. See WarmStandby for the rules.
+
+    /// <summary>
+    /// The timing PC side: hand a copy of the race data to a standby PC that
+    /// gives <see cref="StandbyPin"/>, over the Local Screens server, to
+    /// addresses on the track's own network only. Off by default.
+    /// </summary>
+    public bool StandbyServeEnabled { get; set; }
+
+    /// <summary>The standby side: this PC copies the timing PC's race data every few seconds and can take over.</summary>
+    public bool StandbyModeEnabled { get; set; }
+
+    /// <summary>The standby side: the timing PC's address, as its Local Screens page shows it (192.168.1.20:8080).</summary>
+    public string StandbyPrimaryAddress { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The PIN between the two PCs: the one the timing PC asks for, and the
+    /// one the standby gives - the same PIN typed on both. Eight letters or
+    /// digits or more (WarmStandby.IsUsablePin). Sealed with the other
+    /// secrets.
+    /// </summary>
+    [JsonIgnore]
+    public string StandbyPin { get; set; } = string.Empty;
+
     /// <summary>
     /// True when this file's secrets were sealed by another Windows account
     /// or PC and could not be opened here - after restoring onto a new
@@ -2465,6 +2492,7 @@ public sealed class AppSettings
         public string? RelayCheckInSecret { get; set; }
         public string? SmtpPassword { get; set; }
         public string? BackupPassword { get; set; }
+        public string? StandbyPin { get; set; }
         public Dictionary<string, string>? RacerPins { get; set; }
     }
 
@@ -2481,6 +2509,7 @@ public sealed class AppSettings
         RelayCheckInSecret = RelayCheckInSecret,
         SmtpPassword = SmtpPassword,
         BackupPassword = BackupPassword,
+        StandbyPin = StandbyPin,
         RacerPins = new Dictionary<string, string>(RacerPins, StringComparer.OrdinalIgnoreCase),
     };
 
@@ -2501,6 +2530,7 @@ public sealed class AppSettings
         RelayCheckInPin = fields.RelayCheckInPin ?? string.Empty;
         RelayCheckInSecret = fields.RelayCheckInSecret ?? string.Empty;
         SmtpPassword = fields.SmtpPassword ?? string.Empty;
+        StandbyPin = fields.StandbyPin ?? string.Empty;
         RacerPins = fields.RacerPins is null
             ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             : new Dictionary<string, string>(fields.RacerPins, StringComparer.OrdinalIgnoreCase);
@@ -2534,6 +2564,7 @@ public sealed class AppSettings
         || !string.IsNullOrEmpty(RelayCheckInSecret)
         || !string.IsNullOrEmpty(SmtpPassword)
         || !string.IsNullOrEmpty(BackupPassword)
+        || !string.IsNullOrEmpty(StandbyPin)
         || RacerPins.Count > 0;
 
     /// <summary>

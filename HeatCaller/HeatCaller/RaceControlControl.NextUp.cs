@@ -544,6 +544,15 @@ public sealed partial class RaceControlControl
             day += $"{(day.Length > 0 ? " · " : string.Empty)}{evolution.ClassName}: {char.ToLowerInvariant(words[0])}{words[1..]}";
         }
 
+        // Offline-first, said out loud (11 Nov 2026, Phase 6.3): "Website
+        // offline - racing carries on. Online pages will catch up", and the
+        // standby PC's copy line on a standby - see OfflineFirst. First, so
+        // a long day line never cuts it off; it is only there while true.
+        if (ResilienceLine?.Invoke() is { Length: > 0 } resilience)
+        {
+            day = day.Length > 0 ? $"{resilience} · {day}" : resilience;
+        }
+
         // --- Is anything owed before the next race can go out? ---
         //
         // The rule lives in ProgramNextStep, which puts bump-ups ahead of
