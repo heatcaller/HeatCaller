@@ -294,3 +294,21 @@ describe("My Night: the jump bar", () => {
     assert.deepEqual(names, ["Main car · B6.4", "Second car", "Rearrange"]);
   });
 });
+
+describe("My Night: a race's own lines (11 Nov 2026, build plan 7.4)", () => {
+  it("shows the laptop's lines for the race in its card, and nothing for a race without", async () => {
+    const page = await open({
+      ...NIGHT,
+      races: [NIGHT.races[0], { ...NIGHT.races[1], lines: ["Held off Sam for 4 laps", "Best lap 0.20s quicker than your Heat 1", "", 7] }],
+    });
+    const card = byClass(page.get("nx"), "rc")[0]!;
+    const said = byClass(card, "rc-lines")[0]!;
+
+    assert.equal(said.getAttribute("aria-label"), "Your race");
+    assert.deepEqual(said.find((n) => n.tagName === "LI").map((n) => n.textContent),
+      ["Held off Sam for 4 laps", "Best lap 0.20s quicker than your Heat 1"], "only real lines");
+
+    byClass(rows(page)[0]!, "rbtn")[0]!.click();
+    assert.equal(byClass(byClass(page.get("nx"), "rc")[0]!, "rc-lines").length, 0);
+  });
+});

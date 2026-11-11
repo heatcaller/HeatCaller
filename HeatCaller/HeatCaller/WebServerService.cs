@@ -3396,6 +3396,16 @@ public sealed partial class WebServerService
                     {
                         row["leader"] = leader;
                     }
+
+                    // "lapping" (11 Nov 2026, build plan 7.3): the leader is
+                    // about to lap this car - which approach it is, one more
+                    // than the laps already down - so the driver's lap voice
+                    // can say "Leader behind" once. See LeaderBehind. Only
+                    // when it is so; never on the leader.
+                    if (i > 0 && LeaderBehind.Approach(car, ordered[0]) is { } lapping)
+                    {
+                        row["lapping"] = lapping;
+                    }
                 }
             }
 

@@ -61,7 +61,8 @@ internal static class DriverNightExtras
         IEnumerable<SessionRecord>? tonight,
         Func<string, RoundDefinition?>? roundOf,
         IEnumerable<SessionRecord>? runs = null,
-        bool abbreviate = false)
+        bool abbreviate = false,
+        IReadOnlyList<SessionRecord>? history = null)
     {
         var who = transponder?.Trim();
 
@@ -164,6 +165,12 @@ internal static class DriverNightExtras
                 .ToList();
             var grid = AchievementEvaluator.GridPlace(realCars, row);
 
+            // Their own lines for the race (11 Nov 2026, build plan 7.4) -
+            // only for a race that counts, never a demo or practice run.
+            var said = kind is null
+                ? RaceLines.For(who, session, counts.Select(x => x.Session), history, s => ClassOf(s, roundOf), s => LabelOf(s, roundOf))
+                : Array.Empty<string>();
+
             races.Add(new NightRace
             {
                 Sid = session.Id,
@@ -195,6 +202,7 @@ internal static class DriverNightExtras
                 Out = practice ? null : OutOf(row),
                 Rating = rating,
                 Field = kind is null ? null : FieldOf(results, practice, abbreviate),
+                Lines = said.Count > 0 ? said.ToList() : null,
             });
         }
 
@@ -557,6 +565,12 @@ internal static class DriverNightExtras
     /// practice run). A demo's "[DEMO]" prefix is taken off: the page marks
     /// a demo with a chip of its own.
     /// </summary>
+    /// <summary>A race's class, from its round, or empty when it has none.</summary>
+    private static string ClassOf(SessionRecord session, Func<string, RoundDefinition?>? roundOf) =>
+        !string.IsNullOrEmpty(session.RoundId) && roundOf?.Invoke(session.RoundId) is { } round
+            ? (round.ClassName ?? string.Empty).Trim()
+            : string.Empty;
+
     private static string LabelOf(SessionRecord session, Func<string, RoundDefinition?>? roundOf, string? kind = null)
     {
         var own = (session.Label ?? string.Empty).Trim();
@@ -739,6 +753,16 @@ internal sealed record NightRace
     [JsonPropertyName("field")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<NightFieldRow>? Field { get; init; }
+
+    /// <summary>
+    /// Their own lines for this race - RaceLines.For (11 Nov 2026, build
+    /// plan 7.4): "Held off Sam for 4 laps", "Best Stock finish this year".
+    /// Left out when there are none, and always for a demo or practice run,
+    /// so a night without any is what it was before.
+    /// </summary>
+    [JsonPropertyName("lines")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Lines { get; init; }
 }
 
 /// <summary>One driver in `races[].field`: {pos?, name, qual?, lapsMs?, posAt?, startMs?} - the public result row's shape.</summary>
