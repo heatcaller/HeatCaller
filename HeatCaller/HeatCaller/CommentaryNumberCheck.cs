@@ -1192,6 +1192,28 @@ internal static class CommentaryNumberCheck
             k++;
         }
 
+        // ENDING IN A PAIR (11 Nov 2026): "point one seventy-nine" is .179,
+        // "point seventeen" .17 - said the way "a five four twenty-five" is.
+        // Read as "point one" and a stray seventy-nine, a qualifying time
+        // the facts had exactly was cut as invented, and with it the
+        // pole-sitter's whole introduction. Only up to thousandths.
+        if (digits.Length <= 1 && k < ws.Count)
+        {
+            var w = ws[k].Low;
+
+            if (SmallOf(w) is { } teen and >= 10)
+            {
+                return (digits.Append(teen).ToString(), k + 1 - i);
+            }
+
+            if (TensOf(w) is { } tens)
+            {
+                var unit = k + 1 < ws.Count && ws[k + 1].Hyphened && SmallOf(ws[k + 1].Low) is { } u and >= 1 and <= 9 ? u : 0;
+                var used = unit > 0 ? 2 : 1;
+                return (digits.Append(tens + unit).ToString(), k + used - i);
+            }
+        }
+
         return digits.Length == 0 ? null : (digits.ToString(), k - i);
     }
 

@@ -2014,6 +2014,17 @@ public sealed class CommentaryService
         if (!string.IsNullOrWhiteSpace(answer))
         {
             answer = IntroRepeats.WithoutSecondPass(answer, grid.Select(d => d.SpokenName).ToList());
+
+            // EVERY DRIVER INTRODUCED (11 Nov 2026): one whose sentence was
+            // cut above, or who the model skipped, gets a plain line in
+            // grid order - see IntroRepeats.WithEveryDriver.
+            var filled = new List<string>();
+            answer = IntroRepeats.WithEveryDriver(answer, grid, filled);
+
+            foreach (var note in filled)
+            {
+                Log?.Invoke($"[commentary] Driver introductions: {note}.");
+            }
         }
 
         // The credit last of all, so nothing above can cut into it - and

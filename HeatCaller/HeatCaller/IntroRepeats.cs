@@ -171,6 +171,113 @@ internal static class IntroRepeats
         return string.Join(" ", kept);
     }
 
+    /// <summary>
+    /// The introductions with every driver on the grid in them (11 Nov
+    /// 2026). A driver the words never name - their sentence cut by the
+    /// figures check, or skipped by the model - gets a plain line of the
+    /// app's own ("On pole, Al Gorithim."), put in grid order: in front of
+    /// the first sentence naming a driver further down the grid, or else
+    /// before a closing line that names nobody. Name and position only, so
+    /// there is nothing in it to check.
+    ///
+    /// WHY: the figures check cut the pole-sitter's sentence for a
+    /// misread time, and the room heard "Alongside him on the front row..."
+    /// with nobody on pole. Nothing cut from the introductions should cost a
+    /// driver their introduction.
+    /// </summary>
+    internal static string WithEveryDriver(string introductions, IReadOnlyList<IntroDriver> grid, List<string>? notes = null)
+    {
+        var text = (introductions ?? string.Empty).Trim();
+
+        if (text.Length == 0 || grid is not { Count: > 0 })
+        {
+            return text;
+        }
+
+        var drivers = Matchers(grid.Select(d => d.SpokenName).ToList());
+
+        // Matchers drops blank and repeated names - only fill in when every
+        // driver has a pattern of their own, so index means grid place.
+        if (drivers.Count != grid.Count)
+        {
+            return text;
+        }
+
+        var sentences = Sentences(text);
+        var namedIn = sentences.Select(s => Named(s, drivers)).ToList();
+        var named = new HashSet<int>(namedIn.SelectMany(n => n));
+        var missing = Enumerable.Range(0, grid.Count).Where(d => !named.Contains(d)).ToList();
+
+        if (missing.Count == 0)
+        {
+            return text;
+        }
+
+        // Where the field ends: before any closing sentences that name nobody.
+        var end = sentences.Count;
+
+        while (end > 0 && namedIn[end - 1].Count == 0)
+        {
+            end--;
+        }
+
+        if (end == 0)
+        {
+            // Nobody named at all - not introductions to repair.
+            return text;
+        }
+
+        var inserts = new SortedDictionary<int, List<string>>();
+
+        foreach (var d in missing)
+        {
+            var at = Enumerable.Range(0, end).FirstOrDefault(i => namedIn[i].Any(n => n > d), end);
+
+            if (!inserts.TryGetValue(at, out var list))
+            {
+                inserts[at] = list = new List<string>();
+            }
+
+            list.Add(PlainIntroduction(grid[d], d == grid.Count - 1));
+        }
+
+        var result = new List<string>();
+
+        for (var i = 0; i <= sentences.Count; i++)
+        {
+            if (inserts.TryGetValue(i, out var lines))
+            {
+                result.AddRange(lines);
+            }
+
+            if (i < sentences.Count)
+            {
+                result.Add(sentences[i]);
+            }
+        }
+
+        notes?.Add(missing.Count == 1
+            ? $"{grid[missing[0]].SpokenName} was never named, so was given a plain introduction"
+            : $"{missing.Count} drivers were never named, so were given plain introductions");
+
+        return string.Join(" ", result);
+    }
+
+    /// <summary>"On pole, Sam Smith." - a driver's introduction with nothing in it but their name and where they start.</summary>
+    private static string PlainIntroduction(IntroDriver driver, bool last)
+    {
+        var name = driver.SpokenName.Trim();
+
+        return driver.Slot switch
+        {
+            <= 0 => $"Also in this one, {name}.",
+            1 => $"On pole, {name}.",
+            2 => $"Alongside on the front row, {name}.",
+            _ when last => $"And starting {LeadTracker.SpokenOrdinal(driver.Slot)}, {name}.",
+            _ => $"Starting {LeadTracker.SpokenOrdinal(driver.Slot)}, {name}.",
+        };
+    }
+
     /// <summary>One driver's patterns: the full name, and the first word when no other driver has it.</summary>
     private static List<Regex[]> Matchers(IReadOnlyList<string> names)
     {
