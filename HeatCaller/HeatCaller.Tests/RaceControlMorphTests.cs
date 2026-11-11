@@ -115,7 +115,11 @@ public sealed class RaceControlMorphTests
     {
         var layout = Source("RaceControlControl.Layout.cs");
 
-        Assert.Contains("_btnStartNext.Click += (_, _) => StartNext();", layout, StringComparison.Ordinal);
+        // Start Next's click still starts the next race - past the filter
+        // that swallows a completed hold's let-go (11 Nov 2026, see
+        // StartNextHoldTests).
+        Assert.Contains("_btnStartNext.Click += (_, _) =>", layout, StringComparison.Ordinal);
+        Assert.Contains("if (_startNextClicks.ClickActs())", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("_btnBarNext", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("_btnBarResults", layout, StringComparison.Ordinal);
         Assert.Contains("_btnBarSkip, _btnBarHoldTalk, _btnBarCallUp, _btnBarEditResult, _btnReset", layout, StringComparison.Ordinal);
