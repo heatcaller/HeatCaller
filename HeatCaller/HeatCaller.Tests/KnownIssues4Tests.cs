@@ -32,6 +32,21 @@ public sealed class KnownIssues4Tests : IDisposable
     }
 
     [Fact]
+    public void A_take_saved_as_A_Main_is_not_re_rolled_and_is_not_blamed_on_the_names()
+    {
+        var profile = new VoiceProfile { Engine = VoiceEngine.ElevenLabs, VoiceId = "v1", ModelId = "m1" };
+        var key = VoiceLibrary.KeyFor(profile, "The A-Main is next.");
+        var line = new VoiceLibrary.SavedLine(key, "The A-Main is next.", "Voice", DateTime.UtcNow, 100);
+
+        var why = VoiceSettingsControl.WhyNoReroll(profile, line, key, textTheRaceSends: "The Ay-Main is next.");
+
+        Assert.NotNull(why);
+        Assert.Contains("Ay-Main", why);
+        Assert.DoesNotContain("full names", why);
+        Assert.Contains("Forget Line", why);
+    }
+
+    [Fact]
     public void A_take_whose_words_the_shortening_leaves_alone_can_still_be_re_rolled()
     {
         var profile = new VoiceProfile { Engine = VoiceEngine.ElevenLabs, VoiceId = "v1", ModelId = "m1" };

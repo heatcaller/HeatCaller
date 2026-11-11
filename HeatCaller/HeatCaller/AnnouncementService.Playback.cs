@@ -22,6 +22,25 @@ public sealed partial class AnnouncementService
     private static CancellationTokenSource? _activeLine;
     private static readonly object ActiveOutputLock = new();
 
+    /// <summary>Whether a spoken line is coming out of the speaker now - for a lap chime, which plays under it (see PlaySound).</summary>
+    private static bool VoiceLineIsPlaying
+    {
+        get
+        {
+            lock (ActiveOutputLock)
+            {
+                return _activeLine is not null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// How loud a lap chime is under a spoken line, as a share of its own
+    /// level (10 Nov 2026). Enough to mark the lap, not enough to cover the
+    /// name being said - the chime is the room's tick, the voice its news.
+    /// </summary>
+    internal const float ChimeUnderVoiceGain = 0.55f;
+
     /// <summary>Stops whatever is playing. Returns true if there was something to stop.</summary>
     public static bool StopCurrentPlayback()
     {
@@ -455,16 +474,38 @@ public sealed partial class AnnouncementService
     /// </summary>
     /// <param name="stillWanted">See <see cref="PlayPcmAsync"/>.</param>
     /// <param name="onAir">See <see cref="PlayPcmAsync"/>.</param>
-    public static Task PlayAsync(
+    /// <param name="timing">
+    /// The queued line's timing (10 Nov 2026), given its lengths and the
+    /// moment the output first reads it. Null for anything not timed.
+    /// </param>
+    internal static Task PlayAsync(
         byte[] mp3Bytes,
         double volume,
         double trailingSilenceSeconds = DefaultTrailingSilenceSeconds,
         double leadingSilenceSeconds = DefaultLeadingSilenceSeconds,
         Func<bool>? stillWanted = null,
-        bool onAir = false)
+        bool onAir = false,
+        VoiceLineTiming? timing = null)
     {
         var (pcm, format) = DecodeAudio(mp3Bytes);
-        return PlayPcmAsync(pcm, format, volume, trailingSilenceSeconds, leadingSilenceSeconds, stillWanted: stillWanted, onAir: onAir);
+        Action? started = null;
+
+        if (timing is not null)
+        {
+            NoteLengths(timing, pcm.Length, format, leadingSilenceSeconds, trailingSilenceSeconds);
+            started = () => timing.FirstPulled(TimingClock.NowMs);
+        }
+
+        return PlayPcmAsync(pcm, format, volume, trailingSilenceSeconds, leadingSilenceSeconds, started: started, stillWanted: stillWanted, onAir: onAir);
+    }
+
+    /// <summary>A timed line's lengths as PlayPcmAsync pads it - the same clamps. See VoiceLineTiming.</summary>
+    internal static void NoteLengths(VoiceLineTiming timing, int pcmBytes, WaveFormat format, double leadingSilenceSeconds, double trailingSilenceSeconds)
+    {
+        var bytesPerSecond = Math.Max(1, format.AverageBytesPerSecond);
+        timing.SpeechMs = (long)(1000.0 * pcmBytes / bytesPerSecond);
+        timing.LeadMs = (long)(1000.0 * Math.Clamp(leadingSilenceSeconds, 0.0, DefaultLeadingSilenceSeconds));
+        timing.TailMs = (long)(1000.0 * Math.Clamp(trailingSilenceSeconds, 0.0, LongLineTrailingSilenceSeconds));
     }
 
     /// <summary>
@@ -664,9 +705,45 @@ public sealed partial class AnnouncementService
         // third of a second of dead air at every change of voice in a
         // two-hander, on top of the trimmed tail that already gives the
         // hand-over its breath.
-        if (trailingSilenceSeconds > BackToBackTrailingSilenceSeconds)
+        //
+        // AND NOT FOR A TAIL THAT ALREADY COVERS IT (10 Nov 2026, voice speed
+        // plan, phase 1). The grace is for the device's buffer, which is
+        // AudioBus.OutputLatencyMs - and a line's own trailing silence is
+        // mixed after its last word, so once the bus has mixed a 0.6 s tail
+        // the last word left the speaker long ago. Only the part of the
+        // buffer the tail does not cover is waited for now: none, for every
+        // standard line. The flat 350 ms was dead air after every call - a
+        // third of a second of the 2.5 s the baseline race lost per call.
+        if (trailingSilenceSeconds > BackToBackTrailingSilenceSeconds
+            && GraceAfterLineMs(trailingSilenceSeconds) is var grace and > 0)
         {
-            await Task.Delay(350);
+            await Task.Delay(grace);
+        }
+    }
+
+    /// <summary>How long after the bus has mixed a line's tail the device is still playing its last word - the buffer less the tail. See PlayPcmAsync.</summary>
+    internal static int GraceAfterLineMs(double trailingSilenceSeconds) =>
+        Math.Max(0, AudioBus.OutputLatencyMs - (int)(trailingSilenceSeconds * 1000));
+
+    /// <summary>
+    /// The tail a line gets now: a standard line followed by another one
+    /// waiting in the queue gets the back-to-back tail (10 Nov 2026, voice
+    /// speed plan, phase 1). The 0.6 s was there to stop the device cutting
+    /// a line's end when it stopped; the shared output never stops now (see
+    /// AudioBus), so with another call ready it is only a pause - and on a
+    /// busy track it was the next call's lap going stale. An empty queue
+    /// keeps the full breath.
+    /// </summary>
+    private double TailSecondsNow(SpeechTail tail)
+    {
+        if (tail != SpeechTail.Normal)
+        {
+            return TailSecondsFor(tail);
+        }
+
+        lock (_voiceQueueLock)
+        {
+            return _voiceQueue.Count > 0 ? BackToBackTrailingSilenceSeconds : DefaultTrailingSilenceSeconds;
         }
     }
 }

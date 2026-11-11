@@ -75,7 +75,9 @@ public sealed partial class AnnouncementService
         ShortenNamesForCloudVoices?.Invoke() == true ? Shortened(text) : text;
 
     /// <summary>The line as a cloud voice should be sent it - see the class note and SayFullNamesWithCloudVoices.</summary>
-    private string ForCloudVoice(string text) => ShortensForCloudVoice() ? Shortened(text) : text;
+    /// "A-Main" goes as "Ay-Main" (9 Nov 2026) - see RaceNumbers.SpokenRoundNames.
+    private string ForCloudVoice(string text) =>
+        RaceNumbers.SpokenRoundNames(ShortensForCloudVoice() ? Shortened(text) : text, cloudVoice: true);
 
     /// <summary>The line with every driver's full name in its short form.</summary>
     private string Shortened(string text)

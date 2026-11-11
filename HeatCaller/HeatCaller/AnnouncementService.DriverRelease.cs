@@ -101,8 +101,21 @@ public sealed partial class AnnouncementService
                         : SendToListeners is not null && ListenersWanted?.Invoke() == true
                           && OfferToListenersOnly(prepared.Text, EncodeWav(prepared.Pcm, prepared.Format), shortened);
 
+                    // Rendered at the green, so its timing starts at the
+                    // speaker (10 Nov 2026) - see VoiceLineTiming.
+                    var timing = _lineTiming.Value;
+
+                    if (timing is not null)
+                    {
+                        timing.RenderedBy ??= "prepared ahead";
+                        timing.Characters = prepared.Text.Length;
+                        timing.GotTheSpeaker(TimingClock.NowMs);
+                        NoteLengths(timing, prepared.Pcm.Length, prepared.Format, CurrentLeadingSilence, DefaultTrailingSilenceSeconds);
+                    }
+
                     // WHY (23 Oct 2026, bug hunt 10): re-checked once the line is registered - see PlayPcmAsync.
                     await PlayPcmAsync(prepared.Pcm, prepared.Format, volume, DefaultTrailingSilenceSeconds, CurrentLeadingSilence,
+                        started: timing is null ? null : () => timing.FirstPulled(TimingClock.NowMs),
                         stillWanted: () => !IsCutByCountdown() && !Muted, onAir: onAir);
                 }
                 finally

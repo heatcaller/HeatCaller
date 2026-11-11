@@ -65,12 +65,24 @@ public sealed partial class AnnouncementService
 
         Interlocked.Exchange(ref _lastWordDueTicks, mine);
 
+        // A queued prepared line - a recap, a two-hander's turn - is timed
+        // like any other (10 Nov 2026); see VoiceLineTiming. Its lengths as
+        // PlayPcmAsync pads them.
+        var timing = _lineTiming.Value;
+
+        if (timing is not null)
+        {
+            NoteLengths(timing, pcm.Length, format, leading, trailing);
+        }
+
         // Noted again from the moment the line is first HEARD (22 Oct 2026,
         // known issues): after a speaker dropout the device takes a while to
         // open, and the note made above was early by that much - see
         // FirstReadSampleProvider. Only if the note is still this line's.
         void Heard()
         {
+            timing?.FirstPulled(TimingClock.NowMs);
+
             var heard = (DateTime.UtcNow + toLastWord).Ticks;
 
             if (Interlocked.CompareExchange(ref _lastWordDueTicks, heard, mine) == mine)

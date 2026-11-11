@@ -51,7 +51,22 @@ public sealed partial class AnnouncementService
     /// <param name="SayByMs">The TimingClock time it must start by or not be said - a lap call's, or a clock call's. See AnnouncementService.Freshness.</param>
     /// <param name="Facts">For an AI line written during a race, the race it was written against. See AnnouncementService.Freshness.</param>
     /// <param name="ShownText">What was put on the screens for it when it was queued - taken back if it is dropped as out of date. See AnnouncementTextWithdrawn.</param>
-    private sealed record QueuedVoiceItem(AnnouncementEventType Type, string? Transponder, Func<Task> Work, string? OnAir = null, BattleLine? Battle = null, long? SayByMs = null, RaceFactsStamp? Facts = null, string? ShownText = null);
+    private sealed record QueuedVoiceItem(AnnouncementEventType Type, string? Transponder, Func<Task> Work, string? OnAir = null, BattleLine? Battle = null, long? SayByMs = null, RaceFactsStamp? Facts = null, string? ShownText = null)
+    {
+        /// <summary>When it was queued, on TimingClock - for its line's timing (VoiceLineTiming, 10 Nov 2026).</summary>
+        public long QueuedAtMs { get; init; } = TimingClock.NowMs;
+    }
+
+    /// <summary>
+    /// The line this voice-loop iteration is working on, for its timing -
+    /// set when it is taken off the queue, flowing into its work like
+    /// _dequeuedCall. Null for a line that does not come through the queue
+    /// (a flag call, a test), which is not timed. See VoiceLineTiming.
+    /// </summary>
+    private readonly AsyncLocal<VoiceLineTiming?> _lineTiming = new();
+
+    /// <summary>Every line the loop took this race, for the summary at the flag. See VoiceTimingTally.</summary>
+    internal VoiceTimingTally Timings { get; } = new();
 
     private readonly List<QueuedVoiceItem> _voiceQueue = new();
     private readonly object _voiceQueueLock = new();
@@ -1530,6 +1545,15 @@ public sealed partial class AnnouncementService
                 {
                     StatusMessage?.Invoke("[voice] Reminder (prepared): dropped - the announcer was muted.");
                     return;
+                }
+
+                // Rendered before it was queued, so its timing has no render
+                // and starts at the speaker (10 Nov 2026) - see VoiceLineTiming.
+                if (_lineTiming.Value is { } timing)
+                {
+                    timing.RenderedBy ??= "prepared ahead";
+                    timing.Characters = prepared.Text.Length;
+                    timing.GotTheSpeaker(TimingClock.NowMs);
                 }
 
                 // Listeners at home hear a prepared line (recap, teaser, a

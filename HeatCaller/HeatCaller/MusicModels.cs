@@ -519,7 +519,10 @@ public sealed class MusicStore
 
             Directory.CreateDirectory(MusicDirectory);
 
-            foreach (var source in Directory.GetFiles(bundled).Where(IsSupportedAudio))
+            // Not the removed tracks: a build folder from before 9 Nov 2026
+            // still holds their files, since a build never clears old output.
+            foreach (var source in Directory.GetFiles(bundled)
+                         .Where(f => IsSupportedAudio(f) && !RemovedTitles.Contains(TitleForFile(f))))
             {
                 var target = Path.Combine(MusicDirectory, Path.GetFileName(source));
                 if (!File.Exists(target))
@@ -615,6 +618,17 @@ public sealed class MusicStore
             // as an error they can fix rather than silently vanishing.
             Current.Tracks.RemoveAll(t => t.IsBuiltIn && !File.Exists(t.FilePath));
 
+            // Tracks taken out of the app (9 Nov 2026): their entries go, so
+            // they stop playing. Built-in entries only - a club's own track
+            // is never touched.
+            //
+            // The FILE is left alone (10 Nov 2026, bug hunt): Add Track used
+            // to label a club's own "Victory Lane.mp3" as Included, and the
+            // copy in the music folder may be theirs. Not being a shipped
+            // title any more, it is not listed again; Add Track lists it as
+            // the club's own.
+            Current.Tracks.RemoveAll(t => t.IsBuiltIn && RemovedTitles.Contains(t.DisplayName.Trim()));
+
             // THE SONGS' NAMES (17 Oct 2026): a shipped song listed under its
             // working name - "Broadcast Song 1" - takes the name it has now.
             // Shipped ones only: a club's own track is called what they
@@ -667,9 +681,6 @@ public sealed class MusicStore
         "Vanishing Point", "Last Lap Lights", "Redline Memory", "One More Run",
         "Back to the Grid", "Long Way Home",
 
-        // The sound packs' own tracks (0.55) - see SoundPacks.PackMusic.
-        "Victory Lane", "Insert Coin", "Race Day Live", "Neon Grid",
-
         // Broadcast's own songs (16 Oct 2026).
         "Broadcast Song 1", "Broadcast Song 2", "Broadcast Song 3", "Broadcast Song 4",
 
@@ -677,7 +688,7 @@ public sealed class MusicStore
         "Pit Lane Song 1", "Pit Lane Song 2", "Pit Lane Song 3", "Pit Lane Song 4",
 
         // Classic's own songs (16 Oct 2026).
-        "Classic Song 1", "Classic Song 2", "Classic Song 3", "Classic Song 4",
+        "Classic Song 1", "Classic Song 3", "Classic Song 4",
 
         // Podium's own songs (17 Oct 2026).
         "Podium Song 1", "Podium Song 2", "Podium Song 3", "Podium Song 4",
@@ -687,8 +698,19 @@ public sealed class MusicStore
         // before then is still recognised as the shipped set.
         "Prime Time", "Highlight Reel", "Under the Lights", "Post-Race Show",
         "Gravel and Gasoline", "Dirt Road Dash", "Pit Stop Two-Step", "Back Forty Straight",
-        "Chrome Apex", "Midnight Pit Wall", "Starlight Straight", "Afterburn",
+        "Chrome Apex", "Starlight Straight", "Afterburn",
         "Full Throttle", "Top Step", "Burnout", "Champagne Spray",
+    };
+
+    /// <summary>
+    /// Tracks that used to ship and were taken out of the app (9 Nov 2026).
+    /// An install from before then still has them in its music folder and
+    /// library; SyncBuiltInTracks drops them so they stop playing.
+    /// </summary>
+    private static readonly HashSet<string> RemovedTitles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Neon Grid", "Insert Coin", "Race Day Live", "Victory Lane",
+        "Midnight Pit Wall", "Classic Song 2",
     };
 
     /// <summary>
@@ -715,7 +737,6 @@ public sealed class MusicStore
 
         // Classic - synthwave.
         ["Classic Song 1"] = "Chrome Apex",
-        ["Classic Song 2"] = "Midnight Pit Wall",
         ["Classic Song 3"] = "Starlight Straight",
         ["Classic Song 4"] = "Afterburn",
 

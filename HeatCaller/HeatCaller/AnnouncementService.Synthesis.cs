@@ -437,7 +437,9 @@ public sealed partial class AnnouncementService
 
         // "A-Main" said as the letter, not "ah main" (8 Nov 2026) - for every
         // engine, after the recordings (which are matched by the words as
-        // written). See RaceNumbers.SpokenRoundNames.
+        // written). See RaceNumbers.SpokenRoundNames. Kokoro's spelling here;
+        // the cloud voices get their own below (9 Nov 2026).
+        var beforeLetter = text;
         text = RaceNumbers.SpokenRoundNames(text);
 
         if (profile.EffectiveEngine == VoiceEngine.Kokoro)
@@ -450,7 +452,7 @@ public sealed partial class AnnouncementService
         // Kokoro standing in is ON this PC, so it is given the line as written,
         // full names and all - the same words it says when it is the voice chosen.
         var asWritten = text;
-        text = ForCloudVoice(text);
+        text = ForCloudVoice(beforeLetter);
 
         if (profile.EffectiveEngine == VoiceEngine.HeatCaller)
         {

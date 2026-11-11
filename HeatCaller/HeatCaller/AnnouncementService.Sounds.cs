@@ -187,9 +187,28 @@ public sealed partial class AnnouncementService
 
             try
             {
-                StatusMessage?.Invoke($"[sound] Playing {label} (volume={volume:0.00})...");
+                // A lap chime no longer waits for the voice (10 Nov 2026,
+                // voice speed plan, phase 1). It took the same lock as the
+                // spoken lines, so a chime that began while a call was being
+                // rendered held that call back when it was ready - 0.8 s a
+                // call in the baseline race, as long as the render itself -
+                // and a chime that came during a line waited the whole line
+                // and was then dropped as too late (203 in one race). The
+                // lock was there so two outputs never started at once; there
+                // is one output now, the bus, which mixes. So a lap chime
+                // plays on its lap, under the voice, a little quieter. The
+                // flag-sequence sounds still take the lock: the voice is
+                // timed around them (WaitForLeadInSoundAsync).
+                var underTheVoice = IsPerLapSound(kind);
+                var playAt = underTheVoice && VoiceLineIsPlaying ? volume * ChimeUnderVoiceGain : volume;
 
-                await _audioPlaybackLock.WaitAsync();
+                StatusMessage?.Invoke($"[sound] Playing {label} (volume={playAt:0.00}{(playAt < volume ? ", under the voice" : "")})...");
+
+                if (!underTheVoice)
+                {
+                    await _audioPlaybackLock.WaitAsync();
+                }
+
                 try
                 {
                     // Checked again once the speaker is free: the wait for the
@@ -220,11 +239,11 @@ public sealed partial class AnnouncementService
                         // The same wake-up pad a spoken line gets on this
                         // output - files had none, and a short chime from a
                         // file could vanish on a wireless speaker.
-                        await ToneGenerator.PlayFileAsync(file, volume, cancel.Token, CurrentLeadingSilence, semitones);
+                        await ToneGenerator.PlayFileAsync(file, playAt, cancel.Token, CurrentLeadingSilence, semitones);
                     }
                     else
                     {
-                        await playGenerated(volume, cancel.Token);
+                        await playGenerated(playAt, cancel.Token);
                     }
 
                     if (cancel.IsCancellationRequested)
@@ -237,7 +256,10 @@ public sealed partial class AnnouncementService
                     // Before "finished" is signalled (by the queue wrapper,
                     // once this returns), so a line waiting on this sound
                     // (see WaitForLeadInSoundAsync) starts cleanly after it.
-                    _audioPlaybackLock.Release();
+                    if (!underTheVoice)
+                    {
+                        _audioPlaybackLock.Release();
+                    }
                 }
             }
             finally

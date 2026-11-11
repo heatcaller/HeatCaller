@@ -773,7 +773,7 @@ public sealed class ThemeStore
         }
 
         var titles = theme.Background?.MusicPlaylist ?? new List<string>();
-        // Trimmed, because the library side is: a title saved as "Neon Grid "
+        // Trimmed, because the library side is: a title saved as "Horizon Line "
         // matched no track, and Theme music quietly played the club's own.
         return new ThemeMusicSource(theme.Name, titles.Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim()).ToList());
     }
