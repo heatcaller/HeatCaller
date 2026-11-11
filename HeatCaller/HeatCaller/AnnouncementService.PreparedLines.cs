@@ -546,7 +546,22 @@ public sealed partial class AnnouncementService
             _flagLines.Remove(type);
         }
 
-        RaiseAnnouncementText(prepared.Text);
+        SpeakFlagTake(type, prepared.Text, Task.FromResult(new SynthesisResult(prepared.Audio, prepared.Source)), profile, config, "prepared");
+
+        return true;
+    }
+
+    /// <summary>
+    /// Says a flag call's take: clears the decks now, then plays it once its
+    /// sound has played and the speaker is free. The take may still be being
+    /// made - the finish with the winner's name in it (11 Nov 2026) is
+    /// finished while the fanfare plays. A take that fails is said in the log,
+    /// and the queue the call was holding carries on.
+    /// </summary>
+    /// <param name="how">For the log: "prepared", or how else the take came to be.</param>
+    private void SpeakFlagTake(AnnouncementEventType type, string text, Task<SynthesisResult> take, VoiceProfile profile, AnnouncementEventConfig config, string how)
+    {
+        RaiseAnnouncementText(text);
         var generation = ClearTheDecksFor(type);
 
         // The finish call holds the voice queue until it has spoken - taken
@@ -554,6 +569,8 @@ public sealed partial class AnnouncementService
         var finishHold = ClaimFinishCallHold(type);
 
         var volume = AnnouncementGain(profile.Volume);
+
+        SynthesisResult? made = null;
 
         _ = Task.Run(async () =>
         {
@@ -564,9 +581,13 @@ public sealed partial class AnnouncementService
 
             try
             {
-                StatusMessage?.Invoke($"[voice] {type} (prepared): \"{prepared.Text}\"");
+                StatusMessage?.Invoke($"[voice] {type} ({how}): \"{text}\"");
 
                 await WaitForLeadInSoundAsync(type);
+
+                // Made by now, as a rule - a take still being made is finished
+                // while its sound plays.
+                made = await take;
 
                 await _audioPlaybackLock.WaitAsync();
                 try
@@ -576,14 +597,14 @@ public sealed partial class AnnouncementService
                     // speaking after it would say the opposite.
                     if (Volatile.Read(ref _interruptGeneration) != generation)
                     {
-                        StatusMessage?.Invoke($"[voice] {type} (prepared): dropped - a newer flag call came in before it could speak.");
+                        StatusMessage?.Invoke($"[voice] {type} ({how}): dropped - a newer flag call came in before it could speak.");
                         return;
                     }
 
                     // Muted while it waited for its sound or the speaker.
                     if (Muted)
                     {
-                        StatusMessage?.Invoke($"[voice] {type} (prepared): dropped - the announcer was muted.");
+                        StatusMessage?.Invoke($"[voice] {type} ({how}): dropped - the announcer was muted.");
                         return;
                     }
 
@@ -593,10 +614,10 @@ public sealed partial class AnnouncementService
                     //
                     // WHY (23 Oct 2026, bug hunt 10): with whether its audio
                     // says the names shortened - see OfferToListenersOnly.
-                    var onAir = OfferLineToListeners(prepared.Text, prepared.Audio, AudioFromShortenedText(prepared.Source, prepared.Text));
+                    var onAir = OfferLineToListeners(text, made.Value.Audio, AudioFromShortenedText(made.Value.Source, text));
 
                     // WHY (23 Oct 2026, bug hunt 10): re-checked once the line is registered - see PlayPcmAsync.
-                    await PlayAsync(prepared.Audio, volume, DefaultTrailingSilenceSeconds, CurrentLeadingSilence,
+                    await PlayAsync(made.Value.Audio, volume, DefaultTrailingSilenceSeconds, CurrentLeadingSilence,
                         () => Volatile.Read(ref _interruptGeneration) == generation && !Muted, onAir);
                 }
                 finally
@@ -624,16 +645,16 @@ public sealed partial class AnnouncementService
                 // the recording is left alone, and the console says which
                 // file to re-record - the same rule as the queued lines in
                 // SynthesizeAndPlayAsync.
-                if (IsUndecodable(ex) && prepared.Source is LineSource.ElevenLabs or LineSource.Library or LineSource.HeatCaller)
+                if (IsUndecodable(ex) && made is { Source: LineSource.ElevenLabs or LineSource.Library or LineSource.HeatCaller } badTake)
                 {
-                    if (StingerLibrary.Shared.TryLoad(prepared.Text) is { } recorded
-                        && recorded.AsSpan().SequenceEqual(prepared.Audio))
+                    if (StingerLibrary.Shared.TryLoad(text) is { } recorded
+                        && recorded.AsSpan().SequenceEqual(badTake.Audio))
                     {
-                        StatusMessage?.Invoke($"[voice] The recorded soundscape line \"{prepared.Text}\" won't play - re-record or delete it on the soundscape page.");
+                        StatusMessage?.Invoke($"[voice] The recorded soundscape line \"{text}\" won't play - re-record or delete it on the soundscape page.");
                     }
                     else
                     {
-                        VoiceLibrary.Shared.Forget(DeliveryProfileFor(profile, config), ForCloudVoice(prepared.Text));
+                        VoiceLibrary.Shared.Forget(DeliveryProfileFor(profile, config), ForCloudVoice(text));
                     }
                 }
 
@@ -652,8 +673,6 @@ public sealed partial class AnnouncementService
                 PrimeFlagLine(type);
             }
         });
-
-        return true;
     }
 
     /// <summary>

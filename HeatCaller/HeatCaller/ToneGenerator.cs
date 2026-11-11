@@ -307,7 +307,12 @@ public static class ToneGenerator
     /// <paramref name="semitones"/> raises (or lowers) the whole file - the
     /// streak sound climbs with the streak this way.
     /// </summary>
-    public static async Task PlayFileAsync(string path, float volume, CancellationToken cancellationToken, double leadInSeconds = 0, double semitones = 0)
+    /// <param name="talkOver">
+    /// For the finish fanfare (11 Nov 2026): its last seconds are lowered and
+    /// handed to the voice, which talks over them - see TalkOver. Null: the
+    /// file plays out at its volume, as every other sound does.
+    /// </param>
+    public static async Task PlayFileAsync(string path, float volume, CancellationToken cancellationToken, double leadInSeconds = 0, double semitones = 0, TalkOver? talkOver = null)
     {
         // Same guard as above, plus the file itself: a custom sound whose
         // path has gone (moved drive, cleared folder) would otherwise throw
@@ -348,6 +353,13 @@ public static class ToneGenerator
         if (leadInSeconds > 0)
         {
             chain = new OffsetSampleProvider(chain) { DelayBy = TimeSpan.FromSeconds(leadInSeconds) };
+        }
+
+        if (talkOver is not null)
+        {
+            // The whole length as heard: the file at its own pitch-speed, plus the lead-in.
+            var heard = reader.TotalTime.TotalSeconds / Math.Pow(2, semitones / 12.0) + leadInSeconds;
+            chain = new TalkOverTail(chain, heard, talkOver);
         }
 
         // Through the shared output, like the tones - see AudioBus. Every
@@ -398,6 +410,69 @@ public static class ToneGenerator
     };
 
     /// <summary>Passes samples through untouched while claiming a different sample rate - half of a pitch shift.</summary>
+    /// <summary>
+    /// A sound's last seconds lowered and handed to the voice: once only
+    /// <see cref="TalkOver.Last"/> is left, <see cref="TalkOver.Reached"/>
+    /// runs (off the audio thread) and the sound eases down to
+    /// <see cref="TalkOver.DuckTo"/> over a quarter of a second, the way a
+    /// host talks over the end of a jingle. A sound too short to have a
+    /// tail worth talking over - under <see cref="TalkOver.ShortestLength"/> -
+    /// plays out untouched, and the voice waits for its end as it always did.
+    /// </summary>
+    internal sealed class TalkOverTail : ISampleProvider
+    {
+        private const double RampSeconds = 0.25;
+
+        private readonly ISampleProvider _source;
+        private readonly long _handOverAt;
+        private readonly long _rampSamples;
+        private readonly float _duckTo;
+        private readonly Action _reached;
+        private long _position;
+        private bool _handedOver;
+
+        internal TalkOverTail(ISampleProvider source, double lengthSeconds, TalkOver talkOver)
+        {
+            _source = source;
+            var perSecond = (long)source.WaveFormat.SampleRate * source.WaveFormat.Channels;
+            _handOverAt = lengthSeconds >= talkOver.ShortestLength.TotalSeconds
+                ? (long)((lengthSeconds - talkOver.Last.TotalSeconds) * perSecond)
+                : long.MaxValue;
+            _rampSamples = Math.Max(1, (long)(RampSeconds * perSecond));
+            _duckTo = Math.Clamp(talkOver.DuckTo, 0f, 1f);
+            _reached = talkOver.Reached;
+        }
+
+        public WaveFormat WaveFormat => _source.WaveFormat;
+
+        /// <summary>For the tests: whether the voice has been handed the tail.</summary>
+        internal bool HandedOver => _handedOver;
+
+        public int Read(float[] buffer, int offset, int count)
+        {
+            var read = _source.Read(buffer, offset, count);
+
+            for (var i = 0; i < read; i++, _position++)
+            {
+                if (_position < _handOverAt)
+                {
+                    continue;
+                }
+
+                if (!_handedOver)
+                {
+                    _handedOver = true;
+                    ThreadPool.QueueUserWorkItem(_ => _reached());
+                }
+
+                var into = Math.Min(1.0, (_position - _handOverAt) / (double)_rampSamples);
+                buffer[offset + i] *= (float)(1 - (1 - _duckTo) * into);
+            }
+
+            return read;
+        }
+    }
+
     private sealed class RetaggedRate : ISampleProvider
     {
         private readonly ISampleProvider _source;
@@ -413,3 +488,13 @@ public static class ToneGenerator
         public int Read(float[] buffer, int offset, int count) => _source.Read(buffer, offset, count);
     }
 }
+
+/// <summary>
+/// How a sound hands its last seconds to the voice (11 Nov 2026) - see
+/// ToneGenerator.TalkOverTail.
+/// </summary>
+/// <param name="Last">How much of the end the voice talks over.</param>
+/// <param name="DuckTo">What the sound is lowered to under the voice: 1 is untouched.</param>
+/// <param name="ShortestLength">A sound shorter than this has no tail to talk over.</param>
+/// <param name="Reached">Run once, off the audio thread, when the tail starts.</param>
+public sealed record TalkOver(TimeSpan Last, float DuckTo, TimeSpan ShortestLength, Action Reached);

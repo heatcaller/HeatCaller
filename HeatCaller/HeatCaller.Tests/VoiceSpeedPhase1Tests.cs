@@ -52,7 +52,9 @@ public sealed class VoiceSpeedPhase1Tests
 
         Assert.Contains("var underTheVoice = IsPerLapSound(kind);", sounds);
         Assert.Contains("if (!underTheVoice)\n                {\n                    await _audioPlaybackLock.WaitAsync();", sounds.Replace("\r\n", "\n"));
-        Assert.Contains("if (!underTheVoice)\n                    {\n                        _audioPlaybackLock.Release();", sounds.Replace("\r\n", "\n"));
+        // Given back once, at the end or (the finish fanfare, 11 Nov 2026) when its tail is handed to the voice.
+        Assert.Contains("var lockHeld = !underTheVoice ? 1 : 0;", sounds);
+        Assert.Contains("if (Interlocked.Exchange(ref lockHeld, 0) == 1)\n                    {\n                        _audioPlaybackLock.Release();", sounds.Replace("\r\n", "\n"));
     }
 
     [Fact]

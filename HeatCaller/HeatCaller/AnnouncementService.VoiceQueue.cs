@@ -145,12 +145,25 @@ public sealed partial class AnnouncementService
         // take would leave their name off; the live line carries it.
         var sponsoredHere = SponsoredMoments.ForEvent(type) is { } sponsoredMoment && SponsorOf(sponsoredMoment) is not null;
 
+        // The finish with the winner's name in it, when the club's finish
+        // lines have "{winner}" (11 Nov 2026) - see AnnouncementService.Winner.
+        if (type == AnnouncementEventType.RaceCompleted && !sponsoredHere && _dryRun is null && TrySpeakTheFinishWithTheWinner(config))
+        {
+            return;
+        }
+
         if (IsInterruptingAnnouncement(type) && !sponsoredHere && TrySpeakPreparedFlag(type, config))
         {
             return;
         }
 
         var candidates = config.EffectiveTemplates;
+
+        // A finish that names nobody leaves its "{winner}" lines out.
+        if (type == AnnouncementEventType.RaceCompleted)
+        {
+            candidates = FinishLinesNamingNobody(candidates);
+        }
         if (candidates.Count == 0)
         {
             return;

@@ -209,6 +209,30 @@ public sealed partial class AnnouncementService
                     await _audioPlaybackLock.WaitAsync();
                 }
 
+                // The finish fanfare gives the speaker up for its last
+                // seconds (11 Nov 2026, asked for by Asher): the finish call
+                // comes in over its tail, which is lowered under it, rather
+                // than after it - see FanfareTalkOver. Once only, whichever
+                // comes first: the tail or the end.
+                var lockHeld = !underTheVoice ? 1 : 0;
+
+                void GiveUpTheSpeaker()
+                {
+                    if (Interlocked.Exchange(ref lockHeld, 0) == 1)
+                    {
+                        _audioPlaybackLock.Release();
+                    }
+                }
+
+                var talkOver = kind == SoundEffectKind.RaceCompleted && finished is not null
+                    ? new TalkOver(FanfareTalkOver, FanfareDuckTo, FanfareTalkOverShortest, () =>
+                    {
+                        StatusMessage?.Invoke($"[sound] The finish call comes in over the last {FanfareTalkOver.TotalSeconds:0.0}s of the fanfare, which is lowered under it.");
+                        GiveUpTheSpeaker();
+                        finished.TrySetResult();
+                    })
+                    : null;
+
                 try
                 {
                     // Checked again once the speaker is free: the wait for the
@@ -239,7 +263,7 @@ public sealed partial class AnnouncementService
                         // The same wake-up pad a spoken line gets on this
                         // output - files had none, and a short chime from a
                         // file could vanish on a wireless speaker.
-                        await ToneGenerator.PlayFileAsync(file, playAt, cancel.Token, CurrentLeadingSilence, semitones);
+                        await ToneGenerator.PlayFileAsync(file, playAt, cancel.Token, CurrentLeadingSilence, semitones, talkOver);
                     }
                     else
                     {
@@ -256,10 +280,7 @@ public sealed partial class AnnouncementService
                     // Before "finished" is signalled (by the queue wrapper,
                     // once this returns), so a line waiting on this sound
                     // (see WaitForLeadInSoundAsync) starts cleanly after it.
-                    if (!underTheVoice)
-                    {
-                        _audioPlaybackLock.Release();
-                    }
+                    GiveUpTheSpeaker();
                 }
             }
             finally
@@ -349,6 +370,15 @@ public sealed partial class AnnouncementService
 
         return removed.Count;
     }
+
+    /// <summary>How much of the end of the finish fanfare the finish call talks over (11 Nov 2026).</summary>
+    internal static readonly TimeSpan FanfareTalkOver = TimeSpan.FromSeconds(1.5);
+
+    /// <summary>What the fanfare is lowered to under the finish call - a little, not out.</summary>
+    internal const float FanfareDuckTo = 0.4f;
+
+    /// <summary>A fanfare shorter than this (the built-in tones, a short sting) is heard out in full first, as always.</summary>
+    internal static readonly TimeSpan FanfareTalkOverShortest = TimeSpan.FromSeconds(3);
 
     /// <summary>Completes when the race-completed sound has played (or was skipped). See NotifyRaceCompleted.</summary>
     private volatile Task _finishSoundDone = Task.CompletedTask;
