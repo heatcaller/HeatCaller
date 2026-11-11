@@ -1036,6 +1036,11 @@ public sealed partial class RaceControlControl
         ImagingPlay? jingle = null;
         ImagingBed? bed = null;
 
+        // The Tonight Open, asked for below, and whether On Air got as far
+        // as playing it - a call-off before then gives it back (finally).
+        var tonightOpen = Task.FromResult<SpokenSegment?>(null);
+        var tonightOpenTaken = false;
+
         try
         {
             // 1. THE OPENING, WRITTEN AND RENDERED BEFORE ANYTHING PLAYS
@@ -1051,6 +1056,16 @@ public sealed partial class RaceControlControl
             // its way, and how far along it is (21 Oct 2026) - on the strip
             // under the flag row since 25 Oct 2026. See BeginOnAirProgress.
             BeginOnAirProgress();
+
+            // THE TONIGHT OPEN, ASKED FOR NOW (11 Nov 2026) and written while
+            // the opening is, so neither waits on the other. Once a night,
+            // ticked on Voice -> Commentary, and only in front of a real race:
+            // a demo is not the start of the evening. Asked here, on the UI
+            // thread, because the director reads its facts before it awaits.
+            if (start is null && Commentary?.Invoke() is { } director)
+            {
+                tonightOpen = director.ForTonightOpenAsync(cts.Token);
+            }
 
             // A demo with no round has no race to open - see GoOnAirThenAsync.
             var line = start is not null && round is null ? null : await WriteOpeningAsync(round, cts.Token);
@@ -1090,6 +1105,17 @@ public sealed partial class RaceControlControl
             }
 
             cts.Token.ThrowIfCancellationRequested();
+
+            // The Tonight Open written before the show goes live, so a slow
+            // write is On Air getting ready rather than silence on air. A
+            // write that failed is said in PlayTonightOpenAsync.
+            try
+            {
+                await tonightOpen.WaitAsync(cts.Token);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+            }
 
             // Whatever is left is the announcer finishing what he is saying.
             SetOnAirStep(OnAirStep.Finishing);
@@ -1133,6 +1159,13 @@ public sealed partial class RaceControlControl
             {
                 screen.StopSponsorSpot("On Air");
             }
+
+            // 1b. THE TONIGHT OPEN, THEN THE SHOW OPEN (11 Nov 2026). The
+            //     evening is set out first - its own music, its own recording
+            //     - and it hands straight on to this race's jingle. It used
+            //     to fire by itself in the first quiet gap of the night.
+            tonightOpenTaken = true;
+            await PlayTonightOpenAsync(tonightOpen, cts.Token);
 
             // 2. The jingle, to its post.
             jingle = BroadcastImaging.Start(ImagingCue.TopOfRace);
@@ -1288,6 +1321,11 @@ public sealed partial class RaceControlControl
         }
         finally
         {
+            if (!tonightOpenTaken)
+            {
+                GiveBackWhenWritten(tonightOpen);
+            }
+
             _race.StateChanged -= onRaceMoved;
             _onAirCts = null;
             _onAirStageNow = false;
@@ -1367,6 +1405,80 @@ public sealed partial class RaceControlControl
         {
             _actStage?.Invoke(false, null);
         }
+    }
+
+    /// <summary>
+    /// Plays the Tonight Open On Air asked for, if there is one, and waits for
+    /// the announcer to finish it so the show open's jingle comes in after
+    /// its last word. Calling On Air off (a second press, Reset, a flag)
+    /// stops it where it is. Throws OperationCanceledException then, as the
+    /// rest of On Air does.
+    /// </summary>
+    private async Task PlayTonightOpenAsync(Task<SpokenSegment?> asked, CancellationToken ct)
+    {
+        SpokenSegment? said;
+
+        try
+        {
+            said = await asked.WaitAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            GiveBackWhenWritten(asked);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air - no Tonight Open ({ex.Message}). Straight to the show open.");
+
+            return;
+        }
+
+        if (said is null)
+        {
+            return;
+        }
+
+        var director = Commentary?.Invoke();
+
+        if (PlayTonightOpen is not { } play || ct.IsCancellationRequested)
+        {
+            director?.Dropped(said);
+            ct.ThrowIfCancellationRequested();
+
+            return;
+        }
+
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air - the Tonight Open, then the show open.");
+
+        // A block on air does not see the token, so it is abandoned by hand.
+        using (ct.Register(() => ShowMusic?.Invoke()?.AbandonBlock()))
+        {
+            await play(said).WaitAsync(ct);
+            await _announcer.WaitForAudioAsync(SpokenWait(), ct);
+        }
+
+        ct.ThrowIfCancellationRequested();
+    }
+
+    /// <summary>
+    /// A Tonight Open On Air never played, given back to the director once it
+    /// is written - unspent, so the next On Air can ask for it again. On the
+    /// UI thread, where the director is answered.
+    /// </summary>
+    private void GiveBackWhenWritten(Task<SpokenSegment?> asked)
+    {
+        _ = asked.ContinueWith(
+            written =>
+            {
+                if (written.Result is { } unsaid)
+                {
+                    Commentary?.Invoke()?.Dropped(unsaid);
+                }
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnRanToCompletion,
+            TaskScheduler.FromCurrentSynchronizationContext());
     }
 
     /// <summary>

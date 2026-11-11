@@ -171,10 +171,10 @@ internal sealed class ShowTreatmentCard
         _lblImagingCovers = Hint(
             // Said truly (22 Oct 2026, bug hunt): the imaging only covers the
             // race recap's open and bed, and the stings - the club's own
-            // pieces still play on the cold open, the sign-off and every
+            // pieces still play on the Tonight Open, the sign-off and every
             // other set piece ticked below.
             "This soundscape's imaging plays the race recap's opener, bed and stings (Pieces card above; levels on "
-            + "the Mixer). The club's own pieces below still play on the cold open, the sign-off and the other set "
+            + "the Mixer). The club's own pieces below still play on the Tonight Open, the sign-off and the other set "
             + "pieces ticked below.");
 
         _clubPiecesBar = new ButtonBar().With(Steady(_btnShowClubPieces, HideClubPiecesCaption));
@@ -433,7 +433,7 @@ internal sealed class ShowTreatmentCard
         // since each got its own handling - see ShowSegments.Candidates for
         // what is actually offered and why.
         show.Add(Hint(
-            "The cold open and the sign-off come ticked. Achievements earned plays inside the recap - tick it to give it "
+            "The Tonight Open and the sign-off come ticked. Achievements earned plays inside the recap - tick it to give it "
             + "a show on a night with no recap."),
             gapBelow: UiLayout.HintGap);
 

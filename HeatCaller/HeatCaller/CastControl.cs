@@ -446,7 +446,7 @@ public sealed class CastControl : UserControl
         var announcerGrid = new FieldGrid();
 
         announcerGrid.AddRow("Name:", _txtAnnouncerName);
-        announcerGrid.AddHint("Said in the On Air openings and the cold open. Blank and the announcer is never named.");
+        announcerGrid.AddHint("Said in the On Air openings and the Tonight Open. Blank and the announcer is never named.");
 
         var announcer = new Section("Announcer");
 

@@ -132,7 +132,7 @@ In Simple mode the format shows only the lap limit, the time limit and **Start:*
 ## Start the race
 
 1. Pick the round (or leave the session freeform).
-2. Press <kbd>F1</kbd> (or <kbd>0</kbd>), or **Start Next**. The show opens the race like a radio station: the soundscape's jingle or sweeper, the opening (the race intro), the throw down to pit lane and the driver introductions when they're switched on, a bumper, and then the race is staged. See [On Air](#on-air).
+2. Press <kbd>F1</kbd> (or <kbd>0</kbd>), or **Start Next**. The show opens the race like a radio station: at the first On Air of the evening, the [Tonight Open](../announcer/commentary.md#the-top-and-tail-of-the-night) when it's ticked, then the soundscape's jingle or sweeper, the opening (the race intro), the throw down to pit lane and the driver introductions when they're switched on, a bumper, and then the race is staged. See [On Air](#on-air).
 3. When staging starts, the board clears, the announcer calls the cars to the grid and **Stage** lights up.
 4. Press **Countdown** (<kbd>F2</kbd>). **Countdown** lights up. From now on, a car that crosses the line counts as a [jump start](#jump-starts).
 5. Press **Green** (<kbd>F3</kbd>). The race starts and the clock begins counting.
@@ -149,6 +149,8 @@ While On Air gets the opening ready, the strip under the flag row shows it the w
 - **Anything else that moves the race on** (Stage, Countdown, Green or Reset) calls On Air off, and your press wins. The announcer stops at once here too.
 - **Yellow or Red between races** doesn't call On Air off; it only stops the automatic start.
 - **During a demo's On Air**, a flag press skips the rest of the opening and starts the demo, which stages and goes green by itself. The opening stops at once.
+
+**The Tonight Open** plays at the first On Air of the night, before the jingle, when **Tonight Open** is ticked on **Voice → AI Commentary**. It sets out the evening (the drivers, the classes, the races to run), and the show open follows straight on when it finishes. Holding <kbd>0</kbd> skips it along with the rest. It isn't said again that night. One skipped before a word of it went out is tried again at the next On Air.
 
 Between races, HeatCaller writes the next opening and voices it ahead, so On Air usually starts the jingle at once. If you change the voice in between, the lines voiced ahead are dropped and voiced again.
 

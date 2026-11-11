@@ -77,7 +77,7 @@ public sealed class ShowOnScreenTests : IDisposable
     [Fact]
     public void Every_kind_of_show_has_words_a_crowd_can_read()
     {
-        Assert.Equal("Cold Open", OnAirTreatment.Words(SegmentKind.ColdOpen));
+        Assert.Equal("Tonight Open", OnAirTreatment.Words(SegmentKind.ColdOpen));
         Assert.Equal("Round Intro", OnAirTreatment.Words(SegmentKind.RaceIntro));
         Assert.Equal("Race Recap", OnAirTreatment.Words(SegmentKind.RaceRecap));
         Assert.Equal("Sign-Off", OnAirTreatment.Words(SegmentKind.SignOffNumbers));

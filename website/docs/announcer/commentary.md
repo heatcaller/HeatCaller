@@ -72,7 +72,7 @@ The figures are asked for when HeatCaller starts and every five minutes after, a
 While the month is used up:
 
 - **Race intros, recaps and the During the race segments** (**Battle watch**, **Record laps**, **Coming up next** and **Championship check**) are written by the model on this PC. Its lines are plainer than the relay's.
-- **The Around the race and The show segments go quiet** - **Form guide**, **Qualifying report**, **Cold open**, **Sign-off numbers** and the rest. Those are only ever written by the relay, because a plainly-written version of them is worse than none. They come back with the relay.
+- **The Around the race and The show segments go quiet** - **Form guide**, **Qualifying report**, **Tonight Open**, **Sign-off numbers** and the rest. Those are only ever written by the relay, because a plainly-written version of them is worse than none. They come back with the relay.
 - **The night is paced exactly as before.** The gaps between segments and the night's limits don't change; only the relay's rationing of its own lines steps aside, since nothing is being spent.
 - **Lines aren't sent to the relay just to be refused.** One line is let through about every half hour, in case lines have been added that the laptop hasn't heard about yet.
 - **The normal announcement lines carry on**, as they always do. Commentary never replaces them.
@@ -227,7 +227,7 @@ The second card on the page, under **Who writes it**. These apply to every line 
 | Setting | What it does | Default |
 |---|---|---|
 | **Writing tone:** | **Enthusiastic - trackside hype**, **Neutral - calm play-by-play** or **Dry - understated, deadpan**, or one of the character tones below. | Enthusiastic |
-| **Give the lines their tone's delivery when they're spoken** | Adds the tone's audio tags to the recap and the segments. For Enthusiastic, every sentence is excited and the cold open and sign-off open on a shout; the character tones use their own (see below). Needs an ElevenLabs v3 voice, and does nothing for Neutral or Dry. | On |
+| **Give the lines their tone's delivery when they're spoken** | Adds the tone's audio tags to the recap and the segments. For Enthusiastic, every sentence is excited and the Tonight Open and sign-off open on a shout; the character tones use their own (see below). Needs an ElevenLabs v3 voice, and does nothing for Neutral or Dry. | On |
 | **Max length:** | 8 to 300 words. Up to 30 gives one sentence, up to 70 gives two, beyond that a full paragraph. It's spoken aloud, so a long one takes a while. The recap is allowed a little more than this, and more again for a broadcast opening or sign-off. If the model still runs long, the answer is trimmed back to its last complete sentence, so a recap is never cut off mid-sentence, and the console says "[llm] The answer ran past its length limit - kept it up to the last complete sentence." | 45 |
 | **Phrasing variety:** | 0.2 to 1.3. Low is consistent, safe wording. High is more varied, with the occasional odd sentence. | 0.7 |
 
@@ -323,12 +323,12 @@ The rest of the card is the segments. They come switched on, and they're grouped
 
 | Tick box | What it does | What it needs first |
 |---|---|---|
-| **Cold open** | Sets the evening out before the first race. | Tonight's program. See [The top and tail of the night](#the-top-and-tail-of-the-night). |
+| **Tonight Open** | Sets the evening out at the first On Air of the night, then hands on to the show open. | Tonight's program. See [The top and tail of the night](#the-top-and-tail-of-the-night). |
 | **This day at the club** | What happened here on this date in other years. | A race day filed on this same date in an *earlier* year. A club in its first year gets nothing, which is most clubs that have just installed HeatCaller. |
 | **Sign-off numbers** | The night's totals, fastest lap and closest finish. | Races filed tonight. See [The top and tail of the night](#the-top-and-tail-of-the-night). |
 | **Halfway standings** | Where things stand partway through the heats. | At least 2 of the class's heats run, and at least one still to go. After one heat the provisional order *is* that heat's result, which the recap has just read out. |
 
-Each of **Battle watch**, **Championship check**, **Form guide**, **Qualifying report**, **Grid history**, **Cold open** and **Sign-off numbers** can also be run as a two-hander with the co-host, when **Two voices in the booth** is ticked on the **Co-host** card on **Voice → Cast**. The line beneath each tick box says so.
+Each of **Battle watch**, **Championship check**, **Form guide**, **Qualifying report**, **Grid history**, **Tonight Open** and **Sign-off numbers** can also be run as a two-hander with the co-host, when **Two voices in the booth** is ticked on the **Co-host** card on **Voice → Cast**. The line beneath each tick box says so.
 
 A segment with nothing true to say stays quiet rather than padding, which is why most of the table above has a "what it needs first" column. A club in its first weeks, or one with a handful of drivers, will hear little from **The show** group. See [What the announcer draws on](#what-the-announcer-draws-on).
 
@@ -520,7 +520,7 @@ Both are on **Voice → Cast**, a card each. The Technical Lead has the car; the
 
 | Setting | What it does | Default |
 |---|---|---|
-| **Name:** (Announcer card) | What the main announcer calls himself: for example "Dave Marsh". Said in the On Air openings and the cold open. Leave it blank and he is never named. | Blank |
+| **Name:** (Announcer card) | What the main announcer calls himself: for example "Dave Marsh". Said in the On Air openings and the Tonight Open. Leave it blank and he is never named. | Blank |
 | **After a main, down to pit lane for a word with the winner's Technical Lead** | At the flag, straight after the finish call (and the unofficial result): the announcer throws down to the co-host in pit lane, who asks two questions about the race and any setup changes logged in the **Garage** for the winning car, then hands back before the break. Needs race recaps on. | Off |
 | **After heats too, not only mains** | Gives the heats a Technical Lead as well. | Off |
 | **Name:** (Technical Lead card) | What they're called. Blank and they're "the team's technical lead"; the model never makes a name up. | Blank |
@@ -782,7 +782,7 @@ The announcer has to be unmuted for it, since the whole point is judging the bed
 
 #### Which segments get it
 
-The set pieces — the moments where filling time is the point. **Cold open** and **Sign-off numbers** come ticked; the rest are yours to choose.
+The set pieces — the moments where filling time is the point. **Tonight Open** and **Sign-off numbers** come ticked; the rest are yours to choose.
 
 **Race recaps** is on the list, and it's the one most worth ticking. The recap isn't one line, it's a sequence, and the music lands in the middle of it rather than at the start:
 
@@ -865,9 +865,9 @@ Capped at **two and a half minutes** per driver: somebody who passed a car on ev
 
 #### The night's top and tail
 
-Every race is recorded through its own broadcast, so a recap, the honors, the interview and the color are all in that race's mp3. The two parts of the evening that aren't in any race are the **cold open** before the first one and the **sign-off** after the last — and those are the two set pieces about the *night* rather than about one heat, which makes them the two you'd actually post.
+Every race is recorded through its own broadcast, so a recap, the honors, the interview and the color are all in that race's mp3. The two parts of the evening that aren't in any race are the **Tonight Open** before the first one and the **sign-off** after the last — and those are the two set pieces about the *night* rather than about one heat, which makes them the two you'd actually post.
 
-They now get a recording of their own, in the same night's folder, named `Cold Open` and `Sign-Off`. It's the real broadcast with a recorder round it: your own opener in front of it, the bed under it, the playout at the end. Nothing is written twice and no model is asked anything, so the file can't disagree with what the room heard.
+They now get a recording of their own, in the same night's folder, named `Tonight Open` and `Sign-Off`. It's the real broadcast with a recorder round it: your own opener in front of it, the bed under it, the playout at the end. Nothing is written twice and no model is asked anything, so the file can't disagree with what the room heard.
 
 If something is already recording when a bookend starts, it isn't recorded separately and the console says so — nothing is lost, because whatever is recording has it in it. That's a deliberate refusal: only one thing can take a copy of the mix at a time, and the thing that would have been quietly lost is a race's own recording.
 
@@ -1037,7 +1037,7 @@ The console says what it found, either way:
 
 ## The night's thread
 
-A broadcast tells an evening as a story. The thread is the one storyline a night is offered as: set at the cold open, referred to between races, and resolved at the sign-off.
+A broadcast tells an evening as a story. The thread is the one storyline a night is offered as: set at the Tonight Open, referred to between races, and resolved at the sign-off.
 
 It's the first thing in HeatCaller that **frames** rather than reports, so the rule it keeps is worth stating plainly: **the shape is invented, the claim inside it never is.** "Can anybody stop that run tonight?" is a question, and a question can't be false. "Billy has won the last race of the night at each of the club's last three race days" is a claim, and it's counted out of your own filed results or it isn't said at all. It will only ever frame something your club's results support.
 
@@ -1052,7 +1052,7 @@ Before there's a thread at all:
 | Other drivers who raced across those days | At least **4**. "Can anybody stop that run" asked of three people is a superlative with nothing behind it. |
 | The subject | Has to be racing tonight, on the program or already in one of tonight's results. |
 
-The run is counted over **finished** race days only, so the figure is the same in the sixth heat as it was at the cold open and the subject can't change under the room's feet.
+The run is counted over **finished** race days only, so the figure is the same in the sixth heat as it was at the Tonight Open and the subject can't change under the room's feet.
 
 ### It turns rather than repeating
 
@@ -1060,7 +1060,7 @@ A thread that keeps asking "can anybody stop Billy" after Billy went out in heat
 
 | Where you are in the night | What HeatCaller has worked out |
 |---|---|
-| The cold open | "Billy has won the last race of the night at each of the club's last three race days. Can anybody stop that run tonight?" |
+| The Tonight Open | "Billy has won the last race of the night at each of the club's last three race days. Can anybody stop that run tonight?" |
 | Between races, still unbeaten | "Billy is unbeaten in two races tonight, after winning the last race of the night at the club's last three race days." - and only once they've been out at least **twice**, since one race won isn't the night testing a run. |
 | Between races, beaten | "Billy won the last race of the night at the club's last three race days, but Dot has already beaten them tonight." Said once, however many races follow. |
 | The sign-off, run kept | "Billy has now won the last race of the night at four club race days in a row." |
@@ -1097,13 +1097,13 @@ The model is told to keep both halves of the condition, and never to say that a 
 
 The two bookends read your club's own figures.
 
-**Cold open** reads tonight's **program**: how many classes are racing, how many drivers are in, how many races are still to run, and the venue typed on the race day. It's said before a wheel has turned, so there's nothing filed to count and nothing about it waits for a result:
+**Tonight Open** reads tonight's **program**: how many classes are racing, how many drivers are in, how many races are still to run, and the venue typed on the race day. It's said before a wheel has turned, so there's nothing filed to count and nothing about it waits for a result:
 
 > "Tonight at Brighton Indoor: 41 drivers across 6 classes, 7 of them visiting, 30 races to run. Two rounds left and four points covering the top three."
 
 "7 of them visiting" counts the drivers in tonight's program with **Visiting from another club** ticked on their profile (see [Drivers](../race-day/drivers-and-classes.md)), and nothing else; with nobody ticked the clause is left out. The last sentence is the championship's **Announcer's note**, typed on its **Scoring Rules** window (see [Championships](../race-control/results-and-championships.md)), read out as typed on a night that championship counts; with no note it is left out. Both are your club's own words: HeatCaller never works either one out.
 
-With no venue typed on the day it opens with "Tonight:" instead, which is what most clubs want. It's offered until it has actually been said, so it can land in the second gap of the night rather than the first - which is why the classes and drivers describe the whole evening while the races are counted over what's **left** to run.
+With no venue typed on the day it opens with "Tonight:" instead, which is what most clubs want. **It never fires by itself.** **On Air** plays it (see [On Air](../race-control/running-a-race.md#on-air)). The first time you press <kbd>F1</kbd>, **Start Next** or the program's **Start** in an evening, it's written while the race's opening is. It then plays with its own music and recording and hands straight on to the show open: the jingle, the race intro and the rest. It's said once a night. If one is skipped before a word of it goes out, the next On Air tries again, which is why the classes and drivers describe the whole evening while the races are counted over what's **left** to run. A race started with **Stage**, or a demo, doesn't play it.
 
 What counts as racing is the program, not the check-in sheet: a driver ticked in at the door and left out of every heat isn't racing tonight, and one dropped into a heat by hand is, whatever the sheet says. **Practice rounds count for nothing**, and nor does a class that is only practicing.
 
@@ -1416,7 +1416,7 @@ The last race on the program still gets its extra at every volume: a Standard he
 | Gap after the last line | 1.5 times | 1.25 times | **as set** | 0.6 times | about a third |
 | Saved for the mains | yes | yes | **yes** | less | nothing |
 
-A segment that is once a night (the cold open, the sign-off numbers) stays once a night at every stop, and no quiet stop takes a ticked segment to nothing.
+A segment that is once a night (the Tonight Open, the sign-off numbers) stays once a night at every stop, and no quiet stop takes a ticked segment to nothing.
 
 Two things worth knowing before you decide the setting is broken:
 
@@ -1448,7 +1448,7 @@ So a club doesn't hear about the same driver three segments running, and the rac
 
 Some of these have been asked for. Each is left out on purpose, and knowing which is quicker than filing it as a fault.
 
-**No guessed count of visiting drivers.** The cold open's "7 of them visiting" counts only the profiles you've ticked **Visiting from another club** on. It never reads the home track: turning that into a number means comparing free text with free text, so one spelling of the venue makes a member a visitor, and every regular who left the box empty makes themselves a local. "Seven of them visiting" goes out over the PA as a fact, and the people it's about are standing in the room able to count themselves.
+**No guessed count of visiting drivers.** The Tonight Open's "7 of them visiting" counts only the profiles you've ticked **Visiting from another club** on. It never reads the home track: turning that into a number means comparing free text with free text, so one spelling of the venue makes a member a visitor, and every regular who left the box empty makes themselves a local. "Seven of them visiting" goes out over the PA as a fact, and the people it's about are standing in the room able to count themselves.
 
 **No championship sentence it wrote itself at either bookend.** "Two rounds left and four points covering the top three" is only ever said as your club typed it, in a championship's **Announcer's note**. It isn't worked out: it would be a second opinion against the **Championship check** segment, which has figures of its own.
 
@@ -1467,7 +1467,7 @@ These lines are **written by HeatCaller, not by the model**. They're built from 
 | "That was the B-Main for Box Stock." | In front of whatever the show is about to say about it. |
 | "Still to come, the A-Main for Box Stock." | After it, with a mark in front of it. When the run sheet gives a gap (see [How long a show gets](#how-long-a-show-gets)), it can add "About 4 minutes away." |
 | "Stay with us." | After a freeform race, or on a night with no program, where there's no next race to name and no gap to give. It promises nothing about when. |
-| "First up tonight, Q1 Heat 1 for Box Stock." | At the cold open, where nothing has run yet and "still to come" would be wrong. |
+| "First up tonight, Q1 Heat 1 for Box Stock." | At the Tonight Open, where nothing has run yet and "still to come" would be wrong. |
 | "That is the lot for tonight." | After the sign-off, and nowhere else. The program running out isn't the same thing as the night being over, so a bonus main after tea isn't announced into an evening HeatCaller has already closed. |
 
 Each of these has several ways of being said, and they come out of a shuffled bag, so every phrasing is heard once before any is heard twice. The forward-looking line also mentions how many cars are due out where the program says ("4 cars in that one."), which multiplies the ways of saying it again. The exact sentence is remembered for the night and is **never said twice**, and when every way of saying something has been heard it's simply left out.
@@ -1517,7 +1517,7 @@ Under that, **Controls** has the buttons in the table below, and **At a glance**
 | **Replay Moment** | Whether there's a moment ready to play again. |
 | **Between races** | What the gap will say next and when: "Call-up for Heat 3 in 40s", "Between-race talk held" or "Nothing waiting". **Skip Next Call-up** beside it skips that one call-up: it counts as said, so the next waits a full repeat. |
 
-**What went out last is named by its segment**, not the line itself - "Last: Race Recap", "Last: Milestones", "Last: Cold Open". Until 11 Oct 2026 the row printed the first ninety characters of what had just been said, in quotes, and that was the wrong thing: a race director does not read a quote - they heard the line, or they were busy, and a wall of text in a strip is not how anybody catches up. It also pushed the buttons about on the row as it grew and shrank. What is actually wanted is which part of the program just went out, because that is what says where the show is up to. A two-voice segment says so: "Last: Form Guide (two voices)".
+**What went out last is named by its segment**, not the line itself - "Last: Race Recap", "Last: Milestones", "Last: Tonight Open". Until 11 Oct 2026 the row printed the first ninety characters of what had just been said, in quotes, and that was the wrong thing: a race director does not read a quote - they heard the line, or they were busy, and a wall of text in a strip is not how anybody catches up. It also pushed the buttons about on the row as it grew and shrank. What is actually wanted is which part of the program just went out, because that is what says where the show is up to. A two-voice segment says so: "Last: Form Guide (two voices)".
 
 | Button | What it does |
 |---|---|
@@ -1584,7 +1584,7 @@ See [Security and privacy](../admin/security-and-privacy.md).
 |---|---|---|
 | "Enable commentary first." | **Test Connection** was pressed with commentary off. | Tick **Enable AI commentary**. |
 | A lap time, gap or place in a line or the recap is slightly wrong, or comes a lap late | The track's laps average under 8 seconds. | Expected on a short track: the lap times are close together and the race moves on while a line is spoken. The results on screen are still right. See [On a short track](voice.md#on-a-short-track). |
-| The commentary has gone plainer, and the form guide, cold open and the like have stopped | This month's relay lines are used up, and the model on this PC is writing. | Normal. Check **This month:** on the **Who writes it** card, and press **Ask for More** if the month has a while to run. See [The month's allowance](#the-months-allowance). |
+| The commentary has gone plainer, and the form guide, Tonight Open and the like have stopped | This month's relay lines are used up, and the model on this PC is writing. | Normal. Check **This month:** on the **Who writes it** card, and press **Ask for More** if the month has a while to run. See [The month's allowance](#the-months-allowance). |
 | "[llm] The built-in model is not being used: no model file is installed" | `commentary.gguf` is missing from beside `HeatCaller.exe`, or this is the portable copy. | Reinstall HeatCaller with the installer, which puts the model back. |
 | "[llm] The built-in model is not being used: this PC has ... GB of memory" | The PC has less than 2 GB of memory. | Use the relay: set up the [Club Website page](../online/setup.md). |
 | "[llm] This PC took ...s to write one line" | This PC is too slow for the built-in model at the current **Give up after:**, so it's switched off for the session. | Raise **Give up after:** on the **Who writes it** card, or rely on the relay. |

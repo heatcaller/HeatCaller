@@ -159,7 +159,7 @@ It only shows for a championship whose rule takes the race: its class, **Mains o
 
 ## When the show is on air
 
-The announcer can score its set pieces: your club's own opener plays, a bed runs under the voice, and the piece plays out at the end, so a cold open or a race recap sounds like a broadcast coming on air. While that music is playing, the Big Screen says so.
+The announcer can score its set pieces: your club's own opener plays, a bed runs under the voice, and the piece plays out at the end, so a Tonight Open or a race recap sounds like a broadcast coming on air. While that music is playing, the Big Screen says so.
 
 A band runs across the very foot of the window: a steady broadcast-red **ON AIR** block, and beside it the name of what's on, on a plate in the crowd-screen look with the look's accent underlining it. It wipes on from the left and then sits still. Nothing blinks or pulses, because anything that moves on a crowd screen reads as a notification.
 
@@ -173,7 +173,7 @@ The caption is the crowd's name for the segment, in capitals. Which segments get
 
 | Ticked on **Voice → AI Commentary** | The band says |
 |---|---|
-| **Cold open** | COLD OPEN |
+| **Tonight Open** | TONIGHT OPEN |
 | **Race intros** | ROUND INTRO |
 | **Race recaps** | RACE RECAP |
 | **Achievements earned** | ACHIEVEMENTS EARNED |

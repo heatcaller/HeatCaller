@@ -469,7 +469,7 @@ public sealed class CommentaryBudget
             new(SegmentKind.RoomVerdict,       SegmentTier.Colour, 2, true, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(30), 6, 1, "The room's verdict", "What the room voted would happen, held up against what did.", true),
 
             // --- Flourish: the furniture ---
-            new(SegmentKind.ColdOpen,            SegmentTier.Flourish, 1, true, TimeSpan.FromMinutes(5), TimeSpan.Zero,             1, 1, "Cold open", "Sets the evening out before the first race.", true),
+            new(SegmentKind.ColdOpen,            SegmentTier.Flourish, 1, true, TimeSpan.FromMinutes(5), TimeSpan.Zero,             1, 1, "Tonight Open", "Sets the evening out at the first On Air, then hands on to the show open.", true),
             new(SegmentKind.ThisDayInHistory,    SegmentTier.Flourish, 1, true, TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(60),  1, 1, "This day at the club", "What happened here on this date in other years."),
             new(SegmentKind.SignOffNumbers,      SegmentTier.Flourish, 1, true, TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(15),  1, 1, "Sign-off numbers", "The night's totals, fastest lap and closest finish.", true),
             new(SegmentKind.MidMeetingStandings, SegmentTier.Flourish, 1, true, TimeSpan.FromMinutes(3), TimeSpan.FromSeconds(60),  2, 2, "Halfway standings", "Where things stand partway through the heats."),

@@ -42,7 +42,7 @@ The announcer's voice itself is picked on **Voice → Cast**, on the **Announcer
 | **ElevenLabs voice:** with **Test Voice**, and a line under them. Its list is filled by **Load Voices** on the **Voices** card above. See [Set up your own ElevenLabs account](#set-up-your-own-elevenlabs-account). | ElevenLabs is chosen. Also while the Kokoro voice is chosen and a key is typed in **API Key:**, so you can set ElevenLabs up before switching to it. |
 | **Kokoro voice:** with **Test Voice**, and a line for what the test did. While Kokoro only stands in, the caption reads **If ElevenLabs runs out:**, as it does under each of the rest of the cast. See [Use the Kokoro voice](#use-the-kokoro-voice). | The Kokoro voice is chosen, or it's standing in: always with the HeatCaller voice, and with ElevenLabs while the stand-in box under it is ticked. The voice picked here is the one that stands in. |
 
-**Name:** is at the top of the same card, above the voice: it's said in the On Air openings and the cold open, and left blank the announcer is never named.
+**Name:** is at the top of the same card, above the voice: it's said in the On Air openings and the Tonight Open, and left blank the announcer is never named.
 
 ![Voice, Cast tab: the Voices card with Load Voices, the Announcer card with its Name, an ElevenLabs voice and the Kokoro voice under If ElevenLabs runs out, and the Recap host card](../assets/images/voice-cast.png)
 
