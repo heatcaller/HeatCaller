@@ -198,6 +198,23 @@ Order: **0 → 1 → 2 → 5 → 4 → 7 → 6.** Measuring first, because 1 and
 - **Race B, the same with "Start race calls while ElevenLabs is still sending them" ticked.** Read: lines marked "(streamed)", any "ran ahead of ElevenLabs" gaps, and the change in lap-to-first-word for calls rendered when the speaker was free. Asher listens for stutters, or streamed lines louder or quieter than the rest.
 - **Write both into this plan.** If render-ahead's used share is low (under about half), find out why before building item 2, which leans on it.
 
+#### 0. Results: the 11 Nov 08:52 show (main after PR #131, streaming ticked, Busy dial)
+
+| | Phase 1 (10 Nov) | This show |
+|---|---|---|
+| Lap to first word, median | 1.59 s | **0.96 s** |
+| Lap to first word, 90% | 5.11 s | 5.78 s |
+| Words as a share of speaker time | 74% | **85%** |
+| Early renders used | — | 4 of 7 |
+| Streamed lines | — | 25 of 31, **no gaps, no failures**, first audio in 0.19–0.27 s |
+| Routine calls lost behind a line | 41% | 25 of 47 (53%) |
+
+- **Streaming works.** Every fresh call streamed, and its first audio arrived in about 0.2 s against ~0.8 s for a whole clip. Asher still has to say whether streamed lines sounded as loud as the rest.
+- **The slowest 10% is airtime, not rendering.** A fast lap waited 5 s behind a line already playing (its early render was used), and a battle call was held for the end of a line for 5.5 s. Calls run 3.4–5.6 s of words. The lever left is shorter lines, and busy wording logs nothing when it shortens a pick, so this race can't show whether it did.
+- **The combined personal bests worked, then the dial held them.** "Personal bests for Annie Wayout and Ela vayter!" was offered as the line ended, and the Busy dial's 5 s gap held it. Whether a combined call should be allowed to break the gap is Asher's call.
+- **The winner was named 10.7 s after the flag, not 4–5 s.** Its early render was used. The time went to the fanfare and the finish call ahead of it: the demo's time-up and checkered flag came 5 ms apart, so the fanfare cut the time-up sound and the finish call waited for the fanfare. Options: say the winner *instead of* the finish call's line, or put the name in the finish call. Also, "That's time - one more lap!" took 7.4 s and was dropped by the flag. Check whether the two winner renders, started at time-up, took both ElevenLabs slots (the plan's own rule: keep one free).
+- **The recap: rendering it in pieces is worth building.** It was written instantly and took 13.0 s to render (1,319 characters). The teaser ended at 54.5 s after the flag and the render at 58.3 s, so the show waited about 4 s for it before the rejoin opener. Playing it in pieces would start on the first sentence (~1.5 s) instead.
+
 #### 1. Your lap time before the first corner
 - **What exists:** "Lap time only" (`LapTime`, every Nth lap) and "Every lap completed". With Turbo and render-ahead, a call heard about 1–1.5 s after the crossing is the norm when the speaker is free.
 - **What's missing:** on a busy track the lap time loses to bigger calls, and the busy wording only shortens lines that are already chosen.
