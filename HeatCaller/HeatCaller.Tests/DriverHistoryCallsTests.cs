@@ -228,7 +228,8 @@ public sealed class DriverHistoryCallsTests
             Assert.True(config.Enabled, type.ToString());
             Assert.NotEmpty(config.Templates);
             Assert.Contains(type, rows);
-            Assert.Equal("[excited]", AudioTagTiers.For(type));
+            // A driver's own bests are read plain (#135); two rivals together are a battle.
+            Assert.Equal(type == AnnouncementEventType.RivalsSideBySide ? "[excited]" : null, AudioTagTiers.For(type));
         }
 
         Assert.Equal(rows.ToList().IndexOf(AnnouncementEventType.PersonalBestsTogether) + 1, rows.ToList().IndexOf(AnnouncementEventType.BackOnForm));
