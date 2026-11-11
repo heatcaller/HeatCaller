@@ -136,6 +136,7 @@ Everything else is on the round menu. Right-click the list to open it: on a roun
 | **Start as Demo...** | Runs the round as a simulated race, with no timing hardware. Nothing is recorded against the round unless **Let a demo fill in the race program (rehearse a whole night)** is ticked on **Demo Mode**; then the demo marks it as run. See [Practice, ghosts and demo mode](../race-control/practice-and-ghosts.md). |
 | **Edit Drivers...** | Changes who's in the round. |
 | **Move Drivers Between Heats...** | Opens the class's heats side by side. See [Balance heats](#balance-heats). |
+| **Add a Late Entry...** | Puts a driver who has just arrived into the smallest heat of each round still to run, without moving anyone else. See [A late entry](#a-late-entry). |
 | **Move Up** / **Move Down** | Moves the round one place in the running order. |
 | **Build Tonight's Heats...** | Builds (or rebuilds) the qualifying heats. On a club night it's **Build Tonight's Races...**. |
 | **Build the Finals from Qualifying...** | Seeds a class's mains. Not shown on a club night. |
@@ -165,6 +166,7 @@ The command is grayed out when there's no later qualifying round still to run, a
 HeatCaller builds every planned qualifying round for every class that's racing and has drivers:
 
 - **Heats per round.** Each class's drivers are split into as few heats as the **Drivers per heat:** setting allows. For example, 13 drivers with 8 per heat makes 2 heats (7 and 6). Drivers are dealt into the heats in turn, so heats come out within one driver of each other.
+- **The first round, by recent pace.** With **First round seeded:** on **By recent pace** (the default), Q1 puts similar pace together: each driver's best lap in the class over the last 60 days, the fastest in the last heat, the next fastest in the one before it, and drivers with no lap yet (a rookie, say) in the first heat with the slowest. Later rounds are dealt in turn from that order. A class where nobody has a recent lap is dealt alphabetically, as with **Alphabetical**. **Random** shuffles the field, the same way for every rebuild of that race day.
 - **Drivers in more than one class** are dealt into each class's heats. See [A driver in more than one class](drivers-and-classes.md#a-driver-in-more-than-one-class).
 - **Rotation.** In each new round, the starting point in the driver list moves on by one heat's worth, so the same drivers aren't first out on a cold track every round. When the heats divide the class exactly (16 drivers in two heats of 8, say), the groups are mixed as well from Q2 on, so the same drivers don't share a heat every round.
 - **Names.** Heats are called "Heat 1", "Heat 2" and so on when there's one qualifying round, or "Q1 Heat 1", "Q2 Heat 3" and so on when there's more than one. On a club night they're races: "Race 1", "Race 2", or "Race 1 Heat 2" when a class is split into groups.
@@ -227,6 +229,12 @@ When the list is filtered to one class, moves are made relative to what you can 
 ### Delete rounds
 
 Select one or more rounds, right-click them and choose **Delete**, then confirm. Deleting a round removes it from the program but doesn't delete any recorded results. A round that's on track can't be deleted until it has finished. Undo puts the rounds back in their original places in the running order, and their lines on [the timetable](#the-timetable) come back with the time and tick they had.
+
+### A late entry
+
+For a driver who turns up after the heats are posted. Right-click the list and choose **Add a Late Entry...** (it works on the class in the **Class:** filter, or the selected round's class). Pick the driver from the class's drivers who aren't in a heat still to run, and click **Add to Heats**.
+
+They go into the smallest heat of each qualifying round still to run that they aren't already in (the first of two the same size), never a heat on track or already run. Nobody else moves, so the heat sheet on the wall and everybody's phones stay right; only the heats they joined change. **Undo** takes them out again. On a day that only counts checked-in drivers, check them in first. To re-deal every heat still to run instead, use **Redo Remaining Heats** on Race Control.
 
 ## Start a round
 
@@ -313,7 +321,7 @@ If no qualifier is running, the window says so.
 When a class has finished qualifying, the next-step card offers **Build the finals from qualifying** (it's also **Build the Finals from Qualifying...** on the round menu, available at any time: right-click the list).
 
 1. Click **Build the finals from qualifying**.
-2. Check the summary — how many mains and how many drivers in each, and whether bump-ups are on.
+2. Check the preview: every driver under the main they go in, in order, with the qualifying result that put them there (for example "14 laps, 5:02.3 (Q2 Heat 1)", or "best 3 in a row 36.912" for best-consecutive qualifying), the places that bump up marked **[bump-up place]**, and whether bump-ups are on. While the class's results are still provisional, it starts by saying so (see [The protest window](#the-protest-window)).
 3. Click **Yes**.
 
 How the mains are built:
@@ -324,6 +332,15 @@ How the mains are built:
 - Each main except the lowest is set to receive the class's **Bump up:** number of drivers from the main below.
 
 Seeding only looks at the current race day's mains. If the class already has mains today that haven't run, seeding replaces them. If any of today's mains have already been run, seeding stops with **Mains already run** — take the ones you don't want off the program first, so recorded results aren't orphaned. Mains from earlier race days are left alone and never block seeding. A main that's out on track can't be replaced either. Seeding can be undone. As with the qualifying build, any new mains that have been run by the time you undo are kept, along with a main that's on track right now, and a **Some rounds were kept** box lists them.
+
+### The protest window
+
+After a class's last qualifier is recorded, its results stay provisional for the race day's **Protest window (min):** (5 minutes unless set otherwise on **Setup**), so a lap-count query can be dealt with before the finals are built.
+
+- The next-step card says "Results are provisional until 20:42 (the protest window)." above **Build the finals from qualifying**.
+- Building the finals before then is allowed. The question starts with the same words and "A query still to come could change this order."
+- Drivers can still query a result from their phone in the meantime (see [Querying a result](../online/driver-requests.md#querying-a-result)).
+- A window of 0 turns it off.
 
 If the class has no recorded qualifying yet, seeding offers to add a main by hand instead.
 

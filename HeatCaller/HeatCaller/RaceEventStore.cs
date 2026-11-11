@@ -105,6 +105,22 @@ public sealed class RaceEvent
     public int DriversPerHeat { get; set; }
 
     /// <summary>
+    /// How the first qualifying round is seeded (11 Nov 2026, race-night build
+    /// plan, Phase 3): by recent pace - similar pace together, so a rookie is
+    /// not lapped four times by the A-main drivers - alphabetically (as every
+    /// build was before), or at random. A class where nobody has a recent lap
+    /// is dealt alphabetically whatever this says.
+    /// </summary>
+    public FirstRoundSeeding FirstRoundSeeding { get; set; } = FirstRoundSeeding.Pace;
+
+    /// <summary>
+    /// Minutes a class's qualifying results stay provisional after its last
+    /// qualifier is recorded, for queries and protests before the finals are
+    /// built (11 Nov 2026, Phase 3). 0 for none. See ProtestWindow.
+    /// </summary>
+    public int ProtestMinutes { get; set; } = ProtestWindow.DefaultMinutes;
+
+    /// <summary>
     /// The Between races preset for this day alone (GapPreset.Key), over the
     /// club's own settings - so a monthly big event can be Big event without
     /// changing the weekly club night. Blank uses the club's settings.
