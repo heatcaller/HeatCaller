@@ -41,11 +41,13 @@ export const LAP_VOICE: CatalogueVoice = Object.freeze({
   name: "Daniel",
   what: "Steady Broadcaster",
   voiceId: "onwK4e9ZLuTAKqWW03F9",
-  // v3 (8 Nov 2026, was Flash): the announcer's model, $0.08 per 1,000
-  // characters. It ignores the speed below, so its clips run about twice as
-  // long as Flash's did. The Flash set is kept in lap-voice-flash/ to go
-  // back to.
-  modelId: "eleven_v3",
+  // v4 Turbo (10 Nov 2026, was v3 from 8 Nov, Flash before): the
+  // announcer's model since HeatCaller moved to it, $0.04 per 1,000
+  // characters. Like v3 it ignores the speed below. It plays audio tags, so
+  // "best lap" and "Up to P ..." carry [excited] - the personal-best and
+  // pass moments; every other clip is plain. The v3 set is kept in
+  // lap-voice-v3/ and the Flash set in lap-voice-flash/ to go back to.
+  modelId: "eleven_v4_turbo",
   // A little steadier than the announcer's lines: a clip is one of two
   // thousand and they are heard next to each other, so they should match.
   stability: 0.6,
@@ -76,8 +78,8 @@ export const MINUTES_LEFT_MAX = 60;
 /** How far off a target lap gets a clip, in hundredths: 2.00. */
 export const TARGET_MARGIN_MAX_CS = 200;
 
-/** ElevenLabs' price per 1,000 characters for LAP_VOICE's model (v3), US dollars, read on 8 Nov 2026. */
-export const LAP_DOLLARS_PER_1K = 0.08;
+/** ElevenLabs' price per 1,000 characters for LAP_VOICE's model (v4 Turbo), US dollars, read on 10 Nov 2026. */
+export const LAP_DOLLARS_PER_1K = 0.04;
 
 export interface LapClip {
   /** The file name without ".mp3": letters, digits and hyphens only. */
@@ -159,7 +161,7 @@ export function lapClips(): LapClip[] {
     { name: "on", text: "Lap times on" },
     // 3 Nov 2026, Asher: said as lap times are turned off.
     { name: "off", text: "Lap times off" },
-    { name: "best", text: "best lap" },
+    { name: "best", text: "[excited] best lap" },
     // After a margin clip ("point two"), for a lap slower than their best (3 Nov 2026).
     { name: "pb-off", text: "off your best" },
   ];
@@ -191,7 +193,7 @@ export function lapClips(): LapClip[] {
   // Places gained or lost since the last lap (3 Nov 2026, Asher): a whole
   // clip each rather than "up to" before "P two", so it is said as one line.
   for (let n = 1; n <= POSITION_MAX; n++) {
-    clips.push({ name: `pu${n}`, text: `Up to P ${words(n)}` });
+    clips.push({ name: `pu${n}`, text: `[excited] Up to P ${words(n)}` });
   }
   for (let n = 1; n <= POSITION_MAX; n++) {
     clips.push({ name: `pd${n}`, text: `Down to P ${words(n)}` });

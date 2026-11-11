@@ -24,10 +24,10 @@ const TEXT = new Map(lapClips().map((c) => [c.name, c.text]));
 const NAMES = [...TEXT.keys()];
 
 describe("lap voice: the clips", () => {
-  it("is Daniel, Steady Broadcaster, on v3, for every club", () => {
+  it("is Daniel, Steady Broadcaster, on v4 Turbo, for every club", () => {
     assert.equal(LAP_VOICE.voiceId, "onwK4e9ZLuTAKqWW03F9");
     assert.equal(LAP_VOICE.name, "Daniel");
-    assert.equal(LAP_VOICE.modelId, "eleven_v3");
+    assert.equal(LAP_VOICE.modelId, "eleven_v4_turbo");
     assert.equal(LAP_VOICE.cloned, false);
   });
 
@@ -80,11 +80,18 @@ describe("lap voice: the clips", () => {
     assert.equal(new Set(NAMES).size, NAMES.length, "every name once");
   });
 
-  it("costs under four dollars to make once on v3", () => {
+  it("lifts only best lap and the places gained, with [excited] (10 Nov 2026)", () => {
+    const tagged = NAMES.filter((name) => (TEXT.get(name) as string).includes("["));
+    assert.deepEqual(tagged.sort(), ["best", ...Array.from({ length: 30 }, (_, i) => `pu${i + 1}`)].sort());
+    for (const name of tagged) assert.match(TEXT.get(name) as string, /^\[excited\] [^[]+$/, name);
+    assert.equal(TEXT.get("best"), "[excited] best lap");
+  });
+
+  it("costs under two dollars to make once on v4 Turbo", () => {
     const cost = lapClipCost();
     assert.equal(cost.clips, 2744);
-    assert.equal(cost.chars, 45755);
-    assert.equal(cost.dollars, 3.66);
+    assert.equal(cost.chars, 46065);
+    assert.equal(cost.dollars, 1.84);
   });
 });
 
@@ -619,7 +626,7 @@ describe("lap voice: the Live page", () => {
     l.set(ahead([9500, 9600, 9520, 9400]));
     await l.p.advance(1000);
     assert.deepEqual(l.played.slice(1), ["pu1"]);
-    assert.equal(TEXT.get("pu1"), "Up to P one");
+    assert.equal(TEXT.get("pu1"), "[excited] Up to P one");
 
     l.set(field([9500, 9600, 9520, 9400, 9700]));
     await l.p.advance(1000);

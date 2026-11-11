@@ -353,7 +353,7 @@ public sealed class HandCorrectionCallsTests : IDisposable
     public void A_ruling_for_another_place_says_the_place()
     {
         Assert.Equal("[excited] And with that ruling, Sam is up into third!", AnnouncementService.RulingPassWords("Sam", 3));
-        Assert.Equal("[excited] And with that ruling, Sam takes the lead!", AnnouncementService.RulingPassWords("Sam", 1));
+        Assert.Equal("[shouting] And with that ruling, Sam takes the lead!", AnnouncementService.RulingPassWords("Sam", 1));
     }
 
     [Fact]

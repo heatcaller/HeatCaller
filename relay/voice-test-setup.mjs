@@ -37,7 +37,7 @@ const CATALOGUE_SIZE = 3;
  * are listening to for timing and pronunciation rather than judging on
  * absolute quality. Edit the config afterwards if you want to compare.
  */
-const MODEL_ID = "eleven_flash_v2_5";
+const MODEL_ID = "eleven_v4_turbo";
 
 function say(line = "") {
   console.log(line);

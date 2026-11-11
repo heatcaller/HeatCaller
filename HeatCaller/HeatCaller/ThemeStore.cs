@@ -299,6 +299,51 @@ public sealed class ThemeStore
     public Theme? Get(string id) => _themes.FirstOrDefault(t => t.Id == id);
 
     /// <summary>
+    /// Puts the applied built-in soundscape's own lines back after the voice
+    /// settings were refreshed to the plain defaults (10 Nov 2026, see
+    /// VoiceSettingsStore.RefreshedLines). Without it, an upgrade that
+    /// changed the built-in lines left a club on Pit Lane hearing Classic's
+    /// wording until it applied Pit Lane again.
+    ///
+    /// Only the lines move, and only for the calls the soundscape writes
+    /// lines for; whether each call is on, and its weight, stay the club's.
+    /// A custom soundscape is left alone - the refresh replaces a club's own
+    /// lines everywhere, and theirs are no exception. And so is the
+    /// HeatCaller voice, whose lines are fixed (see Apply).
+    /// </summary>
+    /// <returns>True when any line changed, and the voice settings were saved.</returns>
+    internal bool RestoreActiveThemeLines(VoiceSettingsStore voiceStore)
+    {
+        if (!voiceStore.RefreshedLines
+            || ActiveThemeId is not { } id
+            || Get(id) is not { IsBuiltIn: true } theme
+            || voiceStore.Current.EffectiveEngine == VoiceEngine.HeatCaller)
+        {
+            return false;
+        }
+
+        var current = voiceStore.Current;
+        var changed = false;
+
+        foreach (var (key, themed) in theme.Voice.Events)
+        {
+            if (themed?.Templates is not { Count: > 0 } lines
+                || !current.Events.TryGetValue(key, out var existing)
+                || existing is null
+                || existing.Templates.SequenceEqual(lines, StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            existing.Templates = lines.ToList();
+            existing.Template = string.Empty;
+            changed = true;
+        }
+
+        return changed && voiceStore.Save(current);
+    }
+
+    /// <summary>
     /// The applied-soundscape marker's file name, at the top of the data
     /// folder. A restore clears it when the backup has none (see
     /// BackupService.RestoreBackup).

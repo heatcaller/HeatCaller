@@ -73,11 +73,11 @@ internal sealed record PositionReportOnAir(IReadOnlyList<string> Order, int Dept
 /// </remarks>
 public sealed partial class AnnouncementService
 {
-    internal const string ReportCorrectionForTheLead = "[excited] Hold on - {driver} takes the lead! So it's {positions}.";
+    internal const string ReportCorrectionForTheLead = "[shouting] Hold on - {driver} takes the lead! So it's {positions}.";
 
     internal const string ReportCorrectionForAPlace = "[excited] Hold on - {driver} is through into {place}! So it's {positions}.";
 
-    internal const string ReportRulingForTheLead = "[excited] And with that ruling, {driver} takes the lead! So it's {positions}.";
+    internal const string ReportRulingForTheLead = "[shouting] And with that ruling, {driver} takes the lead! So it's {positions}.";
 
     internal const string ReportRulingForAPlace = "[excited] And with that ruling, {driver} is up into {place}! So it's {positions}.";
 

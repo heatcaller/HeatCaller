@@ -122,7 +122,7 @@ public sealed class BattleLineCutTests : IDisposable
     [Fact]
     public void The_pass_call_names_the_driver_and_the_place()
     {
-        Assert.Equal("[excited] And Sam takes the lead!", AnnouncementService.BattlePassWords("Sam", 1));
+        Assert.Equal("[shouting] And Sam takes the lead!", AnnouncementService.BattlePassWords("Sam", 1));
         Assert.Equal("[excited] And Sam is through, up into third!", AnnouncementService.BattlePassWords("Sam", 3));
     }
 
@@ -132,7 +132,7 @@ public sealed class BattleLineCutTests : IDisposable
         var shipped = VoiceProfile.CreateDefault().Events[nameof(AnnouncementEventType.LeaderChange)].EffectiveTemplates;
 
         Assert.Contains(shipped, line => AnnouncementService.BattlePassForTheLead.EndsWith(
-            line.Replace("[excited] ", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal));
+            line.Replace("[shouting] ", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal));
     }
 
     // --- In the announcer ---------------------------------------------------

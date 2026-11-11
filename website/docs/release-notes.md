@@ -2,6 +2,10 @@
 
 HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whole feature lands, *c* for fixes and smaller additions.
 
+## Unreleased
+
+- **HeatCaller moves to ElevenLabs v4 Turbo (10 November).** Every ElevenLabs voice now uses `eleven_v4_turbo`, including voices set to another model, and **Race calls:** goes back to the same model, since v4 Turbo is quick enough for race calls. The HeatCaller voice on the relay and the relay's spoken lap times move to it too. v4 plays audio tags much harder than v3, so the built-in lines were retagged: `[shouting]` is kept for the start and finish, a new leader, records and the flags, `[excited]` for passes, personal bests and the last lap, and the routine calls are read plain. **This replaces every call's lines with the new built-in ones, including lines you wrote yourself**, though which calls are on and their weights stay as they were. A built-in soundscape you applied keeps its own lines. On v4 the AI commentary tags only the first sentence of a recap. See [Audio tags](announcer/voice.md#audio-tags).
+
 ## 0.62.0
 
 Released 9 Nov 2026. Everything since 0.61.0, newest first.

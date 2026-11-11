@@ -2061,7 +2061,7 @@ export function readVoiceConfig(value: unknown, source: string): VoiceConfig {
       name: text(voice["name"]).length > 0 ? text(voice["name"]) : id,
       what: text(voice["what"]),
       voiceId,
-      modelId: text(voice["modelId"]).length > 0 ? text(voice["modelId"]) : "eleven_flash_v2_5",
+      modelId: text(voice["modelId"]).length > 0 ? text(voice["modelId"]) : "eleven_v4_turbo",
       stability: number(voice["stability"], 0.5, 0, 1),
       similarity: number(voice["similarity"], 0.75, 0, 1),
       style: number(voice["style"], 0, 0, 1),

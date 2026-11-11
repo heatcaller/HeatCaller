@@ -1058,7 +1058,7 @@ Deliberate about three things:
   (20,000 characters, not 100,000), because this is your own account's
   credits and a runaway Prepare Lines should stop long before it gets
   expensive. Both are in the config if you want more.
-- **`eleven_flash_v2_5`**, the cheap model, for the same reason. Edit the
+- **`eleven_v4_turbo`**, the model HeatCaller uses, at half v4's price. Edit the
   config to compare it with anything else.
 
 To throw it away: stop it with Ctrl+C, then delete
@@ -1071,7 +1071,7 @@ working for this laptop.
 
 The spoken laps on the Live page and a driver's own night ("Lap times in my
 ear") play short clips in one ElevenLabs voice, Daniel ("Steady
-Broadcaster", voice `onwK4e9ZLuTAKqWW03F9`, model `eleven_flash_v2_5`), the
+Broadcaster", voice `onwK4e9ZLuTAKqWW03F9`, model `eleven_v4_turbo`), the
 same for every club whatever voice a club runs in its Cast tab. See
 `src/lapvoice.ts`.
 

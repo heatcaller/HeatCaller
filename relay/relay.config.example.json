@@ -11,7 +11,7 @@
         "name": "Clubhouse",
         "what": "Warm and clear, easy over a PA",
         "voiceId": "the ElevenLabs voice id - never sent to a club",
-        "modelId": "eleven_flash_v2_5",
+        "modelId": "eleven_v4_turbo",
         "stability": 0.5,
         "similarity": 0.75,
         "style": 0.3,
