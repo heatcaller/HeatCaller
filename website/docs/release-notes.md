@@ -4,6 +4,14 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Fair results and quick mains (11 November).** Four additions:
+    - **The first round by recent pace.** Q1 now puts similar pace together, from each driver's best lap in the class over the last 60 days: the fastest last, and drivers with no lap yet with the slowest. A class nobody has a lap in is dealt as before. **First round seeded:** on **Race Day → Setup** also offers **Alphabetical** (as before) and **Random**. See [Build the qualifying program](race-day/program-and-mains.md#build-the-qualifying-program).
+    - **The protest window.** A class's results stay provisional for 5 minutes after its last qualifier (**Protest window (min):** on **Setup**; 0 for none). The next-step card says until when, and building the finals before then asks first. See [The protest window](race-day/program-and-mains.md#the-protest-window).
+    - **A mains preview.** **Build the finals from qualifying** now lists every driver under their main, with the qualifying result that put them there and the bump-up places marked, instead of only how many go in each.
+    - **Add a Late Entry...** On the program's right-click menu: a driver who has just arrived goes into the smallest heat of each round still to run, and nobody else moves. See [A late entry](race-day/program-and-mains.md#a-late-entry).
+
+  Update HeatCaller on the race PC; nothing changes on the relay.
+
 - **Auto start between races (11 November).** After each race on the program, Race Control counts down a gap (2:30 unless you choose another) and starts the next race by itself, through On Air as **Start Next** does. It's on by default; the new **Auto start** switch at the foot of the leaderboard turns it off for tonight. Some details:
     - The Next Up bar says "starts in 1:42", and **Hold** beside **Start Next** holds and resumes the count (right-click it for **+1 min** and **Start now**).
     - The call-ups (and the spoken countdown, when it's on) are timed to the real start, and phones show it.

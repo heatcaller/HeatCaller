@@ -612,6 +612,10 @@ public sealed class RaceProgramControl : UserControl
         // nothing selected - which is the state you are in when you look at
         // the programme and think "those heats are lopsided".
         var miBalance = new ToolStripMenuItem("Move Drivers Between Heats...", null, (_, _) => BalanceHeats());
+
+        // A driver who has just turned up, into the smallest heats, nobody
+        // else moved (11 Nov 2026, Phase 3).
+        var miLate = new ToolStripMenuItem("Add a Late Entry...", null, (_, _) => AddLateEntry());
         var miUp = new ToolStripMenuItem("Move Up", null, (_, _) => MoveSelected(up: true));
         var miDown = new ToolStripMenuItem("Move Down", null, (_, _) => MoveSelected(up: false));
         // --- The day-level commands ---
@@ -664,6 +668,7 @@ public sealed class RaceProgramControl : UserControl
             miDemo,
             miEdit,
             miBalance,
+            miLate,
             new ToolStripSeparator(),
             miUp,
             miDown,
@@ -944,6 +949,15 @@ public sealed class RaceProgramControl : UserControl
     {
         var day = DayRounds();
         var step = ProgramNextStep.Evaluate(_events?.Active, day, RacingClasses(), PlannedQualifyingRounds(), _sessionHistory, SetupFacts());
+
+        // The protest window (11 Nov 2026, Phase 3): finals asked for while
+        // the class's results are still provisional say until when.
+        if (step.Stage == ProgramStage.SeedMains && ActiveDay is { } raceDay
+            && ProtestWindow.FinalAtUtc(DayRoundsForClass(step.ClassName), _sessionHistory.Get, raceDay.ProtestMinutes) is { } finalAt
+            && ProtestWindow.IsProvisional(finalAt, DateTime.UtcNow))
+        {
+            step = step with { Detail = ProtestWindow.Words(finalAt) + " " + step.Detail };
+        }
 
         if (step.Stage is ProgramStage.RunNext or ProgramStage.SeedMains or ProgramStage.BumpUps && Plan(day) is { } plan)
         {
@@ -2036,7 +2050,13 @@ public sealed class RaceProgramControl : UserControl
                     continue;
                 }
 
-                var heats = DealQualifyingHeats(roster.Select(d => d.Transponder).ToList(), heatSize, round);
+                // The first round seeded the race day's way - by recent pace
+                // unless it says otherwise - and later rounds dealt in turn
+                // from that order (11 Nov 2026, Phase 3; see FirstRound).
+                var seeding = SeedingFor(raceClass.Name, roster.Select(d => d.Transponder).ToList(), heatSize);
+                var heats = round == 0 && seeding.FirstRoundHeats is { } seeded
+                    ? seeded
+                    : DealQualifyingHeats(seeding.Order, heatSize, round);
 
                 for (var heat = 0; heat < heats.Count; heat++)
                 {
@@ -2259,6 +2279,25 @@ public sealed class RaceProgramControl : UserControl
     /// the class - is left exactly as it was, because there the rotation
     /// already moves drivers between heats.
     /// </summary>
+    /// <summary>
+    /// The class's drivers in the order the build deals them, and the first
+    /// round's heats when it is seeded by pace - see FirstRound.
+    /// </summary>
+    private FirstRound.Seeding SeedingFor(string className, List<string> alphabetical, int heatSize)
+    {
+        var mode = ActiveDay?.FirstRoundSeeding ?? FirstRoundSeeding.Pace;
+
+        var pace = mode == FirstRoundSeeding.Pace
+            ? HeatSeeding.BestLaps(className, _sessionHistory.All, _rounds.Get, DateTime.UtcNow - HeatSeeding.RecentForm, _profiles.PrimaryForAlternate)
+            : new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+
+        var sizes = FirstRound.SizesOf(DealQualifyingHeats(alphabetical, heatSize, 0));
+
+        // String hashes change from run to run in .NET, so a rebuild would
+        // shuffle the field again; this one doesn't.
+        return FirstRound.For(alphabetical, mode, pace, sizes, FirstRound.StableSeed((ActiveDay?.Id ?? string.Empty) + "|" + className));
+    }
+
     internal static List<List<string>> DealQualifyingHeats(IReadOnlyList<string> roster, int heatSize, int round)
     {
         var heatCount = roster.Count == 0
@@ -2515,15 +2554,32 @@ public sealed class RaceProgramControl : UserControl
                 + "Try again once it has been recorded.");
         }
 
-        var summary = string.Join("\r\n", Enumerable.Range(0, plan.TierCount)
-            .Select(t => $"   {MainsBuilder.SeedPlan.LetterFor(t)}-Main: {Plural.Of(plan.Tiers[t].Count, "driver")}"));
+        // Who goes where and why (11 Nov 2026, Phase 3): each driver under
+        // their main, with the qualifying result that put them there and the
+        // bump-up places marked - see MainsPreview.
+        var entries = QualifyingCalculator
+            .Compute(className, _rounds, _sessionHistory, _profiles, raceClass, QualifyingRoundFilter())
+            .GroupBy(e => e.Transponder, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        var summary = MainsPreview.Text(plan, entries,
+            raceClass?.QualifyingMethod ?? QualifyingMethod.TotalLaps,
+            raceClass?.ConsecutiveLapCount ?? 3,
+            bumpUp);
 
         var bumpNote = bumpUp > 0
             ? $"\r\n\r\nTop {bumpUp} from each main will be able to bump up into the tier above."
             : "\r\n\r\nBump-ups are disabled for this class.";
 
+        // The protest window: building now is allowed, and says so.
+        var finalAt = ProtestWindow.FinalAtUtc(DayRoundsForClass(className), _sessionHistory.Get, ActiveDay.ProtestMinutes);
+        var provisional = ProtestWindow.IsProvisional(finalAt, DateTime.UtcNow)
+            ? $"{ProtestWindow.Words(finalAt!.Value)} A query still to come could change this order.\r\n\r\n"
+            : string.Empty;
+
         return new ProgramAnswer(true, ProgramCaptions.SeedMains,
-            $"Put {Plural.Of(ranked.Count, "qualified driver")} in \"{className}\" into {Plural.Of(plan.TierCount, "main")}, fastest first?"
+            provisional
+            + $"Put {Plural.Of(ranked.Count, "qualified driver")} in \"{className}\" into {Plural.Of(plan.TierCount, "main")}, fastest first?"
             + $"\r\n\r\n{summary}{bumpNote}"
             + "\r\n\r\nLower mains are scheduled first so bump-ups can happen before the tier above runs."
             + (existing.Count > 0 ? $"\r\n\r\n{Plural.Of(existing.Count, "existing unrun main")} will be replaced." : string.Empty));
@@ -3311,6 +3367,115 @@ public sealed class RaceProgramControl : UserControl
     /// roster that has had six drivers shuffled around it is not something
     /// anybody can reconstruct from memory.
     /// </summary>
+    /// <summary>
+    /// "Add a Late Entry..." (11 Nov 2026, race-night build plan, Phase 3):
+    /// asks who, then puts them in the smallest heat of each round still to
+    /// run - see LateEntry. Nobody else moves.
+    /// </summary>
+    private void AddLateEntry()
+    {
+        if (TargetClass() is not { } className)
+        {
+            return;
+        }
+
+        if (ClosedDayRefusal() is { } shut)
+        {
+            AppDialog.Show(this, shut.Message, shut.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var classRounds = DayRoundsForClass(className);
+        var inHeats = classRounds
+            .Where(r => r.Kind == RoundKind.Qualifier && !r.IsRecorded)
+            .SelectMany(r => r.AssignedTransponders)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var candidates = RosterFor(className)
+            .Where(p => !inHeats.Contains(p.Transponder))
+            .Select(p => (p.Transponder, string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName))
+            .OrderBy(c => c.Item2, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        if (!classRounds.Any(r => r.Kind == RoundKind.Qualifier && !r.IsRecorded))
+        {
+            AppDialog.Show(this, $"{className} has no heats still to run, so there is nowhere to put a late entry.",
+                "Late entry", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        if (candidates.Count == 0)
+        {
+            AppDialog.Show(this,
+                $"Every {className} driver who can race tonight is already in a heat still to run. A driver who has only just arrived "
+                + "needs to be in the class (and checked in, when tonight only counts checked-in drivers) first.",
+                "Late entry", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var form = new LateEntryForm(className, candidates);
+
+        if (form.ShowDialog(this) != DialogResult.OK || form.Picked is not { } transponder)
+        {
+            return;
+        }
+
+        var answer = AddLateEntryFor(className, transponder, string.Empty);
+        _lblStatus.Text = answer.Message;
+
+        if (!answer.Ok)
+        {
+            AppDialog.Show(this, answer.Message, answer.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+    }
+
+    /// <summary>
+    /// Puts a late entry into the smallest heat of each of the class's
+    /// rounds still to run that they aren't in. One undo. No question asked.
+    /// </summary>
+    public ProgramAnswer AddLateEntryFor(string className, string transponder, string undoPrefix)
+    {
+        if (ClosedDayRefusal() is { } shut)
+        {
+            return shut;
+        }
+
+        var places = LateEntry.Place(DayRoundsForClass(className), transponder, RoundOnTrackId?.Invoke());
+        var name = _profiles.Get(transponder) is { DriverName.Length: > 0 } profile ? profile.DriverName : transponder;
+
+        if (places.Count == 0)
+        {
+            return new ProgramAnswer(false, "Late entry", $"{name} is already in every {className} round still to run.");
+        }
+
+        var before = places.ToDictionary(r => r.Id, r => r.AssignedTransponders.ToList(), StringComparer.Ordinal);
+
+        _undo.Capture(undoPrefix + $"Late entry: {name}", () =>
+        {
+            foreach (var round in places)
+            {
+                if (_rounds.Get(round.Id) is { } current && before.TryGetValue(round.Id, out var roster))
+                {
+                    current.AssignedTransponders = roster;
+                    _rounds.Update(current);
+                }
+            }
+
+            RefreshAll();
+        });
+
+        foreach (var round in places)
+        {
+            round.AssignedTransponders = round.AssignedTransponders.Append(transponder).ToList();
+            _rounds.Update(round);
+        }
+
+        RefreshAll();
+
+        return new ProgramAnswer(true, "Late entry",
+            $"{name} added to {string.Join(", ", places.Select(r => r.RoundLabel))}. Nobody else moved.");
+    }
+
     private void BalanceHeats()
     {
         if (TargetClass() is not { } className)

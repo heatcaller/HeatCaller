@@ -76,6 +76,12 @@ public sealed class RaceDayEventControl : UserControl
     // next thing to do.
     private readonly CheckedListBox _lstClasses = new ThemedCheckedListBox();
     private readonly NumericUpDown _numHeatSize = new();
+
+    /// <summary>How the first round is seeded (RaceEvent.FirstRoundSeeding, 11 Nov 2026).</summary>
+    private readonly ComboBox _cmbFirstRound = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+
+    /// <summary>The protest window in minutes (RaceEvent.ProtestMinutes, 11 Nov 2026).</summary>
+    private readonly NumericUpDown _numProtest = new();
     private readonly CheckBox _chkCheckedInOnly = new ThemedCheckBox();
     private readonly CheckBox _chkAutoAdvance = new ThemedCheckBox();
     private readonly ComboBox _cmbAutoAdvanceScope = new();
@@ -186,7 +192,7 @@ public sealed class RaceDayEventControl : UserControl
     /// Pieces.PickerWidth. Forgotten whenever the lists are rebuilt (see
     /// RefitFields).
     /// </summary>
-    private (Font Font, int Count, int Width)? _eventWidth, _shapeWidth, _venueWidth, _layoutWidth, _championshipWidth, _scopeWidth, _gapPresetWidth;
+    private (Font Font, int Count, int Width)? _eventWidth, _shapeWidth, _venueWidth, _layoutWidth, _championshipWidth, _scopeWidth, _gapPresetWidth, _firstRoundWidth;
 
     /// <summary>The widths the fields had at the normal text size, before any of them was measured - see SizeFields.</summary>
     private const int FieldWidth = 320;
@@ -480,6 +486,19 @@ public sealed class RaceDayEventControl : UserControl
         _numHeatSize.Value = 8;
         programGrid.AddRow("Drivers per heat:", _numHeatSize);
 
+        foreach (var mode in Enum.GetValues<FirstRoundSeeding>())
+        {
+            _cmbFirstRound.Items.Add(FirstRound.Words(mode));
+        }
+
+        _cmbFirstRound.SelectedIndex = 0;
+        programGrid.AddRow("First round seeded:", _cmbFirstRound);
+
+        _numProtest.Minimum = 0;
+        _numProtest.Maximum = 30;
+        _numProtest.Value = ProtestWindow.DefaultMinutes;
+        programGrid.AddRow("Protest window (min):", _numProtest);
+
         _chkCheckedInOnly.Text = "Only include drivers who have checked in";
         _chkCheckedInOnly.AutoSize = true;
         programGrid.AddField(_chkCheckedInOnly);
@@ -617,6 +636,8 @@ public sealed class RaceDayEventControl : UserControl
         Fit(_numQualRounds, number);
         Fit(_lstClasses, wide, _lstClasses.Font.Height * 5 + 12);
         Fit(_numHeatSize, number);
+        Fit(_cmbFirstRound, Math.Max(UiLayout.AtTextSize(160), Pieces.PickerWidth(_cmbFirstRound, ref _firstRoundWidth)));
+        Fit(_numProtest, number);
         Fit(_cmbAutoAdvanceScope, Math.Max(UiLayout.AtTextSize(ScopePickerWidth), Pieces.PickerWidth(_cmbAutoAdvanceScope, ref _scopeWidth)));
         Fit(_cmbGapPreset, Math.Max(wide, Pieces.PickerWidth(_cmbGapPreset, ref _gapPresetWidth)));
 
@@ -716,6 +737,8 @@ public sealed class RaceDayEventControl : UserControl
 
         _dtpOutBy.ValueChanged += CommitNow;
         _numHeatSize.ValueChanged += (_, _) => CommitNow();
+        _cmbFirstRound.SelectedIndexChanged += (_, _) => CommitNow();
+        _numProtest.ValueChanged += (_, _) => CommitNow();
         _chkCheckedInOnly.CheckedChanged += (_, _) => CommitNow();
         _chkAutoAdvance.CheckedChanged += (_, _) =>
         {
@@ -901,6 +924,16 @@ public sealed class RaceDayEventControl : UserControl
         if (onScreen.QualifyingRounds != baseline.QualifyingRounds)
         {
             target.QualifyingRounds = onScreen.QualifyingRounds;
+        }
+
+        if (onScreen.FirstRoundSeeding != baseline.FirstRoundSeeding)
+        {
+            target.FirstRoundSeeding = onScreen.FirstRoundSeeding;
+        }
+
+        if (onScreen.ProtestMinutes != baseline.ProtestMinutes)
+        {
+            target.ProtestMinutes = onScreen.ProtestMinutes;
         }
 
         if (onScreen.FirstRaceLocalTime != baseline.FirstRaceLocalTime)
@@ -1280,6 +1313,8 @@ public sealed class RaceDayEventControl : UserControl
         // _loading set. It is saved onto the day with the next change to any
         // of the day's fields - the same number, so nothing moves.
         _numHeatSize.Value = _events.HeatSizeFor(raceEvent);
+        _cmbFirstRound.SelectedIndex = Math.Clamp((int)raceEvent.FirstRoundSeeding, 0, _cmbFirstRound.Items.Count - 1);
+        _numProtest.Value = Math.Clamp(raceEvent.ProtestMinutes, (int)_numProtest.Minimum, (int)_numProtest.Maximum);
         _chkCheckedInOnly.Checked = raceEvent.CheckedInDriversOnly;
         ShowGapPreset(raceEvent.BetweenRacesPreset);
 
@@ -1336,6 +1371,8 @@ public sealed class RaceDayEventControl : UserControl
         _numQualRounds.Enabled = editable;
         _lstClasses.Enabled = editable;
         _numHeatSize.Enabled = editable;
+        _cmbFirstRound.Enabled = editable;
+        _numProtest.Enabled = editable;
         _chkCheckedInOnly.Enabled = editable;
         _cmbGapPreset.Enabled = editable;
         _chkAutoAdvance.Enabled = editable;
@@ -1596,6 +1633,8 @@ public sealed class RaceDayEventControl : UserControl
         raceEvent.FirstRaceLocalTime = _chkFirstRace.Checked ? _dtpFirstRace.Value : null;
         raceEvent.OutByLocalTime = _chkOutBy.Checked ? _dtpOutBy.Value : null;
         raceEvent.DriversPerHeat = (int)_numHeatSize.Value;
+        raceEvent.FirstRoundSeeding = (FirstRoundSeeding)Math.Max(0, _cmbFirstRound.SelectedIndex);
+        raceEvent.ProtestMinutes = (int)_numProtest.Value;
 
         // Deliberately NOT re-derived from the shape here. It is set from the
         // shape once, when the day is started (EventSpine.StartEvent); after
@@ -1670,6 +1709,8 @@ public sealed class RaceDayEventControl : UserControl
                     current.OutByLocalTime = old.OutByLocalTime;
                     current.QualifyingRounds = old.QualifyingRounds;
                     current.DriversPerHeat = old.DriversPerHeat;
+                    current.FirstRoundSeeding = old.FirstRoundSeeding;
+                    current.ProtestMinutes = old.ProtestMinutes;
                     current.CheckedInDriversOnly = old.CheckedInDriversOnly;
                     current.BetweenRacesPreset = old.BetweenRacesPreset;
                     current.ClassNames = (old.ClassNames ?? new List<string>()).ToList();
@@ -1702,6 +1743,8 @@ public sealed class RaceDayEventControl : UserControl
         && a.OutByLocalTime == b.OutByLocalTime
         && a.QualifyingRounds == b.QualifyingRounds
         && a.DriversPerHeat == b.DriversPerHeat
+        && a.FirstRoundSeeding == b.FirstRoundSeeding
+        && a.ProtestMinutes == b.ProtestMinutes
         && a.CheckedInDriversOnly == b.CheckedInDriversOnly
         && a.BetweenRacesPreset == b.BetweenRacesPreset
         && (a.ClassNames ?? new List<string>()).SequenceEqual(b.ClassNames ?? new List<string>(), StringComparer.Ordinal)
