@@ -213,6 +213,15 @@ public enum AnnouncementEventType
     /// {driver} {car} {team} {sponsors} {time} {previous}.
     /// </summary>
     BestEverHere,
+
+    /// <summary>
+    /// The gap between P2 and the leader, called each time P2 crosses within
+    /// a second of them in the race's final laps or final minute (11 Nov
+    /// 2026). See AnnouncementService.FinalLapsGap. Appended at the END.
+    /// Placeholders: {driver} {car} {team} {sponsors} for the chaser,
+    /// {rival} for the leader, {gap}.
+    /// </summary>
+    FinalLapsGap,
 }
 
 public sealed class AnnouncementEventConfig
@@ -1667,6 +1676,22 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             },
         };
 
+        // The gap for the lead each lap at the end of a race (11 Nov 2026) -
+        // see AnnouncementService.FinalLapsGap. Short: the next crossing is
+        // seconds away.
+        p.Events[nameof(AnnouncementEventType.FinalLapsGap)] = new AnnouncementEventConfig
+        {
+            Enabled = true,
+            Weight = 85,
+            Templates = new List<string>
+            {
+                "[excited] {gap} - {driver} is right there!",
+                "[excited] {driver}, {gap} behind {rival}!",
+                "[excited] Just {gap} between them!",
+                "[excited] {gap} the gap - {driver} on {rival}'s tail!",
+            },
+        };
+
         p.Events[nameof(AnnouncementEventType.AchievementUnlocked)] = new AnnouncementEventConfig
         {
             Enabled = true,
@@ -2032,6 +2057,7 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
         AnnouncementEventType.RaceTimeOver => ("Race time over", "The race time limit was reached - last lap warning."),
         AnnouncementEventType.RaceCompleted => ("Race completed", "The race has finished."),
         AnnouncementEventType.WinnerCalled => ("Winner named", "Said the moment the finish call has been - the winner's name, while the room is still cheering. Made ready on the last lap (or when time is up) for the top two, so there is no pause after the finish call. Only with Race completed on too. The unofficial result is still read after the cheering. Placeholder: {winner} (or {driver})."),
+        AnnouncementEventType.FinalLapsGap => ("Final laps gap", "In a race's last three laps, or its final minute, the gap for the lead called each time the car in second crosses within a second of the leader - \"Point four, he's right there!\". Said within two and a half seconds of the crossing or not at all. Placeholders: {driver} {car} {team} {sponsors} for the chaser, {rival} for the leader, {gap}."),
         AnnouncementEventType.BestEverHere => ("Fastest ever here (driver)", "A personal best that is also the driver's quickest lap EVER on the track layout picked in Race Control - said instead of the personal best, whether or not Personal best lap is on. Once per driver per race. Needs a layout picked and at least one earlier race for that driver on it; not for demos, rentals or excluded guests. Placeholders: {driver} {car} {team} {sponsors} {time} for the new lap, {previous} for their old best."),
         AnnouncementEventType.PersonalBestsTogether => ("Personal bests together", "When two or three drivers' personal bests are lost because the announcer was mid-line, they are said together once it ends - \"Personal bests for Dee and Al!\" - while those laps are still news. Only with Personal best lap on. Placeholder: {drivers}."),
         AnnouncementEventType.AchievementUnlocked => ("Achievement unlocked", "A driver just earned an achievement. Fires after a race, once the result is saved and the achievements have been worked out - at most a few per race, so a big night doesn't turn into a list. Placeholders: {driver} {car} {team} {sponsors} {achievement}."),

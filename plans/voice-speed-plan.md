@@ -254,6 +254,16 @@ Design first; it rides on "Rework follow along" above.
 - **Build:** during a quiet stretch (nothing queued, no battle within 1 s, the pacing gap run, at least 2 laps to go), the host throws to the pit reporter for one exchange about a driver's car or a team, rendered ahead, both turns. At most once per race, and never in the last 2 laps.
 - **Needs Asher:** whether it's worth the relay lines it spends, since the allowance runs out.
 
+### Phase 4 progress (11 Nov 2026)
+
+- **#1, your lap.** Lap beeps (the per-driver cue at the line) already reach the driver as fast as audio can: straight to the output, skipping every queue and lock. They didn't need reworking for speed. Two things changed:
+  - A driver with their own beep no longer also gets the shared good-lap chime 0.12 s later. That was two sounds every crossing, and the Lap Beeps page itself calls the shared chime no use to a driver. The invalid-lap buzzer and the personal-best, fast-lap and streak stings still play.
+  - "Lap time only" must start within 2.5 s of the crossing (other lap calls get 6 s), and among calls of equal weight the driver named longest ago goes first, so every driver gets turns.
+  - Still Asher's call: every lap, every Nth, or personal bests plus every Nth.
+- **#2, the pass for the lead** (`AnnouncementService.PassAhead.cs`). When P2 is within 0.5 s of the leader at the line, `LeadTracker.Preview` gives the change it would be, and the template and lead-change tail are chosen then. A dry run of `EnqueueVoice` builds the exact words, which render in the background. When the lead changes to that driver as predicted, the call takes the kept template and tail and the render is handed over. At most 6 a race, counted with the early renders. A wrong guess is one unused render.
+- **#5, the gap countdown** (`AnnouncementService.FinalLapsGap.cs`, row "Final laps gap"). In the leader's last 3 laps (lap limit from `LapLimitProvider`), or from the final minute or time-up, each time P2 crosses within 1 s of the leader: "Point four - Terry is right there!". Said within 2.5 s or dropped; `[excited]`.
+- **Phase 3's recap in pieces is still held.** A `VoiceTheReadAhead` long-read player already exists to build it from, but the recap renders during the teaser and stop set. Decide from one race's `[timing] Recap:` line.
+
 ### Phase 4 progress (10 Nov 2026)
 - #3, the winner named on the line (see the Phase 3 table).
 - #4, history-aware calls: **"Fastest ever here (driver)"**. A personal best that also beats the driver's quickest lap ever on the layout picked in Race Control is said as that instead: "Dee Ploy has never been faster on this track - seven two five!". It has a `{previous}` placeholder for the old best. It happens once per driver per race, and needs at least one earlier race for that driver on the layout. Demos, rentals, ghosts and excluded guests are left out, as for the track record. Its own row, on by default. Files: `BestEverHere.cs` and `RaceControlControl.BestEverHere.cs`, plus a hook ahead of the personal best in `NotifyPersonalBestLap`.

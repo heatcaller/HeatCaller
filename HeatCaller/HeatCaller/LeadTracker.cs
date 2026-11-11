@@ -117,6 +117,33 @@ public sealed class LeadTracker
     }
 
     /// <summary>
+    /// The change <see cref="Observe"/> would answer if <paramref name="leader"/>
+    /// were seen in front now - nothing is recorded (11 Nov 2026). For a pass
+    /// called ahead: its words are worked out while the cars are still
+    /// nose to tail. See AnnouncementService.PassAhead.
+    /// </summary>
+    public LeadChange? Preview(string? leader)
+    {
+        if (string.IsNullOrWhiteSpace(leader))
+        {
+            return null;
+        }
+
+        lock (_gate)
+        {
+            if (_leader is null || string.Equals(_leader, leader, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var timesLed = _timesLed.GetValueOrDefault(leader) + 1;
+            var leaders = _timesLed.ContainsKey(leader) ? _timesLed.Count : _timesLed.Count + 1;
+
+            return new LeadChange(leader, _leader, _changes + 1, leaders, timesLed);
+        }
+    }
+
+    /// <summary>
     /// The car that was in front has gone - a ghost switched off. The next
     /// car to be seen in front has not taken the lead from anybody, so it is
     /// not counted as a change; the counts so far stand.

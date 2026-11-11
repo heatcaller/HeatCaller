@@ -49,6 +49,9 @@ internal static class AudioTagTiers
     private static readonly HashSet<AnnouncementEventType> Lifted = new()
     {
         AnnouncementEventType.CloseBattle,
+
+        // The same fight, called each lap at the end (11 Nov 2026).
+        AnnouncementEventType.FinalLapsGap,
         AnnouncementEventType.GhostPassed,
         AnnouncementEventType.PassedByGhost,
         AnnouncementEventType.Lapped,

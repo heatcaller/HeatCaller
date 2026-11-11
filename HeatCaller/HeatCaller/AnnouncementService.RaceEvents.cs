@@ -827,6 +827,9 @@ public sealed partial class AnnouncementService
         // Time's up, so the next car over the line wins it: the winner's
         // call is made now for the top two (10 Nov 2026) - see Winner.
         PrepareTheWinnerCalls();
+
+        // And the gap for the lead is called each lap from here (11 Nov 2026).
+        NoteTheFinalMinute();
     }
 
     public void NotifyRaceCompleted()
@@ -1267,6 +1270,10 @@ public sealed partial class AnnouncementService
     /// </summary>
     public void NotifyFinalMinute(TimeSpan? timeLeft = null)
     {
+        // The gap for the lead is called each lap from here, whether or not
+        // the minute itself is said (11 Nov 2026) - see FinalLapsGap.
+        NoteTheFinalMinute();
+
         if (FinalMinuteSayByMs(TimingClock.NowMs, timeLeft) is not { } sayByMs)
         {
             return;

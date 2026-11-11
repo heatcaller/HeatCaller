@@ -317,7 +317,8 @@ public sealed partial class VoiceSettingsControl
     {
         var types = Enum.GetValues<AnnouncementEventType>()
             .Where(t => t is not (AnnouncementEventType.Reminder or AnnouncementEventType.MinutesLeft or AnnouncementEventType.FinalSeconds
-                or AnnouncementEventType.WinnerCalled or AnnouncementEventType.PersonalBestsTogether or AnnouncementEventType.BestEverHere))
+                or AnnouncementEventType.WinnerCalled or AnnouncementEventType.PersonalBestsTogether or AnnouncementEventType.BestEverHere
+                or AnnouncementEventType.FinalLapsGap))
             .ToList();
 
         var finalMinute = types.IndexOf(AnnouncementEventType.FinalMinute);
@@ -329,6 +330,7 @@ public sealed partial class VoiceSettingsControl
         types.Insert(types.IndexOf(AnnouncementEventType.RaceCompleted) + 1, AnnouncementEventType.WinnerCalled);
         types.Insert(types.IndexOf(AnnouncementEventType.PersonalBestLap) + 1, AnnouncementEventType.PersonalBestsTogether);
         types.Insert(types.IndexOf(AnnouncementEventType.PersonalBestLap) + 1, AnnouncementEventType.BestEverHere);
+        types.Insert(types.IndexOf(AnnouncementEventType.CloseBattle) + 1, AnnouncementEventType.FinalLapsGap);
 
         return types.ToArray();
     }
