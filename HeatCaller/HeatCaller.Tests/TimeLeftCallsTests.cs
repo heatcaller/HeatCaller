@@ -198,7 +198,11 @@ public sealed class TimeLeftCallsTests : IDisposable
         Assert.Equal(AnnouncementEventType.WinnerCalled + 1, AnnouncementEventType.PersonalBestsTogether);
         Assert.Equal(AnnouncementEventType.PersonalBestsTogether + 1, AnnouncementEventType.BestEverHere);
         Assert.Equal(AnnouncementEventType.BestEverHere + 1, AnnouncementEventType.FinalLapsGap);
-        Assert.Equal(AnnouncementEventType.FinalLapsGap, Enum.GetValues<AnnouncementEventType>().Max());
+        Assert.Equal(AnnouncementEventType.FinalLapsGap + 1, AnnouncementEventType.BeatLastTimeOut);
+        Assert.Equal(AnnouncementEventType.BeatLastTimeOut + 1, AnnouncementEventType.BackOnForm);
+        Assert.Equal(AnnouncementEventType.BackOnForm + 1, AnnouncementEventType.Milestone);
+        Assert.Equal(AnnouncementEventType.Milestone + 1, AnnouncementEventType.RivalsSideBySide);
+        Assert.Equal(AnnouncementEventType.RivalsSideBySide, Enum.GetValues<AnnouncementEventType>().Max());
     }
 
     [Fact]

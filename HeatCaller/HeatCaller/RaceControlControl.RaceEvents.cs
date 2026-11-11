@@ -179,6 +179,11 @@ public sealed partial class RaceControlControl
         // as each personal best comes in (10 Nov 2026) - see BestEverHere.
         _announcer.BestEverHereBefore = BestEverHereBefore;
 
+        // And the rest of what their saved races say (11 Nov 2026) - quicker
+        // than last time out, back on form, their milestones. See DriverHistory.
+        _announcer.LapAgainstHistory = LapAgainstHistory;
+        _announcer.CareerBefore = CareerBefore;
+
         // The call first, the save whatever the call does - see RaceFiling.AfterTheFlag.
         _raceCompletedHandler = () => RaceFiling.AfterTheFlag(
             _announcer.NotifyRaceCompleted,

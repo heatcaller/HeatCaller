@@ -52,6 +52,9 @@ internal static class AudioTagTiers
 
         // The same fight, called each lap at the end (11 Nov 2026).
         AnnouncementEventType.FinalLapsGap,
+
+        // Two rivals on track together (11 Nov 2026) - a battle.
+        AnnouncementEventType.RivalsSideBySide,
         AnnouncementEventType.GhostPassed,
         AnnouncementEventType.PassedByGhost,
         AnnouncementEventType.Lapped,
@@ -72,6 +75,11 @@ internal static class AudioTagTiers
     {
         AnnouncementEventType.PersonalBestLap,
         AnnouncementEventType.BestEverHere,
+
+        // What their saved races say (11 Nov 2026) - their own bests, read plain.
+        AnnouncementEventType.BeatLastTimeOut,
+        AnnouncementEventType.BackOnForm,
+        AnnouncementEventType.Milestone,
         AnnouncementEventType.PersonalBestsTogether,
         AnnouncementEventType.Streak,
         AnnouncementEventType.StreakLead,

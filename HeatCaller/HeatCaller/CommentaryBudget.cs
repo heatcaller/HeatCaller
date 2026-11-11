@@ -63,6 +63,10 @@ public enum SegmentKind
     // The rolling record watch (7 Nov 2026, known issues): a record coming,
     // where PaceNote is a record gone. Appended for Horizon's reason.
     RecordWatch,
+
+    // The booth live in a quiet stretch (11 Nov 2026): a throw to the
+    // co-host in pit lane, mid-race. Appended for Horizon's reason.
+    PitLaneLive,
 }
 
 /// <summary>
@@ -393,6 +397,16 @@ public sealed class CommentaryBudget
             new(SegmentKind.QualifyingReport,  SegmentTier.Colour, 1, true, TimeSpan.FromMinutes(3),  TimeSpan.FromSeconds(30), 6, 1, "Qualifying report", "What qualifying decided, before the mains go out.", true),
             new(SegmentKind.Honours,           SegmentTier.Colour, 1, true, TimeSpan.FromMinutes(2),  TimeSpan.FromSeconds(45), 5, 3, "Milestones", "A hundredth race, a first podium, a club record."),
             new(SegmentKind.MechanicInterview, SegmentTier.Colour, 2, true, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(15), 6, 2, "Technical Lead's interview", "The announcer asks the winning car's Technical Lead two questions.", true),
+            // THE BOOTH LIVE IN A QUIET STRETCH (11 Nov 2026, voice speed
+            // plan, phase 4 #7, asked for by Asher). Once a race at most, in
+            // a stretch with nothing being said and no fight within a second,
+            // never in the last two laps - see CommentaryDirector's
+            // PitLaneLive case. Always a two-hander: it is a throw to pit
+            // lane, so with no co-host it is not written at all. Arrives
+            // switched OFF (AppSettings.ArrivePitLaneLiveOff): it spends the
+            // month's relay lines in a race, where the other segments are
+            // what the race gives them.
+            new(SegmentKind.PitLaneLive,       SegmentTier.Colour, 2, true, TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(30), 8, 4, "Pit lane, live", "In a quiet stretch of a race, the announcer throws to the co-host in pit lane for a quick word about one driver's car or team. Once a race at most, never in the last two laps. Spends relay lines.", true),
             // THE GRID HISTORY, RETUNED 10 Oct 2026 - from 8 a meeting and
             // 4 a class down to 3 and 1, with its gap trebled.
             //

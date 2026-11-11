@@ -455,7 +455,38 @@ public sealed class AppSettings
     /// already pay for. Race intros and recaps are never in here - they
     /// have their own boxes under "What it writes".
     /// </summary>
-    public string CommentarySegmentsOff { get; set; } = string.Empty;
+    public string CommentarySegmentsOff { get; set; } = nameof(SegmentKind.PitLaneLive);
+
+    /// <summary>
+    /// Set once "Pit lane, live" (11 Nov 2026) has been put in
+    /// <see cref="CommentarySegmentsOff"/> for a club whose settings came
+    /// from before it - see ArrivePitLaneLiveOff.
+    /// </summary>
+    public bool PitLaneLiveArrivedOff { get; set; } = true;
+
+    /// <summary>
+    /// The one segment that arrives switched OFF, unlike every other (11 Nov
+    /// 2026, asked for by Asher): the throw to pit lane mid-race spends the
+    /// month's relay lines in a race, and the allowance has run out before.
+    /// Once, so a club that ticks it on keeps it on.
+    /// </summary>
+    /// <returns>True when it changed anything, so the file is saved.</returns>
+    internal bool ArrivePitLaneLiveOff(string savedJson)
+    {
+        // A file that already has the flag has been through this - or was
+        // made new, with the segment off already (CommentarySegmentsOff's
+        // default). Only a file from before it gets it added.
+        if (savedJson.Contains("\"" + nameof(PitLaneLiveArrivedOff) + "\"", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var off = new HashSet<SegmentKind>(CommentaryBudget.ParseSwitches(CommentarySegmentsOff)) { SegmentKind.PitLaneLive };
+        CommentarySegmentsOff = CommentaryBudget.SaveSwitches(off);
+        PitLaneLiveArrivedOff = true;
+
+        return true;
+    }
 
     /// <summary>
     /// What each of AI Commentary's Simple-mode section switches had on when
@@ -2808,7 +2839,7 @@ public sealed class AppSettings
                     // text. Take them in, then save at once so the plain
                     // copies are gone from disk from this launch on.
                     // "|" not "||": both must run.
-                    if (loaded.AdoptPlainTextSecrets(json) | loaded.MoveToRenamedRelay() | loaded.FoldLowestTier())
+                    if (loaded.AdoptPlainTextSecrets(json) | loaded.MoveToRenamedRelay() | loaded.FoldLowestTier() | loaded.ArrivePitLaneLiveOff(json))
                     {
                         loaded.Save();
                     }

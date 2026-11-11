@@ -160,6 +160,9 @@ public sealed partial class AnnouncementService
         AnnouncementEventType.FastLap or
         AnnouncementEventType.PersonalBestLap or
         AnnouncementEventType.BestEverHere or
+        AnnouncementEventType.BeatLastTimeOut or
+        AnnouncementEventType.BackOnForm or
+        AnnouncementEventType.RivalsSideBySide or
         AnnouncementEventType.PersonalBestsTogether or
         AnnouncementEventType.FinalLapsGap or
         AnnouncementEventType.LeaderChange or

@@ -986,6 +986,11 @@ public sealed class CommentaryDirector
         _pending = null;
         _pendingAt = default;
         _paceCalling = null;
+
+        // The pit lane is this race's to throw to once (11 Nov 2026).
+        _pitLaneSaid = false;
+        _road = null;
+        _closestFightSeconds = double.PositiveInfinity;
     }
 
     /// <summary>
@@ -1124,7 +1129,52 @@ public sealed class CommentaryDirector
         Battles.Observe(pairs);
 
         Horizons.Observe(pairs, leaderLaps, road?.Laps ?? 0, road?.Estimated ?? false, road?.TimeLeft);
+
+        // For the pit lane's quiet stretch (11 Nov 2026): how much race is
+        // left, and how close the closest fight is.
+        _road = road;
+        _closestFightSeconds = pairs
+            .Where(p => p.LapsDown == 0 && !double.IsNaN(p.GapSeconds) && p.GapSeconds >= 0)
+            .Select(p => p.GapSeconds)
+            .DefaultIfEmpty(double.PositiveInfinity)
+            .Min();
     }
+
+    // ------------------------------------------------- pit lane, live (11 Nov 2026)
+
+    /// <summary>The laps left (the leader's current one counted) the pit lane needs: never in the last two laps.</summary>
+    internal const int PitLaneLapsLeftAtLeast = 3;
+
+    /// <summary>No throw to pit lane while two cars are this close - the fight is the story.</summary>
+    internal const double PitLaneNoFightWithin = 1.0;
+
+    /// <summary>
+    /// Whether the announcer has been quiet long enough for a two-hander -
+    /// nothing queued or playing for a few seconds (AnnouncerControl). Null:
+    /// never quiet, so never thrown to.
+    /// </summary>
+    public Func<bool>? AnnouncerQuiet { get; set; }
+
+    /// <summary>
+    /// A driver on track to talk about, and what is known about their car
+    /// and team, or null when nobody has either (AnnouncerControl).
+    /// </summary>
+    public Func<(string DriverId, string Facts)?>? PitLaneSubject { get; set; }
+
+    private RoadLeft? _road;
+    private double _closestFightSeconds = double.PositiveInfinity;
+
+    /// <summary>Thrown to this race already - once a race at most.</summary>
+    private bool _pitLaneSaid;
+
+    /// <summary>
+    /// Whether the race is somewhere the pit lane can be thrown to: enough
+    /// of it left, no fight within a second, and nothing being said.
+    /// </summary>
+    internal static bool QuietStretch(RoadLeft? road, double closestFightSeconds, bool announcerQuiet) =>
+        announcerQuiet
+        && road is { Laps: >= PitLaneLapsLeftAtLeast }
+        && closestFightSeconds >= PitLaneNoFightWithin;
 
     /// <summary>A lap has come in. See PaceWatch.</summary>
     public void Lap(string driverId, double seconds)
@@ -2081,7 +2131,7 @@ public sealed class CommentaryDirector
     /// </summary>
     internal static int? LeaderLapsAllowedFor(SegmentKind kind, Battle? calling) => kind switch
     {
-        SegmentKind.PaceNote or SegmentKind.RecordWatch => null,
+        SegmentKind.PaceNote or SegmentKind.RecordWatch or SegmentKind.PitLaneLive => null,
         SegmentKind.BattleWatch when calling is { Position: > 1 } => 2,
         _ => 1,
     };
@@ -2089,13 +2139,14 @@ public sealed class CommentaryDirector
     /// <summary>Whether a lead change makes an in-race line of this kind untrue - see LeaderLapsAllowedFor.</summary>
     internal static bool LeadMattersFor(SegmentKind kind, Battle? calling) => kind switch
     {
-        SegmentKind.PaceNote or SegmentKind.RecordWatch => false,
+        SegmentKind.PaceNote or SegmentKind.RecordWatch or SegmentKind.PitLaneLive => false,
         SegmentKind.BattleWatch when calling is { Position: > 1 } => false,
         _ => true,
     };
 
     internal static bool InRace(SegmentKind kind) =>
-        kind is SegmentKind.BattleWatch or SegmentKind.PaceNote or SegmentKind.Horizon or SegmentKind.RecordWatch;
+        kind is SegmentKind.BattleWatch or SegmentKind.PaceNote or SegmentKind.Horizon or SegmentKind.RecordWatch
+            or SegmentKind.PitLaneLive;
 
     private async Task<SpokenSegment?> TryAsync(SegmentKind kind, SynchronizationContext? ui, CancellationToken ct)
     {
@@ -2554,10 +2605,13 @@ public sealed class CommentaryDirector
         // but only by making the whole evening chattier - a club that wants
         // the co-host in the heats and the same number of segments had no
         // way to say so. This is that, on its own.
+        // The pit lane is a two-hander or nothing (11 Nov 2026) - a throw to
+        // a co-host who then does not answer is worse than no throw.
         var twoVoices = _settings.CommentaryCoHost
                         && (Stature.WorthTwoVoices
                             || _settings.CommentaryTwoVoicesInHeats
-                            || ShowChatter.TwoVoicesEverywhere(Chatter));
+                            || ShowChatter.TwoVoicesEverywhere(Chatter)
+                            || kind == SegmentKind.PitLaneLive);
 
         if (!twoVoices && _settings.CommentaryCoHost && spec.CanBeExchange)
         {
@@ -2643,6 +2697,21 @@ public sealed class CommentaryDirector
 
         switch (kind)
         {
+            case SegmentKind.PitLaneLive:
+            {
+                // A throw to pit lane needs someone in pit lane: with no
+                // co-host it is not written at all, rather than written in
+                // one voice. And once a race, in a quiet stretch only.
+                if (_pitLaneSaid || !_settings.CommentaryCoHost
+                    || !QuietStretch(_road, _closestFightSeconds, AnnouncerQuiet?.Invoke() == true)
+                    || PitLaneSubject?.Invoke() is not { } subject)
+                {
+                    return Array.Empty<FactBlock>();
+                }
+
+                return new[] { new FactBlock($"pitlane|{_raceKey}|{subject.DriverId}", subject.Facts) };
+            }
+
             case SegmentKind.BattleWatch:
             {
                 // Kept, because Spent has to cool THIS fight. It used to
@@ -3024,6 +3093,10 @@ public sealed class CommentaryDirector
     {
         switch (kind)
         {
+            case SegmentKind.PitLaneLive:
+                _pitLaneSaid = true;
+                break;
+
             case SegmentKind.RecordWatch:
                 // Only if it is still the one that was said - a bigger
                 // threat seen while it was written is a new line.

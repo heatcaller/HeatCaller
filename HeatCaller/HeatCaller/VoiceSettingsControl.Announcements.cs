@@ -318,7 +318,8 @@ public sealed partial class VoiceSettingsControl
         var types = Enum.GetValues<AnnouncementEventType>()
             .Where(t => t is not (AnnouncementEventType.Reminder or AnnouncementEventType.MinutesLeft or AnnouncementEventType.FinalSeconds
                 or AnnouncementEventType.WinnerCalled or AnnouncementEventType.PersonalBestsTogether or AnnouncementEventType.BestEverHere
-                or AnnouncementEventType.FinalLapsGap))
+                or AnnouncementEventType.FinalLapsGap or AnnouncementEventType.BeatLastTimeOut or AnnouncementEventType.BackOnForm
+                or AnnouncementEventType.Milestone or AnnouncementEventType.RivalsSideBySide))
             .ToList();
 
         var finalMinute = types.IndexOf(AnnouncementEventType.FinalMinute);
@@ -331,6 +332,13 @@ public sealed partial class VoiceSettingsControl
         types.Insert(types.IndexOf(AnnouncementEventType.PersonalBestLap) + 1, AnnouncementEventType.PersonalBestsTogether);
         types.Insert(types.IndexOf(AnnouncementEventType.PersonalBestLap) + 1, AnnouncementEventType.BestEverHere);
         types.Insert(types.IndexOf(AnnouncementEventType.CloseBattle) + 1, AnnouncementEventType.FinalLapsGap);
+
+        // The history calls (11 Nov 2026): the lap ones under Fastest ever
+        // here and Personal bests together; the rivals under the battles.
+        types.Insert(types.IndexOf(AnnouncementEventType.PersonalBestsTogether) + 1, AnnouncementEventType.BeatLastTimeOut);
+        types.Insert(types.IndexOf(AnnouncementEventType.PersonalBestsTogether) + 1, AnnouncementEventType.BackOnForm);
+        types.Insert(types.IndexOf(AnnouncementEventType.FinalLapsGap) + 1, AnnouncementEventType.RivalsSideBySide);
+        types.Insert(types.IndexOf(AnnouncementEventType.AchievementUnlocked), AnnouncementEventType.Milestone);
 
         return types.ToArray();
     }

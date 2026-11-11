@@ -626,6 +626,7 @@ public sealed partial class AnnouncementService
         // its passes made ready (11 Nov 2026).
         ForgetTheWinnerCalls();
         ForgetThePredictedPasses(newRace: true);
+        ForgetMilestones();
         _inTheFinalMinute = false;
 
         // Not counted: the count it would go into has just been cleared,

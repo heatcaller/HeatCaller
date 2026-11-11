@@ -290,6 +290,29 @@ Design first; it rides on "Rework follow along" above.
   - **The finish call talks over the end of the fanfare.** For a finish sound of 3 s or more, the last 1.5 s are eased down to 40% over a quarter of a second, and the speaker is handed to the finish call. Shorter sounds, like the built-in tones, play out in full first, as before.
   - Expected: the winner named at about 3.5 s after the flag, instead of about 8 s.
 
+### Phase 4 #4, the history calls (11 Nov 2026)
+
+Asher picked all four. Each has its own row on the Voice page, on by default, with lines the club can edit. Race Control answers from Race History (`RaceControlControl.DriverHistory.cs`, with pure helpers in `DriverHistory.cs`). Demos, imported results, rentals, ghosts and excluded guests are left out, as for the track record.
+
+- **Quicker than last time out.** A personal best that beats the driver's best on their last *night* on this layout (tonight's earlier heats don't count as last time). Said instead of the personal best, once per driver per night. Placeholders `{previous}` and `{margin}` ("two tenths").
+- **Back on form.** A personal best quicker than any of their last three nights here, when all three were slower than their best before them. It takes the place of Quicker than last time out for that lap. Once per driver per night.
+- Order on a personal best: Fastest ever here, then Back on form, then Quicker than last time out, then the plain personal best.
+- **Milestones.** Their 50th race at the club and every hundredth after it, offered on lap 2 (and lap 4 if it wasn't heard). Every thousandth lap, practice laps included, called on the lap itself. It is marked as said only once it's actually heard. `{milestone}` is "hundredth race" or "two thousandth lap".
+- **Rivals side by side.** Two drivers from the Rivalries page within a second of each other get this line in place of the Close battle line, once per pair per race. The chaser is `{driver}`. The existing rivalry line still plays on a pass. It has its own row, so it works with Close battle switched off.
+
+### Phase 4 #7, the booth live in a quiet stretch (11 Nov 2026)
+
+Built as a new in-race director segment, **"Pit lane, live"** (`SegmentKind.PitLaneLive`, Colour tier, relay lines only). It is **off by default**, both for a new club and for one whose settings came from before it (`AppSettings.ArrivePitLaneLiveOff`, run once). It's ticked on the Commentary page, under During the race.
+
+- **The exchange.** The announcer throws to the co-host in pit lane, and they have a two-voice exchange about one driver's car, team or sponsors from the Garage. It's written and rendered ahead like the other two-handers, and never covers the race order or gaps, since the race moves while they talk.
+- **Without a co-host** it isn't written at all, rather than written for one voice.
+- **When it can run** (`CommentaryDirector.QuietStretch`):
+  - the announcer has been quiet (nothing queued or playing) for 4 s;
+  - no pair of cars is within 1 s;
+  - at least 3 laps are left, counting the leader's current lap, so never in the last two.
+- **Limits:** once a race at most, and the usual budget (8 a night, 4 a class, scaled by the chattiness dial).
+- **Freshness:** another lap or a lead change doesn't make it stale.
+
 ### Phase 4 progress (10 Nov 2026)
 - #3, the winner named on the line (see the Phase 3 table).
 - #4, history-aware calls: **"Fastest ever here (driver)"**. A personal best that also beats the driver's quickest lap ever on the layout picked in Race Control is said as that instead: "Dee Ploy has never been faster on this track - seven two five!". It has a `{previous}` placeholder for the old best. It happens once per driver per race, and needs at least one earlier race for that driver on the layout. Demos, rentals, ghosts and excluded guests are left out, as for the track record. Its own row, on by default. Files: `BestEverHere.cs` and `RaceControlControl.BestEverHere.cs`, plus a hook ahead of the personal best in `NotifyPersonalBestLap`.
