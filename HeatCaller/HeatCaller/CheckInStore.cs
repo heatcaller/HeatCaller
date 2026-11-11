@@ -317,6 +317,24 @@ public sealed class CheckInStore
         Save();
     }
 
+    /// <summary>
+    /// Checks these drivers out at the event named, not whichever is current
+    /// - the undo of Who's Racing's Import Entries (11 Nov 2026), which takes
+    /// out only the check-ins the import itself made, at the day it made
+    /// them, as RestoreCheckedIn puts back only what it was given.
+    /// </summary>
+    public void RemoveCheckIns(string eventId, IEnumerable<string> transponders)
+    {
+        var sheet = SheetFor(eventId);
+
+        foreach (var transponder in transponders)
+        {
+            sheet.CheckedIn.Remove(transponder);
+        }
+
+        Save();
+    }
+
     public int Count => Current.CheckedIn.Count;
 
     // --- Across events -----------------------------------------------------

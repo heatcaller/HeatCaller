@@ -184,12 +184,48 @@ Above the list:
 The buttons under the list:
 
 - **Add Driver** opens the **Add a driver** window for someone who isn't on file yet: **Name**, **Transponder** and **Class**. Click **Add Driver** and they're saved with the drivers on file and checked in straight away.
+- **Import Entries** brings in tonight's entry list from a CSV file or a table you copied, such as an RCSignup export or a LiveRC entry list. See [Import entries](#import-entries).
 - **Check In All Shown** ticks in every driver currently in the list (so it respects the filters).
 - **Check Out Everyone** clears all check-ins for the current race day, after you confirm. You can undo it with **Undo**: the drivers are checked back in to the race day they were checked out of, and anyone who checked in since stays checked in. You don't normally need it — a new race day already starts with an empty sheet.
 - **Inspect Selected Car** opens a tech inspection for the selected driver. See [Inspect a car](#inspect-a-car). With more than one driver picked it reads **Inspect Selected Cars** and logs one inspection for all of them. See [Inspect several cars at once](#inspect-several-cars-at-once).
 - **Scrutineering Log** opens the full list of inspections. See [The Scrutineering log](#the-scrutineering-log).
 - **Online Sign-ups** opens the drivers who have signed up online, waiting to be approved. The button shows how many are waiting, for example **Online Sign-ups (3)**. See [Driver sign-up](../online/sign-up.md).
 - **Driver Requests** opens the changes drivers have asked for from their phones, and their result queries, waiting for the desk. The button shows how many are waiting, for example **Driver Requests (2)**. It's only there while the club takes requests, or while some are still waiting. See [Driver requests](../online/driver-requests.md).
+
+### Import entries
+
+If your drivers enter before the night somewhere else, such as RCSignup, LiveRC or a spreadsheet, you can bring that list in instead of ticking everyone by hand. Each row of the list is one driver entered in a class. HeatCaller matches each row to a driver already here, makes a profile for anyone new, adds the class to the classes they race, and can check them all in to tonight's race day. Nothing changes until you've seen what will happen.
+
+1. Click **Import Entries** and choose **From a CSV File...** or **Paste a Table (LiveRC Entry List)...**.
+    - For a file: comma-, semicolon- and tab-separated files all work, and the first row must be the column headings. An RCSignup or LiveTime export is fine as it comes.
+    - For a table: select the whole list on the web page or in the spreadsheet, headings and every row, and copy it (<kbd>Ctrl</kbd>+<kbd>C</kbd>) first. A LiveRC entry list is read one class table at a time, with each table's class as the row's class, as on [Driver Hub](drivers-and-classes.md#import-drivers-from-a-spreadsheet).
+2. The **Import entries** window shows the first rows with a list above each column, guessed from its heading. Headings are matched whatever their capitals, so "FIRST NAME", "Car Number", "AMB #" and "Class" are all recognized. Put any wrong guess right, set columns you don't want to **(ignore)**, and click **Next**. You need a **Transponder** column, a **Driver name** column, or **First name** and **Last name**. **Points so far** isn't used here.
+3. The next window lists every row with what will happen to it, and a line at the top that counts them, for example "3 new drivers, 12 updated, 20 already here with nothing to change, 1 row skipped."
+4. Choose the two ticks, then click **Import**.
+
+How each row is matched:
+
+- **By transponder** when the row has one. The driver with that transponder (as their main one or one of their others) is the match. If their name is different from the row's, the row is skipped: it's a mistake on the sheet or a transponder that changed hands, and you decide which.
+- **By name** when the row has no transponder. Capitals, dots and apostrophes don't matter, and "Black, Kaleb" matches "Kaleb Black". A name nobody here has, or one two drivers share, is skipped.
+- **A new driver** when the transponder is new and nobody here has the name. If somebody here already has the name on another transponder, the row is skipped instead of making a second profile. Add the new transponder on their [transponders](drivers-and-classes.md#a-drivers-transponders), or fix the sheet.
+
+What a row changes:
+
+- **Classes.** The row's class is added to the classes the driver races. Their main class stays as it is, so a Stock driver entered in Mod tonight races both. A driver with no class yet gets the row's class as their main one. A class cell can hold more than one class, separated by semicolons, or by commas when each one is a class you have. A class that isn't on the **Classes** page is entered as the sheet spells it and named under the list: add or rename it on **Classes** before you build the heats.
+- **Other details** (race number, car, announcer name, team, sponsors, email and notes). A blank one on the profile is filled in. One the profile already has is kept, and the row says so, for example "keeps race number 12 (the sheet says 7)". Tick **Replace details that differ** to use the sheet's instead. A different car is added to the driver's garage either way; with the tick, it also becomes the car they're announced in.
+- A driver's name is never changed.
+
+The two ticks:
+
+| Tick | What it does | Default |
+|---|---|---|
+| **Check everyone on the list in to** *race day* | Checks in every driver on the list who wasn't skipped. Drivers already checked in stay checked in. With no race day open it reads **Check everyone on the list in on Who's Racing**. While the current race day is closed it's off and can't be ticked. | On when a race day is open, off when none is |
+| **Replace details that differ** | Puts the sheet's race number, car, team, sponsors, email and notes in place of different ones already on a profile. | Off |
+
+When it's done, **Entries imported** says how many drivers were new, updated and checked in. The whole import is one step for the sidebar **Undo** button: the drivers it added are removed, the drivers it changed go back to how they were, and only the check-ins it made are taken off.
+
+!!! note
+    Moving from LiveTime? [Switching from LiveTime](../getting-started/switching-from-livetime.md) maps LiveTime's screens to HeatCaller's and walks through bringing your drivers across.
 
 ### Drivers checking themselves in
 

@@ -411,6 +411,14 @@ public sealed partial class CheckInControl : UserControl
         var btnAddDriver = new Button { Text = "Add Driver..." };
         btnAddDriver.Click += (_, _) => AddDriver();
 
+        // Tonight's entry list - RCSignup, LiveTime, LiveRC or any CSV -
+        // matched onto the drivers here and checked in (11 Nov 2026, build
+        // plan 7.1). A menu under the button: from a file, or pasted. See
+        // CheckInControl.Entries.cs.
+        var btnEntries = new Button { Text = "Import Entries..." };
+        var entriesMenu = BuildEntriesMenu();
+        btnEntries.Click += (_, _) => entriesMenu.Show(btnEntries, new Point(0, btnEntries.Height));
+
         var btnCheckOutAll = new Button { Text = "Check Out Everyone" };
 
         // Named for what it acts on, like the two buttons beside it. It was
@@ -478,7 +486,7 @@ public sealed partial class CheckInControl : UserControl
 
         // Only the buttons that exist: a club with no tech store gets neither
         // Inspect nor the log.
-        var actions = new ButtonBar().With(btnAddDriver, btnCheckInAll, btnCheckOutAll);
+        var actions = new ButtonBar().With(btnAddDriver, btnEntries, btnCheckInAll, btnCheckOutAll);
 
         if (_tech is not null)
         {

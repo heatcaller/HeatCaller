@@ -166,9 +166,11 @@ internal static class DriverImport
             "transponder", "transponderid", "transponder id", "transponder number", "transponder no",
             "transponder #", "transponder code", "personal transponder", "tx", "tx id", "trans", "chip", "chip id",
             "mylaps", "mylaps id", "rc4", "decoder id",
+            // RCSignup and LiveTime exports (11 Nov 2026, build plan 7.1/7.2).
+            "amb", "amb #", "amb number", "amb id", "mylaps #", "mylaps number", "transponder num",
         }),
-        (ImportColumn.FirstName, new[] { "first name", "firstname", "first", "given name", "forename" }),
-        (ImportColumn.LastName, new[] { "last name", "lastname", "last", "surname", "family name" }),
+        (ImportColumn.FirstName, new[] { "first name", "firstname", "first", "given name", "forename", "racer first name", "driver first name" }),
+        (ImportColumn.LastName, new[] { "last name", "lastname", "last", "surname", "family name", "racer last name", "driver last name" }),
         (ImportColumn.DriverName, new[]
         {
             "drivername", "driver name", "driver", "name", "racer", "racer name", "pilot", "full name", "competitor",
@@ -176,7 +178,8 @@ internal static class DriverImport
         }),
         (ImportColumn.AnnouncerName, new[] { "announcer name", "announcername", "spoken name", "nickname", "nick name" }),
         (ImportColumn.RaceNumber, new[] { "race number", "racenumber", "number", "#", "no", "car number", "car #", "car no", "bib" }),
-        (ImportColumn.ClassName, new[] { "classname", "class name", "class", "category", "division", "racing class" }),
+        (ImportColumn.ClassName, new[] { "classname", "class name", "class", "category", "division", "racing class",
+            "classes", "class 1", "race class", "event class", "entered class", "class entered", "racing classes" }),
         (ImportColumn.Car, new[] { "carmodel", "car model", "car", "model", "vehicle", "chassis", "kit" }),
         (ImportColumn.Team, new[] { "team", "club", "team club", "team name" }),
         (ImportColumn.Sponsors, new[] { "sponsors", "sponsor" }),
