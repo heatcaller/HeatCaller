@@ -35,3 +35,19 @@ describe("Protest window on the phones", () => {
     assert.equal(open_({ sid: "a", qUntil: p.clock - 1 }), false);
   });
 });
+
+/**
+ * ESTIMATED START TIMES (11 Nov 2026): the laptop's "about 20:42" for each
+ * race still to come on the Schedule page, from its plan of the night.
+ */
+describe("Schedule: estimated starts", () => {
+  it("shows the laptop's estimate for a race still to come, and nothing for one done or on track", async () => {
+    const p = await open(schedulePage("acme-rc", "Acme RC"));
+    const est = (l: unknown) => p.eval(`estimateWords(${JSON.stringify(l)})`);
+    assert.equal(est({ status: "next", estimate: "about 20:42" }), "about 20:42");
+    assert.equal(est({ status: "upcoming", estimate: "about 21:05" }), "about 21:05");
+    assert.equal(est({ status: "running", estimate: "about 20:42" }), "");
+    assert.equal(est({ status: "done", estimate: "about 20:42" }), "");
+    assert.equal(est({ status: "next" }), "", "an older laptop sends none");
+  });
+});

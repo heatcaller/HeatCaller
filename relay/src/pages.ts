@@ -8526,6 +8526,16 @@ function runningLate(lines) {
   return late;
 }
 
+// WHEN IT SHOULD START (11 Nov 2026): the laptop's own estimate, "about
+// 20:42", from its plan of the rest of the night (NightPlan) - every race
+// still to come, typed time or not, moving as the night runs. Preferred to
+// the typed time plus how late the night is. Nothing from an older laptop.
+function estimateWords(l) {
+  if (!l || (l.status !== 'next' && l.status !== 'upcoming')) return '';
+  const e = typeof l.estimate === 'string' ? l.estimate.trim() : '';
+  return /^about /.test(e) ? e : '';
+}
+
 function lateWords(late) {
   if (late === null) return '';
   if (Math.abs(late) <= 2) return 'Running on time';
@@ -8585,6 +8595,8 @@ function draw() {
     if (Number.isFinite(started)) {
       const by = Number.isFinite(planned) ? Math.round((started - planned) / 60000) : 0;
       when = 'started ' + clockWords(started) + (Math.abs(by) > 2 ? (by > 0 ? ', ' + by + ' min late' : ', ' + (-by) + ' min early') : '');
+    } else if (estimateWords(l)) {
+      when = estimateWords(l);
     } else if (late !== null && late > 2 && Number.isFinite(planned) && (l.status === 'next' || l.status === 'upcoming')) {
       when = 'about ' + clockWords(planned + late * 60000);
     }

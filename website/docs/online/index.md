@@ -142,6 +142,7 @@ On the Synthwave look the chart lines are neon; every other look uses the standa
 ### On the Schedule page
 
 - **Running late.** Once a race has started, a line at the top says "Running on time" or "Running 6 min behind" (or ahead), going by the latest race to start against the time typed for it on the timetable. Each started race shows when it started ("started 19:42, 6 min late"), and, while the night is behind, each race to come shows "about" its time plus the delay.
+- **When each race should start.** Every race still to come shows "about 20:42", HeatCaller's own estimate from its plan of the rest of the night (each race's length plus tonight's typical gap between races). It moves as the night runs, so a delay or a race that finishes early shows within a few seconds. It's preferred over the typed time plus the delay. With an older HeatCaller the races to come show the typed time plus the delay, as above.
 - **The grid.** With the roster published, tap a race to see its grid: **Grid**, **Driver** and, when known, **Car**.
 - **Qualifying**, under the running order: for each class, every driver's place, their best qualifying score (**Best**) and the main it puts them in (**Main**), with a line where each main ends. The class picker and "Find your name" work on it too. On a driver's own night it's on the card at the top of **Me**, with what it takes to move up ("Beat 17/4:59.000 to make the B main").
 

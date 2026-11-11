@@ -497,6 +497,8 @@ A heat sheet is a printable page for the pit table: the current race day's round
 
 The sheet is black on white for easy reading, with a band of the class's color across the top and beside each round, so you can sort a pile of sheets by class at a glance. It's letter-size. A class with more rounds than fit on one page runs onto as many pages as it needs, each marked "page 1 of 2" and so on. Saved, the first page goes to the file you chose and the others beside it with "-page2", "-page3" added to the name; HeatCaller asks before replacing pages already in that folder.
 
+Each round still to run shows its estimated start after its title, for example "Q2 Heat 1 - about 20:42", from the same plan of the night as the **Next Steps** finish time. The times are worked out when you print or save, so print the sheet again later in the night for times that have moved. Rounds already run, and a sheet printed with no race day open, show none.
+
 ## The Timetable
 
 The timetable is the day's running order with times: every heat and final in the order it runs, plus anything else happening that day — doors open, lunch, the prize-giving. It shows what's done, what's on track now and how far off its slot it started, and what's next.

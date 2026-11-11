@@ -1434,7 +1434,7 @@ public partial class MainForm
         }
 
         SendToRelayIfChanged(RelayChannel.Programme, "the schedule", () => RelayDocuments.Programme(
-            _daySchedule, _rounds, _raceEvents, _profiles, _settings.RelayPublishRoster, abbreviate));
+            _daySchedule, _rounds, _raceEvents, _profiles, _settings.RelayPublishRoster, abbreviate, EstimatedStartsForPhones()));
 
         // Where qualifying stands (4 Nov 2026) - see BuildQualifyingDocument.
         SendToRelayIfChanged(RelayChannel.Qualifying, "qualifying", () => BuildQualifyingDocument(abbreviate));

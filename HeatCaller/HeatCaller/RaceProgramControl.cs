@@ -1030,6 +1030,16 @@ public sealed class RaceProgramControl : UserControl
     /// </summary>
     internal NightPlan.Projection? Plan() => Plan(DayRounds());
 
+    /// <summary>
+    /// Each round's estimated start as the heat sheet prints it - "about
+    /// 20:42" - from the plan as it stands now (11 Nov 2026). See NightPlan.AboutOf.
+    /// </summary>
+    private Func<RoundDefinition, string?> EstimatedStarts()
+    {
+        var about = NightPlan.AboutOf(Plan());
+        return round => about(round.Id);
+    }
+
     private NightPlan.Projection? Plan(IReadOnlyList<RoundDefinition> day)
     {
         if (ActiveDay is not { IsLegacy: false } raceDay || day.Count == 0)
@@ -5043,7 +5053,8 @@ public sealed class RaceProgramControl : UserControl
                 className,
                 rounds,
                 _profiles,
-                ClassByName(className)?.Colour ?? RaceClass.DefaultColourFor(className));
+                ClassByName(className)?.Colour ?? RaceClass.DefaultColourFor(className),
+                EstimatedStarts());
         }
         catch (Exception ex)
         {
@@ -5109,7 +5120,8 @@ public sealed class RaceProgramControl : UserControl
                 className,
                 rounds,
                 _profiles,
-                ClassByName(className)?.Colour ?? RaceClass.DefaultColourFor(className));
+                ClassByName(className)?.Colour ?? RaceClass.DefaultColourFor(className),
+                EstimatedStarts());
 
             if (PageFiles.SavePages(this, pages, dialog.FileName) is not { } written)
             {

@@ -98,7 +98,8 @@ internal static class RelayDocuments
         RaceEventStore events,
         ProfileStore profiles,
         bool lineups,
-        bool abbreviate)
+        bool abbreviate,
+        Func<string, string?>? estimateOf = null)
     {
         var lines = schedule.All;
 
@@ -153,6 +154,14 @@ internal static class RelayDocuments
                         ? "running"
                         : ReferenceEquals(l, next) ? "next" : "upcoming",
                 startedUtc = l.ActualStartUtc,
+
+                // WHEN IT SHOULD START (11 Nov 2026): "about 20:42", from
+                // the night's plan (NightPlan), for a race still to come -
+                // so it moves as the night runs. Null for one done or on
+                // track, a line somebody typed, and from no plan.
+                estimate = !l.IsComplete && !ReferenceEquals(l, running) && !string.IsNullOrEmpty(l.RoundId)
+                    ? estimateOf?.Invoke(l.RoundId!)
+                    : null,
                 drivers = heats.TryGetValue(l.Id ?? string.Empty, out var grid) && grid.Count > 0
                     ? grid.Select(g => shown[g.Name]).ToList()
                     : null,
