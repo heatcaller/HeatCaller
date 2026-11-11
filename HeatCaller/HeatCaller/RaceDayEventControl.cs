@@ -135,6 +135,19 @@ public sealed class RaceDayEventControl : UserControl
 
     private readonly TimePicker _dtpFirstRace = new();
 
+    private const string OutByCaption = "Out of the venue by:";
+
+    /// <summary>
+    /// When the club has to be out of the venue (RaceEvent.OutByLocalTime),
+    /// and whether it has been set: the same pair as the first race's time,
+    /// for the same reason. The Next Steps card measures the night's
+    /// projected finish against it (11 Nov 2026, race-night build plan,
+    /// Phase 2).
+    /// </summary>
+    private readonly CheckBox _chkOutBy = new ThemedCheckBox();
+
+    private readonly TimePicker _dtpOutBy = new();
+
     /// <summary>One entry in the shape picker. ToString is what the combo draws.</summary>
     private sealed record ShapeChoice(RaceDayShape Shape, string Caption)
     {
@@ -429,6 +442,15 @@ public sealed class RaceDayEventControl : UserControl
 
         aboutGrid.AddRow(FirstRaceCaption, FieldGrid.Inline(_dtpFirstRace, _chkFirstRace));
 
+        _dtpOutBy.AutoSize = true;
+        _dtpOutBy.Value = TimeSpan.FromHours(22);
+        _textSize.Wear(_dtpOutBy, () => AppTheme.BodyFont);
+
+        _chkOutBy.Text = "Set";
+        _chkOutBy.AutoSize = true;
+
+        aboutGrid.AddRow(OutByCaption, FieldGrid.Inline(_dtpOutBy, _chkOutBy));
+
         _txtNotes.Multiline = true;
         _txtNotes.AcceptsReturn = true;
         _txtNotes.ScrollBars = ScrollBars.Vertical;
@@ -685,6 +707,14 @@ public sealed class RaceDayEventControl : UserControl
         };
 
         _dtpFirstRace.ValueChanged += CommitNow;
+
+        _chkOutBy.CheckedChanged += (_, _) =>
+        {
+            _dtpOutBy.Enabled = _chkOutBy.Checked && !(Selected?.IsLegacy ?? true);
+            CommitNow();
+        };
+
+        _dtpOutBy.ValueChanged += CommitNow;
         _numHeatSize.ValueChanged += (_, _) => CommitNow();
         _chkCheckedInOnly.CheckedChanged += (_, _) => CommitNow();
         _chkAutoAdvance.CheckedChanged += (_, _) =>
@@ -876,6 +906,11 @@ public sealed class RaceDayEventControl : UserControl
         if (onScreen.FirstRaceLocalTime != baseline.FirstRaceLocalTime)
         {
             target.FirstRaceLocalTime = onScreen.FirstRaceLocalTime;
+        }
+
+        if (onScreen.OutByLocalTime != baseline.OutByLocalTime)
+        {
+            target.OutByLocalTime = onScreen.OutByLocalTime;
         }
 
         // 0 means the day never set its own heat size; the page then shows
@@ -1235,6 +1270,8 @@ public sealed class RaceDayEventControl : UserControl
         // the tick goes on.
         _chkFirstRace.Checked = raceEvent.FirstRaceLocalTime is not null;
         _dtpFirstRace.Value = raceEvent.FirstRaceLocalTime ?? TimeSpan.FromHours(10);
+        _chkOutBy.Checked = raceEvent.OutByLocalTime is not null;
+        _dtpOutBy.Value = raceEvent.OutByLocalTime ?? TimeSpan.FromHours(22);
 
         // Zero means "whatever was used last" - the number the program builds
         // with (RaceEventStore.HeatSizeFor), so that is what the box shows. It
@@ -1290,6 +1327,8 @@ public sealed class RaceDayEventControl : UserControl
         _cmbShape.Enabled = editable;
         _chkFirstRace.Enabled = editable;
         _dtpFirstRace.Enabled = editable && _chkFirstRace.Checked;
+        _chkOutBy.Enabled = editable;
+        _dtpOutBy.Enabled = editable && _chkOutBy.Checked;
         _txtNotes.Enabled = editable;
         _cmbVenue.Enabled = editable;
         _cmbLayout.Enabled = editable;
@@ -1555,6 +1594,7 @@ public sealed class RaceDayEventControl : UserControl
         raceEvent.QualifyingRounds = (int)_numQualRounds.Value;
 
         raceEvent.FirstRaceLocalTime = _chkFirstRace.Checked ? _dtpFirstRace.Value : null;
+        raceEvent.OutByLocalTime = _chkOutBy.Checked ? _dtpOutBy.Value : null;
         raceEvent.DriversPerHeat = (int)_numHeatSize.Value;
 
         // Deliberately NOT re-derived from the shape here. It is set from the
@@ -1627,6 +1667,7 @@ public sealed class RaceDayEventControl : UserControl
                     current.TrackLayoutName = old.TrackLayoutName;
                     current.Shape = old.Shape;
                     current.FirstRaceLocalTime = old.FirstRaceLocalTime;
+                    current.OutByLocalTime = old.OutByLocalTime;
                     current.QualifyingRounds = old.QualifyingRounds;
                     current.DriversPerHeat = old.DriversPerHeat;
                     current.CheckedInDriversOnly = old.CheckedInDriversOnly;
@@ -1658,6 +1699,7 @@ public sealed class RaceDayEventControl : UserControl
         && a.TrackLayoutName == b.TrackLayoutName
         && a.Shape == b.Shape
         && a.FirstRaceLocalTime == b.FirstRaceLocalTime
+        && a.OutByLocalTime == b.OutByLocalTime
         && a.QualifyingRounds == b.QualifyingRounds
         && a.DriversPerHeat == b.DriversPerHeat
         && a.CheckedInDriversOnly == b.CheckedInDriversOnly

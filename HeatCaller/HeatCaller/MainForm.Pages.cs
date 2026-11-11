@@ -746,6 +746,16 @@ public partial class MainForm
         raceProgram.ProgrammeChanged += () => _todayControl?.RefreshAll();
 
         raceControl.NextStepProvider = () => raceProgram.NextStep();
+
+        // The night planned (11 Nov 2026, race-night build plan, Phase 2):
+        // "We're done after this round" is told to the room, and the end of
+        // the night lists what is left before lights out.
+        raceProgram.NightCutShort += text =>
+        {
+            _announcer.SpeakReminder(text, showOnScreens: true, onAir: "Notice");
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [program] Announced: \"{text}\"");
+        };
+        raceProgram.ClosingFacts = NightClosingFacts;
         raceControl.RunProgramStepRequested += step => raceProgram.RunStep(step);
 
         // --- Today ---

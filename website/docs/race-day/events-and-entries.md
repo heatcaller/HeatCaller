@@ -97,6 +97,7 @@ The line under the picker shows what the selected day already holds, for example
 | **Track layout:** | The layout every generated round starts on. Pick a saved layout or type a name. | From the last race day |
 | **Championship:** | The championship this race day counts toward, or **(standalone - no championship)**. See [Results and championships](../race-control/results-and-championships.md). | From the last race day |
 | **First race at:** | When the first race goes out. Tick **Set** to give the day a time; unticked, the day has none. **Fill In the Times...** on the Timetable starts from it, and writes back the time you use there. See [The Timetable](program-and-mains.md#the-timetable). | Not set |
+| **Out of the venue by:** | When the club has to be out of the building. Tick **Set** to give the day one. The next-step card on **Next Steps** then says whether tonight finishes in time, and what would help if it won't. See [When the night finishes](program-and-mains.md#when-the-night-finishes). A new race day takes the time from the last day at the same venue. | From the last day at the venue, or not set |
 | **Notes:** | Free text about the day. The same notes show on **Championship → Calendar**. | Empty |
 
 ### Building the program
