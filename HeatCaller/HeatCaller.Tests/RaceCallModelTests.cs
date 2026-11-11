@@ -113,7 +113,11 @@ public sealed class RaceCallModelTests
     [Fact]
     public void Every_queued_line_is_rendered_through_it_and_the_page_and_styles_keep_it()
     {
-        Assert.Contains("var currentProfile = ForRaceCall(_voiceStore.Current, _dequeuedCall.Value);",
+        // Through ProfileForLine since 10 Nov 2026, which the render ahead
+        // shares, so a line made early is on the same model.
+        Assert.Contains("var currentProfile = ProfileForLine(_dequeuedCall.Value, deliveryOverride, speedOverride);",
+            Source("AnnouncementService.VoiceQueue.cs"), StringComparison.Ordinal);
+        Assert.Contains("var profile = ForRaceCall(_voiceStore.Current, call);",
             Source("AnnouncementService.VoiceQueue.cs"), StringComparison.Ordinal);
         Assert.Contains("_dequeuedCall.Value = work is null ? null : dequeuedType;",
             Source("AnnouncementService.VoiceQueue.cs"), StringComparison.Ordinal);
