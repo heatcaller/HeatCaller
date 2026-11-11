@@ -245,7 +245,7 @@ internal sealed class DriverRequestsForm : Form
         var request = SelectedWaiting();
         var known = request is not null && _desk.DriverOf(request) is not null;
 
-        _btnApprove.Enabled = known && request!.Kind is DriverAsk.Details or DriverAsk.Pack;
+        _btnApprove.Enabled = known && request!.Kind is DriverAsk.Details or DriverAsk.Pack or DriverAsk.Late or DriverAsk.Skip;
         _btnNoted.Enabled = request is { Kind: DriverAsk.Query };
         _btnDecline.Enabled = request is not null;
         _btnDiscard.Enabled = request is not null && !known;
@@ -319,6 +319,27 @@ internal sealed class DriverRequestsForm : Form
                 if (!_desk.Note(current, out refusal))
                 {
                     AppDialog.Show(this, refusal, "Not noted", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+
+                break;
+
+            // More time, or skip my race (11 Nov 2026): Race Control acts on it.
+            case DriverAsk.Late:
+            case DriverAsk.Skip:
+                if (_desk.DriverOf(current) is null)
+                {
+                    return;
+                }
+
+                if (AppDialog.Show(this, $"{_desk.Summary(current)} - for {_desk.NameFor(current)}. Approve it?",
+                        DriverRequestDesk.KindWords(current.Kind), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                {
+                    return;
+                }
+
+                if (!_desk.ApproveRaceAsk(current, out refusal))
+                {
+                    AppDialog.Show(this, refusal, "Not changed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
 
                 break;

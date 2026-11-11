@@ -57,6 +57,16 @@ internal static class DriverAsk
     /// <summary>A car photo from their phone - collected through its own route, filed as a request so its answer reaches the phone (5 Nov 2026).</summary>
     public const string Photo = "photo";
 
+    /// <summary>
+    /// "I need 5 more minutes" before their next race (11 Nov 2026, race-night
+    /// build plan, Phase 1). Waits for the desk; approved, the race goes back
+    /// five minutes when it is the next one out - see RaceControlControl.GiveDriverMoreTime.
+    /// </summary>
+    public const string Late = "late";
+
+    /// <summary>"My car's broken - skip me" in their next race (11 Nov 2026). Waits for the desk; approved, they come out of it - see RaceControlControl.SkipDriverInNextRace.</summary>
+    public const string Skip = "skip";
+
     /// <summary>The kinds the laptop applies by itself, with no desk in between - the relay's DRIVER_WRITE_KINDS, and photos.</summary>
     public static bool IsWrite(string? kind) => kind is Pack or PackEdit or Car or Setup or Photo;
 
@@ -123,7 +133,7 @@ internal static class DriverAsk
     }
 
     /// <summary>True for one of the four kinds, exactly as the relay spells them.</summary>
-    public static bool IsKind(string? kind) => kind is Details or Pack or Query or Setup or PackEdit or Car or Photo;
+    public static bool IsKind(string? kind) => kind is Details or Pack or Query or Setup or PackEdit or Car or Photo or Late or Skip;
 
     /// <summary>True for one of the four states, exactly as the phone reads them.</summary>
     public static bool IsState(string? state) => state is Waiting or Approved or Noted or Declined;

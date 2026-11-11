@@ -255,6 +255,64 @@ public sealed class AutoStartTests
     }
 
     [Fact]
+    public void The_big_screen_counts_down_and_never_names_a_missing_car()
+    {
+        Assert.Equal("NEXT RACE IN 1:42", AutoStartClock.Band(AutoStartState.Counting, TimeSpan.FromSeconds(102)));
+        Assert.Equal("NEXT RACE ON HOLD", AutoStartClock.Band(AutoStartState.Held, null));
+        Assert.Equal("NEXT RACE SOON", AutoStartClock.Band(AutoStartState.WaitingForCars, null));
+        Assert.Equal(string.Empty, AutoStartClock.Band(AutoStartState.Off, null));
+    }
+
+    [Fact]
+    public void The_big_screen_shows_it_only_while_the_race_band_is_blank_between_races()
+    {
+        var source = Source("BigScreenForm.cs");
+
+        Assert.Contains("countdown.Length == 0 && _race.State is RaceState.Idle or RaceState.Finished && _nextRaceIn?.Invoke()", source);
+        Assert.Contains("nextRaceIn: () => AutoStartBand(DateTime.UtcNow)", Source("RaceControlControl.Layout.cs"));
+    }
+
+    [Fact]
+    public void The_phone_remote_can_hold_the_start_and_add_a_minute()
+    {
+        var control = Source("RaceControlControl.cs");
+        var web = Source("WebServerService.cs");
+
+        Assert.Contains("or \"autohold\" or \"autoplus\"))", control);
+        Assert.Contains("case \"autohold\":", control);
+        Assert.Contains("\"callup\", \"autohold\", \"autoplus\" };", web);
+        Assert.Contains("go('autohold')", web);
+        Assert.Contains("go('autoplus')", web);
+    }
+
+    [Fact]
+    public void More_time_and_skip_my_race_are_request_kinds_the_desk_approves()
+    {
+        Assert.True(DriverAsk.IsKind(DriverAsk.Late));
+        Assert.True(DriverAsk.IsKind(DriverAsk.Skip));
+        Assert.Equal("late", DriverAsk.Late);
+        Assert.Equal("skip", DriverAsk.Skip);
+
+        // The desk approves them: never applied by themselves.
+        Assert.False(DriverAsk.IsWrite(DriverAsk.Late));
+        Assert.False(DriverAsk.IsWrite(DriverAsk.Skip));
+
+        Assert.Equal("More time", DriverRequestDesk.KindWords(DriverAsk.Late));
+        Assert.Equal("Skip my race", DriverRequestDesk.KindWords(DriverAsk.Skip));
+    }
+
+    [Fact]
+    public void Approving_them_hands_them_to_race_control()
+    {
+        var form = Source("DriverRequestsForm.cs");
+        var main = Source("MainForm.DriverRequests.cs");
+
+        Assert.Contains("_desk.ApproveRaceAsk(current, out refusal)", form);
+        Assert.Contains("raceControl.GiveDriverMoreTime(transponder, name)", main);
+        Assert.Contains("raceControl.SkipDriverInNextRace(transponder, name)", main);
+    }
+
+    [Fact]
     public void Only_a_real_program_race_leads_to_an_automatic_start()
     {
         var source = Source("RaceControlControl.AfterRace.cs");

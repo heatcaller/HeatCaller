@@ -274,6 +274,19 @@ public sealed class AutoStartClock
         };
     }
 
+    /// <summary>
+    /// The Big Screen's countdown band between races: "NEXT RACE IN 1:42",
+    /// "NEXT RACE ON HOLD", "NEXT RACE SOON". Empty when the clock is off.
+    /// A missing car is not put on the room's screen by name.
+    /// </summary>
+    public static string Band(AutoStartState state, TimeSpan? remaining) => state switch
+    {
+        AutoStartState.Counting when remaining is { } left => $"NEXT RACE IN {Clock(left)}",
+        AutoStartState.Held => "NEXT RACE ON HOLD",
+        AutoStartState.WaitingForFloor or AutoStartState.WaitingForCars or AutoStartState.Start => "NEXT RACE SOON",
+        _ => string.Empty,
+    };
+
     /// <summary>Names as said: "Frank", "Frank and Sam", "Frank, Sam and 2 more".</summary>
     public static string Names(IReadOnlyList<string> names) => names.Count switch
     {

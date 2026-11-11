@@ -22,6 +22,8 @@ import { StoreReadError, type Store } from "./store.js";
  *   - their race has just become the next one, or has just been staged
  *     (the page's worthABuzz) - from driverlive;
  *   - their marshal duty has just become the next race - from driverlive;
+ *   - their race's estimated start has just come inside five minutes
+ *     (11 Nov 2026, Auto start) - from driverlive, once per race;
  *   - a race of theirs has just been filed on their night - from nights.
  *     A demo race is filed there too, marked as a demo, so a demo is a way
  *     to try alerts out.
@@ -262,7 +264,24 @@ function dutyKey(m: unknown): string {
  * the page's own rules (worthABuzz, and the marshal duty's). Nothing for a
  * driver with no entry before.
  */
-export function liveAlerts(before: unknown, after: unknown, url: string): PushMessage[] {
+/** How close a race's start has to be for "Your race is in about 5 minutes". */
+export const SOON_MS = 5 * 60 * 1000;
+
+/**
+ * Whether a driver's next race starts within SOON_MS of `atMs`, by the
+ * laptop's estimate (next.eta) - not on track or staged yet. False with no
+ * estimate or no time to measure from.
+ */
+function startsSoon(n: unknown, atMs: number | undefined): boolean {
+  if (!isObject(n) || atMs === undefined || !Number.isFinite(atMs) || n["now"] === true || n["staged"] === true || typeof n["eta"] !== "string") {
+    return false;
+  }
+
+  const eta = Date.parse(n["eta"]);
+  return Number.isFinite(eta) && eta - atMs <= SOON_MS && eta - atMs > -60 * 1000;
+}
+
+export function liveAlerts(before: unknown, after: unknown, url: string, beforeAtMs?: number, afterAtMs?: number): PushMessage[] {
   if (!isObject(before) || !isObject(after)) {
     return [];
   }
@@ -286,6 +305,16 @@ export function liveAlerts(before: unknown, after: unknown, url: string): PushMe
   if (isObject(m) && dutyKey(m) !== dutyKey(before["marshal"]) && num(m["away"]) === 0 && typeof m["race"] === "string" && m["race"] !== "") {
     const post = typeof m["post"] === "string" && m["post"] !== "" ? ` - ${m["post"]}` : "";
     out.push({ title: "Marshal duty next", body: m["race"] + post, tag: "hc-marshal", url });
+  }
+
+  // "Your race is in about 5 minutes" (11 Nov 2026, race-night build plan,
+  // Phase 1): once per race, as its estimated start comes inside five
+  // minutes - not when "Your race is next" goes out at the same moment.
+  const race = isObject(n) && typeof n["race"] === "string" ? n["race"] : "";
+  const wasSoon = startsSoon(before["next"], beforeAtMs) && isObject(before["next"]) && before["next"]["race"] === race;
+
+  if (race !== "" && startsSoon(n, afterAtMs) && !wasSoon && !out.some((message) => message.tag === "hc-race")) {
+    out.push({ title: "Your race is in about 5 minutes", body: race, tag: "hc-soon", url });
   }
 
   return out;
@@ -587,9 +616,11 @@ export class PushService {
 
       const was = isObject(before) && isObject(before["drivers"]) ? before["drivers"] : {};
       const now = isObject(after) && isObject(after["drivers"]) ? after["drivers"] : {};
+      const beforeAt = isObject(before) && typeof before["at"] === "string" ? Date.parse(before["at"]) : undefined;
+      const afterAt = isObject(after) && typeof after["at"] === "string" ? Date.parse(after["at"]) : this.now().getTime();
 
       for (const id of ids) {
-        for (const message of liveAlerts(was[id], now[id], myNightUrl(club))) {
+        for (const message of liveAlerts(was[id], now[id], myNightUrl(club), beforeAt, afterAt)) {
           await this.send(club, id, message);
         }
       }

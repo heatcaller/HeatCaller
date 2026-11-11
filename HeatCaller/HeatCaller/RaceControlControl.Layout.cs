@@ -657,7 +657,10 @@ public sealed partial class RaceControlControl
                 // towards a championship, "if it ended now" - see
                 // RaceControlControl.Tonight.
                 attract: AttractCards,
-                ifItEndedNow: ChampionshipIfItEndedNow);
+                ifItEndedNow: ChampionshipIfItEndedNow,
+
+                // "NEXT RACE IN 1:42" between races - see AutoStartBand.
+                nextRaceIn: () => AutoStartBand(DateTime.UtcNow));
 
             // The window can be closed by whoever is in front of it - Escape,
             // the X, its own button - so the field must stop pointing at it

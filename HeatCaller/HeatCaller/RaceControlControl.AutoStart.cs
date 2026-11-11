@@ -364,4 +364,99 @@ public sealed partial class RaceControlControl
         AutoStartOn && _autoStart.IsOpen
             ? AutoStartClock.Words(_autoStartState, _autoStart.Remaining(now, Gap.PushedBackMinutes), _autoStart.NotSeen, _autoStart.Resting)
             : string.Empty;
+
+    /// <summary>What the Big Screen's countdown band shows between races: "NEXT RACE IN 1:42". Empty with Auto start not counting.</summary>
+    private string AutoStartBand(DateTime now) =>
+        AutoStartOn && _autoStart.IsOpen
+            ? AutoStartClock.Band(_autoStartState, _autoStart.Remaining(now, Gap.PushedBackMinutes))
+            : string.Empty;
+
+    // --- From the phone remote (11 Nov 2026) ---
+
+    /// <summary>The remote's "autohold": Hold or Resume. Null when it can't, with the reason in <paramref name="refusal"/>.</summary>
+    private string? RemoteAutoHold(out string? refusal)
+    {
+        if (!AutoStartOn || !_autoStart.IsOpen)
+        {
+            refusal = "Auto start isn't counting down to a race right now.";
+            return null;
+        }
+
+        refusal = null;
+        ToggleAutoStartHold();
+        return _autoStart.IsHeld ? "Start held - press again to resume." : "Resumed.";
+    }
+
+    /// <summary>The remote's "autoplus": the next race a minute later, as Call Up's +1 min.</summary>
+    private string? RemoteAutoPlus(out string? refusal)
+    {
+        if (!AutoStartOn || !_autoStart.IsOpen)
+        {
+            refusal = "Auto start isn't counting down to a race right now.";
+            return null;
+        }
+
+        refusal = null;
+        PushNextRaceBack();
+        return "Next race a minute later.";
+    }
+
+    // --- From the driver's phone: "Need 5 minutes" and "Skip me" (11 Nov 2026) ---
+
+    /// <summary>How long a driver's "Need 5 minutes" puts the next race back.</summary>
+    internal const int LateMinutes = 5;
+
+    /// <summary>
+    /// A driver asked for more time before their next race, and the desk
+    /// said yes: when that race is the next one out, it goes back
+    /// <see cref="LateMinutes"/> minutes (Auto start's count moves with it).
+    /// Returns what happened, for the console and the driver.
+    /// </summary>
+    internal string GiveDriverMoreTime(string transponder, string name)
+    {
+        var next = NextRound();
+
+        if (next is null || !next.AssignedTransponders.Contains(transponder, StringComparer.OrdinalIgnoreCase))
+        {
+            return $"{name}'s race isn't the next one out - nothing to hold yet. Ask again when it's next.";
+        }
+
+        var now = DateTime.UtcNow;
+        Gap.NextRace(next.Id);
+        Gap.PushBack(now, LateMinutes);
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] {next.RoundLabel} goes back {LateMinutes} minutes for {name} (asked from their phone).");
+        return $"{next.RoundLabel} goes back {LateMinutes} minutes for you.";
+    }
+
+    /// <summary>
+    /// A driver's car is broken: they come out of their next race that
+    /// hasn't run, after the desk said yes. One undo. Returns what happened.
+    /// </summary>
+    internal string SkipDriverInNextRace(string transponder, string name)
+    {
+        var race = OrderedProgram()
+            .FirstOrDefault(r => !r.IsRecorded
+                                 && !string.Equals(r.Id, _activeRound?.Invoke()?.Id, StringComparison.Ordinal)
+                                 && r.AssignedTransponders.Contains(transponder, StringComparer.OrdinalIgnoreCase));
+
+        if (race is null)
+        {
+            return $"{name} isn't in a race still to run.";
+        }
+
+        var before = race.AssignedTransponders.ToList();
+        race.AssignedTransponders = before
+            .Where(t => !string.Equals(t, transponder, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        _rounds?.Update(race);
+
+        _undo.Capture($"Skip {name} in {race.RoundLabel}", () =>
+        {
+            race.AssignedTransponders = before;
+            _rounds?.Update(race);
+        });
+
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] {name} is out of {race.RoundLabel} - car broken (asked from their phone).");
+        return $"You're out of {race.RoundLabel}. Tell the desk when your car is fixed.";
+    }
 }

@@ -75,6 +75,14 @@ public partial class MainForm
             // 2026) - see DriverRequests.Garage.
             ChassisTypes = _chassisTypes,
             Sheets = _chassisTemplates,
+
+            // More time, or skip my race, from a driver's phone - done in
+            // Race Control once the desk approves (11 Nov 2026).
+            RaceAsk = (kind, transponder, name) => _raceControlControl is not { } raceControl
+                ? "Race Control isn't open, so nothing was changed."
+                : kind == DriverAsk.Late
+                    ? raceControl.GiveDriverMoreTime(transponder, name)
+                    : raceControl.SkipDriverInNextRace(transponder, name),
         };
 
         _driverRequestDesk.GarageChangedByPhone += () =>

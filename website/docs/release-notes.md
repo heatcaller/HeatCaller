@@ -10,7 +10,13 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
     - A driver who raced the race just run gets an extra 2 minutes.
     - If a car in the next race hasn't been heard by the loop when the count runs out, the race waits for you: a banner offers **Start without them** or **Wait**, and the announcer asks the driver once to get the car on the track.
 
-  See [Auto start between races](race-control/running-a-race.md#auto-start-between-races). Update HeatCaller on the race PC; nothing changes on the relay.
+    - **The Big Screen** shows "NEXT RACE IN 1:42" in its countdown band between races.
+    - **The phone remote** has **HOLD START** and **+1 MIN**.
+    - **Heats built in rest-friendly order:** within a round, a driver in two classes gets a race off between their races wherever the heats allow.
+    - **More time, or skip my race:** while their race is next up, a driver's **Me** page has **Need 5 more minutes** and **Car broken - skip me**. Approved at the desk, the race goes back 5 minutes, or they come out of it (with Undo). See [More time, or skip my race](online/driver-requests.md#more-time-or-skip-my-race).
+    - **"Your race is in about 5 minutes"**: a new phone alert, once per race.
+
+  See [Auto start between races](race-control/running-a-race.md#auto-start-between-races). Update HeatCaller on the race PC. **More time, skip my race and the 5-minute alert need the relay redeployed** (`fly deploy --ha=false`); the rest doesn't.
 
 - **Plan the night (11 November).** Four additions:
     - **When the night finishes.** While races are still to run, the next-step card on **Next Steps** says when the night should finish, worked out from each race's length and tonight's own gap between races. **Tonight's program** gets an **About** column with when each race should start. See [When the night finishes](race-day/program-and-mains.md#when-the-night-finishes).

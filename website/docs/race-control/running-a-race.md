@@ -454,6 +454,8 @@ After each race, HeatCaller counts down a gap and starts the next race by itself
     - With no decoder connected, or in a demo, cars aren't looked for.
 - **The start itself** is **Start Next**'s, so it goes through On Air when **Start races On Air** is on, and it never runs a step that's owed first. When bump-ups or the finals are due, the count stops and **Start Next** offers them for you to do.
 - **Off is for tonight only.** Switch it off and races wait for **Start Next** until tomorrow's racing. To keep it off, right-click the switch and choose **Off until I switch it on again**.
+- **On the Big Screen**, the countdown band says "NEXT RACE IN 1:42" between races, "NEXT RACE ON HOLD" while it's held, and "NEXT RACE SOON" at zero. A missing car isn't named there.
+- **From the phone:** the remote's **HOLD START** and **+1 MIN** (see [Phone remote](../screens/phone-and-web.md)). A driver can ask the desk for 5 more minutes or to be skipped, and once you approve, the count moves or they come out of the race (see [More time, or skip my race](../online/driver-requests.md#more-time-or-skip-my-race)). A driver whose race is about 5 minutes away gets a "Your race is in about 5 minutes" alert on their phone.
 
 If something is owed before the next race can go out, the bar says so in place of the next round and the button does it instead: **Move the top finishers up** when a lower main has finished and its bump-ups are due, or **Build the finals from qualifying** when a class has finished qualifying. That way the upper main can't go out before its bump-ups. See [Program and mains](../race-day/program-and-mains.md#the-next-step-card).
 
