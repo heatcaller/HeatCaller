@@ -135,12 +135,23 @@ Shrinking the device buffer from 300 ms to ~150 ms would save about 0.1 s per ca
 | Render the next line ahead | Built, not yet measured | — |
 | Places-only reports survive a crossing | Done | — |
 | Bigger pool of kept calls | Not doing | On Balanced the dial holds what a pool keeps, so it would turn "lost" into "held", not into calls said |
-| Combine calls ("PBs for Dee and Al") | Needs Asher | New wording and a new row on the Voice page |
-| Shorter wording when busy | Needs Asher | Short forms of every template; the slowest calls now wait behind 4–7 s lines, so this is the biggest lever left |
-| Streaming endpoint | Held | The whole-clip pipeline levels loudness, trims silence and feeds listen-along from the full clip; streaming has to rework all three. Worth it once render-ahead is measured, since it only helps calls rendered when the speaker is free |
-| Winner named on the line | Needs Asher | The finish call names nobody by design, and the result read waits for the cheering (14 s after the flag in the last race) |
+| Combine lost personal bests | Built 10 Nov, not measured | `AnnouncementService.CombinedCalls.cs`. Two or more lost behind one line, still inside their lap's 6 s, become one line as it ends ("Personal bests for Dee Ploy and Al gorerhythm!"). Built-in words, not a theme's; goes with the personal-best call |
+| Shorter wording when busy | Built 10 Nov, not measured | `BusyWording.cs`. Busy = a line speaking, one waiting or kept, or 2+ routine calls in 6 s. Picks from the shorter half of the theme's own templates and drops the lead-change count tail. No new words, so no Voice-page change. Instructions keep their wording |
+| Streaming endpoint | Built 10 Nov, off by default, not measured | `AnnouncementService.Streaming.cs`, `StreamingVoiceLine.cs`. A Voice-page tick (ElevenLabs only). Streams only lines with no saved take, recording or early render, and only for a voice whose level is known from its whole clips. Checks run before a word is heard; any failure before audio renders whole. Gaps from a slow connection are logged. Streamed lines reach listen-along only while the whole mix is streamed |
+| Winner named on the line | Built 10 Nov, not measured | `AnnouncementService.Winner.cs`. On the last lap (or at time-up) the winner's line is rendered for the top two. At the flag it goes first in the queue, right after the finish call. Built-in words; goes with the finish call. The unofficial result still follows after the cheering |
 | Fill the library at staging | Needs Asher | Spends ElevenLabs credits on every driver × template × call type the first night |
 | Recap sentence by sentence | Needs a measurement | The recap's wait is mostly the AI writing; no race yet split writing from rendering |
+| Rework follow along | Added 10 Nov 2026, to scope | See below |
+
+### Rework follow along (asked for 10 Nov 2026)
+
+Follow along is how racers follow the race on their phones: the local phone pages on the club Wi-Fi, and the club's online pages through the relay. Listen-along is part of it: the room's calls offered to listeners just before the speaker (`AnnouncementService.ListenAlong`). Now that calls reach the room in ~1.3–1.6 s, the phones should keep up.
+
+To do, in order:
+1. **Measure the lag.** Time from a call being heard in the room to it appearing on a phone: captions, the timing board, and listen-along audio. Do it on both the club Wi-Fi and the relay. Extend the `[timing]` lines to say when each line was offered to listeners.
+2. **Fit it to streaming.** Listen-along takes the whole clip before the line plays (`OfferLineToListeners(text, audio, ...)`). Streaming playback has to send audio to listeners as it arrives, or listeners fall behind the room.
+3. **Rework what the phone shows.** Decide with Asher what follow along should do differently: show calls as they're said, the driver's own calls first, lap times as they cross. This is the "race engineer on the driver's phone" idea from Phase 4, and the natural place for it.
+4. **Relay changes need a fly deploy** from `relay/` and a restart of the app, or phones keep the old page.
 
 Replace "first come, first served, drop if busy" with a small pool of candidate calls:
 

@@ -35,6 +35,25 @@ internal static class VoiceLevel
     internal const double ToleranceDb = 0.5;
 
     /// <summary>
+    /// The speech level the last <see cref="Level"/> on this thread measured,
+    /// before it changed anything - null when it measured nothing. Taken
+    /// (TakeLastMeasured) straight after a line is decoded, so the voice that
+    /// said it can be remembered for the lines that are streamed (10 Nov
+    /// 2026 - see VoiceLevelMemory).
+    /// </summary>
+    [ThreadStatic]
+    private static double? LastMeasuredDb;
+
+    /// <summary>What the last Level on this thread measured, once.</summary>
+    internal static double? TakeLastMeasured()
+    {
+        var measured = LastMeasuredDb;
+        LastMeasuredDb = null;
+
+        return measured;
+    }
+
+    /// <summary>
     /// <paramref name="pcm"/> at <see cref="TargetDb"/>. Only 16-bit PCM is
     /// touched - anything else comes back as it was, as does silence and a
     /// line already at the level. A new array when anything changed.
@@ -50,7 +69,10 @@ internal static class VoiceLevel
         // 50 ms windows stay 50 ms long.
         var rate = format.SampleRate * Math.Max(1, format.Channels);
 
-        if (KokoroLoudness.SpeechDb(pcm, rate) is not { } level || Math.Abs(level - TargetDb) <= ToleranceDb)
+        var measured = KokoroLoudness.SpeechDb(pcm, rate);
+        LastMeasuredDb = measured;
+
+        if (measured is not { } level || Math.Abs(level - TargetDb) <= ToleranceDb)
         {
             return pcm;
         }

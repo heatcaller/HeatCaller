@@ -161,20 +161,13 @@ public sealed partial class AnnouncementService
     /// <param name="speed">The call's own speed, as it passes SynthesizeAndPlayAsync's speedOverride - null for one that passes none.</param>
     private async Task RenderLineAheadAsync(string text, AnnouncementEventType type, double? speed)
     {
-        // On the race-calls model, as the line will be (ForRaceCall reads it).
-        _dequeuedCall.Value = type;
-
-        var profile = ProfileForLine(type, null, speed);
-        text = profile.SanitiseForModel(text);
-
-        if (Muted || !CanSpeak(profile))
+        if (LineAsItWillBeAsked(text, type, speed) is not { } line)
         {
             return;
         }
 
-        profile = WithTheRacesEnergy(profile, text);
-
-        var key = RenderAheadKey(profile, text);
+        var (profile, key) = (line.Profile, line.Key);
+        text = line.Text;
         var render = new TaskCompletionSource<SynthesisResult>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         lock (_renderAheadLock)
@@ -206,6 +199,45 @@ public sealed partial class AnnouncementService
             // Observed, so a failure nobody comes to take is not reported
             // as unobserved; the line that comes for it renders afresh.
             _ = render.Task.Exception;
+        }
+    }
+
+    /// <summary>
+    /// A line as SynthesizeAndPlayAsync will ask for it when it is said with
+    /// no delivery override and no second voice: its profile (with the
+    /// race's energy), its words (with the model's tags) and its key. Null
+    /// when nothing could say it now. Sets _dequeuedCall, so call it only
+    /// where nothing of the queue's own is flowing - see RenderTheNextLineAhead.
+    /// </summary>
+    private (VoiceProfile Profile, string Text, string Key)? LineAsItWillBeAsked(string text, AnnouncementEventType type, double? speed)
+    {
+        // On the race-calls model, as the line will be (ForRaceCall reads it).
+        _dequeuedCall.Value = type;
+
+        var profile = ProfileForLine(type, null, speed);
+        text = profile.SanitiseForModel(text);
+
+        if (Muted || !CanSpeak(profile))
+        {
+            return null;
+        }
+
+        profile = WithTheRacesEnergy(profile, text);
+
+        return (profile, text, RenderAheadKey(profile, text));
+    }
+
+    /// <summary>
+    /// Hands an early render back to be taken - for one kept outside the
+    /// list until its line is about to be said (the winner's call, which a
+    /// flag's clear-out must not take away).
+    /// </summary>
+    private void OfferRenderedAhead(string key, Task<SynthesisResult> render)
+    {
+        lock (_renderAheadLock)
+        {
+            _renderedAhead.RemoveAll(ahead => ahead.Key == key);
+            _renderedAhead.Add((key, render));
         }
     }
 

@@ -823,6 +823,10 @@ public sealed partial class AnnouncementService
         _timeOverSoundDone = timeOverSound.Task;
         PlaySound(SoundEffectKind.RaceTimeOver, ToneGenerator.PlayRaceTimeOverAsync, "race time over sound", timeOverSound);
         EnqueueVoice(AnnouncementEventType.RaceTimeOver, null, null);
+
+        // Time's up, so the next car over the line wins it: the winner's
+        // call is made now for the top two (10 Nov 2026) - see Winner.
+        PrepareTheWinnerCalls();
     }
 
     public void NotifyRaceCompleted()
@@ -872,6 +876,10 @@ public sealed partial class AnnouncementService
 
             hold.TrySetResult();
         }
+
+        // The winner's name, the moment the finish call has been said (10 Nov
+        // 2026) - see AnnouncementService.Winner. Only with the finish call on.
+        QueueTheWinnersCall();
 
         BeginPostRaceQuiet();
     }
@@ -1191,6 +1199,9 @@ public sealed partial class AnnouncementService
     {
         var standing = _standings.TryGetValue(transponderId, out var known) ? known : null;
         EnqueueVoice(AnnouncementEventType.LastLap, standing, null);
+
+        // The winner's call, made now for the top two (10 Nov 2026) - see Winner.
+        PrepareTheWinnerCalls();
     }
 
     /// <summary>

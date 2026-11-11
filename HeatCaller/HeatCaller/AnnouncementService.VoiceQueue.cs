@@ -156,6 +156,23 @@ public sealed partial class AnnouncementService
             return;
         }
 
+        // Shorter wording when the track is busy (10 Nov 2026) - the shorter
+        // half of the club's own templates, and no optional tail. Not for an
+        // instruction (a flag, the grid, a release, a reminder), whose words
+        // are the point. See BusyWording.
+        var busy = !IsPriorityAnnouncement(type) && TrackIsBusy();
+
+        if (busy && candidates.Count > 1)
+        {
+            candidates = BusyWording.ShorterHalf(candidates);
+        }
+
+        if (busy && autoTail is not null)
+        {
+            StatusMessage?.Invoke($"[voice] {type}: the track is busy - said without its extra (\"{autoTail.Value.Tail.Trim()}\").");
+            autoTail = null;
+        }
+
         // Pick one phrasing at random each time, so an event that can
         // legitimately fire many times in a row (e.g. several new fastest
         // laps back to back) doesn't read out the identical sentence
@@ -570,8 +587,18 @@ public sealed partial class AnnouncementService
             currentProfile = WithTheRacesEnergy(currentProfile, text);
         }
 
-        StatusMessage?.Invoke($"{announcingLogPrefix}: \"{text}\"");
         var timing = _lineTiming.Value;
+
+        // Streamed when the club has asked for it and the line can be (10 Nov
+        // 2026, voice speed plan, phase 3) - see AnnouncementService.Streaming.
+        // A line that could not be streamed after all goes on below, whole.
+        if (WillStream(currentProfile, voice, text, out var streamGain)
+            && await TryStreamAndPlayAsync(text, currentProfile, streamGain, announcingLogPrefix, honourMute, forListeners, tail, lead, spoken, whyNotNow, timing))
+        {
+            return;
+        }
+
+        StatusMessage?.Invoke($"{announcingLogPrefix}: \"{text}\"");
         timing?.RenderStarted(TimingClock.NowMs);
         var rendering = System.Diagnostics.Stopwatch.StartNew();
 
@@ -740,7 +767,20 @@ public sealed partial class AnnouncementService
                 // line was, so two turns of one exchange paid both in full
                 // with the hand-over's beat on top - see SpeechLead.
                 // WHY (23 Oct 2026, bug hunt 10): re-checked once the line is registered - see PlayPcmAsync.
-                await PlayAsync(audio, volume, TailSecondsNow(tail), LeadSecondsFor(lead), StillWantedUnlessOvertaken(honourMute), onAir, timing);
+                // Decoded (and levelled) before PlayAsync returns its task, on
+                // this thread - so what the levelling measured is this line's,
+                // and teaches the voice's level for streamed lines (10 Nov
+                // 2026, see VoiceLevelMemory). ElevenLabs takes only.
+                VoiceLevel.TakeLastMeasured();
+                var playing = PlayAsync(audio, volume, TailSecondsNow(tail), LeadSecondsFor(lead), StillWantedUnlessOvertaken(honourMute), onAir, timing);
+
+                if (VoiceLevel.TakeLastMeasured() is { } measured
+                    && synthesis.Source == LineSource.ElevenLabs && voice is null)
+                {
+                    VoiceLevelMemory.Learn(currentProfile, measured);
+                }
+
+                await playing;
             }
             catch (Exception ex) when (synthesis.FromLibrary && IsUndecodable(ex))
             {
@@ -1854,6 +1894,17 @@ public sealed partial class AnnouncementService
             catch (Exception ex)
             {
                 StatusMessage?.Invoke($"[voice queue] Couldn't offer the kept call: {ex.Message}");
+            }
+
+            // Then the personal bests lost behind the line, said together, if
+            // nothing else goes next (10 Nov 2026) - see CombinedCalls.
+            try
+            {
+                OfferTheCombinedPersonalBests();
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke($"[voice queue] Couldn't offer the lost personal bests: {ex.Message}");
             }
         }
     }
