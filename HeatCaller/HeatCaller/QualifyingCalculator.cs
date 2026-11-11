@@ -330,6 +330,16 @@ public static class QualifyingCalculator
                     continue;
                 }
 
+                // WHY (11 Nov 2026, Phase 4.1, mixed-class heats): a heat
+                // this class shares with another is one of its heats, but
+                // only for its own drivers - to Stock, the 3 Stock cars of a
+                // 3 Stock + 4 Mod race are the heat. Always true for a
+                // one-class heat, so nothing else changes.
+                if (!MixedHeats.Counts(round, className, result.Transponder, result.ClassName, profiles))
+                {
+                    continue;
+                }
+
                 // Disqualified from this heat after the race (the result
                 // editor): the heat does not count for them at all. Their
                 // lap times are still on the result - they are what the
@@ -399,6 +409,12 @@ public static class QualifyingCalculator
                 if (GhostService.IsGhost(result.Transponder))
                 {
                     continue; // same as above - the heat running right now
+                }
+
+                // The running heat's other class's cars, as above (Phase 4.1).
+                if (!MixedHeats.Counts(liveRound!, className, result.Transponder, null, profiles))
+                {
+                    continue;
                 }
 
                 var (windowMs, startLap) = BestFlyingWindow(result.LapTimesMs, lapCount);

@@ -131,6 +131,18 @@ public sealed class SessionResultEntry
     public string Outcome { get; set; } = string.Empty;
 
     /// <summary>
+    /// The class this driver ran in, written ONLY for a race from a shared
+    /// heat (11 Nov 2026, race-night build plan, Phase 4.1: mixed-class
+    /// heats) - see MixedHeats.StampClasses. Null on every other result,
+    /// which is every result saved before this: the race's class is its
+    /// round's, as it always was. Stamped at the flag so the championship,
+    /// which only has the saved results, can score each class of a shared
+    /// race apart, and so a later change to the heat cannot rewrite who a
+    /// past result was scored for.
+    /// </summary>
+    public string? ClassName { get; set; }
+
+    /// <summary>
     /// The result exactly as the race recorded it, kept the first time it
     /// is corrected so every later correction is worked out from the real
     /// numbers rather than from an earlier correction. Null on a result

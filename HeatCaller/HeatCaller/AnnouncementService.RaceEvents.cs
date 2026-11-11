@@ -1435,7 +1435,7 @@ public sealed partial class AnnouncementService
     /// "marshalled" by whoever drove the last heat of last week.
     /// </summary>
     public void NotifyGridCall(RoundDefinition round, RoundDefinitionStore rounds, TrackLayoutStore layouts, RaceEventStore? events = null) =>
-        NotifyGridCall(round.RoundLabel, round.ClassName, SpokenMarshalsFor(round, rounds, layouts, events));
+        NotifyGridCall(round.RoundLabel, MixedHeats.SpokenClasses(round), SpokenMarshalsFor(round, rounds, layouts, events)); // "Stock and Mod" for a shared heat (Phase 4.1)
 
     /// <summary>The marshals for one round as a spoken list; empty when none are assigned.</summary>
     private string SpokenMarshalsFor(RoundDefinition round, RoundDefinitionStore rounds, TrackLayoutStore layouts, RaceEventStore? events)

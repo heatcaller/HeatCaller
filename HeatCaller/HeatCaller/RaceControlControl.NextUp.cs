@@ -400,7 +400,7 @@ public sealed partial class RaceControlControl
     private static string RoundTitle(RoundDefinition round) =>
         string.IsNullOrWhiteSpace(round.ClassName)
             ? round.RoundLabel
-            : $"{round.RoundLabel} ({round.ClassName})";
+            : $"{round.RoundLabel} ({MixedHeats.ClassLabel(round)})"; // both classes of a shared heat (Phase 4.1)
 
     /// <summary>
     /// The race these controls act on, for the phone remote (27 Sep 2026):

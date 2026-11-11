@@ -2550,7 +2550,7 @@ public partial class MainForm
         // Like with like: a driver in two classes tonight is measured
         // in the class of the car they last raced, not across both.
         var className = latest is { RoundId: { Length: > 0 } roundId } && roundOf(roundId) is { } round
-            ? round.ClassName.Trim()
+            ? MixedHeats.ClassOfDriver(round, who, _profiles).Trim() // their own class of a shared heat (Phase 4.1)
             : string.Empty;
 
         if (!paceByClass.TryGetValue(className, out var paces))

@@ -247,6 +247,30 @@ For a driver who turns up after the heats are posted. Right-click the list and c
 
 They go into the smallest heat of each qualifying round still to run that they aren't already in (the first of two the same size), never a heat on track or already run. Nobody else moves, so the heat sheet on the wall and everybody's phones stay right; only the heats they joined change. **Undo** takes them out again. On a day that only counts checked-in drivers, check them in first. To re-deal every heat still to run instead, use **Redo Remaining Heats** on Race Control.
 
+### Mixed-class heats
+
+Two small classes can share a heat: 3 Stock and 4 Mod on track as one race. Each class is still scored on its own. The Stock drivers are ranked against each other and the Mod drivers against each other, with their own qualifying, mains, championship points and recap.
+
+There are two ways to make a shared heat:
+
+- **When you build.** On **Setup**, set **Share a heat under (drivers):** to the size below which a class shares, for example 5. When you build, a class whose round is a single heat with fewer drivers than that shares it with another small class, as long as the two fit in **Drivers per heat:** and nobody is in both. A third small class can join while there's room. 0 (the default) never shares. The build's summary and its message say when heats were shared.
+- **By hand.** Select two heats (Ctrl+click the second), right-click and choose **Run Together...**. The earlier heat keeps its place and name, and the other heat comes off the program. **Undo** puts both heats back as they were, until the shared heat has been run.
+
+**Run Together...** refuses two heats of the same class (use [Move Drivers Between Heats...](#balance-heats)), a driver in both heats, heats from different qualifying rounds (Q1 and Q2), a main, and a heat that has been run or is on track. It warns you if the heat would be bigger than **Drivers per heat:**.
+
+How a shared heat shows up:
+
+- **The program, Race Control, the Timetable and the Big Screen** name both classes, for example "Stock + Mod". Filtering the program to one class shows the shared heat under each of its classes.
+- **The heat sheet** names both classes on the heat and each driver's class in the car column.
+- **The announcer** says both classes at the grid call ("Stock and Mod"). At the flag, after the winner, it names each class's winner: "Sam wins Stock, Alex wins Mod." The recap is told each class's top three.
+- **Qualifying, the projection and the mains** count the shared heat as one heat of each class, with only that class's drivers in it. Under **Points per round**, a driver's place is their place in their class, and the field is their class's.
+- **Championships.** A championship for one class counts the shared race with only that class's drivers, and they score their place in their class: the first Stock driver home scores first place even if a Mod car beat them. A championship for every class scores each class separately.
+- **The event report** lists the shared race under each class, with that class's drivers and their places in it.
+
+Each driver's class in the heat is the class whose heat they came from (or the class they were added to as a late entry). A driver added by hand some other way counts in their main class if it's one of the heat's, otherwise their first other class that is. A driver who races both classes is in one of them for that heat.
+
+The [curfew planner](#tonights-program) can suggest it too: when the night is running late and two classes each run one small heat a round, the next-step card offers "run Stock and Mod together (Run Together on the program) to save ...".
+
 ## Start a round
 
 Click the next-step card's **Start** button, select a round and click **Start Selected**, or double-click the round. HeatCaller asks you to confirm ("Staging and the countdown begin immediately."), then switches to **Race Control**, calls the grid, and begins staging and the countdown straight away. See [Running a race](../race-control/running-a-race.md).

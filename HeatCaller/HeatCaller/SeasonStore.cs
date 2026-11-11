@@ -224,7 +224,13 @@ public sealed class SeasonStore
         var byDriver = new Dictionary<string, SeasonStandingEntry>(StringComparer.OrdinalIgnoreCase);
         var rounds = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var session in sessions)
+        // WHY (11 Nov 2026, Phase 4.1, mixed-class heats): a race is scored
+        // as one field or, for a shared heat, one field per class - see
+        // MixedHeats.ScoringFields. A Stock championship scores only the
+        // Stock cars of a heat Stock shared with Mod, and positions close up
+        // behind the Mod cars the way they do behind a ghost. Every race not
+        // from a shared heat is one field, the whole result, as it always was.
+        foreach (var (session, field) in sessions.SelectMany(s => MixedHeats.ScoringFields(s.Results, season.ClassName).Select(f => (s, f))))
         {
             if (session.IsNotScored())
             {
@@ -243,7 +249,7 @@ public sealed class SeasonStore
             // the stored number for exactly that reason; a session with no
             // ghost in it comes out identical, because the stored positions
             // are already 1..N in this order.
-            var scoring = session.Results
+            var scoring = field
                 .Where(r => !GhostService.IsGhost(r.Transponder))
                 .Where(r => profiles is null
                             || string.IsNullOrEmpty(r.Transponder)

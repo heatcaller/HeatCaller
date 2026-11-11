@@ -83,6 +83,9 @@ public sealed class RaceDayEventControl : UserControl
     /// <summary>The protest window in minutes (RaceEvent.ProtestMinutes, 11 Nov 2026).</summary>
     private readonly NumericUpDown _numProtest = new();
 
+    /// <summary>Small classes share a heat under this many drivers (RaceEvent.ShareHeatsUnder, 11 Nov 2026, Phase 4.1). 0 = off.</summary>
+    private readonly NumericUpDown _numShareUnder = new();
+
     /// <summary>The entry fee and the fee for each extra class (RaceEvent.EntryFee, ExtraClassFee - 11 Nov 2026).</summary>
     private readonly NumericUpDown _numEntryFee = new() { DecimalPlaces = 2, Maximum = 1000, Increment = 1 };
 
@@ -503,6 +506,13 @@ public sealed class RaceDayEventControl : UserControl
         _numProtest.Maximum = 30;
         _numProtest.Value = ProtestWindow.DefaultMinutes;
         programGrid.AddRow("Protest window (min):", _numProtest);
+
+        // Mixed-class heats (11 Nov 2026, Phase 4.1): 0 is off, which is
+        // every race day until somebody sets it.
+        _numShareUnder.Minimum = 0;
+        _numShareUnder.Maximum = 19;
+        _numShareUnder.Value = 0;
+        programGrid.AddRow("Share a heat under (drivers):", _numShareUnder);
         programGrid.AddRow("Entry fee:", _numEntryFee);
         programGrid.AddRow("Each extra class:", _numExtraFee);
 
@@ -645,6 +655,7 @@ public sealed class RaceDayEventControl : UserControl
         Fit(_numHeatSize, number);
         Fit(_cmbFirstRound, Math.Max(UiLayout.AtTextSize(160), Pieces.PickerWidth(_cmbFirstRound, ref _firstRoundWidth)));
         Fit(_numProtest, number);
+        Fit(_numShareUnder, number);
         Fit(_numEntryFee, number);
         Fit(_numExtraFee, number);
         Fit(_cmbAutoAdvanceScope, Math.Max(UiLayout.AtTextSize(ScopePickerWidth), Pieces.PickerWidth(_cmbAutoAdvanceScope, ref _scopeWidth)));
@@ -748,6 +759,7 @@ public sealed class RaceDayEventControl : UserControl
         _numHeatSize.ValueChanged += (_, _) => CommitNow();
         _cmbFirstRound.SelectedIndexChanged += (_, _) => CommitNow();
         _numProtest.ValueChanged += (_, _) => CommitNow();
+        _numShareUnder.ValueChanged += (_, _) => CommitNow();
         _numEntryFee.ValueChanged += (_, _) => CommitNow();
         _numExtraFee.ValueChanged += (_, _) => CommitNow();
         _chkCheckedInOnly.CheckedChanged += (_, _) => CommitNow();
@@ -940,6 +952,11 @@ public sealed class RaceDayEventControl : UserControl
         if (onScreen.FirstRoundSeeding != baseline.FirstRoundSeeding)
         {
             target.FirstRoundSeeding = onScreen.FirstRoundSeeding;
+        }
+
+        if (onScreen.ShareHeatsUnder != baseline.ShareHeatsUnder)
+        {
+            target.ShareHeatsUnder = onScreen.ShareHeatsUnder;
         }
 
         if (onScreen.ProtestMinutes != baseline.ProtestMinutes)
@@ -1336,6 +1353,7 @@ public sealed class RaceDayEventControl : UserControl
         _numHeatSize.Value = _events.HeatSizeFor(raceEvent);
         _cmbFirstRound.SelectedIndex = Math.Clamp((int)raceEvent.FirstRoundSeeding, 0, _cmbFirstRound.Items.Count - 1);
         _numProtest.Value = Math.Clamp(raceEvent.ProtestMinutes, (int)_numProtest.Minimum, (int)_numProtest.Maximum);
+        _numShareUnder.Value = Math.Clamp(raceEvent.ShareHeatsUnder, (int)_numShareUnder.Minimum, (int)_numShareUnder.Maximum);
         _numEntryFee.Value = Math.Clamp(raceEvent.EntryFee, _numEntryFee.Minimum, _numEntryFee.Maximum);
         _numExtraFee.Value = Math.Clamp(raceEvent.ExtraClassFee, _numExtraFee.Minimum, _numExtraFee.Maximum);
         _chkCheckedInOnly.Checked = raceEvent.CheckedInDriversOnly;
@@ -1396,6 +1414,7 @@ public sealed class RaceDayEventControl : UserControl
         _numHeatSize.Enabled = editable;
         _cmbFirstRound.Enabled = editable;
         _numProtest.Enabled = editable;
+        _numShareUnder.Enabled = editable;
         _numEntryFee.Enabled = editable;
         _numExtraFee.Enabled = editable;
         _chkCheckedInOnly.Enabled = editable;
@@ -1660,6 +1679,7 @@ public sealed class RaceDayEventControl : UserControl
         raceEvent.DriversPerHeat = (int)_numHeatSize.Value;
         raceEvent.FirstRoundSeeding = (FirstRoundSeeding)Math.Max(0, _cmbFirstRound.SelectedIndex);
         raceEvent.ProtestMinutes = (int)_numProtest.Value;
+        raceEvent.ShareHeatsUnder = (int)_numShareUnder.Value;
         raceEvent.EntryFee = _numEntryFee.Value;
         raceEvent.ExtraClassFee = _numExtraFee.Value;
 
@@ -1738,6 +1758,7 @@ public sealed class RaceDayEventControl : UserControl
                     current.DriversPerHeat = old.DriversPerHeat;
                     current.FirstRoundSeeding = old.FirstRoundSeeding;
                     current.ProtestMinutes = old.ProtestMinutes;
+                    current.ShareHeatsUnder = old.ShareHeatsUnder;
                     current.EntryFee = old.EntryFee;
                     current.ExtraClassFee = old.ExtraClassFee;
                     current.CheckedInDriversOnly = old.CheckedInDriversOnly;
@@ -1774,6 +1795,7 @@ public sealed class RaceDayEventControl : UserControl
         && a.DriversPerHeat == b.DriversPerHeat
         && a.FirstRoundSeeding == b.FirstRoundSeeding
         && a.ProtestMinutes == b.ProtestMinutes
+        && a.ShareHeatsUnder == b.ShareHeatsUnder
         && a.EntryFee == b.EntryFee
         && a.ExtraClassFee == b.ExtraClassFee
         && a.CheckedInDriversOnly == b.CheckedInDriversOnly

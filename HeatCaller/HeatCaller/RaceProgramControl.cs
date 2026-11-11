@@ -616,6 +616,10 @@ public sealed class RaceProgramControl : UserControl
         // A driver who has just turned up, into the smallest heats, nobody
         // else moved (11 Nov 2026, Phase 3).
         var miLate = new ToolStripMenuItem("Add a Late Entry...", null, (_, _) => AddLateEntry());
+
+        // Two small classes' heats as one race, scored apart (11 Nov 2026,
+        // Phase 4.1, mixed-class heats). Needs the two heats selected.
+        var miTogether = new ToolStripMenuItem("Run Together...", null, (_, _) => RunSelectedTogether());
         var miUp = new ToolStripMenuItem("Move Up", null, (_, _) => MoveSelected(up: true));
         var miDown = new ToolStripMenuItem("Move Down", null, (_, _) => MoveSelected(up: false));
         // --- The day-level commands ---
@@ -669,6 +673,7 @@ public sealed class RaceProgramControl : UserControl
             miEdit,
             miBalance,
             miLate,
+            miTogether,
             new ToolStripSeparator(),
             miUp,
             miDown,
@@ -699,6 +704,7 @@ public sealed class RaceProgramControl : UserControl
             miUp.Enabled = single;
             miDown.Enabled = single;
             miDelete.Enabled = selected > 0;
+            miTogether.Enabled = selected == 2;
             miFinishEarly.Enabled = NightPlan.AfterThisRound(DayRounds(), RoundOnTrackId?.Invoke()) is not null;
             miDelete.Text = selected > 1 ? $"Delete {selected} Rounds" : "Delete";
 
@@ -805,9 +811,14 @@ public sealed class RaceProgramControl : UserControl
     /// so a meeting that runs past midnight is still one day and needs no
     /// special handling here.
     /// </summary>
+    //
+    // A heat the class SHARES with another (11 Nov 2026, Phase 4.1,
+    // mixed-class heats) is one of its rounds too - MixedHeats.RunsClass -
+    // so the build counts it as run, a rebuild replaces it, the heat sheet
+    // lists it and a late entry can land in it.
     private List<RoundDefinition> DayRoundsForClass(string className) =>
         DayRounds()
-            .Where(r => string.Equals(r.ClassName, className, StringComparison.OrdinalIgnoreCase))
+            .Where(r => MixedHeats.RunsClass(r, className))
             .ToList();
 
     /// <summary>
@@ -1490,7 +1501,7 @@ public sealed class RaceProgramControl : UserControl
 
         var shown = filter.Length == 0
             ? day
-            : day.Where(r => string.Equals(r.ClassName, filter, StringComparison.OrdinalIgnoreCase)).ToList();
+            : day.Where(r => MixedHeats.RunsClass(r, filter)).ToList(); // a shared heat shows under each of its classes (Phase 4.1)
 
         // Worked out against the WHOLE day, not the filtered view - the
         // next round is the next round whether or not you are looking at
@@ -1539,7 +1550,7 @@ public sealed class RaceProgramControl : UserControl
                 plan?.StartOf(round.Id) is { } estimate ? AppTime.TimeOfDay(estimate.ToLocalTime()) : string.Empty,
                 round.RoundLabel,
                 DescribeKind(round),
-                round.ClassName,
+                MixedHeats.ClassLabel(round), // "Stock + Mod" for a shared heat (Phase 4.1)
                 round.AssignedTransponders.Count,
                 string.IsNullOrWhiteSpace(round.TrackLayoutName) ? "-" : round.TrackLayoutName,
                 round.IsRecorded ? "Recorded" : isNext ? "NEXT" : "Scheduled");
@@ -1906,6 +1917,11 @@ public sealed class RaceProgramControl : UserControl
             + (track.Length > 0 ? $", on {track}" : string.Empty)
             + (ActiveDay?.CheckedInDriversOnly == true ? ", checked-in drivers only" : string.Empty)
             + "."
+            // Phase 4.1: said before the build, so the counts above (one
+            // class's heats each) are not read as the final number.
+            + (ActiveDay?.ShareHeatsUnder is > 0 and var under
+                ? $"\r\n\r\nA class with fewer than {Plural.Of(under, "driver")} shares a {RoundWord} with another small class where they fit, so there may be fewer {RoundWord}s than this. Each class is still scored on its own."
+                : string.Empty)
             + note);
     }
 
@@ -2026,6 +2042,7 @@ public sealed class RaceProgramControl : UserControl
         // the rest-friendly order below.
         IReadOnlyCollection<string>? lastHeat = null;
         var backToBacksAvoided = 0;
+        var heatsShared = 0;
 
         for (var round = 0; round < roundCount; round++)
         {
@@ -2100,6 +2117,16 @@ public sealed class RaceProgramControl : UserControl
                 }
             }
 
+            // Mixed-class heats (11 Nov 2026, Phase 4.1): with the race
+            // day's "Share a heat under" set, a class too small for a decent
+            // heat of its own shares one with another small class - 3 Stock
+            // and 4 Mod as one race, scored apart. Off (0) on every day
+            // until it is set, and the heats are then exactly as built above.
+            var shareUnder = ActiveDay?.ShareHeatsUnder ?? 0;
+            var beforeSharing = roundHeats.Count;
+            roundHeats = MixedHeats.CombineSmallClasses(roundHeats, shareUnder, heatSize);
+            heatsShared += beforeSharing - roundHeats.Count;
+
             var rosters = roundHeats.Select(r => (IReadOnlyCollection<string>)r.AssignedTransponders).ToList();
             var order = RestOrder.Arrange(rosters, lastHeat);
             backToBacksAvoided += RestOrder.BackToBacks(rosters, lastHeat)
@@ -2118,6 +2145,9 @@ public sealed class RaceProgramControl : UserControl
         var done = $"Built {Plural.Of(created.Count, RoundWord)} across {Plural.Of(classes.Count, "class", "classes")}."
                    + (backToBacksAvoided > 0
                        ? $" Ordered so {Plural.Of(backToBacksAvoided, "driver")} in two classes {(backToBacksAvoided == 1 ? "doesn't" : "don't")} race back to back."
+                       : string.Empty)
+                   + (heatsShared > 0
+                       ? $" Small classes share heats, saving {Plural.Of(heatsShared, RoundWord)}."
                        : string.Empty)
                    + HeadsUpBuildNote(classes.Select(c => c.Name).ToList(), roundCount, runByClass);
         _lblStatus.Text = done;
@@ -3046,7 +3076,14 @@ public sealed class RaceProgramControl : UserControl
             return;
         }
 
-        using var form = new RoundRosterForm(round, _profiles, RosterFor(round.ClassName));
+        // A shared heat (11 Nov 2026, Phase 4.1) offers every one of its
+        // classes' drivers, not just its main class's.
+        var roster = MixedHeats.ClassesOf(round)
+            .SelectMany(RosterFor)
+            .DistinctBy(p => p.Transponder, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        using var form = new RoundRosterForm(round, _profiles, roster);
 
         if (form.ShowDialog(this) != DialogResult.OK)
         {
@@ -3544,6 +3581,10 @@ public sealed class RaceProgramControl : UserControl
         }
 
         var before = places.ToDictionary(r => r.Id, r => r.AssignedTransponders.ToList(), StringComparer.Ordinal);
+        var mapsBefore = places.ToDictionary(
+            r => r.Id,
+            r => r.SharedClassOf is null ? null : new Dictionary<string, string>(r.SharedClassOf, StringComparer.OrdinalIgnoreCase),
+            StringComparer.Ordinal);
 
         _undo.Capture(undoPrefix + $"Late entry: {name}", () =>
         {
@@ -3552,6 +3593,7 @@ public sealed class RaceProgramControl : UserControl
                 if (_rounds.Get(round.Id) is { } current && before.TryGetValue(round.Id, out var roster))
                 {
                     current.AssignedTransponders = roster;
+                    current.SharedClassOf = mapsBefore[round.Id];
                     _rounds.Update(current);
                 }
             }
@@ -3562,6 +3604,16 @@ public sealed class RaceProgramControl : UserControl
         foreach (var round in places)
         {
             round.AssignedTransponders = round.AssignedTransponders.Append(transponder).ToList();
+
+            // WHY (11 Nov 2026, Phase 4.1): landing in a heat this class
+            // shares, the driver is written down as this class's - entered
+            // in Stock, scored in Stock - rather than left to their profile.
+            if (MixedHeats.IsShared(round))
+            {
+                round.SharedClassOf ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                round.SharedClassOf[transponder] = className;
+            }
+
             _rounds.Update(round);
         }
 
@@ -4048,6 +4100,98 @@ public sealed class RaceProgramControl : UserControl
             + "\r\n\r\nTheir results stay in the session history, but they stop counting toward this race day and "
             + "toward the championship - the day's recorded count drops by that many and the standings move. "
             + "Delete them anyway?";
+    }
+
+    /// <summary>
+    /// Run Together (11 Nov 2026, race-night build plan, Phase 4.1): the two
+    /// selected heats become one race - 3 Stock and 4 Mod on track together -
+    /// and each class is still scored on its own. The earlier heat keeps its
+    /// slot and name; the later one comes off the program. The rules for
+    /// when two heats can share are MixedHeats.WhyNotTogether's, said to the
+    /// director in its words. One Undo puts both heats back exactly as they
+    /// were, until the shared race is run (a result of one race cannot be
+    /// split into two).
+    /// </summary>
+    private void RunSelectedTogether()
+    {
+        var picked = _grid.SelectedRows
+            .Cast<DataGridViewRow>()
+            .Select(r => r.Tag as string)
+            .Where(id => id is not null)
+            .Select(id => _rounds.Get(id!))
+            .OfType<RoundDefinition>()
+            .ToList();
+
+        if (picked.Count != 2)
+        {
+            AppDialog.Show(this, "Select the two heats to run together (Ctrl+click the second one).",
+                "Run Together", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        if (ClosedDayRefusal() is { } shut)
+        {
+            AppDialog.Show(this, shut.Message, shut.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var onTrack = RoundOnTrackId?.Invoke();
+
+        if (MixedHeats.WhyNotTogether(picked[0], picked[1], onTrack) is { } why)
+        {
+            AppDialog.Show(this, why, "Can't run these together", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var keep = picked.OrderBy(r => r.Order).First();
+        var fold = picked.First(r => !ReferenceEquals(r, keep));
+        var total = keep.AssignedTransponders.Union(fold.AssignedTransponders, StringComparer.OrdinalIgnoreCase).Count();
+        var classes = string.Join(MixedHeats.Joiner, MixedHeats.ClassesOf(keep).Concat(MixedHeats.ClassesOf(fold)));
+
+        var tooBig = total > HeatSize()
+            ? $"\r\n\r\nThat is {Plural.Of(total, "driver")}, more than the {HeatSize()} per {RoundWord} the race day is set to."
+            : string.Empty;
+
+        if (AppDialog.Show(this,
+                $"Run \"{keep.RoundLabel}\" ({MixedHeats.ClassLabel(keep)}) and \"{fold.RoundLabel}\" ({MixedHeats.ClassLabel(fold)}) as one race?\r\n\r\n"
+                + $"It becomes \"{keep.RoundLabel}\" ({classes}), {Plural.Of(total, "driver")}. Each class is still scored on its own - "
+                + "its own results, qualifying, mains and points."
+                + tooBig,
+                "Run Together", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        var foldOwner = _events?.EventForRound(fold.Id)?.Id;
+
+        if (MixedHeats.RunTogetherIn(_rounds, keep, fold, _profiles, onTrack, out var refusal) is not { } undo)
+        {
+            AppDialog.Show(this, refusal ?? "These heats cannot run together.", "Can't run these together",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        _events?.RemoveRound(fold.Id);
+
+        _undo.Capture($"Run together: {keep.RoundLabel} + {fold.RoundLabel}", () =>
+        {
+            // Refused the way every undo here refuses: by throwing, which
+            // the undo stack shows the director, with nothing changed.
+            if (!MixedHeats.UndoRunTogether(_rounds, undo, out var notUndone))
+            {
+                throw new InvalidOperationException((notUndone ?? "The heats could not be taken apart.") + " Nothing was changed.");
+            }
+
+            if (foldOwner is not null)
+            {
+                _events?.AttachRound(foldOwner, undo.Folded.Id);
+            }
+
+            RefreshAll();
+        });
+
+        _lblStatus.Text = $"\"{keep.RoundLabel}\" now runs {classes} together. Undo takes them apart.";
+        RefreshAll();
     }
 
     private void DeleteSelectedRounds()

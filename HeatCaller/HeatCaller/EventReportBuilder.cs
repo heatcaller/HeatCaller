@@ -412,8 +412,29 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
         foreach (var session in sessions)
         {
             var round = session.RoundId is null ? null : rounds.Get(session.RoundId);
-            var className = round?.ClassName ?? "Other sessions";
 
+            // WHY (11 Nov 2026, Phase 4.1, mixed-class heats): a race two
+            // classes shared is listed under EACH class, with only that
+            // class's drivers and their places within it - the Stock table
+            // reads 1-2-3 for the three Stock cars, not 1-4-6. A copy, so the
+            // saved race is untouched.
+            if (MixedHeats.IsShared(round))
+            {
+                foreach (var shared in MixedHeats.ClassesOf(round!))
+                {
+                    var copy = System.Text.Json.JsonSerializer.Deserialize<SessionRecord>(System.Text.Json.JsonSerializer.Serialize(session))!;
+                    copy.Results = MixedHeats.ClassResults(session.Results, round, shared, profiles).ToList();
+                    Add(shared, copy);
+                }
+
+                continue;
+            }
+
+            Add(round?.ClassName ?? "Other sessions", session);
+        }
+
+        void Add(string className, SessionRecord session)
+        {
             if (!byClass.TryGetValue(className, out var list))
             {
                 list = new List<SessionRecord>();
@@ -432,13 +453,19 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
                 var round = session.RoundId is null ? null : rounds.Get(session.RoundId);
                 var title = round?.RoundLabel ?? session.Label;
 
+                // Said, so a shared race's short table is not mistaken for a small heat.
+                if (MixedHeats.IsShared(round))
+                {
+                    title += $" ({MixedHeats.ClassLabel(round!)})";
+                }
+
                 sb.AppendLine($"<p><strong>{Esc(title)}</strong> &middot; {Esc(AppTime.TimeOfDay(session.StartedAtUtc.ToLocalTime()))}"
                               + (string.IsNullOrWhiteSpace(session.TrackLayoutName) ? "" : $" &middot; {Esc(session.TrackLayoutName)}")
                               + "</p>");
 
                 // On the credits kept with the race when it was filed, so an
                 // old meeting's report still names the winner it had (B52).
-                var adjusted = HandicapCalculator.ForSession(session, round?.ClassName, handicaps).Adjusted?
+                var adjusted = HandicapCalculator.ForSession(session, round is null ? null : className, handicaps).Adjusted?
                     .ToDictionary(a => a.Result.Transponder, a => a, StringComparer.OrdinalIgnoreCase);
 
                 // The DNF or DQ set in Edit Result, and why. Left out, a DNF
@@ -580,7 +607,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
         var classNames = dayRoundIds
             .Select(rounds.Get)
             .Where(r => r is { Kind: RoundKind.Qualifier })
-            .Select(r => r!.ClassName)
+            // Every class of a shared heat (Phase 4.1) has qualifying of its own.
+            .SelectMany(r => MixedHeats.ClassesOf(r!))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(n => n)
             .ToList();

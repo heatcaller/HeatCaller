@@ -76,6 +76,30 @@ public sealed class RoundDefinition
     /// <summary>How many legs this main's A-main has, beside <see cref="MainLeg"/>. 0 when not a leg.</summary>
     public int MainLegCount { get; set; }
 
+    /// <summary>
+    /// The OTHER classes sharing this heat with <see cref="ClassName"/>
+    /// (11 Nov 2026, race-night build plan, Phase 4.1: mixed-class heats) -
+    /// "Mod" on a Stock heat that 3 Stock and 4 Mod run together.
+    ///
+    /// Null or empty, which is every round saved before this and every round
+    /// built without the option, is a one-class round and behaves exactly as
+    /// it always did. ClassName stays the round's MAIN class, so everything
+    /// that only knows one class still has a right answer; MixedHeats is
+    /// where a shared round is told apart and scored per class. Optional and
+    /// migration-free on purpose: an older build reading a newer file simply
+    /// ignores it and sees a Stock heat.
+    /// </summary>
+    public List<string>? SharedClasses { get; set; }
+
+    /// <summary>
+    /// Which class each driver in a shared heat runs in, by transponder
+    /// (11 Nov 2026, Phase 4.1). Written when the heat is built or put
+    /// together, because that is when it is certain. A driver with no entry
+    /// is placed by their profile - see MixedHeats.ClassOfDriver. Null for a
+    /// one-class round.
+    /// </summary>
+    public Dictionary<string, string>? SharedClassOf { get; set; }
+
     public bool IsRecorded => !string.IsNullOrEmpty(LinkedSessionId);
 
     /// <summary>A, B, C... derived from the tier. Falls back to the stored label for untiered mains.</summary>
