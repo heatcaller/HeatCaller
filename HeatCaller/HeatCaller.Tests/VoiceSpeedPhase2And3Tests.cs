@@ -80,13 +80,54 @@ public sealed class VoiceSpeedPhase2And3Tests
     // ---------------------------------------------------------------- the winner
 
     [Fact]
-    public void The_winner_s_line_names_them()
+    public void The_winner_s_line_names_them_from_the_club_s_own_lines()
     {
-        var line = AnnouncementService.WinnerLine("Al gorerhythm");
+        var defaults = VoiceProfile.CreateDefault().Events[nameof(AnnouncementEventType.WinnerCalled)].Templates;
+        var line = AnnouncementService.WinnerLine(defaults, "Al gorerhythm");
 
         Assert.Contains("Al gorerhythm", line);
         Assert.DoesNotContain("{winner}", line);
-        Assert.All(AnnouncementService.WinnerLines, template => Assert.Contains("{winner}", template));
+        Assert.All(defaults, template => Assert.Contains("{winner}", template));
+
+        // {driver} works too, as it does in every other call.
+        Assert.Equal("Al wins!", AnnouncementService.WinnerLine(new[] { "{driver} wins!" }, "Al"));
+    }
+
+    [Fact]
+    public void The_new_calls_have_rows_beside_the_calls_they_follow()
+    {
+        var rows = VoiceSettingsControl.AnnouncementTypes().ToList();
+
+        Assert.Equal(rows.IndexOf(AnnouncementEventType.RaceCompleted) + 1, rows.IndexOf(AnnouncementEventType.WinnerCalled));
+        Assert.Equal(rows.IndexOf(AnnouncementEventType.BestEverHere) + 1, rows.IndexOf(AnnouncementEventType.PersonalBestsTogether));
+        Assert.Single(rows, t => t == AnnouncementEventType.WinnerCalled);
+        Assert.Single(rows, t => t == AnnouncementEventType.PersonalBestsTogether);
+    }
+
+    [Fact]
+    public void The_new_calls_have_default_lines_and_a_label()
+    {
+        var defaults = VoiceProfile.CreateDefault();
+
+        foreach (var type in new[] { AnnouncementEventType.WinnerCalled, AnnouncementEventType.PersonalBestsTogether, AnnouncementEventType.BestEverHere })
+        {
+            Assert.True(defaults.Events[type.ToString()].Enabled);
+            Assert.NotEmpty(defaults.Events[type.ToString()].Templates);
+            Assert.NotEqual(type.ToString(), VoiceProfile.Describe(type).Label);
+        }
+
+        Assert.All(defaults.Events[nameof(AnnouncementEventType.PersonalBestsTogether)].Templates,
+            template => Assert.Contains("{drivers}", template));
+    }
+
+    [Fact]
+    public void Applying_an_older_style_keeps_the_newer_calls_as_this_PC_has_them()
+    {
+        var store = Source("ThemeStore.cs");
+        var stamp = store.IndexOf("voiceCopy.TemplateVersion = VoiceSettingsStore.CurrentTemplateVersion;", StringComparison.Ordinal);
+        var save = store.IndexOf("voiceStore.Save(voiceCopy);", stamp, StringComparison.Ordinal);
+
+        Assert.Contains("foreach (var (key, config) in current.Events)", store[stamp..save]);
     }
 
     [Fact]
@@ -122,8 +163,11 @@ public sealed class VoiceSpeedPhase2And3Tests
     {
         var winner = Source("AnnouncementService.Winner.cs");
 
-        Assert.Contains("if (winner is null || IsPracticeMode || Muted || !FinishCallOn())", winner);
-        Assert.Contains("if (IsPracticeMode || Muted || !FinishCallOn()", winner);
+        // Both rows on: Race completed and Winner named.
+        Assert.Contains("events.GetValueOrDefault(nameof(AnnouncementEventType.RaceCompleted)) is { } finish && CallOn(finish)", winner);
+        Assert.Contains("events.GetValueOrDefault(nameof(AnnouncementEventType.WinnerCalled)) is { } winner && CallOn(winner)", winner);
+        Assert.Contains("if (winner is null || IsPracticeMode || Muted || WinnerCallConfig() is not { } config)", winner);
+        Assert.Contains("if (IsPracticeMode || Muted || WinnerCallConfig() is not { } config", winner);
     }
 
     // ---------------------------------------------------------------- lost personal bests
@@ -186,6 +230,67 @@ public sealed class VoiceSpeedPhase2And3Tests
         var held = queue.IndexOf("OfferTheHeldOverCall();", StringComparison.Ordinal);
         var combined = queue.IndexOf("OfferTheCombinedPersonalBests();", StringComparison.Ordinal);
         Assert.True(held > 0 && combined > held);
+    }
+
+    // ---------------------------------------------------------------- fastest ever here (phase 4)
+
+    private static SessionRecord Race(string layout, params (string Transponder, long FastLapMs)[] rows) => new()
+    {
+        TrackLayoutName = layout,
+        Results = rows.Select(r => new SessionResultEntry { Transponder = r.Transponder, FastLapMs = r.FastLapMs }).ToList(),
+    };
+
+    [Fact]
+    public void A_driver_s_best_here_is_their_quickest_lap_on_this_layout_only()
+    {
+        var history = new[]
+        {
+            Race("Home Track", ("dee", 7_400), ("al", 7_100)),
+            Race("home track", ("dee", 7_250)),
+            Race("Away Track", ("dee", 6_000)),
+            Race("Home Track", ("dee", 0)),
+        };
+
+        Assert.Equal(7_250, BestEverHere.PreviousBest(history, "Home Track", "dee"));
+        Assert.Equal(7_100, BestEverHere.PreviousBest(history, "Home Track", "AL"));
+    }
+
+    [Fact]
+    public void A_driver_new_to_the_layout_has_no_best_to_beat()
+    {
+        var history = new[] { Race("Away Track", ("dee", 6_000)) };
+
+        Assert.Null(BestEverHere.PreviousBest(history, "Home Track", "dee"));
+        Assert.Null(BestEverHere.PreviousBest(history, "", "dee"));
+    }
+
+    [Fact]
+    public void Fastest_ever_here_is_asked_before_the_personal_best_and_replaces_it()
+    {
+        var events = Source("AnnouncementService.RaceEvents.cs");
+        var notify = events.IndexOf("public void NotifyPersonalBestLap(string transponderId, long lapMs)", StringComparison.Ordinal);
+        var ever = events.IndexOf("if (CallTheBestEverHere(transponderId, standing, lapMs))", notify, StringComparison.Ordinal);
+        var personal = events.IndexOf("EnqueueVoice(AnnouncementEventType.PersonalBestLap, standing, null, lapMs);", notify, StringComparison.Ordinal);
+
+        Assert.True(ever > notify && personal > ever);
+
+        // And Race Control answers it from the saved races.
+        Assert.Contains("_announcer.BestEverHereBefore = BestEverHereBefore;", Source("RaceControlControl.RaceEvents.cs"));
+        Assert.Contains("_race.IsDemoMode", Source("RaceControlControl.BestEverHere.cs"));
+    }
+
+    [Fact]
+    public void Fastest_ever_here_has_its_row_lines_and_a_lap_s_few_seconds()
+    {
+        var rows = VoiceSettingsControl.AnnouncementTypes().ToList();
+        Assert.Equal(rows.IndexOf(AnnouncementEventType.PersonalBestLap) + 1, rows.IndexOf(AnnouncementEventType.BestEverHere));
+
+        var config = VoiceProfile.CreateDefault().Events[nameof(AnnouncementEventType.BestEverHere)];
+        Assert.True(config.Enabled);
+        Assert.All(config.Templates, template => Assert.Contains("{driver}", template));
+
+        Assert.True(AnnouncementService.IsLapBoundCall(AnnouncementEventType.BestEverHere));
+        Assert.True(AnnouncementService.IsLapBoundCall(AnnouncementEventType.PersonalBestsTogether));
     }
 
     // ---------------------------------------------------------------- streaming

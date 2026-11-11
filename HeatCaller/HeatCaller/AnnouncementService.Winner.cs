@@ -23,20 +23,25 @@ namespace HeatCaller;
 /// early render is kept out of the render-ahead list for the same reason,
 /// and handed over only as it is said.
 ///
-/// Said only when the finish call is on: a club that switched the finish
-/// call off for the fanfare alone has asked for no words at the flag. The
-/// unofficial result is still read after the cheering, with the places and
-/// the fastest lap.
+/// Its own row on the Voice page, "Winner named" (WinnerCalled): the club's
+/// lines, ticks, speed. Said only when the finish call is on as well: a club
+/// that switched the finish call off for the fanfare alone has asked for no
+/// words at the flag. The unofficial result is still read after the cheering,
+/// with the places and the fastest lap.
 /// </remarks>
 public sealed partial class AnnouncementService
 {
-    /// <summary>The winner's line. {winner} is the driver's name as the announcer says it.</summary>
-    internal static readonly string[] WinnerLines =
+    /// <summary>The Winner named row, when it is on along with the finish call - else null.</summary>
+    private AnnouncementEventConfig? WinnerCallConfig()
     {
-        "[excited] {winner} wins it!",
-        "[excited] And it's {winner} who takes the win!",
-        "[excited] {winner} takes the checkered flag first!",
-    };
+        var events = _voiceStore.Current.Events;
+
+        return events.GetValueOrDefault(nameof(AnnouncementEventType.RaceCompleted)) is { } finish && CallOn(finish)
+            && events.GetValueOrDefault(nameof(AnnouncementEventType.WinnerCalled)) is { } winner && CallOn(winner)
+            && winner.EffectiveTemplates.Count > 0
+                ? winner
+                : null;
+    }
 
     /// <summary>The winner's line made ahead for each contender, by transponder: its words and, when it could be rendered, its key and render. Under _winnerCallsLock.</summary>
     private readonly Dictionary<string, (string Text, string? Key, Task<SynthesisResult>? Render)> _winnerCalls = new(StringComparer.OrdinalIgnoreCase);
@@ -45,10 +50,6 @@ public sealed partial class AnnouncementService
 
     /// <summary>How many of the top of the field have their winner's line made ahead.</summary>
     internal const int WinnerContenders = 2;
-
-    /// <summary>Whether the finish call is on, which the winner's line goes with.</summary>
-    private bool FinishCallOn() =>
-        _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.RaceCompleted)) is { } finish && CallOn(finish);
 
     /// <summary>
     /// The race is on its last lap or past its time: the winner's line is
@@ -59,10 +60,13 @@ public sealed partial class AnnouncementService
     {
         try
         {
-            if (IsPracticeMode || Muted || !FinishCallOn() || RunningOrderNow(WinnerContenders) is not { Count: > 0 } order)
+            if (IsPracticeMode || Muted || WinnerCallConfig() is not { } config
+                || RunningOrderNow(WinnerContenders) is not { Count: > 0 } order)
             {
                 return;
             }
+
+            var speed = config.SpeedFor(_voiceStore.Current.Speed);
 
             foreach (var row in order.Take(WinnerContenders))
             {
@@ -78,7 +82,7 @@ public sealed partial class AnnouncementService
 
                 // The words here, on the thread that owns the standings; the
                 // render in the background.
-                var text = WinnerLine(SpokenNameFor(row.Standing));
+                var text = WinnerLine(config.EffectiveTemplates, SpokenNameFor(row.Standing));
 
                 lock (_winnerCallsLock)
                 {
@@ -88,7 +92,7 @@ public sealed partial class AnnouncementService
                 // None of the queue's AsyncLocals reach the render - see RenderAhead.
                 using (ExecutionContext.SuppressFlow())
                 {
-                    _ = Task.Run(() => MakeTheWinnerCall(transponder, text));
+                    _ = Task.Run(() => MakeTheWinnerCall(transponder, text, speed));
                 }
             }
 
@@ -102,11 +106,11 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>Starts one contender's render, and notes it against them if the line is still theirs.</summary>
-    private void MakeTheWinnerCall(string transponder, string text)
+    private void MakeTheWinnerCall(string transponder, string text, double speed)
     {
         try
         {
-            if (LineAsItWillBeAsked(text, AnnouncementEventType.RaceCompleted, speed: null) is not { } line)
+            if (LineAsItWillBeAsked(text, AnnouncementEventType.RaceCompleted, speed) is not { } line)
             {
                 return;
             }
@@ -132,9 +136,11 @@ public sealed partial class AnnouncementService
         }
     }
 
-    /// <summary>One of the winner's lines, with the name in.</summary>
-    internal static string WinnerLine(string winner) =>
-        TemplateBag.Pick(WinnerLines).Replace("{winner}", winner, StringComparison.OrdinalIgnoreCase);
+    /// <summary>One of the club's winner lines, with the name in - {winner}, or {driver} as every other call has it.</summary>
+    internal static string WinnerLine(IReadOnlyList<string> templates, string winner) =>
+        TemplateBag.Pick(templates)
+            .Replace("{winner}", winner, StringComparison.OrdinalIgnoreCase)
+            .Replace("{driver}", winner, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// At the flag: the winner's line, first in the queue - said the moment
@@ -148,16 +154,18 @@ public sealed partial class AnnouncementService
         {
             var winner = _currentLeaderTransponder;
 
-            if (winner is null || IsPracticeMode || Muted || !FinishCallOn())
+            if (winner is null || IsPracticeMode || Muted || WinnerCallConfig() is not { } config)
             {
                 return;
             }
+
+            var speed = config.SpeedFor(_voiceStore.Current.Speed);
 
             lock (_winnerCallsLock)
             {
                 if (!_winnerCalls.TryGetValue(winner, out call))
                 {
-                    call = (WinnerLine(_standings.TryGetValue(winner, out var standing) ? SpokenNameFor(standing) : DisplayNameFor(winner)), null, null);
+                    call = (WinnerLine(config.EffectiveTemplates, _standings.TryGetValue(winner, out var standing) ? SpokenNameFor(standing) : DisplayNameFor(winner)), null, null);
                 }
 
                 _winnerCalls.Clear();
@@ -174,7 +182,7 @@ public sealed partial class AnnouncementService
                         OfferRenderedAhead(key, render);
                     }
 
-                    await SynthesizeAndPlayAsync(call.Text, "[voice] Winner");
+                    await SynthesizeAndPlayAsync(call.Text, "[voice] Winner", speedOverride: speed);
                 }
                 catch (Exception ex)
                 {

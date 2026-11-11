@@ -1175,19 +1175,75 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.PersonalBestLap));
-        if (config is null || !CallOn(config) || config.Templates.Count == 0)
-        {
-            return;
-        }
-
         // The race's fastest lap owns this moment if it's the same lap.
         if (standing.FastLapMs > 0 && standing.FastLapMs == lapMs && IsRaceFastest(transponderId, lapMs))
         {
             return;
         }
 
+        // Their quickest ever on this track, not just tonight (10 Nov 2026,
+        // voice speed plan, phase 4) - called as that instead, whether or not
+        // the ordinary personal best is on. See BestEverHere.
+        if (CallTheBestEverHere(transponderId, standing, lapMs))
+        {
+            return;
+        }
+
+        var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.PersonalBestLap));
+        if (config is null || !CallOn(config) || config.Templates.Count == 0)
+        {
+            return;
+        }
+
         EnqueueVoice(AnnouncementEventType.PersonalBestLap, standing, null, lapMs);
+    }
+
+    /// <summary>
+    /// Asked by Race Control's history (RaceControlControl.BestEverHereBefore):
+    /// the driver's quickest lap ever on tonight's layout before tonight, when
+    /// this lap beats it and they have not been told this race - else null.
+    /// </summary>
+    public Func<string, long, long?>? BestEverHereBefore { get; set; }
+
+    /// <summary>
+    /// Says the lap as the driver's best ever here, when it is one and the
+    /// call is on. True when it was called, so the ordinary personal best
+    /// is not said for the same lap.
+    /// </summary>
+    private bool CallTheBestEverHere(string transponderId, RaceStanding standing, long lapMs)
+    {
+        var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.BestEverHere));
+
+        if (config is null || !CallOn(config) || config.EffectiveTemplates.Count == 0)
+        {
+            return false;
+        }
+
+        long? before;
+
+        try
+        {
+            before = BestEverHereBefore?.Invoke(transponderId, lapMs);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"[voice] Couldn't check {transponderId}'s best ever here ({ex.Message}) - called as a personal best.");
+            return false;
+        }
+
+        if (before is not { } previous)
+        {
+            return false;
+        }
+
+        var extras = new Dictionary<string, (string Spoken, string Display)>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["previous"] = (FormatSecondsForSpeech(previous), FormatSecondsForDisplay(previous)),
+        };
+
+        EnqueueVoice(AnnouncementEventType.BestEverHere, standing, null, lapMs, extras: extras);
+
+        return true;
     }
 
     /// <summary>

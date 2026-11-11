@@ -139,8 +139,9 @@ Shrinking the device buffer from 300 ms to ~150 ms would save about 0.1 s per ca
 | Shorter wording when busy | Built 10 Nov, not measured | `BusyWording.cs`. Busy = a line speaking, one waiting or kept, or 2+ routine calls in 6 s. Picks from the shorter half of the theme's own templates and drops the lead-change count tail. No new words, so no Voice-page change. Instructions keep their wording |
 | Streaming endpoint | Built 10 Nov, off by default, not measured | `AnnouncementService.Streaming.cs`, `StreamingVoiceLine.cs`. A Voice-page tick (ElevenLabs only). Streams only lines with no saved take, recording or early render, and only for a voice whose level is known from its whole clips. Checks run before a word is heard; any failure before audio renders whole. Gaps from a slow connection are logged. Streamed lines reach listen-along only while the whole mix is streamed |
 | Winner named on the line | Built 10 Nov, not measured | `AnnouncementService.Winner.cs`. On the last lap (or at time-up) the winner's line is rendered for the top two. At the flag it goes first in the queue, right after the finish call. Built-in words; goes with the finish call. The unofficial result still follows after the cheering |
-| Fill the library at staging | Needs Asher | Spends ElevenLabs credits on every driver × template × call type the first night |
-| Recap sentence by sentence | Needs a measurement | The recap's wait is mostly the AI writing; no race yet split writing from rendering |
+| Editable new lines | Done 10 Nov | "Winner named" and "Personal bests together" are rows of their own on the Race Calls tab: lines, ticks, speed, weight. Applying an older style keeps them as this PC has them |
+| Fill the library at staging | Not doing | Render-ahead now covers the calls that wait, for no extra cost; this would buy every driver × template × call type the first night. Prepare Lines is still there by hand |
+| Recap sentence by sentence | Measuring first | The old "written and rendered in" line was timed to after the break, so it said nothing. A `[timing] Recap:` line now gives the writing and the rendering apart; decide from that |
 | Rework follow along | Added 10 Nov 2026, to scope | See below |
 
 ### Rework follow along (asked for 10 Nov 2026)
@@ -174,6 +175,12 @@ The rules stay the same, so we still drop rather than say a call late. They just
 - **Speed up the recap.** At the moment it's written and rendered whole (36–38 s after the flag). Render it sentence by sentence and start playing the first sentence while the rest render. The teaser then has to cover only the AI writing time.
 
 ## Phase 4 — what will dazzle a driver
+
+**Started 10 Nov 2026.** Done so far:
+- #3, the winner named on the line (see the Phase 3 table).
+- #4, history-aware calls: **"Fastest ever here (driver)"**. A personal best that also beats the driver's quickest lap ever on the layout picked in Race Control is said as that instead: "Dee Ploy has never been faster on this track - seven two five!". It has a `{previous}` placeholder for the old best. It happens once per driver per race, and needs at least one earlier race for that driver on the layout. Demos, rentals, ghosts and excluded guests are left out, as for the track record. Its own row, on by default. Files: `BestEverHere.cs` and `RaceControlControl.BestEverHere.cs`, plus a hook ahead of the personal best in `NotifyPersonalBestLap`.
+
+Next in Phase 4: #2, passes called while side by side (render "takes the lead" ahead for a car within ~0.5 s). This needs the lead-change wording chosen at prediction time and kept, so the render matches. Then #5, the gap countdown, and #7, the booth live in a quiet stretch. #6, the race engineer on the phone, belongs with "Rework follow along".
 
 Once calls take about a second, HeatCaller can call the race as it happens, not just afterwards.
 

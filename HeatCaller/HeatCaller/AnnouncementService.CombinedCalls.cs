@@ -22,8 +22,9 @@ namespace HeatCaller;
 /// have their say. Not offered when a call kept for the end of the line is
 /// going next, which outranked them.
 ///
-/// Said only with the personal-best call on. Its words are this file's, not a
-/// theme's (TheirNames below).
+/// Its own row on the Voice page, "Personal bests together"
+/// (PersonalBestsTogether) - the club's lines, ticks and speed - heard only
+/// with the personal-best call on too.
 /// </remarks>
 public sealed partial class AnnouncementService
 {
@@ -39,14 +40,6 @@ public sealed partial class AnnouncementService
 
     /// <summary>The most names in one combined line - past three it is a list, not a call.</summary>
     internal const int MostCombined = 3;
-
-    /// <summary>The combined line. {drivers} is the names, "Dee Ploy and Al gorerhythm".</summary>
-    internal static readonly string[] CombinedPersonalBestLines =
-    {
-        "[cheerful] Personal bests for {drivers}!",
-        "[cheerful] {drivers} all go quicker!",
-        "[cheerful] New personal bests - {drivers}.",
-    };
 
     /// <summary>Noted from the drop-while-speaking rule: a personal best nobody heard.</summary>
     private void NoteLostPersonalBest(string? transponder)
@@ -113,9 +106,14 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.PersonalBestLap));
+        var events = _voiceStore.Current.Events;
+        var personalBest = events.GetValueOrDefault(nameof(AnnouncementEventType.PersonalBestLap));
+        var config = events.GetValueOrDefault(nameof(AnnouncementEventType.PersonalBestsTogether));
 
-        if (config is null || !CallOn(config) || HeldByCaution(AnnouncementEventType.PersonalBestLap, config))
+        // Its own row on the Voice page (Personal bests together), heard only
+        // with Personal best lap on too.
+        if (personalBest is null || !CallOn(personalBest) || HeldByCaution(AnnouncementEventType.PersonalBestLap, personalBest)
+            || config is null || !CallOn(config) || config.EffectiveTemplates.Count == 0)
         {
             return;
         }
@@ -123,7 +121,7 @@ public sealed partial class AnnouncementService
         var names = together.Select(t => t.Said).ToList();
         var shown = together.Select(t => t.Shown).ToList();
 
-        var template = TemplateBag.Pick(CombinedPersonalBestLines);
+        var template = TemplateBag.Pick(config.EffectiveTemplates);
         var text = template.Replace("{drivers}", TheirNames(names), StringComparison.OrdinalIgnoreCase);
         var display = VoiceProfile.StripAudioTags(template.Replace("{drivers}", TheirNames(shown), StringComparison.OrdinalIgnoreCase)).Trim();
         var speed = config.SpeedFor(_voiceStore.Current.Speed);
