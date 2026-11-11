@@ -357,7 +357,8 @@ One tag per line is usually enough. Stacked tags fight each other.
 The v4 models play a tag much harder than v3 did, so the built-in lines keep the two loud tags for the moments that matter:
 
 - `[shouting]`: the start, time up and the checkered flag, a new leader, records (track record, fastest lap of the race, provisional pole, record pace), and the yellow, red and green flags and jump starts.
-- `[excited]`: passes and battles, ghost passes, getting lapped, personal bests, streaks, qualifying improvements, achievements, the last lap and the final minute and seconds.
+- `[excited]`: passes and battles, ghost passes, getting lapped, the last lap and the final minute and seconds.
+- A driver's own bests (personal bests, a best ever here, several personal bests said together, streaks, qualifying improvements and achievements) are never `[excited]` or `[shouting]`. Their `[cheerful]` and `[awe]` stay.
 - Everything else (staging, the countdown, lap times, the position report, minutes left, sector and split pace) is read with no tag.
 
 On any other model, a tag would be read out word for word, so HeatCaller strips anything in square brackets before the line is spoken. That means you can leave tags in your lines and switch models without the announcer saying "bracket excited". The built-in lines already use tags, so switching to `eleven_v3` makes them more lively.

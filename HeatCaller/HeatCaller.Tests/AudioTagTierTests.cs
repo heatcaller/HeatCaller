@@ -77,6 +77,58 @@ public sealed class AudioTagTierTests : IDisposable
         }
     }
 
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void A_drivers_own_bests_are_never_lifted_but_keep_their_character_tags(string name)
+    {
+        var characterTags = 0;
+
+        foreach (var (where, type, line) in Lines(name, ProfileFor(name)))
+        {
+            if (AudioTagTiers.Unlifted.Contains(type))
+            {
+                Assert.Null(AudioTagTiers.For(type));
+                Assert.False(Loud.IsMatch(line), $"{where} {type}: \"{line}\" should have no [excited] or [shouting]");
+
+                if (line.Contains("[cheerful]", StringComparison.Ordinal) || line.Contains("[awe]", StringComparison.Ordinal))
+                {
+                    characterTags++;
+                }
+            }
+        }
+
+        // The defaults' personal-best and achievement lines open on
+        // [cheerful] - kept, not stripped with the loud tags (11 Nov 2026).
+        if (name == "defaults")
+        {
+            Assert.True(characterTags > 0, "the [cheerful] lines are kept");
+        }
+    }
+
+    [Fact]
+    public void A_file_on_version_4_only_loses_the_loud_tags_on_a_drivers_own_bests()
+    {
+        var saved = VoiceProfile.CreateDefault();
+        saved.TemplateVersion = 4;
+        saved.ModelId = "eleven_v3";
+        saved.Events[nameof(AnnouncementEventType.PersonalBestLap)].Templates =
+            new List<string> { "[excited] Our own PB line for {driver}!", "[cheerful] {driver} again." };
+        saved.Events[nameof(AnnouncementEventType.AchievementUnlocked)].Templates = new List<string> { "[awe] {driver} earns {achievement}." };
+        saved.Events[nameof(AnnouncementEventType.LeaderChange)].Templates = new List<string> { "[shouting] Our own lead line, {driver}!" };
+        VoiceSettingsStore.Load().Save(saved);
+
+        var loaded = VoiceSettingsStore.Load();
+
+        Assert.False(loaded.RefreshedLines, "not a refresh");
+        Assert.Equal(VoiceSettingsStore.CurrentTemplateVersion, loaded.Current.TemplateVersion);
+        Assert.Equal("eleven_v3", loaded.Current.ModelId);
+        Assert.Equal(
+            new[] { "Our own PB line for {driver}!", "[cheerful] {driver} again." },
+            loaded.Current.Events[nameof(AnnouncementEventType.PersonalBestLap)].Templates);
+        Assert.Equal(new[] { "[awe] {driver} earns {achievement}." }, loaded.Current.Events[nameof(AnnouncementEventType.AchievementUnlocked)].Templates);
+        Assert.Equal(new[] { "[shouting] Our own lead line, {driver}!" }, loaded.Current.Events[nameof(AnnouncementEventType.LeaderChange)].Templates);
+    }
+
     [Fact]
     public void Routine_calls_are_read_plain()
     {
