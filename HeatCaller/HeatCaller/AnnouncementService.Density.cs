@@ -141,7 +141,8 @@ public sealed partial class AnnouncementService
     /// line, queued as a LeaderChange (23 Oct 2026, bug hunt 10). Null for
     /// the type's own.
     /// </param>
-    private bool RoutineCallGetsTheAir(AnnouncementEventType type, out bool kept, Func<bool>? holdOver = null, bool alreadyCounted = false, Action? lost = null, string? transponder = null, string? words = null, Action? paced = null, int? routineWeight = null)
+    /// <param name="renderAhead">Renders the call's words early if it is kept - see AnnouncementService.RenderAhead.</param>
+    private bool RoutineCallGetsTheAir(AnnouncementEventType type, out bool kept, Func<bool>? holdOver = null, bool alreadyCounted = false, Action? lost = null, string? transponder = null, string? words = null, Action? paced = null, int? routineWeight = null, Func<Task>? renderAhead = null)
     {
         kept = false;
 
@@ -169,7 +170,7 @@ public sealed partial class AnnouncementService
             // - and only with pacing on. Wall to wall is the announcer
             // exactly as it was, and it never kept anything.
             if (gap > 0 && holdOver is not null
-                && _heldOver.Offer(new HeldCall(type, holdOver, lost, transponder, words), weight, WeightBeingSpoken(), out var displaced))
+                && _heldOver.Offer(new HeldCall(type, holdOver, lost, transponder, words, renderAhead), weight, WeightBeingSpoken(), out var displaced))
             {
                 if (displaced is not null)
                 {
@@ -180,6 +181,10 @@ public sealed partial class AnnouncementService
                 }
 
                 StatusMessage?.Invoke($"[voice] Keeping {type} for the end of this line - it outranks what is being said.");
+
+                // It goes next once this line ends, so its words can be
+                // rendered while this line is still being said (10 Nov 2026).
+                RenderAheadIfALineIsSpeaking();
 
                 kept = true;
                 return false;
@@ -276,7 +281,7 @@ public sealed partial class AnnouncementService
     /// it is lost instead (20 Oct 2026, Bug Hunt 8 - see the lost parameter
     /// of RoutineCallGetsTheAir).
     /// </summary>
-    private sealed record HeldCall(AnnouncementEventType Type, Func<bool> Reoffer, Action? Lost, string? Transponder = null, string? Words = null);
+    private sealed record HeldCall(AnnouncementEventType Type, Func<bool> Reoffer, Action? Lost, string? Transponder = null, string? Words = null, Func<Task>? RenderAhead = null);
 
     /// <summary>
     /// The one call kept back while the speaker was busy - see
@@ -335,6 +340,10 @@ public sealed partial class AnnouncementService
     /// </summary>
     private void ForgetTheHeldOverCall(bool count)
     {
+        // And whatever was rendered ahead for it or the queue (10 Nov 2026) -
+        // every flag, countdown and new race comes through here.
+        ForgetRenderedAhead();
+
         if (_heldOver.Clear() is not { } gone)
         {
             return;

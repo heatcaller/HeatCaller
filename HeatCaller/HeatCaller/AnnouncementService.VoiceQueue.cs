@@ -381,7 +381,10 @@ public sealed partial class AnnouncementService
             },
             displayText: displayText.Length > 0 ? displayText : text,
             lost: releaseMention,
-            sayByMs: sayByMs);
+            sayByMs: sayByMs,
+            // Its words are final here, so they can be rendered while the
+            // line before them plays (10 Nov 2026) - see RenderAhead.
+            renderAhead: () => RenderLineAheadAsync(text, type, speed));
 
         if (!accepted)
         {
@@ -427,6 +430,37 @@ public sealed partial class AnnouncementService
     /// sponsor's mention is counted here and nowhere earlier. Not run when
     /// the line is dropped or its synthesis fails.
     /// </param>
+    /// <summary>
+    /// The profile a line is said with before its second voice and the
+    /// race's energy: the race-calls model for a race call, then the line's
+    /// own delivery or speed. Shared with the render ahead (10 Nov 2026), so
+    /// a line rendered early is asked for in exactly the words and settings
+    /// it would have been - see AnnouncementService.RenderAhead.
+    /// </summary>
+    private VoiceProfile ProfileForLine(AnnouncementEventType? call, (double Stability, double Style)? deliveryOverride, double? speedOverride)
+    {
+        // On the race-calls model when this is a race call and one is set
+        // (8 Nov 2026) - before the overrides below, which copy the model.
+        var profile = ForRaceCall(_voiceStore.Current, call);
+
+        if (deliveryOverride is { } delivery)
+        {
+            // A shallow copy so the override applies to THIS line only and
+            // doesn't leak into the stored profile - mutating the real one
+            // would leave every later announcement using summary settings.
+            return profile.CloneForDelivery(delivery.Stability, delivery.Style, speedOverride);
+        }
+
+        if (speedOverride is { } speedOnly)
+        {
+            // Speed without a delivery override - a long announcement that
+            // needs room to breathe but no change in expression.
+            return profile.CloneForDelivery(profile.Stability, profile.Style, speedOnly);
+        }
+
+        return profile;
+    }
+
     private async Task SynthesizeAndPlayAsync(
         string text,
         string announcingLogPrefix,
@@ -441,24 +475,7 @@ public sealed partial class AnnouncementService
         Action? spoken = null,
         Func<string?>? whyNotNow = null)
     {
-        // On the race-calls model when this is a race call and one is set
-        // (8 Nov 2026) - before the overrides below, which copy the model.
-        var currentProfile = ForRaceCall(_voiceStore.Current, _dequeuedCall.Value);
-
-        if (deliveryOverride is { } delivery)
-        {
-            // A shallow copy so the override applies to THIS line only and
-            // doesn't leak into the stored profile - mutating the real one
-            // would leave every later announcement using summary settings.
-            currentProfile = currentProfile.CloneForDelivery(delivery.Stability, delivery.Style, speedOverride);
-        }
-        else if (speedOverride is { } speedOnly)
-        {
-            // Speed without a delivery override - a long announcement that
-            // needs room to breathe but no change in expression.
-            currentProfile = currentProfile.CloneForDelivery(
-                currentProfile.Stability, currentProfile.Style, speedOnly);
-        }
+        var currentProfile = ProfileForLine(_dequeuedCall.Value, deliveryOverride, speedOverride);
 
         // Who would say it without the second voice - for a Kokoro voice on
         // the Cast tab that Kokoro can't say after all (RenderCastLineAsync).
@@ -557,14 +574,21 @@ public sealed partial class AnnouncementService
         var timing = _lineTiming.Value;
         timing?.RenderStarted(TimingClock.NowMs);
         var rendering = System.Diagnostics.Stopwatch.StartNew();
-        var synthesis = await RenderCastLineAsync(withoutVoice, currentProfile, voice, text);
+
+        // Rendered while the line before it played, when it was (10 Nov 2026,
+        // voice speed plan, phase 2) - see AnnouncementService.RenderAhead.
+        // Only for exactly these words in exactly these settings; anything
+        // else, or an early render that failed, is rendered now as always.
+        var (synthesis, renderedAhead) = await RenderAheadOrNowAsync(withoutVoice, currentProfile, voice, text);
         var audio = synthesis.Audio;
         rendering.Stop();
 
         if (timing is not null)
         {
             timing.RenderEnded(TimingClock.NowMs);
-            timing.RenderedBy ??= RenderedBy(synthesis.Source, currentProfile);
+            timing.RenderedBy ??= renderedAhead
+                ? $"rendered ahead - {RenderedBy(synthesis.Source, currentProfile)}"
+                : RenderedBy(synthesis.Source, currentProfile);
 
             if (timing.Characters == 0)
             {
@@ -673,6 +697,11 @@ public sealed partial class AnnouncementService
             var volume = AnnouncementGain(currentProfile.Volume);
 
             timing?.GotTheSpeaker(TimingClock.NowMs);
+
+            // While this line plays, the next one renders (10 Nov 2026, voice
+            // speed plan, phase 2) - see AnnouncementService.RenderAhead. It
+            // returns at once.
+            RenderTheNextLineAhead();
 
             // Past every check that drops a line: it is heard from here, so
             // this is where a sponsor's mention counts - see spoken. A
@@ -1131,7 +1160,12 @@ public sealed partial class AnnouncementService
     /// bins the lap calls queued ahead of it nor waits in front of the ones
     /// queued after it. See AnnouncementService.Freshness.
     /// </param>
-    private bool EnqueueVoiceWork(AnnouncementEventType type, string? transponder, Func<Task> work, string? displayText = null, string? onAir = null, bool heldOver = false, Action? lost = null, Action? paced = null, int? routineWeight = null, long? sayByMs = null, RaceFactsStamp? facts = null)
+    /// <param name="renderAhead">
+    /// Renders the line's words early, while the line before it plays (10
+    /// Nov 2026) - null for a line whose words are only decided when it is
+    /// said. See AnnouncementService.RenderAhead.
+    /// </param>
+    private bool EnqueueVoiceWork(AnnouncementEventType type, string? transponder, Func<Task> work, string? displayText = null, string? onAir = null, bool heldOver = false, Action? lost = null, Action? paced = null, int? routineWeight = null, long? sayByMs = null, RaceFactsStamp? facts = null, Func<Task>? renderAhead = null)
     {
         // From the moment it was first offered: a call kept for the end of a
         // line comes back with the deadline it went in with.
@@ -1242,7 +1276,7 @@ public sealed partial class AnnouncementService
                 {
                     using (AboutBattle(battle?.Pair))
                     {
-                        return EnqueueVoiceWork(type, transponder, work, displayText, onAir, heldOver: true, lost: lost, routineWeight: routineWeight, sayByMs: sayByMs, facts: facts);
+                        return EnqueueVoiceWork(type, transponder, work, displayText, onAir, heldOver: true, lost: lost, routineWeight: routineWeight, sayByMs: sayByMs, facts: facts, renderAhead: renderAhead);
                     }
                 },
                 alreadyCounted: heldOver,
@@ -1250,7 +1284,8 @@ public sealed partial class AnnouncementService
                 transponder: transponder,
                 words: displayText,
                 paced: paced,
-                routineWeight: routineWeight))
+                routineWeight: routineWeight,
+                renderAhead: renderAhead))
         {
             return kept;
         }
@@ -1384,7 +1419,10 @@ public sealed partial class AnnouncementService
                 {
                     StatusMessage?.Invoke($"[voice] Playback failed: {ex.Message}");
                 }
-            });
+            })
+            {
+                RenderAhead = renderAhead,
+            };
 
             _voiceQueue.Insert(at, queued);
 
@@ -1401,6 +1439,11 @@ public sealed partial class AnnouncementService
         GiveBackLost(giveBack);
 
         _voiceQueueSignal.Release();
+
+        // Queued while a line speaks: it may be the one said next, so it can
+        // be rendered now - see AnnouncementService.RenderAhead.
+        RenderAheadIfALineIsSpeaking();
+
         return true;
     }
 

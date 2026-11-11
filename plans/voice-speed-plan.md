@@ -107,7 +107,40 @@ The slowest 10% got worse, and it isn't the render. The slowest calls were lead 
 
 Expected result (an estimate, to be checked with Phase 0): lap to first word drops from ~1.9 s to ~1.0 s, and dead air per call from ~1.9 s to ~0.4 s. The same race could then fit roughly 40–50% more calls, and most dropped chimes come back.
 
+### Phase 1 item 5: not doing it (10 Nov 2026)
+
+Shrinking the device buffer from 300 ms to ~150 ms would save about 0.1 s per call. The code's own note says some drivers play nothing at all from a very short buffer, so it would need a new Voice-page setting and a restart to apply. That's the most risk for the least gain on the list. Revisit only if the measurements show it's the biggest piece left.
+
 ## Phase 2 — pick the best call when the speaker comes free (3–5 days)
+
+**What the Phase 1 race changed here.** The pacing dial re-checks every kept call when it's offered again. So a bigger pool of kept calls would mostly turn "lost" into "held by the dial" on Balanced, not into more calls said; it matters only on Busy and Wall to wall. The slowest calls were ready when the speaker came free and then rendered for 0.6–1 s in silence. So the first Phase 2 step is rendering the next call while the current one plays.
+
+### Phase 2, step 1: render the next line ahead (built 10 Nov 2026, not yet measured)
+
+`AnnouncementService.RenderAhead.cs`. When a line is about to be heard, the call that will be said next (the front of the queue, else the call kept for the end of this line) starts rendering. It uses the same profile builder the real render uses. When its turn comes it takes the early render only for exactly the same words and settings, and waits for it if it's still under way. Otherwise it renders as before. A call due before the playing line can end isn't rendered. The race summary says how many early renders were used, since an unused one is a paid request nobody heard.
+
+**First race with it (21:55): it rendered nothing ahead.** It only started as each line began, before the calls made during that line existed, and only the main lap-call path carried the hook. That race's numbers (1.26 s median, 2.12 s at 90%, over only 12 lap calls) are race-to-race variation, not this change. Fixed the same night:
+- It also starts when a call is queued or kept while a line is speaking.
+- Six more paths carry the hook: longest streak, battles, rivalries, race events, milestones, live release calls. Streak calls can't, since their words are chosen when said.
+- Up to three early renders are kept, so a call queued in front of one doesn't throw it away.
+
+### Phase 2, step 2: places-only position reports survive a crossing (10 Nov 2026)
+
+`PositionReportOrder.Moved` dropped a report whenever a car it named crossed the line again, because its gap would then be a lap old. A places-only report ("Bill leads, Sam second") has no gaps to go stale. With the gaps box unticked (the default), only a different car or another order now counts. With three cars named on 8 s laps and ~1 s of render, this was dropping about one report in three.
+
+### Where Phase 2 and Phase 3 stand
+
+| Item | State | Why |
+|---|---|---|
+| Render the next line ahead | Built, not yet measured | — |
+| Places-only reports survive a crossing | Done | — |
+| Bigger pool of kept calls | Not doing | On Balanced the dial holds what a pool keeps, so it would turn "lost" into "held", not into calls said |
+| Combine calls ("PBs for Dee and Al") | Needs Asher | New wording and a new row on the Voice page |
+| Shorter wording when busy | Needs Asher | Short forms of every template; the slowest calls now wait behind 4–7 s lines, so this is the biggest lever left |
+| Streaming endpoint | Held | The whole-clip pipeline levels loudness, trims silence and feeds listen-along from the full clip; streaming has to rework all three. Worth it once render-ahead is measured, since it only helps calls rendered when the speaker is free |
+| Winner named on the line | Needs Asher | The finish call names nobody by design, and the result read waits for the cheering (14 s after the flag in the last race) |
+| Fill the library at staging | Needs Asher | Spends ElevenLabs credits on every driver × template × call type the first night |
+| Recap sentence by sentence | Needs a measurement | The recap's wait is mostly the AI writing; no race yet split writing from rendering |
 
 Replace "first come, first served, drop if busy" with a small pool of candidate calls:
 

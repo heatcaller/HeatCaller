@@ -657,7 +657,8 @@ public sealed partial class AnnouncementService
         // Screen text raised by EnqueueVoiceWork, once the line is accepted.
         EnqueueVoiceWork(type, humanTransponder,
             () => SynthesizeAndPlayAsync(text, $"[voice] {type}", speedOverride: speed),
-            displayText: text);
+            displayText: text,
+            renderAhead: () => RenderLineAheadAsync(text, type, speed));
     }
 
     /// <summary>
@@ -751,7 +752,8 @@ public sealed partial class AnnouncementService
                 }
             },
             displayText: text,
-            lost: releaseMention);
+            lost: releaseMention,
+            renderAhead: () => RenderLineAheadAsync(text, type, speed));
 
         if (!accepted)
         {

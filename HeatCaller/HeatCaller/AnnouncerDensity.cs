@@ -504,4 +504,17 @@ internal sealed class HeldOver<T> where T : class
             return was;
         }
     }
+
+    /// <summary>
+    /// The call being kept, still fresh, without taking it - so its words
+    /// can be rendered while the line it waits on plays (10 Nov 2026). Null
+    /// when nothing is kept or what is kept has gone stale.
+    /// </summary>
+    public T? Peek()
+    {
+        lock (_lock)
+        {
+            return _held is { } call && _clock() - _at <= AnnouncerDensity.HoldOverFor ? call : null;
+        }
+    }
 }

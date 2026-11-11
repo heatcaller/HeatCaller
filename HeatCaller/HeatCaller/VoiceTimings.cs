@@ -167,12 +167,21 @@ internal sealed class VoiceTimingTally
     private readonly object _gate = new();
     private readonly List<VoiceLineTiming> _lines = new();
 
+    private int _renderedAhead;
+
+    /// <summary>A line rendered ahead this race (10 Nov 2026) - see AnnouncementService.RenderAhead. Those used are the lines whose RenderedBy says so.</summary>
+    internal void NoteRenderedAhead() => Interlocked.Increment(ref _renderedAhead);
+
+    internal int RenderedAhead => Volatile.Read(ref _renderedAhead);
+
     internal void Reset()
     {
         lock (_gate)
         {
             _lines.Clear();
         }
+
+        Interlocked.Exchange(ref _renderedAhead, 0);
     }
 
     internal void Add(VoiceLineTiming line)
@@ -244,6 +253,13 @@ internal sealed class VoiceTimingTally
         if (heldMs > 0)
         {
             parts.Add($"words were {Percent(wordsMs, heldMs)} of the {VoiceLineTiming.S(heldMs)} the speaker was held");
+        }
+
+        if (RenderedAhead > 0)
+        {
+            // Every one not used was a request paid for and never heard.
+            var used = lines.Count(l => l.RenderedBy?.StartsWith("rendered ahead", StringComparison.Ordinal) == true);
+            parts.Add($"{used} of {RenderedAhead} lines rendered ahead were used");
         }
 
         parts.Add($"{dropped} of {offered} routine calls lost behind a line being spoken, {held} held by the pacing dial");

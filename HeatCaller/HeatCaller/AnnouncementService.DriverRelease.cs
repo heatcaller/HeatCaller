@@ -142,7 +142,8 @@ public sealed partial class AnnouncementService
 
         // Screen text raised by EnqueueVoiceWork, once the line is accepted.
         EnqueueVoiceWork(type, transponderId, () => SynthesizeAndPlayAsync(text, $"[voice] {type}", speedOverride: speed),
-            displayText: text);
+            displayText: text,
+            renderAhead: () => RenderLineAheadAsync(text, type, speed));
     }
 
     /// <summary>The spoken words for one driver's release call.</summary>

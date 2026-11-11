@@ -637,7 +637,9 @@ public sealed partial class AnnouncementService
                 var said = queuedText;
                 IReadOnlyList<PositionReportOrder.Row> worded = queuedRows;
 
-                if (RunningOrderNow(depth) is { Count: >= 2 } now && PositionReportOrder.Moved(queuedRows, now))
+                // Places only, a car over the line in the same place changes
+                // no word - see PositionReportOrder.Moved (10 Nov 2026).
+                if (RunningOrderNow(depth) is { Count: >= 2 } now && PositionReportOrder.Moved(queuedRows, now, placesOnly))
                 {
                     var reworded = WordRunningOrder(now, template, sayGaps, placesOnly);
 
@@ -658,7 +660,7 @@ public sealed partial class AnnouncementService
                 await SynthesizeAndPlayAsync(said, isRetry ? "[voice] Position report (again)" : "[voice] Position report", speedOverride: reportSpeed,
                     whyNotNow: () =>
                     {
-                        if (RunningOrderNow(depth) is { Count: >= 2 } after && PositionReportOrder.Moved(worded, after))
+                        if (RunningOrderNow(depth) is { Count: >= 2 } after && PositionReportOrder.Moved(worded, after, placesOnly))
                         {
                             movedWhileRendered = true;
                             return "the order moved while it was being rendered";
@@ -1677,7 +1679,8 @@ public sealed partial class AnnouncementService
         ConsiderPerLapAction("voice", transponder, config.Weight, MaxVoicePerLap,
             () => EnqueueVoiceWork(AnnouncementEventType.StreakLead, transponder,
                 () => SynthesizeAndPlayAsync(text, "[voice] Longest streak", speedOverride: speed),
-                displayText: text));
+                displayText: text,
+                renderAhead: () => RenderLineAheadAsync(text, AnnouncementEventType.StreakLead, speed)));
     }
 
     /// <summary>
@@ -2118,7 +2121,8 @@ public sealed partial class AnnouncementService
                 },
                 displayText: said,
                 lost: GiveBack,
-                paced: () => paced = true);
+                paced: () => paced = true,
+                renderAhead: () => RenderLineAheadAsync(said, type, speed));
 
             if (!accepted)
             {
@@ -2283,7 +2287,8 @@ public sealed partial class AnnouncementService
         EnqueueVoiceWork(AnnouncementEventType.LeaderChange, overtakerTransponder, () => SynthesizeAndPlayAsync(text, "[voice] Rivalry announcement",
             "[voice] Skipped rivalry announcement - ElevenLabs API key or voice not configured."),
             displayText: text,
-            routineWeight: rivalryWeight);
+            routineWeight: rivalryWeight,
+            renderAhead: () => RenderLineAheadAsync(text, AnnouncementEventType.LeaderChange, speed: null));
     }
 
     private void HandleGatePassed(GatePassEvent gate)
