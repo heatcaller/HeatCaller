@@ -402,6 +402,9 @@ public sealed partial class RaceControlControl : UserControl
     /// <summary>Raised when Start Next is pressed with a round in hand - MainForm owns the session pickers, so it applies the round and triggers the start.</summary>
     public event Action<RoundDefinition>? NextRoundStartRequested;
 
+    /// <summary>Raised when Start Next is held with a round in hand (11 Nov 2026) - MainForm runs that round as a demo, the same way the race programme's Demo does. See StartNextHold.</summary>
+    public event Action<RoundDefinition>? NextRoundDemoRequested;
+
     /// <summary>
     /// What the programme says the next thing to do is - the same reading
     /// Today's next-step card shows.
