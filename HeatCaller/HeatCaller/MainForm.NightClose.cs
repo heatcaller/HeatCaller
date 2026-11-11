@@ -33,7 +33,33 @@ public partial class MainForm
             NightEmailsToSend(),
             notOnline,
             _settings.LastAutoBackupUtc,
-            _raceEvents.Active is { IsLegacy: false, IsOpen: true });
+            _raceEvents.Active is { IsLegacy: false, IsOpen: true },
+            OwingTonight(daySessions));
+    }
+
+    /// <summary>
+    /// The drivers who raced tonight and still owe their entry (11 Nov 2026,
+    /// Phase 4), or null when tonight's race day has no entry fee.
+    /// </summary>
+    private IReadOnlyList<string>? OwingTonight(IReadOnlyList<SessionRecord> daySessions)
+    {
+        if (_raceEvents.Active is not { IsLegacy: false, EntryFee: > 0 } day)
+        {
+            return null;
+        }
+
+        return daySessions
+            .Where(s => !s.IsNotScored())
+            .SelectMany(s => s.Results.Select(r => r.Transponder))
+            .Where(t => !string.IsNullOrWhiteSpace(t) && !GhostService.IsGhost(t))
+            .Select(t => _profiles.PrimaryForAlternate(t) ?? t)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(t => _profiles.Get(t))
+            .OfType<DriverProfile>()
+            .Where(p => (_payments.Get(day.Id, p.Transponder)?.How ?? PaidHow.Owing) == PaidHow.Owing
+                        && CheckInControl.FeeFor(p, day) > 0)
+            .Select(p => string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName)
+            .ToList();
     }
 
     /// <summary>

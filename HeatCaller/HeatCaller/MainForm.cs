@@ -284,6 +284,9 @@ public partial class MainForm : Form
     private readonly Panel pageHandicaps = new();
 
     private readonly RentalTransponderStore _rentals = RentalTransponderStore.Load();
+
+    /// <summary>Who paid at the desk, per race day (11 Nov 2026, Phase 4 - see DeskMoney).</summary>
+    private readonly EntryPaymentStore _payments = EntryPaymentStore.Load();
     private readonly TechInspectionStore _techInspections = TechInspectionStore.Load();
     private readonly HandicapStore _handicaps = HandicapStore.Load();
     private readonly RaceEventStore _raceEvents = RaceEventStore.Load();

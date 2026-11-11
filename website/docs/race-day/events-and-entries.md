@@ -109,6 +109,8 @@ The line under the picker shows what the selected day already holds, for example
 | **Drivers per heat:** | How many drivers share a heat when the program is built (2–20). | The last race day's, or 8 on a club's first race day |
 | **First round seeded:** | How the first qualifying round is split into heats: **By recent pace** (similar pace together, from each driver's best lap in the class over the last 60 days), **Alphabetical** (dealt in turn, as before 11 Nov 2026), or **Random** (the same random for the same race day, so a rebuild gives the same heats). See [Build the qualifying program](program-and-mains.md#build-the-qualifying-program). | By recent pace |
 | **Protest window (min):** | How long a class's qualifying results stay provisional after its last qualifier, for queries before the finals are built (0 to 30, 0 for none). See [The protest window](program-and-mains.md#the-protest-window). | 5 |
+| **Entry fee:** | What a driver pays for their first class tonight, for [Money at the desk](#money-at-the-desk). Leave it at 0 if the club doesn't track money in HeatCaller; nothing about money is shown then. | 0 |
+| **Each extra class:** | What a driver pays for each class after their first tonight (often less). | 0 |
 | **Only include drivers who have checked in** | When ticked, building the program only uses drivers checked in on **Who's Racing**. When unticked, it uses every driver in the class. | On for a race day, off for a club night |
 | **Start the next race automatically** | When a race finishes without a round picked on **Race Control**, it's recorded against the next round that hasn't run yet, so you can work through the program without picking each round by hand. See [Which round a race counts for](program-and-mains.md#which-round-a-race-counts-for). | On |
 | **Next race is:** | Which round that is: **the class that was racing**, **any class, in program order**, or **only "*class*"**. Grayed out while **Start the next race automatically** is unticked. Only shown in Advanced mode (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)); in Simple mode the day keeps whatever it's set to. | the class that was racing |
@@ -245,6 +247,21 @@ The poster opens in its own window, so you can leave it on a second screen by th
 - **Print** prints it at full printer resolution.
 - **Full screen** fills the screen. Press <kbd>Esc</kbd> to leave full screen, and <kbd>Esc</kbd> again to close the window.
 - **Close** closes it.
+
+### Money at the desk
+
+With an **Entry fee:** set on **Setup**, the **Drivers** card has a **Paid** column. HeatCaller only records what happens at the desk; it never takes a payment.
+
+- **Owes .00** (in amber): what the driver owes tonight, the entry fee plus **Each extra class:** for each of tonight's classes they race after the first.
+- Right-click a driver (or several) and choose **Paid Cash**, **Paid Card**, **Comp** (then **Marshal**, **Volunteer**, **Junior** or **Other**), or **Still Owing** to undo a mistake. **Undo** works too.
+- The column then reads, for example, **Cash .00**, **Card .00** or **Comp - Marshal**.
+
+At the end of the night:
+
+- The event report's **Money at the desk** section gives the cash and card taken, the comps, and who still owes and how much (see [Event reports](../race-control/results-and-championships.md)).
+- The next-step card's closing list includes "2 drivers still owe their entry (Sam, Jo)" (see [Closing the night](program-and-mains.md#closing-the-night)).
+
+Only drivers who raced are counted at the end. Payments are kept per race day.
 
 ## Scrutineering
 

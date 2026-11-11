@@ -4,6 +4,9 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Marshal swaps (11 November).** **Swap...** in the **Corner Marshals** window covers a driver's post for one round with somebody else, and the marshal call, the Next Up bar and drivers' phones follow it. See [Corner marshals](race-day/program-and-mains.md#corner-marshals).
+- **Money at the desk (11 November).** New **Entry fee:** and **Each extra class:** on **Race Day → Setup**. With a fee set, **Who's Racing** shows a **Paid** column (what each driver owes), and right-clicking marks drivers **Paid Cash**, **Paid Card**, **Comp** (marshal, volunteer, junior) or **Still Owing**, with Undo. The event report gets a **Money at the desk** section (cash, card, comps, and who still owes), and the closing list on Next Steps names drivers who still owe. HeatCaller only records it; it never takes a payment. See [Money at the desk](race-day/events-and-entries.md#money-at-the-desk). Update HeatCaller on the race PC; nothing changes on the relay.
+
 - **Fair results and quick mains (11 November).** Four additions:
     - **The first round by recent pace.** Q1 now puts similar pace together, from each driver's best lap in the class over the last 60 days: the fastest last, and drivers with no lap yet with the slowest. A class nobody has a lap in is dealt as before. **First round seeded:** on **Race Day → Setup** also offers **Alphabetical** (as before) and **Random**. See [Build the qualifying program](race-day/program-and-mains.md#build-the-qualifying-program).
     - **The protest window.** A class's results stay provisional for 5 minutes after its last qualifier (**Protest window (min):** on **Setup**; 0 for none). The next-step card says until when, and building the finals before then asks first. See [The protest window](race-day/program-and-mains.md#the-protest-window).

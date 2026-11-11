@@ -80,6 +80,7 @@ Once everything on the program has run, the card adds what's left to do:
 - results not on the club website yet (only when publishing is on)
 - night emails still to send (only when night emails are on and the mailbox is set up)
 - **back up tonight's results**, when the last backup is older than the last race
+- drivers who raced and still owe their entry, when the race day has an entry fee (see [Money at the desk](events-and-entries.md#money-at-the-desk))
 - **Close Day**, while the day is still open
 
 For example: "Before lights out: 2 rentals still out (Sam, Jo) · 14 night emails to send · back up tonight's results · Close Day." With nothing left, it says "All wrapped up - lights out."
@@ -394,6 +395,8 @@ For each round, the **Corner Marshals** window lists **Round**, **Marshaled By**
 - **A driver who's racing in the round is never assigned to marshal it** — for example a late addition or a driver in back-to-back heats. They're skipped, and the next driver from the previous round takes the post.
 - The first round has no previous heat, so its posts are left for you to assign by hand.
 - If there aren't enough free drivers, the uncovered posts are shown and the round is highlighted, for example "Q1 Heat 2 has 3 drivers free for 4 posts - 1 corner uncovered. (1 more is driving in Q2 Heat 1.)"
+
+**Swap...** covers a post with somebody else: a driver who needs to fix their car can swap their marshal duty with a friend. Select the post's row, click **Swap...**, and pick who covers it (anybody racing tonight who isn't driving in that round). The roster then reads, for example, "Sam (covering Jo)", and the announcer's marshal call, the Next Up bar and drivers' phones all follow it. Pick the original driver again to put them back, or use **Undo**. A swap is for that one round.
 
 **Copy as Text** copies the whole roster as plain text, ready to print or paste into a group chat.
 

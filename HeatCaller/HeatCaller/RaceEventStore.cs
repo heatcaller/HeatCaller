@@ -121,6 +121,16 @@ public sealed class RaceEvent
     public int ProtestMinutes { get; set; } = ProtestWindow.DefaultMinutes;
 
     /// <summary>
+    /// The entry fee for a driver's first class tonight, in the club's money
+    /// (11 Nov 2026, Phase 4 - see DeskMoney). Zero: the club doesn't track
+    /// money in HeatCaller, and nothing about it is shown.
+    /// </summary>
+    public decimal EntryFee { get; set; }
+
+    /// <summary>The fee for each class after the first - often a discount. See DeskMoney.FeeFor.</summary>
+    public decimal ExtraClassFee { get; set; }
+
+    /// <summary>
     /// The Between races preset for this day alone (GapPreset.Key), over the
     /// club's own settings - so a monthly big event can be Big event without
     /// changing the weekly club night. Blank uses the club's settings.

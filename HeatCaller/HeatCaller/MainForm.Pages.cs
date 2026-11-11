@@ -529,7 +529,7 @@ public partial class MainForm
         // Who's Racing IS the merged roster: present, tech and inspect
         // per row. The Tech Log tab keeps the scrutineer's full record
         // list; the gate itself is one sheet.
-        var checkIn = new CheckInControl(_profiles, _checkInStore, _raceClasses, _settings, _undo, _techInspections, _webServer, _raceEvents, _batteryPacks) { Dock = DockStyle.Fill };
+        var checkIn = new CheckInControl(_profiles, _checkInStore, _raceClasses, _settings, _undo, _techInspections, _webServer, _raceEvents, _batteryPacks, _payments) { Dock = DockStyle.Fill };
         _checkInControl = checkIn;
 
         // The banner this page shows when check-ins have nowhere to go.

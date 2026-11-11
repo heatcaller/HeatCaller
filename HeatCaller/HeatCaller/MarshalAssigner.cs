@@ -72,6 +72,22 @@ public static class MarshalAssigner
             // the grid for leaves that corner empty the moment it matters.
             var driving = round.AssignedTransponders.ToHashSet(StringComparer.OrdinalIgnoreCase);
             var marshals = previous.AssignedTransponders.Where(t => !driving.Contains(t)).ToList();
+
+            // Swaps (11 Nov 2026): a post whose marshal arranged cover goes to
+            // the driver covering it - never one driving in this round.
+            var covered = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            if (round.MarshalCovers is { Count: > 0 } covers)
+            {
+                for (var m = 0; m < marshals.Count; m++)
+                {
+                    if (covers.TryGetValue(marshals[m], out var cover) && !string.IsNullOrWhiteSpace(cover) && !driving.Contains(cover))
+                    {
+                        covered[cover] = marshals[m];
+                        marshals[m] = cover;
+                    }
+                }
+            }
             var alsoDriving = previous.AssignedTransponders.Count - marshals.Count;
             var posts = new List<Post>();
 
@@ -81,6 +97,11 @@ public static class MarshalAssigner
                 var name = transponder is null
                     ? null
                     : NameFor(transponder, profiles);
+
+                if (transponder is not null && covered.TryGetValue(transponder, out var coveringFor))
+                {
+                    name = $"{name} (covering {NameFor(coveringFor, profiles)})";
+                }
 
                 posts.Add(new Post(p, layout!.PostName(p), transponder, name));
             }
