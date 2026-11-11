@@ -48,10 +48,22 @@ public sealed class CommentaryNumberCheckTests
     [InlineData("a four point nine", 4.9)]
     [InlineData("point three back", 0.3)]
     [InlineData("five point four two", 5.42)]
+    [InlineData("fifty-three point one seventy-nine", 53.179)]
+    [InlineData("six point forty-two", 6.42)]
+    [InlineData("point seventeen back", 0.17)]
     [InlineData("SEVEN-TENTHS", 0.7)]
     public void Reads_the_figure(string text, double expected)
     {
         Assert.Equal(new[] { Math.Round(expected, 3) }, Values(text));
+    }
+
+    [Fact]
+    public void A_pole_time_said_with_a_pair_after_the_point_is_backed()
+    {
+        // 11 Nov 2026: this cut the pole-sitter's whole introduction.
+        Assert.Null(CommentaryNumberCheck.Unsupported(
+            "On pole position, taking the point with thirty-two laps in three minutes fifty-three point one seventy-nine, 'tis Al gorerhythm!",
+            "Qualifying, exact: Al gorerhythm took pole with thirty-two laps in three minutes fifty-three point one seven nine."));
     }
 
     [Theory]

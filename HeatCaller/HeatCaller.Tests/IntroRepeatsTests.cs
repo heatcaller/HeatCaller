@@ -173,4 +173,56 @@ public sealed class IntroRepeatsTests
         Assert.Equal("Terry Byte", DriverIntros.NameFromHistory(new[] { older, newer, asNumber }, "123"));
         Assert.Null(DriverIntros.NameFromHistory(new[] { older }, "999"));
     }
+
+    // ==================== Every driver introduced (11 Nov 2026) ====================
+
+    private static IReadOnlyList<IntroDriver> Field(params string[] names) =>
+        names.Select((n, i) => new IntroDriver("t" + i, i + 1, n, n)).ToList();
+
+    [Fact]
+    public void A_pole_sitter_whose_sentence_was_cut_is_put_back_at_the_front()
+    {
+        var notes = new List<string>();
+
+        var said = IntroRepeats.WithEveryDriver(
+            "Alongside him on the front row, Terry Byte lines up second. Rounding out the top three, Ela Vayter. "
+            + "And at the back, Annie Wayout. Let's go racing!",
+            Field("Al Gorithim", "Terry Byte", "Ela Vayter", "Annie Wayout"),
+            notes);
+
+        Assert.Equal(
+            "On pole, Al Gorithim. Alongside him on the front row, Terry Byte lines up second. Rounding out the top three, "
+            + "Ela Vayter. And at the back, Annie Wayout. Let's go racing!",
+            said);
+        Assert.Single(notes);
+    }
+
+    [Fact]
+    public void A_driver_missing_from_the_middle_goes_in_grid_order_and_the_last_before_the_sign_off()
+    {
+        var said = IntroRepeats.WithEveryDriver(
+            "Sam Smith on pole. Bill Jones alongside. Pat Kim fourth. Let's go racing!",
+            Field("Sam Smith", "Bill Jones", "Frank Lee", "Pat Kim", "Jo Ray"));
+
+        Assert.Equal(
+            "Sam Smith on pole. Bill Jones alongside. Starting third, Frank Lee. Pat Kim fourth. "
+            + "And starting fifth, Jo Ray. Let's go racing!",
+            said);
+    }
+
+    [Fact]
+    public void Introductions_naming_everybody_are_left_alone()
+    {
+        const string Line = "Sam on pole, Bill alongside, and Frank Lee third.";
+
+        Assert.Equal(Line, IntroRepeats.WithEveryDriver(Line, Field("Sam Smith", "Bill Jones", "Frank Lee")));
+    }
+
+    [Fact]
+    public void A_race_with_no_grid_gets_no_position()
+    {
+        var field = new[] { new IntroDriver("a", 0, "Sam Smith", "Sam Smith"), new IntroDriver("b", 0, "Bill Jones", "Bill Jones") };
+
+        Assert.Equal("Sam Smith is here. Also in this one, Bill Jones.", IntroRepeats.WithEveryDriver("Sam Smith is here.", field));
+    }
 }
