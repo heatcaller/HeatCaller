@@ -175,6 +175,22 @@ public sealed class RaceNumbersTests
         Assert.Equal(shown, RaceNumbers.TenthsShown(tenths));
     }
 
+    [Theory]
+    [InlineData(5125, "five point one three seconds", "5.13s")]
+    [InlineData(5135, "five point one four seconds", "5.14s")]
+    [InlineData(5145, "five point one five seconds", "5.15s")]
+    [InlineData(5124, "five point one two seconds", "5.12s")]
+    [InlineData(2060, "two point zero six seconds", "2.06s")]
+    [InlineData(9995, "ten point zero zero seconds", "10.00s")]
+    public void A_split_time_is_said_to_the_hundredth_it_is_shown_to(long ms, string spoken, string shown)
+    {
+        // 10 Nov 2026, bug hunt 16: a 5.125 split was said "one two" (half
+        // to even) and shown "5.13s"; a 5.135 was said "one four" and shown
+        // "5.13s" (the double is 5.1349...). Both now round half up.
+        Assert.Equal(spoken, RaceNumbers.Plainly(ms));
+        Assert.Equal(shown, RaceNumbers.HundredthsShown(ms));
+    }
+
     [Fact]
     public void No_lap_time_contains_a_digit_character()
     {

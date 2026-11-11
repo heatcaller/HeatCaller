@@ -960,7 +960,7 @@ public sealed class HeatBalanceForm : Form
             // driver" follows exactly the same ones - see that method.
             var heats = _columns
                 .Where(c => c.Round is not null)
-                .Select(c => new HeatState(c.Round!, c.Locked, c.Current))
+                .Select(c => new HeatState(c.Round!, c.Locked, c.Current, OnTrack: IsOnTrack(c.Round!)))
                 .ToList();
 
             if (DescribeMoveBlocker(heats, source.Round, targetRound, drag.Transponder, _roundsAreOneRaceDay, NameOf) is { } refusal)
@@ -1004,11 +1004,35 @@ public sealed class HeatBalanceForm : Form
         || round.CreatedAtUtc >= DateTime.UtcNow - NoRaceDayWindow;
 
     /// <summary>
-    /// One heat as the move rules see it: the round, whether it is locked
-    /// (already run), and who is in it at this moment - which on the form
-    /// is the edited copy, not the stored roster.
+    /// Whether a heat counts for "one heat per qualifying round" and for who
+    /// is racing: an open heat always does, a locked one only when it is on
+    /// track or is a run heat that counts (see RunHeatCounts).
+    ///
+    /// WHY (10 Nov 2026, bug hunt 16): the heat out on track is locked like
+    /// a recorded one, so it used to go through RunHeatCounts too. With no
+    /// race day open that skipped it when it was made more than 18 hours
+    /// ago - its drivers showed as not in a heat, and could be dropped into
+    /// another heat of the same qualifying round and run it twice. A heat on
+    /// track is tonight's whenever it was made, so it always counts.
     /// </summary>
-    public sealed record HeatState(RoundDefinition Round, bool Locked, IReadOnlyCollection<string> Drivers);
+    internal static bool HeatCounts(RoundDefinition round, bool locked, bool onTrack, bool roundsAreOneRaceDay) =>
+        !locked || onTrack || RunHeatCounts(round, roundsAreOneRaceDay);
+
+    private bool IsOnTrack(RoundDefinition round) =>
+        string.Equals(round.Id, _onTrackRoundId, StringComparison.Ordinal);
+
+    /// <summary>
+    /// One heat as the move rules see it: the round, whether it is locked
+    /// (already run, or out on track), and who is in it at this moment -
+    /// which on the form is the edited copy, not the stored roster.
+    /// OnTrack marks the heat out on track, which always counts (see
+    /// HeatCounts).
+    /// </summary>
+    public sealed record HeatState(
+        RoundDefinition Round,
+        bool Locked,
+        IReadOnlyCollection<string> Drivers,
+        bool OnTrack = false);
 
     /// <summary>
     /// Why a driver cannot be put into <paramref name="target"/>, or null
@@ -1059,7 +1083,7 @@ public sealed class HeatBalanceForm : Form
         }
 
         var clash = heats.FirstOrDefault(h =>
-            (!h.Locked || RunHeatCounts(h.Round, roundsAreOneRaceDay))
+            HeatCounts(h.Round, h.Locked, h.OnTrack, roundsAreOneRaceDay)
             && h.Round.Id != source?.Id
             && h.Round.Id != target.Id
             && RoundKeyFor(h.Round, onForm) == qualifyingRound
@@ -1073,6 +1097,12 @@ public sealed class HeatBalanceForm : Form
         // "the same round as", not "the same qualifying round as": on a
         // club night these heats are called races, and the sentence has
         // both labels in it already for anyone who wants to check.
+        if (clash.OnTrack)
+        {
+            return $"{nameOf(transponder)} is on track in {clash.Round.RoundLabel}, which is in the same round "
+                   + $"as {target.RoundLabel}.";
+        }
+
         return clash.Locked
             ? $"{nameOf(transponder)} has already raced {clash.Round.RoundLabel}, which is in the same round "
               + $"as {target.RoundLabel}."
@@ -1292,9 +1322,10 @@ public sealed class HeatBalanceForm : Form
         // in no heat tonight never showed up here, and could not be dragged
         // out of the locked old heats either. Now a run heat counts only
         // when it is tonight's, the same rule DescribeMoveBlocker uses for
-        // drops (see RunHeatCounts).
+        // drops (see RunHeatCounts). The heat on track always counts (10 Nov
+        // 2026, bug hunt 16 - see HeatCounts).
         bool Counts(Column c) =>
-            !c.IsSpares && (!c.Locked || RunHeatCounts(c.Round!, _roundsAreOneRaceDay));
+            !c.IsSpares && HeatCounts(c.Round!, c.Locked, IsOnTrack(c.Round!), _roundsAreOneRaceDay);
 
         foreach (var column in _columns.Where(Counts))
         {

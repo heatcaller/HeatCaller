@@ -22,17 +22,19 @@ public sealed record IntroDriver(
 /// <summary>One car in a main's qualifying recap, in qualifying order.</summary>
 /// <param name="SpokenName">The name the voice is given.</param>
 /// <param name="ScreenName">The name a screen shows.</param>
-/// <param name="Laps">Best heat's laps (a most-laps qualifier).</param>
-/// <param name="ElapsedMs">Best heat's time for those laps (a most-laps qualifier).</param>
+/// <param name="Laps">Best heat's laps (a most-laps qualifier) - the total over the counted heats when <paramref name="HeatsCounted"/> is more than one.</param>
+/// <param name="ElapsedMs">Best heat's time for those laps (a most-laps qualifier) - likewise a total over the counted heats.</param>
 /// <param name="ConsecutiveMs">Best run of consecutive laps, in total (a consecutive-laps qualifier). 0 when they never put one together.</param>
 /// <param name="FastLapMs">Best single lap in qualifying.</param>
+/// <param name="HeatsCounted">How many heats Laps and ElapsedMs add up (a class that counts its best two of three, say).</param>
 public sealed record RecapCar(
     string SpokenName,
     string ScreenName,
     int Laps,
     long ElapsedMs,
     long ConsecutiveMs,
-    long FastLapMs);
+    long FastLapMs,
+    int HeatsCounted = 1);
 
 /// <summary>
 /// The facts behind the broadcast's introductions - each driver on the grid,
@@ -396,6 +398,19 @@ internal static class DriverIntros
         // the facts used to hand the model the laps alone, so it read them
         // out as "a qualifying time of thirty-four laps". The time goes with
         // the laps now, whenever the heat has one.
+        //
+        // BEST N HEATS (10 Nov 2026, bug hunt 16). A class that counts its
+        // best two heats hands us their laps and times ADDED UP, and that
+        // was read out as one run - "forty-eight laps in ten minutes and
+        // four seconds" in a five-minute format. Say it is a total, the way
+        // the qualifying standings do, and leave the summed time out: no
+        // heat was ever run in it.
+        if (car.HeatsCounted > 1)
+        {
+            return ($" with {RaceNumbers.Words(car.Laps)} {Plural.Word(car.Laps, "lap")} across their best {RaceNumbers.Words(car.HeatsCounted)} heats",
+                $" with {Plural.Of(car.Laps, "lap")} (best {car.HeatsCounted} heats)");
+        }
+
         var laps = $" with {RaceNumbers.Words(car.Laps)} {Plural.Word(car.Laps, "lap")}";
         var lapsScreen = $" with {Plural.Of(car.Laps, "lap")}";
 

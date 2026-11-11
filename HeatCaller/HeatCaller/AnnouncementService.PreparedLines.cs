@@ -296,12 +296,18 @@ public sealed partial class AnnouncementService
                 continue;
             }
 
-            var renderProfile = DeliveryProfileFor(profile, config);
+            // WHY (10 Nov 2026, bug hunt 16): on the model the race will say
+            // it on. A race call (Last lap!, Fastest lap!) renders live on
+            // the race-calls model when one is set (ForRaceCall), and the
+            // saved-voice key has the model in it - so a line prepared on the
+            // main model was paid for, never found, and paid for again live.
+            // The words are tidied for that model too, as the live path does.
+            var renderProfile = DeliveryProfileFor(ForRaceCall(profile, type), config);
             var label = VoiceProfile.Describe(type).Label;
 
             foreach (var template in config.EffectiveTemplates.Where(t => !t.Contains('{')))
             {
-                Add(label, renderProfile, PreparedFlagText(profile, template));
+                Add(label, renderProfile, PreparedFlagText(renderProfile, template));
             }
         }
 

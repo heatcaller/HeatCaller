@@ -66,6 +66,12 @@ public sealed class SoundscapeEditorForm : Form
     private readonly Func<Theme, CancellationToken, Task> _preview;
     private readonly Action _stopVoice;
 
+    // The Mixer's Sound effects level, read as each sound is played (10 Nov
+    // 2026, bug hunt 16). The play buttons played at a fixed 90% while Preview
+    // and every other test used the fader, so with the fader turned down for a
+    // loud PA a sound here came out several times louder than on race night.
+    private readonly Func<float> _effectsVolume;
+
     private readonly TextBox _txtName = new();
     private readonly TextBox _txtDescription = new();
     private readonly Dictionary<SoundEffectKind, ComboBox> _sounds = new();
@@ -167,6 +173,7 @@ public sealed class SoundscapeEditorForm : Form
         VoiceProfile currentVoice,
         Func<Theme, CancellationToken, Task> preview,
         Action stopVoice,
+        Func<float> effectsVolume,
         IReadOnlyList<string>? musicLibrary = null)
     {
         _musicLibrary = musicLibrary ?? Array.Empty<string>();
@@ -174,6 +181,7 @@ public sealed class SoundscapeEditorForm : Form
         _store = store;
         _preview = preview;
         _stopVoice = stopVoice;
+        _effectsVolume = effectsVolume;
         Result = working;
 
         Text = isNew ? "New soundscape" : $"Edit soundscape - {working.Name}";
@@ -188,6 +196,9 @@ public sealed class SoundscapeEditorForm : Form
 
         DialogFit.Keep(this, page, width: DialogWidth, height: DialogHeight);
     }
+
+    /// <summary>The level a sound row's play button plays at: the Mixer's Sound effects fader, as Preview uses.</summary>
+    internal float SoundTestVolume => _effectsVolume();
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
@@ -260,7 +271,7 @@ public sealed class SoundscapeEditorForm : Form
             {
                 var current = _working.SoundEffects.Effects.GetValueOrDefault(testKind.ToString());
                 var probe = new SoundEffectConfig { BuiltInSound = SoundKeyOf(combo), CustomFilePath = current?.CustomFilePath ?? string.Empty };
-                await SoundPacks.PlayAsync(probe, testKind, 0.9f, 6, 3, leadIn);
+                await SoundPacks.PlayAsync(probe, testKind, SoundTestVolume, 6, 3, leadIn);
             };
 
             var parts = new List<Control> { combo, btnTest };

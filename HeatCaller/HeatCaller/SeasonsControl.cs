@@ -526,7 +526,13 @@ public sealed class SeasonsControl : UserControl
     }
 
     /// <summary>Called when this page becomes visible - new sessions become available to include while it's inactive.</summary>
-    public void RefreshAll() => RefreshSeasonList();
+    /// <remarks>
+    /// Stays on the championship being looked at (10 Nov 2026, bug hunt 16).
+    /// This runs every time the Standings tab is shown, and a bare refresh
+    /// jumped to the first championship in the list - so after a look at
+    /// Race History, a tick or points edit landed on the wrong one.
+    /// </remarks>
+    public void RefreshAll() => RefreshSeasonList(SelectedSeason()?.Id);
 
     private void RefreshSeasonList(string? selectId = null)
     {

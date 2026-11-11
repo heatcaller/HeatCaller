@@ -979,6 +979,13 @@ public sealed class RecordingControl : UserControl
             return;
         }
 
+        // Refilled first, as the season's handler does: a driver renamed on
+        // the Drivers page since the picker last opened would otherwise be
+        // spoken and saved under the old name. The pick is found again by
+        // transponder, so it stays on the same driver.
+        // (10 Nov 2026, bug hunt 16)
+        FillDriversTonight();
+
         if (_cmbDriverCut.SelectedIndex < 0 || _cmbDriverCut.SelectedIndex >= _driversTonight.Count)
         {
             _lblDriverCut.Text = _driversTonight.Count == 0

@@ -370,7 +370,9 @@ public sealed partial class RelayPublisher
             return;
         }
 
-        if (TellTheRelayAsksAreOpen(target, Uri.EscapeDataString(target.Club), wanted: false, token))
+        // Only while it is still the club it was sent to (10 Nov 2026, bug
+        // hunt 16) - see SendNotesClose.
+        if (TellTheRelayAsksAreOpen(target, Uri.EscapeDataString(target.Club), wanted: false, token) && target == _target)
         {
             _asksClosePending = false;
         }

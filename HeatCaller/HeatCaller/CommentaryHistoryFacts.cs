@@ -248,6 +248,14 @@ public static class CommentaryHistoryFacts
     private const int Podium = 3;
 
     /// <summary>
+    /// The longest a rivalry's last-meeting moment may run (10 Nov 2026,
+    /// bug hunt 16). Room for DriverCut.Describe's longest sentence - the
+    /// lap record one - with a 40-character name and a 40-character label,
+    /// and some to spare; only a guard, never meant to cut a real one.
+    /// </summary>
+    private const int MaxMomentChars = 200;
+
+    /// <summary>
     /// The class as an adjective - "Box Stock " - or nothing.
     ///
     /// Every line here is built from numbers the reader scoped to one
@@ -420,8 +428,14 @@ public static class CommentaryHistoryFacts
     /// </summary>
     private static string LastMeeting(HeadToHead record)
     {
+        // AT ITS OWN LENGTH, not CleanLong's sixty characters (10 Nov 2026,
+        // bug hunt 16). The moment is a whole sentence DriverCut.Describe
+        // already built from a 40-character name and a 40-character label,
+        // and sixty cut it mid-number: "won in Round 3 Box Stock A-Main by
+        // 0.0" - a winning margin of nothing, said as a fact. Field still
+        // takes out the brackets; it just no longer chops the sentence.
         var moment = record.LastMetMoment is { Length: > 0 } what
-            ? CommentaryFacts.CleanLong(what)
+            ? CommentaryService.Field(what, MaxMomentChars)
             : string.Empty;
 
         if (record.LastMetFrontRow && moment.Length > 0)

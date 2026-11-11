@@ -646,6 +646,23 @@ public sealed class BroadcastFeaturesTests
     }
 
     [Fact]
+    public void A_best_two_heats_total_is_said_as_a_total_not_one_run()
+    {
+        // Bug hunt 16 (10 Nov 2026): 24 laps in each of two counted heats
+        // was read out as "forty-eight laps in ten minutes and four seconds".
+        var order = new[]
+        {
+            new RecapCar("Sam", "Sam", 48, 604_000, 0, 12_000, HeatsCounted: 2),
+            new RecapCar("Bill", "Bill", 46, 600_000, 0, 12_100, HeatsCounted: 2),
+        };
+
+        var (spoken, screen) = DriverIntros.Recap(order, QualifyingMethod.TotalLaps, 3);
+
+        Assert.Equal("From qualifying: Sam takes pole with forty-eight laps across their best two heats. Bill lines up second, two laps down.", spoken);
+        Assert.Equal("From qualifying: Sam takes pole with 48 laps (best 2 heats). Bill lines up second, 2 laps down.", screen);
+    }
+
+    [Fact]
     public void A_consecutive_laps_recap_quotes_the_average_of_the_best_run()
     {
         var order = new[] { new RecapCar("Sam", "Sam", 20, 250_000, 30_000, 9_800) };

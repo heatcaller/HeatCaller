@@ -393,6 +393,13 @@ public partial class MainForm : Form
     private readonly TimeLeftCalls _timeLeftCalls = new();
 
     /// <summary>
+    /// The race clock's time left, for "one minute to go" - null with no time
+    /// limit. See the FinalMinute handler (10 Nov 2026, bug hunt 16).
+    /// </summary>
+    private TimeSpan? FinalMinuteTimeLeft() =>
+        _race.TimeLimit is { } limit ? limit - _race.ElapsedRaceTime : null;
+
+    /// <summary>
     /// Whether the race on track is one the clock ends, for the time-left
     /// calls (1 Nov 2026) - see AnnouncerControl.ClockEndsTheRace. Before
     /// the announcer's page is built there is nothing to read the leader
@@ -1592,10 +1599,18 @@ public partial class MainForm : Form
         // Only when the clock is what ends the race (1 Nov 2026): in a race
         // with a lap limit too, "one minute to go" is wrong when the laps
         // will run out first - see ClockEndsTheRace.
+        //
+        // WHY (10 Nov 2026, bug hunt 16): with the time actually left, read
+        // when the call is heard. After a freeze across the minute (threaded
+        // or inline), or a race restored with the minute already gone, the
+        // call used to get its fifteen seconds from when it was heard, so
+        // "one minute to go" could be said with half a minute left. Now the
+        // fifteen seconds run from the minute itself, and past them it is
+        // not said - a late time call is worse than none.
         _race.FinalMinute += () =>
         {
-            if (InvokeRequired) { TryPost(() => { if (ClockEndsTheRace()) _announcer.NotifyFinalMinute(); }); return; }
-            if (ClockEndsTheRace()) _announcer.NotifyFinalMinute();
+            if (InvokeRequired) { TryPost(() => { if (ClockEndsTheRace()) _announcer.NotifyFinalMinute(FinalMinuteTimeLeft()); }); return; }
+            if (ClockEndsTheRace()) _announcer.NotifyFinalMinute(FinalMinuteTimeLeft());
         };
 
         // Lets the announcer hold routine lines and lap chimes while a
@@ -2871,10 +2886,14 @@ public partial class MainForm : Form
         // A race-days file that could not be read counts as a day being
         // open, the same as the held-update check at start-up does: it
         // cannot be told that one is not.
+        // The journal is handed over as a question, not an answer (10 Nov
+        // 2026, bug hunt 16): read only when no day is open and Race Control
+        // is idle, so an update offer never reads the journal of the race
+        // being run - that read could make the lap's own journal write fail.
         AppUpdates.NothingInProgressNow = () => TryAsk(() => AppUpdates.NothingInProgress(
             raceDayOpen: _raceEvents.LoadedUnreadable || _raceEvents.Active is { IsLegacy: false, IsOpen: true },
             raceState: _race.State,
-            unfinishedRaceInJournal: RaceJournal.Unfinished() is not null), whenGone: false);
+            unfinishedRaceInJournal: () => RaceJournal.Unfinished() is not null), whenGone: false);
 
         AppUpdates.Ask = (newVersion, thisVersion) => TryAsk(() => (AppUpdates.Answer)AppDialog.Choose(
             this,

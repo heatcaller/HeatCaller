@@ -51,4 +51,48 @@ public sealed class BugHunt15_DriversNightPickerTests : IDisposable
         // Still on the driver who was picked, found again by transponder.
         Assert.Equal(1, seen.picked);
     }
+
+    [Fact]
+    public void Pressing_play_without_opening_the_picker_still_sends_the_new_name()
+    {
+        // (10 Nov 2026, bug hunt 16) The button read the cached list as it
+        // was when the picker last opened, so a rename made since was lost.
+        var sent = StaThread.Run(() =>
+        {
+            using var page = new RecordingControl(new AppSettings());
+
+            var tonight = new List<(string Transponder, string Name)>
+            {
+                ("1111", "Amy Lee"),
+                ("1234", "Jon Smiht"),
+            };
+
+            page.DriversTonight = () => tonight.ToList();
+
+            (string Transponder, string Name)? got = null;
+
+            page.PlayADriversNight = (transponder, name) =>
+            {
+                got = (transponder, name);
+
+                return Task.FromResult<string?>(null);
+            };
+
+            var fill = typeof(RecordingControl).GetMethod("FillDriversTonight", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var play = typeof(RecordingControl).GetMethod("PlayADriversNightAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var combo = (ComboBox)typeof(RecordingControl).GetField("_cmbDriverCut", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(page)!;
+
+            fill.Invoke(page, null);
+            combo.SelectedIndex = 1;
+
+            // Corrected on the Drivers page; the picker is not opened again.
+            tonight[1] = ("1234", "Jon Smith");
+
+            ((Task)play.Invoke(page, null)!).GetAwaiter().GetResult();
+
+            return got;
+        }, TimeSpan.FromMinutes(2), () => "playing a driver's night");
+
+        Assert.Equal(("1234", "Jon Smith"), sent);
+    }
 }

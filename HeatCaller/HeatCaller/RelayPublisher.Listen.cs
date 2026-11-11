@@ -522,7 +522,9 @@ public sealed partial class RelayPublisher
 
         var club = Uri.EscapeDataString(target.Club);
 
-        if (TellTheRelayListeningIsOpen(target, club, wanted: false, token))
+        // Only while it is still the club it was sent to (10 Nov 2026, bug
+        // hunt 16) - see SendNotesClose.
+        if (TellTheRelayListeningIsOpen(target, club, wanted: false, token) && target == _target)
         {
             _listenClosePending = false;
         }

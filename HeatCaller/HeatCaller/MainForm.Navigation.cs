@@ -613,11 +613,7 @@ public partial class MainForm
             && _navItems.Any(i => i.Name == _shownPage)
             && (_raceMode || (query.Length == 0 && _shownPage != previouslySelected));
 
-        var toSelect = keepShown && names.Contains(_shownPage!)
-            ? _shownPage!
-            : previouslySelected is not null && names.Contains(previouslySelected)
-                ? previouslySelected
-                : names.Contains("Race Control") ? "Race Control" : names.FirstOrDefault() ?? "Race Control";
+        var toSelect = NavRowToSelect(names, keepShown ? _shownPage : null, previouslySelected, SimpleMode.ShowAll);
 
         // Moving the highlight raises SelectionChanged, which would show the
         // highlighted page by itself - held off here, so the page shown is
@@ -632,9 +628,57 @@ public partial class MainForm
             _rebuildingNav = false;
         }
 
-        var toShow = keepShown ? _shownPage! : toSelect;
+        // Nothing highlighted (10 Nov 2026, bug hunt 16): the search found
+        // only rows under "In Advanced mode", so the page on screen stays up.
+        var toShow = keepShown ? _shownPage! : toSelect ?? _shownPage ?? "Race Control";
         ShowPage(toShow);
         SelectSearchedTab(toShow);
+    }
+
+    /// <summary>
+    /// A row under "In Advanced mode" - a page Simple mode hides, or the one
+    /// Advanced mode settings row. Picking one goes through PickedAdvancedRow
+    /// and its warning. Never one in Advanced.
+    /// </summary>
+    internal static bool IsAdvancedRow(string name, bool showAll) =>
+        !showAll && (name == SimpleMode.SearchRow || SimpleMode.HiddenPages.Contains(name));
+
+    /// <summary>
+    /// The row RebuildNav highlights: the page kept on screen, else the one
+    /// picked before, else Race Control, else the first row - or null, for
+    /// nothing highlighted.
+    ///
+    /// Never a row under "In Advanced mode" (10 Nov 2026, bug hunt 16). A
+    /// search for "venue" in Simple mode found only Venues and the Advanced
+    /// mode settings row, and the first-row fallback picked Venues - with the
+    /// highlight's SelectionChanged held off, so the hidden page came up with
+    /// no Advanced warning. A search that found only the Advanced mode
+    /// settings row highlighted it the same way, and a highlighted row raises
+    /// nothing when clicked, so the one row in the sidebar was dead. Left
+    /// unhighlighted, the first click on either goes through the warning.
+    /// </summary>
+    internal static string? NavRowToSelect(IReadOnlyList<string> names, string? keptShown, string? previouslySelected, bool showAll)
+    {
+        bool Usable(string? n) => n is not null && names.Contains(n) && !IsAdvancedRow(n, showAll);
+
+        if (Usable(keptShown))
+        {
+            return keptShown;
+        }
+
+        if (Usable(previouslySelected))
+        {
+            return previouslySelected;
+        }
+
+        if (Usable("Race Control"))
+        {
+            return "Race Control";
+        }
+
+        // An empty list (none in practice - a search never filters down to
+        // nothing) keeps the old answer.
+        return names.Count == 0 ? "Race Control" : names.FirstOrDefault(n => !IsAdvancedRow(n, showAll));
     }
 
     /// <summary>True while RebuildNav moves the highlight - see there.</summary>

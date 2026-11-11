@@ -445,9 +445,16 @@ public partial class MainForm
             //
             // In a finally, as in ShowPage: a page left held is never laid
             // out again, and a panel left with its painting off never draws.
+            //
+            // Children first, as ShowPage lets a page go (10 Nov 2026, bug
+            // hunt 16). The new size has asked every container in the page to
+            // be laid out again, so let go parents first, each line that sizes
+            // itself laid its column out again, measuring every line in it -
+            // the stall the 14 Oct change took out of opening a page, left in
+            // every Ctrl+ and Ctrl- on the Voice page and the Commentary tab.
             if (holding)
             {
-                LayoutFreeze.Thaw(shown!);
+                LayoutFreeze.Thaw(shown!, childrenFirst: true);
             }
 
             NoRedraw.End(pnlContent);

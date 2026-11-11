@@ -96,8 +96,17 @@ internal static class RaceNumbers
 
     // "three-point-three-zero-four", "eleven point two six four seconds":
     // three or more digits after the point. One or two read well as they are.
+    //
+    // WHY (10 Nov 2026, bug hunt 16): not after "minutes and" or "laps in".
+    // That is a heat's run time in HeatCaller's own words - DriverIntros'
+    // "thirty-four laps in five minutes and two point three one five
+    // seconds" - and the intro is told to copy it exactly. Put back into
+    // "2.315s" it was then read as a lap, "five minutes and two three
+    // fifteen", with the seconds gone from the minutes. The whole number
+    // starts a word, too, not after a hyphen: otherwise "forty-eight" was
+    // skipped and its "eight" taken alone, giving "forty-8.512s".
     private static readonly System.Text.RegularExpressions.Regex SpelledPoint = new(
-        $@"\b(?<whole>{WholeWord})[- ]point(?<digits>(?:[- ](?:{DigitWord})){{3,}})\b(?:\s+seconds?\b)?",
+        $@"(?<!\bminutes?\s+and\s+)(?<!\blaps?\s+in\s+)(?<![\w-])(?<whole>{WholeWord})[- ]point(?<digits>(?:[- ](?:{DigitWord})){{3,}})\b(?:\s+seconds?\b)?",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant
         | System.Text.RegularExpressions.RegexOptions.Compiled);
 
@@ -406,7 +415,11 @@ internal static class RaceNumbers
             return "minus " + Plainly(-ms);
         }
 
-        var centiseconds = (long)Math.Round(ms / 10.0);
+        // WHY (10 Nov 2026, bug hunt 16): Math.Round here rounded a half to
+        // the even hundredth, so a 5.125 split was said "five point one two"
+        // while the screen showed "5.13s". Half up, in whole numbers, the
+        // same as HundredthsShown, so the two never disagree.
+        var centiseconds = HundredthsOf(ms);
         var whole = centiseconds / 100;
         var hundredths = centiseconds % 100;
 
@@ -570,6 +583,25 @@ internal static class RaceNumbers
     /// a 1.150 to "1.1" (the double is 1.1499...) and a 1.250 to "1.3".
     /// </summary>
     internal static long TenthsOf(long ms) => (Math.Abs(ms) + 50) / 100;
+
+    /// <summary>
+    /// A time in whole hundredths, half up, from the milliseconds - the one
+    /// rounding <see cref="Plainly"/> and <see cref="HundredthsShown"/> both
+    /// use (10 Nov 2026, bug hunt 16). Integer arithmetic for the reason on
+    /// TenthsOf: "0.00" on ms / 1000.0 shows a 5.135 as "5.13".
+    /// </summary>
+    internal static long HundredthsOf(long ms) => (Math.Abs(ms) + 5) / 10;
+
+    /// <summary>
+    /// A split or sector time on a screen, to the hundredth - "5.13s" -
+    /// agreeing with what <see cref="Plainly"/> says (10 Nov 2026, bug hunt 16).
+    /// </summary>
+    internal static string HundredthsShown(long ms)
+    {
+        var c = HundredthsOf(ms);
+        var sign = ms < 0 && c > 0 ? "-" : "";
+        return $"{sign}{c / 100}.{c % 100:00}s";
+    }
 
     /// <summary>A gap of <paramref name="tenths"/> tenths on a screen: "1.3s".</summary>
     internal static string TenthsShown(long tenths) =>

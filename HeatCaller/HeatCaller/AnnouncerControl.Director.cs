@@ -761,8 +761,10 @@ public partial class AnnouncerControl
     ///
     /// THE DRIVER'S NIGHT'S SHAPE, GUARDS AND ALL, which is what the plan
     /// asked for: the same checks in the same order, the floor claimed
-    /// before the model is asked, the recorder started after the writing,
-    /// cut off by the next race or a Reset. What differs is only what it is
+    /// before the model is asked, the recorder started after the writing
+    /// (and, since 10 Nov 2026, after the first piece is voiced, as the
+    /// recap does - there is no clip to fill that wait), cut off by the
+    /// next race or a Reset. What differs is only what it is
     /// about - a whole championship rather than tonight - so there is no
     /// cold-open clip (a season has no one race to open on) and nothing
     /// here needs tonight to have had a race.
@@ -870,9 +872,15 @@ public partial class AnnouncerControl
 
             var voiced = VoiceTheReadAhead(chunks, readToken);
 
-            recording = BookendRecording.StartForASeason(found.Season.Name, line => StatusMessage?.Invoke(line));
-
             await FirstPieceVoicedAsync(voiced, readToken).ConfigureAwait(true);
+
+            // STARTED ONCE THE FIRST PIECE IS IN HAND, tonight's recap's
+            // order rather than the driver's night's (10 Nov 2026, bug hunt
+            // 15). The driver's night can start its recorder early because
+            // its race clip fills the wait; the season has no clip, so a
+            // recorder started before this wait put up to 15 seconds of
+            // silence at the top of the file played at the presentation.
+            recording = BookendRecording.StartForASeason(found.Season.Name, line => StatusMessage?.Invoke(line));
 
             var band = SeasonPiece.OnTheBand(found.Season.Name);
 

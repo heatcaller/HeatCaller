@@ -142,7 +142,24 @@ public static class RcpStretch
             foreach (var tile in tiles)
             {
                 // Not its name: "Pit lane" once is a pit lane, not three.
-                design.Tiles.Add(new RcpTile { Col = inside + step, Row = tile.Row, Kind = tile.Kind, Turns = tile.Turns, Lane = tile.Lane });
+                //
+                // But its piece, yes: a blank or arched rail tile repeated
+                // was coming back plain, so the blanks took rails and the
+                // arched rail was bolted on as a straight one. Adopt only
+                // works out rails, turns and inner corners, so nothing put
+                // them back. A finish tile repeats as an ordinary rail - a
+                // plan has one finish line (10 Nov 2026, bug hunt 16).
+                design.Tiles.Add(new RcpTile
+                {
+                    Col = inside + step,
+                    Row = tile.Row,
+                    Kind = tile.Kind,
+                    Turns = tile.Turns,
+                    Lane = tile.Lane,
+                    Piece = tile.Piece == RcpPiece.Finish ? RcpPiece.Rail : tile.Piece,
+                    Facing = tile.Facing,
+                    Corner = tile.Corner,
+                });
             }
 
             foreach (var rail in rails)

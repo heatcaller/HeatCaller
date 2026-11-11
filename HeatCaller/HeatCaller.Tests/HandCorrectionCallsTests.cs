@@ -284,6 +284,35 @@ public sealed class HandCorrectionCallsTests : IDisposable
         Assert.Equal(new[] { "And with that ruling, Sam takes the lead!" }, shown.ToList());
     }
 
+    [Fact]
+    public void A_ruling_made_seconds_after_the_chasers_crossing_is_still_said()
+    {
+        // 10 Nov 2026, bug hunt 16: the ruling's pass call was given a
+        // deadline 6 s from Sam's last crossing. A penalty 8 s after it went
+        // in already 2 s late and was dropped unheard, right after the
+        // battle line was cut off.
+        var (announcer, shown, log) = Announcer();
+        var samChasingBill = new BattlePair(AheadId: "102", BehindId: "101", Position: 1);
+
+        announcer.OnStandingUpdated(Car("102", 4, 40_000).Announced);
+
+        // Sam crossed 8 s ago.
+        announcer.LapRaisedAtMs = TimingClock.NowMs - 8_000;
+        announcer.OnStandingUpdated(Car("101", 4, 40_400).Announced);
+        announcer.LapRaisedAtMs = null;
+
+        announcer.PutBattleLineOnAir(samChasingBill);
+
+        // Bill penalised behind Sam now.
+        announcer.OnStandingUpdated(Car("102", 4, 50_000, penaltyMs: 10_000, adjusted: true).Announced);
+        UntilShown(shown, "with that ruling");
+        LetTheBatchesSettle();
+        announcer.Muted = true;
+
+        Assert.Equal(new[] { "And with that ruling, Sam takes the lead!" }, shown.ToList());
+        Assert.DoesNotContain(log, line => line.Contains("Dropped LeaderChange", StringComparison.Ordinal));
+    }
+
     [Theory]
     // Words began 200 ms ago: wait until 1.8 s of them have been heard.
     [InlineData(10_000, 10_200, 1_600)]

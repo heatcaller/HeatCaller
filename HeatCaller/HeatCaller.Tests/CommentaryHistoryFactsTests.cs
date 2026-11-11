@@ -159,6 +159,26 @@ public sealed class CommentaryHistoryFactsTests
     }
 
     [Fact]
+    public void A_long_last_meeting_moment_is_said_whole_not_cut_at_sixty()
+    {
+        // 10 Nov 2026, bug hunt 16: CleanLong's sixty characters cut this
+        // to "... A-Main by 0.0" - a winning margin of nothing.
+        const string moment = "Christopher Wellington won in Round 3 Box Stock A-Main by 0.045s.";
+
+        var front = CommentaryHistoryFacts.Rivalry(
+            new HeadToHead("sam", "bill", 7, 1, "three weeks ago", moment, LastMetFrontRow: true),
+            id => id == "sam" ? "Sam" : "Bill",
+            "race-1");
+        var met = CommentaryHistoryFacts.Rivalry(
+            new HeadToHead("sam", "bill", 7, 1, "three weeks ago", moment),
+            id => id == "sam" ? "Sam" : "Bill",
+            "race-1");
+
+        Assert.EndsWith($"shared a front row, {moment}", front!.Text);
+        Assert.EndsWith($"They last met three weeks ago. {moment}", met!.Text);
+    }
+
+    [Fact]
     public void So_is_a_dead_level_one()
     {
         var block = CommentaryHistoryFacts.Rivalry(

@@ -52,6 +52,41 @@ public sealed class RcpStretchTests
         Assert.Empty(RcpPlan.OpenEnds(design));
     }
 
+    /// <summary>
+    /// A repeated column kept only each tile's kind and lane, so a blank
+    /// tile came back plain (and took a rail) and an arched rail came back
+    /// as a straight one (10 Nov 2026, bug hunt 16).
+    /// </summary>
+    [Fact]
+    public void Longer_repeats_each_tiles_piece_with_it()
+    {
+        var design = new RcpTrackDesign { TileSizeMm = 500 };
+
+        for (var col = 0; col < 3; col++)
+        {
+            design.Tiles.Add(new RcpTile { Col = col, Row = 0, Lane = 1, Piece = RcpPiece.Arched, Facing = RcpEdge.North });
+            design.Tiles.Add(new RcpTile { Col = col, Row = 1, Lane = 1, Piece = RcpPiece.Blank });
+            design.Tiles.Add(new RcpTile { Col = col, Row = 2, Lane = 1, Piece = col == 1 ? RcpPiece.Finish : RcpPiece.Rail, Facing = RcpEdge.South });
+            design.Walls.Add(new RcpWall { Col = col, Row = 0, Vertical = false });
+            design.Walls.Add(new RcpWall { Col = col, Row = 3, Vertical = false });
+        }
+
+        Assert.Null(RcpStretch.Columns(design, 2, 2));
+        RcpPieces.Adopt(design);
+
+        foreach (var col in new[] { 2, 3 })
+        {
+            Assert.Equal((RcpPiece.Arched, RcpEdge.North), (design.At(col, 0)!.Piece, design.At(col, 0)!.Facing));
+            Assert.Equal(RcpPiece.Blank, design.At(col, 1)!.Piece);
+
+            // One finish line: its copies are ordinary rails.
+            Assert.Equal((RcpPiece.Rail, RcpEdge.South), (design.At(col, 2)!.Piece, design.At(col, 2)!.Facing));
+        }
+
+        Assert.Single(design.Tiles, t => t.Piece == RcpPiece.Finish);
+        Assert.Equal(RcpPiece.Finish, design.At(1, 2)!.Piece);
+    }
+
     [Fact]
     public void Shorter_takes_the_columns_inside_the_line_out_and_closes_the_gap()
     {

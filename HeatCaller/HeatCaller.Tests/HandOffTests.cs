@@ -350,6 +350,24 @@ public sealed class HandOffTests : IDisposable
         Assert.Contains("CancellationTokenSource.CreateLinkedTokenSource(nextRace.Token)", body, StringComparison.Ordinal);
     }
 
+    // Bug hunt 16 (10 Nov 2026): the season piece started its recorder
+    // before waiting up to 15 s for the first piece, so the file played at
+    // the presentation opened with dead air. A read with no clip to fill
+    // that wait starts recording only once the first piece is in hand.
+    [Theory]
+    [InlineData("public async Task<string?> PlayTonightsRecapAsync()", "private const string TheNightRecap", "BookendRecording.StartForTheNight(")]
+    [InlineData("public async Task<string?> PlayTheSeasonAsync(", "public async Task<string?> PlayADriversNightAsync(", "BookendRecording.StartForASeason(")]
+    public void A_read_with_no_clip_starts_recording_only_once_its_first_piece_is_voiced(string from, string until, string start)
+    {
+        var body = WithoutComments(MethodBody(Source("AnnouncerControl.Director.cs"), from, until));
+
+        var firstPiece = body.IndexOf("await FirstPieceVoicedAsync(voiced, readToken)", StringComparison.Ordinal);
+        var recording = body.IndexOf(start, StringComparison.Ordinal);
+
+        Assert.True(firstPiece > 0, "The read no longer waits for its first piece - this test needs updating.");
+        Assert.True(recording > firstPiece, "The recorder starts before the first piece is voiced, so the file opens with silence.");
+    }
+
     [Fact]
     public void Each_piece_is_queued_no_later_than_the_queue_takes_the_one_in_front_and_never_after_a_stop()
     {

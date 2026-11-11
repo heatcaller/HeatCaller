@@ -329,7 +329,8 @@ public sealed partial class RaceControlControl
     ///
     /// Called by every way On Air is cut short - 0 held (and the phone's
     /// Stage pressed again, which comes the same way), a flag or Stage during a
-    /// demo's On Air (SkipOnAirToTheDemo), and Stage, Countdown, Green, the
+    /// demo's On Air (SkipOnAirToTheDemo), a demo started while On Air is
+    /// opening some other race (RunOnAirAsync, 10 Nov 2026), and Stage, Countdown, Green, the
     /// checkered, Reset or a warm-up by hand (CancelAutoStart) - and always
     /// BEFORE the Stage that follows, so the staging call is queued after the
     /// cut and is the next thing heard. Not by On Air ending normally: its
@@ -820,7 +821,25 @@ public sealed partial class RaceControlControl
             // since it was opening some other race.
             if (start is not null)
             {
-                running.Cancel();
+                try
+                {
+                    running.Cancel();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // On Air had already finished.
+                }
+
+                // WHY (10 Nov 2026, bug hunt 16): and what it had already
+                // queued stops with it - the other race's opening, its
+                // driver introductions and pit lane are priority Reminders a
+                // cancel leaves in the queue, so they played on over the demo
+                // and its staging call waited behind them. See SilenceOnAir.
+                // Before start(), so the demo's staging call is queued after
+                // the cut; the cancelled On Air's own catch queues nothing
+                // (_onAirStageNow is false), so Cancel running it inline is
+                // safe here.
+                SilenceOnAir("On Air called off for a demo");
 
                 // The On Air being called off was opening another race; what
                 // it said is not this demo's (see ShowAtDemoStaging).
@@ -1159,7 +1178,15 @@ public sealed partial class RaceControlControl
                     // The Big Screen's cards for them (1 Nov 2026) - the
                     // field read again, quietly, as the line is handed over:
                     // the same grid they were written from. See IntroOnAir.
-                    if (round is not null && ReadIntroductionFacts(round, null, quiet: true) is { } introFacts)
+                    //
+                    // WHY (10 Nov 2026, bug hunt 16): the round the opening
+                    // was written for (OpeningRun.Round), not this method's
+                    // own round - that is null for every real start (Start
+                    // Next, the Program, F1, the phone, 0), which only a demo
+                    // fills in, so a real race's cards were never armed. And
+                    // the Stage handed over to skips its introductions, the
+                    // only other place they are armed.
+                    if (said.Round is { } introRound && ReadIntroductionFacts(introRound, null, quiet: true) is { } introFacts)
                     {
                         ArmIntroCards(introFacts.Grid, saidIntroductions.Text);
                     }
@@ -1412,12 +1439,26 @@ public sealed partial class RaceControlControl
     /// hands over to does not ask again after the staging call, whether or
     /// not it came back in time.
     /// </param>
+    /// <param name="Round">
+    /// The race it was all written for (10 Nov 2026, bug hunt 16) - the one
+    /// WriteOpeningAsync worked out, from the Round box when it was not given
+    /// one. The Big Screen's intro cards are read from it, so they show the
+    /// same field the introductions were written from.
+    /// </param>
     private sealed record OpeningRun(
         string? Text,
         PackedFacts? History,
         (string Text, Action? Count)? Introductions,
         (List<SpokenLine> Lines, string Focus)? Principal,
-        bool PrincipalTried = false);
+        bool PrincipalTried = false,
+        RoundDefinition? Round = null);
+
+    /// <summary>
+    /// The run marked with the round it was written for (10 Nov 2026, bug
+    /// hunt 16) - see <see cref="OpeningRun"/>'s Round.
+    /// </summary>
+    private static OpeningRun? ForRound(OpeningRun? run, RoundDefinition round) =>
+        run is null ? null : run with { Round = round };
 
     /// <summary>
     /// The opening: the round intro for the race in the Round box, written
@@ -1458,7 +1499,7 @@ public sealed partial class RaceControlControl
 
             if (!_settings.CommentaryRaceIntros)
             {
-                return await PitLaneOnlyAsync(round, introductions, ct);
+                return ForRound(await PitLaneOnlyAsync(round, introductions, ct), round);
             }
 
             if (_settings.CommentaryIntrosMainsOrRivalriesOnly
@@ -1469,7 +1510,7 @@ public sealed partial class RaceControlControl
                     $"{AppTime.LogStampNow()}  [imaging] No opening for {round.RoundLabel} - intros are set to mains and rivalries only, "
                     + "and this race is neither.");
 
-                return await PitLaneOnlyAsync(round, introductions, ct);
+                return ForRound(await PitLaneOnlyAsync(round, introductions, ct), round);
             }
 
             var (clubNight, form, stake, scene) = ReadIntroFacts(round);
@@ -1520,7 +1561,7 @@ public sealed partial class RaceControlControl
 
                 // The pit lane already being written still goes out before
                 // staging (18 Oct 2026) - see OpeningRun.Text.
-                return await PitLaneFrom(principalJob, principal, introductions);
+                return ForRound(await PitLaneFrom(principalJob, principal, introductions), round);
             }
 
             // Never longer than their own budget, which runs from when they
@@ -1553,7 +1594,8 @@ public sealed partial class RaceControlControl
                 history,
                 withIntroductions,
                 principalLines is { Count: > 0 } && principalJob is not null ? (principalLines, principalJob.Focus) : null,
-                PrincipalTried: principalJob is not null);
+                PrincipalTried: principalJob is not null,
+                Round: round);
         }
         catch (OperationCanceledException)
         {

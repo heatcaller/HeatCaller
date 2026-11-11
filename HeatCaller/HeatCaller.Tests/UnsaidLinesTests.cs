@@ -65,4 +65,39 @@ public sealed class UnsaidLinesTests
         Assert.Equal("5", load.Lines[0].Words);
         Assert.Equal(AnnouncerLoad.MostKept + 5, load.Dropped);
     }
+
+    // Bug hunt 16 (10 Nov 2026): once 300 lines were kept the count stopped
+    // growing, so the shift-by-growth arithmetic left the reader's card
+    // sliding down one row with every new line.
+    [Fact]
+    public void The_readers_card_stays_in_view_when_the_list_is_full()
+    {
+        var load = new AnnouncerLoad();
+
+        for (var i = 0; i < AnnouncerLoad.MostKept; i++)
+        {
+            load.NoteDropped(Line(UnsaidKind.Lost, i.ToString()));
+        }
+
+        var before = load.Lines.Reverse().ToList();
+        var anchor = before[10];
+
+        load.NoteDropped(Line(UnsaidKind.Lost, "new"));
+
+        var after = load.Lines.Reverse().ToList();
+
+        Assert.Equal(before.Count, after.Count);
+        Assert.Equal(11, UnsaidLinesForm.TopAfterRefill(anchor, 10, after));
+    }
+
+    [Fact]
+    public void The_view_keeps_its_row_when_the_readers_card_has_gone()
+    {
+        var lines = Enumerable.Range(0, 5).Select(i => Line(UnsaidKind.Lost, i.ToString())).ToList();
+        var gone = Line(UnsaidKind.Lost, "gone");
+
+        Assert.Equal(3, UnsaidLinesForm.TopAfterRefill(gone, 3, lines));
+        Assert.Equal(4, UnsaidLinesForm.TopAfterRefill(gone, 9, lines));
+        Assert.Equal(0, UnsaidLinesForm.TopAfterRefill(lines[2], 0, lines));
+    }
 }

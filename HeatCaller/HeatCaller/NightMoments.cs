@@ -220,7 +220,16 @@ internal static class NightMoments
         // the lead from a car that no longer counts, or never at all.
         // MarksFrom reads nothing but Results, so a bare record carrying
         // them is enough.
-        var timeline = record.Results.Where(row => !IsDisqualified(row)).ToList();
+        //
+        // GHOSTS COME OFF IT TOO, for the same reason (10 Nov 2026, bug hunt
+        // 15). Dropping only a ghost's own lead marks afterwards was not
+        // enough: left on the timeline it is still "the leader" after it
+        // gets in front, so the real car taking the place back was handed a
+        // lead mark - a lead change, even a last-lap one, from nobody. Older
+        // saved results still carry ghost rows, so this is reachable.
+        var timeline = record.Results
+            .Where(row => !GhostService.IsGhost(row.Transponder) && !IsDisqualified(row))
+            .ToList();
         var marks = RaceHighlights.MarksFrom(new SessionRecord { Results = timeline });
 
         // ONLY THE DRIVERS WHO SCORED, which MarksFrom does not filter and

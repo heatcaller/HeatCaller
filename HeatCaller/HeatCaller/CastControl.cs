@@ -280,6 +280,11 @@ public sealed class CastControl : UserControl
             FillVoices(EngineInUse?.Invoke());
         }
 
+        // The stand-ins shown again too (10 Nov 2026, bug hunt 16): a voice
+        // picked from Kokoro's own list, with Kokoro the engine, is who
+        // stands in once the engine is back on ElevenLabs.
+        FillStandIns();
+
         // The AI Commentary tab's "Throw to pit lane" is this switch too
         // (18 Oct 2026), so it is read again in case it was changed there.
         if (_chkPrincipalBefore.Checked != _settings.PrincipalBeforeRace)
@@ -850,6 +855,15 @@ public sealed class CastControl : UserControl
 
             // Whether the row means anything follows the voice picked above it.
             row.VoicePicker.SelectedIndexChanged += (_, _) => RefreshEnabledState();
+
+            // And so does the voice it shows (10 Nov 2026, bug hunt 16). With
+            // no stand-in picked, a speaker stands in with their Kokoro voice
+            // (CastStandIns.Resolve), and a Kokoro pick above changes that -
+            // so the row is shown again after the pick is saved (the Save*Voice
+            // handlers are hooked up first, so they have run). It used to keep
+            // the voice it showed at start-up, and its Test Voice said that
+            // one, not the voice the show would use once ElevenLabs ran out.
+            row.VoicePicker.SelectedIndexChanged += (_, _) => FillStandIn(row, KokoroSpeech.InstalledVoices());
         }
 
         FillStandIns();
@@ -1307,42 +1321,60 @@ public sealed class CastControl : UserControl
     {
         var installed = KokoroSpeech.InstalledVoices();
 
+        foreach (var row in _standIns)
+        {
+            FillStandIn(row, installed);
+        }
+
+        Array.Clear(_standInWidths);
+        SizeFields();
+    }
+
+    /// <summary>
+    /// Fills one "If ElevenLabs runs out" list and selects the voice that
+    /// speaker stands in with now - see FillStandIns. Also run whenever the
+    /// voice picked above it changes (10 Nov 2026, bug hunt 16), since with
+    /// no stand-in picked that voice decides the stand-in.
+    /// </summary>
+    private void FillStandIn(StandInRow row, IReadOnlyList<KokoroVoiceChoice> installed)
+    {
+        // Already showing it: left alone, so a list that is open isn't shut.
+        if (row.Picker.SelectedItem is VoiceChoice shown
+            && string.Equals(shown.Id, row.Voice().StandInKokoroVoice, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
         _fillingStandIns = true;
 
         try
         {
-            foreach (var row in _standIns)
+            var saved = row.Voice().StandInKokoroVoice;
+            var choices = installed.Select(v => new VoiceChoice(v.Name, v.Name, string.Empty, v.Display)).ToList();
+            var at = choices.FindIndex(c => string.Equals(c.Id, saved, StringComparison.OrdinalIgnoreCase));
+
+            // A voice saved on another PC that this one hasn't got stays
+            // on the list, saying who speaks instead - as the announcer's does.
+            if (at < 0 && saved.Length > 0)
             {
-                var saved = row.Voice().StandInKokoroVoice;
-                var choices = installed.Select(v => new VoiceChoice(v.Name, v.Name, string.Empty, v.Display)).ToList();
-                var at = choices.FindIndex(c => string.Equals(c.Id, saved, StringComparison.OrdinalIgnoreCase));
-
-                // A voice saved on another PC that this one hasn't got stays
-                // on the list, saying who speaks instead - as the announcer's does.
-                if (at < 0 && saved.Length > 0)
-                {
-                    choices.Insert(0, new VoiceChoice(saved, saved, string.Empty,
-                        $"{KokoroSpeech.Describe(saved)} (not on this PC - {KokoroSpeech.Describe(KokoroSpeech.DefaultVoice)} speaks instead)"));
-                    at = 0;
-                }
-
-                row.Picker.Items.Clear();
-
-                foreach (var choice in choices)
-                {
-                    row.Picker.Items.Add(choice);
-                }
-
-                row.Picker.SelectedIndex = Math.Max(0, at);
+                choices.Insert(0, new VoiceChoice(saved, saved, string.Empty,
+                    $"{KokoroSpeech.Describe(saved)} (not on this PC - {KokoroSpeech.Describe(KokoroSpeech.DefaultVoice)} speaks instead)"));
+                at = 0;
             }
+
+            row.Picker.Items.Clear();
+
+            foreach (var choice in choices)
+            {
+                row.Picker.Items.Add(choice);
+            }
+
+            row.Picker.SelectedIndex = Math.Max(0, at);
         }
         finally
         {
             _fillingStandIns = false;
         }
-
-        Array.Clear(_standInWidths);
-        SizeFields();
     }
 
     /// <summary>Saves the Kokoro voice picked for when ElevenLabs runs out.</summary>

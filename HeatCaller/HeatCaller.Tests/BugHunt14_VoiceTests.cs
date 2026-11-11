@@ -46,10 +46,13 @@ public sealed class BugHunt14_VoiceTests
     {
         var notify = Between(
             Source("AnnouncementService.RaceEvents.cs"),
-            "public void NotifyFinalMinute()",
+            "public void NotifyFinalMinute(",
             "internal const long FinalMinuteSayWithinMs");
 
-        Assert.Contains("sayByMs: TimingClock.NowMs + FinalMinuteSayWithinMs", Code(notify), StringComparison.Ordinal);
+        // Bug hunt 16 (10 Nov 2026): the say-by time is now worked out by
+        // FinalMinuteSayByMs, from the minute itself - see BugHunt16_FinalMinuteTests.
+        Assert.Contains("FinalMinuteSayByMs(TimingClock.NowMs, timeLeft)", Code(notify), StringComparison.Ordinal);
+        Assert.Contains("sayByMs: sayByMs", Code(notify), StringComparison.Ordinal);
     }
 
     [Fact]

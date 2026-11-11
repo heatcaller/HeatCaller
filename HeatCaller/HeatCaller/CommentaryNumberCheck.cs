@@ -94,6 +94,22 @@ internal static class CommentaryNumberCheck
         System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>
+    /// A speaker label at the start of a sentence - "HOST:", "**Tech Lead:**",
+    /// "Amanda:" - up to three words of letters and a colon.
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex SpeakerLabel = new(
+        @"^\s*[*_]*\p{Lu}\p{L}*(?: \p{Lu}\p{L}*){0,2}[*_]*\s*:[*_]*",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// A speaker label further into a sentence, after the end of a sentence
+    /// SentenceEnd did not split at ("...on lap 12. TECH LEAD: ...").
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex InnerSpeakerLabel = new(
+        @"[.!?…][""'”’)\]]?\s+[*_]*\p{Lu}\p{L}*(?: \p{Lu}\p{L}*){0,2}[*_]*\s*:",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
     /// <paramref name="answer"/> with only the sentences that carry a figure
     /// the facts cannot back taken out (8 Nov 2026, Asher: "the intro needs
     /// to stay. one wrong number shouldn't kill it"). Null when that would
@@ -127,15 +143,47 @@ internal static class CommentaryNumberCheck
             var sentences = SentenceEnd.Split(line);
             var keep = new List<string>(sentences.Length);
 
+            // A cut sentence never takes a speaker label with it (10 Nov
+            // 2026, bug hunt 16). In an interview "HOST:" or "PRINCIPAL:"
+            // is part of the first sentence of its turn, so cutting that
+            // sentence used to leave the rest of the turn untagged, and
+            // ParseInterview then gave it to the other speaker - the host's
+            // question read out in the guest's voice. The label now moves on
+            // to the next sentence kept. A turn with nothing kept before the
+            // next label (or the line's end) is gone whole, label and all, so
+            // nothing of it can land in the wrong voice. A label inside the
+            // cut sentence itself (no split after a digit: "...on lap 12.
+            // TECH LEAD: ...") refuses the answer whole, as before the 8 Nov
+            // repair - there is no telling where that turn's words went.
+            string? label = null;
+
             foreach (var sentence in sentences)
             {
+                var lead = SpeakerLabel.Match(sentence);
+
                 if (Unsupported(sentence, facts) is { } figure)
                 {
                     removed.Add((sentence.Trim(), figure));
+
+                    if (InnerSpeakerLabel.IsMatch(sentence))
+                    {
+                        return null;
+                    }
+
+                    if (lead.Success)
+                    {
+                        label = lead.Value.Trim();
+                    }
+                }
+                else if (label is not null && !lead.Success)
+                {
+                    keep.Add(label + " " + sentence.TrimStart());
+                    label = null;
                 }
                 else
                 {
                     keep.Add(sentence);
+                    label = null;
                 }
             }
 

@@ -47,6 +47,10 @@ public sealed partial class AnnouncementService
 
             _leads.Forget(transponder);
 
+            // Nor is the car behind it called as passing it in a position
+            // report it was named in (10 Nov 2026, bug hunt 16).
+            ForgetInPositionReportOnAir(transponder);
+
             lock (_streakLock)
             {
                 _currentStreaks.Remove(transponder);
@@ -203,7 +207,8 @@ public sealed partial class AnnouncementService
     internal static Dictionary<string, (string, string)> SectorExtras(int sector, long sectorMs) => new()
     {
         ["sector"] = (sector.ToString(System.Globalization.CultureInfo.InvariantCulture), sector.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-        ["sectortime"] = (RaceNumbers.Plainly(sectorMs), (sectorMs / 1000.0).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + "s"),
+        // (10 Nov 2026, bug hunt 16) shown from the same hundredths as said.
+        ["sectortime"] = (RaceNumbers.Plainly(sectorMs), RaceNumbers.HundredthsShown(sectorMs)),
     };
 
     /// <summary>Whether this call is switched on for the session running now (races or practice) - so a caller choosing between calls picks one that will be said.</summary>
@@ -1178,14 +1183,53 @@ public sealed partial class AnnouncementService
         EnqueueVoice(AnnouncementEventType.LastLap, standing, null);
     }
 
-    /// <summary>A timed race has one minute left - fired once by the session.</summary>
-    public void NotifyFinalMinute() =>
+    /// <summary>
+    /// A timed race has one minute left - fired once by the session.
+    /// <paramref name="timeLeft"/> is the race clock's time left as the call
+    /// is heard; null when it cannot be told.
+    /// </summary>
+    public void NotifyFinalMinute(TimeSpan? timeLeft = null)
+    {
+        if (FinalMinuteSayByMs(TimingClock.NowMs, timeLeft) is not { } sayByMs)
+        {
+            return;
+        }
+
         // Bug hunt 14 (7 Nov 2026): with a say-by time, as the other time
         // calls have had since 28 Oct. It waits its turn behind a line
         // already playing, and without one "one minute to go" could be heard
         // with twenty or thirty seconds left.
-        EnqueueVoice(AnnouncementEventType.FinalMinute, null, null,
-            sayByMs: TimingClock.NowMs + FinalMinuteSayWithinMs);
+        EnqueueVoice(AnnouncementEventType.FinalMinute, null, null, sayByMs: sayByMs);
+    }
+
+    /// <summary>
+    /// When "one minute to go" must be said by, or null when it is already
+    /// too late to say it at all.
+    ///
+    /// WHY (10 Nov 2026, bug hunt 16): the say-by time ran from when the
+    /// call was heard, not from the minute. A call heard twelve seconds late
+    /// after a freeze still got its full fifteen, so it could be said with
+    /// about thirty seconds left. It now runs from the minute itself, worked
+    /// out from the time left, and a call heard more than
+    /// FinalMinuteSayWithinMs after the minute is dropped, the same way
+    /// TimeLeftCalls.SayWithin drops a mark it reaches late.
+    /// </summary>
+    internal static long? FinalMinuteSayByMs(long nowMs, TimeSpan? timeLeft)
+    {
+        if (timeLeft is not { } left)
+        {
+            return nowMs + FinalMinuteSayWithinMs;
+        }
+
+        var lateMs = 60_000 - (long)left.TotalMilliseconds;
+
+        if (left <= TimeSpan.Zero || lateMs > FinalMinuteSayWithinMs)
+        {
+            return null;
+        }
+
+        return nowMs + FinalMinuteSayWithinMs - Math.Max(0, lateMs);
+    }
 
     /// <summary>
     /// How long after the minute "one minute to go" is still worth saying.

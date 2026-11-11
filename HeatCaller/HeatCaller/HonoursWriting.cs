@@ -170,8 +170,14 @@ internal static class HonoursWriting
                 // out to say whether anybody had it BEFORE - "the first at the
                 // club" is the line a room looks up for, and the one that must
                 // not be said of a badge half the club already has.
-                var holders = held.Count(d => d.Has(badge.Id));
+                // (10 Nov 2026, bug hunt 16) Ghost cars are not club
+                // drivers. Awards a ghost earned before ghosts were left out
+                // are still in the file, so they are skipped here as the
+                // badge's holder list does. Counted in, one stale ghost award
+                // turned a real club first into "two drivers hold it now".
+                var holders = held.Count(d => !GhostService.IsGhost(d.Transponder) && d.Has(badge.Id));
                 var tonight = allUnlocks
+                    .Where(u => !GhostService.IsGhost(u.Transponder))
                     .Where(u => string.Equals(u.Badge.Id, badge.Id, StringComparison.Ordinal))
                     .Select(u => u.Transponder)
                     .Distinct(StringComparer.OrdinalIgnoreCase)

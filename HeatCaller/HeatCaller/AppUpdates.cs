@@ -103,6 +103,23 @@ internal static class AppUpdates
         && !unfinishedRaceInJournal;
 
     /// <summary>
+    /// The same rule, with the journal read only when the other two have not
+    /// already held the update back.
+    ///
+    /// WHY (10 Nov 2026, bug hunt 16): the live check passed
+    /// RaceJournal.Unfinished() as a plain bool, so it read the journal of
+    /// the race being run on every update offer. That read holds the file
+    /// open without delete sharing, and a lap's journal write landing inside
+    /// it failed its swap and raised "race journal could not be written"
+    /// about a race that was fine. Mid-race the answer is already no, so
+    /// there is nothing to read the journal for.
+    /// </summary>
+    internal static bool NothingInProgress(bool raceDayOpen, RaceState raceState, Func<bool> unfinishedRaceInJournal) =>
+        !raceDayOpen
+        && raceState == RaceState.Idle
+        && !unfinishedRaceInJournal();
+
+    /// <summary>
     /// Why an update is being held back, for the console - so a club that
     /// wonders why it has not updated can see the reason rather than guess.
     /// Null when nothing is holding it.

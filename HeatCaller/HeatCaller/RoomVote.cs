@@ -220,10 +220,27 @@ internal sealed class RoomVote
 
                 if (file is not null)
                 {
+                    // (10 Nov 2026, bug hunt 16) A hand-edited or restored
+                    // file can say null for any of these, and the JSON
+                    // reader puts that null in over the empty default. A
+                    // null option threw in Standing() on the Room Vote
+                    // window's UI timer, and in CallFor and Cast; a null
+                    // WinnerName threw in CallWaiting on the announcer's
+                    // tick; a null DayId threw in StartUp. Repair them here,
+                    // as RivalryStore and the other stores do on load.
+                    file.DayId ??= string.Empty;
+
                     if (file.Current is { } poll)
                     {
                         poll.Options ??= new List<VoteOption>();
+                        poll.Options.RemoveAll(o => o is null || o.Id is null || o.Name is null);
                         poll.Votes ??= new Dictionary<string, string>();
+                        poll.Id ??= string.Empty;
+                        poll.RaceKey ??= string.Empty;
+                        poll.RoundName ??= string.Empty;
+                        poll.ClassName ??= string.Empty;
+                        poll.WinnerId ??= string.Empty;
+                        poll.WinnerName ??= string.Empty;
                     }
 
                     return new RoomVote(file);

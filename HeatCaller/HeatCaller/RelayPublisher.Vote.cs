@@ -680,6 +680,16 @@ public sealed partial class RelayPublisher
                 return false;
             }
 
+            // Published to the club it was sent to, which may not be this
+            // one any more (10 Nov 2026, bug hunt 16): a Save while this was
+            // in flight forgot the ballot for the new club, and recording
+            // the fingerprint here put it back - so the new club's page had
+            // no ballot until the grid or the race changed.
+            if (target != _target)
+            {
+                return true;
+            }
+
             var pollBefore = _pollAsPublished;
 
             _ballotAsPublished = fingerprint;
@@ -754,7 +764,9 @@ public sealed partial class RelayPublisher
 
         var club = Uri.EscapeDataString(target.Club);
 
-        if (PublishTheBallot(target, club, vote, enabled: false, token))
+        // Only while it is still the club it was sent to (10 Nov 2026, bug
+        // hunt 16) - see SendNotesClose.
+        if (PublishTheBallot(target, club, vote, enabled: false, token) && target == _target)
         {
             _voteClosePending = false;
         }

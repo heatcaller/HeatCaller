@@ -892,6 +892,51 @@ public sealed class CommentaryNumberCheckRepairTests
             CommentaryNumberCheck.WithoutUnsupportedSentences(intro, Facts, out _));
     }
 
+    // 10 Nov 2026, bug hunt 16: cutting the labelled first sentence of an
+    // interview turn used to cut its "HOST:" with it, and ParseInterview
+    // then gave the rest of the host's turn to the guest.
+    [Fact]
+    public void A_cut_sentence_leaves_its_speaker_label_on_the_turn()
+    {
+        const string interview = "HOST: How was the car tonight? TECH LEAD: It was really good out there. "
+            + "HOST: You were nine seconds clear! How did that feel? TECH LEAD: It felt great for the whole crew.";
+
+        var kept = CommentaryNumberCheck.WithoutUnsupportedSentences(interview, Facts, out var cut);
+
+        Assert.Equal("HOST: How was the car tonight? TECH LEAD: It was really good out there. "
+            + "HOST: How did that feel? TECH LEAD: It felt great for the whole crew.", kept);
+        Assert.Equal("HOST: You were nine seconds clear!", Assert.Single(cut).Sentence);
+
+        var exchanges = CommentaryService.ParseInterview(kept, "Wrench Turner", Array.Empty<string>());
+
+        Assert.NotNull(exchanges);
+        Assert.Equal(2, exchanges!.Count);
+        Assert.DoesNotContain("How did that feel", exchanges[0].Answer, StringComparison.Ordinal);
+        Assert.Contains("How did that feel", exchanges[1].Question, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_turn_cut_whole_takes_its_label_and_lends_it_to_nobody()
+    {
+        const string interview = "HOST: How was the car tonight? TECH LEAD: It was really good out there, and the crew worked hard. "
+            + "HOST: Nine seconds clear! TECH LEAD: It felt great for the whole crew tonight.";
+
+        var kept = CommentaryNumberCheck.WithoutUnsupportedSentences(interview, Facts, out _);
+
+        Assert.Equal("HOST: How was the car tonight? TECH LEAD: It was really good out there, and the crew worked hard. "
+            + "TECH LEAD: It felt great for the whole crew tonight.", kept);
+    }
+
+    [Fact]
+    public void A_label_inside_a_cut_sentence_refuses_the_lot()
+    {
+        // No split after a digit, so "...lap 12. TECH LEAD: ..." is one sentence.
+        const string interview = "HOST: How was the car tonight? TECH LEAD: It was really good out there, and the crew worked hard. "
+            + "HOST: Nine wins and a pole on lap 12. TECH LEAD: It felt great for the whole crew tonight. HOST: Thanks so much for that.";
+
+        Assert.Null(CommentaryNumberCheck.WithoutUnsupportedSentences(interview, Facts, out _));
+    }
+
     [Fact]
     public void The_five_long_pieces_are_mended_and_the_rest_still_dropped()
     {

@@ -8149,9 +8149,13 @@ async function lastNight() {
 // The night's finals and their winners: every race called a main or a
 // final, in the order they ran. A club that names neither gets its last
 // four races, which on most nights are the ones that decided it.
+// (10 Nov 2026, bug hunt 16) The index already lists a night's sessions in
+// the order they started. They were sorted again by their "HH:mm" start,
+// which has no date, so a B-main at 00:15 on a night that ran late went
+// ahead of the 19:00 heats - and a club with no mains lost its last races
+// from the four. Index order is kept as it comes.
 function winners(night) {
-  const races = night.sessions.filter((x) => x.type === 'Race' && x.won)
-    .sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  const races = night.sessions.filter((x) => x.type === 'Race' && x.won);
   const finals = races.filter((x) => /\\b(main|final)/i.test(String(x.label)));
   return finals.length > 0 ? finals : races.slice(-4);
 }

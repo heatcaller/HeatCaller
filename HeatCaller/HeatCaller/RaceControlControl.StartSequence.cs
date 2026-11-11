@@ -1292,20 +1292,89 @@ public sealed partial class RaceControlControl
             return new List<string>();
         }
 
-        var fromResult = lastRace.Results
+        var lastOrder = lastRace.Results
             .OrderBy(r => r.Position)
             .Select(r => r.Transponder)
             .Where(t => !string.IsNullOrWhiteSpace(t))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        // WHY (10 Nov 2026, bug hunt 16): the release schedule is built on
+        // this list, so every driver on it who is not here held up everyone
+        // behind them by a gap, and had "X, go!" called on the PA for them -
+        // from a race that may have been last week. Only tonight's race, and
+        // only the cars on it that are here, as the desk and the decoder
+        // know it. See BorrowedGridOfCarsHere.
+        var watch = _transponderWatch;
+        var desk = _checkIns is { Count: > 0 } checkIns ? checkIns : null;
+        var fromResult = BorrowedGridOfCarsHere(
+            lastOrder,
+            lastRace.StartedAtUtc,
+            DateTime.UtcNow,
+            desk is null ? null : t => desk.IsCheckedIn(t),
+            watch is null ? null : t => watch.Of(t) is not null);
+
         if (fromResult.Count > 0)
         {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] No round selected - grid taken from the last race ({lastRace.Label}): {Plural.Of(fromResult.Count, "car")}.");
+            var dropped = lastOrder.Count - fromResult.Count;
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] No round selected - grid taken from the last race ({lastRace.Label}): {Plural.Of(fromResult.Count, "car")}"
+                + (dropped > 0 ? $", leaving out {Plural.Of(dropped, "driver")} not here tonight." : "."));
             fromLastRace = true;
         }
 
         return fromResult;
+    }
+
+    /// <summary>How long ago the last race can have started and still be tonight's - see BorrowedGridOfCarsHere.</summary>
+    internal static readonly TimeSpan BorrowedGridMaxAge = TimeSpan.FromHours(12);
+
+    /// <summary>
+    /// The last race's finishing order cut down to a grid for this race:
+    /// empty when that race was not tonight's, otherwise only the cars on
+    /// it that are here.
+    ///
+    /// "Here" is checked in at the desk (<paramref name="checkedIn"/>, null
+    /// when the desk is not in use tonight) or heard by the decoder lately
+    /// (<paramref name="heardLately"/>, null when there is no watch). With
+    /// the desk in use, a car neither ticked in nor heard is left out. With
+    /// only the decoder to go on, it is used once it has heard any car on
+    /// the list - hearing none of them says the loop was quiet, not that
+    /// the whole field went home - and with nothing to go on, the list is
+    /// kept as it is.
+    ///
+    /// A car left out is not held at all: like a newcomer, it is timed
+    /// from the green (see IsReleased), rather than waiting on the gaps of
+    /// drivers who are not there.
+    /// </summary>
+    internal static List<string> BorrowedGridOfCarsHere(
+        IReadOnlyList<string> lastRaceOrder,
+        DateTime lastRaceStartedUtc,
+        DateTime nowUtc,
+        Func<string, bool>? checkedIn,
+        Func<string, bool>? heardLately)
+    {
+        // A twelve-hour window rather than the calendar date, so a club
+        // night that runs past midnight still has its own last race.
+        var age = nowUtc - lastRaceStartedUtc;
+
+        if (age < TimeSpan.Zero || age > BorrowedGridMaxAge)
+        {
+            return new List<string>();
+        }
+
+        if (checkedIn is not null)
+        {
+            return lastRaceOrder
+                .Where(t => checkedIn(t) || heardLately?.Invoke(t) == true)
+                .ToList();
+        }
+
+        if (heardLately is not null && lastRaceOrder.Any(heardLately))
+        {
+            return lastRaceOrder.Where(heardLately).ToList();
+        }
+
+        return lastRaceOrder.ToList();
     }
 
     /// <summary>

@@ -274,4 +274,49 @@ public sealed class PositionReportCutTests : IDisposable
             && line.Contains("a correction by hand put Sam into first", StringComparison.Ordinal));
         Assert.Equal(new[] { "And with that ruling, Sam takes the lead! So it's Sam leads, Frank second, Bill third." }, shown.ToList());
     }
+
+    // --- A ghost switched off while it is read (10 Nov 2026, bug hunt 16) ---
+
+    /// <summary>A ghost (900) leading Sam, Bill and Frank on lap 4, and the report reading the top three.</summary>
+    private static void GhostSamBillBeingRead(AnnouncementService announcer, bool ghostLeads)
+    {
+        announcer.OnStandingUpdated(Car("900", 4, ghostLeads ? 39_000 : 40_200));
+        announcer.OnStandingUpdated(Car("101", 4, 40_000));
+        announcer.OnStandingUpdated(Car("102", 4, 40_400));
+        announcer.OnStandingUpdated(Car("103", 4, 41_000));
+        announcer.PutPositionReportOnAirForTest(ghostLeads ? ["900", "101", "102"] : ["101", "900", "102"], 3);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_ghost_switched_off_mid_report_is_not_called_as_a_pass(bool ghostLeads)
+    {
+        var (announcer, shown, log) = Announcer();
+        GhostSamBillBeingRead(announcer, ghostLeads);
+
+        announcer.OnStandingRemoved("900");
+
+        // Sam starts another lap: Sam, Bill, Frank - nobody passed anybody.
+        announcer.OnStandingUpdated(Car("101", 5, 50_000));
+        announcer.Muted = true;
+
+        Assert.False(WasCut(log));
+        Assert.Empty(shown);
+    }
+
+    [Fact]
+    public void A_real_pass_after_a_ghost_is_switched_off_is_still_corrected()
+    {
+        var (announcer, shown, _) = Announcer();
+        GhostSamBillBeingRead(announcer, ghostLeads: true);
+
+        announcer.OnStandingRemoved("900");
+
+        // Bill crosses onto lap 5 before Sam - he is through into the lead.
+        announcer.OnStandingUpdated(Car("102", 5, 50_000));
+        announcer.Muted = true;
+
+        Assert.Equal(new[] { "Hold on - Bill takes the lead! So it's Bill leads, Sam second, Frank third." }, shown.ToList());
+    }
 }

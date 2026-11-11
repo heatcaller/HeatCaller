@@ -109,6 +109,16 @@ public sealed class RentalTransponderStore
 
                     return new RentalTransponderStore(loaded);
                 }
+
+                // WHY (10 Nov 2026, bug hunt 16): present, parsed, and not
+                // the shape this store writes. A file holding the literal
+                // "null" (a hand edit, a restore or a sync conflict) parses
+                // to nothing without throwing, so it fell through to the
+                // empty store below with the flag left false, and the first
+                // unit added, checked out or in replaced every club unit,
+                // deposit and loan history. Held the same as
+                // RoundDefinitionStore and the other stores do.
+                unreadable = true;
             }
         }
         catch (Exception ex)

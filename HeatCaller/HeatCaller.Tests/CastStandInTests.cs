@@ -278,6 +278,99 @@ public sealed class CastStandInTests : IDisposable
         return problems;
     }
 
+    /// <summary>
+    /// Bug hunt 16 (10 Nov 2026): with no stand-in picked, a speaker stands
+    /// in with their Kokoro voice (CastStandIns.Resolve), so a Kokoro pick on
+    /// their Voice list changes who stands in. The stand-in row used to keep
+    /// showing the voice it showed at start-up - and its Test Voice said
+    /// that one, not the voice the show would use once ElevenLabs ran out.
+    /// </summary>
+    [Fact]
+    public void A_kokoro_pick_above_a_stand_in_row_is_shown_on_it()
+    {
+        FakeKokoro();
+
+        var problems = StaThread.Run(CheckStandInFollowsVoicePick, TimeSpan.FromMinutes(1), () => _now);
+
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
+    }
+
+    private static List<string> CheckStandInFollowsVoicePick()
+    {
+        var problems = new List<string>();
+        var settings = ElevenLabsCast();
+
+        _now = "building the Cast tab";
+
+        using var cast = new CastControl(settings) { EngineInUse = () => VoiceEngine.ElevenLabs };
+
+        static T Field<T>(CastControl cast, string name) => (T)typeof(CastControl)
+            .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(cast)!;
+
+        typeof(CastControl)
+            .GetMethod("FillVoices", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(cast, new object?[] { VoiceEngine.ElevenLabs, null });
+
+        var voice = Field<ComboBox>(cast, "_cmbCoHostVoice");
+        var standIn = Field<ComboBox>(cast, "_cmbCoHostStandIn");
+
+        string? Shown() => (standIn.SelectedItem as CastControl.VoiceChoice)?.Id;
+
+        if (Shown() != CastStandIns.CoHost)
+        {
+            problems.Add($"the co-host's stand-in starts on {Shown()}, not {CastStandIns.CoHost}");
+        }
+
+        _now = "picking a Kokoro voice for the co-host, then an ElevenLabs one";
+
+        var kokoro = voice.Items.OfType<CastControl.VoiceChoice>()
+            .FirstOrDefault(c => c.IsKokoro && !string.Equals(c.Id, CastStandIns.CoHost, StringComparison.OrdinalIgnoreCase));
+        var elevenLabs = voice.Items.OfType<CastControl.VoiceChoice>().FirstOrDefault(c => !c.IsKokoro && c.Id.Length > 0);
+
+        if (kokoro is null || elevenLabs is null)
+        {
+            problems.Add($"the co-host's list has no Kokoro voice ({kokoro}) or no ElevenLabs voice ({elevenLabs})");
+            return problems;
+        }
+
+        voice.SelectedItem = kokoro;
+        voice.SelectedItem = elevenLabs;
+
+        if (settings.CoHostVoice.StandInKokoroVoice != kokoro.Id)
+        {
+            problems.Add($"the co-host stands in with {settings.CoHostVoice.StandInKokoroVoice}, not {kokoro.Id}");
+        }
+
+        if (Shown() != settings.CoHostVoice.StandInKokoroVoice)
+        {
+            problems.Add($"the stand-in row shows {Shown()}, but the co-host stands in with {settings.CoHostVoice.StandInKokoroVoice}");
+        }
+
+        // Nothing was picked on the stand-in row itself.
+        if (settings.CoHostKokoroStandInVoiceName.Length > 0)
+        {
+            problems.Add($"showing the stand-in again saved \"{settings.CoHostKokoroStandInVoiceName}\" as a pick");
+        }
+
+        _now = "changing the co-host's Kokoro voice elsewhere and showing the tab again";
+
+        // As a pick from Kokoro's own list does, with Kokoro the engine then.
+        var other = standIn.Items.OfType<CastControl.VoiceChoice>().First(c => c.Id != kokoro.Id && c.Id != CastStandIns.CoHost);
+        settings.CoHostKokoroVoiceName = other.Id;
+
+        typeof(Control)
+            .GetMethod("OnVisibleChanged", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(cast, new object?[] { EventArgs.Empty });
+
+        if (Shown() != other.Id)
+        {
+            problems.Add($"after the tab is shown again the stand-in row shows {Shown()}, not {other.Id}");
+        }
+
+        return problems;
+    }
+
     // --- No saved ElevenLabs while Kokoro stands in --------------------------
 
     [Fact]
