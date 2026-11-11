@@ -178,4 +178,77 @@ public sealed class FairResultsTests
         Assert.Contains("ProtestWindow.Words(finalAt!.Value)", source);
         Assert.Contains("new ToolStripMenuItem(\"Add a Late Entry...\"", source);
     }
+
+    // 11 Nov 2026: the protest window everywhere.
+
+    [Fact]
+    public void The_window_closes_only_once_every_qualifier_of_the_class_is_in()
+    {
+        var s1 = new SessionRecord { Id = "s1", SessionType = RaceSessionType.Race, EndedAtUtc = T0.AddMinutes(-15) };
+        var heats = new[]
+        {
+            new RoundDefinition { Id = "q1", Kind = RoundKind.Qualifier, LinkedSessionId = "s1" },
+            new RoundDefinition { Id = "q2", Kind = RoundKind.Qualifier },
+            new RoundDefinition { Id = "a", Kind = RoundKind.Main },
+        };
+        var sessions = new Dictionary<string, SessionRecord> { ["s1"] = s1 };
+
+        // One still to run: no window yet.
+        Assert.Null(ProtestWindow.ClosesAtUtc(heats, sessions.GetValueOrDefault, 5));
+
+        // The last one filed a moment ago, its round not linked yet.
+        var justFiled = new SessionRecord { Id = "s2", RoundId = "q2", SessionType = RaceSessionType.Race, EndedAtUtc = T0 };
+        Assert.Equal(T0.AddMinutes(5), ProtestWindow.ClosesAtUtc(heats, sessions.GetValueOrDefault, 5, justFiled));
+
+        // No window, or no qualifiers at all.
+        Assert.Null(ProtestWindow.ClosesAtUtc(heats, sessions.GetValueOrDefault, 0, justFiled));
+        Assert.Null(ProtestWindow.ClosesAtUtc(new[] { heats[2] }, sessions.GetValueOrDefault, 5));
+    }
+
+    [Fact]
+    public void A_query_stays_open_with_no_window_and_until_it_closes()
+    {
+        Assert.True(ProtestWindow.QueryOpen(null, T0));
+        Assert.True(ProtestWindow.QueryOpen(T0.AddMinutes(1), T0));
+        Assert.False(ProtestWindow.QueryOpen(T0, T0));
+    }
+
+    [Fact]
+    public void The_club_setting_wins_and_an_old_race_day_value_still_counts_until_it_is_set()
+    {
+        Assert.Equal(5, ProtestWindow.Minutes(null, null));
+        Assert.Equal(10, ProtestWindow.Minutes(null, 10));
+        Assert.Equal(0, ProtestWindow.Minutes(0, 10));
+        Assert.Equal(ProtestWindow.MostMinutes, ProtestWindow.Minutes(500, null));
+    }
+
+    [Fact]
+    public void A_race_day_that_changed_the_window_hands_it_to_the_club_setting_once()
+    {
+        var old = new RaceEvent { ProtestMinutes = 10, StartedUtc = T0.AddDays(-7) };
+        var newer = new RaceEvent { ProtestMinutes = 8, StartedUtc = T0 };
+        var plain = new RaceEvent { StartedUtc = T0 };
+
+        Assert.Equal(8, ProtestWindow.CarryOver(null, null, new[] { old, newer }));
+        Assert.Equal(10, ProtestWindow.CarryOver(null, old, new[] { old, newer }));
+        Assert.Null(ProtestWindow.CarryOver(3, newer, new[] { newer }));
+        Assert.Null(ProtestWindow.CarryOver(null, plain, new[] { plain }));
+    }
+
+    [Fact]
+    public void The_announcer_says_how_long_and_where_queries_go()
+    {
+        Assert.Equal(
+            "That's qualifying done for Stock. Results are provisional for five minutes - any queries to the race desk, please.",
+            ProtestWindow.Announcement("Stock", 5));
+        Assert.Contains("one minute", ProtestWindow.Announcement("Mod", 1));
+    }
+
+    [Fact]
+    public void The_window_lives_on_the_club_website_page_and_not_on_setup()
+    {
+        Assert.DoesNotContain("Protest window (min):", Source("RaceDayEventControl.cs"));
+        Assert.Contains("protestGrid.AddRow(\"Protest window (min):\", _numProtestMinutes)", Source("RelaySettingsControl.cs").Replace("_protestGrid", "protestGrid"));
+        Assert.Contains("_settings.ProtestMinutesFor(", Source("RaceProgramControl.cs"));
+    }
 }

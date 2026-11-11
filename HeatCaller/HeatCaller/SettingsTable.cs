@@ -325,6 +325,7 @@ internal static class SettingsTable
             nameof(AppSettings.RelayCaptions),
             nameof(AppSettings.RelayDriverRequests),
             nameof(AppSettings.RelayResultQueries),
+            nameof(AppSettings.ProtestMinutes),
             nameof(AppSettings.ClubNotesFromTheRelay),
             nameof(AppSettings.RoomVoteFromTheRelay),
             nameof(AppSettings.RelaySiteTheme),

@@ -822,6 +822,21 @@ public sealed class RaceProgramControl : UserControl
             .ToList();
 
     /// <summary>
+    /// When the class's protest window closes tonight (11 Nov 2026) - once
+    /// every one of its qualifiers today is in - or null: no race day open,
+    /// no window, or a qualifier still to run. <paramref name="justFiled"/>
+    /// is a result filed a moment ago whose round is not linked yet. See
+    /// ProtestWindow.ClosesAtUtc.
+    /// </summary>
+    public DateTime? ProtestClosesAtUtc(string className, SessionRecord? justFiled = null) =>
+        ActiveDay is { } day
+            ? ProtestWindow.ClosesAtUtc(DayRoundsForClass(className), _sessionHistory.Get, _settings.ProtestMinutesFor(day), justFiled)
+            : null;
+
+    /// <summary>The protest window in force tonight, in minutes - see AppSettings.ProtestMinutesFor.</summary>
+    public int ProtestMinutesTonight => _settings.ProtestMinutesFor(ActiveDay);
+
+    /// <summary>
     /// Which classes are racing today.
     ///
     /// The race day says so when it has been told; otherwise this reads it
@@ -964,7 +979,7 @@ public sealed class RaceProgramControl : UserControl
         // The protest window (11 Nov 2026, Phase 3): finals asked for while
         // the class's results are still provisional say until when.
         if (step.Stage == ProgramStage.SeedMains && ActiveDay is { } raceDay
-            && ProtestWindow.FinalAtUtc(DayRoundsForClass(step.ClassName), _sessionHistory.Get, raceDay.ProtestMinutes) is { } finalAt
+            && ProtestWindow.FinalAtUtc(DayRoundsForClass(step.ClassName), _sessionHistory.Get, _settings.ProtestMinutesFor(raceDay)) is { } finalAt
             && ProtestWindow.IsProvisional(finalAt, DateTime.UtcNow))
         {
             step = step with { Detail = ProtestWindow.Words(finalAt) + " " + step.Detail };
@@ -2689,7 +2704,7 @@ public sealed class RaceProgramControl : UserControl
             : "\r\n\r\nBump-ups are disabled for this class.";
 
         // The protest window: building now is allowed, and says so.
-        var finalAt = ProtestWindow.FinalAtUtc(DayRoundsForClass(className), _sessionHistory.Get, ActiveDay.ProtestMinutes);
+        var finalAt = ProtestWindow.FinalAtUtc(DayRoundsForClass(className), _sessionHistory.Get, _settings.ProtestMinutesFor(ActiveDay));
         var provisional = ProtestWindow.IsProvisional(finalAt, DateTime.UtcNow)
             ? $"{ProtestWindow.Words(finalAt!.Value)} A query still to come could change this order.\r\n\r\n"
             : string.Empty;

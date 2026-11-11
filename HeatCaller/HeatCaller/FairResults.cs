@@ -140,6 +140,130 @@ public static class ProtestWindow
     /// <summary>"Results are provisional until 20:42 (the protest window)." - local time, as AppTime shows it.</summary>
     public static string Words(DateTime finalAtUtc) =>
         $"Results are provisional until {AppTime.TimeOfDay(finalAtUtc.ToLocalTime())} (the protest window).";
+
+    /// <summary>The longest window the Club Website page offers.</summary>
+    public const int MostMinutes = 60;
+
+    /// <summary>
+    /// The window in force (11 Nov 2026: one setting, on the Club Website
+    /// page beside "Let drivers query a result"). <paramref name="clubMinutes"/>
+    /// is AppSettings.ProtestMinutes - null until somebody sets it there, and
+    /// then the race day's own old value (RaceEvent.ProtestMinutes, the
+    /// setting's home before) still counts, so a club that had changed it on
+    /// Setup keeps what it chose. Neither: the default.
+    /// </summary>
+    public static int Minutes(int? clubMinutes, int? oldDayMinutes) =>
+        Math.Clamp(clubMinutes ?? oldDayMinutes ?? DefaultMinutes, 0, MostMinutes);
+
+    /// <summary>
+    /// The value to carry over once, at startup, from the race days that
+    /// already have one (11 Nov 2026): null when the club setting is set
+    /// already or no race day ever changed the window from the default -
+    /// else the newest race day's choice (the open one first). After that
+    /// AppSettings.ProtestMinutes is the only place it is read from.
+    /// </summary>
+    public static int? CarryOver(int? clubMinutes, RaceEvent? openDay, IEnumerable<RaceEvent> days)
+    {
+        if (clubMinutes is not null)
+        {
+            return null;
+        }
+
+        var from = openDay is { IsLegacy: false }
+            ? openDay
+            : days.Where(d => !d.IsLegacy).OrderByDescending(d => d.StartedUtc).FirstOrDefault();
+
+        return from is { } day && day.ProtestMinutes != DefaultMinutes
+            ? Math.Clamp(day.ProtestMinutes, 0, MostMinutes)
+            : null;
+    }
+
+    /// <summary>
+    /// When the class's window closes, counted only once EVERY qualifier of
+    /// the class today has been recorded (11 Nov 2026) - before that there
+    /// is no window yet, and nothing on the phones changes. Null with no
+    /// window, no qualifiers, or one still to run. <paramref name="justFiled"/>
+    /// is a result filed a moment ago whose round is not linked to it yet -
+    /// it counts as that round's result.
+    /// </summary>
+    public static DateTime? ClosesAtUtc(IEnumerable<RoundDefinition> classDayRounds, Func<string, SessionRecord?> sessionOf, int minutes,
+        SessionRecord? justFiled = null)
+    {
+        if (minutes <= 0)
+        {
+            return null;
+        }
+
+        var qualifiers = classDayRounds.Where(r => r.Kind == RoundKind.Qualifier).ToList();
+
+        if (qualifiers.Count == 0)
+        {
+            return null;
+        }
+
+        DateTime? lastEnd = null;
+
+        foreach (var round in qualifiers)
+        {
+            var result = justFiled is not null && string.Equals(justFiled.RoundId, round.Id, StringComparison.Ordinal)
+                ? justFiled
+                : round.IsRecorded ? sessionOf(round.LinkedSessionId!) : null;
+
+            if (result is null)
+            {
+                return null;
+            }
+
+            if (!result.IsNotScored() && (lastEnd is null || result.EndedAtUtc > lastEnd))
+            {
+                lastEnd = result.EndedAtUtc;
+            }
+        }
+
+        return lastEnd?.AddMinutes(minutes);
+    }
+
+    /// <summary>
+    /// Whether a driver may still query a race on their phone: always, unless
+    /// the race is a qualifier of a class whose window has closed.
+    /// <paramref name="closesAtUtc"/> null means no window - as before.
+    /// </summary>
+    public static bool QueryOpen(DateTime? closesAtUtc, DateTime nowUtc) => closesAtUtc is not { } at || nowUtc < at;
+
+    /// <summary>"Provisional until 20:42" for the phones - the time in the laptop's local time.</summary>
+    public static string PhoneWords(DateTime closesAtUtc) =>
+        $"Provisional until {AppTime.TimeOfDay(closesAtUtc.ToLocalTime())}";
+
+    /// <summary>
+    /// The announcer's line once a class's last qualifier is in: "That's
+    /// qualifying done for Stock. Results are provisional for five minutes -
+    /// any queries to the race desk, please." Queries off on the phones, the
+    /// desk is still where they go.
+    /// </summary>
+    public static string Announcement(string className, int minutes)
+    {
+        var name = string.IsNullOrWhiteSpace(className) ? string.Empty : $" for {className.Trim()}";
+        var span = minutes == 1 ? "one minute" : $"{SpokenNumber(minutes)} minutes";
+
+        return $"That's qualifying done{name}. Results are provisional for {span} - any queries to the race desk, please.";
+    }
+
+    private static string SpokenNumber(int n) => n switch
+    {
+        2 => "two",
+        3 => "three",
+        4 => "four",
+        5 => "five",
+        6 => "six",
+        7 => "seven",
+        8 => "eight",
+        9 => "nine",
+        10 => "ten",
+        15 => "fifteen",
+        20 => "twenty",
+        30 => "thirty",
+        _ => n.ToString(CultureInfo.InvariantCulture),
+    };
 }
 
 /// <summary>

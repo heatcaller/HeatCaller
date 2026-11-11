@@ -981,6 +981,7 @@ html.light .flagbar.f-white { --flag: #8A90A0; }
 /* Qualifying on the Schedule (4 Nov 2026): a line where each main ends. */
 .qual { padding: 0 0 6px; margin-bottom: 12px; }
 .qual h3 { margin: 0; padding: 12px 16px 6px; font-size: 1.05rem; }
+.qual p.prov { margin: 0; padding: 0 16px 6px; font-size: .9rem; color: var(--muted, inherit); }
 .qual tr.cut td { border-top: 2px dashed var(--accent); }
 /* How far behind the night is running, on the Schedule (4 Nov 2026). */
 .late { margin: 0 0 10px; padding: 10px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); font-weight: 700; }
@@ -8440,6 +8441,15 @@ function qualScore(cls, r) {
   return Number(r.laps) > 0 ? Number(r.laps) + '/' + lap(Number(r.timeMs)) : '-';
 }
 
+// "Provisional until 20:42" while the class's protest window is open (11 Nov
+// 2026): the laptop sends the words and the moment it closes, so the line
+// goes at that time even before the next copy arrives. Nothing from an
+// older laptop.
+function qualProvisional(cls) {
+  const until = Number(cls && cls.provisionalUntil) || 0;
+  return until > Date.now() && cls && typeof cls.provisional === 'string' ? cls.provisional : '';
+}
+
 // For a row in a lower main: the score to beat for the one above, as words.
 function qualToMoveUp(cls, rows, r) {
   const size = Number(cls && cls.mainSize) || 0;
@@ -8676,7 +8686,8 @@ function drawQual(classes) {
       return '<tr' + (cut ? ' class="cut"' : '') + '><td class="pos">' + esc(r.pos) + '</td><td>' + who + '</td>' +
         '<td class="n">' + esc(qualScore(c, r)) + '</td><td class="n">' + esc(r.main || '') + '</td></tr>';
     }).join('');
-    return '<div class="card qual"><h3>' + esc(c.name) + '</h3><table><thead><tr><th class="pos">#</th><th>Driver</th>' +
+    const prov = qualProvisional(c);
+    return '<div class="card qual"><h3>' + esc(c.name) + '</h3>' + (prov ? '<p class="prov">' + esc(prov) + '</p>' : '') + '<table><thead><tr><th class="pos">#</th><th>Driver</th>' +
       '<th class="n">Best</th><th class="n">Main</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
   }).join('');
 }
@@ -11139,6 +11150,8 @@ function qualPart() {
   part.appendChild(el('b', '', 'Qualifying'));
   part.appendChild(el('div', '', nth(Number(m.r.pos)) + ' of ' + m.rows.length + ' in ' + String(m.cls.name || '') + (m.r.main ? ' - ' + m.r.main + ' main' : '')));
   part.appendChild(el('div', 'when', 'Best ' + qualScore(m.cls, m.r)));
+  const prov = qualProvisional(m.cls);
+  if (prov) part.appendChild(el('div', 'when', prov));
   const up = qualToMoveUp(m.cls, m.rows, m.r);
   if (up) part.appendChild(el('div', 'when', up));
   return part;
@@ -12853,6 +12866,7 @@ function drawExtras() {
 // - a line that says so. Only ever reached with a real code that has a
 // live entry, so it gives nothing away that the live card does not.
 function paintNight() {
+  watchQueryWindows();
   if (night !== null) {
     draw();
     drawExtras();
@@ -13034,8 +13048,31 @@ function asksPart() {
 
 // ---- "Something wrong?" under a race
 
+function queryStillOpen(r) {
+  const until = Number(r && r.qUntil) || 0;
+  return until <= 0 || Date.now() < until;
+}
+
+// Redraw the night when the next race's query window closes, so its
+// "Something wrong?" goes on time rather than at the next change.
+let queryWindowTimer = 0;
+function watchQueryWindows() {
+  clearTimeout(queryWindowTimer);
+  const races = night && Array.isArray(night.races) ? night.races : [];
+  const next = races
+    .map((r) => Number(r && r.qUntil) || 0)
+    .filter((t) => t > Date.now())
+    .sort((a, b) => a - b)[0];
+  if (!next) return;
+  queryWindowTimer = setTimeout(() => { paintNight(); }, Math.min(next - Date.now() + 500, 2147483000));
+}
+
 function queryPart(r) {
   if (!asksOpen || queriesOff || !r || typeof r.sid !== 'string' || !OBJECT_ID.test(r.sid)) return null;
+  // The protest window (11 Nov 2026): a qualifier of a class whose window
+  // has closed carries qUntil, and its "Something wrong?" goes at that
+  // moment - see queryWindowTimer. No qUntil, as before.
+  if (!queryStillOpen(r)) return null;
 
   // Both of a driver's cars in one race is two cards with the same race id
   // (22 Oct 2026, second transponder). Each keeps its own query, and says

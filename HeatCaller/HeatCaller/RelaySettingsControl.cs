@@ -86,6 +86,9 @@ public sealed class RelaySettingsControl : UserControl
     // somebody's inbox.
     private readonly CheckBox _chkDriverRequests = new ThemedCheckBox();
     private readonly CheckBox _chkResultQueries = new ThemedCheckBox();
+    private readonly NumericUpDown _numProtestMinutes = new();
+    private FieldGrid _protestGrid = null!;
+    private Label _lblProtestHint = null!;
     private readonly CheckBox _chkRelayCaptions = new ThemedCheckBox();
     private readonly CheckBox _chkNightEmail = new ThemedCheckBox();
     private readonly CheckBox _chkNightEmailAuto = new ThemedCheckBox();
@@ -454,6 +457,7 @@ public sealed class RelaySettingsControl : UserControl
         var shortMail = UiLayout.AtTextSize(ShortMailWidth);
 
         Fit(_txtSmtpHost, shortMail);
+        Fit(_numProtestMinutes, UiLayout.AtTextSize(UiLayout.NumericWidth));
         Fit(_numSmtpPort, Math.Max(
             UiLayout.AtTextSize(UiLayout.NumericWidth),
             TextRenderer.MeasureText(new string('0', PortDigits), _numSmtpPort.Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra));
@@ -723,6 +727,8 @@ public sealed class RelaySettingsControl : UserControl
         StepIn(card.Add(lblRequestsHint));
         StepIn(card.Add(_chkResultQueries, stretch: false, gapBelow: UiLayout.HintGap));
         StepIn(card.Add(lblQueriesHint));
+        StepIn(card.Add(_protestGrid, gapBelow: UiLayout.HintGap));
+        StepIn(card.Add(_lblProtestHint));
 
         card.Add(_chkNightEmail, stretch: false, gapBelow: UiLayout.HintGap);
         card.Add(lblNightEmailHint);
@@ -880,6 +886,33 @@ public sealed class RelaySettingsControl : UserControl
         var lblQueriesHint = HintLabel(
             "On by default. Shows \"Something wrong?\" under each race on a driver's night page. Untick it and "
             + "drivers ask about a result at the desk instead; their other requests still work.");
+
+        // The protest window, moved here from Race Day > Setup (11 Nov
+        // 2026) so it sits beside the queries it limits - the one place it
+        // is set (AppSettings.ProtestMinutes). Not greyed with the queries:
+        // the desk's "provisional until" and the announcer use it either way.
+        _numProtestMinutes.Minimum = 0;
+        _numProtestMinutes.Maximum = ProtestWindow.MostMinutes;
+        _numProtestMinutes.ValueChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            _settings.ProtestMinutes = (int)_numProtestMinutes.Value;
+            _settings.Save();
+            _publisher.SettingsChanged();
+        };
+
+        _protestGrid = new FieldGrid();
+        _protestGrid.AddRow("Protest window (min):", _numProtestMinutes);
+        _linedUp.Add(_protestGrid);
+
+        _lblProtestHint = HintLabel(
+            $"{ProtestWindow.DefaultMinutes} minutes unless you change it; 0 turns it off. Once a class's last "
+            + "qualifier is in, its results show \"Provisional until\" a time on the phones, the announcer says "
+            + "queries go to the desk, and when the time is up \"Something wrong?\" goes from that class's heats.");
 
         _chkNightEmail.Text = "Offer drivers their night by email";
         _chkNightEmail.AutoSize = true;
@@ -2987,6 +3020,7 @@ public sealed class RelaySettingsControl : UserControl
             _chkFullNamesAloud.Enabled = _settings.RelayAbbreviateNames;
             _chkDriverRequests.Checked = _settings.RelayDriverRequests;
             _chkResultQueries.Checked = _settings.RelayResultQueries;
+            _numProtestMinutes.Value = Math.Clamp(_settings.ProtestMinutesFor(null), (int)_numProtestMinutes.Minimum, (int)_numProtestMinutes.Maximum);
             _chkNightEmail.Checked = _settings.NightEmailOffered;
             _chkNightEmailAuto.Checked = _settings.NightEmailAutomatic;
             _chkRelayCaptions.Checked = _settings.RelayCaptions;

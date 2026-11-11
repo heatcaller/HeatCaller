@@ -412,12 +412,14 @@ Seeding only looks at the current race day's mains. If the class already has mai
 
 ### The protest window
 
-After a class's last qualifier is recorded, its results stay provisional for the race day's **Protest window (min):** (5 minutes unless set otherwise on **Setup**), so a lap-count query can be dealt with before the finals are built.
+After a class's last qualifier is recorded, its results stay provisional for the club's **Protest window (min):**, so a lap-count query can be dealt with before the finals are built. It's set on the **Club Website** page, under **Let drivers query a result** (5 minutes unless you change it, up to 60). It used to be on **Race Day → Setup**; a race day that had its own value hands it over the first time you open this version.
 
 - The next-step card says "Results are provisional until 20:42 (the protest window)." above **Build the finals from qualifying**.
 - Building the finals before then is allowed. The question starts with the same words and "A query still to come could change this order."
-- Drivers can still query a result from their phone in the meantime (see [Querying a result](../online/driver-requests.md#querying-a-result)).
-- A window of 0 turns it off.
+- Once every qualifier of the class is in, the announcer says it once, for example "That's qualifying done for Stock. Results are provisional for five minutes - any queries to the race desk, please."
+- On the phones, the class's qualifying on the **Schedule** page, and a driver's own qualifying line, say "Provisional until 20:42" while the window is open.
+- Drivers can query a result from their phone in the meantime (see [Querying a result](../online/driver-requests.md#querying-a-result)). When the window closes, **Something wrong?** goes from that class's heats on each driver's night page. Mains, and a class still qualifying, keep it as before.
+- A window of 0 turns it off, and the phones behave as before.
 
 If the class has no recorded qualifying yet, seeding offers to add a main by hand instead.
 

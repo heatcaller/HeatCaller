@@ -87,6 +87,8 @@ A driver can send at most 10 queries in a night. One more is declined at once wi
 
 **Let drivers query a result** on the Club Website page turns this off on its own. Unticked, **Something wrong?** goes from every race card within a few seconds, a query sent from a page that still shows it is refused with "Your club is not taking result queries online. Ask at the desk.", and the driver's other requests carry on.
 
+Once a class's last qualifier is in, its heats can be queried only until its protest window closes: then **Something wrong?** goes from those heats, at that minute. Mains, and a class still qualifying, aren't affected. See [The protest window](../race-day/program-and-mains.md#the-protest-window).
+
 ### More time, or skip my race
 
 While their race is next up, the **Up next** card on **Me** has two buttons:

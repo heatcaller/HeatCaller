@@ -1149,9 +1149,14 @@ public partial class MainForm
                 }
             }
 
+            // The protest window (11 Nov 2026) - see MainForm.ProtestWindow.
+            var (provisional, provisionalUntil) = ProvisionalFor(raceClass.Name);
+
             classes.Add(new
             {
                 name = raceClass.Name,
+                provisional,
+                provisionalUntil,
                 method = raceClass.QualifyingMethod.ToString(),
                 consecutive = raceClass.ConsecutiveLapCount,
                 mainSize = plan.MainSize,
@@ -2560,7 +2565,7 @@ public partial class MainForm
         }
 
         return (
-            DriverNightExtras.Races(who, tonight, roundOf, runs, _settings.RelayAbbreviateNames, history),
+            WithQueryWindows(who, DriverNightExtras.Races(who, tonight, roundOf, runs, _settings.RelayAbbreviateNames, history)),
             DriverNightExtras.Improvement(who, paces),
             DriverNightExtras.Progress(who, history, latest?.TrackLayoutName, _pbResets, nowLocal));
     }
