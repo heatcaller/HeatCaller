@@ -495,6 +495,13 @@ public sealed partial class CheckInControl : UserControl
 
         actions.With(_btnSignups, _btnDriverRequests);
 
+        // Money at the desk: the slip a double-click on a name adds to.
+        if (_payments is not null)
+        {
+            _btnDriverPaid.Click += (_, _) => OpenDriverPaid();
+            actions.With(_btnDriverPaid);
+        }
+
         var roster = new Section("Drivers");
 
         roster.Add(filterRow);
@@ -1218,6 +1225,8 @@ public sealed partial class CheckInControl : UserControl
             paidColumn.Visible = TonightsFees() is { Entry: > 0 };
         }
 
+        RefreshPaidSlip(_payments is not null && TonightsFees() is { Entry: > 0 });
+
         UpdateSummary();
     }
 
@@ -1231,6 +1240,19 @@ public sealed partial class CheckInControl : UserControl
         // A double-click on one of several picked rows is about all of them -
         // see BulkTech.RowsToActOn - whichever column it lands in.
         var rows = RowsForDoubleClick(e.RowIndex, ModifierKeys);
+
+        // The Driver Paid slip open: a double-click on a name (or on one of
+        // several picked) adds them to it - except on a single row's Tech
+        // cell, which still inspects.
+        var onTech = _tech is not null && e.ColumnIndex == _grid.Columns["tech"]?.Index;
+
+        if (_paidForm is { IsDisposed: false } && (rows.Count > 1 || !onTech))
+        {
+            UndoFirstClickTick();
+            Reselect(rows);
+            AddToPaidSlip(DriversIn(rows));
+            return;
+        }
 
         if (rows.Count > 1)
         {
@@ -1306,17 +1328,13 @@ public sealed partial class CheckInControl : UserControl
     }
 
     /// <summary>
-    /// A double-click on one of several picked drivers: the picked rows
-    /// selected again - the double-click's own first click narrowed the
-    /// selection to its row - and a menu at the pointer offering what can be
-    /// done to all of them.
+    /// The first click of a double-click is an ordinary click, and on a
+    /// Checked In cell an ordinary click ticks or unticks. Whatever it did
+    /// is put back: the double-click was about the picked drivers, not
+    /// that one tick.
     /// </summary>
-    private void ActOnMany(IReadOnlyList<int> rows)
+    private void UndoFirstClickTick()
     {
-        // The first click of the double-click is an ordinary click, and on a
-        // Checked In cell an ordinary click ticks or unticks. Whatever it did
-        // is put back: the double-click was about the picked drivers, not
-        // that one tick.
         if (_tickBeforeClick is { } before
             && _checkIns.IsCheckedIn(before.Transponder) != before.WasIn
             && CheckInStore.ClosedCurrentDay(_events) is null)
@@ -1325,7 +1343,17 @@ public sealed partial class CheckInControl : UserControl
             CheckInChangedAtDesk?.Invoke(before.Transponder);
             RefreshCheckInMarks();
         }
+    }
 
+    /// <summary>
+    /// A double-click on one of several picked drivers: the picked rows
+    /// selected again - the double-click's own first click narrowed the
+    /// selection to its row - and a menu at the pointer offering what can be
+    /// done to all of them.
+    /// </summary>
+    private void ActOnMany(IReadOnlyList<int> rows)
+    {
+        UndoFirstClickTick();
         Reselect(rows);
 
         var drivers = DriversIn(rows);
