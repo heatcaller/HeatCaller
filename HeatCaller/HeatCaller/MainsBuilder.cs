@@ -202,6 +202,36 @@ public static class MainsBuilder
             : null;
     }
 
+    /// <summary>
+    /// The mains one bump-up goes into (11 Nov 2026): <paramref name="target"/>
+    /// alone, or - when it is a leg of a double or triple A-main - every leg
+    /// of that A-main still to run and still waiting for its bump-ups, in
+    /// leg order. The legs share a grid and a feeder, so the director moves
+    /// the B-main's top finishers up once rather than leg by leg. A leg
+    /// already run, or already given its bump-ups, is left as it is.
+    /// </summary>
+    public static List<RoundDefinition> BumpUpTargets(RoundDefinition target, IReadOnlyList<RoundDefinition> allMains)
+    {
+        if (target.MainLeg <= 0)
+        {
+            return new List<RoundDefinition> { target };
+        }
+
+        var others = allMains
+            .Where(r => !ReferenceEquals(r, target)
+                        && !string.Equals(r.Id, target.Id, StringComparison.Ordinal)
+                        && r.Kind == RoundKind.Main
+                        && r.MainTier == target.MainTier
+                        && r.MainLeg > 0
+                        && string.Equals(r.ClassName, target.ClassName, StringComparison.OrdinalIgnoreCase)
+                        && r.BumpUpCount > 0
+                        && !r.BumpUpsApplied
+                        && !r.IsRecorded
+                        && ReferenceEquals(FeederFor(r, allMains), FeederFor(target, allMains)));
+
+        return new[] { target }.Concat(others).OrderBy(r => r.MainLeg).ToList();
+    }
+
     public sealed record BumpUpResult(List<string> Promoted, List<string> Demoted);
 
     /// <summary>One feeder finisher in a bump-up's top places, under the driver's MAIN transponder.</summary>

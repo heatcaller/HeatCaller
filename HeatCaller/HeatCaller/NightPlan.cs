@@ -378,6 +378,25 @@ public static class NightPlan
             ? $"Change of plan, everyone: tonight finishes after {stop.Current.Name}."
             : $"Change of plan, everyone: qualifying finishes after {stop.Current.Name}, and the finals are next.";
 
+    /// <summary>
+    /// An estimated start as the heat sheet and the phones show it (11 Nov
+    /// 2026): "about 20:42", local time as AppTime shows it, rounded to the
+    /// nearest minute.
+    /// </summary>
+    public static string About(DateTime startUtc)
+    {
+        var rounded = new DateTime((startUtc.Ticks + TimeSpan.TicksPerMinute / 2) / TimeSpan.TicksPerMinute * TimeSpan.TicksPerMinute, DateTimeKind.Utc);
+
+        return $"about {AppTime.TimeOfDay(rounded.ToLocalTime())}";
+    }
+
+    /// <summary>
+    /// Each round's "about 20:42" from a plan, by round id - null for a round
+    /// already run, or with no plan (no race day open, nothing left to run).
+    /// </summary>
+    public static Func<string, string?> AboutOf(Projection? plan) =>
+        roundId => plan?.StartOf(roundId) is { } start ? About(start) : null;
+
     /// <summary>A length in whole minutes, as a saving or an overrun is said: "40 min", "1 h 05 min".</summary>
     public static string Minutes(TimeSpan length)
     {

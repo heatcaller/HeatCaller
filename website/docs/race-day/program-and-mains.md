@@ -404,20 +404,22 @@ Each leg is scored like a points round:
 
 Ties are broken by the best finish in any single leg, then by the better finish in the last leg run.
 
-The overall result is in the event report, under **A-Main overall**, with each driver's place and points in every leg. Each leg's own result is in **Results** like any race.
+The overall result is in the event report, under **A-Main overall**, with each driver's place and points in every leg. Each leg's own result is in **Results** like any race. Once the last leg is recorded, the announcer says who won overall straight after that leg's result, for example "Sam wins the A-Main overall, best two of three legs", and the race recap mentions it too.
 
-Each leg takes bump-ups from the B-Main. The next-step card offers them one leg at a time: apply them to every leg before it runs.
+The legs take their bump-ups from the B-Main together. **Move the Top Finishers Up...** (or the next-step card) asks once and puts the B-Main's top finishers into every leg that hasn't run, with one **Undo**. Skipping bump-ups skips them for every leg too. A leg that has already run, or already has its bump-ups, is left alone.
 
 Seeding only looks at the current race day's mains. If the class already has mains today that haven't run, seeding replaces them. If any of today's mains have already been run, seeding stops with **Mains already run** — take the ones you don't want off the program first, so recorded results aren't orphaned. Mains from earlier race days are left alone and never block seeding. A main that's out on track can't be replaced either. Seeding can be undone. As with the qualifying build, any new mains that have been run by the time you undo are kept, along with a main that's on track right now, and a **Some rounds were kept** box lists them.
 
 ### The protest window
 
-After a class's last qualifier is recorded, its results stay provisional for the race day's **Protest window (min):** (5 minutes unless set otherwise on **Setup**), so a lap-count query can be dealt with before the finals are built.
+After a class's last qualifier is recorded, its results stay provisional for the club's **Protest window (min):**, so a lap-count query can be dealt with before the finals are built. It's set on the **Club Website** page, under **Let drivers query a result** (5 minutes unless you change it, up to 60). It used to be on **Race Day → Setup**; a race day that had its own value hands it over the first time you open this version.
 
 - The next-step card says "Results are provisional until 20:42 (the protest window)." above **Build the finals from qualifying**.
 - Building the finals before then is allowed. The question starts with the same words and "A query still to come could change this order."
-- Drivers can still query a result from their phone in the meantime (see [Querying a result](../online/driver-requests.md#querying-a-result)).
-- A window of 0 turns it off.
+- Once every qualifier of the class is in, the announcer says it once, for example "That's qualifying done for Stock. Results are provisional for five minutes - any queries to the race desk, please."
+- On the phones, the class's qualifying on the **Schedule** page, and a driver's own qualifying line, say "Provisional until 20:42" while the window is open.
+- Drivers can query a result from their phone in the meantime (see [Querying a result](../online/driver-requests.md#querying-a-result)). When the window closes, **Something wrong?** goes from that class's heats on each driver's night page. Mains, and a class still qualifying, keep it as before.
+- A window of 0 turns it off, and the phones behave as before.
 
 If the class has no recorded qualifying yet, seeding offers to add a main by hand instead.
 
@@ -494,6 +496,8 @@ A heat sheet is a printable page for the pit table: the current race day's round
 3. Open it and print it at full page size.
 
 The sheet is black on white for easy reading, with a band of the class's color across the top and beside each round, so you can sort a pile of sheets by class at a glance. It's letter-size. A class with more rounds than fit on one page runs onto as many pages as it needs, each marked "page 1 of 2" and so on. Saved, the first page goes to the file you chose and the others beside it with "-page2", "-page3" added to the name; HeatCaller asks before replacing pages already in that folder.
+
+Each round still to run shows its estimated start after its title, for example "Q2 Heat 1 - about 20:42", from the same plan of the night as the **Next Steps** finish time. The times are worked out when you print or save, so print the sheet again later in the night for times that have moved. Rounds already run, and a sheet printed with no race day open, show none.
 
 ## The Timetable
 

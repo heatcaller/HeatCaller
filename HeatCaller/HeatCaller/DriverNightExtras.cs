@@ -763,6 +763,16 @@ internal sealed record NightRace
     [JsonPropertyName("lines")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<string>? Lines { get; init; }
+
+    /// <summary>
+    /// When the protest window for this race's class closes, Unix ms (11 Nov
+    /// 2026): a qualifier of a class whose last qualifier is in. The phone
+    /// takes "Something wrong?" away at that moment. Left out for a race
+    /// with no window, and with queries off - as before.
+    /// </summary>
+    [JsonPropertyName("qUntil")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? QueryUntil { get; init; }
 }
 
 /// <summary>One driver in `races[].field`: {pos?, name, qual?, lapsMs?, posAt?, startMs?} - the public result row's shape.</summary>

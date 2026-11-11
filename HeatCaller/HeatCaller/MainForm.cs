@@ -957,6 +957,15 @@ public partial class MainForm : Form
         if (!_raceEvents.LoadedUnreadable)
         {
             EventSpine.StartFirstDayIfNever(_raceEvents);
+
+            // The protest window moved from Race Day > Setup to the Club
+            // Website page (11 Nov 2026). A race day that had changed it
+            // hands its choice over, once - see ProtestWindow.CarryOver.
+            if (ProtestWindow.CarryOver(_settings.ProtestMinutes, _raceEvents.Active, _raceEvents.All) is { } carried)
+            {
+                _settings.ProtestMinutes = carried;
+                _settings.Save();
+            }
         }
 
         // --- Class renames ---
@@ -1218,6 +1227,10 @@ public partial class MainForm : Form
             // handler is here: a FILED result is the first moment the
             // night a document describes is true.
             PublishDriverNightsFor(record);
+
+            // A class's last qualifier opens its protest window (11 Nov
+            // 2026) - said once, and its drivers' nights carry the close.
+            ProtestWindowAfterFiling(record);
 
             // A finished session is when badges are earned; read them
             // afresh on the next pass rather than waiting out the cache -

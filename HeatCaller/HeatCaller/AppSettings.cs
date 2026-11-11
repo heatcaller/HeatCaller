@@ -935,6 +935,19 @@ public sealed class AppSettings
     public bool RelayResultQueries { get; set; } = true;
 
     /// <summary>
+    /// The protest window in minutes (11 Nov 2026): how long after a class's
+    /// last qualifier its results stay provisional. Set on the Club Website
+    /// page beside "Let drivers query a result" - the one place it is set.
+    /// Null until somebody sets it there, when the open race day's old value
+    /// (RaceEvent.ProtestMinutes, where it used to live) still counts - see
+    /// ProtestWindow.Minutes. 0 turns the window off.
+    /// </summary>
+    public int? ProtestMinutes { get; set; }
+
+    /// <summary>The protest window in force - see ProtestMinutes and ProtestWindow.Minutes.</summary>
+    public int ProtestMinutesFor(RaceEvent? day) => ProtestWindow.Minutes(ProtestMinutes, day?.ProtestMinutes);
+
+    /// <summary>
     /// Publish what the announcer says as text captions on the club's live
     /// page, for drivers who can't hear the PA. Names of drivers who asked
     /// for initials only are redacted.

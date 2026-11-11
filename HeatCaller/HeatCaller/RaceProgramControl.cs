@@ -822,6 +822,21 @@ public sealed class RaceProgramControl : UserControl
             .ToList();
 
     /// <summary>
+    /// When the class's protest window closes tonight (11 Nov 2026) - once
+    /// every one of its qualifiers today is in - or null: no race day open,
+    /// no window, or a qualifier still to run. <paramref name="justFiled"/>
+    /// is a result filed a moment ago whose round is not linked yet. See
+    /// ProtestWindow.ClosesAtUtc.
+    /// </summary>
+    public DateTime? ProtestClosesAtUtc(string className, SessionRecord? justFiled = null) =>
+        ActiveDay is { } day
+            ? ProtestWindow.ClosesAtUtc(DayRoundsForClass(className), _sessionHistory.Get, _settings.ProtestMinutesFor(day), justFiled)
+            : null;
+
+    /// <summary>The protest window in force tonight, in minutes - see AppSettings.ProtestMinutesFor.</summary>
+    public int ProtestMinutesTonight => _settings.ProtestMinutesFor(ActiveDay);
+
+    /// <summary>
     /// Which classes are racing today.
     ///
     /// The race day says so when it has been told; otherwise this reads it
@@ -964,7 +979,7 @@ public sealed class RaceProgramControl : UserControl
         // The protest window (11 Nov 2026, Phase 3): finals asked for while
         // the class's results are still provisional say until when.
         if (step.Stage == ProgramStage.SeedMains && ActiveDay is { } raceDay
-            && ProtestWindow.FinalAtUtc(DayRoundsForClass(step.ClassName), _sessionHistory.Get, raceDay.ProtestMinutes) is { } finalAt
+            && ProtestWindow.FinalAtUtc(DayRoundsForClass(step.ClassName), _sessionHistory.Get, _settings.ProtestMinutesFor(raceDay)) is { } finalAt
             && ProtestWindow.IsProvisional(finalAt, DateTime.UtcNow))
         {
             step = step with { Detail = ProtestWindow.Words(finalAt) + " " + step.Detail };
@@ -1014,6 +1029,16 @@ public sealed class RaceProgramControl : UserControl
     /// no race day open. See NightPlan.
     /// </summary>
     internal NightPlan.Projection? Plan() => Plan(DayRounds());
+
+    /// <summary>
+    /// Each round's estimated start as the heat sheet prints it - "about
+    /// 20:42" - from the plan as it stands now (11 Nov 2026). See NightPlan.AboutOf.
+    /// </summary>
+    private Func<RoundDefinition, string?> EstimatedStarts()
+    {
+        var about = NightPlan.AboutOf(Plan());
+        return round => about(round.Id);
+    }
 
     private NightPlan.Projection? Plan(IReadOnlyList<RoundDefinition> day)
     {
@@ -2689,7 +2714,7 @@ public sealed class RaceProgramControl : UserControl
             : "\r\n\r\nBump-ups are disabled for this class.";
 
         // The protest window: building now is allowed, and says so.
-        var finalAt = ProtestWindow.FinalAtUtc(DayRoundsForClass(className), _sessionHistory.Get, ActiveDay.ProtestMinutes);
+        var finalAt = ProtestWindow.FinalAtUtc(DayRoundsForClass(className), _sessionHistory.Get, _settings.ProtestMinutesFor(ActiveDay));
         var provisional = ProtestWindow.IsProvisional(finalAt, DateTime.UtcNow)
             ? $"{ProtestWindow.Words(finalAt!.Value)} A query still to come could change this order.\r\n\r\n"
             : string.Empty;
@@ -4720,6 +4745,8 @@ public sealed class RaceProgramControl : UserControl
         // MainsBuilder, the same call ApplyBumpUp makes, so the names asked
         // about are the drivers moved - ghosts left out, spare transponders
         // counted as their driver.
+        var legsTaking = MainsBuilder.BumpUpTargets(target, mains);
+        var into = LegsInWords(legsTaking);
         var plan = MainsBuilder.PlanBumpUp(target, feederResults, _profiles);
         var movable = plan.Movable;
         var alreadyThere = plan.AlreadyThere;
@@ -4734,7 +4761,7 @@ public sealed class RaceProgramControl : UserControl
 
             return new BumpUpsAnswer(true, "Nothing to bump",
                 $"Nothing to bump up - every qualifying finisher from {feeder.RoundLabel} is already in {target.RoundLabel}.{who}"
-                + $"\r\n\r\nBump-ups for {target.RoundLabel} are marked as done, so the program can move on.",
+                + $"\r\n\r\nBump-ups for {into} are marked as done, so the program can move on.",
                 target, feeder, true);
         }
 
@@ -4745,8 +4772,8 @@ public sealed class RaceProgramControl : UserControl
             : string.Empty;
 
         return new BumpUpsAnswer(true, ProgramCaptions.BumpUps.TrimEnd('.'),
-            $"Bump {Plural.Of(movable.Count, "driver")} from {feeder.RoundLabel} up into {target.RoundLabel}?\r\n\r\n{names}{skipped}"
-            + $"\r\n\r\n{target.RoundLabel} grows to take them - nobody is moved down into {feeder.RoundLabel}, "
+            $"Bump {Plural.Of(movable.Count, "driver")} from {feeder.RoundLabel} up into {into}?\r\n\r\n{names}{skipped}"
+            + $"\r\n\r\n{(legsTaking.Count > 1 ? "Each leg grows" : target.RoundLabel + " grows")} to take them - nobody is moved down into {feeder.RoundLabel}, "
             + "which has already run.",
             target, feeder, false);
     }
@@ -4778,6 +4805,16 @@ public sealed class RaceProgramControl : UserControl
         // passed - see MainsBuilder.FeederFor.
         var feeder = MainsBuilder.FeederFor(target, mains)!;
         var feederResults = _sessionHistory.Get(feeder.LinkedSessionId!)!;
+
+        // EVERY LEG AT ONCE (11 Nov 2026): a double or triple A-main's legs
+        // share the grid, so the bump-ups go into each leg still to run in
+        // this one step, under one undo - see MainsBuilder.BumpUpTargets.
+        var targets = MainsBuilder.BumpUpTargets(target, mains);
+
+        if (targets.Count > 1)
+        {
+            return ApplyBumpUpsIntoLegs(targets, feeder, feederResults, undoPrefix);
+        }
 
         // Snapshot both rosters - a bump-up changes two rounds at once.
         var targetBefore = target.AssignedTransponders.ToList();
@@ -4850,6 +4887,88 @@ public sealed class RaceProgramControl : UserControl
     }
 
     /// <summary>
+    /// The bump-ups into every leg of a double or triple A-main still to run
+    /// (11 Nov 2026), as one change with one undo - the same rules as the
+    /// single main above: the undo refuses whole once any leg has been run
+    /// or edited by hand since.
+    /// </summary>
+    private ProgramAnswer ApplyBumpUpsIntoLegs(List<RoundDefinition> legs, RoundDefinition feeder, SessionRecord feederResults, string undoPrefix)
+    {
+        var before = legs.ToDictionary(l => l.Id, l => l.AssignedTransponders.ToList(), StringComparer.Ordinal);
+        var feederBefore = feeder.AssignedTransponders.ToList();
+        List<RosterRestore>? restores = null;
+
+        var label = $"{undoPrefix}Bump-ups into {LegsInWords(legs)}";
+
+        Action? undoBumpUps = null;
+        undoBumpUps = () =>
+        {
+            RefuseRosterUndoWhileOnTrack(label, undoBumpUps!, legs.Select(l => l.Id).Append(feeder.Id).ToList());
+
+            if (restores is null)
+            {
+                return;
+            }
+
+            var verdict = CheckRosterUndo(restores, _rounds.Get);
+
+            if (!verdict.CanRestore)
+            {
+                throw new InvalidOperationException(DescribeRosterUndoRefusal(verdict, "bump-ups", "main"));
+            }
+
+            WriteRosters(restores);
+
+            foreach (var leg in legs)
+            {
+                if (_rounds.Get(leg.Id) is { } current)
+                {
+                    current.BumpUpsApplied = false;
+                    _rounds.Update(current);
+                }
+            }
+
+            RefreshAll();
+        };
+
+        _undo.Capture(label, undoBumpUps);
+
+        var promoted = new List<string>();
+
+        foreach (var leg in legs)
+        {
+            var result = MainsBuilder.ApplyBumpUp(leg, feeder, feederResults, _profiles);
+            promoted = promoted.Union(result.Promoted, StringComparer.OrdinalIgnoreCase).ToList();
+            _rounds.Update(leg);
+        }
+
+        _rounds.Update(feeder);
+
+        restores = legs
+            .Select(l => new RosterRestore(l.Id, l.LinkedSessionId, l.AssignedTransponders.ToList(), before[l.Id]))
+            .Append(new RosterRestore(feeder.Id, feeder.LinkedSessionId, feeder.AssignedTransponders.ToList(), feederBefore))
+            .ToList();
+
+        RefreshAll();
+
+        return new ProgramAnswer(true, "Bump-ups applied",
+            $"Promoted {Plural.Of(promoted.Count, "driver")} into {LegsInWords(legs)}.");
+    }
+
+    /// <summary>"A-Main Leg 1, Leg 2 and Leg 3" - the legs a bump-up goes into.</summary>
+    internal static string LegsInWords(IReadOnlyList<RoundDefinition> legs)
+    {
+        if (legs.Count <= 1)
+        {
+            return legs.Count == 1 ? legs[0].RoundLabel : string.Empty;
+        }
+
+        var names = legs.Select((l, i) => i > 0 && l.MainLeg > 0 ? $"Leg {l.MainLeg}" : l.RoundLabel).ToList();
+
+        return string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1];
+    }
+
+    /// <summary>
     /// Marks a main's bump-ups as dealt with without moving anybody - for
     /// "nobody to move" and for "we are not doing bump-ups today". Either
     /// way the banner has to be able to move past it, and it only does that
@@ -4859,15 +4978,26 @@ public sealed class RaceProgramControl : UserControl
     /// </summary>
     public void SkipBumpUps(RoundDefinition target, string undoPrefix = "")
     {
-        _undo.Capture($"{undoPrefix}Skip bump-ups into {target.RoundLabel}", () =>
+        // Every leg of a multi-leg A-main at once, as the bump-ups themselves are.
+        var targets = MainsBuilder.BumpUpTargets(target, DayMainsForClass(target.ClassName));
+
+        _undo.Capture($"{undoPrefix}Skip bump-ups into {LegsInWords(targets)}", () =>
         {
-            target.BumpUpsApplied = false;
-            _rounds.Update(target);
+            foreach (var one in targets)
+            {
+                one.BumpUpsApplied = false;
+                _rounds.Update(one);
+            }
+
             RefreshAll();
         });
 
-        target.BumpUpsApplied = true;
-        _rounds.Update(target);
+        foreach (var one in targets)
+        {
+            one.BumpUpsApplied = true;
+            _rounds.Update(one);
+        }
+
         RefreshAll();
     }
 
@@ -4923,7 +5053,8 @@ public sealed class RaceProgramControl : UserControl
                 className,
                 rounds,
                 _profiles,
-                ClassByName(className)?.Colour ?? RaceClass.DefaultColourFor(className));
+                ClassByName(className)?.Colour ?? RaceClass.DefaultColourFor(className),
+                EstimatedStarts());
         }
         catch (Exception ex)
         {
@@ -4989,7 +5120,8 @@ public sealed class RaceProgramControl : UserControl
                 className,
                 rounds,
                 _profiles,
-                ClassByName(className)?.Colour ?? RaceClass.DefaultColourFor(className));
+                ClassByName(className)?.Colour ?? RaceClass.DefaultColourFor(className),
+                EstimatedStarts());
 
             if (PageFiles.SavePages(this, pages, dialog.FileName) is not { } written)
             {

@@ -39,6 +39,10 @@ public sealed partial class RaceDayService
         Register("race.handCars", OpKind.RaceControl, RaceHandCars, allowedWhileBusy: true);
         Register("race.handScoring", OpKind.RaceControl, RaceHandScoring, allowedWhileBusy: true);
         Register("race.handLap", OpKind.RaceControl, RaceHandLap, allowedWhileBusy: true);
+
+        // A car the decoder never saw before it died (11 Nov 2026) - see
+        // RaceControlControl.HandAddCar. Wi-Fi only, like the taps.
+        Register("race.handAdd", OpKind.RaceControl, RaceHandAdd, allowedWhileBusy: true);
     }
 
     /// <summary>
@@ -64,7 +68,43 @@ public sealed partial class RaceDayService
                     lapsText = c.LapsText,
                 })
                 .ToList(),
+
+            // The cars that can be put on the grid while it is on - this
+            // heat's roster first (11 Nov 2026). Names as the grid's are.
+            addable = control.HandScoringOn
+                ? control.HandScoringAddable()
+                    .Select(a => new { id = DriverIdFor(a.Transponder), name = a.Name, onRoster = a.OnRoster })
+                    .ToList()
+                : null,
         });
+    }
+
+    /// <summary>
+    /// Puts a car the decoder never saw on the board - {driverId}, one of
+    /// race.handCars' addable - through Race Control's HandAddCar, the
+    /// desk's own path. Hand scoring has to be on, as for a tap.
+    /// </summary>
+    private OpResult RaceHandAdd(OpContext context)
+    {
+        var control = _host.RaceControl;
+
+        if (!control.HandScoringOn)
+        {
+            throw new OpRefused("Hand scoring isn't on for this race - switch it on first.");
+        }
+
+        var addable = control.HandScoringAddable();
+        var transponder = TransponderForDriverId(context.Text("driverId"), addable.Select(a => a.Transponder))
+                          ?? throw new OpRefused("That car can't be added - it may be on the grid already. Look again.");
+
+        if (control.HandAddCar(transponder, "a phone") is { } refusal)
+        {
+            throw new OpRefused(refusal);
+        }
+
+        var name = addable.First(a => string.Equals(a.Transponder, transponder, StringComparison.OrdinalIgnoreCase)).Name;
+
+        return OpResult.Done("Car added", $"{name} is on the grid with no laps - tap them each time they cross.", new { id = DriverIdFor(transponder) });
     }
 
     /// <summary>Switches hand scoring on or off for the race running now - {on: true|false}.</summary>

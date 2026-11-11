@@ -42,7 +42,8 @@ public static class HeatSheetRenderer
         string className,
         IReadOnlyList<RoundDefinition> rounds,
         ProfileStore profiles,
-        Color accent)
+        Color accent,
+        Func<RoundDefinition, string?>? startOf = null)
     {
         var plan = PlanPages(rounds.Select(r => r.AssignedTransponders.Count).ToList());
         var pages = new List<Bitmap>(plan.Count);
@@ -56,7 +57,7 @@ public static class HeatSheetRenderer
                 var slice = rounds.Skip(first).Take(plan[page]).ToList();
                 var note = page < plan.Count - 1 ? $"(continued on page {page + 2} of {plan.Count})" : null;
 
-                pages.Add(RenderPage(className, slice, profiles, accent, page + 1, plan.Count, note));
+                pages.Add(RenderPage(className, slice, profiles, accent, page + 1, plan.Count, note, startOf));
                 first += plan[page];
             }
         }
@@ -87,7 +88,8 @@ public static class HeatSheetRenderer
         string className,
         IReadOnlyList<RoundDefinition> rounds,
         ProfileStore profiles,
-        Color accent)
+        Color accent,
+        Func<RoundDefinition, string?>? startOf = null)
     {
         var plan = PlanPages(rounds.Select(r => r.AssignedTransponders.Count).ToList());
         var onFirst = plan[0];
@@ -100,7 +102,7 @@ public static class HeatSheetRenderer
             _ => $"({leftOver} more rounds did not fit and are not on this sheet)",
         };
 
-        return RenderPage(className, rounds.Take(onFirst).ToList(), profiles, accent, 1, 1, note);
+        return RenderPage(className, rounds.Take(onFirst).ToList(), profiles, accent, 1, 1, note, startOf);
     }
 
     /// <summary>
@@ -155,13 +157,14 @@ public static class HeatSheetRenderer
         Color accent,
         int pageNumber,
         int pageCount,
-        string? continuedNote)
+        string? continuedNote,
+        Func<RoundDefinition, string?>? startOf)
     {
         var bitmap = new Bitmap(PageWidth, PageHeight);
 
         try
         {
-            DrawPage(bitmap, className, rounds, profiles, accent, pageNumber, pageCount, continuedNote);
+            DrawPage(bitmap, className, rounds, profiles, accent, pageNumber, pageCount, continuedNote, startOf);
 
             // The page is drawn at 96 DPI so the point-size fonts come out
             // the right size, but the pixels are a Letter page at 150 DPI.
@@ -190,7 +193,8 @@ public static class HeatSheetRenderer
         Color accent,
         int pageNumber,
         int pageCount,
-        string? continuedNote)
+        string? continuedNote,
+        Func<RoundDefinition, string?>? startOf)
     {
         // 96 DPI, not the screen's: under --dpi-aware at 150% the point-size text would draw half as big again.
         bitmap.SetResolution(96, 96);
@@ -252,7 +256,12 @@ public static class HeatSheetRenderer
             var shared = MixedHeats.IsShared(round);
             var classPart = shared ? $"   ({MixedHeats.ClassLabel(round)})" : string.Empty;
 
-            g.DrawString($"{round.RoundLabel}{classPart}{trackPart}", roundFont, black, Margin + 18, y);
+            // When it should start (11 Nov 2026), from NightPlan: "about
+            // 20:42", for a round still to run. A sheet printed again later
+            // in the night has the times as they stand then.
+            var aboutPart = RoundTitleTime(startOf?.Invoke(round));
+
+            g.DrawString($"{round.RoundLabel}{classPart}{trackPart}{aboutPart}", roundFont, black, Margin + 18, y);
             y += 28;
 
             for (var i = 0; i < headers.Length; i++)
@@ -304,6 +313,10 @@ public static class HeatSheetRenderer
 
         HeatCallerMark.DrawPrintFooter(g, Margin, PageWidth - Margin, PageHeight - Margin, footFont);
     }
+
+    /// <summary>The estimated start as it follows a round's title: "   -   about 20:42", or nothing.</summary>
+    internal static string RoundTitleTime(string? about) =>
+        string.IsNullOrWhiteSpace(about) ? string.Empty : $"   -   {about.Trim()}";
 
     private static string Truncate(string text, int max) =>
         text.Length <= max ? text : text[..(max - 1)] + "\u2026";
