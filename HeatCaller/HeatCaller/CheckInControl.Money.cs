@@ -111,4 +111,94 @@ public sealed partial class CheckInControl
             : $"{Plural.Of(drivers.Count, "driver")} marked {(how == PaidHow.Comp ? "comp" : $"paid by {how.ToString().ToLowerInvariant()}")}.",
             AppTheme.Success);
     }
+
+    /// <summary>
+    /// The Driver Paid button (11 Nov 2026): opens the slip that a
+    /// double-click on a name adds to. Shown only on a race day that charges,
+    /// like the Paid column - see RefreshPaidSlip.
+    /// </summary>
+    private readonly Button _btnDriverPaid = new() { Text = "Driver Paid...", Visible = false };
+
+    /// <summary>The Driver Paid slip while it is open, or null.</summary>
+    private DriverPaidForm? _paidForm;
+
+    /// <summary>The slip, while open. For the tests.</summary>
+    internal DriverPaidForm? PaidForm => _paidForm;
+
+    /// <summary>Opens the Driver Paid slip, or brings it forward if it is open already.</summary>
+    internal void OpenDriverPaid()
+    {
+        if (_payments is not { } payments || TonightsFees() is not { Entry: > 0 })
+        {
+            return;
+        }
+
+        if (_paidForm is { IsDisposed: false } open)
+        {
+            open.Activate();
+            return;
+        }
+
+        var form = new DriverPaidForm(
+            profile => TonightsFees() is { } fees ? FeeFor(profile, fees.Day) : 0,
+            profile => TonightsFees() is { } fees
+                ? DeskMoney.Words(payments.Get(fees.Day.Id, profile.Transponder), FeeFor(profile, fees.Day))
+                : string.Empty,
+            (drivers, how, note) =>
+            {
+                if (TonightsFees() is { } fees)
+                {
+                    Settle(fees.Day, drivers, how, note);
+                }
+            });
+
+        form.FormClosed += (_, _) => _paidForm = null;
+        _paidForm = form;
+
+        // Non-modal, so the roster behind it can still be double-clicked.
+        if (FindForm() is { } owner)
+        {
+            form.Show(owner);
+        }
+        else
+        {
+            form.Show();
+        }
+    }
+
+    /// <summary>Adds the drivers to the Driver Paid slip, if it is open.</summary>
+    internal void AddToPaidSlip(IReadOnlyList<DriverProfile> drivers)
+    {
+        if (_paidForm is { IsDisposed: false } form && drivers.Count > 0)
+        {
+            form.AddDrivers(drivers);
+        }
+    }
+
+    /// <summary>
+    /// After the list is redrawn: the button shown only on a night that
+    /// charges, and the slip kept up to date - or closed, with nothing to
+    /// charge for.
+    /// </summary>
+    private void RefreshPaidSlip(bool charging)
+    {
+        if (_btnDriverPaid.Visible != charging)
+        {
+            _btnDriverPaid.Visible = charging;
+        }
+
+        if (_paidForm is not { IsDisposed: false } form)
+        {
+            return;
+        }
+
+        if (charging)
+        {
+            form.RefreshRows();
+        }
+        else
+        {
+            form.Close();
+        }
+    }
 }

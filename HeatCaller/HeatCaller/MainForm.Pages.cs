@@ -2001,6 +2001,12 @@ public partial class MainForm
         raceProgram.RoundDemoRequested += async round => await runRoundAsDemo(round);
         raceControl.NextRoundDemoRequested += async round => await runRoundAsDemo(round);
 
+        // Today's Start button held (11 Nov 2026) - the same demo path.
+        if (_todayControl is { } todayPage)
+        {
+            todayPage.RoundDemoRequested += async round => await runRoundAsDemo(round);
+        }
+
         return pageGhosts;
     }
 

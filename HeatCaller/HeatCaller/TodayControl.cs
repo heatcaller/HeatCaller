@@ -52,6 +52,15 @@ public sealed class TodayControl : UserControl
     /// <summary>Raised when the timer needs connecting.</summary>
     public event Action? ConnectTimerRequested;
 
+    /// <summary>Raised when the Start button is held for a demo run of its round - see BuildDemoHold. The host runs it as the programme's Demo does.</summary>
+    public event Action<RoundDefinition>? RoundDemoRequested;
+
+    /// <summary>Swallows the click a completed hold's let-go makes - see HeldClickFilter.</summary>
+    private readonly HeldClickFilter _heldClicks = new();
+
+    /// <summary>The Start button's "hold for a demo" tip, on a round step only.</summary>
+    private readonly ToolTip _tips = new();
+
 
     /// <summary>
     /// How tall the page's content is, so the host can give this half of
@@ -220,7 +229,17 @@ public sealed class TodayControl : UserControl
         _lblDetail.AutoSize = true;
         _lblDetail.ForeColor = AppTheme.TextMuted;
 
-        _btnPrimary.Click += (_, _) => RunStep();
+        // A click runs the step; a let-go that has just finished a hold
+        // (below) does not run it for real as well.
+        _btnPrimary.Click += (_, _) =>
+        {
+            if (_heldClicks.ClickActs())
+            {
+                RunStep();
+            }
+        };
+
+        BuildDemoHold();
 
         // No caption of its own: the kicker is its caption, and it changes
         // with the day ("BEFORE YOU START", "NEXT STEP", "ALL DONE").
@@ -484,6 +503,65 @@ public sealed class TodayControl : UserControl
         _lblDayLine.Text = string.Join("  ·  ", parts);
     }
 
+    /// <summary>
+    /// HOLD START FOR A DEMO RUN (11 Nov 2026), as Race Control's Start Next
+    /// has (StartNextHold): while the card offers "Start Q1 Heat 1", a press
+    /// held for about a second runs that round as a demo instead - simulated
+    /// laps, never filed as a result, never scored - through MainForm's one
+    /// demo path (RoundDemoRequested). A click still starts it for real.
+    /// Only a round to run can be held: on any other step the button is a
+    /// plain button, with no clock on it and no bar.
+    /// </summary>
+    private void BuildDemoHold()
+    {
+        AppTheme.StyleToolTip(_tips, keep: true);
+
+        var hold = new HoldToAct(_btnPrimary, StartNextHold.Doing, () =>
+        {
+            if (DemoRound() is { } round)
+            {
+                _heldClicks.Held();
+                RoundDemoRequested?.Invoke(round);
+            }
+        });
+
+        _btnPrimary.MouseDown += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                _heldClicks.Pressed();
+            }
+        };
+
+        // Once the let-go - and the click it makes - has been handled, the
+        // next click is a click again whatever happened to this one.
+        _btnPrimary.MouseUp += (_, _) =>
+        {
+            if (IsHandleCreated && !IsDisposed)
+            {
+                BeginInvoke(_heldClicks.Pressed);
+            }
+        };
+
+        _btnPrimary.Paint += (_, e) =>
+        {
+            if (DemoRound() is not null)
+            {
+                hold.PaintOver(e.Graphics, _btnPrimary.ClientRectangle, _btnPrimary.ForeColor, null);
+            }
+        };
+
+        Disposed += (_, _) =>
+        {
+            hold.Dispose();
+            _tips.Dispose();
+        };
+    }
+
+    /// <summary>The round a hold would run as a demo: the one the card offers to start, or null on any other step.</summary>
+    private RoundDefinition? DemoRound() =>
+        _step is { Stage: ProgramStage.RunNext, Round: { } round } ? round : null;
+
     private void RefreshStep()
     {
         var step = _program.NextStep();
@@ -501,6 +579,9 @@ public sealed class TodayControl : UserControl
         _lblHeadline.Text = step.Headline;
         _lblDetail.Text = step.Detail;
         _btnPrimary.Text = step.ActionCaption;
+        _tips.SetToolTip(_btnPrimary, DemoRound() is null ? null : StartNextHold.Tip);
+        _btnPrimary.AccessibleDescription = DemoRound() is null ? null : StartNextHold.AccessibleDescription;
+        _btnPrimary.Invalidate();
 
         // Re-styled every time, because the theme reads a button's colour
         // from its caption and this caption changes with the day. The bar it
