@@ -29,12 +29,12 @@ public sealed class RehearsalTests : IDisposable
     public void The_first_rehearsal_copies_the_club_s_data_and_its_folders()
     {
         WriteReal("profiles.json", "[1]");
-        WriteReal(Path.Combine("Music", "Victory Lane.mp3"), "not really an mp3");
+        WriteReal(Path.Combine("Music", "Horizon Line.mp3"), "not really an mp3");
 
         Assert.True(Rehearsal.Prepare(Real, Copy));
 
         Assert.Equal("[1]", File.ReadAllText(Path.Combine(Copy, "profiles.json")));
-        Assert.True(File.Exists(Path.Combine(Copy, "Music", "Victory Lane.mp3")));
+        Assert.True(File.Exists(Path.Combine(Copy, "Music", "Horizon Line.mp3")));
     }
 
     [Fact]

@@ -49,9 +49,12 @@ public sealed class Theme
     /// since 17 Oct 2026 (see MusicStore.NamedSongs).
     /// 12: Classic adds Victory Lane and Race Day Live to its music - the
     /// two tracks Podium and Broadcast stopped playing (17 Oct 2026).
+    /// 13: Neon Grid, Insert Coin, Race Day Live, Victory Lane and Midnight
+    /// Pit Wall are taken out of the app (9 Nov 2026) - Classic stops
+    /// listing them, and Arcade has no music of its own.
     /// 14: every soundscape's lines retagged for Eleven v4 - [shouting] and
     /// [excited] only on the moments that earn them (10 Nov 2026, see
-    /// AudioTagTiers). 13 is the music clean-up being built alongside.
+    /// AudioTagTiers).
     /// </summary>
     public const int CurrentBuiltInVersion = 14;
 

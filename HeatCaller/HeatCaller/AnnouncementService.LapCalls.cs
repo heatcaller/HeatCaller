@@ -89,11 +89,14 @@ public sealed partial class AnnouncementService
     // The window candidates are collected over before the batch is decided
     // and flushed. All of a single lap's candidates (gate-pass-driven and
     // standings-driven alike) are raised within milliseconds of each other
-    // in practice, so this only adds a small, consistent delay - much
-    // smaller than the ~1s of audio device warm-up padding already baked
-    // into every voice announcement regardless, and barely noticeable for
-    // short chimes.
-    private static readonly TimeSpan PerLapBatchWindow = TimeSpan.FromMilliseconds(300);
+    // in practice - the 10 Nov 2026 log has a lap's calls 1-3 ms apart.
+    //
+    // 120 ms since 10 Nov 2026 (voice speed plan, phase 1), from 300. This
+    // said the delay was small beside "~1s of audio device warm-up" in every
+    // line; that pad is 0.15 s now, the render is under a second, and the
+    // batch plus the field window were 0.67 s of the 2.63 s from a lap to its
+    // call. It also put every lap chime 0.3 s after its lap.
+    private static readonly TimeSpan PerLapBatchWindow = TimeSpan.FromMilliseconds(120);
 
     /// <summary>
     /// Whether a per-lap voice candidate could actually be spoken right now:

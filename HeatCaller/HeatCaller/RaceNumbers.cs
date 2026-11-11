@@ -53,9 +53,15 @@ internal static class RaceNumbers
     /// and left a gap before "main" (Asher: "it needs to sound like it's one
     /// thing"). Not "Ay-Main", which Kokoro says "eye". For the voice only:
     /// the screens keep "A-Main".
+    ///
+    /// ElevenLabs is different (9 Nov 2026, Asher: "it's saying it weird",
+    /// still the letter A): it reads "Eh-Main" as a flat "eh", so the
+    /// cloud voices - ElevenLabs and the HeatCaller voice -
+    /// get "Ay-Main", <paramref name="cloudVoice"/> (see
+    /// AnnouncementService.ForCloudVoice). Kokoro keeps "Eh-".
     /// </summary>
-    internal static string SpokenRoundNames(string text) =>
-        string.IsNullOrEmpty(text) ? text : AMain.Replace(text, "Eh-");
+    internal static string SpokenRoundNames(string text, bool cloudVoice = false) =>
+        string.IsNullOrEmpty(text) ? text : AMain.Replace(text, cloudVoice ? "Ay-" : "Eh-");
 
     private static readonly string[] Small =
     {

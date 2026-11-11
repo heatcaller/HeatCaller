@@ -289,17 +289,22 @@ internal static class AnnouncerDensity
     /// the best of them - see the look-ahead note on
     /// AnnouncementService.OfferToTheField.
     ///
-    /// A third of a second ON TOP OF the per-lap batch's own 300ms, so a
-    /// call goes out about two thirds of a second after the crossing that
-    /// raised it. Every voice line already carries about a second of
-    /// device warm-up, and two cars crossing within a third of a second of
-    /// each other is exactly the case where the order they reached the
-    /// loop in says nothing about which of them is the story.
+    /// ON TOP OF the per-lap batch's own window, so a call is queued about a
+    /// third of a second after the crossing that raised it. Two cars crossing
+    /// within a fraction of a second of each other is exactly the case where
+    /// the order they reached the loop in says nothing about which of them
+    /// is the story.
     ///
     /// Not stretched by later arrivals, the way the per-lap batch is: a
     /// window that restarts on every crossing never closes on a full field.
+    ///
+    /// 200 ms since 10 Nov 2026 (voice speed plan, phase 1), from 350, with
+    /// the per-lap batch down to 120 ms: the "second of device warm-up"
+    /// above is 0.15 s now, so the two windows together were most of the
+    /// wait before a call was even queued. Two cars a fifth of a second
+    /// apart are still weighed together.
     /// </summary>
-    internal static readonly TimeSpan FieldWindow = TimeSpan.FromMilliseconds(350);
+    internal static readonly TimeSpan FieldWindow = TimeSpan.FromMilliseconds(200);
 
     /// <summary>
     /// How long a big call refused because the announcer was mid-sentence

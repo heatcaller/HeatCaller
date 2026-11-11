@@ -245,31 +245,23 @@ public static class SoundPacks
     public static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> PackMusic =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
         {
-            // Podium's own four songs (17 Oct 2026), in place of Victory
-            // Lane - which still ships and stays in the library.
+            // Podium's own four songs (17 Oct 2026).
             ["Podium"] = new[] { "Full Throttle", "Top Step", "Burnout", "Champagne Spray" },
-            ["Arcade"] = new[] { "Insert Coin" },
-            // The club's own four songs since 16 Oct 2026, in place of
-            // Race Day Live - which still ships and stays in the library.
-            // Named since 17 Oct 2026 - they shipped as Broadcast Song 1 to 4
+            // Arcade has no music of its own since its one track was taken
+            // out (9 Nov 2026) - Theme music plays the club's music instead.
+            // Broadcast: the club's own four songs since 16 Oct 2026. Named since 17 Oct 2026 - they shipped as Broadcast Song 1 to 4
             // (see MusicStore.NamedSongs).
             ["Broadcast"] = new[] { "Prime Time", "Highlight Reel", "Under the Lights", "Post-Race Show" },
             // Pit Lane's own four songs (16 Oct 2026) - it had no music of its own before.
             ["PitLane"] = new[] { "Gravel and Gasoline", "Dirt Road Dash", "Pit Stop Two-Step", "Back Forty Straight" },
             ["Synthwave"] = new[]
             {
-                "Neon Grid", "Horizon Line", "Chasing Sunset", "Grid Runner", "Afterglow", "Cooldown Lap",
+                "Horizon Line", "Chasing Sunset", "Grid Runner", "Afterglow", "Cooldown Lap",
                 "Vanishing Point", "Last Lap Lights", "Redline Memory", "One More Run", "Back to the Grid", "Long Way Home",
 
-                // Classic's own four songs (16 Oct 2026), added to the
+                // Classic's own songs (16 Oct 2026), added to the
                 // soundtrack rather than in place of it.
-                "Chrome Apex", "Midnight Pit Wall", "Starlight Straight", "Afterburn",
-
-                // Victory Lane and Race Day Live (17 Oct 2026): Podium and
-                // Broadcast swapped them for songs of their own, so nothing
-                // played them any more. They still ship, and Classic keeps
-                // them in the rotation.
-                "Victory Lane", "Race Day Live",
+                "Chrome Apex", "Starlight Straight", "Afterburn",
             },
         };
 

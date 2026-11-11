@@ -554,10 +554,23 @@ public sealed partial class AnnouncementService
         }
 
         StatusMessage?.Invoke($"{announcingLogPrefix}: \"{text}\"");
+        var timing = _lineTiming.Value;
+        timing?.RenderStarted(TimingClock.NowMs);
         var rendering = System.Diagnostics.Stopwatch.StartNew();
         var synthesis = await RenderCastLineAsync(withoutVoice, currentProfile, voice, text);
         var audio = synthesis.Audio;
         rendering.Stop();
+
+        if (timing is not null)
+        {
+            timing.RenderEnded(TimingClock.NowMs);
+            timing.RenderedBy ??= RenderedBy(synthesis.Source, currentProfile);
+
+            if (timing.Characters == 0)
+            {
+                timing.Characters = text.Length;
+            }
+        }
 
         // How long the words took to make (8 Nov 2026). The log line above is
         // written BEFORE the render, so a slow model's seconds were invisible
@@ -611,6 +624,11 @@ public sealed partial class AnnouncementService
             // AnnouncementService.Freshness.
             if (WhyDequeuedLineIsStale() is { } stale)
             {
+                if (timing is not null)
+                {
+                    timing.DroppedBecause ??= stale;
+                }
+
                 StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - {stale} (rendered in {Seconds(rendering.ElapsedMilliseconds)}).");
                 WithdrawAnnouncementText(_dequeuedFreshness.Value.Shown);
                 return;
@@ -631,6 +649,11 @@ public sealed partial class AnnouncementService
 
             if (notNow is not null)
             {
+                if (timing is not null)
+                {
+                    timing.DroppedBecause ??= notNow;
+                }
+
                 StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - {notNow} (rendered in {Seconds(rendering.ElapsedMilliseconds)}).");
                 return;
             }
@@ -648,6 +671,8 @@ public sealed partial class AnnouncementService
             // louder, including over silence. Not clamped to 1.0 here - see
             // AnnouncementGain for why that clamp made the boost do nothing.
             var volume = AnnouncementGain(currentProfile.Volume);
+
+            timing?.GotTheSpeaker(TimingClock.NowMs);
 
             // Past every check that drops a line: it is heard from here, so
             // this is where a sponsor's mention counts - see spoken. A
@@ -686,7 +711,7 @@ public sealed partial class AnnouncementService
                 // line was, so two turns of one exchange paid both in full
                 // with the hand-over's beat on top - see SpeechLead.
                 // WHY (23 Oct 2026, bug hunt 10): re-checked once the line is registered - see PlayPcmAsync.
-                await PlayAsync(audio, volume, TailSecondsFor(tail), LeadSecondsFor(lead), StillWantedUnlessOvertaken(honourMute), onAir);
+                await PlayAsync(audio, volume, TailSecondsNow(tail), LeadSecondsFor(lead), StillWantedUnlessOvertaken(honourMute), onAir, timing);
             }
             catch (Exception ex) when (synthesis.FromLibrary && IsUndecodable(ex))
             {
@@ -1586,6 +1611,7 @@ public sealed partial class AnnouncementService
             RaceFactsStamp? facts = null;
             var dequeuedType = AnnouncementEventType.Reminder;
             string? shown = null;
+            VoiceLineTiming? timing = null;
 
             lock (_voiceQueueLock)
             {
@@ -1593,6 +1619,18 @@ public sealed partial class AnnouncementService
                 {
                     var item = _voiceQueue[0];
                     work = item.Work;
+
+                    // Where its time goes, from here to the room (10 Nov
+                    // 2026) - see VoiceLineTiming. A lap call's deadline is
+                    // its crossing plus LapCallSayWithinMs (EnqueueVoiceWork),
+                    // so the crossing is read back from it.
+                    timing = new VoiceLineTiming
+                    {
+                        Type = item.Type,
+                        LapSeenAtMs = IsLapBoundCall(item.Type) && item.SayByMs is { } lapSayBy ? lapSayBy - LapCallSayWithinMs : null,
+                        QueuedAtMs = item.QueuedAtMs,
+                        TakenAtMs = TimingClock.NowMs,
+                    };
                     onAirCall = item.Type;
                     onAirNamed = item.OnAir;
                     battle = item.Battle;
@@ -1647,6 +1685,7 @@ public sealed partial class AnnouncementService
             _dequeuedUnderCountdown.Value = countdownGeneration;
             _dequeuedBattle.Value = battle;
             _dequeuedFreshness.Value = (sayBy, facts, shown);
+            _lineTiming.Value = work is null ? null : timing;
 
             // Which call it is, so a race call can render on the race-calls
             // model (8 Nov 2026) - see AnnouncementService.ForRaceCall.
@@ -1674,6 +1713,13 @@ public sealed partial class AnnouncementService
             // work never runs, so nothing else would.
             if (Muted || stale is not null)
             {
+                if (work is not null && timing is not null)
+                {
+                    timing.DroppedBecause = stale ?? "muted";
+                    timing.DoneAtMs = TimingClock.NowMs;
+                    Timings.Add(timing);
+                }
+
                 if (lostIfUnsaid is not null)
                 {
                     GiveBackLost(new[] { lostIfUnsaid });
@@ -1726,6 +1772,22 @@ public sealed partial class AnnouncementService
                 Interlocked.Decrement(ref _voiceInFlight);
                 _isVoiceSpeaking = false;
                 EndSpeaking();
+
+                // Where this line's time went (10 Nov 2026) - see
+                // VoiceLineTiming. Nothing here can cost the loop.
+                if (timing is not null)
+                {
+                    try
+                    {
+                        timing.DoneAtMs = TimingClock.NowMs;
+                        Timings.Add(timing);
+                        StatusMessage?.Invoke(timing.Describe());
+                    }
+                    catch
+                    {
+                        // A timing line is never worth the announcer.
+                    }
+                }
 
                 if (battle is not null)
                 {

@@ -45,6 +45,15 @@ public sealed partial class VoiceSettingsControl
             && !string.IsNullOrWhiteSpace(line.Text)
             && !string.Equals(textTheRaceSends, line.Text, StringComparison.Ordinal))
         {
+            // Only the round's letter respelt (10 Nov 2026, bug hunt): a take
+            // saved as "A-Main" before the online voices were sent "Ay-Main"
+            // (see RaceNumbers.SpokenRoundNames) is not about names at all.
+            if (string.Equals(RaceNumbers.SpokenRoundNames(line.Text, cloudVoice: true), textTheRaceSends, StringComparison.Ordinal))
+            {
+                return "That line was saved before \"A-Main\" was spelt \"Ay-Main\" for the online voices - "
+                       + "the race asks for the new spelling, so this take is never played. Use Forget Line instead.";
+            }
+
             return "That line has drivers' full names in it, and the club now shortens names for the online voices - "
                    + "the race asks for the short form, so this take is never played. Use Forget Line instead.";
         }
