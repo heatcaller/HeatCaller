@@ -445,6 +445,9 @@ internal static class SettingsTable
         memory: new[]
         {
             nameof(AppSettings.StartMaximized),
+
+            // A one-time step done (11 Nov 2026) - see AppSettings.ArrivePitLaneLiveOff.
+            nameof(AppSettings.PitLaneLiveArrivedOff),
             nameof(AppSettings.FontScale),
             nameof(AppSettings.NavIconsOnly),
             nameof(AppSettings.AnnouncerMuted),

@@ -6090,6 +6090,16 @@ public sealed class CommentaryService
     /// </summary>
     private static string InstructionFor(SegmentKind kind) => kind switch
     {
+        // THE THROW TO PIT LANE, MID-RACE (11 Nov 2026). Written as the
+        // two-hander it is: the announcer hands down, the co-host answers
+        // from pit lane about this one car - and never about the race order,
+        // which is moving while they talk.
+        SegmentKind.PitLaneLive =>
+            "The lead commentator throws down to the co-host in pit lane, mid-race, in a quiet moment; the co-host "
+            + "answers about this one driver's car or team, using only the facts given. Keep it light and quick - a "
+            + "breather, not a report. Do not talk about the race order, the gaps or who will win: the race is moving "
+            + "while they speak. The co-host does not say their own name or job after being thrown to.",
+
         // Explicitly NOT asked who will win. A prediction is the one thing
         // in here the app has not worked out, so it is the one thing the
         // model would have to invent.
@@ -6223,6 +6233,7 @@ public sealed class CommentaryService
         SegmentKind.PaceNote => "Pace",
         SegmentKind.Horizon => "Still to decide",
         SegmentKind.RecordWatch => "Record watch",
+        SegmentKind.PitLaneLive => "Pit lane",
         SegmentKind.ComingUpNext => "Coming up",
         SegmentKind.GridHistory => "Grid",
         SegmentKind.ClubAside => "Club note",

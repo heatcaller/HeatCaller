@@ -1233,6 +1233,9 @@ public sealed partial class AnnouncementService
         // 2026) - see FinalLapsGap.
         CheckFinalLapsGap(ordered, standing);
 
+        // A hundredth race, a thousandth lap (11 Nov 2026) - see DriverHistory.
+        CheckMilestones(standing);
+
         CheckLapped(ordered);
         CheckCloseBattles(ordered);
         CheckRivalries(ordered);
@@ -1826,7 +1829,14 @@ public sealed partial class AnnouncementService
         // the pair is still there to call once it's green.
         var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.CloseBattle));
 
-        if (Muted || !VoiceCandidateCanSpeak(AnnouncementEventType.CloseBattle, config))
+        // Two rivals from the Rivalries page within a second (11 Nov 2026,
+        // phase 4 #4) - called as rivals, in place of the plain battle line.
+        // Its own row, so it can be on with Close battle off.
+        var rivalsConfig = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.RivalsSideBySide));
+        var battlesOn = VoiceCandidateCanSpeak(AnnouncementEventType.CloseBattle, config);
+        var rivalsOn = VoiceCandidateCanSpeak(AnnouncementEventType.RivalsSideBySide, rivalsConfig);
+
+        if (Muted || (!battlesOn && !rivalsOn))
         {
             return;
         }
@@ -1877,6 +1887,13 @@ public sealed partial class AnnouncementService
                 continue;
             }
 
+            var rivals = rivalsOn && AreRivals(front.Transponder, chaser.Transponder);
+
+            if (!rivals && !battlesOn)
+            {
+                continue;
+            }
+
             // Only CHECKED here; the pair is recorded as called by
             // FirePairLine once the line is actually accepted to be spoken.
             // It used to be recorded first, and the line could then say
@@ -1921,8 +1938,12 @@ public sealed partial class AnnouncementService
             // any battle. The front car's place among the cars being called.
             var battleFor = i == 0 ? "the lead" : Ordinal(i + 1);
 
-            if (!FirePairLine(AnnouncementEventType.CloseBattle, front.Transponder, chaser.Transponder, offer, battleFor,
-                    about: new BattlePair(front.Transponder, chaser.Transponder, i + 1)))
+            // The chaser is named first: the one coming at their rival.
+            if (!(rivals
+                    ? FirePairLine(AnnouncementEventType.RivalsSideBySide, chaser.Transponder, front.Transponder, offer, battleFor,
+                        about: new BattlePair(front.Transponder, chaser.Transponder, i + 1))
+                    : FirePairLine(AnnouncementEventType.CloseBattle, front.Transponder, chaser.Transponder, offer, battleFor,
+                        about: new BattlePair(front.Transponder, chaser.Transponder, i + 1))))
             {
                 // Never reached the batch, so nothing would ever settle it.
                 lock (_battlesLock)

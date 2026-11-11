@@ -60,6 +60,12 @@ internal static class AudioTagTiers
         // A personal best of a bigger kind, and several said as one (10 Nov 2026) -
         // a driver's own, not the track's, so lifted rather than shouted.
         AnnouncementEventType.BestEverHere,
+
+        // What their saved races say (11 Nov 2026) - their own news, so lifted.
+        AnnouncementEventType.BeatLastTimeOut,
+        AnnouncementEventType.BackOnForm,
+        AnnouncementEventType.Milestone,
+        AnnouncementEventType.RivalsSideBySide,
         AnnouncementEventType.PersonalBestsTogether,
         AnnouncementEventType.Streak,
         AnnouncementEventType.StreakLead,

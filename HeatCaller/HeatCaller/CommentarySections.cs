@@ -170,7 +170,7 @@ internal static class CommentarySections
         Tick(CommentarySection.BeforeTheRace, nameof(AppSettings.PrincipalBeforeRace), s => s.PrincipalBeforeRace, (s, v) => s.PrincipalBeforeRace = v, CastNeed.TeamPrincipal);
 
         Segments(CommentarySection.DuringTheRace,
-            SegmentKind.BattleWatch, SegmentKind.PaceNote, SegmentKind.RecordWatch, SegmentKind.Horizon, SegmentKind.ComingUpNext, SegmentKind.ChampionshipCheck);
+            SegmentKind.BattleWatch, SegmentKind.PaceNote, SegmentKind.RecordWatch, SegmentKind.Horizon, SegmentKind.PitLaneLive, SegmentKind.ComingUpNext, SegmentKind.ChampionshipCheck);
 
         Segments(CommentarySection.BetweenRaces,
             SegmentKind.FormGuide, SegmentKind.QualifyingReport, SegmentKind.GridHistory, SegmentKind.ClubAside, SegmentKind.RoomVerdict);

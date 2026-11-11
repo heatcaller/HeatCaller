@@ -91,7 +91,7 @@ public sealed partial class AnnouncementService
     /// calls (28 Oct 2026). One that waited in the queue past it is not said:
     /// "thirty seconds" at twenty seconds left is worse than nothing.
     /// </param>
-    private void EnqueueVoice(AnnouncementEventType type, RaceStanding? standing, GatePassEvent? gate, long? lapTimeMs = null, int? streakCount = null, string? suffix = null, string? roundLabel = null, string? className = null, string? marshals = null, IReadOnlyDictionary<string, (string Spoken, string Display)>? extras = null, (string Placeholder, string Tail)? autoTail = null, long? sayByMs = null)
+    private void EnqueueVoice(AnnouncementEventType type, RaceStanding? standing, GatePassEvent? gate, long? lapTimeMs = null, int? streakCount = null, string? suffix = null, string? roundLabel = null, string? className = null, string? marshals = null, IReadOnlyDictionary<string, (string Spoken, string Display)>? extras = null, (string Placeholder, string Tail)? autoTail = null, long? sayByMs = null, Action? heard = null)
     {
         if (Muted)
         {
@@ -424,6 +424,16 @@ public sealed partial class AnnouncementService
                         {
                             said = true;
                             countMention?.Invoke();
+
+                            // Told the caller only now it is certain to be heard - a milestone is marked said here (11 Nov 2026).
+                            try
+                            {
+                                heard?.Invoke();
+                            }
+                            catch
+                            {
+                                // A courtesy.
+                            }
                         },
                         whyNotNow: type == AnnouncementEventType.FastLap ? () => FastLapNoLongerTrue(standing) : null);
                 }

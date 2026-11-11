@@ -248,6 +248,7 @@ public sealed class KnownIssues2Tests : IDisposable
         var settings = new AppSettings();
 
         Assert.False(settings.FoldLowestTier());
-        Assert.Equal(string.Empty, settings.CommentarySegmentsOff ?? string.Empty);
+        // Everything but the one segment that arrives off (Pit lane, live, 11 Nov 2026).
+        Assert.Equal(nameof(SegmentKind.PitLaneLive), settings.CommentarySegmentsOff);
     }
 }

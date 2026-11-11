@@ -35,7 +35,7 @@ public sealed class CommentarySectionsTests
             new[] { "CommentaryRaceIntros", "CommentaryDriverIntros", "CommentaryQualifyingRecap", "PrincipalBeforeRace" },
             Keys(CommentarySection.BeforeTheRace));
         Assert.Equal(
-            new[] { "BattleWatch", "PaceNote", "RecordWatch", "Horizon", "ComingUpNext", "ChampionshipCheck" },
+            new[] { "BattleWatch", "PaceNote", "RecordWatch", "Horizon", "PitLaneLive", "ComingUpNext", "ChampionshipCheck" },
             Keys(CommentarySection.DuringTheRace));
         Assert.Equal(
             new[] { "FormGuide", "QualifyingReport", "GridHistory", "ClubAside", "RoomVerdict" },

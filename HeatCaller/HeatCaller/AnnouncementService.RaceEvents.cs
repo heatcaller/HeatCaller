@@ -1192,6 +1192,13 @@ public sealed partial class AnnouncementService
             return;
         }
 
+        // Back on form, or quicker than last time out (11 Nov 2026) - see
+        // AnnouncementService.DriverHistory.
+        if (CallTheLapAgainstHistory(transponderId, standing, lapMs))
+        {
+            return;
+        }
+
         var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.PersonalBestLap));
         if (config is null || !CallOn(config) || config.Templates.Count == 0)
         {

@@ -235,6 +235,12 @@ public partial class AnnouncerControl
             _director = new CommentaryDirector(_commentary, _settings);
             _director.NameFor = NameFor;
 
+            // The booth live in a quiet stretch (11 Nov 2026) - see the
+            // director's PitLaneLive. Quiet is nothing queued or playing for
+            // PitLaneQuietFor, as this page's tick has seen it.
+            _director.AnnouncerQuiet = () => _quietSinceUtc is { } since && DateTime.UtcNow - since >= PitLaneQuietFor;
+            _director.PitLaneSubject = PitLaneSubject;
+
             // BETWEEN RACES (31 Oct 2026): the filler keeps to the Between
             // races card, by the gap Race Control keeps - see GapState.
             _director.GapRefuses = kind => GapState.Shared.WhyNotForTheDirector(GapState.LineFor(kind), DateTime.UtcNow);
@@ -1968,6 +1974,10 @@ public partial class AnnouncerControl
             director.RaceComing();
         }
 
+        // How long the speaker has been free - for the pit lane's quiet
+        // stretch (11 Nov 2026).
+        _quietSinceUtc = _announcer.IsAudioPending ? null : _quietSinceUtc ?? DateTime.UtcNow;
+
         if (racing)
         {
             var ordered = RacingField(_race.GetOrderedStandings());
@@ -2273,6 +2283,52 @@ public partial class AnnouncerControl
     /// the real leader down to second, and had its replayed laps called the
     /// fastest of the race.
     /// </summary>
+    /// <summary>When the announcer last went quiet - nothing queued or playing - or null while it is not.</summary>
+    private DateTime? _quietSinceUtc;
+
+    /// <summary>How long the speaker must have been free before the pit lane is thrown to.</summary>
+    internal static readonly TimeSpan PitLaneQuietFor = TimeSpan.FromSeconds(4);
+
+    /// <summary>
+    /// A driver on track for the pit lane to talk about, with what the
+    /// garage knows of their car and team - one picked at random among
+    /// those with something to say, never a ghost. Null when nobody has a
+    /// car or team set. No place or gap: the race moves while they talk.
+    /// </summary>
+    private (string DriverId, string Facts)? PitLaneSubject()
+    {
+        var known = RacingField(_race.GetOrderedStandings())
+            .Where(s => !GhostService.IsGhost(s.TransponderId))
+            .Select(s => (Standing: s, Profile: _profiles.Get(s.TransponderId)))
+            .Where(x => x.Profile is { } p && (!string.IsNullOrWhiteSpace(p.CarModel) || !string.IsNullOrWhiteSpace(p.Team)))
+            .ToList();
+
+        if (known.Count == 0)
+        {
+            return null;
+        }
+
+        var (standing, profile) = known[Random.Shared.Next(known.Count)];
+        var facts = new System.Text.StringBuilder($"The driver to talk about is {NameFor(standing.TransponderId)}.");
+
+        if (!string.IsNullOrWhiteSpace(profile!.CarModel))
+        {
+            facts.Append($" They are driving the {profile.CarModel.Trim()}.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(profile.Team))
+        {
+            facts.Append($" They run for {profile.Team.Trim()}.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(profile.Sponsors))
+        {
+            facts.Append($" Their sponsors are {profile.Sponsors.Trim()}.");
+        }
+
+        return (standing.TransponderId, facts.ToString());
+    }
+
     internal static IReadOnlyList<RacerStanding> RacingField(IReadOnlyList<RacerStanding> ordered)
     {
         if (!ordered.Any(s => !Ghosts.IsGhost(s.TransponderId)))

@@ -222,6 +222,36 @@ public enum AnnouncementEventType
     /// {rival} for the leader, {gap}.
     /// </summary>
     FinalLapsGap,
+
+    /// <summary>
+    /// A personal best quicker than the driver's best on their last night on
+    /// this layout (11 Nov 2026) - said instead of the personal best, once a
+    /// night. See DriverHistory. Appended at the END. Placeholders: {driver}
+    /// {car} {team} {sponsors} {time} {previous} {margin}.
+    /// </summary>
+    BeatLastTimeOut,
+
+    /// <summary>
+    /// A personal best quicker than any of the driver's last few nights here,
+    /// after a run of slower ones (11 Nov 2026) - said instead of the
+    /// personal best, once a night. See DriverHistory. Appended at the END.
+    /// Placeholders as BeatLastTimeOut.
+    /// </summary>
+    BackOnForm,
+
+    /// <summary>
+    /// A driver's 50th or hundredth race at the club, or their thousandth lap
+    /// (11 Nov 2026). See AnnouncementService.DriverHistory. Appended at the
+    /// END. Placeholders: {driver} {car} {team} {sponsors} {milestone}.
+    /// </summary>
+    Milestone,
+
+    /// <summary>
+    /// Two rivals from the Rivalries page within a second on track (11 Nov
+    /// 2026) - in place of the plain battle line. Appended at the END.
+    /// Placeholders: {driver} (the chaser) {rival} {car} {battle}.
+    /// </summary>
+    RivalsSideBySide,
 }
 
 public sealed class AnnouncementEventConfig
@@ -1692,6 +1722,60 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             },
         };
 
+        // What a driver's saved races say (11 Nov 2026) - see DriverHistory.
+        // On by default: each is once a night, or once a career.
+        p.Events[nameof(AnnouncementEventType.BeatLastTimeOut)] = new AnnouncementEventConfig
+        {
+            Enabled = true,
+            Weight = 65,
+            Templates = new List<string>
+            {
+                "[excited] {driver} - quicker than last time out, by {margin}!",
+                "[excited] {time} for {driver}, and that beats last time here.",
+                "[excited] {driver} has found {margin} on last time out!",
+                "[excited] Better than last time for {driver} - {time}.",
+            },
+        };
+
+        p.Events[nameof(AnnouncementEventType.BackOnForm)] = new AnnouncementEventConfig
+        {
+            Enabled = true,
+            Weight = 70,
+            Templates = new List<string>
+            {
+                "[excited] {driver}'s back on form - {time}, best in a while!",
+                "[excited] That's more like it from {driver} - {time}.",
+                "[excited] {driver}'s quickest here in weeks - {time}!",
+                "[excited] Back to their best, {driver} - {time}!",
+            },
+        };
+
+        p.Events[nameof(AnnouncementEventType.Milestone)] = new AnnouncementEventConfig
+        {
+            Enabled = true,
+            Weight = 70,
+            Templates = new List<string>
+            {
+                "[excited] That's {driver}'s {milestone} at the club!",
+                "[excited] A big one for {driver} - their {milestone} here!",
+                "[excited] {driver} brings up their {milestone}!",
+                "[excited] Give it up for {driver} - {milestone} at the club!",
+            },
+        };
+
+        p.Events[nameof(AnnouncementEventType.RivalsSideBySide)] = new AnnouncementEventConfig
+        {
+            Enabled = true,
+            Weight = 80,
+            Templates = new List<string>
+            {
+                "[excited] These two have history - {driver} right on {rival}!",
+                "[excited] {driver} and {rival} - old rivals, nose to tail {battle}!",
+                "[excited] It's {driver} on {rival} again - there's history here!",
+                "[excited] Rivals side by side - {driver} chasing {rival}!",
+            },
+        };
+
         p.Events[nameof(AnnouncementEventType.AchievementUnlocked)] = new AnnouncementEventConfig
         {
             Enabled = true,
@@ -2059,6 +2143,10 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
         AnnouncementEventType.WinnerCalled => ("Winner named", "Said the moment the finish call has been - the winner's name, while the room is still cheering. Made ready on the last lap (or when time is up) for the top two, so there is no pause after the finish call. Only with Race completed on too. The unofficial result is still read after the cheering. Placeholder: {winner} (or {driver})."),
         AnnouncementEventType.FinalLapsGap => ("Final laps gap", "In a race's last three laps, or its final minute, the gap for the lead called each time the car in second crosses within a second of the leader - \"Point four, he's right there!\". Said within two and a half seconds of the crossing or not at all. Placeholders: {driver} {car} {team} {sponsors} for the chaser, {rival} for the leader, {gap}."),
         AnnouncementEventType.BestEverHere => ("Fastest ever here (driver)", "A personal best that is also the driver's quickest lap EVER on the track layout picked in Race Control - said instead of the personal best, whether or not Personal best lap is on. Once per driver per race. Needs a layout picked and at least one earlier race for that driver on it; not for demos, rentals or excluded guests. Placeholders: {driver} {car} {team} {sponsors} {time} for the new lap, {previous} for their old best."),
+        AnnouncementEventType.BeatLastTimeOut => ("Quicker than last time out", "A personal best quicker than the driver's best lap on their last night on the track layout picked in Race Control - said instead of the personal best, whether or not Personal best lap is on. Once per driver per night. Not for demos, rentals or excluded guests. Placeholders: {driver} {car} {team} {sponsors} {time} for the new lap, {previous} for last time's best, {margin} for how much quicker."),
+        AnnouncementEventType.BackOnForm => ("Back on form", "A personal best quicker than any of the driver's last three nights on this layout, when all three were slower than their best before them - their best in a while. Said instead of the personal best (and instead of Quicker than last time out). Once per driver per night. Placeholders as Quicker than last time out."),
+        AnnouncementEventType.Milestone => ("Milestones", "A driver's 50th race at the club, every hundredth after it, or every thousandth lap (practice counts). The race is said early in it, the lap on the lap itself. Once each, counted from Race History; not for demos, rentals or excluded guests. Placeholders: {driver} {car} {team} {sponsors} {milestone} - \"hundredth race\", \"two thousandth lap\"."),
+        AnnouncementEventType.RivalsSideBySide => ("Rivals side by side", "Two drivers from the Rivalries page within a second of each other on track - said in place of the Close battle line, once per pair per race. Your rivalry line still plays if one passes the other. Placeholders: {driver} (the one chasing), {rival}, {car}, {battle} (\"for the lead\", \"for third\")."),
         AnnouncementEventType.PersonalBestsTogether => ("Personal bests together", "When two or three drivers' personal bests are lost because the announcer was mid-line, they are said together once it ends - \"Personal bests for Dee and Al!\" - while those laps are still news. Only with Personal best lap on. Placeholder: {drivers}."),
         AnnouncementEventType.AchievementUnlocked => ("Achievement unlocked", "A driver just earned an achievement. Fires after a race, once the result is saved and the achievements have been worked out - at most a few per race, so a big night doesn't turn into a list. Placeholders: {driver} {car} {team} {sponsors} {achievement}."),
         AnnouncementEventType.LastLap => ("Last lap", "The leader starts the final lap of a lap-limited race. Fires once. Placeholders: {driver} {car} {team} {sponsors}."),
