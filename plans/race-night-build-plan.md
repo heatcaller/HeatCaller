@@ -81,7 +81,7 @@ Sizes: **S** is about a day, **M** is 2–4 days, **L** is a week or more. They'
 | 1.5 Rest-time guard | A minimum gap of N races between a driver's races, for drivers in two classes and for bump-ups. `BuildQualifying` orders heats to respect it. Move Drivers Between Heats and manual reorders warn before breaking it. When a bumped driver needs turnaround time, the engine stretches the gap before that main by itself. | M |
 | 1.6 Minutes-based push | Add "about 5 minutes" pushes for drivers and marshals using `RaceEta`, alongside the existing push when you're next. Needs a relay deploy. | S |
 
-**Decisions needed:** whether auto-start is on by default once a program exists (the plan's recommendation is yes in Advanced mode and asked once in Simple mode), and whether a missing car holds the start or starts without it.
+**Decided (11 Nov 2026):** auto-start is **on by default** once a program exists. When a car hasn't been seen, the race **starts without it only after the director approves a notification** ("Frank not seen - start without him?"). Until then the countdown holds at zero.
 **Done when:** a 3-class demo night runs Q1 to the end of the mains with no Start Next clicks, and Phase 0 shows the green-to-green median at or under the set gap plus race length.
 
 ### Phase 2: Plan the night (curfew, rain, closing up)
@@ -117,7 +117,7 @@ Sizes: **S** is about a day, **M** is 2–4 days, **L** is a week or more. They'
 | 4.2 Money at the desk | An entry fee per class per event, a discount for a second class, comps (marshal, volunteer, junior), and paid/owing on desk check-in and phone check-in. An end-of-night total by cash and card, in the event report. It only tracks the money and never takes payments. | M |
 | 4.3 Marshal swaps | From the phone, a driver asks a named driver to cover their post. That driver accepts, then the director approves, or it's automatic if allowed. The roster, the marshal call and the pushes update. `MarshalAssigner` gets an overrides layer instead of being rewritten. Needs a relay deploy. | M |
 
-**Decisions needed:** for 4.2, whether to track card payments by hand only or plan a later Square/Stripe link (only track for now). For 4.1, whether mixed heats count toward championships the same way.
+**Decided (11 Nov 2026):** for 4.2, money is **tracked by hand only** for now, with no payment integration. **Still open:** for 4.1, whether mixed heats count toward championships the same way.
 
 ### Phase 5: Formats and sanctioning presets
 *The format gap against LiveTime, and pain point 9 (too much qualifying).*

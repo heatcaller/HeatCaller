@@ -366,6 +366,11 @@ public sealed class RaceFilingService
             EndedAtUtc = DateTime.UtcNow,
             Results = results,
 
+            // When it was called to the grid (11 Nov 2026, night pace).
+            StagedAtUtc = NightPace.StageFor(
+                finished is null ? _race.StagedAtUtc : finished.StagedAtUtc,
+                _journalRecorder.SessionStartedAtUtc.Value),
+
             // Says this result carries rejected laps, laps led and grid
             // positions. Without it an older session looks identical to a
             // race nobody put a wheel wrong in.

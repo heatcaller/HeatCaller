@@ -834,6 +834,7 @@ public sealed class RaceTiming
     public RaceState State => Read(static e => e.State);
     public FlagState Flag => Read(static e => e.Flag);
     public DateTime? RaceStartUtc => Read(static e => e.RaceStartUtc);
+    public DateTime? StagedAtUtc => Read(static e => e.StagedAtUtc);
     public long RaceFastestLapMs => Read(static e => e.RaceFastestLapMs);
     public string RaceFastestLapTransponder => Read(static e => e.RaceFastestLapTransponder);
     public long MsSinceGreen => Read(static e => e.MsSinceGreen);
@@ -2236,9 +2237,10 @@ internal sealed class FinishedRace
 {
     private readonly HashSet<string> _jumpStarted;
 
-    private FinishedRace(IReadOnlyList<RacerStanding> standings, DateTime? raceStartUtc, bool isPracticeMode, int sessionGeneration, HashSet<string> jumpStarted, TimeSpan? timeLimit, int? lapLimit)
+    private FinishedRace(IReadOnlyList<RacerStanding> standings, DateTime? raceStartUtc, bool isPracticeMode, int sessionGeneration, HashSet<string> jumpStarted, TimeSpan? timeLimit, int? lapLimit, DateTime? stagedAtUtc)
     {
         Standings = standings;
+        StagedAtUtc = stagedAtUtc;
         TimeLimit = timeLimit;
         LapLimit = lapLimit;
         RaceStartUtc = raceStartUtc;
@@ -2252,6 +2254,9 @@ internal sealed class FinishedRace
 
     /// <summary>As the race's RaceStartUtc read.</summary>
     public DateTime? RaceStartUtc { get; }
+
+    /// <summary>As the race's StagedAtUtc read - when it was first called to the grid (11 Nov 2026, night pace).</summary>
+    public DateTime? StagedAtUtc { get; }
 
     /// <summary>As the race's IsPracticeMode read.</summary>
     public bool IsPracticeMode { get; }
@@ -2285,6 +2290,6 @@ internal sealed class FinishedRace
             }
         }
 
-        return new FinishedRace(standings, engine.RaceStartUtc, engine.IsPracticeMode, engine.SessionGeneration, jumpStarted, engine.TimeLimit, engine.LapLimit);
+        return new FinishedRace(standings, engine.RaceStartUtc, engine.IsPracticeMode, engine.SessionGeneration, jumpStarted, engine.TimeLimit, engine.LapLimit, engine.StagedAtUtc);
     }
 }
