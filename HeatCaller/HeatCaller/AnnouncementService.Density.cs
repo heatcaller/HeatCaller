@@ -530,6 +530,9 @@ public sealed partial class AnnouncementService
     {
         Load.Reset();
 
+        // And where each line's time went, for the same race (10 Nov 2026).
+        Timings.Reset();
+
         // Not counted: the count it would go into has just been cleared,
         // and a call kept from the last race is nothing this race offered.
         ForgetTheHeldOverCall(count: false);

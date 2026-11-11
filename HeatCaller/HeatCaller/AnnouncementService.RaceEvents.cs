@@ -828,6 +828,14 @@ public sealed partial class AnnouncementService
         StatusMessage?.Invoke($"[audio-trace] NotifyRaceCompleted (muted={Muted})");
         CancelCountdownTicks();
 
+        // How quickly the race's calls reached the room (10 Nov 2026) - the
+        // lines said while it was racing, before the finish call and the
+        // wrap-up join them. See VoiceTimingTally.
+        if (Timings.Summary(Load.Offered, Load.Dropped, Load.Held) is { } timings)
+        {
+            StatusMessage?.Invoke(timings);
+        }
+
         // Holds the voice queue until the finish call has spoken - see
         // _finishCallHold. Raised before anything is queued, so no badge or
         // wrap-up line can slip in ahead of it.
