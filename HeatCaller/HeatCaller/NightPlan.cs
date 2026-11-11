@@ -1,0 +1,396 @@
+using System.Text.RegularExpressions;
+
+namespace HeatCaller;
+
+/// <summary>
+/// The rest of the night, planned (11 Nov 2026, race-night build plan,
+/// Phase 2): when each race still to run should start, when the night will
+/// finish, and - when the race day has an "Out by" time - how far over it
+/// runs and what would bring it back.
+///
+/// WHY: the research found that a director only learns the night is running
+/// long once it already is. "Running 6 min behind" is real, but it arrives
+/// after the fact, about one race. A director who sees "finishes about 22:40,
+/// 40 minutes past the 22:00 curfew" before the first green can still drop a
+/// round or shorten the heats.
+///
+/// THE MODEL, kept simple enough to say out loud:
+///  - Every race still to run, in program order, takes its own length (the
+///    format's time limit plus staging and countdown, or
+///    <see cref="DefaultLength"/> for a lap race) plus the gap between races.
+///  - The gap is tonight's own typical finish-to-green (NightPace) once
+///    there are two gaps to go on, otherwise <see cref="DefaultGap"/>.
+///  - A race on track now is taken as half done, the same assumption
+///    RaceEta makes.
+///  - On a race day, a class that qualifies but has no mains yet is given
+///    the mains it will get (one per heat's worth of drivers), so the finish
+///    covers the finals too.
+///
+/// Pure, so it can be tested without a window. Everything it gives is an
+/// estimate, and every screen says "about".
+/// </summary>
+public static class NightPlan
+{
+    /// <summary>The gap between races before tonight has given two of its own: the low end of ROAR's 2-5 minutes, plus a little.</summary>
+    public static readonly TimeSpan DefaultGap = TimeSpan.FromMinutes(3);
+
+    /// <summary>What a race with no time limit (a lap race) is taken to last.</summary>
+    public static readonly TimeSpan DefaultLength = TimeSpan.FromMinutes(5);
+
+    /// <summary>A race at least this long can lose a minute without becoming pointless.</summary>
+    public static readonly TimeSpan ShortestToShorten = TimeSpan.FromMinutes(3);
+
+    /// <summary>Fewer races of tonight than this and the gap is not tonight's own yet.</summary>
+    public const int RacesForMeasuredGap = 3;
+
+    /// <summary>A class's mains that have not been built yet, for the finish to count.</summary>
+    public sealed record UnbuiltMains(string ClassName, int Count, TimeSpan Length);
+
+    /// <summary>One race still to run, and when it should start.</summary>
+    /// <param name="Round">The round, or null for a main that has not been built yet.</param>
+    public sealed record Slot(RoundDefinition? Round, string Label, string ClassName, RoundKind Kind, TimeSpan Length, DateTime StartUtc)
+    {
+        public DateTime EndUtc => StartUtc + Length;
+    }
+
+    /// <summary>A change that would bring the finish forward, and by how much.</summary>
+    /// <param name="DropsRound">For "drop a round", the qualifying round number it drops; otherwise null.</param>
+    public sealed record Fix(string Text, TimeSpan Saves, int? DropsRound = null);
+
+    /// <summary>The rest of the night.</summary>
+    /// <param name="Slots">Every race still to run, in order, with its start.</param>
+    /// <param name="FinishUtc">When the last of them should finish.</param>
+    /// <param name="Gap">The gap between races used.</param>
+    /// <param name="GapIsTonights">True when <paramref name="Gap"/> is tonight's own, false for the default.</param>
+    /// <param name="OutByUtc">The race day's "Out by" time as a moment, or null with none set.</param>
+    /// <param name="Over">How far past it the finish is; null when it isn't, or there is none.</param>
+    /// <param name="Fixes">When over: what would help, biggest saving first.</param>
+    public sealed record Projection(
+        IReadOnlyList<Slot> Slots,
+        DateTime FinishUtc,
+        TimeSpan Gap,
+        bool GapIsTonights,
+        DateTime? OutByUtc,
+        TimeSpan? Over,
+        IReadOnlyList<Fix> Fixes)
+    {
+        /// <summary>When the round should start, or null when it is not still to run.</summary>
+        public DateTime? StartOf(string roundId) =>
+            Slots.FirstOrDefault(s => s.Round is not null && string.Equals(s.Round.Id, roundId, StringComparison.Ordinal))?.StartUtc;
+    }
+
+    /// <summary>
+    /// How long a round takes on track: its format's time limit plus staging
+    /// and countdown, or <see cref="DefaultLength"/> for a race with no time
+    /// limit. The format is chosen as Race Control chooses it (the round's
+    /// override, the class's qualifier format for a qualifier, the class's
+    /// format, the app default).
+    /// </summary>
+    public static TimeSpan LengthOf(RoundDefinition round, RaceClass? raceClass, RaceFormat appDefault)
+    {
+        var format = round.FormatOverride
+                     ?? (round.Kind == RoundKind.Qualifier ? raceClass?.QualifierFormat : null)
+                     ?? raceClass?.Format
+                     ?? appDefault;
+
+        return LengthOf(format);
+    }
+
+    /// <summary>A format's length on track. See <see cref="LengthOf(RoundDefinition, RaceClass?, RaceFormat)"/>.</summary>
+    public static TimeSpan LengthOf(RaceFormat format) =>
+        format.TimeLimitMinutes > 0
+            ? TimeSpan.FromMinutes(format.TimeLimitMinutes) + TimeSpan.FromSeconds(Math.Max(0, format.StagingSeconds) + Math.Max(0, format.CountdownSeconds))
+            : DefaultLength;
+
+    /// <summary>
+    /// The rest of the night, or null when nothing is left to run.
+    /// </summary>
+    /// <param name="dayRounds">The race day's rounds in program order.</param>
+    /// <param name="lengthOf">How long each round takes (see LengthOf).</param>
+    /// <param name="unbuilt">Mains still to be built, run after everything in <paramref name="dayRounds"/>.</param>
+    /// <param name="onTrackRoundId">The round on track now, if any.</param>
+    /// <param name="lastFinishUtc">When tonight's last race finished, if any.</param>
+    /// <param name="tonightsGap">Tonight's typical finish-to-green, or null when there isn't one yet.</param>
+    /// <param name="outByLocal">The race day's "Out by" time of day, or null.</param>
+    /// <param name="nowUtc">Now.</param>
+    public static Projection? For(
+        IReadOnlyList<RoundDefinition> dayRounds,
+        Func<RoundDefinition, TimeSpan> lengthOf,
+        IEnumerable<UnbuiltMains>? unbuilt,
+        string? onTrackRoundId,
+        DateTime? lastFinishUtc,
+        TimeSpan? tonightsGap,
+        TimeSpan? outByLocal,
+        DateTime nowUtc)
+    {
+        var gap = tonightsGap is { } measured && measured > TimeSpan.Zero ? measured : DefaultGap;
+        var slots = new List<Slot>();
+
+        var toRun = dayRounds.Where(r => r is not null && !r.IsRecorded && r.Kind != RoundKind.Practice).ToList();
+        var onTrack = onTrackRoundId is null
+            ? null
+            : toRun.FirstOrDefault(r => string.Equals(r.Id, onTrackRoundId, StringComparison.Ordinal));
+
+        DateTime cursor;
+
+        if (onTrack is not null)
+        {
+            // Half done, on average - see the model above.
+            var length = lengthOf(onTrack);
+            var start = nowUtc - TimeSpan.FromTicks(length.Ticks / 2);
+            slots.Add(new Slot(onTrack, onTrack.RoundLabel, onTrack.ClassName, onTrack.Kind, length, start));
+            cursor = start + length + gap;
+        }
+        else
+        {
+            cursor = lastFinishUtc is { } finished && finished + gap > nowUtc ? finished + gap : nowUtc;
+        }
+
+        foreach (var round in toRun)
+        {
+            if (ReferenceEquals(round, onTrack))
+            {
+                continue;
+            }
+
+            var length = lengthOf(round);
+            slots.Add(new Slot(round, round.RoundLabel, round.ClassName, round.Kind, length, cursor));
+            cursor += length + gap;
+        }
+
+        foreach (var mains in unbuilt ?? Enumerable.Empty<UnbuiltMains>())
+        {
+            // Lowest first, the order the mains run in.
+            for (var tier = Math.Max(0, mains.Count) - 1; tier >= 0; tier--)
+            {
+                var letter = tier < 26 ? ((char)('A' + tier)).ToString() : (tier + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                slots.Add(new Slot(null, $"{letter}-Main", mains.ClassName, RoundKind.Main, mains.Length, cursor));
+                cursor += mains.Length + gap;
+            }
+        }
+
+        if (slots.Count == 0)
+        {
+            return null;
+        }
+
+        var finish = slots[^1].EndUtc;
+        var outBy = outByLocal is { } time ? NearestOccurrence(time, finish) : (DateTime?)null;
+        TimeSpan? over = outBy is { } limit && finish > limit ? finish - limit : null;
+
+        return new Projection(
+            slots,
+            finish,
+            gap,
+            tonightsGap is { } g && g > TimeSpan.Zero,
+            outBy,
+            over,
+            over is null ? Array.Empty<Fix>() : FixesFor(slots, gap, onTrack, dayRounds));
+    }
+
+    /// <summary>
+    /// The "Out by" time of day on whichever day puts it nearest the finish,
+    /// so 00:30 is after a 23:50 finish, not 23 hours before it - a club
+    /// night running past midnight is most of them (see ScheduleDrift).
+    /// </summary>
+    internal static DateTime NearestOccurrence(TimeSpan timeOfDay, DateTime nearUtc)
+    {
+        var nearLocal = DateTime.SpecifyKind(nearUtc, DateTimeKind.Utc).ToLocalTime();
+
+        var best = new[] { -1, 0, 1 }
+            .Select(days => nearLocal.Date.AddDays(days).Add(timeOfDay))
+            .MinBy(candidate => Math.Abs((nearLocal - candidate).Ticks));
+
+        return DateTime.SpecifyKind(best, DateTimeKind.Local).ToUniversalTime();
+    }
+
+    /// <summary>What would bring the finish forward, biggest saving first.</summary>
+    private static List<Fix> FixesFor(List<Slot> slots, TimeSpan gap, RoundDefinition? onTrack, IReadOnlyList<RoundDefinition> dayRounds)
+    {
+        var fixes = new List<Fix>();
+        var qualifiers = slots.Where(s => s.Round is not null && s.Kind == RoundKind.Qualifier && !ReferenceEquals(s.Round, onTrack)).ToList();
+
+        // 1. Drop the last qualifying round still wholly to run - never the
+        //    first, and never one that has started.
+        // Read against the whole program: a round with one heat run is not
+        // whole, and the slots only hold what is still to run.
+        var lastRound = LastWholeRoundToRun(dayRounds.Where(r => r is not null).ToList(), onTrack?.Id);
+
+        if (lastRound is { } dropping)
+        {
+            var heats = qualifiers.Where(s => RoundNumber(s.Round!.RoundLabel) == dropping.Number).ToList();
+            var saves = TimeSpan.FromTicks(heats.Sum(s => (s.Length + gap).Ticks));
+            fixes.Add(new Fix(
+                $"drop {dropping.Name} ({Plural.Of(heats.Count, "race")}) to save {Minutes(saves)}",
+                saves,
+                dropping.Number));
+        }
+
+        // 2. A minute off every qualifier still to run that can spare one.
+        var shortenable = qualifiers.Count(s => s.Length >= ShortestToShorten);
+
+        if (shortenable > 0)
+        {
+            var saves = TimeSpan.FromMinutes(shortenable);
+            fixes.Add(new Fix($"run qualifiers a minute shorter to save {Minutes(saves)}", saves));
+        }
+
+        // 3. One main fewer in each class with more than one still to run.
+        var mainSaves = slots
+            .Where(s => s.Kind == RoundKind.Main)
+            .GroupBy(s => s.ClassName, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.First())
+            .ToList();
+
+        if (mainSaves.Count > 0)
+        {
+            var saves = TimeSpan.FromTicks(mainSaves.Sum(s => (s.Length + gap).Ticks));
+            fixes.Add(new Fix(
+                mainSaves.Count == 1
+                    ? $"run one main fewer in {mainSaves[0].ClassName} to save {Minutes(saves)}"
+                    : $"run one main fewer in each class to save {Minutes(saves)}",
+                saves));
+        }
+
+        return fixes.OrderByDescending(f => f.Saves).ToList();
+    }
+
+    /// <summary>A qualifying round's number and what it is called: Q3, or Race 3 on a club night.</summary>
+    public readonly record struct RoundName(int Number, string Name);
+
+    private static readonly Regex QualifyingNumber = new(@"^\s*(?:Q(?<n>\d+)\b|Race\s+(?<n>\d+)\b|(?<single>Heat\s+\d+)\s*$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Which qualifying round a heat belongs to, from the label the program
+    /// gave it: "Q2 Heat 3" is 2, "Race 4 Heat 1" is 4 on a club night, and
+    /// a single round's "Heat 3" is 1. Null for a label renamed by hand.
+    /// </summary>
+    public static int? RoundNumber(string? label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return null;
+        }
+
+        var match = QualifyingNumber.Match(label);
+
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        if (match.Groups["single"].Success)
+        {
+            return 1;
+        }
+
+        return int.TryParse(match.Groups["n"].Value, out var n) && n > 0 ? n : null;
+    }
+
+    private static string RoundNameOf(int number, IEnumerable<RoundDefinition> heats) =>
+        heats.Any(h => h.RoundLabel.TrimStart().StartsWith("Race", StringComparison.OrdinalIgnoreCase))
+            ? $"Race {number}"
+            : $"Q{number}";
+
+    /// <summary>
+    /// The last qualifying round none of whose heats has run or is on track,
+    /// as long as it isn't the only round: dropping it is a real choice.
+    /// </summary>
+    private static RoundName? LastWholeRoundToRun(List<RoundDefinition> rounds, string? onTrackId)
+    {
+        var numbered = rounds
+            .Where(r => r.Kind == RoundKind.Qualifier && RoundNumber(r.RoundLabel) is not null)
+            .GroupBy(r => RoundNumber(r.RoundLabel)!.Value)
+            .Where(g => g.Key >= 2 && g.All(r => !r.IsRecorded && !string.Equals(r.Id, onTrackId, StringComparison.Ordinal)))
+            .OrderByDescending(g => g.Key)
+            .FirstOrDefault();
+
+        return numbered is null ? null : new RoundName(numbered.Key, RoundNameOf(numbered.Key, numbered));
+    }
+
+    /// <summary>What "we're done after this round" would do.</summary>
+    /// <param name="Current">The round being finished, e.g. Q2 - the one on track, or the next to run.</param>
+    /// <param name="Dropped">The heats of every later qualifying round, none of them run.</param>
+    public sealed record StopEarly(RoundName Current, IReadOnlyList<RoundDefinition> Dropped);
+
+    /// <summary>
+    /// "We're done after this round": finish the qualifying round now under
+    /// way (the one on track, or else the next to run) and drop every later
+    /// one. Null when there is no qualifying left, or nothing after this
+    /// round to drop.
+    /// </summary>
+    public static StopEarly? AfterThisRound(IReadOnlyList<RoundDefinition> dayRounds, string? onTrackRoundId)
+    {
+        var qualifiers = dayRounds
+            .Where(r => r is not null && r.Kind == RoundKind.Qualifier && RoundNumber(r.RoundLabel) is not null)
+            .ToList();
+
+        var current = qualifiers.FirstOrDefault(r => string.Equals(r.Id, onTrackRoundId, StringComparison.Ordinal))
+                      ?? qualifiers.FirstOrDefault(r => !r.IsRecorded);
+
+        if (current is null || RoundNumber(current.RoundLabel) is not { } number)
+        {
+            return null;
+        }
+
+        var dropped = qualifiers
+            .Where(r => RoundNumber(r.RoundLabel) > number
+                        && !r.IsRecorded
+                        && !string.Equals(r.Id, onTrackRoundId, StringComparison.Ordinal))
+            .ToList();
+
+        return dropped.Count == 0
+            ? null
+            : new StopEarly(new RoundName(number, RoundNameOf(number, qualifiers.Where(q => RoundNumber(q.RoundLabel) == number))), dropped);
+    }
+
+    /// <summary>
+    /// What the announcer says once the later rounds are dropped: "Change of
+    /// plan, everyone: qualifying finishes after Q2, and the finals are
+    /// next." On a club night: "...tonight finishes after Race 2."
+    /// </summary>
+    public static string Announcement(StopEarly stop, bool clubNight) =>
+        clubNight
+            ? $"Change of plan, everyone: tonight finishes after {stop.Current.Name}."
+            : $"Change of plan, everyone: qualifying finishes after {stop.Current.Name}, and the finals are next.";
+
+    /// <summary>A length in whole minutes, as a saving or an overrun is said: "40 min", "1 h 05 min".</summary>
+    public static string Minutes(TimeSpan length)
+    {
+        var minutes = Math.Max(0, (int)Math.Round(length.TotalMinutes));
+
+        return minutes < 60
+            ? $"{minutes} min"
+            : $"{minutes / 60} h {minutes % 60:00} min";
+    }
+
+    /// <summary>
+    /// The plan as the Next Steps card says it, starting with a space:
+    /// " Finishes about 22:40 - 40:00 past the 22:00 out-by. To finish in
+    /// time: drop Q3 (6 races) to save 48:00; ..." Times are local, as
+    /// AppTime shows them.
+    /// </summary>
+    public static string Note(Projection plan)
+    {
+        var finish = AppTime.TimeOfDay(plan.FinishUtc.ToLocalTime());
+
+        if (plan.OutByUtc is not { } outBy)
+        {
+            return $" Finishes about {finish}.";
+        }
+
+        var outByText = AppTime.TimeOfDay(outBy.ToLocalTime());
+
+        if (plan.Over is not { } over)
+        {
+            return $" Finishes about {finish}, inside the {outByText} out-by time.";
+        }
+
+        var fixes = plan.Fixes.Count == 0
+            ? string.Empty
+            : $" To finish in time: {string.Join("; ", plan.Fixes.Select(f => f.Text))}.";
+
+        return $" Finishes about {finish} - {Minutes(over)} past the {outByText} out-by time.{fixes}";
+    }
+}

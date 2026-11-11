@@ -497,6 +497,11 @@ public sealed class RaceProgramControl : UserControl
             // from this page. See RefreshGrid.
             new DataGridViewTextBoxColumn { Name = "due", HeaderText = "Due", FillWeight = 42, Visible = false },
 
+            // When it should start, worked out from tonight's own pace (11
+            // Nov 2026, race-night build plan, Phase 2 - see NightPlan).
+            // Blank for a round already run; hidden with nothing still to run.
+            new DataGridViewTextBoxColumn { Name = "est", HeaderText = "About", FillWeight = 42, Visible = false },
+
             new DataGridViewTextBoxColumn { Name = "round", HeaderText = "Round", FillWeight = 95 },
 
             // What KIND of round this is - and it was not on screen at all.
@@ -649,6 +654,10 @@ public sealed class RaceProgramControl : UserControl
         var miPrintPaper = new ToolStripMenuItem("Print Heat Sheet...", null, (_, _) => PrintHeatSheetOnPaper());
         var miDelete = new ToolStripMenuItem("Delete", null, (_, _) => DeleteSelectedRounds());
 
+        // Rain, a curfew, a track that has to close: finish the round under
+        // way and drop the rest of qualifying (11 Nov 2026, Phase 2).
+        var miFinishEarly = new ToolStripMenuItem("We're Done After This Round...", null, (_, _) => FinishAfterThisRoundFromMenu());
+
         menu.Items.AddRange(new ToolStripItem[]
         {
             miStart,
@@ -665,6 +674,7 @@ public sealed class RaceProgramControl : UserControl
             miPrint,
             miPrintPaper,
             new ToolStripSeparator(),
+            miFinishEarly,
             miDelete,
         });
 
@@ -684,6 +694,7 @@ public sealed class RaceProgramControl : UserControl
             miUp.Enabled = single;
             miDown.Enabled = single;
             miDelete.Enabled = selected > 0;
+            miFinishEarly.Enabled = NightPlan.AfterThisRound(DayRounds(), RoundOnTrackId?.Invoke()) is not null;
             miDelete.Text = selected > 1 ? $"Delete {selected} Rounds" : "Delete";
 
             // A club night has no finals. Both of these build one, so on a
@@ -922,9 +933,130 @@ public sealed class RaceProgramControl : UserControl
         RunPrimaryAction();
     }
 
-    /// <summary>What Next Steps' card says right now: the one next thing to do.</summary>
-    internal ProgramStep NextStep() =>
-        ProgramNextStep.Evaluate(_events?.Active, DayRounds(), RacingClasses(), PlannedQualifyingRounds(), _sessionHistory, SetupFacts());
+    /// <summary>
+    /// What Next Steps' card says right now: the one next thing to do. While
+    /// races are still to run, it also says when the night should finish and,
+    /// with an out-by time set, what would bring it back inside it
+    /// (NightPlan). Once everything has run, it lists what is left before
+    /// lights out (NightClose) - 11 Nov 2026, race-night build plan, Phase 2.
+    /// </summary>
+    internal ProgramStep NextStep()
+    {
+        var day = DayRounds();
+        var step = ProgramNextStep.Evaluate(_events?.Active, day, RacingClasses(), PlannedQualifyingRounds(), _sessionHistory, SetupFacts());
+
+        if (step.Stage is ProgramStage.RunNext or ProgramStage.SeedMains or ProgramStage.BumpUps && Plan(day) is { } plan)
+        {
+            return step with { Detail = step.Detail + NightPlan.Note(plan) };
+        }
+
+        if (step.Stage == ProgramStage.Complete && ClosingFacts is { } closing)
+        {
+            var sessions = DaySessions(day);
+            var facts = closing(sessions);
+            var lastFinish = sessions.Select(s => (DateTime?)s.EndedAtUtc).Max();
+            return step with { Detail = step.Detail + NightClose.Note(facts, lastFinish) };
+        }
+
+        return step;
+    }
+
+    /// <summary>
+    /// What is known about the end of the night - rentals, backups, night
+    /// emails, the club website - for the closing checklist, given the day's
+    /// saved races. Set by MainForm,
+    /// which can see those; null leaves the card as it was.
+    /// </summary>
+    internal Func<IReadOnlyList<SessionRecord>, NightClose.Facts>? ClosingFacts { get; set; }
+
+    /// <summary>The saved races of today's program, however each is linked to its round.</summary>
+    private List<SessionRecord> DaySessions(IReadOnlyList<RoundDefinition> day)
+    {
+        var roundIds = day.Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
+        var linked = day
+            .Where(r => !string.IsNullOrEmpty(r.LinkedSessionId))
+            .Select(r => r.LinkedSessionId!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        return _sessionHistory.All
+            .Where(s => (s.RoundId is not null && roundIds.Contains(s.RoundId)) || linked.Contains(s.Id))
+            .ToList();
+    }
+
+    /// <summary>
+    /// The rest of tonight, planned: when each race still to run should
+    /// start and when the night finishes. Null with nothing left to run, or
+    /// no race day open. See NightPlan.
+    /// </summary>
+    internal NightPlan.Projection? Plan() => Plan(DayRounds());
+
+    private NightPlan.Projection? Plan(IReadOnlyList<RoundDefinition> day)
+    {
+        if (ActiveDay is not { IsLegacy: false } raceDay || day.Count == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            var appDefault = RaceFormat.FromSettings(_settings);
+            var classes = _raceClasses.All;
+
+            RaceClass? ClassNamed(string name) =>
+                classes.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+
+            // On a race day, a class that qualifies but has no mains yet gets
+            // the mains it will have, so the finish covers the finals.
+            var unbuilt = new List<NightPlan.UnbuiltMains>();
+
+            if (!DayIsClubNight)
+            {
+                foreach (var group in day.GroupBy(r => r.ClassName, StringComparer.OrdinalIgnoreCase))
+                {
+                    if (!group.Any(r => r.Kind == RoundKind.Qualifier) || group.Any(r => r.Kind == RoundKind.Main))
+                    {
+                        continue;
+                    }
+
+                    var drivers = group
+                        .Where(r => r.Kind == RoundKind.Qualifier)
+                        .SelectMany(r => r.AssignedTransponders)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .Count();
+
+                    if (drivers == 0)
+                    {
+                        continue;
+                    }
+
+                    var mains = (int)Math.Ceiling(drivers / (double)Math.Max(2, HeatSize()));
+                    var length = NightPlan.LengthOf(ClassNamed(group.Key)?.Format ?? appDefault);
+                    unbuilt.Add(new NightPlan.UnbuiltMains(group.Key, mains, length));
+                }
+            }
+
+            var sessions = DaySessions(day);
+            var pace = NightPace.For(sessions, day, day.Select(r => r.Id).ToList());
+            var tonightsGap = pace is { Races: >= NightPlan.RacesForMeasuredGap } ? pace.MedianGap : null;
+            var lastFinish = sessions.Where(s => !s.IsNotScored()).Select(s => (DateTime?)s.EndedAtUtc).Max();
+
+            return NightPlan.For(
+                day,
+                round => NightPlan.LengthOf(round, ClassNamed(round.ClassName), appDefault),
+                unbuilt,
+                RoundOnTrackId?.Invoke(),
+                lastFinish,
+                tonightsGap,
+                raceDay.OutByLocalTime,
+                DateTime.UtcNow);
+        }
+        catch (Exception ex)
+        {
+            // An estimate is never worth a broken page.
+            StatusMessage?.Invoke($"[program] The night's finish could not be worked out: {ex.Message}");
+            return null;
+        }
+    }
 
     /// <summary>
     /// Moves rounds in the running order, in front of
@@ -1373,6 +1505,14 @@ public sealed class RaceProgramControl : UserControl
             dueColumn.Visible = shown.Any(r => due.ContainsKey(r.Id));
         }
 
+        // When each round still to run should start - see NightPlan.
+        var plan = Plan(day);
+
+        if (_grid.Columns["est"] is { } estColumn)
+        {
+            estColumn.Visible = plan is not null && shown.Any(r => plan.StartOf(r.Id) is not null);
+        }
+
         var position = 1;
 
         foreach (var round in shown)
@@ -1382,6 +1522,7 @@ public sealed class RaceProgramControl : UserControl
             var index = _grid.Rows.Add(
                 position++,
                 due.TryGetValue(round.Id, out var at) ? at : string.Empty,
+                plan?.StartOf(round.Id) is { } estimate ? AppTime.TimeOfDay(estimate.ToLocalTime()) : string.Empty,
                 round.RoundLabel,
                 DescribeKind(round),
                 round.ClassName,
@@ -3735,6 +3876,98 @@ public sealed class RaceProgramControl : UserControl
 
         return new ProgramAnswer(true, "Deleted",
             removed.Count == 1 ? $"Deleted {removed[0].RoundLabel} from the program." : $"Deleted {removed.Count} rounds from the program.");
+    }
+
+    /// <summary>
+    /// Raised with what the announcer should say once "We're done after
+    /// this round" has dropped the later rounds - so the room, the Big
+    /// Screen and the phones hear the change of plan. MainForm speaks it.
+    /// </summary>
+    public event Action<string>? NightCutShort;
+
+    /// <summary>
+    /// What "We're done after this round" would do, or why it can't
+    /// (11 Nov 2026, race-night build plan, Phase 2: rain, a curfew, a
+    /// track that has to close early). The question to ask is in Message.
+    /// </summary>
+    public ProgramAnswer PlanFinishAfterThisRound()
+    {
+        if (ClosedDayRefusal() is { } shut)
+        {
+            return shut;
+        }
+
+        if (NightPlan.AfterThisRound(DayRounds(), RoundOnTrackId?.Invoke()) is not { } stop)
+        {
+            return new ProgramAnswer(false, "Nothing to drop",
+                "There is no later qualifying round still to run, so the night already finishes after this one.");
+        }
+
+        var rounds = stop.Dropped
+            .Select(r => NightPlan.RoundNumber(r.RoundLabel))
+            .OfType<int>()
+            .Distinct()
+            .Count();
+
+        return new ProgramAnswer(true, "We're done after this round",
+            $"Finish {stop.Current.Name} and drop {Plural.Of(rounds, "later round")} - "
+            + $"{Plural.Of(stop.Dropped.Count, "race")} that haven't run:\r\n\r\n"
+            + string.Join("\r\n", stop.Dropped.Select(r => $"   {r.RoundLabel}  ({r.ClassName})"))
+            + "\r\n\r\n"
+            + (DayIsClubNight
+                ? "Nothing that has run is touched."
+                : "Nothing that has run is touched. When this round is done, the finals are built from the qualifying that ran.")
+            + " The announcer tells the room. Undo puts the rounds back.");
+    }
+
+    /// <summary>
+    /// "We're done after this round": drops every later qualifying round that
+    /// hasn't run, as one undo, and has the change announced. No question
+    /// asked; the caller has asked (PlanFinishAfterThisRound).
+    /// </summary>
+    public ProgramAnswer FinishAfterThisRound(string undoPrefix)
+    {
+        var check = PlanFinishAfterThisRound();
+
+        if (!check.Ok)
+        {
+            return check;
+        }
+
+        var stop = NightPlan.AfterThisRound(DayRounds(), RoundOnTrackId?.Invoke())!;
+        var answer = DeleteRounds(stop.Dropped, undoPrefix + $"Finish after {stop.Current.Name}: ");
+
+        if (answer.Ok)
+        {
+            StatusMessage?.Invoke($"[program] Finishing after {stop.Current.Name}: dropped {Plural.Of(stop.Dropped.Count, "race")} still to run.");
+            NightCutShort?.Invoke(NightPlan.Announcement(stop, DayIsClubNight));
+            answer = answer with
+            {
+                Title = "We're done after this round",
+                Message = $"Finishing after {stop.Current.Name}. Dropped {Plural.Of(stop.Dropped.Count, "race")} still to run.",
+            };
+        }
+
+        return answer;
+    }
+
+    private void FinishAfterThisRoundFromMenu()
+    {
+        var plan = PlanFinishAfterThisRound();
+
+        if (!plan.Ok)
+        {
+            AppDialog.Show(this, plan.Message, plan.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        if (AppDialog.Show(this, plan.Message, plan.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Question,
+                MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        FinishAfterThisRound(string.Empty);
     }
 
     // ------------------------------------------------------------------

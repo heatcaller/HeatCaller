@@ -53,7 +53,36 @@ The card works out the single next thing to do, with one button that does it. Th
 | Everything has run, and a class has qualified but has no mains | "Qualifying is complete for Stock." | **Build the finals from qualifying** |
 | Everything has run | "The program is complete." | **Qualifying Standings** (**Tonight's Standings** on a club night) |
 
-The line under the headline gives the numbers behind it — for example the class, driver count and track for the next round, and how many rounds have run and how many are left. If one class has no drivers while others do, it says that class will be skipped.
+The line under the headline gives the numbers behind it — for example the class, driver count and track for the next round, and how many rounds have run and how many are left. If one class has no drivers while others do, it says that class will be skipped. While races are still to run, it also says when the night should finish (see [When the night finishes](#when-the-night-finishes)). Once everything has run, it gives the night pace and lists what's left before lights out (see [Closing the night](#closing-the-night)).
+
+### When the night finishes
+
+While races are still to run, the next-step card ends with "Finishes about 22:40." HeatCaller works it out like this:
+
+- Every race still to run takes its format's time limit plus staging and the countdown. A lap race with no time limit is counted as 5 minutes.
+- After each race comes the gap before the next green. Once tonight has run three races, that's tonight's own typical gap (the same figure as the event report's [night pace](../race-control/results-and-championships.md)). Before then it's 3 minutes.
+- A race on track is taken as half done.
+- On a race day, a class with heats but no finals yet is given the finals it will have (one per heat's worth of drivers), so the finish includes them.
+
+With **Out of the venue by:** set on **Setup**, the card says whether that's in time: "Finishes about 22:40, inside the 23:00 out-by time." If it isn't, it says by how much, then what would help, biggest saving first:
+
+- **drop Q3** (the last qualifying round, when none of its heats has run, and never the first)
+- **run qualifiers a minute shorter**
+- **run one main fewer** in a class with more than one main still to run
+
+For example: "Finishes about 22:40 - 15 min past the 22:00 out-by time. To finish in time: drop Q3 (6 races) to save 48 min; run qualifiers a minute shorter to save 12 min." HeatCaller doesn't make these changes itself. To drop the rest of qualifying, use [We're done after this round](#were-done-after-this-round). The estimate is worked out again whenever the program changes, and each is shown as "about".
+
+### Closing the night
+
+Once everything on the program has run, the card adds what's left to do:
+
+- rental transponders still out, with who has them
+- results not on the club website yet (only when publishing is on)
+- night emails still to send (only when night emails are on and the mailbox is set up)
+- **back up tonight's results**, when the last backup is older than the last race
+- **Close Day**, while the day is still open
+
+For example: "Before lights out: 2 rentals still out (Sam, Jo) · 14 night emails to send · back up tonight's results · Close Day." With nothing left, it says "All wrapped up - lights out."
 
 Bump-ups come *before* starting the next round on purpose: once the upper main has gone out, it's too late to add the bumped drivers. The Next Up bar on **Race Control** follows the same rule: while bump-ups or finals are owed, its **Start Next** button offers them instead of the next race. See [The Next Up bar](../race-control/running-a-race.md#the-next-up-bar).
 
@@ -80,6 +109,7 @@ The **Tonight's program** card lists the race day's rounds, all classes together
 |---|---|
 | **#** | Position in the running order. |
 | **Due** | The round's time on the timetable. Only shown once at least one round has a time. See [The Timetable](#the-timetable). |
+| **About** | When a round still to run should start, worked out from tonight's pace. Blank for rounds already run. See [When the night finishes](#when-the-night-finishes). |
 | **Round** | The round's name, such as "Q2 Heat 1" or "A-Main". |
 | **Kind** | **Heat** (**Race** on a club night), **A-Main**, **B-Main** and so on, **Main (no tier)** for a hand-added main whose name doesn't say its tier, or **Practice**. |
 | **Class** | The class, in the class's color. |
@@ -112,7 +142,19 @@ Everything else is on the round menu. Right-click the list to open it: on a roun
 | **Add a Main by Hand...** | Adds a main you choose the drivers for. Not shown on a club night. |
 | **Save Heat Sheet...** | Saves a printable heat sheet for a class. |
 | **Print Heat Sheet...** | Prints the class's heat sheet, with a preview first. |
+| **We're Done After This Round...** | Finishes the qualifying round under way and drops every later one. See [We're done after this round](#were-done-after-this-round). |
 | **Delete** | Deletes the selected rounds from the program (it says **Delete 3 Rounds** when several are selected). |
+
+### We're done after this round
+
+For rain, a curfew, or a track that has to close early. Right-click the list and choose **We're Done After This Round...**. HeatCaller lists the races it would drop: every heat of the later qualifying rounds (Q3, Q4...), none of them run. The round under way is the one on track, or else the next to run, and it's finished as normal. Click **Yes** to drop them.
+
+- Nothing that has run is touched, and the dropped races' lines leave the timetable.
+- The announcer tells the room, with the words on the Big Screen: "Change of plan, everyone: qualifying finishes after Q2, and the finals are next." On a club night: "...tonight finishes after Race 2."
+- When the round is done, the next-step card offers **Build the finals from qualifying** as usual, from the qualifying that ran.
+- **Undo** puts the dropped races back, with their timetable lines.
+
+The command is grayed out when there's no later qualifying round still to run, and refused on a closed day.
 
 ## Build the qualifying program
 

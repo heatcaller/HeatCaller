@@ -135,6 +135,14 @@ public sealed class RaceEvent
     /// <summary>When the first race is meant to go out. Local time of day; the run sheet measures drift against it.</summary>
     public TimeSpan? FirstRaceLocalTime { get; set; }
 
+    /// <summary>
+    /// When the club has to be out of the venue: a local time of day, or null
+    /// for none (11 Nov 2026, race-night build plan, Phase 2). The Next Steps
+    /// card measures the projected finish against it and suggests what would
+    /// bring the night back inside it (NightPlan).
+    /// </summary>
+    public TimeSpan? OutByLocalTime { get; set; }
+
     // --- Rolling into the next race -------------------------------------
     //
     // Whether finishing a race arms the next one by itself, and which race
