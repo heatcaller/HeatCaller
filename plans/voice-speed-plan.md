@@ -176,13 +176,89 @@ The rules stay the same, so we still drop rather than say a call late. They just
 
 ## Phase 4 — what will dazzle a driver
 
-**Started 10 Nov 2026.** Done so far:
+Once calls take about a second, HeatCaller can call the race as it happens, not just afterwards. The seven ideas are listed below the layout.
+
+### Phase 4 layout (11 Nov 2026)
+
+| # | Item | State | Size | Needs Asher |
+|---|---|---|---|---|
+| 0 | Measure what Phases 2–3 did | To do first | ½ day + races | Two demo races, one with streaming ticked |
+| 1 | Your lap time before the first corner | Mostly there; tune | ½–1 day | Which call clubs want for it |
+| 2 | Pass for the lead called on the line | To build | 2–3 days | — |
+| 3 | Winner named on the line | Built (PR #131) | — | Hear it in a race |
+| 4 | Calls that know the driver's history | One built (Fastest ever here); more to do | 1–2 days each | Which ones |
+| 5 | Gap countdown in the final laps | To build | 1–2 days | Wording |
+| 6 | Race engineer on the driver's phone | Design first | 1–2 weeks | Yes, several decisions |
+| 7 | The booth live in a quiet stretch | To build | 2–3 days | AI spend per race |
+
+Order: **0 → 1 → 2 → 5 → 4 → 7 → 6.** Measuring first, because 1 and 2 are tuned against the numbers. Then the two "call it as it happens" items (2, 5), which share the battle tracking. Then the cheaper history calls, and the booth. The race engineer goes last, because it rides on "Rework follow along".
+
+#### 0. Measure what Phases 2–3 did
+- **Race A, demo, 5 cars, streaming off.** Read: the `[timing]` summary ("N of M lines rendered ahead were used", lap to first word median and 90%, dead air per call), how many `[voice] ... busy` shorter picks there were, any "Personal bests ... offered as one" lines, and the time from the flag to "Winner" in the log. Also the new `[timing] Recap:` line, to settle whether the recap should be played sentence by sentence.
+- **Race B, the same with "Start race calls while ElevenLabs is still sending them" ticked.** Read: lines marked "(streamed)", any "ran ahead of ElevenLabs" gaps, and the change in lap-to-first-word for calls rendered when the speaker was free. Asher listens for stutters, or streamed lines louder or quieter than the rest.
+- **Write both into this plan.** If render-ahead's used share is low (under about half), find out why before building item 2, which leans on it.
+
+#### 1. Your lap time before the first corner
+- **What exists:** "Lap time only" (`LapTime`, every Nth lap) and "Every lap completed". With Turbo and render-ahead, a call heard about 1–1.5 s after the crossing is the norm when the speaker is free.
+- **What's missing:** on a busy track the lap time loses to bigger calls, and the busy wording only shortens lines that are already chosen.
+- **Build:** a "driver's own lap" mode for `LapTime` that names the driver and the time in the shortest form ("Dee, six eight seven"). Allow it only within ~2 s of the crossing, so it's never late. When the track is busy, prefer drivers who haven't been named for a while, so every driver hears themself over a race.
+- **Measure:** the share of each driver's laps that got a call, and lap to word for those.
+- **Needs Asher:** whether clubs want every lap, every Nth, or "personal bests and every Nth".
+
+#### 2. Pass for the lead called on the line
+- **The limit to state plainly:** the timing only knows positions at the line (and at a split loop if there is one). A pass is known when the passer crosses first, so "while side by side" means said within about a second of that crossing, while the other car is still right behind.
+- **What exists:** `LeaderChange`, which is never held by the pacing dial, and the battle tracking that knows when P2 is within a second of P1 (`CheckCloseBattles`, `BattlePair`). Render-ahead hands over only for exactly the same words.
+- **Build:**
+  - **Predict.** When P2 is within ~0.5 s of P1 at the line, ask `LeadTracker` what the lead change would be if P2 took it: the number, leaders, previous, laps led and back in front. Pick the template then (the busy state too) and keep that choice keyed to P2.
+  - **Render ahead.** Render that exact line with `RenderLineAheadAsync`, at most two predictions alive at once, cancelled when the gap opens past ~1 s or the order changes another way.
+  - **Use it.** When the lead change comes, `EnqueueVoice` takes the kept template for that driver instead of picking a new one, so the words, and therefore the render, match.
+  - **Cap and count.** At most N predictions per race (start with 6). The `[timing]` summary gets "lead-change predictions: made / used".
+- **Measure:** lap to first word for `LeaderChange`, against today's.
+- **Risk:** a wrong guess is a paid render nobody hears; the cap and the used share keep that visible.
+
+#### 3. Winner named on the line
+Built: `AnnouncementService.Winner.cs`, row "Winner named". To check in race A: the time from the checkered flag to the winner's name, and that the "Unofficially…" result still follows after the cheering without sounding repetitive. If it does, the result read could skip the winner's name when this was said.
+
+#### 4. Calls that know the driver's history
+- **Built:** "Fastest ever here (driver)". It needs a real race with a layout picked; demos are left out.
+- **Candidates, each a row of its own built the same way** (Race Control answers from `_sessionHistory`, the announcer says it instead of the plainer call):
+  - **Beat last week's time:** "quicker than last time out by two tenths". Compares with the driver's best in their last race on this layout.
+  - **Milestones:** a 100th race, or a 1,000th lap at the club. These are counts from history, said once.
+  - **Rivals side by side:** a rivalry callback when a `RivalryStore` pair is within a second ("these two have history"). Rivalries already have their own lead-change line; this adds the battle.
+  - **Back on form:** the best lap in a while after a run of slower races.
+- **Needs Asher:** which of these, and each one's words.
+
+#### 5. Gap countdown in the final laps
+- **What exists:** `CloseBattle` (once per pair per race) and `SplitBattle` (at the split loop, at most once every five laps). Gaps are known only at the line, or at the split.
+- **Build:** a new row, "Final laps gap". In the last 3 laps of a lap race, or the last minute of a timed one, when P2 is within 1.0 s of P1, call the gap each time they cross: "Point four!", "Point two - he's right there!". It's lap-bound (said within ~2 s or dropped), `[excited]`, and replaces `CloseBattle` for that pair while it runs. With a split loop it also calls at the split.
+- **Measure:** that each gap is heard before the next crossing.
+- **Needs Asher:** the wording, and whether it's for the lead only or any podium place.
+
+#### 6. Race engineer on the driver's phone
+Design first; it rides on "Rework follow along" above.
+- **Shape:** a driver opts in on the relay's phone page and gets their own short calls in their earbuds: lap time, position, the gap ahead and behind, and "push, he's fading". The calls are rendered on the timing laptop and sent through the relay to that phone only.
+- **Hard parts:**
+  - Phones only play sound after a tap: an "Engineer on" button that also unlocks audio.
+  - Latency through the relay: measured in "Rework follow along" step 1.
+  - Privacy: one driver's channel must never reach another phone.
+  - Cost: about 15 credits a call per driver, so a cap per driver per race.
+  - The relay's Pit Wall kit and the Me tab's layout stay as they are.
+  - A fly deploy for every relay change.
+- **Needs Asher:**
+  - whether it's free or part of a paid tier (see the voice business report);
+  - which calls it makes;
+  - whether it's on the Me tab or a page of its own.
+
+#### 7. The booth live in a quiet stretch
+- **What exists:** the AI two-hander (host and pit reporter) is pre-race only. Live AI segments are written through the relay and are limited by the month's relay allowance. The 10 Nov demos hit "this month's relay lines are used up".
+- **Build:** during a quiet stretch (nothing queued, no battle within 1 s, the pacing gap run, at least 2 laps to go), the host throws to the pit reporter for one exchange about a driver's car or a team, rendered ahead, both turns. At most once per race, and never in the last 2 laps.
+- **Needs Asher:** whether it's worth the relay lines it spends, since the allowance runs out.
+
+### Phase 4 progress (10 Nov 2026)
 - #3, the winner named on the line (see the Phase 3 table).
 - #4, history-aware calls: **"Fastest ever here (driver)"**. A personal best that also beats the driver's quickest lap ever on the layout picked in Race Control is said as that instead: "Dee Ploy has never been faster on this track - seven two five!". It has a `{previous}` placeholder for the old best. It happens once per driver per race, and needs at least one earlier race for that driver on the layout. Demos, rentals, ghosts and excluded guests are left out, as for the track record. Its own row, on by default. Files: `BestEverHere.cs` and `RaceControlControl.BestEverHere.cs`, plus a hook ahead of the personal best in `NotifyPersonalBestLap`.
 
-Next in Phase 4: #2, passes called while side by side (render "takes the lead" ahead for a car within ~0.5 s). This needs the lead-change wording chosen at prediction time and kept, so the render matches. Then #5, the gap countdown, and #7, the booth live in a quiet stretch. #6, the race engineer on the phone, belongs with "Rework follow along".
-
-Once calls take about a second, HeatCaller can call the race as it happens, not just afterwards.
+### The seven ideas
 
 1. **Your lap time before you reach the first corner.** "Dee Ploy — six eight seven!" heard about 1 s after crossing, every time there's room for it. Drivers notice that it's quick and it's always about them.
 2. **Passes called while they're happening.** "Terry Byte goes by Ela into P1!" heard while the two cars are still side by side, not a lap later. A ready "takes the lead" line from Phase 3 makes this instant.
