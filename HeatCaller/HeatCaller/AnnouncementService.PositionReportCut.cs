@@ -255,9 +255,66 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>
-    /// Puts the correction for a cut-off position report next in the queue,
-    /// worded from <paramref name="now"/> - the slot and the few seconds a
-    /// battle's pass call gets (QueueBattlePass).
+    /// Where the correction for a cut-off report goes: NEXT, ahead of
+    /// everything waiting but an instruction to a driver sitting still for
+    /// it (a release, the grid call, staging) - which is a few words, and a
+    /// car left on the line otherwise.
+    /// </summary>
+    /// <remarks>
+    /// 11 Nov 2026, Asher: "another thing fired, then correction, and by that
+    /// time the correction was wrong ... ensure corrections fire during what
+    /// they are correcting." It went in the slot a kept call gets
+    /// (HeldOverSlot), behind every race moment and reminder already
+    /// waiting. In the 14:44 race that was a twelve-second AI line about a
+    /// personal best - the correction ran out its few seconds behind it and
+    /// was dropped unheard - and then the race's fastest lap, which put the
+    /// correction five seconds after the cut, by when the pass it named was
+    /// being undone. A correction is the end of the line it cut off, so it
+    /// is said in that line's place; what was waiting waits one line more.
+    /// </remarks>
+    internal static int CorrectionSlot(IReadOnlyList<AnnouncementEventType> queued)
+    {
+        var i = 0;
+
+        while (i < queued.Count && IsInstructionToADriver(queued[i]))
+        {
+            i++;
+        }
+
+        return i;
+    }
+
+    private static bool IsInstructionToADriver(AnnouncementEventType type) => type is
+        AnnouncementEventType.DriverRelease or
+        AnnouncementEventType.GridCall or
+        AnnouncementEventType.RaceStaging;
+
+    /// <summary>
+    /// The first place a line queued after a correction may go: behind any
+    /// correction still waiting, so a kept call or a lap call that would
+    /// otherwise go "next" does not push it back. 0 when none waits.
+    /// </summary>
+    internal static int PastWaitingCorrections(IReadOnlyList<bool> isCorrection)
+    {
+        for (var i = isCorrection.Count - 1; i >= 0; i--)
+        {
+            if (isCorrection[i])
+            {
+                return i + 1;
+            }
+        }
+
+        return 0;
+    }
+
+    /// <summary>PastWaitingCorrections for the queue as it stands. Under _voiceQueueLock.</summary>
+    private int PastWaitingCorrectionsLocked() =>
+        PastWaitingCorrections(_voiceQueue.Select(waiting => waiting.IsCorrection).ToList());
+
+    /// <summary>
+    /// Puts the correction for a cut-off position report next in the queue
+    /// (CorrectionSlot), worded from <paramref name="now"/>, with the few
+    /// seconds a battle's pass call gets (QueueBattlePass).
     /// </summary>
     private void QueuePositionReportCorrection(List<PositionReportOrder.Row> now, int place, int depth, bool byRuling)
     {
@@ -278,7 +335,7 @@ public sealed partial class AnnouncementService
 
         lock (_voiceQueueLock)
         {
-            var at = HeldOverSlot(_voiceQueue.Select(waiting => waiting.Type).ToList());
+            var at = CorrectionSlot(_voiceQueue.Select(waiting => waiting.Type).ToList());
 
             _voiceQueue.Insert(at, new QueuedVoiceItem(AnnouncementEventType.PositionReport, mover.Transponder, OnAir: "Position report",
                 SayByMs: (byRuling ? TimingClock.NowMs : LapSeenAt(mover.Transponder)) + LapCallSayWithinMs, ShownText: words, Work: async () =>
@@ -296,7 +353,10 @@ public sealed partial class AnnouncementService
                 {
                     StatusMessage?.Invoke($"[voice] Position report correction failed: {ex.Message}");
                 }
-            }));
+            })
+            {
+                IsCorrection = true,
+            });
         }
 
         _voiceQueueSignal.Release();

@@ -1451,8 +1451,12 @@ public sealed partial class AnnouncementService
                 // speech, and the lap call it would bin is the race. It waits
                 // behind them instead - see LapCallSlot - and has its own few
                 // seconds to be said in.
+                // Nor a position report's correction (11 Nov 2026): it is the
+                // end of a line already cut off, and the order it gives is
+                // the order on the screens.
                 var discarded = BinQueuedLocked(item =>
-                    !IsPriorityAnnouncement(item.Type) && !IsWorthWaitingFor(item.Type)
+                    !item.IsCorrection
+                    && !IsPriorityAnnouncement(item.Type) && !IsWorthWaitingFor(item.Type)
                     && !(type == AnnouncementEventType.Reminder && IsLapBoundCall(item.Type)), ref giveBack);
                 if (discarded > 0)
                 {
@@ -1481,6 +1485,10 @@ public sealed partial class AnnouncementService
                     .Select(waiting => waiting.Facts is not null || waiting.Type == AnnouncementEventType.Reminder)
                     .ToList()));
             }
+
+            // Never ahead of a position report's correction still waiting
+            // (11 Nov 2026) - see CorrectionSlot.
+            at = Math.Max(at, PastWaitingCorrectionsLocked());
 
             var queued = new QueuedVoiceItem(type, transponder, OnAir: onAir, Battle: battle, SayByMs: sayByMs, Facts: facts, ShownText: displayText, Work: async () =>
             {
