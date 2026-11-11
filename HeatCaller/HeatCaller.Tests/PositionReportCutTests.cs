@@ -49,11 +49,11 @@ public sealed class PositionReportCutTests : IDisposable
     [Fact]
     public void The_correction_names_the_car_that_moved_and_its_place()
     {
-        Assert.Equal("[excited] Hold on - Sam takes the lead! So it's {positions}.",
+        Assert.Equal("[shouting] Hold on - Sam takes the lead! So it's {positions}.",
             AnnouncementService.ReportCorrectionTemplate("Sam", 1, byRuling: false));
         Assert.Equal("[excited] Hold on - Frank is through into second! So it's {positions}.",
             AnnouncementService.ReportCorrectionTemplate("Frank", 2, byRuling: false));
-        Assert.Equal("[excited] And with that ruling, Sam takes the lead! So it's {positions}.",
+        Assert.Equal("[shouting] And with that ruling, Sam takes the lead! So it's {positions}.",
             AnnouncementService.ReportCorrectionTemplate("Sam", 1, byRuling: true));
     }
 

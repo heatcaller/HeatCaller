@@ -121,7 +121,7 @@ public sealed partial class AnnouncementService
     /// shipped Leader change call, so the cut-in sounds like the call it
     /// stands in for.
     /// </summary>
-    internal const string BattlePassForTheLead = "[excited] And {driver} takes the lead!";
+    internal const string BattlePassForTheLead = "[shouting] And {driver} takes the lead!";
 
     /// <summary>The pass call for any other place. {place} is the spoken ordinal - "third".</summary>
     internal const string BattlePassForAPlace = "[excited] And {driver} is through, up into {place}!";
@@ -449,7 +449,7 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>The pass call when a ruling, not the track, swaps a battle for the lead.</summary>
-    internal const string RulingPassForTheLead = "[excited] And with that ruling, {driver} takes the lead!";
+    internal const string RulingPassForTheLead = "[shouting] And with that ruling, {driver} takes the lead!";
 
     /// <summary>The same for any other place. {place} is the spoken ordinal - "third".</summary>
     internal const string RulingPassForAPlace = "[excited] And with that ruling, {driver} is up into {place}!";

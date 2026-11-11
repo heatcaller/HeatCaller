@@ -2214,7 +2214,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         }
 
         var saved = _store.Current;
-        var model = string.IsNullOrWhiteSpace(_cmbModel.Text) ? "eleven_multilingual_v2" : _cmbModel.Text.Trim();
+        var model = string.IsNullOrWhiteSpace(_cmbModel.Text) ? VoiceProfile.DefaultModelId : _cmbModel.Text.Trim();
 
         if (string.Equals(_txtApiKey.Text.Trim(), saved.ApiKey ?? string.Empty, StringComparison.Ordinal)
             && string.Equals(model, saved.ModelId ?? string.Empty, StringComparison.Ordinal)
@@ -3347,8 +3347,8 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         // --- Model ---
         _cmbModel.DropDownStyle = ComboBoxStyle.DropDown;
-        _cmbModel.Items.AddRange(new object[] { "eleven_v4", "eleven_v4_turbo", "eleven_v3", "eleven_multilingual_v2", "eleven_turbo_v2_5", "eleven_flash_v2_5", "eleven_monolingual_v1" });
-        _cmbModel.Text = string.IsNullOrWhiteSpace(current.ModelId) ? "eleven_multilingual_v2" : current.ModelId;
+        _cmbModel.Items.AddRange(new object[] { "eleven_v4_turbo", "eleven_v4", "eleven_v3", "eleven_multilingual_v2", "eleven_turbo_v2_5", "eleven_flash_v2_5", "eleven_monolingual_v1" });
+        _cmbModel.Text = string.IsNullOrWhiteSpace(current.ModelId) ? VoiceProfile.DefaultModelId : current.ModelId;
 
         var fields = new FieldGrid();
 
@@ -3362,7 +3362,8 @@ public sealed partial class VoiceSettingsControl : UserControl
         // type every other hint has. It was a body-type label under the
         // whole card.
         fields.AddHint(
-            "Pick a preset or type any ElevenLabs model id. eleven_v3 is the expressive one; on v2, Style past "
+            "Pick a preset or type any ElevenLabs model id. eleven_v4_turbo is the default: expressive, quick, and it reads "
+            + "audio tags like [excited]. On v2, Style past "
             + "about 0.6 distorts rather than excites.");
 
         // --- Race calls model (8 Nov 2026) ---
@@ -3370,7 +3371,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         // like any other list on the page.
         _cmbRaceCallModel.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbRaceCallModel.Items.Add(SameAsModel);
-        _cmbRaceCallModel.Items.AddRange(new object[] { "eleven_flash_v2_5", "eleven_turbo_v2_5", "eleven_v4_turbo", "eleven_v4", "eleven_v3", "eleven_multilingual_v2" });
+        _cmbRaceCallModel.Items.AddRange(new object[] { "eleven_v4_turbo", "eleven_flash_v2_5", "eleven_turbo_v2_5", "eleven_v4", "eleven_v3", "eleven_multilingual_v2" });
 
         if (!string.IsNullOrWhiteSpace(current.RaceCallModelId) && !_cmbRaceCallModel.Items.Contains(current.RaceCallModelId.Trim()))
         {
@@ -3382,8 +3383,8 @@ public sealed partial class VoiceSettingsControl : UserControl
         Flush(fields.AddRow("Race calls:", _cmbRaceCallModel));
         fields.AddHint(
             "The model for the calls about the race as it runs - lap times, fastest laps, lead changes, battles, "
-            + "the running order and the time left. eleven_flash_v2_5 says them about two seconds sooner than v3 "
-            + "(it ignores audio tags like [excited]), and the show - openings, interviews, recaps, AI commentary - "
+            + "the running order and the time left. Same as Model is v4 Turbo, quick enough for them and it plays "
+            + "their audio tags; eleven_flash_v2_5 is a little quicker but reads no tags. The show - openings, interviews, recaps, AI commentary - "
             + "stays on the Model above.");
 
         var card = new Section("ElevenLabs connection");
@@ -4379,7 +4380,7 @@ public sealed partial class VoiceSettingsControl : UserControl
             VoiceName = selectedVoice is null ? _store.Current.VoiceName
                 : ReferenceEquals(selectedVoice, _voiceNotInAccount) ? _voiceNotInAccountName
                 : selectedVoice.Name,
-            ModelId = string.IsNullOrWhiteSpace(_cmbModel.Text) ? "eleven_multilingual_v2" : _cmbModel.Text.Trim(),
+            ModelId = string.IsNullOrWhiteSpace(_cmbModel.Text) ? VoiceProfile.DefaultModelId : _cmbModel.Text.Trim(),
             RaceCallModelId = _cmbRaceCallModel.SelectedItem is string raceModel && raceModel != SameAsModel ? raceModel : string.Empty,
             Stability = (double)_numStability.Value,
             SimilarityBoost = (double)_numSimilarity.Value,

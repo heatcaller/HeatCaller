@@ -302,7 +302,7 @@ The key and the model are on the **ElevenLabs connection** card on **Voice → V
 1. Get an API key from your ElevenLabs account. <!-- TODO: confirm the exact steps/menu names on the ElevenLabs website for creating an API key, and which key permissions HeatCaller needs (it lists voices and synthesizes speech). -->
 2. In HeatCaller, open **Voice → Voice**.
 3. On the **ElevenLabs connection** card, paste the key into **API Key:**. Tick **Show** if you want to check what you pasted. With the Kokoro voice chosen, the **ElevenLabs voice:** row appears on **Cast** once a key is typed.
-4. Pick a model from **Model:** (see [Choosing a model](#choosing-a-model)). It's shown in Advanced mode; in Simple mode the model stays `eleven_multilingual_v2` unless it was changed before.
+4. Pick a model from **Model:** (see [Choosing a model](#choosing-a-model)). It's shown in Advanced mode; in Simple mode the model is `eleven_v4_turbo`.
 5. Open **Voice → Cast** and press **Load Voices** on the **Voices** card at the top. HeatCaller asks ElevenLabs for the voices on your account and fills every voice list on the tab, **ElevenLabs voice:** on the **Announcer** card included. The line under it says, for example, "Loaded 24 voices."
 6. Pick a voice from **ElevenLabs voice:**.
 7. Press **Test Voice** beside it. You should hear "This is HeatCaller testing your announcer voice." It uses the **Voice parameters** on **Voice → Voice** as they are on screen, so you can change one there and test again. **Test Voice** always tests ElevenLabs, whichever voice is chosen under **Speak with**.
@@ -336,10 +336,10 @@ The **Model:** box offers these presets. You can also type any ElevenLabs model 
 
 | Model | Notes |
 |---|---|
-| `eleven_multilingual_v2` | The default. |
-| `eleven_v4` | The newest expressive model. Understands audio tags (see below). Ignores **Speed:**. |
-| `eleven_v4_turbo` | v4 tuned for speed, at half v4's price. Understands audio tags and ignores **Speed:**. |
+| `eleven_v4_turbo` | The default. v4 tuned for speed, at half v4's price. Understands audio tags (see below) and ignores **Speed:**. |
+| `eleven_v4` | The newest expressive model. Understands audio tags and ignores **Speed:**. |
 | `eleven_v3` | The previous expressive model. Understands audio tags and ignores **Speed:**. |
+| `eleven_multilingual_v2` | The default before 10 Nov 2026. |
 | `eleven_turbo_v2_5` | |
 | `eleven_flash_v2_5` | |
 | `eleven_monolingual_v1` | |
@@ -353,6 +353,12 @@ With `eleven_v3`, `eleven_v4` or `eleven_v4_turbo` (any model ID containing "v3"
 `[excited]` `[cheerful]` `[sad]` `[angry]` `[whispers]` `[laughs]` `[sighs]` `[awe]` `[sarcastic]` `[curious]` `[crying]` `[shouting]`
 
 One tag per line is usually enough. Stacked tags fight each other.
+
+The v4 models play a tag much harder than v3 did, so the built-in lines keep the two loud tags for the moments that matter:
+
+- `[shouting]`: the start, time up and the checkered flag, a new leader, records (track record, fastest lap of the race, provisional pole, record pace), and the yellow, red and green flags and jump starts.
+- `[excited]`: passes and battles, ghost passes, getting lapped, personal bests, streaks, qualifying improvements, achievements, the last lap and the final minute and seconds.
+- Everything else (staging, the countdown, lap times, the position report, minutes left, sector and split pace) is read with no tag.
 
 On any other model, a tag would be read out word for word, so HeatCaller strips anything in square brackets before the line is spoken. That means you can leave tags in your lines and switch models without the announcer saying "bracket excited". The built-in lines already use tags, so switching to `eleven_v3` makes them more lively.
 

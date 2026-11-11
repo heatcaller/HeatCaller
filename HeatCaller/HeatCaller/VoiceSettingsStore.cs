@@ -32,8 +32,12 @@ public sealed class VoiceSettingsStore
     /// never reach anyone who already had a settings file - and every
     /// existing install has one. Version-stamping is what lets a genuine
     /// content update land without also wiping settings on every launch.
+    ///
+    /// 4 (10 Nov 2026): every line retagged for Eleven v4 - [shouting] and
+    /// [excited] only on the moments that earn them (see AudioTagTiers) -
+    /// and every saved voice moved to eleven_v4_turbo.
     /// </summary>
-    internal const int CurrentTemplateVersion = 3;
+    internal const int CurrentTemplateVersion = 4;
 
     /// <summary>
     /// Built-in lines that have been reworded since a club's file was saved
@@ -168,6 +172,18 @@ public sealed class VoiceSettingsStore
 
                     if (loaded.TemplateVersion < CurrentTemplateVersion)
                     {
+                        // Version 4 (10 Nov 2026) is the move to Eleven v4
+                        // Turbo, for every club: the lines are written for
+                        // how v4 plays a tag (see AudioTagTiers), so the
+                        // model moves with them. The race-call model goes
+                        // back to "same as Model" - v4 Turbo is quick enough
+                        // for race calls, which is all Flash was there for.
+                        if (loaded.TemplateVersion < 4)
+                        {
+                            loaded.ModelId = VoiceProfile.DefaultModelId;
+                            loaded.RaceCallModelId = string.Empty;
+                        }
+
                         // Replace ONLY the spoken lines. Enabled, Weight and
                         // every per-event toggle are deliberately untouched -
                         // this is a phrasing refresh, not a settings reset.
@@ -186,7 +202,7 @@ public sealed class VoiceSettingsStore
 
                         loaded.TemplateVersion = CurrentTemplateVersion;
 
-                        var store = new VoiceSettingsStore(loaded);
+                        var store = new VoiceSettingsStore(loaded) { RefreshedLines = true };
                         store.Save(loaded);
                         return store;
                     }
@@ -231,6 +247,15 @@ public sealed class VoiceSettingsStore
     /// would have it throw away the backup's copy of the key.
     /// </summary>
     public bool LoadedUnreadable { get; private init; }
+
+    /// <summary>
+    /// True when this launch replaced the saved lines with the built-in ones
+    /// (an older CurrentTemplateVersion). Those are the plain defaults; a
+    /// club running a soundscape wants that soundscape's own lines back, and
+    /// only the ThemeStore knows which one that is - see
+    /// ThemeStore.RestoreActiveThemeLines.
+    /// </summary>
+    public bool RefreshedLines { get; private init; }
 
     /// <summary>
     /// Takes in an ElevenLabs key stored in plain text by an older version.

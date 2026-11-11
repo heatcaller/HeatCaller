@@ -711,7 +711,7 @@ public sealed class VoiceProfile
 
     public string VoiceId { get; set; } = string.Empty;
     public string VoiceName { get; set; } = string.Empty;
-    public string ModelId { get; set; } = "eleven_multilingual_v2";
+    public string ModelId { get; set; } = DefaultModelId;
 
     /// <summary>
     /// The ElevenLabs model for the race calls - lap times, fastest laps,
@@ -869,6 +869,31 @@ public sealed class VoiceProfile
         !string.IsNullOrEmpty(modelId)
         && (modelId.Contains("v3", StringComparison.OrdinalIgnoreCase)
             || modelId.Contains("v4", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The model every new profile starts on, and every saved one was moved
+    /// to (10 Nov 2026, template version 4): Eleven v4 Turbo. It reads audio
+    /// tags, carries a tag's emotion forward, and is quick enough for race
+    /// calls - the reason eleven_flash_v2_5 was the race-call pick.
+    /// </summary>
+    internal const string DefaultModelId = "eleven_v4_turbo";
+
+    /// <summary>
+    /// Whether an ElevenLabs model is one of the v4 family (eleven_v4,
+    /// eleven_v4_turbo). Those play a tag harder than v3 did and carry its
+    /// emotion on to the sentences after it, so one tag at the front of a
+    /// passage is enough - where v3 let it fade and needed one per sentence.
+    /// </summary>
+    internal static bool IsV4Model(string? modelId) =>
+        !string.IsNullOrEmpty(modelId) && modelId.Contains("v4", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether this voice carries a tag's emotion forward on its own (see
+    /// IsV4Model). The HeatCaller voice renders on the relay's v4 Turbo.
+    /// </summary>
+    public bool CarriesTagsForward =>
+        EffectiveEngine == VoiceEngine.HeatCaller
+        || (EffectiveEngine == VoiceEngine.ElevenLabs && IsV4Model(ModelId));
 
     /// <summary>
     /// Prepares text for this model: keeps audio tags when the model can
@@ -1093,7 +1118,7 @@ public sealed class VoiceProfile
         VoiceName ??= string.Empty;
         // The property's own default, not empty: ElevenLabs is sent the
         // model id as it stands, and an empty one is refused on every line.
-        ModelId ??= "eleven_multilingual_v2";
+        ModelId ??= DefaultModelId;
         HeatCallerVoice ??= string.Empty;
         HeatCallerRev ??= string.Empty;
         HeatCallerVoiceName ??= string.Empty;
@@ -1133,18 +1158,18 @@ public sealed class VoiceProfile
             Enabled = false,
             Templates = new List<string>
             {
-                "[shouting] Racers, please stage your cars.",
-                "[shouting] Bring your cars to the grid.",
-                "[excited] Staging now - line it up.",
-                "[excited] Drivers to the rostrum, please.",
-                "[shouting] Cars on the grid - staging now.",
-                "[shouting] Let's get lined up for this one.",
-                "[shouting] Time to stage. Cars on the track, please.",
-                "[shouting] Grid's open - bring them up.",
-                "[excited] Marshals set, drivers up. Let's stage.",
-                "[excited] Places please, we're staging.",
-                "[excited] Get your cars down, we're about to go.",
-                "[shouting] Staging is open - don't keep us waiting!",
+                "Racers, please stage your cars.",
+                "Bring your cars to the grid.",
+                "Staging now - line it up.",
+                "Drivers to the rostrum, please.",
+                "Cars on the grid - staging now.",
+                "Let's get lined up for this one.",
+                "Time to stage. Cars on the track, please.",
+                "Grid's open - bring them up.",
+                "Marshals set, drivers up. Let's stage.",
+                "Places please, we're staging.",
+                "Get your cars down, we're about to go.",
+                "Staging is open - don't keep us waiting!",
             },
         };
         p.Events[nameof(AnnouncementEventType.CountdownStarted)] = new AnnouncementEventConfig
@@ -1152,18 +1177,18 @@ public sealed class VoiceProfile
             Enabled = false,
             Templates = new List<string>
             {
-                "[excited] Get ready, the countdown has started.",
-                "[excited] Here we go - countdown's on.",
-                "[shouting] Countdown's running. Get ready.",
-                "[excited] Hands on the triggers - countdown's running.",
-                "[shouting] Here we go. Stand by.",
-                "[excited] Clock's ticking - get set.",
-                "[excited] Countdown underway. Eyes down.",
-                "[excited] Nearly there - stand by for green.",
-                "[excited] Focus up, this is it.",
-                "[excited] Deep breath, everyone. Countdown's on.",
-                "[excited] Any second now.",
-                "[excited] Settle in - we're counting down.",
+                "Get ready, the countdown has started.",
+                "Here we go - countdown's on.",
+                "Countdown's running. Get ready.",
+                "Hands on the triggers - countdown's running.",
+                "Here we go. Stand by.",
+                "Clock's ticking - get set.",
+                "Countdown underway. Eyes down.",
+                "Nearly there - stand by for green.",
+                "Focus up, this is it.",
+                "Deep breath, everyone. Countdown's on.",
+                "Any second now.",
+                "Settle in - we're counting down.",
             },
         };
         p.Events[nameof(AnnouncementEventType.YellowFlag)] = new AnnouncementEventConfig
@@ -1211,15 +1236,15 @@ public sealed class VoiceProfile
             {
                 "[shouting] Green flag, racing resumes!",
                 "[shouting] We're back to green - go, go, go!",
-                "[excited] Track is clear. Green flag.",
+                "[shouting] Track is clear. Green flag.",
                 "[shouting] Caution's over - back to green!",
-                "[excited] Green, green, green! Racing again!",
+                "[shouting] Green, green, green! Racing again!",
                 "[shouting] Track's clear, we are racing!",
                 "[shouting] And we're back underway!",
                 "[shouting] Restart! Green flag is out!",
                 "[shouting] Back to racing - green flag!",
                 "[shouting] That's the end of the caution. Go!",
-                "[excited] Clear track, green flag, have at it!",
+                "[shouting] Clear track, green flag, have at it!",
                 "[shouting] Racing resumes - get after it!",
             },
         };
@@ -1228,17 +1253,17 @@ public sealed class VoiceProfile
             Enabled = true,
             Templates = new List<string>
             {
-                "[excited] And they're racing!",
-                "[excited] Green flag! Go go go!",
-                "[excited] Lights out, and away we go!",
-                "[excited] That's green - racing begins!",
+                "[shouting] And they're racing!",
+                "[shouting] Green flag! Go go go!",
+                "[shouting] Lights out, and away we go!",
+                "[shouting] That's green - racing begins!",
                 "[shouting] We are GO!",
                 "[shouting] Green flag - the race is on!",
                 "[shouting] Away they go!",
-                "[excited] And we're racing here at the track!",
+                "[shouting] And we're racing here at the track!",
                 "[shouting] Triggers down, here we go!",
-                "[excited] It's green and they're away!",
-                "[excited] The race is underway!",
+                "[shouting] It's green and they're away!",
+                "[shouting] The race is underway!",
                 "[shouting] Go! Go! Go!",
             },
         };
@@ -1249,16 +1274,16 @@ public sealed class VoiceProfile
             Templates = new List<string>
             {
                 "[shouting] {driver} sets the fastest lap of the race!",
-                "[excited] New fastest lap of the race - {driver}!",
+                "[shouting] New fastest lap of the race - {driver}!",
                 "[shouting] {driver} goes quickest of anyone - {time}!",
                 "[shouting] Fastest lap of the race so far, {driver} with {time}!",
                 "[shouting] {driver} turns up the pace - quickest lap we've seen!",
-                "[excited] Quickest of the race - {driver}, {time}!",
+                "[shouting] Quickest of the race - {driver}, {time}!",
                 "[shouting] {driver} tops the sheet with {time}!",
-                "[excited] Nobody's been faster - {driver} at {time}!",
+                "[shouting] Nobody's been faster - {driver} at {time}!",
                 "[shouting] {driver} sets the benchmark: {time}!",
-                "[excited] That's the lap to beat - {driver}, {time}!",
-                "[excited] Fastest of anyone so far, and it's {driver}!",
+                "[shouting] That's the lap to beat - {driver}, {time}!",
+                "[shouting] Fastest of anyone so far, and it's {driver}!",
                 "[shouting] {driver} lays down {time} - best of the race!",
             },
         };
@@ -1273,13 +1298,13 @@ public sealed class VoiceProfile
             Weight = 45,
             Templates = new List<string>
             {
-                "[shouting] Personal best for {driver}!",
+                "[excited] Personal best for {driver}!",
                 "[cheerful] {driver} improves on their own time - {time}.",
-                "[shouting] That's {driver}'s quickest lap so far.",
+                "[excited] That's {driver}'s quickest lap so far.",
                 "[excited] {driver} finds a bit more - new personal best.",
                 "[excited] {driver} goes quicker than before - {time}.",
-                "[shouting] New best for {driver}: {time}.",
-                "[shouting] {driver} chips away at it - personal best.",
+                "[excited] New best for {driver}: {time}.",
+                "[excited] {driver} chips away at it - personal best.",
                 "[excited] Improvement from {driver} - {time}.",
                 "[excited] {driver} beats their own mark.",
                 "[cheerful] {driver} is finding pace - new personal best.",
@@ -1297,14 +1322,14 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
                 "[shouting] {driver} jumped the start!",
                 "[shouting] Too early from {driver} - jump start.",
                 "[shouting] {driver} moved before the green - jump start!",
-                "[excited] Jumped it! That's {driver} away early.",
-                "[excited] {driver} anticipated the start.",
+                "[shouting] Jumped it! That's {driver} away early.",
+                "[shouting] {driver} anticipated the start.",
                 "[shouting] Early away - jump start for {driver}.",
                 "[shouting] {driver} went too soon.",
                 "[shouting] That's a jump start on {driver}.",
-                "[excited] {driver} beat the green flag - and not in a good way.",
+                "[shouting] {driver} beat the green flag - and not in a good way.",
                 "[shouting] Flagged: {driver} jumped the start.",
-                "[excited] {driver} was off before we were racing."
+                "[shouting] {driver} was off before we were racing."
             },
         };
         p.Events[nameof(AnnouncementEventType.TrackRecord)] = new AnnouncementEventConfig
@@ -1314,16 +1339,16 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Templates = new List<string>
             {
                 "[awe] NEW TRACK RECORD! {driver} sets an all-time best of {time}!",
-                "[excited] {driver} just set the fastest lap ever recorded on this track - {time}!",
-                "[excited] That's a new all-time track record for {driver}!",
-                "[excited] RECORD BREAKER! {driver} at {time}!",
+                "[shouting] {driver} just set the fastest lap ever recorded on this track - {time}!",
+                "[shouting] That's a new all-time track record for {driver}!",
+                "[shouting] RECORD BREAKER! {driver} at {time}!",
                 "[shouting] The track record is GONE - {driver}, {time}!",
                 "[shouting] Nobody has ever gone faster here. {driver}, {time}!",
                 "[awe] History made - {driver} takes the track record with {time}!",
                 "[awe] That is the fastest lap this track has ever seen!",
                 "[shouting] {driver} rewrites the record books - {time}!",
                 "[awe] All-time best! {driver} with {time}!",
-                "[excited] The new standard is {time}, set by {driver}!",
+                "[shouting] The new standard is {time}, set by {driver}!",
                 "[shouting] Track record falls to {driver}!"
             },
         };
@@ -1333,18 +1358,18 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 100,
             Templates = new List<string>
             {
-                "[excited] {driver} takes the lead!",
-                "[excited] New leader - it's {driver}!",
-                "[excited] {driver} moves into first place!",
-                "[excited] The lead changes hands - {driver} is out front!",
-                "[excited] {driver} is through to the front!",
-                "[excited] Lead change! {driver} now heads the field.",
+                "[shouting] {driver} takes the lead!",
+                "[shouting] New leader - it's {driver}!",
+                "[shouting] {driver} moves into first place!",
+                "[shouting] The lead changes hands - {driver} is out front!",
+                "[shouting] {driver} is through to the front!",
+                "[shouting] Lead change! {driver} now heads the field.",
                 "[shouting] {driver} hits the front!",
-                "[excited] Out in front now - {driver}!",
-                "[excited] {driver} grabs P1!",
-                "[excited] That's {driver} into the lead!",
-                "[excited] {driver} leads the way!",
-                "[excited] A new name at the top - {driver}!"
+                "[shouting] Out in front now - {driver}!",
+                "[shouting] {driver} grabs P1!",
+                "[shouting] That's {driver} into the lead!",
+                "[shouting] {driver} leads the way!",
+                "[shouting] A new name at the top - {driver}!"
             },
         };
         p.Events[nameof(AnnouncementEventType.LapCompleted)] = new AnnouncementEventConfig
@@ -1353,18 +1378,18 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 40,
             Templates = new List<string>
             {
-                "[excited] {driver} completes lap {lap}.",
-                "[excited] That's lap {lap} for {driver}.",
-                "[excited] {driver}, lap {lap} done.",
-                "[excited] Lap {lap} in the books for {driver}.",
-                "[excited] {driver} crosses the line - lap {lap}.",
-                "[excited] {driver} banks lap {lap}.",
-                "[excited] Another one down for {driver} - lap {lap}.",
-                "[excited] {driver} through for lap {lap}.",
-                "[excited] Lap {lap} complete, {driver}.",
-                "[excited] {driver} ticks off lap {lap}.",
-                "[excited] That's {lap} for {driver}.",
-                "[excited] {driver} rounds out lap {lap}."
+                "{driver} completes lap {lap}.",
+                "That's lap {lap} for {driver}.",
+                "{driver}, lap {lap} done.",
+                "Lap {lap} in the books for {driver}.",
+                "{driver} crosses the line - lap {lap}.",
+                "{driver} banks lap {lap}.",
+                "Another one down for {driver} - lap {lap}.",
+                "{driver} through for lap {lap}.",
+                "Lap {lap} complete, {driver}.",
+                "{driver} ticks off lap {lap}.",
+                "That's {lap} for {driver}.",
+                "{driver} rounds out lap {lap}."
             },
         };
         p.Events[nameof(AnnouncementEventType.LapTime)] = new AnnouncementEventConfig
@@ -1372,7 +1397,7 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Enabled = false,
             Weight = 30,
             SayLapTimeLabel = true,
-            Templates = new List<string> { "[excited] {laptime}" },
+            Templates = new List<string> { "{laptime}" },
         };
         p.Events[nameof(AnnouncementEventType.Streak)] = new AnnouncementEventConfig
         {
@@ -1404,16 +1429,16 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             {
                 "[excited] {driver} has the longest run going right now - {streak} clean laps!",
                 "[excited] Longest streak on track belongs to {driver}, {streak} in a row!",
-                "[shouting] {driver} takes over the longest run - {streak} straight!",
+                "[excited] {driver} takes over the longest run - {streak} straight!",
                 "[excited] Nobody on track is cleaner than {driver} right now - {streak}!",
                 "[excited] {driver} goes clear of {rival} for the longest run, {streak} laps!",
-                "[shouting] {driver} heads the clean runs now - {streak} laps!",
+                "[excited] {driver} heads the clean runs now - {streak} laps!",
                 "[excited] {driver} leads the consistency charts, {streak} in a row!",
                 "[excited] The longest streak out there is {driver}'s - {streak} laps!",
                 "[excited] {driver} now has the longest clean run on track - {streak}!",
                 "[excited] {driver} takes the streak lead from {rival} - {streak} laps!",
                 "[excited] {streak} in a row - nobody has a longer run than {driver}!",
-                "[shouting] Longest run in the field - {driver}, {streak} laps!",
+                "[excited] Longest run in the field - {driver}, {streak} laps!",
             },
         };
         p.Events[nameof(AnnouncementEventType.GhostPassed)] = new AnnouncementEventConfig
@@ -1424,16 +1449,16 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             {
                 "[excited] {driver} is past {rival}!",
                 "[excited] There it is - {driver} takes {rival}!",
-                "[shouting] {driver} gets by the ghost of {rival}!",
+                "[excited] {driver} gets by the ghost of {rival}!",
                 "[excited] {rival} is dispatched - {driver} through!",
                 "[excited] {driver} hunts down {rival} and takes it!",
-                "[shouting] Past {rival} goes {driver}!",
+                "[excited] Past {rival} goes {driver}!",
                 "[excited] That's {rival} beaten - {driver} ahead!",
                 "[excited] {driver} clears {rival}!",
-                "[shouting] {driver} is through on {rival}!",
+                "[excited] {driver} is through on {rival}!",
                 "[excited] {rival} had no answer - {driver} by!",
                 "[excited] {driver} makes the pass on {rival}!",
-                "[shouting] And {driver} is ahead of {rival}!",
+                "[excited] And {driver} is ahead of {rival}!",
             },
         };
         p.Events[nameof(AnnouncementEventType.PassedByGhost)] = new AnnouncementEventConfig
@@ -1443,16 +1468,16 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Templates = new List<string>
             {
                 "[excited] {rival} slips past {driver}!",
-                "[shouting] {driver} loses out to {rival}!",
+                "[excited] {driver} loses out to {rival}!",
                 "[excited] The ghost of {rival} is by {driver}!",
                 "[excited] {rival} takes the place from {driver}!",
-                "[shouting] {driver} is passed by {rival}!",
+                "[excited] {driver} is passed by {rival}!",
                 "[excited] {rival} goes through on {driver}!",
                 "[excited] That's {rival} ahead of {driver} now!",
-                "[shouting] {driver} has been caught by {rival}!",
+                "[excited] {driver} has been caught by {rival}!",
                 "[excited] {rival} finds a way past {driver}!",
                 "[excited] Trouble for {driver} - {rival} is by!",
-                "[shouting] {rival} claims the position from {driver}!",
+                "[excited] {rival} claims the position from {driver}!",
                 "[excited] {driver} will have to respond - {rival} leads!",
             },
         };
@@ -1467,15 +1492,15 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 65,
             Templates = new List<string>
             {
-                "[shouting] {rival} is all over the back of {driver}!",
+                "[excited] {rival} is all over the back of {driver}!",
                 "[excited] Less than a second between {driver} and {rival}!",
-                "[shouting] {driver} has {rival} right there in the mirrors!",
+                "[excited] {driver} has {rival} right there in the mirrors!",
                 "[excited] This is a proper scrap - {driver} and {rival}!",
-                "[shouting] {rival} is hunting {driver} down!",
-                "[shouting] Nothing between {driver} and {rival}!",
-                "[shouting] {driver} can't shake {rival}!",
+                "[excited] {rival} is hunting {driver} down!",
+                "[excited] Nothing between {driver} and {rival}!",
+                "[excited] {driver} can't shake {rival}!",
                 "[excited] Wheel to wheel - {driver} and {rival}!",
-                "[shouting] {rival} is looking for a way past {driver}!",
+                "[excited] {rival} is looking for a way past {driver}!",
                 "[excited] That's a close one between {driver} and {rival}!",
                 "[excited] {driver} under real pressure from {rival}!",
                 "[excited] Watch these two - {driver} and {rival}!",
@@ -1490,15 +1515,15 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
                 "[excited] {driver} puts a lap on {rival}!",
                 "[excited] {rival} has been lapped by {driver}!",
                 "[excited] That's a full lap for {driver} over {rival}!",
-                "[shouting] {driver} comes through to lap {rival}!",
+                "[excited] {driver} comes through to lap {rival}!",
                 "[excited] {rival} goes a lap down!",
-                "[shouting] {driver} is a lap clear of {rival} now!",
+                "[excited] {driver} is a lap clear of {rival} now!",
                 "[excited] Blue flags for {rival} - {driver} is through!",
-                "[shouting] {driver} laps {rival}!",
+                "[excited] {driver} laps {rival}!",
                 "[excited] A lap gained for {driver} over {rival}!",
                 "[excited] {rival} loses a lap to {driver}!",
                 "[excited] {driver} is lapping the field - {rival} the latest!",
-                "[shouting] And there goes {rival}, a lap down to {driver}!",
+                "[excited] And there goes {rival}, a lap down to {driver}!",
             },
         };
         p.Events[nameof(AnnouncementEventType.PositionReport)] = new AnnouncementEventConfig
@@ -1517,18 +1542,18 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             SpeedMultiplier = 0.96,
             Templates = new List<string>
             {
-                "[excited] As it stands - {positions}.",
-                "[excited] Here's your running order - {positions}.",
-                "[excited] Out on track right now, {positions}.",
-                "[excited] Let's check the order - {positions}.",
-                "[excited] Where we are - {positions}.",
-                "[excited] Positions as they stand - {positions}.",
-                "[excited] At the front of this one, {positions}.",
-                "[excited] The order right now - {positions}.",
-                "[excited] Coming up to the line, {positions}.",
-                "[excited] How they're running - {positions}.",
-                "[excited] Take a look at this - {positions}.",
-                "[excited] And the order - {positions}.",
+                "As it stands - {positions}.",
+                "Here's your running order - {positions}.",
+                "Out on track right now, {positions}.",
+                "Let's check the order - {positions}.",
+                "Where we are - {positions}.",
+                "Positions as they stand - {positions}.",
+                "At the front of this one, {positions}.",
+                "The order right now - {positions}.",
+                "Coming up to the line, {positions}.",
+                "How they're running - {positions}.",
+                "Take a look at this - {positions}.",
+                "And the order - {positions}.",
             },
         };
         p.Events[nameof(AnnouncementEventType.RaceTimeOver)] = new AnnouncementEventConfig
@@ -1536,11 +1561,11 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Enabled = true,
             Templates = new List<string>
             {
-                "[excited] Time's up! This is the last lap.",
+                "[shouting] Time's up! This is the last lap.",
                 "[shouting] That's time - one more lap!",
-                "[excited] White flag - last lap!",
-                "[excited] Time has expired - last lap!",
-                "[excited] White flag is out - bring it home!",
+                "[shouting] White flag - last lap!",
+                "[shouting] Time has expired - last lap!",
+                "[shouting] White flag is out - bring it home!",
                 "[shouting] Final lap! Make it count!",
                 "[shouting] That's the time. One lap to go!",
                 "[shouting] Last time around, everyone!",
@@ -1559,14 +1584,14 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
                 "[cheerful] Checkered flag - that's the race!",
                 "[shouting] And that's a wrap - race complete!",
                 "[cheerful] Checkered flag! That's the end of it.",
-                "[excited] That's the race, everyone.",
-                "[excited] Race over - nice driving out there.",
+                "[shouting] That's the race, everyone.",
+                "[shouting] Race over - nice driving out there.",
                 "[shouting] Checkered flag is out. Race complete!",
                 "[shouting] And we're done - checkered flag!",
-                "[excited] That'll do it. Race finished!",
+                "[shouting] That'll do it. Race finished!",
                 "[cheerful] Bring them in - the race is over.",
-                "[excited] Cars in, please. That's the race.",
-                "[excited] Finished! Great racing, all."
+                "[shouting] Cars in, please. That's the race.",
+                "[shouting] Finished! Great racing, all."
             },
         };
 
@@ -1580,7 +1605,7 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
                 "[excited] That's {achievement} for {driver}!",
                 "[cheerful] {driver} has earned {achievement}.",
                 "[excited] New one for {driver} - {achievement}!",
-                "[shouting] {achievement}! Take a bow, {driver}!"
+                "[excited] {achievement}! Take a bow, {driver}!"
             },
         };
 
@@ -1592,12 +1617,12 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Enabled = true,
             Templates = new List<string>
             {
-                "[shouting] {driver}, go!",
-                "[shouting] Go, {driver}!",
-                "[excited] {driver} - away you go!",
-                "[shouting] {driver}, you're up!",
-                "[excited] Release {driver}!",
-                "[shouting] {driver}, GO GO GO!"
+                "{driver}, go!",
+                "Go, {driver}!",
+                "{driver} - away you go!",
+                "{driver}, you're up!",
+                "Release {driver}!",
+                "{driver}, GO GO GO!"
             },
         };
 
@@ -1614,18 +1639,18 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 88,
             Templates = new List<string>
             {
-                "[excited] {driver} is on record pace - {laptime}!",
+                "[shouting] {driver} is on record pace - {laptime}!",
                 "[shouting] That's record pace from {driver}! {laptime}!",
-                "[excited] {driver} is knocking on the door of the track record - {laptime}!",
-                "[excited] Watch {driver} - that one was a whisker off the record!",
+                "[shouting] {driver} is knocking on the door of the track record - {laptime}!",
+                "[shouting] Watch {driver} - that one was a whisker off the record!",
                 "[shouting] {driver} is right on the record, {laptime}!",
-                "[excited] The track record is in danger - {driver} just went {laptime}!",
-                "[excited] {driver} has found the pace of the record holder - {laptime}!",
+                "[shouting] The track record is in danger - {driver} just went {laptime}!",
+                "[shouting] {driver} has found the pace of the record holder - {laptime}!",
                 "[shouting] {driver} is flying! That is record pace!",
-                "[excited] {driver} is chasing the track record - {laptime}!",
-                "[excited] That's close to the record for {driver} - {laptime}!",
+                "[shouting] {driver} is chasing the track record - {laptime}!",
+                "[shouting] That's close to the record for {driver} - {laptime}!",
                 "[shouting] Record pace! {driver}, {laptime}!",
-                "[excited] {driver} is within touching distance of the record!",
+                "[shouting] {driver} is within touching distance of the record!",
             },
         };
 
@@ -1635,17 +1660,17 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 95,
             Templates = new List<string>
             {
-                "[shouting] Last lap! {driver} leads!",
+                "[excited] Last lap! {driver} leads!",
                 "[excited] This is it - last lap, {driver} out front!",
-                "[shouting] White flag! Last lap for {driver}!",
+                "[excited] White flag! Last lap for {driver}!",
                 "[excited] Final lap! Can anyone catch {driver}?",
-                "[shouting] Last lap! Bring it home, {driver}!",
+                "[excited] Last lap! Bring it home, {driver}!",
                 "[excited] One lap to go - {driver} leads the way!",
-                "[shouting] Here we go - last lap! {driver} in front!",
+                "[excited] Here we go - last lap! {driver} in front!",
                 "[excited] The final lap is on - {driver} leads!",
-                "[shouting] Last time around for {driver}!",
+                "[excited] Last time around for {driver}!",
                 "[excited] One more lap - {driver} out in front!",
-                "[shouting] White flag flying! {driver} on the last lap!",
+                "[excited] White flag flying! {driver} on the last lap!",
                 "[excited] Last lap now - it's {driver}'s to lose!"
             },
         };
@@ -1657,16 +1682,16 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Templates = new List<string>
             {
                 "[excited] One minute to go!",
-                "[shouting] Sixty seconds left on the clock!",
+                "[excited] Sixty seconds left on the clock!",
                 "[excited] Into the final minute!",
                 "[excited] One minute remaining - make it count!",
-                "[shouting] The clock is running down - one minute!",
+                "[excited] The clock is running down - one minute!",
                 "[excited] Final minute! Everything on the line now!",
-                "[shouting] One minute left! Push to the flag!",
+                "[excited] One minute left! Push to the flag!",
                 "[excited] Sixty seconds to go - leave it all out there!",
-                "[shouting] The last minute is here!",
+                "[excited] The last minute is here!",
                 "[excited] One minute on the clock - this is the run home!",
-                "[shouting] Time is nearly up - one minute!",
+                "[excited] Time is nearly up - one minute!",
                 "[excited] Final sixty seconds - go, go, go!"
             },
         };
@@ -1683,11 +1708,11 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             MinutesLeftFrom = 5,
             Templates = new List<string>
             {
-                "[excited] {minutes} minutes to go!",
+                "{minutes} minutes to go!",
                 "{minutes} minutes left on the clock.",
-                "[excited] {minutes} minutes remaining!",
+                "{minutes} minutes remaining!",
                 "We're down to {minutes} minutes.",
-                "[excited] {minutes} minutes to go - plenty of racing left!",
+                "{minutes} minutes to go - plenty of racing left!",
                 "{minutes} minutes left in this one.",
             },
         };
@@ -1700,7 +1725,7 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             {
                 "[excited] {seconds} seconds!",
                 "[excited] {seconds} seconds to go!",
-                "[shouting] {seconds} seconds left!",
+                "[excited] {seconds} seconds left!",
                 "[excited] {seconds} seconds on the clock!",
             },
         };
@@ -1711,17 +1736,17 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 92,
             Templates = new List<string>
             {
-                "[excited] Provisional pole - {driver}, {time}!",
+                "[shouting] Provisional pole - {driver}, {time}!",
                 "[shouting] {driver} goes to the top! {time}!",
-                "[excited] {driver} takes provisional pole with a {time}!",
+                "[shouting] {driver} takes provisional pole with a {time}!",
                 "[shouting] {driver} leads qualifying, {time}!",
-                "[excited] New benchmark - {driver}, {time}!",
+                "[shouting] New benchmark - {driver}, {time}!",
                 "[shouting] {driver} is fastest! {time} for provisional pole!",
-                "[excited] To the top of the sheet - {driver}, {time}!",
+                "[shouting] To the top of the sheet - {driver}, {time}!",
                 "[shouting] {driver} sets the mark to beat - {time}!",
-                "[excited] Provisional pole to {driver} - {time}!",
+                "[shouting] Provisional pole to {driver} - {time}!",
                 "[shouting] {driver} jumps to P1 in qualifying! {time}!",
-                "[excited] That is the one to beat - {driver}, {time}!",
+                "[shouting] That is the one to beat - {driver}, {time}!",
                 "[shouting] {driver} leads them all - {time}!"
             },
         };
@@ -1733,17 +1758,17 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Templates = new List<string>
             {
                 "[excited] {driver} improves - {time}!",
-                "[shouting] {driver} finds more time! {time}!",
+                "[excited] {driver} finds more time! {time}!",
                 "[excited] Better from {driver} - {time}!",
-                "[shouting] Improvement for {driver} - {time}!",
+                "[excited] Improvement for {driver} - {time}!",
                 "[excited] {driver} goes quicker - {time}!",
-                "[shouting] {driver} moves up the order! {time}!",
+                "[excited] {driver} moves up the order! {time}!",
                 "[excited] {driver} steps it up - {time}!",
-                "[shouting] {driver} banks a better one - {time}!",
+                "[excited] {driver} banks a better one - {time}!",
                 "[excited] More pace from {driver} - {time}!",
-                "[shouting] {driver} lowers the bar - {time}!",
+                "[excited] {driver} lowers the bar - {time}!",
                 "[excited] {driver} keeps pushing - {time}!",
-                "[shouting] Quicker again from {driver} - {time}!"
+                "[excited] Quicker again from {driver} - {time}!"
             },
         };
 
@@ -1753,18 +1778,18 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 100,
             Templates = new List<string>
             {
-                "[excited] {class}, {round} - to the grid!",
-                "[shouting] Calling {class} {round} to the grid!",
-                "[excited] {round}, {class} - drivers to the grid!",
-                "[excited] Next up: {class}, {round}. To the grid!",
-                "[shouting] {class} {round} - grid up! Marshals: {marshals}.",
-                "[excited] Grid up for {class}, {round}!",
-                "[shouting] {class}, {round} - to your grid spots!",
-                "[excited] It is {class}, {round} - to the grid, please!",
-                "[shouting] Drivers for {class} {round} - to the grid!",
-                "[excited] {round} is next - {class}, grid up!",
-                "[shouting] To the grid! {class}, {round}!",
-                "[excited] {class} {round} on deck - to the grid!"
+                "{class}, {round} - to the grid!",
+                "Calling {class} {round} to the grid!",
+                "{round}, {class} - drivers to the grid!",
+                "Next up: {class}, {round}. To the grid!",
+                "{class} {round} - grid up! Marshals: {marshals}.",
+                "Grid up for {class}, {round}!",
+                "{class}, {round} - to your grid spots!",
+                "It is {class}, {round} - to the grid, please!",
+                "Drivers for {class} {round} - to the grid!",
+                "{round} is next - {class}, grid up!",
+                "To the grid! {class}, {round}!",
+                "{class} {round} on deck - to the grid!"
             },
         };
 
@@ -1776,18 +1801,18 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 60,
             Templates = new List<string>
             {
-                "[excited] {driver} goes fastest through sector {sector} - {sectortime}!",
+                "{driver} goes fastest through sector {sector} - {sectortime}!",
                 "Quickest sector {sector} of the session for {driver}, {sectortime}.",
-                "[excited] {driver} - best sector {sector} so far!",
-                "[excited] Best sector {sector} yet - {driver}, {sectortime}!",
+                "{driver} - best sector {sector} so far!",
+                "Best sector {sector} yet - {driver}, {sectortime}!",
                 "{driver} is quickest through sector {sector} - {sectortime}.",
-                "[excited] Purple sector {sector} for {driver}!",
+                "Purple sector {sector} for {driver}!",
                 "Sector {sector} - {driver} goes fastest, {sectortime}.",
-                "[excited] {driver} flies through sector {sector} - {sectortime}!",
+                "{driver} flies through sector {sector} - {sectortime}!",
                 "Fastest sector {sector} now belongs to {driver}.",
-                "[excited] {driver} lowers the best sector {sector} - {sectortime}!",
+                "{driver} lowers the best sector {sector} - {sectortime}!",
                 "Top time in sector {sector} for {driver}, {sectortime}.",
-                "[excited] Nobody has gone through sector {sector} quicker than {driver}!",
+                "Nobody has gone through sector {sector} quicker than {driver}!",
             },
         };
 
@@ -1797,18 +1822,18 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 60,
             Templates = new List<string>
             {
-                "[excited] {driver} is {gap} up on their best at the split - on for a personal best!",
+                "{driver} is {gap} up on their best at the split - on for a personal best!",
                 "{driver} is {gap} up at the split. Watch this lap!",
-                "[excited] Up at the split for {driver} - this could be a best!",
-                "[excited] {driver} is {gap} up at the split!",
+                "Up at the split for {driver} - this could be a best!",
+                "{driver} is {gap} up at the split!",
                 "{driver} up by {gap} at the split - a best could be on.",
-                "[excited] Green split for {driver} - {gap} up!",
+                "Green split for {driver} - {gap} up!",
                 "Watch {driver} - {gap} up on their best so far.",
-                "[excited] {driver} is on a flier - {gap} up at the split!",
+                "{driver} is on a flier - {gap} up at the split!",
                 "{gap} up at the split for {driver}. Can they hold it?",
-                "[excited] Personal best pace from {driver} at the split!",
+                "Personal best pace from {driver} at the split!",
                 "{driver} is ahead of their best at the split - {gap}.",
-                "[excited] Up at the split - {driver} could go quicker here!",
+                "Up at the split - {driver} could go quicker here!",
             },
         };
 
@@ -1818,17 +1843,17 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Weight = 88,
             Templates = new List<string>
             {
-                "[excited] {driver} is {gap} up on the track record at the split!",
+                "[shouting] {driver} is {gap} up on the track record at the split!",
                 "[shouting] {driver} is ahead of record pace at the split - {gap} up!",
-                "[excited] Record pace at the split for {driver}!",
+                "[shouting] Record pace at the split for {driver}!",
                 "[shouting] {driver} is up on the record at the split - {gap}!",
-                "[excited] Track record pace at the split for {driver} - {gap} up!",
-                "[excited] {driver} is ahead of the record at the split!",
+                "[shouting] Track record pace at the split for {driver} - {gap} up!",
+                "[shouting] {driver} is ahead of the record at the split!",
                 "[shouting] The record is under threat - {driver}, {gap} up at the split!",
-                "[excited] {gap} up on the record for {driver} at the split!",
+                "[shouting] {gap} up on the record for {driver} at the split!",
                 "[shouting] Record pace! {driver} is {gap} up at the split!",
-                "[excited] Watch this lap - {driver} is ahead of the record!",
-                "[excited] {driver} is on track for a record - {gap} up at the split!",
+                "[shouting] Watch this lap - {driver} is ahead of the record!",
+                "[shouting] {driver} is on track for a record - {gap} up at the split!",
                 "[shouting] {driver} is up on the record - can they hold it?",
             },
         };
@@ -1866,7 +1891,7 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
                 "{driver} has {gap} on {rival} at the split.",
                 "At the split it's {driver}, {gap} clear of {rival}.",
                 "{gap} between {driver} and {rival} at the split.",
-                "[excited] {rival} is {gap} behind {driver} at the split!",
+                "{rival} is {gap} behind {driver} at the split!",
                 "Through the split, {driver} leads {rival} by {gap}.",
             },
         };

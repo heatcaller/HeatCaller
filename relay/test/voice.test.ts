@@ -548,7 +548,7 @@ describe("the HeatCaller voice", () => {
       );
 
       assert.equal(read.voices.length, 1);
-      assert.equal(read.voices[0]?.modelId, "eleven_flash_v2_5");
+      assert.equal(read.voices[0]?.modelId, "eleven_v4_turbo");
       assert.equal(read.monthlyChars, 500);
       assert.equal(read.maxChars, 200);
     });

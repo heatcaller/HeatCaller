@@ -856,6 +856,10 @@ public partial class MainForm : Form
         _raceClasses.Handicaps = _handicaps;
         _rounds = RoundDefinitionStore.Load();
         _themeStore = ThemeStore.Load();
+
+        // After a lines refresh (VoiceSettingsStore.RefreshedLines) the applied
+        // soundscape gets its own lines back - see RestoreActiveThemeLines.
+        _themeStore.RestoreActiveThemeLines(_voiceStore);
         _seasonStore = SeasonStore.Load();
         _rivalryStore = RivalryStore.Load();
         _venueStore = VenueStore.Load();
@@ -1023,6 +1027,7 @@ public partial class MainForm : Form
         // Read live, so switching the model on the Voice Settings page takes
         // effect immediately rather than needing a restart.
         _commentary.VoiceSupportsAudioTagsProvider = () => _voiceStore.Current.SupportsAudioTags;
+        _commentary.VoiceCarriesTagsForwardProvider = () => _voiceStore.Current.CarriesTagsForward;
 
         // Whether the race being called is timed or run to a lap count, so
         // no live line counts laps in a race the clock ends (1 Nov 2026).

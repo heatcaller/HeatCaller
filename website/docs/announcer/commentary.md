@@ -233,7 +233,7 @@ The second card on the page, under **Who writes it**. These apply to every line 
 
 Whatever the tone, the model is told to write for the ear: contractions ("he's", "they're") and, where they fit, short commentator fragments ("Into the hairpin. Side by side."). **Max length:** still decides how much it writes.
 
-With **Give the lines their tone's delivery when they're spoken** ticked, the **Enthusiastic** tone and an `eleven_v3` voice, the recap is delivered with the `[excited]` audio tag on each sentence so the energy holds to the end. With the Kokoro voice chosen, the recap gets no audio tags, since that voice can't use them. See [Audio tags](voice.md#audio-tags).
+With **Give the lines their tone's delivery when they're spoken** ticked, the **Enthusiastic** tone and a v4 voice (`eleven_v4_turbo`, the default, or `eleven_v4`), the recap opens on the `[excited]` audio tag and v4 carries it through. With an `eleven_v3` voice, every sentence gets the tag, because v3 lets the energy fade over a long recap. With the Kokoro voice chosen, the recap gets no audio tags, since that voice can't use them. See [Audio tags](voice.md#audio-tags).
 
 #### Character tones
 

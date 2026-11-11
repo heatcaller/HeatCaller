@@ -782,6 +782,15 @@ public sealed class CommentaryService
     private bool VoiceSupportsAudioTags => VoiceSupportsAudioTagsProvider?.Invoke() ?? false;
 
     /// <summary>
+    /// Whether the voice carries a tag's emotion forward on its own (v4, see
+    /// VoiceProfile.CarriesTagsForward): then only a passage's first sentence
+    /// is tagged. Unset means no - one tag per sentence, as v3 needs.
+    /// </summary>
+    public Func<bool>? VoiceCarriesTagsForwardProvider { get; set; }
+
+    private bool VoiceCarriesTagsForward => VoiceCarriesTagsForwardProvider?.Invoke() ?? false;
+
+    /// <summary>
     /// The system prompt a SEGMENT is written against.
     ///
     /// Segments used to get BuildSystemPrompt alone, which carries one line
@@ -994,6 +1003,15 @@ public sealed class CommentaryService
         {
             first = character.Opener ?? character.Sentence;
             rest = character.Sentence;
+        }
+
+        // v4 (10 Nov 2026): the opening tag only. v4 plays a tag harder than
+        // v3 and carries its emotion on by itself, so a tag on every sentence
+        // made a whole recap shout; on v3 the emotion fades, so it keeps one
+        // per sentence.
+        if (VoiceCarriesTagsForward)
+        {
+            rest = null;
         }
 
         var sentences = SentenceBreak.Split(clean)

@@ -284,7 +284,7 @@ Add a `"voice"` block beside `"clubs"` in `relay.config.json`. Each entry is one
       "name": "Clubhouse",
       "what": "Warm and clear, easy over a PA",
       "voiceId": "<the ElevenLabs voice id>",
-      "modelId": "eleven_flash_v2_5",
+      "modelId": "eleven_v4_turbo",
       "stability": 0.5,
       "similarity": 0.75,
       "style": 0.3,
@@ -822,7 +822,7 @@ Three things it's careful about, because it's your own credits:
 
 - **The key is never written into the config.** `voice-test.key` is git-ignored, and the config holds only the club token's hash, the same as a real relay's.
 - **Its own data folder** (`data-voice-test/`) and its own allowance — 20,000 characters, not 100,000 — so a runaway **Prepare Lines** stops long before it gets expensive. Both are in the config if you want more.
-- **`eleven_flash_v2_5`**, the cheapest model, for the same reason.
+- **`eleven_v4_turbo`**, the model HeatCaller and the relay use, at half v4's price.
 
 To throw it away: <kbd>Ctrl</kbd>+<kbd>C</kbd>, then delete `relay.config.voice-test.json` and `data-voice-test/`. Empty the three boxes in HeatCaller and the voice goes back to the relay on the **Club Website** page.
 
@@ -858,7 +858,7 @@ To throw it away: <kbd>Ctrl</kbd>+<kbd>C</kbd>, then delete `relay.config.voice-
 
 Leave `maxBodyBytes` at its default unless you have a reason. HeatCaller sends documents of up to 900 KB; a lower limit makes the relay refuse some of them.
 
-A voice's optional settings default to `eleven_flash_v2_5`, stability 0.5, similarity 0.75, style 0, speaker boost on, speed 1 and the account's own output format. `name` falls back to the `id`.
+A voice's optional settings default to `eleven_v4_turbo`, stability 0.5, similarity 0.75, style 0, speaker boost on, speed 1 and the account's own output format. `name` falls back to the `id`.
 
 ### Environment variables
 
