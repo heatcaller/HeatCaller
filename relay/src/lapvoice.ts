@@ -43,9 +43,10 @@ export const LAP_VOICE: CatalogueVoice = Object.freeze({
   voiceId: "onwK4e9ZLuTAKqWW03F9",
   // v4 Turbo (10 Nov 2026, was v3 from 8 Nov, Flash before): the
   // announcer's model since HeatCaller moved to it, $0.04 per 1,000
-  // characters. Like v3 it ignores the speed below. It plays audio tags, so
-  // "best lap" and "Up to P ..." carry [excited] - the personal-best and
-  // pass moments; every other clip is plain. The v3 set is kept in
+  // characters. Like v3 it ignores the speed below. No clip carries an audio
+  // tag (11 Nov 2026, Asher): "best lap" and "Up to P ..." were [excited]
+  // for a day and came out sounding put on, next to the plain clips either
+  // side of them in a lap call. The v3 set is kept in
   // lap-voice-v3/ and the Flash set in lap-voice-flash/ to go back to.
   modelId: "eleven_v4_turbo",
   // A little steadier than the announcer's lines: a clip is one of two
@@ -161,7 +162,7 @@ export function lapClips(): LapClip[] {
     { name: "on", text: "Lap times on" },
     // 3 Nov 2026, Asher: said as lap times are turned off.
     { name: "off", text: "Lap times off" },
-    { name: "best", text: "[excited] best lap" },
+    { name: "best", text: "best lap" },
     // After a margin clip ("point two"), for a lap slower than their best (3 Nov 2026).
     { name: "pb-off", text: "off your best" },
   ];
@@ -193,7 +194,7 @@ export function lapClips(): LapClip[] {
   // Places gained or lost since the last lap (3 Nov 2026, Asher): a whole
   // clip each rather than "up to" before "P two", so it is said as one line.
   for (let n = 1; n <= POSITION_MAX; n++) {
-    clips.push({ name: `pu${n}`, text: `[excited] Up to P ${words(n)}` });
+    clips.push({ name: `pu${n}`, text: `Up to P ${words(n)}` });
   }
   for (let n = 1; n <= POSITION_MAX; n++) {
     clips.push({ name: `pd${n}`, text: `Down to P ${words(n)}` });
