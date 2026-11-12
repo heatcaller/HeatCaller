@@ -63,7 +63,7 @@ public partial class MainForm
         var regulars = NextNight.Regulars(_profiles.AllRaceable, _sessionHistory.All, _preEntries.For(night.DayKey).Select(p => p.Transponder), DateTime.UtcNow);
         var mailProblem = PinMailer.ConfigurationProblem(_settings);
 
-        using var form = new CallOffForm(night, regulars.Count, mailProblem);
+        using var form = new CallOffForm(night, regulars.Count, mailProblem, canPush: _settings.RelayEnabled);
 
         if (form.ShowDialog(owner) != DialogResult.OK)
         {
@@ -77,8 +77,23 @@ public partial class MainForm
         PublishNextNightNow();
         OnClientRawMessage($"{AppTime.LogStampNow()}  [program] {NextNight.When(night.Day)} called off.");
 
+        // A push to every phone signed up for alerts (setup plan step 7).
+        string? pushed = null;
+
+        if (form.Push)
+        {
+            var (title, words) = NextNight.OffPush(night, PinMailer.ClubName(_settings));
+            pushed = await _relayPublisher.BroadcastPushAsync(title, words, _pinMailCancel.Token);
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [program] Called off - push: {pushed}");
+        }
+
         if (!form.Email || regulars.Count == 0 || mailProblem is not null)
         {
+            if (pushed is not null && !IsDisposed)
+            {
+                AppDialog.Show(this, $"The night is off on the phones - and {pushed}", "Called off", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+
             return;
         }
 
@@ -107,7 +122,8 @@ public partial class MainForm
 
         if (!IsDisposed)
         {
-            AppDialog.Show(this, result.Ok ? $"The night is off on the phones, and the emails went: {result.Message}" : $"The night is off on the phones, but the emails didn't all go: {result.Message}",
+            var push = pushed is null ? string.Empty : $"\r\n\r\nPush: {pushed}";
+            AppDialog.Show(this, (result.Ok ? $"The night is off on the phones, and the emails went: {result.Message}" : $"The night is off on the phones, but the emails didn't all go: {result.Message}") + push,
                 "Called off", MessageBoxButtons.OK, result.Ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         }
     }

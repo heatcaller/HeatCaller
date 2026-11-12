@@ -57,7 +57,18 @@ export const PUSH_SUBS_PER_DRIVER = 5;
 export const PUSH_SUBS_PER_CLUB = 2000;
 
 /** How long a message waits at the push service for a phone that is off. A race call is stale in ten minutes. */
-const PUSH_TTL_SECONDS = 600;
+export const PUSH_TTL_SECONDS = 600;
+
+/**
+ * How long a club-wide message waits for a phone that is off (12 Nov 2026,
+ * setup plan step 7: "racing's off" by push). Unlike a race call, "the
+ * next race night is off" is still worth hearing hours later - a driver
+ * whose phone was off at tea-time must still learn of it before setting out.
+ */
+export const BROADCAST_TTL_SECONDS = 6 * 3600;
+
+/** The longest any message may wait at a push service: a day. */
+export const PUSH_TTL_MAX_SECONDS = 24 * 3600;
 
 const SEND_TIMEOUT_MS = 10000;
 
@@ -644,12 +655,61 @@ export class PushService {
     }
   }
 
-  /** One message to every phone a driver signed up. A phone the push service says is gone is forgotten. */
-  async send(club: string, id: string, message: PushMessage): Promise<number> {
+  /**
+   * One message to every phone a driver signed up. A phone the push service
+   * says is gone is forgotten. ttlSeconds is how long it may wait for a
+   * phone that is off: ten minutes unless said, never more than a day.
+   */
+  async send(club: string, id: string, message: PushMessage, ttlSeconds: number = PUSH_TTL_SECONDS): Promise<number> {
+    return (await this.deliver(club, id, message, ttlSeconds)).sent;
+  }
+
+  /**
+   * One message to every driver of the club with a phone signed up (12 Nov
+   * 2026, setup plan step 7): the laptop calling the next race night off.
+   *
+   * WHY it reaches only some phones: sign-ups are forgotten when the club
+   * closes drivers' nights (Relay.forgetPushSubs), so this goes to the
+   * phones signed up while nights are open - not to every driver the club
+   * has ever had. Accepted: a phone is only ever signed up for a night.
+   *
+   * badges: drivers tried. sent: phones the push services took. failed:
+   * phones refused, gone or out of reach, plus one for each driver whose
+   * phones could not be read this time. One driver failing never stops
+   * the rest.
+   */
+  async sendAll(
+    club: string,
+    message: PushMessage,
+    ttlSeconds: number = BROADCAST_TTL_SECONDS,
+  ): Promise<{ badges: number; sent: number; failed: number }> {
+    const ids = await this.signedUp(club);
+    let sent = 0;
+    let failed = 0;
+
+    for (const id of ids) {
+      try {
+        const done = await this.deliver(club, id, message, ttlSeconds);
+        sent += done.sent;
+        failed += done.tried - done.sent;
+      } catch (e) {
+        failed++;
+        this.log(`[push] "${club}": could not send ${message.tag} to one driver: ${String(e)}`);
+      }
+    }
+
+    return { badges: ids.size, sent, failed };
+  }
+
+  /** send, also saying how many phones were tried. */
+  private async deliver(club: string, id: string, message: PushMessage, ttlSeconds: number): Promise<{ tried: number; sent: number }> {
+    const ttl = Number.isFinite(ttlSeconds)
+      ? Math.min(Math.max(Math.floor(ttlSeconds), 0), PUSH_TTL_MAX_SECONDS)
+      : PUSH_TTL_SECONDS;
     const subs = await this.subsOf(club, id);
 
     if (subs.length === 0) {
-      return 0;
+      return { tried: 0, sent: 0 };
     }
 
     const keys = await this.vapid();
@@ -665,7 +725,7 @@ export class PushService {
             Authorization: vapidHeader(keys, sub.endpoint, this.subject, this.now()),
             "Content-Encoding": "aes128gcm",
             "Content-Type": "application/octet-stream",
-            TTL: String(PUSH_TTL_SECONDS),
+            TTL: String(ttl),
             Urgency: "high",
             // No Topic header (7 Nov 2026): Apple refused every alert with
             // 400 {"reason":"BadWebPushTopic"} for "hc-race", which the
@@ -710,12 +770,12 @@ export class PushService {
       this.log(`[push] "${club}": ${message.tag} accepted for ${sent} phone${sent === 1 ? "" : "s"}`);
     }
 
-    return sent;
+    return { tried: subs.length, sent };
   }
 }
 
 /** Where a tap on an alert goes: the club's "my night", which opens the night this phone remembers. No badge code in it. */
-function myNightUrl(club: string): string {
+export function myNightUrl(club: string): string {
   return `/c/${encodeURIComponent(club)}/mynight`;
 }
 

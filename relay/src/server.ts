@@ -75,7 +75,7 @@ import { LapVoiceLibrary } from "./lapvoice.js";
 import { STREAM_FORMAT, VOICE_PLAN_OFF, type MeterUsage, type VoicePlan, type VoiceService } from "./voice.js";
 import { isMeterName, type TopUpRequests } from "./topuprequests.js";
 import type { UsageLog } from "./usagelog.js";
-import { PUSH_CHANNEL, pushSubFrom, SERVICE_WORKER_JS, type PushService } from "./push.js";
+import { BROADCAST_TTL_SECONDS, myNightUrl, PUSH_CHANNEL, pushSubFrom, SERVICE_WORKER_JS, type PushService } from "./push.js";
 
 /** The public pages under /c/<club>/, by their last path segment. */
 const PAGES: Readonly<Record<string, (club: string, clubName: string, context: PageContext) => string>> = Object.freeze({
@@ -173,6 +173,17 @@ const INBOX_MAX_ITEMS = 500;
 
 /** Check-in requests are a few dozen bytes. */
 const CHECKIN_MAX_BODY = 4 * 1024;
+
+/**
+ * A club's message to every signed-up phone (12 Nov 2026, setup plan step
+ * 7 - "racing's off" by push): a title, a body and a tag, so well under 2 KB.
+ */
+const PUSH_BROADCAST_MAX_BODY = 2 * 1024;
+const PUSH_BROADCAST_TITLE_MAX = 60;
+const PUSH_BROADCAST_BODY_MAX = 240;
+const PUSH_BROADCAST_TAG = /^[A-Za-z0-9_-]{1,40}$/;
+/** Broadcasts per club an hour: a called-off night, a correction, and one spare. */
+export const PUSH_BROADCASTS_PER_HOUR = 3;
 
 /** Where the relay keeps a club's race-day-manager tunnel: requests waiting for the laptop, and answers waiting for a phone. Not a channel, for the same reason INBOX is not one. */
 /**
@@ -1210,6 +1221,8 @@ export class Relay {
   private readonly askWrites: Limiter;
   /** Car photos from one badge, per club: thirty an hour. */
   private readonly photoUploads: Limiter;
+  /** The laptop's messages to every signed-up phone, per club: three an hour. */
+  private readonly pushBroadcasts: Limiter;
   /**
    * The night page's live poll ({part:"live"}), per club and address -
    * apart from checkinReads, because a paddock of phones on the venue's
@@ -1456,6 +1469,7 @@ export class Relay {
     this.askQueries = new Limiter(3, 60 * 60 * 1000, () => this.now().getTime());
     this.askWrites = new Limiter(120, 60 * 60 * 1000, () => this.now().getTime());
     this.photoUploads = new Limiter(30, 60 * 60 * 1000, () => this.now().getTime());
+    this.pushBroadcasts = new Limiter(PUSH_BROADCASTS_PER_HOUR, 60 * 60 * 1000, () => this.now().getTime());
     this.nightLiveReads = new Limiter(1200, 60 * 1000, () => this.now().getTime());
     this.brain = options.brain;
     this.topUpRequests = options.topUpRequests;
@@ -2651,6 +2665,13 @@ export class Relay {
 
     if (method === "POST" && rest.length === 2 && rest[0] === "push" && (rest[1] === "subscribe" || rest[1] === "unsubscribe")) {
       await this.pushSignUp(request, response, club, rest[1] === "subscribe");
+      return;
+    }
+
+    // The laptop telling every signed-up phone at once (12 Nov 2026, setup
+    // plan step 7): the next race night is off. Its token, never a phone.
+    if (method === "POST" && rest.length === 2 && rest[0] === "push" && rest[1] === "broadcast") {
+      await this.pushBroadcast(request, response, club);
       return;
     }
 
@@ -6795,6 +6816,66 @@ export class Relay {
    * found" whichever it was. The push address must be one of the push
    * services' (pushSubFrom), so the relay never posts anywhere else.
    */
+  /**
+   * The laptop's one message to every phone signed up for the club's alerts
+   * (12 Nov 2026, setup plan step 7: "racing's off" by push). The laptop's
+   * token, as readDriverAsks - a phone can never send this. Three an hour
+   * per club, so a stuck button cannot buzz a paddock's pockets all evening.
+   *
+   * WHY it can reach fewer phones than the club has drivers: sign-ups are
+   * forgotten when the club closes drivers' nights (forgetPushSubs), so it
+   * goes to phones signed up while nights are open. Accepted - see
+   * PushService.sendAll.
+   */
+  private async pushBroadcast(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    // Not configured, or its key will not read just now (push.ts vapid):
+    // said plainly, so the laptop can tell the club to message drivers
+    // another way rather than think the phones were told.
+    const push = this.push;
+    const key = push === undefined ? undefined : await push.publicKey().catch(() => undefined);
+
+    if (push === undefined || key === undefined) {
+      sendJson(response, 503, { ok: false, error: "Alerts are not working on this relay, so no phone was told. Let drivers know another way." });
+      return;
+    }
+
+    const body = await readBody(request, response, PUSH_BROADCAST_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    const message = broadcastFrom(body);
+
+    if (typeof message === "string") {
+      sendJson(response, 400, { ok: false, error: message });
+      return;
+    }
+
+    if (this.pushBroadcasts.blocked(club)) {
+      sendJson(response, 429, { ok: false, error: "Only three messages to every phone an hour. Wait a while and try again." });
+      return;
+    }
+
+    this.pushBroadcasts.hit(club);
+    const outcome = await push.sendAll(club, { ...message, url: myNightUrl(club) }, BROADCAST_TTL_SECONDS);
+    this.log(`[push] "${club}": broadcast ${message.tag} to ${outcome.badges} driver${outcome.badges === 1 ? "" : "s"}: ${outcome.sent} sent, ${outcome.failed} failed`);
+    sendJson(response, 200, { ok: true, badges: outcome.badges, sent: outcome.sent, failed: outcome.failed });
+  }
+
   private async pushSignUp(request: IncomingMessage, response: ServerResponse, club: string, on: boolean): Promise<void> {
     const who = `${club}|${clientAddress(request)}`;
 
@@ -10148,6 +10229,46 @@ function readRawBody(
     // after "end" it changes nothing because the answer is already settled.
     request.on("close", onClose);
   });
+}
+
+/**
+ * The laptop's broadcast body, checked strictly: title (1-60), body
+ * (1-240), an optional tag (letters, digits, - and _, up to 40; "nextnight"
+ * if absent), and nothing else. A string is the reason it was refused.
+ */
+export function broadcastFrom(body: Record<string, unknown>): { title: string; body: string; tag: string } | string {
+  for (const name of Object.keys(body)) {
+    if (name !== "title" && name !== "body" && name !== "tag") {
+      return `Unknown field "${name.slice(0, 40)}".`;
+    }
+  }
+
+  const text = (value: unknown, max: number): string | undefined => {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+
+    const clean = value.trim();
+    return clean.length >= 1 && clean.length <= max && !/[\u0000-\u001f\u007f]/.test(clean) ? clean : undefined;
+  };
+
+  const title = text(body["title"], PUSH_BROADCAST_TITLE_MAX);
+
+  if (title === undefined) {
+    return `A title of 1 to ${PUSH_BROADCAST_TITLE_MAX} characters is needed.`;
+  }
+
+  const said = text(body["body"], PUSH_BROADCAST_BODY_MAX);
+
+  if (said === undefined) {
+    return `A body of 1 to ${PUSH_BROADCAST_BODY_MAX} characters is needed.`;
+  }
+
+  if (body["tag"] !== undefined && (typeof body["tag"] !== "string" || !PUSH_BROADCAST_TAG.test(body["tag"]))) {
+    return "The tag must be up to 40 letters, digits, - or _.";
+  }
+
+  return { title, body: said, tag: typeof body["tag"] === "string" ? body["tag"] : "nextnight" };
 }
 
 function readBody(

@@ -121,6 +121,15 @@ public static class NextNight
         };
     }
 
+    /// <summary>The push that tells every phone signed up for alerts the night is off (setup plan step 7): a title and the club's words.</summary>
+    public static (string Title, string Body) OffPush(AnnouncedNight night, string clubName)
+    {
+        var club = string.IsNullOrWhiteSpace(clubName) ? string.Empty : clubName.Trim() + ": ";
+        var words = string.IsNullOrWhiteSpace(night.OffText) ? $"Racing is off on {When(night.Day)}." : night.OffText.Trim();
+
+        return ($"{club}no racing {When(night.Day)}", words);
+    }
+
     /// <summary>The email that tells a regular the night is off.</summary>
     public static (string Subject, string Body) OffEmail(AnnouncedNight night, string clubName, string driverName)
     {

@@ -4,6 +4,13 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Loose ends from setting up the night (12 November).**
+    - **Templates on nights.** **When...** beside **Templates:** on **Race Day → Setup** sets the nights a template is for, such as every Tuesday or a monthly date. On those nights **Next Steps** offers **Start tonight's Tuesday club night**.
+    - **Racing's off, by push too.** **Call It Off...** can also send a push to every phone signed up for the club's alerts.
+    - **A driver's second transponder.** A car counts as heard tonight when any transponder its driver owns crosses the loop, so a driver running one transponder per car isn't listed as not heard.
+
+  Update HeatCaller on the race PC. The push **needs the relay redeployed** (`fly deploy --ha=false`).
+
 - **Hand the desk over, and bring a club over (12 November).**
     - **Hand the Desk to a Phone...** on the **Auto start** switch's right-click menu shows the phone remote's QR code for a deputy to run the starts while you race. The remote now has **START NOW** and **MARSHALS IN** too. See [Phone remote](screens/phone-and-web.md).
     - **Desk View...** on **Who's Racing** locks the laptop to check-ins, papers and money for a volunteer, until it's unlocked with the PIN you chose. See [Race Day → Who's Racing](race-day/events-and-entries.md#race-day-whos-racing).

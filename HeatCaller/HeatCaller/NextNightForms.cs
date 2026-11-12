@@ -114,12 +114,16 @@ internal sealed class CallOffForm : Form
 {
     private readonly TextBox _txtWords = new() { Multiline = true, Height = 70 };
     private readonly CheckBox _chkEmail = new ThemedCheckBox { AutoSize = true };
+    private readonly CheckBox _chkPush = new ThemedCheckBox { AutoSize = true };
 
     public string Words => _txtWords.Text.Trim();
 
     public bool Email => _chkEmail.Checked && _chkEmail.Enabled;
 
-    public CallOffForm(AnnouncedNight night, int regulars, string? mailProblem)
+    public bool Push => _chkPush.Checked && _chkPush.Enabled;
+
+    /// <param name="canPush">The club website is on, so a push can go to phones signed up for alerts (setup plan step 7).</param>
+    public CallOffForm(AnnouncedNight night, int regulars, string? mailProblem, bool canPush = false)
     {
         Text = "Call It Off";
         Font = AppTheme.BodyFont;
@@ -146,6 +150,14 @@ internal sealed class CallOffForm : Form
         _chkEmail.Enabled = regulars > 0 && mailProblem is null;
         _chkEmail.MaximumSize = new Size(460, 0);
 
+        // Setup plan step 7: a push too, to phones signed up for alerts.
+        _chkPush.Text = canPush
+            ? "Send a push to phones signed up for the club's alerts"
+            : "Send a push (needs the club website switched on)";
+        _chkPush.Checked = canPush;
+        _chkPush.Enabled = canPush;
+        _chkPush.MaximumSize = new Size(460, 0);
+
         var lblMail = new Label
         {
             Text = mailProblem is null ? string.Empty : $"Email can't go: {mailProblem}",
@@ -161,6 +173,7 @@ internal sealed class CallOffForm : Form
         var page = new FillPage();
         page.Add(lblHow, stretch: false, gapBelow: UiLayout.RowGap);
         page.Add(_txtWords, stretch: false, gapBelow: UiLayout.RowGap);
+        page.Add(_chkPush, stretch: false, gapBelow: 0);
         page.Add(_chkEmail, stretch: false, gapBelow: 0);
         page.Add(lblMail, stretch: false, gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnOff), gapBelow: 0);
