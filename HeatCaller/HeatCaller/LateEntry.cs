@@ -22,10 +22,29 @@ public static class LateEntry
     /// <param name="classDayRounds">The class's rounds on today's program, in running order.</param>
     /// <param name="transponder">The late driver.</param>
     /// <param name="onTrackRoundId">The round on track now, if any.</param>
-    public static List<RoundDefinition> Place(IReadOnlyList<RoundDefinition> classDayRounds, string transponder, string? onTrackRoundId)
+    /// <param name="bestLaps">
+    /// Recent best laps in the class by transponder (HeatSeeding.BestLaps), or
+    /// null (12 Nov 2026, setup plan D6). With the late driver's own, the heat
+    /// whose drivers' typical lap is nearest theirs is picked, so a fast late
+    /// driver doesn't land in the slow heat of a round seeded by pace.
+    /// Without, the smallest heat, as before.
+    /// </param>
+    /// <param name="heatSize">
+    /// The night's drivers per heat, or 0 for no limit: heats already that big
+    /// are passed over while one with room is left, so a late entry doesn't
+    /// make a heat bigger than the track runs.
+    /// </param>
+    public static List<RoundDefinition> Place(
+        IReadOnlyList<RoundDefinition> classDayRounds,
+        string transponder,
+        string? onTrackRoundId,
+        IReadOnlyDictionary<string, long>? bestLaps = null,
+        int heatSize = 0)
     {
         var qualifiers = classDayRounds.Where(r => r is not null && r.Kind == RoundKind.Qualifier).ToList();
         var places = new List<RoundDefinition>();
+
+        long? mine = bestLaps is not null && bestLaps.TryGetValue(transponder, out var lap) && lap > 0 ? lap : null;
 
         foreach (var round in qualifiers.GroupBy(r => (object?)NightPlan.RoundNumber(r.RoundLabel) ?? r.Id))
         {
@@ -36,16 +55,42 @@ public static class LateEntry
 
             var open = round
                 .Where(r => !r.IsRecorded && !string.Equals(r.Id, onTrackRoundId, StringComparison.Ordinal))
-                .OrderBy(r => r.AssignedTransponders.Count)
-                .FirstOrDefault();
+                .ToList();
 
-            if (open is not null)
+            if (open.Count == 0)
             {
-                places.Add(open);
+                continue;
             }
+
+            // Room first: a heat already at the night's size is the last resort.
+            var withRoom = heatSize > 0 ? open.Where(r => r.AssignedTransponders.Count < heatSize).ToList() : open;
+            var choices = withRoom.Count > 0 ? withRoom : open;
+
+            var pick = mine is { } own && choices.Any(c => TypicalLap(c, bestLaps!) is not null)
+                ? choices
+                    .Select((r, i) => (r, i, typical: TypicalLap(r, bestLaps!)))
+                    .OrderBy(x => x.typical is { } t ? Math.Abs(t - own) : long.MaxValue)
+                    .ThenBy(x => x.r.AssignedTransponders.Count)
+                    .ThenBy(x => x.i)
+                    .First().r
+                : choices.OrderBy(r => r.AssignedTransponders.Count).First();
+
+            places.Add(pick);
         }
 
         return places;
+    }
+
+    /// <summary>The median recent best lap of a heat's drivers, or null when none of them has one.</summary>
+    internal static long? TypicalLap(RoundDefinition heat, IReadOnlyDictionary<string, long> bestLaps)
+    {
+        var laps = heat.AssignedTransponders
+            .Select(t => bestLaps.TryGetValue(t, out var l) ? l : 0)
+            .Where(l => l > 0)
+            .OrderBy(l => l)
+            .ToList();
+
+        return laps.Count == 0 ? null : laps[laps.Count / 2];
     }
 }
 

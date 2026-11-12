@@ -118,6 +118,8 @@ public partial class MainForm
     /// </summary>
     private void EntriesCloseTick()
     {
+        LateArrivalsTick();
+
         try
         {
             if (_raceEvents.Active is not { IsLegacy: false, IsOpen: true } day
@@ -151,6 +153,14 @@ public partial class MainForm
                 OnClientRawMessage($"{AppTime.LogStampNow()}  [program] Entries close: \"{line}\"");
             }
 
+            // The heats build themselves as entries close (setup plan B2) -
+            // tried once per close, and only before the racing starts.
+            if (now >= closeAt && !racingStarted && _entriesCloseSaid.Add(key + "built") && _raceProgram?.BuildWhenEntriesClose() is { } built)
+            {
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [program] Entries closed - heats built: {built}");
+                _todayControl?.RefreshAll();
+            }
+
             // The card counts down in minutes; redraw it as the minute turns,
             // while the countdown is still on it.
             var minute = now.Ticks / TimeSpan.TicksPerMinute;
@@ -166,4 +176,43 @@ public partial class MainForm
             OnClientRawMessage($"[program] The entries-close call could not be worked out: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// Every fifteen seconds: drivers who checked in after the heats were
+    /// built go into them, when that needs no question (setup plan D6), and
+    /// Next Steps is told about any it should ask about.
+    /// </summary>
+    private void LateArrivalsTick()
+    {
+        try
+        {
+            if (_raceProgram is null || _raceEvents.Active is not { IsLegacy: false, IsOpen: true })
+            {
+                return;
+            }
+
+            if (_raceProgram.AbsorbLateArrivals() is { } added)
+            {
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [program] Checked in late: {added}");
+                _todayControl?.RefreshAll();
+                return;
+            }
+
+            // Late arrivals to ask about: redraw the card when the count changes.
+            var waiting = _raceProgram.LateArrivalsTonight().Count;
+
+            if (waiting != _lateArrivalsShown)
+            {
+                _lateArrivalsShown = waiting;
+                _todayControl?.RefreshAll();
+            }
+        }
+        catch (Exception ex)
+        {
+            OnClientRawMessage($"[program] Late check-ins could not be worked out: {ex.Message}");
+        }
+    }
+
+    /// <summary>How many late arrivals the card was last redrawn for.</summary>
+    private int _lateArrivalsShown;
 }

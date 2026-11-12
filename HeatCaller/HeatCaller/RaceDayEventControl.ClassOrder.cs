@@ -146,3 +146,26 @@ internal sealed class ClassOrderForm : Form
         _list.SelectedIndex = to;
     }
 }
+
+/// <summary>A club-wide tick on the Setup page (setup plan step 4), saved straight to settings like the posting tick.</summary>
+public sealed partial class RaceDayEventControl
+{
+    private void ClubTick(CheckBox box, string text, Func<bool> read, Action<bool> write, bool fallback)
+    {
+        box.Text = text;
+        box.AutoSize = true;
+        box.Checked = _settings is null ? fallback : read();
+        box.Enabled = _settings is not null;
+        box.CheckedChanged += (_, _) =>
+        {
+            if (_settings is null || read() == box.Checked)
+            {
+                return;
+            }
+
+            write(box.Checked);
+            _settings.Save();
+            NightSetupChanged?.Invoke();
+        };
+    }
+}

@@ -783,6 +783,18 @@ public partial class MainForm
         // tonight, and the planned breaks.
         WireNightSetup(raceProgram, raceControl);
 
+        // Start tonight like last time (setup plan B1): the Setup tab's own
+        // New Race Day path, with the last day's answers to its two questions.
+        raceProgram.StartLikeLastRequested += () =>
+        {
+            if (eventTab.StartLikeLastDay())
+            {
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [program] Started tonight like the last race day.");
+                raceProgram.RefreshAll();
+                _todayControl?.RefreshAll();
+            }
+        };
+
         // --- Today ---
         //
         // Built last of the sub-tabs because it reads the programme tab

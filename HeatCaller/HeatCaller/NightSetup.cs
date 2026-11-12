@@ -230,7 +230,7 @@ public static class EntriesClose
     public static string? LateLine(RaceEvent? day, DateTime nowUtc) =>
         AtUtc(day, nowUtc) is { } close && nowUtc >= close && nowUtc < close + TimeSpan.FromHours(8)
             ? $"Entries closed at {AppTime.TimeOfDay(close.ToLocalTime())}. A driver checked in now is a late entry: "
-              + "add them to the heats with Add a Late Entry on the program (right-click), which moves nobody else."
+              + "they go into the heats still to run without moving anyone else (once the heats are posted, Next Steps asks first)."
             : null;
 }
 

@@ -217,6 +217,13 @@ public sealed class RaceEvent
     /// </summary>
     public bool RotateClassOrder { get; set; }
 
+    /// <summary>
+    /// Late check-ins the director said not to add to tonight's heats (12 Nov
+    /// 2026, setup plan D6), as LateArrivals.Key - "Stock|1234" - so Next
+    /// Steps stops asking about them. Tonight only: a new day starts empty.
+    /// </summary>
+    public List<string> LateEntriesDeclined { get; set; } = new();
+
     // --- Rolling into the next race -------------------------------------
     //
     // Whether finishing a race arms the next one by itself, and which race
@@ -421,6 +428,7 @@ public sealed class RaceEventStore
             e.ClassNames = (e.ClassNames ?? new List<string>()).Where(n => n is not null).ToList();
             e.Breaks = (e.Breaks ?? new List<PlannedBreak>()).Where(b => b is not null).ToList();
             e.ClassRunningOrder = (e.ClassRunningOrder ?? new List<string>()).Where(n => n is not null).ToList();
+            e.LateEntriesDeclined = (e.LateEntriesDeclined ?? new List<string>()).Where(n => n is not null).ToList();
 
             foreach (var b in e.Breaks)
             {

@@ -4,6 +4,14 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Start tonight in one press, and late check-ins that sort themselves (12 November).**
+    - **Start tonight like last time.** With no race day open, the card on **Next Steps** starts tonight with the last race day's kind of night, classes and settings. **Set Up Tonight** is still there to change something first.
+    - **The heats build themselves when entries close.** With **Entries close at:** set, the heats are built as it passes, ready to post. Untick **Build the heats when entries close** on **Setup** to build them yourself.
+    - **Checked in late.** A driver who checks in after the heats are built goes into them by themselves before the heats are posted. After posting, **Next Steps** asks first, with **Add them to the heats...**. Either way nobody else moves. See [Checked in late](race-day/program-and-mains.md#checked-in-late).
+    - **A late entry goes in by pace.** **Add a Late Entry** now picks the heat nearest the driver's pace that has room, not just the smallest. See [A late entry](race-day/program-and-mains.md#a-late-entry).
+
+  Update HeatCaller on the race PC; nothing changes on the relay.
+
 - **Marshals in place, and the class running order (12 November).**
     - **Marshals in place.** Tick **Wait for the marshals before starting** on the **Auto start** switch's right-click menu and a race with marshals waits at zero until somebody presses **Marshals in place**. A minute before, a banner names the marshals and their posts. If they're not confirmed in time, the announcer calls them once. **Someone's missing...** logs a no-show, and the event report lists them. Off to start with. See [Marshals in place](race-day/program-and-mains.md#marshals-in-place).
     - **Class running order.** **Order...** on **Race Day → Setup** sets which class goes first in each round, and can turn the order round each round. A new race day keeps it. See [Race Day → Setup](race-day/events-and-entries.md#building-the-program).

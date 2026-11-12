@@ -39,6 +39,7 @@ The card works out the single next thing to do, with one button that does it. Th
 
 | Situation | Headline | Button |
 |---|---|---|
+| No race day is open, and there's a race day from before tonight to go by | "No race day is open." | **Start tonight like last time**. It starts tonight with the last race day's kind of night and classes, and everything else a new day carries forward (see [New Race Day](events-and-entries.md#new-race-day)). To change something first, use **Set Up Tonight** on **Setup** |
 | No race day is open | "No race day is open." | **Start a Race Day** (opens the Set Up Tonight wizard) |
 | The current race day is closed | "Race Day 21 Sep 2026" is closed. | **Start a Race Day** |
 | There are no classes at all | "There are no classes yet." | **Set Up Classes** (opens the **Classes** page) |
@@ -49,6 +50,7 @@ The card works out the single next thing to do, with one button that does it. Th
 | None of today's classes has any drivers | "None of today's classes has any drivers." (or "No drivers in Stock." with one class) | **Add Drivers** |
 | Nothing is scheduled yet | "Nothing is scheduled yet." | **Build tonight's heats** (**Build tonight's races** on a club night) |
 | A lower main has finished and bump-ups are due | "B-Main has finished." | **Move the top finishers up** |
+| Drivers checked in after the heats were posted, and the club asks before adding them | "Max Power checked in after the heats were posted." | **Add them to the heats...**. See [Checked in late](#checked-in-late) |
 | The heats are built, none has run, and they haven't been posted | "Tonight's heats are built - post them next." | **Post the heats...** (**Post the races...** on a club night). See [Post the heats](#post-the-heats) |
 | A round is waiting to run | "Next up: Q2 Heat 1" | **Start Q2 Heat 1** |
 | Everything has run, and a class has qualified but has no mains | "Qualifying is complete for Stock." | **Build the finals from qualifying** |
@@ -293,7 +295,23 @@ Select one or more rounds, right-click them and choose **Delete**, then confirm.
 
 For a driver who turns up after the heats are posted. Right-click the list and choose **Add a Late Entry...** (it works on the class in the **Class:** filter, or the selected round's class). Pick the driver from the class's drivers who aren't in a heat still to run, and click **Add to Heats**.
 
-They go into the smallest heat of each qualifying round still to run that they aren't already in (the first of two the same size), never a heat on track or already run. Nobody else moves, so the heat sheet on the wall and everybody's phones stay right; only the heats they joined change. **Undo** takes them out again. On a day that only counts checked-in drivers, check them in first. To re-deal every heat still to run instead, use **Redo Remaining Heats** on Race Control.
+They go into one heat of each qualifying round still to run that they aren't already in, never a heat on track or already run. Which heat:
+
+- **The heat nearest their pace**, when they have a best lap in the class from the last 60 days: the heat whose drivers' typical best lap is closest to theirs. So a fast driver who turns up late doesn't land in the slow heat of a round seeded by pace.
+- **A heat with room** before one that's already at **Drivers per heat:**, so a late entry doesn't make a heat bigger than the track runs.
+- **The smallest heat** when they have no recent lap (the first of two the same size).
+
+Nobody else moves, so the heat sheet on the wall and everybody's phones stay right; only the heats they joined change. **Undo** takes them out again. On a day that only counts checked-in drivers, check them in first. To re-deal every heat still to run instead, use **Redo Remaining Heats** on Race Control.
+
+### Checked in late
+
+A driver who checks in after tonight's heats are built (at the desk, on a phone, or by scanning) goes into them the same way as **Add a Late Entry**, without anyone having to notice:
+
+- **Before the heats are posted**, they go in by themselves within a few seconds, and nobody else moves. The console says where each went, and **Undo** takes them out.
+- **After the heats are posted** (or once a race has run), the card asks first: "Max Power checked in after the heats were posted." **Add them to the heats...** lists each driver and the heats they'd go in. Untick anyone who isn't racing tonight (say they've only come to marshal), and click **Add the Ticked**. An unticked driver isn't asked about again tonight. **Undo** takes back either.
+- Tick **Add late check-ins to posted heats without asking** on **Setup** to have them go in by themselves after posting too.
+
+Only drivers who check in after the heats are built count. A driver you take out of the heats on purpose, with **Move Drivers Between Heats** say, isn't put back. After HeatCaller restarts, everybody already checked in counts as known.
 
 ### Mixed-class heats
 
