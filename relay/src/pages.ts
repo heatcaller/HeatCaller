@@ -7067,6 +7067,57 @@ const LISTEN_JS = `
   // flag last may clear it.
   let sweepId = 0;
 
+  // THE LISTENER'S OWN COUNTS (11 Nov 2026, asked for by Asher: Listen
+  // Now's music "skips or drops", and maybe the voice). With
+  // ?listendebug=1 on the page's address, a small block under the note
+  // says what the player is doing, so a phone at a race night shows where
+  // a hiccup came from: a stretch that came too late (late), numbers that
+  // never arrived (quiet stretches are never sent, so these are quiet or
+  // lost), how evenly the stretches turned up (every three seconds is
+  // perfect), and how long each fetch and decode took. The laptop counts
+  // its own side in its console - see ListenStream.HealthEvery. Nobody
+  // without the address sees any of it.
+  const DEBUG = typeof location !== 'undefined' && /[?&]listendebug=1(&|$)/.test(location.search || '');
+  const stats = {
+    played: 0, late: 0, skipped: 0, behind: 0, rejoins: 0, failed: 0,
+    lastArrived: 0, gapN: 0, gapSum: 0, gapWorst: 0,
+    fetchLast: 0, fetchWorst: 0, decodeLast: 0, decodeWorst: 0,
+  };
+  let statsBox = null;
+
+  function showStats() {
+    if (!DEBUG || typeof document.createElement !== 'function') {
+      return;
+    }
+
+    try {
+      if (statsBox === null) {
+        statsBox = document.createElement('pre');
+        statsBox.className = 'listendebug';
+        statsBox.style.cssText = 'font:12px/1.4 ui-monospace,monospace;white-space:pre-wrap;opacity:.8;margin:8px 0 0';
+        note.parentNode.insertBefore(statsBox, note.nextSibling);
+      }
+
+      const ms = (s) => Math.round(s * 1000) + ' ms';
+      const now = ctx === null ? 0 : ctx.currentTime;
+      const inHand = nextAt > now ? nextAt - now : 0;
+
+      statsBox.textContent = [
+        'in hand ' + inHand.toFixed(2) + ' s, cushion ' + streamAhead.toFixed(1) + ' s',
+        'played ' + stats.played + ', late ' + stats.late + ', skipped numbers ' + stats.skipped,
+        'too far behind ' + stats.behind + ', rejoined ' + stats.rejoins + ', failed fetches ' + stats.failed,
+        'arrived every ' + (stats.gapN === 0 ? '-' : (stats.gapSum / stats.gapN).toFixed(2) + ' s') +
+          ', worst ' + (stats.gapN === 0 ? '-' : stats.gapWorst.toFixed(2) + ' s'),
+        'fetch ' + ms(stats.fetchLast) + ' (worst ' + ms(stats.fetchWorst) + '), decode ' +
+          ms(stats.decodeLast) + ' (worst ' + ms(stats.decodeWorst) + ')',
+        'player ' + (ctx === null ? '-' : ctx.sampleRate + ' Hz') + ', decoding at ' +
+          (decoder === null ? 'the player\\'s rate' : decoder.sampleRate + ' Hz'),
+      ].join('\\n');
+    } catch (err) {
+      // The counts are never worth the sound.
+    }
+  }
+
   // When the page was hidden, for the catch-up on coming back.
   let hiddenAt = 0;
 
@@ -7108,6 +7159,8 @@ const LISTEN_JS = `
       if (sweepId === me) {
         sweeping = false;
       }
+
+      showStats();
     }
   }
 
@@ -7188,7 +7241,15 @@ const LISTEN_JS = `
           continue;
         }
 
+        const asked = Date.now();
         const got = await ask('/api/v1/c/' + CLUB + '/collection/listen/' + encodeURIComponent(one.id)).catch(() => null);
+        const took = (Date.now() - asked) / 1000;
+        stats.fetchLast = took;
+        stats.fetchWorst = Math.max(stats.fetchWorst, took);
+
+        if (got === null || !got.ok) {
+          stats.failed += 1;
+        }
 
         if (!on || mine !== turn) {
           return;
@@ -7312,7 +7373,10 @@ const LISTEN_JS = `
       return;
     }
 
+    const decoding = Date.now();
     const buffer = await decodeOne(said);
+    stats.decodeLast = (Date.now() - decoding) / 1000;
+    stats.decodeWorst = Math.max(stats.decodeWorst, stats.decodeLast);
 
     if (!on || mine !== turn) {
       return;
@@ -7338,7 +7402,26 @@ const LISTEN_JS = `
       // was not enough for this connection, so it grows - see STREAM_AHEAD_S.
       if (next && !follows) {
         streamAhead = Math.min(STREAM_AHEAD_MOST_S, streamAhead + STREAM_AHEAD_STEP_S);
+        stats.late += 1;
       }
+
+      // The counts - see DEBUG. How long since the one before it turned
+      // up, for the very next stretch only.
+      const arrived = Date.now();
+
+      if (next && stats.lastArrived > 0) {
+        const gap = (arrived - stats.lastArrived) / 1000;
+        stats.gapN += 1;
+        stats.gapSum += gap;
+        stats.gapWorst = Math.max(stats.gapWorst, gap);
+      }
+
+      if (said.run === lastRun && said.n > lastN + 1) {
+        stats.skipped += said.n - lastN - 1;
+      }
+
+      stats.lastArrived = arrived;
+      stats.played += 1;
 
       lastRun = said.run;
       lastN = said.n;
@@ -7350,6 +7433,7 @@ const LISTEN_JS = `
     }
 
     if (at - now > MOST_BEHIND_S) {
+      stats.behind += 1;
       dropAll();
       at = now + (said.kind === 'mix' ? streamAhead : START_AHEAD_S);
     }
@@ -7402,6 +7486,8 @@ const LISTEN_JS = `
   // in flight from before.
   function rejoin() {
     turn += 1;
+    stats.rejoins += 1;
+    stats.lastArrived = 0;
     dropAll();
     streamAhead = STREAM_AHEAD_S;
     chain = Promise.resolve();
