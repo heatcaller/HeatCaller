@@ -585,6 +585,11 @@ public partial class MainForm
 
         subPageEvent.Controls.Add(eventTab);
         _subTabRefresh[subPageEvent] = eventTab.RefreshAll;
+        eventTab.CloseNightChecklistChanged += () =>
+        {
+            _raceProgram.RefreshAll();
+            _todayControl?.RefreshAll();
+        };
 
         // The setup wizard, opened from The Day. Built here rather than
         // there because it drives three pages' commands, not one - and
@@ -764,6 +769,8 @@ public partial class MainForm
             OnClientRawMessage($"{AppTime.LogStampNow()}  [program] Announced: \"{text}\"");
         };
         raceProgram.ClosingFacts = NightClosingFacts;
+        raceProgram.CloseNightRequested += OpenCloseNight;
+        raceProgram.ClosingChecklistChanged += () => _todayControl?.RefreshAll();
         raceControl.RunProgramStepRequested += step => raceProgram.RunStep(step);
 
         // --- Today ---

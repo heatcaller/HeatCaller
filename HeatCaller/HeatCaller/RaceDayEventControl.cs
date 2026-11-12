@@ -89,6 +89,13 @@ public sealed class RaceDayEventControl : UserControl
     private readonly NumericUpDown _numExtraFee = new() { DecimalPlaces = 2, Maximum = 1000, Increment = 1 };
     private readonly CheckBox _chkCheckedInOnly = new ThemedCheckBox();
     private readonly CheckBox _chkAutoAdvance = new ThemedCheckBox();
+
+    /// <summary>
+    /// Close the night with the checklist (11 Nov 2026 - AppSettings.UseCloseNightChecklist).
+    /// The club's, not the day's: saved straight to settings, never part of
+    /// the race day's edits or undo.
+    /// </summary>
+    private readonly CheckBox _chkCloseNight = new ThemedCheckBox();
     private readonly ComboBox _cmbAutoAdvanceScope = new();
 
     /// <summary>Between-race talk for this day: the club's Between races settings, or one of the card's presets over them (31 Oct 2026).</summary>
@@ -105,6 +112,9 @@ public sealed class RaceDayEventControl : UserControl
     /// this page, and this page should not be reaching for either.
     /// </summary>
     public event Action? SetUpTonightRequested;
+
+    /// <summary>The "Close the night with a checklist" tick changed, so the Next Steps card should say it again.</summary>
+    public event Action? CloseNightChecklistChanged;
 
     /// <summary>
     /// The caption on the qualifying-rounds spinner.
@@ -551,6 +561,26 @@ public sealed class RaceDayEventControl : UserControl
         _cmbGapPreset.SelectedIndex = 0;
         programGrid.AddRow("Between-race talk:", _cmbGapPreset);
         programGrid.AddHint("How much the announcer says between races tonight. A preset here is for this day only - the club's own settings are on the AI Commentary tab.");
+
+        // The closing checklist (11 Nov 2026). Every night, not just this
+        // one, so it saves straight to the club's settings.
+        _chkCloseNight.Text = "Close the night with a checklist";
+        _chkCloseNight.AutoSize = true;
+        _chkCloseNight.Checked = _settings?.UseCloseNightChecklist ?? true;
+        _chkCloseNight.Enabled = _settings is not null;
+        _chkCloseNight.CheckedChanged += (_, _) =>
+        {
+            if (_settings is null || _settings.UseCloseNightChecklist == _chkCloseNight.Checked)
+            {
+                return;
+            }
+
+            _settings.UseCloseNightChecklist = _chkCloseNight.Checked;
+            _settings.Save();
+            CloseNightChecklistChanged?.Invoke();
+        };
+        programGrid.AddField(_chkCloseNight);
+        programGrid.AddHint("When every race has run, Next Steps opens a list of what's left - rentals, money, backups, Close Day and your own lines - to tick off. Off, it just says what's left in one line. For every night, not just this one.");
 
         var program = new Section("Building the program");
 

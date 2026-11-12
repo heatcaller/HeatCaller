@@ -187,6 +187,12 @@ public sealed class RaceProgramControl : UserControl
     /// <summary>Raised when the next step is "check somebody in" - the same journey, aimed at the entries tab.</summary>
     public event Action? GoToEntriesTab;
 
+    /// <summary>Shows Who's Racing, for the closing checklist (11 Nov 2026).</summary>
+    internal void ShowEntriesTab() => GoToEntriesTab?.Invoke();
+
+    /// <summary>Shows Setup, where Close Day is, for the closing checklist (11 Nov 2026).</summary>
+    internal void ShowSetupTab() => GoToEventTab?.Invoke();
+
     /// <summary>
     /// Raised after anything changes which rounds are on today's
     /// programme, or their order - so the timetable can follow rather than
@@ -990,10 +996,18 @@ public sealed class RaceProgramControl : UserControl
             return step with { Detail = step.Detail + NightPlan.Note(plan) };
         }
 
+        // The closing checklist (11 Nov 2026), when the club uses it: the same
+        // line, less what has been ticked off by hand, and the button opens
+        // the list. Standings is still a button on the program below.
+        if (step.Stage == ProgramStage.Complete && _settings.UseCloseNightChecklist && ClosingChecklist() is { } checklist)
+        {
+            return step with { Detail = step.Detail + CloseNightChecklist.Note(checklist), ActionCaption = ProgramCaptions.CloseNight };
+        }
+
         if (step.Stage == ProgramStage.Complete && ClosingFacts is { } closing)
         {
             var sessions = DaySessions(day);
-            var facts = closing(sessions);
+            var facts = closing(sessions, ActiveDay);
             var lastFinish = sessions.Select(s => (DateTime?)s.EndedAtUtc).Max();
             return step with { Detail = step.Detail + NightClose.Note(facts, lastFinish) };
         }
@@ -1007,7 +1021,58 @@ public sealed class RaceProgramControl : UserControl
     /// saved races. Set by MainForm,
     /// which can see those; null leaves the card as it was.
     /// </summary>
-    internal Func<IReadOnlyList<SessionRecord>, NightClose.Facts>? ClosingFacts { get; set; }
+    internal Func<IReadOnlyList<SessionRecord>, RaceEvent?, NightClose.Facts>? ClosingFacts { get; set; }
+
+    /// <summary>Asks for the closing checklist window - Next Steps' "Close the night..." (11 Nov 2026).</summary>
+    public event Action? CloseNightRequested;
+
+    /// <summary>A line of the closing checklist was ticked or unticked by hand, so the Next Steps card should say it again.</summary>
+    public event Action? ClosingChecklistChanged;
+
+    /// <summary>
+    /// Tonight's closing checklist (CloseNightChecklist), or null when there
+    /// is no race day or nothing to tell it from. Read by the card and by the
+    /// checklist window, so the two never disagree.
+    /// </summary>
+    /// <param name="dayId">The race day the window was opened for, which it keeps after Close Day (closing a day stops it being the active one); null for the active day.</param>
+    internal List<CloseNightChecklist.Item>? ClosingChecklist(string? dayId = null)
+    {
+        if (ClosingFacts is not { } closing || DayFor(dayId) is not { } raceDay)
+        {
+            return null;
+        }
+
+        var ids = raceDay.RoundIds.ToHashSet(StringComparer.Ordinal);
+        var sessions = DaySessions(_rounds.All.Where(r => ids.Contains(r.Id)).ToList());
+        var lastFinish = sessions.Select(s => (DateTime?)s.EndedAtUtc).Max();
+
+        return CloseNightChecklist.Build(
+            closing(sessions, raceDay),
+            lastFinish,
+            _settings.CloseNightOwnItems,
+            CloseNightChecklist.TicksFor(_settings.CloseNightTicks, raceDay.Id));
+    }
+
+    /// <summary>Ticks a line of tonight's closing checklist off by hand, or back on, and says so on the card.</summary>
+    internal void TickClosingItem(string key, bool done, string? dayId = null)
+    {
+        if (DayFor(dayId) is not { } raceDay)
+        {
+            return;
+        }
+
+        _settings.CloseNightTicks = CloseNightChecklist.Tick(_settings.CloseNightTicks, raceDay.Id, key, done);
+        _settings.Save();
+        RefreshNextStep(DayRounds());
+        ClosingChecklistChanged?.Invoke();
+    }
+
+    /// <summary>The active race day's id, for a window that has to keep to tonight after Close Day.</summary>
+    internal string? ActiveDayId => ActiveDay?.Id;
+
+    /// <summary>A race day by id, or the active one for null. Never the legacy day.</summary>
+    private RaceEvent? DayFor(string? dayId) =>
+        dayId is null ? ActiveDay : _events?.Get(dayId) is { IsLegacy: false } day ? day : null;
 
     /// <summary>The saved races of today's program, however each is linked to its round.</summary>
     private List<SessionRecord> DaySessions(IReadOnlyList<RoundDefinition> day)
@@ -1773,7 +1838,15 @@ public sealed class RaceProgramControl : UserControl
                 break;
 
             case ProgramStage.Complete:
-                ShowStandings(_step.ClassName);
+                if (_settings.UseCloseNightChecklist && CloseNightRequested is not null)
+                {
+                    CloseNightRequested.Invoke();
+                }
+                else
+                {
+                    ShowStandings(_step.ClassName);
+                }
+
                 break;
         }
     }

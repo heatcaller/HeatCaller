@@ -115,6 +115,7 @@ The line under the picker shows what the selected day already holds, for example
 | **Start the next race automatically** | When a race finishes without a round picked on **Race Control**, it's recorded against the next round that hasn't run yet, so you can work through the program without picking each round by hand. See [Which round a race counts for](program-and-mains.md#which-round-a-race-counts-for). | On |
 | **Next race is:** | Which round that is: **the class that was racing**, **any class, in program order**, or **only "*class*"**. Grayed out while **Start the next race automatically** is unticked. Only shown in Advanced mode (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)); in Simple mode the day keeps whatever it's set to. | the class that was racing |
 | **Between-race talk:** | How much the announcer says between races on this day: **The club's Between races settings**, or one of the presets (**Club night**, **Race day**, **Big event**, **Just the call-ups**) over them for this day only. See [Between races](../announcer/commentary.md#between-races). | The club's Between races settings |
+| **Close the night with a checklist** | When every race has run, **Next Steps** offers **Close the night...**, a list of what's left to tick off. Unticked, the card just says what's left in one line. This is the club's setting, for every night, not just this one. See [Closing the night](program-and-mains.md#closing-the-night). | On |
 
 
 !!! tip
