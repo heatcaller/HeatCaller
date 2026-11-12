@@ -113,6 +113,12 @@ public static class NightPlan
     /// <param name="tonightsGap">Tonight's typical finish-to-green, or null when there isn't one yet.</param>
     /// <param name="outByLocal">The race day's "Out by" time of day, or null.</param>
     /// <param name="nowUtc">Now.</param>
+    /// <param name="firstRaceLocal">
+    /// The race day's "First race at" time of day (Setup tab), or null. Until
+    /// a race of tonight has run, nothing is planned to start before it - a
+    /// program built at 16:00 for an 18:00 start says 18:00, not 16:00. Once
+    /// a race has run (or one is on track) the night's own timing takes over.
+    /// </param>
     public static Projection? For(
         IReadOnlyList<RoundDefinition> dayRounds,
         Func<RoundDefinition, TimeSpan> lengthOf,
@@ -121,7 +127,8 @@ public static class NightPlan
         DateTime? lastFinishUtc,
         TimeSpan? tonightsGap,
         TimeSpan? outByLocal,
-        DateTime nowUtc)
+        DateTime nowUtc,
+        TimeSpan? firstRaceLocal = null)
     {
         var gap = tonightsGap is { } measured && measured > TimeSpan.Zero ? measured : DefaultGap;
         var slots = new List<Slot>();
@@ -144,6 +151,17 @@ public static class NightPlan
         else
         {
             cursor = lastFinishUtc is { } finished && finished + gap > nowUtc ? finished + gap : nowUtc;
+
+            // Nothing of tonight has raced yet: start at the time the club
+            // set, when that is still ahead. NearestOccurrence picks the day
+            // (so a 09:00 start set at 23:00 is tomorrow's), and a start
+            // already passed is now - the night is late, not in the past.
+            var nothingRunYet = !dayRounds.Any(r => r is not null && r.IsRecorded && r.Kind != RoundKind.Practice);
+
+            if (nothingRunYet && firstRaceLocal is { } first && NearestOccurrence(first, nowUtc) is var firstUtc && firstUtc > cursor)
+            {
+                cursor = firstUtc;
+            }
         }
 
         foreach (var round in toRun)

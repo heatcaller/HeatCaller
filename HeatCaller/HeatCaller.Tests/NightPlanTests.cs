@@ -63,6 +63,38 @@ public sealed class NightPlanTests
     }
 
     [Fact]
+    public void A_night_built_early_starts_at_the_first_race_time_from_setup()
+    {
+        var rounds = new[] { Heat("Q1 Heat 1"), Heat("Q1 Heat 2") };
+
+        var plan = NightPlan.For(rounds, _ => Five, null, null, null, null, null, Now, LocalTimeOfDay(90))!;
+
+        Assert.Equal(Now.AddMinutes(90), plan.StartOf(rounds[0].Id));
+        Assert.Equal(Now.AddMinutes(98), plan.StartOf(rounds[1].Id));
+    }
+
+    [Fact]
+    public void A_first_race_time_already_passed_starts_now()
+    {
+        var rounds = new[] { Heat("Q1 Heat 1"), Heat("Q1 Heat 2") };
+
+        var plan = NightPlan.For(rounds, _ => Five, null, null, null, null, null, Now, LocalTimeOfDay(-20))!;
+
+        Assert.Equal(Now, plan.StartOf(rounds[0].Id));
+    }
+
+    [Fact]
+    public void Once_a_race_has_run_the_first_race_time_no_longer_holds_the_night()
+    {
+        // Started early: the rest follows the night, not the setup time.
+        var rounds = new[] { Heat("Q1 Heat 1", run: true), Heat("Q1 Heat 2") };
+
+        var plan = NightPlan.For(rounds, _ => Five, null, null, null, null, null, Now, LocalTimeOfDay(30))!;
+
+        Assert.Equal(Now, plan.StartOf(rounds[1].Id));
+    }
+
+    [Fact]
     public void Tonights_own_gap_replaces_the_default()
     {
         var rounds = new[] { Heat("Q1 Heat 1"), Heat("Q1 Heat 2") };
