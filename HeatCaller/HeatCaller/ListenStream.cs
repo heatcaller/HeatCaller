@@ -113,6 +113,22 @@ internal sealed class ListenStream : IDisposable
     /// <summary>How long after a stream fails before another is started.</summary>
     private static readonly TimeSpan RetryEvery = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    /// HOW THE STREAM IS DOING, IN THE CONSOLE (11 Nov 2026, asked for by
+    /// Asher: Listen Now's music "skips or drops", and maybe the voice).
+    /// Counted before anything is changed, so a race night says which of
+    /// the suspects it is. Every five minutes, a line saying what went
+    /// wrong in that stretch: the music or the crowd running dry or being
+    /// trimmed (see Bed), sound dropped on the way to the encoder, and how
+    /// long the stretches took to reach the relay. A clean five minutes
+    /// says nothing, except once every half an hour so a quiet console is
+    /// known to be a clean stream rather than one that is not counting.
+    /// </summary>
+    internal static readonly TimeSpan HealthEvery = TimeSpan.FromMinutes(5);
+
+    /// <summary>How often a clean stream says so - see <see cref="HealthEvery"/>.</summary>
+    internal static readonly TimeSpan CleanEvery = TimeSpan.FromMinutes(30);
+
     /// <summary>The one running, for <see cref="Offer"/> - the music and crowd taps are static.</summary>
     private static volatile Run? _live;
 
@@ -123,17 +139,22 @@ internal sealed class ListenStream : IDisposable
     private readonly ManualResetEventSlim _poke = new(false);
     private volatile bool _disposed;
     private volatile Run? _run;
+    private readonly Func<ListenAlong.Delivery?>? _delivery;
     private DateTime _retryAt = DateTime.MinValue;
     private string? _problemSaid;
+    private DateTime _healthAt = DateTime.MaxValue;
+    private DateTime _cleanSaidAt = DateTime.MinValue;
 
     /// <param name="wanted">Whether listening along is on - asked every second.</param>
     /// <param name="send">Where each segment goes. Called on the encoder's thread; must not block.</param>
     /// <param name="log">Where a problem is said, once.</param>
-    public ListenStream(Func<bool> wanted, Action<ListenSegment> send, Action<string>? log)
+    /// <param name="delivery">How the stretches got to the relay since it was last asked - see ListenAlong.TakeDelivery. Null where nothing sends them.</param>
+    public ListenStream(Func<bool> wanted, Action<ListenSegment> send, Action<string>? log, Func<ListenAlong.Delivery?>? delivery = null)
     {
         _wanted = wanted;
         _send = send;
         _log = log;
+        _delivery = delivery;
         _keeper = new Thread(Keep) { IsBackground = true, Name = "Listen stream", Priority = ThreadPriority.BelowNormal };
         _keeper.Start();
     }
@@ -188,11 +209,17 @@ internal sealed class ListenStream : IDisposable
                 var want = _wanted();
                 var run = _run;
 
+                if (run is not null && DateTime.UtcNow >= _healthAt)
+                {
+                    SayHealth(run, DateTime.UtcNow);
+                }
+
                 if (want && (run is null || run.Finished))
                 {
                     if (run is { Finished: true })
                     {
                         Say(run.Problem);
+                        SayHealth(run, DateTime.UtcNow);
                         Stop(run);
                         _run = null;
                         _retryAt = DateTime.UtcNow + RetryEvery;
@@ -204,6 +231,7 @@ internal sealed class ListenStream : IDisposable
                 }
                 else if (!want && run is not null)
                 {
+                    SayHealth(run, DateTime.UtcNow);
                     Stop(run);
                     _run = null;
                     _retryAt = DateTime.MinValue;
@@ -232,6 +260,11 @@ internal sealed class ListenStream : IDisposable
         AudioBus.ListenOnAir(run);
         run.Start();
 
+        // Counted from here, and the relay's count started afresh with it.
+        _delivery?.Invoke();
+        _healthAt = DateTime.UtcNow + HealthEvery;
+        _cleanSaidAt = DateTime.UtcNow;
+
         // The bus is the clock (see the class summary), so it has to be
         // running for the music to go out before the announcer's first word.
         // Opens it if nothing has yet; blocks this thread only.
@@ -250,6 +283,102 @@ internal sealed class ListenStream : IDisposable
 
         run.Stop();
     }
+
+    /// <summary>The last few minutes' line for the console, or nothing for a clean stretch - see <see cref="HealthEvery"/>.</summary>
+    private void SayHealth(Run run, DateTime nowUtc)
+    {
+        _healthAt = nowUtc + HealthEvery;
+
+        try
+        {
+            var line = HealthLine(run.TakeHealth(), _delivery?.Invoke(), nowUtc - _cleanSaidAt >= CleanEvery);
+
+            if (line is not null)
+            {
+                _cleanSaidAt = nowUtc;
+                _log?.Invoke($"[relay] Listening along, last few minutes: {line}");
+            }
+        }
+        catch
+        {
+            // A count is never worth the stream.
+        }
+    }
+
+    /// <summary>
+    /// The console's words for a stretch of the stream: what went wrong in
+    /// it, or "clean" when nothing did and it is time to say so, or null.
+    /// </summary>
+    internal static string? HealthLine(Health health, ListenAlong.Delivery? delivery, bool sayClean)
+    {
+        var trouble = new List<string>();
+        var shape = new List<string>();
+
+        foreach (var (name, bed) in new[] { ("music", health.Music), ("crowd", health.Crowd) })
+        {
+            if (bed.Heard == 0)
+            {
+                continue;
+            }
+
+            if (bed.Drops > 0)
+            {
+                trouble.Add($"{name} ran dry {Plural.Of(bed.Drops, "time")} ({Seconds(bed.DropSeconds)} silent, longest {Seconds(bed.LongestDropSeconds)})");
+            }
+
+            if (bed.Skips > 0)
+            {
+                trouble.Add($"{name} trimmed {Plural.Of(bed.Skips, "time")} ({Seconds(bed.SkipSeconds)} jumped)");
+            }
+
+            var rate = bed.SourceRate == SampleRate ? "" : $", resampled from {bed.SourceRate} Hz";
+            shape.Add($"{name} held {Seconds(bed.LeastHeldSeconds)} to {Seconds(bed.MostHeldSeconds)}{rate}");
+        }
+
+        if (health.Dropped > 0)
+        {
+            trouble.Add($"{Plural.Of(health.Dropped, "read")} of sound dropped before the encoder");
+        }
+
+        var late = delivery is { Late: > 0 } or { Missed: > 0 };
+
+        if (trouble.Count == 0 && !late && !sayClean)
+        {
+            return null;
+        }
+
+        var parts = new List<string> { trouble.Count == 0 ? "clean" : string.Join("; ", trouble) };
+        parts.AddRange(shape);
+
+        if (delivery is { } sent)
+        {
+            parts.Add(sent.Words());
+        }
+
+        return string.Join(". ", parts) + ".";
+    }
+
+    private static string Seconds(double seconds) =>
+        seconds.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + " s";
+
+    /// <summary>One stretch of the stream's counts - see <see cref="HealthEvery"/>.</summary>
+    internal readonly record struct Health(BedHealth Music, BedHealth Crowd, int Dropped);
+
+    /// <summary>
+    /// What one bed did in a stretch. Heard is how many of the bus's reads
+    /// had this bed under them; a bed that played nothing is left out of
+    /// the line.
+    /// </summary>
+    internal readonly record struct BedHealth(
+        int Heard,
+        int Drops,
+        double DropSeconds,
+        double LongestDropSeconds,
+        int Skips,
+        double SkipSeconds,
+        double LeastHeldSeconds,
+        double MostHeldSeconds,
+        int SourceRate);
 
     private void Say(string? problem)
     {
@@ -296,6 +425,9 @@ internal sealed class ListenStream : IDisposable
         /// <summary>Mono samples handed to the encoder so far - the stream's clock.</summary>
         private long _fed;
 
+        /// <summary>Device reads, or mixed buffers, thrown away because a queue was full - each one a hole in the stream. See <see cref="HealthEvery"/>.</summary>
+        private int _dropped;
+
         private volatile bool _up;
         private volatile bool _finished;
         private volatile bool _stopping;
@@ -332,6 +464,10 @@ internal sealed class ListenStream : IDisposable
 
         public void Caption(string text) => _captions.Enqueue((Interlocked.Read(ref _fed), text));
 
+        /// <summary>The counts since the last time this was asked, which starts them again. Any thread.</summary>
+        public Health TakeHealth() =>
+            new(_beds[MusicSource - 1].TakeHealth(), _beds[CrowdSource - 1].TakeHealth(), Interlocked.Exchange(ref _dropped, 0));
+
         /// <summary>The bus's on-air mix - THE DEVICE'S OWN THREAD. A copy and a queue add.</summary>
         public void Mixed(float[] buffer, int offset, int count) =>
             Take(BusSource, buffer, offset, count, AudioBus.MixSampleRate, AudioBus.MixChannels);
@@ -348,7 +484,11 @@ internal sealed class ListenStream : IDisposable
 
                 var copy = new float[count];
                 Array.Copy(buffer, offset, copy, 0, count);
-                _in.TryAdd(new Chunk(source, copy, sampleRate, Math.Max(1, channels)));
+
+                if (!_in.TryAdd(new Chunk(source, copy, sampleRate, Math.Max(1, channels))))
+                {
+                    Interlocked.Increment(ref _dropped);
+                }
             }
             catch
             {
@@ -366,7 +506,7 @@ internal sealed class ListenStream : IDisposable
 
                     if (chunk.Source != BusSource)
                     {
-                        _beds[chunk.Source - 1].Add(mono);
+                        _beds[chunk.Source - 1].Add(mono, chunk.Rate);
                         continue;
                     }
 
@@ -396,7 +536,10 @@ internal sealed class ListenStream : IDisposable
                     // Waits rather than drops: the encoder keeps up with real
                     // time many times over, and a dropped buffer is a hole
                     // in the music.
-                    _pcm.TryAdd(pcm, 1000);
+                    if (!_pcm.TryAdd(pcm, 1000))
+                    {
+                        Interlocked.Increment(ref _dropped);
+                    }
                 }
             }
             catch (Exception ex)
@@ -501,15 +644,51 @@ internal sealed class ListenStream : IDisposable
 
         private readonly record struct Chunk(int Source, float[] Samples, int Rate, int Channels);
 
-        /// <summary>The music or the crowd, held <see cref="BedLeadSeconds"/> behind its device and laid under the bus.</summary>
-        private sealed class Bed
+        /// <summary>
+        /// The music or the crowd, held <see cref="BedLeadSeconds"/> behind its device and laid under the bus.
+        ///
+        /// Counted as it goes (11 Nov 2026 - see <see cref="HealthEvery"/>),
+        /// the two things it does to the sound that the room never hears:
+        /// running dry, which is silence until half a second has built up
+        /// again, and being trimmed, which jumps the music forward. A dry
+        /// spell counts as a drop only when the music was sounding as it
+        /// ran out and came back within <see cref="LongestDrop"/> - a track
+        /// fading out, or the music being stopped, is not one. Add and Under
+        /// are the mixer thread's; TakeHealth is anybody's.
+        /// </summary>
+        internal sealed class Bed
         {
+            /// <summary>A dry spell longer than this is the music having stopped, not a drop.</summary>
+            internal const double LongestDrop = 5.0;
+
             private readonly Queue<float[]> _parts = new();
+            private readonly object _tally = new();
             private int _head;
             private int _held;
             private bool _primed;
 
-            public void Add(float[] mono)
+            // The dry spell under way: how much silence it has made so far,
+            // and whether it cut the sound off rather than following a fade.
+            private bool _dry;
+            private long _drySamples;
+            private bool _dryCutSound;
+
+            // The loudest of the last read that laid anything under the bus.
+            private float _lastPeak;
+
+            // Since the last TakeHealth, under _tally.
+            private int _heard;
+            private int _drops;
+            private long _dropSamples;
+            private long _longestDropSamples;
+            private int _skips;
+            private long _skipSamples;
+            private int _leastHeld = int.MaxValue;
+            private int _mostHeld;
+            private int _sourceRate = SampleRate;
+
+            /// <param name="sourceRate">The device's own rate, before it was brought to the stream's - for the console only.</param>
+            public void Add(float[] mono, int sourceRate = SampleRate)
             {
                 if (mono.Length == 0)
                 {
@@ -518,6 +697,11 @@ internal sealed class ListenStream : IDisposable
 
                 _parts.Enqueue(mono);
                 _held += mono.Length;
+
+                if (sourceRate > 0)
+                {
+                    Volatile.Write(ref _sourceRate, sourceRate);
+                }
             }
 
             /// <summary>Adds the next stretch of this bed into <paramref name="mix"/>, as long as the mix.</summary>
@@ -529,18 +713,43 @@ internal sealed class ListenStream : IDisposable
                 {
                     if (_held < lead)
                     {
+                        if (_dry)
+                        {
+                            _drySamples += mix.Length;
+                        }
+
                         return;
                     }
 
                     _primed = true;
+
+                    if (_dry)
+                    {
+                        EndDry();
+                    }
                 }
 
                 if (_held > BedMostSeconds * SampleRate)
                 {
-                    Skip(_held - lead);
+                    var trimmed = _held - lead;
+                    Skip(trimmed);
+
+                    lock (_tally)
+                    {
+                        _skips++;
+                        _skipSamples += trimmed;
+                    }
+                }
+
+                lock (_tally)
+                {
+                    _heard++;
+                    _leastHeld = Math.Min(_leastHeld, _held);
+                    _mostHeld = Math.Max(_mostHeld, _held);
                 }
 
                 var at = 0;
+                var peak = 0f;
 
                 while (at < mix.Length && _parts.Count > 0)
                 {
@@ -549,11 +758,18 @@ internal sealed class ListenStream : IDisposable
 
                     for (var i = 0; i < n; i++)
                     {
-                        mix[at + i] += part[_head + i];
+                        var level = part[_head + i];
+                        mix[at + i] += level;
+                        peak = Math.Max(peak, Math.Abs(level));
                     }
 
                     at += n;
                     Used(part, n);
+                }
+
+                if (at > 0)
+                {
+                    _lastPeak = peak;
                 }
 
                 // Ran dry: silence until it has caught up again, rather than
@@ -561,6 +777,54 @@ internal sealed class ListenStream : IDisposable
                 if (at < mix.Length)
                 {
                     _primed = false;
+                    _dry = true;
+                    _drySamples = mix.Length - at;
+                    _dryCutSound = _lastPeak > LoudEnough;
+                }
+            }
+
+            /// <summary>The counts since the last time this was asked, which starts them again.</summary>
+            public BedHealth TakeHealth()
+            {
+                lock (_tally)
+                {
+                    var health = new BedHealth(
+                        _heard,
+                        _drops,
+                        (double)_dropSamples / SampleRate,
+                        (double)_longestDropSamples / SampleRate,
+                        _skips,
+                        (double)_skipSamples / SampleRate,
+                        _heard == 0 ? 0 : (double)_leastHeld / SampleRate,
+                        (double)_mostHeld / SampleRate,
+                        Volatile.Read(ref _sourceRate));
+
+                    _heard = 0;
+                    _drops = 0;
+                    _dropSamples = 0;
+                    _longestDropSamples = 0;
+                    _skips = 0;
+                    _skipSamples = 0;
+                    _leastHeld = int.MaxValue;
+                    _mostHeld = 0;
+                    return health;
+                }
+            }
+
+            private void EndDry()
+            {
+                _dry = false;
+
+                if (!_dryCutSound || _drySamples > LongestDrop * SampleRate)
+                {
+                    return;
+                }
+
+                lock (_tally)
+                {
+                    _drops++;
+                    _dropSamples += _drySamples;
+                    _longestDropSamples = Math.Max(_longestDropSamples, _drySamples);
                 }
             }
 

@@ -142,6 +142,79 @@ internal sealed class ListenAlong
     private double _streamedSeconds;
     private int _segmentsMissed;
 
+    // How the stretches got to the relay since TakeDelivery last asked
+    // (11 Nov 2026 - see ListenStream.HealthEvery): how many, how long from
+    // being cut to the relay having them, and how many never got there.
+    private int _deliveredSegments;
+    private double _deliveredSeconds;
+    private double _worstDelivery;
+    private int _lateSegments;
+    private int _missedSince;
+
+    /// <summary>
+    /// A stretch that reached the relay later than this after it was cut is
+    /// late: the page starts a second ahead (relay/src/pages.ts,
+    /// STREAM_AHEAD_S), so one this late can leave the listener in silence.
+    /// </summary>
+    internal static readonly TimeSpan LateDelivery = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// How the stream's stretches reached the relay over a while - see
+    /// <see cref="TakeDelivery"/>. Seconds are from the stretch being cut to
+    /// the relay answering for it.
+    /// </summary>
+    internal readonly record struct Delivery(int Sent, double AverageSeconds, double WorstSeconds, int Late, int Missed)
+    {
+        /// <summary>The console's words for it.</summary>
+        public string Words()
+        {
+            static string S(double seconds) =>
+                seconds.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + " s";
+
+            var text = Sent == 0
+                ? "No stretches reached the relay"
+                : $"{Plural.Of(Sent, "stretch", "stretches")} to the relay, {S(AverageSeconds)} on average, worst {S(WorstSeconds)}";
+
+            if (Late > 0)
+            {
+                text += $", {Late} late (over {S(LateDelivery.TotalSeconds)})";
+            }
+
+            if (Missed > 0)
+            {
+                text += $", {Missed} never sent";
+            }
+
+            return text;
+        }
+    }
+
+    /// <summary>
+    /// How the stretches got to the relay since this was last asked, which
+    /// starts the count again; null when there were none either way.
+    /// </summary>
+    internal Delivery? TakeDelivery()
+    {
+        lock (_gate)
+        {
+            Delivery? delivery = _deliveredSegments == 0 && _missedSince == 0
+                ? null
+                : new Delivery(
+                    _deliveredSegments,
+                    _deliveredSegments == 0 ? 0 : _deliveredSeconds / _deliveredSegments,
+                    _worstDelivery,
+                    _lateSegments,
+                    _missedSince);
+
+            _deliveredSegments = 0;
+            _deliveredSeconds = 0;
+            _worstDelivery = 0;
+            _lateSegments = 0;
+            _missedSince = 0;
+            return delivery;
+        }
+    }
+
     /// <summary>
     /// The meeting the counts and the numbering belong to.
     ///
@@ -372,6 +445,7 @@ internal sealed class ListenAlong
         if (what.Segment is not null)
         {
             _segmentsMissed++;
+            _missedSince++;
         }
         else if (stale)
         {
@@ -494,7 +568,8 @@ internal sealed class ListenAlong
     /// for being stale, or is pushed off the front by newer lines - all
     /// three better than a retry loop that holds the evening up.
     /// </summary>
-    internal void Done(Spoken sent)
+    /// <param name="nowUtc">When the relay answered for it - now, outside tests. See <see cref="TakeDelivery"/>.</param>
+    internal void Done(Spoken sent, DateTime? nowUtc = null)
     {
         lock (_gate)
         {
@@ -505,6 +580,16 @@ internal sealed class ListenAlong
                 if (sent.Segment is { } segment)
                 {
                     _streamedSeconds += segment.Seconds;
+
+                    var took = Math.Max(0, ((nowUtc ?? DateTime.UtcNow) - segment.AtUtc).TotalSeconds);
+                    _deliveredSegments++;
+                    _deliveredSeconds += took;
+                    _worstDelivery = Math.Max(_worstDelivery, took);
+
+                    if (took > LateDelivery.TotalSeconds)
+                    {
+                        _lateSegments++;
+                    }
                 }
                 else
                 {
@@ -535,6 +620,7 @@ internal sealed class ListenAlong
                 if (line.Segment is not null)
                 {
                     _segmentsMissed++;
+                    _missedSince++;
                 }
                 else
                 {

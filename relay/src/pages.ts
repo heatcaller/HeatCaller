@@ -736,7 +736,9 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
              font-size: 1.6rem; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; color: var(--accent); }
 .trk-who { color: var(--muted); font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .trk-rec.none .trk-who { font-style: italic; }
-.trk-all { display: flex; align-items: center; justify-content: center; margin-top: 12px; text-decoration: none; }
+/* Home's onward links as outline buttons (11 Nov 2026, Asher: "change link on
+   home tab relay to a themed pit button"), the look of Lap records below. */
+.trk-all, .hp-go { display: flex; align-items: center; justify-content: center; margin-top: 12px; text-decoration: none; }
 /* CHART LINES. Every chart - Live's position and lap charts, a race's
    charts, Me's, the Garage's pack charts and the track map's dots - takes
    its lines from --ln0 to --ln11. Every look keeps the original twelve...
@@ -7067,6 +7069,57 @@ const LISTEN_JS = `
   // flag last may clear it.
   let sweepId = 0;
 
+  // THE LISTENER'S OWN COUNTS (11 Nov 2026, asked for by Asher: Listen
+  // Now's music "skips or drops", and maybe the voice). With
+  // ?listendebug=1 on the page's address, a small block under the note
+  // says what the player is doing, so a phone at a race night shows where
+  // a hiccup came from: a stretch that came too late (late), numbers that
+  // never arrived (quiet stretches are never sent, so these are quiet or
+  // lost), how evenly the stretches turned up (every three seconds is
+  // perfect), and how long each fetch and decode took. The laptop counts
+  // its own side in its console - see ListenStream.HealthEvery. Nobody
+  // without the address sees any of it.
+  const DEBUG = typeof location !== 'undefined' && /[?&]listendebug=1(&|$)/.test(location.search || '');
+  const stats = {
+    played: 0, late: 0, skipped: 0, behind: 0, rejoins: 0, failed: 0,
+    lastArrived: 0, gapN: 0, gapSum: 0, gapWorst: 0,
+    fetchLast: 0, fetchWorst: 0, decodeLast: 0, decodeWorst: 0,
+  };
+  let statsBox = null;
+
+  function showStats() {
+    if (!DEBUG || typeof document.createElement !== 'function') {
+      return;
+    }
+
+    try {
+      if (statsBox === null) {
+        statsBox = document.createElement('pre');
+        statsBox.className = 'listendebug';
+        statsBox.style.cssText = 'font:12px/1.4 ui-monospace,monospace;white-space:pre-wrap;opacity:.8;margin:8px 0 0';
+        note.parentNode.insertBefore(statsBox, note.nextSibling);
+      }
+
+      const ms = (s) => Math.round(s * 1000) + ' ms';
+      const now = ctx === null ? 0 : ctx.currentTime;
+      const inHand = nextAt > now ? nextAt - now : 0;
+
+      statsBox.textContent = [
+        'in hand ' + inHand.toFixed(2) + ' s, cushion ' + streamAhead.toFixed(1) + ' s',
+        'played ' + stats.played + ', late ' + stats.late + ', skipped numbers ' + stats.skipped,
+        'too far behind ' + stats.behind + ', rejoined ' + stats.rejoins + ', failed fetches ' + stats.failed,
+        'arrived every ' + (stats.gapN === 0 ? '-' : (stats.gapSum / stats.gapN).toFixed(2) + ' s') +
+          ', worst ' + (stats.gapN === 0 ? '-' : stats.gapWorst.toFixed(2) + ' s'),
+        'fetch ' + ms(stats.fetchLast) + ' (worst ' + ms(stats.fetchWorst) + '), decode ' +
+          ms(stats.decodeLast) + ' (worst ' + ms(stats.decodeWorst) + ')',
+        'player ' + (ctx === null ? '-' : ctx.sampleRate + ' Hz') + ', decoding at ' +
+          (decoder === null ? 'the player\\'s rate' : decoder.sampleRate + ' Hz'),
+      ].join('\\n');
+    } catch (err) {
+      // The counts are never worth the sound.
+    }
+  }
+
   // When the page was hidden, for the catch-up on coming back.
   let hiddenAt = 0;
 
@@ -7108,6 +7161,8 @@ const LISTEN_JS = `
       if (sweepId === me) {
         sweeping = false;
       }
+
+      showStats();
     }
   }
 
@@ -7188,7 +7243,15 @@ const LISTEN_JS = `
           continue;
         }
 
+        const asked = Date.now();
         const got = await ask('/api/v1/c/' + CLUB + '/collection/listen/' + encodeURIComponent(one.id)).catch(() => null);
+        const took = (Date.now() - asked) / 1000;
+        stats.fetchLast = took;
+        stats.fetchWorst = Math.max(stats.fetchWorst, took);
+
+        if (got === null || !got.ok) {
+          stats.failed += 1;
+        }
 
         if (!on || mine !== turn) {
           return;
@@ -7312,7 +7375,10 @@ const LISTEN_JS = `
       return;
     }
 
+    const decoding = Date.now();
     const buffer = await decodeOne(said);
+    stats.decodeLast = (Date.now() - decoding) / 1000;
+    stats.decodeWorst = Math.max(stats.decodeWorst, stats.decodeLast);
 
     if (!on || mine !== turn) {
       return;
@@ -7338,7 +7404,26 @@ const LISTEN_JS = `
       // was not enough for this connection, so it grows - see STREAM_AHEAD_S.
       if (next && !follows) {
         streamAhead = Math.min(STREAM_AHEAD_MOST_S, streamAhead + STREAM_AHEAD_STEP_S);
+        stats.late += 1;
       }
+
+      // The counts - see DEBUG. How long since the one before it turned
+      // up, for the very next stretch only.
+      const arrived = Date.now();
+
+      if (next && stats.lastArrived > 0) {
+        const gap = (arrived - stats.lastArrived) / 1000;
+        stats.gapN += 1;
+        stats.gapSum += gap;
+        stats.gapWorst = Math.max(stats.gapWorst, gap);
+      }
+
+      if (said.run === lastRun && said.n > lastN + 1) {
+        stats.skipped += said.n - lastN - 1;
+      }
+
+      stats.lastArrived = arrived;
+      stats.played += 1;
 
       lastRun = said.run;
       lastN = said.n;
@@ -7350,6 +7435,7 @@ const LISTEN_JS = `
     }
 
     if (at - now > MOST_BEHIND_S) {
+      stats.behind += 1;
       dropAll();
       at = now + (said.kind === 'mix' ? streamAhead : START_AHEAD_S);
     }
@@ -7402,6 +7488,8 @@ const LISTEN_JS = `
   // in flight from before.
   function rejoin() {
     turn += 1;
+    stats.rejoins += 1;
+    stats.lastArrived = 0;
     dropAll();
     streamAhead = STREAM_AHEAD_S;
     chain = Promise.resolve();
@@ -7728,9 +7816,11 @@ function mineWords(n) {
   return away === 1 ? '1 race before yours' : away + ' races before yours';
 }
 
+// A Pit Wall outline button like Home's others (11 Nov 2026, Asher: "you
+// missed see the running order on home").
 function mineLink(words, path) {
   const a = document.createElement('a');
-  a.className = 'more';
+  a.className = 'page wide hp-go';
   a.textContent = words;
   a.setAttribute('href', BASE + path);
   return a;
@@ -7815,13 +7905,8 @@ function drawMine(entry) {
 
   // No "Open your night" (5 Nov 2026, Asher: "remove open your night and
   // check in from home screen") - Me is a tap away on the bar.
-  const links = document.createElement('p');
-  links.className = 'lc-go';
   const where = n.now === true ? mineLink('Watch live', '/live') : next ? mineLink('See the running order', '/schedule') : null;
-  if (where) {
-    links.appendChild(where);
-    mine.appendChild(links);
-  }
+  if (where) mine.appendChild(where);
 }
 
 async function readMine() {
@@ -8032,7 +8117,7 @@ function drawMoments() {
   }
 
   box.innerHTML = '<h3>Tonight&rsquo;s moments</h3><ul class="list">' + rows.join('') +
-    '<li><a class="more" href="' + BASE + '/results#d=' + encodeURIComponent(today) + '">Tonight&rsquo;s results &rarr;</a></li></ul>';
+    '</ul><a class="page wide hp-go" href="' + BASE + '/results#d=' + encodeURIComponent(today) + '">Tonight&rsquo;s results</a>';
   box.hidden = false;
 }
 
@@ -8055,7 +8140,7 @@ function drawSeason() {
     '<ol class="sg">' + x.standings.slice(0, 3).map((r) =>
       '<li><span class="sg-pos">' + esc(ordinal(r.pos)) + '</span><span class="sg-who">' + esc(r.name) + '</span>' +
       '<span class="sg-pts">' + esc(r.points) + ' pts</span></li>').join('') + '</ol>').join('') +
-    '<p class="lc-go"><a class="more" href="' + BASE + '/standings">Full standings &rarr;</a></p>';
+    '<a class="page wide hp-go" href="' + BASE + '/standings">Full standings</a>';
   box.hidden = false;
 }
 
@@ -8596,7 +8681,7 @@ function drawRecap() {
   }
 
   section(recap, rows.length === 0 ? '' : '<ul class="list">' + rows.join('') +
-    '<li><a class="more" href="' + BASE + '/results#d=' + encodeURIComponent(night.day) + '">All of that night\\'s results &rarr;</a></li></ul>');
+    '</ul><a class="page wide hp-go" href="' + BASE + '/results#d=' + encodeURIComponent(night.day) + '">All of that night\\'s results</a>');
 }
 
 async function loadRecap() {
@@ -8700,7 +8785,7 @@ export function homePage(club: string, clubName: string, context: PageContext = 
     ? ""
     : `<section class="lc newbie" id="newbie"><h3>New here?</h3>${fact("Where we race", n.where)}${fact("When we race", n.when)}`
       + (n.join === "" ? "" : `<p class="newbie-join">${escapeHtml(n.join)}</p>`)
-      + `<p class="lc-go"><a class="more" href="#tracks-h">See our tracks</a></p></section>`;
+      + `<a class="page wide hp-go" href="#tracks-h">See our tracks</a></section>`;
 
   return shell({
     club,

@@ -2275,7 +2275,8 @@ public partial class MainForm
         _listenStream ??= new ListenStream(
             () => _settings.ListenAlongOnTheRelay && _settings.RelayEnabled,
             segment => _relayPublisher.OfferStreamToListeners(_raceEvents.Active?.Id, segment),
-            OnClientRawMessage);
+            OnClientRawMessage,
+            _relayPublisher.Listening.TakeDelivery);
         _announcer.StreamingToListeners = () => _listenStream.Streaming;
         _announcer.CaptionToListeners = _listenStream.Caption;
 
