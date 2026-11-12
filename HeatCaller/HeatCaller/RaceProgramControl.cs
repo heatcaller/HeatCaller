@@ -1098,7 +1098,8 @@ public sealed class RaceProgramControl : UserControl
                 lastFinish,
                 tonightsGap,
                 raceDay.OutByLocalTime,
-                DateTime.UtcNow);
+                DateTime.UtcNow,
+                raceDay.FirstRaceLocalTime);
         }
         catch (Exception ex)
         {
