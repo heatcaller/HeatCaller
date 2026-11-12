@@ -67,13 +67,14 @@ const line = (n: number): Held => ({ id: `L0-${String(n).padStart(6, "0")}`, pub
 /** Two seconds of a stretch's own, in a three-second decode. */
 const MIX_FRAMES = Math.round((2 * 44100) / 1152);
 
-function listenPage(script: string, held: Held[], options: { offline?: boolean } = {}) {
+function listenPage(script: string, held: Held[], options: { offline?: boolean; debug?: boolean } = {}) {
   const from = script.indexOf("(function () {\n  const btn = document.getElementById('listenbtn');");
   assert.notEqual(from, -1, "the live page carries the player");
 
   const listeners: (() => void)[] = [];
   const intervals: { run: () => void; ms: number }[] = [];
-  const note = { textContent: "" };
+  const boxes: { textContent: string }[] = [];
+  const note = { textContent: "", parentNode: { insertBefore: (box: { textContent: string }) => boxes.push(box) }, nextSibling: null };
   const btn = { textContent: "", addEventListener: (_type: string, run: () => void) => listeners.push(run) };
   const sound = new FakeAudioWorld();
   const { AudioContext, Audio, OfflineAudioContext, atob } = sound.globals();
@@ -85,7 +86,13 @@ function listenPage(script: string, held: Held[], options: { offline?: boolean }
     CLUB: "acme-rc",
     Audio,
     atob,
-    document: { hidden: false, getElementById: (id: string) => (id === "listenbtn" ? btn : id === "listennote" ? note : null), addEventListener() {} },
+    ...(options.debug === true ? { location: { search: "?listendebug=1" } } : {}),
+    document: {
+      hidden: false,
+      getElementById: (id: string) => (id === "listenbtn" ? btn : id === "listennote" ? note : null),
+      addEventListener() {},
+      createElement: () => ({ textContent: "", className: "", style: { cssText: "" } }),
+    },
     window: {
       AudioContext,
       ...(options.offline === true ? { OfflineAudioContext } : {}),
@@ -123,6 +130,7 @@ function listenPage(script: string, held: Held[], options: { offline?: boolean }
   return {
     sound,
     intervals,
+    boxes,
     async press(): Promise<void> {
       sound.inPress = true;
 
@@ -270,5 +278,42 @@ describe("Listen Now plays the stream smoothly (11 Nov 2026)", () => {
     assert.ok(again !== undefined);
     assert.equal(again.tag, "mix-3");
     assert.ok(Math.abs(again.at - 41) < 1e-9, `started at ${again.at}`);
+  });
+});
+
+describe("Listen Now counts what it does, for ?listendebug=1 (11 Nov 2026)", () => {
+  it("shows nothing extra on the ordinary page", async () => {
+    const held: Held[] = [mix(1)];
+    const page = listenPage(await liveScript(), held);
+
+    await page.press();
+    held.push(mix(2));
+    await page.poll();
+
+    assert.equal(page.boxes.length, 0);
+  });
+
+  it("with listendebug=1, shows a stretch that came too late and numbers that never arrived", async () => {
+    const held: Held[] = [mix(1)];
+    const page = listenPage(await liveScript(), held, { debug: true });
+
+    await page.press();
+
+    // The next one lands after the first has run out: late.
+    const first = page.sound.starts[0];
+    assert.ok(first !== undefined);
+    page.sound.now = first.at + first.length + 0.5;
+    held.push(mix(2));
+    await page.poll();
+
+    // And two numbers never come at all.
+    held.push(mix(5));
+    await page.poll();
+
+    assert.equal(page.boxes.length, 1);
+    const text = page.boxes[0]?.textContent ?? "";
+    assert.match(text, /played 3, late 1, skipped numbers 2/);
+    assert.match(text, /cushion 1\.5 s/);
+    assert.match(text, /failed fetches 0/);
   });
 });
