@@ -95,7 +95,7 @@ describe("bug hunt 11: the shell frames only the club's own pages", () => {
     const shell = appShellPage("acme-rc", "Acme RC");
     const source = /function hcInside\(path\) \{[\s\S]*?\n\}\n/.exec(shell)?.[0];
     assert.ok(source, "hcInside in the shell");
-    const context = createContext({ HOME: "/c/acme-rc", location: { origin: "https://relay.test" }, URL });
+    const context = createContext({ HC_HOME: "/c/acme-rc", location: { origin: "https://relay.test" }, URL });
     runInContext(source, context);
     return runInContext("hcInside", context) as (path: string) => boolean;
   }
