@@ -539,6 +539,16 @@ public partial class MainForm
         // The banner this page shows when check-ins have nowhere to go.
         checkIn.StartRaceDayRequested += StartRaceDayFromBanner;
 
+        // Who said from their phone they're coming tonight (setup plan C1).
+        checkIn.ComingTonightList = ComingTonightList;
+        _preEntries.Changed += () =>
+        {
+            if (!checkIn.IsDisposed)
+            {
+                checkIn.RefreshAll();
+            }
+        };
+
         // The desk's changes are timed, so a slower phone tap made before
         // them cannot undo them - see ApplyRelayCheckIn.
         checkIn.CheckInChangedAtDesk += deskTransponder => _checkInChangedUtc[deskTransponder] = DateTime.UtcNow;
@@ -595,6 +605,10 @@ public partial class MainForm
             _raceProgram.RefreshAll();
             _todayControl?.RefreshAll();
         };
+
+        // Telling the drivers about the next night (setup plan D13).
+        eventTab.AnnounceNightRequested += AnnounceNextNight;
+        eventTab.CallOffRequested += CallOffNextNight;
 
         // The setup wizard, opened from The Day. Built here rather than
         // there because it drives three pages' commands, not one - and

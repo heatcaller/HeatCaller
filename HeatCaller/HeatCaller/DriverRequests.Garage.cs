@@ -97,6 +97,7 @@ internal sealed partial class DriverRequestDesk
                     DriverAsk.PackEdit => ApplyPackEdit(request, out said),
                     DriverAsk.Car => ApplyCar(request, out said),
                     DriverAsk.Photo => ApplyPhoto(request, out said),
+                    DriverAsk.Coming => ApplyComing(request, out said),
                     _ => ApplySetup(request, out said),
                 };
             }
@@ -130,6 +131,7 @@ internal sealed partial class DriverRequestDesk
     {
         DriverAsk.Pack or DriverAsk.PackEdit => _packs is not null,
         DriverAsk.Car or DriverAsk.Photo => Cars is not null,
+        DriverAsk.Coming => PreEntries is not null,
         _ => Setups is not null,
     };
 

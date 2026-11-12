@@ -1030,6 +1030,7 @@ public sealed partial class RaceProgramControl : UserControl
                 Detail = $"Posting prints the {(clubNight ? "race" : "heat")} sheets and the marshal list for the board, and the announcer tells the room. "
                          + $"After that, nothing moves a driver without asking. First up: {step.Round?.RoundLabel ?? "the first race"}."
                          + (notHeard.Length > 0 ? " " + notHeard : string.Empty)
+                         + (PapersWordsTonight(day) is { Length: > 0 } papers ? " " + papers : string.Empty)
                          + (Plan(day) is { } posting ? NightPlan.Note(posting) : string.Empty),
                 ActionCaption = clubNight ? ProgramCaptions.PostRaces : ProgramCaptions.PostHeats,
             };

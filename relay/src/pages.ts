@@ -1031,6 +1031,9 @@ select {
 .hero:hover { border-color: var(--primary); }
 .hero.live { border-left-color: var(--good); }
 .hero.next { border-left-color: var(--accent); }
+/* The next race night called off (12 Nov 2026, setup plan D13). */
+.hero.off { border-left-color: var(--bad); }
+.hero.off .note { padding: 6px 0 0; text-align: left; }
 .kicker { display: block; color: var(--muted); font-size: 0.75rem; letter-spacing: 0.08em;
           text-transform: uppercase; font-weight: 600; }
 .big { display: block; font-size: 1.45rem; font-weight: 700; margin: 4px 0 2px; }
@@ -8445,12 +8448,67 @@ function previewHtml(answer) {
     '<div class="card">' + paragraphs.map((one) => '<p class="note">' + esc(one) + '</p>').join('') + '</div>';
 }
 
+// THE NEXT RACE NIGHT (12 Nov 2026, setup plan D13: the club announces its
+// next night). A card of its own above everything else on Home, because
+// "when do we race next, and in what" is the question a club is asked most
+// between nights - and, when the night is called off, the one place a
+// driver about to load the car will look before setting out.
+//
+// The same expiry rule as the preview, for the same reason: the laptop
+// that put it up may be packed away and never take it down, and a "next
+// race night" from three weeks ago is worse than none. A missing or
+// unreadable 'until' reads as expired.
+//
+// Called off draws instead of the night, never beside it: a card saying
+// Juniors, Stock and Mod at 19:00 next to one saying it is off leaves the
+// driver to work out which is true.
+function nextNightHtml(answer) {
+  if (answer === null || answer === undefined || answer.missing) return '';
+  const b = answer.body && answer.body.body ? answer.body.body : null;
+  if (!b || typeof b !== 'object') return '';
+  const until = Date.parse(String(b.until || ''));
+  if (!Number.isFinite(until) || Date.now() > until) return '';
+  const word = (v) => (typeof v === 'string' ? v.trim() : '');
+  const when = word(b.when);
+
+  if (b.off === true) {
+    const said = word(b.offText);
+    return '<div class="hero off" style="cursor:default">' +
+      '<span class="kicker">Called off</span>' +
+      '<span class="big">' + esc('No racing ' + (when || 'at the next race night')) + '</span>' +
+      (said ? '<p class="note bad">' + esc(said) + '</p>' : '') +
+      '</div>';
+  }
+
+  // "Juniors, Stock and Mod": the way the club would say it out loud.
+  const classes = (Array.isArray(b.classes) ? b.classes : []).map(word).filter(Boolean);
+  const list = classes.length < 2 ? classes.join('') : classes.slice(0, -1).join(', ') + ' and ' + classes[classes.length - 1];
+  const times = [
+    word(b.entriesClose) ? esc('Entries close ' + word(b.entriesClose)) : '',
+    word(b.firstRace) ? esc('First race ' + word(b.firstRace)) : '',
+  ].filter(Boolean).join(' &middot; ');
+  const title = word(b.title);
+  return '<div class="hero next" style="cursor:default">' +
+    '<span class="kicker">Next race night</span>' +
+    '<span class="big">' + esc([title, when].filter(Boolean).join(' - ') || 'Next race night') + '</span>' +
+    (list ? '<span class="when">' + esc(list) + '</span>' : '') +
+    (times ? '<span class="when">' + times + '</span>' : '') +
+    (word(b.venue) ? '<span class="when">' + esc(word(b.venue)) + '</span>' : '') +
+    '</div>';
+}
+
 async function load() {
-  const [state, prog, pre] = await Promise.all([
+  const [state, prog, pre, nn] = await Promise.all([
     grab('/snapshot/state').catch(() => null),
     grab('/snapshot/programme').catch(() => null),
     grab('/snapshot/preview').catch(() => null),
+    grab('/snapshot/nextnight').catch(() => null),
   ]);
+
+  // The next race night's card, whatever else is on: a driver at tonight's
+  // meeting is exactly who wants to know about the next one.
+  const nnAt = document.getElementById('nn');
+  if (nnAt) nnAt.innerHTML = nextNightHtml(nn);
 
   if (state === null && prog === null) {
     now.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
@@ -8810,6 +8868,9 @@ export function homePage(club: string, clubName: string, context: PageContext = 
     body:
       '<div id="gd"></div>' +
       '<div id="up"></div>' +
+      // The club's next race night, or that it is off (12 Nov 2026, setup
+      // plan D13), right under the club's updates: filled by load().
+      '<div id="nn"></div>' +
       '<section class="lc" id="mine" hidden></section>' +
       `<div id="now" data-when="${escapeHtml(n.when)}"><p class="note">Loading&hellip;</p></div>` +
       // No "Check in: tap Me and type your PIN" line any more (5 Nov 2026,
@@ -13415,7 +13476,8 @@ async function sendAsk(kind, f) {
     }
     if (navigator.vibrate) navigator.vibrate(30);
     drawLive();
-    const self = kind === 'pack' || kind === 'setup';
+    // "coming" too (12 Nov 2026, setup plan C1): the laptop files it by itself.
+    const self = kind === 'pack' || kind === 'setup' || kind === 'coming';
     return { ok: true, status: 200, words: (self ? 'Sent - HeatCaller will have it in a few seconds' : 'Sent - the desk will check it') + (ref !== '' ? ' (ref ' + ref + ')' : '') };
   }
 
@@ -13431,6 +13493,7 @@ function kindWords(kind) {
   if (kind === 'setup') return 'Setup log';
   if (kind === 'late') return 'More time';
   if (kind === 'skip') return 'Skip my race';
+  if (kind === 'coming') return 'Next race night';
   return 'Request';
 }
 

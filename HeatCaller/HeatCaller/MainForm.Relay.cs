@@ -1326,6 +1326,7 @@ public partial class MainForm
         RelayChannel.Standings,
         RelayChannel.Qualifying,
         RelayChannel.Sponsors,
+        RelayChannel.NextNight,
     ];
 
     /// <summary>
@@ -1486,6 +1487,12 @@ public partial class MainForm
             SendToRelayIfChanged(RelayChannel.Sponsors, "the sponsors", () => RelaySponsors.Document(
                 _sponsors.Sponsors, file => RelaySponsors.Picture(_sponsors, file, _relaySponsorImages)));
         }
+
+        // The next race night, or that it's off (12 Nov 2026, setup plan
+        // D13). Sent like the rest, so one the relay lost comes back; with
+        // none announced, the card is taken down rather than left standing.
+        SendToRelayIfChanged(RelayChannel.NextNight, "the next race night",
+            () => _settings.NextNight is { } night ? NextNight.Document(night) : NextNight.Withdrawn());
 
         SendToRelayIfChanged(RelayChannel.Tracks, "the tracks", () => RelayDocuments.Tracks(
             _trackLayouts, _sessionHistory.SavedView(), _profiles, _pbResets, _raceEvents.Current.TrackLayoutName, abbreviate, _relayTrackImages));

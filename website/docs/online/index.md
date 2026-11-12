@@ -115,6 +115,7 @@ Home answers "what's on right now?", and changes through the night. From the top
     - "That's racing done for tonight", with **See tonight's results**, once every race on tonight's running order is done.
     - Otherwise "No racing right now", with "We race" and the club's **When we race**.
 4. **Club updates**: the club's news from the **Club updates** card on the Club Website page (see [Club updates](setup.md#club-updates)), with **Got it - hide this**. Hidden news comes back if the club changes the words.
+5. **Next race night**, once the club has announced it with **Announce...** on **Race Day → Setup**: "Club Night - Tue 18 Nov", the classes on, "Entries close 18:30 · First race 19:00", and the venue. If the club calls it off, the card says "Called off" and "No racing Tue 18 Nov", with the club's message. It comes down by itself the morning after. On **Me**, a driver whose phone knows them can tick their classes and tap **I'm coming**, or **Not coming after all**. The desk then sees who to expect (see [Who said they're coming](../race-day/events-and-entries.md#who-said-theyre-coming)).
 5. **Tonight in numbers**: **Races run**, **Still to run**, **Drivers**, **Fastest lap** (and who set it) and **Schedule** ("On time", or so many minutes behind or ahead).
 6. **Tonight's moments**: photo finishes, a lap record broken tonight and achievements earned tonight, with **Tonight's results**.
 7. **Season at a glance**: the top three in up to three seasons, with **Full standings**.
@@ -502,6 +503,7 @@ Once publishing is on, HeatCaller sends:
 - each session's results as it's saved, with any corrections made after the race (what changed, never why)
 - the qualifying order for each class on the race day
 - the club's sponsors (name, tagline, logo and website)
+- the next race night, once it's announced: its date, name, venue, classes and times, or that it's called off and the club's message
 - championship standings for every season
 - today's schedule
 - the badges drivers have earned, and the badge list with its artwork

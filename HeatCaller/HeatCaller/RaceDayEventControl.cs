@@ -109,6 +109,11 @@ public sealed partial class RaceDayEventControl : UserControl
     /// <summary>Add late check-ins to posted heats without asking (setup plan D6 - AppSettings.AddLateCheckInsWithoutAsking). The club's.</summary>
     private readonly CheckBox _chkLateWithoutAsking = new ThemedCheckBox();
 
+    /// <summary>Papers (setup plan D9 - AppSettings.AskForWaivers, CheckMemberships). The club's.</summary>
+    private readonly CheckBox _chkWaivers = new ThemedCheckBox();
+
+    private readonly CheckBox _chkMemberships = new ThemedCheckBox();
+
     private const string EntriesCloseCaption = "Entries close at:";
 
     /// <summary>
@@ -533,6 +538,10 @@ public sealed partial class RaceDayEventControl : UserControl
         aboutGrid.AddRow("Breaks:", FieldGrid.Inline(_lblBreaks, _btnBreaks));
         aboutGrid.AddHint("Watering the track, dinner, track repairs. The finish time, every estimated start and the gap before the next race allow for them, and the announcer tells the room.");
 
+        // Tell the drivers (12 Nov 2026, setup plan D13).
+        aboutGrid.AddRow("Next night on phones:", BuildNextNightRow());
+        aboutGrid.AddHint("Announce the next race night on the Home page of the club's phone pages - the classes on and the times - so drivers can say they're coming. Call It Off tells them it's off, and emails the regulars.");
+
         _txtNotes.Multiline = true;
         _txtNotes.AcceptsReturn = true;
         _txtNotes.ScrollBars = ScrollBars.Vertical;
@@ -664,6 +673,15 @@ public sealed partial class RaceDayEventControl : UserControl
             () => _settings!.AddLateCheckInsWithoutAsking, on => _settings!.AddLateCheckInsWithoutAsking = on, false);
         programGrid.AddField(_chkLateWithoutAsking);
         programGrid.AddHint("A driver who checks in after the heats are built goes into the heat nearest their pace that has room, and nobody else moves. Before the heats are posted that happens by itself. After, Next Steps asks you first - unless this is ticked.");
+
+        // Papers (setup plan D9): the club's.
+        ClubTick(_chkWaivers, "Ask every driver for a signed waiver",
+            () => _settings!.AskForWaivers, on => _settings!.AskForWaivers = on, false);
+        programGrid.AddField(_chkWaivers);
+        ClubTick(_chkMemberships, "Check memberships",
+            () => _settings!.CheckMemberships, on => _settings!.CheckMemberships = on, false);
+        programGrid.AddField(_chkMemberships);
+        programGrid.AddHint("Who's Racing shows a Papers column - \"Waiver missing\", \"Membership expired 3 Oct\" - and Post the heats lists anyone not in order. A junior's waiver is signed by a parent or guardian. Recorded by hand: click a driver's Papers to fill them in. A waiver lasts 12 months.");
 
         // The closing checklist (11 Nov 2026). Every night, not just this
         // one, so it saves straight to the club's settings.
@@ -1478,6 +1496,7 @@ public sealed partial class RaceDayEventControl : UserControl
         _dtpEntriesClose.Value = raceEvent.EntriesCloseLocalTime ?? TimeSpan.FromHours(18.5);
         _lblBreaks.Text = NightBreaks.Summary(raceEvent.Breaks, raceEvent.IsClubNight);
         _lblClassOrder.Text = ClassRunningOrder.Summary(ClassesTonight(raceEvent), raceEvent.ClassRunningOrder, raceEvent.RotateClassOrder);
+        ShowNextNight();
 
         // Zero means "whatever was used last" - the number the program builds
         // with (RaceEventStore.HeatSizeFor), so that is what the box shows. It

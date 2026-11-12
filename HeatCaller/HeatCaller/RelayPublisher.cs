@@ -40,6 +40,10 @@ public enum RelayChannel
     // 5 Nov 2026 (Asher: "add sponsorships to the live tab at the bottom"):
     // the club's sponsors for the foot of Live - see RelaySponsors. Public.
     Sponsors,
+
+    // 12 Nov 2026 (setup plan D13): the club's next race night, or that it's
+    // off - see NextNight. Public: it's what the club tells everybody.
+    NextNight,
 }
 
 /// <summary>
@@ -3767,6 +3771,7 @@ public sealed partial class RelayPublisher : IDisposable
         RelayChannel.Captions => "captions",
         RelayChannel.Qualifying => "qualifying",
         RelayChannel.Sponsors => "sponsors",
+        RelayChannel.NextNight => "nextnight",
 
         // A NAME THE RELAY WILL REFUSE, not "state" (13 Oct 2026). This
         // arm used to answer "state", so a channel added to the enum and

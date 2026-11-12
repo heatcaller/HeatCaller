@@ -238,6 +238,14 @@ export const CHANNELS: Readonly<Record<string, ChannelSpec>> = Object.freeze({
   // website, as the Sponsors page has them. Public - it is what the
   // sponsor paid to have shown.
   sponsors: { name: "sponsors", kind: "snapshot", what: "the club's sponsors, for the foot of Live" },
+  // The club's next race night (12 Nov 2026, setup plan D13: the club
+  // announces it): the day, the classes, entries close and first race,
+  // the venue - or that it is called off, in the club's own words. Public:
+  // it is what a club puts on its noticeboard. The relay never reads the
+  // body; Home draws it and Me offers "I'm coming" from it, and both
+  // honour its own 'until' the way the preview's is honoured, because the
+  // laptop that announced it may never come back to take it down.
+  nextnight: { name: "nextnight", kind: "snapshot", what: "the club's next race night: date, classes, times, or that it's off" },
   // Online check-in: who can be checked in, the PIN's hash, and the
   // drivers' names and photos. Private - the relay hands out pieces of
   // it to a PIN or a badge, never the whole thing.

@@ -721,6 +721,32 @@ public sealed class AppSettings
     /// </summary>
     public bool AddLateCheckInsWithoutAsking { get; set; }
 
+    /// <summary>
+    /// The club asks every driver for a signed waiver (12 Nov 2026, setup plan
+    /// D9; a junior's is signed by a parent or guardian). Who's Racing shows
+    /// a Papers column, and Post the heats lists anyone missing one. Off by
+    /// default.
+    /// </summary>
+    public bool AskForWaivers { get; set; }
+
+    /// <summary>How many months a signed waiver lasts; 0 for for ever. See DeskPapers.</summary>
+    public int WaiverMonths { get; set; } = DeskPapers.DefaultWaiverMonths;
+
+    /// <summary>
+    /// The club checks memberships (12 Nov 2026, setup plan D9): the club's
+    /// own, or a national body's for its racing insurance. A driver with no
+    /// membership on file, or one that has run out, shows on Who's Racing and
+    /// Post the heats. Off by default.
+    /// </summary>
+    public bool CheckMemberships { get; set; }
+
+    /// <summary>
+    /// The next race night as told to the drivers (12 Nov 2026, setup plan
+    /// D13): on the phones' Home page, and the night "I'm coming" is for.
+    /// Null when the club hasn't announced one. See NextNight.
+    /// </summary>
+    public AnnouncedNight? NextNight { get; set; }
+
     /// <summary>The club's own lines on the closing checklist ("Lock the clubhouse", "Pack up the timing loop"), one each.</summary>
     public List<string> CloseNightOwnItems { get; set; } = new();
 

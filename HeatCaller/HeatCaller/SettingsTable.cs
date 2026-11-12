@@ -206,6 +206,10 @@ internal static class SettingsTable
             nameof(AppSettings.PostHeatsBeforeFirstRace),
             nameof(AppSettings.BuildHeatsWhenEntriesClose),
             nameof(AppSettings.AddLateCheckInsWithoutAsking),
+            nameof(AppSettings.AskForWaivers),
+            nameof(AppSettings.WaiverMonths),
+            nameof(AppSettings.CheckMemberships),
+            nameof(AppSettings.NextNight),
             nameof(AppSettings.CloseNightOwnItems),
 
             // Cast: the Co-host's "What they're like", every "If ElevenLabs
