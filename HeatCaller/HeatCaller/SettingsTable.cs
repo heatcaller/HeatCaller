@@ -212,6 +212,7 @@ internal static class SettingsTable
             nameof(AppSettings.NextNight),
             nameof(AppSettings.CloseNightOwnItems),
             nameof(AppSettings.ReadyOwnItems),
+            nameof(AppSettings.NightTemplates),
 
             // Cast: the Co-host's "What they're like", every "If ElevenLabs
             // runs out" Kokoro voice (5 Nov 2026), and the Recap host,

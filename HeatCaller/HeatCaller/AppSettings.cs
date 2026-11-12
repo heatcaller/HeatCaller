@@ -759,6 +759,9 @@ public sealed class AppSettings
     /// <summary>What has been ticked off by hand on tonight's Ready to race checklist, as "raceDayId|key" (CloseNightChecklist.Tick).</summary>
     public List<string> ReadyTicks { get; set; } = new();
 
+    /// <summary>The club's night templates (12 Nov 2026, setup plan B4) - see NightTemplates.</summary>
+    public List<NightTemplate> NightTemplates { get; set; } = new();
+
     /// <summary>
     /// How long On Air's last few openings took to get ready, in
     /// milliseconds, newest last (21 Oct 2026) - from the press to the

@@ -540,6 +540,9 @@ public sealed partial class RaceDayEventControl : UserControl
 
         // Tell the drivers (12 Nov 2026, setup plan D13).
         aboutGrid.AddRow("Next night on phones:", BuildNextNightRow());
+
+        // Night templates (12 Nov 2026, setup plan B4).
+        aboutGrid.AddRow("Templates:", BuildTemplatesRow());
         aboutGrid.AddHint("Announce the next race night on the Home page of the club's phone pages - the classes on and the times - so drivers can say they're coming. Call It Off tells them it's off, and emails the regulars.");
 
         _txtNotes.Multiline = true;
@@ -1497,6 +1500,7 @@ public sealed partial class RaceDayEventControl : UserControl
         _lblBreaks.Text = NightBreaks.Summary(raceEvent.Breaks, raceEvent.IsClubNight);
         _lblClassOrder.Text = ClassRunningOrder.Summary(ClassesTonight(raceEvent), raceEvent.ClassRunningOrder, raceEvent.RotateClassOrder);
         ShowNextNight();
+        ShowTemplateButtons();
 
         // Zero means "whatever was used last" - the number the program builds
         // with (RaceEventStore.HeatSizeFor), so that is what the box shows. It
