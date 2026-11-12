@@ -107,6 +107,9 @@ internal static class ProgramCaptions
     /// <summary>What the Next Up bar's button says while a session is under way.</summary>
     public const string RaceRunning = "Race Running";
 
+    /// <summary>The finished program's button when the club closes the night with the checklist (11 Nov 2026). Never on the Next Up bar.</summary>
+    public const string CloseNight = "Close the night...";
+
     /// <summary>
     /// Every caption the Next Up bar's button can wear, for measuring it.
     ///

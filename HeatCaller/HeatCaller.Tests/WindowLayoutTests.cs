@@ -168,6 +168,7 @@ internal static partial class WindowCatalog
         all.AddRange(ClubToolWindows());
         all.AddRange(CsvImportWindows());
         all.AddRange(EntryImportWindows());
+        all.AddRange(CloseNightWindows());
         all.AddRange(PasteResultWindows());
 
         // The big editors, and the pages shown in windows of their own (30 Sep).

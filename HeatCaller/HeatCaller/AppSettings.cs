@@ -670,6 +670,22 @@ public sealed class AppSettings
     public string AutoStartOffForNight { get; set; } = string.Empty;
 
     /// <summary>
+    /// Close the night with a checklist to tick off (11 Nov 2026 - see
+    /// CloseNightChecklist). On: when every race has run, Next Steps offers
+    /// "Close the night...", a window listing what is left with a button to
+    /// sort each one and a box to tick it off by hand. Off: the card just says
+    /// what is left, in one line, as it did before. On by default - the tick
+    /// is on the Setup tab for a club that doesn't want it.
+    /// </summary>
+    public bool UseCloseNightChecklist { get; set; } = true;
+
+    /// <summary>The club's own lines on the closing checklist ("Lock the clubhouse", "Pack up the timing loop"), one each.</summary>
+    public List<string> CloseNightOwnItems { get; set; } = new();
+
+    /// <summary>What has been ticked off by hand on tonight's closing checklist, as "raceDayId|key" (CloseNightChecklist.Tick).</summary>
+    public List<string> CloseNightTicks { get; set; } = new();
+
+    /// <summary>
     /// How long On Air's last few openings took to get ready, in
     /// milliseconds, newest last (21 Oct 2026) - from the press to the
     /// jingle. On Air's button counts down from their average ("On Air in

@@ -396,6 +396,9 @@ internal static class LayoutAudit
         // What an entry import will do, row by row, with the check-in and replace ticks under it - from Who's Racing's Import Entries (EntryImportForm, 11 Nov 2026).
         "Import entries",
 
+        // What is left before lights out, a tick, words and a button a line, with the club's own lines under - from Next Steps' Close the night... (CloseNightForm, 11 Nov 2026).
+        "Close the Night",
+
         // The big editors (30 Sep).
 
         // A club's own look made from a copy of another: its fields and eleven colours beside the preview and the readability warnings (LookEditorForm).

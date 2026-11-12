@@ -92,4 +92,88 @@ public partial class MainForm
         _nightEmailCount = (now, count);
         return count;
     }
+
+    private CloseNightForm? _closeNight;
+
+    /// <summary>
+    /// Opens the closing checklist (11 Nov 2026 - see CloseNightForm), or
+    /// brings it forward when it is already open.
+    /// </summary>
+    private void OpenCloseNight()
+    {
+        if (_raceProgram is not { } program)
+        {
+            return;
+        }
+
+        if (_closeNight is { IsDisposed: false } open)
+        {
+            open.Reload();
+            open.Activate();
+            return;
+        }
+
+        var form = new CloseNightForm(
+            program.ClosingChecklist,
+            program.TickClosingItem,
+            kind => CloseNightGo(program, kind),
+            () => _settings.CloseNightOwnItems,
+            lines =>
+            {
+                _settings.CloseNightOwnItems = lines;
+                _settings.Save();
+                program.RefreshAll();
+                _todayControl?.RefreshAll();
+            });
+
+        form.FormClosed += (_, _) => _closeNight = null;
+        _closeNight = form;
+        form.Show(this);
+    }
+
+    /// <summary>The button beside a line of the closing checklist: the screen that sorts it, or for the backup, a backup.</summary>
+    private async void CloseNightGo(RaceProgramControl program, CloseNightKind kind)
+    {
+        switch (kind)
+        {
+            case CloseNightKind.Rentals:
+                GoToPage("Rentals");
+                break;
+
+            case CloseNightKind.Money:
+                GoToPage("Race Day");
+                program.ShowEntriesTab();
+                break;
+
+            case CloseNightKind.Website:
+            case CloseNightKind.NightEmails:
+                GoToPage("Club Website");
+                break;
+
+            case CloseNightKind.CloseDay:
+                GoToPage("Race Day");
+                program.ShowSetupTab();
+                break;
+
+            case CloseNightKind.Backup:
+                // A backup now, to the usual folder - the same zip Backup &
+                // Restore's Back Up Now makes. Ticked off once it's taken.
+                try
+                {
+                    var folder = BackupService.SafeBackupFolder(_settings.AutoBackupFolder);
+                    var secrets = BackupService.CaptureSecrets();
+                    var path = await Task.Run(() => BackupService.CreateBackup(folder, automatic: false, secrets));
+                    OnClientRawMessage($"{AppTime.LogStampNow()}  [program] Closing checklist: backed up to {path}");
+                    program.TickClosingItem("backup", true);
+                    _closeNight?.Reload();
+                }
+                catch (Exception ex)
+                {
+                    OnClientRawMessage($"{AppTime.LogStampNow()}  [program] Closing checklist: backup failed: {ex.Message}");
+                    MessageBox.Show(this, "The backup couldn't be taken: " + ex.Message, "Close the Night", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+
+                break;
+        }
+    }
 }

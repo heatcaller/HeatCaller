@@ -85,6 +85,17 @@ Once everything on the program has run, the card adds what's left to do:
 
 For example: "Before lights out: 2 rentals still out (Sam, Jo) · 14 night emails to send · back up tonight's results · Close Day." With nothing left, it says "All wrapped up - lights out."
 
+### The closing checklist
+
+With **Close the night with a checklist** ticked on **Race Day → Setup** (on by default), the card's button reads **Close the night...** once everything has run. It opens a window listing the same things, one per line, plus any lines of your own:
+
+- Each line the app can check ticks itself when it sees the job done, for example when the last rental is checked back in on **Rentals**. The window stays open beside the rest of the app and checks again every couple of seconds.
+- The button beside a line goes to the screen that sorts it: **Rentals**, **Who's Racing** (for entries still owed), **Club Website** (for results and night emails) or **Setup** (for **Close Day**). **Back Up Now** takes a backup to your usual backup folder straight away.
+- If you've dealt with something the app can't see (a rental handed back over the fence, an entry paid to the treasurer), tick it off by hand. It drops off the card too. Hand ticks are kept for tonight's race day only.
+- **Your Own Lines...** adds your club's own jobs, one per line, for example "Lock the clubhouse" or "Pack up the timing loop". They're on the list every night, ticked off by hand.
+
+Checks that don't apply tonight, such as money when the day has no entry fee, aren't listed. With the checklist off, the card just shows the one line, and its button opens **Tonight's Standings** as before. Standings is always on the program's **Standings** button too.
+
 Bump-ups come *before* starting the next round on purpose: once the upper main has gone out, it's too late to add the bumped drivers. The Next Up bar on **Race Control** follows the same rule: while bump-ups or finals are owed, its **Start Next** button offers them instead of the next race. See [The Next Up bar](../race-control/running-a-race.md#the-next-up-bar).
 
 The card is only a shortcut. Every program command it offers is also on the program's buttons or its right-click menu, so you can build or seed at any time, not only when the card suggests it.

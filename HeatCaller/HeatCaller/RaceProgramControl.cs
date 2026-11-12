@@ -187,6 +187,12 @@ public sealed class RaceProgramControl : UserControl
     /// <summary>Raised when the next step is "check somebody in" - the same journey, aimed at the entries tab.</summary>
     public event Action? GoToEntriesTab;
 
+    /// <summary>Shows Who's Racing, for the closing checklist (11 Nov 2026).</summary>
+    internal void ShowEntriesTab() => GoToEntriesTab?.Invoke();
+
+    /// <summary>Shows Setup, where Close Day is, for the closing checklist (11 Nov 2026).</summary>
+    internal void ShowSetupTab() => GoToEventTab?.Invoke();
+
     /// <summary>
     /// Raised after anything changes which rounds are on today's
     /// programme, or their order - so the timetable can follow rather than
@@ -990,6 +996,14 @@ public sealed class RaceProgramControl : UserControl
             return step with { Detail = step.Detail + NightPlan.Note(plan) };
         }
 
+        // The closing checklist (11 Nov 2026), when the club uses it: the same
+        // line, less what has been ticked off by hand, and the button opens
+        // the list. Standings is still a button on the program below.
+        if (step.Stage == ProgramStage.Complete && _settings.UseCloseNightChecklist && ClosingChecklist() is { } checklist)
+        {
+            return step with { Detail = step.Detail + CloseNightChecklist.Note(checklist), ActionCaption = ProgramCaptions.CloseNight };
+        }
+
         if (step.Stage == ProgramStage.Complete && ClosingFacts is { } closing)
         {
             var sessions = DaySessions(day);
@@ -1008,6 +1022,48 @@ public sealed class RaceProgramControl : UserControl
     /// which can see those; null leaves the card as it was.
     /// </summary>
     internal Func<IReadOnlyList<SessionRecord>, NightClose.Facts>? ClosingFacts { get; set; }
+
+    /// <summary>Asks for the closing checklist window - Next Steps' "Close the night..." (11 Nov 2026).</summary>
+    public event Action? CloseNightRequested;
+
+    /// <summary>A line of the closing checklist was ticked or unticked by hand, so the Next Steps card should say it again.</summary>
+    public event Action? ClosingChecklistChanged;
+
+    /// <summary>
+    /// Tonight's closing checklist (CloseNightChecklist), or null when there
+    /// is no race day or nothing to tell it from. Read by the card and by the
+    /// checklist window, so the two never disagree.
+    /// </summary>
+    internal List<CloseNightChecklist.Item>? ClosingChecklist()
+    {
+        if (ClosingFacts is not { } closing || ActiveDay is not { } raceDay)
+        {
+            return null;
+        }
+
+        var sessions = DaySessions(DayRounds());
+        var lastFinish = sessions.Select(s => (DateTime?)s.EndedAtUtc).Max();
+
+        return CloseNightChecklist.Build(
+            closing(sessions),
+            lastFinish,
+            _settings.CloseNightOwnItems,
+            CloseNightChecklist.TicksFor(_settings.CloseNightTicks, raceDay.Id));
+    }
+
+    /// <summary>Ticks a line of tonight's closing checklist off by hand, or back on, and says so on the card.</summary>
+    internal void TickClosingItem(string key, bool done)
+    {
+        if (ActiveDay is not { } raceDay)
+        {
+            return;
+        }
+
+        _settings.CloseNightTicks = CloseNightChecklist.Tick(_settings.CloseNightTicks, raceDay.Id, key, done);
+        _settings.Save();
+        RefreshNextStep(DayRounds());
+        ClosingChecklistChanged?.Invoke();
+    }
 
     /// <summary>The saved races of today's program, however each is linked to its round.</summary>
     private List<SessionRecord> DaySessions(IReadOnlyList<RoundDefinition> day)
@@ -1773,7 +1829,15 @@ public sealed class RaceProgramControl : UserControl
                 break;
 
             case ProgramStage.Complete:
-                ShowStandings(_step.ClassName);
+                if (_settings.UseCloseNightChecklist && CloseNightRequested is not null)
+                {
+                    CloseNightRequested.Invoke();
+                }
+                else
+                {
+                    ShowStandings(_step.ClassName);
+                }
+
                 break;
         }
     }
