@@ -1244,7 +1244,8 @@ public sealed partial class CheckInControl : UserControl
             _grid.Rows.Clear();
             foreach (var profile in CurrentlyShownProfiles())
             {
-                var displayName = string.IsNullOrWhiteSpace(profile.DriverName) ? profile.Transponder : profile.DriverName;
+                // New to racing (setup plan D12): " · first night", " · novice, mentor Al".
+                var displayName = (string.IsNullOrWhiteSpace(profile.DriverName) ? profile.Transponder : profile.DriverName) + NewDrivers.Badge(profile, DateTime.Today);
                 var rowIndex = _tech is null
                     ? _grid.Rows.Add(_checkIns.IsCheckedIn(profile.Transponder), displayName, ClassCellText(profile))
                     : _grid.Rows.Add(_checkIns.IsCheckedIn(profile.Transponder), displayName, ClassCellText(profile),

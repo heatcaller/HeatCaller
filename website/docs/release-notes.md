@@ -4,6 +4,8 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **New to racing (12 November).** Tick **New to racing** on a driver's profile, and add their **Mentor:**. **Who's Racing** shows "novice, mentor Al Gorithim" beside their name, or "first night" for a driver whose profile was made today. The announcer welcomes new drivers once a night, in the gap before their first race: "A big welcome to Max Power, racing with us for the first time tonight - give them room out there." See [Drivers and classes](race-day/drivers-and-classes.md). Update HeatCaller on the race PC; nothing changes on the relay.
+
 - **Ready to race, and the drivers' meeting (12 November).** Once everything is set up, the **Ready to race** card on **Next Steps** offers **Ready to Race...**: a checklist for before the first race. It covers the decoder hearing cars, the phone pages, the club website, the announcer's voice, the heats posted, every car heard, papers, a recent backup and the drivers' meeting. Lines tick themselves, and each has a button to the screen that sorts it. **Meeting Sheet...** writes the drivers' meeting from tonight's day, ready to print or have the announcer read out. See [The Ready to race checklist](race-day/program-and-mains.md#the-ready-to-race-checklist). Update HeatCaller on the race PC; nothing changes on the relay.
 
 - **Before the night: announce it, call it off, and who's coming; papers at the desk (12 November).**

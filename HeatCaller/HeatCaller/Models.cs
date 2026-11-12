@@ -278,6 +278,19 @@ public sealed class DriverProfile
     /// <summary>When that membership runs out (the local date), or null when it isn't known.</summary>
     public DateTime? MembershipExpires { get; set; }
 
+    // --- New to racing (12 Nov 2026, setup plan D12) ---------------------
+
+    /// <summary>
+    /// New to racing: the desk shows it beside their name, and the announcer
+    /// welcomes them once a night so the field gives them room. Ticked on
+    /// Driver Hub; a driver first seen today counts as new without it. See
+    /// NewDrivers.
+    /// </summary>
+    public bool IsNovice { get; set; }
+
+    /// <summary>Who's looking after them tonight - shown at the desk. Blank for nobody.</summary>
+    public string Mentor { get; set; } = string.Empty;
+
     // --- Online privacy and the driver's own words (22 Oct 2026) ---------
     //
     // WHY (22 Oct 2026, driver experience): a driver can ask from their own

@@ -200,6 +200,8 @@ The dialog is titled **Add Driver Profile** or **Edit Driver Profile**. The left
 | **Race number:** | Racing number. Shown as a chip on the driver card, on Race Control, and on the online check-in list. |
 | **Home track:** | Home club or town. |
 | **Skill level:** | Free text, for example "Novice / Intermediate / Expert". |
+| **New to racing** | Tick for a driver who's new. **Who's Racing** shows "novice" beside their name, and the announcer welcomes them once a night, in the gap before their first race, so the field gives them room. A driver whose profile was made today counts as new on their first night without the tick ("first night"). With no laps on record, Q1 seeding by pace already puts them in with the slowest. |
+| **Mentor:** | Who's looking after them tonight. Shown beside their name on **Who's Racing**: "novice, mentor Al Gorithim". |
 | **Contact:** | For organizer use only. It's never announced. |
 | **Email:** | Where the driver's personal check-in PIN is sent, and their night if they want it. It's never shown publicly. See [Emailing racer PINs](../online/email.md). |
 | **Email them their night** | When the club sends night emails, this driver is sent their races, their report card and a link to their night page after racing. It's grayed out until **Email:** has an address. See [Drivers' nights by email](../online/setup.md#drivers-nights-by-email). |

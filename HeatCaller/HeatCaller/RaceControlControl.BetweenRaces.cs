@@ -111,6 +111,9 @@ public sealed partial class RaceControlControl
         // race. Before the muted return: a muted announcer still runs races.
         AutoStartTick(now, facts, busy);
 
+        // A welcome for drivers new to racing, once a night (setup plan D12).
+        WelcomeNewDrivers(busy);
+
         if (_race.State != RaceState.Finished)
         {
             // It started the race.
