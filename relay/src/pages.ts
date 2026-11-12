@@ -307,6 +307,16 @@ html.hcshell body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
 .hcstage iframe { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border: 0; display: block;
                   background: var(--bg); z-index: 1; }
 .hcstage iframe.hcnext { z-index: 0; }
+/* LISTEN CARRIES ON ACROSS THE TABS (11 Nov 2026, Asher: "make the audio of
+   the listen now on the relay continue if you move from tab to tab"). A Live
+   page that is listening is kept, out of sight, while another tab is shown
+   (hckept), and comes back when Live is tapped. In a phone's browser, where
+   every tab is a page of its own, the Live page holds the bar itself while
+   it listens (html.hcheld) and shows the other tabs in a frame over itself,
+   as the home-screen icon's page does. */
+.hcstage iframe.hckept { visibility: hidden; pointer-events: none; z-index: -1; }
+html.hcheld body { overflow: hidden; }
+html.hcheld .hcstage { height: 100%; z-index: 14; }
 .hcprobe { position: fixed; left: 0; top: 0; width: 0; height: 0; visibility: hidden; pointer-events: none;
            padding: var(--sa-t) var(--sa-r) var(--sa-b) var(--sa-l); }
 html.hcshell nav.tabs { position: fixed; left: 0; right: 0; bottom: auto; top: 100vh; top: 100lvh; transform: translateY(-100%);
@@ -1391,7 +1401,10 @@ const FRAMED = (function () {
   if (SHELL) return false;
   try {
     if (window.top !== window) {
-      if (!parent.document.documentElement.classList.contains('hcshell')) return false;
+      // Under the bar's page, or under a Live page holding the bar while it
+      // listens (hcHold).
+      const pc = parent.document.documentElement.classList;
+      if (!pc.contains('hcshell') && !pc.contains('hcheld')) return false;
       d.classList.add('framed');
       const probe = parent.document.getElementById('hcprobe');
       if (probe) {
@@ -1834,6 +1847,200 @@ function meToPin() {
   try { location.replace(to); } catch (e) { location.href = to; }
 }
 
+// THE PAGES UNDER ONE BAR (1 Nov 2026, see ONE BAR in the style): a tap on
+// a tab, or on a link to another of the club's pages, loads that page in a
+// frame behind the one on screen and swaps the two once it has loaded, so
+// the screen never goes blank and the bar is never redrawn. Run by the
+// home-screen icon's page (appShellPage), and by a Live page holding the
+// bar while it listens (hcHold).
+//
+// LISTEN CARRIES ON ACROSS THE TABS (11 Nov 2026, Asher: "make the audio of
+// the listen now on the relay continue if you move from tab to tab. if you
+// turn on listen to my laps then it would stop of course."). A page left
+// while it is listening (hcListening) is kept out of sight instead of
+// thrown away, and is the one shown again when its tab is tapped. Lap times
+// turned on anywhere stop it (hcHushListen).
+const HC_HOME = '/c/' + encodeURIComponent(CLUB);
+let hcStage = null;
+let hcShown = null;
+let hcComing = null;
+// The page kept playing out of sight: a frame, or 'self' for a Live page
+// holding the bar (hcHold).
+let hcKept = null;
+let hcHeld = false;
+let hcHeldPath = '';
+let hcHeldTitle = '';
+let hcHeldLit = null;
+// Only the club's own pages are ever shown under the bar.
+// Bug hunt 11 (2026-11-05): and as the browser will load it - a path like
+// /c/club/../other resolves to another club's page - so the resolved
+// pathname must still be the club's own.
+function hcInside(path) {
+  if (!(typeof path === 'string' && (path === HC_HOME || ['/', '?', '#'].indexOf(path.charAt(HC_HOME.length)) >= 0)
+    && path.indexOf(HC_HOME) === 0 && path.indexOf('//') < 0 && path.indexOf('\\\\') < 0)) return false;
+  try {
+    const u = new URL(path, location.origin);
+    return u.origin === location.origin && (u.pathname === HC_HOME || u.pathname.indexOf(HC_HOME + '/') === 0);
+  } catch (e) { return false; }
+}
+function hcPathOf(path) {
+  try { return new URL(path, location.origin).pathname; } catch (e) { return ''; }
+}
+function hcFrameFor(path) {
+  const f = document.createElement('iframe');
+  f.className = 'hcnext';
+  f.title = CLUB_NAME;
+  f.addEventListener('load', () => hcLanded(f));
+  f.src = path;
+  hcStage.appendChild(f);
+  // A page slow to load is shown as it is rather than never.
+  setTimeout(() => { if (hcComing === f) hcLanded(f); }, 4000);
+  return f;
+}
+// Whether this window, or the page in a frame, is listening right now.
+function hcListeningIn(w) {
+  try { return !!w && typeof w.hcListening === 'function' && w.hcListening() === true; } catch (e) { return false; }
+}
+// Out of sight, still playing. Only one page is ever kept.
+function hcKeep(f) {
+  if (hcKept && hcKept !== 'self' && hcKept !== f) hcKept.remove();
+  hcKept = f;
+  f.className = 'hckept';
+}
+// The old page stays underneath for two more frames, so there is never a
+// frame with neither.
+function hcLetGo(old) {
+  old.className = 'hcnext';
+  requestAnimationFrame(() => requestAnimationFrame(() => old.remove()));
+}
+function hcLanded(f) {
+  if (f === hcComing) {
+    hcComing = null;
+    const old = hcShown;
+    hcShown = f;
+    f.className = '';
+    if (old) {
+      if (hcListeningIn(old.contentWindow)) hcKeep(old); else hcLetGo(old);
+    }
+  } else if (f !== hcShown) {
+    return;
+  }
+  hcSync();
+}
+// The page under the bar loads another page itself (signing in on Me, say):
+// the bar follows it, marking its tab and showing its address.
+function hcSync() {
+  if (!hcShown) return;
+  let doc = null;
+  let path = '';
+  try { doc = hcShown.contentDocument; path = hcShown.contentWindow.location.pathname + hcShown.contentWindow.location.search + hcShown.contentWindow.location.hash; } catch (e) { return; }
+  if (!doc) return;
+  if (hcInside(path)) history.replaceState(null, '', path);
+  if (doc.title) document.title = doc.title;
+  const theirs = Array.from(doc.querySelectorAll('nav.tabs a'));
+  const lit = doc.querySelector('nav.tabs a[aria-current]');
+  const at = lit ? theirs.indexOf(lit) : -1;
+  document.querySelectorAll('nav.tabs a').forEach((a, i) => {
+    if (i === at) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  });
+  meTab();
+}
+// The kept page back on screen, just as it was - still playing.
+function hcBringBack() {
+  if (hcComing) { hcComing.remove(); hcComing = null; }
+  if (hcKept === 'self') { hcUnhold(); return; }
+  const f = hcKept;
+  const old = hcShown;
+  hcKept = null;
+  hcShown = f;
+  f.className = '';
+  if (old) hcLetGo(old);
+  hcSync();
+}
+function hcGo(path) {
+  if (!hcInside(path)) return;
+  if (hcKept) {
+    let keptPath = hcHeldPath;
+    if (hcKept !== 'self') { try { keptPath = hcKept.contentWindow.location.pathname; } catch (e) { keptPath = ''; } }
+    if (keptPath !== '' && hcPathOf(keptPath) === hcPathOf(path)) { hcBringBack(); return; }
+  }
+  if (hcComing) hcComing.remove();
+  hcComing = hcFrameFor(path);
+}
+window.hcGo = hcGo;
+function hcTop() {
+  try {
+    const doc = hcShown ? hcShown.contentDocument : document;
+    doc.body.scrollTo({ top: 0, behavior: 'smooth' });
+    doc.documentElement.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (e) { /* nothing to scroll */ }
+}
+// A page in a phone's browser that is listening, with the bar along the
+// bottom of the screen, holds the bar rather than being left (hcHold). A
+// wider screen, whose tabs scroll with the page, leaves as it always did.
+function hcWouldHold() {
+  if (SHELL || FRAMED || hcHeld || !hcListeningIn(window)) return false;
+  const nav = document.querySelector('nav.tabs');
+  try { return !!nav && getComputedStyle(nav).position === 'fixed'; } catch (e) { return false; }
+}
+// This page becomes the bar's page for as long as the other tabs are shown:
+// it stays where it is, playing, under a stage of frames.
+function hcHold() {
+  if (hcHeld) return;
+  hcHeld = true;
+  hcHeldPath = location.pathname + location.search + location.hash;
+  hcHeldTitle = document.title;
+  // This page's own tab, by its address: the tab just tapped is already lit.
+  hcHeldLit = Array.from(document.querySelectorAll('nav.tabs a')).find((a) => hcPathOf(a.href) === location.pathname)
+    || document.querySelector('nav.tabs a[aria-current]');
+  hcKept = 'self';
+  if (!document.getElementById('hcprobe')) {
+    const probe = document.createElement('div');
+    probe.className = 'hcprobe';
+    probe.id = 'hcprobe';
+    probe.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(probe);
+  }
+  hcStage = document.createElement('div');
+  hcStage.className = 'hcstage';
+  document.body.appendChild(hcStage);
+  document.documentElement.classList.add('hcheld');
+}
+// Back to this page's own tab: the frames go, and it is a page again.
+function hcUnhold() {
+  if (!hcHeld) return;
+  hcHeld = false;
+  hcKept = null;
+  hcShown = null;
+  hcComing = null;
+  if (hcStage) hcStage.remove();
+  hcStage = null;
+  document.documentElement.classList.remove('hcheld');
+  try { history.replaceState(null, '', hcHeldPath); } catch (e) { /* the address stays */ }
+  if (hcHeldTitle) document.title = hcHeldTitle;
+  document.querySelectorAll('nav.tabs a').forEach((a) => {
+    if (a === hcHeldLit) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  });
+  meTab();
+}
+// Lap times turned on stop Listen: here, and in the page kept out of sight.
+function hcDropKept() {
+  if (!hcKept) return;
+  if (hcKept === 'self') {
+    try { if (typeof window.hcStopListen === 'function') window.hcStopListen(); } catch (e) { /* not listening */ }
+    return;
+  }
+  try { if (typeof hcKept.contentWindow.hcStopListen === 'function') hcKept.contentWindow.hcStopListen(); } catch (e) { /* going anyway */ }
+  hcKept.remove();
+  hcKept = null;
+}
+window.hcDropKept = hcDropKept;
+function hcHushListen() {
+  try { if (typeof window.hcStopListen === 'function') window.hcStopListen(); } catch (e) { /* not listening */ }
+  hcDropKept();
+  try { if (FRAMED && typeof parent.hcDropKept === 'function') parent.hcDropKept(); } catch (e) { /* no bar's page */ }
+}
+
 // THE TAPPED TAB LIGHTS AT ONCE, AND ITS PAGE IS READ AHEAD (1 Nov 2026,
 // Asher: "nav tabs still flicker when clicking"). The line over the current
 // tab used to stay on the old tab until the next page arrived and then jump,
@@ -1867,7 +2074,16 @@ function meToPin() {
     if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     light(a);
     const page = pageOf(a);
-    if (SHELL) {
+    // Listening in a phone's browser: this page holds the bar and stays,
+    // playing, under the other tabs (hcHold) - or, tapped on its own tab,
+    // goes back to its top rather than loading again.
+    if (hcWouldHold()) {
+      e.preventDefault();
+      ahead = null;
+      if (page === location.pathname) { hcTop(); return; }
+      hcHold();
+    }
+    if (SHELL || hcHeld) {
       // The bar stays; only the page under it changes. The page already
       // showing goes back to its top instead.
       e.preventDefault();
@@ -1889,7 +2105,7 @@ function meToPin() {
     waiting.then(go, go);
     setTimeout(go, 300);
   });
-  addEventListener('pageshow', (e) => { if (e.persisted && !SHELL) { ahead = null; light(own); } });
+  addEventListener('pageshow', (e) => { if (e.persisted && !SHELL && !hcHeld) { ahead = null; light(own); } });
 
   // A SWIPE ALONG THE BAR (5 Nov 2026, Asher: "add ability to swipe left
   // and right on the bottom tabs to change screens", then "the swiping is
@@ -1943,9 +2159,11 @@ meTab();
 // (behind the page on screen, swapped in once drawn), so the bar stays put
 // for those too. Last in line, so a link some other script has already
 // dealt with is left alone; a link elsewhere, a file, or the same page
-// again is the browser's as before.
-if (FRAMED) {
-  addEventListener('click', (e) => {
+// again is the browser's as before. A Live page listening in a phone's
+// browser does the same with its own links (hcHold), so following one does
+// not stop the sound.
+if (!SHELL && typeof window.addEventListener === 'function') {
+  window.addEventListener('click', (e) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     const a = e.target instanceof Element ? e.target.closest('a[href]') : null;
     if (!a || (a.target !== '' && a.target !== '_self') || a.hasAttribute('download')) return;
@@ -1959,7 +2177,11 @@ if (FRAMED) {
     if (/\\.[A-Za-z0-9]+$/.test(url.pathname) || url.pathname.indexOf(home + '/clip/') === 0) return;
     if (url.pathname === location.pathname && url.search === location.search) return;
     let go = null;
-    try { go = parent.hcGo; } catch (err) { return; }
+    if (FRAMED) {
+      try { go = parent.hcGo; } catch (err) { return; }
+    } else if (hcWouldHold()) {
+      go = (to) => { hcHold(); hcGo(to); };
+    }
     if (typeof go !== 'function') return;
     e.preventDefault();
     go(url.pathname + url.search + url.hash);
@@ -5137,14 +5359,15 @@ const lapTalk = (function () {
       // On, but waiting for a tap since a reload: this tap resumes it.
       if (on && !unlocked) {
         unlocked = true; heardFor = ''; absent = '';
-        wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); show();
+        hcHushListen(); wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); show();
         return;
       }
       unlocked = true;
       on = !on;
       save(ON_KEY, on);
       heardFor = ''; absent = '';
-      if (on) { wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); } else { hush(); letSleep(); }
+      // Lap times on stops Listen, here or kept playing behind another tab.
+      if (on) { hcHushListen(); wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); } else { hush(); letSleep(); }
       show();
     });
 
@@ -7241,6 +7464,18 @@ const LISTEN_JS = `
     });
   }
 
+  // For the bar's page (see LISTEN CARRIES ON ACROSS THE TABS in COMMON_JS):
+  // whether to keep this page playing when another tab is shown, and the
+  // stop that lap times turned on anywhere asks for.
+  window.hcListening = () => on;
+  window.hcStopListen = () => {
+    if (on) {
+      on = false;
+      turn += 1;
+      stop();
+    }
+  };
+
   btn.addEventListener('click', () => {
     on = !on;
     turn += 1;
@@ -7305,6 +7540,10 @@ const LISTEN_JS = `
       return;
     }
 
+    stop();
+  });
+
+  function stop() {
     btn.textContent = 'Listen live';
     say('Press Listen Live to hear the broadcast.');
 
@@ -7331,7 +7570,7 @@ const LISTEN_JS = `
         suspended.catch(() => {});
       }
     }
-  });
+  }
 })();
 `;
 
@@ -11118,14 +11357,15 @@ const nightTalk = (function () {
   function toggle() {
     if (on && !unlocked) {
       unlocked = true; heardTag = ''; absent = false;
-      wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); read(); drawLive();
+      hcHushListen(); wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); read(); drawLive();
       return;
     }
     unlocked = true;
     on = !on;
     save(ON_KEY, on);
     heardTag = ''; absent = false;
-    if (on) { wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); read(); } else { hush(); letSleep(); }
+    // Lap times on stops Listen, kept playing behind another tab.
+    if (on) { hcHushListen(); wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); read(); } else { hush(); letSleep(); }
     drawLive();
   }
 
@@ -15574,86 +15814,18 @@ ${tabsNav(safeClub, name, "")}
 `;
 }
 
+// The frames, the swap and the kept Live page are COMMON_JS's (see THE
+// PAGES UNDER ONE BAR there), shared with a Live page holding the bar.
 const APP_SHELL_JS = `
-const stage = document.getElementById('hcstage');
-const HOME = '/c/' + encodeURIComponent(CLUB);
-// Only the club's own pages are ever shown under the bar.
-// Bug hunt 11 (2026-11-05): and as the browser will load it - a path like
-// /c/club/../other resolves to another club's page - so the resolved
-// pathname must still be the club's own.
-function hcInside(path) {
-  if (!(typeof path === 'string' && (path === HOME || ['/', '?', '#'].indexOf(path.charAt(HOME.length)) >= 0)
-    && path.indexOf(HOME) === 0 && path.indexOf('//') < 0 && path.indexOf('\\\\') < 0)) return false;
-  try {
-    const u = new URL(path, location.origin);
-    return u.origin === location.origin && (u.pathname === HOME || u.pathname.indexOf(HOME + '/') === 0);
-  } catch (e) { return false; }
-}
-let shown = null;
-let coming = null;
-function frameFor(path) {
-  const f = document.createElement('iframe');
-  f.className = 'hcnext';
-  f.title = CLUB_NAME;
-  f.addEventListener('load', () => landed(f));
-  f.src = path;
-  stage.appendChild(f);
-  // A page slow to load is shown as it is rather than never.
-  setTimeout(() => { if (coming === f) landed(f); }, 4000);
-  return f;
-}
-function landed(f) {
-  if (f === coming) {
-    coming = null;
-    const old = shown;
-    shown = f;
-    f.className = '';
-    // The old page stays underneath for two more frames, so there is never
-    // a frame with neither.
-    if (old) requestAnimationFrame(() => requestAnimationFrame(() => old.remove()));
-  } else if (f !== shown) {
-    return;
-  }
-  hcSync();
-}
-// The page under the bar loads another page itself (signing in on Me, say):
-// the bar follows it, marking its tab and showing its address.
-function hcSync() {
-  let doc = null;
-  let path = '';
-  try { doc = shown.contentDocument; path = shown.contentWindow.location.pathname + shown.contentWindow.location.search + shown.contentWindow.location.hash; } catch (e) { return; }
-  if (!doc) return;
-  if (hcInside(path)) history.replaceState(null, '', path);
-  if (doc.title) document.title = doc.title;
-  const theirs = Array.from(doc.querySelectorAll('nav.tabs a'));
-  const lit = doc.querySelector('nav.tabs a[aria-current]');
-  const at = lit ? theirs.indexOf(lit) : -1;
-  document.querySelectorAll('nav.tabs a').forEach((a, i) => {
-    if (i === at) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
-  });
-  meTab();
-}
-function hcGo(path) {
-  if (!hcInside(path)) return;
-  if (coming) coming.remove();
-  coming = frameFor(path);
-}
-window.hcGo = hcGo;
-function hcTop() {
-  try {
-    const doc = shown.contentDocument;
-    doc.body.scrollTo({ top: 0, behavior: 'smooth' });
-    doc.documentElement.scrollTo({ top: 0, behavior: 'smooth' });
-  } catch (e) { /* nothing to scroll */ }
-}
+hcStage = document.getElementById('hcstage');
 (function () {
-  let first = HOME;
+  let first = HC_HOME;
   try {
     const asked = decodeURIComponent(location.hash.slice(1));
     if (hcInside(asked)) first = asked;
   } catch (e) { /* the club's home page */ }
   history.replaceState(null, '', first);
-  coming = frameFor(first);
+  hcComing = hcFrameFor(first);
 })();
 `;
 

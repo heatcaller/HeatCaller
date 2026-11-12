@@ -43,7 +43,7 @@ describe("the home-screen icon's one bar", () => {
   it("loads the next page behind the one on screen and swaps them once it has loaded", () => {
     assert.match(shell, /f\.className = 'hcnext';/);
     assert.match(shell, /\.hcstage iframe\.hcnext \{ z-index: 0; \}/);
-    assert.match(shell, /if \(old\) requestAnimationFrame\(\(\) => requestAnimationFrame\(\(\) => old\.remove\(\)\)\);/);
+    assert.match(shell, /old\.className = 'hcnext';\n  requestAnimationFrame\(\(\) => requestAnimationFrame\(\(\) => old\.remove\(\)\)\);/);
     assert.match(shell, /window\.hcGo = hcGo;/);
   });
 
@@ -54,7 +54,7 @@ describe("the home-screen icon's one bar", () => {
   });
 
   it("hands a tab's tap to the stage instead of loading a new page", () => {
-    assert.match(shell, /if \(SHELL\) \{\s*\/\/[^\n]*\n[^\n]*\n\s*e\.preventDefault\(\);/);
+    assert.match(shell, /if \(SHELL \|\| hcHeld\) \{\s*\/\/[^\n]*\n[^\n]*\n\s*e\.preventDefault\(\);/);
     assert.match(shell, /if \(page === location\.pathname\) \{ ahead = null; hcTop\(\); return; \}/);
   });
 

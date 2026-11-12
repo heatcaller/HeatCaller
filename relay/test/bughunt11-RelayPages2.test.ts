@@ -35,6 +35,7 @@ describe("Listen: a rejoin keeps one sweep at a time", () => {
 
     runInContext(
       `let turn = 0; let chain = null; let started = true; const ctx = null; const keepAlive = null; function dropAll() {}\n`
+        + `const STREAM_AHEAD_S = 1; let streamAhead = STREAM_AHEAD_S;\n`
         + `${lock}\n${sweep}\n${rejoin}\nthis.sweep = sweep; this.rejoin = rejoin;`,
       context,
     );
