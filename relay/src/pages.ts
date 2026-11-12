@@ -7816,9 +7816,11 @@ function mineWords(n) {
   return away === 1 ? '1 race before yours' : away + ' races before yours';
 }
 
+// A Pit Wall outline button like Home's others (11 Nov 2026, Asher: "you
+// missed see the running order on home").
 function mineLink(words, path) {
   const a = document.createElement('a');
-  a.className = 'more';
+  a.className = 'page wide hp-go';
   a.textContent = words;
   a.setAttribute('href', BASE + path);
   return a;
@@ -7903,13 +7905,8 @@ function drawMine(entry) {
 
   // No "Open your night" (5 Nov 2026, Asher: "remove open your night and
   // check in from home screen") - Me is a tap away on the bar.
-  const links = document.createElement('p');
-  links.className = 'lc-go';
   const where = n.now === true ? mineLink('Watch live', '/live') : next ? mineLink('See the running order', '/schedule') : null;
-  if (where) {
-    links.appendChild(where);
-    mine.appendChild(links);
-  }
+  if (where) mine.appendChild(where);
 }
 
 async function readMine() {
