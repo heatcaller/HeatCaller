@@ -13,8 +13,12 @@ public partial class MainForm
     private (DateTime AtUtc, int? Count)? _nightEmailCount;
 
     /// <summary>What is still to do tonight, given the day's saved races.</summary>
-    private NightClose.Facts NightClosingFacts(IReadOnlyList<SessionRecord> daySessions)
+    private NightClose.Facts NightClosingFacts(IReadOnlyList<SessionRecord> daySessions, RaceEvent? day)
     {
+        // The day asked about - the closing checklist keeps to tonight after
+        // Close Day, when it's no longer the active one.
+        day ??= _raceEvents.Active;
+
         var rentalsOut = _rentals.OutNow
             .Select(unit => string.IsNullOrWhiteSpace(unit.CurrentHolderName) ? unit.DisplayName : unit.CurrentHolderName)
             .ToList();
@@ -33,17 +37,17 @@ public partial class MainForm
             NightEmailsToSend(),
             notOnline,
             _settings.LastAutoBackupUtc,
-            _raceEvents.Active is { IsLegacy: false, IsOpen: true },
-            OwingTonight(daySessions));
+            day is { IsLegacy: false, IsOpen: true },
+            OwingTonight(daySessions, day));
     }
 
     /// <summary>
     /// The drivers who raced tonight and still owe their entry (11 Nov 2026,
     /// Phase 4), or null when tonight's race day has no entry fee.
     /// </summary>
-    private IReadOnlyList<string>? OwingTonight(IReadOnlyList<SessionRecord> daySessions)
+    private IReadOnlyList<string>? OwingTonight(IReadOnlyList<SessionRecord> daySessions, RaceEvent? raceDay)
     {
-        if (_raceEvents.Active is not { IsLegacy: false, EntryFee: > 0 } day)
+        if (raceDay is not { IsLegacy: false, EntryFee: > 0 } day)
         {
             return null;
         }
@@ -108,15 +112,25 @@ public partial class MainForm
 
         if (_closeNight is { IsDisposed: false } open)
         {
-            open.Reload();
-            open.Activate();
-            return;
+            // Open for another night (a new day started since): start again.
+            if (open.DayId != program.ActiveDayId)
+            {
+                open.Close();
+            }
+            else
+            {
+                open.Reload();
+                open.Activate();
+                return;
+            }
         }
 
+        var dayId = program.ActiveDayId;
+
         var form = new CloseNightForm(
-            program.ClosingChecklist,
-            program.TickClosingItem,
-            kind => CloseNightGo(program, kind),
+            () => program.ClosingChecklist(dayId),
+            (key, done) => program.TickClosingItem(key, done, dayId),
+            kind => CloseNightGo(program, kind, dayId),
             () => _settings.CloseNightOwnItems,
             lines =>
             {
@@ -124,7 +138,10 @@ public partial class MainForm
                 _settings.Save();
                 program.RefreshAll();
                 _todayControl?.RefreshAll();
-            });
+            })
+        {
+            DayId = dayId,
+        };
 
         form.FormClosed += (_, _) => _closeNight = null;
         _closeNight = form;
@@ -132,7 +149,7 @@ public partial class MainForm
     }
 
     /// <summary>The button beside a line of the closing checklist: the screen that sorts it, or for the backup, a backup.</summary>
-    private async void CloseNightGo(RaceProgramControl program, CloseNightKind kind)
+    private async void CloseNightGo(RaceProgramControl program, CloseNightKind kind, string? dayId)
     {
         switch (kind)
         {
@@ -164,7 +181,7 @@ public partial class MainForm
                     var secrets = BackupService.CaptureSecrets();
                     var path = await Task.Run(() => BackupService.CreateBackup(folder, automatic: false, secrets));
                     OnClientRawMessage($"{AppTime.LogStampNow()}  [program] Closing checklist: backed up to {path}");
-                    program.TickClosingItem("backup", true);
+                    program.TickClosingItem("backup", true, dayId);
                     _closeNight?.Reload();
                 }
                 catch (Exception ex)

@@ -1007,7 +1007,7 @@ public sealed class RaceProgramControl : UserControl
         if (step.Stage == ProgramStage.Complete && ClosingFacts is { } closing)
         {
             var sessions = DaySessions(day);
-            var facts = closing(sessions);
+            var facts = closing(sessions, ActiveDay);
             var lastFinish = sessions.Select(s => (DateTime?)s.EndedAtUtc).Max();
             return step with { Detail = step.Detail + NightClose.Note(facts, lastFinish) };
         }
@@ -1021,7 +1021,7 @@ public sealed class RaceProgramControl : UserControl
     /// saved races. Set by MainForm,
     /// which can see those; null leaves the card as it was.
     /// </summary>
-    internal Func<IReadOnlyList<SessionRecord>, NightClose.Facts>? ClosingFacts { get; set; }
+    internal Func<IReadOnlyList<SessionRecord>, RaceEvent?, NightClose.Facts>? ClosingFacts { get; set; }
 
     /// <summary>Asks for the closing checklist window - Next Steps' "Close the night..." (11 Nov 2026).</summary>
     public event Action? CloseNightRequested;
@@ -1034,27 +1034,29 @@ public sealed class RaceProgramControl : UserControl
     /// is no race day or nothing to tell it from. Read by the card and by the
     /// checklist window, so the two never disagree.
     /// </summary>
-    internal List<CloseNightChecklist.Item>? ClosingChecklist()
+    /// <param name="dayId">The race day the window was opened for, which it keeps after Close Day (closing a day stops it being the active one); null for the active day.</param>
+    internal List<CloseNightChecklist.Item>? ClosingChecklist(string? dayId = null)
     {
-        if (ClosingFacts is not { } closing || ActiveDay is not { } raceDay)
+        if (ClosingFacts is not { } closing || DayFor(dayId) is not { } raceDay)
         {
             return null;
         }
 
-        var sessions = DaySessions(DayRounds());
+        var ids = raceDay.RoundIds.ToHashSet(StringComparer.Ordinal);
+        var sessions = DaySessions(_rounds.All.Where(r => ids.Contains(r.Id)).ToList());
         var lastFinish = sessions.Select(s => (DateTime?)s.EndedAtUtc).Max();
 
         return CloseNightChecklist.Build(
-            closing(sessions),
+            closing(sessions, raceDay),
             lastFinish,
             _settings.CloseNightOwnItems,
             CloseNightChecklist.TicksFor(_settings.CloseNightTicks, raceDay.Id));
     }
 
     /// <summary>Ticks a line of tonight's closing checklist off by hand, or back on, and says so on the card.</summary>
-    internal void TickClosingItem(string key, bool done)
+    internal void TickClosingItem(string key, bool done, string? dayId = null)
     {
-        if (ActiveDay is not { } raceDay)
+        if (DayFor(dayId) is not { } raceDay)
         {
             return;
         }
@@ -1064,6 +1066,13 @@ public sealed class RaceProgramControl : UserControl
         RefreshNextStep(DayRounds());
         ClosingChecklistChanged?.Invoke();
     }
+
+    /// <summary>The active race day's id, for a window that has to keep to tonight after Close Day.</summary>
+    internal string? ActiveDayId => ActiveDay?.Id;
+
+    /// <summary>A race day by id, or the active one for null. Never the legacy day.</summary>
+    private RaceEvent? DayFor(string? dayId) =>
+        dayId is null ? ActiveDay : _events?.Get(dayId) is { IsLegacy: false } day ? day : null;
 
     /// <summary>The saved races of today's program, however each is linked to its round.</summary>
     private List<SessionRecord> DaySessions(IReadOnlyList<RoundDefinition> day)

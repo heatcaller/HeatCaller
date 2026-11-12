@@ -123,3 +123,47 @@ public sealed class CloseNightChecklistTests
         Assert.Empty(settings.CloseNightTicks);
     }
 }
+
+/// <summary>
+/// The closing checklist keeps to tonight after Close Day (11 Nov 2026):
+/// closing a race day stops it being the active one, and the window, opened
+/// for that day, has to go on reading and ticking it.
+/// </summary>
+public sealed class CloseNightAfterCloseDayTests : IDisposable
+{
+    private readonly TempAppData _data = new();
+
+    public void Dispose() => _data.Dispose();
+
+    [Fact]
+    public void The_list_for_tonight_still_reads_and_ticks_after_Close_Day()
+    {
+        var settings = new AppSettings { CloseNightOwnItems = new List<string> { "Lock the clubhouse" } };
+        var events = RaceEventStore.Load();
+        var day = new RaceEvent { Name = "Club Night" };
+        events.Upsert(day);
+        events.SetActive(day.Id);
+
+        using var program = new RaceProgramControl(
+            RaceClassStore.Load(), ProfileStore.Load(), RoundDefinitionStore.Load(), TrackLayoutStore.Load(),
+            SessionHistoryStore.Load(), CheckInStore.Load(), settings, new UndoService(), events, DayScheduleStore.Load())
+        {
+            ClosingFacts = (_, raceDay) => new NightClose.Facts(Array.Empty<string>(), null, null, DateTime.UtcNow, raceDay is { IsOpen: true }),
+        };
+
+        var dayId = program.ActiveDayId;
+        Assert.Equal(day.Id, dayId);
+        Assert.False(program.ClosingChecklist(dayId)!.Single(i => i.Kind == CloseNightKind.CloseDay).Done);
+
+        events.Close(day.Id);
+
+        Assert.Null(program.ActiveDayId);
+        var after = program.ClosingChecklist(dayId)!;
+        Assert.True(after.Single(i => i.Kind == CloseNightKind.CloseDay).SeenDone);
+
+        program.TickClosingItem("own:Lock the clubhouse", true, dayId);
+
+        Assert.True(program.ClosingChecklist(dayId)!.Single(i => i.Kind == CloseNightKind.Own).Ticked);
+        Assert.Equal(new[] { day.Id + "|own:Lock the clubhouse" }, settings.CloseNightTicks);
+    }
+}

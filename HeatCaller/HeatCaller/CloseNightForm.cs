@@ -26,6 +26,9 @@ internal sealed class CloseNightForm : Form
     private readonly TableLayoutPanel _rows = new();
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = RefreshMs };
 
+    /// <summary>The race day this window is for - kept after Close Day, when the day stops being the active one.</summary>
+    public string? DayId { get; init; }
+
     /// <summary>What the rows were last built from, so an unchanged list isn't rebuilt (and doesn't flicker).</summary>
     private string _shown = string.Empty;
 
