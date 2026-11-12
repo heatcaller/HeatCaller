@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home Pit Buttons</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600;700&display=swap">
+<style>
+/* Review sheet: what changes, then one band per Home card with a before and after phone. */
+:root {
+  --page: #F3F1F7; --ink: #1B1530; --soft: #615A78; --line: #DDD8E8; --card: #FFFFFF; --hi: #D81B7A;
+  --f-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page: #0E0A1A; --ink: #EEEAF7; --soft: #A39BBD; --line: #2B2443; --card: #171128; --hi: #FF5FAE; color-scheme: dark } }
+:root[data-theme="dark"] { --page: #0E0A1A; --ink: #EEEAF7; --soft: #A39BBD; --line: #2B2443; --card: #171128; --hi: #FF5FAE; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.55 var(--f-body); }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 28px 16px 80px; }
+h1, h2 { font-family: var(--f-display); letter-spacing: .01em; text-wrap: balance; }
+h1 { font-size: 2.6rem; line-height: 1; margin: 0 0 8px; }
+h2 { font-size: 1.6rem; margin: 0 0 4px; }
+.eyebrow { font: 600 .72rem var(--f-body); text-transform: uppercase; letter-spacing: .14em; color: var(--hi); margin-bottom: 6px; }
+.lede { color: var(--soft); max-width: 65ch; margin: 0; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 24px 0; }
+.box { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; }
+.box b { display: block; font-family: var(--f-display); font-size: 1.1rem; text-transform: uppercase; letter-spacing: .06em; }
+.box ul { margin: 6px 0 0; padding-left: 18px; } .box li { margin: 3px 0; }
+code { font-size: .82rem; background: color-mix(in srgb, var(--hi) 10%, transparent); padding: 1px 5px; border-radius: 4px; }
+
+.ctl { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
+  background: color-mix(in srgb, var(--page) 92%, transparent); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line); margin: 0 -16px; padding: 10px 16px; }
+.ctl .lbl { font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--soft); font-weight: 600; }
+.pill { font: 600 .85rem var(--f-body); padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--card); color: var(--ink); cursor: pointer; min-height: 36px; }
+.pill[aria-pressed="true"] { background: var(--hi); border-color: var(--hi); color: #fff; }
+
+.band { border-top: 1px solid var(--line); padding-top: 26px; margin-top: 30px; }
+.band p.why { color: var(--soft); margin: 0 0 16px; max-width: 70ch; }
+.pair { display: flex; flex-wrap: wrap; gap: 28px; justify-content: center; }
+.shot { display: grid; gap: 8px; justify-items: center; }
+.shot .tag { font: 600 .72rem var(--f-body); text-transform: uppercase; letter-spacing: .12em; color: var(--soft); }
+.shot.after .tag { color: var(--hi); }
+
+/* ---- The phone, in the relay's own default look (Midnight). ---- */
+.phone {
+  --bg: #0F0722; --surface: #1A0F3A; --primary: #FF2E9A; --on-primary: #fff; --accent: #2EE6FF;
+  --text: #F7F2FF; --muted: #9E8AC7; --border: #33215C; --good: #3DD68C;
+  --tonal: color-mix(in srgb, var(--primary) 16%, var(--surface));
+  --on-tonal: color-mix(in srgb, var(--primary) 45%, var(--text));
+  --ring: color-mix(in srgb, var(--accent) 70%, transparent);
+  width: min(340px, 100%); background: var(--bg); color: var(--text); border-radius: 34px; border: 8px solid #05020c;
+  padding: 18px 14px 20px; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  box-shadow: 0 18px 40px rgba(20,10,40,.25);
+}
+.phone.light { --bg: #F7F5FB; --surface: #FFFFFF; --primary: #C2185B; --text: #1B1530; --muted: #6B6385; --border: #DCD6E8; --accent: #0091A8; }
+.phone .hdr { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+.phone .hdr b { font-size: 1.25rem; } .phone .hdr span { color: var(--muted); font-size: .8rem; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+.card h3 { margin: 0 0 8px; font-size: 1rem; }
+.list { list-style: none; margin: 0; padding: 0; }
+.list li { display: flex; flex-direction: column; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.list li:last-child { border-bottom: 0; }
+.list .title { font-weight: 600; } .list .when { color: var(--muted); font-size: .85rem; }
+.sg { list-style: none; margin: 0; padding: 0; }
+.sg li { display: grid; grid-template-columns: 38px 1fr auto; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.sg-pos { color: var(--primary); font-weight: 700; } .sg-pts { color: var(--muted); font-variant-numeric: tabular-nums; }
+.you-l { margin: 4px 0; display: flex; gap: 8px; } .gl-k { color: var(--muted); min-width: 110px; font-size: .88rem; }
+.more { color: var(--accent); font-weight: 600; text-decoration: none; font-size: .92rem; }
+.lc-go { margin: 10px 0 0; }
+.day { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .1em; margin: 0 0 6px; }
+
+/* The kit's buttons, as on the relay. */
+.hp-go { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; margin-top: 12px;
+  padding: 10px 20px; border-radius: 14px; font-weight: 600; text-decoration: none; font-size: .9rem;
+  transition: transform .08s ease, background-color .15s ease; }
+.hp-go:active { transform: scale(.97); }
+.hp-go:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+[data-v="outline"] .hp-go { background: transparent; color: var(--text); border: 1px solid var(--border); }
+[data-v="outline"] .hp-go:hover { background: color-mix(in srgb, var(--text) 5%, transparent); border-color: var(--primary); }
+[data-v="tonal"] .hp-go { background: var(--tonal); color: var(--on-tonal); border: 1px solid transparent; }
+[data-v="primary"] .hp-go { background: var(--primary); color: var(--on-primary); border: 1px solid transparent; }
+.hp-go .ch { margin-left: 6px; opacity: .7; }
+[data-arrow="off"] .hp-go .ch { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap" id="root" data-v="outline" data-arrow="off">
+  <div class="eyebrow">Relay &middot; Home tab &middot; 11 Nov 2026</div>
+  <h1>Home links become Pit Wall buttons</h1>
+  <p class="lede">The four accent-coloured text links on Home turn into the kit's buttons: full-width, 44px tall, with soft 14px corners and the cyan focus ring, coloured only from the club's look. They're built as outline buttons, the same as "Lap records and the quickest drivers" under Our tracks. Use the bar below to try tonal or primary instead.</p>
+
+  <div class="cols">
+    <div class="box"><b>What changes</b><ul>
+      <li><code>a.more</code> becomes <code>a.page.wide.hp-go</code></li>
+      <li>The two links inside lists move out under the list</li>
+      <li>The trailing &rarr; goes, because the button shape already says "tap me"</li>
+    </ul></div>
+    <div class="box"><b>What stays</b><ul>
+      <li>Same words and the same destinations</li>
+      <li>Cards and their order on Home</li>
+      <li>Other tabs' "more" links (Me, check-in)</li>
+    </ul></div>
+    <div class="box"><b>Kit rule</b><ul>
+      <li>Outline = neutral onward step</li>
+      <li>Primary is kept for the one main action on a screen, and Home has none</li>
+      <li>No hex colours outside the look tokens</li>
+    </ul></div>
+  </div>
+
+  <div class="ctl">
+    <span class="lbl">Style</span>
+    <button class="pill" data-set="v" data-val="outline" aria-pressed="true">Outline (built)</button>
+    <button class="pill" data-set="v" data-val="tonal" aria-pressed="false">Tonal</button>
+    <button class="pill" data-set="v" data-val="primary" aria-pressed="false">Primary</button>
+    <span class="lbl">Arrow</span>
+    <button class="pill" data-set="arrow" data-val="off" aria-pressed="true">None (built)</button>
+    <button class="pill" data-set="arrow" data-val="on" aria-pressed="false">Keep &rsaquo;</button>
+    <span class="lbl">Look</span>
+    <button class="pill" data-set="look" data-val="dark" aria-pressed="true">Midnight</button>
+    <button class="pill" data-set="look" data-val="light" aria-pressed="false">Light club</button>
+  </div>
+
+  <!-- 1 -->
+  <section class="band">
+    <div class="eyebrow">1 &middot; Tonight&rsquo;s moments</div>
+    <h2>Tonight&rsquo;s results</h2>
+    <p class="why">Shown while a night is running. Before, the link was the last row of the list, so it looked like one more moment.</p>
+    <div class="pair">
+      <div class="shot"><span class="tag">Before</span><div class="phone">
+        <div class="hdr"><b>Home</b><span>Thu &middot; live</span></div>
+        <div class="card"><h3>Tonight&rsquo;s moments</h3><ul class="list">
+          <li><span class="title">Fastest lap so far</span><span class="when">Sam Reid &middot; 14.882 &middot; 2WD Buggy</span></li>
+          <li><span class="title">Win</span><span class="when">Jo Park &middot; Stock Truck B</span></li>
+          <li><span class="title">New achievement</span><span class="when">Ali Chen &middot; First podium</span></li>
+          <li><a class="more" href="#">Tonight&rsquo;s results &rarr;</a></li>
+        </ul></div>
+      </div></div>
+      <div class="shot after"><span class="tag">After</span><div class="phone">
+        <div class="hdr"><b>Home</b><span>Thu &middot; live</span></div>
+        <div class="card"><h3>Tonight&rsquo;s moments</h3><ul class="list">
+          <li><span class="title">Fastest lap so far</span><span class="when">Sam Reid &middot; 14.882 &middot; 2WD Buggy</span></li>
+          <li><span class="title">Win</span><span class="when">Jo Park &middot; Stock Truck B</span></li>
+          <li><span class="title">New achievement</span><span class="when">Ali Chen &middot; First podium</span></li>
+        </ul><a class="hp-go" href="#">Tonight&rsquo;s results<span class="ch">&rsaquo;</span></a></div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section class="band">
+    <div class="eyebrow">2 &middot; Season at a glance</div>
+    <h2>Full standings</h2>
+    <p class="why">The top three of each points series, then the way to the whole table.</p>
+    <div class="pair">
+      <div class="shot"><span class="tag">Before</span><div class="phone">
+        <div class="card"><h3>Season at a glance</h3><ol class="sg">
+          <li><span class="sg-pos">1st</span><span>Sam Reid</span><span class="sg-pts">412 pts</span></li>
+          <li><span class="sg-pos">2nd</span><span>Jo Park</span><span class="sg-pts">398 pts</span></li>
+          <li><span class="sg-pos">3rd</span><span>Ali Chen</span><span class="sg-pts">371 pts</span></li>
+        </ol><p class="lc-go"><a class="more" href="#">Full standings &rarr;</a></p></div>
+      </div></div>
+      <div class="shot after"><span class="tag">After</span><div class="phone">
+        <div class="card"><h3>Season at a glance</h3><ol class="sg">
+          <li><span class="sg-pos">1st</span><span>Sam Reid</span><span class="sg-pts">412 pts</span></li>
+          <li><span class="sg-pos">2nd</span><span>Jo Park</span><span class="sg-pts">398 pts</span></li>
+          <li><span class="sg-pos">3rd</span><span>Ali Chen</span><span class="sg-pts">371 pts</span></li>
+        </ol><a class="hp-go" href="#">Full standings<span class="ch">&rsaquo;</span></a></div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section class="band">
+    <div class="eyebrow">3 &middot; Last race night</div>
+    <h2>All of that night&rsquo;s results</h2>
+    <p class="why">The recap card when nothing is on. Like Moments, the link used to sit inside the list.</p>
+    <div class="pair">
+      <div class="shot"><span class="tag">Before</span><div class="phone">
+        <div class="day">Last race night</div>
+        <div class="card"><ul class="list">
+          <li><span class="title">2WD Buggy A-main</span><span class="when">Won by Sam Reid</span></li>
+          <li><span class="title">Stock Truck A-main</span><span class="when">Won by Jo Park</span></li>
+          <li><span class="title">Fastest lap of the night</span><span class="when">Sam Reid &middot; 14.702</span></li>
+          <li><a class="more" href="#">All of that night&rsquo;s results &rarr;</a></li>
+        </ul></div>
+      </div></div>
+      <div class="shot after"><span class="tag">After</span><div class="phone">
+        <div class="day">Last race night</div>
+        <div class="card"><ul class="list">
+          <li><span class="title">2WD Buggy A-main</span><span class="when">Won by Sam Reid</span></li>
+          <li><span class="title">Stock Truck A-main</span><span class="when">Won by Jo Park</span></li>
+          <li><span class="title">Fastest lap of the night</span><span class="when">Sam Reid &middot; 14.702</span></li>
+        </ul><a class="hp-go" href="#">All of that night&rsquo;s results<span class="ch">&rsaquo;</span></a></div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="band">
+    <div class="eyebrow">4 &middot; New here?</div>
+    <h2>See our tracks</h2>
+    <p class="why">The newcomer card. The button jumps down to Our tracks, where "Lap records and the quickest drivers" already uses this exact button.</p>
+    <div class="pair">
+      <div class="shot"><span class="tag">Before</span><div class="phone">
+        <div class="card"><h3>New here?</h3>
+          <p class="you-l"><span class="gl-k">Where we race</span><b>Riverside Hall</b></p>
+          <p class="you-l"><span class="gl-k">When we race</span><b>Thursdays 6pm</b></p>
+          <p style="margin:8px 0 0;color:var(--muted)">Turn up at 5:30 and see the desk.</p>
+          <p class="lc-go"><a class="more" href="#">See our tracks</a></p></div>
+      </div></div>
+      <div class="shot after"><span class="tag">After</span><div class="phone">
+        <div class="card"><h3>New here?</h3>
+          <p class="you-l"><span class="gl-k">Where we race</span><b>Riverside Hall</b></p>
+          <p class="you-l"><span class="gl-k">When we race</span><b>Thursdays 6pm</b></p>
+          <p style="margin:8px 0 0;color:var(--muted)">Turn up at 5:30 and see the desk.</p>
+          <a class="hp-go" href="#">See our tracks<span class="ch">&rsaquo;</span></a></div>
+      </div></div>
+    </div>
+  </section>
+</div>
+<script>
+const root = document.getElementById('root');
+document.querySelectorAll('.pill').forEach((b) => b.addEventListener('click', () => {
+  const k = b.dataset.set, v = b.dataset.val;
+  document.querySelectorAll('.pill[data-set="' + k + '"]').forEach((p) => p.setAttribute('aria-pressed', String(p === b)));
+  if (k === 'look') document.querySelectorAll('.phone').forEach((p) => p.classList.toggle('light', v === 'light'));
+  else root.dataset[k] = v;
+}));
+document.querySelectorAll('a[href="#"]').forEach((a) => a.addEventListener('click', (e) => e.preventDefault()));
+</script>
+</body>
+</html>

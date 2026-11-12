@@ -736,7 +736,9 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
              font-size: 1.6rem; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; color: var(--accent); }
 .trk-who { color: var(--muted); font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .trk-rec.none .trk-who { font-style: italic; }
-.trk-all { display: flex; align-items: center; justify-content: center; margin-top: 12px; text-decoration: none; }
+/* Home's onward links as outline buttons (11 Nov 2026, Asher: "change link on
+   home tab relay to a themed pit button"), the look of Lap records below. */
+.trk-all, .hp-go { display: flex; align-items: center; justify-content: center; margin-top: 12px; text-decoration: none; }
 /* CHART LINES. Every chart - Live's position and lap charts, a race's
    charts, Me's, the Garage's pack charts and the track map's dots - takes
    its lines from --ln0 to --ln11. Every look keeps the original twelve...
@@ -8118,7 +8120,7 @@ function drawMoments() {
   }
 
   box.innerHTML = '<h3>Tonight&rsquo;s moments</h3><ul class="list">' + rows.join('') +
-    '<li><a class="more" href="' + BASE + '/results#d=' + encodeURIComponent(today) + '">Tonight&rsquo;s results &rarr;</a></li></ul>';
+    '</ul><a class="page wide hp-go" href="' + BASE + '/results#d=' + encodeURIComponent(today) + '">Tonight&rsquo;s results</a>';
   box.hidden = false;
 }
 
@@ -8141,7 +8143,7 @@ function drawSeason() {
     '<ol class="sg">' + x.standings.slice(0, 3).map((r) =>
       '<li><span class="sg-pos">' + esc(ordinal(r.pos)) + '</span><span class="sg-who">' + esc(r.name) + '</span>' +
       '<span class="sg-pts">' + esc(r.points) + ' pts</span></li>').join('') + '</ol>').join('') +
-    '<p class="lc-go"><a class="more" href="' + BASE + '/standings">Full standings &rarr;</a></p>';
+    '<a class="page wide hp-go" href="' + BASE + '/standings">Full standings</a>';
   box.hidden = false;
 }
 
@@ -8682,7 +8684,7 @@ function drawRecap() {
   }
 
   section(recap, rows.length === 0 ? '' : '<ul class="list">' + rows.join('') +
-    '<li><a class="more" href="' + BASE + '/results#d=' + encodeURIComponent(night.day) + '">All of that night\\'s results &rarr;</a></li></ul>');
+    '</ul><a class="page wide hp-go" href="' + BASE + '/results#d=' + encodeURIComponent(night.day) + '">All of that night\\'s results</a>');
 }
 
 async function loadRecap() {
@@ -8786,7 +8788,7 @@ export function homePage(club: string, clubName: string, context: PageContext = 
     ? ""
     : `<section class="lc newbie" id="newbie"><h3>New here?</h3>${fact("Where we race", n.where)}${fact("When we race", n.when)}`
       + (n.join === "" ? "" : `<p class="newbie-join">${escapeHtml(n.join)}</p>`)
-      + `<p class="lc-go"><a class="more" href="#tracks-h">See our tracks</a></p></section>`;
+      + `<a class="page wide hp-go" href="#tracks-h">See our tracks</a></section>`;
 
   return shell({
     club,
