@@ -540,7 +540,7 @@ To apply one:
 | **BRCA - BRCA on-road qualifying (duration NOT set)** | Qualifier start type set to own clock from first crossing, and most laps then time. The qualifier length is deliberately left for you to set. |
 
 !!! warning
-    - None of the presets set a points scale, and the PNWC preset sets the length of one leg only — HeatCaller doesn't model multi-leg mains. Read **WHAT IT DOES NOT SET** for each one.
+    - None of the presets set a points scale, and the PNWC preset sets the length of one leg only. It doesn't change the class's **A-main:** setting, so to run PNWC's three-leg A-main, set that yourself (see [Double and triple A-mains](program-and-mains.md#double-and-triple-a-mains)). HeatCaller has no multi-leg lower mains. Read **WHAT IT DOES NOT SET** for each one.
     - If the class was following the app default format, a preset that sets a duration gives the class its own format. Later changes to the app default won't reach it any more. The other settings in that new format start from HeatCaller's built-in values (for example a 3000 ms minimum lap), not from your app default, so check **Race Format** afterwards.
     - Applied from the **Classes** page, the preset is saved as soon as you click **Yes**. Applied from inside the class editor, it's saved when you click **Save** on the class.
 

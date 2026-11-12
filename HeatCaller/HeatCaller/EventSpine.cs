@@ -256,10 +256,55 @@ public static class EventSpine
         raceEvent.EntriesCloseLocalTime = sameVenue.FirstOrDefault(e => e.EntriesCloseLocalTime is not null)?.EntriesCloseLocalTime;
         raceEvent.Breaks = NightBreaks.Copy(sameVenue.FirstOrDefault(e => e.Breaks is { Count: > 0 })?.Breaks);
 
+        CarryOverFromLastNight(events, raceEvent);
+
         events.Upsert(raceEvent);
         events.SetActive(raceEvent.Id);
 
         return raceEvent;
+    }
+
+    /// <summary>
+    /// The rest of a night's settings, taken from the last race day of the
+    /// same kind (12 Nov 2026, setup plan A1): the first race's time, the
+    /// first-round seeding, sharing heats, the between-race talk and the
+    /// check-in rule. The entry fees come from the last race day of any kind,
+    /// because a club's fees don't change with the shape of the night.
+    ///
+    /// WHY: these went back to their defaults every week, so a club that
+    /// charges entry or keeps a timetable typed the same few things in every
+    /// night. Only a club's FIRST day of a kind gets the defaults now, and the
+    /// check-in rule is the club's own choice rather than a result of the kind
+    /// of night: a club night that runs a sign-on desk keeps it.
+    /// </summary>
+    private static void CarryOverFromLastNight(RaceEventStore events, RaceEvent raceEvent)
+    {
+        var lastAny = events.Real
+            .Where(e => !string.Equals(e.Id, raceEvent.Id, StringComparison.Ordinal))
+            .OrderByDescending(e => e.StartedUtc)
+            .FirstOrDefault();
+
+        if (lastAny is not null)
+        {
+            raceEvent.EntryFee = lastAny.EntryFee;
+            raceEvent.ExtraClassFee = lastAny.ExtraClassFee;
+        }
+
+        var lastLikeThis = events.Real
+            .Where(e => e.Shape == raceEvent.Shape && !string.Equals(e.Id, raceEvent.Id, StringComparison.Ordinal))
+            .OrderByDescending(e => e.StartedUtc)
+            .FirstOrDefault();
+
+        if (lastLikeThis is null)
+        {
+            return;
+        }
+
+        raceEvent.FirstRaceLocalTime = lastLikeThis.FirstRaceLocalTime;
+        raceEvent.FirstRoundSeeding = lastLikeThis.FirstRoundSeeding;
+        raceEvent.ShareHeatsUnder = lastLikeThis.ShareHeatsUnder;
+        raceEvent.BetweenRacesPreset = lastLikeThis.BetweenRacesPreset ?? string.Empty;
+        raceEvent.CheckedInDriversOnly = lastLikeThis.CheckedInDriversOnly;
     }
 
     /// <summary>

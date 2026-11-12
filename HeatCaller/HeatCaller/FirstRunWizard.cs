@@ -1183,7 +1183,8 @@ public sealed class FirstRunWizard : Form
         {
             if (!_raceClasses.All.Any(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)))
             {
-                _raceClasses.Upsert(new RaceClass { Name = name });
+                // With a race length (setup plan A5): see RaceFormat.ForNewClass.
+                _raceClasses.Upsert(new RaceClass { Name = name, Format = RaceFormat.ForNewClass(_raceClasses.AppDefaultFormat?.Invoke()) });
             }
 
             if (!_doneClasses.Contains(name, StringComparer.OrdinalIgnoreCase))

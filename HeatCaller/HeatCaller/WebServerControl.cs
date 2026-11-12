@@ -21,6 +21,9 @@ public sealed class WebServerControl : UserControl
     private readonly Button _btnStart = new();
     private readonly Button _btnStop = new();
 
+    /// <summary>"Start the server automatically when the app opens" - a field so a first good Start can tick it (setup plan A2).</summary>
+    private readonly CheckBox _chkAutoStart = new ThemedCheckBox();
+
     /// <summary>
     /// The one-off administrator step phones need - see NetworkSetup. Not
     /// enabled while it runs: it opens a UAC prompt, and a second press
@@ -395,16 +398,17 @@ public sealed class WebServerControl : UserControl
 
         _textSize.Wear(lblPinHint, () => AppTheme.SmallFont);
 
-        var chkAutoStart = new ThemedCheckBox
-        {
-            Text = "Start the server automatically when the app opens",
-            AutoSize = true,
-            Checked = _settings.WebServerAutoStart,
-        };
+        var chkAutoStart = _chkAutoStart;
+        chkAutoStart.Text = "Start the server automatically when the app opens";
+        chkAutoStart.AutoSize = true;
+        chkAutoStart.Checked = _settings.WebServerAutoStart;
 
         chkAutoStart.CheckedChanged += (_, _) =>
         {
             _settings.WebServerAutoStart = chkAutoStart.Checked;
+
+            // Somebody has decided, either way: never tick it for them after this.
+            _settings.WebServerAutoStartOffered = true;
             _settings.Save();
         };
 
@@ -844,16 +848,30 @@ public sealed class WebServerControl : UserControl
                 AppDialog.Show(this, error ?? "Couldn't start the server.", "Server didn't start", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
-        else if (!silent && PinWarning() is { } warning)
+        else
         {
-            // Started regardless: live results and check-in are worth
-            // having even while the remote is locked. The server logs the
-            // same thing to the console for an auto-start nobody watched.
-            AppDialog.Show(this, warning, "Server started - check the PINs", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            // It worked, so from next week it starts by itself (12 Nov 2026,
+            // setup plan A2) - once, and never over a club's own choice.
+            if (!silent && !_settings.WebServerAutoStart && !_settings.WebServerAutoStartOffered)
+            {
+                _chkAutoStart.Checked = true;
+                _chkAutoStart.Text = AutoStartTurnedOnCaption;
+            }
+
+            if (!silent && PinWarning() is { } warning)
+            {
+                // Started regardless: live results and check-in are worth
+                // having even while the remote is locked. The server logs the
+                // same thing to the console for an auto-start nobody watched.
+                AppDialog.Show(this, warning, "Server started - check the PINs", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         UpdateUi();
     }
+
+    /// <summary>The auto-start tick's caption once the app has turned it on for the club, so it's plain who did.</summary>
+    internal const string AutoStartTurnedOnCaption = "Start the server automatically when the app opens (turned on for you)";
 
     /// <summary>What is wrong with the PINs as set, in plain words, or null when nothing is.</summary>
     private string? PinWarning()

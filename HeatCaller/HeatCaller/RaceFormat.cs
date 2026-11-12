@@ -118,6 +118,32 @@ public sealed class RaceFormat
 
     public RaceFormat Clone() => (RaceFormat)MemberwiseClone();
 
+    /// <summary>How long a new class's races are when nothing else says (12 Nov 2026, setup plan A5).</summary>
+    public const int NewClassMinutes = 5;
+
+    /// <summary>
+    /// The format a class starts with when it is added (setup plan A5): the
+    /// app's default as it stands, but with a <see cref="NewClassMinutes"/>
+    /// time limit when that default has no limit at all. Null, so the class
+    /// follows the app's default, when the default already has a limit.
+    ///
+    /// WHY: a new install's races have no lap or time limit, so a club's first
+    /// heat ran until somebody found the Checkered button. That is easy to
+    /// miss on the night it matters most. The class's own format can still be
+    /// changed to anything, including no limit.
+    /// </summary>
+    public static RaceFormat? ForNewClass(RaceFormat? appDefault)
+    {
+        if (appDefault is { } given && (given.LapLimit > 0 || given.TimeLimitMinutes > 0))
+        {
+            return null;
+        }
+
+        var format = appDefault?.Clone() ?? new RaceFormat();
+        format.TimeLimitMinutes = NewClassMinutes;
+        return format;
+    }
+
     /// <summary>The format in one readable line, for the chip on Race Control.</summary>
     public string Describe()
     {

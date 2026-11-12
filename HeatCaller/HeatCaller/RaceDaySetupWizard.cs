@@ -1872,7 +1872,8 @@ internal sealed class RaceDaySetupWizard : Form
             return;
         }
 
-        _raceClasses.Upsert(new RaceClass { Name = form.ClassName });
+        // With a race length (setup plan A5): see RaceFormat.ForNewClass.
+        _raceClasses.Upsert(new RaceClass { Name = form.ClassName, Format = RaceFormat.ForNewClass(_raceClasses.AppDefaultFormat?.Invoke()) });
 
         // Ticked: somebody adding a class tonight is adding it to race.
         _lstClasses.Items.Add(form.ClassName, true);

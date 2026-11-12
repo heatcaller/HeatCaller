@@ -133,8 +133,9 @@ public static class SanctioningPresets
             "The points SCALE is not encoded - the rules say highest points wins, which is the opposite "
             + "direction to the national bodies, but do not give the values. Nor is how the main grids are "
             + "seeded from Q1-Q3, the last-lap allowance, or how the lower mains' two legs are combined into "
-            + "one result. The app has no model for a multi-leg main at all: the A-main is three eight-minute "
-            + "legs and the lower mains two five-minute legs, and what this sets is the length of ONE leg.",
+            + "one result. The A-main is three eight-minute legs and the lower mains two five-minute legs: what "
+            + "this sets is the length of ONE leg. The A-main's legs are the class's A-main setting, which this "
+            + "preset leaves as it is, and the app has no multi-leg lower mains.",
 
             Qualifier: f =>
             {

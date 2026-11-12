@@ -4,6 +4,16 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Less to set up each week (12 November).** A few quick wins for the race director:
+    - **A new race day keeps last week's settings.** Besides the venue, layout, championship and heat sizes, it now keeps the entry fees and, from the last day of the same kind, **First race at:**, the first-round seeding, sharing heats, the between-race talk and the check-in rule. See [New Race Day](race-day/events-and-entries.md#new-race-day).
+    - **Change a driver's classes at the desk.** Click their **Class** on **Who's Racing** to tick the classes they race tonight. The column now shows every class a driver races. See [Who's Racing](race-day/events-and-entries.md#race-day-whos-racing).
+    - **The phone server starts by itself next time.** The first time **Start Server** works on **Local Screens**, **Start the server automatically when the app opens** is ticked for you, once. See [Phone and web](screens/phone-and-web.md).
+    - **New classes have a race length.** While the app default has no lap or time limit, a new class starts at 5 minutes, so a first night's heat doesn't run until somebody finds **Checkered**.
+    - **A new install is offered Set Up Tonight.** The empty race day a new install opens no longer stops the one-time "Would you like a hand setting up a race night?" offer.
+    - **Guide fixes.** The sanctioning presets warning no longer says HeatCaller can't run multi-leg A-mains, and the first-race-night steps mention the race day a new install opens.
+
+  Update HeatCaller on the race PC; nothing changes on the relay.
+
 - **Setting up the night: entries close, posting the heats, cars not heard and planned breaks (12 November).** Four additions for the race director, all on **Race Day → Setup**:
     - **Entries close at:** puts the club's cutoff on the day. The announcer calls it ten minutes before and as it passes, **Next Steps** counts down to it, and **Who's Racing** says when a check-in is a late entry. See [Race Day → Setup](race-day/events-and-entries.md#about-the-day).
     - **Post the heats.** Once the heats are built, **Next Steps** offers **Post the heats...** before the first race. It prints every class's heat sheets and the marshal list together and tells the room. After that, **Move Drivers Between Heats** and **Redo Remaining Heats** ask before changing a posted heat. Untick **Post the heats before the first race** to skip it. See [Post the heats](race-day/program-and-mains.md#post-the-heats).
