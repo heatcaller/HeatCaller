@@ -219,7 +219,7 @@ HeatCaller builds every planned qualifying round for every class that's racing a
 - **Drivers in more than one class** are dealt into each class's heats. See [A driver in more than one class](drivers-and-classes.md#a-driver-in-more-than-one-class).
 - **Rotation.** In each new round, the starting point in the driver list moves on by one heat's worth, so the same drivers aren't first out on a cold track every round. When the heats divide the class exactly (16 drivers in two heats of 8, say), the groups are mixed as well from Q2 on, so the same drivers don't share a heat every round.
 - **Names.** Heats are called "Heat 1", "Heat 2" and so on when there's one qualifying round, or "Q1 Heat 1", "Q2 Heat 3" and so on when there's more than one. On a club night they're races: "Race 1", "Race 2", or "Race 1 Heat 2" when a class is split into groups.
-- **Order.** All classes' Q1 heats come first, then all Q2 heats, and so on. Within a round, heats are put in an order that gives a driver in two classes a race off between their races: if one class's last heat and the next class's first heat share a driver, a later heat is brought forward between them. When every heat left shares a driver, the built order stands, and [Auto start](../race-control/running-a-race.md#auto-start-between-races) gives that driver an extra 2 minutes instead. The build's message says how many drivers were kept from racing back to back.
+- **Order.** All classes' Q1 heats come first, then all Q2 heats, and so on. Within a round the classes run in the order set by **Class running order:** on **Setup** (the **Classes** page's order until you set one), turned round each round if you ticked that. Then the heats are put in an order that gives a driver in two classes a race off between their races: if one class's last heat and the next class's first heat share a driver, a later heat is brought forward between them. When every heat left shares a driver, the built order stands, and [Auto start](../race-control/running-a-race.md#auto-start-between-races) gives that driver an extra 2 minutes instead. The build's message says how many drivers were kept from racing back to back.
 - **Track.** Every heat starts on the race day's **Track layout:**.
 
 Rebuilding replaces any of today's qualifiers for those classes that haven't been run yet. Recorded rounds, and rounds from earlier race days, are never touched. A qualifying round that already has a recorded heat isn't built again, and its heats still to run stay as they are, so a rebuild after Q1 has started builds only the rounds after it; the summary marks those rounds "already run". If every planned round has already been run, the build is refused with **Qualifying already run**: to fit a driver into a heat still to run, use [Move Drivers Between Heats...](#balance-heats). A heat that's out on track can't be replaced: the build is refused until it has been recorded. You can undo the build with **Undo**.
@@ -525,6 +525,18 @@ For each round, the **Corner Marshals** window lists **Round**, **Marshaled By**
 **Swap...** covers a post with somebody else: a driver who needs to fix their car can swap their marshal duty with a friend. Select the post's row, click **Swap...**, and pick who covers it (anybody racing tonight who isn't driving in that round). The roster then reads, for example, "Sam (covering Jo)", and the announcer's marshal call, the Next Up bar and drivers' phones all follow it. Pick the original driver again to put them back, or use **Undo**. A swap is for that one round.
 
 **Copy as Text** copies the whole roster as plain text, ready to print or paste into a group chat.
+
+### Marshals in place
+
+To stop Auto start going green with empty posts, right-click the **Auto start** switch on **Race Control** and tick **Wait for the marshals before starting** (off to start with). From then on, for every race with marshals:
+
+- A minute before the start, a banner names them: "Marshals for Q2 Heat 3: Hugh Turn (Turn 1), Rhoda Rage (Turn 2). In place?"
+- **Marshals in place** confirms them, and the race starts on time.
+- If nobody has confirmed by zero, the race waits: the banner reads "Q2 Heat 3 is waiting for its marshals", and the announcer calls them once: "Marshals for Q2 Heat 3, to your posts please: Hugh Turn on Turn 1 and Rhoda Rage on Turn 2."
+- **Someone's missing...** logs a marshal who didn't turn up, for your club's marshal rule. The event report lists them under **Marshal no-shows**. Get someone onto the post, then press **Marshals in place**.
+- **Start now** on the Hold button's menu starts without waiting.
+
+A race with nobody on a post (a layout with no **Corner marshal posts:**) never waits.
 
 The same marshal list is what the announcer reads out for the `{marshals}` placeholder in grid calls. See [Voice announcements](../announcer/voice.md). The Next Up bar on **Race Control** also names the round that marshals the next one.
 

@@ -65,6 +65,13 @@ public sealed class RoundDefinition
     public Dictionary<string, string>? MarshalCovers { get; set; }
 
     /// <summary>
+    /// Marshals who didn't turn up to their post for this round (12 Nov 2026,
+    /// setup plan D4), as "Name (Post)", logged from Race Control's
+    /// Someone's missing... for the club's marshal rule. Null for none.
+    /// </summary>
+    public List<string>? MarshalNoShows { get; set; }
+
+    /// <summary>
     /// Which leg of a multi-leg A-main this is (11 Nov 2026, race-night build
     /// plan, Phase 5.3): 1, 2 or 3, or 0 for every other round - including an
     /// A-main run as one race, the usual case. The legs are scored together

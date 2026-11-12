@@ -670,6 +670,18 @@ public sealed class AppSettings
     public string AutoStartOffForNight { get; set; } = string.Empty;
 
     /// <summary>
+    /// Wait for the marshals before an automatic start (12 Nov 2026, setup
+    /// plan D4). On: a minute before the next race, Race Control names its
+    /// marshals and their posts with Marshals in place and Someone's
+    /// missing... buttons, and at zero the start waits until somebody presses
+    /// Marshals in place. The announcer calls the missing posts once. Off by
+    /// default, so a club running happily today sees no change; the tick is on
+    /// the Auto start switch's right-click menu. A race with nobody on a post
+    /// (a layout with no marshal posts) never waits.
+    /// </summary>
+    public bool AutoStartWaitForMarshals { get; set; }
+
+    /// <summary>
     /// Close the night with a checklist to tick off (11 Nov 2026 - see
     /// CloseNightChecklist). On: when every race has run, Next Steps offers
     /// "Close the night...", a window listing what is left with a button to

@@ -305,6 +305,10 @@ public static class EventSpine
         raceEvent.ShareHeatsUnder = lastLikeThis.ShareHeatsUnder;
         raceEvent.BetweenRacesPreset = lastLikeThis.BetweenRacesPreset ?? string.Empty;
         raceEvent.CheckedInDriversOnly = lastLikeThis.CheckedInDriversOnly;
+
+        // And the class running order (setup plan D7): juniors first every week.
+        raceEvent.ClassRunningOrder = (lastLikeThis.ClassRunningOrder ?? new List<string>()).ToList();
+        raceEvent.RotateClassOrder = lastLikeThis.RotateClassOrder;
     }
 
     /// <summary>

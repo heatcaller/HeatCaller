@@ -378,6 +378,10 @@ public sealed partial class RaceControlControl
 
         // Auto start's "not seen by the loop" banner (11 Nov 2026).
         _page.Add(_carsBanner, gapBelow: UiLayout.RowGap);
+
+        // And its "marshals in place?" ask (12 Nov 2026, setup plan D4).
+        BuildMarshalsAsk();
+        _page.Add(_marshalsBanner, gapBelow: UiLayout.RowGap);
         _page.AddFill(body, body.LeastHeight, gapBelow: 0);
 
         Controls.Add(_page);
