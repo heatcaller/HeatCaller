@@ -44,6 +44,14 @@ internal enum ProgramStage
     /// <summary>There is a round waiting to be run.</summary>
     RunNext,
 
+    /// <summary>
+    /// Tonight's heats are built, none has run, and they haven't been posted
+    /// (12 Nov 2026, setup plan D2). Never made by Evaluate:
+    /// RaceProgramControl.NextStep turns the first RunNext into it when the
+    /// club posts its heats. See HeatPosting.
+    /// </summary>
+    PostHeats,
+
     /// <summary>Every scheduled round has been run, and a class still has no mains. Never reached on a club night.</summary>
     SeedMains,
 
@@ -106,6 +114,12 @@ internal static class ProgramCaptions
 
     /// <summary>What the Next Up bar's button says while a session is under way.</summary>
     public const string RaceRunning = "Race Running";
+
+    /// <summary>The built program's button before the first race when the club posts its heats (12 Nov 2026). Never on the Next Up bar.</summary>
+    public const string PostHeats = "Post the heats...";
+
+    /// <summary>The same on a club night, which has races rather than heats.</summary>
+    public const string PostRaces = "Post the races...";
 
     /// <summary>The finished program's button when the club closes the night with the checklist (11 Nov 2026). Never on the Next Up bar.</summary>
     public const string CloseNight = "Close the night...";

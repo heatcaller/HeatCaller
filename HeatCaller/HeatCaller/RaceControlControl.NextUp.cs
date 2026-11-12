@@ -667,6 +667,12 @@ public sealed partial class RaceControlControl
             return;
         }
 
+        // Posted heats (12 Nov 2026, setup plan D2): drivers have looked theirs up.
+        if (ConfirmPostedChange?.Invoke(FindForm(), $"Redo Remaining Heats deals the drivers into {Plural.Of(pending.Count, "heat")} again, so most of them move.") == false)
+        {
+            return;
+        }
+
         // The old rosters, captured before anything moves, so one Undo puts
         // the whole re-seed back rather than one heat of it.
         var before = pending.ToDictionary(r => r.Id, r => r.AssignedTransponders.ToList(), StringComparer.Ordinal);

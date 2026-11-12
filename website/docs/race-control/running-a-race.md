@@ -449,6 +449,7 @@ After each race, HeatCaller counts down a gap and starts the next race by itself
 - **When it counts.** From the checkered flag of a race on the program. It doesn't count after a demo, a Quick Race or a race kept on its own, and it doesn't start the first race of the night. The gap is 2:30 unless you choose another: right-click the switch for 1:30 to 5:00.
 - **The call-ups follow it.** The call-ups are timed to the real start, whether or not the timetable has times, and so is the spoken countdown ("one minute") when it's ticked on the **Between races** card. Phones show the start time too.
 - **A rest for back-to-back drivers.** When a driver in the next race raced the race just run (two classes, or a bump-up), that race waits an extra 2 minutes, and **NEXT** says who the rest is for.
+- **Planned breaks.** A break planned on **Setup**, such as watering the track after Q2, is added to the gap before the race that follows, and the announcer says it as it begins: "Time for a 10-minute break - water the track. Racing starts again about 20:40." See [Planned breaks](../race-day/program-and-mains.md#planned-breaks).
 - **Hold.** **Hold** on the Next Up bar stops the count, and **Resume** carries on from where it stood. Right-click **Hold** for **+1 min** (the same as Call Up's) and **Start now**.
 - **The announcer comes first.** If the count runs out while the recap is still being spoken, the race starts the moment it ends.
 - **A car not seen by the loop.** About 45 seconds before the start, HeatCaller looks for every car in the next race on the loop, the same way the roll call does. If one hasn't been heard when the count runs out, the race waits:
@@ -463,7 +464,7 @@ After each race, HeatCaller counts down a gap and starts the next race by itself
 
 If something is owed before the next race can go out, the bar says so in place of the next round and the button does it instead: **Move the top finishers up** when a lower main has finished and its bump-ups are due, or **Build the finals from qualifying** when a class has finished qualifying. That way the upper main can't go out before its bump-ups. See [Program and mains](../race-day/program-and-mains.md#the-next-step-card).
 
-**Redo Remaining Heats** rebuilds the rosters of every qualifying heat that hasn't run yet from the drivers checked in right now, after asking. Use it for a no-show or a late entry. When part of a round has already run, that round's remaining heats get only the drivers who haven't raced it yet. Recorded heats and mains aren't changed, and **Undo** puts the old rosters back. See [Events and entries](../race-day/events-and-entries.md).
+**Redo Remaining Heats** rebuilds the rosters of every qualifying heat that hasn't run yet from the drivers checked in right now, after asking. Use it for a no-show or a late entry. When part of a round has already run, that round's remaining heats get only the drivers who haven't raced it yet. Recorded heats and mains aren't changed, and **Undo** puts the old rosters back. Once the heats are posted, it asks a second time, because drivers may already have looked theirs up (see [Post the heats](../race-day/program-and-mains.md#post-the-heats)). See [Events and entries](../race-day/events-and-entries.md).
 
 ## Timing warnings
 

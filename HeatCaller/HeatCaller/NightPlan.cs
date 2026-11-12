@@ -74,6 +74,9 @@ public static class NightPlan
         TimeSpan? Over,
         IReadOnlyList<Fix> Fixes)
     {
+        /// <summary>The planned breaks still ahead tonight, in all (12 Nov 2026, setup plan D5) - already counted in the starts and the finish.</summary>
+        public TimeSpan BreakTime { get; init; }
+
         /// <summary>When the round should start, or null when it is not still to run.</summary>
         public DateTime? StartOf(string roundId) =>
             Slots.FirstOrDefault(s => s.Round is not null && string.Equals(s.Round.Id, roundId, StringComparison.Ordinal))?.StartUtc;
@@ -119,6 +122,11 @@ public static class NightPlan
     /// program built at 16:00 for an 18:00 start says 18:00, not 16:00. Once
     /// a race has run (or one is on track) the night's own timing takes over.
     /// </param>
+    /// <param name="breaks">
+    /// The race day's planned breaks (setup plan D5), or null. A break falls
+    /// between the last race of the round it follows and the next race, and
+    /// pushes everything after it back by its length.
+    /// </param>
     public static Projection? For(
         IReadOnlyList<RoundDefinition> dayRounds,
         Func<RoundDefinition, TimeSpan> lengthOf,
@@ -128,10 +136,22 @@ public static class NightPlan
         TimeSpan? tonightsGap,
         TimeSpan? outByLocal,
         DateTime nowUtc,
-        TimeSpan? firstRaceLocal = null)
+        TimeSpan? firstRaceLocal = null,
+        IReadOnlyList<PlannedBreak>? breaks = null)
     {
         var gap = tonightsGap is { } measured && measured > TimeSpan.Zero ? measured : DefaultGap;
         var slots = new List<Slot>();
+        var breakTime = TimeSpan.Zero;
+
+        // The race before the next one placed, for the breaks between them.
+        RoundDefinition? previous;
+
+        TimeSpan BreakBefore(RoundDefinition next)
+        {
+            var length = NightBreaks.Length(NightBreaks.Between(previous, next, breaks));
+            breakTime += length;
+            return length;
+        }
 
         var toRun = dayRounds.Where(r => r is not null && !r.IsRecorded && r.Kind != RoundKind.Practice).ToList();
         var onTrack = onTrackRoundId is null
@@ -147,10 +167,22 @@ public static class NightPlan
             var start = nowUtc - TimeSpan.FromTicks(length.Ticks / 2);
             slots.Add(new Slot(onTrack, onTrack.RoundLabel, onTrack.ClassName, onTrack.Kind, length, start));
             cursor = start + length + gap;
+            previous = onTrack;
         }
         else
         {
-            cursor = lastFinishUtc is { } finished && finished + gap > nowUtc ? finished + gap : nowUtc;
+            // The last race run, in program order: a break planned after it
+            // is still to come, from its finish.
+            previous = dayRounds.LastOrDefault(r => r is not null && r.IsRecorded && r.Kind != RoundKind.Practice);
+            var firstToRun = toRun.FirstOrDefault();
+            var pause = firstToRun is null ? TimeSpan.Zero : BreakBefore(firstToRun);
+
+            cursor = lastFinishUtc is { } finished && finished + gap + pause > nowUtc ? finished + gap + pause : nowUtc;
+
+            if (firstToRun is not null)
+            {
+                previous = firstToRun;
+            }
 
             // Nothing of tonight has raced yet: start at the time the club
             // set, when that is still ahead. NearestOccurrence picks the day
@@ -171,13 +203,30 @@ public static class NightPlan
                 continue;
             }
 
+            // The first race to run had its break counted above.
+            if (!ReferenceEquals(round, previous))
+            {
+                cursor += BreakBefore(round);
+            }
+
             var length = lengthOf(round);
             slots.Add(new Slot(round, round.RoundLabel, round.ClassName, round.Kind, length, cursor));
             cursor += length + gap;
+            previous = round;
         }
+
+        // A stand-in for the mains still to be built, so a break before the
+        // finals falls in front of them too.
+        var unbuiltMain = new RoundDefinition { Kind = RoundKind.Main };
 
         foreach (var mains in unbuilt ?? Enumerable.Empty<UnbuiltMains>())
         {
+            if (mains.Count > 0)
+            {
+                cursor += BreakBefore(unbuiltMain);
+                previous = unbuiltMain;
+            }
+
             // Lowest first, the order the mains run in.
             for (var tier = Math.Max(0, mains.Count) - 1; tier >= 0; tier--)
             {
@@ -203,7 +252,10 @@ public static class NightPlan
             tonightsGap is { } g && g > TimeSpan.Zero,
             outBy,
             over,
-            over is null ? Array.Empty<Fix>() : FixesFor(slots, gap, onTrack, dayRounds));
+            over is null ? Array.Empty<Fix>() : FixesFor(slots, gap, onTrack, dayRounds))
+        {
+            BreakTime = breakTime,
+        };
     }
 
     /// <summary>
@@ -433,7 +485,8 @@ public static class NightPlan
     /// </summary>
     public static string Note(Projection plan)
     {
-        var finish = AppTime.TimeOfDay(plan.FinishUtc.ToLocalTime());
+        var finish = AppTime.TimeOfDay(plan.FinishUtc.ToLocalTime())
+                     + (plan.BreakTime > TimeSpan.Zero ? $" (with {Minutes(plan.BreakTime)} of breaks)" : string.Empty);
 
         if (plan.OutByUtc is not { } outBy)
         {

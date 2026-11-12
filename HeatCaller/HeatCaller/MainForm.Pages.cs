@@ -590,6 +590,11 @@ public partial class MainForm
             _raceProgram.RefreshAll();
             _todayControl?.RefreshAll();
         };
+        eventTab.NightSetupChanged += () =>
+        {
+            _raceProgram.RefreshAll();
+            _todayControl?.RefreshAll();
+        };
 
         // The setup wizard, opened from The Day. Built here rather than
         // there because it drives three pages' commands, not one - and
@@ -772,6 +777,11 @@ public partial class MainForm
         raceProgram.CloseNightRequested += OpenCloseNight;
         raceProgram.ClosingChecklistChanged += () => _todayControl?.RefreshAll();
         raceControl.RunProgramStepRequested += step => raceProgram.RunStep(step);
+
+        // Setting up the night (12 Nov 2026, setup plan step 1 - see
+        // MainForm.NightSetup): posting the heats, the cars not heard
+        // tonight, and the planned breaks.
+        WireNightSetup(raceProgram, raceControl);
 
         // --- Today ---
         //

@@ -1,0 +1,170 @@
+using System.Drawing;
+
+namespace HeatCaller;
+
+/// <summary>
+/// The night's planned breaks on the Setup tab (12 Nov 2026, setup plan D5):
+/// "Breaks..." opens a window of up to four lines, each a point in the
+/// night, a length and what it's for. Saved on the race day, with an undo.
+/// </summary>
+public sealed partial class RaceDayEventControl
+{
+    private void EditBreaks()
+    {
+        if (Selected is not { IsLegacy: false } day)
+        {
+            return;
+        }
+
+        using var form = new BreaksForm(day.Breaks, Math.Clamp(day.QualifyingRounds, 1, 10), day.IsClubNight);
+
+        if (form.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        var before = NightBreaks.Copy(day.Breaks);
+        var after = form.Breaks;
+
+        if (NightBreaks.Summary(before, false) == NightBreaks.Summary(after, false))
+        {
+            return;
+        }
+
+        day.Breaks = after;
+        _events.Upsert(day);
+
+        var dayId = day.Id;
+        _undo?.Capture($"Change the breaks on '{day.DisplayName}'", () =>
+        {
+            if (_events.Get(dayId) is { } current)
+            {
+                current.Breaks = NightBreaks.Copy(before);
+                _events.Upsert(current);
+            }
+
+            RefreshAfterUndo();
+            NightSetupChanged?.Invoke();
+        });
+
+        _lblBreaks.Text = NightBreaks.Summary(day.Breaks, day.IsClubNight);
+        NightSetupChanged?.Invoke();
+    }
+}
+
+/// <summary>The Breaks window: up to four planned breaks, each a point in the night, a length and what it's for.</summary>
+internal sealed class BreaksForm : Form
+{
+    /// <summary>How many breaks the window holds.</summary>
+    internal const int Lines = 4;
+
+    private readonly List<(ComboBox When, NumericUpDown Minutes, TextBox What)> _lines = new();
+
+    /// <summary>The "when" choices, in order: none, after each round, and before the finals on a race day.</summary>
+    private readonly List<int?> _points = new();
+
+    /// <summary>The breaks as set, in the order the night meets them. Lines left on "No break" are dropped.</summary>
+    public List<PlannedBreak> Breaks =>
+        NightBreaks.Ordered(_lines
+            .Where(l => l.When.SelectedIndex > 0 && _points[l.When.SelectedIndex] is not null)
+            .Select(l => new PlannedBreak
+            {
+                AfterRound = _points[l.When.SelectedIndex]!.Value,
+                Minutes = (int)l.Minutes.Value,
+                What = l.What.Text.Trim(),
+            }))
+            .ToList();
+
+    public BreaksForm(IReadOnlyList<PlannedBreak>? breaks, int rounds, bool clubNight)
+    {
+        Text = "Breaks";
+        Font = AppTheme.BodyFont;
+        BackColor = AppTheme.Background;
+        ShowInTaskbar = false;
+        StartPosition = FormStartPosition.CenterParent;
+
+        _points.Add(null);
+
+        for (var n = 1; n <= rounds; n++)
+        {
+            _points.Add(n);
+        }
+
+        if (!clubNight)
+        {
+            _points.Add(PlannedBreak.BeforeFinals);
+        }
+
+        var lblHow = new Label
+        {
+            Text = "Breaks planned into tonight, such as watering the track after Q2 or dinner before the finals. "
+                   + "The finish time, every estimated start and the gap before the next race allow for them, "
+                   + "and the announcer says when a break begins and when racing starts again.",
+            AutoSize = true,
+            MaximumSize = new Size(520, 0),
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        var grid = new TableLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 3,
+            Dock = DockStyle.Top,
+        };
+
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        grid.Controls.Add(new Label { Text = "When", AutoSize = true, Margin = new Padding(0, 0, 8, 4) }, 0, 0);
+        grid.Controls.Add(new Label { Text = "Minutes", AutoSize = true, Margin = new Padding(0, 0, 8, 4) }, 1, 0);
+        grid.Controls.Add(new Label { Text = "What for (said to the room)", AutoSize = true, Margin = new Padding(0, 0, 0, 4) }, 2, 0);
+
+        var ordered = NightBreaks.Ordered(breaks ?? Array.Empty<PlannedBreak>());
+
+        for (var i = 0; i < Lines; i++)
+        {
+            var when = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 170, Margin = new Padding(0, 2, 8, 2) };
+            when.Items.Add("No break");
+
+            foreach (var point in _points.Skip(1))
+            {
+                when.Items.Add(NightBreaks.WhenName(point!.Value, clubNight));
+            }
+
+            var minutes = new NumericUpDown { Minimum = 1, Maximum = NightBreaks.MaxMinutes, Value = 10, Width = 70, Margin = new Padding(0, 2, 8, 2) };
+            var what = new TextBox { Dock = DockStyle.Fill, Margin = new Padding(0, 2, 0, 2) };
+
+            when.SelectedIndex = 0;
+
+            if (i < ordered.Count)
+            {
+                var index = _points.IndexOf(ordered[i].AfterRound);
+                when.SelectedIndex = index > 0 ? index : 0;
+                minutes.Value = Math.Clamp(ordered[i].Minutes, 1, NightBreaks.MaxMinutes);
+                what.Text = ordered[i].What;
+            }
+
+            grid.Controls.Add(when, 0, i + 1);
+            grid.Controls.Add(minutes, 1, i + 1);
+            grid.Controls.Add(what, 2, i + 1);
+            _lines.Add((when, minutes, what));
+        }
+
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
+        var btnSave = new Button { Text = "Save", DialogResult = DialogResult.OK, AutoSize = true };
+
+        var page = new FillPage();
+        page.Add(lblHow, stretch: false, gapBelow: UiLayout.RowGap);
+        page.Add(grid, stretch: false, gapBelow: UiLayout.RowGap);
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
+
+        Controls.Add(page);
+        AcceptButton = btnSave;
+        CancelButton = btnCancel;
+
+        AppTheme.ApplyRecursively(this);
+        DialogFit.Keep(this, page, width: 620, height: 340);
+    }
+}

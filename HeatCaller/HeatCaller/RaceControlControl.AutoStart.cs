@@ -54,6 +54,16 @@ public sealed partial class RaceControlControl
     /// <summary>Whether Auto start is on right now: switched on, and not turned off for tonight.</summary>
     internal bool AutoStartOn => !AutoStartClock.OffTonight(_settings.AutoStartBetweenRaces, _settings.AutoStartOffForNight, TonightKey);
 
+    /// <summary>Tonight's planned breaks (the race day's - setup plan D5). Set by MainForm; null for none.</summary>
+    internal Func<IReadOnlyList<PlannedBreak>?>? PlannedBreaks { get; set; }
+
+    /// <summary>
+    /// Asks before Redo Remaining Heats changes posted heats (setup plan D2).
+    /// Set by MainForm, from the program page; true to go ahead. Null always
+    /// goes ahead.
+    /// </summary>
+    internal Func<IWin32Window?, string, bool>? ConfirmPostedChange { get; set; }
+
     /// <summary>The gap Auto start counts, from the setting, kept between 30 s and 15 min.</summary>
     private TimeSpan AutoStartGap => TimeSpan.FromSeconds(Math.Clamp(_settings.AutoStartGapSeconds, 30, 900));
 
@@ -268,16 +278,30 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        var justRan = _activeRound?.Invoke()?.AssignedTransponders;
+        var lastRound = _activeRound?.Invoke();
+        var justRan = lastRound?.AssignedTransponders;
         var resting = AutoStartClock.BackToBack(justRan, next.AssignedTransponders).Select(SpokenNameOf).ToList();
 
+        // A break planned between the race just run and this one (12 Nov
+        // 2026, setup plan D5) is added to the gap: "water the track after
+        // Q2" holds Q3 Heat 1 for those ten minutes too.
+        var breaks = NightBreaks.Between(lastRound, next, PlannedBreaks?.Invoke());
+        var gap = AutoStartGap + NightBreaks.Length(breaks);
+
         var wasOpen = _autoStart.IsOpen && _autoStart.RoundId == next.Id;
-        _autoStart.Open(_race.SessionGeneration.ToString(System.Globalization.CultureInfo.InvariantCulture), next.Id, now, AutoStartGap, resting);
+        _autoStart.Open(_race.SessionGeneration.ToString(System.Globalization.CultureInfo.InvariantCulture), next.Id, now, gap, resting);
 
         if (!wasOpen && resting.Count > 0)
         {
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] {AutoStartClock.Names(resting)} raced the last race too - "
                                   + $"{next.RoundLabel} waits an extra {AutoStartClock.Clock(AutoStartClock.RestForBackToBack)}.");
+        }
+
+        if (!wasOpen && breaks.Count > 0 && _autoStart.StartsAtUtc(now, Gap.PushedBackMinutes) is { } resumes)
+        {
+            SayGapLine(NightBreaks.Announcement(breaks, resumes), "Break");
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] Planned break before {next.RoundLabel}: "
+                                  + $"{NightPlan.Minutes(NightBreaks.Length(breaks))}, {NightPlan.About(resumes)}.");
         }
 
         _autoStartState = _autoStart.Step(now, floorBusy, NotSeenIn(next, now), Gap.PushedBackMinutes);

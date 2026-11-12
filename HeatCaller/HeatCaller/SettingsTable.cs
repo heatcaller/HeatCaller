@@ -201,6 +201,7 @@ internal static class SettingsTable
             nameof(AppSettings.RaceStartWithOnAir),
             nameof(AppSettings.AutoStartBetweenRaces),
             nameof(AppSettings.UseCloseNightChecklist),
+            nameof(AppSettings.PostHeatsBeforeFirstRace),
             nameof(AppSettings.CloseNightOwnItems),
 
             // Cast: the Co-host's "What they're like", every "If ElevenLabs

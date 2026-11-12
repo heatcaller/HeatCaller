@@ -13,7 +13,7 @@ namespace HeatCaller;
 /// day with sensible blanks; the fields exist for the clubs that name
 /// their rounds and tie them to a championship.
 /// </summary>
-public sealed class RaceDayEventControl : UserControl
+public sealed partial class RaceDayEventControl : UserControl
 {
     private readonly RaceEventStore _events;
     private readonly VenueStore _venues;
@@ -96,6 +96,28 @@ public sealed class RaceDayEventControl : UserControl
     /// the race day's edits or undo.
     /// </summary>
     private readonly CheckBox _chkCloseNight = new ThemedCheckBox();
+
+    /// <summary>
+    /// Post the heats before the first race (12 Nov 2026, setup plan D2 -
+    /// AppSettings.PostHeatsBeforeFirstRace). The club's, like the checklist above.
+    /// </summary>
+    private readonly CheckBox _chkPostHeats = new ThemedCheckBox();
+
+    private const string EntriesCloseCaption = "Entries close at:";
+
+    /// <summary>
+    /// When entries close (RaceEvent.EntriesCloseLocalTime, 12 Nov 2026, setup
+    /// plan D1): the same tick-and-picker pair as the first race's time, for
+    /// the same reason.
+    /// </summary>
+    private readonly CheckBox _chkEntriesClose = new ThemedCheckBox();
+
+    private readonly TimePicker _dtpEntriesClose = new();
+
+    /// <summary>The night's planned breaks on one line (setup plan D5), and the button that changes them.</summary>
+    private readonly Label _lblBreaks = new();
+
+    private readonly Button _btnBreaks = new();
     private readonly ComboBox _cmbAutoAdvanceScope = new();
 
     /// <summary>Between-race talk for this day: the club's Between races settings, or one of the card's presets over them (31 Oct 2026).</summary>
@@ -115,6 +137,9 @@ public sealed class RaceDayEventControl : UserControl
 
     /// <summary>The "Close the night with a checklist" tick changed, so the Next Steps card should say it again.</summary>
     public event Action? CloseNightChecklistChanged;
+
+    /// <summary>The "Post the heats before the first race" tick, or the night's breaks, changed - so Next Steps should say it again.</summary>
+    public event Action? NightSetupChanged;
 
     /// <summary>
     /// The caption on the qualifying-rounds spinner.
@@ -472,6 +497,31 @@ public sealed class RaceDayEventControl : UserControl
 
         aboutGrid.AddRow(OutByCaption, FieldGrid.Inline(_dtpOutBy, _chkOutBy));
 
+        // Entries close (12 Nov 2026, setup plan D1): above the first race in
+        // the night, but kept below it here so the rows people already know
+        // don't move.
+        _dtpEntriesClose.AutoSize = true;
+        _dtpEntriesClose.Value = TimeSpan.FromHours(18.5);
+        _textSize.Wear(_dtpEntriesClose, () => AppTheme.BodyFont);
+
+        _chkEntriesClose.Text = "Set";
+        _chkEntriesClose.AutoSize = true;
+
+        aboutGrid.AddRow(EntriesCloseCaption, FieldGrid.Inline(_dtpEntriesClose, _chkEntriesClose));
+        aboutGrid.AddHint("After this, a driver who checks in is a late entry. The announcer calls it ten minutes before and as it passes, and Next Steps counts down to it.");
+
+        // The night's planned breaks (setup plan D5): a line saying what they
+        // are, and a window to change them.
+        _lblBreaks.AutoSize = true;
+        _lblBreaks.Margin = new Padding(0, 6, 8, 0);
+        _lblBreaks.Text = "None";
+        _btnBreaks.Text = "Breaks...";
+        _btnBreaks.AutoSize = true;
+        _btnBreaks.Click += (_, _) => EditBreaks();
+
+        aboutGrid.AddRow("Breaks:", FieldGrid.Inline(_lblBreaks, _btnBreaks));
+        aboutGrid.AddHint("Watering the track, dinner, track repairs. The finish time, every estimated start and the gap before the next race allow for them, and the announcer tells the room.");
+
         _txtNotes.Multiline = true;
         _txtNotes.AcceptsReturn = true;
         _txtNotes.ScrollBars = ScrollBars.Vertical;
@@ -561,6 +611,26 @@ public sealed class RaceDayEventControl : UserControl
         _cmbGapPreset.SelectedIndex = 0;
         programGrid.AddRow("Between-race talk:", _cmbGapPreset);
         programGrid.AddHint("How much the announcer says between races tonight. A preset here is for this day only - the club's own settings are on the AI Commentary tab.");
+
+        // Posting the heats (12 Nov 2026, setup plan D2). The club's, like
+        // the closing checklist below.
+        _chkPostHeats.Text = "Post the heats before the first race";
+        _chkPostHeats.AutoSize = true;
+        _chkPostHeats.Checked = _settings?.PostHeatsBeforeFirstRace ?? true;
+        _chkPostHeats.Enabled = _settings is not null;
+        _chkPostHeats.CheckedChanged += (_, _) =>
+        {
+            if (_settings is null || _settings.PostHeatsBeforeFirstRace == _chkPostHeats.Checked)
+            {
+                return;
+            }
+
+            _settings.PostHeatsBeforeFirstRace = _chkPostHeats.Checked;
+            _settings.Save();
+            NightSetupChanged?.Invoke();
+        };
+        programGrid.AddField(_chkPostHeats);
+        programGrid.AddHint("Once the heats are built, Next Steps offers Post the heats... before the first race: it prints the heat sheets and the marshal list, tells the room, and lists any car the loop hasn't heard tonight. After that, moving drivers between heats asks first. For every night, not just this one.");
 
         // The closing checklist (11 Nov 2026). Every night, not just this
         // one, so it saves straight to the club's settings.
@@ -777,6 +847,14 @@ public sealed class RaceDayEventControl : UserControl
         };
 
         _dtpOutBy.ValueChanged += CommitNow;
+
+        _chkEntriesClose.CheckedChanged += (_, _) =>
+        {
+            _dtpEntriesClose.Enabled = _chkEntriesClose.Checked && !(Selected?.IsLegacy ?? true);
+            CommitNow();
+        };
+
+        _dtpEntriesClose.ValueChanged += CommitNow;
         _numHeatSize.ValueChanged += (_, _) => CommitNow();
         _cmbFirstRound.SelectedIndexChanged += (_, _) => CommitNow();
         _numShareUnder.ValueChanged += (_, _) => CommitNow();
@@ -997,6 +1075,11 @@ public sealed class RaceDayEventControl : UserControl
         if (onScreen.OutByLocalTime != baseline.OutByLocalTime)
         {
             target.OutByLocalTime = onScreen.OutByLocalTime;
+        }
+
+        if (onScreen.EntriesCloseLocalTime != baseline.EntriesCloseLocalTime)
+        {
+            target.EntriesCloseLocalTime = onScreen.EntriesCloseLocalTime;
         }
 
         // 0 means the day never set its own heat size; the page then shows
@@ -1358,6 +1441,9 @@ public sealed class RaceDayEventControl : UserControl
         _dtpFirstRace.Value = raceEvent.FirstRaceLocalTime ?? TimeSpan.FromHours(10);
         _chkOutBy.Checked = raceEvent.OutByLocalTime is not null;
         _dtpOutBy.Value = raceEvent.OutByLocalTime ?? TimeSpan.FromHours(22);
+        _chkEntriesClose.Checked = raceEvent.EntriesCloseLocalTime is not null;
+        _dtpEntriesClose.Value = raceEvent.EntriesCloseLocalTime ?? TimeSpan.FromHours(18.5);
+        _lblBreaks.Text = NightBreaks.Summary(raceEvent.Breaks, raceEvent.IsClubNight);
 
         // Zero means "whatever was used last" - the number the program builds
         // with (RaceEventStore.HeatSizeFor), so that is what the box shows. It
@@ -1419,6 +1505,9 @@ public sealed class RaceDayEventControl : UserControl
         _dtpFirstRace.Enabled = editable && _chkFirstRace.Checked;
         _chkOutBy.Enabled = editable;
         _dtpOutBy.Enabled = editable && _chkOutBy.Checked;
+        _chkEntriesClose.Enabled = editable;
+        _dtpEntriesClose.Enabled = editable && _chkEntriesClose.Checked;
+        _btnBreaks.Enabled = editable;
         _txtNotes.Enabled = editable;
         _cmbVenue.Enabled = editable;
         _cmbLayout.Enabled = editable;
@@ -1689,6 +1778,7 @@ public sealed class RaceDayEventControl : UserControl
 
         raceEvent.FirstRaceLocalTime = _chkFirstRace.Checked ? _dtpFirstRace.Value : null;
         raceEvent.OutByLocalTime = _chkOutBy.Checked ? _dtpOutBy.Value : null;
+        raceEvent.EntriesCloseLocalTime = _chkEntriesClose.Checked ? _dtpEntriesClose.Value : null;
         raceEvent.DriversPerHeat = (int)_numHeatSize.Value;
         raceEvent.FirstRoundSeeding = (FirstRoundSeeding)Math.Max(0, _cmbFirstRound.SelectedIndex);
         raceEvent.ShareHeatsUnder = (int)_numShareUnder.Value;
@@ -1766,6 +1856,7 @@ public sealed class RaceDayEventControl : UserControl
                     current.Shape = old.Shape;
                     current.FirstRaceLocalTime = old.FirstRaceLocalTime;
                     current.OutByLocalTime = old.OutByLocalTime;
+                    current.EntriesCloseLocalTime = old.EntriesCloseLocalTime;
                     current.QualifyingRounds = old.QualifyingRounds;
                     current.DriversPerHeat = old.DriversPerHeat;
                     current.FirstRoundSeeding = old.FirstRoundSeeding;
@@ -1802,6 +1893,7 @@ public sealed class RaceDayEventControl : UserControl
         && a.Shape == b.Shape
         && a.FirstRaceLocalTime == b.FirstRaceLocalTime
         && a.OutByLocalTime == b.OutByLocalTime
+        && a.EntriesCloseLocalTime == b.EntriesCloseLocalTime
         && a.QualifyingRounds == b.QualifyingRounds
         && a.DriversPerHeat == b.DriversPerHeat
         && a.FirstRoundSeeding == b.FirstRoundSeeding
