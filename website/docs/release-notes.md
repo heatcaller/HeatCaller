@@ -4,6 +4,8 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Ready to race, and the drivers' meeting (12 November).** Once everything is set up, the **Ready to race** card on **Next Steps** offers **Ready to Race...**: a checklist for before the first race. It covers the decoder hearing cars, the phone pages, the club website, the announcer's voice, the heats posted, every car heard, papers, a recent backup and the drivers' meeting. Lines tick themselves, and each has a button to the screen that sorts it. **Meeting Sheet...** writes the drivers' meeting from tonight's day, ready to print or have the announcer read out. See [The Ready to race checklist](race-day/program-and-mains.md#the-ready-to-race-checklist). Update HeatCaller on the race PC; nothing changes on the relay.
+
 - **Before the night: announce it, call it off, and who's coming; papers at the desk (12 November).**
     - **Announce the next race night.** **Announce...** on **Race Day → Setup** puts it on the phones' Home page: the date, the classes on, when entries close and the first race. It comes down by itself the morning after. See [Race Day → Setup](race-day/events-and-entries.md#about-the-day).
     - **Call it off.** **Call It Off...** shows the night as off on the phones, with your message, and can email every regular through the club's mailbox.

@@ -49,6 +49,9 @@ public sealed class TodayControl : UserControl
     /// </summary>
     public event Action<int>? SetUpRequested;
 
+    /// <summary>The Ready to Race card's "Ready to Race..." once everything is set up (12 Nov 2026, setup plan B3).</summary>
+    public event Action? ReadyToRaceRequested;
+
     /// <summary>Raised when the timer needs connecting.</summary>
     public event Action? ConnectTimerRequested;
 
@@ -683,7 +686,19 @@ public sealed class TodayControl : UserControl
             _lblReadyCount.Text = "All set";
             _lblReadyCount.ForeColor = AppTheme.Success;
             _lblTodo.Text = ReadyLine(rounds.Count);
-            SetFinish(null, null);
+
+            // Set up, and nothing raced yet: the start-of-night checklist
+            // (12 Nov 2026, setup plan B3) - the decoder, the phones, the
+            // announcer, the cars, the meeting.
+            if (ReadyToRaceRequested is not null && !rounds.Any(r => r.IsRecorded))
+            {
+                SetFinish("Ready to Race...", () => ReadyToRaceRequested?.Invoke());
+            }
+            else
+            {
+                SetFinish(null, null);
+            }
+
             return;
         }
 

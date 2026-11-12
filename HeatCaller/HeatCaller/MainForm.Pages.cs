@@ -831,6 +831,9 @@ public partial class MainForm
         // the first step still to do.
         today.SetUpRequested += step => _openRaceDaySetup?.Invoke(step);
 
+        // And, once it's all set, the start-of-night checklist (setup plan B3).
+        today.ReadyToRaceRequested += OpenReadyToRace;
+
         // --- The timetable drawer ---
         //
         // The sheet is a few-times-an-evening job: set the times, add doors

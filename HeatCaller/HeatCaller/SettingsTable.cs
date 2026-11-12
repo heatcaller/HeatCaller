@@ -211,6 +211,7 @@ internal static class SettingsTable
             nameof(AppSettings.CheckMemberships),
             nameof(AppSettings.NextNight),
             nameof(AppSettings.CloseNightOwnItems),
+            nameof(AppSettings.ReadyOwnItems),
 
             // Cast: the Co-host's "What they're like", every "If ElevenLabs
             // runs out" Kokoro voice (5 Nov 2026), and the Recap host,
@@ -471,6 +472,7 @@ internal static class SettingsTable
             // Auto start turned off for one night (11 Nov 2026).
             nameof(AppSettings.AutoStartOffForNight),
             nameof(AppSettings.CloseNightTicks),
+            nameof(AppSettings.ReadyTicks),
 
             // A one-time step done (11 Nov 2026) - see AppSettings.ArrivePitLaneLiveOff.
             nameof(AppSettings.PitLaneLiveArrivedOff),

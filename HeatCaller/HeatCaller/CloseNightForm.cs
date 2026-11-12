@@ -22,6 +22,9 @@ internal sealed class CloseNightForm : Form
     private readonly Func<IReadOnlyList<string>> _ownLines;
     private readonly Action<List<string>> _saveOwnLines;
 
+    /// <summary>The start-of-night list (setup plan B3), not the closing one.</summary>
+    private readonly bool _ready;
+
     private readonly Label _lblHeadline = new();
     private readonly TableLayoutPanel _rows = new();
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = RefreshMs };
@@ -37,20 +40,26 @@ internal sealed class CloseNightForm : Form
     /// <param name="go">Goes to the screen that sorts a line (or, for the backup, takes one).</param>
     /// <param name="ownLines">The club's own lines.</param>
     /// <param name="saveOwnLines">Saves the club's own lines.</param>
+    /// <param name="ready">
+    /// The start-of-night list instead (12 Nov 2026, setup plan B3 - see
+    /// ReadyChecklist): the same window, with its own title and words.
+    /// </param>
     public CloseNightForm(
         Func<List<CloseNightChecklist.Item>?> read,
         Action<string, bool> tick,
         Action<CloseNightKind> go,
         Func<IReadOnlyList<string>> ownLines,
-        Action<List<string>> saveOwnLines)
+        Action<List<string>> saveOwnLines,
+        bool ready = false)
     {
         _read = read;
         _tick = tick;
         _go = go;
         _ownLines = ownLines;
         _saveOwnLines = saveOwnLines;
+        _ready = ready;
 
-        Text = "Close the Night";
+        Text = ready ? "Ready to Race" : "Close the Night";
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
         ShowInTaskbar = false;
@@ -61,8 +70,11 @@ internal sealed class CloseNightForm : Form
 
         var lblHow = new Label
         {
-            Text = "Ticks itself as the app sees each one done. Dealt with something it can't see - a rental handed back, "
-                   + "an entry paid another way? Tick it off by hand.",
+            Text = ready
+                ? "Before the first race. Ticks itself as the app sees each one done. Sorted something it can't see - "
+                  + "the meeting held, a car checked on the bench? Tick it off by hand."
+                : "Ticks itself as the app sees each one done. Dealt with something it can't see - a rental handed back, "
+                  + "an entry paid another way? Tick it off by hand.",
             AutoSize = true,
             MaximumSize = new Size(520, 0),
             ForeColor = AppTheme.TextMuted,
@@ -118,7 +130,9 @@ internal sealed class CloseNightForm : Form
         _shown = shown;
 
         var left = items.Count(i => !i.Done);
-        _lblHeadline.Text = left == 0 ? "All wrapped up - lights out." : $"Before lights out: {Plural.Of(left, "thing")} to do";
+        _lblHeadline.Text = _ready
+            ? left == 0 ? "All set - ready to race." : $"Before the first race: {Plural.Of(left, "thing")} to do"
+            : left == 0 ? "All wrapped up - lights out." : $"Before lights out: {Plural.Of(left, "thing")} to do";
 
         _rows.SuspendLayout();
 
@@ -214,6 +228,15 @@ internal sealed class CloseNightForm : Form
         CloseNightKind.NightEmails => "Club Website",
         CloseNightKind.Backup => "Back Up Now",
         CloseNightKind.CloseDay => "Setup",
+
+        // Ready to race (setup plan B3).
+        CloseNightKind.Decoder => "Connection",
+        CloseNightKind.PhoneServer => "Local Screens",
+        CloseNightKind.Voice => "Mixer",
+        CloseNightKind.Heats => "Next Steps",
+        CloseNightKind.Cars => "Race Control",
+        CloseNightKind.Papers => "Who's Racing",
+        CloseNightKind.Meeting => "Meeting Sheet...",
         _ => null,
     };
 
@@ -231,8 +254,11 @@ internal sealed class CloseNightForm : Form
 
         var lbl = new Label
         {
-            Text = "Anything else your club does before lights out, one per line - \"Lock the clubhouse\", "
-                   + "\"Pack up the timing loop\". They're on the list every night, ticked off by hand.",
+            Text = _ready
+                ? "Anything else your club does before the first race, one per line - \"Water the track\", "
+                  + "\"Set out the marshal posts\". They're on the list every night, ticked off by hand."
+                : "Anything else your club does before lights out, one per line - \"Lock the clubhouse\", "
+                  + "\"Pack up the timing loop\". They're on the list every night, ticked off by hand.",
             AutoSize = true,
             MaximumSize = new Size(440, 0),
         };
