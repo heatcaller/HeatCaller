@@ -241,6 +241,35 @@ public sealed class DriverExp_L_DriverLiveTests
     }
 
     [Fact]
+    public void An_answer_says_when_the_desk_gave_it_and_a_waiting_ask_does_not()
+    {
+        // 11 Nov 2026: the Me card shows a fresh answer, so it needs the time.
+        var club = new Club();
+        club.Add("1001", "Sam Parker", 1);
+
+        var json = DriverLive.Document(new DriverLive.LiveInputs
+        {
+            NowUtc = Now,
+            CheckedIn = new[] { "1001" },
+            ProfileOf = club.Get,
+            BadgeOf = club.BadgeOf,
+            AsksOf = _ => new[]
+            {
+                new DriverAskAnswer("A1B2C3", DriverAsk.Late, DriverAsk.Approved, "Held 5 minutes.", new DateTime(2026, 11, 11, 19, 41, 7, DateTimeKind.Utc)),
+                new DriverAskAnswer("D4E5F6", DriverAsk.Skip, DriverAsk.Waiting, "", new DateTime(2026, 11, 11, 19, 42, 0, DateTimeKind.Utc)),
+                new DriverAskAnswer("B0B0B0", DriverAsk.Query, DriverAsk.Noted, ""),
+            },
+        });
+
+        var asks = Drivers(json).GetProperty(Badge(1)).GetProperty("asks").EnumerateArray().ToList();
+
+        Assert.Equal(3, asks.Count);
+        Assert.Equal("2026-11-11T19:41:07Z", asks[0].GetProperty("at").GetString());
+        Assert.False(asks[1].TryGetProperty("at", out _));
+        Assert.False(asks[2].TryGetProperty("at", out _));
+    }
+
+    [Fact]
     public void The_same_evening_makes_the_same_string_until_the_minute_turns()
     {
         var club = new Club();

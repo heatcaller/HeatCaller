@@ -1,0 +1,502 @@
+<title>Me Hero Requests</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap">
+<style>
+/* Review sheet: Me > Tonight's "Up next" hero card. Its three small controls
+   at the bottom (See the running order, Need 5 more minutes, Car broken -
+   skip me) become big buttons built into the card, and the desk's answer to
+   a request shows on the card. Sheet chrome follows the viewer's theme; the
+   phones always wear the club's Pit Wall look tokens (as mespaces.ts). */
+:root {
+  --page: #F3F1F7; --ink: #1B1530; --soft: #615A78; --line: #DDD8E8; --card: #FFFFFF; --hi: #C2166C;
+  --f-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page: #0E0A1A; --ink: #EEEAF7; --soft: #A39BBD; --line: #2B2443; --card: #171128; --hi: #FF5FAE; color-scheme: dark } }
+:root[data-theme="dark"] { --page: #0E0A1A; --ink: #EEEAF7; --soft: #A39BBD; --line: #2B2443; --card: #171128; --hi: #FF5FAE; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.55 var(--f-body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 20; background: var(--page); }
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 28px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--f-display); letter-spacing: .01em; text-wrap: balance; }
+h1 { font-size: 2.6rem; line-height: 1; margin: 0 0 8px; }
+h2 { font-size: 1.8rem; line-height: 1.05; margin: 0 0 6px; }
+.eyebrow { font-weight: 700; font-size: .72rem; text-transform: uppercase; letter-spacing: .14em; color: var(--hi); margin-bottom: 6px; }
+.lede { color: var(--soft); max-width: 72ch; margin: 0; }
+code { font-size: .86em; background: color-mix(in srgb, var(--ink) 8%, transparent); padding: 1px 5px; border-radius: 5px; overflow-wrap: anywhere; }
+
+.ctl { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center;
+  margin: 22px calc(-1 * max(16px, env(safe-area-inset-left, 0px))) 0; padding: 10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
+  background: color-mix(in srgb, var(--page) 90%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.ctl b { font-family: var(--f-display); font-size: 1.05rem; }
+.seg { display: inline-flex; flex-wrap: wrap; padding: 3px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+.seg button { border: 0; background: none; color: var(--soft); font: inherit; font-weight: 600; font-size: .88rem; padding: 7px 12px;
+  border-radius: 9px; cursor: pointer; min-height: 36px; }
+.seg button[aria-pressed="true"] { background: var(--hi); color: #fff; }
+.seg button:focus-visible, .phone button:focus-visible { outline: 3px solid #2EE6FF; outline-offset: 2px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 34px 26px; justify-items: center; margin-top: 30px; }
+.slot { display: grid; gap: 10px; justify-items: center; width: 100%; max-width: 360px; align-content: start; }
+.cap { width: 100%; display: grid; gap: 4px; }
+.cap .eb { font-weight: 700; font-size: .7rem; text-transform: uppercase; letter-spacing: .14em; color: var(--hi); }
+.cap b { font-family: var(--f-display); font-size: 1.45rem; line-height: 1.05; }
+.cap > span { color: var(--soft); font-size: .92rem; }
+.meas { font-variant-numeric: tabular-nums; font-size: .8rem; font-weight: 600; background: var(--card);
+  border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; justify-self: start; }
+.notes { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: .86rem; }
+.notes div { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; min-width: 0; }
+.notes h3 { margin: 0 0 2px; font-family: var(--f-body); font-size: .7rem; text-transform: uppercase; letter-spacing: .12em; color: var(--soft); }
+.notes ul { margin: 0; padding-left: 16px; }
+.slot.today { opacity: .9; }
+.slot.rec .cap b::after { content: "My pick"; font-family: var(--f-body); font-size: .68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .1em; color: #fff; background: var(--hi); border-radius: 999px; padding: 2px 8px; margin-left: 8px; vertical-align: 4px; }
+
+/* ---- the phone: club look tokens, and the hero card as mespaces.ts draws it */
+.phone {
+  --bg: #0F0722; --surface: #1A0F3A; --primary: #FF2E9A; --accent: #2EE6FF; --text: #F7F2FF;
+  --muted: #9E8AC7; --border: #33215C; --good: #3DD68C; --warn: #F5B83D; --bad: #FF5A5F; --on-primary: #FFFFFF;
+  width: 360px; max-width: 100%; border-radius: 34px; padding: 10px; background: #05020C; box-shadow: 0 18px 40px -18px rgba(20, 0, 40, .55);
+  color-scheme: dark; position: relative;
+}
+.scr { background: var(--bg); color: var(--text); border-radius: 26px; overflow: hidden; padding: 14px 14px 18px;
+  font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; position: relative; }
+.sb { display: flex; justify-content: space-between; font-size: .72rem; font-weight: 600; color: var(--muted); padding: 0 4px 10px; }
+.who { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.who b { font-family: var(--f-display); font-size: 1.5rem; font-weight: 800; }
+.who span { font-size: .75rem; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; }
+.sw { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; border-radius: 16px; background: var(--surface);
+  border: 1px solid var(--border); margin-bottom: 12px; }
+.sw span { text-align: center; font-weight: 700; font-size: .85rem; color: var(--muted); padding: 9px 0; border-radius: 12px; }
+.sw span.on { background: var(--primary); color: var(--on-primary); }
+
+.me-hero { border-radius: 16px; padding: 16px; display: grid; gap: 10px; text-align: left; position: relative; overflow: hidden;
+  background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--accent) 38%, transparent), transparent 60%),
+              linear-gradient(160deg, color-mix(in srgb, var(--primary) 30%, var(--surface)), var(--surface));
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border)); }
+.me-hero .k { font-size: .72rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--primary); }
+.me-hero .big { font-size: 2.3rem; line-height: .98; font-weight: 800; letter-spacing: -.01em; }
+.me-hero .big small { font-size: 1.05rem; color: var(--muted); font-weight: 700; }
+.me-mini { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.me-mini div { background: color-mix(in srgb, var(--bg) 55%, transparent); border-radius: 12px; padding: 8px 10px; display: grid; gap: 2px; min-width: 0; }
+.me-mini small { color: var(--muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; }
+.me-mini b { font-size: 1.02rem; font-variant-numeric: tabular-nums; }
+/* the shipped three tiles (pack, transponder, setup), shrunk to context here */
+.me-acts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.me-act { min-height: 74px; border-radius: 14px; padding: 8px 4px; display: grid; justify-items: center; align-content: center; gap: 2px;
+  background: color-mix(in srgb, var(--bg) 55%, transparent); border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); }
+.me-act .ic { width: 28px; height: 28px; border-radius: 10px; display: grid; place-items: center; background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.me-act .ic svg { width: 20px; height: 20px; }
+.me-act .n { font-size: .62rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.me-act .s { font-weight: 800; font-size: .84rem; }
+
+.phone button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; border: 0; background: none; }
+.phone button:active { transform: scale(.97); }
+.phone button[disabled] { opacity: .38; cursor: default; transform: none; }
+.phone svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--warn); flex: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .pulse { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; transform: scale(.7); } }
+  .rise { animation: rise .32s cubic-bezier(.2,.8,.2,1); }
+  @keyframes rise { from { transform: translateY(10px); opacity: 0; } }
+  .phone button:active { transition: transform .08s; }
+}
+@media (prefers-reduced-motion: reduce) { .phone button:active { transform: none; } }
+
+/* ---- today */
+.t-go { margin: 0; font-weight: 600; font-size: .92rem; }
+.t-go a { color: var(--accent); }
+.t-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.t-acts button { flex: 1 1 8rem; min-height: 38px; border-radius: 10px; font-size: .86rem !important; font-weight: 600 !important;
+  background: var(--surface) !important; border: 1px solid var(--border) !important; padding: 6px 10px; }
+
+/* ---- A: the dock. A bar fused to the card's bottom edge, three equal keys. */
+.A.me-hero { padding-bottom: 0; }
+.a-dock { margin: 4px -16px 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid color-mix(in srgb, var(--text) 14%, transparent); background: color-mix(in srgb, var(--bg) 62%, transparent); }
+.a-dock button { min-height: 84px; display: grid; justify-items: center; align-content: center; gap: 5px; padding: 10px 4px 12px; min-width: 0;
+  font-weight: 800 !important; font-size: .86rem !important; line-height: 1.1; text-align: center; position: relative; }
+.a-dock button + button { border-left: 1px solid color-mix(in srgb, var(--text) 12%, transparent); }
+.a-dock .ic { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; background: color-mix(in srgb, var(--text) 10%, transparent); }
+.a-dock .late .ic { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.a-dock .skip .ic { background: color-mix(in srgb, var(--bad) 22%, transparent); color: var(--bad); }
+.a-dock small { display: block; font-weight: 600; font-size: .7rem; color: var(--muted); }
+.a-dock .asked { background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.a-dock .asked small { color: var(--warn); display: inline-flex; align-items: center; gap: 5px; }
+.a-reply { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: start; padding: 12px 12px 12px 12px; border-radius: 14px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent); border: 1px solid var(--c); }
+.a-reply .dot { grid-row: span 3; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--c); color: var(--bg); }
+.a-reply .dot svg { width: 22px; height: 22px; stroke-width: 3; }
+.a-reply small { font-size: .66rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--c); }
+.a-reply b { font-size: 1.12rem; line-height: 1.15; }
+.a-reply p { margin: 0; font-size: .88rem; color: color-mix(in srgb, var(--text) 82%, transparent); }
+.a-reply .ok { grid-column: 2; justify-self: start; margin-top: 6px; min-height: 40px; padding: 0 18px; border-radius: 10px; font-weight: 800 !important;
+  background: color-mix(in srgb, var(--text) 12%, transparent) !important; }
+
+/* ---- B: the footer is the answer. Running order wide, the two asks as one split key; an answer takes the split key's place. */
+.b-foot { display: grid; gap: 8px; margin-top: 2px; }
+.b-order { min-height: 54px; border-radius: 14px; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 800 !important;
+  background: color-mix(in srgb, var(--bg) 45%, transparent) !important; border: 1px solid color-mix(in srgb, var(--text) 16%, transparent) !important; }
+.b-order svg { width: 22px; height: 22px; color: var(--accent); }
+.b-split { display: grid; grid-template-columns: 1fr 1fr; border-radius: 16px; overflow: hidden; min-height: 76px;
+  border: 1px solid color-mix(in srgb, var(--primary) 60%, transparent); }
+.b-split button { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; padding: 10px 12px; text-align: left; min-width: 0;
+  background: color-mix(in srgb, var(--primary) 22%, transparent) !important; }
+.b-split button + button { border-left: 1px solid color-mix(in srgb, var(--primary) 60%, transparent) !important; }
+.b-split b { display: block; font-size: 1rem; line-height: 1.1; }
+.b-split small { display: block; font-size: .74rem; color: var(--muted); }
+.b-bar { min-height: 76px; border-radius: 16px; display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 10px 10px 10px 14px; }
+.b-bar.wait { background: color-mix(in srgb, var(--warn) 14%, transparent); border: 1px dashed color-mix(in srgb, var(--warn) 70%, transparent); }
+.b-bar.ans { background: var(--c); color: var(--bg); }
+.b-bar .tx { min-width: 0; }
+.b-bar b { display: block; font-size: 1.06rem; line-height: 1.15; }
+.b-bar small { display: block; font-size: .8rem; opacity: .85; }
+.b-bar.wait small { color: var(--muted); opacity: 1; }
+.b-bar .ok { min-height: 44px; min-width: 64px; padding: 0 14px; border-radius: 12px; font-weight: 800 !important; background: color-mix(in srgb, var(--bg) 22%, transparent) !important; color: var(--bg) !important; }
+.b-bar.ans svg.big { width: 30px; height: 30px; stroke-width: 3; }
+
+/* ---- C: the pit board. Running order up in the card's corner; two tall ask keys; the desk's answer hung on a pit board over the top of the card. */
+.c-order { position: absolute; top: 12px; right: 12px; min-height: 48px; padding: 0 12px; border-radius: 12px; display: inline-flex; align-items: center; gap: 6px;
+  font-weight: 800 !important; font-size: .82rem !important; background: color-mix(in srgb, var(--bg) 55%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--text) 18%, transparent) !important; }
+.c-order svg { width: 20px; height: 20px; color: var(--accent); }
+.c-keys { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.c-keys button { min-height: 96px; border-radius: 16px; display: grid; align-content: space-between; justify-items: start; gap: 8px; padding: 12px; text-align: left; min-width: 0;
+  background: color-mix(in srgb, var(--bg) 55%, transparent) !important; border: 1px solid color-mix(in srgb, var(--text) 16%, transparent) !important; }
+.c-keys svg { width: 28px; height: 28px; }
+.c-keys .late svg { color: var(--warn); }
+.c-keys .skip svg { color: var(--bad); }
+.c-keys b { font-size: 1.02rem; line-height: 1.1; }
+.c-keys b small { display: block; font-weight: 600; font-size: .74rem; color: var(--muted); margin-top: 2px; }
+.c-keys .asked { border: 1px dashed var(--warn) !important; background: color-mix(in srgb, var(--warn) 12%, transparent) !important; }
+.c-keys .asked b small { color: var(--warn); }
+.c-board { border-radius: 12px; padding: 12px 14px 12px; background: #111; color: #fff; display: grid; gap: 2px; position: relative;
+  border: 3px solid var(--c); box-shadow: 0 10px 22px -12px #000; }
+.c-board .hd { display: flex; justify-content: space-between; align-items: center; font-size: .66rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--c); }
+.c-board .word { font-family: var(--f-display); font-size: 2.6rem; font-weight: 800; line-height: .95; letter-spacing: .01em; text-transform: uppercase; }
+.c-board p { margin: 2px 0 0; font-size: .9rem; color: #ddd; }
+.c-board .ok { justify-self: start; margin-top: 8px; min-height: 40px; padding: 0 16px; border-radius: 10px; font-weight: 800 !important; background: var(--c) !important; color: #111 !important; }
+
+/* ---- lock screen */
+.lock { width: 360px; max-width: 100%; border-radius: 34px; padding: 10px; background: #05020C; }
+.lock .scr { min-height: 360px; background: radial-gradient(120% 80% at 30% 0%, #3A1E6B, #0F0722 70%); padding: 20px 14px; }
+.lock .time { text-align: center; color: #fff; font: 700 4rem/1 system-ui, sans-serif; letter-spacing: -.02em; margin: 18px 0 2px; }
+.lock .date { text-align: center; color: #E7DDFB; font-weight: 600; margin-bottom: 26px; }
+.note { border-radius: 20px; padding: 12px 14px; background: rgba(245, 240, 255, .82); color: #140D24; display: grid; grid-template-columns: 34px 1fr; gap: 2px 10px; margin-bottom: 8px; }
+.note .app { grid-row: span 3; width: 34px; height: 34px; border-radius: 9px; background: #FF2E9A; color: #fff; display: grid; place-items: center; font: 800 .9rem var(--f-display); }
+.note .top { display: flex; justify-content: space-between; font-size: .78rem; color: #4E466A; }
+.note b { font-size: .95rem; }
+.note p { margin: 0; font-size: .9rem; }
+.note.old { opacity: .7; transform: scale(.96); }
+
+/* ---- the plan */
+.plan { margin-top: 56px; display: grid; gap: 18px; }
+.plan .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; align-items: start; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; min-width: 0; }
+.panel h3 { font-size: 1.3rem; margin: 0 0 6px; }
+.panel ol, .panel ul { margin: 6px 0 0; padding-left: 20px; }
+.panel li { margin: 6px 0; }
+.panel .file { font-weight: 700; font-size: .78rem; text-transform: uppercase; letter-spacing: .1em; color: var(--hi); margin-top: 12px; }
+.flow-wrap { overflow-x: auto; }
+.flow { display: grid; grid-template-columns: repeat(5, minmax(150px, 1fr)); gap: 10px; min-width: 820px; }
+.flow div { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: .88rem; position: relative; }
+.flow div b { display: block; font-family: var(--f-display); font-size: 1.1rem; }
+.flow div small { color: var(--soft); }
+.flow .new { border: 2px solid var(--hi); }
+.flow .new::after { content: "new"; position: absolute; top: -9px; right: 10px; background: var(--hi); color: #fff; font-size: .62rem; font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase; padding: 1px 7px; border-radius: 999px; }
+.msgs { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.msgs th, .msgs td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.msgs th { font-size: .7rem; text-transform: uppercase; letter-spacing: .1em; color: var(--soft); }
+.tbl { overflow-x: auto; }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">Relay · Me › Tonight · hero card</div>
+  <h1>Ask the desk, hear back on the card</h1>
+  <p class="lede">The "Up next" card ends in three small controls today: a <b>See the running order</b> text link and two plain buttons, <b>Need 5 more minutes</b> and <b>Car broken - skip me</b>. Each option below makes them big keys that belong to the card, and puts the desk's answer on the card the moment it comes back. Use the bar to step one request through: ready, asked, then the desk's yes or no. Tapping an ask key on a phone asks too.</p>
+
+  <div class="ctl" role="group" aria-label="Mockup controls">
+    <b>Request</b>
+    <div class="seg" id="kind">
+      <button type="button" data-v="late" aria-pressed="true">5 more minutes</button>
+      <button type="button" data-v="skip" aria-pressed="false">Skip my race</button>
+    </div>
+    <b>Desk</b>
+    <div class="seg" id="state">
+      <button type="button" data-v="ready" aria-pressed="true">Not asked</button>
+      <button type="button" data-v="wait" aria-pressed="false">Waiting</button>
+      <button type="button" data-v="yes" aria-pressed="false">Approved</button>
+      <button type="button" data-v="no" aria-pressed="false">Declined</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <section class="slot today">
+      <div class="cap"><span class="eb">Today</span><b>As shipped</b><span>A text link and two 38px buttons. The answer only appears folded inside "Your requests to the desk", further down the live card.</span></div>
+      <span class="meas">Link ~20px tall · buttons 38px</span>
+      <div class="phone"><div class="scr" data-opt="T"></div></div>
+    </section>
+
+    <section class="slot rec">
+      <div class="cap"><span class="eb">Option A</span><b>The dock</b><span>A three-key bar fused to the card's bottom edge, like the tiles above it. The answer arrives as a reply panel just above the dock.</span></div>
+      <span class="meas">Keys 84px tall · 1/3 width each</span>
+      <div class="phone"><div class="scr" data-opt="A"></div></div>
+      <div class="notes">
+        <div><h3>Good</h3><ul><li>Same tile language as Pack / Transponder / Setup, so the card reads as one panel</li><li>All three keys stay put; the asked key shows it is waiting</li></ul></div>
+        <div><h3>Watch</h3><ul><li>Six square tiles on one card; the icons have to carry it</li><li>Running order sits beside the asks, equal weight</li></ul></div>
+      </div>
+    </section>
+
+    <section class="slot">
+      <div class="cap"><span class="eb">Option B</span><b>The answer takes the footer</b><span>Running order as a wide key; the two asks as one split key. Once asked, the split key becomes the request's status bar, then the desk's answer in full colour.</span></div>
+      <span class="meas">Order 54px · asks 76px</span>
+      <div class="phone"><div class="scr" data-opt="B"></div></div>
+      <div class="notes">
+        <div><h3>Good</h3><ul><li>The answer appears exactly where the driver tapped</li><li>Biggest ask keys; impossible to miss the yes/no colour</li></ul></div>
+        <div><h3>Watch</h3><ul><li>While waiting, you can't ask the other thing from here (fine: one at a time)</li></ul></div>
+      </div>
+    </section>
+
+    <section class="slot">
+      <div class="cap"><span class="eb">Option C</span><b>The pit board</b><span>Running order moves to the card's top corner. Two tall ask keys. The desk's answer is hung on a pit board across the top of the card, the way a pit crew signals a driver.</span></div>
+      <span class="meas">Order 48px · asks 96px</span>
+      <div class="phone"><div class="scr" data-opt="C"></div></div>
+      <div class="notes">
+        <div><h3>Good</h3><ul><li>The answer is the loudest thing on the page, readable at arm's length</li><li>Very racing; fits the Pit Wall look</li></ul></div>
+        <div><h3>Watch</h3><ul><li>Pushes the race name down while it shows</li><li>Corner key is smaller than the asks</li></ul></div>
+      </div>
+    </section>
+
+    <section class="slot">
+      <div class="cap"><span class="eb">Plus · all options</span><b>The push alert</b><span>What the phone shows when the desk answers, locked and in a pocket. Same words as the card. Tapping it opens Me, where the card still shows the answer.</span></div>
+      <span class="meas">Web Push · tag hc-ask</span>
+      <div class="lock"><div class="scr"><div class="time">8:41</div><div class="date">Tuesday 11 November</div><div id="lock"></div></div></div>
+    </section>
+  </div>
+
+  <section class="plan">
+    <div>
+      <div class="eyebrow">Plan</div>
+      <h2>A real push when the desk answers</h2>
+      <p class="lede">Most of the road is already built. The answer already travels from the desk to the phone inside the driver's live document, and the relay already sends Web Push for "your race is next", marshal duty, "about 5 minutes" and results. The relay watches each new live document for changes, so a desk answer is one more change to watch for. Nothing new for the phone to sign up to.</p>
+    </div>
+
+    <div class="flow-wrap"><div class="flow">
+      <div><b>Desk answers</b><small>DriverRequestsForm → <code>ApproveRaceAsk</code> / <code>Decline</code> → <code>store.Answer</code> sets State, Said, AnsweredUtc</small></div>
+      <div class="new"><b>Publish at once</b><small>A store change marks driverlive dirty, so it goes out on the next roster tick instead of within 10s</small></div>
+      <div><b>driverlive</b><small><code>drivers[id].asks[]</code>: ref, kind, state, said, plus new <code>at</code></small></div>
+      <div class="new"><b>Relay compares</b><small><code>afterLive</code> → <code>liveAlerts</code> → new <code>askAlerts</code>: a ref that was waiting is now answered</small></div>
+      <div><b>Phone buzzes</b><small>Existing <code>PushService.send</code> and service worker. Tap opens Me; the hero shows the answer</small></div>
+    </div></div>
+
+    <div class="two">
+      <div class="panel">
+        <h3>In the relay (<code>relay/</code>)</h3>
+        <div class="file">src/push.ts</div>
+        <ol>
+          <li>Add <code>askAlerts(before, after, url, atMs)</code>, called from the end of <code>liveAlerts</code>. For each ask in <code>after.asks</code> whose state is approved, noted or declined, push only if the same <code>ref</code> was <b>waiting</b> in <code>before.asks</code>. An ask that appears already answered also counts, provided its <code>at</code> is under 5 minutes old.</li>
+          <li>Desk kinds only: <code>late</code>, <code>skip</code>, <code>details</code>, <code>query</code>. Pack, car, setup and packedit are applied by the laptop by itself, so they push only when <b>declined</b>.</li>
+          <li><code>tag: "hc-ask-" + ref</code>, so an undo then a re-answer replaces the alert instead of stacking. Keep the 600s TTL; a late "yes, 5 more minutes" is worse than none.</li>
+          <li>Freshness guard (from the stale-calls rule): drop it if <code>at</code> is more than 5 minutes old by the document's own clock.</li>
+          <li><code>url</code>: the existing <code>myNightUrl(club)</code> with <code>&amp;s=tonight</code>, so the tap lands on the card. Never a badge code.</li>
+        </ol>
+        <div class="file">src/mespaces.ts (after you pick)</div>
+        <ol>
+          <li>Draw the chosen option in <code>meMoment()</code>, from <code>live.asks</code> plus <code>sentAsks</code>, which the page already keeps. Show the newest desk-kind answer for 15 minutes after <code>at</code>, or until <b>OK</b> is tapped (seen refs kept per tab).</li>
+          <li>Show the reply on every hero state, not just Up next. A skipped driver's card often moves on to another race, and Racing now still needs "yes, 5 more minutes" in view.</li>
+          <li>When the page is open and a waiting ask turns answered: a short buzz and the existing beep, the same as other in-page alerts.</li>
+        </ol>
+        <div class="file">test/</div>
+        <ul><li>A push.ts test: waiting→approved sends one; an unchanged answer, a pack auto-apply and a first-look document send none; a stale <code>at</code> sends none.</li></ul>
+        <div class="file">Ship</div>
+        <ul><li><code>fly deploy</code> from <code>relay/</code>, then restart HeatCaller, or phones keep the old page.</li></ul>
+      </div>
+
+      <div class="panel">
+        <h3>In the app (Driver Requests)</h3>
+        <div class="file">DriverAskContracts.cs · DriverRequests.cs · DriverLive.cs</div>
+        <ol>
+          <li>Give <code>DriverAskAnswer</code> an <code>AnsweredUtc</code>. <code>AnswersFor</code> already has <code>r.AnsweredUtc</code> to hand.</li>
+          <li><code>DriverLive.AsksFor</code> writes it as <code>"at"</code> (ISO, UTC) when there is one. This is what lets the relay and the card judge freshness.</li>
+        </ol>
+        <div class="file">MainForm.DriverRequests.cs · MainForm.DriverLive.cs</div>
+        <ol>
+          <li>Publish an answer at once. The store already bumps a version on every <code>Changed()</code>; the driverlive tick compares it with the version it last built for and sets <code>_driverLiveDirty</code>. Today an answer waits for the 10-second rebuild.</li>
+        </ol>
+        <div class="file">DriverRequestsForm.cs</div>
+        <ol>
+          <li>Decline already asks for a reason, and Race Control already writes the approval's words ("Held 5 minutes…"). Add one line under the buttons: <i>"The driver's phone is told straight away."</i> That way the desk knows the words they type go to a pocket.</li>
+          <li>Optional, later: a short "Message to the driver" box on approve for details and queries, which today go back with no words.</li>
+          <li>Undo (<code>Reopen</code>) needs nothing new. The phone goes back to "waiting", and the re-answer replaces the alert through its tag.</li>
+        </ol>
+        <div class="file">Limits to tell the user</div>
+        <ul>
+          <li>The phone must have alerts switched on (the existing sign-up). Without it, the card still shows the answer next time the page is open.</li>
+          <li>On an iPhone, only from the club page added to the Home Screen (Apple's rule, already in push.ts).</li>
+          <li>The laptop must be online to the relay. An answer given offline is pushed when it reconnects only if it is still under 5 minutes old.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="panel tbl">
+      <h3>What each alert says</h3>
+      <table class="msgs">
+        <thead><tr><th>Request</th><th>Desk</th><th>Title</th><th>Body</th></tr></thead>
+        <tbody>
+          <tr><td>5 more minutes</td><td>Approved</td><td>Desk: yes, 5 more minutes</td><td>Race Control's words, e.g. "Held 5 minutes. Heat 4 now starts about 8:52."</td></tr>
+          <tr><td>5 more minutes</td><td>Declined</td><td>Desk: can't hold your race</td><td>The reason the desk typed</td></tr>
+          <tr><td>Skip my race</td><td>Approved</td><td>Desk: you're out of Heat 4</td><td>Race Control's words</td></tr>
+          <tr><td>Skip my race</td><td>Declined</td><td>Desk: you're still in Heat 4</td><td>The reason the desk typed</td></tr>
+          <tr><td>Details / race query</td><td>Approved · noted · declined</td><td>Desk: details changed / query noted / …</td><td>The desk's words, or "Open HeatCaller to see it"</td></tr>
+          <tr><td>Pack, car, setup</td><td>Declined only</td><td>Your pack change didn't go through</td><td>The laptop's reason</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const S = { kind: 'late', state: 'ready' };
+  const I = {
+    order: '<svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/></svg>',
+    late: '<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 2.5h5"/></svg>',
+    skip: '<svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L3.5 17.3a1.6 1.6 0 0 0 2.2 2.2l5.8-5.8a4 4 0 0 0 5.2-5.4l-2.4 2.4-2.2-.4-.4-2.2z"/><path d="M17 17l4 4M21 17l-4 4"/></svg>',
+    yes: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    no: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    bat: '<svg viewBox="0 0 24 24"><rect x="3" y="7" width="16" height="10" rx="2"/><path d="M21 10v4M7 10v4M11 10v4"/></svg>',
+    tp: '<svg viewBox="0 0 24 24"><path d="M5 12a7 7 0 0 1 14 0M8.5 12a3.5 3.5 0 0 1 7 0"/><circle cx="12" cy="12" r="1"/></svg>',
+    setup: '<svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>',
+  };
+  // Example words. Approvals are what Race Control writes; declines are a reason the desk typed.
+  const W = {
+    late: { ask: 'Need 5 more minutes', short: '5 more min', sub: 'Ask the desk to hold it', what: 'More time',
+      yes: { head: 'Yes, 5 more minutes', board: '+5 MIN', said: 'Held 5 minutes. Heat 4 now starts about 8:52.' },
+      no: { head: "Can't hold your race", board: 'NO HOLD', said: 'Grid is already called. Get to the stand now.' } },
+    skip: { ask: 'Car broken - skip me', short: 'Skip me', sub: 'Car broken', what: 'Skip my race',
+      yes: { head: "You're out of Heat 4", board: 'SKIPPED', said: 'Taken out of Heat 4. Your next race is Heat 7.' },
+      no: { head: "You're still in Heat 4", board: 'STAY IN', said: 'Bring it to the pits table, we can get you running.' } },
+  };
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const col = (st) => (st === 'yes' ? 'var(--good)' : 'var(--bad)');
+  const answered = () => S.state === 'yes' || S.state === 'no';
+
+  const top = () =>
+    '<div class="sb"><span>8:41</span><span>5G · 72%</span></div>' +
+    '<div class="who"><b>Sam Okafor</b><span>Signed in</span></div>' +
+    '<div class="sw"><span class="on">Tonight</span><span>Races</span><span>Garage</span><span>Stats</span></div>';
+  const headBits = (extra) =>
+    '<span class="k">Up next</span>' + (extra || '') +
+    '<div class="big">Heat 4<br><small>2WD Buggy · called next · about 8 min</small></div>' +
+    '<div class="me-acts">' +
+      '<div class="me-act"><span class="ic">' + I.bat + '</span><span class="n">Pack</span><span class="s">Pack B</span></div>' +
+      '<div class="me-act"><span class="ic">' + I.tp + '</span><span class="n">Transponder</span><span class="s">Heard 8:38</span></div>' +
+      '<div class="me-act"><span class="ic">' + I.setup + '</span><span class="n">Setup</span><span class="s">Logged</span></div>' +
+    '</div>' +
+    '<div class="me-mini"><div><small>Grid</small><b>3rd</b></div><div><small>Best tonight</small><b>21.384</b></div><div><small>Marshal</small><b>Heat 6</b></div></div>';
+
+  function today() {
+    const w = W[S.kind];
+    let req = '';
+    if (S.state !== 'ready') {
+      const st = S.state === 'wait' ? 'waiting for the desk' : S.state === 'yes' ? 'approved' : 'declined';
+      req = '<details style="margin-top:12px;border:1px solid var(--border);border-radius:14px;padding:10px 12px;background:var(--surface);font-size:.86rem"><summary>Your requests to the desk (1' + (answered() ? ', 1 answered' : '') + ')</summary><p style="margin:6px 0 0">' + esc(w.what) + ' (ref 3F9A2C) - ' + st + (answered() ? ': ' + esc(w[S.state].said) : '') + '</p></details>';
+    }
+    return top() + '<section class="me-hero">' + headBits() +
+      '<p class="t-go"><a href="#" onclick="return false">See the running order</a></p>' +
+      '<div class="t-acts"><button type="button" data-ask="late">Need 5 more minutes</button><button type="button" data-ask="skip">Car broken - skip me</button></div>' +
+      '</section>' + req;
+  }
+
+  function optA() {
+    const w = W[S.kind];
+    let reply = '';
+    if (answered()) {
+      const a = w[S.state];
+      reply = '<div class="a-reply rise" style="--c:' + col(S.state) + '"><span class="dot">' + I[S.state] + '</span>' +
+        '<small>Timing desk · 8:41</small><b>' + esc(a.head) + '</b><p>' + esc(a.said) + '</p>' +
+        '<button type="button" class="ok" data-ok>OK</button></div>';
+    }
+    const key = (k) => {
+      const asked = S.state === 'wait' && S.kind === k;
+      const off = S.state === 'wait' && S.kind !== k;
+      return '<button type="button" class="' + k + (asked ? ' asked' : '') + '" data-ask="' + k + '"' + (off ? ' disabled' : '') + '>' +
+        '<span class="ic">' + I[k] + '</span><span>' + esc(W[k].short) +
+        (asked ? '<small><span class="pulse"></span>Waiting</small>' : '<small>' + esc(W[k].sub) + '</small>') + '</span></button>';
+    };
+    return top() + '<section class="me-hero A">' + headBits() + reply +
+      '<div class="a-dock"><button type="button"><span class="ic" style="color:var(--accent)">' + I.order + '</span><span>Running order<small>Heat 4 grid</small></span></button>' +
+      key('late') + key('skip') + '</div></section>';
+  }
+
+  function optB() {
+    const w = W[S.kind];
+    let foot;
+    if (S.state === 'ready') {
+      foot = '<div class="b-split">' +
+        '<button type="button" data-ask="late">' + I.late + '<span><b>5 more<br>minutes</b><small>Hold my race</small></span></button>' +
+        '<button type="button" data-ask="skip">' + I.skip + '<span><b>Skip me</b><small>Car broken</small></span></button></div>';
+    } else if (S.state === 'wait') {
+      foot = '<div class="b-bar wait"><span class="pulse"></span><span class="tx"><b>Asked: ' + esc(w.what.toLowerCase()) + '</b><small>Waiting for the desk · ref 3F9A2C</small></span><span></span></div>';
+    } else {
+      const a = w[S.state];
+      foot = '<div class="b-bar ans rise" style="--c:' + col(S.state) + '">' + I[S.state].replace('<svg', '<svg class="big"') +
+        '<span class="tx"><b>' + esc(a.head) + '</b><small>' + esc(a.said) + '</small></span><button type="button" class="ok" data-ok>OK</button></div>';
+    }
+    return top() + '<section class="me-hero">' + headBits() +
+      '<div class="b-foot"><button type="button" class="b-order">' + I.order + 'See the running order</button>' + foot + '</div></section>';
+  }
+
+  function optC() {
+    const w = W[S.kind];
+    let board = '';
+    if (answered()) {
+      const a = w[S.state];
+      board = '<div class="c-board rise" style="--c:' + col(S.state) + '"><div class="hd"><span>Timing desk</span><span>8:41</span></div>' +
+        '<div class="word">' + esc(a.board) + '</div><p>' + esc(a.said) + '</p><button type="button" class="ok" data-ok>OK</button></div>';
+    }
+    const key = (k) => {
+      const asked = S.state === 'wait' && S.kind === k;
+      const off = (S.state === 'wait' && S.kind !== k);
+      return '<button type="button" class="' + k + (asked ? ' asked' : '') + '" data-ask="' + k + '"' + (off ? ' disabled' : '') + '>' + I[k] +
+        '<b>' + esc(W[k].ask.replace(' - ', ' - ')) + '<small>' + (asked ? 'Asked · waiting for the desk' : (k === 'late' ? 'Desk holds the race' : 'Desk takes you out')) + '</small></b></button>';
+    };
+    return top() + '<section class="me-hero">' + board + headBits('<button type="button" class="c-order">' + I.order + 'Order</button>') +
+      '<div class="c-keys">' + key('late') + key('skip') + '</div></section>';
+  }
+
+  function lock() {
+    const box = document.getElementById('lock');
+    const w = W[S.kind];
+    let h = '<div class="note old"><span class="app">HC</span><div class="top"><b>Your race is next</b><span>8:36</span></div><p>Heat 4 · grid slot 3</p></div>';
+    if (answered()) {
+      const a = w[S.state];
+      h = '<div class="note"><span class="app">HC</span><div class="top"><b>Desk: ' + esc(a.head.charAt(0).toLowerCase() + a.head.slice(1)) + '</b><span>now</span></div><p>' + esc(a.said) + '</p></div>' + h;
+    } else {
+      h += '<p style="text-align:center;color:#CFC3EE;font-size:.85rem;margin-top:18px">Choose Approved or Declined above to see the alert.</p>';
+    }
+    box.innerHTML = h;
+  }
+
+  const R = { T: today, A: optA, B: optB, C: optC };
+  function paint() {
+    document.querySelectorAll('.scr[data-opt]').forEach((s) => { s.innerHTML = R[s.dataset.opt](); });
+    lock();
+    document.querySelectorAll('#kind button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === S.kind)));
+    document.querySelectorAll('#state button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === S.state)));
+  }
+  document.getElementById('kind').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { S.kind = b.dataset.v; paint(); } });
+  document.getElementById('state').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { S.state = b.dataset.v; paint(); } });
+  document.addEventListener('click', (e) => {
+    const ask = e.target.closest('.phone [data-ask]');
+    if (ask && !ask.disabled && S.state === 'ready') { S.kind = ask.dataset.ask; S.state = 'wait'; paint(); return; }
+    if (e.target.closest('.phone [data-ok]')) { S.state = 'ready'; paint(); }
+  });
+  paint();
+})();
+</script>

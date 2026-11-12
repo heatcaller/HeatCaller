@@ -8,6 +8,7 @@ namespace HeatCaller;
 /// <param name="Kind">"details", "pack" or "query" - see <see cref="DriverAsk"/>.</param>
 /// <param name="State">"waiting", "approved", "noted" or "declined" - see <see cref="DriverAsk"/>.</param>
 /// <param name="Said">What the desk said back - a decline's reason, at most <see cref="DriverAsk.SaidMaxChars"/> characters. Empty for none.</param>
+/// <param name="AnsweredUtc">When the desk answered it; null while it waits. Sent to the phone as "at" (11 Nov 2026), so the Me card shows a fresh answer and lets an old one go.</param>
 /// <remarks>
 /// 22 Oct 2026 (driver experience). The contract between the requests desk
 /// (DriverRequests, package Q), which makes these, and the driver's live
@@ -15,7 +16,7 @@ namespace HeatCaller;
 /// is deliberately no answer route of its own: the phone already polls its
 /// live entry.
 /// </remarks>
-public sealed record DriverAskAnswer(string Ref, string Kind, string State, string Said);
+public sealed record DriverAskAnswer(string Ref, string Kind, string State, string Said, DateTime? AnsweredUtc = null);
 
 /// <summary>
 /// The words and limits of a driver's own requests, shared by the laptop

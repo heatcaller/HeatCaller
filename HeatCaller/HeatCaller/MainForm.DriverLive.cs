@@ -75,6 +75,13 @@ public partial class MainForm
     private RaceState _driverLiveRaceState;
 
     /// <summary>
+    /// The drivers' requests store's version driverlive was last built for
+    /// (11 Nov 2026): the desk answering a request rebuilds it at once, so
+    /// the driver's phone hears back on the next tick, not up to 10s later.
+    /// </summary>
+    private int _driverLiveAsksVersion = -1;
+
+    /// <summary>
     /// Rebuild on the next tick: a race filed, or the race changed state.
     /// Set from whichever thread raised that, hence volatile.
     /// </summary>
@@ -209,6 +216,12 @@ public partial class MainForm
             if (_race.State != _driverLiveRaceState)
             {
                 _driverLiveRaceState = _race.State;
+                _driverLiveDirty = true;
+            }
+
+            if (_driverRequests is { } requests && requests.Version != _driverLiveAsksVersion)
+            {
+                _driverLiveAsksVersion = requests.Version;
                 _driverLiveDirty = true;
             }
 
