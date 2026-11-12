@@ -39,6 +39,12 @@ export class FakeAudioWorld {
   /** Whether the code running now is inside the press. */
   inPress = false;
 
+  /** The rate the player's context says it runs at - none unless a test sets it (11 Nov 2026). */
+  contextRate: number | undefined = undefined;
+
+  /** Every decode, and where it happened: on the player's context, or an offline one at this rate. */
+  readonly decodedOn: { tag: string; on: "context" | number }[] = [];
+
   readonly starts: Start[] = [];
   readonly contexts: { inPress: boolean; resumedInPress: boolean; state: string }[] = [];
   readonly elements: { src: string; loop: boolean; paused: boolean; playedInPress: boolean }[] = [];
@@ -72,6 +78,10 @@ export class FakeAudioWorld {
         return world.now;
       }
 
+      get sampleRate(): number | undefined {
+        return world.contextRate;
+      }
+
       resume(): Promise<void> {
         this.record.resumedInPress ||= world.inPress;
         this.record.state = "running";
@@ -85,6 +95,7 @@ export class FakeAudioWorld {
 
       decodeAudioData(bytes: ArrayBuffer): Promise<FakeBuffer> {
         const tag = String.fromCharCode(...new Uint8Array(bytes));
+        world.decodedOn.push({ tag, on: "context" });
         return Promise.resolve(new FakeBuffer(tag, world.bufferLength));
       }
 
@@ -142,6 +153,22 @@ export class FakeAudioWorld {
       }
     }
 
-    return { AudioContext, Audio, atob: (text: string) => text };
+    // Only for decoding, as the player uses it (11 Nov 2026). A harness that
+    // does not put it on the page's window gets a page without one.
+    class OfflineAudioContext {
+      constructor(
+        readonly numberOfChannels: number,
+        readonly length: number,
+        readonly sampleRate: number,
+      ) {}
+
+      decodeAudioData(bytes: ArrayBuffer): Promise<FakeBuffer> {
+        const tag = String.fromCharCode(...new Uint8Array(bytes));
+        world.decodedOn.push({ tag, on: this.sampleRate });
+        return Promise.resolve(new FakeBuffer(tag, world.bufferLength));
+      }
+    }
+
+    return { AudioContext, Audio, OfflineAudioContext, atob: (text: string) => text };
   }
 }

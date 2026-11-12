@@ -6762,9 +6762,33 @@ const LISTEN_JS = `
   const WAIT_MS = 10000;
   const MOST_TRIES = 3;
 
-  // How far ahead of now a stretch is started when it does not follow on
-  // from the one before, so a slow decode cannot open a hole at its start.
+  // How far ahead of now a line is started, so a slow decode cannot open a
+  // hole at its start.
   const START_AHEAD_S = 0.3;
+
+  // THE STREAM'S CUSHION (11 Nov 2026, asked for by Asher: Listen Now was "a
+  // little choppy"). A stretch that does not follow straight on from the one
+  // before is started this far ahead of now, so the next one has this long
+  // to turn up before the sound runs dry. It used to be START_AHEAD_S, a
+  // third of a second, and the next stretch's arrival varies by far more
+  // than that: the laptop sends one every three seconds, the page looked
+  // every two (so a stretch was found anywhere up to two seconds after it
+  // landed), and an upload between races or a slow phone connection adds
+  // more. Each time a stretch came late the player went quiet until it
+  // arrived and then started again a third of a second ahead, ready to run
+  // dry on the next late one. Now the cushion starts at a second, the page
+  // looks every second (see the timer in the press), and each stretch that
+  // still comes late adds half a second, up to three - so a bad connection
+  // costs a hiccup or two and then plays smoothly a little further behind.
+  // Stop, or coming back from the background, starts it at a second again.
+  const STREAM_AHEAD_S = 1;
+  const STREAM_AHEAD_STEP_S = 0.5;
+  const STREAM_AHEAD_MOST_S = 3;
+  let streamAhead = STREAM_AHEAD_S;
+
+  // How often the page asks the relay what is new while listening. Only the
+  // listing's ids and times, which the relay holds in memory.
+  const SWEEP_EVERY_MS = 1000;
 
   // Past this much waiting to be played, the player is not listening along
   // any more but listening back: it drops what it has and starts again now.
@@ -6780,6 +6804,9 @@ const LISTEN_JS = `
   let timer = null;
   let ctx = null;
   let keepAlive = null;
+
+  // Where the stream is decoded - see decoderFor.
+  let decoder = null;
 
   // When the next sound starts, on the audio clock, and which stretch of
   // which run of the stream was scheduled last - so the next one is joined
@@ -6801,7 +6828,7 @@ const LISTEN_JS = `
   // still in flight from before cannot schedule anything into what follows.
   let turn = 0;
 
-  // One sweep at a time. The timer starts one every two seconds whatever
+  // One sweep at a time. The timer starts one every second whatever
   // happens, and a sweep used to mark a line heard before fetching it - so
   // a slow fetch let the next sweep fetch and play the line after it first.
   // 17 Oct 2026, Bug Hunt 8, A21-1. (A line is marked heard once fetched
@@ -6980,7 +7007,7 @@ const LISTEN_JS = `
 
       await chain;
     } catch (err) {
-      // A sweep that failed is one sweep. The next one is in two seconds,
+      // A sweep that failed is one sweep. The next one is in a second,
       // and a race night is not the moment to put an error on a page
       // somebody is listening to.
     }
@@ -6998,9 +7025,9 @@ const LISTEN_JS = `
   }
 
   // decodeAudioData as a promise, for the Safari that only takes callbacks.
-  function decode(bytes) {
+  function decode(into, bytes) {
     return new Promise((done, fail) => {
-      const promised = ctx.decodeAudioData(bytes, done, fail);
+      const promised = into.decodeAudioData(bytes, done, fail);
 
       if (promised && typeof promised.then === 'function') {
         promised.then(done, fail);
@@ -7008,12 +7035,61 @@ const LISTEN_JS = `
     });
   }
 
+  // THE STREAM IS DECODED AT ITS OWN RATE (11 Nov 2026, the other half of
+  // "a little choppy"). decodeAudioData hands back audio at its context's
+  // rate, so where the player's context does not run at the stream's 44.1
+  // kHz - an iPhone is 48 kHz underneath, and a browser that will not take
+  // the rate asked for makes its context at that - every stretch was
+  // resampled on its own. Its length is then not a whole number of
+  // samples, its ends are where the resampler starts and stops, and the
+  // joins no longer meet: measured on the laptop's own encoder in Chromium,
+  // a 48 kHz decode put an error at every join of up to 0.04, twenty times
+  // the codec's own (0.002) - a tick every three seconds under the music.
+  // Decoded on an offline context at the stream's rate, the stretches are
+  // whole frames that join exactly, and the playing context resamples them
+  // as it plays (the same measurement: 0.001 at the joins, as if there were
+  // none). A line is played whole and joins nothing, so it decodes as it
+  // always did, and so does everything where there is no offline context.
+  function decoderFor(rate) {
+    const Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+
+    if (!(rate > 0) || typeof Offline !== 'function' || ctx.sampleRate === rate) {
+      return ctx;
+    }
+
+    if (decoder === null || decoder.sampleRate !== rate) {
+      try {
+        decoder = new Offline(1, 1, rate);
+      } catch (err) {
+        decoder = null;
+        return ctx;
+      }
+    }
+
+    return decoder;
+  }
+
+  async function decodeOne(said) {
+    const into = said.kind === 'mix' ? decoderFor(Number(said.rate)) : ctx;
+
+    if (into !== ctx) {
+      try {
+        return await decode(into, bytesOf(said.audio));
+      } catch (err) {
+        // Decoded the old way below: fresh bytes, as a decode may have
+        // taken the first ones.
+      }
+    }
+
+    return decode(ctx, bytesOf(said.audio));
+  }
+
   async function play(said, mine) {
     if (!on || mine !== turn || ctx === null) {
       return;
     }
 
-    const buffer = await decode(bytesOf(said.audio));
+    const buffer = await decodeOne(said);
 
     if (!on || mine !== turn) {
       return;
@@ -7032,10 +7108,18 @@ const LISTEN_JS = `
       offset = (buffer.length - own) / buffer.sampleRate;
       length = own / buffer.sampleRate;
 
-      const follows = said.run === lastRun && said.n === lastN + 1 && nextAt > now;
+      const next = said.run === lastRun && said.n === lastN + 1;
+      const follows = next && nextAt > now;
+
+      // The very next stretch, after the last one has run out: the cushion
+      // was not enough for this connection, so it grows - see STREAM_AHEAD_S.
+      if (next && !follows) {
+        streamAhead = Math.min(STREAM_AHEAD_MOST_S, streamAhead + STREAM_AHEAD_STEP_S);
+      }
+
       lastRun = said.run;
       lastN = said.n;
-      at = follows ? nextAt : now + START_AHEAD_S;
+      at = follows ? nextAt : now + streamAhead;
     } else {
       lastRun = null;
       lastN = -1;
@@ -7044,7 +7128,7 @@ const LISTEN_JS = `
 
     if (at - now > MOST_BEHIND_S) {
       dropAll();
-      at = now + START_AHEAD_S;
+      at = now + (said.kind === 'mix' ? streamAhead : START_AHEAD_S);
     }
 
     const source = ctx.createBufferSource();
@@ -7096,6 +7180,7 @@ const LISTEN_JS = `
   function rejoin() {
     turn += 1;
     dropAll();
+    streamAhead = STREAM_AHEAD_S;
     chain = Promise.resolve();
     started = false;
     sweeping = false;
@@ -7214,8 +7299,9 @@ const LISTEN_JS = `
       }
 
       started = false;
+      streamAhead = STREAM_AHEAD_S;
       sweep();
-      timer = window.setInterval(sweep, 2000);
+      timer = window.setInterval(sweep, SWEEP_EVERY_MS);
       return;
     }
 
