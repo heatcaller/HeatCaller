@@ -87,6 +87,48 @@ export const ME_CSS = `
   background: var(--good); color: var(--bg); }
 .me-act.wait .badge { background: var(--warn); }
 .me-act .badge svg { width: 12px; height: 12px; stroke-width: 3.2; }
+/* THE DOCK (11 Nov 2026, Asher: "Build option A" of
+   relay/mockups/me-hero-requests.html). See the running order, Need 5 more
+   minutes and Car broken - skip me were a text link and two small buttons
+   at the foot of Up next; now one bar of big keys fused to the card's
+   bottom edge, in the tiles' own language. The key for a request still
+   with the desk says so. */
+.me-hero.docked { padding-bottom: 0; overflow: hidden; }
+.me-dock { margin: 2px -16px 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+  border-top: 1px solid color-mix(in srgb, var(--text) 14%, transparent); background: color-mix(in srgb, var(--bg) 62%, transparent); }
+.me-dk { min-height: 84px; display: grid; justify-items: center; align-content: start; gap: 5px; padding: 14px 4px 12px; min-width: 0;
+  font: inherit; font-weight: 800; font-size: 0.86rem; line-height: 1.1; text-align: center; color: var(--text); text-decoration: none;
+  background: none; border: 0; border-radius: 0; cursor: pointer; }
+.me-dk + .me-dk { border-left: 1px solid color-mix(in srgb, var(--text) 12%, transparent); }
+.me-dk svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; width: 24px; height: 24px; }
+.me-dk .ic { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; color: var(--accent);
+  background: color-mix(in srgb, var(--text) 10%, transparent); }
+.me-dk.late .ic { color: var(--warn); background: color-mix(in srgb, var(--warn) 22%, transparent); }
+.me-dk.skip .ic { color: var(--bad); background: color-mix(in srgb, var(--bad) 22%, transparent); }
+.me-dk small { display: flex; justify-content: center; align-items: center; gap: 5px; font-weight: 600; font-size: 0.7rem; color: var(--muted); }
+.me-dk.asked { background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.me-dk.asked small { color: var(--warn); }
+.me-dk .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); flex: none; }
+@media (hover: hover) { .me-dk:hover { background: color-mix(in srgb, var(--text) 6%, transparent); } }
+.me-dk:focus-visible { outline: 3px solid var(--ring, var(--accent)); outline-offset: -3px; }
+/* The desk's answer, on the card (11 Nov 2026, the same option A): the
+   newest answer to a request the desk decides, for 15 minutes or until OK. */
+.me-reply { --c: var(--good); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; align-items: start; padding: 12px;
+  border-radius: 14px; background: color-mix(in srgb, var(--bg) 70%, transparent); border: 1px solid var(--c); }
+.me-reply.no { --c: var(--bad); }
+.me-reply .dot { grid-row: span 4; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--c); color: var(--bg); }
+.me-reply .dot svg { fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; width: 22px; height: 22px; }
+.me-reply small { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--c); }
+.me-reply b { font-size: 1.12rem; line-height: 1.15; }
+.me-reply p { margin: 0; font-size: 0.88rem; color: color-mix(in srgb, var(--text) 82%, transparent); overflow-wrap: anywhere; }
+.me-reply button { justify-self: start; margin-top: 6px; min-height: 44px; padding: 0 22px; border: 0; border-radius: 12px; font: inherit;
+  font-weight: 800; color: var(--text); background: color-mix(in srgb, var(--text) 14%, transparent); cursor: pointer; }
+@media (prefers-reduced-motion: no-preference) {
+  .me-dk .pulse { animation: me-pulse 1.4s ease-in-out infinite; }
+  @keyframes me-pulse { 50% { opacity: 0.25; transform: scale(0.7); } }
+  .me-reply.new { animation: me-rise 0.32s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  @keyframes me-rise { from { transform: translateY(10px); opacity: 0; } }
+}
 
 .me-switch { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 10px 0 12px; padding: 4px; border-radius: 16px;
@@ -456,6 +498,10 @@ const ME_ICON = {
   setup: 'M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M17 6a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM11 12a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM19 18a2 2 0 1 1-4 0a2 2 0 1 1 4 0z',
   tick: 'M5 12.5l4.5 4.5L19 7.5',
   bang: 'M12 6v7M12 17.5v.01',
+  cross: 'M6 6l12 12M18 6L6 18',
+  order: 'M9 6h11M9 12h11M9 18h11M4.5 6v.01M4.5 12v.01M4.5 18v.01',
+  late: 'M20 13a8 8 0 1 1-16 0a8 8 0 1 1 16 0zM12 9v4l2.5 2M9.5 2.5h5',
+  skip: 'M14.7 6.3a4 4 0 0 0-5.4 5.2l-5.8 5.8a1.6 1.6 0 0 0 2.2 2.2l5.8-5.8a4 4 0 0 0 5.2-5.4l-2.4 2.4-2.2-.4-.4-2.2zM17 17l4 4M21 17l-4 4',
 };
 
 function meIcon(name) {
@@ -485,6 +531,147 @@ function meAct(icon, name, status, ok, says, onTap) {
   b.appendChild(el('span', 's', status));
   b.addEventListener('click', onTap);
   return b;
+}
+
+// ---- the desk's answer, and the dock (11 Nov 2026, option A of
+// relay/mockups/me-hero-requests.html)
+
+// The requests a desk decides. Packs, cars and setups the laptop files by
+// itself, so their answers stay in "Your requests to the desk".
+const ME_DESK_KINDS = ['late', 'skip', 'details', 'query'];
+// How long an answer stays on the card, from when the desk gave it.
+const ME_REPLY_FOR = 15 * 60 * 1000;
+// The answers put away with OK, this tab only - a phone handed to somebody
+// else is no worse off, and a fresh tab shows a fresh answer once more.
+const ME_REPLY_SEEN_KEY = 'hg-me-replies-' + CLUB;
+// The answers last drawn, so only one arriving while the page is open buzzes.
+let meRepliesDrawn = null;
+
+function meAsks() {
+  return (live && Array.isArray(live.asks) ? live.asks : []).filter((a) => a && typeof a === 'object' && typeof a.ref === 'string');
+}
+
+function meSeenReplies() {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(ME_REPLY_SEEN_KEY) || '[]');
+    return Array.isArray(v) ? v.filter((k) => typeof k === 'string') : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function meSawReply(key) {
+  const all = meSeenReplies().filter((k) => k !== key);
+  all.push(key);
+  try { sessionStorage.setItem(ME_REPLY_SEEN_KEY, JSON.stringify(all.slice(-20))); } catch (e) { /* shown again on the next draw */ }
+}
+
+// The answer is kept by ref and state, so the desk undoing an answer and
+// giving another shows the new one.
+function meReplyKey(a) {
+  return a.ref + '|' + a.state;
+}
+
+// The newest answer the desk gave, while it is fresh and not put away.
+// Never one with no time on it: a laptop too old to send one, or an answer
+// from earlier in the evening, would otherwise be told as news.
+function meReplyNow() {
+  const seen = meSeenReplies();
+  const list = meAsks();
+  for (let i = list.length - 1; i >= 0; i--) {
+    const a = list[i];
+    if (!ME_DESK_KINDS.includes(a.kind) || !['approved', 'noted', 'declined'].includes(a.state)) continue;
+    const at = typeof a.at === 'string' ? Date.parse(a.at) : NaN;
+    if (!Number.isFinite(at) || relayNow() - at > ME_REPLY_FOR) continue;
+    if (seen.includes(meReplyKey(a))) continue;
+    return a;
+  }
+  return null;
+}
+
+function meReplyWords(a) {
+  const no = a.state === 'declined';
+  if (a.kind === 'late') return no ? "Can't hold your race" : 'Yes, 5 more minutes';
+  if (a.kind === 'skip') return no ? "You're still in your race" : "You're out of your race";
+  if (a.kind === 'details') return no ? 'Your details stay as they were' : a.state === 'noted' ? 'The desk has your details' : 'Your details are changed';
+  return no ? 'Your result stands' : a.state === 'noted' ? 'The desk has your query' : 'The desk agreed with your query';
+}
+
+function meReply(a) {
+  const no = a.state === 'declined';
+  const box = el('div', 'me-reply ' + (no ? 'no' : 'ok'));
+  box.setAttribute('role', 'status');
+  const dot = el('span', 'dot');
+  dot.appendChild(meIcon(no ? 'cross' : 'tick'));
+  box.appendChild(dot);
+  box.appendChild(el('small', '', 'Timing desk · ' + hm(Date.parse(a.at))));
+  box.appendChild(el('b', '', meReplyWords(a)));
+  const said = typeof a.said === 'string' ? a.said.trim() : '';
+  if (said !== '') box.appendChild(el('p', '', said));
+  box.appendChild(tapButton('OK', '', () => { meSawReply(meReplyKey(a)); meMoment(); }));
+  // A new answer while the page is open: a buzz, and it rises into place.
+  const key = meReplyKey(a);
+  if (meRepliesDrawn !== null && !meRepliesDrawn.includes(key)) {
+    box.className += ' new';
+    if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+  }
+  return box;
+}
+
+// The More time or Skip me still with the desk, newest first, or ''. Sent
+// from this page and not listed yet counts too.
+function meRaceAskWaiting() {
+  const listed = meAsks();
+  const known = new Set(listed.map((a) => a.ref));
+  const sent = typeof sentAsks !== 'undefined' ? sentAsks.filter((s) => !known.has(s.ref)) : [];
+  const all = listed.concat(sent);
+  for (let i = all.length - 1; i >= 0; i--) {
+    const a = all[i];
+    if ((a.kind === 'late' || a.kind === 'skip') && (a.state === undefined || a.state === 'waiting')) return a.kind;
+  }
+  return '';
+}
+
+function meDockKey(tag, cls, icon, words, sub) {
+  const k = el(tag, 'me-dk ' + cls);
+  const ic = el('span', 'ic');
+  ic.appendChild(meIcon(icon));
+  k.appendChild(ic);
+  k.appendChild(el('span', '', words));
+  if (sub) k.appendChild(sub);
+  return k;
+}
+
+// The foot of Up next: the running order while it is next (goLink's rule),
+// and the two asks while the club takes them. Null with neither.
+function meDock(n) {
+  const dock = el('div', 'me-dock');
+  if (num(n.away) === 0) {
+    const a = meDockKey('a', 'order', 'order', 'See the running order', null);
+    a.setAttribute('href', '/c/' + encodeURIComponent(CLUB) + '/schedule');
+    dock.appendChild(a);
+  }
+  if (typeof asksOpen !== 'undefined' && asksOpen && me) {
+    const waiting = meRaceAskWaiting();
+    for (const [kind, words, sub, says] of [
+      ['late', '5 more minutes', 'Hold my race', 'Need 5 more minutes'],
+      ['skip', 'Skip me', 'Car broken', 'Car broken - skip me'],
+    ]) {
+      const small = el('small', '');
+      if (waiting === kind) {
+        small.appendChild(el('span', 'pulse'));
+        small.appendChild(el('span', '', 'Waiting'));
+      } else {
+        small.textContent = sub;
+      }
+      const b = meDockKey('button', kind + (waiting === kind ? ' asked' : ''), kind, words, small);
+      b.type = 'button';
+      b.setAttribute('aria-label', says + (waiting === kind ? ' - asked, waiting for the desk' : ''));
+      b.addEventListener('click', () => meRaceAsk(kind));
+      dock.appendChild(b);
+    }
+  }
+  return dock.children.length > 0 ? dock : null;
 }
 
 // ---- the moment card
@@ -534,6 +721,7 @@ function meMoment() {
   const last = races.length > 0 ? races[races.length - 1] : null;
   const lastAt = last && typeof last.at === 'string' ? Date.parse(last.at) : NaN;
   const fresh = Number.isFinite(lastAt) && relayNow() - lastAt < 20 * 60 * 1000;
+  let dock = null;
 
   if (typeof ci === 'object' && ci && ci.shown && !checkedIn()) {
     meHeroKind = 'checkin';
@@ -584,18 +772,11 @@ function meMoment() {
     const best = races.reduce((b, r) => (num(r.bestMs) > 0 && (b === 0 || num(r.bestMs) < b) ? num(r.bestMs) : b), 0);
     const m = live && live.marshal && typeof live.marshal === 'object' && typeof live.marshal.race === 'string' ? live.marshal : null;
     hero.appendChild(meMini([['Grid', num(n.slot) > 0 ? nth(n.slot) : ''], ['Best tonight', meLap(best)], ['Marshal', m ? String(m.race) : '']]));
-    // See the running order while it is next, moved up from the Setup
-    // card's old first lines (6 Nov 2026) with the rest of what they said.
-    const go = typeof goLink === 'function' ? goLink(n) : null;
-    if (go) hero.appendChild(go);
-    // Not ready (11 Nov 2026, race-night build plan, Phase 1): ask the desk for
-    // five more minutes, or to be skipped with a broken car. The desk approves.
-    if (typeof asksOpen !== 'undefined' && asksOpen && me) {
-      const late = el('div', 'acts');
-      late.appendChild(tapButton('Need 5 more minutes', '', () => meRaceAsk('late')));
-      late.appendChild(tapButton('Car broken - skip me', '', () => meRaceAsk('skip')));
-      hero.appendChild(late);
-    }
+    // See the running order while it is next (moved up from the Setup
+    // card's old first lines, 6 Nov 2026) and, while the club takes asks,
+    // Need 5 more minutes and Car broken - skip me (11 Nov 2026, race-night
+    // build plan, Phase 1; the desk approves): the dock, drawn last.
+    dock = meDock(n);
   } else if (races.length > 0) {
     hero.appendChild(el('span', 'k', 'Your night'));
     const best = races.reduce((b, r) => (num(r.bestMs) > 0 && (b === 0 || num(r.bestMs) < b) ? num(r.bestMs) : b), 0);
@@ -607,8 +788,17 @@ function meMoment() {
   // Qualifying under whatever the card is saying - except Check in, which
   // is the one thing to do when they arrive.
   if (meHeroKind !== 'checkin') {
+    // The desk's answer first, on whatever the card is saying: a driver
+    // taken out of a race has usually moved on to the next one.
+    const reply = meReplyNow();
+    if (reply) hero.appendChild(meReply(reply));
+    meRepliesDrawn = meAsks().map(meReplyKey);
     const q = meQual();
     if (q) hero.appendChild(q);
+  }
+  if (dock) {
+    hero.className += ' docked';
+    hero.appendChild(dock);
   }
   at.appendChild(hero);
 }

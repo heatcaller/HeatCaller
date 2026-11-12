@@ -469,6 +469,13 @@ internal static class DriverLive
                 one["said"] = said.Length > DriverAsk.SaidMaxChars ? said[..DriverAsk.SaidMaxChars] : said;
             }
 
+            // When the desk answered (11 Nov 2026), so the Me card on the
+            // phone shows the answer while it is fresh. Only on an answer.
+            if (answer.State != DriverAsk.Waiting && answer.AnsweredUtc is { } at)
+            {
+                one["at"] = DateTime.SpecifyKind(at, DateTimeKind.Utc).ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+            }
+
             list.Add(one);
         }
 

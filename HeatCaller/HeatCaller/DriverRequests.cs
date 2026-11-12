@@ -578,7 +578,7 @@ internal sealed class DriverRequestStore
                 .OrderByDescending(r => r.AskedUtc)
                 .Take(MostAnswersShown)
                 .OrderBy(r => r.AskedUtc)
-                .Select(r => new DriverAskAnswer(r.Ref, r.Kind, r.State, r.Said))
+                .Select(r => new DriverAskAnswer(r.Ref, r.Kind, r.State, r.Said, r.AnsweredUtc))
                 .Where(a => a.Ref.Length > 0)
                 .ToList();
         }
