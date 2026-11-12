@@ -3371,6 +3371,11 @@ public static class AppTheme
                     if (textBox.Multiline)
                     {
                         ThinScrollBar.Attach(textBox);
+
+                        // And gives the wheel back to the page when it has no
+                        // use for it, so the page does not stop scrolling
+                        // under the pointer (11 Nov 2026).
+                        WheelPassThrough.Attach(textBox);
                     }
 
                     break;

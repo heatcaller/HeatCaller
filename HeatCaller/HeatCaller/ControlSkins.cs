@@ -694,6 +694,130 @@ internal static class ScrollRepaint
 }
 
 /// <summary>
+/// A text box that scrolls inside a page that scrolls hands the wheel back
+/// to the page when it has no use for it.
+///
+/// A multiline box keeps every wheel turn over it, even with nothing left
+/// to scroll and even when nobody is typing in it. On the Website page the
+/// first-night guide and Club updates boxes are half a window tall between
+/// them, so turning the wheel down the page stopped dead as soon as the
+/// pointer reached either one (11 Nov 2026).
+///
+/// Now the page scrolls unless the box is being worked in (focused, or a
+/// read-only box such as a log, which is there to be scrolled) AND it still
+/// has somewhere to go that way. Click into the box and the wheel scrolls
+/// it, up to its top or bottom, and then the page carries on. With no
+/// scrolling page round it, the box keeps the wheel as it always did.
+/// </summary>
+internal static class WheelPassThrough
+{
+    private const int WM_MOUSEWHEEL = 0x020A;
+    private const int SB_VERT = 1;
+    private const int SIF_ALL = 0x17;
+
+    private static readonly ConditionalWeakTable<TextBoxBase, object> Hooked = new();
+
+    public static void Attach(TextBoxBase box)
+    {
+        if (Hooked.TryGetValue(box, out _))
+        {
+            return;
+        }
+
+        Hooked.Add(box, new object());
+
+        box.MouseWheel += (_, e) =>
+        {
+            if (e is not HandledMouseEventArgs { Handled: false } handled || e.Delta == 0)
+            {
+                return;
+            }
+
+            var page = ScrollingPage(box);
+
+            if (page is null)
+            {
+                return;
+            }
+
+            var working = box.Focused || box.ReadOnly;
+
+            if (working && CanScroll(box, up: e.Delta > 0))
+            {
+                return;
+            }
+
+            // The box does nothing with it; the page gets the same turn, at
+            // the same place, as if the pointer had been over the page.
+            handled.Handled = true;
+
+            var screen = box.PointToScreen(e.Location);
+            var wParam = (IntPtr)(e.Delta << 16);
+            var lParam = (IntPtr)((screen.Y << 16) | (screen.X & 0xFFFF));
+
+            SendMessage(page.Handle, WM_MOUSEWHEEL, wParam, lParam);
+        };
+    }
+
+    /// <summary>The nearest panel round the box that can scroll up and down now.</summary>
+    internal static ScrollableControl? ScrollingPage(Control box)
+    {
+        for (var parent = box.Parent; parent is not null; parent = parent.Parent)
+        {
+            if (parent is ScrollableControl { AutoScroll: true, IsHandleCreated: true } page && page.VerticalScroll.Visible)
+            {
+                return page;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Whether the box still has text to scroll to, up or down.</summary>
+    internal static bool CanScroll(TextBoxBase box, bool up)
+    {
+        if (!box.IsHandleCreated)
+        {
+            return false;
+        }
+
+        var info = new SCROLLINFO { cbSize = Marshal.SizeOf<SCROLLINFO>(), fMask = SIF_ALL };
+
+        if (!GetScrollInfo(box.Handle, SB_VERT, ref info))
+        {
+            return false;
+        }
+
+        var page = Math.Max(1, info.nPage);
+
+        if (info.nMax - info.nMin + 1 <= page)
+        {
+            return false;
+        }
+
+        return up ? info.nPos > info.nMin : info.nPos + page - 1 < info.nMax;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SCROLLINFO
+    {
+        public int cbSize;
+        public int fMask;
+        public int nMin;
+        public int nMax;
+        public int nPage;
+        public int nPos;
+        public int nTrackPos;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetScrollInfo(IntPtr hwnd, int bar, ref SCROLLINFO info);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+}
+
+/// <summary>
 /// Column headings that stay put while a list scrolls under them.
 ///
 /// The Announcements and Sound Effects lists had their headings INSIDE the
