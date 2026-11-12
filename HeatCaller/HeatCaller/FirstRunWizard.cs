@@ -32,7 +32,7 @@ namespace HeatCaller;
 /// footer 58px from the bottom - which a larger text size ran off the
 /// bottom and the right of, and which a long step's text ran into.
 /// </summary>
-public sealed class FirstRunWizard : Form
+public sealed partial class FirstRunWizard : Form
 {
     /// <summary>The rail's width at the normal text size - wider only when its step names or the brand need it.</summary>
     private const int RailWidth = 190;
@@ -713,7 +713,11 @@ public sealed class FirstRunWizard : Form
         var classRow = new FieldGrid();
         classRow.AddRow("Class:", FieldGrid.Inline(_cmbDriverClass, _lblDriversHint));
 
-        _driversStep.Add(classRow, gapBelow: 0);
+        _driversStep.Add(classRow, gapBelow: UiLayout.RowGap);
+
+        // Bringing a club over (12 Nov 2026, setup plan C2): a whole list at
+        // once - RCSignup or LiveTime export, a LiveRC entry list, any CSV.
+        _driversStep.Add(BuildImportRow(), gapBelow: 0);
     }
 
     /// <summary>

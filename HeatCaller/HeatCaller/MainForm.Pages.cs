@@ -538,6 +538,7 @@ public partial class MainForm
 
         // The banner this page shows when check-ins have nowhere to go.
         checkIn.StartRaceDayRequested += StartRaceDayFromBanner;
+        checkIn.DeskViewRequested += StartDeskView;
 
         // Who said from their phone they're coming tonight (setup plan C1).
         checkIn.ComingTonightList = ComingTonightList;
@@ -695,6 +696,20 @@ public partial class MainForm
         tabRaceDay.TabPages.Add(subPageEvent);
         tabRaceDay.TabPages.Add(subPageEntries);
         AppTheme.StyleTabControl(tabRaceDay);
+
+        // The desk view keeps to Who's Racing (12 Nov 2026, setup plan D8).
+        tabRaceDay.Selecting += (_, e) =>
+        {
+            if (!DeskViewAllowsTab(e.TabPage, subPageEntries))
+            {
+                e.Cancel = true;
+            }
+        };
+        _showWhosRacing = () =>
+        {
+            GoToPage("Race Day");
+            tabRaceDay.SelectedTab = subPageEntries;
+        };
 
         var tabChampionship = new TabControl { Dock = DockStyle.Fill };
         tabChampionship.TabPages.Add(subPageStandings);
@@ -2638,6 +2653,7 @@ public partial class MainForm
         };
 
         pageWebServer.Controls.Add(webServer);
+        _localScreens = webServer;
 
         // Not from the control's constructor, which runs inside this one:
         // the server would be answering phones before there was a window

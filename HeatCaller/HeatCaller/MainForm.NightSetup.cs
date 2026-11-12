@@ -44,6 +44,9 @@ public partial class MainForm
         raceControl.PlannedBreaks = () => _raceEvents.Active is { IsLegacy: false } day ? day.Breaks : null;
         raceControl.ConfirmPostedChange = (owner, what) => raceProgram.ChangePostedHeatsOk(owner, what);
 
+        // Hand the desk to a phone (setup plan D8).
+        raceControl.HandDeskRequested += HandTheDeskToAPhone;
+
         // A marshal who didn't turn up (setup plan D4), kept on the round for
         // the event report and the club's marshal rule.
         raceControl.MarshalNoShow += (round, who) =>

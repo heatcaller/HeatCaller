@@ -57,6 +57,9 @@ public sealed partial class RaceControlControl
     /// <summary>Tonight's planned breaks (the race day's - setup plan D5). Set by MainForm; null for none.</summary>
     internal Func<IReadOnlyList<PlannedBreak>?>? PlannedBreaks { get; set; }
 
+    /// <summary>"Hand the Desk to a Phone..." on the Auto start switch's menu (setup plan D8) - MainForm shows the remote's QR code.</summary>
+    public event Action? HandDeskRequested;
+
     /// <summary>
     /// Asks before Redo Remaining Heats changes posted heats (setup plan D2).
     /// Set by MainForm, from the program page; true to go ahead. Null always
@@ -105,6 +108,9 @@ public sealed partial class RaceControlControl
             {
                 Checked = _settings.AutoStartWaitForMarshals,
             });
+
+            // Setup plan D8: a deputy runs the starts from their phone.
+            menu.Items.Add(new ToolStripMenuItem("Hand the Desk to a Phone...", null, (_, _) => HandDeskRequested?.Invoke()));
 
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(new ToolStripMenuItem("Off until I switch it on again", null, (_, _) => SetAutoStart(false, forTonightOnly: false))

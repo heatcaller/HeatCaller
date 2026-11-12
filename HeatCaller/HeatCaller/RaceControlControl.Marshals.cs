@@ -200,3 +200,35 @@ public static class MarshalsInPlace
         return $"Marshals for {roundLabel}, to your posts please: {list}. We start when you're in place.";
     }
 }
+
+/// <summary>The deputy's phone (12 Nov 2026, setup plan D8): Start now and Marshals in place from the remote.</summary>
+public sealed partial class RaceControlControl
+{
+    /// <summary>The remote's "autonow": start the next race now. Null when it can't, with the reason in <paramref name="refusal"/>.</summary>
+    private string? RemoteAutoNow(out string? refusal)
+    {
+        if (!AutoStartOn || !_autoStart.IsOpen)
+        {
+            refusal = "Auto start isn't counting down to a race right now.";
+            return null;
+        }
+
+        refusal = null;
+        AutoStartNow();
+        return "Starting now.";
+    }
+
+    /// <summary>The remote's "marshalsin": the next race's marshals are in place.</summary>
+    private string? RemoteMarshalsIn(out string? refusal)
+    {
+        if (!AutoStartOn || !_autoStart.IsOpen)
+        {
+            refusal = "No race is waiting for its marshals right now.";
+            return null;
+        }
+
+        refusal = null;
+        ConfirmMarshals();
+        return "Marshals in place.";
+    }
+}

@@ -4,6 +4,13 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Hand the desk over, and bring a club over (12 November).**
+    - **Hand the Desk to a Phone...** on the **Auto start** switch's right-click menu shows the phone remote's QR code for a deputy to run the starts while you race. The remote now has **START NOW** and **MARSHALS IN** too. See [Phone remote](screens/phone-and-web.md).
+    - **Desk View...** on **Who's Racing** locks the laptop to check-ins, papers and money for a volunteer, until it's unlocked with the PIN you chose. See [Race Day → Who's Racing](race-day/events-and-entries.md#race-day-whos-racing).
+    - **Import a List...** on the first-run wizard's **Drivers** step brings in a club's drivers, transponders and classes from an RCSignup or LiveTime export, a LiveRC entry list or a spreadsheet, adding any class it names.
+
+  Update HeatCaller on the race PC; nothing changes on the relay.
+
 - **Night templates (12 November).** **Templates:** on **Race Day → Setup** keeps a night's settings under a name, such as "Tuesday club night" or "Points round". **Start Tonight From It** starts a race day with them, for a club that runs more than one kind of night. See [Race Day → Setup](race-day/events-and-entries.md#about-the-day). Update HeatCaller on the race PC; nothing changes on the relay.
 
 - **New to racing (12 November).** Tick **New to racing** on a driver's profile, and add their **Mentor:**. **Who's Racing** shows "novice, mentor Al Gorithim" beside their name, or "first night" for a driver whose profile was made today. The announcer welcomes new drivers once a night, in the gap before their first race: "A big welcome to Max Power, racing with us for the first time tonight - give them room out there." See [Drivers and classes](race-day/drivers-and-classes.md). Update HeatCaller on the race PC; nothing changes on the relay.

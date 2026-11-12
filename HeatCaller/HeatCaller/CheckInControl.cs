@@ -82,6 +82,9 @@ public sealed partial class CheckInControl : UserControl
     /// <summary>Raised when the desk asks, from the banner, for a race day to start. The host owns making one.</summary>
     public event Action? StartRaceDayRequested;
 
+    /// <summary>"Desk View..." - lock this laptop to Who's Racing for a volunteer (setup plan D8).</summary>
+    public event Action? DeskViewRequested;
+
     /// <summary>
     /// Optional, and only ever used to build the self check-in poster - a
     /// club that never starts the web server still gets the whole of this
@@ -567,7 +570,12 @@ public sealed partial class CheckInControl : UserControl
         scan.Add(_txtScan, gapBelow: UiLayout.HintGap);
         scan.Add(_lblScanStatus);
 
-        var scanButtons = scan.Add(new ButtonBar().With(btnBadges, btnPoster), gapBelow: 0);
+        // Desk view (12 Nov 2026, setup plan D8): this laptop locked to
+        // check-ins and money, for a volunteer, while the director races.
+        var btnDeskView = new Button { Text = "Desk View..." };
+        btnDeskView.Click += (_, _) => DeskViewRequested?.Invoke();
+
+        var scanButtons = scan.Add(new ButtonBar().With(btnBadges, btnPoster, btnDeskView), gapBelow: 0);
 
         var body = new Beside(() => ScanColumnWidth(scanButtons));
 

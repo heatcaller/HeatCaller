@@ -1919,7 +1919,7 @@ public sealed partial class WebServerService
         var query = context.Request.QueryString;
         var action = query["action"];
 
-        var allowed = new[] { "stage", "countdown", "green", "yellow", "red", "checkered", "reset", "skip", "holdtalk", "callup", "autohold", "autoplus" };
+        var allowed = new[] { "stage", "countdown", "green", "yellow", "red", "checkered", "reset", "skip", "holdtalk", "callup", "autohold", "autoplus", "autonow", "marshalsin" };
         if (action is null || !allowed.Contains(action))
         {
             context.Response.StatusCode = 400;
@@ -5484,6 +5484,10 @@ public sealed partial class WebServerService
           <div class="grid3">
             <button onclick="go('autohold')">HOLD START</button>
             <button onclick="go('autoplus')">+1 MIN</button>
+            <button onclick="go('autonow')">START NOW</button>
+          </div>
+          <div class="grid3">
+            <button onclick="go('marshalsin')">MARSHALS IN</button>
           </div>
           <table style="margin-top:18px"><thead><tr id="head"></tr></thead>
           <tbody id="rows"></tbody></table>
@@ -5545,7 +5549,7 @@ public sealed partial class WebServerService
         // so it can only abandon that race - if another has gone green since,
         // the laptop asks again.
         async function go(a, force, race){
-          const name = ({ holdtalk: 'HOLD TALK', callup: 'CALL UP', autohold: 'HOLD START', autoplus: '+1 MIN' })[a] || a.toUpperCase();
+          const name = ({ holdtalk: 'HOLD TALK', callup: 'CALL UP', autohold: 'HOLD START', autoplus: '+1 MIN', autonow: 'START NOW', marshalsin: 'MARSHALS IN' })[a] || a.toUpperCase();
           const press = ++lastPress;
           show(press, 'Sending ' + name + '…', '', 'busy');
           let r, d = null;

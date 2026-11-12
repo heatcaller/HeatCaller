@@ -309,6 +309,8 @@ There are two kinds of QR check-in, and HeatCaller picks one automatically:
 
 **Self Check-In Poster** opens a poster with a QR code that takes a phone to the laptop's check-in page, where drivers find their own name, tap it and give their personal PIN. The poster reads **CHECK IN** with the line "Scan, find your name, tap it. Same Wi-Fi as the timing laptop."
 
+**Desk View...** locks the laptop to **Who's Racing** for a volunteer minding the desk while you race: check-ins, papers and money, and nothing else. Choose a PIN of four or more digits to unlock it with. Until it's unlocked, the sidebar and the other Race Day tabs do nothing, nor do the function keys (so no stray F6 throws the checkered flag) or other shortcuts, and closing HeatCaller asks for the PIN. A small **Desk View** window at the top of the screen has **Unlock...**. The PIN is kept only until HeatCaller closes.
+
 The laptop's web server must be running first, and phones must be on the same Wi-Fi as the laptop. If it isn't running, you'll see **Web server is not running**. Start it on the **Local Screens** page — see [Local Screens](../screens/phone-and-web.md).
 
 The poster opens in its own window, so you can leave it on a second screen by the door while racing carries on:

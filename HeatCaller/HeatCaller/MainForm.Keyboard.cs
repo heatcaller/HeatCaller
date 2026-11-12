@@ -25,6 +25,12 @@ public partial class MainForm
     /// </summary>
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
+        // The desk view lets typing through and nothing else (setup plan D8).
+        if (_deskOnly && !DeskViewAllowsKey(keyData))
+        {
+            return true;
+        }
+
         if (keyData == Keys.F11)
         {
             ToggleRaceMode();
