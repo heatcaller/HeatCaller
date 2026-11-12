@@ -1262,6 +1262,15 @@ public sealed class ProfileForm : Form
                 ? Result.FirstSeenUtc ?? DateTime.UtcNow
                 : Result.FirstSeenUtc,
 
+            // Papers (12 Nov 2026, setup plan D9): recorded on Who's Racing,
+            // not on this dialog, so kept exactly as they were - a Driver Hub
+            // edit must never wipe a signed waiver or a membership.
+            WaiverSignedOn = Result.WaiverSignedOn,
+            IsJunior = Result.IsJunior,
+            WaiverGuardian = Result.WaiverGuardian ?? string.Empty,
+            MembershipNumber = Result.MembershipNumber ?? string.Empty,
+            MembershipExpires = Result.MembershipExpires,
+
             // WHY (22 Oct 2026, driver experience): the driver's own choices,
             // which a phone can set too. All five are on this dialog and are
             // saved as they stand in it - the privacy ticks included, so a

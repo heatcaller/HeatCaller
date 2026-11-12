@@ -81,3 +81,38 @@ public sealed class DeskPapersTests
         Assert.Equal(string.Empty, DeskPapers.PostingWords(new List<(string, IReadOnlyList<string>)> { ("Max Power", Array.Empty<string>()) }));
     }
 }
+
+/// <summary>A Driver Hub edit keeps a driver's papers (12 Nov 2026): the dialog doesn't show them, and it used to wipe a field it didn't copy.</summary>
+public sealed class DeskPapersSurviveAnEditTests : IDisposable
+{
+    private readonly TempAppData _data = new();
+
+    public void Dispose() => _data.Dispose();
+
+    [Fact]
+    public void Editing_a_driver_in_Driver_Hub_keeps_their_waiver_and_membership()
+    {
+        var driver = new DriverProfile
+        {
+            Transponder = "1",
+            DriverName = "Max Power",
+            WaiverSignedOn = new DateTime(2026, 11, 1),
+            IsJunior = true,
+            WaiverGuardian = "Pat Power",
+            MembershipNumber = "BRCA 12345",
+            MembershipExpires = new DateTime(2027, 3, 31),
+        };
+
+        var shown = StaThread.Run(() =>
+        {
+            using var form = new ProfileForm(driver, RaceClassStore.Load());
+            return form.ProfileAsShown();
+        }, TimeSpan.FromSeconds(30), () => "editing Max Power in Driver Hub");
+
+        Assert.Equal(driver.WaiverSignedOn, shown.WaiverSignedOn);
+        Assert.True(shown.IsJunior);
+        Assert.Equal("Pat Power", shown.WaiverGuardian);
+        Assert.Equal("BRCA 12345", shown.MembershipNumber);
+        Assert.Equal(driver.MembershipExpires, shown.MembershipExpires);
+    }
+}
