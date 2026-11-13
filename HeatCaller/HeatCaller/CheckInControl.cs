@@ -662,7 +662,7 @@ public sealed partial class CheckInControl : UserControl
         _lblNoDayHeadline = headline;
         _lblNoDayDetail = detail;
 
-        var start = new Button { Text = "Start a Race Day" };
+        var start = new Button { Text = "Start Tonight..." };
         start.Click += (_, _) => StartRaceDayRequested?.Invoke();
 
         AppTheme.StyleButton(start, AppTheme.ButtonKind.Primary);
@@ -1292,10 +1292,10 @@ public sealed partial class CheckInControl : UserControl
 
         if (_grid.Columns["paid"] is { } paidColumn)
         {
-            paidColumn.Visible = TonightsFees() is { Entry: > 0 };
+            paidColumn.Visible = TonightsFees() is { Charges: true };
         }
 
-        RefreshPaidSlip(_payments is not null && TonightsFees() is { Entry: > 0 });
+        RefreshPaidSlip(_payments is not null && TonightsFees() is { Charges: true });
 
         UpdateSummary();
     }

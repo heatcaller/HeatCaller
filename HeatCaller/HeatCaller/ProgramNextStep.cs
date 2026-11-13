@@ -147,7 +147,7 @@ internal static class ProgramCaptions
     public const string LateArrivals = "Add them to the heats...";
 
     /// <summary>Starting tonight from the last race day (12 Nov 2026). Never on the Next Up bar.</summary>
-    public const string StartLikeLast = "Start tonight like last time";
+    public const string StartLikeLast = "Start tonight like last time...";
 
     /// <summary>The finished program's button when the club closes the night with the checklist (11 Nov 2026). Never on the Next Up bar.</summary>
     public const string CloseNight = "Close the night...";
@@ -228,7 +228,7 @@ internal static class ProgramNextStep
                 ProgramStage.NoEvent,
                 "No race day is open.",
                 "Check-ins, the heats and the timetable are all filed against a race day. Start one and this page builds itself from it.",
-                "Start a Race Day");
+                "Start Tonight...");
         }
 
         // A club night has no finals, so three of the eight states below
@@ -252,7 +252,7 @@ internal static class ProgramNextStep
                 $"\"{raceEvent.DisplayName}\" is closed.",
                 "Nothing new is added to a closed day - its results and standings keep reading exactly as they do now. "
                 + "Start a day for tonight, or reopen this one on the Setup tab.",
-                "Start a Race Day");
+                "Start Tonight...");
         }
 
         // 2. Nothing is racing today. Which of the four reasons that can be

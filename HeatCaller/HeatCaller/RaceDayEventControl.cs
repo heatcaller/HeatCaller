@@ -1626,8 +1626,11 @@ public sealed partial class RaceDayEventControl : UserControl
     }
 
     /// <summary>
-    /// Starts a race day from somewhere else in the app - the Today tab's
-    /// checklist, or the banner on Who's Racing.
+    /// Starts a race day from somewhere else in the app - Next Steps, the
+    /// banner on Who's Racing, the Calendar, Set Up Tonight. Opens the Start
+    /// Tonight window, as every door does (setup plan step 8) - see
+    /// StartTonight. FALSE when it was cancelled, so the caller does not
+    /// march the window over to The Day for a day nobody made.
     ///
     /// Routed through this tab's own command rather than copied, so the
     /// undo entry, the refusal to delete a day that has since been used,
@@ -1635,12 +1638,10 @@ public sealed partial class RaceDayEventControl : UserControl
     /// race day that behaved differently is exactly the kind of thing that
     /// makes a second one appear at eight o'clock on a Saturday.
     /// </summary>
-    /// <summary>
-    /// Starts a day from somewhere else - the Today checklist, the banner on
-    /// Who's Racing. FALSE when the dialog was cancelled, so the caller does
-    /// not march the window over to The Day for a day nobody made.
-    /// </summary>
-    public bool StartNewDayFromElsewhere() => StartNewDay();
+    /// <param name="wanted">The choice to open on - a Next Steps card's - or null for the usual (StartTonight.Preselect).</param>
+    /// <param name="templateName">For a template choice, which template.</param>
+    public bool StartNewDayFromElsewhere(StartTonightKind? wanted = null, string? templateName = null) =>
+        StartTonightWindow(wanted, templateName);
 
     /// <summary>
     /// Sets which classes are racing today, from somewhere else - the
@@ -1692,34 +1693,85 @@ public sealed partial class RaceDayEventControl : UserControl
     }
 
     /// <summary>
-    /// Starts a race day when the shape and the classes have already been
-    /// asked for somewhere else.
-    ///
-    /// The setup wizard asks both itself, so opening NewRaceDayForm on top
-    /// of it would be the same two questions twice. Everything else is the
-    /// same path - StartDayFrom, carry-forward and undo entry included.
+    /// Next Steps' "Start tonight like last time" (12 Nov 2026, setup plan
+    /// B1): the Start Tonight window, opened on "Like last time" (setup plan
+    /// step 8). False when it was cancelled.
     /// </summary>
+    public bool StartLikeLastDay() => StartTonightWindow(StartTonightKind.LikeLast, null);
+
     /// <summary>
-    /// Starts tonight like the last race day (12 Nov 2026, setup plan B1):
-    /// its kind of night and its classes, and everything else a new day
-    /// carries forward. The same path as New Race Day, undo entry included.
-    /// False when there is no last day with classes to go by.
+    /// Starts a race day when the shape and the classes have already been
+    /// asked for somewhere else - Set Up Tonight's day step, for a wizard
+    /// opened with no day to work on. The same path - StartDayFrom,
+    /// carry-forward and undo entry included.
     /// </summary>
-    public bool StartLikeLastDay()
-    {
-        if (LastRealDay() is not { ClassNames.Count: > 0 } last)
-        {
-            return false;
-        }
-
-        StartDayFrom(last, last.Shape, last.ClassNames.ToList());
-        return true;
-    }
-
     public bool StartNewDayFromWizard(RaceDayShape shape, IReadOnlyList<string> classNames)
     {
         StartDayFrom(LastRealDay(), shape, classNames);
         return true;
+    }
+
+    /// <summary>
+    /// THE Start Tonight window (12 Nov 2026, setup plan step 8): like last
+    /// time, each night template, or something different, and the day started
+    /// the way that was picked. Every door that starts a race day comes here -
+    /// see StartTonight. False when it was cancelled.
+    /// </summary>
+    private bool StartTonightWindow(StartTonightKind? wanted, string? templateName)
+    {
+        var previous = LastRealDay();
+        var templates = _settings?.NightTemplates ?? new List<NightTemplate>();
+        var options = StartTonight.Options(previous, templates);
+        var selected = StartTonight.Preselect(options, NightTemplates.ForDay(templates, DateTime.Today), wanted, templateName);
+
+        // A day still open with something in it is said in the window - it
+        // used to be a second question, asked only on the template path.
+        var openDay = _events.Active is { IsLegacy: false, IsOpen: true } open && !(open.RoundIds.Count == 0 && open.ClassNames.Count == 0)
+            ? open.DisplayName
+            : null;
+
+        using var ask = new NewRaceDayForm(
+            options,
+            selected,
+            _raceClasses.All.Select(c => c.Name).ToList(),
+            previous?.ClassNames ?? new List<string>(),
+            previous?.Shape ?? RaceDayShape.RaceDay,
+            openDay);
+
+        if (ask.ShowDialog(this) != DialogResult.OK)
+        {
+            return false;
+        }
+
+        StartTonightAs(ask.Choice, ask.Shape, ask.ClassNames);
+        return true;
+    }
+
+    /// <summary>
+    /// Starts tonight the way it was chosen. One path whichever it was:
+    /// StartDayFrom, with one undo entry; a template's settings then go on
+    /// over the carried-forward ones.
+    /// </summary>
+    private void StartTonightAs(StartTonightOption choice, RaceDayShape shape, IReadOnlyList<string> classNames)
+    {
+        var previous = LastRealDay();
+
+        switch (choice.Kind)
+        {
+            case StartTonightKind.LikeLast when choice.LastDay is { } last:
+                StartDayFrom(previous, last.Shape, last.ClassNames.ToList());
+                break;
+
+            case StartTonightKind.Template when choice.Template is { } template:
+                StartFromTemplate(template);
+                return;
+
+            default:
+                StartDayFrom(previous, shape, classNames);
+                break;
+        }
+
+        NightSetupChanged?.Invoke();
     }
 
     /// <summary>
@@ -1731,24 +1783,8 @@ public sealed partial class RaceDayEventControl : UserControl
             .OrderByDescending(e => e.StartedUtc)
             .FirstOrDefault();
 
-    /// <summary>Asks the two questions and makes the day. False when it was cancelled.</summary>
-    private bool StartNewDay()
-    {
-        var previous = LastRealDay();
-
-        using var ask = new NewRaceDayForm(
-            _raceClasses.All.Select(c => c.Name).ToList(),
-            previous?.ClassNames ?? new List<string>(),
-            previous?.Shape ?? RaceDayShape.RaceDay);
-
-        if (ask.ShowDialog(this) != DialogResult.OK)
-        {
-            return false;
-        }
-
-        StartDayFrom(previous, ask.Shape, ask.ClassNames);
-        return true;
-    }
+    /// <summary>Setup's New Race Day: the Start Tonight window. False when it was cancelled.</summary>
+    private bool StartNewDay() => StartTonightWindow(null, null);
 
     /// <summary>
     /// Makes the day, with everything the dialog did not ask about carried

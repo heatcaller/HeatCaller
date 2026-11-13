@@ -158,8 +158,8 @@ internal static class LayoutAudit
         // The app's own message box (AppDialog), for every message it shows.
         "Message",
 
-        // What kind of night it is and which classes are racing (NewRaceDayForm).
-        "Start a Race Day",
+        // How to start tonight, and what kind of night it is and which classes are racing (NewRaceDayForm - the Start Tonight window).
+        "Start Tonight",
 
         // Who is in a round and in what order (RoundRosterForm).
         "Drivers in Round",
