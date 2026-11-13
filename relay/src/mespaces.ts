@@ -156,6 +156,7 @@ export const ME_CSS = `
 .me-coming label { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border: 1px solid var(--border);
   border-radius: 999px; cursor: pointer; }
 .me-coming .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.me-coming .acts .go { flex: 1 1 10rem; max-width: none; margin: 0; }
 .me-coming .st { margin: 10px 0 0; font-size: 0.9rem; color: var(--muted); }
 .me-coming .st b { color: var(--text); display: block; }
 .me-tile { text-align: left; border: 1px solid var(--border); border-radius: 16px; padding: 12px; background: var(--surface);
@@ -263,10 +264,15 @@ export const ME_BODY_TOP =
   '<div class="me-fee" id="me-fee" role="status" hidden></div>' +
   '<div class="me-moment" id="me-moment" aria-live="polite"></div>' +
   '<div class="me-switch" id="me-switch" role="tablist" aria-label="Parts of Me"></div>' +
-  '<div class="me-tiles" id="me-tiles" data-sp="tonight"></div>' +
-  // I'm coming to the next race night (12 Nov 2026, setup plan C1), under
-  // the tiles on Tonight; empty unless the club is taking entries for it.
-  '<div class="me-coming" id="me-coming" data-sp="tonight"></div>';
+  '<div class="me-tiles" id="me-tiles" data-sp="tonight"></div>';
+
+/**
+ * I'm coming to the next race night (12 Nov 2026, setup plan C1); empty
+ * unless the club is taking entries for it. Under Lap times in my ear on
+ * Tonight since 13 Nov 2026 (Asher: "move are you coming card below lap
+ * times in my ear"), so it sits in the night's "nx" right after "ea".
+ */
+export const ME_COMING = '<div class="me-coming" id="me-coming" data-sp="tonight"></div>';
 
 /** At the foot: a space with nothing in it yet says so; the sheet (the pack swap) and the toast. */
 export const ME_BODY_END =
@@ -298,7 +304,7 @@ function meSpaceOf(node) {
   const id = String(node.id || '');
   // Your details is on Tonight, under Right now, since 6 Nov 2026 (Asher:
   // "move more details from garage to tonight tab").
-  if (id === 'lv' || id === 'ea' || id === 'gd' || id === 'me-tiles' || id === 'yd') return 'tonight';
+  if (id === 'lv' || id === 'ea' || id === 'gd' || id === 'me-tiles' || id === 'yd' || id === 'me-coming') return 'tonight';
   if (id === 'ng' || id === 'nt' || id === 'n-races' || id === 'n-calls' || id.indexOf('n-car-') === 0) return 'races';
   if (id === 'me-garage') return 'garage';
   if (id === 'n-how' || id === 'n-score' || id === 'n-prog') return 'stats';
@@ -552,7 +558,9 @@ function meComingCard() {
     if (ticked.length === 0) { meToast('Tick the classes you are racing first', true); return; }
     meSendComing(night.day, ticked);
   }));
-  acts.appendChild(tapButton('Not coming after all', '', () => meSendComing(night.day, [])));
+  // A real button beside I'm coming (13 Nov 2026, Asher: "make the not
+  // coming after all a button"): the same size, visibly the second choice.
+  acts.appendChild(tapButton('Not coming after all', 'go quiet', () => meSendComing(night.day, [])));
   at.appendChild(acts);
 
   // Where the last one stands: waiting, or the laptop's answer in its words.
@@ -1336,7 +1344,13 @@ function meStart() {
   if (by && top) top.appendChild(by);
 
   // Whatever the night redraws, the spaces follow.
-  const watch = new MutationObserver(meSoon);
+  // Except the I'm coming card, which lives in "nx" and is drawn by the
+  // refresh itself: watching it would redraw it for ever.
+  const ownComing = (n) => { for (let x = n; x; x = x.parentNode) if (x.id === 'me-coming') return true; return false; };
+  const watch = new MutationObserver((recs) => {
+    if (Array.isArray(recs) && recs.length > 0 && recs.every((r) => r && ownComing(r.target))) return;
+    meSoon();
+  });
   for (const id of ['nx', 'nt', 'ng', 'gd', 'yd', 'lv', 'ea']) {
     const n = document.getElementById(id);
     if (n) watch.observe(n, { childList: true, subtree: id === 'lv' || id === 'nx' });
