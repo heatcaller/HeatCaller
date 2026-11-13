@@ -43,6 +43,8 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
   Update HeatCaller on the race PC; nothing changes on the relay.
 
+- **IFMAR, ROAR, EFRA, NZRCA and Reedy Race presets (12 November).** **Sanctioning Preset** now offers IFMAR 1:10 electric off-road, 1/10 electric track and 1/12 electric track, ROAR 1/10 and 1/12 electric club racing, EFRA 1/10 and 1/12 electric, NZRCA EP off-road and on-road, and the Reedy Touring Car Race of Champions Open classes. Each one is taken from the body's own rulebook, names the edition and the rule numbers, and sets only what that rulebook states. The IFMAR section, EFRA, NZRCA and Reedy presets also set the class's A-main to 3 legs. See [Sanctioning presets](race-day/drivers-and-classes.md#sanctioning-presets). Update HeatCaller on the race PC; nothing changes on the relay.
+
 - **Loose ends from setting up the night (12 November).**
     - **Templates on nights.** **When...** beside **Templates:** on **Race Day → Setup** sets the nights a template is for, such as every Tuesday or a monthly date. On those nights **Next Steps** offers **Start tonight's Tuesday club night**.
     - **Racing's off, by push too.** **Call It Off...** can also send a push to every phone signed up for the club's alerts.
