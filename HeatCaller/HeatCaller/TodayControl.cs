@@ -572,7 +572,7 @@ public sealed class TodayControl : UserControl
 
         _lblKicker.Text = AppTheme.Spaced(step.Stage switch
         {
-            ProgramStage.NoEvent or ProgramStage.DayClosed or ProgramStage.StartLikeLast or ProgramStage.NoClassesOnFile
+            ProgramStage.NoEvent or ProgramStage.DayClosed or ProgramStage.StartLikeLast or ProgramStage.StartFromTemplate or ProgramStage.NoClassesOnFile
                 or ProgramStage.NoClasses or ProgramStage.NoDrivers
                 or ProgramStage.NobodyCheckedIn => "BEFORE YOU START",
             ProgramStage.Complete => "ALL DONE",

@@ -876,7 +876,7 @@ public sealed class DriverStats
             // race director most needs to see on this card.
             if (sources.TechInspections.Latest(transponder) is { } inspection)
             {
-                tech = $"{inspection.ResultText} at {inspection.InspectedAtUtc.ToLocalTime():HH:mm}";
+                tech = $"{inspection.ResultText} at {AppTime.TimeOfDay(inspection.InspectedAtUtc.ToLocalTime())}";
                 techFailed = !inspection.IsCleared;
             }
             else

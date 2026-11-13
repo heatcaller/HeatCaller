@@ -1503,7 +1503,7 @@ public sealed class SoundEffectsControl : UserControl
         var races = profile.Effects.Values.Count(c => c.Enabled);
         var practice = profile.Effects.Values.Count(c => c.EnabledInPractice ?? c.Enabled);
 
-        _lblStatus.Text = $"Saved {DateTime.Now:HH:mm:ss} - {Plural.Of(races, "sound")} on for races, {practice} for practice.";
+        _lblStatus.Text = $"Saved {AppTime.TimeWithSeconds(DateTime.Now)} - {Plural.Of(races, "sound")} on for races, {practice} for practice.";
         _lblStatus.ForeColor = AppTheme.TextMuted;
     }
 
@@ -1562,7 +1562,7 @@ public sealed class SoundEffectsControl : UserControl
         }
 
         ShowProfile(_store.Current);
-        _lblStatus.Text = $"Undone at {DateTime.Now:HH:mm:ss} - the sounds below are as they were.";
+        _lblStatus.Text = $"Undone at {AppTime.TimeWithSeconds(DateTime.Now)} - the sounds below are as they were.";
         _lblStatus.ForeColor = AppTheme.TextMuted;
     }
 

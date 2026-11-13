@@ -318,7 +318,7 @@ internal sealed class UnsaidLinesForm : Form
 
         TextRenderer.DrawText(g, badge, AppTheme.BoldFont, new Point(x, y), lost ? AppTheme.Danger : AppTheme.TextMuted, TextFormatFlags.NoPadding);
 
-        var head = $"{line.AtUtc.ToLocalTime():h:mm:ss tt}  ·  {line.Call}" + (line.Driver is { Length: > 0 } driver ? $"  ·  {driver}" : string.Empty);
+        var head = $"{AppTime.TimeWithSeconds(line.AtUtc.ToLocalTime())}  ·  {line.Call}" + (line.Driver is { Length: > 0 } driver ? $"  ·  {driver}" : string.Empty);
 
         TextRenderer.DrawText(g, head, AppTheme.SmallFont,
             new Rectangle(x + badgeSize.Width + 10, y, width - badgeSize.Width - 10, AppTheme.SmallFont.Height),

@@ -265,7 +265,7 @@ internal static class HangWatchdog
     }
 
     private static string WallClock(long tick, long now) =>
-        (DateTime.Now - TimeSpan.FromMilliseconds(Math.Max(0, now - tick))).ToString("h:mm:ss tt");
+        AppTime.TimeWithSeconds(DateTime.Now - TimeSpan.FromMilliseconds(Math.Max(0, now - tick)));
 
     private static void Say(Action<string> log, string text)
     {

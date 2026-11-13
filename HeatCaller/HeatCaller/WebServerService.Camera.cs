@@ -234,7 +234,7 @@ public sealed partial class WebServerService
           if (grab.width !== video.videoWidth || grab.height !== video.videoHeight){ grab.width = video.videoWidth; grab.height = video.videoHeight; }
           const t = Date.now();
           gx.drawImage(video, 0, 0);
-          const d = new Date(t), stamp = d.toLocaleTimeString([], { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+          const d = new Date(t), stamp = d.toLocaleTimeString([], { hour12: !window.HC24 }) + '.' + String(d.getMilliseconds()).padStart(3, '0');
           const size = Math.max(14, Math.round(grab.height / 28));
           gx.font = 'bold ' + size + 'px system-ui'; gx.fillStyle = 'rgba(0,0,0,.6)';
           gx.fillRect(0, grab.height - size * 1.6, gx.measureText(stamp).width + size, size * 1.6);

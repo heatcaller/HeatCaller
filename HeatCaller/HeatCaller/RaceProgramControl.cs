@@ -1903,6 +1903,10 @@ public sealed partial class RaceProgramControl : UserControl
                 ShowLateArrivals();
                 break;
 
+            case ProgramStage.StartFromTemplate:
+                StartFromTemplateRequested?.Invoke(_step.ClassName);
+                break;
+
             case ProgramStage.StartLikeLast:
                 StartLikeLastRequested?.Invoke();
                 break;

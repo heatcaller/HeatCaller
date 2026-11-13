@@ -243,6 +243,19 @@ public sealed partial class RaceProgramControl
     /// </summary>
     private ProgramStep? StartLikeLastStep(ProgramStep step)
     {
+        // A template set for tonight comes first (setup plan step 7).
+        if (StartFromTemplateRequested is not null && TonightsTemplate(DateTime.UtcNow) is { } tonight)
+        {
+            return step with
+            {
+                Stage = ProgramStage.StartFromTemplate,
+                Detail = $"Tonight is \"{tonight.Name}\": {NightTemplates.Describe(tonight)}. One press starts tonight's race day with all of it. "
+                         + "To change something first, use Set Up Tonight on Setup (Shift+S).",
+                ActionCaption = $"Start tonight's {tonight.Name}",
+                ClassName = tonight.Name,
+            };
+        }
+
         if (StartLikeLastRequested is null || LastDayToCopy(DateTime.UtcNow) is not { } last)
         {
             return null;
@@ -338,5 +351,28 @@ internal sealed class LateArrivalsForm : Form
 
         AppTheme.ApplyRecursively(this);
         DialogFit.Keep(this, page, width: 580, height: 260 + 30 * lines.Count);
+    }
+}
+
+/// <summary>Templates on dates (12 Nov 2026, setup plan step 7).</summary>
+public sealed partial class RaceProgramControl
+{
+    /// <summary>Asks the Setup page to start tonight from the template of this name - Next Steps' "Start tonight's ...".</summary>
+    public event Action<string>? StartFromTemplateRequested;
+
+    /// <summary>
+    /// The template set for tonight, or null: none is, or a race day was
+    /// started in the last 12 hours (tonight's has begun, or been and gone).
+    /// </summary>
+    internal NightTemplate? TonightsTemplate(DateTime nowUtc)
+    {
+        var last = _events?.Real.OrderByDescending(e => e.StartedUtc).FirstOrDefault();
+
+        if (last is not null && nowUtc - last.StartedUtc < TonightAlreadyStarted)
+        {
+            return null;
+        }
+
+        return NightTemplates.ForDay(_settings.NightTemplates, nowUtc.ToLocalTime().Date);
     }
 }

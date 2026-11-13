@@ -718,7 +718,7 @@ public sealed partial class VoiceSettingsControl
         profile.StreakThresholdInPractice = practice;
         sounds.Save(profile);
 
-        _lblAnnouncementStatus.Text = $"Streak thresholds saved {DateTime.Now:HH:mm:ss}.";
+        _lblAnnouncementStatus.Text = $"Streak thresholds saved {AppTime.TimeWithSeconds(DateTime.Now)}.";
     }
 
     /// <summary>Puts the streak boxes back to what the effects store holds, without that counting as an edit.</summary>

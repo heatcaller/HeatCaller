@@ -4041,7 +4041,22 @@ public sealed partial class WebServerService
     private static void WriteHtml(HttpListenerContext context, string html)
     {
         context.Response.ContentType = "text/html; charset=utf-8";
-        WriteBody(context, html);
+        WriteBody(context, WithClock(html));
+    }
+
+    /// <summary>
+    /// The page with the club's 12/24-hour choice handed to its scripts as
+    /// window.HC24 (12 Nov 2026: every time a person reads follows the
+    /// 24-hour tick on Themes - AppTime.Use24Hour - phones included), just
+    /// inside the head. A page with no head is sent as it is.
+    /// </summary>
+    internal static string WithClock(string html)
+    {
+        var at = html.IndexOf("<head>", StringComparison.OrdinalIgnoreCase);
+
+        return at < 0
+            ? html
+            : html.Insert(at + "<head>".Length, $"<script>window.HC24={(AppTime.Use24Hour ? "true" : "false")};</script>");
     }
 
     private static void WriteJson(HttpListenerContext context, string json)
@@ -4924,7 +4939,7 @@ public sealed partial class WebServerService
         }
         function serverNow(){ return Date.now() + skew; }
         function clockAt(ms){
-          try { return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
+          try { return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: !window.HC24 }); }
           catch(e) { return ''; }
         }
 

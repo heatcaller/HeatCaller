@@ -636,7 +636,7 @@ public sealed class StreamDecoderClient : IDisposable
 
             try
             {
-                pending.TryAdd($"{DateTime.Now:HH:mm:ss.fff}  {prefix}{text}");
+                pending.TryAdd($"{AppTime.LogStampNow()}  {prefix}{text}");
             }
             catch
             {

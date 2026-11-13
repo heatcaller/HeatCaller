@@ -349,7 +349,7 @@ internal sealed class SignupsForm : Form
         }
         else if (_desk.LockedUntilUtc is { } locked)
         {
-            text = $"Sign-up codes are locked after too many wrong guesses until {locked.ToLocalTime():t}. "
+            text = $"Sign-up codes are locked after too many wrong guesses until {AppTime.TimeOfDay(locked.ToLocalTime())}. "
                 + "Cancel every open invite and make new ones to reopen it straight away.";
             bad = true;
         }

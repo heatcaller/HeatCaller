@@ -85,11 +85,6 @@ public partial class MainForm
 
         var since = TonightsSightings.NightStartUtc(DateTime.Now);
 
-        if (TonightsSightings.HeardSince(transponder, since))
-        {
-            return true;
-        }
-
         _savedTonight ??= (DateTime.MinValue, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
         // The saved races are read again at most every half a minute: the card
@@ -99,7 +94,15 @@ public partial class MainForm
             _savedTonight = (DateTime.UtcNow, TonightsSightings.InSessions(_sessionHistory.All, since));
         }
 
-        return _savedTonight.Value.Heard.Contains(transponder.Trim());
+        // Any of the driver's transponders (12 Nov 2026, setup plan step 7):
+        // a heat carries the driver's main one, but their Mod car may run
+        // their second, and that crossing the loop is the car heard.
+        var owner = _profiles.Get(_profiles.PrimaryForAlternate(transponder) ?? transponder);
+        var saved = _savedTonight.Value.Heard;
+
+        return TonightsSightings.HeardAny(
+            TonightsSightings.IdsOf(transponder, owner),
+            id => TonightsSightings.HeardSince(id, since) || saved.Contains(id));
     }
 
     /// <summary>The transponders in races saved tonight, and when that was read. See HeardTonight.</summary>

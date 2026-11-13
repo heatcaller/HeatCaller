@@ -67,6 +67,13 @@ internal enum ProgramStage
     /// </summary>
     StartLikeLast,
 
+    /// <summary>
+    /// No race day is open, and a night template is set for today (12 Nov
+    /// 2026, setup plan step 7). Made by RaceProgramControl.NextStep. The
+    /// step's ClassName carries the template's name.
+    /// </summary>
+    StartFromTemplate,
+
     /// <summary>Every scheduled round has been run, and a class still has no mains. Never reached on a club night.</summary>
     SeedMains,
 

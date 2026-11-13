@@ -237,7 +237,7 @@ Everything HeatCaller makes for people to see ends with a small sun and the HEAT
 | Setting | What it does | Default |
 |---|---|---|
 | **Animate the Synthwave sidebar header (scrolling grid, twinkling stars)** | Animates the sidebar header. Only for looks with Synthwave effects, and not while the club logo is shown there. Turn it off for a still image if you'd rather avoid the motion. Advanced mode only. | On |
-| **Use 24-hour (military) time** | Shows times as 24-hour instead of AM/PM. Lists and pickers already open update as they refresh. | Off |
+| **Use 24-hour (military) time** | Shows times as 24-hour instead of AM/PM everywhere a time is written: the app's screens, status lines and logs, the Wi-Fi pages, and your club's online pages on phones (after the relay picks up the change). Lists and pickers already open update as they refresh; a Wi-Fi or phone page shows the change the next time it is opened. Before 12 November 2026 the phone pages used each phone's own setting. | Off |
 
 ## After updating from 0.47
 

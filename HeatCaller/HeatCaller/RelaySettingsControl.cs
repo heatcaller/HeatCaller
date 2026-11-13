@@ -1786,7 +1786,7 @@ public sealed class RelaySettingsControl : UserControl
             // sign-in right now, whatever they would say. The lock grows
             // each time, so past today the day is given too.
             var local = lockedUntil.ToLocalTime();
-            var when = local.Date == DateTime.Today ? local.ToString("t") : local.ToString("g");
+            var when = local.Date == DateTime.Today ? AppTime.TimeOfDay(local) : AppTime.DateAndTime(local);
             var fix = _settings.RelayCheckInPin.Length == 0 ? "set a staff PIN" : "change the staff PIN";
             text = $"PIN sign-in is locked after many wrong guesses until {when} - {fix} to reopen it.";
             colour = AppTheme.Danger;
@@ -2810,7 +2810,7 @@ public sealed class RelaySettingsControl : UserControl
             // club - publishing a changed one is what reopens it, the same
             // as check-in's own lock above.
             var local = lockedUntil.ToLocalTime();
-            var when = local.Date == DateTime.Today ? local.ToString("t") : local.ToString("g");
+            var when = local.Date == DateTime.Today ? AppTime.TimeOfDay(local) : AppTime.DateAndTime(local);
             text = $"Locked after many wrong guesses until {when} - change the Manager PIN on Local Screens to reopen it.";
             colour = AppTheme.Danger;
         }

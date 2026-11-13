@@ -38,6 +38,8 @@ export interface Look {
    * ask: it changes every race, and the page is drawn once.
    */
   readonly vote: boolean;
+  /** 24-hour times (true), 12-hour (false), or the phone's own locale (undefined) - the laptop's tick on Themes. */
+  readonly clock24?: boolean | undefined;
   /** Light-on-dark or dark-on-light, for color-scheme and a few contrast fixes. */
   readonly light: boolean;
   /** CSS custom properties to override, name to value. Empty for the default look. */
@@ -255,10 +257,13 @@ export function lookFrom(site: StoredDocument | undefined, checkin: StoredDocume
     : undefined;
 
   const light = theme?.["light"] === true;
+  const rawClock = body?.["clock24"];
+  const clock24 = typeof rawClock === "boolean" ? rawClock : undefined;
   const logoVersion = logo === undefined ? undefined : logoVersionOf(logo);
 
   return {
     light,
+    clock24,
     vars,
     themeColor: vars["--bg"] ?? DEFAULT_THEME_COLOR,
     tagline,

@@ -1553,12 +1553,12 @@ internal sealed partial class DriverRequestDesk
 
     private string RaceWords(DriverRequest request) =>
         RaceOf(request) is { } session
-            ? (string.IsNullOrWhiteSpace(session.Label) ? session.StartedAtUtc.ToLocalTime().ToString("ddd HH:mm", CultureInfo.CurrentCulture) : session.Label.Trim())
+            ? (string.IsNullOrWhiteSpace(session.Label) ? session.StartedAtUtc.ToLocalTime().ToString("ddd ", CultureInfo.CurrentCulture) + AppTime.TimeOfDay(session.StartedAtUtc.ToLocalTime()) : session.Label.Trim())
             : "a race this laptop doesn't have";
 
     /// <summary>The line a query adds to its race's notes: "[Driver query 19:42] Sam P.: ...".</summary>
     internal static string NoteLine(DriverRequest request, string driverName) =>
-        $"[Driver query {request.AskedUtc.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture)}] {ShortName(driverName)}: {request.Text("m")}";
+        $"[Driver query {AppTime.TimeOfDay(request.AskedUtc.ToLocalTime())}] {ShortName(driverName)}: {request.Text("m")}";
 
     /// <summary>
     /// Noted: the query goes into the race's notes (Race History shows them),

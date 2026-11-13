@@ -395,6 +395,30 @@ public static class TonightsSightings
         return heard;
     }
 
+    /// <summary>
+    /// The transponders that count as this car on the loop (12 Nov 2026,
+    /// setup plan step 7): the one on the heat, and every one its driver
+    /// owns. A driver in two classes often moves one transponder between
+    /// cars, or runs a second in their other car - either crossing is them.
+    /// </summary>
+    public static IReadOnlyList<string> IdsOf(string transponder, DriverProfile? owner)
+    {
+        var ids = new List<string> { transponder.Trim() };
+
+        foreach (var id in owner?.AllTransponderIds ?? Array.Empty<string>())
+        {
+            if (!ids.Contains(id, StringComparer.OrdinalIgnoreCase))
+            {
+                ids.Add(id);
+            }
+        }
+
+        return ids;
+    }
+
+    /// <summary>Whether any of these transponders has been heard.</summary>
+    public static bool HeardAny(IEnumerable<string> ids, Func<string, bool> heard) => ids.Any(heard);
+
     /// <summary>For tests.</summary>
     internal static void Clear() => LastHeard.Clear();
 }

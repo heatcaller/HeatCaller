@@ -5,6 +5,7 @@ import { homePage, nightPage } from "../src/pages.js";
 import { CHANNELS } from "../src/types.js";
 import { askFieldsFrom, ASK_MAX_COMING_CLASSES, DRIVER_ASK_KINDS, isWriteKind } from "../src/driverasks.js";
 import { FakePage, pageParts, type FakeNode } from "./driverexp-rp1-fakepage.js";
+import { CLOCK_JS } from "../src/clock.js";
 
 /**
  * THE NEXT RACE NIGHT, AND "I'M COMING" (12 Nov 2026).
@@ -45,6 +46,7 @@ function nextNightHtmlFrom(html: string): (answer: unknown) => string {
 
   const context = createContext({});
 
+  runInContext(CLOCK_JS, context);
   runInContext(html.slice(escFrom, escTo + 3), context);
   runInContext(html.slice(from, to + 1), context);
 

@@ -52,6 +52,16 @@ public sealed class NightTemplate
     public TimeSpan? OutByLocalTime { get; set; }
 
     public List<PlannedBreak> Breaks { get; set; } = new();
+
+    /// <summary>
+    /// The days of the week this template is the night on (12 Nov 2026, setup
+    /// plan step 7): "every Tuesday". Next Steps then offers to start that
+    /// night from it. Empty for none.
+    /// </summary>
+    public List<DayOfWeek> Weekdays { get; set; } = new();
+
+    /// <summary>Particular dates it's the night on (local dates) - a points round once a month. These win over a weekday.</summary>
+    public List<DateTime> Dates { get; set; } = new();
 }
 
 /// <summary>Making a template from a day, and a day from a template. Pure.</summary>
@@ -133,6 +143,48 @@ public static class NightTemplates
         var kind = t.Shape == RaceDayShape.ClubNight ? "Club night" : "Race day";
         var first = t.FirstRaceLocalTime is { } time ? $", first race {AppTime.TimeOfDay(DateTime.Today.Add(time))}" : string.Empty;
 
-        return $"{t.Name} - {kind}, {Plural.Of(t.ClassNames.Count, "class", "classes")}{first}";
+        var when = WhenWords(t) is { Length: > 0 } on ? $" - {on}" : string.Empty;
+
+        return $"{t.Name} - {kind}, {Plural.Of(t.ClassNames.Count, "class", "classes")}{first}{when}";
+    }
+
+    /// <summary>
+    /// The template that's tonight's night (setup plan step 7), or null: one
+    /// set for this date first, then one set for this day of the week. The
+    /// first of each, in the templates' order.
+    /// </summary>
+    public static NightTemplate? ForDay(IEnumerable<NightTemplate>? templates, DateTime localDay)
+    {
+        var all = (templates ?? Enumerable.Empty<NightTemplate>()).Where(t => t is not null).ToList();
+        var day = localDay.Date;
+
+        return all.FirstOrDefault(t => (t.Dates ?? new List<DateTime>()).Any(d => d.Date == day))
+               ?? all.FirstOrDefault(t => (t.Weekdays ?? new List<DayOfWeek>()).Contains(day.DayOfWeek));
+    }
+
+    /// <summary>When a template is the night, in a few words: "Tuesdays", "Tue and Thu, and 6 Dec", or "" for never.</summary>
+    public static string WhenWords(NightTemplate t)
+    {
+        var format = System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat;
+        var days = (t.Weekdays ?? new List<DayOfWeek>()).Distinct().OrderBy(d => ((int)d + 6) % 7).ToList();
+        var dates = (t.Dates ?? new List<DateTime>()).Select(d => d.Date).Where(d => d >= DateTime.Today).Distinct().OrderBy(d => d).ToList();
+
+        var parts = new List<string>();
+
+        if (days.Count == 1)
+        {
+            parts.Add(format.GetDayName(days[0]) + "s");
+        }
+        else if (days.Count > 1)
+        {
+            parts.Add(string.Join(" and ", days.Select(format.GetAbbreviatedDayName)));
+        }
+
+        if (dates.Count > 0)
+        {
+            parts.Add(string.Join(", ", dates.Take(3).Select(d => d.ToString("d MMM"))) + (dates.Count > 3 ? ", ..." : string.Empty));
+        }
+
+        return string.Join(", and ", parts);
     }
 }
