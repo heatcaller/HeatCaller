@@ -14,7 +14,7 @@ This page also covers choosing which columns each leaderboard shows, and the **S
 
 A small reminder of the keys, "F11: toggle fullscreen     M: track map     O: on air     C: captions     Esc: close", sits in the top-right corner. HeatCaller doesn't remember which monitor you used, so you move it each time you open it. Pressing **Big Screen** (or <kbd>B</kbd>, or **Open Big Screen** on **Local Screens**) while it's already open brings that window to the front rather than opening a second one. The **Practice** page's **Open Big Screen** opens a window of its own each time, so you can run more than one if you have the screens.
 
-![The Big Screen in a window during a demo race: RACING - GREEN FLAG, the race clock and the leaderboard with laps, best laps and gaps](../assets/images/big-screen-racing.png)
+![The Big Screen in a window during a demo race: RACING - GREEN FLAG, the announcer's latest line, the race clock with 3 LAPS TO GO, the leaderboard with laps, best laps and gaps, and ON DECK along the bottom](../assets/images/big-screen-racing.png)
 
 ## What it shows
 

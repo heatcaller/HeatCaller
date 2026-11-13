@@ -46,6 +46,7 @@ These are the RC racing terms and HeatCaller terms used in the app and in these 
 | Term | Meaning |
 |---|---|
 | **Race day (event)** | One meeting. Check-ins, tech, the program and the timetable are all filed against the current race day. You start one on **Race Day → Setup** with **New Race Day** or **Set Up Tonight**. **Close Day** stops new rounds joining it. Its results stay readable forever. See [Events, entries and check-in](../race-day/events-and-entries.md). |
+| **Start Tonight** | The window that starts a race night, from **New Race Day**, **Set Up Tonight** or <kbd>Shift</kbd>+<kbd>S</kbd> when no race day is open. It can start tonight like the last race day, from a night template, or from scratch. See [The Start Tonight window](../race-day/events-and-entries.md#the-start-tonight-window). |
 | **Club night** | A race day set to **Club night - just races** in **What kind of night:**: a flat list of races with no finals, seeding or bump-ups. The other kind is **Race day - heats, then finals**. |
 | **Legacy event** | Holds everything recorded before HeatCaller tracked race days. It's read-only. |
 | **Class** | The rulebook a group of drivers races under: how qualifying is scored, how many heats count, main size, bump-ups, race format and tech checklist. Every driver has a class. |
@@ -53,9 +54,13 @@ These are the RC racing terms and HeatCaller terms used in the app and in these 
 | **Round** | One line in the race program: a qualifying heat or a main. |
 | **Heat** | A qualifying race for a group of drivers from one class. The number of drivers per heat is set on the race day. On a club night, the program's rounds are called races instead. |
 | **Qualifying rounds** | How many times each driver goes out in qualifying (3 by default), set on the race day as **Heats each driver gets:**. |
-| **Qualifying** | The heats that decide the order drivers are seeded into the mains. Each class scores it one of two ways: **total laps** (most laps, then the lowest time) or **best-N consecutive**. |
+| **Qualifying** | The heats that decide the order drivers are seeded into the mains. Each class scores it one of three ways: **total laps** (most laps, then the lowest time), **best-N consecutive**, or **points per round**. |
 | **Best-N consecutive** | A qualifying method that scores a driver's quickest unbroken run of N laps (3 by default, 5 is also common) and ignores the rest. It rewards a clean, sustained run over one lucky lap. The start lap is never part of the window. |
 | **Heats that count** | How many of a driver's heats count toward qualifying. 1 means their single best heat decides it. 2 means "best 2 of 3": their two best heats are totaled and the worst is dropped. |
+| **Points per round** | A qualifying method where each round is scored on its own by finishing position, and the fewest points wins. The class's **Top qualifier scores:** setting gives the round's winner 1 point (the club scale) or 0 points (the IFMAR and EFRA scales). See [Points per round](../race-day/program-and-mains.md#points-per-round). |
+| **Heads-up qualifying (HRQF)** | A first round seeded from tonight's practice, so each driver races the ones just quicker and just slower than them. Chosen with **First round seeded:** on **Race Day → Setup**. See [Heads-up qualifying](../race-day/program-and-mains.md#heads-up-qualifying). |
+| **Mixed-class heats** | Two or more small classes sharing one heat on track, each still scored on its own: its own qualifying, mains and points. See [Mixed-class heats](../race-day/program-and-mains.md#mixed-class-heats). |
+| **Late entry** | A driver added after the heats are posted, with **Add a Late Entry...**. They go into the heats still to run. See [A late entry](../race-day/program-and-mains.md#a-late-entry). |
 | **TQ (top qualifier)** | The fastest driver in qualifying. In HeatCaller, the qualifying order is what seeds the mains, so the TQ is the first driver seeded into the A-main. |
 | **Main** | A final. After qualifying, drivers are split into mains by qualifying order, up to the class's main size (8 by default). |
 | **A-main, B-main, C-main...** | The mains in order of pace. The fastest qualifiers go in the A-main, the next group in the B-main, and so on. If the field doesn't divide evenly, the slowest main is the short one. Lower mains run first. |
@@ -64,7 +69,11 @@ These are the RC racing terms and HeatCaller terms used in the app and in these 
 | **Program** | The day's list of rounds, shown as **Tonight's program** on **Race Day → Next Steps** and built with **Build tonight's heats**. |
 | **Timetable (run sheet)** | The day's timed running order, in the **Timetable** window (the **Timetable** button under the program on **Race Day → Next Steps**). It follows the program's rounds by itself and holds any lines you add yourself, like lunch or prize-giving. **Print Run Sheet...** prints it. |
 | **Next Up bar** | The strip on **Race Control** showing what's running **NOW**, what's **NEXT**, and progress through the **DAY**. **Start Next** starts the next round. |
+| **Auto start** | Starting the next race by itself after a gap (2:30 by default) from the last race's checkered flag. On by default; **Hold** stops the count. See [Auto start between races](../race-control/running-a-race.md#auto-start-between-races). |
+| **DNS (did not start)** | A driver taken out of the next race (a broken car, gone home) with **Skip ... (DNS)**. They're listed under the finishers, greyed, and score nothing for that race. See [Skip a driver in the next race (DNS)](../race-control/running-a-race.md#skip-a-driver-in-the-next-race-dns). |
+| **Protest window** | The minutes after each qualifying round and each main while its results are provisional, so a lap-count query can still be put right. See [The protest window](../race-day/program-and-mains.md#the-protest-window). |
 | **Marshal** | A person at a corner who puts crashed cars back on the track. If a track layout has **Corner marshal posts:** set, each heat is marshalled by the drivers from the previous heat, and the announcer can read the marshals out in the grid call. |
+| **Marshals in place** | The banner button that confirms a race's marshals are at their posts, so a race set to wait for them can start. Marshals can also tap **I'm at my post** on their phones. See [Marshals in place](../race-day/program-and-mains.md#marshals-in-place). |
 | **Tech (scrutineering)** | Checking cars against the class rules. Each class can have a tech checklist. Inspections are recorded from **Race Day → Who's Racing**, and the full list is in the **Scrutineering log**. When a heat is staged, Race Control warns about any driver in it who hasn't passed tech today (a per-class setting, on by default). It's a warning, not a block. |
 | **Rental** | A club transponder loaned to a driver who doesn't have one, tracked on the **Rentals** page. |
 | **Handicap** | A credit that evens out a mixed-ability grid: either seconds taken off a driver's time, or whole laps added. Handicaps are applied when results are shown. Recorded lap times, personal bests and track records are never changed. See [Practice, ghosts and demo](../race-control/practice-and-ghosts.md). |
@@ -105,6 +114,7 @@ These are the RC racing terms and HeatCaller terms used in the app and in these 
 | **Crowd screens** | The screens other people watch: the Big Screen, the Wi-Fi pages and the club's online pages. They share one look and show the club logo. |
 | **Sponsor** | A business the club has sold airtime to, listed on the **Sponsors** page: slides and videos on the Big Screen, and a spoken **sponsor read** (under [Sound and voice](#sound-and-voice) below). Nothing to do with a *driver's* **Sponsors:** on **Driver Hub**, which is what fills the `{sponsors}` placeholder in an announcement line. See [Big Screen](../screens/big-screen.md) and [Driver details used in calls](../announcer/voice.md#driver-details-used-in-calls). |
 | **Backup password** | The password that protects the copy of your keys (API keys, tokens, PINs) inside a backup, so they can be unlocked on a different PC. See [Backups](../admin/backups.md). |
+| **Standby PC** | A second laptop that keeps a copy of the timing laptop's race data and can **Take Over** if it dies mid-meeting. See [Standby PC](../admin/standby-pc.md). |
 
 ## Sound and voice
 

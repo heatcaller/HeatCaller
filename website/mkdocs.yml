@@ -73,6 +73,7 @@ nav:
       - Your club's online pages: online/index.md
       - Setting up the Club Website page: online/setup.md
       - Online check-in: online/check-in.md
+      - Driver requests: online/driver-requests.md
       - Driver sign-up: online/sign-up.md
       - Emailing PINs to racers: online/email.md
   - Administration:

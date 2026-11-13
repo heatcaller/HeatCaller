@@ -108,7 +108,7 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
   Update HeatCaller on the race PC; nothing changes on the relay.
 
 - **Less to set up each week (12 November).** A few quick wins for the race director:
-    - **A new race day keeps last week's settings.** Besides the venue, layout, championship and heat sizes, it now keeps the entry fees and, from the last day of the same kind, **First race at:**, the first-round seeding, sharing heats, the between-race talk and the check-in rule. See [New Race Day](race-day/events-and-entries.md#new-race-day).
+    - **A new race day keeps last week's settings.** Besides the venue, layout, championship and heat sizes, it now keeps the entry fees and, from the last day of the same kind, **First race at:**, the first-round seeding, sharing heats, the between-race talk and the check-in rule. See [New Race Day](race-day/events-and-entries.md#the-start-tonight-window).
     - **Change a driver's classes at the desk.** Click their **Class** on **Who's Racing** to tick the classes they race tonight. The column now shows every class a driver races. See [Who's Racing](race-day/events-and-entries.md#race-day-whos-racing).
     - **The phone server starts by itself next time.** The first time **Start Server** works on **Local Screens**, **Start the server automatically when the app opens** is ticked for you, once. See [Phone and web](screens/phone-and-web.md).
     - **New classes have a race length.** While the app default has no lap or time limit, a new class starts at 5 minutes, so a first night's heat doesn't run until somebody finds **Checkered**.

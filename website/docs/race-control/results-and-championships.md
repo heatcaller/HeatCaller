@@ -34,7 +34,7 @@ After the checkered flag, **Edit Result** on Race Control's flag row opens the r
 
 Below the results is a notes box, for the weather, the track surface, incidents or anything else worth remembering. Notes are saved when you click away from the box, or when you close HeatCaller.
 
-![Race History listing saved demo races, none selected yet, with the results columns and the action buttons below](../assets/images/race-history.png)
+![Race History listing saved demo races, none selected yet, with the results columns and the action buttons below, from Replay to Delete Session](../assets/images/race-history.png)
 
 | Button | What it does |
 |---|---|
