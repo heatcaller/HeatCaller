@@ -75,7 +75,7 @@ public sealed class RcpLayoutGeneratorTests
         var stock = new RcpStock();
         stock.Sets["50cm Wide-L / Oblong"] = 1;
         stock.LooseFor(500).Tiles = 20;
-        stock.LooseFor(500).StraightRails = 20;
+        stock.LooseFor(500).RailTiles = 20;
 
         var room = Room(9000, 6000, 500);
         var worked = RcpLayoutGenerator.For(room, stock, 2).Where(l => !l.RcpOwn).ToList();

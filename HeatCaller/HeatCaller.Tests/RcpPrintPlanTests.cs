@@ -123,31 +123,38 @@ public sealed class RcpPrintPlanTests
     }
 
     [Fact]
-    public void The_build_list_goes_floor_rails_dividers_turns_markings_by_the_printed_grid()
+    public void The_build_list_lays_the_pieces_row_by_row_then_the_markings_by_the_printed_grid()
     {
+        // Railed tiles, Phase 3 (13 Nov 2026): each tile goes down with its
+        // rail on, so the floor, rails, dividers and turns are one step,
+        // each cell saying what piece goes there.
         var design = Ring();
         var steps = RcpBuildList.For(design);
 
-        Assert.Equal("1. Lay the floor", steps[0].Heading);
-        Assert.StartsWith("2. Put the rails round it", steps[1].Heading);
-        Assert.Contains(steps, s => s.Heading.EndsWith("Put the turns in"));
+        Assert.Equal("1. Lay the pieces", steps[0].Heading);
+        Assert.DoesNotContain(steps, s => s.Heading.EndsWith("Lay the floor") || s.Heading.EndsWith("Put the rails round it") || s.Heading.EndsWith("Put the turns in"));
         Assert.EndsWith("Put the markings down", steps[^1].Heading);
 
-        // The top row: all twelve across, A to L, with outer curve tiles at
-        // both ends of a ring with turns.
-        var floor = steps[0].Lines;
-        Assert.Contains(floor, l => l.StartsWith("Row 1: A to L - 12 tiles"));
+        // The top row: a turn at each end of the ring, rail tiles between.
+        var pieces = steps[0].Lines;
+        Assert.Contains(pieces, l => l == "Row 1: A outer curve tile, turn across its north-west corner; B to K rail tile, rail north; L outer curve tile, turn across its north-east corner");
 
-        // The middle rows of a two-wide ring are two runs.
-        Assert.Contains(floor, l => l.StartsWith("Row 4: A to B, K to L - 4 tiles"));
+        // The second row has the inner corner tiles at the inside of the bends.
+        Assert.Contains(pieces, l => l.StartsWith("Row 2: A rail tile, rail west; B inner corner tile, piece in its south-east corner; C to J rail tile, rail south;"));
+
+        // The middle rows of a two-wide ring are two lanes, each tile railed on its own side.
+        Assert.Contains(pieces, l => l == "Row 4: A rail tile, rail west; B rail tile, rail east; K rail tile, rail west; L rail tile, rail east");
 
         // Every floor row is listed, top to bottom.
-        Assert.Equal(8, floor.Count(l => l.StartsWith("Row ")));
+        Assert.Equal(8, pieces.Count(l => l.StartsWith("Row ")));
 
         Assert.Contains(steps[^1].Lines, l => l == "The finish line at E1.");
 
         var used = RcpPlan.Count(design);
-        Assert.StartsWith($"{used.Tiles} tiles: {used.PlainTiles} plain", floor[0]);
+        Assert.StartsWith($"{used.Tiles} pieces: ", pieces[0]);
+        Assert.Contains($"{used.Pieces.Rail} rail tiles", pieces[0]);
+        Assert.Contains("4 outer curve tiles", pieces[0]);
+        Assert.Contains("4 inner corner tiles", pieces[0]);
     }
 
     [Fact]
@@ -165,27 +172,57 @@ public sealed class RcpPrintPlanTests
         Assert.Equal("A1", RcpBuildList.Cell(origin, -5, 3));
         Assert.Equal("D2", RcpBuildList.Cell(origin, -2, 4));
 
-        var floor = RcpBuildList.For(design)[0].Lines;
-        Assert.Contains(floor, l => l.StartsWith("Row 1: A to B - 2 tiles"));
-        Assert.Contains(floor, l => l.StartsWith("Row 2: D - 1 tile"));
+        var pieces = RcpBuildList.For(design)[0].Lines;
+        Assert.Contains(pieces, l => l == "Row 1: A to B plain tile");
+        Assert.Contains(pieces, l => l == "Row 2: D plain tile");
     }
 
     [Fact]
-    public void A_turn_round_an_inside_corner_is_left_to_the_inner_corner_line_as_the_parts_list_counts_it()
+    public void A_turn_that_is_no_tiles_own_is_listed_with_the_loose_parts()
     {
         var design = Ring();
-        var outside = RcpPlan.Count(design).OuterTurnRails;
 
         // A turn round the inner corner of the top-left bend: it bulges off
-        // the track, into the island.
+        // the track, into the island, where there's no outer curve tile for
+        // it - it isn't one of the club's pieces.
         design.Curves.Add(new RcpCurve { Col = 2, Row = 2, Quadrant = RcpQuadrant.SouthEast, Radius = 1 });
 
-        Assert.Equal(outside, RcpPlan.Count(design).OuterTurnRails);
+        var steps = RcpBuildList.For(design);
+        var loose = steps.Single(s => s.Heading.EndsWith("Put the loose rail parts on")).Lines;
 
-        var turns = RcpBuildList.For(design).Single(s => s.Heading.EndsWith("Put the turns in")).Lines;
-        var listed = turns.Where(l => l.Contains("turn rail")).Sum(l => int.Parse(l.Split(' ')[0]));
+        Assert.Contains(loose, l => l.StartsWith("1 turn rail that isn't one tile's own turn") && l.EndsWith("at C3."));
 
-        Assert.Equal(outside, listed);
+        // The ring's own four turns are on their tiles, in the pieces.
+        Assert.Equal(4, steps[0].Lines.Sum(l => l.Split("outer curve tile, turn across").Length - 1));
+    }
+
+    [Fact]
+    public void A_custom_tile_is_said_where_it_is_laid_and_with_the_loose_parts()
+    {
+        // A tile with rails on two edges: the second is custom work.
+        var design = new RcpTrackDesign();
+        design.Tiles.Add(new RcpTile { Col = 0, Row = 0 });
+        design.Walls.Add(new RcpWall { Col = 0, Row = 0 });
+        design.Walls.Add(new RcpWall { Col = 0, Row = 0, Vertical = true });
+
+        var steps = RcpBuildList.For(design);
+
+        Assert.Contains(steps[0].Lines, l => l.StartsWith("Row 1: A rail tile, rail ") && l.EndsWith("(custom: a second rail)"));
+        Assert.Contains(steps.Single(s => s.Heading.EndsWith("Put the loose rail parts on")).Lines, l => l.StartsWith("1 second rail on a tile"));
+    }
+
+    [Fact]
+    public void Each_piece_has_its_mark_for_the_printed_sheets()
+    {
+        Assert.Equal("R", RcpBuildList.Code(RcpPiece.Rail));
+        Assert.Equal("OC", RcpBuildList.Code(RcpPiece.OuterCurve));
+        Assert.Equal("IC", RcpBuildList.Code(RcpPiece.InnerCorner));
+        Assert.Equal(string.Empty, RcpBuildList.Code(RcpPiece.Plain));
+
+        // Every piece but the plain tile has a mark, and no two share one.
+        var marks = Enum.GetValues<RcpPiece>().Where(p => p != RcpPiece.Plain).Select(RcpBuildList.Code).ToList();
+        Assert.All(marks, m => Assert.False(string.IsNullOrEmpty(m)));
+        Assert.Equal(marks.Count, marks.Distinct().Count());
     }
 
     [Fact]
@@ -225,9 +262,11 @@ public sealed class RcpPrintPlanTests
 
         Assert.True(lines[0].Title);
         Assert.Contains(lines, l => l.Heading && l.Text == "Parts, in 50 cm tiles");
-        Assert.Contains(lines, l => l.Text.StartsWith("Plain tiles: "));
+        Assert.Contains(lines, l => l.Text.StartsWith("Plain and blank tiles: "));
+        Assert.Contains(lines, l => l.Text.StartsWith("Rail tiles: "));
+        Assert.Contains(lines, l => l.Text.StartsWith("On the plan sheets each tile is marked with its piece"));
         Assert.Contains(lines, l => l.Text.StartsWith("What the club owns isn't entered"));
-        Assert.Contains(lines, l => l.Heading && l.Text == "1. Lay the floor");
+        Assert.Contains(lines, l => l.Heading && l.Text == "1. Lay the pieces");
     }
 
     [Fact]

@@ -4,6 +4,16 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Track Designer: the rest of railed tiles (13 November).** Each tile goes down with its rail on, and now the rest of the designer works that way too.
+    - **Pick up, copy and stretch whole pieces.** A tile picked up with **Select** brings its own rail or turn, and a rail on the box's edge that's bolted to a tile outside it stays put. Picking one side of a divider takes that side's rail and leaves the other lane's, and putting it back makes a divider again. A stretch lays each tile again as the piece it is, and no longer refuses next to a one-tile turn, since the turn is part of its tile. A row stretch no longer turns an arched or finish rail tile's rail onto the wrong edge.
+    - **The build list lays the pieces.** **Lay the pieces** goes row by row, each cell saying what goes there ("B to K rail tile, rail north"), in place of laying the floor and then the rails, dividers and turns. The printed sheets mark each tile R, F, A, OC, IC or B. Loose rail parts get a step of their own.
+    - **What the club owns, in pieces.** Enter rail tiles, finish rail tiles, arched rail tiles, outer curve and inner corner tiles as they are, with their rails on, and the loose rails, turn rails and corner pieces apart. A plan is checked piece for piece ("Rail tiles: 2 short"). A boxed set counts as the pieces it makes, and a cupboard entered before is turned into pieces when it opens, each straight rail paired with a plain tile.
+    - **Drawn as they are.** The outer curve tile is a quarter circle, with bare room in the corner beyond its turn. The arched rail tile's rail rises into the lane, with three bolts. In the 3D view each rail stands on its own tile and the arch stands up in its shape. The ghost under the pointer shows the same shapes.
+    - **What the pieces can't build is marked.** Besides **custom** tiles, a rail with no tile under it is tagged **no tile**, and a turn that isn't one of the club's pieces, such as a two-tile turn, is tagged **not a piece**.
+    - **RCP's layouts from real pieces.** The serpentines and the Wide L meet the wall with a turn either side of the divider instead of a custom tile, and the 50cm Oval goes round a divider so both lanes are two tiles wide.
+
+    See [Track Designer](race-day/track-designer.md).
+
 - **Whole names in the championship standings (13 November).** In a 1280-wide window the **Standings** table cut drivers to "Bil..." and "As...", because every heading kept its full width and **Driver** got what was left. **Driver** and **Races** ("6 of 7") are now kept wide enough for what they show, the two narrower columns of the page give up room first, and **Carried In** shows only when somebody has points carried in. See [Championship](race-control/results-and-championships.md#championship).
 
 - **Fixes from the first night on step 8 (12 November).**

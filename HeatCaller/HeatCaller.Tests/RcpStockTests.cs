@@ -77,9 +77,17 @@ public sealed class RcpStockTests
         Assert.Equal(2 * 40 + 28 + 10 + 2, owned.Tiles);
         Assert.Equal(2 * 12 + 2, owned.OuterCurveTiles);
         Assert.Equal(2 * 12, owned.InnerCornerTiles);
-        Assert.Equal(2 * 16 + 5, owned.StraightRails);
-        Assert.Equal(2 * 12, owned.TurnRails);
-        Assert.Equal(2 * 12, owned.InnerCornerPieces);
+
+        // In pieces (railed tiles, Phase 4): a Wide-L's 16 straight rails go
+        // on its 2 start/finish tiles and its 14 straight tiles, so the box
+        // is all rail tiles and corner tiles - no rail left loose, and no
+        // plain tile. The turn rails and corner pieces are on their tiles.
+        Assert.Equal(2 * 14, owned.RailTiles);
+        Assert.Equal(2 * 2, owned.FinishTiles);
+        Assert.Equal(10, owned.PlainTiles);
+        Assert.Equal(5, owned.StraightRails);
+        Assert.Equal(0, owned.TurnRails);
+        Assert.Equal(0, owned.CornerPieces);
         Assert.Equal(8, owned.EndCaps);
 
         // The Oval's parts aren't published: its tiles count, nothing else.
@@ -89,18 +97,16 @@ public sealed class RcpStockTests
     }
 
     [Fact]
-    public void A_plan_is_checked_part_by_part_and_short_parts_are_said()
+    public void A_plan_is_checked_piece_by_piece_and_short_pieces_are_said()
     {
         var used = RcpPlan.Count(TwoWideRing());
 
         var stock = new RcpStock();
         var loose = stock.LooseFor(500);
         loose.Tiles = 100;
+        loose.RailTiles = 100;
         loose.OuterCurveTiles = 3;
         loose.InnerCornerTiles = 4;
-        loose.StraightRails = 100;
-        loose.TurnRails = 4;
-        loose.InnerCornerPieces = 4;
 
         var lines = stock.Check(used, 500);
 
@@ -110,8 +116,128 @@ public sealed class RcpStockTests
 
         Assert.Equal(new[] { "Outer curve tiles" }, lines.Where(l => l.Short).Select(l => l.Part).ToArray());
 
-        // No end caps counted, so they aren't checked.
+        // No end caps counted, so they aren't checked; no loose rails used
+        // or owned, so they aren't listed.
         Assert.DoesNotContain(lines, l => l.Part == "End caps");
+        Assert.DoesNotContain(lines, l => l.Part == "Loose straight rails");
+    }
+
+    [Fact]
+    public void A_plan_short_of_rail_tiles_says_rail_tiles_not_tiles_and_rails()
+    {
+        // Railed tiles, Phase 4: the rails stay on, so a plan is short of
+        // the piece - "2 more rail tiles" - however many plain tiles and
+        // loose rails the cupboard has.
+        var used = RcpPlan.Count(TwoWideRing());
+        var rails = used.Pieces.Rail;
+
+        Assert.True(rails > 0);
+
+        var stock = new RcpStock();
+        var loose = stock.LooseFor(500);
+        loose.Tiles = 100;
+        loose.RailTiles = rails - 2;
+        loose.StraightRails = 50;
+        loose.OuterCurveTiles = 4;
+        loose.InnerCornerTiles = 4;
+
+        var lines = stock.Check(used, 500);
+        var line = Assert.Single(lines, l => l.Short);
+
+        Assert.Equal("Rail tiles", line.Part);
+        Assert.Equal(-2, line.Left);
+    }
+
+    [Fact]
+    public void The_ring_is_counted_in_pieces()
+    {
+        var used = RcpPlan.Count(TwoWideRing()).Pieces;
+
+        Assert.Equal(4, used.OuterCurve);
+        Assert.Equal(4, used.InnerCorner);
+        Assert.Equal(0, used.SecondRails);
+        Assert.Equal(0, used.LooseRails);
+        Assert.Equal(0, used.LooseTurns);
+        Assert.Equal(56, used.Plain + used.Rail + used.OuterCurve + used.InnerCorner);
+    }
+
+    [Fact]
+    public void A_box_counts_as_the_pieces_it_makes()
+    {
+        // The Mini-96: 2 start/finish tiles and 70 straights take its 72
+        // straight rails, 12 outer curve tiles their turn rails, 12 inner
+        // corner tiles their pieces.
+        var pieces = RcpStock.KitPieces(RcpKit.ByName("30cm Mini-96")!);
+
+        Assert.Equal(2, pieces.FinishTiles);
+        Assert.Equal(70, pieces.RailTiles);
+        Assert.Equal(0, pieces.Tiles);
+        Assert.Equal(12, pieces.OuterCurveTiles);
+        Assert.Equal(12, pieces.InnerCornerTiles);
+        Assert.Equal(0, pieces.StraightRails);
+        Assert.Equal(0, pieces.TurnRails);
+        Assert.Equal(0, pieces.InnerCornerPieces);
+    }
+
+    [Fact]
+    public void A_box_with_more_rails_than_tiles_keeps_the_rest_loose_and_says_so()
+    {
+        var kit = new RcpKit("Test box", 500, 0, 4, 6, 0, 0, 0, 0, "small");
+        var pieces = RcpStock.KitPieces(kit);
+
+        Assert.Equal(4, pieces.RailTiles);
+        Assert.Equal(2, pieces.StraightRails);
+    }
+
+    [Fact]
+    public void A_cupboard_counted_before_pieces_is_turned_into_pieces()
+    {
+        // Saved before railed tiles: tiles and rails counted apart. Each
+        // straight rail goes on a plain tile, the turn rails onto the outer
+        // curve tiles, the corner pieces onto the inner corner tiles, and
+        // what is over is kept as it is.
+        var stock = new RcpStock
+        {
+            Loose =
+            {
+                new RcpLooseParts
+                {
+                    TileSizeMm = 500, Tiles = 20, StraightRails = 26, OuterCurveTiles = 4, TurnRails = 5,
+                    InnerCornerTiles = 4, InnerCornerPieces = 6, EndCaps = 3,
+                },
+            },
+        };
+
+        var loose = Assert.Single(stock.Tidied().Loose);
+
+        Assert.Equal(20, loose.RailTiles);
+        Assert.Equal(0, loose.Tiles);
+        Assert.Equal(6, loose.StraightRails);
+        Assert.Equal(4, loose.OuterCurveTiles);
+        Assert.Equal(1, loose.TurnRails);
+        Assert.Equal(2, loose.InnerCornerPieces);
+        Assert.Equal(3, loose.EndCaps);
+        Assert.Equal(RcpLooseParts.CurrentPieces, loose.PiecesVersion);
+
+        // And only once: tidied again, nothing moves.
+        var again = Assert.Single(stock.Tidied().Tidied().Loose);
+        Assert.Equal(20, again.RailTiles);
+        Assert.Equal(6, again.StraightRails);
+    }
+
+    [Fact]
+    public void Loose_parts_entered_now_are_pieces_already()
+    {
+        var stock = new RcpStock();
+        var loose = stock.LooseFor(500);
+        loose.Tiles = 10;
+        loose.StraightRails = 4;
+
+        var tidied = Assert.Single(stock.Tidied().Loose);
+
+        Assert.Equal(10, tidied.Tiles);
+        Assert.Equal(4, tidied.StraightRails);
+        Assert.Equal(0, tidied.RailTiles);
     }
 
     [Fact]

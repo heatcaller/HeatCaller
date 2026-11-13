@@ -155,6 +155,8 @@ public static class RcpTrackPainter
             DrawWall(g, wall, scale, origin, detailed, sides.GetValueOrDefault((wall.Col, wall.Row, wall.Vertical)));
         }
 
+        DrawArchedRails(g, design, scale, origin, detailed);
+
         foreach (var curve in design.Curves)
         {
             DrawCurve(g, curve, scale, origin, detailed);
@@ -217,6 +219,98 @@ public static class RcpTrackPainter
     private static PointF Grid(int col, int row, float scale, PointF origin) =>
         new(origin.X + col * scale, origin.Y + row * scale);
 
+    // --- The shapes of the pieces that aren't square (railed tiles, Phase 5) --
+
+    /// <summary>How far the arched rail's arch reaches into the lane at its middle, in tiles - from the photo (plans\track-designer\arched-rail-tile.jpg).</summary>
+    internal const float ArchRise = 0.22f;
+
+    /// <summary>
+    /// The outer curve tile as RCP cuts it (plans\track-designer\outer-curve-
+    /// tile.jpg), in grid units: a QUARTER CIRCLE one tile in radius, centred
+    /// on the tile's corner across from its Corner, so its curved side runs
+    /// across that corner - where the turn rail is - and the square's corner
+    /// beyond the arc is bare room.
+    /// </summary>
+    internal static PointF[] QuarterDisc(RcpTile tile, int steps = 16)
+    {
+        var centre = RcpPieces.CornerPoint(tile.Col, tile.Row, RcpPieces.Opposite(tile.Corner));
+        var (dx, dy) = RcpAutoRails.Step(tile.Corner);
+
+        // Round from one straight edge to the other through the Corner's
+        // direction: atan2 of each edge's far end from the centre.
+        var a0 = MathF.Atan2(0, dx);
+        var a1 = MathF.Atan2(dy, 0);
+        var sweep = a1 - a0;
+
+        if (sweep > MathF.PI)
+        {
+            sweep -= 2 * MathF.PI;
+        }
+        else if (sweep < -MathF.PI)
+        {
+            sweep += 2 * MathF.PI;
+        }
+
+        var points = new List<PointF> { new(centre.X, centre.Y) };
+
+        for (var i = 0; i <= steps; i++)
+        {
+            var a = a0 + sweep * i / steps;
+            points.Add(new PointF(centre.X + MathF.Cos(a), centre.Y + MathF.Sin(a)));
+        }
+
+        return points.ToArray();
+    }
+
+    /// <summary>
+    /// The arched rail as it is bolted to its tile (plans\track-designer\
+    /// arched-rail-tile.jpg), in grid units: a straight rail along the tile's
+    /// Facing edge whose lane side rises in a shallow arc to ArchRise at the
+    /// middle. Worked out with the rail on the south edge and turned to its
+    /// own.
+    /// </summary>
+    internal static PointF[] ArchOutline(RcpTile tile, int steps = 16)
+    {
+        const float rail = RailThickness;
+
+        // The arc through both ends of the rail's inner face and its peak.
+        var chord = 1f;
+        var rise = ArchRise;
+        var radius = (chord * chord / 4f + rise * rise) / (2f * rise);
+        var centreV = 1f - rail - rise + radius;
+        var half = MathF.Asin(0.5f / radius);
+
+        var local = new List<PointF> { new(0f, 1f), new(0f, 1f - rail) };
+
+        for (var i = 0; i <= steps; i++)
+        {
+            var a = -MathF.PI / 2f - half + 2f * half * i / steps;
+            local.Add(new PointF(0.5f + radius * MathF.Cos(a), centreV + radius * MathF.Sin(a)));
+        }
+
+        local.Add(new PointF(1f, 1f - rail));
+        local.Add(new PointF(1f, 1f));
+
+        return local.Select(p => OnTile(tile, p.X, p.Y)).ToArray();
+    }
+
+    /// <summary>A point given on a tile as if its rail were on its south edge, turned to the tile's Facing, in grid units.</summary>
+    internal static PointF OnTile(RcpTile tile, float u, float v)
+    {
+        var (x, y) = tile.Facing switch
+        {
+            RcpEdge.North => (1f - u, 1f - v),
+            RcpEdge.East => (v, 1f - u),
+            RcpEdge.West => (1f - v, u),
+            _ => (u, v),
+        };
+
+        return new PointF(tile.Col + x, tile.Row + y);
+    }
+
+    private static PointF[] ToPixels(IEnumerable<PointF> grid, float scale, PointF origin) =>
+        grid.Select(p => new PointF(origin.X + p.X * scale, origin.Y + p.Y * scale)).ToArray();
+
     // --- Floor ---------------------------------------------------------------
 
     /// <summary>
@@ -240,6 +334,53 @@ public static class RcpTrackPainter
 
         using var fill = new LinearGradientBrush(shade, FoamLight, FoamDark, LinearGradientMode.ForwardDiagonal);
 
+        // The outer curve tile is a quarter circle, not a square (railed
+        // tiles, Phase 5, 13 Nov 2026): the square drawn and then cut to its
+        // shape, the teeth kept on its two straight edges.
+        var state = tile.Piece == RcpPiece.OuterCurve ? ClipToQuarterDisc(g, tile, rect, reach, scale, origin) : null;
+
+        try
+        {
+            DrawTileFloorShape(g, tile, rect, fill, scale, detailed, outsideCorner);
+        }
+        finally
+        {
+            if (state is not null)
+            {
+                g.Restore(state);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Clips drawing to an outer curve tile's quarter circle, with the strips
+    /// along its two straight edges where its teeth reach past the square.
+    /// Returns the state to put back.
+    /// </summary>
+    private static GraphicsState ClipToQuarterDisc(Graphics g, RcpTile tile, RectangleF rect, float reach, float scale, PointF origin)
+    {
+        var state = g.Save();
+
+        using var shape = new GraphicsPath(FillMode.Winding);
+        shape.AddPolygon(ToPixels(QuarterDisc(tile, 24), scale, origin));
+
+        // The two straight edges meet at the disc's centre - the corner
+        // across from tile.Corner - and run along the square's sides there.
+        var (dx, dy) = RcpAutoRails.Step(tile.Corner);
+        var alongX = dy > 0 ? new RectangleF(rect.X - reach, rect.Y - reach, rect.Width + reach * 2f, reach) : new RectangleF(rect.X - reach, rect.Bottom, rect.Width + reach * 2f, reach);
+        var alongY = dx > 0 ? new RectangleF(rect.X - reach, rect.Y - reach, reach, rect.Height + reach * 2f) : new RectangleF(rect.Right, rect.Y - reach, reach, rect.Height + reach * 2f);
+
+        // Outside the square, so they add back only the teeth on those two
+        // edges; the teeth on the two sides the arc cuts away are gone.
+        shape.AddRectangle(alongX);
+        shape.AddRectangle(alongY);
+
+        g.SetClip(shape, CombineMode.Intersect);
+        return state;
+    }
+
+    private static void DrawTileFloorShape(Graphics g, RcpTile tile, RectangleF rect, LinearGradientBrush fill, float scale, bool detailed, bool outsideCorner)
+    {
         if (!detailed)
         {
             g.FillRectangle(fill, rect);
@@ -284,7 +425,7 @@ public static class RcpTrackPainter
     private static void DrawMottle(Graphics g, RcpTile tile, RectangleF rect, GraphicsPath outline)
     {
         var state = g.Save();
-        g.SetClip(outline);
+        g.SetClip(outline, CombineMode.Intersect);
 
         using var light = new SolidBrush(FoamFleckLight);
         using var dark = new SolidBrush(FoamFleckDark);
@@ -461,6 +602,65 @@ public static class RcpTrackPainter
         }
 
         return sides;
+    }
+
+    /// <summary>
+    /// Each arched rail tile's rail drawn with its arch (railed tiles, Phase
+    /// 5, 13 Nov 2026), over the straight rail its seam is drawn as: the
+    /// rail rises in a shallow arc into the lane, held by three bolts - two
+    /// low near its ends, one at the top of the arch - as in the photo. To
+    /// everything that reads the seams it is still a straight rail on its
+    /// edge, so the lap, Trace route and the map are unchanged.
+    /// </summary>
+    private static void DrawArchedRails(Graphics g, RcpTrackDesign design, float scale, PointF origin, bool detailed)
+    {
+        foreach (var tile in design.Tiles.Where(t => t.Piece == RcpPiece.Arched))
+        {
+            var (col, row, vertical) = RcpPlan.EdgeLine(tile.Col, tile.Row, tile.Facing);
+
+            if (design.WallAt(col, row, vertical) is null)
+            {
+                continue;
+            }
+
+            var outline = ToPixels(ArchOutline(tile), scale, origin);
+
+            if (detailed)
+            {
+                var shift = Math.Max(1f, scale * RailThickness * 0.3f);
+                using var shadow = new SolidBrush(RailShadow);
+                g.FillPolygon(shadow, outline.Select(p => new PointF(p.X + shift * 0.5f, p.Y + shift)).ToArray());
+            }
+
+            var bounds = new RectangleF(tile.Col * scale + origin.X, tile.Row * scale + origin.Y, Math.Max(1f, scale), Math.Max(1f, scale));
+
+            using (var brush = new LinearGradientBrush(bounds, RailFace, RailEdge,
+                       tile.Facing is RcpEdge.North or RcpEdge.South ? LinearGradientMode.Vertical : LinearGradientMode.Horizontal))
+            {
+                g.FillPolygon(brush, outline);
+            }
+
+            using (var edge = new Pen(Color.FromArgb(150, RailEdge), Math.Max(1f, scale * 0.01f)))
+            {
+                g.DrawPolygon(edge, outline);
+            }
+
+            if (!detailed || scale < 40f)
+            {
+                continue;
+            }
+
+            using var head = new SolidBrush(RailScrew);
+            using var slot = new Pen(RailEdge, Math.Max(1f, scale * 0.006f));
+            var size = Math.Max(3f, scale * RailThickness * 0.55f);
+            var low = 1f - RailThickness / 2f;
+
+            foreach (var (u, v) in new[] { (0.22f, low), (0.78f, low), (0.5f, 1f - RailThickness - ArchRise * 0.45f) })
+            {
+                var at = OnTile(tile, u, v);
+                DrawBolt(g, head, slot, new PointF(origin.X + at.X * scale, origin.Y + at.Y * scale), size);
+            }
+        }
     }
 
     /// <summary>How far a rail on its own tile sits from the seam, in pixels: the same as each of a divider's two rails.</summary>

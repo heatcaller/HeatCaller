@@ -16,9 +16,12 @@ namespace HeatCaller;
 ///     would wall the track off every tile.
 ///   - SHORTER: the tiles just inside the line come out, rails and
 ///     markings with them, and everything past it moves in.
-/// A turn rail goes with whichever side its bulge is on. One a cut would go
-/// through the middle of - a two-tile turn with the line inside it - stops
-/// the stretch with a reason, since half a turn rail isn't a piece. A
+/// What is repeated is whole pieces - each tile with its rail (railed
+/// tiles, Phase 3, 13 Nov 2026). A turn rail goes with whichever side its
+/// bulge is on; a one-tile turn is its outer curve tile's, so it always
+/// goes whole with that tile. Only a turn that is no tile's own - a
+/// two-tile turn with the line inside it - stops the stretch with a reason,
+/// since half a turn rail isn't a piece. A
 /// lane's own rails are worked out again afterwards (RcpAutoRails), so the
 /// lanes' turns follow the new shape by themselves; only a turn put down
 /// by hand can stop it.
@@ -61,7 +64,12 @@ public static class RcpStretch
         // while its rails moved away).
         var lines = by > 0 ? new[] { at } : new[] { at + by, at };
 
-        foreach (var curve in design.Curves.Where(c => !c.Auto))
+        // A one-tile turn is part of its outer curve tile (railed tiles,
+        // Phase 3, 13 Nov 2026): that tile is on one side of the line or the
+        // other, so the turn goes with it whole and can't be cut. Only a turn
+        // that is no tile's own - a two-tile turn, or one with no floor under
+        // it - can still be cut through.
+        foreach (var curve in design.Curves.Where(c => !c.Auto && RcpPieces.TurnTile(design, c) is null))
         {
             var (dx, _) = RcpAutoRails.Step(curve.Quadrant);
             var from = Math.Min(curve.Col, curve.Col + dx * curve.Radius);
@@ -149,6 +157,23 @@ public static class RcpStretch
                 // works out rails, turns and inner corners, so nothing put
                 // them back. A finish tile repeats as an ordinary rail - a
                 // plan has one finish line (10 Nov 2026, bug hunt 16).
+                //
+                // Whole pieces (railed tiles, Phase 3, 13 Nov 2026): a rail
+                // tile with its rail along the stretch comes again with its
+                // rail. One with its rail across the stretch - the end wall
+                // of a bay, on the line itself - goes on out with the line,
+                // so its copies are plain floor, or the track would be walled
+                // off every tile. An outer curve tile's turn stays the one
+                // turn, on its own tile; its copies are plain floor too.
+                var across = RcpPieces.HasStraight(tile.Piece) && tile.Facing is RcpEdge.East or RcpEdge.West;
+                var piece = tile.Piece switch
+                {
+                    RcpPiece.Finish => RcpPiece.Rail,
+                    RcpPiece.OuterCurve or RcpPiece.InnerCorner => RcpPiece.Plain,
+                    _ when across => RcpPiece.Plain,
+                    _ => tile.Piece,
+                };
+
                 design.Tiles.Add(new RcpTile
                 {
                     Col = inside + step,
@@ -156,7 +181,7 @@ public static class RcpStretch
                     Kind = tile.Kind,
                     Turns = tile.Turns,
                     Lane = tile.Lane,
-                    Piece = tile.Piece == RcpPiece.Finish ? RcpPiece.Rail : tile.Piece,
+                    Piece = piece,
                     Facing = tile.Facing,
                     Corner = tile.Corner,
                 });
@@ -237,6 +262,23 @@ public static class RcpStretch
         foreach (var tile in design.Tiles)
         {
             (tile.Col, tile.Row) = (tile.Row, tile.Col);
+
+            // Its rail's edge and its corner are read across the diagonal
+            // too, or a finish or arched tile - kept as laid by Adopt - came
+            // out of a row stretch with its rail on the wrong edge.
+            tile.Facing = tile.Facing switch
+            {
+                RcpEdge.North => RcpEdge.West,
+                RcpEdge.West => RcpEdge.North,
+                RcpEdge.South => RcpEdge.East,
+                _ => RcpEdge.South,
+            };
+            tile.Corner = tile.Corner switch
+            {
+                RcpQuadrant.NorthEast => RcpQuadrant.SouthWest,
+                RcpQuadrant.SouthWest => RcpQuadrant.NorthEast,
+                _ => tile.Corner,
+            };
         }
 
         foreach (var wall in design.Walls)

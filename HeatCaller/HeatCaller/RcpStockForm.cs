@@ -72,7 +72,7 @@ public sealed class RcpStockForm : Form
         }
 
         setsCard.Add(setsGrid, gapBelow: UiLayout.HintGap);
-        setsCard.Add(Note("Some boxes come with only a tile count from RCP. For those, only the tiles are counted."), gapBelow: 0);
+        setsCard.Add(Note("Each box counts as the pieces it makes, with every rail bolted to a tile. Some boxes come with only a tile count from RCP. For those, only the tiles are counted."), gapBelow: 0);
 
         // --- Loose parts ---
         var looseCard = new Section("Loose parts");
@@ -94,18 +94,23 @@ public sealed class RcpStockForm : Form
             _loose.Add((read, write, box));
         }
 
-        Part("Plain tiles:", p => p.Tiles, (p, v) => p.Tiles = v);
+        // In pieces, as the cupboard holds them: the rails stay on their
+        // tiles (railed tiles, Phase 4, 13 Nov 2026).
+        Part("Plain and blank tiles:", p => p.Tiles, (p, v) => p.Tiles = v);
+        Part("Rail tiles:", p => p.RailTiles, (p, v) => p.RailTiles = v);
+        Part("Finish rail tiles:", p => p.FinishTiles, (p, v) => p.FinishTiles = v);
+        Part("Arched rail tiles:", p => p.ArchedTiles, (p, v) => p.ArchedTiles = v);
         Part("Outer curve tiles:", p => p.OuterCurveTiles, (p, v) => p.OuterCurveTiles = v);
         Part("Inner corner tiles:", p => p.InnerCornerTiles, (p, v) => p.InnerCornerTiles = v);
-        Part("Straight rails:", p => p.StraightRails, (p, v) => p.StraightRails = v);
-        Part("Turn rails:", p => p.TurnRails, (p, v) => p.TurnRails = v);
-        Part("Inner corner pieces:", p => p.InnerCornerPieces, (p, v) => p.InnerCornerPieces = v);
+        Part("Loose straight rails:", p => p.StraightRails, (p, v) => p.StraightRails = v);
+        Part("Loose turn rails:", p => p.TurnRails, (p, v) => p.TurnRails = v);
+        Part("Loose corner pieces:", p => p.InnerCornerPieces, (p, v) => p.InnerCornerPieces = v);
         Part("End caps:", p => p.EndCaps, (p, v) => p.EndCaps = v);
 
         _btn30.Click += (_, _) => ShowLoose(300);
         _btn50.Click += (_, _) => ShowLoose(500);
 
-        looseCard.Add(Note("Parts not in a box - blank tiles, a lane widening kit, spares. Tile sizes don't mix, so each size is counted on its own:"), gapBelow: UiLayout.HintGap);
+        looseCard.Add(Note("Pieces not in a box - blank tiles, a lane widening kit, spares. Count each tile as it is, with its rail on. Tile sizes don't mix, so each size is counted on its own:"), gapBelow: UiLayout.HintGap);
         looseCard.Add(new ButtonBar(tight: true).With(_btn30, _btn50), gapBelow: UiLayout.RowGap);
         looseCard.Add(looseGrid, gapBelow: 0);
 
