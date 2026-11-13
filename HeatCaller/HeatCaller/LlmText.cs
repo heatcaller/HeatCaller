@@ -111,9 +111,17 @@ internal static class LlmText
         {
             // Strip a leading label like "Commentary:" or "Announcer:".
             var colon = line.IndexOf(':');
-            // Letters only: "2:30 left on the clock" opens with a time, not
-            // a label, and lost its minutes here.
-            if (colon > 0 && colon < 16 && line[..colon].All(char.IsLetter))
+            // One word, and not a number: "2:30 left on the clock" opens
+            // with a time, not a label, and lost its minutes here. Only the
+            // letters and digits are looked at, because the label often
+            // comes dressed - "\"Commentary:", "**Commentary:**",
+            // "[Announcer]:", "Co-host:" - and the quote in front of a
+            // quoted time ("\"2:30 left") must not make a label of it.
+            var label = colon > 0 && colon < 16 ? line[..colon] : string.Empty;
+
+            if (label.Length > 0
+                && !label.Contains(' ')
+                && !label.Where(char.IsLetterOrDigit).All(char.IsDigit))
             {
                 line = line[(colon + 1)..].Trim();
             }

@@ -451,7 +451,6 @@ internal static class WarmStandby
     {
         var from = string.IsNullOrWhiteSpace(primary) ? "the timing PC" : primary;
         var age = nowUtc - copyTakenUtc;
-        var holds = files > 0 ? $" ({Plural.Of(files, "file")})" : string.Empty;
 
         // No count is one not known, not an empty copy: a standby started
         // after the timing PC died has the copy on disk but has never been

@@ -295,6 +295,27 @@ public static class SoundPacks
         return FileFor(config.BuiltInSound, kind);
     }
 
+    /// <summary>
+    /// The club's own file for this effect when one is set and
+    /// <see cref="ResolveFile"/> passes it over - missing, on a network
+    /// path, or not something this PC can decode - else null.
+    ///
+    /// WHY (bug hunt 17): once such a file fell back to the pack or the
+    /// tone, Test and Test All on the Sounds page played that and said all
+    /// was well, with nothing to say the sound heard was not the club's.
+    /// </summary>
+    internal static string? OwnFilePassedOver(SoundEffectConfig? config, SoundEffectKind kind)
+    {
+        var custom = config?.CustomFilePath;
+
+        if (string.IsNullOrWhiteSpace(custom))
+        {
+            return null;
+        }
+
+        return string.Equals(ResolveFile(config, kind), custom, StringComparison.Ordinal) ? null : custom;
+    }
+
     /// <summary>What CanBePlayed found for a file, and the size and date it had then.</summary>
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (long Length, DateTime WrittenUtc, bool Playable)> Checked =
         new(StringComparer.OrdinalIgnoreCase);

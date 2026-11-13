@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 
 namespace HeatCaller.Tests;
 
@@ -35,6 +36,94 @@ public sealed class BugHunt17_WebServerServiceTests : IDisposable
         // answer that gets through, which a poll brings within four seconds.
         Assert.Contains("(d._status === 200 || d.notSent) ? 'error' : 'gate'", sayFailure);
         Assert.Contains("if (msgKind === 'gate') { say(''); }", FunctionBody(manage, "function checkGate("));
+    }
+
+    // The page keeps the line up only for an answer marked notSent, so the
+    // laptop's two flag-gate refusals are checked as it really sends them.
+
+    [Fact]
+    public void A_flag_turned_away_while_another_is_carried_out_is_answered_not_sent()
+    {
+        var server = ManagerServer();
+
+        // A GREEN from the flag remote is still being carried out.
+        Assert.Equal(RemoteCommandGate.Answer.Go, GateOf(server).TryBegin("flag-remote", "GREEN", out _));
+
+        var (head, answer) = AskForFlag(server, "GREEN");
+
+        Assert.StartsWith("HTTP/1.1 503", head, StringComparison.Ordinal);
+        AssertNotSent(answer);
+    }
+
+    [Fact]
+    public void A_flag_turned_away_for_too_many_commands_is_answered_not_sent()
+    {
+        var server = ManagerServer();
+        var gate = GateOf(server);
+
+        // Every device together has had its share of this minute.
+        for (var i = 0; i < RemoteCommandGate.AllDevicesPerMinute; i++)
+        {
+            Assert.Equal(RemoteCommandGate.Answer.Go, gate.TryBegin($"phone-{i}", "GREEN", out _));
+            gate.End();
+        }
+
+        var (head, answer) = AskForFlag(server, "GREEN");
+
+        Assert.StartsWith("HTTP/1.1 429", head, StringComparison.Ordinal);
+        AssertNotSent(answer);
+    }
+
+    private const string TestManagerPin = "482913";
+
+    /// <summary>
+    /// A server /api/manage will answer: a manager PIN, a host that is up,
+    /// and a race-day manager that is there but never built - the gate turns
+    /// both of these flags away before it is asked anything.
+    /// </summary>
+    private static WebServerService ManagerServer() =>
+        new(new RaceTiming(new RaceControlSession()), ProfileStore.Load())
+        {
+            ManagerPin = TestManagerPin,
+            HostReady = true,
+            Manager = (RaceDayService)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(RaceDayService)),
+        };
+
+    private static RemoteCommandGate GateOf(WebServerService server) =>
+        (RemoteCommandGate)typeof(WebServerService)
+            .GetField("_commands", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(server)!;
+
+    /// <summary>A race.flag from the manager page's Race tab, and the laptop's answer to it.</summary>
+    private static (string Head, string Answer) AskForFlag(WebServerService server, string flag)
+    {
+        using var listener = Listener(out var port);
+
+        var body = "{\"id\":\"f1\",\"op\":\"race.flag\",\"args\":{\"flag\":\"" + flag + "\"}}";
+
+        using var client = Ask(port,
+            "POST /api/manage HTTP/1.1\r\nHost: localhost:" + port + "\r\n"
+            + "X-HeatCaller: 1\r\nX-Pin: " + TestManagerPin + "\r\n"
+            + "Content-Type: application/json\r\nContent-Length: " + Encoding.ASCII.GetByteCount(body) + "\r\n\r\n" + body);
+
+        var context = listener.GetContext();
+        var handled = (Task)Call(server, "HandleManageAsync", context)!;
+
+        Assert.True(handled.Wait(TimeSpan.FromSeconds(15)), "/api/manage never answered the flag.");
+
+        var (head, bytes) = ReadAnswer(client.GetStream());
+        return (head, Encoding.UTF8.GetString(bytes));
+    }
+
+    private static void AssertNotSent(string answer)
+    {
+        using var document = JsonDocument.Parse(answer);
+        var root = document.RootElement;
+
+        Assert.False(root.GetProperty("ok").GetBoolean(), answer);
+        Assert.True(root.TryGetProperty("notSent", out var notSent) && notSent.ValueKind == JsonValueKind.True, answer);
+        Assert.Equal("f1", root.GetProperty("id").GetString());
+        Assert.StartsWith("NOT sent", root.GetProperty("error").GetString());
     }
 
     // --- A tab opened with a box still focused ---------------------------------------------

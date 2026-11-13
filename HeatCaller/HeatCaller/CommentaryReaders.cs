@@ -417,7 +417,11 @@ public static partial class CommentaryReaders
             {
                 // Within their own class: a shared heat is scored a class
                 // at a time, so its class winner has a win. See Placing.
-                if (Placing(race, transponder, withinClass: true) is not { } position)
+                //
+                // AND ONLY WHERE THEY RAN IN THE CLASS ASKED FOR: a shared
+                // heat is in Stock's races and in Mod's, and a Mod driver's
+                // class win in one is not a Stock win. See RanIn.
+                if (Placing(race, transponder, withinClass: true, ofClass: className) is not { } position)
                 {
                     continue;
                 }
@@ -456,7 +460,7 @@ public static partial class CommentaryReaders
                 Since(lastWin, today)));
         }
 
-        return (grid, HeadToHeads(grid, races, today));
+        return (grid, HeadToHeads(grid, races, today, className));
     }
 
     /// <summary>
@@ -536,13 +540,24 @@ public static partial class CommentaryReaders
     /// is every race but a shared heat's. Off for the callers that ask who
     /// finished ahead of whom on the track (MetAcross), where the overall
     /// order is the true answer.
+    ///
+    /// <paramref name="ofClass"/> (13 Nov 2026, bug hunt 17) is the class
+    /// whose races are being counted: a driver who ran a shared heat in
+    /// ANOTHER class was not in this class's race, and the answer is null
+    /// exactly as if they had not been on the grid. Blank asks nothing.
+    /// See <see cref="RanIn"/>.
     /// </summary>
-    private static int? Placing(SessionRecord race, string transponder, bool withinClass = false)
+    private static int? Placing(SessionRecord race, string transponder, bool withinClass = false, string? ofClass = null)
     {
         foreach (var entry in race.Results)
         {
             if (string.Equals(entry.Transponder, transponder, StringComparison.OrdinalIgnoreCase))
             {
+                if (!RanIn(race, entry, ofClass))
+                {
+                    return null;
+                }
+
                 // Anything that is not a placing is a retirement, which
                 // DriverForm reads as a zero.
                 if (entry.Position <= 0
@@ -588,6 +603,59 @@ public static partial class CommentaryReaders
     }
 
     /// <summary>
+    /// Whether a row of a saved race is one of <paramref name="className"/>'s
+    /// (13 Nov 2026, bug hunt 17).
+    ///
+    /// RacesIn hands a shared heat to EACH of its classes, which is right -
+    /// and means the race alone no longer says whose a row is. Its rows are
+    /// stamped with the class each car ran in, so a row stamped Mod is not
+    /// counted as a Stock start, a Stock win, a Stock entry or a Stock night
+    /// out, however the question was asked.
+    ///
+    /// Always true for a race with no class stamped on its rows - every race
+    /// but a shared heat's, which are read exactly as they always were - and
+    /// when no class is asked for. An unstamped row beside stamped ones goes
+    /// with the first stamped class, as in <see cref="SameClassField"/>.
+    /// </summary>
+    private static bool RanIn(SessionRecord race, SessionResultEntry entry, string? className)
+    {
+        var wanted = Typed(className);
+
+        if (wanted.Length == 0)
+        {
+            return true;
+        }
+
+        var ranIn = Typed(entry.ClassName);
+
+        if (ranIn.Length == 0)
+        {
+            ranIn = Typed(race.Results.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.ClassName))?.ClassName);
+        }
+
+        return ranIn.Length == 0 || string.Equals(ranIn, wanted, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Whether a driver ran a saved race in <paramref name="className"/> -
+    /// <see cref="RanIn"/> for their row. True when they have no row at
+    /// all: that is not this question, and the caller goes on to ask where
+    /// they finished.
+    /// </summary>
+    private static bool DroveIn(SessionRecord race, string transponder, string? className)
+    {
+        foreach (var entry in race.Results)
+        {
+            if (string.Equals(entry.Transponder, transponder, StringComparison.OrdinalIgnoreCase))
+            {
+                return RanIn(race, entry, className);
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Which pairs on this grid have a record against each other worth
     /// knowing, best first.
     ///
@@ -602,7 +670,8 @@ public static partial class CommentaryReaders
     private static List<HeadToHead> HeadToHeads(
         IReadOnlyList<DriverForm> grid,
         List<SessionRecord> races,
-        DateTime nowUtc)
+        DateTime nowUtc,
+        string? className = null)
     {
         var found = new List<(HeadToHead Pair, int Met, double Lopsided)>();
 
@@ -621,7 +690,15 @@ public static partial class CommentaryReaders
                 // implementations of that rule are two that eventually
                 // disagree about a seven-one record". See MetAcross for
                 // the rule itself and for why a retirement is not a win.
-                var (aAhead, bAhead, lastMet) = MetAcross(races, a, b);
+                //
+                // Over the races BOTH ran in this class (13 Nov 2026, bug
+                // hunt 17): a shared heat one of them ran as Stock and the
+                // other as Mod is not one of their Stock meetings. Every
+                // race but a shared heat's passes untouched - see RanIn.
+                var (aAhead, bAhead, lastMet) = MetAcross(
+                    races.Where(race => DroveIn(race, a, className) && DroveIn(race, b, className)),
+                    a,
+                    b);
 
                 var met = aAhead + bAhead;
 
@@ -2584,7 +2661,7 @@ public static partial class CommentaryReaders
 
         foreach (var transponder in transponders)
         {
-            if (WeeksOf(nights, profiles, transponder, today) is { } weeks)
+            if (WeeksOf(nights, profiles, transponder, today, className) is { } weeks)
             {
                 found.Add(weeks);
             }
@@ -2605,7 +2682,8 @@ public static partial class CommentaryReaders
         IReadOnlyList<(DateTime Night, List<SessionRecord> Races)> nights,
         ProfileStore profiles,
         string transponder,
-        DateTime nowLocal)
+        DateTime nowLocal,
+        string? className = null)
     {
         var who = Typed(transponder);
 
@@ -2641,6 +2719,15 @@ public static partial class CommentaryReaders
                     if (!string.Equals(Typed(entry.Transponder), who, StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
+                    }
+
+                    // A shared heat they ran in ANOTHER class is not one of
+                    // this class's races for them (13 Nov 2026, bug hunt
+                    // 17): not a start, not a night out, and not a top
+                    // three in the class being read. See RanIn.
+                    if (!RanIn(race, entry, className))
+                    {
+                        break;
                     }
 
                     raced = true;
@@ -3517,7 +3604,7 @@ public static partial class CommentaryReaders
                 // than this one is noted, though: then neither "the
                 // biggest since" nor "the biggest in N races" is true, and
                 // the builder says nothing.
-                if (Starters(race) > entries.Count)
+                if (Starters(race, wanted) > entries.Count)
                 {
                     biggerTonight = true;
                 }
@@ -3526,7 +3613,7 @@ public static partial class CommentaryReaders
                 continue;
             }
 
-            if (Starters(race) >= entries.Count)
+            if (Starters(race, wanted) >= entries.Count)
             {
                 biggestSince = When(race, today);
                 break;
@@ -4948,7 +5035,7 @@ public static partial class CommentaryReaders
     private static SessionRecord? LastOfNight(IReadOnlyList<SessionRecord> night) =>
         night
             .OrderByDescending(record => record.EndedAtUtc)
-            .ThenByDescending(Starters)
+            .ThenByDescending(record => Starters(record, string.Empty))
             .FirstOrDefault();
 
     /// <summary>
@@ -5035,10 +5122,19 @@ public static partial class CommentaryReaders
     /// How many cars actually started a race, as its saved result counts
     /// them - ghosts left out, for the reason <see cref="Field"/> gives,
     /// and each transponder once however the result was corrected.
+    ///
+    /// IN ONE CLASS (13 Nov 2026, bug hunt 17). A shared heat is one of
+    /// each of its classes' races, and to Mod it is a four-car race however
+    /// many Stock cars were on the track with them - the way it was scored.
+    /// Counted whole, a class that shared its heats had "the biggest Mod
+    /// entry" silenced all night by its own nine-car heats, or dated from a
+    /// night it had four cars. A race with no class stamped on its rows is
+    /// counted exactly as before. See <see cref="RanIn"/>.
     /// </summary>
-    private static int Starters(SessionRecord race) =>
+    private static int Starters(SessionRecord race, string className) =>
         race.Results
             .Where(entry => !string.IsNullOrWhiteSpace(entry.Transponder) && !GhostService.IsGhost(entry.Transponder))
+            .Where(entry => RanIn(race, entry, className))
             .Select(entry => entry.Transponder)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Count();

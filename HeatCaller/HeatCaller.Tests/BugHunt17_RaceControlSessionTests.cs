@@ -53,25 +53,133 @@ public sealed class BugHunt17_RaceControlSessionTests : IDisposable
         var race = CarriedBackOverTheLoop();
 
         Assert.True(race.AdjustLaps("A", -1));
-        Seen(race, "A", 121_000); // the real lap, 11 s - timed 7 s from the false crossing
+        // Folded into the lap before until the next crossing says more.
+        Assert.Equal(new long[] { 500, 13_500 }, StandingOf(race, "A").LapTimesMs);
 
+        Seen(race, "A", 121_000); // the real lap, 11 s - 7 s from the false crossing
+
+        // The 4 s taken off goes with this lap, not the 9.5 s one before it:
+        // the saved lap list holds the real laps, and no 7 s "lap".
         var a = StandingOf(race, "A");
         Assert.Equal(3, a.Laps);
-        Assert.Equal(new long[] { 500, 13_500, 7_000 }, a.LapTimesMs);
+        Assert.Equal(new long[] { 500, 9_500, 11_000 }, a.LapTimesMs);
         Assert.Equal(a.ElapsedMs, a.LapTimesMs.Sum());
 
-        // Counted, but not a timed lap: not A's best, not the race's fastest.
+        // What best-lap and best-consecutive qualifying read from that list.
+        Assert.Equal(9_500L, QualifyingCalculator.BestFlyingWindow(a.LapTimesMs, 1).TotalMs);
+        Assert.Equal(20_500L, QualifyingCalculator.BestFlyingWindow(a.LapTimesMs, 2).TotalMs);
+
+        // Counted, but with a crash and a carry in it: not a lap to judge
+        // the next one by. A's real 9.5 s lap is its best again, and the
+        // race's fastest, as before the false crossing.
         Assert.True(a.IsRecoveryLap(2));
-        Assert.Equal(13_500L, a.FastestLapMs);
-        Assert.Equal(9_800L, race.RaceFastestLapMs);
-        Assert.Equal("B", race.RaceFastestLapTransponder);
+        Assert.Equal(9_500L, a.FastestLapMs);
+        Assert.Equal(9_500L, race.RaceFastestLapMs);
+        Assert.Equal("A", race.RaceFastestLapTransponder);
 
         // The lap after that is timed from a real crossing, and counts again.
         Seen(race, "A", 131_000);
 
         a = StandingOf(race, "A");
         Assert.False(a.IsRecoveryLap(3));
-        Assert.Equal(10_000L, a.FastestLapMs);
+        Assert.Equal(new long[] { 500, 9_500, 11_000, 10_000 }, a.LapTimesMs);
+        Assert.Equal(9_500L, a.FastestLapMs);
+    }
+
+    [Fact]
+    public void When_the_earlier_of_two_crossings_was_the_false_one_the_fold_stands()
+    {
+        var race = new RaceControlSession();
+
+        race.Stage();
+        race.StartCountdown();
+        race.GreenFlag(100_000);
+
+        Seen(race, "A", 100_500);
+        Seen(race, "A", 110_000);
+        Seen(race, "A", 114_000); // false: lifted over the loop 4 s into the lap
+        Seen(race, "A", 121_000); // the real end of that 11 s lap, counted as 7 s
+
+        Assert.True(race.AdjustLaps("A", -1));
+        Seen(race, "A", 132_000); // a real 11 s lap, timed from a real crossing
+
+        // Giving the 7 s to this lap would leave the 4 s "lap" standing as
+        // A's best. It stays folded: 4 s + 7 s is the real lap.
+        var a = StandingOf(race, "A");
+        Assert.Equal(new long[] { 500, 9_500, 11_000, 11_000 }, a.LapTimesMs);
+        Assert.Equal(a.ElapsedMs, a.LapTimesMs.Sum());
+        Assert.Equal(9_500L, a.FastestLapMs);
+        Assert.Equal(9_500L, QualifyingCalculator.BestFlyingWindow(a.LapTimesMs, 1).TotalMs);
+    }
+
+    [Fact]
+    public void A_lap_taken_off_straight_after_the_start_lap_goes_with_the_next_lap()
+    {
+        var race = new RaceControlSession();
+
+        race.Stage();
+        race.StartCountdown();
+        race.GreenFlag(100_000);
+
+        Seen(race, "A", 100_500);
+        Seen(race, "A", 104_500); // carried back over the loop, counted as a 4 s lap
+
+        Assert.True(race.AdjustLaps("A", -1));
+        Assert.Equal(new long[] { 4_500 }, StandingOf(race, "A").LapTimesMs);
+
+        Seen(race, "A", 111_500); // the real first lap, 11 s - 7 s from the false crossing
+
+        // A start lap is never a best whatever its length, so the time can
+        // only do harm on the flying lap: no 7 s lap is left in the list.
+        var a = StandingOf(race, "A");
+        Assert.Equal(new long[] { 500, 11_000 }, a.LapTimesMs);
+        Assert.Equal(a.ElapsedMs, a.LapTimesMs.Sum());
+        Assert.Equal(11_000L, QualifyingCalculator.BestFlyingWindow(a.LapTimesMs, 1).TotalMs);
+    }
+
+    [Fact]
+    public void Undoing_the_lap_taken_off_after_the_next_lap_puts_every_crossing_back()
+    {
+        var race = CarriedBackOverTheLoop();
+
+        var edit = race.EditStanding("A", () => race.AdjustLaps("A", -1));
+        Assert.NotNull(edit);
+
+        Seen(race, "A", 121_000);
+        Assert.Equal(new long[] { 500, 9_500, 11_000 }, StandingOf(race, "A").LapTimesMs);
+
+        race.UndoStandingEdit(edit!);
+
+        var a = StandingOf(race, "A");
+        Assert.Equal(4, a.Laps);
+        Assert.Equal(new long[] { 500, 9_500, 4_000, 7_000 }, a.LapTimesMs);
+        Assert.Equal(a.ElapsedMs, a.LapTimesMs.Sum());
+    }
+
+    [Fact]
+    public void A_second_lap_taken_off_before_the_next_crossing_leaves_the_times_folded()
+    {
+        var race = new RaceControlSession();
+
+        race.Stage();
+        race.StartCountdown();
+        race.GreenFlag(100_000);
+
+        Seen(race, "A", 100_500);
+        Seen(race, "A", 110_000);
+        Seen(race, "A", 120_000);
+        Seen(race, "A", 124_000);
+
+        Assert.True(race.AdjustLaps("A", -1));
+        Assert.True(race.AdjustLaps("A", -1));
+        Seen(race, "A", 131_000);
+
+        // Two laps gone: no telling whose time is whose, so nothing is
+        // moved - the lap is only kept out of the bests.
+        var a = StandingOf(race, "A");
+        Assert.Equal(new long[] { 500, 23_500, 7_000 }, a.LapTimesMs);
+        Assert.True(a.IsRecoveryLap(2));
+        Assert.Equal(23_500L, a.FastestLapMs);
     }
 
     [Fact]
@@ -104,8 +212,13 @@ public sealed class BugHunt17_RaceControlSessionTests : IDisposable
 
         Seen(race, "A", 121_000);
 
-        Assert.True(StandingOf(race, "A").IsRecoveryLap(2));
-        Assert.Equal("B", race.RaceFastestLapTransponder);
+        // Whatever the lap came to through the stoppage, it is not a best,
+        // and no lap shorter than A's real 9.5 s is left in the list.
+        var a = StandingOf(race, "A");
+        Assert.True(a.IsRecoveryLap(2));
+        Assert.Equal(3, a.LapTimesMs.Count);
+        Assert.True(a.LapTimesMs.Skip(1).Min() >= 9_500);
+        Assert.True(race.RaceFastestLapMs >= 9_500);
     }
 
     // --- The clock of a race put back -------------------------------------------

@@ -1309,7 +1309,7 @@ public sealed partial class RaceControlControl
         $"{round.ClassName} - {round.RoundLabel}".Trim();
 
     /// <summary>The ways AppTime.TimeOfDay writes the Quick Race stamp's time.</summary>
-    private static readonly string[] QuickRaceStampTimes = { "HH:mm", "h:mm tt", "h:mm" };
+    private static readonly string[] QuickRaceStampTimes = { "HH:mm", "h:mm tt", "h:mm" }; // read with TryParseExact, never written
 
     /// <summary>
     /// Whether a name is the "Quick Race 19:05" or "Quick Race 7:05 PM" stamp

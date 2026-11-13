@@ -524,6 +524,11 @@ public sealed partial class RaceControlSession
         // not judged against an earlier one.
         long? gapFromLastSeenMs = null;
 
+        // Whether the lap time below runs from this driver's last counted
+        // crossing on the decoder's clock - the only kind of lap a removed
+        // lap's time can be given to (see GiveRemovedLapToTheShorterLap).
+        var timedFromLastCountedCrossing = false;
+
         if (standing.LastSeenDeviceTimeMs == 0)
         {
             // Very first pass of the race for this racer - always counts.
@@ -591,6 +596,7 @@ public sealed partial class RaceControlSession
             lapTimeMs = standing.LastLapDeviceTimeMs > 0
                 ? lap.DeviceTimeMs - standing.LastLapDeviceTimeMs
                 : elapsedSinceStart;
+            timedFromLastCountedCrossing = standing.LastLapDeviceTimeMs > 0;
         }
 
         // A device clock that has gone BACKWARDS cannot produce a duration
@@ -630,6 +636,10 @@ public sealed partial class RaceControlSession
 
             // Split reads on the old clock can't be placed against the new one.
             standing.ClearSplitReads();
+
+            // Nor can a lap taken off by hand: the next lap is timed from
+            // here, not from the crossing that was taken off.
+            _removedLapTimes.Remove(standing.TransponderId);
 
             // The race's own zero point is on the old clock as well, and
             // every driver's elapsed time is measured from it - left there,
@@ -684,9 +694,20 @@ public sealed partial class RaceControlSession
         // crossing that was taken off, so it is not a timed lap either - see
         // _lapTimedFromRemovedCrossing. Kept out of bests and streaks the
         // same way as the first lap after a recovery.
+        //
+        // Second pass: and its stored time is put right where that can be
+        // done - the removed lap's time goes to whichever of this lap and
+        // the one before is the shorter without it, so that neither is left
+        // falsely short in the lap list that qualifying and the records
+        // read. See GiveRemovedLapToTheShorterLap.
         if (isValid && _lapTimedFromRemovedCrossing.Remove(standing.TransponderId))
         {
             firstLapAfterRecovery = true;
+
+            if (_removedLapTimes.Remove(standing.TransponderId, out var removedLap) && timedFromLastCountedCrossing)
+            {
+                lapTimeMs = GiveRemovedLapToTheShorterLap(standing, removedLap, lapTimeMs);
+            }
         }
 
         if (isValid)

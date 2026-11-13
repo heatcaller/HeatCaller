@@ -1336,8 +1336,26 @@ public sealed class BigScreenForm : Form
         // so a break that opened on a missing file showed no sponsor at all
         // and sat on the standings for what was left of LeaderboardSeconds
         // - which can be the whole break.
+        //
+        // THE SLIDES STEPPED OVER HAVE HAD THEIR SLOTS. The break ends after
+        // one slot per slide (see _breakSlidesShown), so a step that was not
+        // counted bought the break a slot too many and a sponsor was shown
+        // twice: A, gone, C went A, C, A. And a step that goes all the way
+        // round to a slide this break has shown is the end of the pass, not
+        // another slide - the one that is up holds, as it does at the end
+        // of any break (see SponsorSlotEnded).
         if (!stillsOnly && NextSlideThatIsThere() is { } there)
         {
+            var slides = _sponsors.SlideFileNames.Count;
+
+            _breakSlidesShown += (there - _sponsorIndex + slides) % slides;
+
+            if (there != _sponsorIndex && _breakSlidesShown > slides)
+            {
+                CommercialBreak.EverySponsorShown();
+                return;
+            }
+
             _sponsorIndex = there;
         }
 

@@ -491,6 +491,20 @@ internal sealed class GapState
         get { lock (_gate) { return _callUps; } }
     }
 
+    /// <summary>
+    /// Whether the Call Up button's call-up is followed by the marshals:
+    /// ticked, somebody posted, and not called for this race already. With
+    /// the call-up's box unticked the marshals go by themselves early in the
+    /// gap, and a Call Up pressed after that said them a second time.
+    /// </summary>
+    public bool MarshalsFollowACallUp(GapRules rules, GapFacts facts)
+    {
+        lock (_gate)
+        {
+            return rules.Marshals && facts.Marshals.Count > 0 && !_marshalsSaid;
+        }
+    }
+
     /// <summary>Minutes the race director has pushed the next race back (Call Up's right-click).</summary>
     public int PushedBackMinutes
     {

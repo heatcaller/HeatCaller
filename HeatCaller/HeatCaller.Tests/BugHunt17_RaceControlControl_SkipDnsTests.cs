@@ -14,20 +14,35 @@ public sealed class BugHunt17_RaceControlControl_SkipDnsTests
     /// one their phone showed, and left them on the grid about to start.
     /// </summary>
     [Theory]
-    [InlineData(RaceState.Idle, false, false, true)]
-    [InlineData(RaceState.Finished, false, false, true)]
-    [InlineData(RaceState.Staging, false, false, false)]
-    [InlineData(RaceState.Countdown, false, false, false)]
-    [InlineData(RaceState.Racing, false, false, false)]
+    [InlineData(RaceState.Idle, false, false, false, true)]
+    [InlineData(RaceState.Finished, false, false, false, true)]
+    [InlineData(RaceState.Staging, false, false, false, false)]
+    [InlineData(RaceState.Countdown, false, false, false, false)]
+    [InlineData(RaceState.Racing, false, false, false, false)]
     // A demo on the round is a rehearsal: the round itself is still to run.
-    [InlineData(RaceState.Racing, true, false, true)]
+    [InlineData(RaceState.Racing, true, false, false, true)]
+    // Open practice before the first race runs on the same clock, and the
+    // Round box can already hold Q1 Heat 1: that heat is still to run, and
+    // the phone lists it as next.
+    [InlineData(RaceState.Racing, false, true, false, true)]
+    [InlineData(RaceState.Staging, false, true, false, true)]
     // A finished race not filed yet may be this round's: passed over, as before.
-    [InlineData(RaceState.Finished, false, true, false)]
-    [InlineData(RaceState.Idle, false, true, false)]
+    [InlineData(RaceState.Finished, false, false, true, false)]
+    [InlineData(RaceState.Idle, false, false, true, false)]
+    [InlineData(RaceState.Racing, false, true, true, false)]
     public void The_round_in_the_Round_box_is_passed_over_only_while_it_is_on_track(
-        RaceState state, bool demo, bool raceWaitingToBeFiled, bool stillToRun)
+        RaceState state, bool demo, bool practice, bool raceWaitingToBeFiled, bool stillToRun)
     {
-        Assert.Equal(stillToRun, RaceControlControl.ActiveRoundStillToRun(state, demo, raceWaitingToBeFiled));
+        Assert.Equal(stillToRun, RaceControlControl.ActiveRoundStillToRun(state, demo, practice, raceWaitingToBeFiled));
+    }
+
+    [Fact]
+    public void Skip_me_reads_practice_mode_as_the_phones_list_does()
+    {
+        Assert.Contains(
+            "ActiveRoundStillToRun(_race.State, _race.IsDemoMode, _race.IsPracticeMode, HasUnfiledRaces)",
+            Source("RaceControlControl.SkipDns.cs"),
+            StringComparison.Ordinal);
     }
 
     [Fact]

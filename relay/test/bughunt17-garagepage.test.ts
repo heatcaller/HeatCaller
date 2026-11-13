@@ -75,4 +75,43 @@ describe("bug hunt 17: a garage that comes back after a 404", () => {
     assert.equal(field(page.get("gp"), /^Label/).value, "Half typ", "the draft refills the form");
     assert.ok(page.button(page.get("gp"), /^Cancel$/), "and there is a way out of it");
   });
+
+  it("draws it again when the first answer after the 404 has no garage in it yet", async () => {
+    // The relay answers 200 with garage:null when the laptop's garage is not
+    // there yet or the store read failed: 404, then that, then the garage.
+    let answer: "garage" | "none" | "missing" = "garage";
+    const { html, script } = pageParts(garagePage("acme-rc", "Acme RC"));
+    const page = new FakePage(html, async (url) => {
+      if (url.endsWith("/driver/garage")) {
+        if (answer === "missing") return { status: 404, body: { ok: false, error: "Not found" } };
+        return { status: 200, body: { ok: true, garage: answer === "garage" ? garage() : null, pin: false, signedIn: false, asks: [] } };
+      }
+      return { status: 404 };
+    }, { hash: `#d=${CODE}` });
+    page.run(`globalThis.crypto = { getRandomValues(a) { for (let i = 0; i < a.length; i++) a[i] = (i * 37 + 11) & 255; return a; } };`);
+    page.run(script);
+    await page.settle();
+
+    page.button(page.get("gp"), /^Add a pack$/)!.click();
+    const input = field(page.get("gp"), /^Label/);
+    input.value = "Half typ";
+    input.fire("input");
+
+    answer = "missing";
+    await page.advance(15000);
+    assert.match(page.get("gm").textContent, /No garage was found for that code/);
+    assert.equal(page.get("gp").children.length, 0, "wiped with the rest");
+
+    answer = "none";
+    await page.advance(15000);
+    assert.match(page.get("gm").textContent, /Waiting for the timing desk/);
+    assert.equal(page.get("gp").children.length, 0, "nothing to draw yet");
+
+    answer = "garage";
+    await page.advance(15000);
+    assert.doesNotMatch(page.get("gm").textContent, /Waiting for the timing desk|No garage was found/);
+    assert.match(page.get("gp").textContent, /Battery packs/);
+    assert.equal(field(page.get("gp"), /^Label/).value, "Half typ", "the draft refills the form");
+    assert.ok(page.button(page.get("gp"), /^Cancel$/), "and there is a way out of it");
+  });
 });

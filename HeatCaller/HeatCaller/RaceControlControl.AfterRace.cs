@@ -920,8 +920,18 @@ public sealed partial class RaceControlControl
         {
             try
             {
+                // A SHARED HEAT'S OTHER CLASS IS LEFT OUT (13 Nov 2026, bug
+                // hunt 17). These records are counted over ONE class and
+                // worded with its name - "his third Stock win here" - so a
+                // Mod driver asked about under Stock was either handed his
+                // Mod places as Stock ones or announced as making a first
+                // Stock start. Each row's own stamp says which class it ran
+                // in. Everybody, as always, for a one-class race.
                 var (grid, rivalries) = CommentaryReaders.GridHistory(
-                    record.Results.Select(r => r.Transponder).ToList(),
+                    record.Results
+                        .Where(r => round is null || MixedHeats.Counts(round, round.ClassName, r.Transponder, r.ClassName, _profiles))
+                        .Select(r => r.Transponder)
+                        .ToList(),
                     round?.ClassName,
                     _profiles,
                     _sessionHistory,
@@ -7138,8 +7148,13 @@ public sealed partial class RaceControlControl
         {
             if (_rounds is not null)
             {
+                // The round's MAIN class's drivers, which is everybody
+                // unless the heat is shared (13 Nov 2026, bug hunt 17):
+                // these records are counted over one class and worded with
+                // its name, so the other class's drivers are left out
+                // rather than read out under a class they are not racing.
                 var (grid, rivalries) = CommentaryReaders.GridHistory(
-                    round.AssignedTransponders,
+                    MixedHeats.DriversOfClass(round, round.ClassName, _profiles),
                     round.ClassName,
                     _profiles,
                     _sessionHistory,
@@ -7183,8 +7198,11 @@ public sealed partial class RaceControlControl
                 CommentaryReaders.LayoutRecord(_trackLayouts, _sessionHistory, layoutName),
                 _rounds is null
                     ? null
+                    // The class's own entry in a shared heat (bug hunt 17):
+                    // the field is sized against that class's past races,
+                    // each counted by that class's cars alone.
                     : CommentaryReaders.Field(
-                        round.AssignedTransponders,
+                        MixedHeats.DriversOfClass(round, round.ClassName, _profiles),
                         round.ClassName,
                         _sessionHistory,
                         _rounds),

@@ -209,8 +209,16 @@ public sealed class TrackPositions
         /// switched off, unplugged, or deaf to this transponder - and a car
         /// held short of a loop that never hears it was called stopped on
         /// every lap.
+        ///
+        /// A bit lapses when the car goes past that loop unheard - see
+        /// Crossed: a split decoder that drops out mid-race, or a split
+        /// transponder that dies, costs one false stop at most, and the
+        /// loop is waited for again as soon as it next hears the car.
         /// </summary>
         public int SplitsHeard;
+
+        /// <summary>The split loops that have heard this car since it last crossed the line, a bit each as in SplitsHeard.</summary>
+        public int SplitsThisLap;
     }
 
     private readonly Dictionary<string, Seen> _seen = new(StringComparer.OrdinalIgnoreCase);
@@ -302,6 +310,15 @@ public sealed class TrackPositions
 
         if (point == TimingPoint.Line)
         {
+            // A split the car has just gone a whole lap without being heard
+            // at is no longer waited for (bug hunt 17): a split decoder that
+            // dropped out mid-race, or one car's split transponder dying,
+            // left the bit set for the rest of the race, and the car was
+            // held short of that loop and called stopped there on every
+            // lap. Now that is one lap at most.
+            seen.SplitsHeard &= seen.SplitsThisLap;
+            seen.SplitsThisLap = 0;
+
             seen.LineAt = nowMs;
             seen.Split = 0;
         }
@@ -313,6 +330,7 @@ public sealed class TrackPositions
             if (seen.Split is >= 1 and <= 31)
             {
                 seen.SplitsHeard |= 1 << (seen.Split - 1);
+                seen.SplitsThisLap |= 1 << (seen.Split - 1);
             }
         }
 

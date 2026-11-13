@@ -47,6 +47,60 @@ public sealed class BugHunt17_MixedHeatsTests : IDisposable
         Assert.Null(MixedHeats.ClassMapFor(new RoundDefinition { ClassName = "Stock" }, _profiles.AnyThread));
     }
 
+    /// <summary>
+    /// The announcer reads the map off the UI thread while check-in can be
+    /// ticking a class for a driver, which edits the profile's list of other
+    /// classes in place. Walked with foreach, that threw "Collection was
+    /// modified" into the position report.
+    /// </summary>
+    [Fact]
+    public async Task The_announcers_map_can_be_built_while_a_drivers_classes_are_being_edited()
+    {
+        var alex = new DriverProfile { Transponder = "ALEX", DriverName = "Alex", ClassName = "Buggy", Classes = new() { "Truck", "Mod" } };
+        _profiles.Upsert(alex);
+
+        var round = new RoundDefinition
+        {
+            ClassName = "Stock",
+            SharedClasses = new() { "Mod" },
+            AssignedTransponders = new() { "S1", "ALEX" },
+            SharedClassOf = new(StringComparer.OrdinalIgnoreCase) { ["S1"] = "Stock" },
+        };
+
+        // Their other classes still decide, in order, when the main class is not one of the heat's.
+        Assert.Equal("Mod", MixedHeats.ClassMapFor(round, _profiles.AnyThread)!["ALEX"]);
+
+        // The profile the any-thread view hands out, edited the way check-in edits it.
+        var live = _profiles.AnyThread.Get("ALEX")!;
+        using var stop = new CancellationTokenSource();
+
+        var editing = Task.Run(() =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                live.Classes.Add("Truggy");
+                live.Classes.RemoveAll(c => c == "Truggy");
+            }
+        });
+
+        try
+        {
+            for (var i = 0; i < 20000; i++)
+            {
+                // Never a throw, and always one of the heat's classes.
+                Assert.Contains(MixedHeats.ClassMapFor(round, _profiles.AnyThread)!["ALEX"], new[] { "Stock", "Mod" });
+            }
+        }
+        finally
+        {
+            stop.Cancel();
+            await editing;
+        }
+
+        Assert.Contains("for (var i = 0; others is not null && i < others.Count; i++)", Source("MixedHeats.cs"));
+        Assert.DoesNotContain("foreach (var other in profile.Classes", Source("MixedHeats.cs"));
+    }
+
     [Fact]
     public void The_main_form_hands_the_announcer_the_any_thread_profiles()
     {

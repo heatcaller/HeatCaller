@@ -61,6 +61,32 @@ public sealed class BugHunt17_SoundPacksTests : IDisposable
         Assert.Equal(path, SoundPacks.ResolveFile(config, SoundEffectKind.GoodLap));
     }
 
+    // Test and Test All on the Sounds page ask this, so they can say the
+    // sound just heard was not the club's own.
+
+    [Fact]
+    public void A_file_that_cannot_be_decoded_is_named_as_passed_over()
+    {
+        var path = FileOf("start.ogg", WriteRubbish);
+        var config = new SoundEffectConfig { Enabled = true, CustomFilePath = path, BuiltInSound = "Podium" };
+
+        Assert.Equal(path, SoundPacks.OwnFilePassedOver(config, SoundEffectKind.GoodLap));
+
+        // A file that isn't there is passed over as well.
+        var gone = new SoundEffectConfig { Enabled = true, CustomFilePath = Path.Combine(_data.Folder, "gone.wav") };
+        Assert.Equal(gone.CustomFilePath, SoundPacks.OwnFilePassedOver(gone, SoundEffectKind.GoodLap));
+    }
+
+    [Fact]
+    public void A_file_that_plays_or_no_file_at_all_is_not_passed_over()
+    {
+        var own = new SoundEffectConfig { Enabled = true, CustomFilePath = FileOf("start.wav", WriteTone), BuiltInSound = "Podium" };
+
+        Assert.Null(SoundPacks.OwnFilePassedOver(own, SoundEffectKind.GoodLap));
+        Assert.Null(SoundPacks.OwnFilePassedOver(new SoundEffectConfig { Enabled = true, BuiltInSound = "Podium" }, SoundEffectKind.GoodLap));
+        Assert.Null(SoundPacks.OwnFilePassedOver(null, SoundEffectKind.GoodLap));
+    }
+
     [Fact]
     public void A_file_replaced_with_a_good_one_is_looked_at_again()
     {

@@ -83,6 +83,45 @@ public class BugHunt17_TrackMapTests
     }
 
     [Fact]
+    public void A_split_that_drops_out_mid_race_costs_one_false_stop_and_is_then_not_waited_for()
+    {
+        var line = SquareWithSplit();
+        var positions = new TrackPositions();
+        var said = new List<string>();
+        positions.CarStopped += (_, where) => said.Add(where);
+
+        var car = TwelveSecondLaps();
+
+        // Lap one: heard at Split 1. Then the split decoder is unplugged.
+        positions.Crossed("A", TimingPoint.Line, 1000);
+        positions.Crossed("A", TimingPoint.Split1, 4000);
+        positions.Crossed("A", TimingPoint.Line, 13_000);
+
+        // Lap two: still waited for there, and overdue - the one false stop.
+        Assert.True(Assert.Single(positions.Estimate(new[] { car }, line, 24_500, racing: true)).Stopped);
+        Assert.Equal(new[] { "between the line and Split 1" }, said);
+
+        // Round to the line having passed Split 1 unheard: no longer waited
+        // for. It used to be held short of it, and called stopped, every lap.
+        positions.Crossed("A", TimingPoint.Line, 25_000);
+
+        var placed = Assert.Single(positions.Estimate(new[] { car }, line, 36_500, racing: true));
+
+        Assert.False(placed.Stopped);
+        Assert.Equal(11.5f / 12f, placed.Fraction, 3);
+        Assert.Equal(0.99f, placed.Cap, 3);
+        Assert.Single(said);
+
+        // Plugged back in: heard there once, and waited for there again.
+        positions.Crossed("A", TimingPoint.Line, 37_000);
+        positions.Crossed("A", TimingPoint.Split1, 40_000);
+        positions.Crossed("A", TimingPoint.Line, 49_000);
+
+        Assert.Equal(0.24f, Assert.Single(positions.Estimate(new[] { car }, line, 54_000, racing: true)).Fraction, 3);
+        Assert.Single(said);
+    }
+
+    [Fact]
     public void A_new_race_forgets_which_splits_heard_the_car()
     {
         var line = SquareWithSplit();

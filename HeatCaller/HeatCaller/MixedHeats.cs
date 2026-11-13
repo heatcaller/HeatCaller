@@ -407,7 +407,9 @@ public static class MixedHeats
     /// heat by hand has no entry in the heat's own record, so their profile
     /// decides, as it does when the result is saved; without it the announcer
     /// called them in the heat's main class and the results did not.
-    /// <paramref name="drivers"/> is ProfileStore.AnyThread.
+    /// <paramref name="drivers"/> is ProfileStore.AnyThread, whose profiles
+    /// are the live objects: their strings are safe to read here, and their
+    /// list of other classes is read as a copy that cannot throw (ProfileClasses).
     /// </summary>
     public static IReadOnlyDictionary<string, string>? ClassMapFor(RoundDefinition? round, IDriverLookup drivers)
     {
@@ -825,20 +827,49 @@ public static class MixedHeats
         return pairs;
     }
 
-    private static IEnumerable<string> ProfileClasses(DriverProfile profile)
+    /// <summary>
+    /// The driver's classes, main class first, as a list of its own.
+    ///
+    /// WHY IT IS A COPY TAKEN BY INDEX (bug hunt 17): the announcer reads
+    /// this off the UI thread (<see cref="ClassMapFor(RoundDefinition?, IDriverLookup)"/>),
+    /// and DriverProfile.Classes is a list the UI thread edits in place -
+    /// ticking a class at check-in (CheckInControl.SetRunsClass). Walking it
+    /// with foreach while it changed threw "Collection was modified" into
+    /// the announcer's position report. Read by index, a change underneath
+    /// can at worst run past the end, which is caught: the classes read so
+    /// far stand - the main class always, since it is a string - and the
+    /// next call, a moment later, reads the list as it settled.
+    /// </summary>
+    private static IReadOnlyList<string> ProfileClasses(DriverProfile profile)
     {
-        if (!string.IsNullOrWhiteSpace(profile.ClassName))
+        var found = new List<string>();
+
+        if (profile.ClassName is { } main && !string.IsNullOrWhiteSpace(main))
         {
-            yield return profile.ClassName.Trim();
+            found.Add(main.Trim());
         }
 
-        foreach (var other in profile.Classes ?? new List<string>())
+        try
         {
-            if (!string.IsNullOrWhiteSpace(other))
+            // One read of the property: the undo swaps in a whole new list.
+            var others = profile.Classes;
+
+            for (var i = 0; others is not null && i < others.Count; i++)
             {
-                yield return other.Trim();
+                var other = others[i];
+
+                if (!string.IsNullOrWhiteSpace(other))
+                {
+                    found.Add(other.Trim());
+                }
             }
         }
+        catch (Exception e) when (e is ArgumentOutOfRangeException or IndexOutOfRangeException or InvalidOperationException)
+        {
+            // The list changed under the read - see above.
+        }
+
+        return found;
     }
 
     private static SessionResultEntry Clone(SessionResultEntry entry) =>

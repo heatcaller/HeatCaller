@@ -121,6 +121,71 @@ public sealed class BugHunt17_BetweenRacesTests
     }
 
     [Fact]
+    public void A_Call_Up_pressed_after_the_automatic_marshals_does_not_say_them_again()
+    {
+        var facts = Next();
+        var gap = OpenGap(facts);
+        var rules = GapRules.Default with { CallUps = false };
+        var now = T0.AddSeconds(15);
+
+        // The marshals go by themselves, the call-up's box being unticked.
+        Assert.Equal(GapLine.Marshals, gap.NextCall(rules, now, facts, false, false, out _));
+        Assert.True(gap.MarshalsFollowACallUp(rules, facts));
+        gap.Said(GapLine.Marshals, now);
+
+        // Then the race director presses Call Up: the call-up, and no marshals after it.
+        var pressed = now.AddSeconds(40);
+        gap.NextRace(facts.NextId);
+        gap.Said(GapLine.CallUp, pressed);
+
+        Assert.False(gap.MarshalsFollowACallUp(rules, facts));
+        Assert.Equal("the marshals have been called", gap.WhyNot(GapLine.Marshals, rules, pressed.AddMinutes(2), facts, false, false));
+    }
+
+    [Fact]
+    public void A_Call_Up_pressed_first_is_still_followed_by_the_marshals_once()
+    {
+        var facts = Next();
+        var gap = OpenGap(facts);
+        var rules = GapRules.Default with { CallUps = false };
+
+        gap.Said(GapLine.CallUp, T0.AddSeconds(5));
+        Assert.True(gap.MarshalsFollowACallUp(rules, facts));
+        gap.Said(GapLine.Marshals, T0.AddSeconds(5));
+
+        Assert.False(gap.MarshalsFollowACallUp(rules, facts));
+
+        // Unticked, or nobody posted: never.
+        var fresh = OpenGap(facts);
+        Assert.False(fresh.MarshalsFollowACallUp(rules with { Marshals = false }, facts));
+        Assert.False(fresh.MarshalsFollowACallUp(rules, facts with { Marshals = Array.Empty<(string, string)>() }));
+
+        // A new next race starts again.
+        gap.NextRace("r4");
+        Assert.True(gap.MarshalsFollowACallUp(rules, facts));
+    }
+
+    [Fact]
+    public void The_Call_Up_button_asks_the_gap_before_saying_the_marshals()
+    {
+        var folder = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (folder is not null && !File.Exists(Path.Combine(folder.FullName, "check.cmd")))
+        {
+            folder = folder.Parent;
+        }
+
+        Assert.NotNull(folder);
+
+        var source = File.ReadAllText(Path.Combine(folder!.FullName, "HeatCaller", "HeatCaller", "RaceControlControl.BetweenRaces.cs"));
+        var start = source.IndexOf("internal string CallUpNow(", StringComparison.Ordinal);
+        var end = source.IndexOf("private void PushNextRaceBack()", start, StringComparison.Ordinal);
+
+        Assert.True(start >= 0 && end > start);
+        Assert.Contains("if (Gap.MarshalsFollowACallUp(rules, facts))", source[start..end], StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void With_the_call_up_ticked_both_still_wait_for_it()
     {
         var facts = Next(notIn: 2);

@@ -165,6 +165,184 @@ public sealed class BugHunt17_CommentaryReadersTests : IDisposable
     }
 
     // ------------------------------------------------------------------
+    // ...and only for the class each driver ran it in (the review of 87)
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void A_class_win_in_a_shared_heat_is_not_form_in_the_other_class()
+    {
+        var profiles = Profiles("Sam", "Alex");
+        var rounds = RoundDefinitionStore.Load();
+        var sessions = new List<SessionRecord>();
+
+        // Three shared heats: Alex wins Mod on the road, Sam wins Stock behind him.
+        for (var week = 1; week <= 3; week++)
+        {
+            var heat = SharedHeat($"Q{week}");
+            rounds.Add(heat);
+            sessions.Add(Race(heat, Now.AddDays(-7 * week), Row("Alex", 1, Mod), Row("Sam", 2, Stock)));
+        }
+
+        var history = SessionHistoryStore.FromSessions(sessions);
+
+        // Asked for Stock with the whole grid, as the shared heat's own
+        // intro used to: Alex's three Mod wins were handed over as three
+        // Stock wins, beside Sam's three from the same races.
+        var (stock, _) = CommentaryReaders.GridHistory(new[] { "Sam", "Alex" }, Stock, profiles, history, rounds, DateTime.UtcNow);
+
+        var sam = stock.Single(d => d.DriverId == "Sam");
+        Assert.Equal(3, sam.RacesHere);
+        Assert.Equal(3, sam.WinsHere);
+
+        var alexInStock = stock.Single(d => d.DriverId == "Alex");
+        Assert.Equal(0, alexInStock.RacesHere);
+        Assert.Equal(0, alexInStock.WinsHere);
+        Assert.Equal(0, alexInStock.PodiumsHere);
+        Assert.Empty(alexInStock.RecentFinishes!);
+
+        // And they are still his in the class he ran them in.
+        var (mod, _) = CommentaryReaders.GridHistory(new[] { "Sam", "Alex" }, Mod, profiles, history, rounds, DateTime.UtcNow);
+
+        Assert.Equal(3, mod.Single(d => d.DriverId == "Alex").WinsHere);
+        Assert.Equal(0, mod.Single(d => d.DriverId == "Sam").RacesHere);
+    }
+
+    [Fact]
+    public void Two_drivers_in_different_classes_of_a_shared_heat_have_not_met_in_either_class()
+    {
+        var profiles = Profiles("Sam", "Alex");
+        var rounds = RoundDefinitionStore.Load();
+        var sessions = new List<SessionRecord>();
+
+        // Enough meetings to clear the rivalry bar, every one of them a
+        // shared heat with Alex in Mod ahead of Sam in Stock.
+        for (var week = 1; week <= CommentaryHistoryFacts.RivalryMeetings + 1; week++)
+        {
+            var heat = SharedHeat($"Q{week}");
+            rounds.Add(heat);
+            sessions.Add(Race(heat, Now.AddDays(-7 * week), Row("Alex", 1, Mod), Row("Sam", 2, Stock)));
+        }
+
+        var history = SessionHistoryStore.FromSessions(sessions);
+
+        var (_, inStock) = CommentaryReaders.GridHistory(new[] { "Sam", "Alex" }, Stock, profiles, history, rounds, DateTime.UtcNow);
+        var (_, inMod) = CommentaryReaders.GridHistory(new[] { "Sam", "Alex" }, Mod, profiles, history, rounds, DateTime.UtcNow);
+
+        Assert.Empty(inStock);
+        Assert.Empty(inMod);
+
+        // Across the club as a whole they did share a track, and that
+        // record is untouched.
+        var (_, clubWide) = CommentaryReaders.GridHistory(new[] { "Sam", "Alex" }, null, profiles, history, rounds, DateTime.UtcNow);
+
+        Assert.Single(clubWide);
+    }
+
+    [Fact]
+    public void Nights_out_in_a_shared_heat_count_for_the_class_the_driver_ran_in_only()
+    {
+        var profiles = Profiles("Sam", "Alex");
+        var rounds = RoundDefinitionStore.Load();
+        var sessions = new List<SessionRecord>();
+
+        for (var week = 1; week <= 3; week++)
+        {
+            var heat = SharedHeat($"Q{week}");
+            rounds.Add(heat);
+            sessions.Add(Race(heat, Now.AddDays(-7 * week), Row("Alex", 1, Mod), Row("Sam", 2, Stock)));
+        }
+
+        var history = SessionHistoryStore.FromSessions(sessions);
+
+        // Alex has not had a Stock night out at all, let alone three in the top three.
+        var stock = CommentaryReaders.RecentWeeks(new[] { "Sam", "Alex" }, Stock, profiles, history, rounds, Now);
+
+        Assert.Equal("Sam", Assert.Single(stock).DriverId);
+
+        var alex = Assert.Single(CommentaryReaders.RecentWeeks(new[] { "Alex" }, Mod, profiles, history, rounds, Now));
+
+        Assert.Equal(3, alex.NightsOut);
+        Assert.Equal(3, alex.RacesStarted);
+        Assert.Equal(3, alex.PodiumNightsRunning);
+    }
+
+    // ------------------------------------------------------------------
+    // The field: a shared heat is as big as the class's own cars in it
+    // ------------------------------------------------------------------
+
+    private static readonly string[] FiveMod = { "M1", "M2", "M3", "M4", "M5" };
+
+    /// <summary>A nine-car shared heat: five Stock cars and four of the Mod ones.</summary>
+    private static SessionResultEntry[] NineWithFourMod() => new[]
+    {
+        Row("S1", 1, Stock), Row("M1", 2, Mod), Row("S2", 3, Stock), Row("M2", 4, Mod), Row("S3", 5, Stock),
+        Row("M3", 6, Mod), Row("S4", 7, Stock), Row("M4", 8, Mod), Row("S5", 9, Stock),
+    };
+
+    [Fact]
+    public void A_shared_heat_is_sized_by_the_classs_own_cars_when_a_field_is_compared()
+    {
+        var rounds = RoundDefinitionStore.Load();
+
+        var modOnly = new RoundDefinition { ClassName = Mod, RoundLabel = "Mod Q1", Kind = RoundKind.Qualifier };
+        var lastWeek = SharedHeat("Q1");
+        var tonight = SharedHeat("Q1");
+        rounds.Add(modOnly);
+        rounds.Add(lastWeek);
+        rounds.Add(tonight);
+
+        var fortnightAgo = Now.AddDays(-14);
+
+        var history = SessionHistoryStore.FromSessions(new[]
+        {
+            // The last night Mod really had five cars out.
+            Race(modOnly, fortnightAgo, FiveMod.Select((t, i) => Row(t, i + 1)).ToArray()),
+
+            // Nine on the track since, twice - but four of them Mod.
+            Race(lastWeek, Now.AddDays(-7), NineWithFourMod()),
+            Race(tonight, Now.AddHours(-1), NineWithFourMod()),
+        });
+
+        var field = CommentaryReaders.Field(FiveMod, Mod, history, rounds, Now);
+
+        Assert.NotNull(field);
+        Assert.Equal(5, field!.Entries);
+
+        // Tonight's shared heat had four Mod cars, not nine: nothing
+        // bigger has run tonight, so the line is not silenced.
+        Assert.False(field.BiggerTonight);
+
+        // And last week's is walked past, to the night Mod had five.
+        Assert.Equal(
+            fortnightAgo.ToString("d MMMM", System.Globalization.CultureInfo.InvariantCulture),
+            field.BiggestSinceDescribed);
+        Assert.Equal(2, field.RacesSinceThatBig);
+    }
+
+    [Fact]
+    public void A_race_with_no_class_stamps_is_sized_exactly_as_before()
+    {
+        var rounds = RoundDefinitionStore.Load();
+        var heat = new RoundDefinition { ClassName = Mod, RoundLabel = "Q1", Kind = RoundKind.Qualifier };
+        rounds.Add(heat);
+
+        var lastWeek = Now.AddDays(-7);
+
+        var history = SessionHistoryStore.FromSessions(new[]
+        {
+            Race(heat, lastWeek, FiveMod.Select((t, i) => Row(t, i + 1)).ToArray()),
+        });
+
+        var field = CommentaryReaders.Field(new[] { "M1", "M2", "M3", "M4" }, Mod, history, rounds, Now);
+
+        Assert.NotNull(field);
+        Assert.Equal(
+            lastWeek.ToString("d MMMM", System.Globalization.CultureInfo.InvariantCulture),
+            field!.BiggestSinceDescribed);
+        Assert.Equal(0, field.RacesSinceThatBig);
+    }
+
+    // ------------------------------------------------------------------
     // The qualifying gate: a shared heat is one of the class's heats
     // ------------------------------------------------------------------
 

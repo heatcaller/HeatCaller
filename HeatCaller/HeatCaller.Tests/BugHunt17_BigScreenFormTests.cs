@@ -22,6 +22,15 @@ public sealed class BugHunt17_BigScreenFormTests
         // Before the slide is picked, so the one picked is one that is there.
         Assert.True(stepped >= 0 && chosen > stepped);
 
+        // And the slides stepped over count as slots the break has had, so
+        // it still ends after one pass rather than showing a sponsor twice;
+        // a step right round to a slide already shown ends the pass.
+        var counted = show.IndexOf("_breakSlidesShown += (there - _sponsorIndex + slides) % slides;", stepped, StringComparison.Ordinal);
+        var roundAgain = show.IndexOf("if (there != _sponsorIndex && _breakSlidesShown > slides)", stepped, StringComparison.Ordinal);
+        var moved = show.IndexOf("_sponsorIndex = there;", stepped, StringComparison.Ordinal);
+
+        Assert.True(counted > stepped && roundAgain > counted && moved > roundAgain && chosen > moved);
+
         var next = MethodBody(Source("BigScreenForm.cs"), "private int? NextSlideThatIsThere()", "private void ShowSponsorVideo(");
 
         Assert.Contains("var from = Math.Max(0, _sponsorIndex);", next, StringComparison.Ordinal);

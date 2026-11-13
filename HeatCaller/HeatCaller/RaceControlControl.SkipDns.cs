@@ -59,7 +59,7 @@ public sealed partial class RaceControlControl
         // race, or while On Air opens it - it is the race the driver's phone
         // shows as next, and a "Skip me" used to take them out of the race
         // after it instead.
-        var onTrack = ActiveRoundStillToRun(_race.State, _race.IsDemoMode, HasUnfiledRaces)
+        var onTrack = ActiveRoundStillToRun(_race.State, _race.IsDemoMode, _race.IsPracticeMode, HasUnfiledRaces)
             ? null
             : _activeRound?.Invoke()?.Id;
 
@@ -72,11 +72,15 @@ public sealed partial class RaceControlControl
     /// <summary>
     /// Whether the round in the Round box, not recorded, is a race still to
     /// run rather than the one on track: nothing staged or racing (a demo on
-    /// it is only a rehearsal), and no finished race still waiting to be
-    /// filed - that one may be this round's, run and not linked to it yet.
+    /// it is only a rehearsal, and open practice before the first race runs
+    /// on the same clock without being this round at all), and no finished
+    /// race still waiting to be filed - that one may be this round's, run
+    /// and not linked to it yet. The same test of "on track" as the phones'
+    /// list (UpcomingRaces), so "Skip me" takes the driver out of the race
+    /// their phone showed.
     /// </summary>
-    internal static bool ActiveRoundStillToRun(RaceState state, bool demo, bool raceWaitingToBeFiled) =>
-        !raceWaitingToBeFiled && (demo || state is RaceState.Idle or RaceState.Finished);
+    internal static bool ActiveRoundStillToRun(RaceState state, bool demo, bool practice, bool raceWaitingToBeFiled) =>
+        !raceWaitingToBeFiled && (demo || practice || state is RaceState.Idle or RaceState.Finished);
 
     /// <summary>
     /// The grid a driver was skipped from, by "round id|transponder", so the

@@ -515,8 +515,9 @@ function paint(name, force) {
   if (!force && key === s.key) return;
   // A section with nothing drawn (the first read, or wiped by a read that
   // found no garage) holds nothing to protect: it is drawn, and any draft
-  // refills its form.
-  if (!force && s.key !== null && busy(name, s)) return;
+  // refills its form. The same goes for a box left empty by a read that
+  // answered with no garage in it yet.
+  if (!force && s.key !== null && s.box.children.length > 0 && busy(name, s)) return;
   // New data: anything sent and settled starts again from it.
   if (key !== s.key) {
     for (const [form, d] of [...drafts]) if (d.section === name && !d.dirty) drafts.delete(form);
