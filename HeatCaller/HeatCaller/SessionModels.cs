@@ -124,6 +124,16 @@ public sealed class SessionResultEntry
     public int StartSlots(IReadOnlyList<long> lapTimesMs) =>
         StartLapCredited && lapTimesMs.Count > 1 && lapTimesMs[0] == 0 ? 2 : 1;
 
+    /// <summary>
+    /// Where this car's own clock started, in ms after the green (bug hunt
+    /// 17): its first crossing in a qualifying start, its release in a
+    /// staggered start on "own release", and zero when every car is timed
+    /// from the green. LapTimesMs run from here, so two cars' laps are only
+    /// on one clock once each has this added - RaceLines' "held off" needs
+    /// that. Zero on every result saved before this was recorded.
+    /// </summary>
+    public long ClockZeroMs { get; set; }
+
     // --- Corrections made after the race was saved ---
     //
     // All four are what the result editor has decided for this driver, as
