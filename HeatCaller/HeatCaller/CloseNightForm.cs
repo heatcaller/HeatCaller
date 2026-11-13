@@ -26,7 +26,19 @@ internal sealed class CloseNightForm : Form
     private readonly bool _ready;
 
     private readonly Label _lblHeadline = new();
+
+    /// <summary>
+    /// How the night went, under the headline on the closing list (12 Nov
+    /// 2026, setup plan step 8): the night pace and the race director's two
+    /// measures, "entries close to heats posted" and "doors open to first
+    /// green". Hidden when there is nothing to say, and on Ready to race.
+    /// </summary>
+    private readonly Label _lblPace = new();
+
     private readonly TableLayoutPanel _rows = new();
+
+    /// <summary>The night pace line (RaceProgramControl.ClosingPaceLine); null leaves it out.</summary>
+    public Func<string>? PaceLine { get; init; }
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = RefreshMs };
 
     /// <summary>The race day this window is for - kept after Close Day, when the day stops being the active one.</summary>
@@ -97,8 +109,13 @@ internal sealed class CloseNightForm : Form
         var btnClose = new Button { Text = "Close", DialogResult = DialogResult.Cancel, AutoSize = true };
         btnClose.Click += (_, _) => Close();
 
+        _lblPace.AutoSize = true;
+        _lblPace.MaximumSize = new Size(520, 0);
+        _lblPace.Visible = false;
+
         var page = new FillPage();
         page.Add(_lblHeadline, stretch: false, gapBelow: UiLayout.RowGap);
+        page.Add(_lblPace, stretch: false, gapBelow: UiLayout.RowGap);
         page.Add(lblHow, stretch: false, gapBelow: UiLayout.RowGap);
         page.AddFill(scroller, 240, gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar(alignRight: true).With(btnClose, btnOwn), gapBelow: 0);
@@ -119,6 +136,15 @@ internal sealed class CloseNightForm : Form
     /// <summary>Reads the list again and, if anything changed, redraws it.</summary>
     internal void Reload()
     {
+        var pace = _ready ? string.Empty : PaceLine?.Invoke() ?? string.Empty;
+
+        if (_lblPace.Text != pace)
+        {
+            _lblPace.Text = pace;
+        }
+
+        _lblPace.Visible = pace.Length > 0;
+
         var items = _read() ?? new List<CloseNightChecklist.Item>();
         var shown = string.Join("\n", items.Select(i => $"{i.Key}|{i.Words}|{i.SeenDone}|{i.Ticked}"));
 

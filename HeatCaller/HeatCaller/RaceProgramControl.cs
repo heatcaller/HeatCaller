@@ -1098,6 +1098,25 @@ public sealed partial class RaceProgramControl : UserControl
             CloseNightChecklist.TicksFor(_settings.CloseNightTicks, raceDay.Id));
     }
 
+    /// <summary>
+    /// How the night went, for the closing checklist window's line (12 Nov
+    /// 2026, setup plan step 8): the night pace and the race director's two
+    /// measures - the same words as the Next Steps card. Empty when there is
+    /// nothing to say.
+    /// </summary>
+    internal string ClosingPaceLine(string? dayId = null)
+    {
+        if (DayFor(dayId) is not { } raceDay)
+        {
+            return string.Empty;
+        }
+
+        var ids = raceDay.RoundIds.ToHashSet(StringComparer.Ordinal);
+        var day = _rounds.All.Where(r => ids.Contains(r.Id)).ToList();
+
+        return ProgramNextStep.PaceNote(day, DaySessions(day), raceDay).Trim();
+    }
+
     /// <summary>Ticks a line of tonight's closing checklist off by hand, or back on, and says so on the card.</summary>
     internal void TickClosingItem(string key, bool done, string? dayId = null)
     {
@@ -1150,7 +1169,12 @@ public sealed partial class RaceProgramControl : UserControl
         return round => about(round.Id);
     }
 
-    private NightPlan.Projection? Plan(IReadOnlyList<RoundDefinition> day)
+    /// <param name="keepPromises">
+    /// Hold each race to its promised time, as Auto start will (12 Nov 2026,
+    /// setup plan step 8 - StartPromise). False when the promises are being
+    /// made afresh, so old ones don't hold the new ones back.
+    /// </param>
+    private NightPlan.Projection? Plan(IReadOnlyList<RoundDefinition> day, bool keepPromises = true)
     {
         if (ActiveDay is not { IsLegacy: false } raceDay || day.Count == 0)
         {
@@ -1210,7 +1234,8 @@ public sealed partial class RaceProgramControl : UserControl
                 raceDay.OutByLocalTime,
                 DateTime.UtcNow,
                 raceDay.FirstRaceLocalTime,
-                raceDay.Breaks);
+                raceDay.Breaks,
+                keepPromises && _settings.AutoStartNeverEarly && _settings.AutoStartBetweenRaces);
         }
         catch (Exception ex)
         {

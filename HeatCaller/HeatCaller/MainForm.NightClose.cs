@@ -141,6 +141,9 @@ public partial class MainForm
             })
         {
             DayId = dayId,
+
+            // How the night went (12 Nov 2026, setup plan step 8).
+            PaceLine = () => program.ClosingPaceLine(dayId),
         };
 
         form.FormClosed += (_, _) => _closeNight = null;

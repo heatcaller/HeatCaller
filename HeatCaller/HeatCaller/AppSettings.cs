@@ -682,6 +682,18 @@ public sealed class AppSettings
     public bool AutoStartWaitForMarshals { get; set; }
 
     /// <summary>
+    /// "Never start a race more than 2 minutes before the time drivers were
+    /// given" (12 Nov 2026, setup plan step 8), on the Auto start switch's
+    /// right-click menu. On: Auto start waits for each race's promised time
+    /// (the "about 20:42" drivers saw when the heats were posted) less two
+    /// minutes, however early the night is running, and the estimates after
+    /// it wait too. Start now still starts at once. On by default: drivers
+    /// work on their cars in the pits by the time they were given, and a heat
+    /// that goes early is a driver who misses it. See StartPromise.
+    /// </summary>
+    public bool AutoStartNeverEarly { get; set; } = true;
+
+    /// <summary>
     /// Close the night with a checklist to tick off (11 Nov 2026 - see
     /// CloseNightChecklist). On: when every race has run, Next Steps offers
     /// "Close the night...", a window listing what is left with a button to

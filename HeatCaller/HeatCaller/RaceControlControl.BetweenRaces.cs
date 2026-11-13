@@ -178,6 +178,13 @@ public sealed partial class RaceControlControl
         {
             Gap.CallUpQueued(DateTime.UtcNow);
             dequeued = Gap.CallUpDequeued;
+
+            // When the race was called (12 Nov 2026, setup plan step 8):
+            // NightPace cuts the gap at it.
+            if (_gapFacts?.Facts is { HasNext: true, NextId: { } calledId })
+            {
+                RaceCalledUp?.Invoke(calledId);
+            }
         }
 
         _announcer.SpeakReminder(text, showOnScreens: true, onAir: onAir, dequeued: dequeued);
@@ -496,6 +503,12 @@ public sealed partial class RaceControlControl
         Gap.NextRace(facts.NextId);
         Gap.PushBack(now);
         _gapFacts = null;
+
+        // +1 min goes in the gap's log (setup plan step 8).
+        if (facts.HasNext)
+        {
+            NoteGap(facts.NextId, GapNoteKind.PushedBack, now, TimeSpan.FromMinutes(1));
+        }
 
         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [gap] {(facts.HasNext ? facts.Round : "The next race")} pushed back a minute "
                               + $"({Plural.Of(Gap.PushedBackMinutes, "minute")} in all) - the call-ups and countdown move with it.");

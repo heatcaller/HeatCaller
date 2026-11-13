@@ -80,6 +80,16 @@ public static class NightPlan
         /// <summary>When the round should start, or null when it is not still to run.</summary>
         public DateTime? StartOf(string roundId) =>
             Slots.FirstOrDefault(s => s.Round is not null && string.Equals(s.Round.Id, roundId, StringComparison.Ordinal))?.StartUtc;
+
+        /// <summary>
+        /// The start to show drivers (12 Nov 2026, setup plan step 8): the
+        /// estimate, or the time they were given when the night is running
+        /// early - see StartPromise.Shown. Null when it is not still to run.
+        /// </summary>
+        public DateTime? ShownStartOf(string roundId) =>
+            Slots.FirstOrDefault(s => s.Round is not null && string.Equals(s.Round.Id, roundId, StringComparison.Ordinal)) is { } slot
+                ? StartPromise.Shown(slot.StartUtc, slot.Round!.PromisedStartUtc)
+                : null;
     }
 
     /// <summary>
@@ -137,7 +147,8 @@ public static class NightPlan
         TimeSpan? outByLocal,
         DateTime nowUtc,
         TimeSpan? firstRaceLocal = null,
-        IReadOnlyList<PlannedBreak>? breaks = null)
+        IReadOnlyList<PlannedBreak>? breaks = null,
+        bool keepPromises = false)
     {
         var gap = tonightsGap is { } measured && measured > TimeSpan.Zero ? measured : DefaultGap;
         var slots = new List<Slot>();
@@ -207,6 +218,14 @@ public static class NightPlan
             if (!ReferenceEquals(round, previous))
             {
                 cursor += BreakBefore(round);
+            }
+
+            // Never more than 2 minutes early (12 Nov 2026, setup plan step
+            // 8): Auto start waits for a race's promised time, so the races
+            // after it wait too, and the finish says so.
+            if (keepPromises && StartPromise.NotBefore(round, neverEarly: true) is { } notBefore && cursor < notBefore)
+            {
+                cursor = notBefore;
             }
 
             var length = lengthOf(round);
@@ -464,8 +483,29 @@ public static class NightPlan
     /// Each round's "about 20:42" from a plan, by round id - null for a round
     /// already run, or with no plan (no race day open, nothing left to run).
     /// </summary>
+    /// <remarks>
+    /// The promised time when the night is running early (12 Nov 2026, setup
+    /// plan step 8 - see StartPromise): a heat that will wait for 20:42 is
+    /// never shown as about 20:35.
+    /// </remarks>
     public static Func<string, string?> AboutOf(Projection? plan) =>
-        roundId => plan?.StartOf(roundId) is { } start ? About(start) : null;
+        roundId => plan?.ShownStartOf(roundId) is { } start ? About(start) : null;
+
+    /// <summary>
+    /// The Big Screen's line of races to come, with their estimated starts
+    /// (12 Nov 2026, setup plan step 8, build plan 2.2): "UP NEXT:  Stock Q2
+    /// Heat 3 about 20:42  •  Mod Q2 Heat 1 about 20:49". A race with no
+    /// estimate is listed without one. Empty with nothing to come.
+    /// </summary>
+    public static string UpNext(IEnumerable<(string ClassName, string Label, string? About)> races)
+    {
+        var parts = races
+            .Select(r => string.Join(" ", new[] { r.ClassName, r.Label, r.About ?? string.Empty }.Where(s => !string.IsNullOrWhiteSpace(s))))
+            .Where(s => s.Length > 0)
+            .ToList();
+
+        return parts.Count == 0 ? string.Empty : "UP NEXT:  " + string.Join("  •  ", parts);
+    }
 
     /// <summary>A length in whole minutes, as a saving or an overrun is said: "40 min", "1 h 05 min".</summary>
     public static string Minutes(TimeSpan length)

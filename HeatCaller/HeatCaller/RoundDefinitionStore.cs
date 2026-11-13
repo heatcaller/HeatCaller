@@ -362,6 +362,15 @@ public sealed class RoundDefinitionStore
             return false;
         }
 
+        // When the result was saved (12 Nov 2026, setup plan step 8): the
+        // filing part of the gap after this race, for NightPace. The first
+        // save only - linking the same session again (a correction) isn't
+        // the result going in.
+        if (!string.Equals(round.LinkedSessionId, sessionId, StringComparison.Ordinal) || round.SavedAtUtc is null)
+        {
+            round.SavedAtUtc = DateTime.UtcNow;
+        }
+
         round.LinkedSessionId = sessionId;
         Update(round);
         return true;

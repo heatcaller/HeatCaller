@@ -130,7 +130,9 @@ public sealed class NightPaceTests
     [Fact]
     public void A_short_call_to_the_grid_is_not_worth_naming()
     {
-        var gap = NightPace.For(new[] { Race("H1", 0), Race("H2", 15, stagedMinutesBefore: 1.5) })!.Longest!;
+        // A club whose set gap is 8 minutes: ten minutes isn't idle (12 Nov
+        // 2026 - see NightPaceStep8Tests for "idle director").
+        var gap = NightPace.For(new[] { Race("H1", 0), Race("H2", 15, stagedMinutesBefore: 1.5) }, setGap: TimeSpan.FromMinutes(8))!.Longest!;
 
         Assert.Empty(gap.Causes);
         Assert.Equal("nothing recorded", gap.CauseText);

@@ -434,7 +434,7 @@ internal static class ProgramNextStep
             (dayRounds.Count == 1
                 ? "The one round on today's program has been run and recorded."
                 : $"All {dayRounds.Count} rounds on today's program have been run and recorded.")
-            + PaceNote(dayRounds, history),
+            + PaceNote(dayRounds, history, raceEvent),
 
             // There is no TQ on a club night, so the same list is just
             // tonight's order. Same form either way, different word for it.
@@ -446,7 +446,18 @@ internal static class ProgramNextStep
     /// " Night pace: green to green 6:10 · ..." for the finished day's
     /// races, or empty with fewer than two of them. See NightPace.
     /// </summary>
-    private static string PaceNote(IReadOnlyList<RoundDefinition> dayRounds, SessionHistoryStore history)
+    internal static string PaceNote(IReadOnlyList<RoundDefinition> dayRounds, SessionHistoryStore history, RaceEvent? raceEvent = null) =>
+        PaceNote(dayRounds, history.All, raceEvent);
+
+    /// <summary>
+    /// The pace note from the sessions themselves - also the closing
+    /// checklist's line (12 Nov 2026, setup plan step 8), which has the
+    /// day's sessions to hand. With the race director's two measures
+    /// (NightMeasures) after the pace: "Night pace: Green to green 6:10 ·
+    /// ... Entries close to heats posted 4:10 · doors open to first green
+    /// 38:00."
+    /// </summary>
+    internal static string PaceNote(IReadOnlyList<RoundDefinition> dayRounds, IEnumerable<SessionRecord> history, RaceEvent? raceEvent)
     {
         var roundIds = dayRounds.Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
         var linked = dayRounds
@@ -454,12 +465,19 @@ internal static class ProgramNextStep
             .Select(r => r.LinkedSessionId!)
             .ToHashSet(StringComparer.Ordinal);
 
-        var sessions = history.All
-            .Where(s => (s.RoundId is not null && roundIds.Contains(s.RoundId)) || linked.Contains(s.Id));
+        var sessions = history
+            .Where(s => (s.RoundId is not null && roundIds.Contains(s.RoundId)) || linked.Contains(s.Id))
+            .ToList();
 
-        return NightPace.For(sessions, dayRounds, roundIds) is { } pace
-            ? $" Night pace: {NightPace.Line(pace)}."
+        var pace = NightPace.For(sessions, dayRounds, roundIds, breaks: raceEvent?.Breaks) is { } report
+            ? $" Night pace: {NightPace.Line(report)}."
             : string.Empty;
+
+        var measures = NightMeasures.Line(NightMeasures.For(raceEvent, sessions, dayRounds));
+
+        return measures.Length == 0
+            ? pace
+            : $"{pace} {char.ToUpperInvariant(measures[0])}{measures[1..]}.";
     }
 
     /// <summary>

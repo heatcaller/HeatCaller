@@ -65,6 +65,9 @@ public partial class MainForm
             }
         };
 
+        // Night pace and the times drivers were given (setup plan step 8).
+        WirePaceAndStarts(raceProgram, raceControl);
+
         _entriesCloseTimer.Tick += (_, _) => EntriesCloseTick();
         _entriesCloseTimer.Start();
         FormClosed += (_, _) => _entriesCloseTimer.Dispose();

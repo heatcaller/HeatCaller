@@ -681,7 +681,11 @@ public sealed partial class RaceControlControl
                 ifItEndedNow: ChampionshipIfItEndedNow,
 
                 // "NEXT RACE IN 1:42" between races - see AutoStartBand.
-                nextRaceIn: () => AutoStartBand(DateTime.UtcNow));
+                nextRaceIn: () => AutoStartBand(DateTime.UtcNow),
+
+                // "UP NEXT: Stock Q2 Heat 3 about 20:42 ..." between races
+                // (setup plan step 8) - see BigScreenUpNext.
+                upNext: BigScreenUpNext);
 
             // The window can be closed by whoever is in front of it - Escape,
             // the X, its own button - so the field must stop pointing at it
