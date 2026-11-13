@@ -496,8 +496,11 @@ function meComingNight() {
   if (b.off === true || b.takingEntries !== true) return null;
   const day = typeof b.day === 'string' ? b.day.trim() : '';
   if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(day)) return null;
+  // A comma would split one name in two on the way (the classes go as one
+  // comma-separated line), so it goes as a space; the laptop matches its own
+  // names the same way (DriverRequestDesk.ClassesOf).
   const classes = (Array.isArray(b.classes) ? b.classes : [])
-    .map((c) => (typeof c === 'string' ? c.replace(/,/g, ' ').trim() : '')).filter(Boolean);
+    .map((c) => (typeof c === 'string' ? c.replace(/,/g, ' ').replace(/\s+/g, ' ').trim() : '')).filter(Boolean);
   if (classes.length === 0) return null;
   const when = typeof b.when === 'string' && b.when.trim() !== '' ? b.when.trim() : day;
   return { day: day, when: when, classes: classes };
@@ -767,7 +770,12 @@ function meReplyWords(a) {
   // this is only the headline over it.
   if (a.kind === 'coming') {
     if (no) return "HeatCaller couldn't put you down";
-    return meComingSent.get(a.ref) === '' ? "You're off the list" : "You're down for the next race night";
+    // After a reload, or on another phone, nothing here remembers what was
+    // sent, and the listed ask carries no classes: the laptop's own words
+    // ("Taken off Tue 18 Nov...", ComingTonight.Said) tell which it was.
+    const sent = meComingSent.get(a.ref);
+    const off = sent !== undefined ? sent === '' : /^Taken off\b/.test(typeof a.said === 'string' ? a.said.trim() : '');
+    return off ? "You're off the list" : "You're down for the next race night";
   }
   // Marshals from their phones (12 Nov 2026, setup plan step 8): the
   // laptop's said carries the post and the race.

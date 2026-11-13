@@ -31,8 +31,17 @@ powershell -NoProfile -Command "Start-Sleep -Seconds 5"
 
 echo Packing /data on the machine...
 fly ssh console %APPFLAG% -C "tar czf /tmp/relay-data.tgz -C /data ."
+REM The relay is still writing while this packs: a file tar listed can be
+REM renamed away before tar reads it, and tar then reports a failure although
+REM nothing is wrong. A second go straight away settles that.
 if errorlevel 1 (
-  echo Could not pack the data. Is the machine running? Try: fly status %APPFLAG%
+  echo The pack did not finish cleanly. Trying once more...
+  fly ssh console %APPFLAG% -C "tar czf /tmp/relay-data.tgz -C /data ."
+)
+if errorlevel 1 (
+  REM Not left behind: a half-made copy of the whole volume on the machine.
+  fly ssh console %APPFLAG% -C "rm -f /tmp/relay-data.tgz"
+  echo Could not pack the data, so nothing was downloaded. If the machine is stopped, try: fly status %APPFLAG%
   exit /b 1
 )
 

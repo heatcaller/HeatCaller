@@ -513,7 +513,10 @@ function paint(name, force) {
   if (!s || !s.box) return;
   const key = JSON.stringify(s.keyOf());
   if (!force && key === s.key) return;
-  if (!force && busy(name, s)) return;
+  // A section with nothing drawn (the first read, or wiped by a read that
+  // found no garage) holds nothing to protect: it is drawn, and any draft
+  // refills its form.
+  if (!force && s.key !== null && busy(name, s)) return;
   // New data: anything sent and settled starts again from it.
   if (key !== s.key) {
     for (const [form, d] of [...drafts]) if (d.section === name && !d.dirty) drafts.delete(form);
