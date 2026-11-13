@@ -22,9 +22,10 @@ public sealed partial class AnnouncementService
     /// <summary>
     /// Asked by Race Control's history (RaceControlControl.LapAgainstHistory)
     /// as a personal best comes in: back on form or quicker than last time
-    /// out, with the mark it beat - else null.
+    /// out, with the mark it beat - else null. The third argument is whether
+    /// a call is switched on, so one that is off is not used up for the night.
     /// </summary>
-    public Func<string, long, (AnnouncementEventType Type, long Previous)?>? LapAgainstHistory { get; set; }
+    public Func<string, long, Func<AnnouncementEventType, bool>, (AnnouncementEventType Type, long Previous)?>? LapAgainstHistory { get; set; }
 
     /// <summary>Asked by Race Control (RaceControlControl.CareerBefore): the driver's races and laps at the club before this race, or null.</summary>
     public Func<string, (int Races, int Laps)?>? CareerBefore { get; set; }
@@ -50,7 +51,7 @@ public sealed partial class AnnouncementService
 
         try
         {
-            found = LapAgainstHistory?.Invoke(transponderId, lapMs);
+            found = LapAgainstHistory?.Invoke(transponderId, lapMs, On);
         }
         catch (Exception ex)
         {

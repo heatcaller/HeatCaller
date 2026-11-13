@@ -44,9 +44,12 @@ public sealed partial class RaceControlControl
     /// ever here: whether it puts them back on form (quicker than any of
     /// their last few nights here, after a run of slower ones) or quicker
     /// than last time out - with the mark it beat. Null for neither, or once
-    /// they have been told tonight.
+    /// they have been told tonight. <paramref name="on"/> is the announcer's
+    /// answer to whether a call is switched on: one that is off is neither
+    /// returned nor marked as told.
     /// </summary>
-    internal (AnnouncementEventType Type, long Previous)? LapAgainstHistory(string transponder, long lapMs)
+    internal (AnnouncementEventType Type, long Previous)? LapAgainstHistory(
+        string transponder, long lapMs, Func<AnnouncementEventType, bool> on)
     {
         ForgetDriverHistoryOnANewRace();
 
@@ -71,7 +74,12 @@ public sealed partial class RaceControlControl
             _nightsOn[key] = nights;
         }
 
-        if (DriverHistory.SlumpBest(nights) is { } slump && lapMs < slump
+        // Only a call that is on (bug hunt 17): with Back on form unticked,
+        // a lap that would have been one used to be marked as told for last
+        // time out as well, then thrown away by the announcer - so the driver
+        // never heard "quicker than last time out" all night.
+        if (on(AnnouncementEventType.BackOnForm)
+            && DriverHistory.SlumpBest(nights) is { } slump && lapMs < slump
             && _toldTonight.Add($"{tonight}|form|{transponder}"))
         {
             // Back on form says the better thing; last time out is not said as well.
@@ -83,7 +91,8 @@ public sealed partial class RaceControlControl
             return (AnnouncementEventType.BackOnForm, slump);
         }
 
-        if (DriverHistory.LastTimeOut(nights) is { } last && lapMs < last
+        if (on(AnnouncementEventType.BeatLastTimeOut)
+            && DriverHistory.LastTimeOut(nights) is { } last && lapMs < last
             && _toldTonight.Add($"{tonight}|last|{transponder}"))
         {
             StatusMessage?.Invoke(

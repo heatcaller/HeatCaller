@@ -52,19 +52,48 @@ public sealed partial class RaceControlControl
     /// The race still to run that the driver is in next - never the one on
     /// track - or null.
     /// </summary>
-    private RoundDefinition? NextRaceOf(string transponder) =>
-        OrderedProgram()
+    private RoundDefinition? NextRaceOf(string transponder)
+    {
+        // The round in the Round box is passed over only while it is the one
+        // on track (bug hunt 17). Picked but not started - before the first
+        // race, or while On Air opens it - it is the race the driver's phone
+        // shows as next, and a "Skip me" used to take them out of the race
+        // after it instead.
+        var onTrack = ActiveRoundStillToRun(_race.State, _race.IsDemoMode, HasUnfiledRaces)
+            ? null
+            : _activeRound?.Invoke()?.Id;
+
+        return OrderedProgram()
             .FirstOrDefault(r => !r.IsRecorded
-                                 && !string.Equals(r.Id, _activeRound?.Invoke()?.Id, StringComparison.Ordinal)
+                                 && !string.Equals(r.Id, onTrack, StringComparison.Ordinal)
                                  && r.AssignedTransponders.Contains(transponder, StringComparer.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Whether the round in the Round box, not recorded, is a race still to
+    /// run rather than the one on track: nothing staged or racing (a demo on
+    /// it is only a rehearsal), and no finished race still waiting to be
+    /// filed - that one may be this round's, run and not linked to it yet.
+    /// </summary>
+    internal static bool ActiveRoundStillToRun(RaceState state, bool demo, bool raceWaitingToBeFiled) =>
+        !raceWaitingToBeFiled && (demo || state is RaceState.Idle or RaceState.Finished);
+
+    /// <summary>
+    /// The grid a driver was skipped from, by "round id|transponder", so the
+    /// Next Up bar's "Put back" can give them their slot again. Not saved:
+    /// after a restart they go to the back of the grid.
+    /// </summary>
+    private readonly Dictionary<string, List<string>> _gridBeforeSkip = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Takes the driver out of their next race, scored DNS, with one undo.
     /// Returns the race, or null when they are in none still to run.
+    /// <paramref name="inRace"/> is the race the desk's menu named; without
+    /// one it is the driver's own next race.
     /// </summary>
-    internal RoundDefinition? SkipDriverDns(string transponder, string name, string why)
+    internal RoundDefinition? SkipDriverDns(string transponder, string name, string why, RoundDefinition? inRace = null)
     {
-        if (NextRaceOf(transponder) is not { } race || SkipDns.Skip(race, transponder) is not { } undo)
+        if ((inRace ?? NextRaceOf(transponder)) is not { } race || SkipDns.Skip(race, transponder) is not { } undo)
         {
             return null;
         }
@@ -72,12 +101,15 @@ public sealed partial class RaceControlControl
         _rounds?.Update(race);
 
         var roundId = race.Id;
+        _gridBeforeSkip[$"{roundId}|{transponder}"] = undo.GridBefore;
+
         _undo.Capture($"Skip {name} in {race.RoundLabel} (DNS)", () =>
         {
             var current = _rounds?.Get(roundId) ?? race;
             var result = current.IsRecorded ? _sessionHistory.Get(current.LinkedSessionId!) : null;
             SkipDns.PutBack(current, transponder, undo, result);
             _rounds?.Update(current);
+            _gridBeforeSkip.Remove($"{roundId}|{transponder}");
 
             if (result is not null)
             {
@@ -97,9 +129,9 @@ public sealed partial class RaceControlControl
         var item = new ToolStripMenuItem("Skip in this race (DNS)");
         item.Click += (_, _) =>
         {
-            if (SelectedTransponder() is { Length: > 0 } transponder)
+            if (SelectedTransponder() is { Length: > 0 } transponder && NextRound() is { } next)
             {
-                SkipFromDesk(transponder);
+                SkipFromDesk(transponder, next);
             }
         };
 
@@ -122,13 +154,17 @@ public sealed partial class RaceControlControl
         }
     }
 
-    /// <summary>The desk's skip, said in the console like the phone's.</summary>
-    private void SkipFromDesk(string transponder)
+    /// <summary>
+    /// The desk's skip, said in the console like the phone's. From
+    /// <paramref name="next"/>, the race its menu named - not whichever race
+    /// the driver is in first, which can be the one in the Round box.
+    /// </summary>
+    private void SkipFromDesk(string transponder, RoundDefinition next)
     {
         var profile = _profiles.Get(transponder);
         var name = string.IsNullOrWhiteSpace(profile?.DriverName) ? transponder : profile!.DriverName;
 
-        if (SkipDriverDns(transponder, name, "skipped at the desk") is null)
+        if (next.IsRecorded || SkipDriverDns(transponder, name, "skipped at the desk", next) is null)
         {
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [program] {name} isn't in a race still to run.");
             return;
@@ -170,7 +206,7 @@ public sealed partial class RaceControlControl
             {
                 var who = transponder;
                 var item = new ToolStripMenuItem(SpokenNameOf(who));
-                item.Click += (_, _) => SkipFromDesk(who);
+                item.Click += (_, _) => SkipFromDesk(who, next);
                 menu.Items.Add(item);
             }
 
@@ -208,13 +244,52 @@ public sealed partial class RaceControlControl
             race.SkippedDns = null;
         }
 
+        _gridBeforeSkip.Remove($"{race.Id}|{transponder}", out var gridBefore);
+
         if (!race.AssignedTransponders.Contains(transponder, StringComparer.OrdinalIgnoreCase))
         {
-            race.AssignedTransponders = race.AssignedTransponders.Append(transponder).ToList();
+            race.AssignedTransponders = BackInTheirSlot(race.AssignedTransponders, gridBefore, transponder);
         }
 
         _rounds?.Update(race);
         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [program] {SpokenNameOf(transponder)} is back in {race.RoundLabel} - no DNS.");
         RefreshNextUpAfterSkip();
+    }
+
+    /// <summary>
+    /// The grid with a skipped driver put back where they were (bug hunt 17:
+    /// they used to go on the end, so the top qualifier put back in the
+    /// A-Main was gridded last). <paramref name="gridBefore"/> is the grid
+    /// they were skipped from: they go straight after the nearest driver who
+    /// was ahead of them then and is still on the grid, or to the front when
+    /// none is - so it holds up when the grid has been edited since. Without
+    /// it (a restart since the skip) they go on the end, as before.
+    /// </summary>
+    internal static List<string> BackInTheirSlot(IReadOnlyList<string> grid, IReadOnlyList<string>? gridBefore, string transponder)
+    {
+        var back = grid.ToList();
+        var was = gridBefore?.ToList().FindIndex(t => string.Equals(t, transponder, StringComparison.OrdinalIgnoreCase)) ?? -1;
+
+        if (was < 0)
+        {
+            back.Add(transponder);
+            return back;
+        }
+
+        var slot = 0;
+
+        for (var ahead = was - 1; ahead >= 0; ahead--)
+        {
+            var at = back.FindIndex(t => string.Equals(t, gridBefore![ahead], StringComparison.OrdinalIgnoreCase));
+
+            if (at >= 0)
+            {
+                slot = at + 1;
+                break;
+            }
+        }
+
+        back.Insert(slot, transponder);
+        return back;
     }
 }
