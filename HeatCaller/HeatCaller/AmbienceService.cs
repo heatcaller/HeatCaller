@@ -161,6 +161,18 @@ public sealed class AmbienceService : IDisposable
     public Intensity CurrentIntensity => _current;
 
     /// <summary>
+    /// How many times a mood has been asked for - SetIntensity or a finish
+    /// celebration - counted even when it was the mood already set.
+    ///
+    /// For the Ambience page's Preview, which sets Racing and puts the old
+    /// mood back when stopped. The mood alone can't tell it whether the race
+    /// has since gone green: that asks for Racing too, and changes nothing.
+    /// </summary>
+    public int MoodsAsked => Volatile.Read(ref _moodsAsked);
+
+    private int _moodsAsked;
+
+    /// <summary>
     /// The level actually being played right now - the surge peak while one
     /// is active, otherwise the base mood. Separate from CurrentIntensity
     /// because a surge deliberately does NOT overwrite the base, so that
@@ -885,6 +897,9 @@ public sealed class AmbienceService : IDisposable
     /// </summary>
     public void SetIntensity(Intensity intensity)
     {
+        // Counted before anything else - see MoodsAsked.
+        Interlocked.Increment(ref _moodsAsked);
+
         // A race mood brings a fading-out crowd back - the next session
         // staging. Idle doesn't: that is what a session ending (or being
         // reset) asks for, and it shouldn't call off the fade that ends it.
@@ -1025,6 +1040,7 @@ public sealed class AmbienceService : IDisposable
 
         var seconds = Math.Clamp(celebrationSeconds, 0, 300);
 
+        Interlocked.Increment(ref _moodsAsked);
         _current = Intensity.Peak;
         _surgePeak = Intensity.Peak;
         _surgeTotalSeconds = seconds;

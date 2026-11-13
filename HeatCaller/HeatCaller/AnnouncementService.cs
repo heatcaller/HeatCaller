@@ -1985,6 +1985,9 @@ public sealed partial class AnnouncementService
             BinTheFieldCallsUnderLock();
         }
 
+        // Here as well as at staging, for a race started without it.
+        ForgetTheLastRace();
+
         ForgetTheHeldOverCall(count: true);
     }
 }

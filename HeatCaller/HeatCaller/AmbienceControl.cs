@@ -1263,6 +1263,9 @@ public sealed class AmbienceControl : UserControl
     /// <summary>The crowd's mood before the preview set it to Racing, put back when the preview stops.</summary>
     private AmbienceService.Intensity _pagePreviewMoodBefore;
 
+    /// <summary>The crowd's count of moods asked for, as the preview's own Racing left it - see TogglePreview.</summary>
+    private int _pagePreviewMoodsAsked;
+
     /// <summary>True when a race session took over the crowd this page's Preview started - see SessionAdoptedAmbience.</summary>
     private bool _pagePreviewAdoptedBySession;
 
@@ -1309,7 +1312,13 @@ public sealed class AmbienceControl : UserControl
             // caution).
             // WHY (20 Oct 2026): not when a session has since taken the crowd
             // over - the race owns the mood now.
-            if (!_pagePreviewAdoptedBySession && _ambience.CurrentIntensity == AmbienceService.Intensity.Racing)
+            // Nor when anything has asked for a mood since the preview set
+            // its own, Racing included: Preview pressed while staging and
+            // stopped after the green found the mood at Racing - the race's
+            // Racing by then - and dropped the crowd back to staging level.
+            if (!_pagePreviewAdoptedBySession
+                && _ambience.CurrentIntensity == AmbienceService.Intensity.Racing
+                && _ambience.MoodsAsked == _pagePreviewMoodsAsked)
             {
                 _ambience.SetIntensity(_pagePreviewMoodBefore);
             }
@@ -1326,6 +1335,15 @@ public sealed class AmbienceControl : UserControl
         }
 
         _pagePreviewMoodBefore = _ambience.CurrentIntensity;
+
+        // Peak is only ever the finish celebration, and the preview's Racing
+        // ends that - its settle to Idle gives up. Put back as Peak, the
+        // crowd roared on between races with nothing left to bring it down,
+        // so what goes back is where the celebration was heading.
+        if (_pagePreviewMoodBefore == AmbienceService.Intensity.Peak)
+        {
+            _pagePreviewMoodBefore = AmbienceService.Intensity.Idle;
+        }
 
         // A crowd On Air opened and is holding silent: let go, or the preview
         // plays nothing (22 Oct 2026, bug hunt).
@@ -1367,6 +1385,7 @@ public sealed class AmbienceControl : UserControl
             }
 
             _ambience.SetIntensity(AmbienceService.Intensity.Racing);
+            _pagePreviewMoodsAsked = _ambience.MoodsAsked;
             btnPreview.Text = "Stop Preview";
         }
         else
@@ -1479,32 +1498,21 @@ public sealed class AmbienceLayerForm : Form
     /// </summary>
     public AmbienceLayer Result { get; }
 
-    /// <summary>Whether the ambience was already playing when the dialog opened, so closing it can put things back.</summary>
-    private readonly bool _ambienceWasRunning;
-
     /// <summary>True when the dialog's own preview started the ambience, so only that gets stopped on close.</summary>
     private bool _previewStartedAmbience;
 
     /// <summary>True once a preview has soloed this layer - the other layers are muted until the mix is restored.</summary>
     private bool _previewTouched;
 
-    /// <summary>True when a race session took over the crowd while this dialog was open - see SessionAdoptedAmbience.</summary>
-    private bool _previewAdoptedBySession;
-
     /// <summary>
     /// WHY (20 Oct 2026): a session staged while this dialog was open (from a
     /// phone or the remote) kept the preview's crowd as its own, and closing
     /// the dialog then stopped it for the rest of the race. Now the dialog
     /// stops owning it, and on close puts the full mix back instead of
-    /// stopping it, as it does for a crowd that was playing when it opened.
+    /// stopping it, as it does for any crowd it did not start (EndPreview).
     /// </summary>
     internal void SessionAdoptedAmbience()
     {
-        if (_previewStartedAmbience)
-        {
-            _previewAdoptedBySession = true;
-        }
-
         _previewStartedAmbience = false;
     }
 
@@ -1513,7 +1521,6 @@ public sealed class AmbienceLayerForm : Form
         Result = existing?.Clone() ?? new AmbienceLayer();
         _ambience = ambience;
         _store = store;
-        _ambienceWasRunning = ambience?.IsRunning ?? false;
 
         Text = existing is null ? "Add Ambience Layer" : $"Edit {Result.DisplayName}";
         Font = AppTheme.BodyFont;
@@ -1665,6 +1672,13 @@ public sealed class AmbienceLayerForm : Form
 
         var volumes = new FieldGrid();
 
+        // The levels as tuned, read with "Always on" off. VolumeFor answers
+        // the constant level for an always-on layer, so every slider opened
+        // at it - and Save writes the sliders back, which flattened the five
+        // tuned levels to that one the next time the layer was edited.
+        var tuned = Result.Clone();
+        tuned.AlwaysOn = false;
+
         foreach (var (intensity, label, hint) in rows)
         {
             // SliderControl, not TrackBar: a skinned TrackBar drew its handle
@@ -1677,7 +1691,7 @@ public sealed class AmbienceLayerForm : Form
                 Maximum = 100,
                 SmallChange = 1,
                 LargeChange = 10,
-                Value = (int)Math.Clamp(Result.VolumeFor(intensity) * 100f, 0, 100),
+                Value = (int)Math.Clamp(tuned.VolumeFor(intensity) * 100f, 0, 100),
             };
 
             // Sized by the line rather than by their text, so a new value
@@ -1933,8 +1947,8 @@ public sealed class AmbienceLayerForm : Form
     /// This used to stop the ambience outright whenever it was playing -
     /// including when it had been playing before the dialog opened, mid
     /// race or from the page's own Preview button - and never started it
-    /// again. Now: if the preview started it, it stops; if it was already
-    /// playing and the preview soloed this layer, it is restarted from the
+    /// again. Now: if the preview started it, it stops; if something else
+    /// did and the preview soloed this layer, it is restarted from the
     /// saved settings so every layer comes back at its proper level; if the
     /// preview never played, it is left alone.
     /// </summary>
@@ -1949,8 +1963,14 @@ public sealed class AmbienceLayerForm : Form
         {
             _ambience.Stop();
         }
-        else if (_previewTouched && (_ambienceWasRunning || _previewAdoptedBySession) && _ambience.IsRunning)
+        else if (_previewTouched && _ambience.IsRunning)
         {
+            // Whoever started it. This used to be only for a crowd that was
+            // playing when the dialog opened, or one a session took over
+            // from the preview - so a session started (from a phone or the
+            // remote) with the dialog open and no slider yet dragged had
+            // its crowd soloed by the next drag and left that way on close.
+            //
             // A restart rather than a level refresh: the preview may have
             // loaded a layer (or a file) that isn't in the saved settings,
             // and only rebuilding the mix takes that back out. Started past
@@ -1970,7 +1990,6 @@ public sealed class AmbienceLayerForm : Form
 
         _previewStartedAmbience = false;
         _previewTouched = false;
-        _previewAdoptedBySession = false;
     }
 
     private void BtnSave_Click(object? sender, EventArgs e)

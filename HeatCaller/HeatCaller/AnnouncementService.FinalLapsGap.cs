@@ -32,7 +32,7 @@ public sealed partial class AnnouncementService
     /// <summary>The lap limit of the race on track, when it has one - read live. Null or nought for none.</summary>
     public Func<int?>? LapLimitProvider { get; set; }
 
-    /// <summary>Set by the final minute or time-up of a timed race, cleared for a new one.</summary>
+    /// <summary>Set by the final minute or time-up of a timed race, cleared for a new one, staged or not (ForgetTheLastRace).</summary>
     private volatile bool _inTheFinalMinute;
 
     /// <summary>The timed race is into its last minute (NotifyFinalMinute, NotifyRaceTimeOver).</summary>
