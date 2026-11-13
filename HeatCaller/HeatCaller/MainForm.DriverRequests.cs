@@ -80,6 +80,10 @@ public partial class MainForm
             PreEntries = _preEntries,
             AnnouncedNight = () => _settings.NextNight,
 
+            // A query inside a protest window goes to the top (12 Nov 2026,
+            // setup plan step 8) - see MainForm.ProtestWindow.
+            QueryInWindow = QueryInProtestWindow,
+
             // More time, or skip my race, from a driver's phone - done in
             // Race Control once the desk approves (11 Nov 2026).
             RaceAsk = (kind, transponder, name) => _raceControlControl is not { } raceControl
@@ -88,6 +92,9 @@ public partial class MainForm
                     ? raceControl.GiveDriverMoreTime(transponder, name)
                     : raceControl.SkipDriverInNextRace(transponder, name),
         };
+
+        // Marshals from their phones (12 Nov 2026, setup plan step 8).
+        WireMarshalsFromPhones(_driverRequestDesk);
 
         _driverRequestDesk.GarageChangedByPhone += () =>
         {

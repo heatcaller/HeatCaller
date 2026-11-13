@@ -83,6 +83,14 @@ public sealed partial class RaceDayEventControl : UserControl
     /// <summary>Small classes share a heat under this many drivers (RaceEvent.ShareHeatsUnder, 11 Nov 2026, Phase 4.1). 0 = off.</summary>
     private readonly NumericUpDown _numShareUnder = new();
 
+    /// <summary>Races off between a driver's races (RaceEvent.RacesOffBetween, 12 Nov 2026, setup plan step 8). 0-3.</summary>
+    private readonly NumericUpDown _numRacesOff = new();
+
+    /// <summary>The club's marshal rule (AppSettings.MarshalNoShowRule, setup plan step 8) and its seconds.</summary>
+    private readonly ComboBox _cmbMarshalRule = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+
+    private readonly NumericUpDown _numMarshalSeconds = new();
+
     /// <summary>The entry fee and the fee for each extra class (RaceEvent.EntryFee, ExtraClassFee - 11 Nov 2026).</summary>
     private readonly NumericUpDown _numEntryFee = new() { DecimalPlaces = 2, Maximum = 1000, Increment = 1 };
 
@@ -115,6 +123,12 @@ public sealed partial class RaceDayEventControl : UserControl
     private readonly CheckBox _chkMemberships = new ThemedCheckBox();
 
     private const string EntriesCloseCaption = "Entries close at:";
+
+    /// <summary>The rest gap's row (setup plan step 8) - RaceEvent.RacesOffBetween.</summary>
+    internal const string RacesOffCaption = "Races off between a driver's races:";
+
+    /// <summary>The marshal rule's row (setup plan step 8) - AppSettings.MarshalNoShowRule.</summary>
+    internal const string MarshalRuleCaption = "A marshal who doesn't turn up:";
 
     /// <summary>
     /// When entries close (RaceEvent.EntriesCloseLocalTime, 12 Nov 2026, setup
@@ -248,7 +262,7 @@ public sealed partial class RaceDayEventControl : UserControl
     /// Pieces.PickerWidth. Forgotten whenever the lists are rebuilt (see
     /// RefitFields).
     /// </summary>
-    private (Font Font, int Count, int Width)? _eventWidth, _shapeWidth, _venueWidth, _layoutWidth, _championshipWidth, _scopeWidth, _gapPresetWidth, _firstRoundWidth;
+    private (Font Font, int Count, int Width)? _eventWidth, _shapeWidth, _venueWidth, _layoutWidth, _championshipWidth, _scopeWidth, _gapPresetWidth, _firstRoundWidth, _marshalRuleWidth;
 
     /// <summary>The widths the fields had at the normal text size, before any of them was measured - see SizeFields.</summary>
     private const int FieldWidth = 320;
@@ -588,6 +602,56 @@ public sealed partial class RaceDayEventControl : UserControl
         _numShareUnder.Maximum = 19;
         _numShareUnder.Value = 0;
         programGrid.AddRow("Share a heat under (drivers):", _numShareUnder);
+
+        // The rest gap (12 Nov 2026, setup plan step 8): 1, the one race off
+        // every build gave, unless a night says otherwise.
+        _numRacesOff.Minimum = 0;
+        _numRacesOff.Maximum = RestOrder.MostGap;
+        _numRacesOff.Value = RestOrder.DefaultGap;
+        programGrid.AddRow(RacesOffCaption, _numRacesOff);
+
+        // The club's marshal rule (setup plan step 8). Every night, not just
+        // this one, so it saves straight to the club's settings - as the
+        // closing checklist below does.
+        foreach (var rule in Enum.GetValues<MarshalNoShowRule>())
+        {
+            _cmbMarshalRule.Items.Add(MarshalRule.Words(rule));
+        }
+
+        _cmbMarshalRule.SelectedIndex = Math.Clamp((int)(_settings?.MarshalNoShowRule ?? MarshalNoShowRule.LosesBestQualifier), 0, _cmbMarshalRule.Items.Count - 1);
+        _cmbMarshalRule.Enabled = _settings is not null;
+        _numMarshalSeconds.Minimum = 1;
+        _numMarshalSeconds.Maximum = MarshalRule.MostPenaltySeconds;
+        _numMarshalSeconds.Value = Math.Clamp(_settings?.MarshalNoShowPenaltySeconds ?? MarshalRule.DefaultPenaltySeconds, 1, MarshalRule.MostPenaltySeconds);
+        _numMarshalSeconds.Enabled = _settings?.MarshalNoShowRule == MarshalNoShowRule.TimePenalty;
+
+        _cmbMarshalRule.SelectedIndexChanged += (_, _) =>
+        {
+            var rule = (MarshalNoShowRule)Math.Max(0, _cmbMarshalRule.SelectedIndex);
+            _numMarshalSeconds.Enabled = rule == MarshalNoShowRule.TimePenalty;
+
+            if (_settings is null || _settings.MarshalNoShowRule == rule)
+            {
+                return;
+            }
+
+            _settings.MarshalNoShowRule = rule;
+            _settings.Save();
+        };
+
+        _numMarshalSeconds.ValueChanged += (_, _) =>
+        {
+            if (_settings is null || _settings.MarshalNoShowPenaltySeconds == (int)_numMarshalSeconds.Value)
+            {
+                return;
+            }
+
+            _settings.MarshalNoShowPenaltySeconds = (int)_numMarshalSeconds.Value;
+            _settings.Save();
+        };
+
+        programGrid.AddRow(MarshalRuleCaption, FieldGrid.Inline(_cmbMarshalRule, _numMarshalSeconds, new Label { Text = "seconds", AutoSize = true }));
+        programGrid.AddHint("Logged from Race Control's Someone's missing... Losing the best qualifying result takes it from the driver's class tonight; a time penalty goes on their next race. Click the same line again to take a no-show off. For every night, not just this one.");
         programGrid.AddRow("Entry fee:", _numEntryFee);
         programGrid.AddRow("Each extra class:", _numExtraFee);
 
@@ -801,6 +865,9 @@ public sealed partial class RaceDayEventControl : UserControl
         Fit(_numHeatSize, number);
         Fit(_cmbFirstRound, Math.Max(UiLayout.AtTextSize(160), Pieces.PickerWidth(_cmbFirstRound, ref _firstRoundWidth)));
         Fit(_numShareUnder, number);
+        Fit(_numRacesOff, number);
+        Fit(_numMarshalSeconds, number);
+        Fit(_cmbMarshalRule, Math.Max(UiLayout.AtTextSize(220), Pieces.PickerWidth(_cmbMarshalRule, ref _marshalRuleWidth)));
         Fit(_numEntryFee, number);
         Fit(_numExtraFee, number);
         Fit(_cmbAutoAdvanceScope, Math.Max(UiLayout.AtTextSize(ScopePickerWidth), Pieces.PickerWidth(_cmbAutoAdvanceScope, ref _scopeWidth)));
@@ -912,6 +979,7 @@ public sealed partial class RaceDayEventControl : UserControl
         _numHeatSize.ValueChanged += (_, _) => CommitNow();
         _cmbFirstRound.SelectedIndexChanged += (_, _) => CommitNow();
         _numShareUnder.ValueChanged += (_, _) => CommitNow();
+        _numRacesOff.ValueChanged += (_, _) => CommitNow();
         _numEntryFee.ValueChanged += (_, _) => CommitNow();
         _numExtraFee.ValueChanged += (_, _) => CommitNow();
         _chkCheckedInOnly.CheckedChanged += (_, _) => CommitNow();
@@ -1104,6 +1172,11 @@ public sealed partial class RaceDayEventControl : UserControl
         if (onScreen.FirstRoundSeeding != baseline.FirstRoundSeeding)
         {
             target.FirstRoundSeeding = onScreen.FirstRoundSeeding;
+        }
+
+        if (onScreen.RacesOffBetween != baseline.RacesOffBetween)
+        {
+            target.RacesOffBetween = onScreen.RacesOffBetween;
         }
 
         if (onScreen.ShareHeatsUnder != baseline.ShareHeatsUnder)
@@ -1511,6 +1584,7 @@ public sealed partial class RaceDayEventControl : UserControl
         _numHeatSize.Value = _events.HeatSizeFor(raceEvent);
         _cmbFirstRound.SelectedIndex = Math.Clamp((int)raceEvent.FirstRoundSeeding, 0, _cmbFirstRound.Items.Count - 1);
         _numShareUnder.Value = Math.Clamp(raceEvent.ShareHeatsUnder, (int)_numShareUnder.Minimum, (int)_numShareUnder.Maximum);
+        _numRacesOff.Value = Math.Clamp(raceEvent.RacesOffBetween, (int)_numRacesOff.Minimum, (int)_numRacesOff.Maximum);
         _numEntryFee.Value = Math.Clamp(raceEvent.EntryFee, _numEntryFee.Minimum, _numEntryFee.Maximum);
         _numExtraFee.Value = Math.Clamp(raceEvent.ExtraClassFee, _numExtraFee.Minimum, _numExtraFee.Maximum);
         _chkCheckedInOnly.Checked = raceEvent.CheckedInDriversOnly;
@@ -1575,6 +1649,7 @@ public sealed partial class RaceDayEventControl : UserControl
         _numHeatSize.Enabled = editable;
         _cmbFirstRound.Enabled = editable;
         _numShareUnder.Enabled = editable;
+        _numRacesOff.Enabled = editable;
         _numEntryFee.Enabled = editable;
         _numExtraFee.Enabled = editable;
         _chkCheckedInOnly.Enabled = editable;
@@ -1626,8 +1701,11 @@ public sealed partial class RaceDayEventControl : UserControl
     }
 
     /// <summary>
-    /// Starts a race day from somewhere else in the app - the Today tab's
-    /// checklist, or the banner on Who's Racing.
+    /// Starts a race day from somewhere else in the app - Next Steps, the
+    /// banner on Who's Racing, the Calendar, Set Up Tonight. Opens the Start
+    /// Tonight window, as every door does (setup plan step 8) - see
+    /// StartTonight. FALSE when it was cancelled, so the caller does not
+    /// march the window over to The Day for a day nobody made.
     ///
     /// Routed through this tab's own command rather than copied, so the
     /// undo entry, the refusal to delete a day that has since been used,
@@ -1635,12 +1713,10 @@ public sealed partial class RaceDayEventControl : UserControl
     /// race day that behaved differently is exactly the kind of thing that
     /// makes a second one appear at eight o'clock on a Saturday.
     /// </summary>
-    /// <summary>
-    /// Starts a day from somewhere else - the Today checklist, the banner on
-    /// Who's Racing. FALSE when the dialog was cancelled, so the caller does
-    /// not march the window over to The Day for a day nobody made.
-    /// </summary>
-    public bool StartNewDayFromElsewhere() => StartNewDay();
+    /// <param name="wanted">The choice to open on - a Next Steps card's - or null for the usual (StartTonight.Preselect).</param>
+    /// <param name="templateName">For a template choice, which template.</param>
+    public bool StartNewDayFromElsewhere(StartTonightKind? wanted = null, string? templateName = null) =>
+        StartTonightWindow(wanted, templateName);
 
     /// <summary>
     /// Sets which classes are racing today, from somewhere else - the
@@ -1692,34 +1768,85 @@ public sealed partial class RaceDayEventControl : UserControl
     }
 
     /// <summary>
-    /// Starts a race day when the shape and the classes have already been
-    /// asked for somewhere else.
-    ///
-    /// The setup wizard asks both itself, so opening NewRaceDayForm on top
-    /// of it would be the same two questions twice. Everything else is the
-    /// same path - StartDayFrom, carry-forward and undo entry included.
+    /// Next Steps' "Start tonight like last time" (12 Nov 2026, setup plan
+    /// B1): the Start Tonight window, opened on "Like last time" (setup plan
+    /// step 8). False when it was cancelled.
     /// </summary>
+    public bool StartLikeLastDay() => StartTonightWindow(StartTonightKind.LikeLast, null);
+
     /// <summary>
-    /// Starts tonight like the last race day (12 Nov 2026, setup plan B1):
-    /// its kind of night and its classes, and everything else a new day
-    /// carries forward. The same path as New Race Day, undo entry included.
-    /// False when there is no last day with classes to go by.
+    /// Starts a race day when the shape and the classes have already been
+    /// asked for somewhere else - Set Up Tonight's day step, for a wizard
+    /// opened with no day to work on. The same path - StartDayFrom,
+    /// carry-forward and undo entry included.
     /// </summary>
-    public bool StartLikeLastDay()
-    {
-        if (LastRealDay() is not { ClassNames.Count: > 0 } last)
-        {
-            return false;
-        }
-
-        StartDayFrom(last, last.Shape, last.ClassNames.ToList());
-        return true;
-    }
-
     public bool StartNewDayFromWizard(RaceDayShape shape, IReadOnlyList<string> classNames)
     {
         StartDayFrom(LastRealDay(), shape, classNames);
         return true;
+    }
+
+    /// <summary>
+    /// THE Start Tonight window (12 Nov 2026, setup plan step 8): like last
+    /// time, each night template, or something different, and the day started
+    /// the way that was picked. Every door that starts a race day comes here -
+    /// see StartTonight. False when it was cancelled.
+    /// </summary>
+    private bool StartTonightWindow(StartTonightKind? wanted, string? templateName)
+    {
+        var previous = LastRealDay();
+        var templates = _settings?.NightTemplates ?? new List<NightTemplate>();
+        var options = StartTonight.Options(previous, templates);
+        var selected = StartTonight.Preselect(options, NightTemplates.ForDay(templates, DateTime.Today), wanted, templateName);
+
+        // A day still open with something in it is said in the window - it
+        // used to be a second question, asked only on the template path.
+        var openDay = _events.Active is { IsLegacy: false, IsOpen: true } open && !(open.RoundIds.Count == 0 && open.ClassNames.Count == 0)
+            ? open.DisplayName
+            : null;
+
+        using var ask = new NewRaceDayForm(
+            options,
+            selected,
+            _raceClasses.All.Select(c => c.Name).ToList(),
+            previous?.ClassNames ?? new List<string>(),
+            previous?.Shape ?? RaceDayShape.RaceDay,
+            openDay);
+
+        if (ask.ShowDialog(this) != DialogResult.OK)
+        {
+            return false;
+        }
+
+        StartTonightAs(ask.Choice, ask.Shape, ask.ClassNames);
+        return true;
+    }
+
+    /// <summary>
+    /// Starts tonight the way it was chosen. One path whichever it was:
+    /// StartDayFrom, with one undo entry; a template's settings then go on
+    /// over the carried-forward ones.
+    /// </summary>
+    private void StartTonightAs(StartTonightOption choice, RaceDayShape shape, IReadOnlyList<string> classNames)
+    {
+        var previous = LastRealDay();
+
+        switch (choice.Kind)
+        {
+            case StartTonightKind.LikeLast when choice.LastDay is { } last:
+                StartDayFrom(previous, last.Shape, last.ClassNames.ToList());
+                break;
+
+            case StartTonightKind.Template when choice.Template is { } template:
+                StartFromTemplate(template);
+                return;
+
+            default:
+                StartDayFrom(previous, shape, classNames);
+                break;
+        }
+
+        NightSetupChanged?.Invoke();
     }
 
     /// <summary>
@@ -1731,24 +1858,8 @@ public sealed partial class RaceDayEventControl : UserControl
             .OrderByDescending(e => e.StartedUtc)
             .FirstOrDefault();
 
-    /// <summary>Asks the two questions and makes the day. False when it was cancelled.</summary>
-    private bool StartNewDay()
-    {
-        var previous = LastRealDay();
-
-        using var ask = new NewRaceDayForm(
-            _raceClasses.All.Select(c => c.Name).ToList(),
-            previous?.ClassNames ?? new List<string>(),
-            previous?.Shape ?? RaceDayShape.RaceDay);
-
-        if (ask.ShowDialog(this) != DialogResult.OK)
-        {
-            return false;
-        }
-
-        StartDayFrom(previous, ask.Shape, ask.ClassNames);
-        return true;
-    }
+    /// <summary>Setup's New Race Day: the Start Tonight window. False when it was cancelled.</summary>
+    private bool StartNewDay() => StartTonightWindow(null, null);
 
     /// <summary>
     /// Makes the day, with everything the dialog did not ask about carried
@@ -1857,6 +1968,7 @@ public sealed partial class RaceDayEventControl : UserControl
         raceEvent.DriversPerHeat = (int)_numHeatSize.Value;
         raceEvent.FirstRoundSeeding = (FirstRoundSeeding)Math.Max(0, _cmbFirstRound.SelectedIndex);
         raceEvent.ShareHeatsUnder = (int)_numShareUnder.Value;
+        raceEvent.RacesOffBetween = (int)_numRacesOff.Value;
         raceEvent.EntryFee = _numEntryFee.Value;
         raceEvent.ExtraClassFee = _numExtraFee.Value;
 
@@ -1936,6 +2048,7 @@ public sealed partial class RaceDayEventControl : UserControl
                     current.DriversPerHeat = old.DriversPerHeat;
                     current.FirstRoundSeeding = old.FirstRoundSeeding;
                     current.ShareHeatsUnder = old.ShareHeatsUnder;
+                    current.RacesOffBetween = old.RacesOffBetween;
                     current.EntryFee = old.EntryFee;
                     current.ExtraClassFee = old.ExtraClassFee;
                     current.CheckedInDriversOnly = old.CheckedInDriversOnly;
@@ -1973,6 +2086,7 @@ public sealed partial class RaceDayEventControl : UserControl
         && a.DriversPerHeat == b.DriversPerHeat
         && a.FirstRoundSeeding == b.FirstRoundSeeding
         && a.ShareHeatsUnder == b.ShareHeatsUnder
+        && a.RacesOffBetween == b.RacesOffBetween
         && a.EntryFee == b.EntryFee
         && a.ExtraClassFee == b.ExtraClassFee
         && a.CheckedInDriversOnly == b.CheckedInDriversOnly

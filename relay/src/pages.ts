@@ -433,6 +433,9 @@ header:has(.brand) { padding-top: 8px; }
 .solo { text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
         padding: 28px 20px; }
 .solo h2 { margin: 14px 0 4px; font-size: 1.6rem; }
+/* The driver's own entry on their check-in card (12 Nov 2026, setup plan step 8). */
+.solo .fee { margin: 10px 0 0; font-weight: 700; color: var(--warn); }
+.solo .fee.ok { color: var(--good); }
 .av { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; flex: none; }
 .av.big { width: 128px; height: 128px; font-size: 2.8rem; }
 .av.ini { display: inline-flex; align-items: center; justify-content: center; background: var(--primary);
@@ -521,6 +524,15 @@ a.go { text-align: center; text-decoration: none; }
 .lc-check { margin-top: 8px; font-weight: 600; }
 .lc-check.seen { color: var(--good); }
 .lc-check.missed { color: var(--bad); }
+/* Marshals from their phones and the entry fee (12 Nov 2026, setup plan step 8). */
+.lc-check.ok, .lc-askedcover.ok, .lc-entry.ok { color: var(--good); }
+.lc-askedcover.no, .lc-entry.owing { color: var(--warn); }
+.lc-marshal { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.lc-cover summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; }
+.lc-cover select { min-height: 44px; margin: 0 8px 8px 0; max-width: 100%; }
+.lc-coverask { border: 2px solid var(--primary); border-radius: 12px; padding: 10px 12px; }
+.lc-coverask .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.lc-entry { font-weight: 700; }
 #nx { max-width: 42rem; margin: 18px auto 0; text-align: left; }
 #nx h3 { margin: 22px 0 8px; }
 .rc { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
@@ -904,6 +916,9 @@ html.light .flagbar.f-white { --flag: #8A90A0; }
 .flagbar .lp-me b { color: var(--text); font-weight: 700; }
 .flagbar .lp-foot .ondeck b { font-weight: 600; }
 .ondeck { color: var(--muted); font-size: 0.85rem; margin-left: auto; }
+/* The next race's countdown on Schedule (12 Nov 2026, setup plan step 8). */
+.nextstart { font-weight: 800; font-size: 1.15rem; text-align: center; font-variant-numeric: tabular-nums; }
+.nextstart[hidden] { display: none; }
 .flagbar .ondeck { font-size: 0.9rem; margin-left: auto; }
 @media (max-width: 420px) {
   .flagbar { padding: 14px 16px; gap: 12px; }
@@ -1094,6 +1109,8 @@ mark { background: var(--primary); color: var(--on-primary, #FFFFFF); border-rad
 .page:hover { border-color: var(--primary); }
 .page:disabled { opacity: 0.45; cursor: default; }
 .page.wide { flex: 1 1 100%; }
+/* A race night's pace, under its heading (12 Nov 2026). */
+#feed .pace { color: var(--muted); font-size: 0.85rem; margin: -4px 0 10px; }
 /* A race day's heading has a share of its own, so the whole day is one
    link and not only the heat somebody happened to open. */
 #feed .day { display: flex; align-items: center; gap: 10px; }
@@ -3048,7 +3065,7 @@ function myRow(results, name) {
 // driver whose own finish goes where the winner usually does.
 function card(line, body, mine) {
   const results = body !== null && Array.isArray(body.results) ? body.results : [];
-  const facts = [line.at, line.track, line.season].filter(Boolean).map(esc).join(' &middot; ');
+  const facts = [hcHm(line.at), line.track, line.season].filter(Boolean).map(esc).join(' &middot; ');
   const me = mine === '' || results.length === 0 ? null : myRow(results, mine);
   const field = Number(line.drivers) || 0;
   const what = line.label || line.type || 'Session';
@@ -3386,7 +3403,11 @@ function visibleDays() {
       if (line !== null && (season === '' || String(line.season ?? '') === season)) lines.push(line);
     }
 
-    if (lines.length > 0) out.push({ day: String(entry.day ?? ''), lines });
+    // The night's pace (12 Nov 2026, setup plan step 8), when the laptop
+    // sent one - only for the whole night, not a season's slice of it.
+    const pace = season === '' && typeof entry.pace === 'string' ? entry.pace : '';
+
+    if (lines.length > 0) out.push({ day: String(entry.day ?? ''), lines, pace });
   }
 
   return out;
@@ -3531,8 +3552,15 @@ function fail(mine, text) {
 
 function drawGroups(groups, got, mine) {
   return groups.map((entry) =>
-    dayHeading(entry.day) +
+    dayHeading(entry.day) + paceLine(entry.pace) +
     entry.lines.map((line) => card(line, got.has(line.id) ? got.get(line.id) : null, mine)).join('')).join('');
+}
+
+// How the night ran, under its heading (12 Nov 2026, setup plan step 8):
+// "Night pace: Green to green 6:10 · 31% on track". The numbers only - the
+// laptop never sends the causes to a public page.
+function paceLine(pace) {
+  return typeof pace === 'string' && pace !== '' ? '<p class="pace">Night pace: ' + esc(pace) + '</p>' : '';
 }
 
 // The day's own heading, and the link to the whole of it. data-day is
@@ -5127,7 +5155,51 @@ function lvAhead(lapNumber, ms) {
 }
 `;
 
-const LIVE_JS = `${CLOCK_JS}
+/**
+ * THE NEXT RACE'S COUNTDOWN ON PHONES (12 Nov 2026, setup plan step 8).
+ *
+ * While Auto start counts down between races the Big Screen shows "NEXT RACE
+ * IN 1:42" and the phones showed an estimate to the minute. The laptop now
+ * puts the next race's start (UTC) and its state - counting, held or soon -
+ * in the live state (nextStart), and the Live and Schedule pages count down
+ * to it themselves, a second at a time, by the relay's clock (relayClock)
+ * where they have heard it. A count that reaches zero says "starting soon"
+ * until the laptop says otherwise; a state older than STALE_MS says nothing,
+ * since a laptop that went quiet is no longer counting anything.
+ *
+ * Exported for the tests, which run nextStartWords on its own.
+ */
+export const NEXT_START_JS = `
+const NEXT_START_STALE_MS = 20 * 60 * 1000;
+function nextStartWords(ns, nowMs, publishedMs) {
+  if (!ns || typeof ns !== 'object') return '';
+  if (Number.isFinite(publishedMs) && publishedMs > 0 && nowMs - publishedMs > NEXT_START_STALE_MS) return '';
+  if (ns.state === 'held') return 'Next race on hold';
+  if (ns.state === 'soon') return 'Next race starting soon';
+  if (ns.state !== 'counting') return '';
+  const at = Date.parse(String(ns.at || ''));
+  if (!Number.isFinite(at)) return '';
+  const left = Math.ceil((at - nowMs) / 1000);
+  if (left <= 0) return 'Next race starting soon';
+  if (left > 3600) return '';
+  return 'Next race in ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0');
+}
+function nextStartNow() {
+  const c = typeof relayClock === 'function' ? relayClock() : null;
+  return c === null ? Date.now() : c;
+}
+`;
+
+const LIVE_JS = NEXT_START_JS + `${CLOCK_JS}
+// The countdown between races (setup plan step 8): the last state's
+// nextStart and when it was published, redrawn every second by itself.
+let nextStart = null;
+let nextStartAt = 0;
+setInterval(() => {
+  const at = document.getElementById('nextin');
+  if (at) at.textContent = nextStartWords(nextStart, nextStartNow(), nextStartAt);
+}, 1000);
+
 const board = document.getElementById('board');
 const bar = document.getElementById('bar');
 
@@ -5544,6 +5616,10 @@ function drawBar(state, over, at, rows) {
         : running === 'Racing' ? 'Waiting for the first crossing' : '';
     }
   }
+  // Between races, the next one's countdown (setup plan step 8), kept up to
+  // the second by the timer at the top of this script.
+  const counting = (over || running === 'Idle') ? nextStartWords(state.nextStart, nextStartNow(), nextStartAt) : '';
+  if (counting !== '') info = '<b id="nextin">' + esc(counting) + '</b>' + (info ? ' \\u00B7 ' + info : '');
   const next = state.onDeck ? '<span class="ondeck">Next up: <b>' + esc(state.onDeck) + '</b></span>' : '';
 
   bar.innerHTML = '<div class="lp-top"><span class="lp-id"><span class="kick"><i></i>' + esc(kick) + '</span>'
@@ -6150,6 +6226,8 @@ async function load() {
 
   const state = answer.body.body || {};
   const at = Date.parse(answer.body.publishedAt);
+  nextStart = state.nextStart && typeof state.nextStart === 'object' ? state.nextStart : null;
+  nextStartAt = isFinite(at) ? at : 0;
   render(state, answer.seen === true, isFinite(at) ? at : 0);
 
   // The broadcast bug in the corner (30 Oct 2026, relay branding) while a
@@ -9192,6 +9270,35 @@ find.addEventListener('input', () => drawQual(qualClasses));
 poll(loadQual, 30000);
 `;
 
+/**
+ * The Schedule page's "Next race in 1:42" (12 Nov 2026, setup plan step 8):
+ * the live state read every ten seconds - only for its nextStart, and only
+ * while nothing is on track - and counted down every second between reads.
+ */
+const SCHEDULE_NEXT_JS = `
+const nextBox = document.getElementById('nextstart');
+let schedNext = null;
+let schedNextAt = 0;
+function drawNextStart() {
+  if (!nextBox) return;
+  const words = nextStartWords(schedNext, nextStartNow(), schedNextAt);
+  nextBox.hidden = words === '';
+  if (nextBox.textContent !== words) nextBox.textContent = words;
+}
+async function loadNextStart() {
+  const answer = await grab('/snapshot/state', 5000).catch(() => null);
+  if (answer === null) return;
+  const s = !answer.missing && answer.body && answer.body.body && typeof answer.body.body === 'object' ? answer.body.body : null;
+  const running = s ? String(s.state || 'Idle') : 'Idle';
+  schedNext = s && (running === 'Idle' || running === 'Finished') && s.nextStart && typeof s.nextStart === 'object' ? s.nextStart : null;
+  const at = s ? Date.parse(answer.body.publishedAt) : NaN;
+  schedNextAt = Number.isFinite(at) ? at : 0;
+  drawNextStart();
+}
+poll(loadNextStart, 10000);
+setInterval(drawNextStart, 1000);
+`;
+
 export function schedulePage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
   return shell({
     club,
@@ -9201,12 +9308,14 @@ export function schedulePage(club: string, clubName: string, context: PageContex
     sub: "Today's running order, ticked off as it happens.",
     body:
       '<div id="head"></div>' +
+      // The next race's countdown while Auto start counts (setup plan step 8).
+      '<div id="nextstart" class="card nextstart" role="status" hidden></div>' +
       '<div class="tools"><select id="cls" style="display:none"></select>' +
       '<input id="find" type="search" placeholder="Find your name" autocomplete="off" style="display:none"></div>' +
       '<div class="day">Running order</div>' +
       '<div id="board"><p class="note">Loading&hellip;</p></div>' +
       '<div id="qual"></div>',
-    script: QUAL_JS + SCHEDULE_JS,
+    script: QUAL_JS + SCHEDULE_JS + NEXT_START_JS + SCHEDULE_NEXT_JS,
   }, context);
 }
 
@@ -9913,6 +10022,17 @@ async function tap(d) {
 // ---- one driver, from a badge
 
 function drawOne() {
+  // Tonight's entry, paid or owing (12 Nov 2026, setup plan step 8): the
+  // laptop's own words, "Entry: $15.00 - pay at the desk" or "Paid ✓". The
+  // relay only ever hands it with this one driver - to their badge or their
+  // PIN - and never on the staff list, so nobody sees anyone else's money.
+  // Inside drawOne, so drawOne still stands on its own.
+  function entryLine(d) {
+    const e = d && d.entry && typeof d.entry === 'object' ? d.entry : null;
+    if (!e || typeof e.words !== 'string' || e.words.trim() === '') return '';
+    return '<p class="fee' + (e.paid === true ? ' ok' : '') + '">' + esc(e.words) + '</p>';
+  }
+
   const d = drivers[0];
   if (!d) return;
   const on = isIn(d);
@@ -9920,6 +10040,7 @@ function drawOne() {
   box.innerHTML = '<div class="solo">' + avatar(d, 'big') +
     '<h2>' + esc(d.name) + '</h2>' +
     '<div class="when">' + [facts(d), esc(eventName)].filter(Boolean).join(' &middot; ') + '</div>' +
+    entryLine(d) +
     '<button class="go' + (on ? ' on' : '') + '" id="go" type="button">' + (on ? 'Checked in &#10003;' : 'Check in') + '</button>' +
     '<p class="when">' + (on ? 'Tap again if you need to check out.' : 'One tap and the timing desk knows you are here.') + '</p>' +
     '</div>' +
@@ -11909,6 +12030,112 @@ function marshalWhen(away) {
   return n <= 0 ? 'That race is next - head to your post.' : plural(n, 'race', 'races') + ' before it.';
 }
 
+// ---- marshals from their phones (12 Nov 2026, setup plan step 8)
+//
+// I'M AT MY POST: on the duty while it is the next race to start (m.next),
+// once - the laptop files it by itself and Race Control has them in; when
+// every marshal of the race has said so, the start stops waiting for them.
+// ASK SOMEONE TO COVER: the laptop sends who can (m.choices: a key and a
+// short name each, never a badge code), and the asked driver's own card
+// says "Max P. asks you to cover Turn 3 in Q2 Heat 3" with Accept and
+// Decline. A yes becomes the swap - by itself, or after the desk's OK.
+// Only while the club takes asks and this phone has the driver.
+const coverPick = { round: '', k: '', open: false };
+
+function marshalActs(m) {
+  if (!(typeof asksOpen !== 'undefined' && asksOpen && me)) return null;
+  const round = typeof m.round === 'string' && /^[0-9a-f]{32}$/.test(m.round) ? m.round : '';
+  if (round === '') return null;
+  const box = el('div', 'lc-marshal');
+  const post = typeof m.post === 'string' && m.post !== '' ? m.post : 'your post';
+  if (m.in === true) {
+    box.appendChild(el('div', 'lc-check ok', "You're at " + post + ' - Race Control knows'));
+  } else if (m.next === true) {
+    box.appendChild(tapButton("I'm at my post (" + post + ')', 'go', async () => {
+      const got = await sendAsk('post', { round: round });
+      toast(got.ok ? 'Sent - Race Control will have you in a few seconds' : got.words);
+    }));
+  }
+  const choices = Array.isArray(m.choices) ? m.choices.filter((c) => c && typeof c.k === 'string' && /^[0-9a-f]{12}$/.test(c.k) && typeof c.name === 'string') : [];
+  if (choices.length > 0 && m.in !== true) {
+    if (coverPick.round !== round) { coverPick.round = round; coverPick.k = ''; coverPick.open = false; }
+    const part = el('details', 'lc-cover');
+    part.open = coverPick.open;
+    part.addEventListener('toggle', () => { coverPick.open = part.open; });
+    part.appendChild(el('summary', '', 'Ask someone to cover...'));
+    const pick = document.createElement('select');
+    pick.setAttribute('aria-label', 'Who to ask');
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = 'Pick a driver not racing it';
+    pick.appendChild(none);
+    for (const c of choices) {
+      const o = document.createElement('option');
+      o.value = c.k;
+      o.textContent = c.name;
+      if (c.k === coverPick.k) o.selected = true;
+      pick.appendChild(o);
+    }
+    pick.addEventListener('change', () => { coverPick.k = pick.value; });
+    part.appendChild(pick);
+    part.appendChild(tapButton('Ask them', 'go quiet', async () => {
+      if (coverPick.k === '') { toast('Pick who to ask first'); return; }
+      const who = choices.find((c) => c.k === coverPick.k);
+      const got = await sendAsk('swap', { round: round, to: coverPick.k });
+      toast(got.ok ? 'Asked ' + (who ? who.name : 'them') + ' - their phone will ask them' : got.words);
+      if (got.ok) { coverPick.open = false; coverPick.k = ''; }
+    }));
+    box.appendChild(part);
+  }
+  return box.children.length > 0 ? box : null;
+}
+
+function coverAskPart() {
+  const a = live && live.coverAsk && typeof live.coverAsk === 'object' ? live.coverAsk : null;
+  if (!a || typeof a.offer !== 'string' || !/^[0-9a-f]{24}$/.test(a.offer)) return null;
+  if (!(typeof asksOpen !== 'undefined' && asksOpen && me)) return null;
+  // Answered from this page already: the live entry catches up in a moment.
+  if (sentAsks.some((s) => s.kind === 'cover' && s.offer === a.offer)) return null;
+  const part = el('div', 'lc-part lc-coverask');
+  part.setAttribute('role', 'status');
+  const where = (typeof a.post === 'string' && a.post !== '' ? a.post : 'their post') + (typeof a.race === 'string' && a.race !== '' ? ' in ' + a.race : '');
+  part.appendChild(el('b', '', String(a.from || 'A driver') + ' asks you to cover ' + where));
+  const acts = el('div', 'acts');
+  const answer = async (yes) => {
+    const got = await sendAsk('cover', { offer: a.offer, answer: yes ? 'yes' : 'no' });
+    if (got.ok) {
+      const last = sentAsks.length > 0 ? sentAsks[sentAsks.length - 1] : null;
+      if (last && last.kind === 'cover') last.offer = a.offer;
+      toast(yes ? 'Said yes - HeatCaller will let you know' : 'Said no');
+      drawLive();
+    } else {
+      toast(got.words);
+    }
+  };
+  acts.appendChild(tapButton('Accept', 'go', () => answer(true)));
+  acts.appendChild(tapButton('Decline', '', () => answer(false)));
+  part.appendChild(acts);
+  return part;
+}
+
+function askedCoverPart() {
+  const a = live && live.askedCover && typeof live.askedCover === 'object' ? live.askedCover : null;
+  if (!a) return null;
+  const to = typeof a.to === 'string' && a.to !== '' ? a.to : 'them';
+  const where = (typeof a.post === 'string' && a.post !== '' ? a.post : 'your post') + (typeof a.race === 'string' && a.race !== '' ? ' in ' + a.race : '');
+  const words = a.state === 'accepted' ? to + ' is covering ' + where
+    : a.state === 'desk' ? to + ' said yes to covering ' + where + ' - waiting for the desk'
+    : a.state === 'declined' ? to + " can't cover " + where + ' - you are still on it'
+    : 'Asked ' + to + ' to cover ' + where + ' - waiting for them';
+  return el('div', 'lc-part lc-askedcover ' + (a.state === 'accepted' ? 'ok' : a.state === 'declined' ? 'no' : ''), words);
+}
+
+function entryMoneyPart() {
+  const e = live && live.entry && typeof live.entry === 'object' ? live.entry : null;
+  if (!e || typeof e.words !== 'string' || e.words === '') return null;
+  return el('div', 'lc-part lc-entry ' + (e.paid === true ? 'ok' : 'owing'), e.words);
+}
+
 function liveCard() {
   const n = live && live.next && typeof live.next === 'object' ? live.next : null;
   const card = el('section', 'lc' + (n && n.staged === true ? ' staged' : n && n.now !== true && num(n.away) === 0 ? ' next' : ''));
@@ -11936,8 +12163,21 @@ function liveCard() {
       duty.appendChild(el('b', '', 'Your marshal duty: '));
       duty.appendChild(el('span', '', m.race + (typeof m.post === 'string' && m.post !== '' ? ' - ' + m.post : '')));
       duty.appendChild(el('span', 'when', ' · ' + marshalWhen(m.away)));
+      // At my post, and ask someone to cover (12 Nov 2026, setup plan step 8).
+      const acts = marshalActs(m);
+      if (acts) duty.appendChild(acts);
       card.appendChild(duty);
     }
+
+    // Somebody asked them to cover a post, and the last ask they sent.
+    const cover = coverAskPart();
+    if (cover) card.appendChild(cover);
+    const askedOut = askedCoverPart();
+    if (askedOut) card.appendChild(askedOut);
+
+    // Their own entry money tonight (setup plan step 8): never anyone else's.
+    const money = entryMoneyPart();
+    if (money) card.appendChild(money);
   }
 
   // The race-day jobs in one row (28 Oct 2026, My Night laid out to be
@@ -13478,7 +13718,7 @@ async function sendAsk(kind, f) {
     if (navigator.vibrate) navigator.vibrate(30);
     drawLive();
     // "coming" too (12 Nov 2026, setup plan C1): the laptop files it by itself.
-    const self = kind === 'pack' || kind === 'setup' || kind === 'coming';
+    const self = kind === 'pack' || kind === 'setup' || kind === 'coming' || kind === 'post' || kind === 'swap' || kind === 'cover';
     return { ok: true, status: 200, words: (self ? 'Sent - HeatCaller will have it in a few seconds' : 'Sent - the desk will check it') + (ref !== '' ? ' (ref ' + ref + ')' : '') };
   }
 
@@ -13495,6 +13735,9 @@ function kindWords(kind) {
   if (kind === 'late') return 'More time';
   if (kind === 'skip') return 'Skip my race';
   if (kind === 'coming') return 'Next race night';
+  if (kind === 'post') return 'At my marshal post';
+  if (kind === 'swap') return 'Cover my post';
+  if (kind === 'cover') return 'Marshal swap';
   return 'Request';
 }
 

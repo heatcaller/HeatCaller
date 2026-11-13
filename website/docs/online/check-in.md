@@ -171,6 +171,7 @@ Photos are never on the public pages, but anyone with the staff PIN sees every d
 A racer who scans their QR check-in, or types their personal PIN, sees their own card:
 
 - their photo (or initials), name, and "#*number* · *class* · *event*"
+- when tonight's race day has an entry fee, **Entry: $15.00 - pay at the desk** until the desk marks them paid on **Who's Racing**, then **Paid ✓** (a comp counts as paid). It's only ever their own: the relay gives it out with that one driver, to their QR check-in or their personal PIN, and never on the full list the staff PIN opens. HeatCaller never takes a payment. See [Money at the desk](../race-day/events-and-entries.md#money-at-the-desk).
 - a big **Check in** button, with "One tap and the timing desk knows you are here." From a QR check-in, a driver with a personal PIN is asked for it on the first tap; see [Checking in or out needs the driver's own PIN](#checking-in-or-out-needs-the-drivers-own-pin).
 
 After tapping, the button turns to "Checked in ✓", with "Tap again if you need to check out.", and a message says "*name* is checked in."
@@ -179,6 +180,7 @@ Under the card:
 
 - From a QR check-in: **Not you? Open the full list**, which goes to the PIN box.
 - From a personal PIN: **Not you? Sign out**, which forgets the PIN on that phone and goes back to the PIN box.
+- On a driver's own night, the **Check in** card on **Me** and the **Alerts** card say the same about their entry, from their own private live details.
 - When the club gives drivers their own nights, the card also has **See your racing from last time**, which opens that driver's night page, whether the card was opened from a QR check-in or a personal PIN. See [A driver's own night](index.md#a-drivers-own-night).
 
 ### The first-night guide

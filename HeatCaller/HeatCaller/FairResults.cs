@@ -21,6 +21,13 @@ public enum FirstRoundSeeding
     /// At the end so a saved race day's choice keeps its number.
     /// </summary>
     HeadsUp,
+
+    /// <summary>
+    /// By race number (12 Nov 2026, setup plan step 8) - the BRCA norm:
+    /// dealt into the heats in race-number order, as alphabetical is dealt in
+    /// name order. At the end, like HeadsUp, so saved choices keep their number.
+    /// </summary>
+    RaceNumber,
 }
 
 /// <summary>
@@ -47,11 +54,15 @@ public static class FirstRound
     /// <param name="pace">Each driver's recent best lap (HeatSeeding.BestLaps).</param>
     /// <param name="heatSizes">How many each first-round heat holds, in running order.</param>
     /// <param name="randomSeed">Fixes the random order for a race day - its id's hash.</param>
+    /// <param name="raceNumberOf">Each driver's race number (DriverProfile.RaceNumber), for <see cref="FirstRoundSeeding.RaceNumber"/>.</param>
     public static Seeding For(IReadOnlyList<string> roster, FirstRoundSeeding mode, IReadOnlyDictionary<string, long> pace,
-        IReadOnlyList<int> heatSizes, int randomSeed)
+        IReadOnlyList<int> heatSizes, int randomSeed, Func<string, string?>? raceNumberOf = null)
     {
         switch (mode)
         {
+            case FirstRoundSeeding.RaceNumber:
+                return new Seeding(ByRaceNumber(roster, raceNumberOf ?? (_ => null)), null);
+
             case FirstRoundSeeding.Random:
                 var random = new Random(randomSeed);
                 return new Seeding(roster.OrderBy(_ => random.Next()).ToList(), null);
@@ -67,6 +78,23 @@ public static class FirstRound
                 return new Seeding(roster.ToList(), null);
         }
     }
+
+    /// <summary>
+    /// The roster in race-number order (12 Nov 2026, setup plan step 8):
+    /// numbers that are numbers first, numerically (2 before 10); then any
+    /// other number as text ("7a", "X1"); then drivers with no number, in the
+    /// roster's own order - alphabetical, as RosterFor gives it. A tie keeps
+    /// the roster's order too, so two drivers sharing a number stay put.
+    /// </summary>
+    public static List<string> ByRaceNumber(IReadOnlyList<string> roster, Func<string, string?> raceNumberOf) =>
+        roster
+            .Select((driver, index) => (driver, index, Number: (raceNumberOf(driver) ?? string.Empty).Trim()))
+            .OrderBy(x => x.Number.Length == 0 ? 2 : int.TryParse(x.Number, System.Globalization.NumberStyles.Integer, CultureInfo.InvariantCulture, out _) ? 0 : 1)
+            .ThenBy(x => int.TryParse(x.Number, System.Globalization.NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : 0)
+            .ThenBy(x => x.Number, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.index)
+            .Select(x => x.driver)
+            .ToList();
 
     /// <summary>A seed that is the same every run for the same text (FNV-1a), unlike string.GetHashCode.</summary>
     public static int StableSeed(string text)
@@ -93,6 +121,7 @@ public static class FirstRound
         FirstRoundSeeding.Alphabetical => "Alphabetical",
         FirstRoundSeeding.Random => "Random",
         FirstRoundSeeding.HeadsUp => "Heads-up (HRQF, from practice)",
+        FirstRoundSeeding.RaceNumber => "By race number",
         _ => "By recent pace",
     };
 }
@@ -106,6 +135,11 @@ public static class FirstRound
 /// provisional: the desk sees when they become final, a driver can still
 /// query a result from their phone, and building the finals before then asks
 /// first.
+///
+/// 12 Nov 2026, setup plan step 8: every qualifying round and every main
+/// opens a window of its own too (<see cref="ForRound"/>), for the phones,
+/// the announcer, the Big Screen and Driver Requests. The finals still wait
+/// only for the last round's (<see cref="FinalAtUtc"/>, <see cref="ClosesAtUtc"/>).
 /// </summary>
 public static class ProtestWindow
 {
@@ -222,6 +256,156 @@ public static class ProtestWindow
 
         return lastEnd?.AddMinutes(minutes);
     }
+
+    /// <summary>
+    /// A window opened by one round of a class (12 Nov 2026, setup plan
+    /// step 8): what it is called ("Q2", "A-Main"), when it closes, and
+    /// whether it was the class's last qualifying round.
+    /// </summary>
+    public sealed record RoundWindow(string What, DateTime ClosesAtUtc, RoundKind Kind, bool LastQualifying, string Key);
+
+    /// <summary>
+    /// The window <paramref name="round"/> belongs to (12 Nov 2026, setup
+    /// plan step 8).
+    ///
+    /// WHY: the window used to open only after a class's LAST qualifier, so
+    /// a lap-count dispute over Q1 had nowhere to go but the desk, and a
+    /// main had no window at all - though a main's result is the one that
+    /// goes on the trophy. Now each qualifying ROUND opens one once all its
+    /// heats are in (a round is "Q2": every Q2 heat of the class, read from
+    /// the labels the way Move Drivers Between Heats reads them), and each
+    /// main opens its own as soon as it is in. A heat added by hand beside
+    /// numbered rounds is a window of its own. Seeding the finals still
+    /// waits only for the LAST round's window - see <see cref="FinalAtUtc"/>.
+    ///
+    /// Null with no window, a practice, a round not run yet, or a round
+    /// whose other heats are still to run. <paramref name="justFiled"/> is a
+    /// result filed a moment ago whose round is not linked yet.
+    /// </summary>
+    public static RoundWindow? ForRound(RoundDefinition round, IReadOnlyList<RoundDefinition> classDayRounds, Func<string, SessionRecord?> sessionOf,
+        int minutes, SessionRecord? justFiled = null)
+    {
+        if (minutes <= 0 || round.Kind == RoundKind.Practice)
+        {
+            return null;
+        }
+
+        SessionRecord? ResultOf(RoundDefinition r) =>
+            justFiled is not null && string.Equals(justFiled.RoundId, r.Id, StringComparison.Ordinal)
+                ? justFiled
+                : r.IsRecorded ? sessionOf(r.LinkedSessionId!) : null;
+
+        if (round.Kind == RoundKind.Main)
+        {
+            return ResultOf(round) is { } run && !run.IsNotScored()
+                ? new RoundWindow(MainName(round), run.EndedAtUtc.AddMinutes(minutes), RoundKind.Main, false, "#" + round.Id)
+                : null;
+        }
+
+        var key = HeatBalanceForm.RoundKeyFor(round, classDayRounds);
+        var group = key is null
+            ? new List<RoundDefinition> { round }
+            : classDayRounds.Where(r => r.Kind == RoundKind.Qualifier && HeatBalanceForm.RoundKeyFor(r, classDayRounds) == key).ToList();
+
+        DateTime? lastEnd = null;
+
+        foreach (var heat in group)
+        {
+            if (ResultOf(heat) is not { } result)
+            {
+                return null;
+            }
+
+            if (!result.IsNotScored() && (lastEnd is null || result.EndedAtUtc > lastEnd))
+            {
+                lastEnd = result.EndedAtUtc;
+            }
+        }
+
+        if (lastEnd is null)
+        {
+            return null;
+        }
+
+        // The last round: every qualifier of the class is in once this one is.
+        var last = classDayRounds.Where(r => r.Kind == RoundKind.Qualifier).All(r => ResultOf(r) is not null);
+        var what = key is null
+            ? (string.IsNullOrWhiteSpace(round.RoundLabel) ? "the extra heat" : round.RoundLabel.Trim())
+            : key.Length == 0
+                ? "qualifying"
+                : (round.RoundLabel ?? string.Empty).TrimStart().StartsWith("Race", StringComparison.OrdinalIgnoreCase) ? $"Race {key[1..]}" : key;
+
+        return new RoundWindow(what, lastEnd.Value.AddMinutes(minutes), RoundKind.Qualifier, last, key is null ? "#" + round.Id : "Q" + key);
+    }
+
+    /// <summary>
+    /// The class's LATEST window - the round whose results came in last -
+    /// for the results that show "Provisional until 20:42" and the Big
+    /// Screen (12 Nov 2026, setup plan step 8). <paramref name="kind"/>
+    /// keeps it to qualifiers (the qualifying card) or mains; null for both.
+    /// </summary>
+    public static RoundWindow? Latest(IReadOnlyList<RoundDefinition> classDayRounds, Func<string, SessionRecord?> sessionOf, int minutes,
+        RoundKind? kind = null)
+    {
+        if (minutes <= 0)
+        {
+            return null;
+        }
+
+        return classDayRounds
+            .Where(r => r.IsRecorded && r.Kind != RoundKind.Practice && (kind is null || r.Kind == kind))
+            .Select(r => ForRound(r, classDayRounds, sessionOf, minutes))
+            .OfType<RoundWindow>()
+            .MaxBy(w => w.ClosesAtUtc);
+    }
+
+    /// <summary>
+    /// Whether a query asked at <paramref name="askedUtc"/> came in while
+    /// the race's window was open (12 Nov 2026, setup plan step 8) - those
+    /// go to the top of Driver Requests, since the answer can still change
+    /// a result before it is final.
+    /// </summary>
+    public static bool AskedInside(DateTime askedUtc, DateTime? raceEndedUtc, DateTime? closesAtUtc) =>
+        closesAtUtc is { } closes && askedUtc < closes && (raceEndedUtc is not { } ended || askedUtc >= ended);
+
+    /// <summary>
+    /// Waiting requests in the order the desk sees them: queries asked
+    /// inside a protest window first, then everything else, each as it came.
+    /// </summary>
+    public static List<T> DeskOrder<T>(IEnumerable<T> waiting, Func<T, bool> inWindow) =>
+        waiting.Select((r, i) => (r, i)).OrderBy(x => inWindow(x.r) ? 0 : 1).ThenBy(x => x.i).Select(x => x.r).ToList();
+
+    /// <summary>"A-Main", "B-Main Leg 2"... - the label, or the tier's name for an unlabelled main.</summary>
+    private static string MainName(RoundDefinition main) =>
+        !string.IsNullOrWhiteSpace(main.RoundLabel) ? main.RoundLabel.Trim()
+        : main.TierLetter.Length > 0 ? $"{main.TierLetter}-Main"
+        : "the main";
+
+    /// <summary>
+    /// The announcer's line once a round's window opens (12 Nov 2026, setup
+    /// plan step 8), saying which round: "That's Q1 done for Stock. Results
+    /// are provisional for five minutes - any queries to the race desk,
+    /// please." The last qualifying round says qualifying is done, as
+    /// before; a main says "That's the A-Main done for Stock".
+    /// </summary>
+    public static string Announcement(string className, int minutes, RoundWindow window)
+    {
+        if (window.Kind == RoundKind.Qualifier && window.LastQualifying && window.What == "qualifying")
+        {
+            return Announcement(className, minutes);
+        }
+
+        var name = string.IsNullOrWhiteSpace(className) ? string.Empty : $" for {className.Trim()}";
+        var span = minutes == 1 ? "one minute" : $"{SpokenNumber(minutes)} minutes";
+        var what = window.Kind == RoundKind.Main ? $"the {window.What}" : window.What;
+        var andQualifying = window.Kind == RoundKind.Qualifier && window.LastQualifying ? ", and that's qualifying" : string.Empty;
+
+        return $"That's {what} done{name}{andQualifying}. Results are provisional for {span} - any queries to the race desk, please.";
+    }
+
+    /// <summary>"PROVISIONAL UNTIL 20:42" for the Big Screen's results - local time, as AppTime shows it.</summary>
+    public static string BoardWords(DateTime closesAtUtc) =>
+        $"PROVISIONAL UNTIL {AppTime.TimeOfDay(closesAtUtc.ToLocalTime())}";
 
     /// <summary>
     /// Whether a driver may still query a race on their phone: always, unless

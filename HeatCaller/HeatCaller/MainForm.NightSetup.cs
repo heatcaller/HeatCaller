@@ -44,26 +44,23 @@ public partial class MainForm
         raceControl.PlannedBreaks = () => _raceEvents.Active is { IsLegacy: false } day ? day.Breaks : null;
         raceControl.ConfirmPostedChange = (owner, what) => raceProgram.ChangePostedHeatsOk(owner, what);
 
+        // The Big Screen's "PROVISIONAL UNTIL 20:42" (setup plan step 8).
+        raceControl.ProvisionalBoard = ProvisionalBoardLine;
+
+        // Tonight's races off between a driver's races (setup plan step 8), for Auto start's rest.
+        raceControl.RestGap = () => raceProgram.RestGapTonight;
+
         // Hand the desk to a phone (setup plan D8).
         raceControl.HandDeskRequested += HandTheDeskToAPhone;
 
         // A marshal who didn't turn up (setup plan D4), kept on the round for
-        // the event report and the club's marshal rule.
-        raceControl.MarshalNoShow += (round, who) =>
-        {
-            if (_rounds.Get(round.Id) is not { } saved)
-            {
-                return;
-            }
+        // the event report and the club's marshal rule (setup plan step 8 -
+        // see MainForm.SetupStep8).
+        raceControl.MarshalNoShow += LogMarshalNoShow;
+        raceControl.MarshalNoShowTakenBack += (round, who) => TakeMarshalNoShowBack(round.Id, who, withUndo: true);
 
-            saved.MarshalNoShows ??= new List<string>();
-
-            if (!saved.MarshalNoShows.Contains(who, StringComparer.OrdinalIgnoreCase))
-            {
-                saved.MarshalNoShows.Add(who);
-                _rounds.Update(saved);
-            }
-        };
+        // Night pace and the times drivers were given (setup plan step 8).
+        WirePaceAndStarts(raceProgram, raceControl);
 
         _entriesCloseTimer.Tick += (_, _) => EntriesCloseTick();
         _entriesCloseTimer.Start();

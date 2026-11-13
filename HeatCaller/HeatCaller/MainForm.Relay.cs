@@ -119,7 +119,11 @@ public partial class MainForm
         var eventName = current.Id == RaceEventStore.LegacyEventId ? string.Empty : current.Name;
 
         SendToRelayIfChanged(RelayChannel.CheckIn, "the check-in list", () => RelayDocuments.CheckIn(
-            roster, _profiles, _settings, eventName, _relayCheckInPhotos));
+            roster, _profiles, _settings, eventName, _relayCheckInPhotos,
+
+            // Each driver's own entry, paid or owing (setup plan step 8) -
+            // handed by the relay only to that driver's badge or PIN.
+            DriverLiveMoneyOf));
     }
 
     /// <summary>
@@ -1021,6 +1025,7 @@ public partial class MainForm
         var changed = state != _lastRelayRaceState;
 
         _lastRelayRaceState = state;
+        changed |= CountdownChanged(ref _lastRelayCountdown);
 
         if (!live && !changed)
         {
@@ -1933,7 +1938,10 @@ public partial class MainForm
                 // was unticked sat inside that window, and the archive
                 // offered it with no result behind it.
                 from: null,
-                onRelay: s => _relayPublisher.ResultIsOnRelay(s.Id, RelayResultsIndex.EffectiveStart(s)));
+                onRelay: s => _relayPublisher.ResultIsOnRelay(s.Id, RelayResultsIndex.EffectiveStart(s)),
+
+                // Night pace on the club's online results (setup plan step 8).
+                paceOfDay: (_, daySessions) => RelayResultsIndex.PaceOf(daySessions, _rounds.All, _raceEvents.All));
 
             if (onlyIfChanged && _relayIndexSent.TryGetValue(year, out var last) && last == json)
             {

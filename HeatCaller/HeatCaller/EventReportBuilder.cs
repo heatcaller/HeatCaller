@@ -72,7 +72,7 @@ public static class EventReportBuilder
 
         WriteSummary(sb, sessions, profiles);
         WriteNightPace(sb, sessions, rounds, ReportEvent(options));
-        WriteMoney(sb, sessions, ReportEvent(options), payments, profiles);
+        WriteMoney(sb, sessions, ReportEvent(options), payments, profiles, DeskMoney.ClassLookup(classes.All));
         WriteMarshalNoShows(sb, rounds, ReportEvent(options));
 
         // Outstanding items first when there are any - the point of putting
@@ -273,9 +273,17 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     /// the drivers who raced. Only for a race day with an entry fee. See
     /// DeskMoney.
     /// </summary>
-    private static void WriteMoney(StringBuilder sb, List<SessionRecord> sessions, RaceEvent? raceEvent, EntryPaymentStore? payments, ProfileStore profiles)
+    /// <remarks>
+    /// With classes' own fees (12 Nov 2026, setup plan step 8): a night that
+    /// charges only through its classes gets the section too, each driver's
+    /// fee is worked out with them (DeskMoney.FeeFor), and a line under the
+    /// totals says what each class charged, so the treasurer can check a
+    /// figure against the price board.
+    /// </remarks>
+    private static void WriteMoney(StringBuilder sb, List<SessionRecord> sessions, RaceEvent? raceEvent, EntryPaymentStore? payments, ProfileStore profiles,
+        Func<string, RaceClass?> classNamed)
     {
-        if (payments is null || raceEvent is not { EntryFee: > 0 } day)
+        if (payments is null || raceEvent is not { } day || !DeskMoney.Charges(day, classNamed))
         {
             return;
         }
@@ -291,9 +299,14 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
             .ToList();
 
         var totals = DeskMoney.Count(raced.Select(p =>
-            (string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName, CheckInControl.FeeFor(p, day), payments.Get(day.Id, p.Transponder))));
+            (string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName, CheckInControl.FeeFor(p, day, classNamed), payments.Get(day.Id, p.Transponder))));
 
         sb.AppendLine("<h2>Money at the desk</h2>");
+
+        if (DeskMoney.FeesLine(day, classNamed) is { } fees)
+        {
+            sb.AppendLine($"<p class=\"sub\">{Esc(fees)}</p>");
+        }
         sb.AppendLine("<div class=\"cards\">");
         sb.AppendLine($"<div class=\"card\"><div class=\"k\">{Esc(DeskMoney.Money(totals.Taken))}</div><div class=\"l\">Taken</div></div>");
         sb.AppendLine($"<div class=\"card\"><div class=\"k\">{Esc(DeskMoney.Money(totals.Cash))}</div><div class=\"l\">Cash</div></div>");
@@ -347,7 +360,16 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
         foreach (var round in missed)
         {
-            sb.AppendLine($"<li>{Esc(round.RoundLabel)}: {Esc(string.Join(", ", round.MarshalNoShows!))}</li>");
+            // What the club's rule did to each (12 Nov 2026, setup plan step
+            // 8): "Hugh Turn (Turn 3) - loses their best Stock qualifying
+            // result tonight". A no-show logged before the rule existed has
+            // its name only.
+            var each = round.MarshalNoShows!.Select(who =>
+                round.NoShowMarshals?.FirstOrDefault(n => string.Equals(n.Who, who, StringComparison.OrdinalIgnoreCase)) is { } noShow
+                    ? $"{who} - {MarshalRule.Consequence(noShow)}"
+                    : who);
+
+            sb.AppendLine($"<li>{Esc(round.RoundLabel)}: {Esc(string.Join(", ", each))}</li>");
         }
 
         sb.AppendLine("</ul>");
@@ -355,7 +377,13 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
     private static void WriteNightPace(StringBuilder sb, List<SessionRecord> sessions, RoundDefinitionStore rounds, RaceEvent? raceEvent)
     {
-        if (NightPace.For(sessions, rounds.All, raceEvent?.RoundIds) is not { } pace)
+        // The race director's two measures (12 Nov 2026, setup plan step 8)
+        // go with the pace even on a night of one race - the first green is
+        // what they measure to.
+        var measures = NightMeasures.For(raceEvent, sessions, rounds.All);
+        var pace = NightPace.For(sessions, rounds.All, raceEvent?.RoundIds, breaks: raceEvent?.Breaks);
+
+        if (pace is null && measures.Empty)
         {
             return;
         }
@@ -363,14 +391,49 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
         sb.AppendLine("<h2>Night pace</h2>");
         sb.AppendLine("<div class=\"cards\">");
 
+        if (measures.EntriesToHeats is { } entries)
+        {
+            var (value, label) = entries < TimeSpan.Zero
+                ? (NightPace.Clock(-entries), "Heats posted before entries closed")
+                : (NightPace.Clock(entries), measures.HeatsNotPosted ? "Entries close to first green (heats not posted)" : "Entries close to heats posted");
+            sb.AppendLine($"<div class=\"card\"><div class=\"k\">{value}</div><div class=\"l\">{Esc(label)}</div></div>");
+        }
+
+        if (measures.DoorsToGreen is { } doors)
+        {
+            sb.AppendLine($"<div class=\"card\"><div class=\"k\">{NightPace.Clock(doors)}</div><div class=\"l\">Doors open to first green</div></div>");
+        }
+
+        if (pace is null)
+        {
+            sb.AppendLine("</div>");
+            return;
+        }
+
         if (pace.MedianGreenToGreen is { } g2g)
         {
             sb.AppendLine($"<div class=\"card\"><div class=\"k\">{NightPace.Clock(g2g)}</div><div class=\"l\">Green to green (typical)</div></div>");
         }
 
+        if (pace.WorstGreenToGreen is { } worst)
+        {
+            sb.AppendLine($"<div class=\"card\"><div class=\"k\">{NightPace.Clock(worst.GreenToGreen)}</div><div class=\"l\">Worst green to green: "
+                          + $"{Esc(worst.Before.Label)} to {Esc(worst.After.Label)} ({Esc(worst.CauseText)})</div></div>");
+        }
+
         if (pace.MedianGap is { } gap)
         {
             sb.AppendLine($"<div class=\"card\"><div class=\"k\">{NightPace.Clock(gap)}</div><div class=\"l\">Finish to next green (typical)</div></div>");
+        }
+
+        if (pace.MedianFinishToSaved is { } saving)
+        {
+            sb.AppendLine($"<div class=\"card\"><div class=\"k\">{NightPace.Clock(saving)}</div><div class=\"l\">Finish to result saved (typical)</div></div>");
+        }
+
+        if (pace.MedianCalledToGreen is { } called)
+        {
+            sb.AppendLine($"<div class=\"card\"><div class=\"k\">{NightPace.Clock(called)}</div><div class=\"l\">Call-up to green (typical)</div></div>");
         }
 
         if (pace.OnTrackShare is { } share)
@@ -548,6 +611,13 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
                 sb.AppendLine("</table>");
 
+                // Who was skipped from the grid and scored DNS (12 Nov 2026,
+                // setup plan step 8) - see SkipDns.
+                if (SkipDns.Words(session, t => NameFor(t, t, profiles)) is { Length: > 0 } dns)
+                {
+                    sb.AppendLine($"<p class=\"sub\">{Esc(dns)}</p>");
+                }
+
                 // 22 Oct 2026: what the * after a lap count means - see HandCountedLaps.
                 if (session.Results.Any(r => HandCountedLaps.In(r) > 0))
                 {
@@ -690,7 +760,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
                               + $"<td class=\"num\">{e.BestLaps}</td>"
                               + (consecutive ? $"<td class=\"num\">{(e.BestConsecutiveMs > 0 ? $"{Secs(e.BestConsecutiveMs)}s" : "-")}</td>" : string.Empty)
                               + $"<td class=\"num\">{(e.BestFastLapMs > 0 ? $"{Secs(e.BestFastLapMs)}s" : "-")}</td>"
-                              + $"<td>{Esc(e.SourceRoundLabel)}</td>"
+                              + $"<td>{Esc(e.SourceRoundLabel)}{(string.IsNullOrWhiteSpace(e.Forfeit) ? string.Empty : $" <em>({Esc(e.Forfeit)})</em>")}</td>"
                               + "</tr>");
             }
 

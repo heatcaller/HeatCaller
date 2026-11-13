@@ -864,6 +864,12 @@ interface CheckinDriver {
   readonly number: string;
   readonly checkedIn: boolean;
   readonly photo: string;
+  /**
+   * Tonight's entry, paid or owing (12 Nov 2026, setup plan step 8), as the
+   * laptop worded it - this driver's own. Handed out only with the driver
+   * (to their badge or their PIN), never on the staff list: see staffRows.
+   */
+  readonly entry?: { readonly words: string; readonly paid: boolean };
 }
 
 /**
@@ -5058,8 +5064,12 @@ export class Relay {
     // that. Staff now get the same rows with an opaque handle in place of
     // the id (staffRowRef); a tap with that handle is turned back into the
     // driver below. A racer still gets their own real id.
+    //
+    // Nor anybody's money (12 Nov 2026, setup plan step 8): a driver's own
+    // entry line goes only to their own badge or PIN, so it is taken off
+    // every staff row.
     const staffRows = (): CheckinDriver[] =>
-      drivers.map((d) => ({ ...d, id: staffRowRef(checkin.passKey, club, checkin.pinSha256, d.id) }));
+      drivers.map(({ entry: _entry, ...d }) => ({ ...d, id: staffRowRef(checkin.passKey, club, checkin.pinSha256, d.id) }));
 
     if (action === "list") {
       // A pass first. It is what a right PIN was answered with, and it is
@@ -9982,6 +9992,7 @@ function cleanDriver(value: unknown): CheckinDriver | undefined {
   }
 
   const photo = text("photo", 60 * 1024);
+  const entry = entryOf(d["entry"]);
 
   return {
     id: d["id"] as string,
@@ -9990,7 +10001,19 @@ function cleanDriver(value: unknown): CheckinDriver | undefined {
     number: text("number", 8),
     checkedIn: d["checkedIn"] === true,
     photo: /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(photo) ? photo : "",
+    ...(entry === undefined ? {} : { entry }),
   };
+}
+
+/** A check-in driver's own entry line (setup plan step 8): one short line of text and a yes/no, or nothing. */
+export function entryOf(value: unknown): { words: string; paid: boolean } | undefined {
+  if (!isPlainObject(value) || typeof value["words"] !== "string") {
+    return undefined;
+  }
+
+  const words = value["words"].replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+
+  return words === "" ? undefined : { words, paid: value["paid"] === true };
 }
 
 /**

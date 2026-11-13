@@ -913,10 +913,14 @@ public partial class MainForm
     /// moment it would be most unwelcome.
     ///
     /// An open day with nothing in it - no classes picked, no rounds - doesn't
-    /// count (12 Nov 2026, setup plan A4). A fresh install opens one by itself
-    /// (EventSpine.StartFirstDayIfNever), so the old rule meant a new club was
-    /// never offered the wizard at all. The wizard takes that day over rather
-    /// than starting another.
+    /// count (12 Nov 2026, setup plan A4). A fresh install used to open one by
+    /// itself, so the old rule meant a new club was never offered the wizard
+    /// at all. A fresh install no longer does (setup plan step 8), but an
+    /// install that already has such a day keeps it, and the wizard takes it
+    /// over rather than starting another.
+    ///
+    /// Also offered straight after the first-run wizard (setup plan step 8),
+    /// which is how a new club's first real race day is started.
     /// </summary>
     /// <summary>A race day nobody has done anything with yet: no classes picked and no rounds.</summary>
     internal static bool IsEmptyDay(RaceEvent day) =>

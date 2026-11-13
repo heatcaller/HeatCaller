@@ -175,7 +175,8 @@ internal static class RelayResultsIndex
         Func<string?, string?> seasonNameFor,
         bool abbreviate,
         DateTime? from,
-        Func<SessionRecord, bool>? onRelay = null)
+        Func<SessionRecord, bool>? onRelay = null,
+        Func<string, IReadOnlyList<SessionRecord>, string?>? paceOfDay = null)
     {
         var mine = all
             .Where(s => !s.IsNotScored() && YearOf(s) == year)
@@ -330,11 +331,25 @@ internal static class RelayResultsIndex
         // costs the page nothing but an array index - and so that "what
         // days did this club race" is one small array rather than
         // something a phone works out by walking every session.
+        //
+        // With the night's pace beside a day when there is one (12 Nov 2026,
+        // setup plan step 8, build plan 0.1): "Green to green 6:10 · 31% on
+        // track", worked out by the laptop from the day's sessions, since the
+        // relay doesn't read results. Left out of a day with none, so an
+        // older page - and a day with one race - sees the shape it always did.
         var days = sessionDays
             .Select((day, index) => (Day: day, Index: index))
             .GroupBy(x => x.Day, StringComparer.Ordinal)
             .OrderByDescending(g => g.Key, StringComparer.Ordinal)
-            .Select(g => new { day = g.Key, sessions = g.Select(x => x.Index).ToList() })
+            .Select(g =>
+            {
+                var indexes = g.Select(x => x.Index).ToList();
+                var pace = paceOfDay?.Invoke(g.Key, indexes.Select(i => mine[i]).ToList());
+
+                return string.IsNullOrWhiteSpace(pace)
+                    ? (object)new { day = g.Key, sessions = indexes }
+                    : new { day = g.Key, sessions = indexes, pace };
+            })
             .ToList();
 
         return JsonSerializer.Serialize(new
@@ -351,6 +366,26 @@ internal static class RelayResultsIndex
             sessions,
             days,
         });
+    }
+
+    /// <summary>
+    /// A race day's night pace for its heading on the club's results page
+    /// (12 Nov 2026, setup plan step 8): NightPace.PublicLine - the numbers,
+    /// never the causes - or null with fewer than two races. The program it
+    /// is read against is the race day whose rounds the sessions ran, when
+    /// one can be found, for "18 of 18 races run" and its planned breaks.
+    /// </summary>
+    internal static string? PaceOf(IReadOnlyList<SessionRecord> daySessions, IEnumerable<RoundDefinition> rounds, IEnumerable<RaceEvent> raceDays)
+    {
+        var roundIds = daySessions.Select(s => s.RoundId).OfType<string>().ToHashSet(StringComparer.Ordinal);
+        var raceDay = roundIds.Count == 0
+            ? null
+            : raceDays.FirstOrDefault(d => d is { IsLegacy: false } && d.RoundIds.Any(roundIds.Contains));
+
+        var pace = NightPace.For(daySessions, rounds, raceDay?.RoundIds, breaks: raceDay?.Breaks);
+        var line = pace is null ? string.Empty : NightPace.PublicLine(pace);
+
+        return line.Length == 0 ? null : line;
     }
 
     /// <summary>

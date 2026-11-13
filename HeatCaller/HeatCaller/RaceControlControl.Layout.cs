@@ -483,6 +483,10 @@ public sealed partial class RaceControlControl
         _nextUpBar.AddButton(_btnAutoHold, HoldCaption, ResumeCaption);
         _nextUpBar.AddButton(_btnStartNext, ProgramCaptions.NextUpBarWidest);
         _nextUpBar.AddButton(_btnReseed);
+
+        // Right-click: skip a driver in the next race, scored DNS (12 Nov
+        // 2026, setup plan step 8) - see RaceControlControl.SkipDns.
+        BuildNextUpSkipMenu();
     }
 
     /// <summary>
@@ -681,7 +685,14 @@ public sealed partial class RaceControlControl
                 ifItEndedNow: ChampionshipIfItEndedNow,
 
                 // "NEXT RACE IN 1:42" between races - see AutoStartBand.
-                nextRaceIn: () => AutoStartBand(DateTime.UtcNow));
+                nextRaceIn: () => AutoStartBand(DateTime.UtcNow),
+
+                // "PROVISIONAL UNTIL 20:42" on the finished board (12 Nov
+                // 2026, setup plan step 8) - MainForm works it out.
+                provisional: () => ProvisionalBoard?.Invoke(),
+                // "UP NEXT: Stock Q2 Heat 3 about 20:42 ..." between races
+                // (setup plan step 8) - see BigScreenUpNext.
+                upNext: BigScreenUpNext);
 
             // The window can be closed by whoever is in front of it - Escape,
             // the X, its own button - so the field must stop pointing at it

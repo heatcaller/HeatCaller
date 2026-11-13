@@ -235,6 +235,15 @@ public sealed class SessionRecord
     public List<SessionResultEntry> Results { get; set; } = new();
 
     /// <summary>
+    /// Drivers scored DNS - did not start - in this race (12 Nov 2026, setup
+    /// plan step 8): skipped from its grid by the desk, or by their own
+    /// approved "Skip me", by transponder. They have no row in Results (they
+    /// never ran, so nothing reads a lap of theirs); the result, the event
+    /// report and points qualifying say "DNS" for them. Null for none.
+    /// </summary>
+    public List<string>? DidNotStart { get; set; }
+
+    /// <summary>
     /// Whether this session was recorded by a version that counts rejected
     /// laps, laps led and grid positions.
     ///

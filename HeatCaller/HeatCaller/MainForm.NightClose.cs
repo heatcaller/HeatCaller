@@ -47,7 +47,10 @@ public partial class MainForm
     /// </summary>
     private IReadOnlyList<string>? OwingTonight(IReadOnlyList<SessionRecord> daySessions, RaceEvent? raceDay)
     {
-        if (raceDay is not { IsLegacy: false, EntryFee: > 0 } day)
+        // A night that charges through its classes only counts too (12 Nov 2026, setup plan step 8).
+        var classNamed = DeskMoney.ClassLookup(_raceClasses.All);
+
+        if (raceDay is not { IsLegacy: false } day || !DeskMoney.Charges(day, classNamed))
         {
             return null;
         }
@@ -61,7 +64,7 @@ public partial class MainForm
             .Select(t => _profiles.Get(t))
             .OfType<DriverProfile>()
             .Where(p => (_payments.Get(day.Id, p.Transponder)?.How ?? PaidHow.Owing) == PaidHow.Owing
-                        && CheckInControl.FeeFor(p, day) > 0)
+                        && CheckInControl.FeeFor(p, day, classNamed) > 0)
             .Select(p => string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName)
             .ToList();
     }
@@ -141,6 +144,9 @@ public partial class MainForm
             })
         {
             DayId = dayId,
+
+            // How the night went (12 Nov 2026, setup plan step 8).
+            PaceLine = () => program.ClosingPaceLine(dayId),
         };
 
         form.FormClosed += (_, _) => _closeNight = null;

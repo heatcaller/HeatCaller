@@ -144,6 +144,27 @@ public sealed class RaceClass
     /// </summary>
     public RaceFormat? QualifierFormat { get; set; }
 
+    /// <summary>
+    /// What this class costs a driver as their entry tonight, or null to
+    /// charge the race day's Entry fee (12 Nov 2026, setup plan step 8).
+    ///
+    /// WHY: a race day had one entry fee, and clubs don't - "Juniors $5, Mod
+    /// $20" is on half the price boards in the country. One fee for the night
+    /// meant the desk worked the difference out in its head and the report's
+    /// totals were wrong by it. Null rather than zero, because zero is a real
+    /// answer (a free beginners' class) and "not set" has to mean "the day's".
+    /// See DeskMoney.FeeFor for how several classes add up.
+    /// </summary>
+    public decimal? EntryFee { get; set; }
+
+    /// <summary>
+    /// What this class costs as a driver's second or later class tonight, or
+    /// null for the race day's Each extra class fee - capped at this class's
+    /// own EntryFee when it has one, so a $5 class is never $10 as an extra
+    /// (12 Nov 2026, setup plan step 8). See DeskMoney.FeeFor.
+    /// </summary>
+    public decimal? ExtraClassFee { get; set; }
+
     /// <summary>Maximum drivers per main. Qualifying is split into as many tiers as needed to seat everyone.</summary>
     public int MainSize { get; set; } = 8;
 

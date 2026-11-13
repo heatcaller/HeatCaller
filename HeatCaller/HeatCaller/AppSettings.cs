@@ -682,6 +682,41 @@ public sealed class AppSettings
     public bool AutoStartWaitForMarshals { get; set; }
 
     /// <summary>
+    /// Marshal swaps from phones need the desk's OK (12 Nov 2026, setup plan
+    /// step 8). A driver with marshal duty can ask another driver, from their
+    /// Me page, to cover their post; once the asked driver says yes, the swap
+    /// waits in Driver Requests for the desk to approve while this is on (the
+    /// default - a swap moves who stands on a corner, and the desk should
+    /// know), or is made by itself when it's off. A no never waits for anyone.
+    /// The tick is on the Driver Requests window.
+    /// </summary>
+    public bool MarshalSwapsNeedDesk { get; set; } = true;
+
+    /// <summary>
+    /// "A marshal who doesn't turn up:" (12 Nov 2026, setup plan step 8) -
+    /// the club's rule for a no-show logged from Race Control's Someone's
+    /// missing...: nothing, loses their best qualifying result tonight (the
+    /// default, the usual club rule), or a time penalty in their next race.
+    /// Set on Race Day > Setup; for every night. See MarshalRule.
+    /// </summary>
+    public MarshalNoShowRule MarshalNoShowRule { get; set; } = MarshalNoShowRule.LosesBestQualifier;
+
+    /// <summary>The time penalty, in seconds, under MarshalNoShowRule.TimePenalty. 10 unless changed.</summary>
+    public int MarshalNoShowPenaltySeconds { get; set; } = MarshalRule.DefaultPenaltySeconds;
+
+    /// <summary>
+    /// "Never start a race more than 2 minutes before the time drivers were
+    /// given" (12 Nov 2026, setup plan step 8), on the Auto start switch's
+    /// right-click menu. On: Auto start waits for each race's promised time
+    /// (the "about 20:42" drivers saw when the heats were posted) less two
+    /// minutes, however early the night is running, and the estimates after
+    /// it wait too. Start now still starts at once. On by default: drivers
+    /// work on their cars in the pits by the time they were given, and a heat
+    /// that goes early is a driver who misses it. See StartPromise.
+    /// </summary>
+    public bool AutoStartNeverEarly { get; set; } = true;
+
+    /// <summary>
     /// Close the night with a checklist to tick off (11 Nov 2026 - see
     /// CloseNightChecklist). On: when every race has run, Next Steps offers
     /// "Close the night...", a window listing what is left with a button to

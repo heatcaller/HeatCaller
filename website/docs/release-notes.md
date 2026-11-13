@@ -6,6 +6,45 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 - **The 24-hour tick on Themes now reaches every time (12 November).** With **Use 24-hour (military) time** ticked, the times in status lines ("Saved at"), the developer log, achievements, driver requests, the Finish Camera stamp, the Wi-Fi pages and your club's online pages are all 24-hour; with it off they are all AM/PM. The phone pages used each phone's own setting before, and they need the relay redeployed for this. See [Looks and the club logo](screens/looks-and-logo.md).
 
+- **Marshals, the countdown and entry money on phones (12 November).**
+    - **I'm at my post.** While a driver's marshal duty is the next race, their night page has **I'm at my post (Turn 3)**. Race Control's marshals banner says who's in ("2 of 3 in: Hugh Turn, Rhoda Rage; waiting for Axel Grease"), and when every marshal has tapped it the race stops waiting for them. **Marshals in place** still confirms them all. See [Marshals in place](race-day/program-and-mains.md#marshals-in-place).
+    - **Marshal swaps from phones.** **Ask someone to cover...** on a driver's marshal duty asks another driver, whose phone offers **Accept** and **Decline**. A yes waits in **Driver Requests** while **Marshal swaps from phones need the desk's OK** is ticked (the default), or is made by itself. See [Marshals from their phones](online/driver-requests.md#marshals-from-their-phones).
+    - **Marshal duty in about 5 minutes**, a new alert: "You're marshalling Q2 Heat 3 in about 5 minutes - Turn 3", once per race.
+    - **Next race in 1:42** on the Live and Schedule pages while Auto start counts down between races, with "on hold" and "starting soon", like the Big Screen.
+    - **Paid or owing.** With an entry fee on the race day, a driver's QR check-in card and their own night say **Entry: $15.00 - pay at the desk** or **Paid ✓**. Only their own: it's never on the staff PIN's full list. See [What the racer sees](online/check-in.md#what-the-racer-sees).
+
+  Update HeatCaller on the race PC. All of these **need the relay redeployed** (`fly deploy --ha=false`).
+
+- **The program and results, for the night as clubs run it (12 November).**
+    - **A protest window after every round.** Each qualifying round of a class, and each main, now has its own window: the announcer names the round ("That's Q1 done for Stock..."), the **Big Screen**'s finished board says "PROVISIONAL UNTIL 20:42", and a query asked inside a window goes to the top of **Driver Requests**, marked **In the protest window**. The finals still wait only for the last round's. See [The protest window](race-day/program-and-mains.md#the-protest-window).
+    - **Stop early, finals too.** With an out-by time, **We're Done After This Round...** also offers the finals 2 minutes shorter, or one main fewer per class, with the minutes each saves, applied when the finals are built. See [We're done after this round](race-day/program-and-mains.md#were-done-after-this-round).
+    - **Skip a driver, scored DNS.** Right-click the Next Up bar, or a driver on the board, for **Skip in this race (DNS)**. An approved **Car broken - skip me** from a phone does the same. Race History lists them under the race's finishers as DNS. **Undo** puts them back. See [Skip a driver in the next race](race-control/running-a-race.md#skip-a-driver-in-the-next-race-dns).
+    - **The marshal rule.** **A marshal who doesn't turn up:** on **Setup**: nothing, loses their best qualifying result (the default), or a time penalty in their next race. A no-show from **Someone's missing...** applies it, **Qualifying Standings** and the event report say why, and clicking the line again takes it off. See [Marshals in place](race-day/program-and-mains.md#marshals-in-place).
+    - **By race number.** **First round seeded:** has **By race number**, the BRCA way.
+    - **Races off between a driver's races:** on **Setup** (0 to 3, 1 as before) for the build and Auto start's rest. **Move Drivers Between Heats** and dragging the running order warn before saving a change that puts a driver closer: "Max Power would race in Q2 Heat 1 and Q2 Heat 2 back to back."
+
+  Update HeatCaller on the race PC. Nothing new on the relay.
+
+- **Night pace and start times (12 November).**
+    - **The race director's two measures.** The event report's **Night pace**, the **Next Steps** card at the end of the night and the **Close the Night** checklist now give **entries close to heats posted** and **doors open to first green**. Doors open is the first check-in of the night. See [Night pace](race-control/results-and-championships.md).
+    - **Why a gap was long.** Night pace now gives the worst green to green and what caused it. It names what the desk did in a gap ("held 3 min at the desk", "pushed back 2 min (+1 min)", "a planned break (10 min)") and a slow save. A long gap with nothing going on is "a break", and one well over the set gap is "idle director". The typical finish to result saved and call-up to green are measured too.
+    - **Night pace online.** Each race night on the club's **Results** page has its pace under the date: the numbers only, never the causes.
+    - **Never more than 2 minutes early.** Posting the heats keeps each race's "about 20:42" as the time drivers were given. On a night you don't post, the first race does it. Auto start never starts a race more than 2 minutes before that time ("NEXT RACE AT 20:40" on the Big Screen), and the phones show the given time while the night is early. **Start now** still starts at once. It's on by default; untick it on the **Auto start** switch's right-click menu. See [Auto start between races](race-control/running-a-race.md#auto-start-between-races).
+    - **Keys for Hold and Start now.** <kbd>H</kbd> holds and resumes Auto start, and <kbd>N</kbd> is **Start now**, on Race Control and in Race Mode. See [Keyboard shortcuts](reference/keyboard-shortcuts.md).
+    - **Estimated times on the Big Screen.** Between races the bottom bar says "UP NEXT: Stock Q2 Heat 3 about 20:42 • ..." for the next three races. See [Big Screen](screens/big-screen.md).
+
+  Update HeatCaller on the race PC. Night pace on the club's **Results** page **needs the relay redeployed** (`fly deploy --ha=false`); everything else works without it.
+
+- **One way to start a night, how a class finishes, and fees per class (12 November).**
+    - **Start Tonight.** Every button that starts a race day now opens the same **Start Tonight** window: **New Race Day** on **Setup** and on the **Calendar**, **Start Tonight...** on **Next Steps** and **Who's Racing**, the **like last time** and template cards, **Start Tonight From It**, and **Set Up Tonight** when no day is open. At the top it offers **Like last time (Tue 4 Nov)**, each night template, or **Something different...** (what kind of night, and which classes). See [Start a race day](race-day/events-and-entries.md#start-a-race-day).
+    - **No empty first race day.** A new install no longer opens a race day by itself. The first-run wizard offers **Set Up Tonight** when it finishes, which starts your first night. An empty day an older install made is left as it was.
+    - **How a race finishes.** Adding a class (**Add a Class**, Set Up Tonight's **Add Class**, the first-run wizard's **Classes** step) asks for its **Race length:** and **When time's up:**: **Time's up, then finish the lap** or **Stop when time's up**. The **Classes** page shows which. See [Class settings](race-day/drivers-and-classes.md#class-settings).
+    - **A fee per class.** A class can have its own entry fee and extra-class fee, under **Fees** in the class. A driver pays their dearest class's entry, and each other class as an extra. The **Paid** column, the closing list and the event report all use them. See [Fees per class](race-day/events-and-entries.md#fees-per-class).
+
+  Update HeatCaller on the race PC; nothing changes on the relay.
+
+- **IFMAR, ROAR, EFRA, NZRCA and Reedy Race presets (12 November).** **Sanctioning Preset** now offers IFMAR 1:10 electric off-road, 1/10 electric track and 1/12 electric track, ROAR 1/10 and 1/12 electric club racing, EFRA 1/10 and 1/12 electric, NZRCA EP off-road and on-road, and the Reedy Touring Car Race of Champions Open classes. Each one is taken from the body's own rulebook, names the edition and the rule numbers, and sets only what that rulebook states. The IFMAR section, EFRA, NZRCA and Reedy presets also set the class's A-main to 3 legs. See [Sanctioning presets](race-day/drivers-and-classes.md#sanctioning-presets). Update HeatCaller on the race PC; nothing changes on the relay.
+
 - **Loose ends from setting up the night (12 November).**
     - **Templates on nights.** **When...** beside **Templates:** on **Race Day → Setup** sets the nights a template is for, such as every Tuesday or a monthly date. On those nights **Next Steps** offers **Start tonight's Tuesday club night**.
     - **Racing's off, by push too.** **Call It Off...** can also send a push to every phone signed up for the club's alerts.

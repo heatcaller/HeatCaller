@@ -143,6 +143,9 @@ export const ME_CSS = `
 
 .me-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
 .me-tiles:empty { display: none; }
+/* Tonight's entry on the Check in card (12 Nov 2026, setup plan step 8). */
+.me-fee { font-weight: 700; color: var(--warn); margin: 0 0 10px; }
+.me-fee.ok { color: var(--good); }
 /* I'm coming to the next race night (12 Nov 2026, setup plan C1). */
 .me-coming:empty { display: none; }
 .me-coming { border: 1px solid var(--border); border-radius: 16px; padding: 12px 14px; background: var(--surface); margin: 0 0 14px; }
@@ -562,6 +565,12 @@ function meComingCard() {
 
 // ---- what the moment and the tiles read
 
+// "Entry: $15.00 - pay at the desk" or "Paid ✓", as the laptop worded it, or ''.
+function meEntryWords() {
+  const e = live && live.entry && typeof live.entry === 'object' ? live.entry : null;
+  return e && typeof e.words === 'string' ? e.words : '';
+}
+
 function meNext() {
   return live && live.next && typeof live.next === 'object' ? live.next : null;
 }
@@ -674,7 +683,9 @@ function meAct(icon, name, status, ok, says, onTap) {
 
 // The requests a desk decides. Packs, cars and setups the laptop files by
 // itself, so their answers stay in "Your requests to the desk".
-const ME_DESK_KINDS = ['late', 'skip', 'details', 'query'];
+// A marshal swap's answer too (12 Nov 2026, setup plan step 8): "You're
+// covering Turn 3" is news whether the desk OK'd it or the laptop did.
+const ME_DESK_KINDS = ['late', 'skip', 'details', 'query', 'cover'];
 // How long an answer stays on the card, from when the desk gave it.
 const ME_REPLY_FOR = 15 * 60 * 1000;
 // The answers put away with OK, this tab only - a phone handed to somebody
@@ -735,6 +746,11 @@ function meReplyWords(a) {
     if (no) return "HeatCaller couldn't put you down";
     return meComingSent.get(a.ref) === '' ? "You're off the list" : "You're down for the next race night";
   }
+  // Marshals from their phones (12 Nov 2026, setup plan step 8): the
+  // laptop's said carries the post and the race.
+  if (a.kind === 'post') return no ? "Race Control couldn't put you in" : "You're at your post";
+  if (a.kind === 'swap') return no ? "Couldn't ask them" : 'Asked - waiting for them';
+  if (a.kind === 'cover') return no ? 'No marshal swap' : 'Marshal swap done';
   if (a.kind === 'details') return no ? 'Your details stay as they were' : a.state === 'noted' ? 'The desk has your details' : 'Your details are changed';
   return no ? 'Your result stands' : a.state === 'noted' ? 'The desk has your query' : 'The desk agreed with your query';
 }
@@ -872,6 +888,10 @@ function meMoment() {
     big.appendChild(el('br'));
     big.appendChild(el('small', '', 'one tap tells the timing desk'));
     hero.appendChild(big);
+    // Tonight's entry, paid or owing (12 Nov 2026, setup plan step 8) -
+    // their own, from their own live entry.
+    const fee = meEntryWords();
+    if (fee) hero.appendChild(el('div', 'me-fee' + (live.entry.paid === true ? ' ok' : ''), fee));
     hero.appendChild(tapButton('Check in', 'go', tapCheckIn));
   } else if (n && n.now === true) {
     hero.appendChild(el('span', 'k', 'On track · ' + String(n.race || 'your race')));

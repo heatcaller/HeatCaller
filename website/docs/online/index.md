@@ -131,6 +131,7 @@ Since 6 November there's no **You** card (a remembered driver's best finish, sta
 
 - **The flag card**, at the top: race control's flag and the race's stage in large capitals ("Get ready" while staging, "Start sequence" during the countdown), "Lap 7 / 12" on the right, and a bar with a segment for each lap filling in the flag's color toward a checkered finish. A race of more than 40 laps gets one long bar instead, and a timed race a bar of the time gone. Under it: the laps to go ("Last lap", "Finishing"), the leader and what's next. Before the first car crosses the line it says "Cars to the start line", "Starting any moment" or "Waiting for the first crossing".
 - **Race over.** After the checkered flag the card says "Race over", with the laps, the winner and the board's last update, and the last race's board stays up until the next race fills it (twelve hours at most).
+- **Next race in 1:42.** While [Auto start](../race-control/running-a-race.md#auto-start-between-races) counts down between races, the flag card counts down to the next race a second at a time, like the Big Screen's band. It says "Next race on hold" while the start is held, and "Next race starting soon" once the count is up and the start is waiting (for the announcer, a car or the marshals). It needs the relay redeployed since 12 Nov 2026.
 - **The driver you follow** (see [Following a driver](#following-a-driver)) gets a line of their own on the flag card: their place, the gap to the car ahead and whether it's closing ("closing 0.12s a lap", over the last three laps against the same car), what they'd need a lap to catch it by the flag, and how far clear they are of the car behind.
 - **Track map**, under the board while a race is on and the day's track layout has a drawn plan: a numbered dot for each car where HeatCaller works out it is, moving between updates at the car's own pace. The followed driver's dot is ringed, and a car well overdue stops and is marked. Ghost cars aren't drawn, and no transponder number is sent.
 - **Position by lap** and **Lap times**: a line per driver in its own color, the same colors as the map. Position by lap has P1 at the top; Lap times has quicker laps higher, with each driver's best marked. Lap times is drawn from every lap on the board, so it's the whole race however late you opened the page.
@@ -141,6 +142,8 @@ Since 6 November there's no **You** card (a remembered driver's best finish, sta
 On the Synthwave look the chart lines are neon; every other look uses the standard twelve colors.
 
 ### On the Schedule page
+
+- **Next race in 1:42.** While Auto start counts down between races, the same countdown as the Live page sits at the top of the running order.
 
 - **Running late.** Once a race has started, a line at the top says "Running on time" or "Running 6 min behind" (or ahead), going by the latest race to start against the time typed for it on the timetable. Each started race shows when it started ("started 19:42, 6 min late"), and, while the night is behind, each race to come shows "about" its time plus the delay.
 - **When each race should start.** Every race still to come shows "about 20:42", HeatCaller's own estimate from its plan of the rest of the night (each race's length plus tonight's typical gap between races). It moves as the night runs, so a delay or a race that finishes early shows within a few seconds. It's preferred over the typed time plus the delay. With an older HeatCaller the races to come show the typed time plus the delay, as above.
@@ -304,7 +307,11 @@ Everything on this page except the night's facts and the report card needs the r
 The **Alerts** card on **Tonight** (headed **Right now** until 6 November, and **Setup** for part of that day) is there while HeatCaller is sending the driver's live details. That covers everyone in the grids of the next dozen races, their marshals, and anyone who has raced or checked in tonight. Ghost cars and rentals never get one. It refreshes every 20 seconds while the page is on screen.
 
 - **Turn on alerts**: see [Alerts](#alerts).
-- **Your marshal duty**, when they marshal one of the coming races, on one line: the race, their post and how far off it is, for example "Your marshal duty: Q2 Heat 2 (Stock Buggy) - Turn 3 · 1 race before it." or "... · That race is next - head to your post." It's the same duty the announcer calls; see [Corner marshals](../race-day/program-and-mains.md#corner-marshals).
+- **Your marshal duty**, when they marshal one of the coming races, on one line: the race, their post and how far off it is, for example "Your marshal duty: Q2 Heat 2 (Stock Buggy) - Turn 3 · 1 race before it." or "... · That race is next - head to your post." It's the same duty the announcer calls; see [Corner marshals](../race-day/program-and-mains.md#corner-marshals). While the club takes requests from phones:
+    - **I'm at my post (Turn 3)**, while that race is the next to start. A tap tells Race Control they're in, and the line then says "You're at Turn 3 - Race Control knows". See [Marshals in place](../race-day/program-and-mains.md#marshals-in-place).
+    - **Ask someone to cover...**: pick a driver who's here tonight and isn't racing or marshalling that race, and tap **Ask them**. Under the duty it then says how the ask is getting on: "Asked Hugh T. to cover Turn 3 in Q2 Heat 3 - waiting for them", "... said yes ... - waiting for the desk", "Hugh T. is covering Turn 3 in Q2 Heat 3" or "Hugh T. can't cover ... - you are still on it". Only first names and an initial are shown.
+- **Max P. asks you to cover Turn 3 in Q2 Heat 3**, when another driver has asked them, with **Accept** and **Decline**. A yes is the swap, made by itself or once the desk approves it.
+- **Entry: $15.00 - pay at the desk** or **Paid ✓**, when tonight's race day has an entry fee: their own, as the desk has it on **Who's Racing**. It's on the **Check in** card on **Me** too. Nobody else's money is ever sent.
 - **Your transponder**, with when the timing line last heard it and a **Check my transponder** button (see below).
 - **Your requests to the desk (2, 1 answered)**, once they've sent one: tap it to see how each is getting on (see [What the driver sees](driver-requests.md#what-the-driver-sees)). It stays open across the card's refreshes once tapped.
 
@@ -329,6 +336,7 @@ From then on the phone shows its own notifications, page open or not:
 | "Your race is next" | Their race has just become the next one | The race and their grid slot |
 | "Your race is staged - to the driver stand" | Their race has just been staged | The race and their grid slot |
 | "Marshal duty next" | The race they marshal is next | The race and their post |
+| "Marshal duty in about 5 minutes" | The race they marshal has just come inside 5 minutes of its estimated start. Once per race, not when "Marshal duty next" goes at the same moment, and not once they've said they're at their post | "You're marshalling Q2 Heat 3 in about 5 minutes - Turn 3" |
 | "Your result is in" | A race of theirs has just been filed, marked "(demo)" or "(practice)" for a demo race or practice run | The race and their place |
 
 Tapping a notification opens **Me**. A newer notification of the same kind replaces the older one, and one that can't reach a switched-off phone within ten minutes is dropped. Nothing goes off when alerts are first turned on for a race that was already next, so a demo race is a good way to try them.

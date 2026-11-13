@@ -839,8 +839,32 @@ public sealed partial class RaceProgramControl : UserControl
             ? ProtestWindow.ClosesAtUtc(DayRoundsForClass(className), _sessionHistory.Get, _settings.ProtestMinutesFor(day), justFiled)
             : null;
 
+    /// <summary>
+    /// Tonight's "Races off between a driver's races:" (12 Nov 2026, setup
+    /// plan step 8) - RaceEvent.RacesOffBetween, or the one race off with no
+    /// race day open.
+    /// </summary>
+    public int RestGapTonight => Math.Clamp(ActiveDay?.RacesOffBetween ?? RestOrder.DefaultGap, 0, RestOrder.MostGap);
+
     /// <summary>The protest window in force tonight, in minutes - see AppSettings.ProtestMinutesFor.</summary>
     public int ProtestMinutesTonight => _settings.ProtestMinutesFor(ActiveDay);
+
+    /// <summary>
+    /// The window a round of tonight opened, for one of its classes (12 Nov
+    /// 2026, setup plan step 8: a window after every qualifying round and
+    /// every main) - null with no race day open, no window, or the round's
+    /// other heats still to run. See ProtestWindow.ForRound.
+    /// </summary>
+    public ProtestWindow.RoundWindow? RoundProtestWindow(RoundDefinition round, string className, SessionRecord? justFiled = null) =>
+        ActiveDay is { } day
+            ? ProtestWindow.ForRound(round, DayRoundsForClass(className), _sessionHistory.Get, _settings.ProtestMinutesFor(day), justFiled)
+            : null;
+
+    /// <summary>The class's latest window tonight (setup plan step 8), qualifiers or mains only when <paramref name="kind"/> says - see ProtestWindow.Latest.</summary>
+    public ProtestWindow.RoundWindow? LatestProtestWindow(string className, RoundKind? kind = null) =>
+        ActiveDay is { } day
+            ? ProtestWindow.Latest(DayRoundsForClass(className), _sessionHistory.Get, _settings.ProtestMinutesFor(day), kind)
+            : null;
 
     /// <summary>
     /// Which classes are racing today.
@@ -1098,6 +1122,25 @@ public sealed partial class RaceProgramControl : UserControl
             CloseNightChecklist.TicksFor(_settings.CloseNightTicks, raceDay.Id));
     }
 
+    /// <summary>
+    /// How the night went, for the closing checklist window's line (12 Nov
+    /// 2026, setup plan step 8): the night pace and the race director's two
+    /// measures - the same words as the Next Steps card. Empty when there is
+    /// nothing to say.
+    /// </summary>
+    internal string ClosingPaceLine(string? dayId = null)
+    {
+        if (DayFor(dayId) is not { } raceDay)
+        {
+            return string.Empty;
+        }
+
+        var ids = raceDay.RoundIds.ToHashSet(StringComparer.Ordinal);
+        var day = _rounds.All.Where(r => ids.Contains(r.Id)).ToList();
+
+        return ProgramNextStep.PaceNote(day, DaySessions(day), raceDay).Trim();
+    }
+
     /// <summary>Ticks a line of tonight's closing checklist off by hand, or back on, and says so on the card.</summary>
     internal void TickClosingItem(string key, bool done, string? dayId = null)
     {
@@ -1150,7 +1193,12 @@ public sealed partial class RaceProgramControl : UserControl
         return round => about(round.Id);
     }
 
-    private NightPlan.Projection? Plan(IReadOnlyList<RoundDefinition> day)
+    /// <param name="keepPromises">
+    /// Hold each race to its promised time, as Auto start will (12 Nov 2026,
+    /// setup plan step 8 - StartPromise). False when the promises are being
+    /// made afresh, so old ones don't hold the new ones back.
+    /// </param>
+    private NightPlan.Projection? Plan(IReadOnlyList<RoundDefinition> day, bool keepPromises = true)
     {
         if (ActiveDay is not { IsLegacy: false } raceDay || day.Count == 0)
         {
@@ -1190,7 +1238,16 @@ public sealed partial class RaceProgramControl : UserControl
                     }
 
                     var mains = (int)Math.Ceiling(drivers / (double)Math.Max(2, HeatSize()));
-                    var length = NightPlan.LengthOf(ClassNamed(group.Key)?.Format ?? appDefault);
+                    var format = ClassNamed(group.Key)?.Format ?? appDefault;
+
+                    // Tonight's finals cut (12 Nov 2026, setup plan step 8),
+                    // chosen in "We're Done After This Round...".
+                    if (raceDay.FinalsOneMainFewer && mains > 1)
+                    {
+                        mains--;
+                    }
+
+                    var length = NightPlan.LengthOf(NightPlan.Shortened(format, raceDay.FinalsMinutesShorter) ?? format);
                     unbuilt.Add(new NightPlan.UnbuiltMains(group.Key, mains, length));
                 }
             }
@@ -1210,7 +1267,8 @@ public sealed partial class RaceProgramControl : UserControl
                 raceDay.OutByLocalTime,
                 DateTime.UtcNow,
                 raceDay.FirstRaceLocalTime,
-                raceDay.Breaks);
+                raceDay.Breaks,
+                keepPromises && _settings.AutoStartNeverEarly && _settings.AutoStartBetweenRaces);
         }
         catch (Exception ex)
         {
@@ -1943,7 +2001,7 @@ public sealed partial class RaceProgramControl : UserControl
             // day and there isn't one - so landing somebody on The Day and
             // leaving them to find "New Race Day" is a step that exists only
             // because the code was easier to write that way. The same event
-            // the "Start a Race Day" card uses, so both open the same dialog.
+            // the "Start Tonight..." card uses, so both open the same window.
             StartRaceDayRequested?.Invoke();
             return;
         }
@@ -2199,9 +2257,11 @@ public sealed partial class RaceProgramControl : UserControl
             _events?.RemoveRound(gone.Id);
         }
 
-        // The drivers of the race that runs last before each new round, for
-        // the rest-friendly order below.
-        IReadOnlyCollection<string>? lastHeat = null;
+        // The drivers of the races that run last before each new round, for
+        // the rest-friendly order below - as many as tonight's "Races off
+        // between a driver's races:" (12 Nov 2026, setup plan step 8).
+        var recentHeats = new List<IReadOnlyCollection<string>>();
+        var restGap = RestGapTonight;
         var backToBacksAvoided = 0;
         var heatsShared = 0;
 
@@ -2293,15 +2353,15 @@ public sealed partial class RaceProgramControl : UserControl
             heatsShared += beforeSharing - roundHeats.Count;
 
             var rosters = roundHeats.Select(r => (IReadOnlyCollection<string>)r.AssignedTransponders).ToList();
-            var order = RestOrder.Arrange(rosters, lastHeat);
-            backToBacksAvoided += RestOrder.BackToBacks(rosters, lastHeat)
-                                  - RestOrder.BackToBacks(order.Select(i => rosters[i]).ToList(), lastHeat);
+            var order = RestOrder.Arrange(rosters, recentHeats, restGap);
+            backToBacksAvoided += RestOrder.Clashes(rosters, recentHeats, restGap)
+                                  - RestOrder.Clashes(order.Select(i => rosters[i]).ToList(), recentHeats, restGap);
 
             foreach (var index in order)
             {
                 _rounds.Add(roundHeats[index]);
                 created.Add(roundHeats[index]);
-                lastHeat = roundHeats[index].AssignedTransponders;
+                recentHeats.Add(roundHeats[index].AssignedTransponders);
             }
         }
 
@@ -2309,7 +2369,9 @@ public sealed partial class RaceProgramControl : UserControl
 
         var done = $"Built {Plural.Of(created.Count, RoundWord)} across {Plural.Of(classes.Count, "class", "classes")}."
                    + (backToBacksAvoided > 0
-                       ? $" Ordered so {Plural.Of(backToBacksAvoided, "driver")} in two classes {(backToBacksAvoided == 1 ? "doesn't" : "don't")} race back to back."
+                       ? restGap <= 1
+                           ? $" Ordered so {Plural.Of(backToBacksAvoided, "driver")} in two classes {(backToBacksAvoided == 1 ? "doesn't" : "don't")} race back to back."
+                           : $" Ordered so {Plural.Of(backToBacksAvoided, "driver")} in two classes {(backToBacksAvoided == 1 ? "gets" : "get")} {Plural.Of(restGap, "race")} off between their races."
                        : string.Empty)
                    + (heatsShared > 0
                        ? $" Small classes share heats, saving {Plural.Of(heatsShared, RoundWord)}."
@@ -2581,7 +2643,10 @@ public sealed partial class RaceProgramControl : UserControl
 
         // String hashes change from run to run in .NET, so a rebuild would
         // shuffle the field again; this one doesn't.
-        return FirstRound.For(alphabetical, mode, pace, sizes, FirstRound.StableSeed((ActiveDay?.Id ?? string.Empty) + "|" + className));
+        // By race number (12 Nov 2026, setup plan step 8): each driver's own
+        // number off their profile.
+        return FirstRound.For(alphabetical, mode, pace, sizes, FirstRound.StableSeed((ActiveDay?.Id ?? string.Empty) + "|" + className),
+            transponder => _profiles.Get(transponder)?.RaceNumber);
     }
 
     internal static List<List<string>> DealQualifyingHeats(IReadOnlyList<string> roster, int heatSize, int round)
@@ -2813,7 +2878,7 @@ public sealed partial class RaceProgramControl : UserControl
 
         var mainSize = Math.Max(2, raceClass?.MainSize ?? 8);
         var bumpUp = Math.Max(0, raceClass?.BumpUpCount ?? 0);
-        var plan = MainsBuilder.PlanSeeding(ranked, mainSize);
+        var plan = FinalsPlanTonight(MainsBuilder.PlanSeeding(ranked, mainSize));
 
         // Today's mains only. A main from an earlier race day is finished
         // business: it must neither block tonight's seeding as "already
@@ -2868,8 +2933,45 @@ public sealed partial class RaceProgramControl : UserControl
             + $"Put {Plural.Of(ranked.Count, "qualified driver")} in \"{className}\" into {Plural.Of(plan.TierCount, "main")}, fastest first?"
             + $"\r\n\r\n{summary}{bumpNote}"
             + "\r\n\r\nLower mains are scheduled first so bump-ups can happen before the tier above runs."
+            + FinalsCutNote()
             + (existing.Count > 0 ? $"\r\n\r\n{Plural.Of(existing.Count, "existing unrun main")} will be replaced." : string.Empty));
     }
+
+    /// <summary>
+    /// The seeding with tonight's finals cut (12 Nov 2026, setup plan step 8):
+    /// one main fewer when "We're Done After This Round..." chose it.
+    /// </summary>
+    private MainsBuilder.SeedPlan FinalsPlanTonight(MainsBuilder.SeedPlan plan) =>
+        ActiveDay is { FinalsOneMainFewer: true } ? NightPlan.OneMainFewer(plan) : plan;
+
+    /// <summary>The finals question's line about tonight's cut, or nothing without one.</summary>
+    private string FinalsCutNote()
+    {
+        if (ActiveDay is not { } day || (day.FinalsMinutesShorter <= 0 && !day.FinalsOneMainFewer))
+        {
+            return string.Empty;
+        }
+
+        var parts = new List<string>();
+
+        if (day.FinalsOneMainFewer)
+        {
+            parts.Add("one main fewer (the lowest main isn't run)");
+        }
+
+        if (day.FinalsMinutesShorter > 0)
+        {
+            parts.Add($"each main {Plural.Of(day.FinalsMinutesShorter, "minute")} shorter");
+        }
+
+        return $"\r\n\r\nTonight's finals are cut to finish in time: {string.Join(" and ", parts)} - chosen in We're Done After This Round.";
+    }
+
+    /// <summary>A built main's format with tonight's "minutes shorter" (setup plan step 8), or null to keep the class's.</summary>
+    private RaceFormat? ShortenedMainFormat(RaceClass? raceClass) =>
+        ActiveDay is { FinalsMinutesShorter: > 0 } day
+            ? NightPlan.Shortened(raceClass?.Format ?? RaceFormat.FromSettings(_settings), day.FinalsMinutesShorter)
+            : null;
 
     /// <summary>
     /// The order the finals are seeded from: the qualifying ranking, kept to
@@ -2917,7 +3019,7 @@ public sealed partial class RaceProgramControl : UserControl
 
         var mainSize = Math.Max(2, raceClass?.MainSize ?? 8);
         var bumpUp = Math.Max(0, raceClass?.BumpUpCount ?? 0);
-        var plan = MainsBuilder.PlanSeeding(ranked, mainSize);
+        var plan = FinalsPlanTonight(MainsBuilder.PlanSeeding(ranked, mainSize));
 
         var existing = DayRoundsForClass(className).Where(r => r.Kind == RoundKind.Main).ToList();
 
@@ -2954,8 +3056,18 @@ public sealed partial class RaceProgramControl : UserControl
         // A double or triple A-main (11 Nov 2026, Phase 5.3) is built as its legs.
         created.AddRange(MainsBuilder.BuildRounds(className, plan, DayTrack(), bumpUp, raceClass?.AMainLegs ?? 1));
 
+        // Tonight's "finals N minutes shorter" (12 Nov 2026, setup plan
+        // step 8): each main carries the shortened format as its own, so Race
+        // Control runs it that long and the plan counts it that long.
+        var shortened = ShortenedMainFormat(raceClass);
+
         foreach (var round in created)
         {
+            if (shortened is not null && round.FormatOverride is null)
+            {
+                round.FormatOverride = shortened.Clone();
+            }
+
             _rounds.Add(round);
         }
 
@@ -3563,6 +3675,13 @@ public sealed partial class RaceProgramControl : UserControl
     {
         var anchor = AnchorFor(ShownRoundIds(), insertBefore);
 
+        // A driver closer than tonight's races off asks first (12 Nov 2026,
+        // setup plan step 8) - see RaceProgramControl.RestGap.
+        if (!MoveKeepsRest(ids, anchor))
+        {
+            return;
+        }
+
         MoveWithUndo(ids, anchor);
 
         RefreshGrid();
@@ -3834,7 +3953,11 @@ public sealed partial class RaceProgramControl : UserControl
             // pace - see HeatSeeding.
             // Null - no buttons - when nobody in the class has a lap on record.
             pace: HeatSeeding.BestLaps(className, _sessionHistory.All, _rounds.Get,
-                DateTime.UtcNow - HeatSeeding.RecentForm, _profiles.PrimaryForAlternate) is { Count: > 0 } recent ? recent : null);
+                DateTime.UtcNow - HeatSeeding.RecentForm, _profiles.PrimaryForAlternate) is { Count: > 0 } recent ? recent : null,
+
+            // Closer than tonight's races off between a driver's races?
+            // Asked at Save (12 Nov 2026, setup plan step 8).
+            restCheck: RosterRestWarning);
 
         if (form.ShowDialog(this) != DialogResult.OK || form.Changes.Count == 0)
         {
@@ -4444,7 +4567,8 @@ public sealed partial class RaceProgramControl : UserControl
     /// <paramref name="undoPrefix"/> in front. Recorded session history is
     /// never touched: this deletes the programme's slots, not results.
     /// </summary>
-    public ProgramAnswer DeleteRounds(IReadOnlyList<RoundDefinition> removed, string undoPrefix)
+    /// <param name="alsoUndo">More for the same undo to put back (setup plan step 8: a finals cut chosen with it).</param>
+    public ProgramAnswer DeleteRounds(IReadOnlyList<RoundDefinition> removed, string undoPrefix, Action? alsoUndo = null)
     {
         if (removed.Count == 0)
         {
@@ -4467,6 +4591,7 @@ public sealed partial class RaceProgramControl : UserControl
             () =>
             {
                 RestoreRounds(removed, owners);
+                alsoUndo?.Invoke();
                 RefreshAll();
             });
 
@@ -4529,7 +4654,13 @@ public sealed partial class RaceProgramControl : UserControl
     /// hasn't run, as one undo, and has the change announced. No question
     /// asked; the caller has asked (PlanFinishAfterThisRound).
     /// </summary>
-    public ProgramAnswer FinishAfterThisRound(string undoPrefix)
+    /// <param name="minutesShorter">
+    /// 12 Nov 2026, setup plan step 8: also run tonight's finals this many
+    /// minutes shorter - stored on the race day (RaceEvent.FinalsMinutesShorter)
+    /// and applied when the finals are built. 0 for no change.
+    /// </param>
+    /// <param name="oneMainFewer">Also run one main fewer per class (RaceEvent.FinalsOneMainFewer).</param>
+    public ProgramAnswer FinishAfterThisRound(string undoPrefix, int minutesShorter = 0, bool oneMainFewer = false)
     {
         var check = PlanFinishAfterThisRound();
 
@@ -4538,18 +4669,53 @@ public sealed partial class RaceProgramControl : UserControl
             return check;
         }
 
+        // The finals cut is kept on the day, and the same undo that puts the
+        // rounds back takes it off again.
+        var day = ActiveDay;
+        var cutBefore = (day?.FinalsMinutesShorter ?? 0, day?.FinalsOneMainFewer ?? false);
+        var cutting = day is not null && !DayIsClubNight && (minutesShorter > 0 || oneMainFewer);
+        var dayId = day?.Id;
+
+        void PutCutBack()
+        {
+            if (cutting && dayId is not null && _events?.Get(dayId) is { } current)
+            {
+                current.FinalsMinutesShorter = cutBefore.Item1;
+                current.FinalsOneMainFewer = cutBefore.Item2;
+                _events.Upsert(current);
+            }
+        }
+
         var stop = NightPlan.AfterThisRound(DayRounds(), RoundOnTrackId?.Invoke())!;
-        var answer = DeleteRounds(stop.Dropped, undoPrefix + $"Finish after {stop.Current.Name}: ");
+        var answer = DeleteRounds(stop.Dropped, undoPrefix + $"Finish after {stop.Current.Name}: ", alsoUndo: PutCutBack);
 
         if (answer.Ok)
         {
-            StatusMessage?.Invoke($"[program] Finishing after {stop.Current.Name}: dropped {Plural.Of(stop.Dropped.Count, "race")} still to run.");
+            var cutWords = string.Empty;
+
+            if (cutting)
+            {
+                day!.FinalsMinutesShorter = minutesShorter > 0 ? minutesShorter : day.FinalsMinutesShorter;
+                day.FinalsOneMainFewer = oneMainFewer || day.FinalsOneMainFewer;
+                _events!.Upsert(day);
+
+                cutWords = string.Join(" and ", new[]
+                {
+                    minutesShorter > 0 ? $"the finals {Plural.Of(minutesShorter, "minute")} shorter" : null,
+                    oneMainFewer ? "one main fewer per class" : null,
+                }.OfType<string>());
+                cutWords = $" Tonight's finals: {cutWords}.";
+            }
+
+            StatusMessage?.Invoke($"[program] Finishing after {stop.Current.Name}: dropped {Plural.Of(stop.Dropped.Count, "race")} still to run.{cutWords}");
             NightCutShort?.Invoke(NightPlan.Announcement(stop, DayIsClubNight));
             answer = answer with
             {
                 Title = "We're done after this round",
-                Message = $"Finishing after {stop.Current.Name}. Dropped {Plural.Of(stop.Dropped.Count, "race")} still to run.",
+                Message = $"Finishing after {stop.Current.Name}. Dropped {Plural.Of(stop.Dropped.Count, "race")} still to run.{cutWords}",
             };
+
+            RefreshAll();
         }
 
         return answer;
@@ -4565,13 +4731,54 @@ public sealed partial class RaceProgramControl : UserControl
             return;
         }
 
-        if (AppDialog.Show(this, plan.Message, plan.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Question,
-                MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+        // With an out-by time, the finals can give time back too (12 Nov
+        // 2026, setup plan step 8): shorter, or one main fewer per class,
+        // each with what it saves - see NightPlan.FinalsCuts.
+        var cuts = DayIsClubNight ? null : NightPlan.FinalsCuts(Plan());
+
+        if (cuts is null || (!cuts.CanShorten && !cuts.CanDropOne))
+        {
+            if (AppDialog.Show(this, plan.Message, plan.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Question,
+                    MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+            {
+                return;
+            }
+
+            FinishAfterThisRound(string.Empty);
+            return;
+        }
+
+        var labels = new List<string> { "Just finish after this round" };
+        var choices = new List<(int Minutes, bool Fewer)> { (0, false) };
+        var lines = new List<string>();
+
+        if (cuts.CanShorten)
+        {
+            labels.Add($"...and finals {cuts.MinutesShorter} min shorter");
+            choices.Add((cuts.MinutesShorter, false));
+            lines.Add($"   and run the finals {Plural.Of(cuts.MinutesShorter, "minute")} shorter - saves {NightPlan.Minutes(cuts.ShorterSaves)}");
+        }
+
+        if (cuts.CanDropOne)
+        {
+            labels.Add("...and one main fewer");
+            choices.Add((0, true));
+            lines.Add($"   and one main fewer per class ({string.Join(", ", cuts.FewerClasses)}) - saves {NightPlan.Minutes(cuts.FewerSaves)}");
+        }
+
+        labels.Add("Cancel");
+
+        var pick = AppDialog.Choose(this,
+            plan.Message + "\r\n\r\nThe finals can give time back too:\r\n" + string.Join("\r\n", lines)
+            + "\r\n\r\nApplied when the finals are built. One main fewer leaves out each class's lowest main.",
+            plan.Title, MessageBoxIcon.Question, labels.Count - 1, labels.ToArray());
+
+        if (pick < 0 || pick >= choices.Count)
         {
             return;
         }
 
-        FinishAfterThisRound(string.Empty);
+        FinishAfterThisRound(string.Empty, choices[pick].Minutes, choices[pick].Fewer);
     }
 
     // ------------------------------------------------------------------

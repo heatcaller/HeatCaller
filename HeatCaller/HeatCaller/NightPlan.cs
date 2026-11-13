@@ -80,6 +80,16 @@ public static class NightPlan
         /// <summary>When the round should start, or null when it is not still to run.</summary>
         public DateTime? StartOf(string roundId) =>
             Slots.FirstOrDefault(s => s.Round is not null && string.Equals(s.Round.Id, roundId, StringComparison.Ordinal))?.StartUtc;
+
+        /// <summary>
+        /// The start to show drivers (12 Nov 2026, setup plan step 8): the
+        /// estimate, or the time they were given when the night is running
+        /// early - see StartPromise.Shown. Null when it is not still to run.
+        /// </summary>
+        public DateTime? ShownStartOf(string roundId) =>
+            Slots.FirstOrDefault(s => s.Round is not null && string.Equals(s.Round.Id, roundId, StringComparison.Ordinal)) is { } slot
+                ? StartPromise.Shown(slot.StartUtc, slot.Round!.PromisedStartUtc)
+                : null;
     }
 
     /// <summary>
@@ -137,7 +147,8 @@ public static class NightPlan
         TimeSpan? outByLocal,
         DateTime nowUtc,
         TimeSpan? firstRaceLocal = null,
-        IReadOnlyList<PlannedBreak>? breaks = null)
+        IReadOnlyList<PlannedBreak>? breaks = null,
+        bool keepPromises = false)
     {
         var gap = tonightsGap is { } measured && measured > TimeSpan.Zero ? measured : DefaultGap;
         var slots = new List<Slot>();
@@ -207,6 +218,14 @@ public static class NightPlan
             if (!ReferenceEquals(round, previous))
             {
                 cursor += BreakBefore(round);
+            }
+
+            // Never more than 2 minutes early (12 Nov 2026, setup plan step
+            // 8): Auto start waits for a race's promised time, so the races
+            // after it wait too, and the finish says so.
+            if (keepPromises && StartPromise.NotBefore(round, neverEarly: true) is { } notBefore && cursor < notBefore)
+            {
+                cursor = notBefore;
             }
 
             var length = lengthOf(round);
@@ -438,6 +457,103 @@ public static class NightPlan
             : new StopEarly(new RoundName(number, RoundNameOf(number, qualifiers.Where(q => RoundNumber(q.RoundLabel) == number))), dropped);
     }
 
+    /// <summary>How much shorter "run the finals shorter" makes each main.</summary>
+    public const int FinalsShorterBy = 2;
+
+    /// <summary>
+    /// What "We're done after this round" can also offer for the finals
+    /// (12 Nov 2026, setup plan step 8), with the minutes each saves.
+    /// </summary>
+    /// <param name="MinutesShorter">How much shorter each main would be - <see cref="FinalsShorterBy"/>.</param>
+    /// <param name="ShorterSaves">What running every main that much shorter saves; zero when no main is long enough to lose it.</param>
+    /// <param name="FewerSaves">What one main fewer in each class with more than one saves; zero when none has.</param>
+    /// <param name="FewerClasses">The classes that would lose a main.</param>
+    public sealed record FinalsCut(int MinutesShorter, TimeSpan ShorterSaves, TimeSpan FewerSaves, IReadOnlyList<string> FewerClasses)
+    {
+        public bool CanShorten => ShorterSaves > TimeSpan.Zero;
+
+        public bool CanDropOne => FewerSaves > TimeSpan.Zero;
+    }
+
+    /// <summary>
+    /// The finals cuts "We're done after this round" can offer (setup plan
+    /// step 8): only when the night has an out-by time, and only the ones that
+    /// save something. Read off the same projection the Next Steps card uses,
+    /// so the minutes agree with "To finish in time: ...". Null with no out-by
+    /// time or no finals still to run.
+    ///
+    /// WHY: dropping a qualifying round is the usual answer to a curfew, but
+    /// it isn't always enough - and the finals are where the time is. The
+    /// director deciding at 21:15 to finish early wants the other two levers
+    /// in the same breath, with what each buys, not a hunt through the
+    /// class settings afterwards.
+    /// </summary>
+    public static FinalsCut? FinalsCuts(Projection? plan)
+    {
+        if (plan is not { OutByUtc: not null })
+        {
+            return null;
+        }
+
+        var mains = plan.Slots.Where(s => s.Kind == RoundKind.Main && (s.Round is null || !s.Round.IsRecorded)).ToList();
+
+        if (mains.Count == 0)
+        {
+            return null;
+        }
+
+        var shorter = TimeSpan.FromMinutes(FinalsShorterBy);
+        var shortenable = mains.Count(s => s.Length - shorter >= ShortestToShorten);
+
+        var fewer = mains
+            .GroupBy(s => s.ClassName, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .Select(g => (Class: g.Key, Saves: g.First().Length + plan.Gap))
+            .ToList();
+
+        return new FinalsCut(
+            FinalsShorterBy,
+            TimeSpan.FromTicks(shorter.Ticks * shortenable),
+            TimeSpan.FromTicks(fewer.Sum(f => f.Saves.Ticks)),
+            fewer.Select(f => f.Class).ToList());
+    }
+
+    /// <summary>
+    /// A main's format with tonight's cut taken off (setup plan step 8): the
+    /// time limit <paramref name="minutesShorter"/> minutes shorter, never
+    /// below <see cref="ShortestToShorten"/>. Null when nothing changes - a
+    /// lap race, no cut, or a main already as short as it goes - so the main
+    /// keeps the class's format as usual.
+    /// </summary>
+    public static RaceFormat? Shortened(RaceFormat format, int minutesShorter)
+    {
+        if (minutesShorter <= 0 || format.TimeLimitMinutes <= 0)
+        {
+            return null;
+        }
+
+        var limit = Math.Max((int)ShortestToShorten.TotalMinutes, format.TimeLimitMinutes - minutesShorter);
+
+        if (limit >= format.TimeLimitMinutes)
+        {
+            return null;
+        }
+
+        var shortened = format.Clone();
+        shortened.TimeLimitMinutes = limit;
+        return shortened;
+    }
+
+    /// <summary>
+    /// The seeding with one main fewer (setup plan step 8): the lowest main of
+    /// a class with more than one is left out - its drivers' night ends with
+    /// qualifying. Unchanged with one main.
+    /// </summary>
+    public static MainsBuilder.SeedPlan OneMainFewer(MainsBuilder.SeedPlan plan) =>
+        plan.TierCount <= 1
+            ? plan
+            : new MainsBuilder.SeedPlan(plan.TierCount - 1, plan.MainSize, plan.Tiers.Take(plan.TierCount - 1).ToList());
+
     /// <summary>
     /// What the announcer says once the later rounds are dropped: "Change of
     /// plan, everyone: qualifying finishes after Q2, and the finals are
@@ -464,8 +580,29 @@ public static class NightPlan
     /// Each round's "about 20:42" from a plan, by round id - null for a round
     /// already run, or with no plan (no race day open, nothing left to run).
     /// </summary>
+    /// <remarks>
+    /// The promised time when the night is running early (12 Nov 2026, setup
+    /// plan step 8 - see StartPromise): a heat that will wait for 20:42 is
+    /// never shown as about 20:35.
+    /// </remarks>
     public static Func<string, string?> AboutOf(Projection? plan) =>
-        roundId => plan?.StartOf(roundId) is { } start ? About(start) : null;
+        roundId => plan?.ShownStartOf(roundId) is { } start ? About(start) : null;
+
+    /// <summary>
+    /// The Big Screen's line of races to come, with their estimated starts
+    /// (12 Nov 2026, setup plan step 8, build plan 2.2): "UP NEXT:  Stock Q2
+    /// Heat 3 about 20:42  •  Mod Q2 Heat 1 about 20:49". A race with no
+    /// estimate is listed without one. Empty with nothing to come.
+    /// </summary>
+    public static string UpNext(IEnumerable<(string ClassName, string Label, string? About)> races)
+    {
+        var parts = races
+            .Select(r => string.Join(" ", new[] { r.ClassName, r.Label, r.About ?? string.Empty }.Where(s => !string.IsNullOrWhiteSpace(s))))
+            .Where(s => s.Length > 0)
+            .ToList();
+
+        return parts.Count == 0 ? string.Empty : "UP NEXT:  " + string.Join("  •  ", parts);
+    }
 
     /// <summary>A length in whole minutes, as a saving or an overrun is said: "40 min", "1 h 05 min".</summary>
     public static string Minutes(TimeSpan length)

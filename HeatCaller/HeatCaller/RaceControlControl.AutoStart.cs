@@ -61,6 +61,40 @@ public sealed partial class RaceControlControl
     public event Action? HandDeskRequested;
 
     /// <summary>
+    /// Something the desk did in the gap before a race (12 Nov 2026, setup
+    /// plan step 8, build plan 0.2): Hold and how long, +1 min, Start now, a
+    /// driver's five minutes, a wait for the promised time. The race's
+    /// round id. MainForm keeps it on the round (RoundDefinition.GapNotes)
+    /// for NightPace, so the report can say "held 3 min at the desk".
+    /// </summary>
+    public event Action<string, GapNote>? GapNoted;
+
+    /// <summary>A race was called up to the grid (12 Nov 2026, setup plan step 8): its round id, for RoundDefinition.CalledAtUtc.</summary>
+    public event Action<string>? RaceCalledUp;
+
+    /// <summary>When the hold now on began, and for which race - so its length is logged when it ends, however it ends.</summary>
+    private (DateTime SinceUtc, string RoundId)? _holdLogged;
+
+    /// <summary>Logs a note against a race's gap.</summary>
+    private void NoteGap(string? roundId, GapNoteKind kind, DateTime nowUtc, TimeSpan length)
+    {
+        if (!string.IsNullOrEmpty(roundId))
+        {
+            GapNoted?.Invoke(roundId, new GapNote { Kind = kind, AtUtc = nowUtc, Seconds = (int)Math.Round(Math.Max(0, length.TotalSeconds)) });
+        }
+    }
+
+    /// <summary>A hold has ended - resumed, started through, or the gap closed: its length goes in the gap's log.</summary>
+    private void NoteHoldEnded(DateTime nowUtc)
+    {
+        if (_holdLogged is { } hold)
+        {
+            _holdLogged = null;
+            NoteGap(hold.RoundId, GapNoteKind.Held, nowUtc, nowUtc - hold.SinceUtc);
+        }
+    }
+
+    /// <summary>
     /// Asks before Redo Remaining Heats changes posted heats (setup plan D2).
     /// Set by MainForm, from the program page; true to go ahead. Null always
     /// goes ahead.
@@ -76,6 +110,9 @@ public sealed partial class RaceControlControl
     /// <summary>Wires the switch, the Hold button and the banner. Called from BuildLayout.</summary>
     private void BuildAutoStart()
     {
+        // The set gap, for night pace's "idle director" (setup plan step 8).
+        NightPace.ClubGap = AutoStartGap;
+
         _swAutoStart.On = AutoStartOn;
         _swAutoStart.OnChanged += (_, _) => SetAutoStart(_swAutoStart.On, forTonightOnly: true);
 
@@ -97,6 +134,7 @@ public sealed partial class RaceControlControl
                 {
                     _settings.AutoStartGapSeconds = chosen;
                     _settings.Save();
+                    NightPace.ClubGap = AutoStartGap;
                     StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] The gap between races is {AutoStartClock.Clock(TimeSpan.FromSeconds(chosen))} from now on.");
                 };
                 menu.Items.Add(item);
@@ -107,6 +145,12 @@ public sealed partial class RaceControlControl
             menu.Items.Add(new ToolStripMenuItem("Wait for the marshals before starting", null, (_, _) => ToggleWaitForMarshals())
             {
                 Checked = _settings.AutoStartWaitForMarshals,
+            });
+
+            // Setup plan step 8: a race waits for the time drivers were given.
+            menu.Items.Add(new ToolStripMenuItem("Never start a race more than 2 minutes before the time drivers were given", null, (_, _) => ToggleNeverEarly())
+            {
+                Checked = _settings.AutoStartNeverEarly,
             });
 
             // Setup plan D8: a deputy runs the starts from their phone.
@@ -217,22 +261,64 @@ public sealed partial class RaceControlControl
         if (_autoStart.IsHeld)
         {
             _autoStart.Resume(now);
+            NoteHoldEnded(now);
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] Resumed - the next race starts in {AutoStartClock.Clock(_autoStart.Remaining(now, Gap.PushedBackMinutes) ?? TimeSpan.Zero)}.");
         }
         else if (_autoStart.IsOpen)
         {
             _autoStart.Hold(now);
+            _holdLogged = _autoStart.RoundId is { } held ? (now, held) : null;
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] Start held - press Resume to carry on.");
         }
 
         UpdateAutoHoldButton();
     }
 
-    /// <summary>Start now, from the Hold button's menu.</summary>
+    /// <summary>Start now, from the Hold button's menu and its key.</summary>
     private void AutoStartNow()
     {
+        var now = DateTime.UtcNow;
+        NoteHoldEnded(now);
+        NoteGap(_autoStart.RoundId, GapNoteKind.StartedNow, now, TimeSpan.Zero);
         _autoStart.StartNow();
         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] Starting now.");
+    }
+
+    /// <summary>
+    /// The Hold key (H, 12 Nov 2026, setup plan step 8): Hold or Resume, as
+    /// the Hold button - or, with nothing counting, says why in the log.
+    /// </summary>
+    internal void TriggerAutoStartHold()
+    {
+        if (!AutoStartOn || !_autoStart.IsOpen)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] H (Hold): Auto start isn't counting down to a race right now.");
+            return;
+        }
+
+        ToggleAutoStartHold();
+    }
+
+    /// <summary>The Start now key (N, 12 Nov 2026, setup plan step 8), as the Hold button's Start now.</summary>
+    internal void TriggerAutoStartNow()
+    {
+        if (!AutoStartOn || !_autoStart.IsOpen)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] N (Start now): Auto start isn't counting down to a race right now - F1 starts one by hand.");
+            return;
+        }
+
+        AutoStartNow();
+    }
+
+    /// <summary>The switch menu's "Never start a race more than 2 minutes before the time drivers were given".</summary>
+    private void ToggleNeverEarly()
+    {
+        _settings.AutoStartNeverEarly = !_settings.AutoStartNeverEarly;
+        _settings.Save();
+        StatusMessage?.Invoke(_settings.AutoStartNeverEarly
+            ? $"{AppTime.LogStampNow()}  [auto] Auto start never starts a race more than {NightPlan.Minutes(StartPromise.Early)} before the time drivers were given."
+            : $"{AppTime.LogStampNow()}  [auto] Auto start starts each race when the gap is up, even ahead of the time drivers were given.");
     }
 
     /// <summary>The banner's Start without them.</summary>
@@ -241,6 +327,7 @@ public sealed partial class RaceControlControl
         var who = AutoStartClock.Names(_autoStart.NotSeen);
         _autoStart.ApproveMissingCars();
         _autoStart.Resume(DateTime.UtcNow);
+        NoteHoldEnded(DateTime.UtcNow);
         ShowCarsBanner(false);
         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] Starting without {who} - approved at the desk.");
     }
@@ -292,7 +379,7 @@ public sealed partial class RaceControlControl
         }
 
         var lastRound = _activeRound?.Invoke();
-        var justRan = lastRound?.AssignedTransponders;
+        var justRan = RecentlyRan(next, lastRound);
         var resting = AutoStartClock.BackToBack(justRan, next.AssignedTransponders).Select(SpokenNameOf).ToList();
 
         // A break planned between the race just run and this one (12 Nov
@@ -321,9 +408,38 @@ public sealed partial class RaceControlControl
         // waits for them, and only for a race with somebody on a post.
         var waitForMarshals = _settings.AutoStartWaitForMarshals && facts.Marshals.Count > 0;
 
+        // Marshals in place from their own phones (12 Nov 2026, setup plan
+        // step 8): all of them in opens the gate by itself, and the banner
+        // says who's in and who isn't. Worked out only when the club waits.
+        IReadOnlyList<bool>? arrived = null;
+        IReadOnlyList<(string Name, string Post)> shown = facts.Marshals;
+
+        if (waitForMarshals)
+        {
+            var posts = MarshalPostsFor(next);
+            arrived = MarshalsFromPhones(next, posts);
+            shown = posts.Select(p => (p.Name, p.Post)).ToList();
+        }
+
+        // Never more than 2 minutes early (12 Nov 2026, setup plan step 8):
+        // the time drivers were given holds the start back however early the
+        // night is running. Set every second, so a promise made mid-gap, or
+        // the setting changed, counts at once.
+        var hadNotBefore = _autoStart.NotBeforeUtc;
+        _autoStart.NotBefore(StartPromise.NotBefore(next, _settings.AutoStartNeverEarly));
+
+        if (_autoStart.NotBeforeUtc is { } notBefore && hadNotBefore != notBefore && _autoStart.WaitForTime(now, Gap.PushedBackMinutes) > TimeSpan.Zero)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] The night is running early: {next.RoundLabel} waits for its time "
+                                  + $"and starts at {AppTime.TimeOfDay(notBefore.ToLocalTime())}, {NightPlan.Minutes(StartPromise.Early)} before the time drivers were given. Start now starts it sooner.");
+        }
+
+        var waitedForTime = _autoStart.WaitForTime(now, Gap.PushedBackMinutes);
+
         _autoStartState = _autoStart.Step(now, floorBusy, NotSeenIn(next, now), Gap.PushedBackMinutes, waitForMarshals);
 
-        ShowMarshalsAsk(next, facts.Marshals, waitForMarshals, now);
+        ShowMarshalsAsk(next, shown, waitForMarshals, now, arrived);
+        UpdatePhoneCountdown(now);
 
         switch (_autoStartState)
         {
@@ -342,6 +458,15 @@ public sealed partial class RaceControlControl
 
             case AutoStartState.Start:
                 ShowCarsBanner(false);
+                NoteHoldEnded(now);
+
+                // How long past the gap the race waited for its time, for
+                // the night pace's causes - not after Start now, which didn't.
+                if (waitedForTime > TimeSpan.Zero)
+                {
+                    NoteGap(next.Id, GapNoteKind.WaitedForPromise, now, waitedForTime);
+                }
+
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] Starting {next.RoundLabel} - the gap is up.");
                 StartNext();
                 break;
@@ -357,12 +482,17 @@ public sealed partial class RaceControlControl
     /// <summary>The gap is over (a race went out, or Auto start can't run): the clock and its banner go.</summary>
     private void CloseAutoStart()
     {
+        // A hold the race went out through (Start Next by hand) still goes
+        // in the gap's log.
+        NoteHoldEnded(DateTime.UtcNow);
+
         if (_autoStart.IsOpen)
         {
             _autoStart.Close();
         }
 
         _autoStartState = AutoStartState.Off;
+        _phoneCountdown = null;
         _carsCalledFor = null;
         ShowCarsBanner(false);
         HideMarshalsAsk();
@@ -406,14 +536,46 @@ public sealed partial class RaceControlControl
     /// <summary>What the Next Up bar adds after the next race: "starts in 1:42". Empty with Auto start not counting.</summary>
     private string AutoStartWords(DateTime now) =>
         AutoStartOn && _autoStart.IsOpen
-            ? AutoStartClock.Words(_autoStartState, _autoStart.Remaining(now, Gap.PushedBackMinutes), _autoStart.NotSeen, _autoStart.Resting)
+            ? AutoStartClock.Words(_autoStartState, _autoStart.Remaining(now, Gap.PushedBackMinutes), _autoStart.NotSeen, _autoStart.Resting,
+                _autoStart.StartsAtUtc(now, Gap.PushedBackMinutes))
             : string.Empty;
 
-    /// <summary>What the Big Screen's countdown band shows between races: "NEXT RACE IN 1:42". Empty with Auto start not counting.</summary>
+    /// <summary>What the Big Screen's countdown band shows between races: "NEXT RACE IN 1:42", "NEXT RACE AT 20:40". Empty with Auto start not counting.</summary>
     private string AutoStartBand(DateTime now) =>
         AutoStartOn && _autoStart.IsOpen
-            ? AutoStartClock.Band(_autoStartState, _autoStart.Remaining(now, Gap.PushedBackMinutes))
+            ? AutoStartClock.Band(_autoStartState, _autoStart.Remaining(now, Gap.PushedBackMinutes), _autoStart.StartsAtUtc(now, Gap.PushedBackMinutes))
             : string.Empty;
+
+    /// <summary>
+    /// Each round's estimated start, "about 20:42" (NightPlan.AboutOf, the
+    /// phones' own - promised times included). Set by MainForm; null leaves
+    /// the times off the Big Screen's up-next line.
+    /// </summary>
+    internal Func<string, string?>? EstimatedStart { get; set; }
+
+    /// <summary>How many races to come the Big Screen lists between races.</summary>
+    private const int UpNextOnBigScreen = 3;
+
+    /// <summary>
+    /// The Big Screen's line of races to come between races (12 Nov 2026,
+    /// setup plan step 8, build plan 2.2): "UP NEXT:  Stock Q2 Heat 3 about
+    /// 20:42  •  ..." - the same estimates the phones show. Empty while a
+    /// race is on, in practice, or with nothing to come.
+    /// </summary>
+    private string BigScreenUpNext()
+    {
+        if (_race.State is not (RaceState.Idle or RaceState.Finished) || _race.IsPracticeMode)
+        {
+            return string.Empty;
+        }
+
+        var about = EstimatedStart;
+
+        return NightPlan.UpNext(OrderedProgram()
+            .Where(r => !r.IsRecorded && r.Kind != RoundKind.Practice)
+            .Take(UpNextOnBigScreen)
+            .Select(r => (r.ClassName, r.RoundLabel, about?.Invoke(r.Id))));
+    }
 
     // --- From the phone remote (11 Nov 2026) ---
 
@@ -468,6 +630,7 @@ public sealed partial class RaceControlControl
         var now = DateTime.UtcNow;
         Gap.NextRace(next.Id);
         Gap.PushBack(now, LateMinutes);
+        NoteGap(next.Id, GapNoteKind.DriverAskedForTime, now, TimeSpan.FromMinutes(LateMinutes));
         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] {next.RoundLabel} goes back {LateMinutes} minutes for {name} (asked from their phone).");
         return $"{next.RoundLabel} goes back {LateMinutes} minutes for you.";
     }
@@ -478,29 +641,13 @@ public sealed partial class RaceControlControl
     /// </summary>
     internal string SkipDriverInNextRace(string transponder, string name)
     {
-        var race = OrderedProgram()
-            .FirstOrDefault(r => !r.IsRecorded
-                                 && !string.Equals(r.Id, _activeRound?.Invoke()?.Id, StringComparison.Ordinal)
-                                 && r.AssignedTransponders.Contains(transponder, StringComparer.OrdinalIgnoreCase));
-
-        if (race is null)
+        // 12 Nov 2026, setup plan step 8: scored DNS for the race, not just
+        // taken off its grid - see SkipDns and RaceControlControl.SkipDns.
+        if (SkipDriverDns(transponder, name, "car broken (asked from their phone)") is not { } race)
         {
             return $"{name} isn't in a race still to run.";
         }
 
-        var before = race.AssignedTransponders.ToList();
-        race.AssignedTransponders = before
-            .Where(t => !string.Equals(t, transponder, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        _rounds?.Update(race);
-
-        _undo.Capture($"Skip {name} in {race.RoundLabel}", () =>
-        {
-            race.AssignedTransponders = before;
-            _rounds?.Update(race);
-        });
-
-        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] {name} is out of {race.RoundLabel} - car broken (asked from their phone).");
-        return $"You're out of {race.RoundLabel}. Tell the desk when your car is fixed.";
+        return $"You're out of {race.RoundLabel} - it's a DNS. Tell the desk when your car is fixed.";
     }
 }

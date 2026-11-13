@@ -12,7 +12,7 @@ This page is for a club that runs its nights in LiveTime (LiveTime Scoring Engin
 
 | In LiveTime | In HeatCaller | Where to read more |
 |---|---|---|
-| **Events**, an **Event** | A race day. Start one with **Start a Race Day** on **Race Day → Next Steps** or **Who's Racing**. A club night is a race day too. | [Events, entries and check-in](../race-day/events-and-entries.md) |
+| **Events**, an **Event** | A race day. Start one with **Start Tonight...** on **Race Day → Next Steps** or **Who's Racing**. A club night is a race day too. | [Events, entries and check-in](../race-day/events-and-entries.md) |
 | The Event's **Classes** tab | The **Classes** page, and **Classes racing:** on **Race Day → Setup** for which of them run tonight. | [Classes](../race-day/drivers-and-classes.md#classes) |
 | **Registrations** | **Race Day → Who's Racing**: who's here tonight, checked in, with their tech and what they've paid. | [Race Day → Who's Racing](../race-day/events-and-entries.md#race-day-whos-racing) |
 | **Imports** (RCSignup, CSV) | **Import Entries** on **Who's Racing**. See [Bring your entries across](#bring-your-entries-across) below. | [Import entries](../race-day/events-and-entries.md#import-entries) |

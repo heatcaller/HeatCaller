@@ -147,7 +147,7 @@ internal static class ProgramCaptions
     public const string LateArrivals = "Add them to the heats...";
 
     /// <summary>Starting tonight from the last race day (12 Nov 2026). Never on the Next Up bar.</summary>
-    public const string StartLikeLast = "Start tonight like last time";
+    public const string StartLikeLast = "Start tonight like last time...";
 
     /// <summary>The finished program's button when the club closes the night with the checklist (11 Nov 2026). Never on the Next Up bar.</summary>
     public const string CloseNight = "Close the night...";
@@ -228,7 +228,7 @@ internal static class ProgramNextStep
                 ProgramStage.NoEvent,
                 "No race day is open.",
                 "Check-ins, the heats and the timetable are all filed against a race day. Start one and this page builds itself from it.",
-                "Start a Race Day");
+                "Start Tonight...");
         }
 
         // A club night has no finals, so three of the eight states below
@@ -252,7 +252,7 @@ internal static class ProgramNextStep
                 $"\"{raceEvent.DisplayName}\" is closed.",
                 "Nothing new is added to a closed day - its results and standings keep reading exactly as they do now. "
                 + "Start a day for tonight, or reopen this one on the Setup tab.",
-                "Start a Race Day");
+                "Start Tonight...");
         }
 
         // 2. Nothing is racing today. Which of the four reasons that can be
@@ -434,7 +434,7 @@ internal static class ProgramNextStep
             (dayRounds.Count == 1
                 ? "The one round on today's program has been run and recorded."
                 : $"All {dayRounds.Count} rounds on today's program have been run and recorded.")
-            + PaceNote(dayRounds, history),
+            + PaceNote(dayRounds, history, raceEvent),
 
             // There is no TQ on a club night, so the same list is just
             // tonight's order. Same form either way, different word for it.
@@ -446,7 +446,18 @@ internal static class ProgramNextStep
     /// " Night pace: green to green 6:10 · ..." for the finished day's
     /// races, or empty with fewer than two of them. See NightPace.
     /// </summary>
-    private static string PaceNote(IReadOnlyList<RoundDefinition> dayRounds, SessionHistoryStore history)
+    internal static string PaceNote(IReadOnlyList<RoundDefinition> dayRounds, SessionHistoryStore history, RaceEvent? raceEvent = null) =>
+        PaceNote(dayRounds, history.All, raceEvent);
+
+    /// <summary>
+    /// The pace note from the sessions themselves - also the closing
+    /// checklist's line (12 Nov 2026, setup plan step 8), which has the
+    /// day's sessions to hand. With the race director's two measures
+    /// (NightMeasures) after the pace: "Night pace: Green to green 6:10 ·
+    /// ... Entries close to heats posted 4:10 · doors open to first green
+    /// 38:00."
+    /// </summary>
+    internal static string PaceNote(IReadOnlyList<RoundDefinition> dayRounds, IEnumerable<SessionRecord> history, RaceEvent? raceEvent)
     {
         var roundIds = dayRounds.Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
         var linked = dayRounds
@@ -454,12 +465,19 @@ internal static class ProgramNextStep
             .Select(r => r.LinkedSessionId!)
             .ToHashSet(StringComparer.Ordinal);
 
-        var sessions = history.All
-            .Where(s => (s.RoundId is not null && roundIds.Contains(s.RoundId)) || linked.Contains(s.Id));
+        var sessions = history
+            .Where(s => (s.RoundId is not null && roundIds.Contains(s.RoundId)) || linked.Contains(s.Id))
+            .ToList();
 
-        return NightPace.For(sessions, dayRounds, roundIds) is { } pace
-            ? $" Night pace: {NightPace.Line(pace)}."
+        var pace = NightPace.For(sessions, dayRounds, roundIds, breaks: raceEvent?.Breaks) is { } report
+            ? $" Night pace: {NightPace.Line(report)}."
             : string.Empty;
+
+        var measures = NightMeasures.Line(NightMeasures.For(raceEvent, sessions, dayRounds));
+
+        return measures.Length == 0
+            ? pace
+            : $"{pace} {char.ToUpperInvariant(measures[0])}{measures[1..]}.";
     }
 
     /// <summary>

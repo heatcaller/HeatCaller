@@ -66,6 +66,7 @@ public sealed class RestOrderTests
 
         var source = File.ReadAllText(Path.Combine(dir!.FullName, "HeatCaller", "HeatCaller", "RaceProgramControl.cs"));
 
-        Assert.Contains("var order = RestOrder.Arrange(rosters, lastHeat);", source);
+        // 12 Nov 2026, setup plan step 8: with tonight's gap, not always one.
+        Assert.Contains("var order = RestOrder.Arrange(rosters, recentHeats, restGap);", source);
     }
 }

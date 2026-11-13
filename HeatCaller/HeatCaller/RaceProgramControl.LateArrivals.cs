@@ -249,9 +249,9 @@ public sealed partial class RaceProgramControl
             return step with
             {
                 Stage = ProgramStage.StartFromTemplate,
-                Detail = $"Tonight is \"{tonight.Name}\": {NightTemplates.Describe(tonight)}. One press starts tonight's race day with all of it. "
-                         + "To change something first, use Set Up Tonight on Setup (Shift+S).",
-                ActionCaption = $"Start tonight's {tonight.Name}",
+                Detail = $"Tonight is \"{tonight.Name}\": {NightTemplates.Describe(tonight)}. Opens Start Tonight on it - press Start Tonight to start the night with all of it, "
+                         + "or pick something else there.",
+                ActionCaption = $"Start tonight's {tonight.Name}...",
                 ClassName = tonight.Name,
             };
         }
@@ -269,7 +269,7 @@ public sealed partial class RaceProgramControl
         {
             Stage = ProgramStage.StartLikeLast,
             Detail = $"Start tonight's {kind} like \"{last.DisplayName}\": {string.Join(", ", last.ClassNames)}{at}{first}, "
-                     + "with its heat sizes, fees, breaks and the rest. To change something first, use Set Up Tonight on Setup (Shift+S).",
+                     + "with its heat sizes, fees, breaks and the rest. Opens Start Tonight on it, where something else can be picked instead.",
             ActionCaption = ProgramCaptions.StartLikeLast,
         };
     }

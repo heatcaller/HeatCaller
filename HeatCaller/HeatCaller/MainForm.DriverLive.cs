@@ -325,7 +325,27 @@ public partial class MainForm
             // can read their laps out.
             RowTagOf = _webServer.RelayRowTag,
             TargetOf = DriverTargets.TargetMs,
+
+            // 12 Nov 2026, setup plan step 8: marshals in place and swaps
+            // from their phones, and their own entry money.
+            MarshalIn = _raceControlControl.MarshalIsIn,
+            CoverOffers = _driverRequests is null
+                ? Array.Empty<MarshalSwaps.Offer>()
+                : MarshalSwaps.Offers(_driverRequests.All, nowUtc),
+            MainOfBadge = badge => _relayBadgeIds.TryGetValue(badge, out var transponder) ? transponder : null,
+            MoneyOf = DriverLiveMoneyOf,
         });
+    }
+
+    /// <summary>A driver's own entry fee tonight, paid or owing, for their phone - null with no race day open or no fee (setup plan step 8).</summary>
+    private DeskMoney.PhoneMoney? DriverLiveMoneyOf(string main)
+    {
+        if (_raceEvents.Active is not { IsLegacy: false, EntryFee: > 0 } day || _profiles.Get(main) is not { } profile)
+        {
+            return null;
+        }
+
+        return DeskMoney.ForPhone(CheckInControl.FeeFor(profile, day), _payments.Get(day.Id, profile.Transponder));
     }
 
     /// <summary>The transponders behind every badge with a request to hear back about - see DriverRequestStore.BadgesWithAnswers.</summary>

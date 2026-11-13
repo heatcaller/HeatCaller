@@ -125,6 +125,32 @@ public sealed class RaceEvent
     public FirstRoundSeeding FirstRoundSeeding { get; set; } = FirstRoundSeeding.Pace;
 
     /// <summary>
+    /// "Races off between a driver's races:" (12 Nov 2026, setup plan step
+    /// 8): how many races must run between two of one driver's races - 1 by
+    /// default, the one race off the build always gave. 0 lets a driver race
+    /// back to back; 2 or 3 gives a club with lots of two-class drivers time
+    /// to swap cars, batteries and transponders. Read by the build's rest
+    /// order (RestOrder.Arrange), Auto start's rest for a driver who raced
+    /// too recently, and the warnings when heats are changed by hand.
+    /// </summary>
+    public int RacesOffBetween { get; set; } = RestOrder.DefaultGap;
+
+    /// <summary>
+    /// Tonight's finals run this many minutes shorter than their format
+    /// (12 Nov 2026, setup plan step 8) - chosen in "We're Done After This
+    /// Round..." to bring the night back inside its out-by time. Applied
+    /// when the finals are built. 0, the usual case, is the format as set.
+    /// </summary>
+    public int FinalsMinutesShorter { get; set; }
+
+    /// <summary>
+    /// Tonight's finals run one main fewer per class (12 Nov 2026, setup
+    /// plan step 8): the lowest main of a class with more than one is not
+    /// built. Chosen in "We're Done After This Round..."; false is as usual.
+    /// </summary>
+    public bool FinalsOneMainFewer { get; set; }
+
+    /// <summary>
     /// Minutes a class's qualifying results stay provisional after its last
     /// qualifier is recorded, for queries and protests before the finals are
     /// built (11 Nov 2026, Phase 3). 0 for none. See ProtestWindow.
@@ -194,6 +220,19 @@ public sealed class RaceEvent
     /// between heats asks first. See HeatPosting.
     /// </summary>
     public DateTime? HeatsPostedUtc { get; set; }
+
+    /// <summary>
+    /// Doors open (12 Nov 2026, setup plan step 8): the first check-in of the
+    /// night, stamped once when the first driver is checked in at the desk,
+    /// on a phone or by any other route (CheckInStore.CheckedIn). Null until
+    /// then. The race director's second measure, "doors open to first
+    /// green", is from here to the first race's green - see NightMeasures.
+    ///
+    /// WHY THE FIRST CHECK-IN AND NOT A BUTTON: nobody presses "doors open",
+    /// but every night starts with somebody checking in, and the queue at
+    /// the desk is exactly what the measure is for.
+    /// </summary>
+    public DateTime? DoorsOpenUtc { get; set; }
 
     /// <summary>
     /// Breaks planned into the night (12 Nov 2026, setup plan D5): "water the

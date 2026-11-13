@@ -1626,6 +1626,10 @@ public sealed partial class RaceControlControl
         var pack = new ToolStripMenuItem("Pack");
         pack.DropDownItems.Add(new ToolStripMenuItem("..."));
 
+        // Skip in the next race, scored DNS (12 Nov 2026, setup plan step
+        // 8) - shown as the menu opens for a driver in the next race.
+        var skipDns = BuildSkipDnsItem();
+
         var copyId = new ToolStripMenuItem("Copy transponder ID");
         copyId.Click += (_, _) =>
         {
@@ -1649,6 +1653,7 @@ public sealed partial class RaceControlControl
             coach,
             releaseDriver,
             releaseAll,
+            skipDns,
             new ToolStripSeparator(),
             addLap,
             removeLap,
@@ -1719,6 +1724,8 @@ public sealed partial class RaceControlControl
             releaseDriver.Text = $"Release {name} now";
 
             releaseAll.Visible = canRelease;
+
+            FillSkipDnsItem(skipDns, transponder, name);
 
             scoreByHand.Visible = _race.State == RaceState.Racing && !_race.IsPracticeMode;
             scoreByHand.Text = HandScoringOn ? "Open the hand-scoring grid..." : "Score the race by hand (decoder down)...";

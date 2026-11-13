@@ -519,6 +519,32 @@ internal sealed class DriverRequestStore
         }
     }
 
+    /// <summary>
+    /// Writes down what the laptop worked out while filing a request, beside
+    /// what the phone sent (12 Nov 2026, setup plan step 8): a marshal swap
+    /// keeps who was asked and which post, since the phone only sent a key.
+    /// Kept on this laptop only. False for a request it doesn't have.
+    /// </summary>
+    internal bool Note(string id, IReadOnlyDictionary<string, string> texts)
+    {
+        lock (_gate)
+        {
+            if (_file.Requests.FirstOrDefault(r => r.Id == id) is not { } request)
+            {
+                return false;
+            }
+
+            foreach (var (key, value) in texts)
+            {
+                request.Texts[key] = value;
+            }
+
+            Changed();
+            Save();
+            return true;
+        }
+    }
+
     /// <summary>Back to waiting - for an undo of the desk's answer here. The phone is shown "waiting" again on its next poll.</summary>
     internal bool Reopen(string id)
     {
@@ -725,6 +751,13 @@ internal sealed class DriverRequestStore
         // 12 Nov 2026, "I'm coming" (setup plan C1).
         "day" => 10,
         "classes" => 200,
+
+        // 12 Nov 2026, marshals from their phones (setup plan step 8). The
+        // round is a Guid "N"; "to" a MarshalSwaps key; "offer" a relay id.
+        "round" => 32 + 8,
+        "to" => MarshalSwaps.KeyLength,
+        "offer" => 24 + 8,
+        "answer" => 3,
 
         // 5 Nov 2026, the garage from the phone.
         "op" => 16,
@@ -1087,6 +1120,13 @@ internal sealed partial class DriverRequestDesk
                     : $"Coming on {request.Text("day")}: {request.Text("classes").Replace(",", ", ")}");
                 break;
 
+            // Marshals from their phones (12 Nov 2026, setup plan step 8).
+            case DriverAsk.Post:
+            case DriverAsk.Swap:
+            case DriverAsk.Cover:
+                lines.Add(MarshalWords(request));
+                break;
+
             default:
                 lines.Add(WriteWords(request));
                 break;
@@ -1101,6 +1141,12 @@ internal sealed partial class DriverRequestDesk
     public string NoteFor(DriverRequest request)
     {
         var notes = new List<string>();
+
+        // First, so it reads before anything else (setup plan step 8).
+        if (InProtestWindow(request))
+        {
+            notes.Add(InProtestWindowWords);
+        }
 
         if (DriverOf(request) is null)
         {
@@ -1155,6 +1201,9 @@ internal sealed partial class DriverRequestDesk
         DriverAsk.Late => "More time",
         DriverAsk.Skip => "Skip my race",
         DriverAsk.Coming => "Coming next race night",
+        DriverAsk.Post => "At my marshal post",
+        DriverAsk.Swap => "Cover my post?",
+        DriverAsk.Cover => "Marshal swap",
         _ => kind,
     };
 
@@ -1538,6 +1587,36 @@ internal sealed partial class DriverRequestDesk
     /// <summary>The saved race a query is about, or null.</summary>
     public SessionRecord? RaceOf(DriverRequest request) =>
         request.Text("race") is { Length: > 0 } id ? _history.Get(id) : null;
+
+    /// <summary>
+    /// Whether a query about this race, asked then, came in while the race's
+    /// protest window was open (12 Nov 2026, setup plan step 8). Set by
+    /// MainForm; null leaves every query where it falls.
+    /// </summary>
+    public Func<SessionRecord, DateTime, bool>? QueryInWindow { get; set; }
+
+    /// <summary>The marker Driver Requests shows on such a query, first in its notes.</summary>
+    public const string InProtestWindowWords = "In the protest window";
+
+    /// <summary>
+    /// A query asked inside its race's protest window: it goes to the top of
+    /// the waiting list, marked, because its answer can still change a
+    /// result before it is final - and the finals are seeded from it.
+    /// </summary>
+    public bool InProtestWindow(DriverRequest request)
+    {
+        try
+        {
+            return request.Kind == DriverAsk.Query
+                   && QueryInWindow is { } inWindow
+                   && RaceOf(request) is { } race
+                   && inWindow(race, request.AskedUtc);
+        }
+        catch (Exception)
+        {
+            return false; // the order of a list is never worth a broken page
+        }
+    }
 
     /// <summary>Whether the driver has a row in the race their query is about.</summary>
     public bool InThatRace(DriverRequest request)

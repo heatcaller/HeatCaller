@@ -178,6 +178,13 @@ public sealed partial class RaceControlControl
         {
             Gap.CallUpQueued(DateTime.UtcNow);
             dequeued = Gap.CallUpDequeued;
+
+            // When the race was called (12 Nov 2026, setup plan step 8):
+            // NightPace cuts the gap at it.
+            if (_gapFacts?.Facts is { HasNext: true, NextId: { } calledId })
+            {
+                RaceCalledUp?.Invoke(calledId);
+            }
         }
 
         _announcer.SpeakReminder(text, showOnScreens: true, onAir: onAir, dequeued: dequeued);
@@ -353,11 +360,20 @@ public sealed partial class RaceControlControl
     /// Marshals dialog and the grid call work it out (MarshalAssigner), so
     /// all three name the same people. Empty when nobody is posted.
     /// </summary>
-    private IReadOnlyList<(string Name, string Post)> MarshalsFor(RoundDefinition round)
+    private IReadOnlyList<(string Name, string Post)> MarshalsFor(RoundDefinition round) =>
+        MarshalPostsFor(round).Select(p => (p.Name, p.Post)).ToList();
+
+    /// <summary>
+    /// <see cref="MarshalsFor"/> with each marshal's main transponder and the
+    /// transponder they were put down on (12 Nov 2026, setup plan step 8): the
+    /// main matches a marshal saying from their phone they're at their post;
+    /// the transponder finds their results for the club's marshal rule.
+    /// </summary>
+    private IReadOnlyList<(string Main, string Name, string Post, string Transponder)> MarshalPostsFor(RoundDefinition round)
     {
         if (_rounds is null)
         {
-            return Array.Empty<(string, string)>();
+            return Array.Empty<(string, string, string, string)>();
         }
 
         try
@@ -369,19 +385,19 @@ public sealed partial class RaceControlControl
 
             if (assignment is null)
             {
-                return Array.Empty<(string, string)>();
+                return Array.Empty<(string, string, string, string)>();
             }
 
             return assignment.Posts
                 .Where(p => p.IsFilled)
-                .Select(p => (SpokenNameOf(p.Transponder!), p.Name ?? string.Empty))
+                .Select(p => (MainOf(p.Transponder!), SpokenNameOf(p.Transponder!), p.Name ?? string.Empty, p.Transponder!))
                 .ToList();
         }
         catch (Exception ex)
         {
             // A call-up without marshals beats no call-up.
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [gap] Couldn't work out the marshals for {round.RoundLabel}: {ex.Message}");
-            return Array.Empty<(string, string)>();
+            return Array.Empty<(string, string, string, string)>();
         }
     }
 
@@ -496,6 +512,12 @@ public sealed partial class RaceControlControl
         Gap.NextRace(facts.NextId);
         Gap.PushBack(now);
         _gapFacts = null;
+
+        // +1 min goes in the gap's log (setup plan step 8).
+        if (facts.HasNext)
+        {
+            NoteGap(facts.NextId, GapNoteKind.PushedBack, now, TimeSpan.FromMinutes(1));
+        }
 
         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [gap] {(facts.HasNext ? facts.Round : "The next race")} pushed back a minute "
                               + $"({Plural.Of(Gap.PushedBackMinutes, "minute")} in all) - the call-ups and countdown move with it.");

@@ -98,6 +98,26 @@ internal static class DriverLive
 
         /// <summary>The target lap race control set for a transponder tonight, in ms (DriverTargets.TargetMs), or null.</summary>
         public Func<string, long?>? TargetOf { get; init; }
+
+        /// <summary>
+        /// Whether a marshal (main transponder) has said from their phone
+        /// they're at their post for a round (12 Nov 2026, setup plan step 8 -
+        /// RaceControlControl.MarshalIsIn): (round id, main).
+        /// </summary>
+        public Func<string, string, bool>? MarshalIn { get; init; }
+
+        /// <summary>Asks to cover a marshal post still open (MarshalSwaps.Offers) - 12 Nov 2026.</summary>
+        public IReadOnlyList<MarshalSwaps.Offer> CoverOffers { get; init; } = Array.Empty<MarshalSwaps.Offer>();
+
+        /// <summary>A badge id's main transponder, or null - for the names on an ask to cover.</summary>
+        public Func<string, string?>? MainOfBadge { get; init; }
+
+        /// <summary>
+        /// Whether a driver (main transponder) has paid tonight's entry, when
+        /// the race day has a fee (12 Nov 2026, setup plan step 8 - DeskMoney.ForPhone).
+        /// Only ever their own: it goes in their own entry.
+        /// </summary>
+        public Func<string, DeskMoney.PhoneMoney?>? MoneyOf { get; init; }
     }
 
     /// <summary>
@@ -255,6 +275,74 @@ internal static class DriverLive
             Consider(t, onlyWithAsks: true);
         }
 
+        // The next race to start: the first not on track (12 Nov 2026).
+        var nextIndex = -1;
+
+        for (var i = 0; i < upcoming.Count; i++)
+        {
+            if (!upcoming[i].OnTrack)
+            {
+                nextIndex = i;
+                break;
+            }
+        }
+
+        var upcomingRounds = upcoming.Select(u => u.RoundId).Where(id => !string.IsNullOrEmpty(id)).ToHashSet(StringComparer.Ordinal);
+        var offers = inputs.CoverOffers ?? Array.Empty<MarshalSwaps.Offer>();
+
+        string ShortNameOfMain(string? t) => t is null ? string.Empty : MarshalSwaps.ShortName(profileOf(t)?.DriverName);
+
+        string ShortNameOfBadge(string badge) => ShortNameOfMain(inputs.MainOfBadge?.Invoke(badge));
+
+        // Who a marshal can ask to cover their post (MarshalSwaps.Candidates):
+        // by key and short name, never by transponder or badge code.
+        List<Dictionary<string, object?>>? CoverChoices(string main, string roundId, int away)
+        {
+            var driving = byMain[away].Grid;
+            var marshalling = duties
+                .Where(d => d is not null && string.Equals(d.RoundId, roundId, StringComparison.Ordinal))
+                .Select(d => Who(d.Transponder)?.Main ?? d.Transponder);
+
+            var list = new List<Dictionary<string, object?>>();
+
+            foreach (var t in MarshalSwaps.Candidates(checkedIn, driving, marshalling, main))
+            {
+                if (Who(t) is not { } who || ShortNameOfMain(who.Main) is not { Length: > 0 } name)
+                {
+                    continue;
+                }
+
+                list.Add(new Dictionary<string, object?> { ["k"] = MarshalSwaps.KeyOf(who.Badge), ["name"] = name });
+            }
+
+            return list
+                .OrderBy(c => (string)c["name"]!, StringComparer.CurrentCultureIgnoreCase)
+                .Take(MarshalSwaps.MostChoices)
+                .ToList();
+        }
+
+        Dictionary<string, object?>? CoverAskFor(string badge) =>
+            offers.LastOrDefault(o => o.ToBadge == badge && o.State == MarshalSwaps.Asked && upcomingRounds.Contains(o.RoundId)) is { } o
+                ? new Dictionary<string, object?>
+                {
+                    ["offer"] = o.Id,
+                    ["from"] = ShortNameOfBadge(o.FromBadge) is { Length: > 0 } from ? from : "A driver",
+                    ["race"] = o.Title,
+                    ["post"] = o.Post,
+                }
+                : null;
+
+        Dictionary<string, object?>? AskedCoverOf(string badge) =>
+            offers.LastOrDefault(o => o.FromBadge == badge && upcomingRounds.Contains(o.RoundId)) is { } o
+                ? new Dictionary<string, object?>
+                {
+                    ["race"] = o.Title,
+                    ["post"] = o.Post,
+                    ["to"] = ShortNameOfBadge(o.ToBadge),
+                    ["state"] = o.State,
+                }
+                : null;
+
         var drivers = new Dictionary<string, object?>(StringComparer.Ordinal);
 
         // Two braces, the "at" pair and "drivers":{} - and room to spare.
@@ -272,11 +360,64 @@ internal static class DriverLive
 
             if (marshals.TryGetValue(main, out var marshal))
             {
-                entry["marshal"] = new Dictionary<string, object?>
+                var duty = new Dictionary<string, object?>
                 {
                     ["race"] = marshal.Duty.RoundTitle,
                     ["post"] = marshal.Duty.PostName,
                     ["away"] = marshal.Away,
+                };
+
+                // Marshals from their phones (12 Nov 2026, setup plan step
+                // 8): the round, so "I'm at my post" and "Ask someone to
+                // cover" can name it; whether it is the next race to start
+                // (not the one on track), when it is expected to, and whether
+                // they've said they're in. A round id names a race, not anyone.
+                duty["round"] = marshal.Duty.RoundId;
+
+                if (marshal.Away == nextIndex)
+                {
+                    duty["next"] = true;
+                }
+
+                if (upcoming[marshal.Away].EtaUtc is { } dutyEta && !upcoming[marshal.Away].OnTrack)
+                {
+                    duty["eta"] = Iso(RoundToMinute(AsUtc(dutyEta)));
+                }
+
+                if (inputs.MarshalIn?.Invoke(marshal.Duty.RoundId, main) == true)
+                {
+                    duty["in"] = true;
+                }
+
+                if (CoverChoices(main, marshal.Duty.RoundId, marshal.Away) is { Count: > 0 } choices)
+                {
+                    duty["choices"] = choices;
+                }
+
+                entry["marshal"] = duty;
+            }
+
+            // Asks to cover a post (12 Nov 2026): one asked of them, and the
+            // last one they sent, while its race is still to run.
+            if (CoverAskFor(badge) is { } coverAsk)
+            {
+                entry["coverAsk"] = coverAsk;
+            }
+
+            if (AskedCoverOf(badge) is { } askedCover)
+            {
+                entry["askedCover"] = askedCover;
+            }
+
+            // Tonight's entry fee, paid or owing - their own, never anyone
+            // else's (12 Nov 2026, setup plan step 8).
+            if (inputs.MoneyOf?.Invoke(main) is { } money)
+            {
+                entry["entry"] = new Dictionary<string, object?>
+                {
+                    ["fee"] = money.Fee,
+                    ["paid"] = money.Paid,
+                    ["words"] = money.Words,
                 };
             }
 

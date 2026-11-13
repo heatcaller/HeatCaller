@@ -24,10 +24,14 @@ public sealed partial class RaceControlControl
     private string? _marshalsCalledFor;
 
     /// <summary>
-    /// A marshal didn't turn up for a round: the round, and "Name (Post)".
-    /// MainForm saves it on the round.
+    /// A marshal didn't turn up for a round: the round, "Name (Post)" and
+    /// their transponder. MainForm saves it on the round and applies the
+    /// club's marshal rule.
     /// </summary>
-    public event Action<RoundDefinition, string>? MarshalNoShow;
+    public event Action<RoundDefinition, string, string>? MarshalNoShow;
+
+    /// <summary>A no-show taken back off (setup plan step 8): the round, and "Name (Post)". MainForm undoes the rule.</summary>
+    public event Action<RoundDefinition, string>? MarshalNoShowTakenBack;
 
     /// <summary>The marshals of the round the banner is showing, for Someone's missing.</summary>
     private IReadOnlyList<(string Name, string Post)> _marshalsShown = Array.Empty<(string, string)>();
@@ -66,7 +70,8 @@ public sealed partial class RaceControlControl
     /// Once a second from the gap: shows the ask from a minute before the
     /// start until somebody confirms, and at zero calls the posts once.
     /// </summary>
-    private void ShowMarshalsAsk(RoundDefinition next, IReadOnlyList<(string Name, string Post)> marshals, bool waitForMarshals, DateTime nowUtc)
+    private void ShowMarshalsAsk(RoundDefinition next, IReadOnlyList<(string Name, string Post)> marshals, bool waitForMarshals, DateTime nowUtc,
+        IReadOnlyList<bool>? arrived = null)
     {
         var remaining = _autoStart.Remaining(nowUtc, Gap.PushedBackMinutes);
         var show = waitForMarshals
@@ -83,7 +88,7 @@ public sealed partial class RaceControlControl
         _marshalsShown = marshals;
         _marshalsRound = next;
 
-        var text = MarshalsInPlace.Ask(next.RoundLabel, marshals, waiting: _autoStartState == AutoStartState.WaitingForMarshals);
+        var text = MarshalsInPlace.Ask(next.RoundLabel, marshals, waiting: _autoStartState == AutoStartState.WaitingForMarshals, arrived);
 
         if (_lblMarshalsBanner.Text != text)
         {
@@ -96,7 +101,14 @@ public sealed partial class RaceControlControl
         if (_autoStartState == AutoStartState.WaitingForMarshals && _marshalsCalledFor != next.Id)
         {
             _marshalsCalledFor = next.Id;
-            SayGapLine(MarshalsInPlace.Call(next.RoundLabel, marshals), "Marshals");
+
+            // Only the posts still empty (setup plan step 8): calling Hugh
+            // to Turn 1 when his phone says he's standing on it is noise.
+            var missing = arrived is null
+                ? marshals
+                : marshals.Where((_, i) => !(i < arrived.Count && arrived[i])).ToList();
+
+            SayGapLine(MarshalsInPlace.Call(next.RoundLabel, missing.Count > 0 ? missing : marshals), "Marshals");
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] {next.RoundLabel} is waiting for its marshals. Marshals in place starts it.");
         }
     }
@@ -126,14 +138,29 @@ public sealed partial class RaceControlControl
 
         var menu = new ContextMenuStrip();
 
+        // Each marshal's transponder too (12 Nov 2026, setup plan step 8), so
+        // the club's marshal rule can find their results.
+        var posts = MarshalPostsFor(round);
+
         foreach (var (name, post) in _marshalsShown)
         {
             var who = MarshalsInPlace.Who(name, post);
+            var transponder = posts.FirstOrDefault(p => p.Name == name && p.Post == post).Transponder ?? string.Empty;
             var logged = round.MarshalNoShows?.Contains(who, StringComparer.OrdinalIgnoreCase) == true;
-            var item = new ToolStripMenuItem($"{who} didn't turn up") { Checked = logged, Enabled = !logged };
+
+            // Logged already: the same line takes it back off (setup plan
+            // step 8) - a no-show logged by mistake costs a driver a result.
+            var item = new ToolStripMenuItem(logged ? $"{who} did turn up - take the no-show off" : $"{who} didn't turn up") { Checked = logged };
             item.Click += (_, _) =>
             {
-                MarshalNoShow?.Invoke(round, who);
+                if (logged)
+                {
+                    MarshalNoShowTakenBack?.Invoke(round, who);
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] Marshal no-show taken off for {round.RoundLabel}: {who}.");
+                    return;
+                }
+
+                MarshalNoShow?.Invoke(round, who, transponder);
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] Marshal no-show logged for {round.RoundLabel}: {who}. "
                                       + "Get someone onto the post, then press Marshals in place.");
             };
@@ -174,13 +201,36 @@ public static class MarshalsInPlace
     /// (Turn 2). In place?" - or, once the start is waiting, "Q2 Heat 3 is
     /// waiting for its marshals: ...".
     /// </summary>
-    public static string Ask(string roundLabel, IReadOnlyList<(string Name, string Post)> marshals, bool waiting)
-    {
-        var who = string.Join(", ", marshals.Select(m => Who(m.Name, m.Post)));
+    public static string Ask(string roundLabel, IReadOnlyList<(string Name, string Post)> marshals, bool waiting) =>
+        Ask(roundLabel, marshals, waiting, null);
 
-        return waiting
-            ? $"{roundLabel} is waiting for its marshals: {who}."
-            : $"Marshals for {roundLabel}: {who}. In place?";
+    /// <summary>
+    /// The banner, once a marshal has said from their phone they're at their
+    /// post (12 Nov 2026, setup plan step 8): "Marshals for Q2 Heat 3 - 2 of 3
+    /// in: Hugh Turn, Rhoda Rage; waiting for Axel Grease (Turn 3)." With
+    /// nobody in from a phone, exactly the old wording.
+    /// </summary>
+    /// <param name="arrived">For each marshal, in the same order, whether they're in. Null or all false for none.</param>
+    public static string Ask(string roundLabel, IReadOnlyList<(string Name, string Post)> marshals, bool waiting, IReadOnlyList<bool>? arrived)
+    {
+        var inCount = arrived is null ? 0 : marshals.Where((_, i) => i < arrived.Count && arrived[i]).Count();
+
+        if (inCount == 0)
+        {
+            var who = string.Join(", ", marshals.Select(m => Who(m.Name, m.Post)));
+
+            return waiting
+                ? $"{roundLabel} is waiting for its marshals: {who}."
+                : $"Marshals for {roundLabel}: {who}. In place?";
+        }
+
+        var inNames = marshals.Where((_, i) => i < arrived!.Count && arrived[i]).Select(m => m.Name);
+        var missing = marshals.Where((_, i) => !(i < arrived!.Count && arrived[i])).Select(m => Who(m.Name, m.Post)).ToList();
+        var head = waiting ? $"{roundLabel} is waiting for its marshals" : $"Marshals for {roundLabel}";
+
+        return missing.Count == 0
+            ? $"{head} - all {marshals.Count} in: {string.Join(", ", inNames)}."
+            : $"{head} - {inCount} of {marshals.Count} in: {string.Join(", ", inNames)}; waiting for {string.Join(", ", missing)}.";
     }
 
     /// <summary>What the announcer says once, at zero: "Marshals for Q2 Heat 3, to your posts please: Hugh Turn on Turn 1 and Rhoda Rage on Turn 2. We start when you're in place."</summary>
@@ -231,4 +281,98 @@ public sealed partial class RaceControlControl
         ConfirmMarshals();
         return "Marshals in place.";
     }
+}
+
+/// <summary>
+/// Marshals in place from the marshals' own phones, and the countdown the
+/// phones show (12 Nov 2026, setup plan step 8).
+/// </summary>
+public sealed partial class RaceControlControl
+{
+    /// <summary>The countdown last worked out for the phones. Replaced whole, so read from any thread.</summary>
+    private volatile PhoneCountdown? _phoneCountdown;
+
+    /// <summary>The round the "all in from their phones" line was last logged for, so it is said once.</summary>
+    private string? _allInLoggedFor;
+
+    /// <summary>
+    /// What the Live and Schedule pages count down between races (setup plan
+    /// step 8): the next race's start and whether it's counting, held or due.
+    /// Null with Auto start not counting. Safe off the UI thread.
+    /// </summary>
+    public PhoneCountdown? CountdownForPhones => _phoneCountdown;
+
+    /// <summary>
+    /// A marshal tapped "I'm at my post" on their phone (the "post" ask, filed
+    /// by the laptop by itself): recorded for that round, if they really are
+    /// one of its marshals and it hasn't run. The words go back to the phone.
+    /// </summary>
+    /// <param name="roundId">The round the phone named.</param>
+    /// <param name="transponder">The driver's main transponder.</param>
+    public (bool Ok, string Said) MarshalAtPost(string roundId, string transponder)
+    {
+        if (_rounds?.Get(roundId) is not { } round)
+        {
+            return (false, "That race isn't in tonight's program any more.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(round.LinkedSessionId))
+        {
+            return (false, $"{round.RoundLabel} has already run.");
+        }
+
+        var main = MainOf(transponder);
+        var post = MarshalPostsFor(round).FirstOrDefault(p => string.Equals(p.Main, main, StringComparison.OrdinalIgnoreCase));
+
+        if (post.Main is null)
+        {
+            return (false, $"You're not marshalling {round.RoundLabel} any more - have a look at your duty.");
+        }
+
+        if (_autoStart.Posts.In(round.Id, main))
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] {MarshalsInPlace.Who(post.Name, post.Post)} is at their post for {round.RoundLabel} (from their phone).");
+        }
+
+        return (true, string.IsNullOrWhiteSpace(post.Post)
+            ? $"Thanks - Race Control has you at your post for {round.RoundLabel}."
+            : $"Thanks - Race Control has you on {post.Post} for {round.RoundLabel}.");
+    }
+
+    /// <summary>Whether a marshal (any of their transponders) has said from their phone they're in for a round.</summary>
+    public bool MarshalIsIn(string roundId, string transponder) => _autoStart.Posts.IsIn(roundId, MainOf(transponder));
+
+    /// <summary>A transponder's owner's main transponder, or itself.</summary>
+    private string MainOf(string transponder) =>
+        _profiles.Get(transponder)?.Transponder is { Length: > 0 } main ? main.Trim() : transponder.Trim();
+
+    /// <summary>
+    /// From the gap's tick: when every marshal of the next race has said from
+    /// their phone they're in, the start stops waiting for them - as if the
+    /// desk had pressed Marshals in place. Returns who's in, in the posts' order.
+    /// </summary>
+    private IReadOnlyList<bool> MarshalsFromPhones(RoundDefinition next, IReadOnlyList<(string Main, string Name, string Post, string Transponder)> posts)
+    {
+        var mains = posts.Select(p => p.Main).ToList();
+        var arrived = _autoStart.Posts.Arrived(next.Id, mains);
+
+        if (!_autoStart.MarshalsConfirmed && _autoStart.Posts.AllIn(next.Id, mains))
+        {
+            _autoStart.ConfirmMarshals();
+
+            if (_allInLoggedFor != next.Id)
+            {
+                _allInLoggedFor = next.Id;
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] All {Plural.Of(mains.Count, "marshal")} for {next.RoundLabel} said from their phones they're at their posts.");
+            }
+        }
+
+        return arrived;
+    }
+
+    /// <summary>The phones' countdown, worked out again: after every gap tick, and when the gap closes.</summary>
+    private void UpdatePhoneCountdown(DateTime now) =>
+        _phoneCountdown = AutoStartOn && _autoStart.IsOpen
+            ? PhoneCountdown.For(_autoStartState, _autoStart.StartsAtUtc(now, Gap.PushedBackMinutes))
+            : null;
 }

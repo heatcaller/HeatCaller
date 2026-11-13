@@ -335,6 +335,27 @@ public sealed class BigScreenForm : Form
     /// only while the race itself has nothing there. Null from Practice.
     /// </summary>
     private readonly Func<string>? _nextRaceIn;
+
+    /// <summary>
+    /// "PROVISIONAL UNTIL 20:42" on the finished board while that race's
+    /// protest window is open (12 Nov 2026, setup plan step 8) - the room
+    /// sees the result can still change, the way the phones already did.
+    /// Null, or a null answer, for none.
+    /// </summary>
+    private readonly Func<string?>? _provisional;
+
+    /// <summary>
+    /// The races to come with their estimated starts, between races (12 Nov
+    /// 2026, setup plan step 8, build plan 2.2): "UP NEXT:  Stock Q2 Heat 3
+    /// about 20:42  •  ...". Shown in the On Deck bar in place of the day
+    /// schedule's next entry, because the program's own times are the ones
+    /// drivers were given. Null from Practice.
+    /// </summary>
+    private readonly Func<string>? _upNext;
+
+    /// <summary>True while the On Deck bar is showing <see cref="_upNext"/>.</summary>
+    private bool _upNextShowing;
+
     private bool _tickerShowing;
 
     /// <summary>
@@ -386,9 +407,11 @@ public sealed class BigScreenForm : Form
         TransponderWatch? watch = null, Func<IReadOnlyList<string>>? roster = null,
         Func<(TrackLine? Line, IReadOnlyList<TrackPositions.Car> Cars)>? trackMap = null,
         Func<IReadOnlyList<AttractCard>>? attract = null, Func<IfItEndedNow?>? ifItEndedNow = null,
-        Func<string>? nextRaceIn = null)
+        Func<string>? nextRaceIn = null, Func<string?>? provisional = null, Func<string>? upNext = null)
     {
         _nextRaceIn = nextRaceIn;
+        _provisional = provisional;
+        _upNext = upNext;
         _trackMap = trackMap;
         _attract = attract;
         _ifItEndedNow = ifItEndedNow;
@@ -1128,7 +1151,45 @@ public sealed class BigScreenForm : Form
     private void RefreshOnDeck()
     {
         // The championship ticker has the bar while a race is on (UpdateTicker).
-        if (_schedule is null || _tickerShowing)
+        if (_tickerShowing)
+        {
+            return;
+        }
+
+        // Between races, the program's races to come with their estimated
+        // starts (setup plan step 8) - even with no day schedule.
+        var upNext = string.Empty;
+
+        try
+        {
+            upNext = _upNext?.Invoke() ?? string.Empty;
+        }
+        catch
+        {
+            // No up-next line rather than no Big Screen.
+        }
+
+        if (upNext.Length > 0)
+        {
+            _upNextShowing = true;
+            _pnlOnDeck.Visible = true;
+
+            if (_lblOnDeck.Text != upNext)
+            {
+                _lblOnDeck.Text = upNext;
+            }
+
+            return;
+        }
+
+        if (_upNextShowing)
+        {
+            _upNextShowing = false;
+            _pnlOnDeck.Visible = _schedule is not null;
+            _lblOnDeck.Text = string.Empty;
+        }
+
+        if (_schedule is null)
         {
             return;
         }
@@ -2568,9 +2629,26 @@ public sealed class BigScreenForm : Form
             RaceState.Racing => "RACE IN PROGRESS",
             RaceState.Staging => "STAGING — GET READY",
             RaceState.Countdown => "COUNTDOWN — STAND BY",
-            RaceState.Finished => "RACE COMPLETE",
+            RaceState.Finished => FinishedWords(),
             _ => "Waiting for the race to start...",
         };
+    }
+
+    /// <summary>"RACE COMPLETE", or "RACE COMPLETE — PROVISIONAL UNTIL 20:42" inside the protest window (setup plan step 8).</summary>
+    private string FinishedWords()
+    {
+        string? provisional = null;
+
+        try
+        {
+            provisional = _provisional?.Invoke();
+        }
+        catch (Exception)
+        {
+            // A board line is never worth a broken screen.
+        }
+
+        return string.IsNullOrWhiteSpace(provisional) ? "RACE COMPLETE" : $"RACE COMPLETE — {provisional}";
     }
 
 
@@ -2706,6 +2784,13 @@ public sealed class BigScreenForm : Form
 
         _lblCountdown.Text = countdown;
         _lblElapsed.Text = ElapsedText();
+
+        // Between races the board isn't redrawn, so the up-next line and its
+        // estimated starts (setup plan step 8) are kept fresh from here.
+        if (_upNext is not null)
+        {
+            RefreshOnDeck();
+        }
 
         UpdateRollCall();
         UpdateAttract();

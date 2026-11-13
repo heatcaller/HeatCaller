@@ -9,6 +9,14 @@ public enum AutoStartState
     /// <summary>Counting down to the next race's start.</summary>
     Counting,
 
+    /// <summary>
+    /// Counting down, but to the time drivers were given less two minutes
+    /// rather than the gap (12 Nov 2026, setup plan step 8 - StartPromise):
+    /// the night is running early, and the race waits for its time. Start
+    /// now still starts it.
+    /// </summary>
+    WaitingForTime,
+
     /// <summary>The race director pressed Hold. The clock stands still until Resume.</summary>
     Held,
 
@@ -77,12 +85,39 @@ public sealed class AutoStartClock
     private bool _carsApproved;
     private bool _marshalsConfirmed;
     private bool _started;
+    private DateTime? _notBeforeUtc;
+
+    /// <summary>
+    /// The earliest the race may start (12 Nov 2026, setup plan step 8): its
+    /// promised time less StartPromise.Early, or null for no such limit.
+    /// </summary>
+    public DateTime? NotBeforeUtc => _notBeforeUtc;
+
+    /// <summary>
+    /// Sets the earliest the race may start - see StartPromise.NotBefore.
+    /// Race Control sets it every second, so a promise made or a setting
+    /// changed mid-gap takes effect at once. Null lifts it.
+    /// </summary>
+    public void NotBefore(DateTime? utc)
+    {
+        if (IsOpen)
+        {
+            _notBeforeUtc = utc;
+        }
+    }
 
     /// <summary>How long before the start the marshals can be said to be in place, so a confirmed race never stops at zero.</summary>
     public static readonly TimeSpan AskForMarshalsFrom = TimeSpan.FromSeconds(60);
 
     /// <summary>True once somebody has said the next race's marshals are in place.</summary>
     public bool MarshalsConfirmed => _marshalsConfirmed;
+
+    /// <summary>
+    /// Marshals who said from their phone they're at their post (12 Nov 2026,
+    /// setup plan step 8), by round. Not cleared by <see cref="Open"/> or
+    /// <see cref="Close"/>: a marshal says so before the gap opens.
+    /// </summary>
+    public MarshalPosts Posts { get; } = new();
 
     /// <summary>The next race this gap is counting down to, or null when it isn't open.</summary>
     public string? RoundId { get; private set; }
@@ -133,6 +168,7 @@ public sealed class AutoStartClock
         _marshalsConfirmed = false;
         _started = false;
         _startNow = false;
+        _notBeforeUtc = null;
 
         // A different next race in the same gap (the director moved the
         // order) keeps the clock where it was and any hold: only a new gap
@@ -158,10 +194,27 @@ public sealed class AutoStartClock
         _carsApproved = false;
         _marshalsConfirmed = false;
         _started = false;
+        _notBeforeUtc = null;
     }
 
-    /// <summary>When the race will start, or null when the gap isn't open. Includes the time held so far and any minutes pushed back.</summary>
+    /// <summary>
+    /// When the race will start, or null when the gap isn't open. Includes
+    /// the time held so far and any minutes pushed back - and never before
+    /// <see cref="NotBeforeUtc"/>, the time drivers were given less two
+    /// minutes, so the call-ups and the countdown marks wait with it.
+    /// </summary>
     public DateTime? StartsAtUtc(DateTime nowUtc, int pushedBackMinutes = 0)
+    {
+        if (GapStartsAtUtc(nowUtc, pushedBackMinutes) is not { } gapStart)
+        {
+            return null;
+        }
+
+        return _notBeforeUtc is { } notBefore && notBefore > gapStart && !_startNow ? notBefore : gapStart;
+    }
+
+    /// <summary>When the gap alone would start the race - the flag, the gap, the rest, the hold and the +1 mins - or null when it isn't open.</summary>
+    public DateTime? GapStartsAtUtc(DateTime nowUtc, int pushedBackMinutes = 0)
     {
         if (!IsOpen)
         {
@@ -172,6 +225,16 @@ public sealed class AutoStartClock
 
         return _openedUtc + _gap + _rest + held + TimeSpan.FromMinutes(Math.Max(0, pushedBackMinutes));
     }
+
+    /// <summary>
+    /// How much longer than the gap the race waits for its time (12 Nov
+    /// 2026, setup plan step 8) - zero when the gap is the longer, or there
+    /// is no promise. For the gap's log (GapNoteKind.WaitedForPromise).
+    /// </summary>
+    public TimeSpan WaitForTime(DateTime nowUtc, int pushedBackMinutes = 0) =>
+        StartsAtUtc(nowUtc, pushedBackMinutes) is { } at && GapStartsAtUtc(nowUtc, pushedBackMinutes) is { } gap && at > gap
+            ? at - gap
+            : TimeSpan.Zero;
 
     /// <summary>How long to the start, never below zero, or null when the gap isn't open.</summary>
     public TimeSpan? Remaining(DateTime nowUtc, int pushedBackMinutes = 0) =>
@@ -259,7 +322,9 @@ public sealed class AutoStartClock
 
         if (remaining > TimeSpan.Zero && !_startNow)
         {
-            return AutoStartState.Counting;
+            return WaitForTime(nowUtc, pushedBackMinutes) > TimeSpan.Zero
+                ? AutoStartState.WaitingForTime
+                : AutoStartState.Counting;
         }
 
         if (floorBusy)
@@ -293,13 +358,17 @@ public sealed class AutoStartClock
     /// "starts in 1:42", "held - press Resume", "waiting for Frank's car".
     /// Empty when the clock is off.
     /// </summary>
-    public static string Words(AutoStartState state, TimeSpan? remaining, IReadOnlyList<string> notSeen, IReadOnlyList<string> resting)
+    /// <param name="startsAtUtc">When it starts, for "waits for its time - starts at 20:40". Null leaves the time out.</param>
+    public static string Words(AutoStartState state, TimeSpan? remaining, IReadOnlyList<string> notSeen, IReadOnlyList<string> resting, DateTime? startsAtUtc = null)
     {
         var rest = resting.Count > 0 ? $" (rest for {Names(resting)})" : string.Empty;
 
         return state switch
         {
             AutoStartState.Counting when remaining is { } left => $"starts in {Clock(left)}{rest}",
+            AutoStartState.WaitingForTime when remaining is { } left => startsAtUtc is { } at
+                ? $"waiting for its time - starts at {AppTime.TimeOfDay(at.ToLocalTime())} (in {Clock(left)}), the time drivers were given"
+                : $"waiting for its time - starts in {Clock(left)}",
             AutoStartState.Held => "start held - press Resume",
             AutoStartState.WaitingForFloor => "starts when the announcer finishes",
             AutoStartState.WaitingForCars => $"waiting for {Names(notSeen)} - not seen by the loop",
@@ -312,11 +381,15 @@ public sealed class AutoStartClock
     /// <summary>
     /// The Big Screen's countdown band between races: "NEXT RACE IN 1:42",
     /// "NEXT RACE ON HOLD", "NEXT RACE SOON". Empty when the clock is off.
-    /// A missing car is not put on the room's screen by name.
+    /// A missing car is not put on the room's screen by name. A race waiting
+    /// for its time says the time (12 Nov 2026, setup plan step 8): "NEXT
+    /// RACE AT 20:40", which is what the pits want to know.
     /// </summary>
-    public static string Band(AutoStartState state, TimeSpan? remaining) => state switch
+    public static string Band(AutoStartState state, TimeSpan? remaining, DateTime? startsAtUtc = null) => state switch
     {
         AutoStartState.Counting when remaining is { } left => $"NEXT RACE IN {Clock(left)}",
+        AutoStartState.WaitingForTime when startsAtUtc is { } at => $"NEXT RACE AT {AppTime.TimeOfDay(at.ToLocalTime())}",
+        AutoStartState.WaitingForTime when remaining is { } left => $"NEXT RACE IN {Clock(left)}",
         AutoStartState.Held => "NEXT RACE ON HOLD",
         AutoStartState.WaitingForFloor or AutoStartState.WaitingForCars or AutoStartState.WaitingForMarshals or AutoStartState.Start => "NEXT RACE SOON",
         _ => string.Empty,
@@ -354,4 +427,97 @@ public sealed class AutoStartClock
     /// <summary>Whether the automatic start is off tonight: switched off, or turned off for this night only.</summary>
     public static bool OffTonight(bool switchedOn, string? offForNight, string tonight) =>
         !switchedOn || string.Equals(offForNight, tonight, StringComparison.Ordinal);
+}
+
+/// <summary>
+/// Marshals who said from their own phone that they're at their post (12 Nov
+/// 2026, setup plan step 8), round by round.
+///
+/// WHY: Marshals in place (setup plan D4) was one button for the whole race -
+/// the desk looking down the track and pressing it, or the deputy's remote.
+/// The marshals themselves know first, and a desk that can read "2 of 3 in:
+/// Hugh Turn, Rhoda Rage; waiting for Axel Grease" knows who to shout for
+/// instead of counting heads. When every marshal of the next race has said
+/// so, the start stops waiting by itself; the desk's Marshals in place still
+/// opens it whatever the phones say.
+///
+/// Kept by round, not by gap: the "I'm at my post" button is on the phone
+/// while the race before is still running, before Auto start has opened the
+/// gap it would otherwise be kept in. Only the last <see cref="RoundsKept"/>
+/// rounds are remembered - a night is a few dozen races.
+/// </summary>
+public sealed class MarshalPosts
+{
+    /// <summary>How many rounds' confirmations are kept, oldest forgotten first.</summary>
+    public const int RoundsKept = 32;
+
+    private readonly Dictionary<string, HashSet<string>> _in = new(StringComparer.Ordinal);
+    private readonly List<string> _order = new();
+
+    /// <summary>A marshal (by main transponder) is at their post for a round. True the first time.</summary>
+    public bool In(string roundId, string marshal)
+    {
+        if (string.IsNullOrWhiteSpace(roundId) || string.IsNullOrWhiteSpace(marshal))
+        {
+            return false;
+        }
+
+        if (!_in.TryGetValue(roundId, out var set))
+        {
+            set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _in[roundId] = set;
+            _order.Add(roundId);
+
+            while (_order.Count > RoundsKept)
+            {
+                _in.Remove(_order[0]);
+                _order.RemoveAt(0);
+            }
+        }
+
+        return set.Add(marshal.Trim());
+    }
+
+    /// <summary>Whether this marshal has said they're at their post for this round.</summary>
+    public bool IsIn(string? roundId, string? marshal) =>
+        roundId is not null && marshal is not null && _in.TryGetValue(roundId, out var set) && set.Contains(marshal.Trim());
+
+    /// <summary>For each marshal given, whether they're in - in the same order.</summary>
+    public IReadOnlyList<bool> Arrived(string roundId, IReadOnlyList<string> marshals) =>
+        marshals.Select(m => IsIn(roundId, m)).ToList();
+
+    /// <summary>True when there are marshals and every one of them has said they're at their post.</summary>
+    public bool AllIn(string roundId, IReadOnlyList<string> marshals) =>
+        marshals.Count > 0 && marshals.All(m => IsIn(roundId, m));
+}
+
+/// <summary>
+/// The next race's start as the phones count it down (12 Nov 2026, setup plan
+/// step 8): <paramref name="AtUtc"/> while counting, and the state in one of
+/// three words - "counting", "held" or "soon".
+/// </summary>
+public sealed record PhoneCountdown(DateTime? AtUtc, string State)
+{
+    /// <summary>
+    /// What the Live and Schedule pages are told between races - the Big
+    /// Screen band's three states (<see cref="AutoStartClock.Band"/>), with
+    /// the start time instead of the time left, so a phone counts it down
+    /// itself between two of the laptop's publishes. Null with the clock off.
+    /// To the second, so the same count is the same document.
+    /// </summary>
+    public static PhoneCountdown? For(AutoStartState state, DateTime? startsAtUtc) => state switch
+    {
+        AutoStartState.Counting when startsAtUtc is { } at => new PhoneCountdown(
+            new DateTime(at.Ticks - at.Ticks % TimeSpan.TicksPerSecond, DateTimeKind.Utc), "counting"),
+        AutoStartState.Held => new PhoneCountdown(null, "held"),
+        AutoStartState.WaitingForFloor or AutoStartState.WaitingForCars or AutoStartState.WaitingForMarshals or AutoStartState.Start
+            => new PhoneCountdown(null, "soon"),
+        _ => null,
+    };
+
+    /// <summary>A short key that changes exactly when the phones need telling again. Empty for none.</summary>
+    public static string KeyOf(PhoneCountdown? countdown) =>
+        countdown is null
+            ? string.Empty
+            : countdown.State + "|" + (countdown.AtUtc?.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty);
 }

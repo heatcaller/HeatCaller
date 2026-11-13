@@ -399,8 +399,9 @@ The **Classes** page lists every class in a grid, so you can compare them side b
 | **Class** | The class name, in the class's color. |
 | **Qualifying** | How qualifying is scored, for example "Most laps, then time · best heat" or "Best 3 consecutive · best 2 heats". |
 | **Mains** | Main size and bump-ups, for example "8 per main · top 2 bump up" or "10 per main · no bump-ups". |
-| **Race format** | The class's race format, or "app default". If the class has a separate qualifier format, it's shown after `quals:`. |
+| **Race format** | The class's race format, or "app default", with how a timed race finishes: "then finish the lap" or "stop at the time". If the class has a separate qualifier format, it's shown after `quals:`. |
 | **Tech** | How many items are on the class's tech checklist, or "-" if there's none. |
+| **Fee** | The class's own entry fee, and its fee as an extra class if it has one ("$20.00, $10.00 as an extra class"), or "Race day's" when it charges the race day's fees. See [Money at the desk](events-and-entries.md#money-at-the-desk). |
 
 Use **Add a Class**, **Edit** (or double-click a row), **Sanctioning Preset** and **Delete**. You can also reach the same list from a driver profile by clicking **Manage** next to **Class:**.
 
@@ -445,6 +446,8 @@ The **Add Class** / **Edit Class** dialog has these settings:
 |---|---|---|
 | **Name:** | Required. The small colored square beside the name is the class color — click it to change it. | — |
 | **Notes:** | Free text. | Empty |
+| **Race length:** | A new class only: how many minutes its races last (1–180). On an existing class, change it with **Race Format...**. | 5, or the app default's time limit |
+| **When time's up:** | A new class only: **Time's up, then finish the lap** (the leader takes the flag and everyone else finishes the lap they're on) or **Stop when time's up** (the race ends at the time). Left as they were offered, the class follows the app default when that has a limit (a club racing to a lap count keeps its laps); changed, the class gets its own format with that time and finish and no lap limit. Once **Race Format...** or a **Sanctioning Preset** sets the format, these two rows are grayed and show what it set. | Then finish the lap, or the app default's rule |
 | **Qualifying:** | **Most laps, then lowest time**, **Best consecutive laps (fastest clean run)**, or **Points per round (1st = 1 point, fewest wins)**. See [How qualifying ranks drivers](program-and-mains.md#how-qualifying-ranks-drivers) and [Points per round](program-and-mains.md#points-per-round). | Most laps, then lowest time |
 | **Consecutive laps to count:** | For best-consecutive scoring only: how many laps in a row make a run (2–20). | 3 |
 | **Heats that count:** | How many of each driver's best heats are totaled (1–20). Set 2 for "best 2 of 3". Leave at 1 to count only their single best heat. For **Points per round**, it's how many rounds count. | 1 |
@@ -535,14 +538,27 @@ To apply one:
 2. Pick a preset from the list. The right side explains **WHERE IT CAME FROM**, **WHAT IT SETS** and **WHAT IT DOES NOT SET** — read the last one before you apply it.
 3. Click **Apply to This Class**, check the list of changes, and click **Yes**.
 
+Each preset names the rulebook edition it came from. Check it against your current rulebook before a sanctioned meeting.
+
 | Preset | What it sets |
 |---|---|
 | **PN Racing - PNWC 2026 qualifying and mains** | Qualifier format: standard start, 5 minutes, no lap limit. Race format: standard start, 8 minutes, no lap limit. Most laps then time, best 2 heats count, 10 drivers per main, bump-ups off. |
 | **IFMAR - IFMAR-style qualifying clocks** | Qualifier start type set to own clock from first crossing, and most laps then time. Nothing else. |
+| **IFMAR - 1:10 electric off-road (5-minute)** | From IFMAR's 1:10 Electric Off Road rules (version 13 November 2019). Qualifier format: own clock from first crossing, 5 minutes. Race format: grid start, 5 minutes. Most laps then time. 10 drivers per main. A-main in 3 legs, best 2 count. |
+| **IFMAR - 1/10 electric track - ISTC, FWD, E F1 (5-minute)** | From IFMAR's Electric Track rules (September 2024). The same settings as the off-road preset. |
+| **IFMAR - 1/12 electric track (8-minute)** | The same, at 8 minutes. |
 | **BRCA - BRCA on-road qualifying (duration NOT set)** | Qualifier start type set to own clock from first crossing, and most laps then time. The qualifier length is deliberately left for you to set. |
+| **ROAR - 1/10 electric, Level 1-4 (5-minute)** | From the ROAR Rules Ver. 26-10a (October 2026). Qualifier and race formats: 5 minutes, no lap limit. Mains: full-field start. Most laps then time, and the mains set from each driver's single best heat. The qualifier start is left as it is, because ROAR allows either. |
+| **ROAR - 1/12 electric on-road, Level 1-4 (8-minute)** | The same, at 8 minutes. |
+| **EFRA - 1/10 electric off-road and on-road (5-minute)** | From the EFRA Handbook 2026, Appendix 3 (electric). Qualifier and race formats: 5 minutes, no lap limit. Mains: grid start. 10 drivers per main. A-main in 3 legs, best 2 count. |
+| **EFRA - 1/12 electric track (8-minute)** | The same, at 8 minutes. |
+| **NZRCA - EP off-road 1/10 (5-minute)** | From the NZRCA EP Off-Road Rules 2026. Qualifiers: 5 minutes, staggered start with each driver on their own clock. Mains: 5 minutes, grid start. 12 drivers per main. A-main in 3 legs, best 2 count. The stagger gap is left as it is. |
+| **NZRCA - EP on-road 5-minute classes** | From the NZRCA EP On-Road Rules 2026, for the 5-minute classes (touring, FWD, Super Stock, M-Chassis, Formula One, Pro 10; not Pro 12). The same settings as the off-road preset. |
+| **Reedy Race - Touring Car Race of Champions, Open classes (2019)** | From the 2019 event's rules on reedyrace.com, the latest published. Qualifier and race formats: 5 minutes. A-main in 3 legs, best 2 count. Start types are left as they are. |
 
 !!! warning
-    - None of the presets set a points scale, and the PNWC preset sets the length of one leg only. It doesn't change the class's **A-main:** setting, so to run PNWC's three-leg A-main, set that yourself (see [Double and triple A-mains](program-and-mains.md#double-and-triple-a-mains)). HeatCaller has no multi-leg lower mains. Read **WHAT IT DOES NOT SET** for each one.
+    - None of the presets set a points scale. IFMAR's, ROAR's and EFRA's qualifying points give the top qualifier 0 points, and HeatCaller's **Points per round** gives 1, so those presets leave the class's qualifying method as it is. The IFMAR section, EFRA, NZRCA and Reedy presets set the class's **A-main:** to 3 legs. HeatCaller runs only the A-main in legs, so lower mains that their rules run in legs are run once.
+    - The PNWC preset sets the length of one leg only. It doesn't change the class's **A-main:** setting, so to run PNWC's three-leg A-main, set that yourself (see [Double and triple A-mains](program-and-mains.md#double-and-triple-a-mains)). HeatCaller has no multi-leg lower mains. Read **WHAT IT DOES NOT SET** for each one.
     - If the class was following the app default format, a preset that sets a duration gives the class its own format. Later changes to the app default won't reach it any more. The other settings in that new format start from HeatCaller's built-in values (for example a 3000 ms minimum lap), not from your app default, so check **Race Format** afterwards.
     - Applied from the **Classes** page, the preset is saved as soon as you click **Yes**. Applied from inside the class editor, it's saved when you click **Save** on the class.
 

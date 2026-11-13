@@ -80,6 +80,13 @@ public sealed partial class RaceProgramControl
         day.HeatsPostedUtc = DateTime.UtcNow;
         _events.Upsert(day);
 
+        // The times drivers are given (12 Nov 2026, setup plan step 8): each
+        // heat's estimated start as the board and the phones show it now,
+        // promised on the round. Made afresh from the plan without the old
+        // promises, so posting again after an undo doesn't keep stale ones.
+        var promisedBefore = dayRounds.ToDictionary(r => r.Id, r => r.PromisedStartUtc, StringComparer.Ordinal);
+        var promised = PromiseStarts(dayRounds, overwrite: true);
+
         var dayId = day.Id;
         _undo.Capture(clubNight ? "Post the races" : "Post the heats", () =>
         {
@@ -87,6 +94,12 @@ public sealed partial class RaceProgramControl
             {
                 current.HeatsPostedUtc = null;
                 _events.Upsert(current);
+            }
+
+            foreach (var round in promised)
+            {
+                round.PromisedStartUtc = promisedBefore.GetValueOrDefault(round.Id);
+                _rounds.Update(round);
             }
 
             HeatsPostedChanged?.Invoke();
@@ -105,6 +118,64 @@ public sealed partial class RaceProgramControl
         if (form.PrintHeats || form.PrintMarshals)
         {
             PrintForTheBoard(form.PrintHeats, form.PrintMarshals);
+        }
+    }
+
+    /// <summary>
+    /// Promises each race still to run its estimated start (12 Nov 2026,
+    /// setup plan step 8 - StartPromise), saved on the round. Returns the
+    /// rounds changed.
+    /// </summary>
+    /// <param name="overwrite">True at posting; false keeps any promise already made.</param>
+    /// <param name="skipRoundId">The race going out now, which needs no promise.</param>
+    private List<RoundDefinition> PromiseStarts(IReadOnlyList<RoundDefinition> dayRounds, bool overwrite, string? skipRoundId = null)
+    {
+        var plan = Plan(dayRounds, keepPromises: false);
+
+        if (plan is null)
+        {
+            return new List<RoundDefinition>();
+        }
+
+        var changed = StartPromise.Stamp(dayRounds, plan.StartOf, overwrite, skipRoundId);
+
+        foreach (var round in changed)
+        {
+            _rounds.Update(round);
+        }
+
+        if (changed.Count > 0)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [program] {Plural.Of(changed.Count, "race")} given a start time "
+                                  + $"(the first {NightPlan.About(changed.Min(r => r.PromisedStartUtc!.Value))}). "
+                                  + (_settings.AutoStartNeverEarly ? $"Auto start won't start one more than {NightPlan.Minutes(StartPromise.Early)} before its time." : string.Empty));
+        }
+
+        return changed;
+    }
+
+    /// <summary>
+    /// The first race of a night that doesn't post its heats is going out
+    /// (12 Nov 2026, setup plan step 8): the races after it are promised
+    /// their estimated starts now, as the phones show them. Nothing once
+    /// anything has run or been promised - see StartPromise.OwedAtFirstRace.
+    /// Called by MainForm when a race stages.
+    /// </summary>
+    internal void PromiseStartsAtFirstRace(string? goingOutRoundId)
+    {
+        try
+        {
+            var dayRounds = DayRounds();
+
+            if (StartPromise.OwedAtFirstRace(ActiveDay, dayRounds)
+                && dayRounds.Any(r => string.Equals(r.Id, goingOutRoundId, StringComparison.Ordinal)))
+            {
+                PromiseStarts(dayRounds, overwrite: false, skipRoundId: goingOutRoundId);
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [program] Couldn't give tonight's races their start times: {ex.Message}");
         }
     }
 

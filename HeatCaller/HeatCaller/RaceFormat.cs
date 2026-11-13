@@ -144,6 +144,66 @@ public sealed class RaceFormat
         return format;
     }
 
+    /// <summary>The words for the two ways a timed race finishes - see <see cref="FinishOnNextCrossing"/>.</summary>
+    public const string StopAtTimeWords = "Stop when time's up";
+
+    /// <summary>See <see cref="StopAtTimeWords"/>.</summary>
+    public const string FinishTheLapWords = "Time's up, then finish the lap";
+
+    /// <summary>One of the two finish rules as the class windows say it.</summary>
+    public static string FinishWords(bool finishTheLap) => finishTheLap ? FinishTheLapWords : StopAtTimeWords;
+
+    /// <summary>
+    /// The race length a new class's window starts at (12 Nov 2026, setup plan
+    /// step 8): the app default's time limit when it has one, otherwise
+    /// <see cref="NewClassMinutes"/> - the same figure ForNewClass would give.
+    /// </summary>
+    public static int SuggestedMinutes(RaceFormat? appDefault) =>
+        appDefault is { TimeLimitMinutes: > 0 } given ? Math.Clamp(given.TimeLimitMinutes, 1, 180) : NewClassMinutes;
+
+    /// <summary>
+    /// How a new class's races finish when nobody says (12 Nov 2026, setup plan
+    /// step 8): the app default's rule, which on a new install is "time's up,
+    /// then finish the lap" - the common club rule, and what FinishOnNextCrossing
+    /// has always defaulted to.
+    /// </summary>
+    public static bool SuggestedFinishTheLap(RaceFormat? appDefault) => appDefault?.FinishOnNextCrossing ?? true;
+
+    /// <summary>
+    /// The format a class starts with when the window that adds it asked for
+    /// its race length and how it finishes (12 Nov 2026, setup plan step 8).
+    ///
+    /// WHY: A5 gave a new class a length, but not the other half of the rule.
+    /// On-road clubs stop the race at the time; most off-road clubs let the
+    /// leader take the flag and everyone finish the lap they are on. A class
+    /// that silently got whichever the app default happened to say was a
+    /// protest waiting for the first close finish. So the window asks both.
+    ///
+    /// Left as the window suggested (<see cref="SuggestedMinutes"/> and
+    /// <see cref="SuggestedFinishTheLap"/>), the answer is exactly
+    /// <see cref="ForNewClass(RaceFormat?)"/>'s: null to follow an app default
+    /// that already has a limit - including a club that races to a lap count -
+    /// or the default with a 5-minute limit. Changed, the class gets its own
+    /// format: the default's start procedure and the rest, raced to that time
+    /// with that finish, and no lap limit, because the question was asked in
+    /// minutes. Everything can still be changed under Race Format....
+    /// </summary>
+    public static RaceFormat? ForNewClass(RaceFormat? appDefault, int minutes, bool finishTheLap)
+    {
+        minutes = Math.Clamp(minutes, 1, 180);
+
+        if (minutes == SuggestedMinutes(appDefault) && finishTheLap == SuggestedFinishTheLap(appDefault))
+        {
+            return ForNewClass(appDefault);
+        }
+
+        var format = appDefault?.Clone() ?? new RaceFormat();
+        format.LapLimit = 0;
+        format.TimeLimitMinutes = minutes;
+        format.FinishOnNextCrossing = finishTheLap;
+        return format;
+    }
+
     /// <summary>The format in one readable line, for the chip on Race Control.</summary>
     public string Describe()
     {
