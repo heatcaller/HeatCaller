@@ -1558,7 +1558,7 @@ internal sealed partial class DriverRequestDesk
 
     /// <summary>The line a query adds to its race's notes: "[Driver query 19:42] Sam P.: ...".</summary>
     internal static string NoteLine(DriverRequest request, string driverName) =>
-        $"[Driver query {request.AskedUtc.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture)}] {ShortName(driverName)}: {request.Text("m")}";
+        $"[Driver query {AppTime.TimeOfDay(request.AskedUtc.ToLocalTime())}] {ShortName(driverName)}: {request.Text("m")}";
 
     /// <summary>
     /// Noted: the query goes into the race's notes (Race History shows them),

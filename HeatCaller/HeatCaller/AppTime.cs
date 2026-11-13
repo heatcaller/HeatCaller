@@ -19,6 +19,14 @@ public static class AppTime
     public static string TimeOfDay(DateTime value) =>
         value.ToString(Use24Hour ? "HH:mm" : "h:mm tt");
 
+    /// <summary>
+    /// Time of day with seconds - "2:35:07 PM" or "14:35:07" - for "Saved at"
+    /// status lines and the like (12 Nov 2026: every time a person reads
+    /// follows the 24-hour tick on Themes).
+    /// </summary>
+    public static string TimeWithSeconds(DateTime value) =>
+        value.ToString(Use24Hour ? "HH:mm:ss" : "h:mm:ss tt");
+
     /// <summary>Time of day from a TimeSpan, for the time picker and schedule entries.</summary>
     public static string TimeOfDay(TimeSpan value)
     {

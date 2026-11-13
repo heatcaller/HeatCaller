@@ -114,7 +114,7 @@ internal static class SessionLog
             var thread = Environment.CurrentManagedThreadId;
             var who = thread == _uiThreadId ? "UI " : $"T{thread,-2}";
 
-            Pending.TryAdd($"{DateTime.Now:HH:mm:ss.fff} {who} {line}");
+            Pending.TryAdd($"{AppTime.LogStampNow()} {who} {line}");
         }
         catch
         {

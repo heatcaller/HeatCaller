@@ -20,6 +20,7 @@ import { DEFAULT_LOOK, type Look, type SocialLink } from "./site.js";
 import { SUN_ICON_SIZE } from "./sun.js";
 import { GARAGE_CSS, GARAGE_EMBED_BODY, garageEmbedScript } from "./garagepage.js";
 import { ME_BODY_END, ME_BODY_TOP, ME_CSS, ME_JS } from "./mespaces.js";
+import { CLOCK_JS, clockAttr } from "./clock.js";
 
 /** What a page needs to know beyond its club: how the club looks, and where it is being served from. */
 export interface PageContext {
@@ -1377,7 +1378,7 @@ document.addEventListener('gesturechange', (e) => e.preventDefault());
 // ask the screen to stay upright. Only an installed app on Android grants
 // it; everywhere else it is refused, quietly, and the style's "Turn your
 // phone upright" covers a phone held sideways.
-const PORTRAIT_JS = `
+const PORTRAIT_JS = `${CLOCK_JS}
 try {
   if (screen.orientation && typeof screen.orientation.lock === 'function') {
     const asked = screen.orientation.lock('portrait');
@@ -1724,7 +1725,7 @@ function touched() {
   if (stamp) {
     // While a page is drawn from copies, the time they were read.
     const at = warm && warmAt > 0 ? new Date(warmAt) : new Date();
-    stamp.textContent = 'Updated ' + at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    stamp.textContent = 'Updated ' + at.toLocaleTimeString([], { hour12: HC_H12, hour: '2-digit', minute: '2-digit' });
   }
 }
 
@@ -2473,7 +2474,7 @@ export function shell(page: Shell, context: PageContext): string {
   const links = anchors === "" ? "" : `<span class="links">${anchors}</span>`;
 
   return `<!doctype html>
-<html lang="en" class="${look.light ? "light" : "dark"}${sunset ? " synthwave" : ""}">
+<html lang="en" class="${look.light ? "light" : "dark"}${sunset ? " synthwave" : ""}"${clockAttr(look.clock24)}>
 <head>
 <meta charset="utf-8">
 ${NO_ZOOM_HEAD}
@@ -2756,7 +2757,7 @@ function ordinalOf(n) {
  * It is the same page either way: it reads the id off its own path and
  * opens that session, exactly as it does for the older "#s=" links.
  */
-const RESULTS_JS = `
+const RESULTS_JS = `${CLOCK_JS}
 const feed = document.getElementById('feed');
 const tools = document.getElementById('tools');
 const pager = document.getElementById('pager');
@@ -3089,7 +3090,7 @@ function raceControlLog(body) {
   const when = (at) => {
     const t = Date.parse(String(at || ''));
     if (!Number.isFinite(t)) return '';
-    try { return new Date(t).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; }
+    try { return new Date(t).toLocaleString([], { weekday: 'short', hour12: HC_H12, hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; }
   };
   return '<div class="rclog"><h4>Race control</h4><p class="when">This result was corrected after the race.</p><ul>' +
     list.slice(0, 20).map((c) => '<li><span class="when">' + esc(when(c.at)) + '</span> ' + nm(String(c.name || 'A driver')) + ': ' + esc(c.change) + '</li>').join('') +
@@ -4299,7 +4300,7 @@ async function loadFlat() {
     html += card({
       id: item.id,
       day: iso,
-      at: d ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+      at: d ? d.toLocaleTimeString([], { hour12: HC_H12, hour: '2-digit', minute: '2-digit' }) : '',
       type: body.type,
       label: body.label,
       track: body.track,
@@ -5126,7 +5127,7 @@ function lvAhead(lapNumber, ms) {
 }
 `;
 
-const LIVE_JS = `
+const LIVE_JS = `${CLOCK_JS}
 const board = document.getElementById('board');
 const bar = document.getElementById('bar');
 
@@ -5650,7 +5651,7 @@ function keptRace() {
 }
 
 function lbClock(at) {
-  try { return new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; }
+  try { return new Date(at).toLocaleTimeString([], { hour12: HC_H12, hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; }
 }
 
 // --- The position chart (4 Nov 2026, Asher: "create a position chart to
@@ -8354,7 +8355,7 @@ drawUpdates();
 poll(loadSponsor, 300000);
 `;
 
-const HOME_JS = `
+const HOME_JS = `${CLOCK_JS}
 const now = document.getElementById('now');
 const recap = document.getElementById('recap');
 const trackList = document.getElementById('tracks');
@@ -8484,8 +8485,8 @@ function nextNightHtml(answer) {
   const classes = (Array.isArray(b.classes) ? b.classes : []).map(word).filter(Boolean);
   const list = classes.length < 2 ? classes.join('') : classes.slice(0, -1).join(', ') + ' and ' + classes[classes.length - 1];
   const times = [
-    word(b.entriesClose) ? esc('Entries close ' + word(b.entriesClose)) : '',
-    word(b.firstRace) ? esc('First race ' + word(b.firstRace)) : '',
+    word(b.entriesClose) ? esc('Entries close ' + hcHm(word(b.entriesClose))) : '',
+    word(b.firstRace) ? esc('First race ' + hcHm(word(b.firstRace))) : '',
   ].filter(Boolean).join(' &middot; ');
   const title = word(b.title);
   return '<div class="hero next" style="cursor:default">' +
@@ -8548,7 +8549,7 @@ async function load() {
     now.innerHTML = '<a class="hero next" href="' + BASE + '/schedule">' +
       '<span class="kicker">On now</span>' +
       '<span class="big">' + esc(lineTitle(l)) + '</span>' +
-      '<span class="when">' + (l.time ? esc(l.time) + ' &middot; ' : '') + 'see the full schedule &rarr;</span>' + heroLineup(l) + '</a>';
+      '<span class="when">' + (l.time ? esc(hcHm(l.time)) + ' &middot; ' : '') + 'see the full schedule &rarr;</span>' + heroLineup(l) + '</a>';
   } else if (doneTonight(lines)) {
     // Tonight's racing is over (5 Nov 2026): say so, and where the results are.
     now.innerHTML = '<a class="hero" href="' + BASE + '/results">' +
@@ -8935,7 +8936,7 @@ function qualToMoveUp(cls, rows, r) {
 }
 `;
 
-const SCHEDULE_JS = `
+const SCHEDULE_JS = `${CLOCK_JS}
 const board = document.getElementById('board');
 const head = document.getElementById('head');
 const picker = document.getElementById('cls');
@@ -8982,7 +8983,7 @@ function clockOn(text, dayOf) {
 }
 
 function clockWords(ms) {
-  try { return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; }
+  try { return new Date(ms).toLocaleTimeString([], { hour12: HC_H12, hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; }
 }
 
 // Minutes late (negative: early) by the latest line that has started, or null.
@@ -9076,7 +9077,7 @@ function draw() {
     const open = drivers.length > 0 && (opened.has(l.id) || (q && drivers.some((n) => hit(n, q))));
 
     return '<details class="' + status + '" data-id="' + esc(l.id) + '"' + (open ? ' open' : '') + '><summary>' +
-      '<span class="tm">' + esc(l.time || '') + '</span>' +
+      '<span class="tm">' + esc(hcHm(l.time)) + '</span>' +
       '<span class="title">' + esc([l.className, l.description].filter(Boolean).join(' - ') || 'Session') +
         (when ? '<span class="eta">' + esc(when) + '</span>' : '') + '</span>' +
       '<span class="winner">' +
@@ -10597,7 +10598,7 @@ export function signupPage(club: string, clubName: string, context: PageContext 
  * holds. No endpoint, nothing stored, and nothing for the relay to serve
  * twice - the words are already on the screen.
  */
-const NIGHT_JS = `
+const NIGHT_JS = `${CLOCK_JS}
 const box = document.getElementById('nt');
 
 // The code, from either form. Validated to the relay's own shape before
@@ -11647,7 +11648,7 @@ function qualPart() {
 // sign-out still clears a timer an older page kept (ME_LEFTOVERS).
 
 function hm(ms) {
-  return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return new Date(ms).toLocaleTimeString([], { hour12: HC_H12, hour: '2-digit', minute: '2-digit' });
 }
 
 // A time off the laptop, drawn as the phone's own clock reads it - or a
@@ -15635,7 +15636,7 @@ export function managePage(club: string, clubName: string, context: PageContext 
     : `<style>:root{${variables.map(([k, v]) => `${k}:${v}`).join(";")}}</style>`;
 
   return `<!doctype html>
-<html lang="en" class="${look.light ? "light" : "dark"}">
+<html lang="en" class="${look.light ? "light" : "dark"}"${clockAttr(look.clock24)}>
 <head>
 <meta charset="utf-8">
 ${NO_ZOOM_HEAD}
@@ -15935,7 +15936,7 @@ export function appShellPage(club: string, clubName: string, context: PageContex
     : `<style>:root{${variables.map(([k, v]) => `${k}:${v}`).join(";")}}</style>`;
 
   return `<!doctype html>
-<html lang="en" class="hcshell ${look.light ? "light" : "dark"}">
+<html lang="en" class="hcshell ${look.light ? "light" : "dark"}"${clockAttr(look.clock24)}>
 <head>
 <meta charset="utf-8">
 ${NO_ZOOM_HEAD}

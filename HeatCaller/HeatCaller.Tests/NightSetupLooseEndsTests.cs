@@ -164,3 +164,60 @@ public sealed class RacingOffPushTests
         Assert.Equal("Flooded track - sorry!", body);
     }
 }
+
+/// <summary>The 24-hour tick on Themes reaches every time a person reads (12 Nov 2026), phones included.</summary>
+[Collection(AppTimeCollection.Name)]
+public sealed class TwentyFourHourEverywhereTests
+{
+    [Fact]
+    public void Times_with_seconds_follow_the_tick()
+    {
+        var was = AppTime.Use24Hour;
+        try
+        {
+            var at = new DateTime(2026, 11, 12, 19, 5, 9);
+            AppTime.Use24Hour = true;
+            Assert.Equal("19:05:09", AppTime.TimeWithSeconds(at));
+            AppTime.Use24Hour = false;
+            Assert.StartsWith("7:05:09", AppTime.TimeWithSeconds(at));
+        }
+        finally
+        {
+            AppTime.Use24Hour = was;
+        }
+    }
+
+    [Fact]
+    public void The_wifi_pages_are_handed_the_choice_inside_their_head()
+    {
+        var was = AppTime.Use24Hour;
+        try
+        {
+            AppTime.Use24Hour = true;
+            Assert.Equal("<html><head><script>window.HC24=true;</script><title>x</title></head></html>", WebServerService.WithClock("<html><head><title>x</title></head></html>"));
+            AppTime.Use24Hour = false;
+            Assert.Contains("window.HC24=false;", WebServerService.WithClock("<HEAD></HEAD>"));
+            Assert.Equal("no head", WebServerService.WithClock("no head"));
+        }
+        finally
+        {
+            AppTime.Use24Hour = was;
+        }
+    }
+
+    [Fact]
+    public void The_phone_pages_are_told_through_the_site_look()
+    {
+        var json = RelayDocuments.Site(new AppSettings { Use24HourTime = true });
+
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        Assert.True(doc.RootElement.GetProperty("clock24").GetBoolean());
+    }
+}
+
+/// <summary>Tests that flip the app-wide AppTime.Use24Hour run on their own, so no other test reads a time mid-flip.</summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class AppTimeCollection
+{
+    public const string Name = "AppTime (app-wide 12/24-hour flag)";
+}

@@ -576,7 +576,7 @@ public sealed partial class RaceControlControl
             _currentRaceIsRerun = false;
             _rerunPending = false;
 
-            _txtSessionLabel.Text = $"Quick Race {DateTime.Now:HH:mm}";
+            _txtSessionLabel.Text = $"Quick Race {AppTime.TimeOfDay(DateTime.Now)}";
 
             ApplyEffectiveFormat();
             ApplyJumpStartRules();

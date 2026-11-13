@@ -4977,14 +4977,14 @@ public sealed partial class VoiceSettingsControl : UserControl
                 var reason = SafeFile.IsFrozen
                     ? "saving is switched off until the app restarts after a restore"
                     : "the settings file couldn't be written (the console says why)";
-                _lblSaveStatus.Text = $"Could not save at {DateTime.Now:HH:mm:ss}: {reason}. Changes last only until the app closes.";
+                _lblSaveStatus.Text = $"Could not save at {AppTime.TimeWithSeconds(DateTime.Now)}: {reason}. Changes last only until the app closes.";
                 _lblSaveStatus.ForeColor = AppTheme.Danger;
                 ShowSaveFailureOnRaceCalls(failed: true);
                 Status($"Settings NOT saved - {reason}.");
                 return;
             }
 
-            _lblSaveStatus.Text = $"Saved automatically at {DateTime.Now:HH:mm:ss}.";
+            _lblSaveStatus.Text = $"Saved automatically at {AppTime.TimeWithSeconds(DateTime.Now)}.";
             _lblSaveStatus.ForeColor = AppTheme.TextMuted;
             ShowSaveFailureOnRaceCalls(failed: false);
             Status($"Settings saved - {Describe(profile)}");

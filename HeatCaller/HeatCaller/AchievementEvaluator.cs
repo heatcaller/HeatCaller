@@ -545,7 +545,7 @@ public static partial class AchievementEvaluator
 
             if (localStart.Hour >= 22 || localStart.Hour < 4)
             {
-                Award(AchievementCatalogue.NightOwl, localStart.ToString("HH:mm"));
+                Award(AchievementCatalogue.NightOwl, AppTime.TimeOfDay(localStart));
             }
 
             // Still turning up a year later. Taken from the earliest race
@@ -615,7 +615,7 @@ public static partial class AchievementEvaluator
                 // stays a Night Owl rather than becoming an early bird.
                 if (localStart.Hour >= 4 && localStart.Hour < 9)
                 {
-                    Award(AchievementCatalogue.EarlyBird, localStart.ToString("HH:mm"));
+                    Award(AchievementCatalogue.EarlyBird, AppTime.TimeOfDay(localStart));
                 }
 
                 if (localStart.DayOfWeek == DayOfWeek.Friday && localStart.Day == 13)

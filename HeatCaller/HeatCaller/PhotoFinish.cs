@@ -448,7 +448,7 @@ public sealed class PhotoFinish
 
         /// <summary>"21:14:05.123  P1  Sam Smith  lap 12", as listed.</summary>
         public string Title =>
-            $"{AtUtc.ToLocalTime():HH:mm:ss.fff}  {(Position > 0 ? $"P{Position}  " : string.Empty)}{Name}  lap {Lap}{(Finish ? string.Empty : "  (lap)")}";
+            $"{AppTime.LogStamp(AtUtc.ToLocalTime())}  {(Position > 0 ? $"P{Position}  " : string.Empty)}{Name}  lap {Lap}{(Finish ? string.Empty : "  (lap)")}";
     }
 
     /// <summary>The nights with shots kept, newest first.</summary>

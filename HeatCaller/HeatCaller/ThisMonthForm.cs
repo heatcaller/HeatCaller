@@ -349,7 +349,7 @@ public sealed class ThisMonthForm : Form
 
         _refreshing = false;
 
-        var at = DateTime.Now.ToString("HH:mm", CultureInfo.InvariantCulture);
+        var at = AppTime.TimeOfDay(DateTime.Now);
         var problem = UsageMeters.Shared.LastProblem;
 
         // A relay that didn't answer leaves the last figures standing; the

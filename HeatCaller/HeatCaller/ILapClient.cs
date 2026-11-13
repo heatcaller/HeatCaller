@@ -966,7 +966,7 @@ public sealed class ILapClient : IDisposable
         {
             // Dropped rather than waited for when the queue is full: a
             // writer that has stopped must not stop the reader with it.
-            pending.TryAdd($"{DateTime.Now:HH:mm:ss.fff}  {line}");
+            pending.TryAdd($"{AppTime.LogStampNow()}  {line}");
         }
         catch
         {

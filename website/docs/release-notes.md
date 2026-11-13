@@ -4,6 +4,8 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **The 24-hour tick on Themes now reaches every time (12 November).** With **Use 24-hour (military) time** ticked, the times in status lines ("Saved at"), the developer log, achievements, driver requests, the Finish Camera stamp, the Wi-Fi pages and your club's online pages are all 24-hour; with it off they are all AM/PM. The phone pages used each phone's own setting before, and they need the relay redeployed for this. See [Looks and the club logo](screens/looks-and-logo.md).
+
 - **Loose ends from setting up the night (12 November).**
     - **Templates on nights.** **When...** beside **Templates:** on **Race Day → Setup** sets the nights a template is for, such as every Tuesday or a monthly date. On those nights **Next Steps** offers **Start tonight's Tuesday club night**.
     - **Racing's off, by push too.** **Call It Off...** can also send a push to every phone signed up for the club's alerts.

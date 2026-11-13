@@ -691,6 +691,8 @@ internal static class RelayDocuments
             ["theme"] = theme,
             ["tagline"] = tagline,
             ["logo"] = logo,
+            // 12 Nov 2026: the 24-hour tick on Themes, so the phone pages write times the club's way.
+            ["clock24"] = settings.Use24HourTime,
         };
 
         if (plate is Color plateColor)
