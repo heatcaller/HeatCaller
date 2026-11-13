@@ -9,8 +9,12 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
     - **The Setup tile goes to Setup first time.** Tapping **Setup** on Me went to the car card on the first tap and to Setup only on the second.
     - **Entry fee at the top of Me.** "Entry: $15.00 - pay at the desk" (or "Paid") is now right under your name on every part of Me, not only on the Check in card.
     - **More times follow the 24-hour tick:** Driver Requests' sent time, online sign-ups, backups, seasons, pace analysis, transponder transfers and the voice and relay settings.
+    - **I'm coming from Home.** While the club is taking entries, Home's **Next race night** card says "Coming? Tap to put yourself down" and opens Me at the **I'm coming** card. Before, tapping it did nothing.
+    - **Alerts as a banner.** In-app alerts on a driver's night ("Your race is next", "Your result is in", marshal duty) drop in from the top as a banner in the club's colours, title over the details. Tap it to put it away.
+    - **The leaderboard in "Your result is in".** The push and the banner list the race's top three with their laps, with your own line marked "(you)".
+    - **The post in the marshal push.** The 5-minute marshal push now names the post in its title: "Marshal at Turn 3 in about 5 minutes".
 
-  The two phone fixes need the relay redeployed.
+  The phone fixes need the relay redeployed.
 
 - **The 24-hour tick on Themes now reaches every time (12 November).** With **Use 24-hour (military) time** ticked, the times in status lines ("Saved at"), the developer log, achievements, driver requests, the Finish Camera stamp, the Wi-Fi pages and your club's online pages are all 24-hour; with it off they are all AM/PM. The phone pages used each phone's own setting before, and they need the relay redeployed for this. See [Looks and the club logo](screens/looks-and-logo.md).
 

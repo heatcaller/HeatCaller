@@ -202,6 +202,7 @@ internal static class DriverNightExtras
                 Out = practice ? null : OutOf(row),
                 Rating = rating,
                 Field = kind is null ? null : FieldOf(results, practice, abbreviate),
+                Top = TopOf(results, practice, abbreviate),
                 Lines = said.Count > 0 ? said.ToList() : null,
             });
         }
@@ -531,6 +532,37 @@ internal static class DriverNightExtras
         }).ToList();
     }
 
+    /// <summary>
+    /// The race's top three as the "Your result is in" push lists them (12 Nov
+    /// 2026, Asher: "when the race results are posted add the leaderboard to
+    /// the push notification"): place, public name and laps, ghosts left out,
+    /// the same names the race's public result shows. Null for a practice run
+    /// or a race of one.
+    /// </summary>
+    internal static List<NightTopRow>? TopOf(IReadOnlyList<SessionResultEntry> results, bool practice, bool abbreviate)
+    {
+        var rows = results.Where(r => r is not null && !Ghosts.IsGhost(r.Transponder)).ToList();
+
+        if (practice || rows.Count < 2)
+        {
+            return null;
+        }
+
+        var names = RelayPublisher.DisplayNames(
+            rows.Select(r => RelayDocuments.PublicNameOrUnnamed(r.DriverName, r.Transponder)).ToList(),
+            abbreviate,
+            rows.Select(r => (string?)r.Transponder).ToList());
+
+        var top = rows
+            .Select((r, i) => (Row: r, Name: names[i]))
+            .Where(x => x.Row.Position is >= 1 and <= 3)
+            .OrderBy(x => x.Row.Position)
+            .Select(x => new NightTopRow { Pos = x.Row.Position, Name = x.Name, Laps = x.Row.Laps })
+            .ToList();
+
+        return top.Count > 0 ? top : null;
+    }
+
     private static int IndexOfRow(IReadOnlyList<SessionResultEntry> results, SessionResultEntry row)
     {
         for (var i = 0; i < results.Count; i++)
@@ -754,6 +786,11 @@ internal sealed record NightRace
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<NightFieldRow>? Field { get; init; }
 
+    /// <summary>The race's top three, for the "Your result is in" push (12 Nov 2026) - see DriverNightExtras.TopOf. Left out for practice.</summary>
+    [JsonPropertyName("top")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<NightTopRow>? Top { get; init; }
+
     /// <summary>
     /// Their own lines for this race - RaceLines.For (11 Nov 2026, build
     /// plan 7.4): "Held off Sam for 4 laps", "Best Stock finish this year".
@@ -773,6 +810,19 @@ internal sealed record NightRace
     [JsonPropertyName("qUntil")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public long? QueryUntil { get; init; }
+}
+
+/// <summary>One of a race's top three on a driver's night (12 Nov 2026): place, public name, laps.</summary>
+internal sealed record NightTopRow
+{
+    [JsonPropertyName("p")]
+    public int Pos { get; init; }
+
+    [JsonPropertyName("n")]
+    public string Name { get; init; } = string.Empty;
+
+    [JsonPropertyName("laps")]
+    public int Laps { get; init; }
 }
 
 /// <summary>One driver in `races[].field`: {pos?, name, qual?, lapsMs?, posAt?, startMs?} - the public result row's shape.</summary>

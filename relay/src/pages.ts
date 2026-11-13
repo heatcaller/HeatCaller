@@ -425,6 +425,19 @@ header:has(.brand) { padding-top: 8px; }
 .follow span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .follow button { background: none; border: 0; color: var(--muted); font: inherit; font-size: 1.2rem;
                  line-height: 1; cursor: pointer; padding: 4px 10px; }
+/* In-app alerts as a banner (12 Nov 2026): the club's colours, dropping in
+   from the top like the phone's own notifications - see alertNow. */
+.hc-banner { position: fixed; z-index: 30; left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px));
+  top: max(10px, var(--sa-t, 0px)); margin: 0 auto; max-width: 34rem; display: grid; gap: 2px; cursor: pointer;
+  padding: 12px 16px 12px 14px; border-radius: 16px; color: var(--text);
+  background: color-mix(in srgb, var(--primary) 18%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, transparent); border-left: 5px solid var(--accent);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); transform: translateY(calc(-100% - 40px)); transition: transform 0.28s ease; }
+.hc-banner.on { transform: none; }
+.hc-banner b { font-size: 1rem; }
+.hc-banner span { font-size: 0.9rem; color: var(--muted); }
+.hc-banner span:first-of-type { color: var(--text); }
+@media (prefers-reduced-motion: reduce) { .hc-banner { transition: none; } }
 .toast { position: fixed; left: 50%; top: max(14px, var(--sa-t)); transform: translateX(-50%);
          background: var(--text); color: var(--bg); border-radius: 10px; padding: 10px 16px; font-size: 0.9rem;
          font-weight: 600; z-index: 20; max-width: calc(100% - 32px); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35); }
@@ -11391,9 +11404,51 @@ function alertsAlso() {
 
 // On the page while it is open; the relay's push says it with the page
 // closed (pushOn).
+//
+// A banner (12 Nov 2026, Asher: "theme in the in app notifications for the
+// relay. can we make them a banner notification?"): it drops in from the top
+// in the club's own colours - title bold, the words under it, a line each -
+// the way the phone's own notifications look, instead of the small
+// one-line pill that confirms a tap. Tap it to put it away; it goes by
+// itself after eight seconds. A newer alert takes its place.
 function alertNow(title, body) {
   buzz();
-  toast(title + (body ? ' - ' + body : ''));
+  let b = document.getElementById('hc-banner');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'hc-banner';
+    b.className = 'hc-banner';
+    b.setAttribute('role', 'alert');
+    b.addEventListener('click', () => { b.className = 'hc-banner'; });
+    document.body.appendChild(b);
+  }
+  b.textContent = '';
+  const t = document.createElement('b');
+  t.textContent = String(title || '');
+  b.appendChild(t);
+  const lines = String(body || '').split('\\n').filter((line) => line.trim() !== '');
+  for (const line of lines) {
+    const s = document.createElement('span');
+    s.textContent = line;
+    b.appendChild(s);
+  }
+  // Read out as one sentence, the way the pill read.
+  b.setAttribute('aria-label', [String(title || '')].concat(lines).join(' - '));
+  // Out and in again, so a second alert drops in rather than just changing.
+  b.className = 'hc-banner';
+  void b.offsetWidth;
+  b.className = 'hc-banner on';
+  clearTimeout(alertNow.timer);
+  alertNow.timer = setTimeout(() => { b.className = 'hc-banner'; }, 8000);
+}
+
+// The race's top three under "Your result is in", as the push lists them.
+function topLines(r) {
+  const top = r && Array.isArray(r.top) ? r.top : [];
+  return top.slice(0, 3)
+    .filter((x) => x && num(x.p) > 0 && typeof x.n === 'string' && x.n.trim() !== '')
+    .map((x) => num(x.p) + '. ' + x.n.trim() + (num(x.laps) > 0 ? ' - ' + num(x.laps) + (num(x.laps) === 1 ? ' lap' : ' laps') : '')
+      + (num(x.p) === num(r.pos) ? ' (you)' : ''));
 }
 
 // --- Lap times in my ear, on their own night (29 Oct 2026, asked for by
@@ -14426,7 +14481,7 @@ async function refreshNight() {
   const races = night && Array.isArray(night.races) ? night.races : [];
   if (alertsOn && racesSeen >= 0 && races.length > racesSeen) {
     const r = races[races.length - 1] || {};
-    alertNow('Your result is in', [String(r.label || ''), finishWords(r)].filter(Boolean).join(' - '));
+    alertNow('Your result is in', [[String(r.label || ''), finishWords(r)].filter(Boolean).join(' - '), ...topLines(r)].join('\\n'));
   }
   racesSeen = races.length;
   drawLive();
