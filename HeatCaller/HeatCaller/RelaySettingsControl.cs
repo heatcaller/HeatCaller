@@ -114,6 +114,9 @@ public sealed class RelaySettingsControl : UserControl
     private readonly Label _lblTestResult = new();
     private readonly Label _lblStatus = new();
     private readonly Label _lblDetail = new();
+
+    /// <summary>Whether the Status card is naming a restored backup's relay address, as it does in Simple mode where the address row is hidden.</summary>
+    private bool _restoredAddressNamed;
     private readonly TextBox _txtTagline = new();
     private readonly TextBox _txtNewcomerWhere = new();
     private readonly TextBox _txtNewcomerWhen = new();
@@ -523,8 +526,10 @@ public sealed class RelaySettingsControl : UserControl
         {
             // Saved together with the fields: turning this on while the
             // token sat unsaved in its box would switch on a publisher
-            // with nothing to publish with.
-            SaveFields();
+            // with nothing to publish with. The tick alone does not take a
+            // restored backup's address as checked, though - with publishing
+            // off the page had not yet said it was held (Bug hunt 17).
+            SaveFields(confirmRestored: false);
         };
 
         _txtBaseUrl.PlaceholderText = "http://localhost:8787";
@@ -2659,11 +2664,23 @@ public sealed class RelaySettingsControl : UserControl
         if (_settings.SmtpPort == 465 || RestoredSettings.IsHeld(RestoredSettings.Part.Mail))
         {
             ShowMailResult(PinMailer.ConfigurationProblem(_settings) ?? string.Empty, ok: false);
+            _mailProblemShown = true;
+        }
+        else if (_mailProblemShown)
+        {
+            // Put right - the port changed, a provider picked - so the line
+            // stops saying it is wrong (Bug hunt 17). Only a problem this
+            // put there: what a test email said is left alone.
+            ShowMailResult(MailTestHint, ok: true);
         }
     }
 
+    /// <summary>Whether the result line is showing a problem with the settings (RefreshMailProblem) rather than the hint or what a test said.</summary>
+    private bool _mailProblemShown;
+
     private void ShowMailResult(string message, bool ok)
     {
+        _mailProblemShown = false;
         _lblMailResult.Text = message;
         _lblMailResult.ForeColor = ok ? AppTheme.TextDark : AppTheme.Primary;
     }
@@ -3069,12 +3086,20 @@ public sealed class RelaySettingsControl : UserControl
     }
 
     /// <summary>Writes the boxes to settings. False when the club id is one the relay could never hold - saved anyway, and said so.</summary>
-    private bool SaveFields()
+    private bool SaveFields(bool confirmRestored = true)
     {
         if (_loading)
         {
             return false;
         }
+
+        // Whether this save takes a restored backup's address as checked
+        // (RestoredSettings): only with the address in front of whoever
+        // pressed - its box, or in Simple mode, which hides the box, the
+        // Status card naming it (Bug hunt 17).
+        var confirming = confirmRestored
+                         && RestoredSettings.IsHeld(RestoredSettings.Part.PublishRelay)
+                         && (SimpleMode.ShowAll || _restoredAddressNamed);
 
         // Lower case, as the relay keeps it: "Acme-RC" typed here is
         // plainly acme-rc, and the relay answers anything else with a 404.
@@ -3088,6 +3113,20 @@ public sealed class RelaySettingsControl : UserControl
         _settings.RelayBaseUrl = RelayPublisher.NormaliseBaseUrl(_txtBaseUrl.Text);
         _settings.RelayClub = club;
         _settings.RelayToken = _txtToken.Text.Trim();
+
+        // The set "that last tested clean" came out of the same backup. Only
+        // the address being saved has been checked, so a last-good set for
+        // any other address is forgotten rather than offered afterwards as
+        // this laptop's own (Bug hunt 17). The next clean test remembers anew.
+        if (confirming
+            && !string.Equals(RelayPublisher.NormaliseBaseUrl(_settings.RelayLastGoodBaseUrl), _settings.RelayBaseUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            _settings.RelayLastGoodBaseUrl = string.Empty;
+            _settings.RelayLastGoodClub = string.Empty;
+            _settings.RelayLastGoodToken = string.Empty;
+            _settings.RelayLastGoodUtc = null;
+        }
+
         _settings.Save();
 
         // Show the tidied address and club back, so "localhost:8787"
@@ -3099,11 +3138,15 @@ public sealed class RelaySettingsControl : UserControl
             _txtClub.Text = club;
         }
 
-        // Every way here is somebody at this page pressing something, with
-        // the address in front of them - so an address a restored backup
-        // brought in is theirs from now on (RestoredSettings). Before
-        // SettingsChanged, which is what reads it again.
-        RestoredSettings.Confirm(RestoredSettings.Part.PublishRelay);
+        // Somebody at this page pressed Save or Test Connection with the
+        // address in front of them (see "confirming" above) - so an address
+        // a restored backup brought in is theirs from now on
+        // (RestoredSettings). Before SettingsChanged, which is what reads
+        // it again.
+        if (confirming)
+        {
+            RestoredSettings.Confirm(RestoredSettings.Part.PublishRelay);
+        }
 
         _publisher.SettingsChanged();
         RefreshStatus();
@@ -3162,7 +3205,9 @@ public sealed class RelaySettingsControl : UserControl
 
     private void RestoreLastGood()
     {
-        if (!HasLastGood())
+        // Not while a restored backup's settings are unchecked: the set that
+        // "last worked" came out of the same file (Bug hunt 17).
+        if (!HasLastGood() || RestoredSettings.IsHeld(RestoredSettings.Part.PublishRelay))
         {
             return;
         }
@@ -3192,6 +3237,15 @@ public sealed class RelaySettingsControl : UserControl
         if (!HasLastGood())
         {
             _lblLastGood.Text = "Nothing has tested clean yet. A successful test remembers what it used.";
+            _btnRestore.Enabled = false;
+            return;
+        }
+
+        // Held after a restore: the last-good set is from the backup too, so
+        // it is not vouched for or offered until the settings are checked.
+        if (RestoredSettings.IsHeld(RestoredSettings.Part.PublishRelay))
+        {
+            _lblLastGood.Text = RestoredSettings.LastGoodHeldMessage;
             _btnRestore.Enabled = false;
             return;
         }
@@ -3391,22 +3445,36 @@ public sealed class RelaySettingsControl : UserControl
 
         var status = _publisher.Status;
 
+        // Before "Not configured", which is what the publisher reports while
+        // it holds back - and which would send somebody looking for a
+        // missing token that is sitting right there. And before "Not
+        // publishing" (Bug hunt 17): with publishing off the hold was never
+        // said, and Save or the tick then took the address as checked.
+        if (RestoredSettings.IsHeld(RestoredSettings.Part.PublishRelay))
+        {
+            _lblStatus.Text = "Check these settings";
+            _lblStatus.ForeColor = AppTheme.Primary;
+
+            // Simple mode hides the address row, so there is no "address
+            // above": the address is named here instead, and Save only
+            // takes it as checked once it has been (SaveFields).
+            var address = RelayPublisher.NormaliseBaseUrl(_txtBaseUrl.Text);
+
+            _lblDetail.Text = SimpleMode.ShowAll
+                ? RestoredSettings.PublishRelayMessage
+                : RestoredSettings.PublishRelayMessageNaming(address);
+
+            _restoredAddressNamed = !SimpleMode.ShowAll;
+            return;
+        }
+
+        _restoredAddressNamed = false;
+
         if (!status.Enabled)
         {
             _lblStatus.Text = "Not publishing";
             _lblStatus.ForeColor = AppTheme.TextMuted;
             _lblDetail.Text = "Tick \"Publish to the relay\" above once the address, club and token are set.";
-            return;
-        }
-
-        // Before "Not configured", which is what the publisher reports while
-        // it holds back - and which would send somebody looking for a
-        // missing token that is sitting right there.
-        if (RestoredSettings.IsHeld(RestoredSettings.Part.PublishRelay))
-        {
-            _lblStatus.Text = "Check these settings";
-            _lblStatus.ForeColor = AppTheme.Primary;
-            _lblDetail.Text = RestoredSettings.PublishRelayMessage;
             return;
         }
 

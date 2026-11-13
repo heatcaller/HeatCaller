@@ -152,6 +152,19 @@ internal static class RestoredSettings
             parts |= Part.PublishRelay;
         }
 
+        // The address "that last tested clean" is one too (Bug hunt 17):
+        // Restore Last Working on the Club Website page copies it into the
+        // live settings along with this laptop's own sealed token. One this
+        // laptop was neither using nor remembering holds the relay, and the
+        // page does not offer it while held.
+        var restoredLastGood = RelayAddress(restored, nameof(AppSettings.RelayLastGoodBaseUrl));
+
+        if (NewAddress(restoredLastGood, RelayAddress(live, nameof(AppSettings.RelayBaseUrl)))
+            && NewAddress(restoredLastGood, RelayAddress(live, nameof(AppSettings.RelayLastGoodBaseUrl))))
+        {
+            parts |= Part.PublishRelay;
+        }
+
         if (NewAddress(RelayAddress(restored, nameof(AppSettings.VoiceRelayBaseUrl)), RelayAddress(live, nameof(AppSettings.VoiceRelayBaseUrl))))
         {
             parts |= Part.VoiceRelay;
@@ -233,6 +246,20 @@ internal static class RestoredSettings
     public const string PublishRelayMessage =
         "These relay settings came from a restored backup, so nothing is published or collected until you check them. "
         + "If the address above is your club's relay, press Save or Test Connection.";
+
+    /// <summary>
+    /// The same with the address named, for where the page has no address
+    /// "above" to check: Simple mode hides that row (Bug hunt 17).
+    /// </summary>
+    public static string PublishRelayMessageNaming(string address) =>
+        address.Trim().Length == 0
+            ? PublishRelayMessage
+            : "These relay settings came from a restored backup, so nothing is published or collected until you check them. "
+              + $"They send to {address.Trim()} - if that is your club's relay, press Save or Test Connection.";
+
+    /// <summary>Why Restore Last Working is not offered while the relay is held, for the Club Website page.</summary>
+    public const string LastGoodHeldMessage =
+        "The settings that last tested clean came with a restored backup too, so they are not offered until these are checked.";
 
     /// <summary>Why the voice is not asking its relay, for Voice Settings.</summary>
     public const string VoiceRelayMessage =
