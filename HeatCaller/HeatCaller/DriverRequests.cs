@@ -519,6 +519,32 @@ internal sealed class DriverRequestStore
         }
     }
 
+    /// <summary>
+    /// Writes down what the laptop worked out while filing a request, beside
+    /// what the phone sent (12 Nov 2026, setup plan step 8): a marshal swap
+    /// keeps who was asked and which post, since the phone only sent a key.
+    /// Kept on this laptop only. False for a request it doesn't have.
+    /// </summary>
+    internal bool Note(string id, IReadOnlyDictionary<string, string> texts)
+    {
+        lock (_gate)
+        {
+            if (_file.Requests.FirstOrDefault(r => r.Id == id) is not { } request)
+            {
+                return false;
+            }
+
+            foreach (var (key, value) in texts)
+            {
+                request.Texts[key] = value;
+            }
+
+            Changed();
+            Save();
+            return true;
+        }
+    }
+
     /// <summary>Back to waiting - for an undo of the desk's answer here. The phone is shown "waiting" again on its next poll.</summary>
     internal bool Reopen(string id)
     {
@@ -725,6 +751,13 @@ internal sealed class DriverRequestStore
         // 12 Nov 2026, "I'm coming" (setup plan C1).
         "day" => 10,
         "classes" => 200,
+
+        // 12 Nov 2026, marshals from their phones (setup plan step 8). The
+        // round is a Guid "N"; "to" a MarshalSwaps key; "offer" a relay id.
+        "round" => 32 + 8,
+        "to" => MarshalSwaps.KeyLength,
+        "offer" => 24 + 8,
+        "answer" => 3,
 
         // 5 Nov 2026, the garage from the phone.
         "op" => 16,
@@ -1087,6 +1120,13 @@ internal sealed partial class DriverRequestDesk
                     : $"Coming on {request.Text("day")}: {request.Text("classes").Replace(",", ", ")}");
                 break;
 
+            // Marshals from their phones (12 Nov 2026, setup plan step 8).
+            case DriverAsk.Post:
+            case DriverAsk.Swap:
+            case DriverAsk.Cover:
+                lines.Add(MarshalWords(request));
+                break;
+
             default:
                 lines.Add(WriteWords(request));
                 break;
@@ -1155,6 +1195,9 @@ internal sealed partial class DriverRequestDesk
         DriverAsk.Late => "More time",
         DriverAsk.Skip => "Skip my race",
         DriverAsk.Coming => "Coming next race night",
+        DriverAsk.Post => "At my marshal post",
+        DriverAsk.Swap => "Cover my post?",
+        DriverAsk.Cover => "Marshal swap",
         _ => kind,
     };
 

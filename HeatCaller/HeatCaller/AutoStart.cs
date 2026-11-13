@@ -84,6 +84,13 @@ public sealed class AutoStartClock
     /// <summary>True once somebody has said the next race's marshals are in place.</summary>
     public bool MarshalsConfirmed => _marshalsConfirmed;
 
+    /// <summary>
+    /// Marshals who said from their phone they're at their post (12 Nov 2026,
+    /// setup plan step 8), by round. Not cleared by <see cref="Open"/> or
+    /// <see cref="Close"/>: a marshal says so before the gap opens.
+    /// </summary>
+    public MarshalPosts Posts { get; } = new();
+
     /// <summary>The next race this gap is counting down to, or null when it isn't open.</summary>
     public string? RoundId { get; private set; }
 
@@ -354,4 +361,97 @@ public sealed class AutoStartClock
     /// <summary>Whether the automatic start is off tonight: switched off, or turned off for this night only.</summary>
     public static bool OffTonight(bool switchedOn, string? offForNight, string tonight) =>
         !switchedOn || string.Equals(offForNight, tonight, StringComparison.Ordinal);
+}
+
+/// <summary>
+/// Marshals who said from their own phone that they're at their post (12 Nov
+/// 2026, setup plan step 8), round by round.
+///
+/// WHY: Marshals in place (setup plan D4) was one button for the whole race -
+/// the desk looking down the track and pressing it, or the deputy's remote.
+/// The marshals themselves know first, and a desk that can read "2 of 3 in:
+/// Hugh Turn, Rhoda Rage; waiting for Axel Grease" knows who to shout for
+/// instead of counting heads. When every marshal of the next race has said
+/// so, the start stops waiting by itself; the desk's Marshals in place still
+/// opens it whatever the phones say.
+///
+/// Kept by round, not by gap: the "I'm at my post" button is on the phone
+/// while the race before is still running, before Auto start has opened the
+/// gap it would otherwise be kept in. Only the last <see cref="RoundsKept"/>
+/// rounds are remembered - a night is a few dozen races.
+/// </summary>
+public sealed class MarshalPosts
+{
+    /// <summary>How many rounds' confirmations are kept, oldest forgotten first.</summary>
+    public const int RoundsKept = 32;
+
+    private readonly Dictionary<string, HashSet<string>> _in = new(StringComparer.Ordinal);
+    private readonly List<string> _order = new();
+
+    /// <summary>A marshal (by main transponder) is at their post for a round. True the first time.</summary>
+    public bool In(string roundId, string marshal)
+    {
+        if (string.IsNullOrWhiteSpace(roundId) || string.IsNullOrWhiteSpace(marshal))
+        {
+            return false;
+        }
+
+        if (!_in.TryGetValue(roundId, out var set))
+        {
+            set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _in[roundId] = set;
+            _order.Add(roundId);
+
+            while (_order.Count > RoundsKept)
+            {
+                _in.Remove(_order[0]);
+                _order.RemoveAt(0);
+            }
+        }
+
+        return set.Add(marshal.Trim());
+    }
+
+    /// <summary>Whether this marshal has said they're at their post for this round.</summary>
+    public bool IsIn(string? roundId, string? marshal) =>
+        roundId is not null && marshal is not null && _in.TryGetValue(roundId, out var set) && set.Contains(marshal.Trim());
+
+    /// <summary>For each marshal given, whether they're in - in the same order.</summary>
+    public IReadOnlyList<bool> Arrived(string roundId, IReadOnlyList<string> marshals) =>
+        marshals.Select(m => IsIn(roundId, m)).ToList();
+
+    /// <summary>True when there are marshals and every one of them has said they're at their post.</summary>
+    public bool AllIn(string roundId, IReadOnlyList<string> marshals) =>
+        marshals.Count > 0 && marshals.All(m => IsIn(roundId, m));
+}
+
+/// <summary>
+/// The next race's start as the phones count it down (12 Nov 2026, setup plan
+/// step 8): <paramref name="AtUtc"/> while counting, and the state in one of
+/// three words - "counting", "held" or "soon".
+/// </summary>
+public sealed record PhoneCountdown(DateTime? AtUtc, string State)
+{
+    /// <summary>
+    /// What the Live and Schedule pages are told between races - the Big
+    /// Screen band's three states (<see cref="AutoStartClock.Band"/>), with
+    /// the start time instead of the time left, so a phone counts it down
+    /// itself between two of the laptop's publishes. Null with the clock off.
+    /// To the second, so the same count is the same document.
+    /// </summary>
+    public static PhoneCountdown? For(AutoStartState state, DateTime? startsAtUtc) => state switch
+    {
+        AutoStartState.Counting when startsAtUtc is { } at => new PhoneCountdown(
+            new DateTime(at.Ticks - at.Ticks % TimeSpan.TicksPerSecond, DateTimeKind.Utc), "counting"),
+        AutoStartState.Held => new PhoneCountdown(null, "held"),
+        AutoStartState.WaitingForFloor or AutoStartState.WaitingForCars or AutoStartState.WaitingForMarshals or AutoStartState.Start
+            => new PhoneCountdown(null, "soon"),
+        _ => null,
+    };
+
+    /// <summary>A short key that changes exactly when the phones need telling again. Empty for none.</summary>
+    public static string KeyOf(PhoneCountdown? countdown) =>
+        countdown is null
+            ? string.Empty
+            : countdown.State + "|" + (countdown.AtUtc?.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty);
 }

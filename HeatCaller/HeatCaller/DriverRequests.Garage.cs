@@ -73,6 +73,13 @@ internal sealed partial class DriverRequestDesk
                 continue;
             }
 
+            // A yes to covering a marshal post waits for the desk while the
+            // club wants to OK swaps (12 Nov 2026, setup plan step 8).
+            if (NeedsDesk(request))
+            {
+                continue;
+            }
+
             // The old five-part form is filed, and answered, as it always
             // was - and its refusals still leave it for the desk.
             if (request.Kind == DriverAsk.Setup && request.Text("car").Length == 0)
@@ -98,6 +105,9 @@ internal sealed partial class DriverRequestDesk
                     DriverAsk.Car => ApplyCar(request, out said),
                     DriverAsk.Photo => ApplyPhoto(request, out said),
                     DriverAsk.Coming => ApplyComing(request, out said),
+                    DriverAsk.Post => ApplyPost(request, out said),
+                    DriverAsk.Swap => ApplySwap(request, out said),
+                    DriverAsk.Cover => ApplyCover(request, out said),
                     _ => ApplySetup(request, out said),
                 };
             }
@@ -132,6 +142,9 @@ internal sealed partial class DriverRequestDesk
         DriverAsk.Pack or DriverAsk.PackEdit => _packs is not null,
         DriverAsk.Car or DriverAsk.Photo => Cars is not null,
         DriverAsk.Coming => PreEntries is not null,
+        DriverAsk.Post => MarshalAtPost is not null,
+        DriverAsk.Swap => DutyOf is not null && CoverCandidates is not null,
+        DriverAsk.Cover => ApplyMarshalCover is not null,
         _ => Setups is not null,
     };
 

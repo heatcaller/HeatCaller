@@ -1021,6 +1021,7 @@ public partial class MainForm
         var changed = state != _lastRelayRaceState;
 
         _lastRelayRaceState = state;
+        changed |= CountdownChanged(ref _lastRelayCountdown);
 
         if (!live && !changed)
         {
