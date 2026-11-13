@@ -222,9 +222,9 @@ internal static class SimpleMode
 
         foreach (var line in MoreLines)
         {
-            if (line.TryGetTarget(out var control) && control.Visible == showAll)
+            if (line.TryGetTarget(out var control))
             {
-                control.Visible = !showAll;
+                SetShown(control, !showAll);
             }
         }
 
@@ -285,11 +285,28 @@ internal static class SimpleMode
 
     private static void Show(Control part, Func<bool>? own, bool simpleOnly = false)
     {
-        var show = simpleOnly ? !ShowAll : Shows(own);
+        SetShown(part, simpleOnly ? !ShowAll : Shows(own));
+    }
 
+    /// <summary>
+    /// Shows or hides one part. 13 Nov 2026, Bug hunt 17: Visible reads
+    /// false for anything on a page or tab that is not showing, whatever the
+    /// part's own setting - so hiding a part there was taken as already
+    /// done, and it was still on the page when the page was next opened
+    /// (Advanced cards in Simple, the More settings line in Advanced). Under
+    /// a hidden parent it is now hidden regardless, and the parent told to
+    /// lay out again, which a change it cannot see would not do.
+    /// </summary>
+    private static void SetShown(Control part, bool show)
+    {
         if (part.Visible != show)
         {
             part.Visible = show;
+        }
+        else if (!show && part.Parent is { Visible: false } parent)
+        {
+            part.Visible = false;
+            parent.PerformLayout(part, nameof(Control.Visible));
         }
     }
 

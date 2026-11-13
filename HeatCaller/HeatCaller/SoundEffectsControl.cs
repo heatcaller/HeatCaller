@@ -1503,9 +1503,21 @@ public sealed class SoundEffectsControl : UserControl
         var races = profile.Effects.Values.Count(c => c.Enabled);
         var practice = profile.Effects.Values.Count(c => c.EnabledInPractice ?? c.Enabled);
 
-        _lblStatus.Text = $"Saved {AppTime.TimeWithSeconds(DateTime.Now)} - {Plural.Of(races, "sound")} on for races, {practice} for practice.";
-        _lblStatus.ForeColor = AppTheme.TextMuted;
+        _lblStatus.Text = SavedStatus(_store.LoadedUnreadable, AppTime.TimeWithSeconds(DateTime.Now), races, practice);
+        _lblStatus.ForeColor = _store.LoadedUnreadable ? AppTheme.Danger : AppTheme.TextMuted;
     }
+
+    /// <summary>
+    /// The status line after a save. 13 Nov 2026, Bug hunt 17: it said
+    /// "Saved" even while the store was holding its writes (the file could
+    /// not be read at startup - SoundEffectsStore.LoadedUnreadable), so an
+    /// evening's set-up looked saved and was gone at the next start.
+    /// </summary>
+    internal static string SavedStatus(bool notWritten, string time, int races, int practice) =>
+        notWritten
+            ? "Not saved - the sounds file (sound-effects.json) couldn't be read when HeatCaller started, so it is left as it is. "
+              + "These changes play until HeatCaller closes. Restart HeatCaller to save changes."
+            : $"Saved {time} - {Plural.Of(races, "sound")} on for races, {practice} for practice.";
 
     /// <summary>
     /// Puts one of this page's bulk or destructive changes on the undo

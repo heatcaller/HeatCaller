@@ -51,15 +51,38 @@ public static class SkipDns
     }
 
     /// <summary>
-    /// Puts a skip back: the grid as it was and the DNS mark off - and, when
+    /// Puts a skip back: the driver in their old place on the grid and the DNS mark off - and, when
     /// the race has run since, the DNS off its saved result
     /// (<paramref name="result"/>, which the caller then saves).
     /// </summary>
     public static void PutBack(RoundDefinition race, string transponder, Undo undo, SessionRecord? result = null)
     {
-        if (!race.IsRecorded)
+        // 13 Nov 2026, Bug hunt 17: only this driver goes back, into the grid
+        // as it is now. The whole grid from before the skip used to be put
+        // back, which dropped anyone returned to the grid since (the Next Up
+        // bar's "Put ... back") - off the grid with no DNS mark either.
+        if (!race.IsRecorded && !race.AssignedTransponders.Contains(transponder, StringComparer.OrdinalIgnoreCase))
         {
-            race.AssignedTransponders = undo.GridBefore.ToList();
+            var grid = race.AssignedTransponders.ToList();
+            var was = undo.GridBefore.FindIndex(t => string.Equals(t, transponder, StringComparison.OrdinalIgnoreCase));
+
+            // Their old place: straight after the nearest driver who was
+            // ahead of them and is still on the grid, or first with none.
+            var at = was < 0 ? grid.Count : 0;
+
+            for (var i = was - 1; i >= 0; i--)
+            {
+                var ahead = grid.FindIndex(t => string.Equals(t, undo.GridBefore[i], StringComparison.OrdinalIgnoreCase));
+
+                if (ahead >= 0)
+                {
+                    at = ahead + 1;
+                    break;
+                }
+            }
+
+            grid.Insert(at, was < 0 ? transponder : undo.GridBefore[was]);
+            race.AssignedTransponders = grid;
         }
 
         if (!undo.WasMarked)

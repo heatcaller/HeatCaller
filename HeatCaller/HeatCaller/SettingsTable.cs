@@ -213,10 +213,6 @@ internal static class SettingsTable
             nameof(AppSettings.AskForWaivers),
             nameof(AppSettings.WaiverMonths),
             nameof(AppSettings.CheckMemberships),
-            nameof(AppSettings.NextNight),
-            nameof(AppSettings.CloseNightOwnItems),
-            nameof(AppSettings.ReadyOwnItems),
-            nameof(AppSettings.NightTemplates),
 
             // Cast: the Co-host's "What they're like", every "If ElevenLabs
             // runs out" Kokoro voice (5 Nov 2026), and the Recap host,
@@ -447,6 +443,16 @@ internal static class SettingsTable
 
             // The club's own track parts, for the Track Designer.
             nameof(AppSettings.TrackStock),
+
+            // The club's own night templates, its own checklist lines and
+            // the next night it has told the drivers about. 13 Nov 2026, Bug
+            // hunt 17: these were filed as tuning, so Restore Default
+            // Settings emptied them (and withdrew the announced night), and
+            // Put Back Earlier Settings swapped them for an older copy's.
+            nameof(AppSettings.NightTemplates),
+            nameof(AppSettings.CloseNightOwnItems),
+            nameof(AppSettings.ReadyOwnItems),
+            nameof(AppSettings.NextNight),
 
             // First-run flags, one-time steps, and the mode itself.
             nameof(AppSettings.HasCompletedFirstRun),
