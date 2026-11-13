@@ -39,10 +39,10 @@ The card works out the single next thing to do, with one button that does it. Th
 
 | Situation | Headline | Button |
 |---|---|---|
-| No race day is open, and a night template is set for today (see **Templates:** on [Race Day → Setup](events-and-entries.md#about-the-day)) | "No race day is open." | **Start tonight's** *template* - for example **Start tonight's Tuesday club night** |
-| No race day is open, and there's a race day from before tonight to go by | "No race day is open." | **Start tonight like last time**. It starts tonight with the last race day's kind of night and classes, and everything else a new day carries forward (see [New Race Day](events-and-entries.md#new-race-day)). To change something first, use **Set Up Tonight** on **Setup** |
-| No race day is open | "No race day is open." | **Start a Race Day** (opens the Set Up Tonight wizard) |
-| The current race day is closed | "Race Day 21 Sep 2026" is closed. | **Start a Race Day** |
+| No race day is open, and a night template is set for today (see **Templates:** on [Race Day → Setup](events-and-entries.md#about-the-day)) | "No race day is open." | **Start tonight's** *template*... - for example **Start tonight's Tuesday club night...**. It opens the [Start Tonight window](events-and-entries.md#the-start-tonight-window) on that template |
+| No race day is open, and there's a race day from before tonight to go by | "No race day is open." | **Start tonight like last time...**. It opens the [Start Tonight window](events-and-entries.md#the-start-tonight-window) on **Like last time**: the last race day's kind of night and classes, and everything else a new day carries forward. Press **Start Tonight**, or pick something else there |
+| No race day is open | "No race day is open." | **Start Tonight...** (opens the [Start Tonight window](events-and-entries.md#the-start-tonight-window)) |
+| The current race day is closed | "Race Day 21 Sep 2026" is closed. | **Start Tonight...** |
 | There are no classes at all | "There are no classes yet." | **Set Up Classes** (opens the **Classes** page) |
 | There are no drivers at all | "There are no drivers yet." | **Add Drivers** (opens **Driver Hub**) |
 | No driver has a class | "No driver is in a class yet." | **Add Drivers** |

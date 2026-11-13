@@ -4,6 +4,14 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **One way to start a night, how a class finishes, and fees per class (12 November).**
+    - **Start Tonight.** Every button that starts a race day now opens the same **Start Tonight** window: **New Race Day** on **Setup** and on the **Calendar**, **Start Tonight...** on **Next Steps** and **Who's Racing**, the **like last time** and template cards, **Start Tonight From It**, and **Set Up Tonight** when no day is open. At the top it offers **Like last time (Tue 4 Nov)**, each night template, or **Something different...** (what kind of night, and which classes). See [Start a race day](race-day/events-and-entries.md#start-a-race-day).
+    - **No empty first race day.** A new install no longer opens a race day by itself. The first-run wizard offers **Set Up Tonight** when it finishes, which starts your first night. An empty day an older install made is left as it was.
+    - **How a race finishes.** Adding a class (**Add a Class**, Set Up Tonight's **Add Class**, the first-run wizard's **Classes** step) asks for its **Race length:** and **When time's up:**: **Time's up, then finish the lap** or **Stop when time's up**. The **Classes** page shows which. See [Class settings](race-day/drivers-and-classes.md#class-settings).
+    - **A fee per class.** A class can have its own entry fee and extra-class fee, under **Fees** in the class. A driver pays their dearest class's entry, and each other class as an extra. The **Paid** column, the closing list and the event report all use them. See [Fees per class](race-day/events-and-entries.md#fees-per-class).
+
+  Update HeatCaller on the race PC; nothing changes on the relay.
+
 - **Loose ends from setting up the night (12 November).**
     - **Templates on nights.** **When...** beside **Templates:** on **Race Day → Setup** sets the nights a template is for, such as every Tuesday or a monthly date. On those nights **Next Steps** offers **Start tonight's Tuesday club night**.
     - **Racing's off, by push too.** **Call It Off...** can also send a push to every phone signed up for the club's alerts.
