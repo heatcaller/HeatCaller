@@ -324,6 +324,33 @@ public sealed class SetupStep8ProgramTests : IDisposable
     }
 
     [Fact]
+    public void On_the_ifmar_scale_the_marshals_lost_round_scores_ifmars_missed_round()
+    {
+        // 12 Nov 2026: the lost round is a round not run, on the class's own
+        // scale - IFMAR's 500, not the club's field + 1.
+        var q1 = RunHeat("Q1 Heat 1", T0, ("A", 14, 300_000), ("B", 13, 300_000));
+        RunHeat("Q2 Heat 1", T0.AddMinutes(10), ("A", 14, 300_000), ("B", 13, 301_000));
+
+        var points = new RaceClass
+        {
+            Name = "Stock",
+            QualifyingMethod = QualifyingMethod.RoundPoints,
+            CountBestRounds = 2,
+            RoundPointsScale = RoundPointsScale.Ifmar,
+        };
+        LogNoShow(q1, "A", MarshalNoShowRule.LosesBestQualifier);
+
+        var standings = Standings(points);
+        var a = standings.Single(e => e.Transponder == "A");
+
+        // Q1 lost (500), Q2 TQ (0). B keeps the places they earned: 2nd and 2nd, 2 + 2.
+        Assert.Equal(500, a.Points);
+        Assert.Contains("Q1 lost (marshal) (500 pts)", a.PointsDetail);
+        Assert.Equal(4, standings.Single(e => e.Transponder == "B").Points);
+        Assert.Equal("B", standings[0].Transponder);
+    }
+
+    [Fact]
     public void A_time_penalty_goes_on_their_next_race_and_comes_off_with_the_no_show()
     {
         var marshalled = Round("q1h2", "Q1 Heat 2");

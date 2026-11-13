@@ -85,6 +85,17 @@ internal static class RaceEta
         var line = schedule.FirstOrDefault(e =>
             e is not null && string.Equals(e.RoundId, roundId, StringComparison.Ordinal));
 
+        return SlotUtc(line, minutesLate, nowUtc);
+    }
+
+    /// <summary>
+    /// A run-sheet line's time as a moment, plus <paramref name="minutesLate"/>
+    /// - or null when there is no line or no time that reads. Also the Day
+    /// Schedule's expected time for a line not started yet (12 Nov 2026,
+    /// ScheduleExpected).
+    /// </summary>
+    internal static DateTime? SlotUtc(ScheduleEntry? line, int? minutesLate, DateTime nowUtc)
+    {
         // Read the way ScheduleDrift.MinutesOff reads it, so "~10:15" and
         // "TBD" are nothing here exactly as they are there.
         if (line is null || string.IsNullOrWhiteSpace(line.ScheduledTime) || !DateTime.TryParse(line.ScheduledTime, out var slot))

@@ -886,7 +886,7 @@ public partial class MainForm
             // meeting by checking in everybody from the last one.
             if (DateTime.UtcNow - tap.AtUtc > TimeSpan.FromHours(12))
             {
-                OnClientRawMessage($"[relay] Ignored an old check-{(tap.Wanted ? "in" : "out")} for {name} from {tap.AtUtc.ToLocalTime():g}.");
+                OnClientRawMessage($"[relay] Ignored an old check-{(tap.Wanted ? "in" : "out")} for {name} from {AppTime.DateAndTime(tap.AtUtc.ToLocalTime())}.");
                 return true;
             }
 
@@ -1497,7 +1497,7 @@ public partial class MainForm
         // D13). Sent like the rest, so one the relay lost comes back; with
         // none announced, the card is taken down rather than left standing.
         SendToRelayIfChanged(RelayChannel.NextNight, "the next race night",
-            () => _settings.NextNight is { } night ? NextNight.Document(night) : NextNight.Withdrawn());
+            () => _settings.NextNight is { } night ? NextNight.Document(night, _settings.RelayDriverRequests) : NextNight.Withdrawn());
 
         SendToRelayIfChanged(RelayChannel.Tracks, "the tracks", () => RelayDocuments.Tracks(
             _trackLayouts, _sessionHistory.SavedView(), _profiles, _pbResets, _raceEvents.Current.TrackLayoutName, abbreviate, _relayTrackImages));
@@ -1722,6 +1722,11 @@ public partial class MainForm
         [JsonPropertyName("corrections")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<RelayCorrection>? Corrections { get; init; }
+
+        /// <summary>The public names of the drivers scored DNS (12 Nov 2026, see SkipDns), drawn under the finishers. Last, and left out for a race with none.</summary>
+        [JsonPropertyName("dns")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string>? Dns { get; init; }
     }
 
     /// <summary>One line of the public race control log: when, whose result, and what changed - never why.</summary>
@@ -2073,10 +2078,12 @@ public partial class MainForm
             // With each row's transponder: an old result carries the name as
             // it was on the night, so a driver renamed since is still caught
             // by initials-only (22 Oct 2026, driver experience).
-            var names = RelayPublisher.DisplayNames(
-                session.Results.Select(r => RelayDocuments.PublicNameOrUnnamed(r.DriverName, r.Transponder)).ToList(),
-                abbreviate,
-                session.Results.Select(r => (string?)r.Transponder).ToList());
+            //
+            // 12 Nov 2026: through RelayDocuments.ResultNames, the one rule the
+            // push's top three use too, and with the race's DNS drivers in the
+            // same pass so a DNS name never clashes with a finisher's.
+            var publicNames = RelayDocuments.ResultNames(session, abbreviate, t => _profiles.Get(t)?.DriverName);
+            var names = publicNames.Rows;
 
             // Where everybody was after each lap - races only: practice is
             // everybody on track at once, not a race for places.
@@ -2133,6 +2140,12 @@ public partial class MainForm
                     PosAt = positions is not null && positions[i].Length > 0 ? positions[i] : null,
                 }).ToList(),
                 Corrections = PublicCorrections(session, names),
+
+                // 12 Nov 2026: who was skipped and scored DNS (SkipDns), by
+                // public name only - no position, laps or times, they never
+                // ran. Left out with nobody DNS, so a result is byte for
+                // byte what it was.
+                Dns = publicNames.Dns.Count > 0 ? publicNames.Dns.ToList() : null,
             });
 
             // The effective start - the end, for a session saved without a
@@ -2580,7 +2593,7 @@ public partial class MainForm
         }
 
         return (
-            WithQueryWindows(who, DriverNightExtras.Races(who, tonight, roundOf, runs, _settings.RelayAbbreviateNames, history)),
+            WithQueryWindows(who, DriverNightExtras.Races(who, tonight, roundOf, runs, _settings.RelayAbbreviateNames, history, t => _profiles.Get(t)?.DriverName)),
             DriverNightExtras.Improvement(who, paces),
             DriverNightExtras.Progress(who, history, latest?.TrackLayoutName, _pbResets, nowLocal));
     }

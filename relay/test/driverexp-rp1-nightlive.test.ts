@@ -242,7 +242,7 @@ describe("alerts", () => {
     marshal = { race: "Q2 Heat 3", post: "Turn 2", away: 0 };
     await page.advance(20000);
     assert.equal(page.vibrations.length, 2, "marshal duty is next");
-    const said = () => String(page.eval("(document.getElementById('toast') || {}).textContent || ''"));
+    const said = () => String(page.eval("(document.getElementById('hc-banner') || { getAttribute: () => '' }).getAttribute('aria-label') || ''"));
     assert.equal(said(), "Marshal duty next - Q2 Heat 3 - Turn 2");
 
     await page.advance(20000);

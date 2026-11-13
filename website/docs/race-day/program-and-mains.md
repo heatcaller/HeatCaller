@@ -424,7 +424,7 @@ A counted heat where the driver had no valid run is shown with **(no valid run)*
 Points qualifying (the ROAR "Qual-Points" style) scores each qualifying **round**, not each heat. A round is all the heats with the same round number: "Q2 Heat 1" and "Q2 Heat 2" are both round 2.
 
 1. Every driver who ran one of the round's heats is ranked against everyone else in that round: most laps, then lowest time.
-2. Each driver scores their place: 1st scores 1 point, 2nd scores 2, and so on. Two drivers level on laps and time share the place and its points, and the next driver takes the place after them.
+2. Each driver scores their place: 1st scores 1 point, 2nd scores 2, and so on (or 0 for 1st, the IFMAR and EFRA way: see [The top qualifier on 0 points](#the-top-qualifier-on-0-points-ifmar-and-efra)). Two drivers level on laps and time share the place and its points, and the next driver takes the place after them.
 3. A driver who didn't run the round, or was disqualified from it, scores the field plus one. The field is every driver with a qualifying result in the class. For example, in a class of 12, a missed round scores 13.
 4. **Heats that count:** sets how many **rounds** count. Each driver's best (lowest) rounds are added up and the rest are dropped. For example, set it to 2 for "best 2 of 3".
 5. Fewest points wins.
@@ -439,6 +439,28 @@ A missed round always scores worse than last place, so missing a round can never
 Penalties count, because they're already in the laps and time each round is ranked on. A heat added by hand without a round number ("Extra heat") beside numbered rounds is scored as a round of its own. On a one-round night, all the heats are one round. A driver on their alternate transponder is scored once, under their main transponder.
 
 During a heat, the [qualifying projection](#qualifying-projection) ranks the running heat with the rest of its round. The announcer's provisional pole call follows most laps then time in the heat on track.
+
+#### The top qualifier on 0 points (IFMAR and EFRA)
+
+IFMAR, EFRA and ROAR (at Level 5) score the fastest driver in a round **0 points**, then 2, 3, 4 and so on. That's 1 point less for every round a driver wins, and it can change the order, not only the totals:
+
+| | Q1 | Q2 | **1st = 1 point** | **Top qualifier on 0** |
+|---|---|---|---|---|
+| Driver A | 1st | 4th | 1 + 4 = **5** | 0 + 4 = **4**, and A is ahead on the round win |
+| Driver B | 2nd | 2nd | 2 + 2 = **4**, ahead | 2 + 2 = **4** |
+
+To score a class the rulebook way, set **Top qualifier scores:** in the class editor (see [Class settings](drivers-and-classes.md#class-settings)). Each body's choice also brings its rules for a missed round and for ties:
+
+| **Top qualifier scores:** | A missed or DQ'd round scores | Ties, using the counted rounds only |
+|---|---|---|
+| **1 point (club)** | The field plus one. | The best finish in any round, then the best heat anywhere. |
+| **0 points - IFMAR (a missed round scores 500)** | 500 (IFMAR track rules 1.4.5; the off-road rules say "no points", which isn't zero). | The counted scores, lowest first, then the laps and time of the lowest-scoring round. |
+| **0 points - EFRA (a missed round scores last place)** | Last place: the number of drivers in the class's qualifying (EFRA Appendix 3, 9.4.1). | The best finish in the counted rounds, then the laps and time of the best points round, then the second best. |
+
+On the IFMAR and EFRA scales, a dropped round isn't looked at for a tie, as their rules say. The standings, the mains, the projection, heads-up qualifying, the event report and the phones all use the class's scale, and a marshal who [loses their best qualifier](#marshals-in-place) has that round scored as a missed round on the same scale.
+
+!!! note
+    IFMAR and EFRA count fewer rounds when fewer are run (for example IFMAR's best 3 of 5, but best 2 of 3 or 4). **Heats that count:** is a fixed number, so change it if the schedule is cut short. ROAR's Level 5 Qual-Points uses the same 0, 2, 3 scale; its last tie-break (the better laps and time of the two counted rounds) isn't one HeatCaller offers.
 
 ### Qualifying standings
 
@@ -652,6 +674,7 @@ The grid shows **Done**, **Time**, **Class**, **What** and **Status**. The **Sta
 - **done** (and when it started) for finished lines, faded.
 - **on track · started 14:05** for a line that's started but not finished, with how far off its slot it started — **on time**, **4 min late** or **3 min early** — when the slot is a clock time.
 - **up next** for the first line not yet done.
+- **expected 20:47 · 7 min late** (or early) for a line still to come, once the night is 3 minutes or more off its times. It's the lateness of the last line started, plus how far Race Control has put the next race back (an approved **Need 5 more minutes**, **+1 min** or **Hold**) for that race's line and every line after it. The **Time** you typed isn't changed. The next line up shows it after **up next**.
 - **(round deleted from program)** for a line whose round no longer exists.
 
 Click the **Done** checkbox to tick a line off (or back on) by hand. Double-click a line to edit it.

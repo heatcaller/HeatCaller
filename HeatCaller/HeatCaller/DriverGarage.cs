@@ -276,7 +276,7 @@ internal static class DriverGarage
 
     private static string RaceLabel(SessionRecord session) =>
         string.IsNullOrWhiteSpace(session.Label)
-            ? session.StartedAtUtc.ToLocalTime().ToString("ddd d MMM HH:mm", System.Globalization.CultureInfo.CurrentCulture)
+            ? session.StartedAtUtc.ToLocalTime().ToString("ddd d MMM ", System.Globalization.CultureInfo.CurrentCulture) + AppTime.TimeOfDay(session.StartedAtUtc.ToLocalTime())
             : session.Label.Trim();
 
     private static string ByWhom(BatteryPackStore packs, string sessionId, string key)

@@ -224,7 +224,7 @@ internal static class TransponderTransferring
         }
 
         var named = string.Join("\n", races.Take(8).Select(s =>
-            $"  {(string.IsNullOrWhiteSpace(s.Label) ? s.SessionType.ToString() : s.Label.Trim())} - {s.StartedAtUtc.ToLocalTime():d MMM yyyy HH:mm}"));
+            $"  {(string.IsNullOrWhiteSpace(s.Label) ? s.SessionType.ToString() : s.Label.Trim())} - {s.StartedAtUtc.ToLocalTime():d MMM yyyy} {AppTime.TimeOfDay(s.StartedAtUtc.ToLocalTime())}"));
         var more = races.Count > 8 ? $"\n  ...and {races.Count - 8} more." : string.Empty;
 
         return $"{id} was timed as a car of its own in {Plural.Of(races.Count, "race")} already run, so "

@@ -300,6 +300,18 @@ export function marshalSoonWords(m: Record<string, unknown>): string {
   return "You're marshalling " + String(m["race"] ?? "the next race") + " in about 5 minutes" + post;
 }
 
+/**
+ * The soon push's title with the post in it - "Marshal at Turn 3 in about 5
+ * minutes" (12 Nov 2026, Asher: "make sure the marshal post is in the 5
+ * minutes notification for marshalling"). A phone's lock screen shows the
+ * title whole but cuts the body short, and the end of the body was where
+ * the post was. Without a named post, the title it always had.
+ */
+export function marshalSoonTitle(m: Record<string, unknown>): string {
+  const post = typeof m["post"] === "string" ? m["post"].replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, 40) : "";
+  return post !== "" ? `Marshal at ${post} in about 5 minutes` : "Marshal duty in about 5 minutes";
+}
+
 export function liveAlerts(before: unknown, after: unknown, url: string, beforeAtMs?: number, afterAtMs?: number): PushMessage[] {
   if (!isObject(before) || !isObject(after)) {
     return [];
@@ -345,7 +357,7 @@ export function liveAlerts(before: unknown, after: unknown, url: string, beforeA
   const dutyWasSoon = startsSoon(before["marshal"], beforeAtMs) && isObject(before["marshal"]) && before["marshal"]["race"] === duty;
 
   if (duty !== "" && isObject(m) && m["in"] !== true && startsSoon(m, afterAtMs) && !dutyWasSoon && !out.some((message) => message.tag === "hc-marshal")) {
-    out.push({ title: "Marshal duty in about 5 minutes", body: marshalSoonWords(m), tag: "hc-marshal-soon", url });
+    out.push({ title: marshalSoonTitle(m), body: marshalSoonWords(m), tag: "hc-marshal-soon", url });
   }
 
   return out;
@@ -379,10 +391,41 @@ export function nightAlerts(before: unknown, after: unknown, url: string): PushM
 
   return [{
     title: "Your result is in" + run,
-    body: [label, out || placed].filter((s) => s !== "").join(" - "),
+    body: [[label, out || placed].filter((s) => s !== "").join(" - "), ...leaderboardLines(race)].join("\n"),
     tag: "hc-result",
     url,
   }];
+}
+
+/**
+ * The race's top three under the result (12 Nov 2026, Asher: "when the race
+ * results are posted add the leaderboard to the push notification"): "1. Sam P
+ * - 20 laps", their own line marked "(you)". From races[].top, which the
+ * laptop sends from then on - an older laptop's night has none, and the push
+ * is the one line it always was. Names are cut short and stripped of control
+ * characters: a push is plain text, a line each.
+ */
+export function leaderboardLines(race: Record<string, unknown>): string[] {
+  const top = Array.isArray(race["top"]) ? race["top"] : [];
+  const mine = num(race["pos"]);
+  const lines: string[] = [];
+
+  for (const row of top.slice(0, 3)) {
+    if (!isObject(row) || num(row["p"]) < 1 || typeof row["n"] !== "string") {
+      continue;
+    }
+
+    const name = row["n"].replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 40);
+
+    if (name === "") {
+      continue;
+    }
+
+    const laps = num(row["laps"]) > 0 ? ` - ${num(row["laps"])} ${num(row["laps"]) === 1 ? "lap" : "laps"}` : "";
+    lines.push(`${num(row["p"])}. ${name}${laps}${num(row["p"]) === mine ? " (you)" : ""}`);
+  }
+
+  return lines;
 }
 
 // ---------------------------------------------------------------- service

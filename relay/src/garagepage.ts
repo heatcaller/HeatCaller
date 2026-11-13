@@ -1396,6 +1396,26 @@ function manageButton(car, sec) {
   return b;
 }
 
+// Scroll a section to the top and keep it there (12 Nov 2026, Asher: "clicking
+// the setup chip the first time moves the screen to the car card. a second tap
+// moves it to setup"). From Me's Setup tile the Garage has only just slid in and
+// is still laying out - the car's picture lands after the smooth scroll has
+// picked its spot - so the scroll stopped short. It is checked again as the
+// page settles and put right if it drifted.
+function scrollToStay(target) {
+  if (!target || typeof target.scrollIntoView !== 'function') return;
+  try { target.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { return; }
+  const check = () => {
+    try {
+      const top = target.getBoundingClientRect().top;
+      const margin = parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
+      if (Math.abs(top - margin) > 24) target.scrollIntoView({ block: 'start' });
+    } catch (e) { /* it is just below */ }
+  };
+  setTimeout(check, 450);
+  setTimeout(check, 1100);
+}
+
 // One slide: the picture, then one main button and Manage. The car racing
 // tonight gets Log setup; any other car, Racing tonight.
 function carSlide(car, sec) {
@@ -1408,7 +1428,7 @@ function carSlide(car, sec) {
       view.carAt = car.id;
       paint('setup', false);
       const s = document.getElementById('gs');
-      try { if (s && typeof s.scrollIntoView === 'function') s.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* it is just below */ }
+      scrollToStay(s);
     }));
   } else {
     btns.appendChild(tapButton('Racing tonight', 'gb ton', () => { change('car', { op: 'tonight', car: car.id }, key); }));

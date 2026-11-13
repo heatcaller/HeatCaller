@@ -4,6 +4,26 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Fixes from the first night on step 8 (12 November).**
+    - **More time moves the schedule.** Approving a driver's **Need 5 more minutes** (or **+1 min** or **Hold**) now moves every "about" time after that race: the program, the phones' **Schedule** and the Big Screen's **UP NEXT**, not only Auto start's count.
+    - **More time asked early is kept.** Approving it while the driver's race isn't next used to change nothing ("ask again when it's next"). Now it's kept, and the race goes back 5 minutes by itself when it becomes the next one out. The phone says "Q3 Heat 2 will go back 5 minutes for you when it's next." Two approvals add up, and it's dropped if the race runs or is deleted first, or the driver comes out of it. See [More time and skip my race at the desk](online/driver-requests.md#more-time-and-skip-my-race-at-the-desk).
+    - **Races run out of order.** When the desk runs a race ahead of its place in the program, the schedule now puts that race first, so its push-back and Auto start's count move the right times.
+    - **The Day Schedule follows it too.** Lines still to come show "expected 20:47 · 7 min late" once the night is 3 minutes or more off, the next race's push-back included. The times you typed aren't changed. See [Reading the sheet](race-day/program-and-mains.md#reading-the-sheet).
+    - **The Setup tile goes to Setup first time.** Tapping **Setup** on Me went to the car card on the first tap and to Setup only on the second.
+    - **Entry fee at the top of Me.** "Entry: $15.00 - pay at the desk" (or "Paid") is now right under your name on every part of Me, not only on the Check in card.
+    - **More times follow the 24-hour tick:** Driver Requests' sent time, online sign-ups, backups, seasons, pace analysis, transponder transfers and the voice and relay settings.
+    - **I'm coming from Home.** While the club is taking entries, Home's **Next race night** card says "Coming? Tap to put yourself down" and opens Me at the **I'm coming** card. Before, tapping it did nothing.
+    - **I'm coming works days before.** The **I'm coming** card used to need tonight's check-in open, like every other request from a phone, so between race nights it never showed. It now only needs driver requests on, the next night taking entries, and the driver's own night page. With driver requests off, the phones don't say the night is taking entries.
+    - **Pop-ups in the club's colours.** The small "Following Sam" style pop-ups on the phone pages now use the club's colours, to match the alert banner.
+    - **Alerts as a banner.** In-app alerts on a driver's night ("Your race is next", "Your result is in", marshal duty) drop in from the top as a banner in the club's colours, title over the details. Tap it to put it away.
+    - **The leaderboard in "Your result is in".** The push and the banner list the race's top three with their laps, with your own line marked "(you)".
+    - **The post in the marshal push.** The 5-minute marshal push now names the post in its title: "Marshal at Turn 3 in about 5 minutes".
+    - **DNS on every result.** A driver skipped and scored DNS is now also listed under the finishers on **Print Results**, in **Export Results...** (a row with Status DNS in the Results CSV, and `didNotStart` in the JSON; the columns are where they were, so old sheets still read it) and on the club's **Results** page online, in grey. See [Exporting results](race-control/results-and-championships.md).
+    - **One name in "Your result is in".** The top three in the push are named exactly as the race's result online names them. With a ghost car or a DNS driver in the race whose name shortens the same way as a driver's, the push could say "Alex K" while the result said "Alex Ken".
+    - **Round points the rulebook way.** IFMAR, EFRA and ROAR give the top qualifier in a round 0 points (then 2, 3, 4), where **Points per round** gave 1. That can swap two drivers: 1st + 4th beats 2nd + 2nd under the rulebooks and loses on the club scale. A class's new **Top qualifier scores:** setting picks **1 point (club)**, **0 points - IFMAR** or **0 points - EFRA**, each with that body's score for a missed round and its tie-breaks. Classes you already have stay on 1 point and score exactly as before. The IFMAR, EFRA and NZRCA off-road sanctioning presets now switch it on. See [The top qualifier on 0 points](race-day/program-and-mains.md#the-top-qualifier-on-0-points-ifmar-and-efra).
+
+  The phone fixes need the relay redeployed.
+
 - **The 24-hour tick on Themes now reaches every time (12 November).** With **Use 24-hour (military) time** ticked, the times in status lines ("Saved at"), the developer log, achievements, driver requests, the Finish Camera stamp, the Wi-Fi pages and your club's online pages are all 24-hour; with it off they are all AM/PM. The phone pages used each phone's own setting before, and they need the relay redeployed for this. See [Looks and the club logo](screens/looks-and-logo.md).
 
 - **Marshals, the countdown and entry money on phones (12 November).**

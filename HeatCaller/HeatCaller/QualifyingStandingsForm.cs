@@ -28,6 +28,7 @@ public sealed class QualifyingStandingsForm : Form
         var method = raceClass?.QualifyingMethod ?? QualifyingMethod.TotalLaps;
         var lapCount = Math.Max(1, raceClass?.ConsecutiveLapCount ?? 3);
         var countBest = Math.Max(1, raceClass?.CountBestRounds ?? 1);
+        var scale = raceClass?.RoundPointsScale ?? RoundPointsScale.Club;
         Font = AppTheme.BodyFont;
 
         var page = new FillPage();
@@ -224,10 +225,10 @@ public sealed class QualifyingStandingsForm : Form
         var lblRule = new Label
         {
             Text = points
-                ? "Each round ranks everyone in its heats on laps then time: 1st scores 1 point, 2nd 2 and so on, and a round not run "
-                  + "(or a DQ) scores one more than the field. "
+                // 12 Nov 2026: in the class's own scale's words (RoundPointsScale).
+                ? QualifyingCalculator.RuleWords(scale).Scoring
                   + (countBest > 1 ? $"The best {countBest} rounds count. " : string.Empty)
-                  + "Fewest points wins; ties go to the best single-round finish, then the best heat. Double-click a row for detail."
+                  + QualifyingCalculator.RuleWords(scale).Ties + " Double-click a row for detail."
                 : countBest > 1
                 ? (method == QualifyingMethod.BestConsecutiveLaps
                     ? $"Each heat is scored on its quickest unbroken run of {Plural.Of(lapCount, "lap")}, penalties included. The best {countBest} heats "

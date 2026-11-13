@@ -130,7 +130,7 @@ internal static class CloudBackupStatus
         }
 
         return new State(MissionControl.Level.Good, "Up to date",
-            $"The last backup reached {Names(facts.Services)} on {last.ToLocalTime():yyyy-MM-dd HH:mm}.");
+            $"The last backup reached {Names(facts.Services)} on {last.ToLocalTime():yyyy-MM-dd} {AppTime.TimeOfDay(last.ToLocalTime())}.");
     }
 
     /// <summary>

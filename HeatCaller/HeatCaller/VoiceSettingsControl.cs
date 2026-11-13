@@ -3700,8 +3700,8 @@ public sealed partial class VoiceSettingsControl : UserControl
             var cost = CharactersCharged(Line.Text);
 
             return cost > 0
-                ? $"{words}   ({Plural.Of(cost, "char")} \u00B7 {Line.LastUsedUtc.ToLocalTime():g})"
-                : $"{words}   ({Line.LastUsedUtc.ToLocalTime():g})";
+                ? $"{words}   ({Plural.Of(cost, "char")} \u00B7 {AppTime.DateAndTime(Line.LastUsedUtc.ToLocalTime())})"
+                : $"{words}   ({AppTime.DateAndTime(Line.LastUsedUtc.ToLocalTime())})";
         }
     }
 

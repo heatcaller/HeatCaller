@@ -143,8 +143,9 @@ export const ME_CSS = `
 
 .me-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
 .me-tiles:empty { display: none; }
-/* Tonight's entry on the Check in card (12 Nov 2026, setup plan step 8). */
+/* Tonight's entry, at the top of Me under their name (12 Nov 2026). */
 .me-fee { font-weight: 700; color: var(--warn); margin: 0 0 10px; }
+.me-fee[hidden] { display: none !important; }
 .me-fee.ok { color: var(--good); }
 /* I'm coming to the next race night (12 Nov 2026, setup plan C1). */
 .me-coming:empty { display: none; }
@@ -259,6 +260,7 @@ html.framed .me-sheet .in { padding-bottom: calc(22px + 58px + var(--sa-b, 0px))
 
 /** Under their name: the moment card, the switch and the tiles. */
 export const ME_BODY_TOP =
+  '<div class="me-fee" id="me-fee" role="status" hidden></div>' +
   '<div class="me-moment" id="me-moment" aria-live="polite"></div>' +
   '<div class="me-switch" id="me-switch" role="tablist" aria-label="Parts of Me"></div>' +
   '<div class="me-tiles" id="me-tiles" data-sp="tonight"></div>' +
@@ -465,6 +467,9 @@ let meNextNightAt = 0;
 // all" is not headlined as "You're down".
 let meComingTicks = null;
 const meComingSent = new Map();
+// From Home's next race night card ("#...&go=coming", 12 Nov 2026): the
+// card is brought into view the first time it is drawn.
+let meGoComing = false;
 
 async function meReadNextNight() {
   if (typeof grab !== 'function' || Date.now() - meNextNightAt < 60000) return;
@@ -517,7 +522,10 @@ async function meSendComing(day, classes) {
 function meComingCard() {
   const at = document.getElementById('me-coming');
   if (!at) return;
-  const night = typeof asksOpen !== 'undefined' && asksOpen && me ? meComingNight() : null;
+  // Tonight's asks (asksOpen, on tonight's list), or just I'm coming with no
+  // check-in tonight (comingOpen, 12 Nov 2026).
+  const open = (typeof asksOpen !== 'undefined' && asksOpen && me) || (typeof comingOpen !== 'undefined' && comingOpen);
+  const night = open ? meComingNight() : null;
   at.textContent = '';
   if (!night) return;
   if (meComingTicks === null || meComingTicks.day !== night.day) meComingTicks = { day: night.day, on: new Set() };
@@ -560,6 +568,13 @@ function meComingCard() {
       if (said !== '') st.appendChild(el('span', '', said));
     }
     at.appendChild(st);
+  }
+
+  // Asked for from Home's next race night card: brought into view once drawn.
+  if (meGoComing) {
+    meGoComing = false;
+    if (meSpace !== 'tonight') meSetSpace('tonight', 'r');
+    if (typeof scrollToStay === 'function') scrollToStay(at); else at.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 }
 
@@ -868,7 +883,21 @@ function meQual() {
   return part;
 }
 
+// Tonight's entry, paid or owing (12 Nov 2026), at the very top of Me, just
+// under their name (Asher: "move entry fee reminder to the top of the me tab
+// right below the driver name") - on every part of Me, not only while the
+// Check in card is up. Their own, from their own live entry.
+function meFee() {
+  const at = document.getElementById('me-fee');
+  if (!at) return;
+  const words = meEntryWords();
+  at.textContent = words;
+  at.hidden = words === '';
+  at.className = 'me-fee' + (live && live.entry && live.entry.paid === true ? ' ok' : '');
+}
+
 function meMoment() {
+  meFee();
   const at = document.getElementById('me-moment');
   if (!at) return;
   at.textContent = '';
@@ -888,10 +917,6 @@ function meMoment() {
     big.appendChild(el('br'));
     big.appendChild(el('small', '', 'one tap tells the timing desk'));
     hero.appendChild(big);
-    // Tonight's entry, paid or owing (12 Nov 2026, setup plan step 8) -
-    // their own, from their own live entry.
-    const fee = meEntryWords();
-    if (fee) hero.appendChild(el('div', 'me-fee' + (live.entry.paid === true ? ' ok' : ''), fee));
     hero.appendChild(tapButton('Check in', 'go', tapCheckIn));
   } else if (n && n.now === true) {
     hero.appendChild(el('span', 'k', 'On track · ' + String(n.race || 'your race')));
@@ -1148,7 +1173,7 @@ function meToSetup() {
   meCloseSheet();
   meSetSpace('garage', 'l');
   const s = document.getElementById('gs');
-  if (s) s.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  if (s && typeof scrollToStay === 'function') scrollToStay(s); else if (s) s.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 // The moment card's "No setup logged" (7 Nov 2026, Asher: "if you tap the
@@ -1299,6 +1324,7 @@ function meStart() {
   let kept = '';
   try { kept = localStorage.getItem(ME_SPACE_KEY) || ''; } catch (e) { /* none kept */ }
   meSetSpace(asked ? asked[1] : kept || 'tonight');
+  meGoComing = /[#&]go=coming/.test(location.hash || '');
 
   // The byline beside their name (7 Nov 2026, Asher: "drop the byline on
   // me tab to the match the height of the driver name keeping a little

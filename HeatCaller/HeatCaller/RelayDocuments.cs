@@ -81,6 +81,49 @@ internal static class RelayDocuments
         && name.Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Any(word => string.Equals(word, id, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// The names one session's public result shows: <c>Rows</c> in step with
+    /// session.Results, and <c>Dns</c> in step with session.DidNotStart.
+    /// </summary>
+    internal sealed record PublicResultNames(IReadOnlyList<string> Rows, IReadOnlyList<string> Dns);
+
+    /// <summary>
+    /// THE names a session's public result goes out under - the one rule
+    /// for the result document (MainForm.PublishSessionToRelay) and for
+    /// anything else that names the same race's drivers in public, such as
+    /// the top three in the "Your result is in" push (DriverNightExtras.TopOf).
+    ///
+    /// The whole field at once through RelayPublisher.DisplayNames, each row
+    /// with its transponder for initials-only, a car nobody named as
+    /// UnnamedDriver. The race's DNS drivers (SkipDns) go in the same pass,
+    /// named from their profile (<paramref name="profileNameOf"/>) since they
+    /// have no result row, so a DNS "Alex Kemp" and a finishing "Alex Kent"
+    /// never both read "Alex K". With nobody DNS this is exactly the names
+    /// the result always had, so an old result is republished byte for byte.
+    /// </summary>
+    /// <remarks>
+    /// 12 Nov 2026: the push's top three were named by a pass of their own
+    /// over the field with the ghosts taken out first, so a race with a
+    /// ghost whose name clashed with a driver's said "Alex K" in the push
+    /// and "Alex Ken" on the results page. One function, one name.
+    /// </remarks>
+    internal static PublicResultNames ResultNames(SessionRecord session, bool abbreviate, Func<string, string?>? profileNameOf = null)
+    {
+        var results = session.Results ?? new List<SessionResultEntry>();
+        var dns = session.DidNotStart ?? new List<string>();
+
+        var names = results.Select(r => PublicNameOrUnnamed(r?.DriverName, r?.Transponder))
+            .Concat(dns.Select(t => PublicNameOrUnnamed(profileNameOf?.Invoke(t), t)))
+            .ToList();
+        var transponders = results.Select(r => r?.Transponder)
+            .Concat(dns.Select(t => (string?)t))
+            .ToList();
+
+        var shown = RelayPublisher.DisplayNames(names, abbreviate, transponders);
+
+        return new PublicResultNames(shown.Take(results.Count).ToList(), shown.Skip(results.Count).ToList());
+    }
+
     // ----------------------------------------------------------- programme
 
     /// <summary>

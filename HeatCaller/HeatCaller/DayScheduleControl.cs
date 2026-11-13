@@ -504,13 +504,19 @@ public sealed class DayScheduleControl : UserControl
         var entries = _schedule.All;
         var firstPendingId = entries.FirstOrDefault(e => !e.IsComplete)?.Id;
 
+        // The day's lateness and the next race's push-back, read once for
+        // the sheet (12 Nov 2026) - see ScheduleExpected.
+        var dayLate = _schedule.MinutesLate();
+        var next = NextStart?.Invoke();
+        var now = DateTime.UtcNow;
+
         var keepRow = -1;
 
         _grid.Rows.Clear();
         foreach (var entry in entries)
         {
             var round = entry.IsGenerated ? _rounds.Get(entry.RoundId) : null;
-            var status = StatusFor(entry, round, entry.Id == firstPendingId);
+            var status = StatusFor(entry, round, entry.Id == firstPendingId, ScheduleExpected.Words(entries, entry, dayLate, next, now));
 
             var rowIndex = _grid.Rows.Add(entry.IsComplete, entry.ScheduledTime, entry.ClassName, entry.Description, status.Text);
             var row = _grid.Rows[rowIndex];
@@ -550,7 +556,8 @@ public sealed class DayScheduleControl : UserControl
     /// on track right now is the loudest thing on the sheet, and the next
     /// one up is picked out in the accent.
     /// </summary>
-    private (string Text, Color? Ink) StatusFor(ScheduleEntry entry, RoundDefinition? round, bool isNextUp)
+    /// <param name="expected">For a line not started yet, when it is expected and how late (ScheduleExpected.Words), or empty.</param>
+    private (string Text, Color? Ink) StatusFor(ScheduleEntry entry, RoundDefinition? round, bool isNextUp, string expected)
     {
         if (entry.IsGenerated && round is null)
         {
@@ -576,10 +583,28 @@ public sealed class DayScheduleControl : UserControl
 
         if (isNextUp)
         {
-            return ("up next", AppTheme.Primary);
+            return (expected.Length > 0 ? $"up next · {expected}" : "up next", AppTheme.Primary);
         }
 
-        return (string.Empty, null);
+        // 12 Nov 2026: a line still to come says when it is expected once
+        // the night is off its times - "expected 20:47 · 7 min late".
+        return (expected, null);
+    }
+
+    /// <summary>
+    /// Race Control's next race and how far it has been put back
+    /// (RaceControlControl.NextStartForPlan), for the expected times of the
+    /// lines still to come. Null when there is no Race Control.
+    /// </summary>
+    internal Func<RaceControlControl.NextStartFact?>? NextStart { get; set; }
+
+    /// <summary>The next race moved (a push-back, a Hold, an approved "Need 5 minutes"): redraws the sheet when it is in a window.</summary>
+    internal void NextStartMoved()
+    {
+        if (!IsDisposed && Parent is not null && IsHandleCreated)
+        {
+            RefreshAll();
+        }
     }
 
     /// <summary>

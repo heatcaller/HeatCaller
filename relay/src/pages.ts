@@ -425,9 +425,26 @@ header:has(.brand) { padding-top: 8px; }
 .follow span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .follow button { background: none; border: 0; color: var(--muted); font: inherit; font-size: 1.2rem;
                  line-height: 1; cursor: pointer; padding: 4px 10px; }
+/* In-app alerts as a banner (12 Nov 2026): the club's colours, dropping in
+   from the top like the phone's own notifications - see alertNow. */
+.hc-banner { position: fixed; z-index: 30; left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px));
+  top: max(10px, var(--sa-t, 0px)); margin: 0 auto; max-width: 34rem; display: grid; gap: 2px; cursor: pointer;
+  padding: 12px 16px 12px 14px; border-radius: 16px; color: var(--text);
+  background: color-mix(in srgb, var(--primary) 18%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, transparent); border-left: 5px solid var(--accent);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); transform: translateY(calc(-100% - 40px)); transition: transform 0.28s ease; }
+.hc-banner.on { transform: none; }
+.hc-banner b { font-size: 1rem; }
+.hc-banner span { font-size: 0.9rem; color: var(--muted); }
+.hc-banner span:first-of-type { color: var(--text); }
+@media (prefers-reduced-motion: reduce) { .hc-banner { transition: none; } }
 .toast { position: fixed; left: 50%; top: max(14px, var(--sa-t)); transform: translateX(-50%);
-         background: var(--text); color: var(--bg); border-radius: 10px; padding: 10px 16px; font-size: 0.9rem;
-         font-weight: 600; z-index: 20; max-width: calc(100% - 32px); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35); }
+         border-radius: 10px; padding: 10px 16px; font-size: 0.9rem;
+         font-weight: 600; z-index: 20; max-width: calc(100% - 32px); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+         /* In the club's colours like the alert banner (12 Nov 2026), not
+            inverted: the page's surface tinted by its primary, an accent edge. */
+         color: var(--text); background: color-mix(in srgb, var(--primary) 18%, var(--surface));
+         border: 1px solid color-mix(in srgb, var(--primary) 45%, transparent); border-left: 4px solid var(--accent); }
 
 /* Check-in */
 .solo { text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
@@ -554,6 +571,7 @@ table.res tbody.drv:nth-of-type(odd) tr { background: var(--row-alt); }
 table.res tbody.drv td.pos { color: var(--muted); font-weight: 400; }
 table.res tbody.drv:first-of-type tr:first-child td.pos { color: var(--primary); font-weight: 700; }
 table.res tr.lxr td { padding-top: 0; white-space: normal; }
+table.res tbody.dns td { color: var(--muted); }
 details.lx { background: none; border: none; border-radius: 0; margin: 0; overflow: visible; }
 details.lx > summary { padding: 0 0 6px; color: var(--accent); font-size: 0.85rem; display: inline-block; }
 details.lx[open] > summary { color: var(--text); }
@@ -1047,6 +1065,8 @@ select {
 .hero:hover { border-color: var(--primary); }
 .hero.live { border-left-color: var(--good); }
 .hero.next { border-left-color: var(--accent); }
+/* "Coming? Tap to put yourself down" on a night taking entries (12 Nov 2026). */
+.hero .nn-go { display: block; margin-top: 8px; font-weight: 700; color: var(--accent); }
 /* The next race night called off (12 Nov 2026, setup plan D13). */
 .hero.off { border-left-color: var(--bad); }
 .hero.off .note { padding: 6px 0 0; text-align: left; }
@@ -2910,6 +2930,18 @@ function rows(results, sid) {
   }).join('');
 }
 
+// 12 Nov 2026: who was skipped and scored DNS (did not start), under the
+// finishers and greyed - the laptop sends their public names as body.dns,
+// in the same name pass as the rows. No position, laps or times: they never
+// ran. Nothing at all for a result without them (and from an older laptop).
+function dnsRows(body) {
+  const list = body && Array.isArray(body.dns) ? body.dns.filter((n) => typeof n === 'string' && n.trim() !== '') : [];
+  if (list.length === 0) return '';
+  return '<tbody class="dns">' + list.map((n) =>
+    '<tr><td class="pos">DNS</td><td>' + nm(n) + '</td><td class="n"></td>' +
+    '<td class="n">Did not start</td><td class="n"></td><td class="n"></td></tr>').join('') + '</tbody>';
+}
+
 // Which drivers' View laps are open, by session and row, so a refresh puts
 // them back as they were. The panel is only written while open: a club
 // night of sixty heats is not sixty times every driver's lap list.
@@ -3091,7 +3123,7 @@ function card(line, body, mine) {
         '<div class="tw"><table class="res"><thead><tr>' +
         '<th class="pos">Pos</th><th>Driver</th><th class="n">Qual</th>' +
         '<th class="n">Laps/Time</th><th class="n">Behind</th><th class="n">Best</th>' +
-        '</tr></thead>' + withLength(body, () => rows(results, line.id)) + '</table></div>' +
+        '</tr></thead>' + withLength(body, () => rows(results, line.id)) + dnsRows(body) + '</table></div>' +
         positionGraph(results) + raceControlLog(body)) +
     '</details>';
 }
@@ -8567,13 +8599,32 @@ function nextNightHtml(answer) {
     word(b.firstRace) ? esc('First race ' + hcHm(word(b.firstRace))) : '',
   ].filter(Boolean).join(' &middot; ');
   const title = word(b.title);
-  return '<div class="hero next" style="cursor:default">' +
+  // Taking entries: the card is a way in to say so (12 Nov 2026, Asher:
+  // "theres no way to say you're coming to the next race... when you tap it
+  // i just highlihts the card"). It opens Me on Tonight at its I'm coming
+  // card, the classes to tick and the button - the Me tab's own address, so
+  // a phone that has the driver goes straight to their night.
+  const comingTo = b.takingEntries === true && typeof nextNightComingHref === 'function' ? nextNightComingHref() : '';
+  const open = comingTo ? '<a class="hero next" href="' + esc(comingTo) + '">' : '<div class="hero next" style="cursor:default">';
+  return open +
     '<span class="kicker">Next race night</span>' +
     '<span class="big">' + esc([title, when].filter(Boolean).join(' - ') || 'Next race night') + '</span>' +
     (list ? '<span class="when">' + esc(list) + '</span>' : '') +
     (times ? '<span class="when">' + times + '</span>' : '') +
     (word(b.venue) ? '<span class="when">' + esc(word(b.venue)) + '</span>' : '') +
-    '</div>';
+    (comingTo ? '<span class="nn-go">Coming? Tap to put yourself down &rarr;</span>' : '') +
+    (comingTo ? '</a>' : '</div>');
+}
+
+// Me's I'm coming card: the Me tab's own link (their night once the phone
+// has the driver), opened on Tonight with the card brought into view.
+function nextNightComingHref() {
+  const base = typeof BASE === 'string' ? BASE : '';
+  const tab = typeof document !== 'undefined' && document.querySelector
+    ? document.querySelector('nav.tabs a[href$="/mynight"], nav.tabs a[href*="/night#d="]')
+    : null;
+  const href = tab && tab.getAttribute('href') ? tab.getAttribute('href') : base + '/mynight';
+  return href + (href.indexOf('#') >= 0 ? '&' : '#') + 's=tonight&go=coming';
 }
 
 async function load() {
@@ -11370,9 +11421,51 @@ function alertsAlso() {
 
 // On the page while it is open; the relay's push says it with the page
 // closed (pushOn).
+//
+// A banner (12 Nov 2026, Asher: "theme in the in app notifications for the
+// relay. can we make them a banner notification?"): it drops in from the top
+// in the club's own colours - title bold, the words under it, a line each -
+// the way the phone's own notifications look, instead of the small
+// one-line pill that confirms a tap. Tap it to put it away; it goes by
+// itself after eight seconds. A newer alert takes its place.
 function alertNow(title, body) {
   buzz();
-  toast(title + (body ? ' - ' + body : ''));
+  let b = document.getElementById('hc-banner');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'hc-banner';
+    b.className = 'hc-banner';
+    b.setAttribute('role', 'alert');
+    b.addEventListener('click', () => { b.className = 'hc-banner'; });
+    document.body.appendChild(b);
+  }
+  b.textContent = '';
+  const t = document.createElement('b');
+  t.textContent = String(title || '');
+  b.appendChild(t);
+  const lines = String(body || '').split('\\n').filter((line) => line.trim() !== '');
+  for (const line of lines) {
+    const s = document.createElement('span');
+    s.textContent = line;
+    b.appendChild(s);
+  }
+  // Read out as one sentence, the way the pill read.
+  b.setAttribute('aria-label', [String(title || '')].concat(lines).join(' - '));
+  // Out and in again, so a second alert drops in rather than just changing.
+  b.className = 'hc-banner';
+  void b.offsetWidth;
+  b.className = 'hc-banner on';
+  clearTimeout(alertNow.timer);
+  alertNow.timer = setTimeout(() => { b.className = 'hc-banner'; }, 8000);
+}
+
+// The race's top three under "Your result is in", as the push lists them.
+function topLines(r) {
+  const top = r && Array.isArray(r.top) ? r.top : [];
+  return top.slice(0, 3)
+    .filter((x) => x && num(x.p) > 0 && typeof x.n === 'string' && x.n.trim() !== '')
+    .map((x) => num(x.p) + '. ' + x.n.trim() + (num(x.laps) > 0 ? ' - ' + num(x.laps) + (num(x.laps) === 1 ? ' lap' : ' laps') : '')
+      + (num(x.p) === num(r.pos) ? ' (you)' : ''));
 }
 
 // --- Lap times in my ear, on their own night (29 Oct 2026, asked for by
@@ -13619,6 +13712,7 @@ function take(body) {
   // anything missing or of the wrong shape counts as no.
   me = body && typeof body.me === 'object' && body.me !== null && !Array.isArray(body.me) ? body.me : null;
   asksOpen = !!body && body.asksOpen === true;
+  comingOpen = !!body && body.comingOpen === true;
   queriesOff = !!body && body.queriesOff === true;
 }
 
@@ -13650,6 +13744,8 @@ const ASK_STATES = ['waiting', 'approved', 'noted', 'declined'];
 let me = null;
 // Whether the relay will take a request from this code right now.
 let asksOpen = false;
+// "I'm coming" may be asked with no check-in tonight (12 Nov 2026) - the relay's comingGateOf.
+let comingOpen = false;
 // Whether the club has switched result queries off on the laptop (5 Nov
 // 2026): each race's "Something wrong?" goes, the other requests stay.
 let queriesOff = false;
@@ -14405,7 +14501,7 @@ async function refreshNight() {
   const races = night && Array.isArray(night.races) ? night.races : [];
   if (alertsOn && racesSeen >= 0 && races.length > racesSeen) {
     const r = races[races.length - 1] || {};
-    alertNow('Your result is in', [String(r.label || ''), finishWords(r)].filter(Boolean).join(' - '));
+    alertNow('Your result is in', [[String(r.label || ''), finishWords(r)].filter(Boolean).join(' - '), ...topLines(r)].join('\\n'));
   }
   racesSeen = races.length;
   drawLive();

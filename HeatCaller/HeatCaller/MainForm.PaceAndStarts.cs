@@ -61,6 +61,13 @@ public partial class MainForm
         // The phones' estimates, cached there, for the Big Screen.
         raceControl.EstimatedStart = roundId => EstimatedStartsForPhones()(roundId);
 
+        // The next race when Race Control will really start it (12 Nov 2026):
+        // an approved "Need 5 minutes", +1 min or Hold moves every "about"
+        // time after it - see RaceControlControl.NextStart. A move clears the
+        // cached estimates so the phones and Big Screen get them at once.
+        raceProgram.NextStart = () => raceControl.NextStartForPlan;
+        raceControl.NextStartMoved += () => _phoneEstimates = null;
+
         // A night that doesn't post its heats gives its times at the first race.
         _race.StateChanged += state =>
         {

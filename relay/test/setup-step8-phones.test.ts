@@ -77,7 +77,7 @@ describe("the marshal's about 5 minutes push", () => {
     const after = duty("2026-11-12T19:44:00Z");
 
     assert.deepEqual(liveAlerts(before, after, url, at, at), [
-      { title: "Marshal duty in about 5 minutes", body: "You're marshalling Q2 Heat 3 in about 5 minutes - Turn 3", tag: "hc-marshal-soon", url },
+      { title: "Marshal at Turn 3 in about 5 minutes", body: "You're marshalling Q2 Heat 3 in about 5 minutes - Turn 3", tag: "hc-marshal-soon", url },
     ]);
     assert.deepEqual(liveAlerts(after, after, url, at, at), [], "once per race");
   });

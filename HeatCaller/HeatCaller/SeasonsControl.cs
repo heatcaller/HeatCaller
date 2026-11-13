@@ -616,7 +616,7 @@ public sealed class SeasonsControl : UserControl
                     ? "  (freeform)"
                     : $"  [{round.ClassName} {round.Kind}]";
 
-                var display = $"{session.StartedAtUtc.ToLocalTime():yyyy-MM-dd HH:mm} - {label}{trackPart}{kindPart}";
+                var display = $"{session.StartedAtUtc.ToLocalTime():yyyy-MM-dd} {AppTime.TimeOfDay(session.StartedAtUtc.ToLocalTime())} - {label}{trackPart}{kindPart}";
 
                 var index = _clbSessions.Items.Add(new SessionListItem(session, display));
                 _clbSessions.SetItemChecked(index, counted.Contains(session.Id));

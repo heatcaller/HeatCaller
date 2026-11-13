@@ -7059,6 +7059,8 @@ export class Relay {
       ...liveField,
       ...me,
       ...(checkin !== undefined ? { asksOpen: true } : {}),
+      // I'm coming to the next race night, with no check-in tonight (12 Nov 2026) - see comingGateOf.
+      ...(checkin === undefined && await this.comingGateOf(club, id) ? { comingOpen: true } : {}),
       ...(queriesOff ? { queriesOff: true } : {}),
     });
   }
@@ -7435,6 +7437,39 @@ export class Relay {
   }
 
   /**
+   * Whether this driver may say "I'm coming" to the next race night (12 Nov
+   * 2026, Asher: "theres no way to say you're coming to the next race").
+   *
+   * WHY ITS OWN GATE: every other ask is for tonight, so askGateOf wants
+   * tonight's check-in open with them on its list. "I'm coming" is asked
+   * days before, when there is no check-in at all - so under that gate the
+   * card never showed and the ask was turned away. This one wants nights
+   * open, asks open, the club's next night taking entries, and a night page
+   * of their own (the badge is a driver the laptop has published, not a
+   * guess). The laptop still checks the night and their badge itself
+   * (DriverRequestDesk.ApplyComing).
+   */
+  private async comingGateOf(club: string, id: string): Promise<boolean> {
+    if (!DRIVER_ID.test(id) || !(await this.nightsOpenFor(club)) || !(await this.driverAsksOpenFor(club))) {
+      return false;
+    }
+
+    const next = (await this.store.getSnapshot(club, "nextnight").catch(() => undefined))?.body;
+
+    if (!isPlainObject(next) || next["takingEntries"] !== true || next["off"] === true) {
+      return false;
+    }
+
+    const until = Date.parse(String(next["until"] ?? ""));
+
+    if (!Number.isFinite(until) || this.now().getTime() > until) {
+      return false;
+    }
+
+    return (await this.store.getItem(club, NIGHTS_CHANNEL, id).catch(() => undefined)) !== undefined;
+  }
+
+  /**
    * A driver asking the desk for something, with their badge code - see
    * driverasks.ts. Held until the laptop collects it; never acted on here.
    */
@@ -7465,7 +7500,10 @@ export class Relay {
     // route tells a stranger nothing about which codes are real.
     const checkin = DRIVER_ID.test(id) ? await this.askGateOf(club, id) : undefined;
 
-    if (checkin === undefined) {
+    // "I'm coming" has a gate of its own, with no check-in - see comingGateOf.
+    const comingOnly = checkin === undefined && body["kind"] === "coming" && await this.comingGateOf(club, id);
+
+    if (checkin === undefined && !comingOnly) {
       sendJson(response, 404, { ok: false, error: "Not found" });
       return;
     }
@@ -7485,7 +7523,7 @@ export class Relay {
     // The personal PIN's proof is the pass checkin/list answered it with,
     // checked against this driver's own in constant time (racerByPass).
     const pass = typeof body["pass"] === "string" && PASS.test(body["pass"]) ? body["pass"] : "";
-    const withPin = pass !== "" && racerByPass(checkin, pass)?.id === id;
+    const withPin = pass !== "" && checkin !== undefined && racerByPass(checkin, pass)?.id === id;
 
     // A driver who HAS a personal PIN changes their details only with it:
     // the badge code alone is printed on a lanyard. A driver without one
@@ -7497,7 +7535,7 @@ export class Relay {
     // write limit below still holds.
     const write = isWriteKind(kind);
 
-    if (kind === "details" && hasRacerPin(checkin, id) && !withPin) {
+    if (kind === "details" && checkin !== undefined && hasRacerPin(checkin, id) && !withPin) {
       sendJson(response, 403, { ok: false, error: "Sign in with your personal PIN first." });
       return;
     }
@@ -7538,7 +7576,7 @@ export class Relay {
       // Read again inside the lock, as sendClubNote does: the club may have
       // closed asks or nights, or taken them off the list, while this
       // waited for it - and closing deletes what is held under this lock.
-      if ((await this.askGateOf(club, id)) === undefined) {
+      if ((await this.askGateOf(club, id)) === undefined && !(comingOnly && await this.comingGateOf(club, id))) {
         return "closed" as const;
       }
 

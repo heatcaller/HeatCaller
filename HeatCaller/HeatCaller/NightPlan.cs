@@ -116,9 +116,68 @@ public static class NightPlan
             : DefaultLength;
 
     /// <summary>
+    /// The race day's rounds in the order Race Control will run them: the
+    /// race it has as next (<paramref name="nextStart"/>) moved in front of
+    /// the rounds still to run, the rest in program order after it. The
+    /// list as it was when that race is already first, isn't in it, or has
+    /// run.
+    ///
+    /// WHY (12 Nov 2026, the first night on step 8): Race Control's next
+    /// race is the first unrun round that isn't the one in hand (NextRound),
+    /// and the desk picks rounds out of order - a heat held for a driver, a
+    /// practice before the first heat. For then matched the next start
+    /// against the first unrun round in program order only, so on those
+    /// nights the push-back and Auto start's count moved nothing, and the
+    /// schedule said one race was next while the PA called another. Kept
+    /// out of For, which plans the order it is given.
+    /// </summary>
+    public static IReadOnlyList<RoundDefinition> InRunningOrder(IReadOnlyList<RoundDefinition> dayRounds, RaceControlControl.NextStartFact? nextStart)
+    {
+        if (nextStart?.RoundId is not { Length: > 0 } nextId)
+        {
+            return dayRounds;
+        }
+
+        static bool ToRun(RoundDefinition? r) => r is not null && !r.IsRecorded && r.Kind != RoundKind.Practice;
+
+        var at = -1;
+        var firstToRun = -1;
+
+        for (var i = 0; i < dayRounds.Count; i++)
+        {
+            if (!ToRun(dayRounds[i]))
+            {
+                continue;
+            }
+
+            if (firstToRun < 0)
+            {
+                firstToRun = i;
+            }
+
+            if (string.Equals(dayRounds[i].Id, nextId, StringComparison.Ordinal))
+            {
+                at = i;
+                break;
+            }
+        }
+
+        if (at <= firstToRun)
+        {
+            return dayRounds;
+        }
+
+        var ordered = dayRounds.ToList();
+        var next = ordered[at];
+        ordered.RemoveAt(at);
+        ordered.Insert(firstToRun, next);
+        return ordered;
+    }
+
+    /// <summary>
     /// The rest of the night, or null when nothing is left to run.
     /// </summary>
-    /// <param name="dayRounds">The race day's rounds in program order.</param>
+    /// <param name="dayRounds">The race day's rounds in program order (or running order - see InRunningOrder).</param>
     /// <param name="lengthOf">How long each round takes (see LengthOf).</param>
     /// <param name="unbuilt">Mains still to be built, run after everything in <paramref name="dayRounds"/>.</param>
     /// <param name="onTrackRoundId">The round on track now, if any.</param>
@@ -148,7 +207,8 @@ public static class NightPlan
         DateTime nowUtc,
         TimeSpan? firstRaceLocal = null,
         IReadOnlyList<PlannedBreak>? breaks = null,
-        bool keepPromises = false)
+        bool keepPromises = false,
+        RaceControlControl.NextStartFact? nextStart = null)
     {
         var gap = tonightsGap is { } measured && measured > TimeSpan.Zero ? measured : DefaultGap;
         var slots = new List<Slot>();
@@ -204,6 +264,23 @@ public static class NightPlan
             if (nothingRunYet && firstRaceLocal is { } first && NearestOccurrence(first, nowUtc) is var firstUtc && firstUtc > cursor)
             {
                 cursor = firstUtc;
+            }
+
+            // When Race Control will really start the next race (12 Nov
+            // 2026): Auto start's count, which carries a driver's approved
+            // "Need 5 minutes", the desk's +1 min and a Hold; or, with Auto
+            // start off, how far the desk put it back. Everything after it
+            // moves with it.
+            if (nextStart is { } known && firstToRun is not null && string.Equals(known.RoundId, firstToRun.Id, StringComparison.Ordinal))
+            {
+                if (known.StartsAtUtc is { } startsAt)
+                {
+                    cursor = startsAt > nowUtc ? startsAt : nowUtc;
+                }
+                else if (known.PushedBackMinutes > 0)
+                {
+                    cursor += TimeSpan.FromMinutes(known.PushedBackMinutes);
+                }
             }
         }
 

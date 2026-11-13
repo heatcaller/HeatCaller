@@ -173,7 +173,7 @@ internal sealed class DriverRequestsForm : Form
     }
 
     private static string WhenText(DateTime utc) =>
-        utc.ToLocalTime().ToString("ddd HH:mm", CultureInfo.CurrentCulture);
+        utc.ToLocalTime().ToString("ddd ", CultureInfo.CurrentCulture) + AppTime.TimeOfDay(utc.ToLocalTime());
 
     // ------------------------------------------------------------ drawing
 
@@ -473,7 +473,7 @@ internal sealed class ApproveDriverRequestForm : Form
 
         var intro = new List<string>
         {
-            $"Sent from their phone {request.AskedUtc.ToLocalTime().ToString("ddd d MMM HH:mm", CultureInfo.CurrentCulture)}, "
+            $"Sent from their phone {request.AskedUtc.ToLocalTime().ToString("ddd d MMM ", CultureInfo.CurrentCulture)}{AppTime.TimeOfDay(request.AskedUtc.ToLocalTime())}, "
             + (request.Proof == DriverAsk.ByPin ? "signed in with their personal PIN." : "with their badge code."),
             "Untick anything you don't want to change. Their phone shows your answer.",
         };

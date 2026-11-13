@@ -74,6 +74,7 @@ public sealed partial class RaceControlControl
         {
             Gap.Close();
             CloseAutoStart();
+            ForgetNextStart();
             ShowGapInBroadcast(string.Empty);
             return;
         }
@@ -83,6 +84,14 @@ public sealed partial class RaceControlControl
         var rules = GapRulesNow();
         var facts = GapFactsNow(now);
         Gap.NextRace(facts.NextId);
+
+        // More time a driver was given before their race was next (12 Nov
+        // 2026): on now it is, before Auto start and the call-ups read the
+        // push-back.
+        if (ApplyOwedMoreTime(now, facts.NextId))
+        {
+            facts = GapFactsNow(now);
+        }
 
         // The recap show counts as on air from the flag - between its parts
         // too, while the next part is written - so the quiet after it is
@@ -110,6 +119,9 @@ public sealed partial class RaceControlControl
         // Auto start (11 Nov 2026): counts the gap down and starts the next
         // race. Before the muted return: a muted announcer still runs races.
         AutoStartTick(now, facts, busy);
+
+        // The next race's real start, for the night plan's times (12 Nov 2026).
+        NoteNextStart(now, facts);
 
         // A welcome for drivers new to racing, once a night (setup plan D12).
         WelcomeNewDrivers(busy);

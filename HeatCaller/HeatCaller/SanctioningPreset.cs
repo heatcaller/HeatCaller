@@ -38,7 +38,8 @@ public sealed record SanctioningPreset(
     int? MainSize = null,
     int? BumpUpCount = null,
     int? AMainLegs = null,
-    int? AMainLegsCounted = null)
+    int? AMainLegsCounted = null,
+    RoundPointsScale? PointsScale = null)
 {
     public override string ToString() => $"{Body}  -  {Name}";
 
@@ -79,6 +80,14 @@ public sealed record SanctioningPreset(
                 QualifyingMethod.RoundPoints => "Qualifying scored on points per round, fewest wins",
                 _ => "Qualifying scored on most laps, then lowest time",
             });
+        }
+
+        // What a round's places score (12 Nov 2026) - set only by a preset
+        // whose rulebook gives the scale, which is the rulebook's TQ = 0.
+        if (PointsScale is { } scale)
+        {
+            raceClass.RoundPointsScale = scale;
+            changed.Add($"Round points: {QualifyingCalculator.ScaleWords(scale)}");
         }
 
         if (ConsecutiveLapCount is { } laps)
@@ -138,16 +147,22 @@ public sealed record SanctioningPreset(
 /// its rule number and page. EFRA's and NZRCA's are from their 2026
 /// documents on their own sites, and the Reedy Race's from reedyrace.com.
 ///
-/// THE POINTS TRAP, which is why three of these leave qualifying alone.
-/// ROAR's Qual-Points (14.3.6) and EFRA's Round by Round system (App. 3
-/// 9.4.1) both give the top qualifier ZERO points, second 2, third 3. The
-/// app's RoundPoints gives first 1 point. That one-point difference is not
-/// cosmetic: 1st + 4th is 4 points under ROAR and EFRA and 5 under the app,
-/// against 2nd + 2nd's 4 in both, so the app would rank those two drivers
-/// the other way round. A preset that switched RoundPoints on and called it
-/// ROAR's system would score a sanctioned meeting wrong. The A-main legs,
-/// on the other hand, ARE scored 1st = 1 point by EFRA (10.5) and NZRCA
-/// (B3.12 / A3.10), which is what AMainLegs does, so those are set.
+/// THE POINTS TRAP. ROAR's Qual-Points (14.3.6), IFMAR's qualifying points
+/// (off-road 1.7, track 1.4.5) and EFRA's Round by Round system (App. 3
+/// 9.4.1) all give the top qualifier ZERO points, second 2, third 3. The
+/// club scale gives first 1 point. That one-point difference is not
+/// cosmetic: 1st + 4th is 4 points under the rulebooks and 5 on the club
+/// scale, against 2nd + 2nd's 4 in both, so the club scale ranks those two
+/// drivers the other way round. Until 12 Nov 2026 the app had only the club
+/// scale, so every preset left qualifying alone. Now a class can score the
+/// rulebook way (RoundPointsScale, with each body's missed-round score and
+/// tie-breaks), and the presets whose rulebooks score round points switch
+/// it on: IFMAR's and EFRA's, and NZRCA off-road, whose B3.5 names "the
+/// IFMAR qualifying points system". ROAR's Level 1-4 presets still rank on
+/// the single best heat - that is what 8.8.4 says for club levels; Qual-
+/// Points is Level 5 (8.8.5). The A-main legs, on the other hand, ARE
+/// scored 1st = 1 point by EFRA (10.5) and NZRCA (B3.12 / A3.10), which is
+/// what AMainLegs does, so those are set.
 ///
 /// An empty list entry would at least be honest; a wrong one is worse
 /// than nothing, because it is wrong with authority.
@@ -208,19 +223,23 @@ public static class SanctioningPresets
             + "Rules, version 13 Nov 2019; Electric Track Racing and Technical Rules, September 2024). For a "
             + "section's lengths, finals and legs, use that section's IFMAR preset below.",
 
-            "Nothing but the start type and the heat ranking: each driver's clock starts at their own first "
-            + "crossing, so the run from the grid to the timing loop costs nobody anything, and each heat is "
-            + "ranked on laps then time - which is how IFMAR places a driver in a round (off-road 1.7, track "
-            + "1.4.5).",
+            "The start type and IFMAR's qualifying points: each driver's clock starts at their own first "
+            + "crossing, so the run from the grid to the timing loop costs nobody anything. Each round ranks "
+            + "its drivers on laps then time and scores the fastest 0 points, second 2, third 3 (off-road 1.7, "
+            + "track 1.4.5); a round not run scores 500 (track 1.4.5); the best three rounds count - IFMAR's "
+            + "count for five or six rounds - and ties go to the counted scores, then their laps and times.",
 
-            "No durations, no round count, no main sizes and no points. IFMAR then turns each round's placing "
-            + "into points - 0 for the fastest, 2 for second, 3 for third - and adds the best three of five or "
-            + "six. HeatCaller's points per round gives the fastest 1, which can swap two drivers, so that is "
-            + "not switched on. IFMAR also calls cars away one at a time; HeatCaller sends them together and "
-            + "starts each clock at its own first crossing.",
+            "No durations, no main sizes. IFMAR counts fewer rounds when fewer are run - the best two of three "
+            + "or four, the best one of two - so change \"Heats that count\" if the schedule is cut short. IFMAR "
+            + "also calls cars away one at a time; HeatCaller sends them together and starts each clock at its "
+            + "own first crossing.",
 
             Qualifier: f => f.StartType = RaceStartType.Qualifier,
-            Method: QualifyingMethod.TotalLaps),
+            // 12 Nov 2026: IFMAR's own points now that the app can score
+            // them (RoundPointsScale.Ifmar) - see the points trap.
+            Method: QualifyingMethod.RoundPoints,
+            CountBestRounds: 3,
+            PointsScale: RoundPointsScale.Ifmar),
 
         // IFMAR's section rules (ifmar.org, Rules page), World
         // Championship format. Each keeps the convention preset's own-clock
@@ -243,9 +262,15 @@ public static class SanctioningPresets
         //            of 3.
         //     1.8.2 (p. 11) qualifying staggered, car by car; 1.8.3 main
         //            finals from an F1 grid of ten rows.
-        // Not set: qualifying scoring (off-road 1.7, track 1.4.5 - 0 points
-        // for the TQ, see the points trap), the round count (five or six),
-        // bump-ups (neither section has any), the lower finals' legs (track
+        //   Qualifying (12 Nov 2026): off-road 1.7 (p. 5) and track 1.4.5
+        //            (p. 8-9) - round points, fastest 0, second 2, third 3;
+        //            a round with no time or a DQ'd time 500 (track); best
+        //            3 of 5 ("the normal qualifying", off-road) or of 5-6
+        //            (track); ties on counted scores only, then the laps
+        //            and times from the lowest score. RoundPointsScale.Ifmar.
+        // Not set: the round count itself (five or six - a schedule), the
+        // shorter counts when rounds are lost (4 or 3 run: best 2; 2 run:
+        // best 1), bump-ups (neither section has any), the lower finals' legs (track
         // 1.6.1 runs them two or three times; the app runs only the A-main
         // in legs). Ties: IFMAR's second tie-breaker is laps and times from
         // the best finish, AMainLegs the last leg's order.
@@ -310,11 +335,18 @@ public static class SanctioningPresets
         //                  all finals in 3 legs. 10.4: best 2 of 3 count.
         //   10.5   (p. 103) a final's winner 1 point, second 2 ... - the
         //                  AMainLegs scale.
+        //   9.4.1  (p. 102) qualifying (12 Nov 2026): Round by Round points,
+        //                  fastest 0, second 2, third 3; no time or a DQ'd
+        //                  time scores last place in the round; ties on the
+        //                  best finish in the counted rounds, then the best
+        //                  points round's laps and time, counting rounds
+        //                  only. RoundPointsScale.Efra. To count: 2 from 3,
+        //                  4 or 5 rounds, 3 from 6, 1 from 2 - set to 2, the
+        //                  count for the off-road format's five rounds (9.4.7).
         // Not set: the qualifier start (9.2.2 / 9.4.4 call a staggered start
         // car by car but give no gap and do not say how the clock runs),
-        // qualifying scoring (Round by Round, 9.4.1 - TQ scores zero, see
-        // the points trap; and the rounds-to-count table changes with the
-        // rounds completed), bump-ups (none in the appendix), and the
+        // the count for six rounds (3) or two (1), bump-ups (none in the
+        // appendix), and the
         // three-leg LOWER finals, which the app does not run. The second
         // tie-breaker differs too: 10.6 compares laps and times from each
         // driver's best finish, AMainLegs the last leg's finishing order.
@@ -333,8 +365,13 @@ public static class SanctioningPresets
         //   B3.9   heats and finals a maximum of 12 cars.
         //   B3.11  A finals at least 3 races; B3.12 1 point for the winner
         //          down to 12 for twelfth, best 2 of 3 count.
-        // Not set: qualifying scoring ("IFMAR qualifying points system",
-        // B3.5, scale not given in the document), the round count (B3.10:
+        //   B3.5   "Qualifying results to be determined using IFMAR
+        //          qualifying points system" - so (12 Nov 2026) IFMAR's
+        //          scale, missed-round score and tie-breaks
+        //          (RoundPointsScale.Ifmar, off-road 1.7). Not IFMAR's count:
+        //          NZRCA does not adopt a round schedule, so the class's
+        //          own "Heats that count" stays.
+        // Not set: the round count (B3.10:
         // a minimum of 3 heats, a schedule rather than a setting),
         // bump-ups (none stated; B3.7 fixes the grid from qualifying), and
         // lower finals' legs (B3.11.1, the club's discretion).
@@ -347,19 +384,24 @@ public static class SanctioningPresets
 
             "Qualifiers: 5 minutes (B6.1a), staggered start with each driver on their own clock (B3.5). Finals: "
             + "5 minutes (B6.1a), grid start (B3.6, for national events). Up to 12 cars per final (B3.9). A-main "
-            + "in 3 legs, best 2 count, 1 point for the winner (B3.11, B3.12).",
+            + "in 3 legs, best 2 count, 1 point for the winner (B3.11, B3.12). Qualifying on the \"IFMAR "
+            + "qualifying points system\" (B3.5): fastest in a round 0 points, second 2, third 3, as IFMAR's "
+            + "off-road rules 1.7 score it.",
 
-            "How qualifying is scored: the rules name the \"IFMAR qualifying points system\" (B3.5) but give no "
-            + "scale, so the class's own method stays. The stagger GAP (the race director's or the scoring "
+            "How many rounds count: IFMAR's table (best 3 of 5, 2 of 3 or 4, 1 of 2) goes with its own "
+            + "schedule, which NZRCA does not adopt, so the class's \"Heats that count\" stays - set it for your "
+            + "rounds. The stagger GAP (the race director's or the scoring "
             + "program's, B3.5), the number of rounds (at least 3, B3.10), bump-ups (none stated) and legs for "
             + "the lower finals (the club's choice, B3.11.1) are not set. Ties: the rules' second tie-breaker "
             + "is laps and times from the best finish (B3.12); HeatCaller's is the last leg.",
 
             Qualifier: StaggeredOwnClock(5),
             Main: GridStart(5),
+            Method: QualifyingMethod.RoundPoints,
             MainSize: 12,
             AMainLegs: 3,
-            AMainLegsCounted: 2),
+            AMainLegsCounted: 2,
+            PointsScale: RoundPointsScale.Ifmar),
 
         // NZRCA EP On-Road Rules 2026, Version 29.0 (res.cloudinary.com/
         // nzrca/.../EP Onroad Rules 2026.pdf):
@@ -480,8 +522,9 @@ public static class SanctioningPresets
 
         "The qualifier start - ROAR allows either a full-field or an IFMAR start (8.9.1). Main size and bump-ups "
         + "(no general rule for electric Level 1-4). The triple A-main (Level 5 nationals, 8.8.6 and 14.3.7). "
-        + "Level 5's Qual-Points (14.3.6): it gives the top qualifier 0 points where HeatCaller's points per round "
-        + "gives 1, which can swap two drivers' order, so it is not switched on.",
+        + "Level 5's Qual-Points (8.8.5, 14.3.6) - Level 1-4 ranks on the single best heat (8.8.4), which is what "
+        + "this sets. For a Level 5 class, choose points per round with the top qualifier on 0 points; ROAR's "
+        + "last tie-break (the better laps and time of the two counted rounds) is not one HeatCaller offers.",
 
         Qualifier: Length(minutes),
         Main: GridStart(minutes),
@@ -496,14 +539,15 @@ public static class SanctioningPresets
 
         $"Qualifiers: {minutes} minutes, each driver's clock from their own first crossing. Finals: {minutes} "
         + "minutes from a grid start. 10 drivers per final. A-main in 3 legs, best 2 count, 1 point for the "
-        + "winner. Each heat ranked on laps then time.",
+        + "winner. Qualifying on IFMAR's round points (off-road 1.7, track 1.4.5): fastest in a round 0, second "
+        + "2, third 3, a round not run 500, best 3 rounds count, ties on the counted scores then their laps and "
+        + "times.",
 
-        "Qualifying points: IFMAR gives the fastest in a round 0 points, second 2, third 3, and adds the best "
-        + "three of five or six rounds; HeatCaller's points per round gives the fastest 1, which can swap two "
-        + "drivers, so that is not switched on and the class's count of heats stays as it is. IFMAR calls cars away one at a time; HeatCaller sends "
+        "IFMAR counts fewer rounds when fewer are run - best 2 of 3 or 4, best 1 of 2 - so change \"Heats that "
+        + "count\" if the schedule is cut short. IFMAR calls cars away one at a time; HeatCaller sends "
         + "them together and starts each clock at its own first crossing. Bump-ups (none in the rules). Lower "
-        + "finals in legs (HeatCaller runs only the A-main in legs). Ties: IFMAR's second tie-breaker is laps "
-        + "and times from the best finish; HeatCaller's is the last leg.",
+        + "finals in legs (HeatCaller runs only the A-main in legs). Ties in the A-main: IFMAR's second "
+        + "tie-breaker is laps and times from the best finish; HeatCaller's is the last leg.",
 
         Qualifier: f =>
         {
@@ -512,10 +556,13 @@ public static class SanctioningPresets
             f.LapLimit = 0;
         },
         Main: GridStart(minutes),
-        Method: QualifyingMethod.TotalLaps,
+        // 12 Nov 2026: off-road 1.7 / track 1.4.5 - see the comment above Ifmar(...).
+        Method: QualifyingMethod.RoundPoints,
+        CountBestRounds: 3,
         MainSize: 10,
         AMainLegs: 3,
-        AMainLegsCounted: 2);
+        AMainLegsCounted: 2,
+        PointsScale: RoundPointsScale.Ifmar);
 
     private static SanctioningPreset Efra(string key, string name, string classes, int minutes) => new(
         key,
@@ -527,20 +574,27 @@ public static class SanctioningPresets
         + "format. " + CheckRulebook,
 
         $"Qualifiers: {minutes} minutes. Finals: {minutes} minutes from a grid (F1-type) start. 10 drivers per "
-        + "final. A-main in 3 legs, best 2 count, 1 point for the winner.",
+        + "final. A-main in 3 legs, best 2 count, 1 point for the winner. Qualifying on EFRA's Round by Round "
+        + "points (9.4.1): fastest in a round 0, second 2, third 3, a round with no time scores last place, best "
+        + "2 rounds count (EFRA's count for 3, 4 or 5 rounds), ties on the best counted finish then that round's "
+        + "laps and time.",
 
-        "Qualifying scoring - EFRA's Round by Round points (9.4.1) give the top qualifier 0 points where "
-        + "HeatCaller's gives 1, and how many rounds count depends on how many were run, so the class's own "
-        + "method stays. The qualifier start (staggered, called car by car, 9.2.2 - no gap given). Bump-ups (none "
+        "How many rounds count depends on how many were run (9.4.1): best 3 of 6, best 1 of 2, and fewer than "
+        + "two is void - change \"Heats that count\" to match the schedule. "
+        + "The qualifier start (staggered, called car by car, 9.2.2 - no gap given). Bump-ups (none "
         + "in the appendix). EFRA runs the lower finals in three legs too; HeatCaller runs only the A-main in "
         + "legs. Ties: EFRA's second tie-breaker is laps and times from the best finish (10.6); HeatCaller's is "
         + "the last leg.",
 
         Qualifier: Length(minutes),
         Main: GridStart(minutes),
+        // 12 Nov 2026: 9.4.1 Round by Round - see the comment above Efra(...).
+        Method: QualifyingMethod.RoundPoints,
+        CountBestRounds: 2,
         MainSize: 10,
         AMainLegs: 3,
-        AMainLegsCounted: 2);
+        AMainLegsCounted: 2,
+        PointsScale: RoundPointsScale.Efra);
 
     public static SanctioningPreset? Find(string key) =>
         All.FirstOrDefault(p => string.Equals(p.Key, key, StringComparison.OrdinalIgnoreCase));

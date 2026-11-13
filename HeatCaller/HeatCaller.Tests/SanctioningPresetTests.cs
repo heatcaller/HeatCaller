@@ -88,7 +88,7 @@ public sealed class SanctioningPresetTests
     [Theory]
     [InlineData("efra-electric-10", 5)]
     [InlineData("efra-electric-12", 8)]
-    public void Efra_sets_lengths_grid_finals_of_ten_and_three_legs_but_not_its_points(string key, int minutes)
+    public void Efra_sets_lengths_grid_finals_of_ten_three_legs_and_round_by_round_points(string key, int minutes)
     {
         var raceClass = Applied(key);
 
@@ -99,10 +99,13 @@ public sealed class SanctioningPresetTests
         Assert.Equal(3, raceClass.AMainLegs);
         Assert.Equal(2, raceClass.AMainLegsCounted);
 
-        // Round by Round gives the TQ zero points - not the app's scale - so
-        // qualifying stays the club's, and so do the qualifier start and bump-ups.
-        Assert.Equal(QualifyingMethod.BestConsecutiveLaps, raceClass.QualifyingMethod);
-        Assert.Equal(3, raceClass.CountBestRounds);
+        // 9.4.1 Round by Round (12 Nov 2026): TQ zero, EFRA's missed round and
+        // ties, best 2 - the count for 3, 4 or 5 rounds.
+        Assert.Equal(QualifyingMethod.RoundPoints, raceClass.QualifyingMethod);
+        Assert.Equal(RoundPointsScale.Efra, raceClass.RoundPointsScale);
+        Assert.Equal(2, raceClass.CountBestRounds);
+
+        // The qualifier start and bump-ups are not stated.
         Assert.Equal(5, raceClass.ConsecutiveLapCount);
         Assert.Equal(RaceStartType.HandReleased, raceClass.QualifierFormat.StartType);
         Assert.Equal(4, raceClass.BumpUpCount);
@@ -127,10 +130,22 @@ public sealed class SanctioningPresetTests
         Assert.Equal(2, raceClass.AMainLegsCounted);
 
         // The gap is the race director's (kept at the club's 7 s by AssertClubFormatKept),
-        // and qualifying scoring and bump-ups are not stated.
-        Assert.Equal(QualifyingMethod.BestConsecutiveLaps, raceClass.QualifyingMethod);
+        // bump-ups are not stated, nor is a count of rounds.
         Assert.Equal(3, raceClass.CountBestRounds);
         Assert.Equal(4, raceClass.BumpUpCount);
+
+        if (key == "nzrca-ep-offroad-10")
+        {
+            // B3.5: "IFMAR qualifying points system" (12 Nov 2026).
+            Assert.Equal(QualifyingMethod.RoundPoints, raceClass.QualifyingMethod);
+            Assert.Equal(RoundPointsScale.Ifmar, raceClass.RoundPointsScale);
+        }
+        else
+        {
+            // A3.4 says how heats are called, not how they are ranked.
+            Assert.Equal(QualifyingMethod.BestConsecutiveLaps, raceClass.QualifyingMethod);
+            Assert.Equal(RoundPointsScale.Club, raceClass.RoundPointsScale);
+        }
         AssertClubFormatKept(raceClass.Format);
         AssertClubFormatKept(raceClass.QualifierFormat);
     }
@@ -148,12 +163,13 @@ public sealed class SanctioningPresetTests
         Assert.Equal(0, raceClass.QualifierFormat.LapLimit);
         Assert.Equal(minutes, raceClass.Format!.TimeLimitMinutes);
         Assert.Equal(RaceStartType.Standard, raceClass.Format.StartType);
-        Assert.Equal(QualifyingMethod.TotalLaps, raceClass.QualifyingMethod);
         Assert.Equal(10, raceClass.MainSize);
         Assert.Equal(3, raceClass.AMainLegs);
         Assert.Equal(2, raceClass.AMainLegsCounted);
 
-        // IFMAR's best-3-of-5/6 is a points count, not the app's heats count.
+        // Off-road 1.7 / track 1.4.5 (12 Nov 2026): round points, TQ zero, best 3 of 5 or 6.
+        Assert.Equal(QualifyingMethod.RoundPoints, raceClass.QualifyingMethod);
+        Assert.Equal(RoundPointsScale.Ifmar, raceClass.RoundPointsScale);
         Assert.Equal(3, raceClass.CountBestRounds);
         Assert.Equal(5, raceClass.ConsecutiveLapCount);
         Assert.Equal(4, raceClass.BumpUpCount);
@@ -162,13 +178,15 @@ public sealed class SanctioningPresetTests
     }
 
     [Fact]
-    public void The_ifmar_convention_preset_still_sets_only_the_start_and_the_heat_ranking()
+    public void The_ifmar_convention_preset_sets_only_the_start_and_ifmars_points()
     {
         var raceClass = Applied("ifmar-qualifying");
 
         Assert.Equal(RaceStartType.Qualifier, raceClass.QualifierFormat!.StartType);
         Assert.Equal(11, raceClass.QualifierFormat.TimeLimitMinutes);
-        Assert.Equal(QualifyingMethod.TotalLaps, raceClass.QualifyingMethod);
+        Assert.Equal(QualifyingMethod.RoundPoints, raceClass.QualifyingMethod);
+        Assert.Equal(RoundPointsScale.Ifmar, raceClass.RoundPointsScale);
+        Assert.Equal(3, raceClass.CountBestRounds);
         Assert.Equal(7, raceClass.MainSize);
         Assert.Equal(1, raceClass.AMainLegs);
         Assert.Equal(RaceStartType.HandReleased, raceClass.Format!.StartType);
@@ -195,11 +213,38 @@ public sealed class SanctioningPresetTests
     }
 
     [Fact]
-    public void No_preset_switches_on_round_points()
+    public void Every_preset_on_round_points_uses_its_rulebooks_scale_never_the_clubs()
     {
-        // ROAR's and EFRA's round points give the top qualifier 0 where the
-        // app gives 1, which can swap two drivers - see SanctioningPresets.
-        Assert.DoesNotContain(SanctioningPresets.All, p => p.Method == QualifyingMethod.RoundPoints);
+        // 12 Nov 2026: IFMAR, EFRA and ROAR give the top qualifier 0 where the
+        // club scale gives 1, which can swap two drivers - so a preset that
+        // switches round points on must also say which rulebook scale.
+        var onPoints = SanctioningPresets.All.Where(p => p.Method == QualifyingMethod.RoundPoints).ToList();
+
+        Assert.NotEmpty(onPoints);
+        Assert.All(onPoints, p => Assert.True(p.PointsScale is RoundPointsScale.Ifmar or RoundPointsScale.Efra, p.Key));
+    }
+
+    [Fact]
+    public void Presets_that_rank_on_the_best_result_leave_the_scale_alone()
+    {
+        foreach (var key in new[] { "roar-electric-10", "roar-electric-12", "nzrca-ep-onroad-5min", "reedy-tc-2019-open", "pnwc-2026", "brca-onroad" })
+        {
+            var raceClass = ClubClass();
+            raceClass.RoundPointsScale = RoundPointsScale.Efra;
+            Preset(key).ApplyTo(raceClass, new RaceFormat());
+
+            Assert.Null(Preset(key).PointsScale);
+            Assert.Equal(RoundPointsScale.Efra, raceClass.RoundPointsScale);
+        }
+    }
+
+    [Fact]
+    public void The_applied_list_names_the_points_scale()
+    {
+        var changes = Preset("ifmar-electric-offroad-10").ApplyTo(ClubClass(), new RaceFormat());
+
+        Assert.Contains("Qualifying scored on points per round, fewest wins", changes);
+        Assert.Contains("Round points: TQ 0, 2nd 2 (IFMAR)", changes);
     }
 
     [Theory]

@@ -232,7 +232,11 @@ public sealed class RaceClassesControl : UserControl
         var method = raceClass.QualifyingMethod switch
         {
             QualifyingMethod.BestConsecutiveLaps => $"Best {raceClass.ConsecutiveLapCount} consecutive",
-            QualifyingMethod.RoundPoints => "Points per round",
+            // 12 Nov 2026: the scale only when it is a rulebook's, so a club
+            // class reads exactly as it did.
+            QualifyingMethod.RoundPoints => raceClass.RoundPointsScale == RoundPointsScale.Club
+                ? "Points per round"
+                : $"Points per round, {QualifyingCalculator.ScaleWords(raceClass.RoundPointsScale)}",
             _ => "Most laps, then time",
         };
 
