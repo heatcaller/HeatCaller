@@ -115,12 +115,14 @@ describe("Who wins?: a pick is settled by its own race", () => {
   const MIN = 60000;
 
   // A finished board, published at `at`, won by `winner` over five minutes.
-  const finished = (winner: string, at: number) => ({
+  // lapMs: a later race is told from the one before by its winner's time
+  // (Bug hunt 17), so one won by the same driver is given its own.
+  const finished = (winner: string, at: number, lapMs = 10000) => ({
     publishedAt: new Date(at).toISOString(),
     body: {
       state: "Finished", flag: "Checkered", countdown: "",
       standings: [
-        { name: winner, laps: Array.from({ length: 30 }, () => 10000), best: 10000, lap: 31, cells: [{ text: winner, emphasis: "none" }] },
+        { name: winner, laps: Array.from({ length: 30 }, () => lapMs), best: lapMs, lap: 31, cells: [{ text: winner, emphasis: "none" }] },
         { name: "Riley T.", laps: Array.from({ length: 29 }, () => 10300), best: 10300, lap: 30, cells: [{ text: "Riley T.", emphasis: "none" }] },
       ],
     },
@@ -179,7 +181,7 @@ describe("Who wins?: a pick is settled by its own race", () => {
 
     // A long wait before the race (more than twice its length), watched.
     await p.advance(10 * MIN);
-    show(finished("Jordan M.", picked + 16 * MIN));
+    show(finished("Jordan M.", picked + 16 * MIN, 10100));
     await p.advance(7 * MIN);
 
     assert.equal(p.eval("picksWords()"), "Your picks: 0 of 1 right");
