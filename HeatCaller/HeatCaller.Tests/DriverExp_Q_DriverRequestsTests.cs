@@ -425,7 +425,7 @@ public sealed class DriverExp_Q_DriverRequestsTests : IDisposable
         // WHY (23 Oct 2026, bug hunt 10): formatted as the app formats it - an
         // interpolated HH:mm takes the culture's time separator ("." in
         // Finnish), so the test failed on such a PC though the app was right.
-        var line = $"[Driver query {Tonight.ToLocalTime().ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture)}] Sam P.: My third lap wasn't counted";
+        var line = $"[Driver query {AppTime.TimeOfDay(Tonight.ToLocalTime())}] Sam P.: My third lap wasn't counted";
         Assert.Equal("Track was damp." + Environment.NewLine + line, w.Heat.Notes);
         Assert.Equal(DriverAsk.Noted, w.Store.Get(ask.Id)!.State);
         Assert.Equal(resultsBefore, JsonSerializer.Serialize(w.Heat.Results));
