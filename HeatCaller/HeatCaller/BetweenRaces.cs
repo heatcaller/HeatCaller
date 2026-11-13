@@ -336,7 +336,14 @@ internal sealed record GapPreset(string Key, string Name, string What, Func<GapR
         });
 
     public static GapPreset RaceDay { get; } = new("raceday", "Race day", "Normal, every default on the card.",
-        r => GapRules.Default with { CustomLines = r.CustomLines });
+        // The automatic countdown is kept, as the other three presets keep
+        // it: its tick is the Timetable's too, and a day set to Race day
+        // must not switch off a countdown the Timetable shows as on.
+        r => GapRules.Default with
+        {
+            CustomLines = r.CustomLines,
+            AutoCountdown = r.AutoCountdown, CountdownMarks = r.CountdownMarks, CountdownTimesUp = r.CountdownTimesUp,
+        });
 
     public static GapPreset BigEvent { get; } = new("big", "Big event", "Busy, segments and sponsor reads on, two-races-out call-up on.",
         r => r with
@@ -913,18 +920,20 @@ internal sealed class GapState
                 return "the call-up goes first";
             }
 
+            // Marshals and not-checked-in wait for the call-up only when one
+            // can go: with the call-up's box unticked they would wait all gap.
             return kind switch
             {
                 GapLine.CallUp => WhyNotACallUp(rules, nowUtc, facts),
                 GapLine.Marshals => !facts.HasNext ? "the program has nothing next"
                     : facts.Marshals.Count == 0 ? "nobody is posted to marshal it"
                     : _marshalsSaid ? "the marshals have been called"
-                    : _callUps == 0 ? "the call-up goes first"
+                    : _callUps == 0 && rules.Allows(GapLine.CallUp) ? "the call-up goes first"
                     : null,
                 GapLine.NotCheckedIn => !facts.HasNext ? "the program has nothing next"
                     : facts.NotCheckedIn.Count == 0 ? "everyone in it is checked in"
                     : _notCheckedInSaid ? "already said"
-                    : _callUps == 0 ? "the call-up goes first"
+                    : _callUps == 0 && rules.Allows(GapLine.CallUp) ? "the call-up goes first"
                     : null,
                 GapLine.TwoOut => facts.TwoOutId is not { } twoOut ? "nothing is two races out"
                     : _twoOutSaidFor.Contains(twoOut) ? "already said for that race"

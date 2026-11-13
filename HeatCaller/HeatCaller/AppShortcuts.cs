@@ -120,8 +120,27 @@ internal static class AppShortcuts
     /// quoted, with any single quote in it doubled. A path cannot contain a
     /// quote on Windows, but this is a string going into a command line and
     /// it is quoted properly rather than almost properly.
+    ///
+    /// PowerShell ends a single-quoted string at a curly quote as well as a
+    /// straight one, and a curly quote CAN be in a path (a profile folder
+    /// named O’Brien), so all five it reads as a single quote are doubled.
     /// </summary>
-    internal static string PowerShellString(string value) => "'" + value.Replace("'", "''") + "'";
+    internal static string PowerShellString(string value)
+    {
+        var quoted = new System.Text.StringBuilder("'", value.Length + 2);
+
+        foreach (var c in value)
+        {
+            quoted.Append(c);
+
+            if (c is '\'' or '‘' or '’' or '‚' or '‛')
+            {
+                quoted.Append(c);
+            }
+        }
+
+        return quoted.Append('\'').ToString();
+    }
 
     private static void RunPowerShell(string script)
     {

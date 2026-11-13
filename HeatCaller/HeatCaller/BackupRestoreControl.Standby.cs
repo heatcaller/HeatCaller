@@ -290,11 +290,15 @@ public sealed partial class BackupRestoreControl
     ///   3. The mirror stopped, and the newest copy set aside under a name
     ///      of its own and checked again, so no copy arriving now can
     ///      change what is restored halfway through.
-    ///   4. The marker left and standby mode switched off BEFORE anything
-    ///      is replaced - so from the restart on, this PC is never copied
-    ///      over. Both are put back if the restore is refused.
-    ///   5. RunRestore, which keeps this PC's own settings and voice files
+    ///   4. RunRestore, which keeps this PC's own settings and voice files
     ///      (WarmStandby.MachineOwnFiles) and restarts.
+    ///   5. The marker left and standby mode switched off BEFORE anything
+    ///      is replaced - so from the restart on, this PC is never copied
+    ///      over - but AFTER the restore's safety backup is made, at its
+    ///      point of no return. The safety backup is this PC as a standby,
+    ///      so restoring it puts the standby back; made after the marker,
+    ///      it brought back a PC that said it had taken over and copied
+    ///      nothing.
     /// </summary>
     private void TakeOver()
     {
@@ -319,8 +323,13 @@ public sealed partial class BackupRestoreControl
         var status = mirror.Status;
         var copyAt = status.LastCopyUtc ?? File.GetLastWriteTimeUtc(mirror.LatestPath);
 
+        // After a restart the mirror knows the copy is there but not how
+        // much is in it until an ask succeeds - and with the timing PC dead
+        // none will - so it is counted here rather than asked as "0 files".
+        var files = status.Files > 0 ? status.Files : FilesInCopy(mirror.LatestPath);
+
         var confirm = AppDialog.Show(this,
-            WarmStandby.TakeOverQuestion(copyAt, DateTime.UtcNow, status.Primary, status.Files),
+            WarmStandby.TakeOverQuestion(copyAt, DateTime.UtcNow, status.Primary, files),
             "Take over as the timing PC", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
 
         if (confirm != DialogResult.Yes || !CanRestoreNow())
@@ -346,8 +355,6 @@ public sealed partial class BackupRestoreControl
             {
                 throw new InvalidDataException(check.Problem);
             }
-
-            WarmStandby.WriteTakenOver(AppPaths.Root, new WarmStandby.TakenOver(DateTime.UtcNow, status.Primary, copyAt));
         }
         catch (Exception ex)
         {
@@ -361,23 +368,48 @@ public sealed partial class BackupRestoreControl
         }
 
         var wasStandby = _settings.StandbyModeEnabled;
-        _settings.StandbyModeEnabled = false;
-        _settings.Save();
 
-        RunRestore(restoring, WarmStandby.MachineOwnFiles, refused: () =>
-        {
-            // Refused with nothing touched: back to being the standby.
-            WarmStandby.ClearTakenOver(AppPaths.Root);
-            _settings.StandbyModeEnabled = wasStandby;
-            _settings.Save();
-
-            if (wasStandby)
+        RunRestore(restoring, WarmStandby.MachineOwnFiles,
+            refused: () =>
             {
-                mirror.Start();
-            }
+                // Refused with nothing touched, the marker and the setting
+                // included: back to being the standby.
+                if (wasStandby)
+                {
+                    mirror.Start();
+                }
 
-            RefreshStandby();
-        });
+                RefreshStandby();
+            },
+            atPointOfNoReturn: () =>
+            {
+                try
+                {
+                    WarmStandby.WriteTakenOver(AppPaths.Root, new WarmStandby.TakenOver(DateTime.UtcNow, status.Primary, copyAt));
+                }
+                finally
+                {
+                    // Whatever became of the marker, standby mode goes off.
+                    _settings.StandbyModeEnabled = false;
+                    _settings.Save();
+                }
+            });
+    }
+
+    /// <summary>How many stores the copy on disk holds, or zero when it can't be read or isn't a good copy. Never throws.</summary>
+    private static int FilesInCopy(string path)
+    {
+        try
+        {
+            // Shared with everything, so a copy arriving now is not stopped from replacing it.
+            using var copy = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            var check = WarmStandby.Validate(copy);
+            return check.Ok ? check.Files : 0;
+        }
+        catch (Exception)
+        {
+            return 0;
+        }
     }
 
     /// <summary>

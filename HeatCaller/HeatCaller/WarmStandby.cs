@@ -439,15 +439,18 @@ internal static class WarmStandby
 
     /// <summary>
     /// The question Take Over asks, with how old the copy is, said plainly:
-    /// anything the timing PC saved after it is not on this PC.
+    /// anything the timing PC saved after it is not on this PC. A count of
+    /// zero is "not known" and is left out: no copy that is kept is empty,
+    /// and "0 files" would say a good copy was.
     /// </summary>
     public static string TakeOverQuestion(DateTime copyTakenUtc, DateTime nowUtc, string? primary, int files)
     {
         var from = string.IsNullOrWhiteSpace(primary) ? "the timing PC" : primary;
         var age = nowUtc - copyTakenUtc;
+        var holds = files > 0 ? $" ({Plural.Of(files, "file")})" : string.Empty;
 
         return $"Take over from {from}?\n\n"
-               + $"The newest copy is {Age(age)} old ({Plural.Of(files, "file")}). Anything {from} saved after that is not on this PC - "
+               + $"The newest copy is {Age(age)} old{holds}. Anything {from} saved after that is not on this PC - "
                + "check the last race's result once you are running.\n\n"
                + "This PC's current data is saved to a safety backup first, then the copy is put in place and HeatCaller restarts. "
                + "After that this PC is the timing PC: connect the decoder to it. It stops copying, and nothing is ever copied over it again "
