@@ -43,6 +43,13 @@ internal sealed class StreamDecoderReader
     /// <summary>A mapped time may land this far after its arrival - rounding, nothing more.</summary>
     internal const long MostLateMs = 5;
 
+    /// <summary>
+    /// How far behind the decoder's latest clock a PASS may be stamped and
+    /// still be a car that sat on the loop (stalled, or gridded on it) rather
+    /// than a decoder that restarted.
+    /// </summary>
+    internal const long LongestDwellMs = DecoderClockMap.Window;
+
     private readonly int _decoder;
     private readonly IDecoderProtocol _protocol;
     private readonly Action<string> _log;
@@ -89,7 +96,7 @@ internal sealed class StreamDecoderReader
         foreach (var reading in _readings)
         {
             LastHeardMs = arrivedMs;
-            var relative = reading.DeviceMs is { } device ? Learn(device, arrivedMs) : (long?)null;
+            var relative = reading.DeviceMs is { } device ? Learn(device, arrivedMs, reading.TransponderId is not null) : null;
 
             if (reading.TransponderId is not { } car)
             {
@@ -99,9 +106,14 @@ internal sealed class StreamDecoderReader
 
             var at = AppTimeOf(relative, arrivedMs);
 
-            if (_lastPassMs.TryGetValue(car, out var last) && at - last < DuplicateWindowMs && at >= last)
+            // WHY (Bug hunt 17): either side of the last one. The first read
+            // of a crossing can be timed as it arrived and its repeat mapped
+            // from the decoder's clock, which lands a little EARLIER; taken
+            // only when later, that repeat went to the race as a pass before
+            // the driver's last one ("the decoder clock went backwards").
+            if (_lastPassMs.TryGetValue(car, out var last) && Math.Abs(at - last) < DuplicateWindowMs)
             {
-                _log($"[decoder] Suppressed repeat of {car} ({at - last}ms after the last).");
+                _log($"[decoder] Suppressed repeat of {car} ({Math.Abs(at - last)}ms {(at >= last ? "after" : "before")} the last).");
                 continue;
             }
 
@@ -125,10 +137,25 @@ internal sealed class StreamDecoderReader
     /// Teaches the map one reading of the decoder's clock, and hands back
     /// that reading on the map's scale (milliseconds since _base).
     /// A clock that went well backwards, or ran past the map's 32 bits, starts
-    /// the map again.
+    /// the map again. Null for a pass stamped well behind the latest clock:
+    /// it teaches the map nothing and is timed as it arrived.
     /// </summary>
-    private long Learn(long deviceMs, long arrivedMs)
+    private long? Learn(long deviceMs, long arrivedMs, bool isPass)
     {
+        // WHY (Bug hunt 17): a car that sat on the loop for more than Jump
+        // (stalled, or gridded on it) has its pass stamped that far behind
+        // the heartbeats and other cars' passes sent meanwhile. That was
+        // taken for a restart: a false "it has restarted" line, and the map
+        // thrown away as the race got going. The decoder's clock has not
+        // moved, so the map is left alone. A real restart still shows on the
+        // next heartbeat, on a pass further back than this, or - on a decoder
+        // with neither - to the map itself once its readings stop agreeing.
+        if (isPass && _highest is { } latest
+            && deviceMs < latest - DecoderClockMap.Jump && deviceMs >= latest - LongestDwellMs)
+        {
+            return null;
+        }
+
         // WHY (2026-11-05, Bug hunt 11): a pass is only sent once the car has
         // left the loop, so a heartbeat or status that came first can carry a
         // later clock than the pass after it. Every reading was checked

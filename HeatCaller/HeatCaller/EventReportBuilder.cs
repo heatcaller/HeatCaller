@@ -676,7 +676,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
             var ordered = group.OrderBy(x => x.Round!.MainLeg).Select(x => x.Session).ToList();
             var legCount = Math.Max(group.Max(x => x.Round!.MainLegCount), ordered.Count);
             var counting = AMainLegs.LegsCounting(legCount, raceClass?.AMainLegsCounted ?? 0);
-            var overall = AMainLegs.Overall(ordered, counting, profiles.PrimaryForAlternate);
+            var overall = AMainLegs.Overall(ordered, counting, profiles.PrimaryForAlternate,
+                group.OrderBy(x => x.Round!.MainLeg).Select(x => x.Round!.MainLeg).ToList());
 
             sb.AppendLine($"<h2>{Esc(group.Key)} A-Main overall</h2>");
             sb.AppendLine($"<p>{Plural.Of(ordered.Count, "leg")} of {legCount} run; the best {counting} count, fewest points wins. {Esc(AMainLegs.TieBreakWords)}</p>");
