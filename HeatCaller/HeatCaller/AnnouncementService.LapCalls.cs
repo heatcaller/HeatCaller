@@ -565,6 +565,17 @@ public sealed partial class AnnouncementService
         // {gaps} in the line, they are said after each name as before.
         var placesOnly = !config.PositionReportSayGaps;
 
+        // A heat classes share is worded by class place and never with gaps,
+        // whatever the box says (WordSharedRunningOrder), so it is places
+        // only for the checks below too (13 Nov 2026, bug hunt 17): with the
+        // box ticked, a car it named crossing the line in the same place had
+        // the report worded again to the same words, then thrown away as
+        // "the order moved" - see PositionReportOrder.Moved.
+        if (SharedHeatClasses?.Invoke() is { Count: > 0 })
+        {
+            placesOnly = true;
+        }
+
         var text = WordRunningOrder(rows, template, sayGaps, placesOnly);
 
         if (text.Length == 0)
@@ -2587,7 +2598,9 @@ public sealed partial class AnnouncementService
         // the same reason: a cue that arrives late is worse than none.
         // Nor for a lap the window was told of too late (23 Oct 2026, timing
         // layer, P4b): a cue that arrives late is worse than none, as above.
-        if (!Muted && LapBeeps?.ToneFor(transponder) is { } toneIndex && !SkippedAsStale())
+        // Nor for a rejected pass (13 Nov 2026, bug hunt 17): the cue tells a
+        // driver their lap counted, and a double read at the loop did not.
+        if (gate.Valid && !Muted && LapBeeps?.ToneFor(transponder) is { } toneIndex && !SkippedAsStale())
         {
             var beepVolume = (float)_soundStore.Current.Volume;
             _ = ToneGenerator.PlayDriverLapAsync(toneIndex, beepVolume);

@@ -87,7 +87,7 @@ public sealed partial class AnnouncementService
             return text;
         }
 
-        List<string> names;
+        List<(string Driver, string Spoken)> names;
 
         try
         {
@@ -99,7 +99,7 @@ public sealed partial class AnnouncementService
             names = NamesToShorten();
         }
 
-        var key = string.Join('\n', names);
+        var key = string.Join('\n', names.Select(name => name.Driver + "\t" + name.Spoken));
         (Regex Pattern, Dictionary<string, string> Map)? built;
 
         lock (_shortNamesLock)
@@ -116,14 +116,44 @@ public sealed partial class AnnouncementService
         return built is { } shortNames ? ShortenNames(text, shortNames.Pattern, shortNames.Map) : text;
     }
 
-    private List<string> NamesToShorten() =>
+    /// <summary>Each driver's name and Announcer name ("" for one not given), in a settled order.</summary>
+    private List<(string Driver, string Spoken)> NamesToShorten() =>
         _profiles.All.ToList()
-            .SelectMany(profile => new[] { profile.SpokenName, profile.DriverName })
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Select(name => name!.Trim())
-            .Distinct(StringComparer.CurrentCultureIgnoreCase)
-            .OrderBy(name => name, StringComparer.Ordinal)
+            .Select(profile => (Driver: (profile.DriverName ?? string.Empty).Trim(), Spoken: (profile.SpokenName ?? string.Empty).Trim()))
+            .Where(name => name.Driver.Length > 0 || name.Spoken.Length > 0)
+            .Distinct()
+            .OrderBy(name => name.Driver, StringComparer.Ordinal)
+            .ThenBy(name => name.Spoken, StringComparer.Ordinal)
             .ToList();
+
+    /// <summary>
+    /// ShortNameMap for the drivers on file, each with the two names a line
+    /// may carry for them: the driver name and the Announcer name.
+    /// </summary>
+    /// <remarks>
+    /// WHY (13 Nov 2026, bug hunt 17): both went into one list, so a driver
+    /// saved as "Jon Lee" and said as "Jon Leigh" was taken for two people
+    /// sharing "Jon L" and given surname letters until they differed - "Jon
+    /// Lee" stayed whole and "Jon Leigh" went out as "Jon Lei". Now the
+    /// driver names are shortened among themselves, which is what the pages
+    /// do, and the names said (the Announcer name, or the driver name where
+    /// there is none) among themselves - so one driver's two spellings never
+    /// push each other longer, and two drivers who would share a short form
+    /// are still told apart. A name both lists hold takes the pages' form.
+    /// </remarks>
+    internal static Dictionary<string, string> ShortNameMap(IReadOnlyList<(string Driver, string Spoken)> drivers)
+    {
+        var map = ShortNameMap(drivers
+            .Select(driver => string.IsNullOrWhiteSpace(driver.Spoken) ? driver.Driver : driver.Spoken)
+            .ToList());
+
+        foreach (var (full, shortName) in ShortNameMap(drivers.Select(driver => driver.Driver).ToList()))
+        {
+            map[full] = shortName;
+        }
+
+        return map;
+    }
 
     /// <summary>
     /// Each full name (two words or more) and the short form the club's

@@ -813,7 +813,20 @@ public sealed partial class AnnouncementService
         var startSound = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _startSoundDone = startSound.Task;
         PlaySound(SoundEffectKind.RaceStarted, ToneGenerator.PlayRaceStartedAsync, "race started sound", startSound);
+
+        var clearsBefore = Volatile.Read(ref _interruptGeneration);
         EnqueueVoice(AnnouncementEventType.RaceStarted, null, null);
+
+        // WHY (13 Nov 2026, bug hunt 17): the decks are cleared at the green
+        // only by the start call itself, so with it off (a club using the
+        // horn alone) a green pressed by hand - no countdown to cut anything
+        // - left the last race's recap or a sponsor read speaking over this
+        // one, and the horn waiting for the speaker behind it. The same hole
+        // NotifyRaceCompleted had. Spares the horn (see LeadInSoundKindFor).
+        if (Volatile.Read(ref _interruptGeneration) == clearsBefore)
+        {
+            ClearTheDecksFor(AnnouncementEventType.RaceStarted);
+        }
     }
 
     public void NotifyRaceTimeOver()
@@ -822,7 +835,10 @@ public sealed partial class AnnouncementService
         var timeOverSound = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _timeOverSoundDone = timeOverSound.Task;
         PlaySound(SoundEffectKind.RaceTimeOver, ToneGenerator.PlayRaceTimeOverAsync, "race time over sound", timeOverSound);
+
+        var clearsBefore = Volatile.Read(ref _interruptGeneration);
         EnqueueVoice(AnnouncementEventType.RaceTimeOver, null, null);
+        MakeWayForTheBuzzer(clearsBefore);
 
         // Time's up, so the next car over the line wins it: the winner's
         // call is made now for the top two (10 Nov 2026) - see Winner.
@@ -830,6 +846,24 @@ public sealed partial class AnnouncementService
 
         // And the gap for the lead is called each lap from here (11 Nov 2026).
         NoteTheFinalMinute();
+    }
+
+    /// <summary>
+    /// With the time-up call off, its buzzer makes its own way to the
+    /// speaker, as a flag's sound does (PlayFlagSound): it waited behind
+    /// whatever lap call was being spoken (13 Nov 2026, bug hunt 17). Only
+    /// when the buzzer is on - with neither, nothing needs the speaker, and
+    /// the race's lap calls carry on.
+    /// </summary>
+    /// <param name="clearsBefore">_interruptGeneration before the call was offered: unchanged, the call cleared nothing.</param>
+    private void MakeWayForTheBuzzer(int clearsBefore)
+    {
+        if (Volatile.Read(ref _interruptGeneration) == clearsBefore && !Muted
+            && _soundStore.Current.Effects.GetValueOrDefault(nameof(SoundEffectKind.RaceTimeOver)) is { } buzzer
+            && buzzer.IsEnabledFor(IsPracticeMode))
+        {
+            ClearTheDecksFor(AnnouncementEventType.RaceTimeOver);
+        }
     }
 
     public void NotifyRaceCompleted()
