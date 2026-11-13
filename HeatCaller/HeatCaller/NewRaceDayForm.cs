@@ -79,18 +79,95 @@ public sealed class NewRaceDayForm : Form
         IReadOnlyList<string> classNames,
         IReadOnlyCollection<string> alreadyRacing,
         RaceDayShape shape)
+        : this(StartTonight.Options(null, null), 0, classNames, alreadyRacing, shape)
     {
-        Text = "Start a race day";
+    }
+
+    /// <summary>The choices at the top, in order - see StartTonight.Options.</summary>
+    private readonly IReadOnlyList<StartTonightOption> _options;
+
+    /// <summary>One radio button per choice, in the same order as _options.</summary>
+    private readonly List<RadioButton> _choiceButtons = new();
+
+    /// <summary>What was chosen at the top. Only meaningful after DialogResult.OK.</summary>
+    public StartTonightOption Choice
+    {
+        get
+        {
+            var picked = _choiceButtons.FindIndex(b => b.Checked);
+            return _options[picked >= 0 ? picked : _options.Count - 1];
+        }
+    }
+
+    /// <summary>
+    /// The Start Tonight window (12 Nov 2026, setup plan step 8): the ways to
+    /// start tonight at the top - like last time, each night template, or
+    /// something different - and the two questions under them, which only
+    /// "Something different..." uses. Every door that starts a race day opens
+    /// this - see StartTonight. With only "Something different..." to offer (a
+    /// club's first night), the choices aren't shown and it is the two
+    /// questions, as it always was.
+    /// </summary>
+    /// <param name="options">The choices, from StartTonight.Options. The last is always "Something different...".</param>
+    /// <param name="selected">The choice picked when it opens, from StartTonight.Preselect.</param>
+    /// <param name="openDay">A race day still open with something in it, which starting tonight leaves as it is - said in the window rather than asked in a second one. Null for none.</param>
+    public NewRaceDayForm(
+        IReadOnlyList<StartTonightOption> options,
+        int selected,
+        IReadOnlyList<string> classNames,
+        IReadOnlyCollection<string> alreadyRacing,
+        RaceDayShape shape,
+        string? openDay = null)
+    {
+        _options = options.Count > 0 ? options : StartTonight.Options(null, null);
+
+        Text = "Start Tonight";
         Font = AppTheme.BodyFont;
+
+        var choosing = _options.Count > 1;
 
         var lblIntro = new Label
         {
-            Text = "Two questions, and the day is ready to build. Everything else - the name, the venue, "
-                 + "the track and the numbers - starts from your last race day and can be changed on Race Day > Setup.",
+            Text = choosing
+                ? "How would you like to start tonight? Whichever you pick, everything can be changed afterwards on Race Day > Setup, "
+                  + "and Undo takes the new day away again."
+                : "Two questions, and the day is ready to build. Everything else - the name, the venue, "
+                  + "the track and the numbers - starts from your last race day and can be changed on Race Day > Setup.",
             AutoSize = true,
             Font = AppTheme.BodyFont,
             ForeColor = AppTheme.TextMuted,
         };
+
+        // The choices: a radio button each, with what it would start under it.
+        var choiceParts = new List<(Control Part, int GapBelow)>();
+
+        if (choosing)
+        {
+            for (var i = 0; i < _options.Count; i++)
+            {
+                var option = _options[i];
+                var button = new ThemedRadioButton { Text = option.Caption, AutoSize = true, Font = AppTheme.BoldFont, Checked = i == Math.Clamp(selected, 0, _options.Count - 1) };
+                button.CheckedChanged += (_, _) => ApplyChoice();
+                _choiceButtons.Add(button);
+
+                var detail = new Label { Text = option.Detail, AutoSize = true, Font = AppTheme.SmallFont, ForeColor = AppTheme.TextMuted };
+
+                choiceParts.Add((button, UiLayout.HintGap));
+                choiceParts.Add((detail, UiLayout.RowGap));
+            }
+        }
+
+        // A day already open is said here, not asked about in a second window.
+        if (!string.IsNullOrWhiteSpace(openDay))
+        {
+            choiceParts.Add((new Label
+            {
+                Text = $"\"{openDay}\" is still open. Starting tonight makes the new day current and leaves that one as it is - close it on Setup or the Calendar.",
+                AutoSize = true,
+                Font = AppTheme.SmallFont,
+                ForeColor = AppTheme.Warning,
+            }, UiLayout.RowGap));
+        }
 
         // --- What kind of night ---
 
@@ -167,11 +244,19 @@ public sealed class NewRaceDayForm : Form
 
         // --- The actions ---
 
-        var btnOk = new Button { Text = "Start the Day", Font = AppTheme.BodyFont, DialogResult = DialogResult.OK };
+        var btnOk = new Button { Text = "Start Tonight", Font = AppTheme.BodyFont, DialogResult = DialogResult.OK };
         var btnCancel = new Button { Text = "Cancel", Font = AppTheme.BodyFont, DialogResult = DialogResult.Cancel };
 
         var page = new FillPage();
         page.Add(lblIntro);
+
+        foreach (var (part, gap) in choiceParts)
+        {
+            page.Add(part, stretch: part is not RadioButton, gapBelow: gap);
+        }
+
+        _questionParts = new Control[] { lblShape, _cmbShape, _lblShapeHint, lblClasses, _lstClasses, _lblNoClasses };
+
         page.Add(lblShape, gapBelow: UiLayout.LabelGap);
 
         // Its own width (see below), not the page's.
@@ -184,7 +269,7 @@ public sealed class NewRaceDayForm : Form
         page.Add(_lblNoClasses);
 
         // Against the right-hand edge, Cancel furthest right, as a dialog's
-        // buttons go - and Tab still reaches Start the Day first, as it did:
+        // buttons go - and Tab still reaches Start Tonight first, as it did:
         // the bar takes them right to left, in the order they were added.
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnOk), gapBelow: 0);
         btnOk.TabIndex = 0;
@@ -198,6 +283,7 @@ public sealed class NewRaceDayForm : Form
         ApplyShapeHint();
 
         AppTheme.ApplyRecursively(this);
+        ApplyChoice();
 
         // After the theme pass, in the face it leaves it in: as wide as it
         // was made at the normal text size, at the size in use, or as its
@@ -208,7 +294,27 @@ public sealed class NewRaceDayForm : Form
         // The width it had at the normal text size, and about the height -
         // the classes about six rows tall. It can be made taller, for a club
         // with more classes than that.
-        DialogFit.Keep(this, page, width: 552, height: 500);
+        // Taller by the choices at the top, when there are any.
+        DialogFit.Keep(this, page, width: 552, height: choosing ? 500 + 52 * _options.Count : 500);
+    }
+
+    /// <summary>The two questions and what they are shown with - only "Something different..." uses them.</summary>
+    private Control[] _questionParts = Array.Empty<Control>();
+
+    /// <summary>
+    /// The two questions greyed unless "Something different..." is picked:
+    /// like last time and a template bring their own kind of night and
+    /// classes. Greyed rather than hidden, so the window doesn't change shape
+    /// as the choices are tried.
+    /// </summary>
+    private void ApplyChoice()
+    {
+        var asking = Choice.Kind == StartTonightKind.Different;
+
+        foreach (var part in _questionParts)
+        {
+            part.Enabled = asking;
+        }
     }
 
     private void ApplyShapeHint() =>

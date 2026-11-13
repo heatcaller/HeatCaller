@@ -624,6 +624,25 @@ public partial class MainForm
         // on Next Steps asks for the first step that is not done yet.
         _openRaceDaySetup = startStep =>
         {
+            // With no race day to work on, tonight is started first, in the
+            // Start Tonight window every door uses (12 Nov 2026, setup plan
+            // step 8) - the wizard's own day step used to start one with its
+            // own questions, a second way in. Cancelled, nothing opens. Then
+            // the wizard opens at the first step still to do. An open day with
+            // nothing in it - the one older installs opened by themselves - is
+            // still taken over rather than a second started.
+            if (_raceEvents.Active is not { IsLegacy: false, IsOpen: true })
+            {
+                if (!eventTab.StartNewDayFromElsewhere())
+                {
+                    return;
+                }
+
+                _raceProgram.RefreshAll();
+                _todayControl?.RefreshAll();
+                startStep = Math.Max(startStep, _todayControl?.FirstSetupStep() ?? RaceDaySetupWizard.StepClasses);
+            }
+
             using var wizard = new RaceDaySetupWizard(
                 _settings, _raceClasses, _profiles, _trackLayouts, _venueStore, _raceEvents, _checkInStore,
                 new RaceDaySetupHost(
@@ -661,29 +680,32 @@ public partial class MainForm
         // so there is one implementation with one undo entry rather than
         // three that drift.
         //
-        // "Start a Race Day" - the next-step card on Next Steps, the banner on
-        // Who's Racing - opens the Set Up Tonight wizard now, not the
-        // two-question dialog. The wizard's day step starts the day through
-        // this same tab's command (RaceDaySetupHost.StartDay), so there is
-        // still one implementation; the wizard just walks on from there to
-        // the classes, check-in and the programme instead of leaving them to
-        // be found. Opened at the first step not done yet - the step the
-        // Ready to Race bar's own button would open.
-        //
-        // The Calendar's New Race Day below still uses the dialog: from
-        // there somebody is filing a day, not setting up tonight.
+        // ONE WAY IN (12 Nov 2026, setup plan step 8): "Start a Race Day" - the
+        // next-step card on Next Steps, the banner on Who's Racing - opens the
+        // Start Tonight window, the same one as Setup's New Race Day, the
+        // Calendar's, Set Up Tonight's and Next Steps' "like last time" and
+        // template cards (see StartTonight). It used to open the Set Up Tonight
+        // wizard, which asked its own questions; now a repeat night is "Like
+        // last time" and Start, and the Ready to Race bar's button is there for
+        // the rest. Stays on the page it was pressed on.
         _startRaceDay = () =>
         {
-            var step = _todayControl?.FirstSetupStep() ?? RaceDaySetupWizard.StepDay;
-            _openRaceDaySetup?.Invoke(step);
+            if (!eventTab.StartNewDayFromElsewhere())
+            {
+                return;
+            }
+
+            _raceProgram.RefreshAll();
+            _todayControl?.RefreshAll();
+            RefreshCurrentPage();
         };
 
-        // The Calendar's New Race Day is that same command - one dialog,
+        // The Calendar's New Race Day is that same command - one window,
         // one undo entry, one set of defaults carried forward - but it
         // stays on the Calendar afterwards rather than marching the window
-        // to The Day. The day arrives with its shape, its classes and the
-        // last day's venue and format already on it, so there is nothing
-        // waiting to be typed.
+        // to The Day. It starts TONIGHT's day, dated now, like every other
+        // door: the Calendar has never filed a day for another date (12 Nov
+        // 2026, setup plan step 8 - checked and kept).
         eventsPage.StartRaceDayRequested += () =>
         {
             if (!eventTab.StartNewDayFromElsewhere())

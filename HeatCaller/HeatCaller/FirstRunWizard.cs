@@ -175,6 +175,12 @@ public sealed partial class FirstRunWizard : Form
     private readonly ButtonBar _classChips = new(tight: true, sameWidth: true);
     private readonly Label _lblClassesHint = new();
 
+    /// <summary>The race length and finish every class typed here gets (12 Nov 2026, setup plan step 8) - see ClassLengthPicker. Made in the constructor, from the app default.</summary>
+    private ClassLengthPicker _classLength = new(null);
+
+    /// <summary>The grid the race length rows are in, lined up on its own.</summary>
+    private FieldGrid? _classLengthGrid;
+
     // Drivers
     private readonly PageStack _driversStep = new();
     private readonly Label _lblNameHeader = new();
@@ -244,6 +250,7 @@ public sealed partial class FirstRunWizard : Form
         _profiles = profiles;
         _startingLookKey = Looks.ForApp(settings).Key;
         _sound = sound is not null && settings.AskAboutSoundInWizards ? new SoundOffer(settings, sound) : null;
+        _classLength = new ClassLengthPicker(raceClasses.AppDefaultFormat?.Invoke());
 
         Text = "Welcome to HeatCaller";
         Font = AppTheme.BodyFont;
@@ -664,6 +671,10 @@ public sealed partial class FirstRunWizard : Form
         _classesStep.Add(FieldGrid.Inline(_txtClasses), gapBelow: UiLayout.RowGap);
         _classesStep.Add(_lblChipsCaption, stretch: false, gapBelow: UiLayout.HintGap);
         _classesStep.Add(_classChips, gapBelow: UiLayout.RowGap);
+
+        // How long the new classes race and how they finish (setup plan step 8):
+        // one answer for every class typed here, as a club's classes mostly share it.
+        _classLengthGrid = _classesStep.Add(_classLength.Grid(), gapBelow: UiLayout.RowGap);
         _classesStep.Add(_lblClassesHint, gapBelow: 0);
     }
 
@@ -825,6 +836,12 @@ public sealed partial class FirstRunWizard : Form
         FitPicker(_cmbBaud, PortWidth);
         FitPicker(_cmbDriverClass, DriverClassWidth);
         _sound?.SizeFields();
+        _classLength.SizeFields();
+
+        if (_classLengthGrid is not null)
+        {
+            FieldGrid.LineUp(new[] { _classLengthGrid });
+        }
 
         _txtTrackName.Width = UiLayout.AtTextSize(TrackNameWidth);
 
@@ -1188,7 +1205,8 @@ public sealed partial class FirstRunWizard : Form
             if (!_raceClasses.All.Any(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)))
             {
                 // With a race length (setup plan A5): see RaceFormat.ForNewClass.
-                _raceClasses.Upsert(new RaceClass { Name = name, Format = RaceFormat.ForNewClass(_raceClasses.AppDefaultFormat?.Invoke()) });
+                // And with the length and finish asked for on this step (setup plan step 8).
+                _raceClasses.Upsert(new RaceClass { Name = name, Format = _classLength.Format() });
             }
 
             if (!_doneClasses.Contains(name, StringComparer.OrdinalIgnoreCase))

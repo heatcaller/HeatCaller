@@ -65,31 +65,35 @@ public sealed partial class RaceDayEventControl
         _btnSaveTemplate.Enabled = _settings is not null && Selected is { IsLegacy: false };
     }
 
-    /// <summary>Starts a race day from the picked template: New Race Day's own path, then the template's settings over it.</summary>
-    private void StartFromTemplate() => StartFromTemplate(PickedTemplate);
-
-    /// <summary>Starts tonight from the template of this name - Next Steps' "Start tonight's ..." (setup plan step 7). False when there is none.</summary>
-    public bool StartFromTemplateNamed(string name)
+    /// <summary>
+    /// Start Tonight From It: the Start Tonight window, opened on the picked
+    /// template (12 Nov 2026, setup plan step 8) - one way to start a night.
+    /// </summary>
+    private void StartFromTemplate()
     {
-        var template = _settings?.NightTemplates.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
-        StartFromTemplate(template);
-        return template is not null;
+        if (PickedTemplate is { } template)
+        {
+            StartTonightWindow(StartTonightKind.Template, template.Name);
+        }
     }
 
-    private void StartFromTemplate(NightTemplate? picked)
+    /// <summary>
+    /// Next Steps' "Start tonight's ..." (setup plan step 7): the Start Tonight
+    /// window, opened on that template (setup plan step 8). False when there
+    /// is no such template or the window was cancelled.
+    /// </summary>
+    public bool StartFromTemplateNamed(string name) =>
+        _settings?.NightTemplates.Any(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase)) == true
+        && StartTonightWindow(StartTonightKind.Template, name);
+
+    /// <summary>
+    /// Starts a race day from a template: New Race Day's own path, then the
+    /// template's settings over it. Only from the Start Tonight window
+    /// (StartTonightAs), which says when a day is open already - it used to
+    /// be asked here, in a second window.
+    /// </summary>
+    private void StartFromTemplate(NightTemplate template)
     {
-        if (picked is not { } template)
-        {
-            return;
-        }
-
-        if (_events.Active is { IsLegacy: false, IsOpen: true } open && !(open.RoundIds.Count == 0 && open.ClassNames.Count == 0)
-            && AppDialog.Show(this, $"\"{open.DisplayName}\" is open already. Start a new race day from \"{template.Name}\" anyway?",
-                "Start tonight from a template", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
-        {
-            return;
-        }
-
         StartDayFrom(LastRealDay(), template.Shape, template.ClassNames.ToList());
 
         if (_events.Active is { IsLegacy: false } day)

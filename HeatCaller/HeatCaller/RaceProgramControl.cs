@@ -2001,7 +2001,7 @@ public sealed partial class RaceProgramControl : UserControl
             // day and there isn't one - so landing somebody on The Day and
             // leaving them to find "New Race Day" is a step that exists only
             // because the code was easier to write that way. The same event
-            // the "Start a Race Day" card uses, so both open the same dialog.
+            // the "Start Tonight..." card uses, so both open the same window.
             StartRaceDayRequested?.Invoke();
             return;
         }

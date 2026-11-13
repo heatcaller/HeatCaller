@@ -327,7 +327,7 @@ public sealed class EventsControl : UserControl
         // giving two answers. Pointing at a closed day is how its results,
         // its standings and its run sheet are looked at, and Today answers
         // it properly: the checklist shows "this day is closed" with
-        // "Start a Race Day" under it. Nothing can join a closed day
+        // "Start Tonight..." under it. Nothing can join a closed day
         // wherever it is current, because every build refuses it by name.
         var previousActiveId = _events.Active?.Id;
 

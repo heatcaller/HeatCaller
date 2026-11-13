@@ -399,8 +399,9 @@ The **Classes** page lists every class in a grid, so you can compare them side b
 | **Class** | The class name, in the class's color. |
 | **Qualifying** | How qualifying is scored, for example "Most laps, then time · best heat" or "Best 3 consecutive · best 2 heats". |
 | **Mains** | Main size and bump-ups, for example "8 per main · top 2 bump up" or "10 per main · no bump-ups". |
-| **Race format** | The class's race format, or "app default". If the class has a separate qualifier format, it's shown after `quals:`. |
+| **Race format** | The class's race format, or "app default", with how a timed race finishes: "then finish the lap" or "stop at the time". If the class has a separate qualifier format, it's shown after `quals:`. |
 | **Tech** | How many items are on the class's tech checklist, or "-" if there's none. |
+| **Fee** | The class's own entry fee, and its fee as an extra class if it has one ("$20.00, $10.00 as an extra class"), or "Race day's" when it charges the race day's fees. See [Money at the desk](events-and-entries.md#money-at-the-desk). |
 
 Use **Add a Class**, **Edit** (or double-click a row), **Sanctioning Preset** and **Delete**. You can also reach the same list from a driver profile by clicking **Manage** next to **Class:**.
 
@@ -445,6 +446,8 @@ The **Add Class** / **Edit Class** dialog has these settings:
 |---|---|---|
 | **Name:** | Required. The small colored square beside the name is the class color — click it to change it. | — |
 | **Notes:** | Free text. | Empty |
+| **Race length:** | A new class only: how many minutes its races last (1–180). On an existing class, change it with **Race Format...**. | 5, or the app default's time limit |
+| **When time's up:** | A new class only: **Time's up, then finish the lap** (the leader takes the flag and everyone else finishes the lap they're on) or **Stop when time's up** (the race ends at the time). Left as they were offered, the class follows the app default when that has a limit (a club racing to a lap count keeps its laps); changed, the class gets its own format with that time and finish and no lap limit. Once **Race Format...** or a **Sanctioning Preset** sets the format, these two rows are grayed and show what it set. | Then finish the lap, or the app default's rule |
 | **Qualifying:** | **Most laps, then lowest time**, **Best consecutive laps (fastest clean run)**, or **Points per round (1st = 1 point, fewest wins)**. See [How qualifying ranks drivers](program-and-mains.md#how-qualifying-ranks-drivers) and [Points per round](program-and-mains.md#points-per-round). | Most laps, then lowest time |
 | **Consecutive laps to count:** | For best-consecutive scoring only: how many laps in a row make a run (2–20). | 3 |
 | **Heats that count:** | How many of each driver's best heats are totaled (1–20). Set 2 for "best 2 of 3". Leave at 1 to count only their single best heat. For **Points per round**, it's how many rounds count. | 1 |

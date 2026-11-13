@@ -72,7 +72,7 @@ public static class EventReportBuilder
 
         WriteSummary(sb, sessions, profiles);
         WriteNightPace(sb, sessions, rounds, ReportEvent(options));
-        WriteMoney(sb, sessions, ReportEvent(options), payments, profiles);
+        WriteMoney(sb, sessions, ReportEvent(options), payments, profiles, DeskMoney.ClassLookup(classes.All));
         WriteMarshalNoShows(sb, rounds, ReportEvent(options));
 
         // Outstanding items first when there are any - the point of putting
@@ -273,9 +273,17 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     /// the drivers who raced. Only for a race day with an entry fee. See
     /// DeskMoney.
     /// </summary>
-    private static void WriteMoney(StringBuilder sb, List<SessionRecord> sessions, RaceEvent? raceEvent, EntryPaymentStore? payments, ProfileStore profiles)
+    /// <remarks>
+    /// With classes' own fees (12 Nov 2026, setup plan step 8): a night that
+    /// charges only through its classes gets the section too, each driver's
+    /// fee is worked out with them (DeskMoney.FeeFor), and a line under the
+    /// totals says what each class charged, so the treasurer can check a
+    /// figure against the price board.
+    /// </remarks>
+    private static void WriteMoney(StringBuilder sb, List<SessionRecord> sessions, RaceEvent? raceEvent, EntryPaymentStore? payments, ProfileStore profiles,
+        Func<string, RaceClass?> classNamed)
     {
-        if (payments is null || raceEvent is not { EntryFee: > 0 } day)
+        if (payments is null || raceEvent is not { } day || !DeskMoney.Charges(day, classNamed))
         {
             return;
         }
@@ -291,9 +299,14 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
             .ToList();
 
         var totals = DeskMoney.Count(raced.Select(p =>
-            (string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName, CheckInControl.FeeFor(p, day), payments.Get(day.Id, p.Transponder))));
+            (string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName, CheckInControl.FeeFor(p, day, classNamed), payments.Get(day.Id, p.Transponder))));
 
         sb.AppendLine("<h2>Money at the desk</h2>");
+
+        if (DeskMoney.FeesLine(day, classNamed) is { } fees)
+        {
+            sb.AppendLine($"<p class=\"sub\">{Esc(fees)}</p>");
+        }
         sb.AppendLine("<div class=\"cards\">");
         sb.AppendLine($"<div class=\"card\"><div class=\"k\">{Esc(DeskMoney.Money(totals.Taken))}</div><div class=\"l\">Taken</div></div>");
         sb.AppendLine($"<div class=\"card\"><div class=\"k\">{Esc(DeskMoney.Money(totals.Cash))}</div><div class=\"l\">Cash</div></div>");

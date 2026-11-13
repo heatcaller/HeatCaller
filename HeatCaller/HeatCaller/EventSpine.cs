@@ -323,41 +323,11 @@ public static class EventSpine
             ? $"Club Night {localDate:d MMM yyyy}"
             : $"Race Day {localDate:d MMM yyyy}";
 
-    /// <summary>
-    /// Starts a first race day for a club that has never had one. Returns
-    /// the day it made, or null when there was nothing to do.
-    ///
-    /// WHY THIS EXISTS. A fresh install has exactly one event: the legacy
-    /// holder, which is where everything recorded before race days existed
-    /// lives. Nothing used to create a real one - not the first-run
-    /// wizard, not the first race - so a club could run for months with
-    /// Active null. That state is not harmless. Rounds are only filed
-    /// against a day while one is active, so qualifying had no boundary:
-    /// the second race day folded in the first day's heats and seeded its
-    /// mains from a mixture of both, which is the exact fault race days
-    /// were introduced to fix.
-    ///
-    /// WHY "NEVER" AND NOT "NOT RIGHT NOW". Closing a race day clears the
-    /// current one (see RaceEventStore.Close), so a club that finishes the
-    /// night properly has no day open until the next one starts. Starting
-    /// one whenever none was open would hand them a new empty "Race Day 3
-    /// Oct 2026" every morning they opened the app to look at last week's
-    /// results. Having NEVER had one is a different thing: a fresh
-    /// install, where leaving it that way is the trap.
-    ///
-    /// Anything else that needs a day - the Today checklist, the banner on
-    /// Who's Racing - goes through RaceDayEventControl's own New Race Day
-    /// instead, so there is one implementation with one undo entry.
-    /// </summary>
-    public static RaceEvent? StartFirstDayIfNever(RaceEventStore events)
-    {
-        if (events.Real.Count > 0)
-        {
-            return null;
-        }
-
-        return StartEvent(events, DefaultDayName(DateTime.Now));
-    }
+    // StartFirstDayIfNever lived here: on a fresh install's first launch it
+    // opened an empty, class-less race day by itself. Removed (12 Nov 2026,
+    // setup plan step 8) - a day nobody started was a trap of its own, and
+    // the first real day is started by the person, through Start Tonight. See
+    // the note where MainForm's constructor used to call it.
 
     /// <summary>
     /// Every session that counts towards a championship. THE answer to

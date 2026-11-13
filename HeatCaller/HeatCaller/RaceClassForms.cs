@@ -101,11 +101,46 @@ public sealed class RaceClassEditForm : Form
     /// <summary>The other classes, for refusing a name one of them already has. Null skips the check.</summary>
     private readonly RaceClassStore? _store;
 
+    /// <summary>A new class's race length and finish rule (12 Nov 2026, setup plan step 8). Null when editing.</summary>
+    private readonly ClassLengthPicker? _length;
+
+    /// <summary>
+    /// Set once Race Format... or a sanctioning preset has set the new class's
+    /// format, which then wins over the two rows - see SeedFormatFromLength.
+    /// </summary>
+    private bool _formatSetElsewhere;
+
+    /// <summary>The class's own entry fee and extra-class fee (12 Nov 2026, setup plan step 8). Unticked follows the race day's.</summary>
+    private readonly CheckBox _chkOwnFee = new ThemedCheckBox();
+
+    private readonly NumericUpDown _numOwnFee = new() { DecimalPlaces = 2, Maximum = 1000, Increment = 1 };
+    private readonly CheckBox _chkOwnExtraFee = new ThemedCheckBox();
+    private readonly NumericUpDown _numOwnExtraFee = new() { DecimalPlaces = 2, Maximum = 1000, Increment = 1 };
+
     public RaceClassEditForm(RaceClass? existing, RaceClassStore? store = null)
     {
         // A new class starts with a race length (setup plan A5): see RaceFormat.ForNewClass.
         Result = existing ?? new RaceClass { Format = RaceFormat.ForNewClass(store?.AppDefaultFormat?.Invoke()) };
         _store = store;
+
+        // And a NEW class's window asks for it, with how the race finishes
+        // (12 Nov 2026, setup plan step 8) - see ClassLengthPicker. Not for a
+        // class being edited: its format is already its own, under Race
+        // Format..., and two places to change one setting is how they drift.
+        if (existing is null)
+        {
+            _length = new ClassLengthPicker(store?.AppDefaultFormat?.Invoke());
+        }
+
+        // Its own fees (12 Nov 2026, setup plan step 8) - see RaceClass.EntryFee.
+        _chkOwnFee.Text = "Its own:";
+        _chkOwnFee.AutoSize = true;
+        _chkOwnFee.Checked = Result.EntryFee is not null;
+        _numOwnFee.Value = Math.Clamp(Result.EntryFee ?? 0m, _numOwnFee.Minimum, _numOwnFee.Maximum);
+        _numOwnExtraFee.Value = Math.Clamp(Result.ExtraClassFee ?? 0m, _numOwnExtraFee.Minimum, _numOwnExtraFee.Maximum);
+        _chkOwnExtraFee.Text = "Its own:";
+        _chkOwnExtraFee.AutoSize = true;
+        _chkOwnExtraFee.Checked = Result.ExtraClassFee is not null;
 
         Text = existing is null ? "Add Class" : "Edit Class";
         Font = AppTheme.BodyFont;
@@ -236,6 +271,9 @@ public sealed class RaceClassEditForm : Form
         var btnFormat = new Button { Text = "Race Format..." };
         btnFormat.Click += (_, _) =>
         {
+            // A new class's editor opens on the length and finish typed above.
+            SeedFormatFromLength();
+
             using var form = new RaceFormatForm(
                 Result.Format,
                 $"Race Format - {(string.IsNullOrWhiteSpace(_txtName.Text) ? "this class" : _txtName.Text)}",
@@ -245,6 +283,7 @@ public sealed class RaceClassEditForm : Form
             if (form.ShowDialog(this) == DialogResult.OK)
             {
                 Result.Format = form.Result;
+                FormatSetElsewhere();
             }
         };
 
@@ -309,6 +348,11 @@ public sealed class RaceClassEditForm : Form
         var about = new FieldGrid();
         about.AddRow("Name:", FieldGrid.Inline(_txtName, _swatch));
         about.AddRow("Notes:", _txtNotes, stretch: true);
+
+        // A new class's race length and how it finishes, under its name - the
+        // first thing after the name a club has to decide (setup plan step 8).
+        _length?.AddTo(about);
+
         about.AddRow("Qualifying:", _cmbQualifying);
         _lblConsecutive = about.AddRow("Consecutive laps to count:", _numConsecutive);
         about.AddRow("Heats that count:", _numCountBest);
@@ -334,10 +378,29 @@ public sealed class RaceClassEditForm : Form
         raceDay.AddField(_chkJumpCostsLap);
         raceDay.AddWide(_chkWarnUninspected, stretch: false);
 
+        // The class's own fees (12 Nov 2026, setup plan step 8): each row a
+        // tick and the amount, greyed while unticked - unticked, the class
+        // pays the race day's fees. See RaceClass.EntryFee and DeskMoney.FeeFor.
+        var lblMoney = new Label { Text = "Fees", AutoSize = true, Font = AppTheme.BoldFont };
+        var money = new FieldGrid();
+        money.AddRow("Entry fee:", FieldGrid.Inline(_chkOwnFee, _numOwnFee));
+        money.AddRow("As an extra class:", FieldGrid.Inline(_chkOwnExtraFee, _numOwnExtraFee));
+        money.AddWide(new Label
+        {
+            Text = "Unticked, the class charges the race day's Entry fee and Each extra class (Race Day > Setup). "
+                 + "A driver in several classes pays their dearest class's entry fee, and each other class at its extra-class fee - "
+                 + "never more than that class's own entry fee.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        });
+
         // Hooked once the captions they grey out exist - the field grids
         // make them, above.
         _cmbQualifying.SelectedIndexChanged += (_, _) => UpdateConsecutiveEnabled();
         _chkJumpStart.CheckedChanged += (_, _) => UpdateJumpStartEnabled();
+        _chkOwnFee.CheckedChanged += (_, _) => UpdateFeesEnabled();
+        _chkOwnExtraFee.CheckedChanged += (_, _) => UpdateFeesEnabled();
 
         var page = new FillPage();
 
@@ -348,7 +411,9 @@ public sealed class RaceClassEditForm : Form
         body.Add(about);
         body.Add(lblMains, stretch: false, gapBelow: UiLayout.LabelGap);
         body.Add(mains);
-        body.Add(raceDay, gapBelow: 0);
+        body.Add(raceDay);
+        body.Add(lblMoney, stretch: false, gapBelow: UiLayout.LabelGap);
+        body.Add(money, gapBelow: 0);
 
         // Two rows with two jobs: the class's sub-editors on one, the exit
         // buttons on the other, bottom-right where a dialog keeps them.
@@ -378,12 +443,13 @@ public sealed class RaceClassEditForm : Form
         ForeColor = AppTheme.TextDark;
         UpdateConsecutiveEnabled();
         UpdateJumpStartEnabled();
+        UpdateFeesEnabled();
         UpdateSwatch();
         AppTheme.ApplyRecursively(this);
 
         // Once the captions are on the dialog and wear its face - what they
         // are measured in.
-        FieldGrid.LineUp(new[] { about, mains, raceDay });
+        FieldGrid.LineUp(new[] { about, mains, raceDay, money });
         SizeFields();
 
         DialogFit.Keep(this, page, width: DialogWidth, body: body);
@@ -431,6 +497,48 @@ public sealed class RaceClassEditForm : Form
         {
             number.Width = width;
         }
+
+        // The fees as wide as their largest amount, decimals and all.
+        var feeWidth = Math.Max(
+            UiLayout.AtTextSize(UiLayout.NumericWidth),
+            TextRenderer.MeasureText("0000.00", _numOwnFee.Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
+        _numOwnFee.Width = feeWidth;
+        _numOwnExtraFee.Width = feeWidth;
+
+        _length?.SizeFields();
+    }
+
+    /// <summary>A fee's amount only means anything with its tick, so it is greyed rather than hidden.</summary>
+    private void UpdateFeesEnabled()
+    {
+        _numOwnFee.Enabled = _chkOwnFee.Checked;
+        _numOwnExtraFee.Enabled = _chkOwnExtraFee.Checked;
+    }
+
+    /// <summary>
+    /// For a new class whose format nothing else has set yet: the format from
+    /// the race length and finish rows, so Race Format... and a sanctioning
+    /// preset start from what was typed there rather than from the 5 minutes
+    /// the class was made with (12 Nov 2026, setup plan step 8).
+    /// </summary>
+    private void SeedFormatFromLength()
+    {
+        if (_length is not null && !_formatSetElsewhere)
+        {
+            Result.Format = _length.Format();
+        }
+    }
+
+    /// <summary>Race Format... or a preset has set the new class's format: that wins, and the rows say so.</summary>
+    private void FormatSetElsewhere()
+    {
+        if (_length is null)
+        {
+            return;
+        }
+
+        _formatSetElsewhere = true;
+        _length.ShowSetElsewhere(Result.Format);
     }
 
     /// <summary>Shows the class's A-main legs on the picker - the closest choice for a hand-edited file.</summary>
@@ -508,6 +616,10 @@ public sealed class RaceClassEditForm : Form
         var savedName = Result.Name;
         Result.Name = _txtName.Text.Trim();
 
+        // From the length and finish typed, for a new class (setup plan step 8).
+        SeedFormatFromLength();
+        var formatBefore = System.Text.Json.JsonSerializer.Serialize(Result.Format);
+
         using var form = new SanctioningPresetForm(Result, _store?.AppDefaultFormat?.Invoke());
 
         var applied = form.ShowDialog(this) == DialogResult.OK;
@@ -528,6 +640,11 @@ public sealed class RaceClassEditForm : Form
         SelectLegs();
 
         UpdateConsecutiveEnabled();
+
+        if (System.Text.Json.JsonSerializer.Serialize(Result.Format) != formatBefore)
+        {
+            FormatSetElsewhere();
+        }
     }
 
     /// <summary>What this class's colour is right now, chosen or derived.</summary>
@@ -668,6 +785,15 @@ public sealed class RaceClassEditForm : Form
         Result.AMainLegs = legs.Legs;
         Result.AMainLegsCounted = legs.Counted;
         Result.ColorArgb = _colourArgb;
+
+        // A new class's race length and finish (setup plan step 8), unless
+        // Race Format... or a preset has set the format since.
+        SeedFormatFromLength();
+
+        // Its own fees, or null to follow the race day's (setup plan step 8).
+        Result.EntryFee = _chkOwnFee.Checked ? _numOwnFee.Value : null;
+        Result.ExtraClassFee = _chkOwnExtraFee.Checked ? _numOwnExtraFee.Value : null;
+
         DialogResult = DialogResult.OK;
         Close();
     }

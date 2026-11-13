@@ -938,26 +938,25 @@ public partial class MainForm : Form
                 _raceEvents, _checkInStore, _techInspections, _daySchedule, _rounds, _seasonStore);
         }
 
-        // --- A first race day, for a club that has never had one ---
+        // --- No first race day made by itself (12 Nov 2026, setup plan step 8) ---
         //
-        // Until now a fresh install had exactly one event: the legacy
-        // holder, and nothing anywhere made a real one - not the wizard,
-        // not the first race. That is not a harmless default. Rounds are
-        // only filed against a day while one is active, so a club that
-        // never opened the Event tab had qualifying with no boundary: the
-        // second race day folded in the first day's heats and seeded its
-        // mains from a mixture of both, which is the exact fault race days
-        // were added to fix.
+        // A fresh install used to open an empty race day here on its first
+        // launch (EventSpine.StartFirstDayIfNever), named with the install
+        // date and with no classes. It was there to stop qualifying having no
+        // boundary, but it was a day nobody had started: the guide had to
+        // explain it, Set Up Tonight had to learn to take it over, and a club
+        // that started its first night properly ended up with two. Nothing
+        // needs a day to exist - check-ins fall back to the legacy holder and
+        // the program can't be built without tonight's classes, which only a
+        // started day has - and "no race day open" is already the state after
+        // every Close Day. The first real day is started by the person: the
+        // first-run wizard offers Set Up Tonight when it finishes, which opens
+        // Start Tonight (see MainForm.Pages, _startTonight).
         //
-        // Only ever on a club's first launch - see StartFirstDayIfNever
-        // for why "never had one" rather than "hasn't one open". Not at all
-        // when the file could not be read: "no events" is then a guess, and
-        // acting on it is exactly how every race day got replaced by one
-        // empty new one.
+        // An install that already has such a day keeps it, untouched; the
+        // wizard offer still looks past it (IsEmptyDay).
         if (!_raceEvents.LoadedUnreadable)
         {
-            EventSpine.StartFirstDayIfNever(_raceEvents);
-
             // The protest window moved from Race Day > Setup to the Club
             // Website page (11 Nov 2026). A race day that had changed it
             // hands its choice over, once - see ProtestWindow.CarryOver.
@@ -2307,6 +2306,15 @@ public partial class MainForm : Form
             else if (wizard.TakeTour)
             {
                 StartTour();
+            }
+            else
+            {
+                // Straight on to tonight (12 Nov 2026, setup plan step 8): a
+                // fresh install no longer opens a race day by itself, so the
+                // first real one is offered here - Set Up Tonight, which
+                // starts it through Start Tonight. After a tour it waits for
+                // the next start, as it always did.
+                OfferRaceDaySetupOnce();
             }
         });
 

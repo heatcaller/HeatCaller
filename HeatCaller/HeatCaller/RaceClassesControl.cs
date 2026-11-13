@@ -117,7 +117,10 @@ public sealed class RaceClassesControl : UserControl
             new DataGridViewTextBoxColumn { Name = "qualifying", HeaderText = "Qualifying", FillWeight = 120 },
             new DataGridViewTextBoxColumn { Name = "mains", HeaderText = "Mains", FillWeight = 100 },
             new DataGridViewTextBoxColumn { Name = "format", HeaderText = "Race format", FillWeight = 130 },
-            new DataGridViewTextBoxColumn { Name = "tech", HeaderText = "Tech", FillWeight = 55 });
+            new DataGridViewTextBoxColumn { Name = "tech", HeaderText = "Tech", FillWeight = 55 },
+
+            // The class's own fee (12 Nov 2026, setup plan step 8) - "Race day's" when it charges the day's.
+            new DataGridViewTextBoxColumn { Name = "fee", HeaderText = "Fee", FillWeight = 70 });
 
         _grid.CellDoubleClick += (_, args) =>
         {
@@ -174,7 +177,8 @@ public sealed class RaceClassesControl : UserControl
                 DescribeQualifying(raceClass),
                 DescribeMains(raceClass),
                 DescribeFormat(raceClass),
-                raceClass.TechCheckItems.Count == 0 ? "-" : raceClass.TechCheckItems.Count.ToString());
+                raceClass.TechCheckItems.Count == 0 ? "-" : raceClass.TechCheckItems.Count.ToString(),
+                DeskMoney.ClassFeeWords(raceClass) is { Length: > 0 } fee ? fee : "Race day's");
 
             var row = _grid.Rows[index];
 
@@ -262,12 +266,19 @@ public sealed class RaceClassesControl : UserControl
     /// </summary>
     private static string DescribeFormat(RaceClass raceClass)
     {
-        var race = raceClass.Format?.Describe() ?? "app default";
+        // With how a timed race finishes (12 Nov 2026, setup plan step 8).
+        var race = raceClass.Format is { } format ? format.Describe() + FinishNote(format) : "app default";
 
         return raceClass.QualifierFormat is null
             ? race
             : $"{race}   //   quals: {raceClass.QualifierFormat.Describe()}";
     }
+
+    /// <summary>"  ·  then finish the lap" or "  ·  stop at the time" for a timed race; nothing otherwise.</summary>
+    internal static string FinishNote(RaceFormat format) =>
+        format.TimeLimitMinutes <= 0
+            ? string.Empty
+            : format.FinishOnNextCrossing ? "  ·  then finish the lap" : "  ·  stop at the time";
 
     private RaceClass? SelectedClass() =>
         _grid.SelectedRows.Count == 1 && _grid.SelectedRows[0].Tag is string id

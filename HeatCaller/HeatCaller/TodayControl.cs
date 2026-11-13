@@ -725,8 +725,8 @@ public sealed class TodayControl : UserControl
     /// the day) rather than in the order of the list, so it walks forward
     /// from there. The day step when nothing the wizard covers is left.
     ///
-    /// Public for "Start a Race Day", wherever it is pressed: it opens the
-    /// wizard too, at the same step this bar's button would.
+    /// Public for Set Up Tonight opened with no day: once Start Tonight has
+    /// started one, the wizard opens at this step (setup plan step 8).
     /// </summary>
     public int FirstSetupStep()
     {

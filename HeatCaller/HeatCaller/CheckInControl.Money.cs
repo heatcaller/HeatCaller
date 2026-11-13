@@ -7,39 +7,64 @@ namespace HeatCaller;
 /// </summary>
 public sealed partial class CheckInControl
 {
-    /// <summary>Tonight's race day and its fees, or null with no race day open.</summary>
-    private (RaceEvent Day, decimal Entry, decimal Extra)? TonightsFees() =>
-        _events?.Active is { IsLegacy: false } day ? (day, day.EntryFee, day.ExtraClassFee) : null;
+    /// <summary>
+    /// Tonight's race day and whether it charges, or null with no race day
+    /// open. Charges is the day's entry fee or a class's own (12 Nov 2026,
+    /// setup plan step 8) - it used to be the day's fee alone, so a club that
+    /// priced only its classes would never have seen the Paid column. See
+    /// DeskMoney.Charges.
+    /// </summary>
+    private (RaceEvent Day, bool Charges)? TonightsFees() =>
+        _events?.Active is { IsLegacy: false } day ? (day, DeskMoney.Charges(day, ClassNamed)) : null;
 
-    /// <summary>What this driver owes tonight: the entry fee, and the extra-class fee for each of tonight's classes after the first.</summary>
-    internal static decimal FeeFor(DriverProfile profile, RaceEvent day)
+    /// <summary>A class by name from the club's classes, for its fees.</summary>
+    private RaceClass? ClassNamed(string name) => DeskMoney.ClassLookup(_raceClasses.All)(name);
+
+    /// <summary>What this driver owes tonight, with only the race day's fees - see the overload.</summary>
+    internal static decimal FeeFor(DriverProfile profile, RaceEvent day) => FeeFor(profile, day, null);
+
+    /// <summary>
+    /// What this driver owes tonight: their dearest class's entry fee, and the
+    /// extra-class fee for each other class of tonight's they race - each
+    /// class's own fees where it has them (12 Nov 2026, setup plan step 8),
+    /// the race day's otherwise. See DeskMoney.FeeFor.
+    ///
+    /// With no classes ticked for the night, the driver's main class is what
+    /// they're paying for - one class, as it always was.
+    /// </summary>
+    internal static decimal FeeFor(DriverProfile profile, RaceEvent day, Func<string, RaceClass?>? classNamed)
     {
-        var classes = day.ClassNames is { Count: > 0 } names
-            ? names.Count(profile.RunsClass)
-            : 1;
+        var names = day.ClassNames is { Count: > 0 } tonight
+            ? tonight.Where(profile.RunsClass).ToList()
+            : new List<string>();
 
-        return DeskMoney.FeeFor(Math.Max(1, classes), day.EntryFee, day.ExtraClassFee);
+        if (names.Count == 0)
+        {
+            names.Add(profile.ClassName ?? string.Empty);
+        }
+
+        return DeskMoney.FeeFor(names.Select(name => DeskMoney.FeeOf(classNamed?.Invoke(name), day.EntryFee, day.ExtraClassFee)));
     }
 
     /// <summary>Fills a row's Paid cell.</summary>
     private void ShowPaid(DataGridViewRow row)
     {
         if (_payments is null || _grid.Columns["paid"] is not { } column || row.Tag is not DriverProfile profile
-            || TonightsFees() is not { Entry: > 0 } fees)
+            || TonightsFees() is not { Charges: true } fees)
         {
             return;
         }
 
         var payment = _payments.Get(fees.Day.Id, profile.Transponder);
         var cell = row.Cells[column.Index];
-        cell.Value = DeskMoney.Words(payment, FeeFor(profile, fees.Day));
+        cell.Value = DeskMoney.Words(payment, FeeFor(profile, fees.Day, ClassNamed));
         cell.Style.ForeColor = (payment?.How ?? PaidHow.Owing) == PaidHow.Owing ? AppTheme.Warning : AppTheme.Success;
     }
 
     /// <summary>The right-click menu's Paid cash / Paid card / Comp / Owing, for the drivers picked.</summary>
     private void AddPaymentItems(ContextMenuStrip menu, IReadOnlyList<DriverProfile> drivers)
     {
-        if (_payments is null || TonightsFees() is not { Entry: > 0 } fees)
+        if (_payments is null || TonightsFees() is not { Charges: true } fees)
         {
             return;
         }
@@ -89,7 +114,7 @@ public sealed partial class CheckInControl
                 : new EntryPayment
                 {
                     How = how,
-                    Amount = how is PaidHow.Cash or PaidHow.Card ? FeeFor(profile, day) : 0,
+                    Amount = how is PaidHow.Cash or PaidHow.Card ? FeeFor(profile, day, ClassNamed) : 0,
                     Note = note,
                     AtUtc = now,
                 });
@@ -128,7 +153,7 @@ public sealed partial class CheckInControl
     /// <summary>Opens the Driver Paid slip, or brings it forward if it is open already.</summary>
     internal void OpenDriverPaid()
     {
-        if (_payments is not { } payments || TonightsFees() is not { Entry: > 0 })
+        if (_payments is not { } payments || TonightsFees() is not { Charges: true })
         {
             return;
         }
@@ -140,9 +165,9 @@ public sealed partial class CheckInControl
         }
 
         var form = new DriverPaidForm(
-            profile => TonightsFees() is { } fees ? FeeFor(profile, fees.Day) : 0,
+            profile => TonightsFees() is { } fees ? FeeFor(profile, fees.Day, ClassNamed) : 0,
             profile => TonightsFees() is { } fees
-                ? DeskMoney.Words(payments.Get(fees.Day.Id, profile.Transponder), FeeFor(profile, fees.Day))
+                ? DeskMoney.Words(payments.Get(fees.Day.Id, profile.Transponder), FeeFor(profile, fees.Day, ClassNamed))
                 : string.Empty,
             (drivers, how, note) =>
             {

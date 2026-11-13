@@ -47,6 +47,117 @@ public static class DeskMoney
     public static decimal FeeFor(int classes, decimal entryFee, decimal extraClassFee) =>
         classes <= 0 || entryFee <= 0 ? 0 : entryFee + Math.Max(0, classes - 1) * Math.Max(0, extraClassFee);
 
+    /// <summary>
+    /// One of tonight's classes as the desk prices it (12 Nov 2026, setup plan
+    /// step 8): what it costs as a driver's entry, and as an extra class.
+    /// </summary>
+    public readonly record struct ClassFee(decimal Entry, decimal Extra);
+
+    /// <summary>
+    /// What a class costs tonight: its own fees where it has them, the race
+    /// day's where it hasn't. An extra class with its own entry fee and no
+    /// extra fee of its own costs the day's extra-class fee or its own entry
+    /// fee, whichever is less - a $5 Juniors class is never charged $10 as
+    /// somebody's second class.
+    /// </summary>
+    public static ClassFee FeeOf(RaceClass? raceClass, decimal dayEntryFee, decimal dayExtraClassFee)
+    {
+        var entry = Math.Max(0, raceClass?.EntryFee ?? dayEntryFee);
+
+        var extra = raceClass?.ExtraClassFee is { } own
+            ? own
+            : raceClass?.EntryFee is not null ? Math.Min(dayExtraClassFee, entry) : dayExtraClassFee;
+
+        return new ClassFee(entry, Math.Max(0, extra));
+    }
+
+    /// <summary>
+    /// What a driver owes for these classes tonight (12 Nov 2026, setup plan
+    /// step 8): the DEAREST class's entry fee, then each other class at its
+    /// extra-class fee.
+    ///
+    /// WHY THE DEAREST FIRST: with one fee for the night it didn't matter
+    /// which class was "first". With "Juniors $5, Mod $20" it does, and the
+    /// rule has to be one the desk can say out loud and get the same answer
+    /// as the screen: your entry is your dearest class, and anything else you
+    /// race tonight is an extra. It's also what a price board means by "first
+    /// class $20, each extra $10". With no class fees of its own this is
+    /// exactly the old rule - entry fee plus the extra fee per class after the
+    /// first, and nothing at all when the entry fee is nothing.
+    /// </summary>
+    public static decimal FeeFor(IEnumerable<ClassFee> classes)
+    {
+        var list = classes.OrderByDescending(c => c.Entry).ToList();
+
+        if (list.Count == 0 || list[0].Entry <= 0)
+        {
+            return 0;
+        }
+
+        return list[0].Entry + list.Skip(1).Sum(c => c.Extra);
+    }
+
+    /// <summary>
+    /// Whether tonight charges anything at all (12 Nov 2026, setup plan step
+    /// 8): the day has an entry fee, or one of its classes has its own. What
+    /// shows the Paid column, the Driver Paid button and the report's money.
+    /// </summary>
+    public static bool Charges(RaceEvent? day, Func<string, RaceClass?> classNamed) =>
+        day is { IsLegacy: false } real
+        && (real.EntryFee > 0 || (real.ClassNames ?? new List<string>()).Any(name => classNamed(name)?.EntryFee is > 0));
+
+    /// <summary>
+    /// A class's own fees in a few words, for the Classes page - "$5.00",
+    /// "$20.00, $10.00 as an extra class" - or "" when it charges the race
+    /// day's (12 Nov 2026, setup plan step 8).
+    /// </summary>
+    public static string ClassFeeWords(RaceClass raceClass) => (raceClass.EntryFee, raceClass.ExtraClassFee) switch
+    {
+        ({ } entry, { } extra) => $"{Money(entry)}, {Money(extra)} as an extra class",
+        ({ } entry, null) => Money(entry),
+        (null, { } extra) => $"{Money(extra)} as an extra class",
+        _ => string.Empty,
+    };
+
+    /// <summary>
+    /// What tonight's classes charged, for the event report - "Fees: Juniors
+    /// $5.00, Mod $20.00; the rest $15.00; other extra classes $10.00." - or null
+    /// when no class of tonight's has a fee of its own, where the day's fee
+    /// is all there is to say (12 Nov 2026, setup plan step 8).
+    /// </summary>
+    public static string? FeesLine(RaceEvent day, Func<string, RaceClass?> classNamed)
+    {
+        var own = (day.ClassNames ?? new List<string>())
+            .Select(classNamed)
+            .OfType<RaceClass>()
+            .Where(c => c.EntryFee is not null || c.ExtraClassFee is not null)
+            .ToList();
+
+        if (own.Count == 0)
+        {
+            return null;
+        }
+
+        var parts = new List<string> { string.Join(", ", own.Select(c => $"{c.Name} {ClassFeeWords(c)}")) };
+
+        if (own.Count < (day.ClassNames?.Count ?? 0))
+        {
+            parts.Add($"the rest {Money(day.EntryFee)}");
+        }
+
+        parts.Add($"other extra classes {Money(day.ExtraClassFee)}");
+
+        return $"Fees: {string.Join("; ", parts)}.";
+    }
+
+    /// <summary>A class by name, ignoring case - how the desk finds a class's fees.</summary>
+    public static Func<string, RaceClass?> ClassLookup(IEnumerable<RaceClass>? classes)
+    {
+        var all = (classes ?? Enumerable.Empty<RaceClass>()).ToList();
+
+        return name => all.FirstOrDefault(c => string.Equals(c.Name?.Trim(), name?.Trim(), StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>The night's money, as the report and the closing checklist give it.</summary>
     /// <param name="Cash">Cash taken.</param>
     /// <param name="Card">Card taken.</param>

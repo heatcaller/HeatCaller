@@ -1864,16 +1864,17 @@ internal sealed class RaceDaySetupWizard : Form
     {
         var onFile = _raceClasses.All.Select(c => c.Name).ToList();
 
-        using var form = new QuickClassForm(name =>
-            onFile.Any(existing => string.Equals(existing, name, StringComparison.OrdinalIgnoreCase)));
+        using var form = new QuickClassForm(
+            name => onFile.Any(existing => string.Equals(existing, name, StringComparison.OrdinalIgnoreCase)),
+            _raceClasses.AppDefaultFormat?.Invoke());
 
         if (form.ShowDialog(this) != DialogResult.OK)
         {
             return;
         }
 
-        // With a race length (setup plan A5): see RaceFormat.ForNewClass.
-        _raceClasses.Upsert(new RaceClass { Name = form.ClassName, Format = RaceFormat.ForNewClass(_raceClasses.AppDefaultFormat?.Invoke()) });
+        // With the race length and finish asked for (setup plan A5 and step 8): see RaceFormat.ForNewClass.
+        _raceClasses.Upsert(new RaceClass { Name = form.ClassName, Format = form.Format });
 
         // Ticked: somebody adding a class tonight is adding it to race.
         _lstClasses.Items.Add(form.ClassName, true);
@@ -2340,18 +2341,27 @@ internal sealed class RaceDaySetupWizard : Form
 /// </summary>
 internal sealed class QuickClassForm : Form
 {
-    /// <summary>How wide it is inside its frame at the normal text size: the 360px column it was made with, and the page's margins.</summary>
-    private const int DialogWidth = 360 + UiLayout.PageLeft + UiLayout.PageRight;
+    /// <summary>How wide it is inside its frame at the normal text size: a 460px column - it was 360 until it asked for the race length and finish (12 Nov 2026, setup plan step 8), whose captions and picker need the room - and the page's margins.</summary>
+    private const int DialogWidth = 460 + UiLayout.PageLeft + UiLayout.PageRight;
 
     private readonly TextBox _txtName = new();
     private readonly Label _lblProblem = new();
     private readonly Func<string, bool> _exists;
 
+    /// <summary>The race length and how it finishes (12 Nov 2026, setup plan step 8) - see ClassLengthPicker.</summary>
+    private readonly ClassLengthPicker _length;
+
     public string ClassName => _txtName.Text.Trim();
 
-    public QuickClassForm(Func<string, bool> exists)
+    /// <summary>The new class's format from the race length and finish asked for - see RaceFormat.ForNewClass.</summary>
+    public RaceFormat? Format => _length.Format();
+
+    /// <param name="exists">Whether a class of this name is on file already.</param>
+    /// <param name="appDefault">The app's default race format, which the race length starts from.</param>
+    public QuickClassForm(Func<string, bool> exists, RaceFormat? appDefault = null)
     {
         _exists = exists;
+        _length = new ClassLengthPicker(appDefault);
 
         Text = "Add a class";
         Font = AppTheme.BodyFont;
@@ -2359,7 +2369,7 @@ internal sealed class QuickClassForm : Form
 
         var lblIntro = new Label
         {
-            Text = "Saved with the club's classes, and ticked for tonight. Its race format can be set right after.",
+            Text = "Saved with the club's classes, and ticked for tonight. The rest of its race format can be set right after.",
             AutoSize = true,
             Font = AppTheme.SmallFont,
             ForeColor = AppTheme.TextMuted,
@@ -2391,6 +2401,7 @@ internal sealed class QuickClassForm : Form
         page.Add(lblIntro, gapBelow: UiLayout.SectionGap - UiLayout.HintGap);
         page.Add(lblName, stretch: false, gapBelow: UiLayout.HintGap);
         page.Add(nameField, gapBelow: UiLayout.RowGap);
+        var lengthGrid = page.Add(_length.Grid(), gapBelow: UiLayout.RowGap);
         page.Add(_lblProblem, gapBelow: UiLayout.RowGap);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
@@ -2413,6 +2424,9 @@ internal sealed class QuickClassForm : Form
         // As tall as a line of its text and room round it, at the text size
         // in use; the page gives it its width.
         nameField.Height = AppTheme.BodyFont.Height + 16;
+
+        FieldGrid.LineUp(new[] { lengthGrid });
+        _length.SizeFields();
 
         DialogFit.Keep(this, page, width: DialogWidth);
     }
