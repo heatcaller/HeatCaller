@@ -415,7 +415,9 @@ public static partial class CommentaryReaders
             // and the order a streak is counted from.
             foreach (var race in races)
             {
-                if (Placing(race, transponder) is not { } position)
+                // Within their own class: a shared heat is scored a class
+                // at a time, so its class winner has a win. See Placing.
+                if (Placing(race, transponder, withinClass: true) is not { } position)
                 {
                     continue;
                 }
@@ -489,8 +491,12 @@ public static partial class CommentaryReaders
 
         if (wanted.Length > 0)
         {
+            // RunsClass, not the round's main class alone (13 Nov 2026, bug
+            // hunt 17): a shared heat is one of Stock's races AND one of
+            // Mod's, and read by its main class the Mod drivers' heats did
+            // not exist for their form, their field or their recent weeks.
             roundIds = rounds.All
-                .Where(r => !string.IsNullOrWhiteSpace(r.Id) && string.Equals(r.ClassName?.Trim(), wanted, StringComparison.OrdinalIgnoreCase))
+                .Where(r => !string.IsNullOrWhiteSpace(r.Id) && MixedHeats.RunsClass(r, wanted))
                 .Select(r => r.Id)
                 .ToHashSet(StringComparer.Ordinal);
 
@@ -520,8 +526,18 @@ public static partial class CommentaryReaders
     /// IsFinish. Ghost cars in an older file are taken out of the count, so
     /// a real driver behind one is not a place down (DriverStats'
     /// PlaceAmongRealCars).
+    ///
+    /// <paramref name="withinClass"/> (13 Nov 2026, bug hunt 17) gives the
+    /// place within the driver's OWN class in a shared heat, the way the
+    /// heat was scored: the Stock winner who was fourth overall behind
+    /// three Mod cars won, and a driver's form has to say so. The other
+    /// class's cars are taken out of the count exactly as a ghost is. It
+    /// changes nothing for a race with no class stamped on its rows, which
+    /// is every race but a shared heat's. Off for the callers that ask who
+    /// finished ahead of whom on the track (MetAcross), where the overall
+    /// order is the true answer.
     /// </summary>
-    private static int? Placing(SessionRecord race, string transponder)
+    private static int? Placing(SessionRecord race, string transponder, bool withinClass = false)
     {
         foreach (var entry in race.Results)
         {
@@ -539,13 +555,36 @@ public static partial class CommentaryReaders
                 var ghostsAhead = race.Results.Count(other =>
                     other.Position > 0
                     && other.Position < entry.Position
-                    && GhostService.IsGhost(other.Transponder));
+                    && (GhostService.IsGhost(other.Transponder)
+                        || (withinClass && !SameClassField(race, other, entry))));
 
                 return Math.Max(1, entry.Position - ghostsAhead);
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Whether two rows of a saved race were scored against each other.
+    /// Always, unless the race is a shared heat's - its rows are stamped
+    /// with the class each ran in (MixedHeats.StampClasses) - and then only
+    /// when they ran in the same class. An unstamped row beside stamped
+    /// ones goes with the first stamped class, the reading
+    /// MixedHeats.ScoringFields takes for the championship.
+    /// </summary>
+    private static bool SameClassField(SessionRecord race, SessionResultEntry a, SessionResultEntry b)
+    {
+        var fallback = Typed(race.Results.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.ClassName))?.ClassName);
+
+        if (fallback.Length == 0)
+        {
+            return true;
+        }
+
+        string ClassOf(SessionResultEntry r) => string.IsNullOrWhiteSpace(r.ClassName) ? fallback : r.ClassName.Trim();
+
+        return string.Equals(ClassOf(a), ClassOf(b), StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -1256,6 +1295,19 @@ public static partial class CommentaryReaders
         SessionHistoryStore history,
         ProfileStore? profiles = null)
     {
+        // A SHARED HEAT IS REFUSED (13 Nov 2026, bug hunt 17). Its result
+        // is scored a class at a time (MixedHeats.ScoringFields), so the
+        // Stock winner and the Mod winner BOTH score first-place points -
+        // and the proof below prices one finishing order of one field,
+        // where "Carl wins and Bill is second" puts Bill on second-place
+        // points and nobody else above third. Neither holds once the two
+        // are in different classes, so the sentence could be false when
+        // the race is filed. Nothing is claimed rather than that.
+        if (MixedHeats.IsShared(round))
+        {
+            return null;
+        }
+
         // A car on this grid with no profile name still scores - its
         // results are filed, and ComputeStandings counts them, under its
         // transponder - but Entrants leaves it out, so the proof would
@@ -2268,7 +2320,12 @@ public static partial class CommentaryReaders
             .Where(round => !string.IsNullOrWhiteSpace(round.Id))
             .Where(round => round.Kind == RoundKind.Qualifier)
             .Where(round => scope is null || scope.Contains(round.Id))
-            .Where(round => string.Equals(Typed(round.ClassName), wanted, StringComparison.OrdinalIgnoreCase))
+            // RunsClass (13 Nov 2026, bug hunt 17): a heat the class shares
+            // is one of its heats too. Matched on the main class alone, a
+            // class that shared every heat had none - no pole report, no
+            // halfway standings - and one that shared only a later round
+            // was "finished" with that round still to run.
+            .Where(round => MixedHeats.RunsClass(round, wanted))
             .ToList();
 
     /// <summary>
@@ -2599,9 +2656,20 @@ public static partial class CommentaryReaders
                     {
                         finishedAll = false;
                     }
-                    else if (entry.Position > 0 && (bestThatNight == 0 || entry.Position < bestThatNight))
+                    else if (entry.Position > 0)
                     {
-                        bestThatNight = entry.Position;
+                        // The place in their own class - a shared heat's
+                        // class winner was on the podium however many of
+                        // the other class finished ahead (bug hunt 17).
+                        var place = entry.Position - race.Results.Count(other =>
+                            other.Position > 0
+                            && other.Position < entry.Position
+                            && !SameClassField(race, other, entry));
+
+                        if (bestThatNight == 0 || place < bestThatNight)
+                        {
+                            bestThatNight = place;
+                        }
                     }
 
                     break;
@@ -3093,6 +3161,7 @@ public static partial class CommentaryReaders
     /// <param name="className">The class whose mains are counted. Blank is no answer, not "every class".</param>
     /// <param name="nowLocal">Now, in local time - for which night counts as tonight. Defaults to now.</param>
     /// <param name="withinRoundIds">The round ids belonging to the race day in hand, or null for every round - RaceEventStore.ActiveRoundScope's own answer. Only the "another A leg still to come" check reads it.</param>
+    /// <param name="aMainLegsCounted">The class's own "legs that count" for an A-main run in legs (RaceClass.AMainLegsCounted); 0 is the usual rule. See MainWinner.</param>
     public static MainsOnLayout? MainsHere(
         SessionHistoryStore history,
         RoundDefinitionStore? rounds,
@@ -3100,7 +3169,8 @@ public static partial class CommentaryReaders
         string? layoutName,
         string? className,
         DateTime? nowLocal = null,
-        IReadOnlySet<string>? withinRoundIds = null)
+        IReadOnlySet<string>? withinRoundIds = null,
+        int aMainLegsCounted = 0)
     {
         var layout = Typed(layoutName);
         var cls = Typed(className);
@@ -3115,6 +3185,11 @@ public static partial class CommentaryReaders
         // about classes or round kinds on its own.
         var tiers = new Dictionary<string, int>(StringComparer.Ordinal);
 
+        // And which of them are LEGS of an A-main run in two or three
+        // (AMainLegs) - see MainWinner for why the meeting's winner is not
+        // simply whoever won the last of them.
+        var legOf = new Dictionary<string, (int Leg, int Legs)>(StringComparer.Ordinal);
+
         foreach (var round in rounds.All)
         {
             if (round.Kind != RoundKind.Main
@@ -3128,6 +3203,11 @@ public static partial class CommentaryReaders
             // final and never set a tier on it has run its A-main. The
             // same reading RaceStature takes.
             tiers[round.Id] = round.MainTier <= 0 ? 0 : round.MainTier;
+
+            if (round.MainTier <= 0 && round.MainLeg > 0)
+            {
+                legOf[round.Id] = (round.MainLeg, round.MainLegCount);
+            }
         }
 
         if (tiers.Count == 0)
@@ -3141,7 +3221,11 @@ public static partial class CommentaryReaders
         // The top main of each meeting, by meeting. The 6am-to-6am night
         // the rest of the app counts by, so a club night that runs past
         // midnight is one meeting.
-        var topOfEachMeeting = new Dictionary<DateTime, (SessionRecord Session, int Tier)>();
+        //
+        // EVERY top main of the meeting is kept, not just the latest (13
+        // Nov 2026, bug hunt 17): an A-main run in legs is two or three of
+        // them, and its winner is decided across all of them.
+        var topOfEachMeeting = new Dictionary<DateTime, (List<SessionRecord> Sessions, int Tier)>();
 
         // Tonight's own top-tier mains of this class here, filed so far -
         // kept aside for the "not until the last A leg" check below.
@@ -3172,11 +3256,13 @@ public static partial class CommentaryReaders
                 continue;
             }
 
-            if (!topOfEachMeeting.TryGetValue(night, out var already)
-                || tier < already.Tier
-                || (tier == already.Tier && session.EndedAtUtc > already.Session.EndedAtUtc))
+            if (!topOfEachMeeting.TryGetValue(night, out var already) || tier < already.Tier)
             {
-                topOfEachMeeting[night] = (session, tier);
+                topOfEachMeeting[night] = (new List<SessionRecord> { session }, tier);
+            }
+            else if (tier == already.Tier)
+            {
+                already.Sessions.Add(session);
             }
         }
 
@@ -3220,6 +3306,20 @@ public static partial class CommentaryReaders
             {
                 return null;
             }
+
+            // AND NOT WHEN TONIGHT'S LAST LEG WENT TO SOMEBODY ELSE (13 Nov
+            // 2026, bug hunt 17). The recap holds the winner of the race it
+            // is recapping against this run - the last leg's - and when
+            // the A-main overall went to another driver, "Bill has ended
+            // that run tonight" would follow "Sam wins the A-Main overall"
+            // in one recap. There is no true line to hand it, so none.
+            if (!string.Equals(
+                    MainWinner(topTonight, legOf, profiles, aMainLegsCounted),
+                    WinnerIn(topTonight.MaxBy(one => one.EndedAtUtc)!, profiles),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
         }
 
         if (topOfEachMeeting.Count == 0)
@@ -3230,15 +3330,15 @@ public static partial class CommentaryReaders
         // Newest meeting first, which is the direction a run is counted in.
         var meetings = topOfEachMeeting
             .OrderByDescending(one => one.Key)
-            .Select(one => one.Value.Session)
+            .Select(one => one.Value.Sessions)
             .ToList();
 
         var holder = string.Empty;
         var run = 0;
 
-        foreach (var session in meetings)
+        foreach (var sessions in meetings)
         {
-            var winner = WinnerIn(session, profiles);
+            var winner = MainWinner(sessions, legOf, profiles, aMainLegsCounted);
 
             if (winner.Length == 0)
             {
@@ -3275,6 +3375,59 @@ public static partial class CommentaryReaders
             SaidAs(profiles, holder),
             holder,
             run);
+    }
+
+    /// <summary>
+    /// Who won a meeting's top main, given every top-tier main of the class
+    /// filed that night - a transponder, empty, or SomebodyElse, exactly as
+    /// <see cref="WinnerIn"/> answers.
+    ///
+    /// ONE MAIN, OR THE SAME ONE RUN AGAIN: the latest, as it always was.
+    ///
+    /// AN A-MAIN RUN IN LEGS (13 Nov 2026, bug hunt 17): the overall winner
+    /// on points across the legs (AMainLegs.Overall), which is who the club
+    /// was told "wins the A-Main". The latest leg alone credited the
+    /// meeting to whoever won leg three, so a driver who took legs one and
+    /// two had "his" run of mains broken by a leg he could afford to lose.
+    /// Held to WinnerIn's own bars: enough real cars, a winner who actually
+    /// finished a leg, and a rental or excluded driver's win is somebody
+    /// else's.
+    ///
+    /// Transponders are read as they were raced, with no folding of a spare
+    /// onto its main one - that is how WinnerIn names every other meeting's
+    /// winner, and the run is counted by comparing the two.
+    /// </summary>
+    private static string MainWinner(
+        IReadOnlyList<SessionRecord> sessions,
+        IReadOnlyDictionary<string, (int Leg, int Legs)> legOf,
+        ProfileStore profiles,
+        int aMainLegsCounted)
+    {
+        // Each leg once, by its latest filing, in leg order.
+        var legs = sessions
+            .Where(session => session.RoundId is { } id && legOf.ContainsKey(id))
+            .GroupBy(session => legOf[session.RoundId!].Leg)
+            .OrderBy(leg => leg.Key)
+            .Select(leg => leg.MaxBy(session => session.EndedAtUtc)!)
+            .ToList();
+
+        if (legs.Count < 2)
+        {
+            return WinnerIn(sessions.MaxBy(session => session.EndedAtUtc)!, profiles);
+        }
+
+        var legCount = Math.Max(legs.Count, legs.Max(session => legOf[session.RoundId!].Legs));
+        var table = AMainLegs.Overall(legs, AMainLegs.LegsCounting(legCount, aMainLegsCounted));
+
+        if (table.Count(row => AchievementEvaluator.CanHoldTrackRecord(Typed(row.Transponder), profiles)) < LeastCarsForAWin
+            || table[0].BestFinish <= 0)
+        {
+            return string.Empty;
+        }
+
+        var winner = Typed(table[0].Transponder);
+
+        return AchievementEvaluator.CanHoldTrackRecord(winner, profiles) ? winner : SomebodyElse;
     }
 
     /// <summary>

@@ -1053,7 +1053,12 @@ public sealed partial class RaceControlControl
                     _profiles,
                     ranOn,
                     round?.ClassName,
-                    withinRoundIds: _events?.ActiveRoundScope());
+                    withinRoundIds: _events?.ActiveRoundScope(),
+                    // For an A-main run in legs: the class's own "legs that
+                    // count", so a meeting's main goes to its overall winner.
+                    aMainLegsCounted: _raceClasses?.All
+                        .FirstOrDefault(c => string.Equals(c.Name, round?.ClassName, StringComparison.OrdinalIgnoreCase))
+                        ?.AMainLegsCounted ?? 0);
             }
             catch (Exception ex)
             {
