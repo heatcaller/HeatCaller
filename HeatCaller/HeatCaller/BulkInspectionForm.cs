@@ -87,6 +87,11 @@ internal sealed class BulkInspectionForm : Form
         _cmbResult.SelectedItem = VerdictPassed;
 
         _txtNotes.Multiline = true;
+
+        // Enter starts a new line here, as in every other notes box.
+        // Without this it pressed Save, and filed the half-written note
+        // against every car picked.
+        _txtNotes.AcceptsReturn = true;
         _txtNotes.ScrollBars = ScrollBars.Vertical;
 
         var fields = new FieldGrid();
