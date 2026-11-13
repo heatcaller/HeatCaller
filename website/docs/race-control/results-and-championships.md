@@ -150,15 +150,35 @@ The line above the buttons says how many sessions the chosen day has, and how ma
 
 The report starts with the day's totals: sessions, drivers, laps run and the fastest lap. **Night pace** comes next (see below). With an entry fee on the race day, **Money at the desk** follows: cash and card taken, comps, and who still owes (see [Money at the desk](../race-day/events-and-entries.md#money-at-the-desk)). Rentals still out come after that, so they get noticed. After that come the qualifying standings (worked out the same way as the race program's **Standings**, which is **Tonight's Standings** on a club night; see [Qualifying standings](../race-day/program-and-mains.md#qualifying-standings)), the results grouped by class, the fastest laps of the day, the tech inspection summary and, if you ticked it, every lap. Races with no round are listed under "Other sessions". Each result shows the driver name saved with it, so a transponder that has since changed hands still shows who raced.
 
-**Night pace.** How quickly the night ran, worked out from the races saved:
+**Night pace.** How quickly the night ran, worked out from the races saved. It starts with the race director's two measures:
+
+- **Entries close to heats posted:** from the **Entries close at:** time on **Race Day → Setup** to the moment you posted the heats. Aim for under 5 minutes. If you didn't post the heats, it's measured to the first green instead, and the card says "(heats not posted)". Heats posted before entries closed are shown as how long before.
+- **Doors open to first green:** from the first check-in of the night to the first race's green. The first check-in is noted by itself, however the driver was checked in: at the desk, on a phone, or with **Check In All**. Practice doesn't count as the first green.
+
+Then the numbers from the races themselves:
 
 - **Green to green (typical):** how far apart the races started. It's the median, so one long break doesn't hide a quick night.
+- **Worst green to green:** the two races that started furthest apart, and what HeatCaller saw in the gap between them.
 - **Finish to next green (typical):** the usual time from one race's finish to the next race's green. This is the dead time between races.
+- **Finish to result saved (typical)** and **Call-up to green (typical):** the two parts of that gap HeatCaller can see. They're shown once races have been saved and called up with this version.
 - **Of the night on track:** the share of the time from the first green to the last finish when cars were racing.
 - **Races run:** how many of the race day's heats and mains have a race, out of the program.
-- **Longest gaps:** the three longest waits between races, and what HeatCaller saw happen in each one: *building heats*, *building the finals*, *correcting a result*, or *waiting at the grid* (the time from staging the race to its green, when that's 3 minutes or more). "Nothing recorded" means none of those happened, for example while waiting for drivers who hadn't been called yet.
+- **Longest gaps:** the three longest waits between races, and what happened in each one.
 
-Practice, demo races and pasted results aren't counted. A break of more than 3 hours (an afternoon session, then an evening program) splits the night in two and doesn't count as a gap. The section is left out with fewer than two races. When every round has been run, the same numbers appear on one line on the race program's next-step card. Times at the grid are saved from this version on, so older races show the other causes only.
+What happened in a gap, most telling first:
+
+- *a planned break (10 min)*: a break you added with **Breaks...** on **Setup**.
+- *held 3 min at the desk*, *pushed back 2 min (+1 min)*, *5 min more for a driver who asked*: Auto start's **Hold**, **+1 min** and a driver's **Need 5 minutes** from their phone.
+- *waited 2 min for the time drivers were given*: Auto start held the race back to its posted time (see [Auto start between races](running-a-race.md#auto-start-between-races)).
+- *building heats*, *building the finals*, *correcting a result*.
+- *saving the result took 4:10*: 3 minutes or more from the checkered flag to the result being saved.
+- *waiting at the grid*: the time from staging the race to its green, when that's 3 minutes or more.
+
+When none of those happened, HeatCaller names the gap by its length. A gap of 20 minutes or more is *a break*. A gap at least 5 minutes longer than Auto start's gap is *idle director*: nothing was going on, and nobody started the next race. If the race was called up, it says how long after the flag that was. A shorter gap says "nothing recorded".
+
+Practice, demo races and pasted results aren't counted. A break of more than 3 hours (an afternoon session, then an evening program) splits the night in two and doesn't count as a gap. The section is left out with fewer than two races and nothing to measure. When every round has been run, the same numbers appear on one line on the race program's next-step card, and on the **Close the Night** checklist under its headline. Times at the grid, call-ups, saves and what the desk did are saved from the versions that added them, so older races show the other causes only.
+
+**On the club's results page.** With results published to the [club website](../online/index.md), each race night on the **Results** page has a line under its date: "Night pace: Green to green 6:10 (worst 14:20) · 31% on track · 18 of 18 races run". Only the numbers go online, never what happened in the gaps, so nobody's quiet moment at the desk is on a public page.
 
 **Which races the report covers.** When a race day (event) set up on **Race Day → Setup** raced on the chosen day, the report covers that race day's own rounds, including any that ran past midnight. Practice and races with no round are included when they ran on a day that race day raced. Otherwise the report covers everything saved on that date. If more than one race day raced on the chosen date, the report covers everything recorded on the date and says so at the top. The tech inspection summary always covers the same races as the rest of the report. Saved demo races and pasted results are always left out (and a day with only those isn't offered under **Day:**), and ghost cars never appear in the fastest laps or the driver count.
 

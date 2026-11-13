@@ -4,6 +4,16 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Night pace and start times (12 November).**
+    - **The race director's two measures.** The event report's **Night pace**, the **Next Steps** card at the end of the night and the **Close the Night** checklist now give **entries close to heats posted** and **doors open to first green**. Doors open is the first check-in of the night. See [Night pace](race-control/results-and-championships.md).
+    - **Why a gap was long.** Night pace now gives the worst green to green and what caused it. It names what the desk did in a gap ("held 3 min at the desk", "pushed back 2 min (+1 min)", "a planned break (10 min)") and a slow save. A long gap with nothing going on is "a break", and one well over the set gap is "idle director". The typical finish to result saved and call-up to green are measured too.
+    - **Night pace online.** Each race night on the club's **Results** page has its pace under the date: the numbers only, never the causes.
+    - **Never more than 2 minutes early.** Posting the heats keeps each race's "about 20:42" as the time drivers were given. On a night you don't post, the first race does it. Auto start never starts a race more than 2 minutes before that time ("NEXT RACE AT 20:40" on the Big Screen), and the phones show the given time while the night is early. **Start now** still starts at once. It's on by default; untick it on the **Auto start** switch's right-click menu. See [Auto start between races](race-control/running-a-race.md#auto-start-between-races).
+    - **Keys for Hold and Start now.** <kbd>H</kbd> holds and resumes Auto start, and <kbd>N</kbd> is **Start now**, on Race Control and in Race Mode. See [Keyboard shortcuts](reference/keyboard-shortcuts.md).
+    - **Estimated times on the Big Screen.** Between races the bottom bar says "UP NEXT: Stock Q2 Heat 3 about 20:42 • ..." for the next three races. See [Big Screen](screens/big-screen.md).
+
+  Update HeatCaller on the race PC. Night pace on the club's **Results** page **needs the relay redeployed** (`fly deploy --ha=false`); everything else works without it.
+
 - **Loose ends from setting up the night (12 November).**
     - **Templates on nights.** **When...** beside **Templates:** on **Race Day → Setup** sets the nights a template is for, such as every Tuesday or a monthly date. On those nights **Next Steps** offers **Start tonight's Tuesday club night**.
     - **Racing's off, by push too.** **Call It Off...** can also send a push to every phone signed up for the club's alerts.
