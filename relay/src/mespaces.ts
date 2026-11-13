@@ -467,6 +467,9 @@ let meNextNightAt = 0;
 // all" is not headlined as "You're down".
 let meComingTicks = null;
 const meComingSent = new Map();
+// From Home's next race night card ("#...&go=coming", 12 Nov 2026): the
+// card is brought into view the first time it is drawn.
+let meGoComing = false;
 
 async function meReadNextNight() {
   if (typeof grab !== 'function' || Date.now() - meNextNightAt < 60000) return;
@@ -562,6 +565,13 @@ function meComingCard() {
       if (said !== '') st.appendChild(el('span', '', said));
     }
     at.appendChild(st);
+  }
+
+  // Asked for from Home's next race night card: brought into view once drawn.
+  if (meGoComing) {
+    meGoComing = false;
+    if (meSpace !== 'tonight') meSetSpace('tonight', 'r');
+    if (typeof scrollToStay === 'function') scrollToStay(at); else at.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 }
 
@@ -1311,6 +1321,7 @@ function meStart() {
   let kept = '';
   try { kept = localStorage.getItem(ME_SPACE_KEY) || ''; } catch (e) { /* none kept */ }
   meSetSpace(asked ? asked[1] : kept || 'tonight');
+  meGoComing = /[#&]go=coming/.test(location.hash || '');
 
   // The byline beside their name (7 Nov 2026, Asher: "drop the byline on
   // me tab to the match the height of the driver name keeping a little

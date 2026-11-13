@@ -1047,6 +1047,8 @@ select {
 .hero:hover { border-color: var(--primary); }
 .hero.live { border-left-color: var(--good); }
 .hero.next { border-left-color: var(--accent); }
+/* "Coming? Tap to put yourself down" on a night taking entries (12 Nov 2026). */
+.hero .nn-go { display: block; margin-top: 8px; font-weight: 700; color: var(--accent); }
 /* The next race night called off (12 Nov 2026, setup plan D13). */
 .hero.off { border-left-color: var(--bad); }
 .hero.off .note { padding: 6px 0 0; text-align: left; }
@@ -8567,13 +8569,32 @@ function nextNightHtml(answer) {
     word(b.firstRace) ? esc('First race ' + hcHm(word(b.firstRace))) : '',
   ].filter(Boolean).join(' &middot; ');
   const title = word(b.title);
-  return '<div class="hero next" style="cursor:default">' +
+  // Taking entries: the card is a way in to say so (12 Nov 2026, Asher:
+  // "theres no way to say you're coming to the next race... when you tap it
+  // i just highlihts the card"). It opens Me on Tonight at its I'm coming
+  // card, the classes to tick and the button - the Me tab's own address, so
+  // a phone that has the driver goes straight to their night.
+  const comingTo = b.takingEntries === true && typeof nextNightComingHref === 'function' ? nextNightComingHref() : '';
+  const open = comingTo ? '<a class="hero next" href="' + esc(comingTo) + '">' : '<div class="hero next" style="cursor:default">';
+  return open +
     '<span class="kicker">Next race night</span>' +
     '<span class="big">' + esc([title, when].filter(Boolean).join(' - ') || 'Next race night') + '</span>' +
     (list ? '<span class="when">' + esc(list) + '</span>' : '') +
     (times ? '<span class="when">' + times + '</span>' : '') +
     (word(b.venue) ? '<span class="when">' + esc(word(b.venue)) + '</span>' : '') +
-    '</div>';
+    (comingTo ? '<span class="nn-go">Coming? Tap to put yourself down &rarr;</span>' : '') +
+    (comingTo ? '</a>' : '</div>');
+}
+
+// Me's I'm coming card: the Me tab's own link (their night once the phone
+// has the driver), opened on Tonight with the card brought into view.
+function nextNightComingHref() {
+  const base = typeof BASE === 'string' ? BASE : '';
+  const tab = typeof document !== 'undefined' && document.querySelector
+    ? document.querySelector('nav.tabs a[href$="/mynight"], nav.tabs a[href*="/night#d="]')
+    : null;
+  const href = tab && tab.getAttribute('href') ? tab.getAttribute('href') : base + '/mynight';
+  return href + (href.indexOf('#') >= 0 ? '&' : '#') + 's=tonight&go=coming';
 }
 
 async function load() {
