@@ -2341,8 +2341,8 @@ internal sealed class RaceDaySetupWizard : Form
 /// </summary>
 internal sealed class QuickClassForm : Form
 {
-    /// <summary>How wide it is inside its frame at the normal text size: the 360px column it was made with, and the page's margins.</summary>
-    private const int DialogWidth = 360 + UiLayout.PageLeft + UiLayout.PageRight;
+    /// <summary>How wide it is inside its frame at the normal text size: a 460px column - it was 360 until it asked for the race length and finish (12 Nov 2026, setup plan step 8), whose captions and picker need the room - and the page's margins.</summary>
+    private const int DialogWidth = 460 + UiLayout.PageLeft + UiLayout.PageRight;
 
     private readonly TextBox _txtName = new();
     private readonly Label _lblProblem = new();
