@@ -1789,6 +1789,21 @@ public partial class MainForm
         // result with no laps recorded is the shape it always was and the
         // page simply shows no graph or lap list for it.
 
+        /// <summary>
+        /// A shared heat (13 Nov 2026, mixed classes): the class this driver
+        /// raced in and their place in it, for the results page's "2nd in
+        /// Stock". Both left out for every other race, so its row is the
+        /// shape it always was.
+        /// </summary>
+        [JsonPropertyName("cls")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Cls { get; init; }
+
+        /// <inheritdoc cref="Cls"/>
+        [JsonPropertyName("clsPos")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? ClsPos { get; init; }
+
         /// <summary>Where they started - the grid, from qualifying - for the Qual column. Left out when the grid was not known.</summary>
         [JsonPropertyName("qual")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -2089,6 +2104,7 @@ public partial class MainForm
             // everybody on track at once, not a race for places.
             var isRace = session.SessionType == RaceSessionType.Race;
             var positions = isRace ? LapByLap.Positions(session.Results) : null;
+            var classPlaces = MixedHeats.ClassPlacesOf(session.Results, null);
 
             var document = JsonSerializer.Serialize(new RelayResultDocument
             {
@@ -2104,6 +2120,8 @@ public partial class MainForm
                 Results = session.Results.Select((r, i) => new RelayResultRow
                 {
                     Pos = r.Position,
+                    Cls = classPlaces[r].Place is null ? null : classPlaces[r].Class,
+                    ClsPos = classPlaces[r].Place,
                     Name = names[i],
                     Car = r.CarModel,
                     Laps = r.Laps,

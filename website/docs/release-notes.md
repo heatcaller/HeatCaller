@@ -4,6 +4,16 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Shared heats: places by class everywhere (13 November).** A race two classes shared was scored by class in championships, qualifying and the mains, but listed as one field. Now, as a championship counts it:
+    - **The position report** calls each car by its place in its own class: "Mo leads Mod, Sam leads Stock, Bea second in Stock." No gaps are said in a shared heat, since they're measured to the overall leader.
+    - **Race History** has a **Class Place** column for a shared race, and the printed results sheet puts each driver's class place beside their name.
+    - **Export Results...** gives each driver's own class in **Class** and their place in it in a new last column, **ClassPosition** (`className` and `classPosition` in the JSON).
+    - **The phone results** say "2nd in Stock" under each name. This needs the relay redeployed.
+
+    See [Mixed-class heats](race-day/program-and-mains.md#mixed-class-heats).
+
+- **No more short-track warning (13 November).** The announcer keeps up on short laps now, so the amber "Short laps" line under Race Control's **Session** card and the warning under **Average lap time (sec):** on **Track Layouts** are gone, and so is the guide's "On a short track" section. One thing to know on any track: with **Say each car's gap to the leader** ticked, the position report takes longer to say, and a gap can change while it's being said. See [Voice](announcer/voice.md).
+
 - **Fixes from the first night on step 8 (12 November).**
     - **More time moves the schedule.** Approving a driver's **Need 5 more minutes** (or **+1 min** or **Hold**) now moves every "about" time after that race: the program, the phones' **Schedule** and the Big Screen's **UP NEXT**, not only Auto start's count.
     - **More time asked early is kept.** Approving it while the driver's race isn't next used to change nothing ("ask again when it's next"). Now it's kept, and the race goes back 5 minutes by itself when it becomes the next one out. The phone says "Q3 Heat 2 will go back 5 minutes for you when it's next." Two approvals add up, and it's dropped if the race runs or is deleted first, or the driver comes out of it. See [More time and skip my race at the desk](online/driver-requests.md#more-time-and-skip-my-race-at-the-desk).

@@ -274,10 +274,16 @@ public static class ResultsSheetRenderer
                 }
 
                 var r = section.Results[row];
+
+                // A shared heat (13 Nov 2026): each driver's place in their own
+                // class beside their name, as Race History shows it - the
+                // overall position stays in Pos.
+                var classPlace = MixedHeats.ClassPlacesOf(section.Results, null)[r];
+
                 string[] cells =
                 {
                     r.Position.ToString(),
-                    r.DriverName,
+                    classPlace is { Place: { } place, Class: { } cls } ? $"{r.DriverName}  ({MixedHeats.Ordinal(place)} {cls})" : r.DriverName,
                     string.IsNullOrWhiteSpace(r.CarModel) ? "-" : r.CarModel,
                     HandCountedLaps.LapsText(r.Laps, HandCountedLaps.In(r)),
                     r.FastLapMs > 0 ? $"{r.FastLapMs / 1000.0:0.000}s" : "-",

@@ -758,6 +758,12 @@ public sealed partial class AnnouncementService
     /// </param>
     private string WordRunningOrder(IReadOnlyList<PositionReportOrder.Row> rows, string template, bool sayGaps, bool placesOnly = false)
     {
+        // A heat classes share: places within each class (13 Nov 2026).
+        if (SharedHeatClasses?.Invoke() is { Count: > 0 } classOf)
+        {
+            return WordSharedRunningOrder(rows, template, classOf);
+        }
+
         var parts = new List<string>();
 
         // Each car read out with how far back it is, leader first - what
@@ -847,6 +853,48 @@ public sealed partial class AnnouncementService
         return template
             .Replace("{positions}", positions, StringComparison.OrdinalIgnoreCase)
             .WithPositionGaps(gaps)
+            .TidyTemplate();
+    }
+
+    /// <summary>
+    /// The running order of a heat two or more classes share (13 Nov 2026,
+    /// mixed-class heats, plans\race-night-build-plan.md 4.1): the same cars
+    /// in the same overall order, each called by their place in their own
+    /// class - "Mo leads Mod, Sam leads Stock, Bea second in Stock" - since
+    /// that is the place their results and championship count. The cars
+    /// named are the overall top, so a car's place among them is its place
+    /// in its class on the whole board: everyone ahead of it is named too.
+    ///
+    /// No gaps and no laps down: both are measured to the overall leader,
+    /// who in a shared heat may be in another class, so "a lap down" or
+    /// "three seconds back" would be said of a car leading its own class.
+    /// {gaps} is left empty and the club's line round it tidied, as with the
+    /// gaps off. A car the map doesn't know (a ghost) is called by its place
+    /// overall.
+    /// </summary>
+    private string WordSharedRunningOrder(IReadOnlyList<PositionReportOrder.Row> rows, string template, IReadOnlyDictionary<string, string> classOf)
+    {
+        var parts = new List<string>();
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var name = SpokenNameFor(rows[i].Standing);
+
+            if (!classOf.TryGetValue(rows[i].Standing.Transponder?.Trim() ?? string.Empty, out var cls) || string.IsNullOrWhiteSpace(cls))
+            {
+                parts.Add(i == 0 ? $"{name} leads" : $"{name} {Ordinal(i + 1)}");
+                continue;
+            }
+
+            var place = counts[cls] = counts.GetValueOrDefault(cls) + 1;
+
+            parts.Add(place == 1 ? $"{name} leads {cls}" : $"{name} {Ordinal(place)} in {cls}");
+        }
+
+        return template
+            .Replace("{positions}", string.Join(", ", parts), StringComparison.OrdinalIgnoreCase)
+            .WithPositionGaps(string.Empty)
             .TidyTemplate();
     }
 

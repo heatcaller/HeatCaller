@@ -117,7 +117,7 @@ Sizes: **S** is about a day, **M** is 2–4 days, **L** is a week or more. They'
 | 4.2 Money at the desk | An entry fee per class per event, a discount for a second class, comps (marshal, volunteer, junior), and paid/owing on desk check-in and phone check-in. An end-of-night total by cash and card, in the event report. It only tracks the money and never takes payments. | M |
 | 4.3 Marshal swaps | From the phone, a driver asks a named driver to cover their post. That driver accepts, then the director approves, or it's automatic if allowed. The roster, the marshal call and the pushes update. `MarshalAssigner` gets an overrides layer instead of being rewritten. Needs a relay deploy. | M |
 
-**Decided (11 Nov 2026):** for 4.2, money is **tracked by hand only** for now, with no payment integration. **Still open:** for 4.1, whether mixed heats count toward championships the same way.
+**Decided (11 Nov 2026):** for 4.2, money is **tracked by hand only** for now, with no payment integration. **Decided (13 Nov 2026, Asher):** for 4.1, championship points in a mixed-class heat are separate by class - which is how MixedHeats.ScoringFields already scored them. The same day the rest of 4.1 was finished: the position report calls places within each class, and Race History, the printed sheet, the export and the phone results give each driver's class place.
 
 ### Phase 5: Formats and sanctioning presets
 *The format gap against LiveTime, and pain point 9 (too much qualifying).*
