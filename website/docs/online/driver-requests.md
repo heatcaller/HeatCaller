@@ -209,6 +209,16 @@ Select the request and click **Approve**, then **Yes**. The **Desk** button on R
 
 Neither happens until the desk approves it. To say no, **Decline** it with a reason.
 
+### Marshals from their phones
+
+Since 12 November 2026 a driver with marshal duty can say from their phone that they're at their post, and ask another driver to cover it (see [Marshals in place](../race-day/program-and-mains.md#marshals-in-place)):
+
+- **At my marshal post** is filed by itself: Race Control has them in for that race, and the phone says "Thanks - Race Control has you on Turn 3 for Q2 Heat 3." A driver who isn't marshalling that race any more is told so.
+- **Cover my post?** is filed by itself too, since it only asks. The phone says "Asked Hugh T. to cover Turn 3 - waiting for them to say yes."
+- **Marshal swap** is the asked driver's answer. A no is filed by itself. A yes waits under **Waiting for you**, reading "Covers Max Power's post: Turn 3 in Q2 Heat 3 (Stock)", while **Marshal swaps from phones need the desk's OK** is ticked at the top of the window (it is to start with). Click **Approve...**, then **Yes**, and the swap is made, as **Swap...** in the Marshals window makes it, with a step in **Undo**. Untick the box and a yes is made by itself.
+
+The asked driver must be checked in tonight and not racing or marshalling that race. Phones see only a first name and an initial for the other driver.
+
 ### Declining
 
 Select any waiting request and click **Decline**. The **Decline *name*'s Request** window asks you to "Tell them why, or what to do instead (optional - shown on their phone). Nothing about them is changed:". Type up to 120 characters, such as "Come and see us at the desk", and click **Decline**. The phone shows "declined" with your reason. **Undo** puts the request back on the waiting list.

@@ -179,6 +179,7 @@ Under the card:
 
 - From a QR check-in: **Not you? Open the full list**, which goes to the PIN box.
 - From a personal PIN: **Not you? Sign out**, which forgets the PIN on that phone and goes back to the PIN box.
+- On a driver's own night, when tonight's race day has an entry fee, the **Check in** card on **Me** and the **Alerts** card say **Entry: $15.00 - pay at the desk** until the desk marks them paid on **Who's Racing**, then **Paid ✓**. A comp counts as paid. It's only ever their own entry, sent in their own private live details: no other driver's money is published, and HeatCaller never takes a payment. See [Money at the desk](../race-day/events-and-entries.md#money-at-the-desk).
 - When the club gives drivers their own nights, the card also has **See your racing from last time**, which opens that driver's night page, whether the card was opened from a QR check-in or a personal PIN. See [A driver's own night](index.md#a-drivers-own-night).
 
 ### The first-night guide

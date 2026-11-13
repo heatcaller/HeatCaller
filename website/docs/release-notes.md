@@ -4,6 +4,15 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Marshals, the countdown and entry money on phones (12 November).**
+    - **I'm at my post.** While a driver's marshal duty is the next race, their night page has **I'm at my post (Turn 3)**. Race Control's marshals banner says who's in ("2 of 3 in: Hugh Turn, Rhoda Rage; waiting for Axel Grease"), and when every marshal has tapped it the race stops waiting for them. **Marshals in place** still confirms them all. See [Marshals in place](race-day/program-and-mains.md#marshals-in-place).
+    - **Marshal swaps from phones.** **Ask someone to cover...** on a driver's marshal duty asks another driver, whose phone offers **Accept** and **Decline**. A yes waits in **Driver Requests** while **Marshal swaps from phones need the desk's OK** is ticked (the default), or is made by itself. See [Marshals from their phones](online/driver-requests.md#marshals-from-their-phones).
+    - **Marshal duty in about 5 minutes**, a new alert: "You're marshalling Q2 Heat 3 in about 5 minutes - Turn 3", once per race.
+    - **Next race in 1:42** on the Live and Schedule pages while Auto start counts down between races, with "on hold" and "starting soon", like the Big Screen.
+    - **Paid or owing.** With an entry fee on the race day, a driver's own night says **Entry: $15.00 - pay at the desk** or **Paid ✓**. Only their own.
+
+  Update HeatCaller on the race PC. All of these **need the relay redeployed** (`fly deploy --ha=false`).
+
 - **Loose ends from setting up the night (12 November).**
     - **Templates on nights.** **When...** beside **Templates:** on **Race Day → Setup** sets the nights a template is for, such as every Tuesday or a monthly date. On those nights **Next Steps** offers **Start tonight's Tuesday club night**.
     - **Racing's off, by push too.** **Call It Off...** can also send a push to every phone signed up for the club's alerts.
