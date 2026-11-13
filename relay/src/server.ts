@@ -3052,7 +3052,7 @@ export class Relay {
         // withLapTimes.
         body: spec.name === "programme" && who.publishRoster !== true
           ? withoutLineups(body)
-          : spec.name === "state" ? withLapTimes(existing?.body, body, at.getTime()) : body,
+          : spec.name === "state" ? withLapTimes(existing?.body, body, at.getTime(), readHeldMs(parsed.query.get("held"))) : body,
       };
 
       if (spec.kind === "snapshot") {
@@ -9486,7 +9486,8 @@ function withoutLineups(body: unknown): unknown {
 
 /**
  * The live board with "lapAt" on each row: when, on the relay's clock in
- * milliseconds, that car's newest lap first reached the relay.
+ * milliseconds, that car's newest lap first reached the relay - less how
+ * old the laptop said the lap already was, when it says (see below).
  *
  * WHY (8 Nov 2026, timing review): a phone reading out lap times dropped a
  * call that was more than 2.3 s old - but counted from when the PAGE read
@@ -9501,11 +9502,27 @@ function withoutLineups(body: unknown): unknown {
  * they were in the frame before keeps that frame's lapAt; anything else is
  * a new lap, stamped now.
  *
+ * LESS HOW OLD THE LAPTOP SAYS THE LAP IS (13 Nov 2026, bug hunt 17, #173).
+ * "Now" is when the frame ARRIVED, and a frame can be old news by then: the
+ * laptop builds one a second, and on a bad uplink a frame waits out a
+ * backoff, a timed-out request or a big upload ahead of it. Stamped on
+ * arrival, a lap several seconds old looked new, and a phone said it late.
+ * So the laptop now says, on each row, how old that car's newest lap was
+ * when it built the frame ("lapAge", ms), and on the request how long the
+ * frame then waited to be sent ("held", ms, counted to this very attempt -
+ * a frame sent again says more). A new lap is stamped now less the two.
+ * Only an age that is a number, zero or more, is believed, and the two
+ * together never past LAP_AGE_MAX_MS. With neither - an older app - the
+ * stamp is the arrival, exactly as before. The time the frame spent on
+ * the network is not counted and cannot be: that would take the laptop's
+ * clock and this one agreeing to the second, and nothing makes them.
+ * "lapAge" is the laptop's word to the relay and is not kept on the row.
+ *
  * A row is found in the frame before by its tag, else by name; a key on
  * two rows matches nothing. Anything not shaped as a board is left as it
  * is, so this never throws.
  */
-export function withLapTimes(before: unknown, body: unknown, nowMs: number): unknown {
+export function withLapTimes(before: unknown, body: unknown, nowMs: number, heldMs?: number): unknown {
   if (!isPlainObject(body) || !Array.isArray(body["standings"])) {
     return body;
   }
@@ -9558,11 +9575,34 @@ export function withLapTimes(before: unknown, body: unknown, nowMs: number): unk
       const kept = prior !== undefined && prior !== null && prior.crossings === crossings(row)
         && typeof prior.lapAt === "number" && Number.isFinite(prior.lapAt) && prior.lapAt <= nowMs
         ? prior.lapAt
-        : nowMs;
+        : nowMs - Math.min(LAP_AGE_MAX_MS, Math.floor((saneAge(row["lapAge"]) ?? 0) + (saneAge(heldMs) ?? 0)));
 
-      return { ...row, lapAt: kept };
+      const { lapAge: _stated, ...rest } = row;
+      return { ...rest, lapAt: kept };
     }),
   };
+}
+
+/**
+ * The most a lap's stated age is believed for. Far past anything a phone
+ * would still say (it drops a lap over a few seconds old), so a bigger
+ * number changes nothing - it only keeps a nonsense one from putting
+ * lapAt somewhere absurd.
+ */
+const LAP_AGE_MAX_MS = 10 * 60 * 1000;
+
+/** An age in milliseconds, when it is one: a number, finite, zero or more. Anything else is no age at all. */
+function saneAge(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
+/**
+ * "held" on a state publish: how long the laptop held the frame before
+ * this send, in whole milliseconds. Unlike seq, a bad one is not refused -
+ * it is only a hint, and the frame is worth having without it.
+ */
+function readHeldMs(raw: string | null): number | undefined {
+  return raw !== null && /^\d{1,12}$/.test(raw) ? Number(raw) : undefined;
 }
 
 /** The laptop's manage document, cleaned. Undefined when there is none, or it is not an object - readCheckin's twin, much simpler: nothing here but whether it is on and what it is guarded by. */

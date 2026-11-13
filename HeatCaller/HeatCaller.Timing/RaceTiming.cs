@@ -885,9 +885,11 @@ public sealed class RaceTiming
     internal LiveRaceView ReadLiveView() =>
         _host is null
             ? Read(static e => new LiveRaceView(
-                e.GetOrderedStandings(), e.State, e.Flag, e.GetCountdownText(), e.SessionGeneration, e.StreakThreshold, e.SectorLengthsFeet))
+                e.GetOrderedStandings(), e.State, e.Flag, e.GetCountdownText(), e.SessionGeneration, e.StreakThreshold, e.SectorLengthsFeet,
+                e.EstimatedDeviceTimeNowMs))
             : Read(static e => new LiveRaceView(
-                CopyOf(e.GetOrderedStandings()), e.State, e.Flag, e.GetCountdownText(), e.SessionGeneration, e.StreakThreshold, e.SectorLengthsFeet?.ToArray()));
+                CopyOf(e.GetOrderedStandings()), e.State, e.Flag, e.GetCountdownText(), e.SessionGeneration, e.StreakThreshold, e.SectorLengthsFeet?.ToArray(),
+                e.EstimatedDeviceTimeNowMs));
 
     /// <remarks>Inline, the engine's live RacerStanding, or null; threaded, a copy (P4).</remarks>
     public RacerStanding? RaceLeader() =>
@@ -2219,6 +2221,11 @@ public sealed class RaceTiming
 /// The race as the live state document reads it, from one moment - see
 /// <see cref="RaceTiming.ReadLiveView"/>. Added 24 Oct 2026 (timing layer, P8).
 /// </summary>
+/// <param name="DeviceNowMs">
+/// What the decoder's clock read at that moment, as best the race knows
+/// (EstimatedDeviceTimeNowMs) - what a row's last lap is aged against for
+/// the relay (13 Nov 2026, bug hunt 17; see RelayLapAge in the app).
+/// </param>
 internal sealed record LiveRaceView(
     IReadOnlyList<RacerStanding> Ordered,
     RaceState State,
@@ -2226,7 +2233,8 @@ internal sealed record LiveRaceView(
     string Countdown,
     int Generation,
     int StreakThreshold,
-    double[]? SectorLengthsFeet);
+    double[]? SectorLengthsFeet,
+    long DeviceNowMs);
 
 /// <summary>
 /// A finished race as it stood the moment it finished - frozen on the timing

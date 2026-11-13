@@ -2463,6 +2463,17 @@ public partial class MainForm : Form
                 }
             }
 
+            // WHY (13 Nov 2026, bug hunt 17): the last race's clips and
+            // highlight videos are made on a background thread for minutes
+            // after the flag, and closing abandoned them without a word. A
+            // person is asked, and can wait - see WaitsForClipsBeforeClosing.
+            // Before anything is torn down: the work still needs the relay.
+            if (WaitsForClipsBeforeClosing(e.CloseReason))
+            {
+                e.Cancel = true;
+                return;
+            }
+
             // Before the tick is stopped - see RefreshPrivacyBeforeClosing.
             RefreshPrivacyBeforeClosing();
 

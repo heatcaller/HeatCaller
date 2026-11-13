@@ -6713,25 +6713,44 @@ public sealed partial class RaceControlControl
         // experience) - see ClipShare. Read here for the same reason.
         var clipShare = ClipShareFor(store, record);
 
-        _ = Task.Run(() => RaceAudioRecorder.Publish(
-            recorder.Stop(),
-            store,
-            record,
-            releaseOffsets,
-            message =>
+        // WHY (13 Nov 2026, bug hunt 17): counted from here, on this thread,
+        // until Publish has returned, so the window can ask before it closes
+        // on clips and videos still being made - see
+        // RaceAudioRecorder.AfterRaceWork. The same test Publish makes for
+        // whether there are clips at all.
+        var workOver = store.DriverHighlights && record is not null
+            ? RaceAudioRecorder.NoteAfterRaceWork(videos: video is not null && !HighlightVideo.EncoderUnavailable)
+            : null;
+
+        _ = Task.Run(() =>
+        {
+            try
             {
-                try
-                {
-                    log?.Invoke(message);
-                }
-                catch
-                {
-                    // A console that has gone. Saying where the file went is
-                    // not worth an unobserved exception on a pool thread.
-                }
-            },
-            video,
-            clipShare));
+                RaceAudioRecorder.Publish(
+                    recorder.Stop(),
+                    store,
+                    record,
+                    releaseOffsets,
+                    message =>
+                    {
+                        try
+                        {
+                            log?.Invoke(message);
+                        }
+                        catch
+                        {
+                            // A console that has gone. Saying where the file went is
+                            // not worth an unobserved exception on a pool thread.
+                        }
+                    },
+                    video,
+                    clipShare);
+            }
+            finally
+            {
+                workOver?.Invoke();
+            }
+        });
     }
 
     /// <summary>

@@ -142,6 +142,56 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         return Publishing.ContainsKey(full) || Live.ContainsKey(full);
     }
 
+    /// <summary>What a highlight video's own cut of the recording is called, before its ".wav" - a working file, deleted once the video is made.</summary>
+    internal const string VideoWavMarker = " video";
+
+    // WHY (13 Nov 2026, bug hunt 17): closing HeatCaller while a race's
+    // clips and videos were still being made abandoned them without a word -
+    // the work is on a pool thread, which dies with the app. Counted here
+    // from the moment the race hands its recording over until its Publish
+    // has returned, so the window can ask before it closes (MainForm,
+    // WaitsForClipsBeforeClosing). Only races that get clips are counted: a
+    // recording with no clips is rescued by the sweep, so nothing is lost.
+    private static int _racesBeingFinished;
+    private static int _racesWithVideos;
+
+    /// <summary>How many races' clips are still being made or sent, and how many of those have highlight videos to make too.</summary>
+    internal static (int Races, int WithVideos) AfterRaceWork =>
+        (Volatile.Read(ref _racesBeingFinished), Volatile.Read(ref _racesWithVideos));
+
+    /// <summary>
+    /// Counts a race whose clips (and videos, when <paramref name="videos"/>)
+    /// are about to be made - see <see cref="AfterRaceWork"/>. The answer is
+    /// called when that work is over, however it ended; a second call does
+    /// nothing.
+    /// </summary>
+    internal static Action NoteAfterRaceWork(bool videos)
+    {
+        Interlocked.Increment(ref _racesBeingFinished);
+
+        if (videos)
+        {
+            Interlocked.Increment(ref _racesWithVideos);
+        }
+
+        var over = 0;
+
+        return () =>
+        {
+            if (Interlocked.Exchange(ref over, 1) != 0)
+            {
+                return;
+            }
+
+            Interlocked.Decrement(ref _racesBeingFinished);
+
+            if (videos)
+            {
+                Interlocked.Decrement(ref _racesWithVideos);
+            }
+        };
+    }
+
     /// <summary>
     /// How many converted buffers may wait for the writer.
     ///
@@ -1360,7 +1410,15 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             return null;
         }
 
-        var wav = RaceHighlights.UnusedPath(folder, name + " video", ".wav");
+        var wav = RaceHighlights.UnusedPath(folder, name + VideoWavMarker, ".wav");
+
+        // WHY (13 Nov 2026, bug hunt 17): both working files are held in
+        // Publishing while this video is made, so the sweep that now removes
+        // ones left by a close (see IsVideoLeftover) never takes one that is
+        // only waiting its turn behind another race's videos.
+        var wavHeld = Path.GetFullPath(wav);
+        Publishing[wavHeld] = 0;
+        string? partHeld = null;
 
         try
         {
@@ -1389,6 +1447,10 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
 
             var mp4 = RaceHighlights.UnusedPath(folder, name, ".mp4");
 
+            // Written under its ".part.mp4" name - see HighlightVideo.PartPathFor.
+            partHeld = Path.GetFullPath(HighlightVideo.PartPathFor(mp4));
+            Publishing[partHeld] = 0;
+
             return HighlightVideo.Make(
                 wav,
                 mp4,
@@ -1409,6 +1471,12 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         finally
         {
             TryDelete(wav, log);
+            Publishing.TryRemove(wavHeld, out _);
+
+            if (partHeld is not null)
+            {
+                Publishing.TryRemove(partHeld, out _);
+            }
         }
     }
 
@@ -1772,11 +1840,79 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
 
                 TryDelete(bed, log);
             }
+
+            // WHY (13 Nov 2026, bug hunt 17): a highlight video's two working
+            // files, left in a Highlights folder for good when the app was
+            // closed (or Windows shut down) part way through one - its own
+            // cut of the recording, and the video as far as it got, which
+            // does not play. Neither is ever picked up again, so both are
+            // only deleted. Same checks as above; which files count is
+            // IsVideoLeftover's.
+            foreach (var pattern in new[] { "*" + VideoWavMarker + ".wav", "*" + HighlightVideo.PartEnding })
+            {
+                foreach (var stray in Directory.EnumerateFiles(root, pattern, SearchOption.AllDirectories))
+                {
+                    if (!IsVideoLeftover(stray)
+                        || InUse(stray)
+                        || DateTime.UtcNow - File.GetLastWriteTimeUtc(stray) < TimeSpan.FromMinutes(2))
+                    {
+                        continue;
+                    }
+
+                    TryDelete(stray, log);
+
+                    if (!File.Exists(stray) && stray.EndsWith(HighlightVideo.PartEnding, StringComparison.OrdinalIgnoreCase))
+                    {
+                        log($"{AppTime.LogStampNow()}  [video] Removed a highlight video that was never finished, "
+                            + $"left by an earlier close: {stray}");
+                    }
+                }
+            }
         }
         catch (Exception ex)
         {
             log($"{AppTime.LogStampNow()}  [audio] Could not tidy up earlier recordings ({ex.Message}).");
         }
+    }
+
+    /// <summary>
+    /// True for a highlight video's working file by its name and place alone
+    /// (13 Nov 2026, bug hunt 17): in a "Highlights" folder, and either a
+    /// part-written video (HighlightVideo.PartEnding) or a video's cut of
+    /// the recording, "&lt;clip&gt; video.wav".
+    ///
+    /// The wav only counts with that driver's own clip beside it. A clip the
+    /// encoder refused is KEPT as a plain wav under the driver's name, and a
+    /// driver called "... Video" must not have theirs taken for a working
+    /// file; a working file left without its clip stays, which is only untidy.
+    /// </summary>
+    internal static bool IsVideoLeftover(string path)
+    {
+        var folder = Path.GetDirectoryName(path);
+
+        if (folder is null
+            || !string.Equals(Path.GetFileName(folder), DriversOwnClip.FolderName, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var name = Path.GetFileName(path);
+
+        if (name.EndsWith(HighlightVideo.PartEnding, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var ending = VideoWavMarker + ".wav";
+
+        if (!name.EndsWith(ending, StringComparison.OrdinalIgnoreCase) || name.Length == ending.Length)
+        {
+            return false;
+        }
+
+        var clip = Path.Combine(folder, name[..^ending.Length]);
+
+        return File.Exists(clip + ".mp3") || File.Exists(clip + ".wav");
     }
 
     /// <summary>

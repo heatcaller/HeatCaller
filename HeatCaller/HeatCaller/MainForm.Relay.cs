@@ -1053,7 +1053,7 @@ public partial class MainForm
         {
             _relayPublisher.PublishSnapshot(
                 RelayChannel.State,
-                _webServer.BuildStateJson(_settings.RelayAbbreviateNames, forRelay: true));
+                RelayStateJson(_settings.RelayAbbreviateNames));
         }
         catch (Exception ex)
         {

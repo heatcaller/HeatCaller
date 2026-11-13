@@ -87,8 +87,15 @@ public sealed partial class WebServerService
             return;
         }
 
-        WriteJson(context, BuildVoteBallotJson(vote, ClientKey(context)));
+        WriteJson(context, BuildVoteBallotJson(vote, ClientKey(context), context.Request.Headers[VoterTokenHeader]));
     }
+
+    /// <summary>
+    /// The header the voting page sends its browser's own random token in -
+    /// the second of the two keys a voter is known by. See HandleRoomVote
+    /// and RoomVote.VoterFor.
+    /// </summary>
+    internal const string VoterTokenHeader = "X-HeatCaller-Voter";
 
     /// <summary>
     /// The ballot as one phone sees it.
@@ -109,10 +116,11 @@ public sealed partial class WebServerService
     /// </summary>
     /// <param name="vote">Tonight's vote.</param>
     /// <param name="voter">This phone, as ClientKey names it.</param>
-    internal string BuildVoteBallotJson(RoomVote vote, string voter)
+    /// <param name="voterToken">Its browser's token, if the page sent one, so a phone whose address has changed still sees its pick.</param>
+    internal string BuildVoteBallotJson(RoomVote vote, string voter, string? voterToken = null)
     {
         var key = _rosterKey;
-        var picked = vote.PickOf(voter);
+        var picked = vote.PickOf(voter, voterToken);
 
         return JsonSerializer.Serialize(new
         {
@@ -202,6 +210,17 @@ public sealed partial class WebServerService
         // rate limit uses - no name, no sign-in, nothing stored about
         // whoever it is beyond the fact that they have voted once.
         //
+        // KNOWN BY TWO KEYS (13 Nov 2026, bug hunt 17, #159): its address,
+        // and a random token the page keeps in its browser and sends in a
+        // header. A vote from an address that has voted, or with a token
+        // that has voted, is the same voter changing their mind - so a
+        // phone whose address changes mid-vote is not a second person. The
+        // token is optional (an older page sends none, and is judged by
+        // address as before), is only ever used for this, and the rate
+        // limits above stay on the address. RoomVote checks its shape and
+        // ignores one it does not like. Changing both still makes a new
+        // voter; nothing short of a sign-in would stop that.
+        //
         // The page sends the ballot's opaque id; Cast wants the option's
         // own. One that matches nobody is turned away here and never handed
         // to Cast as it came: the option ids are transponder numbers, so
@@ -224,7 +243,7 @@ public sealed partial class WebServerService
             return;
         }
 
-        if (vote.Cast(device, option) is { } why)
+        if (vote.Cast(device, option, voterToken: context.Request.Headers[VoterTokenHeader]) is { } why)
         {
             context.Response.StatusCode = 400;
             WriteJson(context, JsonSerializer.Serialize(new { ok = false, error = why }));
@@ -282,6 +301,31 @@ public sealed partial class WebServerService
         var open = true;
         var shown = null;
 
+        // A random id this browser makes once and keeps, sent with the
+        // ballot and the vote so the laptop knows this phone again if its
+        // Wi-Fi address changes. It says nothing about who anybody is. Where
+        // storage is blocked it lasts for this visit only.
+        var voterId = '';
+        function voter() {
+          if (voterId) { return voterId; }
+          try { voterId = localStorage.getItem('hc-voter') || ''; } catch (e) { voterId = ''; }
+          if (!/^[A-Za-z0-9_-]{16,40}$/.test(voterId)) {
+            var made = '';
+            try {
+              var bytes = new Uint8Array(16);
+              crypto.getRandomValues(bytes);
+              for (var i = 0; i < bytes.length; i++) { made += ('0' + bytes[i].toString(16)).slice(-2); }
+            } catch (e) {
+              made = '';
+              while (made.length < 32) { made += Math.random().toString(36).slice(2); }
+              made = made.slice(0, 32);
+            }
+            voterId = made;
+            try { localStorage.setItem('hc-voter', voterId); } catch (e) { /* this visit only */ }
+          }
+          return voterId;
+        }
+
         function draw(d) {
           // Bug hunt 14: no vote opened yet is not a closed one, so it is
           // said as the not-ok answer in ballot() says it.
@@ -320,7 +364,7 @@ public sealed partial class WebServerService
         }
 
         function ballot() {
-          fetch('/api/vote/ballot')
+          fetch('/api/vote/ballot', { headers:{ '{{VoterTokenHeader}}':voter() } })
             .then(function(r){ return r.ok ? r.json() : null; })
             .then(function(d){
               if (d && d.ok) { draw(d); return; }
@@ -337,7 +381,7 @@ public sealed partial class WebServerService
           // The same header and method every write to this server uses, so
           // a page left open from an older version is turned away rather
           // than half-working.
-          fetch('/api/vote?d=' + encodeURIComponent(id), { method:'POST', headers:{ 'X-HeatCaller':'1' } })
+          fetch('/api/vote?d=' + encodeURIComponent(id), { method:'POST', headers:{ 'X-HeatCaller':'1', '{{VoterTokenHeader}}':voter() } })
             .then(function(r){ return r.json().catch(function(){ return { ok:false, error:'No answer from the laptop.' }; }); })
             .then(function(d){
               if (d && d.ok) {

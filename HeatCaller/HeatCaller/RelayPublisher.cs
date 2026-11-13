@@ -1709,7 +1709,46 @@ public sealed partial class RelayPublisher : IDisposable
 
     /// <param name="Reissued">Already sent once with a fresh seq after the relay said it held a newer one. See Drain.</param>
     /// <param name="Result">A session's result, for the results index once the relay has answered for it; null for anything else. See PublishResult.</param>
-    private sealed record Pending(string Channel, string? ItemId, string Json, long Seq, bool Reissued = false, ResultNote? Result = null);
+    /// <param name="QueuedTick">When it was queued, on TickSource - for a live frame, what "held" is counted from. See HeldMs.</param>
+    private sealed record Pending(string Channel, string? ItemId, string Json, long Seq, bool Reissued = false, ResultNote? Result = null, long QueuedTick = 0);
+
+    /// <summary>
+    /// The clock a waiting frame is timed on: Environment.TickCount64, unless
+    /// a test has put its own here. Never the wall clock, which Windows can
+    /// step - see _nextAttemptTick.
+    /// </summary>
+    internal Func<long> TickSource { get; set; } = static () => Environment.TickCount64;
+
+    /// <summary>
+    /// How long a frame queued at <paramref name="queuedTick"/> has been held
+    /// by <paramref name="nowTick"/>, in milliseconds - never negative.
+    ///
+    /// WHY (13 Nov 2026, bug hunt 17, #173): the relay notes when each car's
+    /// newest lap reached it, and a phone reading lap times out drops a lap
+    /// more than a few seconds old by that. But a frame can wait here - a
+    /// backoff, a request that timed out, a big upload ahead of it - and
+    /// stamped on arrival its laps looked new, so they were said late. The
+    /// live state now says on each row how old the lap was when the frame
+    /// was built (RelayLapAge), and its publish says how long the frame then
+    /// waited ("held"), worked out at each send - so a frame sent again says
+    /// more than it did the first time. The relay takes both off the arrival.
+    ///
+    /// The time the request then spends on the network is not counted and
+    /// cannot be: that would need this laptop's clock and the relay's to
+    /// agree to the second, and nothing makes them.
+    /// </summary>
+    internal static long HeldMs(long queuedTick, long nowTick) => Math.Max(0, nowTick - queuedTick);
+
+    /// <summary>
+    /// Where a document is published. "held" goes on the live state only,
+    /// and as a query the relay reads beside seq - a relay from before it
+    /// reads seq alone and takes the frame as it always did.
+    /// </summary>
+    internal static string PublishPath(string root, string club, string channel, string? itemId, long seq, long? heldMs) =>
+        itemId is null
+            ? $"{root}/api/v1/c/{club}/publish/{channel}?seq={seq}"
+              + (heldMs is { } held ? $"&held={held.ToString(System.Globalization.CultureInfo.InvariantCulture)}" : string.Empty)
+            : $"{root}/api/v1/c/{club}/publish/{channel}/{itemId}?seq={seq}";
 
     /// <param name="result">For a session's result, what the worker notes for the results index once the relay answers. See Pending.</param>
     /// <returns>Whether it was queued - false when it was dropped, which PublishResult has to know. See NoteResultsWindow.</returns>
@@ -1736,7 +1775,7 @@ public sealed partial class RelayPublisher : IDisposable
 
             lock (_gate)
             {
-                var item = new Pending(channel, itemId, json, NextSeq(), Result: result);
+                var item = new Pending(channel, itemId, json, NextSeq(), Result: result, QueuedTick: TickSource());
 
                 if (itemId is null)
                 {
@@ -3494,9 +3533,14 @@ public sealed partial class RelayPublisher : IDisposable
             return SendOutcome.Retry;
         }
 
-        var path = item.ItemId is null
-            ? $"{root}/api/v1/c/{club}/publish/{item.Channel}?seq={item.Seq}"
-            : $"{root}/api/v1/c/{club}/publish/{item.Channel}/{item.ItemId}?seq={item.Seq}";
+        // How long the live frame has waited, as of THIS attempt - see HeldMs.
+        var path = PublishPath(
+            root,
+            club,
+            item.Channel,
+            item.ItemId,
+            item.Seq,
+            item.ItemId is null && item.Channel == NameOf(RelayChannel.State) ? HeldMs(item.QueuedTick, TickSource()) : null);
 
         try
         {

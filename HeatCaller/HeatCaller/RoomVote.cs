@@ -86,7 +86,7 @@ internal sealed record RoomsVerdict(RoomCall Call, string? WinnerName, string Ra
 /// vote from the same phone REPLACES the first. Somebody who picked the
 /// wrong name on a phone screen gets to fix it, and nobody gets two.
 /// Counting arrivals instead would have made the tally a measure of who
-/// pressed hardest.
+/// pressed hardest. Who "the same phone" is: see <see cref="VoterFor"/>.
 ///
 /// WHY IT SAYS NOTHING ON A THIN VOTE
 ///
@@ -155,6 +155,21 @@ internal sealed class RoomVote
 
         /// <summary>Voter id to the option they picked. See the note on this class for why it is held this way round.</summary>
         public Dictionary<string, string> Votes { get; set; } = new();
+
+        /// <summary>
+        /// A browser's own token to the voter in <see cref="Votes"/> it
+        /// voted as - see <see cref="VoterFor"/>. Lives and dies with the
+        /// poll, as the votes do, and never holds more than
+        /// <see cref="MostVoters"/>.
+        /// </summary>
+        public Dictionary<string, string> Tokens { get; set; } = new();
+
+        /// <summary>
+        /// An address a known token later voted from, to the voter in
+        /// <see cref="Votes"/> it belongs to - see <see cref="VoterFor"/>.
+        /// Bounded and cleared as <see cref="Tokens"/> is.
+        /// </summary>
+        public Dictionary<string, string> Addresses { get; set; } = new();
 
         public DateTime OpenedUtc { get; set; }
         public DateTime? ClosedUtc { get; set; }
@@ -235,6 +250,21 @@ internal sealed class RoomVote
                         poll.Options ??= new List<VoteOption>();
                         poll.Options.RemoveAll(o => o is null || o.Id is null || o.Name is null);
                         poll.Votes ??= new Dictionary<string, string>();
+
+                        // (13 Nov 2026, bug hunt 17, #159) Absent from a file
+                        // written before these existed, and a null value in
+                        // one would throw in VoterFor's lookup.
+                        poll.Tokens ??= new Dictionary<string, string>();
+                        poll.Addresses ??= new Dictionary<string, string>();
+
+                        foreach (var also in new[] { poll.Tokens, poll.Addresses })
+                        {
+                            foreach (var key in also.Where(one => one.Value is null).Select(one => one.Key).ToList())
+                            {
+                                also.Remove(key);
+                            }
+                        }
+
                         poll.Id ??= string.Empty;
                         poll.RaceKey ??= string.Empty;
                         poll.RoundName ??= string.Empty;
@@ -661,12 +691,24 @@ internal sealed class RoomVote
     /// vote is judged by whether the poll was open when it was cast: at or
     /// after it opened, before it closed, and inside LongestOpen.
     /// </param>
-    internal string? Cast(string? voterId, string? optionId, string? expectedPollId = null, DateTime? castAtUtc = null)
+    /// <param name="voterToken">
+    /// The random token the voting page keeps in its browser, or null when
+    /// it sent none (an older page, the relay's collector). A second key to
+    /// the same voter - see <see cref="VoterFor"/>. One of the wrong shape
+    /// is treated as none.
+    /// </param>
+    internal string? Cast(
+        string? voterId,
+        string? optionId,
+        string? expectedPollId = null,
+        DateTime? castAtUtc = null,
+        string? voterToken = null)
     {
         lock (_gate)
         {
             var voter = Clean(voterId, MostChars);
             var pick = Clean(optionId, MostChars);
+            var token = VoterToken(voterToken);
 
             if (voter.Length == 0 || pick.Length == 0)
             {
@@ -700,17 +742,107 @@ internal sealed class RoomVote
             // THE CEILING ONLY BITES ON A NEW VOTER. Somebody changing their
             // mind must never be turned away for a limit about how many people
             // have voted.
-            if (!poll.Votes.ContainsKey(voter) && poll.Votes.Count >= MostVoters)
+            //
+            // WHO THIS IS comes first (bug hunt 17, #159): a known address or
+            // a known token is a voter already in it, changing their mind.
+            var held = VoterFor(poll, voter, token);
+
+            if (!poll.Votes.ContainsKey(held) && poll.Votes.Count >= MostVoters)
             {
                 return "That is as many votes as this one can take.";
             }
 
-            poll.Votes[voter] = pick;
+            poll.Votes[held] = pick;
+
+            // Both keys now lead to this voter. Never re-pointed once set,
+            // and never past MostVoters each: a full table only means a
+            // later phone is known by its address alone, as it was before
+            // there were tokens.
+            if (token is not null && !poll.Tokens.ContainsKey(token) && poll.Tokens.Count < MostVoters)
+            {
+                poll.Tokens[token] = held;
+            }
+
+            if (!string.Equals(voter, held, StringComparison.Ordinal)
+                && !poll.Addresses.ContainsKey(voter)
+                && poll.Addresses.Count < MostVoters)
+            {
+                poll.Addresses[voter] = held;
+            }
 
             Save();
 
             return null;
         }
+    }
+
+    /// <summary>The fewest characters a voter token may be.</summary>
+    internal const int TokenLeastChars = 16;
+
+    /// <summary>The most characters a voter token may be.</summary>
+    internal const int TokenMostChars = 40;
+
+    /// <summary>
+    /// A voter token as it is safe to keep, or null when there is none or
+    /// it is not the shape the voting page makes: 16 to 40 letters, digits,
+    /// "-" or "_". It comes from a stranger's phone and goes into a file,
+    /// so anything else is dropped rather than tidied.
+    /// </summary>
+    internal static string? VoterToken(string? token)
+    {
+        if (token is null || token.Length < TokenLeastChars || token.Length > TokenMostChars)
+        {
+            return null;
+        }
+
+        foreach (var c in token)
+        {
+            if (!(c is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' or '-' or '_'))
+            {
+                return null;
+            }
+        }
+
+        return token;
+    }
+
+    /// <summary>
+    /// The voter a vote belongs to: the name its pick is held under in
+    /// <see cref="Poll.Votes"/>, or <paramref name="voter"/> itself when
+    /// this is somebody new.
+    ///
+    /// TWO KEYS, EITHER ONE IS ENOUGH (13 Nov 2026, bug hunt 17, #159). A
+    /// voter used to be the phone's address and nothing else, so a phone
+    /// whose address changed mid-vote (a Wi-Fi reconnect, a privacy address
+    /// rolling over) was counted as a second person - and could be made to,
+    /// on purpose. The voting page now also sends a random token it keeps
+    /// in its own browser. An address that has voted, or a token that has
+    /// voted, is the same voter: so a new address alone does not get a
+    /// second vote, and neither does a private window on the same address.
+    ///
+    /// The address is asked first, so a vote with no token is judged by
+    /// address alone, exactly as before. A phone that changes BOTH is still
+    /// a new voter - only a sign-in could stop that, and this asks nobody
+    /// who they are.
+    /// </summary>
+    private static string VoterFor(Poll poll, string voter, string? token)
+    {
+        if (poll.Votes.ContainsKey(voter))
+        {
+            return voter;
+        }
+
+        if (poll.Addresses.TryGetValue(voter, out var movedFrom) && poll.Votes.ContainsKey(movedFrom))
+        {
+            return movedFrom;
+        }
+
+        if (token is not null && poll.Tokens.TryGetValue(token, out var votedAs) && poll.Votes.ContainsKey(votedAs))
+        {
+            return votedAs;
+        }
+
+        return voter;
     }
 
     /// <summary>
@@ -721,7 +853,9 @@ internal sealed class RoomVote
     /// being read). Without this, every poll would rewrite the file with
     /// the votes it already had.
     /// </summary>
-    internal string? PickOf(string? voterId)
+    /// <param name="voterId">The voter, as <see cref="Cast"/> was given them.</param>
+    /// <param name="voterToken">Their browser's token, if it sent one - so a phone on a new address is still shown its pick.</param>
+    internal string? PickOf(string? voterId, string? voterToken = null)
     {
         lock (_gate)
         {
@@ -732,7 +866,7 @@ internal sealed class RoomVote
                 return null;
             }
 
-            return poll.Votes.TryGetValue(voter, out var picked) ? picked : null;
+            return poll.Votes.TryGetValue(VoterFor(poll, voter, VoterToken(voterToken)), out var picked) ? picked : null;
         }
     }
 
