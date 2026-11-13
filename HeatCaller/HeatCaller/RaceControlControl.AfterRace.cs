@@ -1233,6 +1233,22 @@ public sealed partial class RaceControlControl
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Could not read the race's drama: {ex.Message}");
         }
 
+        // WHY (bug hunt 17): the winner's name for the throw to pit lane,
+        // read HERE for the same reason - it comes off the profiles. The
+        // throw and the hand-over's brief read it inside the sequence below,
+        // on the thread pool, where a profile added at that moment could
+        // change the store under them.
+        var flagWinner = string.Empty;
+
+        try
+        {
+            flagWinner = FlagResultRows(record).Podium is { Count: > 0 } flagPodium ? WinnerName(flagPodium[0]) : string.Empty;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Could not read the winner's name for the throw to pit lane: {ex.Message}");
+        }
+
         _ = Task.Run(async () =>
         {
             // The writing and rendering of the recap, the interview and the
@@ -1374,6 +1390,11 @@ public sealed partial class RaceControlControl
             Task<string?>? recapWriting = null;
             var recapWasQueued = false;
 
+            // Bug hunt 17: the sequence failed part-way (not stopped, not
+            // called off) - out here so the finally can still call the badges
+            // kept back for the achievements segment.
+            var sequenceFailed = false;
+
             try
             {
                 var sequenceStarted = DateTime.UtcNow;
@@ -1453,7 +1474,7 @@ public sealed partial class RaceControlControl
                 // asks the questions himself and there is nobody to hand back.
                 var flagHandOff = interviewTask is not null && CoHostInterviews
                     ? StartHandOff(
-                        FlagHandOffBrief(record, resultRead), null, null, _settings.CoHostVoice, null, followOnWork.Token)
+                        FlagHandOffBrief(flagWinner, resultRead), null, null, _settings.CoHostVoice, null, followOnWork.Token)
                     : null;
 
                 // THE THROW INTO THE STOP SET, WRITTEN (19 Oct 2026): the
@@ -1558,7 +1579,7 @@ public sealed partial class RaceControlControl
                 // The race announcer's throw to pit lane, and the co-host's
                 // hand back - rendered now, so they are ready at the flag.
                 var flagThrowTask = interviewTask is not null
-                    ? RenderFlagThrowAsync(record, followOnWork.Token)
+                    ? RenderFlagThrowAsync(flagWinner, followOnWork.Token)
                     : null;
 
                 var flagHandBackTask = interviewTask is not null && CoHostInterviews
@@ -2022,7 +2043,16 @@ public sealed partial class RaceControlControl
                 // Never carried into the next race's break: a break that did
                 // not open leaves the bumper playing out on its own, and the
                 // handle is no use to anything after this.
-                _intoTheStopSet = null;
+                // WHY (bug hunt 17): unless the break did not open because the
+                // next race was called (or Skip, Hold) - then it is faded, as
+                // the no-break branch above fades it, not left over the
+                // staging call.
+                var neverHeardOut = Interlocked.Exchange(ref _intoTheStopSet, null);
+
+                if (nextRace.IsCancellationRequested)
+                {
+                    neverHeardOut?.CrossfadeOut();
+                }
 
                 // ... -> STOP SET -> JINGLE/SWEEPER -> RECAP OPEN. Started by
                 // MarkTheBreak as the break ended, and heard out here so the
@@ -2367,7 +2397,7 @@ public sealed partial class RaceControlControl
                     await EndShowAsync(crossfade: false);
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 // Released here as well: a synthesis failure mid-recap would
                 // otherwise leave the bed ducked for the rest of the night.
@@ -2375,6 +2405,24 @@ public sealed partial class RaceControlControl
 
                 // Colour commentary is decoration - never let it surface as
                 // an error on a page that just finished a race.
+                //
+                // WHY (bug hunt 17): but said in the console, and noted for
+                // the finally's held badges. Silence was the only symptom: the
+                // teaser promised a recap, nothing came and nothing said why.
+                // Not a wait called off, which has its own lines.
+                if (ex is not OperationCanceledException)
+                {
+                    sequenceFailed = true;
+
+                    try
+                    {
+                        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] The recap show stopped part-way - {ex.Message}");
+                    }
+                    catch
+                    {
+                        // A failing handler must not stop the clean-up below.
+                    }
+                }
             }
             finally
             {
@@ -2457,6 +2505,19 @@ public sealed partial class RaceControlControl
 
                         StatusMessage?.Invoke(
                             $"{AppTime.LogStampNow()}  [achievements] The recap was stopped ({recapShow.StoppedBy}) before its achievements segment, so they are called one at a time.");
+                    }
+                    else if (honours is { Started: false, Unlocks: { Count: > 0 } unheard } && sequenceFailed && !recapShow.NextRaceCalled)
+                    {
+                        // WHY (bug hunt 17): the same for a sequence that
+                        // failed part-way - nothing had stopped it, so the
+                        // badges kept for the segment were never said at all.
+                        foreach (var unlock in unheard.Take(MaxSpokenAchievements))
+                        {
+                            _announcer.NotifyAchievement(unlock.Transponder, unlock.Badge.Name);
+                        }
+
+                        StatusMessage?.Invoke(
+                            $"{AppTime.LogStampNow()}  [achievements] The recap show stopped before its achievements segment, so they are called one at a time.");
                     }
                 }
                 catch
@@ -3675,7 +3736,7 @@ public sealed partial class RaceControlControl
     /// down to pit lane, where Jess is with the Technical Lead from Sam's
     /// team. Jess?" In his own voice. See PitLaneThrow.
     /// </summary>
-    private async Task<SpokenLine?> RenderFlagThrowAsync(SessionRecord record, CancellationToken cancel)
+    private async Task<SpokenLine?> RenderFlagThrowAsync(string winner, CancellationToken cancel)
     {
         var line = PitLaneThrow(
             CoHostInterviews ? (_settings.CommentaryCoHostName ?? string.Empty).Trim() : string.Empty,
@@ -3683,7 +3744,8 @@ public sealed partial class RaceControlControl
             technicalLead: true,
             // Bug hunt 14 (7 Nov 2026), R2: the same winner as the result
             // read and the AI's throw (FlagHandOffBrief) - never a DQ.
-            FlagResultRows(record).Podium is { Count: > 0 } podium ? WinnerName(podium[0]) : string.Empty);
+            // Bug hunt 17: read on the UI thread and handed in - see flagWinner.
+            winner);
 
         if (cancel.IsCancellationRequested)
         {
@@ -3923,14 +3985,14 @@ public sealed partial class RaceControlControl
     /// What the AI is told about the throw down to pit lane at the flag, and
     /// the co-host's hand back. The throw must still name the guest's role
     /// and whose team - the interview is written to pick up from exactly
-    /// that (CommentaryService.ThrownDownTo). Read on the UI thread.
+    /// that (CommentaryService.ThrownDownTo). The winner is read on the UI
+    /// thread and handed in (bug hunt 17) - see flagWinner.
     /// </summary>
-    private HandOff.Brief FlagHandOffBrief(SessionRecord record, string? resultRead)
+    private HandOff.Brief FlagHandOffBrief(string winner, string? resultRead)
     {
         var coHost = (_settings.CommentaryCoHostName ?? string.Empty).Trim();
         // Bug hunt 14 (7 Nov 2026), R2: the winner the result read names -
         // a DQ'd or no-lap car placed first is nobody's win to talk about.
-        var winner = FlagResultRows(record).Podium is { Count: > 0 } podium ? WinnerName(podium[0]) : string.Empty;
         var team = winner.Length > 0 ? $"{winner}'s team" : "the winning team";
 
         return new HandOff.Brief(
@@ -5892,8 +5954,19 @@ public sealed partial class RaceControlControl
                 // the room hearing the whole ring-out and then a beat of
                 // nothing before the video.
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Into the break - the bumper, off the teaser, to its out.");
-                await started.AtPost.WaitAsync(nextRace);
-                started.CrossfadeOut();
+
+                // WHY (bug hunt 17): faded when the wait is called off too -
+                // the next race, Skip or Hold. Nothing else holds this handle,
+                // so the bumper played on whole over the staging call.
+                try
+                {
+                    await started.AtPost.WaitAsync(nextRace);
+                }
+                finally
+                {
+                    started.CrossfadeOut();
+                }
+
                 return;
             }
 
@@ -8326,6 +8399,26 @@ public sealed partial class RaceControlControl
         var wasRerun = _currentRaceIsRerun;
         _currentRaceIsRerun = false;
 
+        // WHY (bug hunt 17): the Quick Race's stamp is let go on every way out
+        // of the filing, not only from FilingFinished - a race with nothing
+        // to save (no laps, ghosts only) never reaches that, and the stamp
+        // was left for the next freeform race to be saved under.
+        try
+        {
+            FileCompletedRace(wasQuickRace, wasRerun);
+        }
+        finally
+        {
+            if (wasQuickRace && QuickRaceStampToRelease(_txtSessionLabel.Text) is not null)
+            {
+                _txtSessionLabel.Text = string.Empty;
+            }
+        }
+    }
+
+    /// <summary>SaveCompletedSessionToHistory's hand-over to the filing service.</summary>
+    private void FileCompletedRace(bool wasQuickRace, bool wasRerun)
+    {
         _filing.FileCompletedRace(new RaceFilingInput
         {
             WasQuickRace = wasQuickRace,

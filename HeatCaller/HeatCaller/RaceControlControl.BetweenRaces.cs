@@ -123,9 +123,6 @@ public sealed partial class RaceControlControl
         // The next race's real start, for the night plan's times (12 Nov 2026).
         NoteNextStart(now, facts);
 
-        // A welcome for drivers new to racing, once a night (setup plan D12).
-        WelcomeNewDrivers(busy);
-
         if (_race.State != RaceState.Finished)
         {
             // It started the race.
@@ -135,6 +132,17 @@ public sealed partial class RaceControlControl
         if (_announcer.Muted || busy)
         {
             return;
+        }
+
+        // A welcome for drivers new to racing, once a night (setup plan D12).
+        // WHY (bug hunt 17): down here, behind the returns above and Hold
+        // Talk. It ran before them, so a muted announcer marked the newcomers
+        // welcomed without a word being heard, Hold Talk did not hold it, and
+        // on the tick Auto start started the race it welcomed the race
+        // after's newcomers a race early.
+        if (!held)
+        {
+            WelcomeNewDrivers(busy);
         }
 
         if (Gap.MarkDue(rules, now, facts, held) is { } mark)
