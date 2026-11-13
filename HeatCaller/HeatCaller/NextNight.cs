@@ -215,28 +215,66 @@ public sealed class PreEntryStore
         var path = Path.Combine(AppPaths.Root, "pre-entries.json");
         var loaded = new Dictionary<string, Dictionary<string, PreEntry>>(StringComparer.Ordinal);
 
+        var unreadable = false;
+
         try
         {
-            if (File.Exists(path)
-                && JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, PreEntry>>>(File.ReadAllText(path)) is { } read)
+            if (File.Exists(path))
             {
-                foreach (var (night, entries) in read)
+                if (JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, PreEntry>>>(SafeFile.ReadAllTextWithRetry(path)) is { } read)
                 {
-                    if (entries is not null)
+                    foreach (var (night, entries) in read)
                     {
-                        loaded[night] = new Dictionary<string, PreEntry>(entries.Where(e => e.Value is not null), StringComparer.OrdinalIgnoreCase);
+                        if (entries is null)
+                        {
+                            continue;
+                        }
+
+                        // One at a time, the last one winning: two keys that
+                        // differ only by case would throw out of the
+                        // dictionary's own constructor and lose the whole file.
+                        var coming = new Dictionary<string, PreEntry>(StringComparer.OrdinalIgnoreCase);
+
+                        foreach (var (transponder, entry) in entries)
+                        {
+                            if (entry is not null)
+                            {
+                                coming[transponder] = entry;
+                            }
+                        }
+
+                        loaded[night] = coming;
                     }
+                }
+                else
+                {
+                    // Present, and not the shape this store writes (the
+                    // literal "null", say). Not a new install either.
+                    unreadable = true;
                 }
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // An unreadable file means nobody is expected, which the desk
             // will notice at once; it never stops the app.
+            //
+            // WHY (13 Nov 2026, bug hunt 17): and it is never saved over.
+            // The first phone "I'm coming" used to replace everyone who had
+            // already said so (see LoadedUnreadable).
+            loaded.Clear();
+            unreadable = SafeFile.HoldWritesAfterUnreadable(path, ex);
         }
 
-        return new PreEntryStore(loaded, path);
+        return new PreEntryStore(loaded, path) { LoadedUnreadable = unreadable };
     }
+
+    /// <summary>
+    /// True when the file was there at startup but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. Answers this session are then
+    /// kept in memory only, and nothing is saved over the club's real file.
+    /// </summary>
+    public bool LoadedUnreadable { get; private init; }
 
     /// <summary>Raised after any change, for Who's Racing.</summary>
     public event Action? Changed;
@@ -275,8 +313,9 @@ public sealed class PreEntryStore
 
     private void Save()
     {
-        if (_path is null)
+        if (_path is null || LoadedUnreadable)
         {
+            // See LoadedUnreadable: the club's real file stays as it is.
             return;
         }
 

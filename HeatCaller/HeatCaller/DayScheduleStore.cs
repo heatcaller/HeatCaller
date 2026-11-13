@@ -881,8 +881,17 @@ public sealed class DayScheduleStore
     /// done. Undoing one also clears its start stamp, because MarkStarted
     /// never overwrites one and the re-run would otherwise be measured from
     /// the rehearsal's start time.
+    ///
+    /// WHY isKnown (13 Nov 2026, bug hunt 17): a round the programme cannot
+    /// find is not the same as a round that is no longer recorded. With
+    /// race-rounds.json locked at launch the programme loads empty, every
+    /// round read as "not recorded", and tonight's whole sheet was unticked
+    /// and its start times wiped and saved. A tick is only taken back when
+    /// the round is there to say it is unrun.
     /// </summary>
-    public int AutoCompleteRecorded(Func<string, bool> isRecorded)
+    /// <param name="isRecorded">Whether a round has a race saved against it.</param>
+    /// <param name="isKnown">Whether the programme has the round at all; left out, every round is taken as known.</param>
+    public int AutoCompleteRecorded(Func<string, bool> isRecorded, Func<string, bool>? isKnown = null)
     {
         var changed = 0;
 
@@ -909,7 +918,8 @@ public sealed class DayScheduleStore
                     changed++;
                 }
             }
-            else if (_autoTicked.Contains(entry.Id) && !isRecorded(entry.RoundId))
+            else if (_autoTicked.Contains(entry.Id) && !isRecorded(entry.RoundId)
+                     && (isKnown is null || isKnown(entry.RoundId)))
             {
                 entry.IsComplete = false;
 

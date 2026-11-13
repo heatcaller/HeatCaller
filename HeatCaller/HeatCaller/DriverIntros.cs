@@ -37,7 +37,9 @@ public sealed record RecapCar(
     int HeatsCounted = 1,
     // WHY (11 Nov 2026, Phase 5.1): a points qualifier is decided on
     // points, and laps or a time read out instead would name the wrong
-    // reason for pole. Zero under the other rules.
+    // reason for pole. Zero under the other rules - and a real score
+    // under this one: the top qualifier scores 0 on the IFMAR and EFRA
+    // scales, so 0 is never read as "no points".
     int Points = 0);
 
 /// <summary>
@@ -381,8 +383,12 @@ internal static class DriverIntros
     {
         if (method == QualifyingMethod.RoundPoints)
         {
-            return car.Points > 0
-                ? ($" with {RaceNumbers.Words(car.Points)} {Plural.Word(car.Points, "point")}", $" with {Plural.Of(car.Points, "point")}")
+            // WHY (13 Nov 2026, bug hunt 17): 0 used to mean "no score",
+            // which the rulebook scales made the best score there is - a
+            // pole sitter who took TQ in every counted round lost their
+            // score, and second place the gap to them.
+            return car.Points >= 0
+                ?($" with {RaceNumbers.Words(car.Points)} {Plural.Word(car.Points, "point")}", $" with {Plural.Of(car.Points, "point")}")
                 : (string.Empty, string.Empty);
         }
 
@@ -468,7 +474,7 @@ internal static class DriverIntros
         // on points means a tie-breaker decided it - said as "level on points".
         if (method == QualifyingMethod.RoundPoints)
         {
-            if (ahead.Points <= 0 || behind.Points <= 0)
+            if (ahead.Points < 0 || behind.Points < 0)
             {
                 return (string.Empty, string.Empty);
             }

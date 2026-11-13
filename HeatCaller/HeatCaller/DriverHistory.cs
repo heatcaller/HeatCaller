@@ -14,7 +14,10 @@ namespace HeatCaller;
 ///
 /// A NIGHT, NOT A RACE. "Last time out" is the driver's last night on the
 /// layout, not their last heat - tonight's earlier heats are tonight. Nights
-/// are told apart by the local date the race started on.
+/// are told apart by the club night the race started on, 6am to 6am
+/// (TonightAtTheTrack.NightOf), so a meeting that runs past midnight is
+/// still one night: by the calendar date, the mains after midnight took the
+/// same evening's heats for "last time out".
 /// </remarks>
 internal static class DriverHistory
 {
@@ -63,7 +66,7 @@ internal static class DriverHistory
                 continue;
             }
 
-            var night = DateOnly.FromDateTime(record.StartedAtUtc.ToLocalTime());
+            var night = NightOf(record.StartedAtUtc.ToLocalTime());
 
             if (night >= tonight)
             {
@@ -75,6 +78,9 @@ internal static class DriverHistory
 
         return nights.OrderByDescending(n => n.Key).Select(n => (n.Key, n.Value)).ToList();
     }
+
+    /// <summary>The club night a local time belongs to, as a date - 6am to 6am, so the small hours are still the night before. What a caller passes as "tonight".</summary>
+    internal static DateOnly NightOf(DateTime local) => DateOnly.FromDateTime(TonightAtTheTrack.NightOf(local));
 
     /// <summary>Their best lap on their last night on the layout before tonight, or null for none.</summary>
     internal static long? LastTimeOut(IReadOnlyList<(DateOnly Night, long BestMs)> nights) =>

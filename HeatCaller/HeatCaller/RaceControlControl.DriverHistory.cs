@@ -62,7 +62,7 @@ public sealed partial class RaceControlControl
             return null;
         }
 
-        var tonight = DateOnly.FromDateTime(DateTime.Now);
+        var tonight = DriverHistory.NightOf(DateTime.Now);
         var key = $"{track}\n{transponder}";
 
         if (!_nightsOn.TryGetValue(key, out var nights))

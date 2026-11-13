@@ -494,7 +494,7 @@ public sealed class DayScheduleControl : UserControl
     {
         // Generated lines tick themselves off once their round is recorded
         // - the whole point of a line knowing which heat it is.
-        _schedule.AutoCompleteRecorded(id => _rounds.Get(id)?.IsRecorded == true);
+        _schedule.AutoCompleteRecorded(id => _rounds.Get(id)?.IsRecorded == true, id => _rounds.Get(id) is not null);
 
         // A move asks for a particular line back; otherwise whatever the
         // cursor was on.

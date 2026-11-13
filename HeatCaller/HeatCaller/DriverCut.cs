@@ -195,21 +195,44 @@ internal static class DriverCut
 
             var said = new System.Text.StringBuilder($"{named} raced {ran}");
 
-            if (row.Position > 0)
+            // WHY (13 Nov 2026, bug hunt 17): the saved Position was said as
+            // it stood. A disqualified or retired car still has one (the
+            // result editor numbers every row, those last), so a black flag
+            // read "finished fifth of 5" and could be their best finish of
+            // the night; and an older result with a ghost row ahead made the
+            // winner "second of 3". The place is now counted over the real
+            // cars, the same ones the field is, and a DQ or DNF is said as
+            // what it was.
+            var outcome = ResultEditor.NormaliseOutcome(row.Outcome);
+            var place = 0;
+
+            if (outcome == ResultEditor.Dq)
             {
-                said.Append($" and finished {Ordinal(row.Position)}");
+                said.Append(" and was disqualified");
+            }
+            else if (outcome == ResultEditor.Dnf)
+            {
+                said.Append(" and did not finish");
+            }
+            else if (row.Position > 0)
+            {
+                place = 1 + race.Results.Count(one =>
+                    one.Position > 0 && one.Position < row.Position
+                    && !string.IsNullOrWhiteSpace(one.Transponder) && !GhostService.IsGhost(one.Transponder));
+
+                said.Append($" and finished {Ordinal(place)}");
 
                 if (field > 1)
                 {
                     said.Append($" of {field}");
                 }
 
-                if (row.Position == 1)
+                if (place == 1)
                 {
                     wins++;
                 }
 
-                bestPlace = Math.Min(bestPlace, row.Position);
+                bestPlace = Math.Min(bestPlace, place);
             }
 
             // Only a slot that could be one in THIS race. A freeform race
@@ -225,9 +248,9 @@ internal static class DriverCut
             // that actually formed - not a slot left over from a bigger race.
             var grid = AchievementEvaluator.GridPlace(RealCars(race), row);
 
-            if (grid > 0 && row.Position > 0 && grid != row.Position)
+            if (grid > 0 && place > 0 && grid != place)
             {
-                said.Append(grid > row.Position
+                said.Append(grid > place
                     ? $", up from {Ordinal(grid)} on the grid"
                     : $", having started {Ordinal(grid)}");
             }
