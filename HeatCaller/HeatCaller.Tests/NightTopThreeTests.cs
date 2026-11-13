@@ -14,7 +14,7 @@ public sealed class NightTopThreeTests
             Row(4, "Dee Four", "4", 17), Row(2, "Bea Two", "2", 19), Row(1, "Ann One", "1", 20), Row(3, "Cal Three", "3", 18),
         };
 
-        var top = DriverNightExtras.TopOf(results, practice: false, abbreviate: false)!;
+        var top = DriverNightExtras.TopOf(new SessionRecord { Results = results }, practice: false, abbreviate: false)!;
 
         Assert.Equal(new[] { 1, 2, 3 }, top.Select(t => t.Pos));
         Assert.Equal(new[] { 20, 19, 18 }, top.Select(t => t.Laps));
@@ -26,7 +26,7 @@ public sealed class NightTopThreeTests
     {
         var results = new List<SessionResultEntry> { Row(1, "Ann One", "1", 20), Row(2, "Bea Two", "2", 19) };
 
-        Assert.Null(DriverNightExtras.TopOf(results, practice: true, abbreviate: false));
-        Assert.Null(DriverNightExtras.TopOf(results.Take(1).ToList(), practice: false, abbreviate: false));
+        Assert.Null(DriverNightExtras.TopOf(new SessionRecord { Results = results }, practice: true, abbreviate: false));
+        Assert.Null(DriverNightExtras.TopOf(new SessionRecord { Results = results.Take(1).ToList() }, practice: false, abbreviate: false));
     }
 }
