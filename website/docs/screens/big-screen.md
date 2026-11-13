@@ -381,7 +381,7 @@ Each picture is checked before it's added. A file over 50 MB, a picture over 200
 
 Images are scaled to fit the leaderboard area without stretching. Only the leaderboard area is replaced: the banner, clock, countdown and ON DECK bar stay on screen. An animated GIF shows its first frame. A missing or unreadable image is skipped, and so is a slide over the size limits, for example one added by an older version or brought in with a backup: the Big Screen stays on the leaderboard for that turn, and its preview on the **Sponsors** page stays blank. Nothing is deleted. The live results page on the Wi-Fi only shows slides that pass the same check. It goes by what each picture really is, not its file extension, so a PNG saved as `.jpg` still shows there.
 
-<!-- screenshot: Sponsors page with three slides listed and the Rotation timing card -->
+![The Sponsors page with three slides listed and the first, a Corner Hobbies picture, in the preview, the Add Image, Add Video, Remove and Move buttons under it, and the Rotation timing card below: the leaderboard shows for 10 seconds, each slide for 8, and the leaderboard is never interrupted while a race is running](../assets/images/sponsors.png)
 
 ### Rotation timing
 

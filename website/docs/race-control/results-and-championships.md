@@ -188,7 +188,7 @@ When a class uses handicaps, the results show a **Handicap pos** column, and the
 
 The **Championship** page has two tabs, **Standings** and **Calendar**. The **Standings** tab is where you build a championship (a season) and see its table. It's laid out in three columns: your championships, the scoring setup, and the standings. See [Championship → Calendar](../race-day/events-and-entries.md#championship-calendar) for the **Calendar** tab.
 
-<!-- screenshot: Championship → Standings with a season selected, points scheme, session list and standings -->
+![Championship → Standings with the Fall Series 2026 - Stock championship selected: the points scheme (25, 20, 16, 13, 11 down the places), the races counted with seven Stock A-Mains ticked and one heat left out, and the standings table of seven drivers with points, wins, podiums, races and DNFs, under "best 6 rounds count"](../assets/images/championship-standings.png)
 
 ### Create a championship
 
@@ -268,7 +268,7 @@ Either way, the sidebar **Undo** button puts the points back as they were.
 
 **Race Analytics** reads your saved history. Each tab refreshes when you open it, so it's up to date as soon as a race finishes.
 
-<!-- screenshot: Race Analytics Overview tab -->
+![Race Analytics → Overview: At a glance tiles for races run, laps counted, drivers seen and the best lap ever, with who set it and where, and the Track records table with each layout's lap record, who holds it, when it was set and how many races it has had](../assets/images/race-analytics-overview.png)
 
 ### Overview
 
