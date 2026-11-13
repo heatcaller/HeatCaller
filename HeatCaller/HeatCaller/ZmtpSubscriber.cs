@@ -41,20 +41,33 @@ internal sealed class ZmtpSubscriber : IDisposable
     /// <summary>A message longer than this from a timing decoder is not one - the connection is dropped rather than the memory spent.</summary>
     private const long MaxFrameLength = 1024 * 1024;
 
+    /// <summary>
+    /// How long a publisher that has finished its handshake may say nothing
+    /// before the link is taken for dead. OpenStint sends a status every
+    /// second, so ten seconds of silence is not a quiet track.
+    /// </summary>
+    internal const int DefaultSilenceLimitMs = 10_000;
+
     private readonly Socket _socket;
+    private readonly int _silenceLimitMs;
+    private readonly System.Diagnostics.Stopwatch _quiet = System.Diagnostics.Stopwatch.StartNew();
     private readonly List<byte> _in = new();
     private readonly byte[] _buffer = new byte[8192];
     private readonly List<byte[]> _frames = new();
     private bool _greeted;
     private bool _ready;
 
-    private ZmtpSubscriber(Socket socket) => _socket = socket;
+    private ZmtpSubscriber(Socket socket, int silenceLimitMs)
+    {
+        _socket = socket;
+        _silenceLimitMs = silenceLimitMs;
+    }
 
     /// <summary>The publisher's socket type from its READY, once the handshake is done - "PUB" from OpenStint.</summary>
     public string? PeerSocketType { get; private set; }
 
     /// <summary>Connects, and sends this side's greeting and READY. The handshake completes as messages are received.</summary>
-    public static ZmtpSubscriber Connect(string host, int port, int timeoutMs)
+    public static ZmtpSubscriber Connect(string host, int port, int timeoutMs, int silenceLimitMs = DefaultSilenceLimitMs)
     {
         var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
 
@@ -65,7 +78,7 @@ internal sealed class ZmtpSubscriber : IDisposable
                 throw new TimeoutException($"no answer from {host}:{port} in {timeoutMs / 1000} seconds - check the address, and that OpenStint is running");
             }
 
-            var subscriber = new ZmtpSubscriber(socket);
+            var subscriber = new ZmtpSubscriber(socket, silenceLimitMs);
             socket.Send(Greeting());
             socket.Send(Command("READY", Property("Socket-Type", "SUB")));
             return subscriber;
@@ -85,7 +98,8 @@ internal sealed class ZmtpSubscriber : IDisposable
     /// <summary>
     /// The next whole message, its frames' text joined by spaces - waiting at
     /// most <paramref name="timeoutMs"/>, null when none came. Throws when the
-    /// publisher closes the connection or breaks the protocol.
+    /// publisher closes the connection or breaks the protocol, or says
+    /// nothing for longer than the silence limit once the handshake is done.
     /// </summary>
     public string? Receive(int timeoutMs)
     {
@@ -102,6 +116,19 @@ internal sealed class ZmtpSubscriber : IDisposable
 
             if (left <= 0 || !_socket.Poll(left * 1000, SelectMode.SelectRead))
             {
+                // WHY (13 Nov 2026, Bug Hunt 17): a publisher that loses
+                // power, or whose network drops, never says goodbye - no
+                // close reaches this end, so the socket just stays quiet.
+                // That used to read as "no cars yet" for ever: the status
+                // stayed Connected and nothing reconnected when OpenStint
+                // came back. Its once-a-second status is the sign of life,
+                // so a long silence is thrown as a failed link and
+                // StreamDecoderClient tries again, as it does for a close.
+                if (_ready && _quiet.ElapsedMilliseconds > _silenceLimitMs)
+                {
+                    throw new IOException($"nothing from OpenStint in {_silenceLimitMs / 1000} seconds - the link has gone quiet");
+                }
+
                 return null;
             }
 
@@ -111,6 +138,8 @@ internal sealed class ZmtpSubscriber : IDisposable
             {
                 throw new IOException("the OpenStint decoder closed the connection");
             }
+
+            _quiet.Restart();
 
             _in.AddRange(_buffer.AsSpan(0, read).ToArray());
         }

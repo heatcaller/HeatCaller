@@ -67,6 +67,14 @@ internal static class WornPhrases
             {
                 var at = line.IndexOf(phrase, StringComparison.OrdinalIgnoreCase);
 
+                // Only from the start of a word. "attention" is not "tension",
+                // nor "prehistoric" "historic" - the phrase may run on into
+                // the rest of a word (see Watched) but never begin inside one.
+                while (at > 0 && char.IsLetter(line[at - 1]))
+                {
+                    at = line.IndexOf(phrase, at + 1, StringComparison.OrdinalIgnoreCase);
+                }
+
                 if (at < 0)
                 {
                     continue;
