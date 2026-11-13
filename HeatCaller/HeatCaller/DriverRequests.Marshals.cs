@@ -164,8 +164,15 @@ internal sealed partial class DriverRequestDesk
             return false;
         }
 
-        if (OfferFor(request, out refusal) is not { } offer || !MakeCover(request, offer, out var said, out _, out _))
+        if (OfferFor(request, out refusal) is not { } offer)
         {
+            return false;
+        }
+
+        if (!MakeCover(request, offer, out var said, out _, out _))
+        {
+            // Why not, or the desk's "Not swapped" box opens with nothing in it.
+            refusal = said;
             return false;
         }
 
@@ -187,6 +194,19 @@ internal sealed partial class DriverRequestDesk
         if (offer is not { Kind: DriverAsk.Swap, State: DriverAsk.Approved }
             || offer.Text("toBadge") != request.Badge
             || request.AskedUtc - offer.AskedUtc > MarshalSwaps.OffersLast)
+        {
+            said = "That ask to cover isn't open any more.";
+            return null;
+        }
+
+        // A newer ask by the same marshal for the same race replaced this one
+        // (MarshalSwaps.Offers): a yes from a page that hasn't caught up must
+        // not take the post from whoever was asked instead.
+        var round = offer.Text("round");
+
+        if (_store.All.Any(r => r.Kind == DriverAsk.Swap && r.State == DriverAsk.Approved
+                                && r.Badge == offer.Badge && r.Text("round") == round
+                                && r.Text("toBadge").Length > 0 && r.AskedUtc > offer.AskedUtc))
         {
             said = "That ask to cover isn't open any more.";
             return null;
@@ -219,7 +239,23 @@ internal sealed partial class DriverRequestDesk
         var ownerName = MarshalSwaps.ShortName(owner.DriverName);
         var coverName = MarshalSwaps.ShortName(cover.DriverName);
 
-        if (ApplyMarshalCover!(offer.Text("round"), owner.Transponder, cover.Transponder) is { } refusal)
+        var round = offer.Text("round");
+
+        // The ask was checked when it was sent, but the yes can come a good
+        // while later - and after a yes to somebody else's post in the same
+        // race - so who marshals and who is free are read again here.
+        if (DutyOf is { } dutyOf && dutyOf(round, owner.Transponder) is null)
+        {
+            said = $"The swap can't be made - {(ownerName.Length > 0 ? ownerName : "the marshal")} isn't marshalling that race any more.";
+            return false;
+        }
+
+        var refusal = CoverCandidates is { } candidates
+                      && !candidates(round, owner.Transponder).Any(c => string.Equals(c.Main, cover.Transponder, StringComparison.OrdinalIgnoreCase))
+            ? "The swap can't be made - the cover is racing in that race, marshalling it already, or not checked in tonight."
+            : ApplyMarshalCover!(round, owner.Transponder, cover.Transponder);
+
+        if (refusal is not null)
         {
             said = refusal;
             failed = MarshalSwapNotices.FailedNotice(coverName, ownerName, offer.Text("post"), offer.Text("title"), refusal);

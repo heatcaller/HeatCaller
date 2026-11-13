@@ -603,13 +603,15 @@ public sealed class DriverStats
             // more. A hand-released grid files the whole roster at the green
             // and a DQ'd car is cut to no laps, so counting rows read "P1 of
             // 6" for a heat only two cars ran.
-            var field = session.Results.Count(e => !GhostService.IsGhost(e.Transponder) && e.Laps >= 1);
+            // In a shared heat, their own class's cars only - the field the
+            // place beside it is counted in.
+            var field = FieldOf(session, row).Count(e => e.Laps >= 1);
 
             var outcome = !IsFinish(row) || place is not { } finished
                 ? "did not finish"
                 : $"P{finished} of {field}" + (row.FastLapMs > 0 ? $"  ·  best {LapText(row.FastLapMs)}s" : string.Empty);
 
-            stats._activity.Add(new ActivityLine(session.StartedAtUtc, ActivityKind.Race, $"{RaceName(session, snapshot)}  ·  {outcome}"));
+            stats._activity.Add(new ActivityLine(session.StartedAtUtc, ActivityKind.Race, $"{RaceName(session, row, snapshot)}  ·  {outcome}"));
         }
 
         stats._activity.AddRange(SetupActivity(query.DriverName, snapshot));
@@ -617,9 +619,10 @@ public sealed class DriverStats
 
         // A saved race records its round, and the round its class - the
         // same lookup EventSpine.RuleAccepts uses to put a race in a
-        // class's championship.
+        // class's championship. In a shared heat it is the class their own
+        // result was stamped with - see ClassOf.
         stats.Classes = races
-            .Select(r => !string.IsNullOrEmpty(r.Session.RoundId) && snapshot.RoundClasses.TryGetValue(r.Session.RoundId, out var cls) ? cls : null)
+            .Select(r => ClassOf(r.Session, r.Row, snapshot))
             .Where(cls => cls is not null)
             .Select(cls => cls!)
             .GroupBy(cls => cls, StringComparer.OrdinalIgnoreCase)
@@ -801,7 +804,7 @@ public sealed class DriverStats
     /// like, with the class after it when the label doesn't already say it -
     /// "Q2 Heat 1 (Stock Buggy)".
     /// </summary>
-    private static string RaceName(SessionRecord session, DriverStatsSnapshot snapshot)
+    private static string RaceName(SessionRecord session, SessionResultEntry row, DriverStatsSnapshot snapshot)
     {
         var label = System.Text.RegularExpressions.Regex.Replace(session.Label ?? string.Empty, @"\[[^\]]*\]", string.Empty).Trim();
 
@@ -810,8 +813,7 @@ public sealed class DriverStats
             label = "Race";
         }
 
-        return !string.IsNullOrEmpty(session.RoundId)
-               && snapshot.RoundClasses.TryGetValue(session.RoundId, out var cls)
+        return ClassOf(session, row, snapshot) is { } cls
                && !label.Contains(cls, StringComparison.OrdinalIgnoreCase)
             ? $"{label} ({cls})"
             : label;
@@ -943,14 +945,41 @@ public sealed class DriverStats
     /// </summary>
     private static int? PlaceAmongRealCars(SessionRecord race, SessionResultEntry row)
     {
-        var ranked = race.Results
+        var index = FieldOf(race, row).IndexOf(row);
+
+        return index < 0 ? null : index + 1;
+    }
+
+    /// <summary>
+    /// The real cars this row raced against, in finishing order. The whole
+    /// result for every ordinary race. In a shared heat (MixedHeats) only
+    /// the cars of the row's own class - the split the championship scores -
+    /// so a Mod driver fourth on the road behind three Stock cars is first of
+    /// the Mods here, as they are in the championship line on the same card.
+    /// </summary>
+    private static List<SessionResultEntry> FieldOf(SessionRecord race, SessionResultEntry row)
+    {
+        var real = race.Results
             .Where(e => !GhostService.IsGhost(e.Transponder))
             .OrderBy(e => e.Position)
             .ToList();
 
-        var index = ranked.IndexOf(row);
+        return MixedHeats.ScoringFields(real, null).FirstOrDefault(f => f.Contains(row))?.ToList() ?? real;
+    }
 
-        return index < 0 ? null : index + 1;
+    /// <summary>
+    /// The class a driver raced a saved race in: the class stamped on the
+    /// results of a shared heat, otherwise the round's - which for a shared
+    /// heat is only its main class, and not theirs.
+    /// </summary>
+    private static string? ClassOf(SessionRecord race, SessionResultEntry row, DriverStatsSnapshot snapshot)
+    {
+        if (FieldOf(race, row).FirstOrDefault(e => !string.IsNullOrWhiteSpace(e.ClassName)) is { } stamped)
+        {
+            return stamped.ClassName!.Trim();
+        }
+
+        return !string.IsNullOrEmpty(race.RoundId) && snapshot.RoundClasses.TryGetValue(race.RoundId, out var cls) ? cls : null;
     }
 
     /// <summary>
