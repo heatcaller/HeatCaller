@@ -32,12 +32,56 @@ public enum QualifyingMethod
     /// the round (or was disqualified from it) scores one more than the
     /// field. CountBestRounds picks the best N rounds. Ties go to the best
     /// single-round finish, then the best single heat by laps and time.
+    /// (That is the club scale; 12 Nov 2026, RoundPointsScale adds the
+    /// IFMAR and EFRA ones, where the top qualifier scores 0.)
     ///
     /// Added at the END of the enum on purpose: classes are saved with the
     /// method as a number in older files, and inserting it earlier would
     /// quietly change every saved class's rule.
     /// </summary>
     RoundPoints,
+}
+
+/// <summary>
+/// What a round's places are worth under <see cref="QualifyingMethod.RoundPoints"/>,
+/// and the rulebook's tie-breaks and missed-round score that go with them
+/// (12 Nov 2026).
+///
+/// WHY: the club scale gives the top qualifier 1 point. IFMAR (off-road
+/// 1.7, track 1.4.5), EFRA (Appendix 3, 9.4.1) and ROAR (14.3.6) give the
+/// top qualifier ZERO and second 2, third 3 - a winner's bonus of one point
+/// per round won. That changes the order, not just the figures: 1st + 4th
+/// is 5 against 2nd + 2nd's 4 on the club scale (2nd + 2nd ahead), and 4
+/// against 4 on the rulebook scale, where the round winner then takes it
+/// on the best single finish. A sanctioned meeting scored on the club scale
+/// would hand that place to the wrong driver.
+///
+/// The bodies agree on the scale and part company on the rest, so each is
+/// its own choice rather than one "0 for the TQ" switch:
+///  - a missed or disqualified round: IFMAR track 500 points (off-road 1.7:
+///    "no points", which is NOT zero - read as the same 500), EFRA "points
+///    for last place in that Round" (the field: every driver in the
+///    class's qualifying);
+///  - ties, counting rounds only (both bodies discard the dropped rounds'
+///    scores, laps and times): IFMAR compares the counted scores lowest
+///    first, all of them, then the laps and time of the lowest-scoring
+///    round; EFRA the single best finish, then the laps and time of the
+///    best points round, then of the second best.
+///
+/// Club is first, and the default, so every class saved before this scores
+/// exactly as it did. Added in this order for the same reason as
+/// RoundPoints: a number in a saved file must keep meaning what it meant.
+/// </summary>
+public enum RoundPointsScale
+{
+    /// <summary>1st = 1, 2nd = 2; a missed round = field + 1; ties to the best finish, then the best heat anywhere.</summary>
+    Club,
+
+    /// <summary>IFMAR: TQ 0, 2nd 2, 3rd 3; a missed round 500; ties on the counted scores, then the lowest score's laps and time.</summary>
+    Ifmar,
+
+    /// <summary>EFRA: TQ 0, 2nd 2, 3rd 3; a missed round scores last place (the field); ties on the best finish, then the best round's laps and time.</summary>
+    Efra,
 }
 
 /// <summary>A racing class (e.g. "Stock Buggy", "Mini-Z MR03") used to group drivers for heats/mains.</summary>
@@ -60,6 +104,13 @@ public sealed class RaceClass
     /// stop one bad round wrecking a day.
     /// </summary>
     public int CountBestRounds { get; set; } = 1;
+
+    /// <summary>
+    /// What a round's places score under points qualifying - the club's
+    /// 1st = 1 point, or a rulebook's TQ = 0 (12 Nov 2026, see
+    /// RoundPointsScale). Read only when QualifyingMethod is RoundPoints.
+    /// </summary>
+    public RoundPointsScale RoundPointsScale { get; set; } = RoundPointsScale.Club;
 
     /// <summary>
     /// What scrutineering checks this class requires. Per class because the

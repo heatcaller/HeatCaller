@@ -329,6 +329,8 @@ public sealed class QualifyingProjector
 
         return $"{round.Id}|{_race.SessionGeneration}|{standings.Count}|{laps}|{elapsed}|{penalty}|{blackFlagged}"
             + $"|{raceClass?.QualifyingMethod}|{raceClass?.ConsecutiveLapCount}|{raceClass?.CountBestRounds}"
+            // 12 Nov 2026: a changed points scale re-scores every round.
+            + $"|{raceClass?.RoundPointsScale}"
             // 17 Oct 2026, Bug Hunt 8, A26-3: an Edit Result DQ or a Delete
             // during a live qualifier redraws the projection at once.
             + $"|{_history.Revision}";

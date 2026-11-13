@@ -13,6 +13,7 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
     - **Alerts as a banner.** In-app alerts on a driver's night ("Your race is next", "Your result is in", marshal duty) drop in from the top as a banner in the club's colours, title over the details. Tap it to put it away.
     - **The leaderboard in "Your result is in".** The push and the banner list the race's top three with their laps, with your own line marked "(you)".
     - **The post in the marshal push.** The 5-minute marshal push now names the post in its title: "Marshal at Turn 3 in about 5 minutes".
+    - **Round points the rulebook way.** IFMAR, EFRA and ROAR give the top qualifier in a round 0 points (then 2, 3, 4), where **Points per round** gave 1. That can swap two drivers: 1st + 4th beats 2nd + 2nd under the rulebooks and loses on the club scale. A class's new **Top qualifier scores:** setting picks **1 point (club)**, **0 points - IFMAR** or **0 points - EFRA**, each with that body's score for a missed round and its tie-breaks. Classes you already have stay on 1 point and score exactly as before. The IFMAR, EFRA and NZRCA off-road sanctioning presets now switch it on. See [The top qualifier on 0 points](race-day/program-and-mains.md#the-top-qualifier-on-0-points-ifmar-and-efra).
 
   The phone fixes need the relay redeployed.
 
