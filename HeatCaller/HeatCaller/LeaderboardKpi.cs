@@ -204,8 +204,15 @@ public static class RaceGaps
     /// which still has to add up to the driver's race time. See
     /// RacerStanding.RecoveryLapIndexes.
     /// </summary>
+    /// <remarks>
+    /// Nor the lap after a credited start lap (bug hunt 17, see
+    /// RacerStanding.StartLapCredited): that one runs from a crossing before
+    /// the green, so it is the car's real start lap and the session keeps it
+    /// out of best lap. Left in here, Time Lost measured it against a best
+    /// it was never allowed to set.
+    /// </remarks>
     public static IReadOnlyList<long> PaceLaps(RacerStanding s) =>
-        s.LapTimesMs.Where((_, i) => i > 0 && !s.IsRecoveryLap(i)).ToList();
+        s.LapTimesMs.Where((_, i) => i > 0 && !(s.StartLapCredited && i == 1) && !s.IsRecoveryLap(i)).ToList();
 }
 
 /// <summary>Everything a KPI might need beyond the single standing being rendered.</summary>
@@ -456,7 +463,7 @@ public static class KpiCatalog
                 var gap = s.LapTimesMs[^1] - s.FastestLapMs;
                 return gap == 0
                     ? new KpiValue("BEST", KpiEmphasis.Good)
-                    : new KpiValue($"+{gap / 1000.0:0.000}");
+                    : new KpiValue(Invariant($"+{gap / 1000.0:0.000}"));
             }),
 
         new("qual", "Qual", "Where this driver would qualify OVERALL if the heat ended now, and how many places this heat has moved them. Blank outside a qualifier.", 80,
@@ -504,7 +511,7 @@ public static class KpiCatalog
 
         new("pace", "Best Pace Gap", "How far this driver's best lap is off the quickest lap of the session.", 75,
             (s, _, ctx) => ctx.FastestOverall > 0 && s.FastestLapMs > ctx.FastestOverall
-                ? new KpiValue($"+{(s.FastestLapMs - ctx.FastestOverall) / 1000.0:0.000}")
+                ? new KpiValue(Invariant($"+{(s.FastestLapMs - ctx.FastestOverall) / 1000.0:0.000}"))
                 : new KpiValue("-")),
 
         // Averages, spread and trend use flying laps only - the green-to-line
@@ -570,8 +577,8 @@ public static class KpiCatalog
                     return new KpiValue("level");
                 }
                 return delta < 0
-                    ? new KpiValue($"\u25B2 {Math.Abs(delta) / 1000.0:0.00}", KpiEmphasis.Good)
-                    : new KpiValue($"\u25BC {delta / 1000.0:0.00}", KpiEmphasis.Bad);
+                    ? new KpiValue(Invariant($"\u25B2 {Math.Abs(delta) / 1000.0:0.00}"), KpiEmphasis.Good)
+                    : new KpiValue(Invariant($"\u25BC {delta / 1000.0:0.00}"), KpiEmphasis.Bad);
             }),
 
         // --- Analytics that answer "what should I do about it?" ---
@@ -601,7 +608,7 @@ public static class KpiCatalog
                 // it cost nothing.
                 return lost <= 0
                     ? new KpiValue("0.000", KpiEmphasis.Good)
-                    : new KpiValue($"{lost / 1000.0:0.000}");
+                    : new KpiValue(Invariant($"{lost / 1000.0:0.000}"));
             }),
 
         new("gained", "Gained", "Positions made up - or lost - since the grid.", 55,
@@ -663,7 +670,7 @@ public static class KpiCatalog
             // "+3s" (or a 0.4 s jump-start penalty to "+0s") is a number the
             // director cannot check against what was given.
             (s, _, _) => s.PenaltyMs > 0
-                ? new KpiValue($"+{s.PenaltyMs / 1000.0:0.#}s", KpiEmphasis.Bad)
+                ? new KpiValue(Invariant($"+{s.PenaltyMs / 1000.0:0.#}s"), KpiEmphasis.Bad)
                 : new KpiValue("-")),
 
         new("byhand", "By Hand", "Laps race control added by hand this race (+1 Lap), for a transponder that stopped being read.", 55,
@@ -691,13 +698,21 @@ public static class KpiCatalog
             ? new KpiValue(name)
             : new KpiValue(name + WarningRules.Badge(s.Warnings), KpiEmphasis.Bad);
 
-    private static string Secs(long ms) => ms > 0 ? $"{ms / 1000.0:0.000}" : "-";
+    /// <summary>
+    /// A number on the board with a decimal point whatever the PC's region
+    /// (bug hunt 17), as <see cref="RaceGaps.Format"/> writes the gaps. On a
+    /// comma-decimal Windows the lap times read "12,345" beside a gap of
+    /// "+2.345" on the same row, on the screens and on the phone board.
+    /// </summary>
+    private static string Invariant(FormattableString text) => FormattableString.Invariant(text);
+
+    private static string Secs(long ms) => ms > 0 ? Invariant($"{ms / 1000.0:0.000}") : "-";
 
     /// <summary>Feet a second to miles an hour.</summary>
     private const double MphPerFootPerSecond = 3600.0 / 5280.0;
 
     /// <summary>A speed on the board: "23.4".</summary>
-    private static string Mph(double mph) => mph.ToString("0.0");
+    private static string Mph(double mph) => mph.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>The average speed in mph through a sector of this length, taken in this time - or null.</summary>
     public static double? SectorMph(double feet, long ms) => feet > 0 && ms > 0 ? feet / (ms / 1000.0) * MphPerFootPerSecond : null;

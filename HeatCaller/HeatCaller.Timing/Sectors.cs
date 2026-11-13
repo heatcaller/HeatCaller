@@ -227,9 +227,9 @@ public static class Sectors
     public static string Line(long[] sectors) => string.Join(" / ", sectors.Select(Format));
 
     /// <summary>A sector time on the board: seconds to the hundredth - the split loop's clock tie is good to about that, not to the thousandth.</summary>
-    public static string Format(long ms) => ms > 0 ? (ms / 1000.0).ToString("0.00") : "-";
+    public static string Format(long ms) => ms > 0 ? (ms / 1000.0).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) : "-";
 
     /// <summary>A gap at a split: "-0.08" (up) or "+0.12" (down).</summary>
     public static string FormatDelta(long ms) =>
-        (ms < 0 ? "-" : ms > 0 ? "+" : string.Empty) + (Math.Abs(ms) / 1000.0).ToString("0.00");
+        (ms < 0 ? "-" : ms > 0 ? "+" : string.Empty) + (Math.Abs(ms) / 1000.0).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
 }

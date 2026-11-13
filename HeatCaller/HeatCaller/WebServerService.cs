@@ -3418,8 +3418,9 @@ public sealed partial class WebServerService
                     // about to lap this car - which approach it is, one more
                     // than the laps already down - so the driver's lap voice
                     // can say "Leader behind" once. See LeaderBehind. Only
-                    // when it is so; never on the leader.
-                    if (i > 0 && LeaderBehind.Approach(car, ordered[0]) is { } lapping)
+                    // when it is so; never on the leader. Against the first
+                    // real car, never a ghost - see LeaderBehind.Approach.
+                    if (i > 0 && LeaderBehind.Approach(car, ordered) is { } lapping)
                     {
                         row["lapping"] = lapping;
                     }

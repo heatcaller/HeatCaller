@@ -136,6 +136,17 @@ internal sealed class ListenAlong
     private readonly object _gate = new();
     private readonly Queue<Spoken> _held = new();
 
+    // The one Take last handed out, which the publisher may still be
+    // sending, and whether newer ones pushed it off the queue meanwhile
+    // (bug hunt 17). It used to be counted as dropped the moment it was
+    // pushed off, and Done then did nothing for it - so a line or stretch
+    // the relay had, and listeners heard, was reported as one that never
+    // went out, and the slowest delivery of all was left out of the
+    // stream's health. It is counted when the send's answer is known
+    // instead: by Done or LetGo, or by the next Take when neither came.
+    private Spoken? _sending;
+    private bool _sendingPushedOff;
+
     private bool _wanted;
 
     /// <summary>Stream segments that reached the relay tonight, in seconds of audio, and how many did not - for <see cref="Report"/>.</summary>
@@ -274,6 +285,8 @@ internal sealed class ListenAlong
                 if (!value)
                 {
                     _held.Clear();
+                    _sending = null;
+                    _sendingPushedOff = false;
                 }
             }
         }
@@ -393,6 +406,8 @@ internal sealed class ListenAlong
 
             _dayId = day;
             _held.Clear();
+            _sending = null;
+            _sendingPushedOff = false;
             _numbered = 0;
 
             // Never the same run twice, even two meetings inside one tick.
@@ -429,14 +444,49 @@ internal sealed class ListenAlong
 
             while (_held.Count >= MostHeld)
             {
-                Missed(_held.Dequeue(), stale: false);
+                PushOffOldest();
             }
 
-            var said = segment.Captions.Count > 0 ? segment.Captions[^1].Text : string.Empty;
+            var said =segment.Captions.Count > 0 ? segment.Captions[^1].Text : string.Empty;
             _held.Enqueue(new Spoken(IdFor(_run, ++_numbered), said, segment.Mp3, segment.AtUtc, segment));
         }
 
         return Verdict.Held;
+    }
+
+    /// <summary>
+    /// Makes room by letting the oldest go. Counted as missed here unless it
+    /// is the one being sent, whose count waits for the answer - see
+    /// <see cref="_sending"/>. Under the lock.
+    /// </summary>
+    private void PushOffOldest()
+    {
+        var oldest = _held.Dequeue();
+
+        if (ReferenceEquals(oldest, _sending))
+        {
+            _sendingPushedOff = true;
+            return;
+        }
+
+        Missed(oldest, stale: false);
+    }
+
+    /// <summary>
+    /// Whether this is the one being sent and it was pushed off the queue
+    /// meanwhile - and either way, it is no longer being sent. Under the lock.
+    /// </summary>
+    private bool WasPushedOffWhileSending(Spoken what)
+    {
+        if (!ReferenceEquals(_sending, what))
+        {
+            return false;
+        }
+
+        var pushedOff = _sendingPushedOff;
+        _sending = null;
+        _sendingPushedOff = false;
+        return pushedOff;
     }
 
     /// <summary>Counts something that never went out, as a line or as a segment. Under the lock.</summary>
@@ -517,7 +567,7 @@ internal sealed class ListenAlong
             // results queue.
             while (_held.Count >= MostHeld)
             {
-                Missed(_held.Dequeue(), stale: false);
+                PushOffOldest();
             }
 
             _held.Enqueue(new Spoken(IdFor(_run, ++_numbered), (text ?? string.Empty).Trim(), mp3, atUtc));
@@ -538,12 +588,24 @@ internal sealed class ListenAlong
     {
         lock (_gate)
         {
+            // Asked again with no answer for the last one: its send failed.
+            // Had it stayed at the head that would be the retry, but newer
+            // ones pushed it off, so now it is one that never went out.
+            if (_sending is { } failed && _sendingPushedOff)
+            {
+                Missed(failed, stale: false);
+            }
+
+            _sending = null;
+            _sendingPushedOff = false;
+
             while (_held.Count > 0)
             {
                 var next = _held.Peek();
 
                 if (nowUtc - next.AtUtc <= (next.Segment is null ? GoesStale : SegmentGoesStale))
                 {
+                    _sending = next;
                     return next;
                 }
 
@@ -573,9 +635,16 @@ internal sealed class ListenAlong
     {
         lock (_gate)
         {
-            if (_held.Count > 0 && ReferenceEquals(_held.Peek(), sent))
+            // Pushed off the queue while it was being sent, it is no longer
+            // there to dequeue - but the relay has it, so it counts as sent.
+            var pushedOff = WasPushedOffWhileSending(sent);
+
+            if (pushedOff || (_held.Count > 0 && ReferenceEquals(_held.Peek(), sent)))
             {
-                _held.Dequeue();
+                if (!pushedOff)
+                {
+                    _held.Dequeue();
+                }
 
                 if (sent.Segment is { } segment)
                 {
@@ -613,9 +682,14 @@ internal sealed class ListenAlong
     {
         lock (_gate)
         {
-            if (_held.Count > 0 && ReferenceEquals(_held.Peek(), line))
+            var pushedOff = WasPushedOffWhileSending(line);
+
+            if (pushedOff || (_held.Count > 0 && ReferenceEquals(_held.Peek(), line)))
             {
-                _held.Dequeue();
+                if (!pushedOff)
+                {
+                    _held.Dequeue();
+                }
 
                 if (line.Segment is not null)
                 {

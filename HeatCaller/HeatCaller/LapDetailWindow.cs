@@ -81,6 +81,12 @@ public sealed class LapDetailWindow : Form
     /// <summary>How many laps it is sized to show.</summary>
     public int Rows => _view.Rows;
 
+    /// <summary>How many laps back from the newest it is scrolled - 0 follows the newest. For tests.</summary>
+    internal int ScrolledBack => _view.ScrolledBack;
+
+    /// <summary>A scroll key, as when it is pressed with the window in focus. For tests.</summary>
+    internal bool ScrollKey(Keys key) => _view.ScrollKey(key);
+
     /// <summary>The text size (Ctrl +/-) it was last laid out for.</summary>
     public float BuiltForFontScale { get; private set; }
 
@@ -313,6 +319,9 @@ public sealed class LapDetailWindow : Form
         private int MaxScrollBack => Math.Max(0, _lapMs.Length - Rows);
 
         private int ScrollBack => Math.Clamp(_scrollBack, 0, MaxScrollBack);
+
+        /// <summary>How many laps back from the newest the list is scrolled, as it shows.</summary>
+        public int ScrolledBack => ScrollBack;
 
         /// <summary>Raised when the X in the corner is clicked.</summary>
         public event EventHandler? CloseClicked;
@@ -595,6 +604,11 @@ public sealed class LapDetailWindow : Form
 
             var lapsBefore = _lapMs.Length;
 
+            // As the list shows it now, not the raw count: a window scrolled
+            // back and then dragged tall enough for every lap is at the
+            // bottom again, whatever was left in _scrollBack.
+            var wasBack = ScrollBack;
+
             if (standing is null)
             {
                 _scrollBack = 0;
@@ -653,10 +667,7 @@ public sealed class LapDetailWindow : Form
                 // the count along with it, so the same laps stay on screen
                 // instead of the list creeping a row a lap. At the bottom it
                 // stays at 0 and follows the newest lap.
-                if (_scrollBack > 0 && _lapMs.Length > lapsBefore)
-                {
-                    _scrollBack += _lapMs.Length - lapsBefore;
-                }
+                _scrollBack = wasBack > 0 ? wasBack + Math.Max(0, _lapMs.Length - lapsBefore) : 0;
             }
 
             Invalidate();
