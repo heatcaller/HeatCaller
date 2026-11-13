@@ -652,6 +652,7 @@ The grid shows **Done**, **Time**, **Class**, **What** and **Status**. The **Sta
 - **done** (and when it started) for finished lines, faded.
 - **on track · started 14:05** for a line that's started but not finished, with how far off its slot it started — **on time**, **4 min late** or **3 min early** — when the slot is a clock time.
 - **up next** for the first line not yet done.
+- **expected 20:47 · 7 min late** (or early) for a line still to come, once the night is 3 minutes or more off its times. It's the lateness of the last line started, plus how far Race Control has put the next race back (an approved **Need 5 more minutes**, **+1 min** or **Hold**) for that race's line and every line after it. The **Time** you typed isn't changed. The next line up shows it after **up next**.
 - **(round deleted from program)** for a line whose round no longer exists.
 
 Click the **Done** checkbox to tick a line off (or back on) by hand. Double-click a line to edit it.

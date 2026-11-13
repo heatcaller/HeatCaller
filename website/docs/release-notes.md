@@ -6,6 +6,9 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 - **Fixes from the first night on step 8 (12 November).**
     - **More time moves the schedule.** Approving a driver's **Need 5 more minutes** (or **+1 min** or **Hold**) now moves every "about" time after that race: the program, the phones' **Schedule** and the Big Screen's **UP NEXT**, not only Auto start's count.
+    - **More time asked early is kept.** Approving it while the driver's race isn't next used to change nothing ("ask again when it's next"). Now it's kept, and the race goes back 5 minutes by itself when it becomes the next one out. The phone says "Q3 Heat 2 will go back 5 minutes for you when it's next." Two approvals add up, and it's dropped if the race runs or is deleted first, or the driver comes out of it. See [More time and skip my race at the desk](online/driver-requests.md#more-time-and-skip-my-race-at-the-desk).
+    - **Races run out of order.** When the desk runs a race ahead of its place in the program, the schedule now puts that race first, so its push-back and Auto start's count move the right times.
+    - **The Day Schedule follows it too.** Lines still to come show "expected 20:47 · 7 min late" once the night is 3 minutes or more off, the next race's push-back included. The times you typed aren't changed. See [Reading the sheet](race-day/program-and-mains.md#reading-the-sheet).
     - **The Setup tile goes to Setup first time.** Tapping **Setup** on Me went to the car card on the first tap and to Setup only on the second.
     - **Entry fee at the top of Me.** "Entry: $15.00 - pay at the desk" (or "Paid") is now right under your name on every part of Me, not only on the Check in card.
     - **More times follow the 24-hour tick:** Driver Requests' sent time, online sign-ups, backups, seasons, pace analysis, transponder transfers and the voice and relay settings.

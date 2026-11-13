@@ -1260,8 +1260,13 @@ public sealed partial class RaceProgramControl : UserControl
             var tonightsGap = pace is { Races: >= NightPlan.RacesForMeasuredGap } ? pace.MedianGap : null;
             var lastFinish = sessions.Where(s => !s.IsNotScored()).Select(s => (DateTime?)s.EndedAtUtc).Max();
 
+            // In the order Race Control will run it (12 Nov 2026): its next
+            // race first, even when that isn't the program's next - see
+            // NightPlan.InRunningOrder.
+            var nextStart = NextStart?.Invoke();
+
             return NightPlan.For(
-                day,
+                NightPlan.InRunningOrder(day, nextStart),
                 round => NightPlan.LengthOf(round, ClassNamed(round.ClassName), appDefault),
                 unbuilt,
                 RoundOnTrackId?.Invoke(),
@@ -1272,7 +1277,7 @@ public sealed partial class RaceProgramControl : UserControl
                 raceDay.FirstRaceLocalTime,
                 raceDay.Breaks,
                 keepPromises && _settings.AutoStartNeverEarly && _settings.AutoStartBetweenRaces,
-                NextStart?.Invoke());
+                nextStart);
         }
         catch (Exception ex)
         {

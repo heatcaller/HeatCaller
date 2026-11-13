@@ -85,6 +85,14 @@ public sealed partial class RaceControlControl
         var facts = GapFactsNow(now);
         Gap.NextRace(facts.NextId);
 
+        // More time a driver was given before their race was next (12 Nov
+        // 2026): on now it is, before Auto start and the call-ups read the
+        // push-back.
+        if (ApplyOwedMoreTime(now, facts.NextId))
+        {
+            facts = GapFactsNow(now);
+        }
+
         // The recap show counts as on air from the flag - between its parts
         // too, while the next part is written - so the quiet after it is
         // after the show, not after the finish call.
