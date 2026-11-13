@@ -6,7 +6,8 @@ namespace HeatCaller.Tests;
 /// </summary>
 public sealed class NewDriversTests : IDisposable
 {
-    private static readonly DateTime Today = DateTime.Today;
+    // The time, not midnight's date: a first night is the 6am night (bug hunt 17).
+    private static readonly DateTime Today = DateTime.Now;
 
     private readonly TempAppData _data = new();
 

@@ -1199,6 +1199,17 @@ public sealed class MixerControl : UserControl
             return;
         }
 
+        // Announcements need unmuting, or the whole point is lost. Before
+        // anything is remembered below: the sidebar's unmute brings back the
+        // crowd its mute stopped, and that crowd is the race's, not this
+        // audition's. Unmuted after, the audition counted the crowd as its
+        // own and Stop Everything (or leaving the page) stopped it for the
+        // rest of the race.
+        if (_announcer.Muted)
+        {
+            SetAnnouncerMuted(false);
+        }
+
         // Remembered so stopping restores the previous state rather than
         // leaving everything silent - the ambience may well have been
         // running before this was pressed.
@@ -1259,12 +1270,6 @@ public sealed class MixerControl : UserControl
         if (_music.IsPlaying && !_music.IsPaused)
         {
             started.Add("music");
-        }
-
-        // Announcements need unmuting, or the whole point is lost.
-        if (_announcer.Muted)
-        {
-            SetAnnouncerMuted(false);
         }
 
         // Deliberately NOT speaking yet. The first thing you need to hear

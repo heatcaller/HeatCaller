@@ -394,7 +394,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
         if (measures.EntriesToHeats is { } entries)
         {
             var (value, label) = entries < TimeSpan.Zero
-                ? (NightPace.Clock(-entries), "Heats posted before entries closed")
+                ? (NightPace.Clock(-entries), measures.HeatsNotPosted ? "First green before entries closed (heats not posted)" : "Heats posted before entries closed")
                 : (NightPace.Clock(entries), measures.HeatsNotPosted ? "Entries close to first green (heats not posted)" : "Entries close to heats posted");
             sb.AppendLine($"<div class=\"card\"><div class=\"k\">{value}</div><div class=\"l\">{Esc(label)}</div></div>");
         }

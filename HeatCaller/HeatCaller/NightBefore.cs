@@ -417,8 +417,13 @@ internal static class NightBefore
             return FactPack.Build(Array.Empty<FactBlock>(), said: null, MostChars);
         }
 
+        // Every class in a heat that classes share (MixedHeats), not just
+        // the one the heat is filed under - Mod sharing Stock's heats is
+        // still racing, and a preview that leaves it out has told its
+        // drivers there is nothing on for them.
         var classes = races
-            .Select(one => CommentaryFacts.Clean(one.ClassName))
+            .SelectMany(one => MixedHeats.ClassesOf(one))
+            .Select(one => CommentaryFacts.Clean(one))
             .Where(one => one.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -480,12 +485,21 @@ internal static class NightBefore
 
             foreach (var round in races)
             {
-                if (!string.Equals(CommentaryFacts.Clean(round.ClassName), className, StringComparison.OrdinalIgnoreCase))
+                // The class as the round spells it, its own or one sharing
+                // the heat.
+                var runsAs = MixedHeats.ClassesOf(round).FirstOrDefault(
+                    one => string.Equals(CommentaryFacts.Clean(one), className, StringComparison.OrdinalIgnoreCase));
+
+                if (runsAs is null)
                 {
                     continue;
                 }
 
-                foreach (var one in round.AssignedTransponders)
+                // ONLY THIS CLASS'S DRIVERS in a heat classes share. The
+                // whole roster used to be counted for the class the heat is
+                // filed under, so three Stock cars sharing with four Mod were
+                // advertised as seven Stock entries and Mod was never named.
+                foreach (var one in MixedHeats.DriversOfClass(round, runsAs))
                 {
                     // Ghosts are not entries, for the reason
                     // CommentaryReaders.Field gives: a count of cars is a

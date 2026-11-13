@@ -246,9 +246,22 @@ public static class NightPlan
             // is still to come, from its finish.
             previous = dayRounds.LastOrDefault(r => r is not null && r.IsRecorded && r.Kind != RoundKind.Practice);
             var firstToRun = toRun.FirstOrDefault();
-            var pause = firstToRun is null ? TimeSpan.Zero : BreakBefore(firstToRun);
+            var pause = firstToRun is null ? TimeSpan.Zero : NightBreaks.Length(NightBreaks.Between(previous, firstToRun, breaks));
 
             cursor = lastFinishUtc is { } finished && finished + gap + pause > nowUtc ? finished + gap + pause : nowUtc;
+
+            // Only the part of this break still to come counts as break time
+            // ahead: one already taken, or the minutes of it already gone,
+            // are in no start and not in the finish. It runs from the last
+            // finish plus the gap, so what is left is from now to its end.
+            var breakAhead = TimeSpan.Zero;
+
+            if (pause > TimeSpan.Zero && lastFinishUtc is { } ended)
+            {
+                var breakStarts = ended + gap;
+                var left = breakStarts + pause - (nowUtc > breakStarts ? nowUtc : breakStarts);
+                breakAhead = left > TimeSpan.Zero ? left : TimeSpan.Zero;
+            }
 
             if (firstToRun is not null)
             {
@@ -276,12 +289,21 @@ public static class NightPlan
                 if (known.StartsAtUtc is { } startsAt)
                 {
                     cursor = startsAt > nowUtc ? startsAt : nowUtc;
+
+                    // The start is known, so no more of the break is left
+                    // than the wait for it.
+                    if (breakAhead > cursor - nowUtc)
+                    {
+                        breakAhead = cursor - nowUtc;
+                    }
                 }
                 else if (known.PushedBackMinutes > 0)
                 {
                     cursor += TimeSpan.FromMinutes(known.PushedBackMinutes);
                 }
             }
+
+            breakTime += breakAhead;
         }
 
         foreach (var round in toRun)

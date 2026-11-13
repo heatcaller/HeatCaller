@@ -13,23 +13,29 @@ namespace HeatCaller;
 /// </summary>
 public static class NewDrivers
 {
-    /// <summary>A driver first seen today - their profile made tonight - is on their first night.</summary>
-    public static bool FirstNight(DriverProfile profile, DateTime todayLocal) =>
-        profile.FirstSeenUtc is { } first && first.ToLocalTime().Date == todayLocal.Date;
+    /// <summary>
+    /// A driver first seen tonight - their profile made tonight - is on their
+    /// first night. The night runs 6am to 6am (TonightAtTheTrack.NightOf), so
+    /// a newcomer checked in at 19:30 is still on their first night at 00:05;
+    /// by the calendar date the welcome and the badge went at midnight.
+    /// </summary>
+    public static bool FirstNight(DriverProfile profile, DateTime nowLocal) =>
+        profile.FirstSeenUtc is { } first
+        && TonightAtTheTrack.NightOf(first.ToLocalTime()) == TonightAtTheTrack.NightOf(nowLocal);
 
     /// <summary>New to racing: ticked as a novice, or on their first night.</summary>
-    public static bool IsNew(DriverProfile profile, DateTime todayLocal) =>
-        profile.IsNovice || FirstNight(profile, todayLocal);
+    public static bool IsNew(DriverProfile profile, DateTime nowLocal) =>
+        profile.IsNovice || FirstNight(profile, nowLocal);
 
     /// <summary>What Who's Racing puts after their name: " · first night", " · novice, mentor Al Gorithim", or nothing.</summary>
-    public static string Badge(DriverProfile profile, DateTime todayLocal)
+    public static string Badge(DriverProfile profile, DateTime nowLocal)
     {
-        if (!IsNew(profile, todayLocal))
+        if (!IsNew(profile, nowLocal))
         {
             return string.Empty;
         }
 
-        var what = FirstNight(profile, todayLocal) ? "first night" : "novice";
+        var what = FirstNight(profile, nowLocal) ? "first night" : "novice";
         var mentor = string.IsNullOrWhiteSpace(profile.Mentor) ? string.Empty : $", mentor {profile.Mentor.Trim()}";
 
         return $" · {what}{mentor}";
