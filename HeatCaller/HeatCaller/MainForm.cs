@@ -1012,6 +1012,13 @@ public partial class MainForm : Form
                 settingsChanged = true;
             }
 
+            // Bug hunt 17: the night templates name classes too. Left as
+            // they were, a night started from one left the renamed class out.
+            if (NightTemplates.RenameClass(_settings.NightTemplates, oldName, newName))
+            {
+                settingsChanged = true;
+            }
+
             if (settingsChanged)
             {
                 _settings.Save();

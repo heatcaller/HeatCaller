@@ -983,13 +983,25 @@ public sealed class PracticeModeControl : UserControl
                 return false;
 
             case RaceState.Finished when _race.GetOrderedStandings().Count > 0:
+                var generationAsked = _race.SessionGeneration;
                 var answer = AppDialog.Show(this,
                     "The last race's finishing order is still on the Race Control board.\r\n\r\n"
                     + "Its result was saved to Race History when the checkered flag fell (a demo race is only "
                     + "saved if \"Save demo races to Race History\" is ticked). Starting practice clears the board.\r\n\r\n"
                     + "Start practice now?",
                     "Clear the finished race?", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-                return answer == DialogResult.Yes;
+
+                if (answer != DialogResult.Yes)
+                {
+                    return false;
+                }
+
+                // The yes was for the race on the board when it was asked.
+                // If another has been staged or started since (Auto start
+                // ticks on behind the box), the session is judged again from
+                // the top, which refuses a race being started or run.
+                return StillTheFinishedRaceAskedAbout(generationAsked, _race.SessionGeneration, _race.State, _race.IsWarmingUp)
+                       || ConfirmRaceControlCanBeCleared();
 
             default:
                 return true;
@@ -1043,7 +1055,7 @@ public sealed class PracticeModeControl : UserControl
                     "the practice has been stopped, restarted or cleared again since. Nothing was changed.");
             }
 
-            if (race.GetOrderedStandings().Count > 0)
+            if (ClearedLapsWouldBeLost(race.GetOrderedStandings()))
             {
                 throw new InvalidOperationException(
                     "laps have been counted since the clear, and putting the old figures back would lose them. Nothing was changed.");
@@ -1059,6 +1071,24 @@ public sealed class PracticeModeControl : UserControl
         _startedAtUtc = DateTime.UtcNow;
         RefreshGrid();
     }
+
+    /// <summary>
+    /// Whether undoing a Clear Stats would throw away laps counted since it:
+    /// a real car's only. Bug hunt 17: a ghost laps from the green on its
+    /// own, so with ghosts running the undo was refused within a ghost lap
+    /// of the clear, to save laps nobody drove.
+    /// </summary>
+    internal static bool ClearedLapsWouldBeLost(IEnumerable<RacerStanding> standingsSinceClear) =>
+        standingsSinceClear.Any(s => !GhostService.IsGhost(s.TransponderId));
+
+    /// <summary>
+    /// Whether the session, once "Clear the finished race?" was answered, is
+    /// still the finished race the question was about. Bug hunt 17: the box
+    /// stays up while the clock ticks, and Auto start could stage or start
+    /// the next race behind it - the Yes was then spent on wiping that race.
+    /// </summary>
+    internal static bool StillTheFinishedRaceAskedAbout(int generationAsked, int generationNow, RaceState stateNow, bool warmingUpNow) =>
+        generationNow == generationAsked && stateNow == RaceState.Finished && !warmingUpNow;
 
     /// <param name="fromGatePass">
     /// True when a car crossing the gate started this. The green is then

@@ -765,6 +765,13 @@ public sealed class RaceEventStore
             return moved;
         }
 
+        // Bug hunt 17: the running order names classes as well, and was
+        // left alone - the renamed class then ran last, as any unlisted
+        // class does, on this day and on every day that carried the order
+        // forward. On every event, whatever its ClassNames: a day racing
+        // every class lists none, and can still have an order.
+        var orderMoved = RenameInRunningOrders(oldName, newName);
+
         foreach (var raceEvent in _events)
         {
             if (raceEvent.ClassNames is null
@@ -781,12 +788,36 @@ public sealed class RaceEventStore
             moved.Add(raceEvent.Id);
         }
 
-        if (moved.Count > 0)
+        if (moved.Count > 0 || orderMoved)
         {
             Save();
         }
 
         return moved;
+    }
+
+    /// <summary>
+    /// Moves a class name in every event's running order, for a rename or
+    /// its undo. True when any order changed; the caller saves.
+    ///
+    /// The order only sorts the classes that exist, so the undo simply moves
+    /// the name back: an order that had listed the new name all along was
+    /// naming no class, and goes on naming none.
+    /// </summary>
+    private bool RenameInRunningOrders(string from, string to)
+    {
+        var changed = false;
+
+        foreach (var raceEvent in _events)
+        {
+            if (NightTemplates.Renamed(raceEvent.ClassRunningOrder, from, to) is { } order)
+            {
+                raceEvent.ClassRunningOrder = order;
+                changed = true;
+            }
+        }
+
+        return changed;
     }
 
     /// <summary>
@@ -830,7 +861,7 @@ public sealed class RaceEventStore
 
         var keep = leaveAlone.ToHashSet(StringComparer.Ordinal);
         var merged = moved.Where(id => keep.Contains(id)).ToHashSet(StringComparer.Ordinal);
-        var changed = false;
+        var changed = RenameInRunningOrders(newName, oldName);
 
         foreach (var raceEvent in _events)
         {

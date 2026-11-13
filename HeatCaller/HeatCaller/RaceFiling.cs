@@ -255,6 +255,10 @@ internal static class RaceFiling
                 // told their added seconds were for a jump start (PenaltyWords).
                 JumpStarted = jumpStarted?.Invoke(s.TransponderId) ?? false,
 
+                // Bug hunt 17: so the pace and pack figures can leave out
+                // the rest of a credited start (SessionResultEntry.StartSlots).
+                StartLapCredited = s.StartLapCredited,
+
                 // Copies, not the live warnings. The board keeps its
                 // standings after the flag, and Clear Penalty there zeroes
                 // each warning's time - which, through the shared objects,

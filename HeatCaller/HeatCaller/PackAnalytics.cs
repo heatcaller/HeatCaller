@@ -197,7 +197,7 @@ public static class PackAnalytics
     private static (PackRun Run, List<double> Clean)? RunOf(SessionRecord session, string layout, SessionResultEntry result)
     {
         var raced = result.AsRaced is { LapTimesMs.Count: > 0 } asRaced ? asRaced.LapTimesMs : result.LapTimesMs;
-        var clean = CleanLaps(raced);
+        var clean = CleanLaps(raced, result.StartSlots(raced));
 
         var recordedBest = result.AsRaced is { FastLapMs: > 0 } r ? r.FastLapMs : result.FastLapMs;
         var best = clean.Count > 0 ? clean.Min() : recordedBest > 0 ? recordedBest / 1000.0 : 0;
@@ -223,10 +223,14 @@ public static class PackAnalytics
             Round(median), Round(StdDev(clean)), Round(fade), ProfileOf(clean, median)), clean);
     }
 
-    /// <summary>The laps as raced in seconds: no start lap, nothing of zero or less, nothing past half as long again as the median.</summary>
-    private static List<double> CleanLaps(List<long> lapTimesMs)
+    /// <summary>
+    /// The laps as raced in seconds: no start lap, nothing of zero or less, nothing past half as long again as the median.
+    /// Bug hunt 17: <paramref name="startSlots"/> is two for a driver credited with the start lap at the green, whose
+    /// next entry is the rest of the start and could be short enough to stand as the pack's best lap.
+    /// </summary>
+    private static List<double> CleanLaps(List<long> lapTimesMs, int startSlots)
     {
-        var laps = lapTimesMs.Skip(1).Where(ms => ms > 0).Select(ms => ms / 1000.0).ToList();
+        var laps = lapTimesMs.Skip(startSlots).Where(ms => ms > 0).Select(ms => ms / 1000.0).ToList();
 
         if (laps.Count == 0)
         {

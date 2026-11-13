@@ -105,6 +105,25 @@ public sealed class SessionResultEntry
     /// </summary>
     public bool JumpStarted { get; set; }
 
+    /// <summary>
+    /// This driver was past the line at the green and was credited with the
+    /// start lap (bug hunt 17) - see RacerStanding.StartLapCredited. Their
+    /// LapTimesMs then begins with a zero, and the entry after it is the
+    /// rest of the start: timed from their crossing before the green, not a
+    /// flying lap. The zero alone does not say so - a qualifier's start slot
+    /// is zero too, and the lap after it is a real one - so it is saved.
+    /// False on every result saved before this.
+    /// </summary>
+    public bool StartLapCredited { get; set; }
+
+    /// <summary>
+    /// How many entries at the front of <paramref name="lapTimesMs"/> (this
+    /// result's laps, as saved or as raced) are the start and not flying
+    /// laps: one, or two for a driver credited with the start lap.
+    /// </summary>
+    public int StartSlots(IReadOnlyList<long> lapTimesMs) =>
+        StartLapCredited && lapTimesMs.Count > 1 && lapTimesMs[0] == 0 ? 2 : 1;
+
     // --- Corrections made after the race was saved ---
     //
     // All four are what the result editor has decided for this driver, as
