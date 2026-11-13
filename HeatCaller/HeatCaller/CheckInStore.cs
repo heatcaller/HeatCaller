@@ -260,6 +260,15 @@ public sealed class CheckInStore
 
     public bool IsCheckedIn(string transponder) => Current.CheckedIn.Contains(transponder);
 
+    /// <summary>
+    /// Somebody was checked in at the current race day (12 Nov 2026, setup
+    /// plan step 8), by whatever route: the desk, a phone, Check In All. The
+    /// race day's id. MainForm stamps the first one as doors open
+    /// (RaceEvent.DoorsOpenUtc - see NightMeasures.StampDoorsOpen). Here,
+    /// in the one place every check-in passes, so no route is missed.
+    /// </summary>
+    public event Action<string>? CheckedIn;
+
     public void SetCheckedIn(string transponder, bool checkedIn)
     {
         if (checkedIn)
@@ -272,17 +281,30 @@ public sealed class CheckInStore
         }
 
         Save();
+
+        if (checkedIn)
+        {
+            CheckedIn?.Invoke(CurrentEventId);
+        }
     }
 
 
     public void CheckInAll(IEnumerable<string> transponders)
     {
+        var any = false;
+
         foreach (var transponder in transponders)
         {
             Current.CheckedIn.Add(transponder);
+            any = true;
         }
 
         Save();
+
+        if (any)
+        {
+            CheckedIn?.Invoke(CurrentEventId);
+        }
     }
 
     public void CheckOutAll()

@@ -303,6 +303,16 @@ public partial class MainForm
             case Keys.R when !e.Shift: rc.TriggerReadinessCheck(); break;
             case Keys.A when !e.Shift: rc.TriggerAnnouncerScreen(); break;
 
+            // Auto start's Hold / Resume and Start now (12 Nov 2026, setup
+            // plan step 8, build plan 1.2). Letters, not F-keys: every bare
+            // F-key is taken (F1-F10 and F12 on Race Control, F11 for Race
+            // Mode), and the F-keys stay bare. H for Hold; N for Start now,
+            // since S is half of Shift+S. Not while typing, like the other
+            // letters - Start now starts a race, so a stray "n" in a notes
+            // box must never do it.
+            case Keys.H when !e.Shift: rc.TriggerAutoStartHold(); break;
+            case Keys.N when !e.Shift: rc.TriggerAutoStartNow(); break;
+
             // On Air itself (17 Oct 2026), whatever "Start races On Air" is
             // set to - a key rather than Shift+F1, since the F-keys stay bare
             // (see the top of this method). 0 since 1 Nov 2026 (it was O,

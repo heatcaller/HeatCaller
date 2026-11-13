@@ -59,6 +59,9 @@ public partial class MainForm
         raceControl.MarshalNoShow += LogMarshalNoShow;
         raceControl.MarshalNoShowTakenBack += (round, who) => TakeMarshalNoShowBack(round.Id, who, withUndo: true);
 
+        // Night pace and the times drivers were given (setup plan step 8).
+        WirePaceAndStarts(raceProgram, raceControl);
+
         _entriesCloseTimer.Tick += (_, _) => EntriesCloseTick();
         _entriesCloseTimer.Start();
         FormClosed += (_, _) => _entriesCloseTimer.Dispose();

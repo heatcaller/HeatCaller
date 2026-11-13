@@ -1109,6 +1109,8 @@ mark { background: var(--primary); color: var(--on-primary, #FFFFFF); border-rad
 .page:hover { border-color: var(--primary); }
 .page:disabled { opacity: 0.45; cursor: default; }
 .page.wide { flex: 1 1 100%; }
+/* A race night's pace, under its heading (12 Nov 2026). */
+#feed .pace { color: var(--muted); font-size: 0.85rem; margin: -4px 0 10px; }
 /* A race day's heading has a share of its own, so the whole day is one
    link and not only the heat somebody happened to open. */
 #feed .day { display: flex; align-items: center; gap: 10px; }
@@ -3401,7 +3403,11 @@ function visibleDays() {
       if (line !== null && (season === '' || String(line.season ?? '') === season)) lines.push(line);
     }
 
-    if (lines.length > 0) out.push({ day: String(entry.day ?? ''), lines });
+    // The night's pace (12 Nov 2026, setup plan step 8), when the laptop
+    // sent one - only for the whole night, not a season's slice of it.
+    const pace = season === '' && typeof entry.pace === 'string' ? entry.pace : '';
+
+    if (lines.length > 0) out.push({ day: String(entry.day ?? ''), lines, pace });
   }
 
   return out;
@@ -3546,8 +3552,15 @@ function fail(mine, text) {
 
 function drawGroups(groups, got, mine) {
   return groups.map((entry) =>
-    dayHeading(entry.day) +
+    dayHeading(entry.day) + paceLine(entry.pace) +
     entry.lines.map((line) => card(line, got.has(line.id) ? got.get(line.id) : null, mine)).join('')).join('');
+}
+
+// How the night ran, under its heading (12 Nov 2026, setup plan step 8):
+// "Night pace: Green to green 6:10 · 31% on track". The numbers only - the
+// laptop never sends the causes to a public page.
+function paceLine(pace) {
+  return typeof pace === 'string' && pace !== '' ? '<p class="pace">Night pace: ' + esc(pace) + '</p>' : '';
 }
 
 // The day's own heading, and the link to the whole of it. data-day is

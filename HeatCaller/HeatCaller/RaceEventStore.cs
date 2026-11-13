@@ -222,6 +222,19 @@ public sealed class RaceEvent
     public DateTime? HeatsPostedUtc { get; set; }
 
     /// <summary>
+    /// Doors open (12 Nov 2026, setup plan step 8): the first check-in of the
+    /// night, stamped once when the first driver is checked in at the desk,
+    /// on a phone or by any other route (CheckInStore.CheckedIn). Null until
+    /// then. The race director's second measure, "doors open to first
+    /// green", is from here to the first race's green - see NightMeasures.
+    ///
+    /// WHY THE FIRST CHECK-IN AND NOT A BUTTON: nobody presses "doors open",
+    /// but every night starts with somebody checking in, and the queue at
+    /// the desk is exactly what the measure is for.
+    /// </summary>
+    public DateTime? DoorsOpenUtc { get; set; }
+
+    /// <summary>
     /// Breaks planned into the night (12 Nov 2026, setup plan D5): "water the
     /// track after Q2, 10 minutes". See PlannedBreak and NightBreaks.
     /// </summary>

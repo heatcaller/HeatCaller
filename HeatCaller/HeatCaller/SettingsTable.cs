@@ -206,6 +206,7 @@ internal static class SettingsTable
             nameof(AppSettings.MarshalSwapsNeedDesk),
             nameof(AppSettings.MarshalNoShowRule),
             nameof(AppSettings.MarshalNoShowPenaltySeconds),
+            nameof(AppSettings.AutoStartNeverEarly),
             nameof(AppSettings.PostHeatsBeforeFirstRace),
             nameof(AppSettings.BuildHeatsWhenEntriesClose),
             nameof(AppSettings.AddLateCheckInsWithoutAsking),

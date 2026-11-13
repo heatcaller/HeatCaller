@@ -364,7 +364,13 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
     private static void WriteNightPace(StringBuilder sb, List<SessionRecord> sessions, RoundDefinitionStore rounds, RaceEvent? raceEvent)
     {
-        if (NightPace.For(sessions, rounds.All, raceEvent?.RoundIds) is not { } pace)
+        // The race director's two measures (12 Nov 2026, setup plan step 8)
+        // go with the pace even on a night of one race - the first green is
+        // what they measure to.
+        var measures = NightMeasures.For(raceEvent, sessions, rounds.All);
+        var pace = NightPace.For(sessions, rounds.All, raceEvent?.RoundIds, breaks: raceEvent?.Breaks);
+
+        if (pace is null && measures.Empty)
         {
             return;
         }
@@ -372,14 +378,49 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
         sb.AppendLine("<h2>Night pace</h2>");
         sb.AppendLine("<div class=\"cards\">");
 
+        if (measures.EntriesToHeats is { } entries)
+        {
+            var (value, label) = entries < TimeSpan.Zero
+                ? (NightPace.Clock(-entries), "Heats posted before entries closed")
+                : (NightPace.Clock(entries), measures.HeatsNotPosted ? "Entries close to first green (heats not posted)" : "Entries close to heats posted");
+            sb.AppendLine($"<div class=\"card\"><div class=\"k\">{value}</div><div class=\"l\">{Esc(label)}</div></div>");
+        }
+
+        if (measures.DoorsToGreen is { } doors)
+        {
+            sb.AppendLine($"<div class=\"card\"><div class=\"k\">{NightPace.Clock(doors)}</div><div class=\"l\">Doors open to first green</div></div>");
+        }
+
+        if (pace is null)
+        {
+            sb.AppendLine("</div>");
+            return;
+        }
+
         if (pace.MedianGreenToGreen is { } g2g)
         {
             sb.AppendLine($"<div class=\"card\"><div class=\"k\">{NightPace.Clock(g2g)}</div><div class=\"l\">Green to green (typical)</div></div>");
         }
 
+        if (pace.WorstGreenToGreen is { } worst)
+        {
+            sb.AppendLine($"<div class=\"card\"><div class=\"k\">{NightPace.Clock(worst.GreenToGreen)}</div><div class=\"l\">Worst green to green: "
+                          + $"{Esc(worst.Before.Label)} to {Esc(worst.After.Label)} ({Esc(worst.CauseText)})</div></div>");
+        }
+
         if (pace.MedianGap is { } gap)
         {
             sb.AppendLine($"<div class=\"card\"><div class=\"k\">{NightPace.Clock(gap)}</div><div class=\"l\">Finish to next green (typical)</div></div>");
+        }
+
+        if (pace.MedianFinishToSaved is { } saving)
+        {
+            sb.AppendLine($"<div class=\"card\"><div class=\"k\">{NightPace.Clock(saving)}</div><div class=\"l\">Finish to result saved (typical)</div></div>");
+        }
+
+        if (pace.MedianCalledToGreen is { } called)
+        {
+            sb.AppendLine($"<div class=\"card\"><div class=\"k\">{NightPace.Clock(called)}</div><div class=\"l\">Call-up to green (typical)</div></div>");
         }
 
         if (pace.OnTrackShare is { } share)

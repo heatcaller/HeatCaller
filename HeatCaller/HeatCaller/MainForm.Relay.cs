@@ -1938,7 +1938,10 @@ public partial class MainForm
                 // was unticked sat inside that window, and the archive
                 // offered it with no result behind it.
                 from: null,
-                onRelay: s => _relayPublisher.ResultIsOnRelay(s.Id, RelayResultsIndex.EffectiveStart(s)));
+                onRelay: s => _relayPublisher.ResultIsOnRelay(s.Id, RelayResultsIndex.EffectiveStart(s)),
+
+                // Night pace on the club's online results (setup plan step 8).
+                paceOfDay: (_, daySessions) => RelayResultsIndex.PaceOf(daySessions, _rounds.All, _raceEvents.All));
 
             if (onlyIfChanged && _relayIndexSent.TryGetValue(year, out var last) && last == json)
             {

@@ -689,7 +689,10 @@ public sealed partial class RaceControlControl
 
                 // "PROVISIONAL UNTIL 20:42" on the finished board (12 Nov
                 // 2026, setup plan step 8) - MainForm works it out.
-                provisional: () => ProvisionalBoard?.Invoke());
+                provisional: () => ProvisionalBoard?.Invoke(),
+                // "UP NEXT: Stock Q2 Heat 3 about 20:42 ..." between races
+                // (setup plan step 8) - see BigScreenUpNext.
+                upNext: BigScreenUpNext);
 
             // The window can be closed by whoever is in front of it - Escape,
             // the X, its own button - so the field must stop pointing at it

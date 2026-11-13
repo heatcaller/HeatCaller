@@ -122,10 +122,85 @@ public sealed class RoundDefinition
     /// </summary>
     public Dictionary<string, string>? SharedClassOf { get; set; }
 
+    /// <summary>
+    /// The start drivers were given for this race (12 Nov 2026, setup plan
+    /// step 8): the "about 20:42" the phones and the heat sheets showed at
+    /// the moment the heats were posted - or, on a night that doesn't post,
+    /// when the first race went out. Null for a race nobody was given a time
+    /// for (built later, or a night with no plan).
+    ///
+    /// WHY ON THE ROUND: the promise is about this heat, and has to survive
+    /// a restart of the laptop mid-night - the plan itself moves every
+    /// minute, so it can't be worked out again later. Auto start never
+    /// starts the race more than StartPromise.Early before it (a club
+    /// setting, on by default), because drivers are in the pits working on
+    /// cars and were told a time. See StartPromise.
+    /// </summary>
+    public DateTime? PromisedStartUtc { get; set; }
+
+    /// <summary>
+    /// When this race was first called up to the grid (12 Nov 2026, setup
+    /// plan step 8, build plan 0.1): the call-up line going out, by itself
+    /// or from Call Up. Null when it never was. With <see cref="SavedAtUtc"/>
+    /// it cuts the gap before this race into its parts for NightPace.
+    ///
+    /// WHY ON THE ROUND AND NOT THE SESSION: a race is called up before there
+    /// is any session to write it on, and the round is what both the
+    /// call-up and the result already point at.
+    /// </summary>
+    public DateTime? CalledAtUtc { get; set; }
+
+    /// <summary>
+    /// When this race's result was saved - the round linked to its session
+    /// (RoundDefinitionStore.MarkRecorded, 12 Nov 2026, setup plan step 8).
+    /// The time from the checkered flag to here is the filing part of the
+    /// gap that follows the race.
+    /// </summary>
+    public DateTime? SavedAtUtc { get; set; }
+
+    /// <summary>
+    /// What the desk did in the gap before this race (12 Nov 2026, setup plan
+    /// step 8, build plan 0.2): Hold and how long, +1 min, Start now, a
+    /// driver's "Need 5 minutes", a wait for the promised time. NightPace
+    /// names them as the gap's causes, so the report can say "held 3 min at
+    /// the desk" instead of leaving the gap unexplained. Null for none.
+    /// </summary>
+    public List<GapNote>? GapNotes { get; set; }
+
     public bool IsRecorded => !string.IsNullOrEmpty(LinkedSessionId);
 
     /// <summary>A, B, C... derived from the tier. Falls back to the stored label for untiered mains.</summary>
     public string TierLetter => MainTier >= 0 && MainTier < 26
         ? ((char)('A' + MainTier)).ToString()
         : string.Empty;
+}
+
+/// <summary>What the desk did in a gap between races (12 Nov 2026, setup plan step 8). See RoundDefinition.GapNotes.</summary>
+public enum GapNoteKind
+{
+    /// <summary>Auto start held; <see cref="GapNote.Seconds"/> is how long.</summary>
+    Held,
+
+    /// <summary>+1 min (Call Up's push back); <see cref="GapNote.Seconds"/> is 60.</summary>
+    PushedBack,
+
+    /// <summary>A driver's "Need 5 minutes", said yes to at the desk.</summary>
+    DriverAskedForTime,
+
+    /// <summary>Start now pressed - the race went before the gap was up.</summary>
+    StartedNow,
+
+    /// <summary>Auto start waited for the start drivers were given; <see cref="GapNote.Seconds"/> is how long.</summary>
+    WaitedForPromise,
+}
+
+/// <summary>One thing the desk did in a gap, and when. See RoundDefinition.GapNotes.</summary>
+public sealed class GapNote
+{
+    public GapNoteKind Kind { get; set; }
+
+    public DateTime AtUtc { get; set; }
+
+    /// <summary>How long it put the race back, in seconds; 0 when it didn't (Start now).</summary>
+    public int Seconds { get; set; }
 }

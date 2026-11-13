@@ -91,6 +91,8 @@ The card also lists any car on tonight's heats that the loop hasn't heard tonigh
 
 Click **Post the Heats**. The print preview opens with all the pages together, and the card moves on to **Start Q1 Heat 1**. **Undo** takes the posting back.
 
+Posting also keeps each race's estimated start, as printed and shown on the phones, as the time drivers were given. Auto start never starts a race more than 2 minutes before it (see [Auto start between races](../race-control/running-a-race.md#auto-start-between-races)). The time from **Entries close at:** to posting is the first of the race director's two measures in the event report's [night pace](../race-control/results-and-championships.md).
+
 Once the heats are posted, **Move Drivers Between Heats** and **Redo Remaining Heats** (on **Race Control**) ask before changing them: "The heats were posted at 18:42, so drivers and marshals may already have looked theirs up." **Add a Late Entry** doesn't ask, because it moves nobody else (see [A late entry](#a-late-entry)).
 
 If you start the first race without posting, the heats count as out and the card stops asking. Untick **Post the heats before the first race** to go straight from building to **Start Q1 Heat 1**, as before.

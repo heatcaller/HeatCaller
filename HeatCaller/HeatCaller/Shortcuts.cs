@@ -28,6 +28,8 @@ public static class ShortcutCatalog
             new Shortcut("F9", "Between races: skip the line on air"),
             new Shortcut("F10", "Between races: Hold Talk / Resume Talk"),
             new Shortcut("F12", "Between races: call up the next race"),
+            new Shortcut("H", "Between races: hold / resume Auto start"),
+            new Shortcut("N", "Between races: Auto start's Start now"),
             new Shortcut("B", "Open the Big Screen"),
             new Shortcut("R", "Pre-race check"),
             new Shortcut("A", "Announcer screen"),

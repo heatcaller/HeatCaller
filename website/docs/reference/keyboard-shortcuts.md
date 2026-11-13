@@ -22,6 +22,8 @@ These work while the **Race Control** page is showing, and throughout Race Mode.
 | <kbd>F9</kbd> | **Skip**, between races: skips the part of the recap show or the line on air. Holding the button ends the whole recap show; the key never does. |
 | <kbd>F10</kbd> | **Hold Talk** / **Resume Talk**: nothing is said between races until you press it again. |
 | <kbd>F12</kbd> | **Call Up**: calls up the next race now. |
+| <kbd>H</kbd> | **Hold** / **Resume** on the Next Up bar: holds Auto start's count to the next race, and carries it on again. See [Auto start between races](../race-control/running-a-race.md#auto-start-between-races). |
+| <kbd>N</kbd> | **Start now**, from the **Hold** button's right-click menu: starts the next race without waiting for the count. |
 | <kbd>B</kbd> | **Big Screen** |
 | <kbd>R</kbd> | **Pre-race check** |
 | <kbd>A</kbd> | **Announcer Screen** |
@@ -31,6 +33,8 @@ Each key does what clicking its button does (except <kbd>F1</kbd>, described abo
 The **Red**, **Checkered** and **Reset** buttons have to be pressed and held for about a second, so a stray click can't stop or end a race. Their keys, <kbd>F5</kbd>, <kbd>F6</kbd> and <kbd>F7</kbd>, act on a single press. See [Press and hold](../race-control/running-a-race.md#press-and-hold).
 
 **Only the bare key counts.** If you hold <kbd>Alt</kbd>, <kbd>Ctrl</kbd> or <kbd>Shift</kbd>, the F-keys do nothing. For example, <kbd>Alt</kbd>+<kbd>F4</kbd> closes the window as usual and never throws a yellow flag on its way out.
+
+<kbd>H</kbd> and <kbd>N</kbd> only do something while Auto start is counting down to a race. Otherwise the Race Control log says why nothing happened. They're letters rather than F-keys because every F-key is already taken.
 
 The F-keys work even while you're typing in a box on the page. The letter keys and <kbd>0</kbd> don't: while a text box, a number box, a time box, a drop-down list or a grid cell you're editing has the focus, a letter is typing, not a shortcut. None of them work on any other page, or while a dialog is open. Two windows pass the F-keys on to Race Control: the **Broadcast** window takes <kbd>F1</kbd> to <kbd>F10</kbd> and <kbd>F12</kbd>, and a driver's lap breakdown window takes <kbd>F1</kbd> to <kbd>F8</kbd>, so you can throw a flag without clicking back to the main window first.
 
