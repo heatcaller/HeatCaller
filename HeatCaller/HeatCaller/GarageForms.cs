@@ -824,7 +824,10 @@ internal sealed class ChassisTypesForm : Form
 
         Controls.Add(page);
 
-        AcceptButton = btnClose;
+        // Enter saves: Add leaves the cursor in the Name box, and Enter after
+        // typing the name used to press Close - the name was lost and a
+        // chassis called "New chassis" was left behind. Esc still closes.
+        AcceptButton = _btnSave;
         CancelButton = btnClose;
 
         AppTheme.ApplyRecursively(this);
