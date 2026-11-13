@@ -14,7 +14,7 @@ This page also covers choosing which columns each leaderboard shows, and the **S
 
 A small reminder of the keys, "F11: toggle fullscreen     M: track map     O: on air     C: captions     Esc: close", sits in the top-right corner. HeatCaller doesn't remember which monitor you used, so you move it each time you open it. Pressing **Big Screen** (or <kbd>B</kbd>, or **Open Big Screen** on **Local Screens**) while it's already open brings that window to the front rather than opening a second one. The **Practice** page's **Open Big Screen** opens a window of its own each time, so you can run more than one if you have the screens.
 
-![The Big Screen in a window during a demo race: RACING - GREEN FLAG, the race clock and the leaderboard with laps, best laps and gaps](../assets/images/big-screen-racing.png)
+![The Big Screen in a window during a demo race: RACING - GREEN FLAG, the announcer's latest line, the race clock with 3 LAPS TO GO, the leaderboard with laps, best laps and gaps, and ON DECK along the bottom](../assets/images/big-screen-racing.png)
 
 ## What it shows
 
@@ -381,7 +381,7 @@ Each picture is checked before it's added. A file over 50 MB, a picture over 200
 
 Images are scaled to fit the leaderboard area without stretching. Only the leaderboard area is replaced: the banner, clock, countdown and ON DECK bar stay on screen. An animated GIF shows its first frame. A missing or unreadable image is skipped, and so is a slide over the size limits, for example one added by an older version or brought in with a backup: the Big Screen stays on the leaderboard for that turn, and its preview on the **Sponsors** page stays blank. Nothing is deleted. The live results page on the Wi-Fi only shows slides that pass the same check. It goes by what each picture really is, not its file extension, so a PNG saved as `.jpg` still shows there.
 
-<!-- screenshot: Sponsors page with three slides listed and the Rotation timing card -->
+![The Sponsors page with three slides listed and the first, a Corner Hobbies picture, in the preview, the Add Image, Add Video, Remove and Move buttons under it, and the Rotation timing card below: the leaderboard shows for 10 seconds, each slide for 8, and the leaderboard is never interrupted while a race is running](../assets/images/sponsors.png)
 
 ### Rotation timing
 
