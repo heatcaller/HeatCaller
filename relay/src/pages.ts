@@ -3065,7 +3065,7 @@ function myRow(results, name) {
 // driver whose own finish goes where the winner usually does.
 function card(line, body, mine) {
   const results = body !== null && Array.isArray(body.results) ? body.results : [];
-  const facts = [line.at, line.track, line.season].filter(Boolean).map(esc).join(' &middot; ');
+  const facts = [hcHm(line.at), line.track, line.season].filter(Boolean).map(esc).join(' &middot; ');
   const me = mine === '' || results.length === 0 ? null : myRow(results, mine);
   const field = Number(line.drivers) || 0;
   const what = line.label || line.type || 'Session';
