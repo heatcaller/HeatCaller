@@ -2931,7 +2931,7 @@ function rows(results, sid) {
 
     return '<tbody class="drv"><tr>' +
       '<td class="pos">' + esc(r.pos) + '</td>' +
-      '<td>' + nm(r.name) + (r.car ? '<span class="sec">' + esc(r.car) + '</span>' : '') + '</td>' +
+      '<td>' + nm(r.name) + (clsPlace(r) ? '<span class="sec">' + esc(clsPlace(r)) + '</span>' : '') + (r.car ? '<span class="sec">' + esc(r.car) + '</span>' : '') + '</td>' +
       '<td class="n">' + (Number(r.qual) > 0 ? esc(r.qual) : '') + '</td>' +
       '<td class="n">' + lapsAndTime + penChip(r) + '</td>' +
       '<td class="n">' + esc(i === 0 ? '' : behindWords(r, results[i - 1])) + '</td>' +
@@ -2943,6 +2943,16 @@ function rows(results, sid) {
         '</details></td></tr>') +
       '</tbody>';
   }).join('');
+}
+
+// A shared heat (13 Nov 2026, mixed classes): "2nd in Stock" - the driver's
+// place in their own class, which is what their championship scores. The
+// laptop sends cls and clsPos only for a race classes shared; any other
+// row has neither, and gets nothing.
+function clsPlace(r) {
+  const at = r ? Math.round(Number(r.clsPos)) : 0;
+  const cls = r && typeof r.cls === 'string' ? r.cls.trim() : '';
+  return Number.isFinite(at) && at > 0 && cls !== '' ? ordinal(at) + ' in ' + cls : '';
 }
 
 // 12 Nov 2026: who was skipped and scored DNS (did not start), under the
@@ -3119,7 +3129,9 @@ function card(line, body, mine) {
   let right = '';
 
   if (me !== null) {
-    right = '<span class="winner">' + esc(ordinal(me.pos)) + ' of ' + results.length + '</span>';
+    // In a shared heat, their place in their own class first - the one
+    // their championship counts - then overall.
+    right = '<span class="winner">' + (clsPlace(me) ? esc(clsPlace(me)) + ' &middot; ' : '') + esc(ordinal(me.pos)) + ' of ' + results.length + '</span>';
   } else if (results.length > 0) {
     right = '<span class="winner">1st &nbsp;' + nm(results[0].name) + '</span>';
   } else if (body === null && field > 0) {

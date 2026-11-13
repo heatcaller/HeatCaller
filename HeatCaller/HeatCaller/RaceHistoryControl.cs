@@ -190,7 +190,11 @@ public sealed class RaceHistoryControl : UserControl
             // With a split loop: their best through each sector, and those
             // added up - shown only for a session that has sectors.
             new DataGridViewTextBoxColumn { Name = "sectors", HeaderText = "Best Sectors", FillWeight = 90 },
-            new DataGridViewTextBoxColumn { Name = "ideal", HeaderText = "Ideal Lap", FillWeight = 60 }
+            new DataGridViewTextBoxColumn { Name = "ideal", HeaderText = "Ideal Lap", FillWeight = 60 },
+
+            // A shared heat (mixed classes): each driver's class and their
+            // place in it - shown only for a race from one (13 Nov 2026).
+            new DataGridViewTextBoxColumn { Name = "cls", HeaderText = "Class Place", FillWeight = 80, Visible = false }
         );
 
         // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
@@ -434,6 +438,11 @@ public sealed class RaceHistoryControl : UserControl
         _detailGrid.Columns["sectors"]!.Visible = hasSectors;
         _detailGrid.Columns["ideal"]!.Visible = hasSectors;
 
+        var round = _rounds is null || session.RoundId is null ? null : _rounds.Get(session.RoundId);
+        var places = MixedHeats.ClassPlacesOf(session.Results, round);
+        var shared = places.Values.Any(p => p.Place is not null);
+        _detailGrid.Columns["cls"]!.Visible = shared;
+
         foreach (var r in session.Results.OrderBy(r => r.Position))
         {
             var adj = adjusted is not null && adjusted.TryGetValue(r.Transponder, out var a) ? a : null;
@@ -455,7 +464,8 @@ public sealed class RaceHistoryControl : UserControl
                 adjText,
                 WarningsText(r),
                 Sectors.Bests(r) is { } bests ? Sectors.Line(bests) : "-",
-                Sectors.Bests(r) is { } forIdeal ? $"{Sectors.Format(forIdeal.Sum())}s" : "-");
+                Sectors.Bests(r) is { } forIdeal ? $"{Sectors.Format(forIdeal.Sum())}s" : "-",
+                places[r] is { Place: { } place, Class: { } cls } ? $"{MixedHeats.Ordinal(place)} in {cls}" : string.Empty);
 
             // The driver, for the Report Card on the right-click menu.
             _detailGrid.Rows[rowIndex].Tag = r.Transponder;
@@ -492,7 +502,8 @@ public sealed class RaceHistoryControl : UserControl
         // (they never ran) and no Report Card on their row.
         foreach (var transponder in session.DidNotStart ?? new List<string>())
         {
-            var dnsIndex = _detailGrid.Rows.Add(null, DriverNameOf(transponder), "-", null, "-", string.Empty, string.Empty, "-", "-");
+            var dnsIndex = _detailGrid.Rows.Add(null, DriverNameOf(transponder), "-", null, "-", string.Empty, string.Empty, "-", "-",
+                shared && round is not null ? MixedHeats.ClassOfDriver(round, transponder, _profiles) : string.Empty);
             var dnsRow = _detailGrid.Rows[dnsIndex];
             dnsRow.Cells["pos"].Tag = DnsMark;
             dnsRow.Cells["pos"].ToolTipText = DnsHover;

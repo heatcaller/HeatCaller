@@ -241,6 +241,58 @@ public static class MixedHeats
     }
 
     /// <summary>
+    /// Each row of a saved result with the class it raced in and its place
+    /// within that class (13 Nov 2026, mixed-class results) - for Race
+    /// History, the printed sheet, the export and the phones, which list a
+    /// shared heat as it finished with each driver's class place beside the
+    /// overall one. Places run 1..N inside each class in finishing order, the
+    /// same split the championship scores (ScoringFields). For a race with
+    /// no stamped rows - every race not from a shared heat - the class is
+    /// the round's (or null without one) and the place is null: the overall
+    /// position is the only place there is.
+    /// </summary>
+    public static IReadOnlyDictionary<SessionResultEntry, (string? Class, int? Place)> ClassPlacesOf(
+        IReadOnlyList<SessionResultEntry> results, RoundDefinition? round)
+    {
+        var map = new Dictionary<SessionResultEntry, (string?, int?)>(ReferenceEqualityComparer.Instance);
+        var stamped = results.Any(r => !string.IsNullOrWhiteSpace(r.ClassName));
+
+        if (!stamped)
+        {
+            foreach (var r in results)
+            {
+                map[r] = (string.IsNullOrWhiteSpace(round?.ClassName) ? null : round!.ClassName, null);
+            }
+
+            return map;
+        }
+
+        foreach (var field in ScoringFields(results, null))
+        {
+            var place = 0;
+
+            foreach (var r in field.OrderBy(r => r.Position <= 0 ? int.MaxValue : r.Position))
+            {
+                place++;
+                map[r] = (field.First(f => !string.IsNullOrWhiteSpace(f.ClassName)).ClassName!.Trim(), place);
+            }
+        }
+
+        return map;
+    }
+
+    /// <summary>"3rd" - a place as the results print it.</summary>
+    public static string Ordinal(int n) => (n % 100) is 11 or 12 or 13
+        ? $"{n}th"
+        : (n % 10) switch
+        {
+            1 => $"{n}st",
+            2 => $"{n}nd",
+            3 => $"{n}rd",
+            _ => $"{n}th",
+        };
+
+    /// <summary>
     /// The result as one class saw it: only that class's rows of a shared
     /// heat, in finishing order, with their positions renumbered 1..N.
     /// Copies - the saved result is never touched. A one-class result comes
@@ -378,14 +430,6 @@ public static class MixedHeats
         return $"{Plural.Of(stamped.Select(r => r.ClassName!.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Count(), "class", "classes")} shared this race and each is scored on its own, "
                + "so call each class's places within it. " + string.Join(" ", parts);
     }
-
-    private static string Ordinal(int n) => n switch
-    {
-        1 => "1st",
-        2 => "2nd",
-        3 => "3rd",
-        _ => $"{n}th",
-    };
 
     // ------------------------------------------------------------------
     // Run Together - two heats put into one race by hand.

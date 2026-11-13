@@ -66,12 +66,18 @@ public static class ResultsExporter
         // disqualified driver came out as an unexplained no-lap row at the
         // bottom and a DNF as an ordinary finisher - the outcome Edit Result
         // set (ResultEditor puts it in Status) was lost on the way out.
-        sb.AppendLine("SessionDate,SessionTime,SessionLabel,Round,Class,Track,Position,Driver,Transponder,Car,Laps,TotalTimeSeconds,BestLapSeconds,Status,LapsCountedByHand");
+        // ClassPosition last of all (13 Nov 2026, mixed-class results): a
+        // driver's place within their own class in a shared heat, empty for
+        // every other race. Class is the driver's own class there, not the
+        // heat's main one.
+        sb.AppendLine("SessionDate,SessionTime,SessionLabel,Round,Class,Track,Position,Driver,Transponder,Car,Laps,TotalTimeSeconds,BestLapSeconds,Status,LapsCountedByHand,ClassPosition");
 
         foreach (var session in sessions.OrderBy(s => s.StartedAtUtc))
         {
             var round = session.RoundId is null ? null : rounds?.Get(session.RoundId);
             var local = session.StartedAtUtc.ToLocalTime();
+
+            var places = MixedHeats.ClassPlacesOf(session.Results, round);
 
             foreach (var result in session.Results.OrderBy(r => r.Position))
             {
@@ -81,7 +87,7 @@ public static class ResultsExporter
                     Csv(local.ToString("HH:mm:ss", CultureInfo.InvariantCulture)),
                     Csv(session.Label),
                     Csv(round?.RoundLabel ?? string.Empty),
-                    Csv(round?.ClassName ?? string.Empty),
+                    Csv(places[result].Class ?? string.Empty),
                     Csv(session.TrackLayoutName),
                     result.Position.ToString(CultureInfo.InvariantCulture),
                     Csv(NameFor(result, profiles)),
@@ -94,6 +100,7 @@ public static class ResultsExporter
                     // After Status for the same reason Status is last of
                     // the rest (22 Oct 2026) - see HandCountedLaps.
                     HandCountedLaps.In(result).ToString(CultureInfo.InvariantCulture),
+                    places[result].Place?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
                 }));
             }
 
@@ -110,7 +117,7 @@ public static class ResultsExporter
                     Csv(local.ToString("HH:mm:ss", CultureInfo.InvariantCulture)),
                     Csv(session.Label),
                     Csv(round?.RoundLabel ?? string.Empty),
-                    Csv(round?.ClassName ?? string.Empty),
+                    Csv(round is null ? string.Empty : MixedHeats.ClassOfDriver(round, transponder, profiles)),
                     Csv(session.TrackLayoutName),
                     string.Empty,
                     Csv(DnsNameFor(transponder, profiles)),
@@ -120,6 +127,7 @@ public static class ResultsExporter
                     string.Empty,
                     string.Empty,
                     Csv(Dns),
+                    string.Empty,
                     string.Empty,
                 }));
             }
@@ -155,6 +163,8 @@ public static class ResultsExporter
             // No rows for a DNS driver (12 Nov 2026, SkipDns): a lap file is
             // one row per lap, and they never turned one. The Results CSV and
             // the JSON carry them.
+            var places = MixedHeats.ClassPlacesOf(session.Results, round);
+
             foreach (var result in session.Results.OrderBy(r => r.Position))
             {
                 long cumulative = 0;
@@ -171,7 +181,7 @@ public static class ResultsExporter
                         Csv(local.ToString("HH:mm:ss", CultureInfo.InvariantCulture)),
                         Csv(session.Label),
                         Csv(round?.RoundLabel ?? string.Empty),
-                        Csv(round?.ClassName ?? string.Empty),
+                        Csv(places[result].Class ?? string.Empty),
                         Csv(NameFor(result, profiles)),
                         Csv(result.Transponder),
                         (lap + 1).ToString(CultureInfo.InvariantCulture),
@@ -191,6 +201,7 @@ public static class ResultsExporter
         var payload = sessions.OrderBy(s => s.StartedAtUtc).Select(session =>
         {
             var round = session.RoundId is null ? null : rounds?.Get(session.RoundId);
+            var places = MixedHeats.ClassPlacesOf(session.Results, round);
 
             return new
             {
@@ -209,6 +220,12 @@ public static class ResultsExporter
                 results = session.Results.OrderBy(r => r.Position).Select(r => new
                 {
                     position = r.Position,
+
+                    // The class this driver raced in, and their place in it, for a
+                    // shared heat (13 Nov 2026); for any other race the class is
+                    // the round's and classPosition is null.
+                    className = places[r].Class,
+                    classPosition = places[r].Place,
                     driver = NameFor(r, profiles),
                     transponder = r.Transponder,
                     car = r.CarModel,

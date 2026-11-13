@@ -96,7 +96,7 @@ public sealed class SkipDnsResultsTests : IDisposable
             .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
 
         // The header is unchanged, so an old sheet still finds every column.
-        Assert.Equal("SessionDate,SessionTime,SessionLabel,Round,Class,Track,Position,Driver,Transponder,Car,Laps,TotalTimeSeconds,BestLapSeconds,Status,LapsCountedByHand", lines[0]);
+        Assert.Equal("SessionDate,SessionTime,SessionLabel,Round,Class,Track,Position,Driver,Transponder,Car,Laps,TotalTimeSeconds,BestLapSeconds,Status,LapsCountedByHand,ClassPosition", lines[0]);
         Assert.Equal(5, lines.Length);
         Assert.Contains(",1,Bea,301,", lines[1]);
         Assert.Contains(",2,Cal,302,", lines[2]);
@@ -104,8 +104,8 @@ public sealed class SkipDnsResultsTests : IDisposable
         // Max's profile name has a comma, so it is quoted: split on the
         // quotes first, then count the columns.
         Assert.Contains(",,\"Max, Power\",303,,,,,DNS,", lines[3]);
-        Assert.EndsWith(",,304,304,,,,,DNS,", lines[4]);
-        Assert.Equal(15, lines[4].Split(',').Length);
+        Assert.EndsWith(",,304,304,,,,,DNS,,", lines[4]);
+        Assert.Equal(16, lines[4].Split(',').Length);
     }
 
     [Fact]

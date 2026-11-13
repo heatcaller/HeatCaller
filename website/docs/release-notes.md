@@ -4,6 +4,16 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Shared heats: places by class everywhere (13 November).** A race two classes shared was scored by class in championships, qualifying and the mains, but listed as one field. Now, as a championship counts it:
+    - **The position report** calls each car by its place in its own class: "Mo leads Mod, Sam leads Stock, Bea second in Stock." No gaps are said in a shared heat, since they're measured to the overall leader.
+    - **Race History** has a **Class Place** column for a shared race, and the printed results sheet puts each driver's class place beside their name.
+    - **Export Results...** gives each driver's own class in **Class** and their place in it in a new last column, **ClassPosition** (`className` and `classPosition` in the JSON).
+    - **The phone results** say "2nd in Stock" under each name. This needs the relay redeployed.
+
+    See [Mixed-class heats](race-day/program-and-mains.md#mixed-class-heats).
+
+- **No more short-track warning (13 November).** The announcer keeps up on short laps now, so the amber "Short laps" line under Race Control's **Session** card and the warning under **Average lap time (sec):** on **Track Layouts** are gone, and so is the guide's "On a short track" section. One thing to know on any track: with **Say each car's gap to the leader** ticked, the position report takes longer to say, and a gap can change while it's being said. See [Voice](announcer/voice.md).
+
 - **Track Designer: the rest of railed tiles (13 November).** Each tile goes down with its rail on, and now the rest of the designer works that way too.
     - **Pick up, copy and stretch whole pieces.** A tile picked up with **Select** brings its own rail or turn, and a rail on the box's edge that's bolted to a tile outside it stays put. Picking one side of a divider takes that side's rail and leaves the other lane's, and putting it back makes a divider again. A stretch lays each tile again as the piece it is, and no longer refuses next to a one-tile turn, since the turn is part of its tile. A row stretch no longer turns an arched or finish rail tile's rail onto the wrong edge.
     - **The build list lays the pieces.** **Lay the pieces** goes row by row, each cell saying what goes there ("B to K rail tile, rail north"), in place of laying the floor and then the rails, dividers and turns. The printed sheets mark each tile R, F, A, OC, IC or B. Loose rail parts get a step of their own.
