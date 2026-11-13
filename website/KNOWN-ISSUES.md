@@ -4,17 +4,16 @@ Reviewed at 0.52.0, and again on 10 Oct 2026 after the show round, the voice rou
 
 ## Still open
 
-Re-checked against the code on 7 Nov 2026, after the known-issues round of that day fixed everything else (see "Fixed since 0.60.0").
+Re-checked against the code on 13 Nov 2026. The installer now has a public download: release v0.62.0 (9 Nov 2026) on asherizm/HeatCaller-releases has the signed `HeatCallerApp-beta.msi`, and getting-started/install.md links to it. The short-track limit (announcer unreliable under 8 seconds a lap) was taken out of the docs and the app on 13 Nov 2026, as the announcer keeps up on short laps now; the beta terms, section 1, still mention it.
 
 | Issue | Where it's documented |
 |---|---|
-| **The installer has nowhere public to download from yet.** getting-started/install.md was rewritten around the installer on 22 Oct 2026 and says to get it from the HeatCaller team for now. The releases repo has to exist with the signed assets on it before the page can give a download link - the update feed points there too. Not a code fix: it needs the repo made and a signed release published. | getting-started/install.md. Knock-ons still to check in reference/faq.md, getting-started/index.md, first-race-night.md and admin/troubleshooting.md |
+| Nothing open. |  |
 
 ## Documented states, not bugs
 
 | State | Where it's documented |
 |---|---|
-| **The announcer is unreliable where laps average under 8 seconds.** A line takes two or three seconds to say, so on a 6-second lap the race moves on while it plays: routine calls are skipped behind the one playing, and a gap, place or lap time not re-checked at the speaker can be a lap old. The commentary's number check can't tell every near miss between close lap times. The 8 seconds is a deliberate margin over where it was seen to go wrong (the 5-6 s demo heat of 8 Nov 2026). Timing and scoring are unaffected. Added 9 Nov 2026; also in the beta terms, section 1. | announcer/voice.md (On a short track), announcer/commentary.md (Troubleshooting), reference/faq.md, race-day/drivers-and-classes.md |
 | **A PC with no Kokoro voice file has nothing underneath it.** The installer ships the 310 MB file, so this only happens to a club that lost it or declined the download on an older build. It is said loudly - the console's `[voice] NO VOICE - ...`, the Mixer's red **NO VOICE:** and a red line on Voice Settings - with one button that fixes it. Re-checked 22 Oct 2026; the old code comments that still said the Windows voice stands in were corrected the same day. | announcer/voice.md (When nothing can speak) |
 | **The relay's voice routes name no club** (`/voice/samples`, `/voice/sample/<id>`, `/voice/preview`). Decided 22 Oct 2026: they stay a deliberate exception - a club has to hear a voice before it signs up, the two sample routes read and write nothing a club published, and `/voice/preview` carries the publish token. The `previewDailyChars` comment now says the 1,000,000 bound is only a sanity ceiling. | admin/security-and-privacy.md ("Every club is separate"), admin/relay-hosting.md |
 | **Practice rounds are not counted in the cold open's "races to run".** `CommentaryReaders.NightAhead` filters tonight's programme to `round.Kind != RoundKind.Practice`, the same judgement `RacesIn` makes about the history. A club whose evening is ten heats and twenty practice slots is told ten, and that is correct: "thirty races to run" would be the app reading out its own booking sheet as a race meeting. Kept on 7 Nov 2026 as the defensible answer. | announcer/commentary.md (The top and tail of the night) |

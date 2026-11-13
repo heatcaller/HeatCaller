@@ -21,7 +21,7 @@ Most of the plan is built. Phases 0–7 were merged in PRs #140–#150, #156 and
 |---|---|
 | **Built** | 1.1 auto-start (`AutoStart.cs`), 1.4 late or skip asks, 2.1 curfew planner (`NightPlan.cs`), 2.4 close the night, 3.2 mains preview, 3.4 late entry (`LateEntry.cs`), 4.1 mixed-class heats, 5.1 points qualifying, 5.2 heads-up, 5.3 multi-leg A-mains, 6.1 hand scoring, 6.2 standby PC, 6.3 offline-first, 7.1 entry import, 7.2 LiveTime guide, 7.3 leader behind, 7.4 race lines |
 | **Partial** | 0.1, 0.2, 0.3, 1.2, 1.3, 1.5, 1.6, 2.2, 2.3, 3.1, 3.3, 4.2, 4.3 (what's missing is listed below) |
-| **Missing** | 5.4 ROAR, EFRA and NZRCA presets. This was left out on purpose: only figures from a rulebook we can check are allowed. 7.5 cross-club index: a strategy call, still not decided |
+| **Missing** | 7.5 cross-club index: a strategy call, still not decided. (5.4, the ROAR, EFRA and NZRCA presets, was built 12 Nov 2026 in 17406f5, every figure cited to the body's own rulebook.) |
 
 **What the partial items are missing:**
 

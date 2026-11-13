@@ -647,7 +647,7 @@ Click **Add** or **Edit**. The **Add Track Layout** / **Edit Track Layout** dial
 |---|---|
 | **Name:** | Required. |
 | **Track length (ft):** | Optional, for information only. |
-| **Average lap time (sec):** | Optional. Used to pace Demo Mode races on this track. See [Practice, ghosts and demo mode](../race-control/practice-and-ghosts.md). Under 8 seconds, the note under the box turns into a warning: the announcer skips more calls and gets more of them wrong, and Race Control shows the same warning while this track is picked; see [On a short track](../announcer/voice.md#on-a-short-track). |
+| **Average lap time (sec):** | Optional. Used to pace Demo Mode races on this track. See [Practice, ghosts and demo mode](../race-control/practice-and-ghosts.md). |
 | **Corner marshal posts:** | How many marshal posts the layout needs (0–20). **0** means marshals aren't tracked. Posts are named Corner 1, Corner 2 and so on. See [Marshal assignments](program-and-mains.md#corner-marshals). |
 | **Notes:** | Free text. |
 | **Photo or drawing:** | Click **Attach File** to attach a photo or drawing (PNG, JPG, BMP, GIF, PDF, DWG or DXF). **Open** opens it; **Remove** detaches it. Attaching a new file replaces the old one. **Attach File** and **Remove** only take effect when you click **Save**; **Cancel** keeps the old picture. |

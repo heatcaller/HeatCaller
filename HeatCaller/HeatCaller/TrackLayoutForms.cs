@@ -208,27 +208,10 @@ public sealed class TrackLayoutEditForm : Form
         fields.AddRow("Name:", _txtName, stretch: true);
         fields.AddRow("Track length (ft):", FieldGrid.Inline(_numTrackLength, lblLengthHint));
         fields.AddRow("Average lap time (sec):", _numAvgLapSeconds);
-        // The pace note, and the short-track warning in its place while the
-        // lap typed is under 8 seconds (ShortTrack) - one label as tall as
-        // the longer, so the dialog doesn't move as the number changes.
-        const string paceNote = "optional - used to pace Demo Mode races on this track";
-        var lblAvgLapHint = new SteadyLabel
-        {
-            Text = paceNote,
-            UseMnemonic = false,
-            Wordings = new[] { paceNote, ShortTrack.LongestWarning },
-        };
-
-        void ShowAvgLapHint()
-        {
-            var warning = ShortTrack.Warning((double)_numAvgLapSeconds.Value);
-            lblAvgLapHint.Text = warning ?? paceNote;
-            lblAvgLapHint.ForeColor = warning is null ? AppTheme.TextMuted : AppTheme.Warning;
-        }
-
-        fields.AddHint(lblAvgLapHint);
-        ShowAvgLapHint();
-        _numAvgLapSeconds.ValueChanged += (_, _) => ShowAvgLapHint();
+        // The short-track warning that used to take this note's place under
+        // 8 seconds was taken out on 13 Nov 2026: the announcer keeps up on
+        // short laps now (Asher).
+        fields.AddHint("optional - used to pace Demo Mode races on this track");
         fields.AddRow("Corner marshal posts:", _numMarshalPosts);
         fields.AddHint("0 = don't track marshals. Each heat is marshaled by the drivers from the previous heat.");
 
