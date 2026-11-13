@@ -2623,6 +2623,9 @@ public sealed partial class RaceProgramControl : UserControl
                 Name = className,
                 QualifyingMethod = QualifyingMethod.RoundPoints,
                 CountBestRounds = round,
+                // 12 Nov 2026: on the class's own scale, so the round's heats
+                // are dealt in the order its standings will print.
+                RoundPointsScale = ClassByName(className)?.RoundPointsScale ?? RoundPointsScale.Club,
             };
 
             points = QualifyingCalculator

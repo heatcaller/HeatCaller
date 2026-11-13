@@ -48,6 +48,23 @@ public sealed class RaceClassEditForm : Form
     /// <summary>The caption of the consecutive-laps row, greyed with it - see UpdateConsecutiveEnabled. The field grid makes it.</summary>
     private readonly Label _lblConsecutive;
 
+    /// <summary>
+    /// What a round's places score under points per round (12 Nov 2026) -
+    /// the club's 1st = 1 point, or IFMAR's or EFRA's top qualifier 0. See
+    /// RoundPointsScale for why it is a choice and not a detail.
+    /// </summary>
+    private readonly ComboBox _cmbPointsScale = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+
+    /// <summary>The caption of the points-scale row, greyed with it - see UpdateConsecutiveEnabled.</summary>
+    private readonly Label _lblPointsScale;
+
+    private static readonly (RoundPointsScale Scale, string Words)[] ScaleChoices =
+    {
+        (RoundPointsScale.Club, "1 point (club)"),
+        (RoundPointsScale.Ifmar, "0 points - IFMAR (a missed round scores 500)"),
+        (RoundPointsScale.Efra, "0 points - EFRA (a missed round scores last place)"),
+    };
+
     private readonly NumericUpDown _numMainSize = new();
     private readonly NumericUpDown _numBumpUp = new();
 
@@ -189,12 +206,21 @@ public sealed class RaceClassEditForm : Form
         _numCountBest.Maximum = 20;
         _numCountBest.Value = Math.Clamp(Result.CountBestRounds, 1, 20);
 
+        foreach (var choice in ScaleChoices)
+        {
+            _cmbPointsScale.Items.Add(choice.Words);
+        }
+
+        SelectScale();
+
         var lblQualHint = new Label
         {
             Text = "Best consecutive scores the quickest unbroken run of N laps. \"Heats that count\" totals each driver's "
                  + "best that many heats and drops the rest - 2 for \"best 2 of 3\", 1 for their single best heat. "
                  + "Points per round ranks each round's heats together (1st = 1 point, a missed round = field + 1); "
-                 + "there it counts each driver's best that many ROUNDS, and fewest points wins.",
+                 + "there it counts each driver's best that many ROUNDS, and fewest points wins. For a sanctioned "
+                 + "meeting, set the top qualifier to 0 points the way IFMAR and EFRA score it - that can change the "
+                 + "order, not just the numbers.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
@@ -356,6 +382,7 @@ public sealed class RaceClassEditForm : Form
         about.AddRow("Qualifying:", _cmbQualifying);
         _lblConsecutive = about.AddRow("Consecutive laps to count:", _numConsecutive);
         about.AddRow("Heats that count:", _numCountBest);
+        _lblPointsScale = about.AddRow("Top qualifier scores:", _cmbPointsScale);
 
         // Across both columns, under the rows it explains - it is about the
         // two of them together - wrapping to the grid's width.
@@ -479,6 +506,9 @@ public sealed class RaceClassEditForm : Form
         (Font Font, int Count, int Width)? qualifyingWidth = null;
         _cmbQualifying.Width = Math.Max(UiLayout.AtTextSize(UiLayout.FieldWidth), Pieces.PickerWidth(_cmbQualifying, ref qualifyingWidth));
 
+        (Font Font, int Count, int Width)? scaleWidth = null;
+        _cmbPointsScale.Width = Math.Max(UiLayout.AtTextSize(UiLayout.FieldWidth), Pieces.PickerWidth(_cmbPointsScale, ref scaleWidth));
+
         (Font Font, int Count, int Width)? legsWidth = null;
         _cmbAMainLegs.Width = Math.Max(UiLayout.AtTextSize(UiLayout.FieldWidth), Pieces.PickerWidth(_cmbAMainLegs, ref legsWidth));
 
@@ -573,7 +603,21 @@ public sealed class RaceClassEditForm : Form
         var enabled = CurrentMethod() == QualifyingMethod.BestConsecutiveLaps;
         _numConsecutive.Enabled = enabled;
         _lblConsecutive.ForeColor = enabled ? AppTheme.TextDark : AppTheme.TextMuted;
+
+        // The points scale only means anything for points per round.
+        var points = CurrentMethod() == QualifyingMethod.RoundPoints;
+        _cmbPointsScale.Enabled = points;
+        _lblPointsScale.ForeColor = points ? AppTheme.TextDark : AppTheme.TextMuted;
     }
+
+    private void SelectScale()
+    {
+        var index = Array.FindIndex(ScaleChoices, c => c.Scale == Result.RoundPointsScale);
+        _cmbPointsScale.SelectedIndex = index >= 0 ? index : 0;
+    }
+
+    private RoundPointsScale CurrentScale() =>
+        ScaleChoices[Math.Clamp(_cmbPointsScale.SelectedIndex, 0, ScaleChoices.Length - 1)].Scale;
 
     private sealed record MethodItem(QualifyingMethod Method, string Label)
     {
@@ -635,6 +679,7 @@ public sealed class RaceClassEditForm : Form
 
         _numConsecutive.Value = Math.Clamp(Result.ConsecutiveLapCount, _numConsecutive.Minimum, _numConsecutive.Maximum);
         _numCountBest.Value = Math.Clamp(Result.CountBestRounds, _numCountBest.Minimum, _numCountBest.Maximum);
+        SelectScale();
         _numMainSize.Value = Math.Clamp(Result.MainSize, _numMainSize.Minimum, _numMainSize.Maximum);
         _numBumpUp.Value = Math.Clamp(Result.BumpUpCount, _numBumpUp.Minimum, _numBumpUp.Maximum);
         SelectLegs();
@@ -774,6 +819,7 @@ public sealed class RaceClassEditForm : Form
         Result.QualifyingMethod = CurrentMethod();
         Result.ConsecutiveLapCount = (int)_numConsecutive.Value;
         Result.CountBestRounds = (int)_numCountBest.Value;
+        Result.RoundPointsScale = CurrentScale();
         Result.MainSize = (int)_numMainSize.Value;
         Result.DetectJumpStarts = _chkJumpStart.Checked;
         Result.JumpStartPenaltySeconds = (int)_numJumpPenalty.Value;

@@ -489,7 +489,8 @@ public static class QualifyingCalculator
 
         if (method == QualifyingMethod.RoundPoints)
         {
-            return RankByPoints(byDriver, names, disqualified, countBest, forfeitReasons);
+            return RankByPoints(byDriver, names, disqualified, countBest, forfeitReasons,
+                raceClass?.RoundPointsScale ?? RoundPointsScale.Club);
         }
 
         var entries = byDriver
@@ -570,7 +571,10 @@ public static class QualifyingCalculator
     /// For each qualifying ROUND, every driver who ran one of its heats is
     /// ranked against everybody else in that round - most laps, then least
     /// time, which is the total-laps rule applied inside the round - and
-    /// scores their place: 1st = 1 point, 2nd = 2 and so on. Drivers level
+    /// scores their place: 1st = 1 point, 2nd = 2 and so on - or, on a
+    /// rulebook scale (12 Nov 2026, RoundPointsScale), 1st = 0 with that
+    /// body's missed-round score and tie-breaks (RulebookOrder); everything
+    /// described below is the club scale. Drivers level
     /// on laps AND time to the millisecond share the place (and its points),
     /// and the next driver takes the place after them, the way a results
     /// sheet prints a dead heat.
@@ -600,10 +604,21 @@ public static class QualifyingCalculator
     /// </summary>
     private static List<Entry> RankByPoints(Dictionary<string, List<HeatScore>> byDriver,
         Dictionary<string, (string Driver, string Car)> names, HashSet<(string Driver, string Group)> disqualified, int countBest,
-        IReadOnlyDictionary<string, string>? forfeits = null)
+        IReadOnlyDictionary<string, string>? forfeits = null, RoundPointsScale scale = RoundPointsScale.Club)
     {
         var field = byDriver.Count;
-        var missed = field + 1;
+
+        // 12 Nov 2026: what a round not run scores, by the class's scale
+        // (RoundPointsScale). The club's field + 1 is worse than any place;
+        // so is IFMAR's 500 (track 1.4.5). EFRA's "last place in that
+        // Round" (9.4.1) is the field: a round somebody missed has at most
+        // field - 1 runners, so its last runner scores less than that.
+        var missed = scale switch
+        {
+            RoundPointsScale.Ifmar => IfmarMissedRoundPoints,
+            RoundPointsScale.Efra => field,
+            _ => field + 1,
+        };
 
         // Each driver's one result per round: their better heat if they ran
         // two heats of it (moved between heats, or a hand-added heat filed
@@ -678,12 +693,13 @@ public static class QualifyingCalculator
         }
 
         var entries = new List<Entry>();
+        var tieKeys = new Dictionary<string, (List<int> Scores, List<HeatScore?> Heats)>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var (driver, heats) in byDriver)
         {
             var scores = groups
                 .Select(g => (Group: g, Place: places[driver].TryGetValue(g.Key, out var p) ? p : 0))
-                .Select(x => (x.Group, x.Place, Points: x.Place > 0 ? x.Place : missed))
+                .Select(x => (x.Group, x.Place, Points: x.Place > 0 ? PlacePoints(x.Place, scale) : missed))
                 .ToList();
 
             // Best N, lowest points first; a tie between two rounds keeps
@@ -719,6 +735,12 @@ public static class QualifyingCalculator
             var bestFinish = scores.Where(s => s.Place > 0).Select(s => s.Place).DefaultIfEmpty(0).Min();
             var single = countedHeats.Count == 1 && counted.Count == 1 ? countedHeats[0] : null;
 
+            // The rulebook tie-breaks look at the COUNTED rounds only, best
+            // score first (12 Nov 2026, see RulebookOrder).
+            tieKeys[driver] = (
+                counted.Select(s => s.Points).ToList(),
+                counted.Select(s => s.Place > 0 ? perRound[driver][s.Group.Key] : null).ToList());
+
             entries.Add(new Entry(
                 driver,
                 names[driver].Driver,
@@ -741,12 +763,161 @@ public static class QualifyingCalculator
                 Forfeit: lostWords.TryGetValue(driver, out var lostLine) ? lostLine : string.Empty));
         }
 
+        if (scale != RoundPointsScale.Club)
+        {
+            return entries
+                .OrderBy(e => e, new RulebookOrder(scale, tieKeys))
+                .ToList();
+        }
+
         return entries
             .OrderBy(e => e.Points)
             .ThenBy(e => e.BestRoundFinish > 0 ? e.BestRoundFinish : int.MaxValue)
             .ThenByDescending(e => e.BestLaps)
             .ThenBy(e => e.BestElapsedMs)
             .ToList();
+    }
+
+    /// <summary>
+    /// What IFMAR scores a round a driver did not record a time in, or had
+    /// their time disqualified from: 500 points (Electric Track Racing and
+    /// Technical Rules, September 2024, 1.4.5). The off-road rules (1.7) say
+    /// "no points (Attention, no points is NOT zero)" without a figure; the
+    /// track rule's 500 is the same intent - never a score worth counting.
+    /// </summary>
+    public const int IfmarMissedRoundPoints = 500;
+
+    /// <summary>
+    /// A round place's points on a scale (12 Nov 2026): the club's 1st = 1,
+    /// 2nd = 2; or the rulebooks' top qualifier 0, then 2, 3, 4 - IFMAR
+    /// off-road 1.7, track 1.4.5, EFRA App. 3 9.4.1, ROAR 14.3.6. Drivers
+    /// sharing a place share its points, so a dead heat for the TQ is 0
+    /// each and the next driver scores their place, as IFMAR's own example
+    /// table does.
+    /// </summary>
+    public static int PlacePoints(int place, RoundPointsScale scale) =>
+        scale == RoundPointsScale.Club || place != 1 ? place : 0;
+
+    /// <summary>
+    /// The scale in a few words, for a picker or a one-line summary: "1st =
+    /// 1 point", "TQ 0, 2nd 2 (IFMAR)". One wording, so the class editor,
+    /// the Classes page and the standings all say it the same way.
+    /// </summary>
+    public static string ScaleWords(RoundPointsScale scale) => scale switch
+    {
+        RoundPointsScale.Ifmar => "TQ 0, 2nd 2 (IFMAR)",
+        RoundPointsScale.Efra => "TQ 0, 2nd 2 (EFRA)",
+        _ => "1st = 1 point",
+    };
+
+    /// <summary>
+    /// How a scale scores and breaks ties, in full, for the standings
+    /// window's rule line - the two halves either side of "the best N
+    /// rounds count".
+    /// </summary>
+    public static (string Scoring, string Ties) RuleWords(RoundPointsScale scale) => scale switch
+    {
+        RoundPointsScale.Ifmar => (
+            "Each round ranks everyone in its heats on laps then time: the fastest scores 0 points, 2nd 2, 3rd 3 and so on "
+            + $"(IFMAR), and a round not run (or a DQ) scores {IfmarMissedRoundPoints}. ",
+            "Fewest points wins; ties go to the counted rounds' scores, lowest first, then the laps and time of the "
+            + "lowest-scoring round - dropped rounds are not looked at."),
+        RoundPointsScale.Efra => (
+            "Each round ranks everyone in its heats on laps then time: the fastest scores 0 points, 2nd 2, 3rd 3 and so on "
+            + "(EFRA), and a round not run (or a DQ) scores last place - the number of drivers. ",
+            "Fewest points wins; ties go to the best finish in the counted rounds, then the laps and time of the best "
+            + "points round - dropped rounds are not looked at."),
+        _ => (
+            "Each round ranks everyone in its heats on laps then time: 1st scores 1 point, 2nd 2 and so on, and a round not run "
+            + "(or a DQ) scores one more than the field. ",
+            "Fewest points wins; ties go to the best single-round finish, then the best heat."),
+    };
+
+    /// <summary>
+    /// The rulebook order for points qualifying (12 Nov 2026): fewest
+    /// points, then the rulebook's tie-breaks, which use the COUNTED rounds
+    /// only - IFMAR: "The discarded scores, laps and times will not be used
+    /// to separate a tie" (off-road 1.7, track 1.4.5); EFRA: "Only counting
+    /// Rounds will be used to decide Qualifying positions (or ties)" (App. 3
+    /// 9.4.1).
+    ///
+    ///  - IFMAR: the lowest single counted score, then the next best, until
+    ///    every counted score has been compared; then the laps and time of
+    ///    the lowest-scoring round - and, should those match too, the next
+    ///    lowest's, in the same order.
+    ///  - EFRA: the best finish in the counted rounds, then the laps and
+    ///    time of the best points round, then of the second best (and so
+    ///    on, when three count).
+    ///
+    /// A counted round the driver did not run has no laps or time, and loses
+    /// that comparison to one they did. Still level after all of it: the
+    /// order they were found in, as on the club scale.
+    /// </summary>
+    private sealed class RulebookOrder(RoundPointsScale scale,
+        IReadOnlyDictionary<string, (List<int> Scores, List<HeatScore?> Heats)> keys) : IComparer<Entry>
+    {
+        public int Compare(Entry? x, Entry? y)
+        {
+            if (x is null || y is null)
+            {
+                return x is null ? (y is null ? 0 : 1) : -1;
+            }
+
+            var byTotal = x.Points.CompareTo(y.Points);
+
+            if (byTotal != 0)
+            {
+                return byTotal;
+            }
+
+            var a = keys[x.Transponder];
+            var b = keys[y.Transponder];
+
+            // IFMAR compares every counted score; EFRA only the best one.
+            var common = Math.Min(a.Scores.Count, b.Scores.Count);
+            var scoresCompared = scale == RoundPointsScale.Ifmar ? common : Math.Min(1, common);
+
+            for (var i = 0; i < scoresCompared; i++)
+            {
+                var byScore = a.Scores[i].CompareTo(b.Scores[i]);
+
+                if (byScore != 0)
+                {
+                    return byScore;
+                }
+            }
+
+            for (var i = 0; i < Math.Min(a.Heats.Count, b.Heats.Count); i++)
+            {
+                var (ha, hb) = (a.Heats[i], b.Heats[i]);
+
+                if (ha is null || hb is null)
+                {
+                    if (ha is null && hb is null)
+                    {
+                        continue;
+                    }
+
+                    return ha is null ? 1 : -1;
+                }
+
+                var byLaps = hb.Laps.CompareTo(ha.Laps);
+
+                if (byLaps != 0)
+                {
+                    return byLaps;
+                }
+
+                var byTime = ha.ElapsedMs.CompareTo(hb.ElapsedMs);
+
+                if (byTime != 0)
+                {
+                    return byTime;
+                }
+            }
+
+            return 0;
+        }
     }
 
     /// <summary>"1st", "2nd", "11th" - a round finish in the points breakdown.</summary>

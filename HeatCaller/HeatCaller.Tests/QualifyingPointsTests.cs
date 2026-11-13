@@ -325,6 +325,156 @@ public sealed class QualifyingPointsTests : IDisposable
         Assert.DoesNotContain("laps", screen);
     }
 
+    // --- The rulebook scales (12 Nov 2026, RoundPointsScale) ---
+
+    private static RaceClass Rulebook(RoundPointsScale scale, int countBest = 1) => new()
+    {
+        Name = Stock,
+        QualifyingMethod = QualifyingMethod.RoundPoints,
+        CountBestRounds = countBest,
+        RoundPointsScale = scale,
+    };
+
+    [Theory]
+    [InlineData(RoundPointsScale.Ifmar)]
+    [InlineData(RoundPointsScale.Efra)]
+    public void The_rulebook_scale_gives_the_tq_zero_then_two_three_four(RoundPointsScale scale)
+    {
+        RunHeat("Q1 Heat 1", R("A", 14, 300_000), R("B", 13, 300_000));
+        RunHeat("Q1 Heat 2", R("C", 12, 300_000), R("D", 11, 300_000));
+
+        var entries = Compute(Rulebook(scale));
+
+        Assert.Equal(new[] { "A", "B", "C", "D" }, Ids(entries));
+        Assert.Equal(new[] { 0, 2, 3, 4 }, entries.Select(e => e.Points).ToArray());
+        Assert.Equal("Q1 1st (0 pts)", entries[0].PointsDetail);
+        Assert.Equal("0 pts (Q1)", entries[0].PointsWords());
+    }
+
+    [Fact]
+    public void A_dead_heat_for_tq_is_zero_each_and_the_next_driver_scores_their_place()
+    {
+        // IFMAR off-road 1.7's own example: tied drivers share the points.
+        RunHeat("Q1 Heat 1", R("A", 14, 300_000), R("B", 13, 300_000));
+        RunHeat("Q1 Heat 2", R("C", 14, 300_000));
+
+        var entries = Compute(Rulebook(RoundPointsScale.Ifmar));
+
+        Assert.Equal(0, entries.Single(e => e.Transponder == "A").Points);
+        Assert.Equal(0, entries.Single(e => e.Transponder == "C").Points);
+        Assert.Equal(3, entries.Single(e => e.Transponder == "B").Points);
+    }
+
+    /// <summary>
+    /// The case the whole setting exists for: 1st + 4th against 2nd + 2nd.
+    /// Club: 1 + 4 = 5 against 4, so the steady driver is ahead. Rulebook:
+    /// 0 + 4 = 4 against 4, level, and the round winner takes it on the best
+    /// single finish (IFMAR 1.7, EFRA 9.4.1, ROAR 14.3.6).
+    /// </summary>
+    [Theory]
+    [InlineData(RoundPointsScale.Club, "B", "A")]
+    [InlineData(RoundPointsScale.Ifmar, "A", "B")]
+    [InlineData(RoundPointsScale.Efra, "A", "B")]
+    public void First_and_fourth_against_second_and_second_swaps_on_the_rulebook_scale(RoundPointsScale scale, string ahead, string behind)
+    {
+        RunHeat("Q1 Heat 1", R("A", 15, 300_000), R("B", 14, 300_000), R("C", 13, 300_000), R("D", 12, 300_000));
+        RunHeat("Q2 Heat 1", R("C", 15, 300_000), R("B", 14, 300_000), R("D", 13, 300_000), R("A", 12, 300_000));
+
+        var entries = Compute(Rulebook(scale, countBest: 2));
+        var order = Ids(entries).ToList();
+
+        Assert.True(order.IndexOf(ahead) < order.IndexOf(behind), $"{ahead} should be ahead of {behind}: {string.Join(", ", order)}");
+
+        var a = entries.Single(e => e.Transponder == "A");
+        var b = entries.Single(e => e.Transponder == "B");
+        Assert.Equal(scale == RoundPointsScale.Club ? 5 : 4, a.Points);
+        Assert.Equal(4, b.Points);
+    }
+
+    [Fact]
+    public void A_missed_round_scores_500_on_the_ifmar_scale()
+    {
+        RunHeat("Q1 Heat 1", R("A", 14, 300_000), R("B", 13, 300_000), R("C", 12, 300_000));
+        RunHeat("Q2 Heat 1", R("A", 14, 300_000), R("C", 13, 300_000));          // B missed Q2
+
+        var b = Compute(Rulebook(RoundPointsScale.Ifmar, countBest: 2)).Single(e => e.Transponder == "B");
+
+        Assert.Equal(2 + QualifyingCalculator.IfmarMissedRoundPoints, b.Points);
+        Assert.Equal("Q1 2nd (2 pts), Q2 DNS (500 pts)", b.PointsDetail);
+    }
+
+    [Fact]
+    public void A_missed_round_scores_last_place_the_field_on_the_efra_scale()
+    {
+        RunHeat("Q1 Heat 1", R("A", 14, 300_000), R("B", 13, 300_000), R("C", 12, 300_000));
+        RunHeat("Q2 Heat 1", R("A", 14, 300_000), R("C", 13, 300_000));          // B missed Q2
+
+        var entries = Compute(Rulebook(RoundPointsScale.Efra, countBest: 2));
+        var b = entries.Single(e => e.Transponder == "B");
+        var c = entries.Single(e => e.Transponder == "C");
+
+        // Field of 3: the DNS scores 3, and Q2's last runner (C, 2nd) scores less.
+        Assert.Equal("Q1 2nd (2 pts), Q2 DNS (3 pts)", b.PointsDetail);
+        Assert.Equal(5, b.Points);
+        Assert.Equal(3 + 2, c.Points);
+    }
+
+    /// <summary>
+    /// Only the counted rounds break a tie on the rulebook scales (IFMAR
+    /// 1.7 "the discarded scores, laps and times will not be used"; EFRA
+    /// 9.4.1 "only counting Rounds"). A, B and C each won one round and that
+    /// is the round counted: level on 0, level on best finish. The club scale
+    /// then looks at the best heat ANYWHERE - A's 19 laps in Q3, a round A
+    /// dropped. The rulebooks look at the counted round's laps: A's Q1 10
+    /// against B's Q2 11.
+    /// </summary>
+    [Theory]
+    [InlineData(RoundPointsScale.Club, new[] { "C", "A", "B" })]
+    [InlineData(RoundPointsScale.Ifmar, new[] { "C", "B", "A" })]
+    [InlineData(RoundPointsScale.Efra, new[] { "C", "B", "A" })]
+    public void Rulebook_ties_use_the_counted_rounds_only(RoundPointsScale scale, string[] expected)
+    {
+        RunHeat("Q1 Heat 1", R("A", 10, 300_000), R("B", 9, 300_000));
+        RunHeat("Q2 Heat 1", R("B", 11, 300_000), R("A", 10, 300_000));
+        RunHeat("Q3 Heat 1", R("C", 20, 300_000), R("A", 19, 300_000), R("B", 18, 300_000));
+
+        var entries = Compute(Rulebook(scale, countBest: 1));
+
+        Assert.All(entries, e => Assert.Equal(scale == RoundPointsScale.Club ? 1 : 0, e.Points));
+        Assert.Equal(expected, Ids(entries));
+    }
+
+    /// <summary>
+    /// IFMAR compares every counted score before any laps; EFRA only the
+    /// best finish, then the best round's laps and time. Best 2 of 2:
+    /// A 0 + 4, B 2 + 2 is the swap above; here A 2 + 3 against B 2 + 3
+    /// level on both scores, so both go to the laps of the best round.
+    /// </summary>
+    [Theory]
+    [InlineData(RoundPointsScale.Ifmar)]
+    [InlineData(RoundPointsScale.Efra)]
+    public void Level_on_every_counted_score_goes_to_the_best_rounds_laps_and_time(RoundPointsScale scale)
+    {
+        RunHeat("Q1 Heat 1", R("X", 20, 300_000), R("A", 15, 300_000), R("B", 14, 300_000));
+        RunHeat("Q2 Heat 1", R("X", 20, 300_000), R("B", 16, 300_000), R("A", 13, 300_000));
+
+        var entries = Compute(Rulebook(scale, countBest: 2));
+
+        // A: 2 (Q1, 15 laps) + 3; B: 2 (Q2, 16 laps) + 3. B's best round has more laps.
+        Assert.Equal(5, entries.Single(e => e.Transponder == "A").Points);
+        Assert.Equal(5, entries.Single(e => e.Transponder == "B").Points);
+        Assert.Equal(new[] { "X", "B", "A" }, Ids(entries));
+    }
+
+    [Fact]
+    public void A_class_saved_before_the_scale_reads_as_the_club_scale()
+    {
+        var raceClass = System.Text.Json.JsonSerializer.Deserialize<RaceClass>(
+            "{\"Name\":\"Stock\",\"QualifyingMethod\":2,\"CountBestRounds\":2}")!;
+
+        Assert.Equal(RoundPointsScale.Club, raceClass.RoundPointsScale);
+    }
+
     private static SessionResultEntry R(string transponder, int laps, long elapsedMs) => new()
     {
         Transponder = transponder,
