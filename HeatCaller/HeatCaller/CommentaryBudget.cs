@@ -1622,6 +1622,27 @@ public sealed class CommentaryBudget
 
     private void Trim(DateTime now)
     {
+        // THE CLOCK WENT BACKWARDS (13 Nov 2026, bug hunt 17). This is the
+        // laptop's wall clock, and Windows correcting it, somebody setting
+        // it, or daylight saving ending mid-meeting left these stamps in
+        // the future: "now - last" was negative, so under every gap, and
+        // the ten-minute window kept its lines for ten minutes plus the
+        // size of the jump - an hour of nothing but intros and recaps.
+        // A stamp later than now is taken as now, so the gap and the
+        // window are waited out once from here and never for longer.
+        if (_lastSpoken is { } last && last > now)
+        {
+            _lastSpoken = now;
+        }
+
+        for (var at = 0; at < _spokenAt.Count; at++)
+        {
+            if (_spokenAt[at] > now)
+            {
+                _spokenAt[at] = now;
+            }
+        }
+
         if (_spokenAt.Count == 0)
         {
             return;

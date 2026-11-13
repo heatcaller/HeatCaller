@@ -994,6 +994,31 @@ public sealed class CommentaryDirector
     }
 
     /// <summary>
+    /// The class of the round under the announcer, told on the tick like
+    /// <see cref="Stature"/> - for the segments between races.
+    ///
+    /// WHY (13 Nov 2026, bug hunt 17): the class was only ever set at the
+    /// green, so between races it was the LAST race's. The readers follow
+    /// the round picked in the Round box, so with the Stock main picked
+    /// after a Mod heat the qualifying report said Stock's pole sitter
+    /// "takes pole in Mod", and booked it against Mod's allowance.
+    ///
+    /// Not while a race is running - that class is the race's own. And a
+    /// blank one changes nothing: with no round picked the readers have
+    /// nothing for a class anyway, and the last race's still counts the
+    /// per-class limits as it did.
+    /// </summary>
+    public void ClassBetweenRaces(string? className)
+    {
+        if (_racing || string.IsNullOrWhiteSpace(className))
+        {
+            return;
+        }
+
+        _className = className;
+    }
+
+    /// <summary>
     /// A battle watch the director let go was thrown away by the voice
     /// before a word of it was heard - its two cars swapped (3 Nov 2026).
     /// Its turn for the night and the class comes back, so a close fight
@@ -2767,7 +2792,15 @@ public sealed class CommentaryDirector
                 // cooldown landed on a fight nobody had mentioned while
                 // the one that was just called stayed free to be called
                 // again.
-                _calling = Battles.Pick();
+                //
+                // AND NOT A FIGHT ALREADY CALLED THIS RACE (13 Nov 2026,
+                // bug hunt 17). Its key is spent for the race, so once the
+                // two-minute cooldown ran out the leaders were picked again
+                // on every pass, came to nothing, and a new fight for third
+                // behind them was never offered. Passed over here, so the
+                // next fight down gets the call.
+                _calling = Battles.Pick(
+                    skip: fight => Said.Spent(CommentaryFacts.Battle(fight, names, _raceKey).Key));
 
                 return _calling is { } battle
                     ? new[] { CommentaryFacts.Battle(battle, names, _raceKey) }
@@ -2850,7 +2883,15 @@ public sealed class CommentaryDirector
                     return Array.Empty<FactBlock>();
                 }
 
-                return CommentaryFacts.ComingUpNext(next.Rounds, next.InAbout, _raceKey) is { } block
+                // NO RACE YET IS NO RACE KEY (13 Nov 2026, bug hunt 17), not
+                // a blank one. Blank made the key "upnext:" before the first
+                // green of every launch, and tonight's spent keys come back
+                // after a restart - so the app reopened between the heats
+                // and the mains found it already said. Null keys it on the
+                // round that is next instead.
+                var upNextKey = _raceKey.Length > 0 ? _raceKey : null;
+
+                return CommentaryFacts.ComingUpNext(next.Rounds, next.InAbout, upNextKey) is { } block
                     ? new[] { block }
                     : Array.Empty<FactBlock>();
             }

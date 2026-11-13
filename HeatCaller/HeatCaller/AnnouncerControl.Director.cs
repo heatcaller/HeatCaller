@@ -1967,6 +1967,13 @@ public partial class AnnouncerControl
             }
         }
 
+        // Between races the class is the picked round's, not the last
+        // race's - see CommentaryDirector.ClassBetweenRaces.
+        if (!racing)
+        {
+            director.ClassBetweenRaces(RaceClassName?.Invoke());
+        }
+
         // The next race on its way closes the gap after the last one, so no
         // paid read lands on the grid. See CommentaryDirector.ReadsBelongHere.
         if (_race.State is RaceState.Staging or RaceState.Countdown)
