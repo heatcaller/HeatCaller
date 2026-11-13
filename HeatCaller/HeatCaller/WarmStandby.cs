@@ -87,6 +87,10 @@ internal static class WarmStandby
     /// settings (decoder port, voice choice, sealed keys), the voice files,
     /// this PC's own metering and licence acceptance, the restore record,
     /// and the taken-over marker itself.
+    ///
+    /// The window of published results is a setting too, but it is no use
+    /// without relay-results.json, which IS copied - so that file carries
+    /// the window with it (RelayResultsIndex.Ledger.From).
     /// </summary>
     public static readonly IReadOnlyCollection<string> MachineOwnFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -447,6 +451,12 @@ internal static class WarmStandby
     {
         var from = string.IsNullOrWhiteSpace(primary) ? "the timing PC" : primary;
         var age = nowUtc - copyTakenUtc;
+        var holds = files > 0 ? $" ({Plural.Of(files, "file")})" : string.Empty;
+
+        // No count is one not known, not an empty copy: a standby started
+        // after the timing PC died has the copy on disk but has never been
+        // told how many files are in it, and "(0 files)" read as nothing to
+        // take over from at the one moment the question matters.
         var holds = files > 0 ? $" ({Plural.Of(files, "file")})" : string.Empty;
 
         return $"Take over from {from}?\n\n"

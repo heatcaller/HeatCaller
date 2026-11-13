@@ -191,6 +191,7 @@ public sealed partial class RelayPublisher : IDisposable
         // A ledger from before it recorded its relay describes the one in
         // use: until now the window was cleared whenever that changed.
         AdoptLedger(_target);
+        KeepWindowWithLedger();
 
         // A timeout, not the default of 100 seconds. A socket that hangs
         // must not hold the queue for a minute and a half.
@@ -1241,6 +1242,13 @@ public sealed partial class RelayPublisher : IDisposable
                     _settings.Save();
                 }
 
+                // The ledger's own copy of the window - see Ledger.From.
+                if (now != _ledger.From)
+                {
+                    _ledger.From = now;
+                    changed = true;
+                }
+
                 if (changed)
                 {
                     _ledger.Save();
@@ -1365,6 +1373,39 @@ public sealed partial class RelayPublisher : IDisposable
         catch
         {
             // Adopted in memory, written with the ledger's next change.
+        }
+    }
+
+    /// <summary>
+    /// Makes the window in settings and the ledger's own copy of it agree,
+    /// at startup - see RelayResultsIndex.Ledger.From. After a standby PC's
+    /// Take Over the ledger is the timing PC's and the settings are still
+    /// this PC's, and the ledger's window is the one its exceptions mean.
+    /// Never throws.
+    /// </summary>
+    private void KeepWindowWithLedger()
+    {
+        try
+        {
+            lock (_ledgerGate)
+            {
+                var window = _ledger.KeepWindow(_settings.RelayResultsFromUtc, out var changed);
+
+                if (window != _settings.RelayResultsFromUtc)
+                {
+                    _settings.RelayResultsFromUtc = window;
+                    _settings.Save();
+                }
+
+                if (changed)
+                {
+                    _ledger.Save();
+                }
+            }
+        }
+        catch
+        {
+            // Settled in memory, written with the next change to either.
         }
     }
 

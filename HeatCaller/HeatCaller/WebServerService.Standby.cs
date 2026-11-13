@@ -141,5 +141,9 @@ public sealed partial class WebServerService
         context.Response.Headers["X-HeatCaller-Files"] = files.ToString(CultureInfo.InvariantCulture);
         context.Response.ContentLength64 = zip.Length;
         context.Response.OutputStream.Write(zip, 0, zip.Length);
+
+        // Closed like every other answer this server writes, so the request
+        // is let go of now and not whenever the garbage collector gets to it.
+        context.Response.OutputStream.Close();
     }
 }
