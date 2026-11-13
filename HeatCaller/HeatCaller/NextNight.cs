@@ -67,7 +67,12 @@ public static class NextNight
     /// reads: day, title, when, venue, classes, firstRace, entriesClose, off,
     /// offText, takingEntries, until.
     /// </summary>
-    public static string Document(AnnouncedNight night)
+    /// <param name="phonesCanSay">
+    /// Whether drivers' phones can send "I'm coming" at all - the club's driver
+    /// requests switch (12 Nov 2026). Off, the night isn't "taking entries" on
+    /// the phones, so Home doesn't offer a Coming? link that leads nowhere.
+    /// </param>
+    public static string Document(AnnouncedNight night, bool phonesCanSay = true)
     {
         static string? Clock(TimeSpan? time) =>
             time is { } t ? $"{(int)t.TotalHours % 24:00}:{t.Minutes:00}" : null;
@@ -83,7 +88,7 @@ public static class NextNight
             entriesClose = Clock(night.EntriesClose),
             off = night.Off,
             offText = night.Off ? night.OffText.Trim() : string.Empty,
-            takingEntries = night.TakingEntries && !night.Off,
+            takingEntries = night.TakingEntries && !night.Off && phonesCanSay,
             until = UntilUtc(night.Day).ToString("o", System.Globalization.CultureInfo.InvariantCulture),
         });
     }

@@ -139,7 +139,7 @@ public partial class MainForm
         try
         {
             _relayPublisher.PublishSnapshot(RelayChannel.NextNight,
-                _settings.NextNight is { } night ? NextNight.Document(night) : NextNight.Withdrawn());
+                _settings.NextNight is { } night ? NextNight.Document(night, _settings.RelayDriverRequests) : NextNight.Withdrawn());
         }
         catch (Exception ex)
         {

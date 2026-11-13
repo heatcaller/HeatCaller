@@ -13695,6 +13695,7 @@ function take(body) {
   // anything missing or of the wrong shape counts as no.
   me = body && typeof body.me === 'object' && body.me !== null && !Array.isArray(body.me) ? body.me : null;
   asksOpen = !!body && body.asksOpen === true;
+  comingOpen = !!body && body.comingOpen === true;
   queriesOff = !!body && body.queriesOff === true;
 }
 
@@ -13726,6 +13727,8 @@ const ASK_STATES = ['waiting', 'approved', 'noted', 'declined'];
 let me = null;
 // Whether the relay will take a request from this code right now.
 let asksOpen = false;
+// "I'm coming" may be asked with no check-in tonight (12 Nov 2026) - the relay's comingGateOf.
+let comingOpen = false;
 // Whether the club has switched result queries off on the laptop (5 Nov
 // 2026): each race's "Something wrong?" goes, the other requests stay.
 let queriesOff = false;

@@ -522,7 +522,10 @@ async function meSendComing(day, classes) {
 function meComingCard() {
   const at = document.getElementById('me-coming');
   if (!at) return;
-  const night = typeof asksOpen !== 'undefined' && asksOpen && me ? meComingNight() : null;
+  // Tonight's asks (asksOpen, on tonight's list), or just I'm coming with no
+  // check-in tonight (comingOpen, 12 Nov 2026).
+  const open = (typeof asksOpen !== 'undefined' && asksOpen && me) || (typeof comingOpen !== 'undefined' && comingOpen);
+  const night = open ? meComingNight() : null;
   at.textContent = '';
   if (!night) return;
   if (meComingTicks === null || meComingTicks.day !== night.day) meComingTicks = { day: night.day, on: new Set() };
