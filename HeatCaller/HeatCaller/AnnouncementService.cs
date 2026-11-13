@@ -701,9 +701,16 @@ public sealed partial class AnnouncementService
         AnnouncementTextReady?.Invoke(clean);
     }
 
-    /// <summary>A line as the screens show it: no audio tags, real names. See WithScreenNames.</summary>
+    /// <summary>
+    /// A line as the screens show it: no audio tags, real names. See WithScreenNames.
+    ///
+    /// The profiles as of their last change, not the live list (bug hunt 17):
+    /// lines are queued from pool threads too - a sponsor's read in the break,
+    /// a recap line - and reading the live list while the desk saved a driver
+    /// could throw, which lost the line before it was queued.
+    /// </summary>
     private string ForTheScreens(string text) =>
-        WithScreenNames(VoiceProfile.StripAudioTags(text), _profiles.AllIncludingGhosts);
+        WithScreenNames(VoiceProfile.StripAudioTags(text), _profiles.AllIncludingGhostsForAnyThread);
 
     /// <summary>
     /// Puts each driver's real name back where the line has the name the
@@ -775,9 +782,13 @@ public sealed partial class AnnouncementService
             .ThenBy(k => k, StringComparer.Ordinal)
             .Select(System.Text.RegularExpressions.Regex.Escape));
 
+        // A name in the possessive is still the name (bug hunt 17): the
+        // apostrophe after it used to refuse the match, so "Ela vayter's
+        // clean run" went to the screens respelled. Any other apostrophe
+        // still does - the O of O'Brien is not somebody's nickname.
         return System.Text.RegularExpressions.Regex.Replace(
             text,
-            $@"(?<![\w'])(?:{choices})(?![\w'])",
+            $@"(?<![\w'])(?:{choices})(?!\w|'(?![sS]\b))",
             m => swaps[m.Value]);
     }
 
