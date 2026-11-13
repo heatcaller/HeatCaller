@@ -76,6 +76,10 @@ public partial class MainForm
             ChassisTypes = _chassisTypes,
             Sheets = _chassisTemplates,
 
+            // "I'm coming" from the Me page (12 Nov 2026, setup plan C1).
+            PreEntries = _preEntries,
+            AnnouncedNight = () => _settings.NextNight,
+
             // More time, or skip my race, from a driver's phone - done in
             // Race Control once the desk approves (11 Nov 2026).
             RaceAsk = (kind, transponder, name) => _raceControlControl is not { } raceControl

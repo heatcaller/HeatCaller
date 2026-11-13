@@ -46,6 +46,14 @@ public sealed partial class CheckInControl : UserControl
     /// <summary>Whether that line is shown - kept here for the reason _noDayBannerShown is.</summary>
     private bool _entriesClosedShown;
 
+    /// <summary>"12 said they're coming · 9 here · still to come: ..." (setup plan C1) - ComingTonight.Line.</summary>
+    private readonly Label _lblComing = new();
+
+    private bool _comingShown;
+
+    /// <summary>Who said from their phone they're coming tonight (setup plan C1). Set by MainForm; null shows nothing.</summary>
+    internal Func<IReadOnlyList<PreEntry>>? ComingTonightList { get; set; }
+
     /// <summary>
     /// The banner's two lines, held so it can say which of its two things
     /// is wrong: no race day at all, or a current day that is closed - see
@@ -388,6 +396,10 @@ public sealed partial class CheckInControl : UserControl
             // entry fee - see RefreshDriverList. Right-click to settle.
             _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "paid", HeaderText = "Paid", FillWeight = 35, ReadOnly = true, Visible = false });
         }
+
+        // Papers (12 Nov 2026, setup plan D9): shown only while the club
+        // checks waivers or memberships - see RefreshDriverList. Click to record.
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "papers", HeaderText = "Papers", FillWeight = 45, ReadOnly = true, Visible = false });
         _grid.CellClick += Grid_CellClick;
         _grid.CellDoubleClick += Grid_CellDoubleClick;
         _grid.CurrentCellDirtyStateChanged += (_, _) =>
@@ -578,6 +590,12 @@ public sealed partial class CheckInControl : UserControl
         _lblEntriesClosed.ForeColor = AppTheme.Warning;
         _lblEntriesClosed.Visible = false;
         page.Add(_lblEntriesClosed, gapBelow: UiLayout.RowGap);
+
+        // Who said they're coming tonight (12 Nov 2026, setup plan C1).
+        _lblComing.AutoSize = true;
+        _lblComing.ForeColor = AppTheme.TextMuted;
+        _lblComing.Visible = false;
+        page.Add(_lblComing, gapBelow: UiLayout.RowGap);
         page.AddFill(body, body.LeastHeight, gapBelow: 0);
 
         Controls.Add(page);
@@ -1109,6 +1127,7 @@ public sealed partial class CheckInControl : UserControl
     {
         RefreshNoDayBanner();
         RefreshEntriesClosed();
+        RefreshComing();
         RefreshClassFilter();
         RefreshDriverList();
     }
@@ -1234,6 +1253,7 @@ public sealed partial class CheckInControl : UserControl
                 _grid.Rows[rowIndex].Tag = profile;
                 ShowPack(_grid.Rows[rowIndex]);
                 ShowPaid(_grid.Rows[rowIndex]);
+                ShowPapers(_grid.Rows[rowIndex]);
 
                 if (_tech is not null)
                 {
@@ -1255,6 +1275,12 @@ public sealed partial class CheckInControl : UserControl
         }
 
         // The Paid column only on a race day that charges (11 Nov 2026).
+        // Papers only while the club checks them (setup plan D9).
+        if (_grid.Columns["papers"] is { } papersColumn)
+        {
+            papersColumn.Visible = ChecksPapers;
+        }
+
         if (_grid.Columns["paid"] is { } paidColumn)
         {
             paidColumn.Visible = TonightsFees() is { Entry: > 0 };
@@ -1505,6 +1531,13 @@ public sealed partial class CheckInControl : UserControl
         if (e.RowIndex >= 0 && _batteries is not null && e.ColumnIndex == _grid.Columns["pack"]?.Index)
         {
             PickPack(e.RowIndex);
+            return;
+        }
+
+        // The Papers cell: the waiver and membership (setup plan D9).
+        if (e.RowIndex >= 0 && e.ColumnIndex == _grid.Columns["papers"]?.Index)
+        {
+            EditPapers(e.RowIndex);
             return;
         }
 

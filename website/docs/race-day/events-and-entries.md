@@ -99,6 +99,7 @@ The line under the picker shows what the selected day already holds, for example
 | **First race at:** | When the first race goes out. Tick **Set** to give the day a time; unticked, the day has none. **Fill In the Times...** on the Timetable starts from it, and writes back the time you use there. See [The Timetable](program-and-mains.md#the-timetable). | From the last day of the same kind, or not set |
 | **Out of the venue by:** | When the club has to be out of the building. Tick **Set** to give the day one. The next-step card on **Next Steps** then says whether tonight finishes in time, and what would help if it won't. See [When the night finishes](program-and-mains.md#when-the-night-finishes). A new race day takes the time from the last day at the same venue. | From the last day at the venue, or not set |
 | **Entries close at:** | When entries close. Tick **Set** to give the day one. Ten minutes before, the announcer says "Entries close in 10 minutes", and as it passes, "Entries are now closed" (only before the first race has run). Until the heats are built, **Next Steps** counts down to it. After it, **Who's Racing** says that anyone checked in now is a late entry. They go into the heats still to run without moving anyone else, and once the heats are posted **Next Steps** asks first (see [Checked in late](program-and-mains.md#checked-in-late)). Nobody is stopped from checking in. A new race day takes the time from the last day at the same venue. | From the last day at the venue, or not set |
+| **Next night on phones:** | What the phones' Home page says about the next race night. **Announce...** sets it: the night, what it's called, the venue, the classes on, the first race and when entries close, and whether drivers can say they're coming from their phones. It starts from the last race day a week on. **Publish** puts it on the phones, and **Take Down** takes it off. **Call It Off...** marks it as off with your message, and can email every regular with an address (drivers who raced in the last 8 weeks, or said they're coming) through the club's mailbox. See [Who said they're coming](#who-said-theyre-coming). Needs the club website switched on, and the relay updated. | Not announced |
 | **Breaks:** | Breaks planned into the night, such as watering the track after Q2. **Breaks...** changes them. The finish time, the estimated starts and Auto start all allow for them. See [Planned breaks](program-and-mains.md#planned-breaks). A new race day takes them from the last day at the same venue. | From the last day at the venue, or none |
 | **Notes:** | Free text about the day. The same notes show on **Championship → Calendar**. | Empty |
 
@@ -121,6 +122,8 @@ The line under the picker shows what the selected day already holds, for example
 | **Post the heats before the first race** | Once the heats are built, **Next Steps** offers **Post the heats...** before the first race: it prints the heat sheets and the marshal list, tells the room, and lists any car the loop hasn't heard tonight. After that, moving drivers between heats asks first. This is the club's setting, for every night. See [Post the heats](program-and-mains.md#post-the-heats). | On |
 | **Build the heats when entries close** | With **Entries close at:** set, the heats build themselves as it passes (if they haven't been built yet), and **Next Steps** moves on to posting them. **Undo** takes the build back. The club's setting. | On |
 | **Add late check-ins to posted heats without asking** | A driver who checks in after the heats are built goes into them by **Add a Late Entry**'s rule, which moves nobody else. Before posting that always happens by itself; after posting, **Next Steps** asks first unless this is ticked. See [Checked in late](program-and-mains.md#checked-in-late). The club's setting. | Off |
+| **Ask every driver for a signed waiver** | Who's Racing shows a **Papers** column, and **Post the heats** lists anyone without a signed waiver. A junior's is signed by a parent or guardian, and a waiver lasts 12 months. See [Papers: waivers and memberships](#papers-waivers-and-memberships). The club's setting. | Off |
+| **Check memberships** | The same for memberships: the club's own, or a national body's for its racing insurance. A driver with none on file, or one that has run out, shows. The club's setting. | Off |
 | **Close the night with a checklist** | When every race has run, **Next Steps** offers **Close the night...**, a list of what's left to tick off. Unticked, the card just says what's left in one line. This is the club's setting, for every night, not just this one. See [Closing the night](program-and-mains.md#closing-the-night). | On |
 
 
@@ -199,6 +202,26 @@ The buttons under the list:
 - **Scrutineering Log** opens the full list of inspections. See [The Scrutineering log](#the-scrutineering-log).
 - **Online Sign-ups** opens the drivers who have signed up online, waiting to be approved. The button shows how many are waiting, for example **Online Sign-ups (3)**. See [Driver sign-up](../online/sign-up.md).
 - **Driver Requests** opens the changes drivers have asked for from their phones, and their result queries, waiting for the desk. The button shows how many are waiting, for example **Driver Requests (2)**. It's only there while the club takes requests, or while some are still waiting. See [Driver requests](../online/driver-requests.md).
+
+### Papers: waivers and memberships
+
+With **Ask every driver for a signed waiver** or **Check memberships** ticked on **Setup**, **Who's Racing** has a **Papers** column. It shows **OK**, or what isn't in order:
+
+- "Waiver missing", or "Guardian's waiver missing" for a driver marked under 18.
+- "Waiver ran out 12 Nov", once a waiver is 12 months old.
+- "Junior: no guardian named on the waiver".
+- "Membership missing", until a driver has a membership number or a date on file.
+- "Membership expired 3 Oct", the day after it runs out.
+
+Click a driver's **Papers** to fill them in: **Waiver signed on** (today, or the date on the paper), **Under 18** with the parent or guardian who signed, and the **Membership no.** with the date it **Runs out on**. It's saved on the driver's profile, so next week it's already there. **Undo** puts it back.
+
+**Post the heats** lists anyone on tonight's heats whose papers aren't in order. Nobody is stopped from checking in or racing: it's the desk's call. Papers are recorded by hand, for the club's own records. HeatCaller doesn't take signatures or check anybody's membership, and the papers never leave the laptop.
+
+### Who said they're coming
+
+When the club has announced the next race night (**Next night on phones:** on **Setup**) and drivers have said from their **Me** page that they're coming, **Who's Racing** shows a line on that night: "12 said they're coming · 9 here · still to come: Al Gorithim, Hugh Turn and 1 more." It updates as drivers check in.
+
+A driver's answer is filed by itself, and their phone is told "You're down for Tue 18 Nov: Stock and Mod. Check in when you arrive." Saying they're coming doesn't check them in or put them in the heats: they still check in when they arrive. Only classes on the announced night are kept, and **Not coming after all** takes them off the list. **Driver Requests** lists each answer as "Coming next race night". This needs online check-in on, and the relay updated.
 
 ### Import entries
 

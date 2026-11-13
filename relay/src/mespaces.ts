@@ -143,6 +143,17 @@ export const ME_CSS = `
 
 .me-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
 .me-tiles:empty { display: none; }
+/* I'm coming to the next race night (12 Nov 2026, setup plan C1). */
+.me-coming:empty { display: none; }
+.me-coming { border: 1px solid var(--border); border-radius: 16px; padding: 12px 14px; background: var(--surface); margin: 0 0 14px; }
+.me-coming .k { font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 700; display: block; }
+.me-coming .big { font-size: 1.2rem; font-weight: 800; margin: 2px 0 8px; }
+.me-coming .cls { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+.me-coming label { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border: 1px solid var(--border);
+  border-radius: 999px; cursor: pointer; }
+.me-coming .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.me-coming .st { margin: 10px 0 0; font-size: 0.9rem; color: var(--muted); }
+.me-coming .st b { color: var(--text); display: block; }
 .me-tile { text-align: left; border: 1px solid var(--border); border-radius: 16px; padding: 12px; background: var(--surface);
   color: var(--text); display: grid; gap: 4px; align-content: start; min-height: 6.5rem; cursor: pointer; font: inherit; min-width: 0; }
 .me-tile.w { grid-column: span 2; min-height: 0; }
@@ -247,7 +258,10 @@ html.framed .me-sheet .in { padding-bottom: calc(22px + 58px + var(--sa-b, 0px))
 export const ME_BODY_TOP =
   '<div class="me-moment" id="me-moment" aria-live="polite"></div>' +
   '<div class="me-switch" id="me-switch" role="tablist" aria-label="Parts of Me"></div>' +
-  '<div class="me-tiles" id="me-tiles" data-sp="tonight"></div>';
+  '<div class="me-tiles" id="me-tiles" data-sp="tonight"></div>' +
+  // I'm coming to the next race night (12 Nov 2026, setup plan C1), under
+  // the tiles on Tonight; empty unless the club is taking entries for it.
+  '<div class="me-coming" id="me-coming" data-sp="tonight"></div>';
 
 /** At the foot: a space with nothing in it yet says so; the sheet (the pack swap) and the toast. */
 export const ME_BODY_END =
@@ -426,6 +440,126 @@ async function meRaceAsk(kind) {
   }
 }
 
+// ---- I'm coming to the next race night (12 Nov 2026, setup plan C1)
+//
+// WHY ON ME: the club announces its next night on the nextnight snapshot
+// (setup plan D13, drawn on Home), and the driver who reads it is the one
+// who knows whether they are coming and in what. Asking them at the gate
+// next week is how a desk ends up typing forty entries in the last half
+// hour before the first race. One tap a few days early is the whole fix.
+//
+// The same gate as Need 5 more minutes and Skip me: only while the club
+// takes asks and this phone has the driver (asksOpen && me), and only
+// while the snapshot says it is taking entries, is not called off and is
+// still in date - the expiry the page honours, not the relay, as Home's
+// nextNightHtml does. The laptop files it by itself (a write kind) and
+// answers in the driver's live document; its own words ("You're down for
+// Tue 18 Nov") are what this shows under the headline.
+let meNextNight = null;
+let meNextNightAt = 0;
+// What this phone last ticked, kept across the 30-second redraws, and the
+// classes each sent ask carried, by ref - so an answer to "not coming after
+// all" is not headlined as "You're down".
+let meComingTicks = null;
+const meComingSent = new Map();
+
+async function meReadNextNight() {
+  if (typeof grab !== 'function' || Date.now() - meNextNightAt < 60000) return;
+  meNextNightAt = Date.now();
+  const answer = await grab('/snapshot/nextnight').catch(() => null);
+  if (answer === null) return;
+  meNextNight = !answer.missing && answer.body && answer.body.body && typeof answer.body.body === 'object' ? answer.body.body : null;
+  meComingCard();
+}
+
+// The night on offer, or null: in date, not off, taking entries, with a
+// day the laptop can match and at least one class to tick.
+function meComingNight() {
+  const b = meNextNight;
+  if (!b) return null;
+  const until = Date.parse(String(b.until || ''));
+  if (!Number.isFinite(until) || relayNow() > until) return null;
+  if (b.off === true || b.takingEntries !== true) return null;
+  const day = typeof b.day === 'string' ? b.day.trim() : '';
+  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(day)) return null;
+  const classes = (Array.isArray(b.classes) ? b.classes : [])
+    .map((c) => (typeof c === 'string' ? c.replace(/,/g, ' ').trim() : '')).filter(Boolean);
+  if (classes.length === 0) return null;
+  const when = typeof b.when === 'string' && b.when.trim() !== '' ? b.when.trim() : day;
+  return { day: day, when: when, classes: classes };
+}
+
+// The newest I'm coming this phone or the live document knows of.
+function meComingAsk() {
+  const listed = meAsks();
+  const known = new Set(listed.map((a) => a.ref));
+  const sent = typeof sentAsks !== 'undefined' ? sentAsks.filter((s) => !known.has(s.ref)) : [];
+  const all = listed.concat(sent);
+  for (let i = all.length - 1; i >= 0; i--) if (all[i].kind === 'coming') return all[i];
+  return null;
+}
+
+async function meSendComing(day, classes) {
+  const got = await sendAsk('coming', { day: day, classes: classes.join(',') });
+  if (got.ok) {
+    const last = typeof sentAsks !== 'undefined' && sentAsks.length > 0 ? sentAsks[sentAsks.length - 1] : null;
+    if (last && last.kind === 'coming') meComingSent.set(last.ref, classes.join(','));
+    meToast(classes.length > 0 ? 'Sent - HeatCaller will put you down' : 'Sent - HeatCaller will take you off the list');
+    meComingCard();
+  } else {
+    meToast(got.words, true);
+  }
+}
+
+function meComingCard() {
+  const at = document.getElementById('me-coming');
+  if (!at) return;
+  const night = typeof asksOpen !== 'undefined' && asksOpen && me ? meComingNight() : null;
+  at.textContent = '';
+  if (!night) return;
+  if (meComingTicks === null || meComingTicks.day !== night.day) meComingTicks = { day: night.day, on: new Set() };
+  const ticks = meComingTicks.on;
+
+  at.appendChild(el('span', 'k', 'Are you coming?'));
+  at.appendChild(el('div', 'big', 'Next race night ' + night.when));
+  const box = el('div', 'cls');
+  for (const name of night.classes) {
+    const label = el('label', '');
+    const tick = document.createElement('input');
+    tick.type = 'checkbox';
+    tick.checked = ticks.has(name);
+    tick.addEventListener('change', () => { if (tick.checked) ticks.add(name); else ticks.delete(name); });
+    label.appendChild(tick);
+    label.appendChild(el('span', '', name));
+    box.appendChild(label);
+  }
+  at.appendChild(box);
+
+  const acts = el('div', 'acts');
+  acts.appendChild(tapButton("I'm coming", 'go', () => {
+    const ticked = night.classes.filter((c) => ticks.has(c));
+    if (ticked.length === 0) { meToast('Tick the classes you are racing first', true); return; }
+    meSendComing(night.day, ticked);
+  }));
+  acts.appendChild(tapButton('Not coming after all', '', () => meSendComing(night.day, [])));
+  at.appendChild(acts);
+
+  // Where the last one stands: waiting, or the laptop's answer in its words.
+  const a = meComingAsk();
+  if (a) {
+    const st = el('div', 'st');
+    st.setAttribute('role', 'status');
+    if (a.state === undefined || a.state === 'waiting') {
+      st.appendChild(el('b', '', 'Sent - waiting for HeatCaller'));
+    } else {
+      st.appendChild(el('b', '', meReplyWords(a)));
+      const said = typeof a.said === 'string' ? a.said.trim() : '';
+      if (said !== '') st.appendChild(el('span', '', said));
+    }
+    at.appendChild(st);
+  }
+}
+
 // ---- what the moment and the tiles read
 
 function meNext() {
@@ -502,6 +636,8 @@ const ME_ICON = {
   order: 'M9 6h11M9 12h11M9 18h11M4.5 6v.01M4.5 12v.01M4.5 18v.01',
   late: 'M20 13a8 8 0 1 1-16 0a8 8 0 1 1 16 0zM12 9v4l2.5 2M9.5 2.5h5',
   skip: 'M14.7 6.3a4 4 0 0 0-5.4 5.2l-5.8 5.8a1.6 1.6 0 0 0 2.2 2.2l5.8-5.8a4 4 0 0 0 5.2-5.4l-2.4 2.4-2.2-.4-.4-2.2zM17 17l4 4M21 17l-4 4',
+  // A calendar page, for I'm coming to the next race night (12 Nov 2026).
+  coming: 'M5 6h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM4 10h16M8 3.5v4M16 3.5v4M9 14.5l2 2 4-4',
 };
 
 function meIcon(name) {
@@ -593,6 +729,12 @@ function meReplyWords(a) {
   const no = a.state === 'declined';
   if (a.kind === 'late') return no ? "Can't hold your race" : 'Yes, 5 more minutes';
   if (a.kind === 'skip') return no ? "You're still in your race" : "You're out of your race";
+  // The laptop's own said names the night ("You're down for Tue 18 Nov");
+  // this is only the headline over it.
+  if (a.kind === 'coming') {
+    if (no) return "HeatCaller couldn't put you down";
+    return meComingSent.get(a.ref) === '' ? "You're off the list" : "You're down for the next race night";
+  }
   if (a.kind === 'details') return no ? 'Your details stay as they were' : a.state === 'noted' ? 'The desk has your details' : 'Your details are changed';
   return no ? 'Your result stands' : a.state === 'noted' ? 'The desk has your query' : 'The desk agreed with your query';
 }
@@ -1104,6 +1246,10 @@ function meRefresh() {
   meClassify();
   meMoment();
   meTiles();
+  // The next race night (12 Nov 2026): read at most once a minute, drawn
+  // on every refresh so asksOpen and the answer stay in step.
+  meReadNextNight();
+  meComingCard();
 }
 
 let meQueued = false;

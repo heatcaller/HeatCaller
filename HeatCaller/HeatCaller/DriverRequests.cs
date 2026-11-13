@@ -722,6 +722,10 @@ internal sealed class DriverRequestStore
         "tires" or "gearing" or "springs" or "ride" or "motor" => DriverAsk.SetupPartMaxChars,
         "notes" => DriverAsk.SetupNotesMaxChars,
 
+        // 12 Nov 2026, "I'm coming" (setup plan C1).
+        "day" => 10,
+        "classes" => 200,
+
         // 5 Nov 2026, the garage from the phone.
         "op" => 16,
         "car" or "sheet" or "entry" or "chassis" => 32 + 8,
@@ -1077,6 +1081,12 @@ internal sealed partial class DriverRequestDesk
                 lines.Add("Car broken - skip them in their next race" + NoteWords(request));
                 break;
 
+            case DriverAsk.Coming:
+                lines.Add(request.Text("classes").Length == 0
+                    ? $"Not coming on {request.Text("day")} after all"
+                    : $"Coming on {request.Text("day")}: {request.Text("classes").Replace(",", ", ")}");
+                break;
+
             default:
                 lines.Add(WriteWords(request));
                 break;
@@ -1144,6 +1154,7 @@ internal sealed partial class DriverRequestDesk
         DriverAsk.Photo => "Car photo",
         DriverAsk.Late => "More time",
         DriverAsk.Skip => "Skip my race",
+        DriverAsk.Coming => "Coming next race night",
         _ => kind,
     };
 

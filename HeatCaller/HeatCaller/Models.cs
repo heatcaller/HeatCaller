@@ -257,6 +257,27 @@ public sealed class DriverProfile
     /// </summary>
     public string Email { get; set; } = string.Empty;
 
+    // --- Papers: the waiver and the membership (12 Nov 2026, setup plan D9) ---
+    //
+    // Recorded by hand at the desk, like money: HeatCaller never collects a
+    // signature or checks a national body's records. Organiser use only, like
+    // Contact - never published. See DeskPapers.
+
+    /// <summary>When this driver last signed the club's waiver (the local date), or null for never.</summary>
+    public DateTime? WaiverSignedOn { get; set; }
+
+    /// <summary>Under 18: the waiver needs a parent or guardian, named in <see cref="WaiverGuardian"/>.</summary>
+    public bool IsJunior { get; set; }
+
+    /// <summary>Who signed a junior's waiver for them. Blank for an adult, or a junior's not signed yet.</summary>
+    public string WaiverGuardian { get; set; } = string.Empty;
+
+    /// <summary>Their membership number - the club's, or a national body's for its racing insurance. Blank for none.</summary>
+    public string MembershipNumber { get; set; } = string.Empty;
+
+    /// <summary>When that membership runs out (the local date), or null when it isn't known.</summary>
+    public DateTime? MembershipExpires { get; set; }
+
     // --- Online privacy and the driver's own words (22 Oct 2026) ---------
     //
     // WHY (22 Oct 2026, driver experience): a driver can ask from their own

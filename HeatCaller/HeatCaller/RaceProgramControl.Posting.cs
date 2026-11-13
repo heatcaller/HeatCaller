@@ -67,7 +67,10 @@ public sealed partial class RaceProgramControl
         var clubNight = DayIsClubNight;
         var notHeard = NotHeardTonight(dayRounds);
 
-        using var form = new PostHeatsForm(clubNight, HeatPosting.NotHeardWords(notHeard, listed: 12));
+        var papers = PapersWordsTonight(dayRounds);
+        var warnings = string.Join(" ", new[] { HeatPosting.NotHeardWords(notHeard, listed: 12), papers }.Where(w => w.Length > 0));
+
+        using var form = new PostHeatsForm(clubNight, warnings);
 
         if (form.ShowDialog(this) != DialogResult.OK)
         {
@@ -254,5 +257,30 @@ internal sealed class PostHeatsForm : Form
 
         AppTheme.ApplyRecursively(this);
         DialogFit.Keep(this, page, width: 560, height: 380);
+    }
+}
+
+/// <summary>Drivers on tonight's heats whose papers aren't in order (setup plan D9), for posting.</summary>
+public sealed partial class RaceProgramControl
+{
+    /// <summary>"2 drivers' papers aren't in order: ...", or empty - for the drivers in races still to run, when the club checks papers.</summary>
+    internal string PapersWordsTonight(IReadOnlyList<RoundDefinition> day)
+    {
+        if (!_settings.AskForWaivers && !_settings.CheckMemberships)
+        {
+            return string.Empty;
+        }
+
+        var drivers = day
+            .Where(r => r is not null && !r.IsRecorded && r.Kind != RoundKind.Practice)
+            .SelectMany(r => r.AssignedTransponders)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(t => _profiles.Get(t))
+            .OfType<DriverProfile>()
+            .Select(p => (Name: string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName.Trim(),
+                Problems: (IReadOnlyList<string>)DeskPapers.Problems(p, _settings.AskForWaivers, _settings.WaiverMonths, _settings.CheckMemberships, DateTime.Today)))
+            .ToList();
+
+        return DeskPapers.PostingWords(drivers);
     }
 }

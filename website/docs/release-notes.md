@@ -4,6 +4,14 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Before the night: announce it, call it off, and who's coming; papers at the desk (12 November).**
+    - **Announce the next race night.** **Announce...** on **Race Day → Setup** puts it on the phones' Home page: the date, the classes on, when entries close and the first race. It comes down by itself the morning after. See [Race Day → Setup](race-day/events-and-entries.md#about-the-day).
+    - **Call it off.** **Call It Off...** shows the night as off on the phones, with your message, and can email every regular through the club's mailbox.
+    - **"I'm coming" from the phone.** On **Me**, a driver ticks their classes and taps **I'm coming**. **Who's Racing** then says "12 said they're coming · 9 here · still to come: ...". See [Who said they're coming](race-day/events-and-entries.md#who-said-theyre-coming).
+    - **Waivers and memberships.** Tick **Ask every driver for a signed waiver** or **Check memberships** on **Setup** and **Who's Racing** gets a **Papers** column ("Waiver missing", "Membership expired 3 Oct"). Click it to record them. **Post the heats** lists anyone not in order. See [Papers: waivers and memberships](race-day/events-and-entries.md#papers-waivers-and-memberships).
+
+  Update HeatCaller on the race PC. The next-night card and **I'm coming** **need the relay redeployed** (`fly deploy --ha=false`); papers and the emails work without it.
+
 - **Start tonight in one press, and late check-ins that sort themselves (12 November).**
     - **Start tonight like last time.** With no race day open, the card on **Next Steps** starts tonight with the last race day's kind of night, classes and settings. **Set Up Tonight** is still there to change something first.
     - **The heats build themselves when entries close.** With **Entries close at:** set, the heats are built as it passes, ready to post. Untick **Build the heats when entries close** on **Setup** to build them yourself.

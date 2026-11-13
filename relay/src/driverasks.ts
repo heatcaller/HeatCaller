@@ -76,8 +76,16 @@ export const ASK_OBJECT_ID = /^[0-9a-f]{32}$/;
  * swapping packs between every round, logging a sheet and adding a car
  * would run through the desk kinds' six an hour in one evening) and, for a
  * driver who has a personal PIN, need it (server.ts driverAsk).
+ *
+ * "coming" joined them on 12 Nov 2026 (setup plan C1: "I'm coming to the
+ * next race night, in these classes"). It is a write, not a desk ask,
+ * because there is nothing for the desk to decide - a driver putting
+ * themselves down for next week is the club's whole point in asking, and
+ * the desk would only be clicking yes to every one. The laptop files it
+ * on its entry list and says so in its answer ("You're down for Tue 18
+ * Nov"); a second one for the same day replaces the first.
  */
-export const DRIVER_WRITE_KINDS: readonly DriverAskKind[] = ["pack", "packedit", "car", "setup"];
+export const DRIVER_WRITE_KINDS: readonly DriverAskKind[] = ["pack", "packedit", "car", "setup", "coming"];
 
 /** Whether a kind is one the laptop applies by itself. */
 export function isWriteKind(kind: string): boolean {
@@ -135,12 +143,20 @@ const EMAIL = /^[^\s@<>()",;:\\[\]]+@[^\s@<>()",;:\\[\]]+\.[^\s@<>()",;:\\[\]]+$
 
 // "late" and "skip" (11 Nov 2026, race-night build plan, Phase 1): "I need 5
 // more minutes" and "my car's broken - skip me", both for the desk to approve.
-export type DriverAskKind = "details" | "pack" | "query" | "setup" | "packedit" | "car" | "late" | "skip";
+// "coming" (12 Nov 2026, setup plan C1): "I'm coming to the next race night,
+// in these classes" - applied by the laptop by itself (DRIVER_WRITE_KINDS).
+export type DriverAskKind = "details" | "pack" | "query" | "setup" | "packedit" | "car" | "late" | "skip" | "coming";
 
-export const DRIVER_ASK_KINDS: readonly DriverAskKind[] = ["details", "pack", "query", "setup", "packedit", "car", "late", "skip"];
+export const DRIVER_ASK_KINDS: readonly DriverAskKind[] = ["details", "pack", "query", "setup", "packedit", "car", "late", "skip", "coming"];
 
 /** The longest note a "late" or "skip" can carry. */
 export const ASK_MAX_RACE_NOTE = 120;
+
+/** A "coming" ask's night: the next night snapshot's own day, yyyy-mm-dd. */
+export const ASK_NIGHT_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A "coming" ask's classes, comma-separated on one line. */
+export const ASK_MAX_COMING_CLASSES = 200;
 
 /** Which proof came with the ask: the personal PIN's pass, or the badge code alone. */
 export type DriverAskProof = "pin" | "badge";
@@ -255,6 +271,38 @@ export function askFieldsFrom(kind: string, f: unknown, withPin: boolean): AskCh
     }
 
     return { ok: true, f: m.length > 0 ? { m } : {} };
+  }
+
+  // I'm coming to the next race night (12 Nov 2026, setup plan C1): which
+  // night, as the nextnight snapshot names it, and the classes ticked. The
+  // day is checked to the letter because the laptop matches it against the
+  // night it announced - a phone holding last week's snapshot must not be
+  // put down for a night that is not the one on offer, and the laptop can
+  // only tell that from a day it can read. The classes are one tidied line
+  // the laptop splits on commas and matches against its own class names;
+  // anything it does not know it leaves out and says so. Empty is allowed
+  // and means "not coming after all" - the way a driver takes it back.
+  if (kind === "coming") {
+    const day = typeof input["day"] === "string" ? input["day"].trim() : "";
+
+    if (!ASK_NIGHT_DAY.test(day)) {
+      return refuse(400, "Which race night is it?");
+    }
+
+    if (input["classes"] !== undefined && typeof input["classes"] !== "string") {
+      return refuse(400, "That request could not be read.");
+    }
+
+    const raw = cleanAskText(input["classes"], ASK_MAX_COMING_CLASSES + 1);
+
+    if (raw.length > ASK_MAX_COMING_CLASSES) {
+      return refuse(400, `Keep your classes under ${ASK_MAX_COMING_CLASSES} characters.`);
+    }
+
+    // Each name trimmed and empties dropped, so "Stock, ,Mod," reads "Stock,Mod".
+    const classes = raw.split(",").map((one) => one.trim()).filter((one) => one !== "").join(",");
+
+    return { ok: true, f: { day, classes } };
   }
 
   if (kind === "setup" && (input["car"] !== undefined || input["sheet"] !== undefined)) {
