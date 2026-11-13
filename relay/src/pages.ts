@@ -19,7 +19,7 @@ import type { PagePreview } from "./preview.js";
 import { DEFAULT_LOOK, type Look, type SocialLink } from "./site.js";
 import { SUN_ICON_SIZE } from "./sun.js";
 import { GARAGE_CSS, GARAGE_EMBED_BODY, garageEmbedScript } from "./garagepage.js";
-import { ME_BODY_END, ME_BODY_TOP, ME_CSS, ME_JS } from "./mespaces.js";
+import { ME_BODY_END, ME_BODY_TOP, ME_COMING, ME_CSS, ME_JS } from "./mespaces.js";
 import { CLOCK_JS, clockAttr } from "./clock.js";
 
 /** What a page needs to know beyond its club: how the club looks, and where it is being served from. */
@@ -1065,8 +1065,10 @@ select {
 .hero:hover { border-color: var(--primary); }
 .hero.live { border-left-color: var(--good); }
 .hero.next { border-left-color: var(--accent); }
-/* "Coming? Tap to put yourself down" on a night taking entries (12 Nov 2026). */
-.hero .nn-go { display: block; margin-top: 8px; font-weight: 700; color: var(--accent); }
+/* "Coming? Put yourself down" on a night taking entries (12 Nov 2026), a
+   button like See the running order since 13 Nov 2026. */
+.hero .nn-go { margin-top: 12px; }
+.hero:has(.nn-go):hover { border-color: var(--border); }
 /* The next race night called off (12 Nov 2026, setup plan D13). */
 .hero.off { border-left-color: var(--bad); }
 .hero.off .note { padding: 6px 0 0; text-align: left; }
@@ -1160,6 +1162,19 @@ mark { background: var(--primary); color: var(--on-primary, #FFFFFF); border-rad
 .feed .row div { min-width: 0; }
 .feed .row b { display: block; }
 .feed .row span { color: var(--muted); font-size: 0.85rem; }
+/* Just earned, each one opening to how it was won (13 Nov 2026). */
+.earned summary.row { cursor: pointer; list-style: none; }
+.earned summary.row::-webkit-details-marker { display: none; }
+.earned summary.row::after { content: ""; flex: none; margin-left: auto; width: 7px; height: 7px;
+  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); }
+.earned[open] summary.row { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-color: var(--primary); }
+.earned[open] summary.row::after { transform: rotate(-135deg); }
+.earned summary.row:focus-visible { outline: 3px solid var(--ring, var(--accent)); outline-offset: 2px; }
+.earned .how { background: var(--surface); border: 1px solid var(--primary); border-top: 0;
+  border-radius: 0 0 10px 10px; padding: 4px 14px 14px; }
+.earned .how p { margin: 8px 0 0; }
+.earned .how p span { display: block; color: var(--muted); font-size: 0.75rem; letter-spacing: 0.06em;
+  text-transform: uppercase; font-weight: 600; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
 .badge { display: flex; gap: 12px; background: var(--surface); border: 1px solid var(--border);
          border-radius: 10px; padding: 12px 14px; }
@@ -8616,16 +8631,19 @@ function nextNightHtml(answer) {
   // i just highlihts the card"). It opens Me on Tonight at its I'm coming
   // card, the classes to tick and the button - the Me tab's own address, so
   // a phone that has the driver goes straight to their night.
+  // A button since 13 Nov 2026 (Asher: "the link for the coming? ask on the
+  // next race day card should be a button, like the link to schedule
+  // button"): the card itself stays still, and the way in is the same
+  // pill as See the running order.
   const comingTo = b.takingEntries === true && typeof nextNightComingHref === 'function' ? nextNightComingHref() : '';
-  const open = comingTo ? '<a class="hero next" href="' + esc(comingTo) + '">' : '<div class="hero next" style="cursor:default">';
-  return open +
+  return '<div class="hero next" style="cursor:default">' +
     '<span class="kicker">Next race night</span>' +
     '<span class="big">' + esc([title, when].filter(Boolean).join(' - ') || 'Next race night') + '</span>' +
     (list ? '<span class="when">' + esc(list) + '</span>' : '') +
     (times ? '<span class="when">' + times + '</span>' : '') +
     (word(b.venue) ? '<span class="when">' + esc(word(b.venue)) + '</span>' : '') +
-    (comingTo ? '<span class="nn-go">Coming? Tap to put yourself down &rarr;</span>' : '') +
-    (comingTo ? '</a>' : '</div>');
+    (comingTo ? '<a class="page wide hp-go nn-go" href="' + esc(comingTo) + '">Coming? Put yourself down</a>' : '') +
+    '</div>';
 }
 
 // Me's I'm coming card: the Me tab's own link (their night once the phone
@@ -9412,15 +9430,49 @@ async function loadCatalogue() {
 function drawRecent(doc) {
   const rows = Array.isArray(doc.recent) ? doc.recent : [];
 
+  // Each one opens to how it was won (13 Nov 2026, Asher: "make the newly
+  // won achievements at the top clickable so you can see how you got the
+  // achievements"): what it takes, what they did, when, and that night's
+  // results. A details element, so it opens with no script and a reader
+  // hears it as something to expand.
+  // One opened stays open through the minute's redraw.
+  const opened = new Set(Array.from(recent.querySelectorAll ? recent.querySelectorAll('details[open]') : [])
+    .map((d) => d.getAttribute('data-k')));
   recent.innerHTML = rows.length === 0
     ? '<p class="note">Nobody has earned an achievement yet. They are handed out after every race.</p>'
     : rows.map((r) => {
         const b = catalogue && catalogue.get(r.id) || { name: r.id };
-        return '<div class="row">' + img(b.art, 'art small', b.name) + '<div>' +
+        const k = [r.id, r.name, r.whenUtc].map((v) => String(v || '')).join('|');
+        return '<details class="earned" data-k="' + esc(k) + '"' + (opened.has(k) ? ' open' : '') + '><summary class="row">' + img(b.art, 'art small', b.name) + '<div>' +
           '<b>' + nm(r.name) + ' &middot; <span class="' + tierClass(b) + '">' + esc(b.name) + '</span></b>' +
           '<span>' + [r.detail, ago(r.whenUtc)].filter(Boolean).map(esc).join(' &middot; ') + '</span>' +
-          '</div></div>';
+          '</div></summary>' + earnedHow(r, b) + '</details>';
       }).join('');
+}
+
+// The night a time belongs to: from its six in the morning to the next,
+// the same turn the laptop files a night's races by. '' when unreadable.
+function earnedDay(whenUtc) {
+  const t = Date.parse(String(whenUtc || ''));
+  if (!Number.isFinite(t)) return '';
+  const d = new Date(t - 6 * 3600000);
+  const two = (n) => (n < 10 ? '0' : '') + n;
+  return d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate());
+}
+
+function earnedHow(r, b) {
+  const lines = [];
+  if (b.description) lines.push(['What it takes', esc(b.description)]);
+  if (r.detail) lines.push(['How they got it', esc(r.detail)]);
+  const t = Date.parse(String(r.whenUtc || ''));
+  if (Number.isFinite(t)) {
+    lines.push(['When', esc(new Date(t).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))]);
+  }
+  const day = earnedDay(r.whenUtc);
+  return '<div class="how">' +
+    lines.map((l) => '<p><span>' + l[0] + '</span>' + l[1] + '</p>').join('') +
+    (day ? '<a class="page wide hp-go" href="/c/' + encodeURIComponent(CLUB) + '/results#d=' + encodeURIComponent(day) + '">That night&rsquo;s results</a>' : '') +
+    '</div>';
 }
 
 function drawLeaders(doc) {
@@ -13561,7 +13613,9 @@ function arrange(at) {
   // are arranging - beside the card rather than in it, so Right now
   // redrawing itself every few seconds leaves them be. The cards that stay
   // put (a car's stray races) go after them.
-  const rest = Array.from(at.children).filter((n) => cardKey(n) === '');
+  // I'm coming rides under Lap times in my ear wherever that goes (13 Nov 2026).
+  const coming = document.getElementById('me-coming');
+  const rest = Array.from(at.children).filter((n) => cardKey(n) === '' && n !== coming);
   for (const k of order) {
     const card = byKey[k];
     const j = shown.indexOf(k);
@@ -13594,6 +13648,7 @@ function arrange(at) {
       at.appendChild(bar);
     }
     at.appendChild(card);
+    if (k === 'ear' && coming && coming.parentNode === at) at.appendChild(coming);
   }
   for (const n of rest) at.appendChild(n);
 
@@ -13623,7 +13678,9 @@ function drawExtras() {
   // lifted out before the rest is cleared, and put back as they were.
   // Lap times in my ear first since 7 Nov 2026 (Asher: "move laptimes in
   // my ear above alerts on the tonight tab").
-  const held = [document.getElementById('ea'), lvBox].filter(Boolean);
+  // I'm coming under Lap times in my ear since 13 Nov 2026 (Asher: "move
+  // are you coming card below lap times in my ear").
+  const held = [document.getElementById('ea'), document.getElementById('me-coming'), lvBox].filter(Boolean);
   for (const n of held) n.remove();
   at.textContent = '';
   for (const n of held) at.appendChild(n);
@@ -14764,7 +14821,7 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // sections and script); the pack-swap sheet and the empty note at the foot.
     body: `<style>${ME_CSS}${GARAGE_CSS}</style>` +
       '<div class="me-top" id="metop"><div id="nh"></div></div><div id="nj"></div>' + ME_BODY_TOP + '<div id="ng"></div>' +
-      '<div id="nx"><div id="ea"></div><div id="lv"></div></div><div id="nt"><p class="note">Loading&hellip;</p></div>' +
+      '<div id="nx"><div id="ea"></div>' + ME_COMING + '<div id="lv"></div></div><div id="nt"><p class="note">Loading&hellip;</p></div>' +
       // No "Sign out on this phone" at the foot since 7 Nov 2026 (Asher:
       // "remove the sign out link at the bottom of the garage tab"): the
       // Signed in button at the top asks the same question.

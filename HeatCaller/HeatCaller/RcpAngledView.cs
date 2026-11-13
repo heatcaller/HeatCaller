@@ -64,6 +64,9 @@ public static class RcpAngledView
     private static readonly Color Furniture = ColorTranslator.FromHtml("#26262A");
     private static readonly Color Shadow = Color.FromArgb(80, 0, 0, 0);
 
+    /// <summary>How far a rail stands in from its seam, on its own tile, in tiles - each of a divider's two rails too (RcpTrackPainter.RailInset).</summary>
+    private const float Inset = 0.085f;
+
     /// <summary>Where the light comes from: up, and over the top-left - as the flat plan's shadows fall.</summary>
     private static readonly (float X, float Y, float Z) Light = Normalised(-0.35f, -0.5f, 0.8f);
 
@@ -207,10 +210,28 @@ public static class RcpAngledView
         var faces = new List<Face>();
         var shadows = new List<PointF[]>();
 
+        // Each rail raised from the tile it is bolted to, flush with that
+        // tile's edge, as the board draws it (RcpTrackPainter.RailSides) -
+        // not from the seam (railed tiles, Phase 5, 13 Nov 2026). A
+        // divider's two rails stand one on each lane's tile.
+        var sides = RcpTrackPainter.RailSides(design);
+        var arched = design.Tiles
+            .Where(t => t.Piece == RcpPiece.Arched)
+            .ToDictionary(t => RcpPlan.EdgeLine(t.Col, t.Row, t.Facing), t => t);
+
         foreach (var wall in design.Walls)
         {
             var (a, b) = (wall.From, wall.To);
-            var offsets = wall.Double ? new[] { -0.085f, 0.085f } : new[] { 0f };
+            var seam = (wall.Col, wall.Row, wall.Vertical);
+
+            if (!wall.Double && arched.TryGetValue(seam, out var tile))
+            {
+                // The arched rail stands up in its own shape.
+                AddBlock(faces, shadows, camera, RcpTrackPainter.ArchOutline(tile), railHeight, Rail);
+                continue;
+            }
+
+            var offsets = wall.Double ? new[] { -Inset, Inset } : new[] { sides.GetValueOrDefault(seam) * Inset };
 
             foreach (var offset in offsets)
             {
@@ -221,7 +242,11 @@ public static class RcpAngledView
 
         foreach (var curve in design.Curves)
         {
-            var radii = curve.Double ? new[] { curve.Radius - 0.085f, curve.Radius + 0.085f } : new[] { curve.Radius };
+            // A single turn sits inside its quarter-circle tile, a rail's
+            // inset in from the grid lines, as the board draws it.
+            var radii = curve.Double
+                ? new[] { curve.Radius - Inset, curve.Radius + Inset }
+                : new[] { curve.Radius > Inset * 2f ? curve.Radius - Inset : curve.Radius };
 
             foreach (var radius in radii)
             {
@@ -314,9 +339,12 @@ public static class RcpAngledView
             }
 
             // The teeth only where a tile is big enough on screen to show
-            // them; further off, a plain square with its seam.
+            // them; further off, a plain square with its seam. An outer
+            // curve tile is the quarter circle it is (railed tiles, Phase 5).
             var big = Distance(square[0], square[2]) > 60f;
-            var outline = big ? Projected(camera, RcpJoints.Outline(tile.Col, tile.Row), 0) : null;
+            var outline = tile.Piece == RcpPiece.OuterCurve
+                ? Projected(camera, RcpTrackPainter.QuarterDisc(tile, 16), 0)
+                : big ? Projected(camera, RcpJoints.Outline(tile.Col, tile.Row), 0) : null;
 
             g.FillPolygon(foam, outline ?? square);
             g.DrawPolygon(seam, outline ?? square);

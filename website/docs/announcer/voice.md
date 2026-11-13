@@ -479,7 +479,7 @@ To silence every row at once, for races or for practice, use **Race calls:** on 
 
 With the HeatCaller voice chosen, the lines boxes are read-only, the **Speed** boxes are switched off and the **Test** buttons aren't shown. The **Race** and **Practice** ticks, **Caution**, **Weight** and the per-row extras all still work. See [What's fixed while it's chosen](#whats-fixed-while-its-chosen).
 
-![Voice, Race Calls tab: rows for Race staging, Countdown started, Race started and Fast lap, each with Race and Practice ticks, its lines, Weight, Speed, Caution and Test](../assets/images/voice-race-calls.png)
+![Voice, Race Calls tab: rows for Race staging, Countdown started, Race started and Fast lap (race best), each with Race and Practice ticks, its lines, Weight and Speed](../assets/images/voice-race-calls.png)
 
 ### Race and practice
 
@@ -719,7 +719,7 @@ The same two-at-once limit and the same 30-second give-up apply to the relay.
 
 The Announcer screen is a window for whoever is on the microphone. It's not another leaderboard. It gives you things to say. Open it with **Announcer Screen** on **Race Control** (shortcut <kbd>A</kbd>). The first time, it opens beside the main window when there's room, so the director keeps **Race Control** while you keep the Announcer; you can also put it on a second monitor. Closing it only hides it: open it again and everything is still on it. The **Race Control** button in the window brings the main window forward on **Race Control** without closing the Announcer.
 
-![The Announcer screen during a demo race: the running order, talking points with the AI's latest line, the fastest lap and two close battles, and the Spotlight on the leader](../assets/images/announcer-screen.png)
+![The Announcer screen during a demo race: GREEN FLAG with the clock and ON DECK, the running order, talking points with the latest lines, the Spotlight on the leader, and Last race summary](../assets/images/announcer-screen.png)
 
 The page shows:
 

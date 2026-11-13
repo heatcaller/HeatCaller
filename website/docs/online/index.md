@@ -66,7 +66,7 @@ A few more pages are never in the tabs, because each is for one person:
 
 The club's links from the **Look** card (website, Facebook, Instagram and so on) are under "Find us" on Home and at the foot of every other page (see [Look](setup.md#look)).
 
-![The Schedule page on a phone, showing today's running order with Done, On track and Next markers](../assets/images/online-schedule-page-phone.png)
+![The Schedule page on a phone: a Today card for the club night with its venue and track, a Next race in 1:35 countdown, the class filter and Find your name box, then the running order with a Running 4 min behind banner, three Done heats with the times they really started, the next heat marked Next with its estimated time, the races still to come and a break, and the tab bar along the bottom](../assets/images/online-schedule-page-phone.png)
 
 ### Getting around
 

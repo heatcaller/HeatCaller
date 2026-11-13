@@ -67,7 +67,7 @@ If no driver is selected, nothing happens and the Race Control log says why. See
 | Key | What it does |
 |---|---|
 | <kbd>?</kbd> | Shows the keyboard shortcuts sheet. |
-| <kbd>Shift</kbd>+<kbd>S</kbd> | Opens the Set Up Tonight wizard, which sets up a race night step by step. See [The Set Up Tonight wizard](../race-day/events-and-entries.md#the-set-up-tonight-wizard). |
+| <kbd>Shift</kbd>+<kbd>S</kbd> | Opens the Set Up Tonight wizard, which sets up a race night step by step. With no race day open, the **Start Tonight** window comes first (see [The Start Tonight window](../race-day/events-and-entries.md#the-start-tonight-window)). See [The Set Up Tonight wizard](../race-day/events-and-entries.md#the-set-up-tonight-wizard). |
 | <kbd>Shift</kbd>+<kbd>T</kbd> | Starts the app tour, a short look around the main pages. See [The app tour](../getting-started/install.md#the-app-tour). Not in Race Mode. |
 | <kbd>M</kbd> | Mutes or unmutes all sound, the same as the mute button at the bottom of the sidebar. |
 | <kbd>Ctrl</kbd>+<kbd>Z</kbd> | Undo, the same as the **Undo** button at the bottom of the sidebar. In a text box, it undoes your typing instead. |
@@ -175,7 +175,7 @@ With the mouse:
 
 ### Picking part of a plan up
 
-Take the **Select** tool (<kbd>8</kbd>) and drag a box round part of the plan. Everything the box covers is picked up, and because the box snaps out to whole tiles, the rails round the edge of a block of tiles come with it rather than being left behind.
+Take the **Select** tool (<kbd>8</kbd>) and drag a box round part of the plan. Everything the box covers is picked up. Each tile brings the rail or turn bolted to it, so the rails round the edge of a block of tiles come with it, and a rail on the box's edge bolted to a tile outside it stays with that tile.
 
 Then:
 

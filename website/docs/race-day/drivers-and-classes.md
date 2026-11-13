@@ -8,7 +8,7 @@ The pages covered here are all in the sidebar: **Driver Hub**, **Classes**, **Re
 
 A driver profile ties a transponder to a person. When the decoder reports a transponder, HeatCaller looks up its profile to get the name the announcer says, the class the driver races in, and everything shown on screens and results.
 
-![Driver Hub: the roster on the left with Terry Byte selected, and their card on the right with class badges, Checked in, and the Profile tab's race-day and profile details](../assets/images/driver-hub.png)
+![Driver Hub in its Table view: the roster with each driver's classes, car, transponder and whether they're checked in tonight, and Al Gorithim's card on the right with Edit, Photo and the buttons that open each part of the card](../assets/images/driver-hub.png)
 
 The page has three views: **Card**, **Table** and **Garage**, in the upper left. The page opens on the one you used last. The banner for [unknown transponders](../timing/transponders.md#unknown-transponders) is across the top of all three.
 
@@ -390,7 +390,7 @@ A **Points so far** column brings each driver's championship points in with them
 
 A class is the rulebook a group of drivers races under: how qualifying is scored, how many heats count, how big a main is, whether bump-ups happen, what a scrutineer checks, and how the races are run. Every setting is per class, because clubs rarely run two classes the same way.
 
-![The Classes page listing four classes with their Qualifying, Mains, Race Format and Tech columns](../assets/images/classes.png)
+![The Classes page listing four classes with their Qualifying, Mains, Race Format, Tech and Fee columns, and Add a Class, Edit, Sanctioning Preset and Delete below](../assets/images/classes.png)
 
 The **Classes** page lists every class in a grid, so you can compare them side by side:
 
@@ -673,7 +673,7 @@ The **Garage** page shows all the club's cars. One driver's cars are also on the
 
 The **Garage** page shows the club's cars as cards, grouped under their class. A car with a photo shows it; one without gets a plate with its number. **Show:** picks whose cars are on the wall (**Everyone's cars**, **The club's own cars**, or one driver's), and **Include retired** adds retired cars. The buttons under the wall are **Add a Car**, **Chassis Types** (the list of chassis a car can be), **Chassis Sheets** (see [Chassis sheets](#chassis-sheets)) and **Club Batteries** (see [Club batteries](#club-batteries)).
 
-![Garage page: Everyone's cars, grouped under Box Stock 2, Mod 2 and Stock 4, two with photos and the rest on numbered plates, with Add a Car, Chassis Types, Chassis Sheets and Club Batteries below](../assets/images/garage.png)
+![Garage page: Everyone's cars, grouped under Box Stock 2, Mod 2 and Stock 6, some with photos and the rest on plates with their initials, with Add a Car, Chassis Types, Chassis Sheets and Club Batteries below](../assets/images/garage.png)
 
 Click a car to open it. Across the top is the car: a small picture, its details, and the buttons **Edit**, **Photos** and **More**. **More** holds **Lend Out**, **Transfer** (see [Transfer a car](#transfer-a-car)), **Retire** and **Delete Car**. Under that is every setup logged for the car.
 

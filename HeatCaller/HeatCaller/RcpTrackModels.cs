@@ -522,6 +522,64 @@ public sealed record RcpKit(
 }
 
 /// <summary>What a layout needs, counted up.</summary>
+/// <summary>
+/// A plan counted in RCP's pieces (railed tiles, Phase 4, 13 Nov 2026): how
+/// many tiles of each piece the floor is, and the rails no piece carries.
+/// </summary>
+public sealed class RcpPieceCount
+{
+    public int Plain { get; set; }
+    public int Rail { get; set; }
+    public int Finish { get; set; }
+    public int Arched { get; set; }
+    public int OuterCurve { get; set; }
+    public int InnerCorner { get; set; }
+    public int Blank { get; set; }
+
+    /// <summary>Second rails on a tile that already has one - custom tiles.</summary>
+    public int SecondRails { get; set; }
+
+    /// <summary>Rails with no tile under them.</summary>
+    public int LooseRails { get; set; }
+
+    /// <summary>Turn rails that aren't one tile's own turn - two-tile turns, back-to-back pairs (as two), or with no outer curve tile under them.</summary>
+    public int LooseTurns { get; set; }
+
+    /// <summary>
+    /// The pieces of <paramref name="design"/>, worked out on a copy
+    /// (RcpPieces.Adopt) so a plan whose pieces were never worked out - a
+    /// starter layout, one built for the room, a file - counts the same as
+    /// one on the board, and the plan itself is left alone.
+    /// </summary>
+    public static RcpPieceCount Of(RcpTrackDesign design)
+    {
+        var copy = design.Clone();
+        var report = RcpPieces.Adopt(copy);
+        var count = new RcpPieceCount
+        {
+            SecondRails = report.SecondRails,
+            LooseRails = report.RailsWithNoTile,
+            LooseTurns = copy.Curves.Where(c => RcpPieces.TurnTile(copy, c) is null).Sum(c => c.Double ? 2 : 1),
+        };
+
+        foreach (var tile in copy.Tiles.Where(t => t.Kind != RcpTileKind.Infield))
+        {
+            switch (tile.Piece)
+            {
+                case RcpPiece.Rail: count.Rail++; break;
+                case RcpPiece.Finish: count.Finish++; break;
+                case RcpPiece.Arched: count.Arched++; break;
+                case RcpPiece.OuterCurve: count.OuterCurve++; break;
+                case RcpPiece.InnerCorner: count.InnerCorner++; break;
+                case RcpPiece.Blank: count.Blank++; break;
+                default: count.Plain++; break;
+            }
+        }
+
+        return count;
+    }
+}
+
 public sealed class RcpInventory
 {
     public int Tiles { get; set; }
@@ -582,6 +640,12 @@ public sealed class RcpInventory
     /// rail post quarter laid by hand. They are all the same part.
     /// </summary>
     public int InnerCornerPieces => InnerCornerTiles + PostQuarters + DividerEndQuarters;
+
+    /// <summary>
+    /// The plan counted in pieces - each tile with its rail on (railed
+    /// tiles, Phase 4, 13 Nov 2026) - as the stock check reads it.
+    /// </summary>
+    public RcpPieceCount Pieces { get; set; } = new();
 
     /// <summary>The plain floor: every tile that is neither corner tile.</summary>
     public int PlainTiles => Math.Max(0, Tiles - OuterCurveTiles - InnerCornerTiles);
@@ -847,6 +911,8 @@ public static class RcpPlan
         inventory.OuterTurnRails = design.Curves
             .Where(c => corners.Outer.Contains(QuadrantCell(c)))
             .Sum(c => c.Double ? 2 : 1);
+
+        inventory.Pieces = RcpPieceCount.Of(design);
 
         return inventory;
     }

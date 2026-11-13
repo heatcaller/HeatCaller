@@ -329,6 +329,7 @@ internal static class RcpPlanPrinter
         }
 
         DrawGridNames(g, box, sheet.Tiles, mmPerTile, origin, small, grey);
+        DrawPieceMarks(g, box, sheet.Tiles, mmPerTile, design, small);
 
         // The scale bar, and how long it should measure.
         var footTop = box.Bottom + 3f;
@@ -359,6 +360,48 @@ internal static class RcpPlanPrinter
             g.DrawString(
                 $"{length} on the floor. This bar should measure {paperMm:0} mm - if it doesn't, the printer has scaled the page: turn off \"fit to page\".",
                 small, grey, new RectangleF(bar.Right + 3f, bar.Top - 0.8f, Math.Max(10f, page.Right - bar.Right - 3f), FooterMm - 2f));
+        }
+    }
+
+    /// <summary>
+    /// Each cell's piece, marked in its top-left corner the way the build
+    /// list names it (RcpBuildList.Code: R, F, A, OC, IC, B) - so the sheet
+    /// laid on the floor says which piece goes where, outer curve and inner
+    /// corner tiles included (railed tiles Phase 3, and the next round's
+    /// Phase C2, 13 Nov 2026). Left off when a tile prints under 7 mm, where
+    /// the marks would cover the drawing.
+    /// </summary>
+    private static void DrawPieceMarks(Graphics g, RectangleF box, RectangleF tiles, double mmPerTile, RcpTrackDesign design, Font font)
+    {
+        if (mmPerTile < 7)
+        {
+            return;
+        }
+
+        var pieces = design.Clone();
+        var custom = RcpPieces.Adopt(pieces).CustomTiles.ToHashSet();
+
+        using var back = new SolidBrush(Color.FromArgb(220, 255, 255, 255));
+        using var ink = new SolidBrush(Color.Black);
+
+        foreach (var tile in pieces.Tiles)
+        {
+            var code = RcpBuildList.Code(tile.Piece) + (custom.Contains((tile.Col, tile.Row)) ? "*" : string.Empty);
+
+            if (code.Length == 0 || tile.Kind == RcpTileKind.Infield
+                || tile.Col < tiles.Left - 1e-4f || tile.Col + 1 > tiles.Right + 1e-4f
+                || tile.Row < tiles.Top - 1e-4f || tile.Row + 1 > tiles.Bottom + 1e-4f)
+            {
+                continue;
+            }
+
+            var at = new PointF(
+                box.Left + (float)((tile.Col - tiles.Left) * mmPerTile) + 0.6f,
+                box.Top + (float)((tile.Row - tiles.Top) * mmPerTile) + 0.6f);
+            var size = g.MeasureString(code, font);
+
+            g.FillRectangle(back, at.X, at.Y, size.Width, size.Height);
+            g.DrawString(code, font, ink, at);
         }
     }
 
@@ -443,20 +486,38 @@ internal static class RcpPlanPrinter
         }
         else
         {
-            lines.Add(new PrintLine($"Plain tiles: {used.PlainTiles}"));
-            lines.Add(new PrintLine($"Outer curve tiles: {used.OuterCurveTiles}"));
-            lines.Add(new PrintLine($"Inner corner tiles: {used.InnerCornerTiles}"));
-            lines.Add(new PrintLine($"Straight rails: {used.StraightRails}" + (used.Dividers > 0 ? $" ({used.Dividers} dividers, two rails each)" : string.Empty)));
-            lines.Add(new PrintLine($"Turn rails: {used.OuterTurnRails}"));
-            lines.Add(new PrintLine($"Inner corner pieces: {used.InnerCornerPieces}"));
+            // In pieces, each tile with its rail on (railed tiles, Phase 4).
+            var pieces = used.Pieces;
+
+            void Piece(string part, int count, bool always = false)
+            {
+                if (always || count > 0)
+                {
+                    lines.Add(new PrintLine($"{part}: {count}"));
+                }
+            }
+
+            Piece("Plain and blank tiles", pieces.Plain + pieces.Blank, always: true);
+            Piece("Rail tiles", pieces.Rail, always: true);
+            Piece("Finish rail tiles", pieces.Finish);
+            Piece("Arched rail tiles", pieces.Arched);
+            Piece("Outer curve tiles", pieces.OuterCurve, always: true);
+            Piece("Inner corner tiles", pieces.InnerCorner, always: true);
+            Piece("Loose straight rails", pieces.SecondRails + pieces.LooseRails);
+            Piece("Loose turn rails", pieces.LooseTurns);
+            Piece("Corner rail pieces", used.PostQuarters + used.DividerEndQuarters);
             lines.Add(new PrintLine($"End caps: {used.EndCaps}"));
             lines.Add(new PrintLine("What the club owns isn't entered, so nothing is checked against it - the Track Designer's Parts section says what's in the cupboard."));
         }
 
         if (used.TwoTileTurns > 0)
         {
-            lines.Add(new PrintLine($"{Plural.Of(used.TwoTileTurns, "two-tile turn")} counted as one outer curve tile and one turn rail each - RCP's boxes don't say what one takes."));
+            lines.Add(new PrintLine($"{Plural.Of(used.TwoTileTurns, "two-tile turn")} counted as loose turn rails - the club's pieces have only the one-tile turn."));
         }
+
+        lines.Add(new PrintLine(string.Empty));
+        lines.Add(new PrintLine("On the plan sheets each tile is marked with its piece: R rail tile, F finish rail tile, A arched rail tile, "
+                                + "OC outer curve tile, IC inner corner tile, B blank tile, unmarked a plain tile; * is a custom tile with a second rail."));
 
         foreach (var step in RcpBuildList.For(job.Design))
         {

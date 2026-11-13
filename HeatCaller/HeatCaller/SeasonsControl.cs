@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 
 namespace HeatCaller;
 
@@ -283,7 +283,7 @@ public sealed class SeasonsControl : UserControl
 
         // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
         _textSize.Keep(() => Pieces.KeepHeadingsWhole(_dgvPointsScheme));
-        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_dgvStandings));
+        _textSize.Keep(KeepStandingsWhole);
 
         // --- The page ---
         Beside? outer = null;
@@ -300,6 +300,7 @@ public sealed class SeasonsControl : UserControl
         outer.AddSideFill(standings, standings.LeastHeight, gapBelow: 0);
 
         var page = new FillPage();
+        _page = page;
 
         page.AddFill(outer, outer.LeastHeight, gapBelow: 0);
 
@@ -327,6 +328,11 @@ public sealed class SeasonsControl : UserControl
     /// championships, whose width is only what the other two leave, would
     /// give up all of theirs. Nothing here scrolls sideways (FillPage).
     /// </summary>
+    /// <summary>What the standings card needs across for every shown column at its least, its border and the card's inset.</summary>
+    private int StandingsNeed() =>
+        _dgvStandings.Columns.Cast<DataGridViewColumn>().Where(column => column.Visible).Sum(column => column.MinimumWidth)
+        + 2 + Section.Inset.Horizontal;
+
     private (int Seasons, int Middle, int Standings) ColumnWidths(int content)
     {
         var widestButton = _seasonButtons?.Controls.OfType<Button>().Select(button => button.Width).DefaultIfEmpty(0).Max() ?? 0;
@@ -336,6 +342,20 @@ public sealed class SeasonsControl : UserControl
             Math.Max(widestButton, _seasonsCard?.CaptionWidth ?? 0) + Section.Inset.Horizontal);
 
         var middle = Math.Clamp((int)(content * 0.25f), UiLayout.AtTextSize(260), UiLayout.AtTextSize(420));
+
+        // The standings' whole headings, driver names and Races values
+        // (KeepStandingsWhole) come first: the middle column, then the
+        // championships, give way down to their least before the table
+        // has to scroll sideways (user-guide pictures, 13 Nov 2026).
+        var seasonsLeast = Math.Max(UiLayout.AtTextSize(160), Math.Max(widestButton, _seasonsCard?.CaptionWidth ?? 0) + Section.Inset.Horizontal);
+        var shortBy = StandingsNeed() - (content - UiLayout.RowGap * 2 - seasons - middle);
+
+        if (shortBy > 0)
+        {
+            var fromMiddle = Math.Min(shortBy, Math.Max(0, middle - UiLayout.AtTextSize(260)));
+            middle -= fromMiddle;
+            seasons -= Math.Min(shortBy - fromMiddle, Math.Max(0, seasons - seasonsLeast));
+        }
 
         // What the three share: all of it but the gap between each two -
         // the gap a Beside leaves between its parts and its column.
@@ -783,6 +803,29 @@ public sealed class SeasonsControl : UserControl
         return (forcedIn, forcedOut);
     }
 
+    /// <summary>
+    /// The widest driver name and Races value in the table now, which their
+    /// columns are kept wide enough for (see KeepStandingsWhole).
+    /// </summary>
+    private string _widestDriver = "Driver";
+    private string _widestRaces = "99";
+
+    /// <summary>
+    /// Keeps every heading whole, plus the driver names and the "5 of 7" in
+    /// Races. Before 13 Nov 2026 only the headings were kept, so at
+    /// 1280x800 they took the whole card and Driver got the leftovers:
+    /// "Bil..." and "As..." (user-guide pictures).
+    /// </summary>
+    private void KeepStandingsWhole()
+    {
+        Pieces.KeepHeadingsWhole(_dgvStandings, ("driver", _widestDriver), ("sessions", _widestRaces));
+
+        // The columns' new least can change how the page shares its width.
+        _page?.PerformLayout();
+    }
+
+    private Control? _page;
+
     private void RecomputeStandings()
     {
         var season = SelectedSeason();
@@ -795,6 +838,11 @@ public sealed class SeasonsControl : UserControl
 
         var sessions = EventSpine.SessionsFor(season, _events, _rounds, _history);
         var standings = SeasonStore.ComputeStandings(season, sessions, _profiles);
+
+        // Carried In is blank unless somebody brought points from before,
+        // which most championships never do - so it shows only when it
+        // says something, and the room it took goes to the names.
+        _dgvStandings.Columns["carried"]!.Visible = standings.Any(entry => entry.CarriedIn != 0);
 
         var rank = 1;
         foreach (var entry in standings)
@@ -815,6 +863,21 @@ public sealed class SeasonsControl : UserControl
                     : entry.SessionsCounted.ToString(),
                 entry.Dnfs,
                 entry.BestFinish == int.MaxValue ? "-" : $"P{entry.BestFinish}");
+        }
+
+        string Widest(string column, string least) => _dgvStandings.Rows.Cast<DataGridViewRow>()
+            .Select(row => row.Cells[column].Value?.ToString() ?? string.Empty)
+            .Append(least)
+            .MaxBy(text => TextRenderer.MeasureText(text, _dgvStandings.Font).Width)!;
+
+        var driver = Widest("driver", "Driver");
+        var races = Widest("sessions", "99");
+
+        if (driver != _widestDriver || races != _widestRaces)
+        {
+            _widestDriver = driver;
+            _widestRaces = races;
+            KeepStandingsWhole();
         }
 
         var rule = season.AutoInclude

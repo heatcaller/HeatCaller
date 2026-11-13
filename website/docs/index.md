@@ -2,7 +2,7 @@
 
 HeatCaller runs RC race nights from one Windows laptop. It times the laps from your decoder, runs the race from staging to the checkered flag, calls the action out loud like a trackside announcer, keeps every result, and builds your championship as the season goes. Racers can follow along on their phones — on the club Wi-Fi, or anywhere through your club's own online pages — and check themselves in with a QR check-in or a personal PIN.
 
-![The Race Control page during a demo race: the Green flag lit, the clock at 01:05 under GREEN FLAG with 8 LAPS TO GO, and seven drivers on the leaderboard with their laps, gaps, last and best laps and streaks](assets/images/race-control-racing.png)
+![The Race Control page during a demo race: the Green flag lit, the clock at 01:05 under GREEN FLAG with 3 LAPS TO GO, the Now and Next bar, and seven drivers on the leaderboard with their laps, gaps, last and best laps and streaks, with Auto start on below](assets/images/race-control-racing.png)
 
 !!! note "Beta"
     HeatCaller is in beta (version 0.62.0). Expect rough edges, and keep backups turned on.

@@ -2,6 +2,8 @@
 
 12 Nov 2026. This plan has three parts:
 
+> **Status, 13 Nov 2026:** steps 1–8 were built and merged into main as PRs #161–#168, with fixes from the first night in #169 and #170; the relay is deployed to match. Part 1 below is the snapshot from before that work (main at 7b465e7), so most of its "Partial" and "Missing" items, and all four places the guide disagreed, are now done. The user guide and `website/docs/release-notes.md` ("Unreleased") describe what was built.
+
 1. **Part 1** checks [race-night-build-plan.md](race-night-build-plan.md) against the code on main (7b465e7) and the user guide.
 2. **Part 2** maps what a race director does today, from opening the app to the first green flag.
 3. **Part 3** suggests ways to make that quicker.

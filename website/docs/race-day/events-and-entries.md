@@ -85,7 +85,7 @@ Every step can be skipped, and **Skip setup** leaves the wizard at any point. A 
 
 **Setup** is the race day itself: which day the app is working on, what the day is, and how its program gets built.
 
-![Race Day, Setup tab: Race Day 6 Nov 2026 picked under Which race day, About the day, and Building the program with Classes racing below](../assets/images/race-day-setup.png)
+![Race Day, Setup tab: Race Day 11 Nov 2026 picked under Which race day with New Race Day and Set Up Tonight, and About the day with the kind of night, venue, track, First race at, Out of the venue by, Entries close at and Breaks](../assets/images/race-day-setup.png)
 
 There's no Save button. Every change saves itself as you make it, and a **Saved** note appears for a moment after the **Close Day** and **Delete Day** buttons. Typing in a box is saved when you pause or move to another field, and a run of typing is one step for **Undo**.
 
@@ -172,7 +172,7 @@ The three "Also" choices can only be ticked while the races themselves are being
 
 **Who's Racing** is the sign-on desk: who's here today, and whether their car has passed tech. It's also where scrutineering happens: the **Tech** column is the gate, and the **Scrutineering Log** button opens the full record.
 
-![Race Day, Who's Racing tab: five of nine drivers checked in, their classes and tech status, and the Scan to Check In card with Print QR Check-ins and Self Check-In Poster](../assets/images/race-day-whos-racing.png)
+![Race Day, Who's Racing tab: six of nine drivers checked in, with their classes, tech, pack, Paid and Papers columns, the buttons from Add Driver and Import Entries to Driver Paid, and the Scan to Check In card with Print QR Check-ins, Self Check-In Poster and Desk View](../assets/images/race-day-whos-racing.png)
 
 If no race day is open, a banner at the top says "No race day is open." Check-ins made then aren't kept with tonight's racing, and the heats can't be built from them. Click **Start Tonight...** in the banner to start one, in the [Start Tonight window](#the-start-tonight-window).
 
@@ -491,7 +491,7 @@ For more on signal strength and transponder problems, see [Transponders](../timi
 
 The **Calendar** tab, on the **Championship** page, lists every race day with what it covered. It's where you look back at past race days, and another place to switch which one is current.
 
-![Championship, Calendar tab: the current race day, Race Day 6 Nov 2026, open with 4 rounds and 3 recorded, and the buttons for managing race days](../assets/images/championship-calendar.png)
+![Championship, Calendar tab: the current race day, Race Day 11 Nov 2026, open with 12 rounds and 1 recorded, last week's day below it, and the buttons for managing race days](../assets/images/championship-calendar.png)
 
 The line above the list names the current race day ("Current: *name*"), adds "(closed - nothing new joins it)" when that day is closed, or says "No race day is open - rounds aren't being grouped". The list has these columns: **Race day**, **State** (**Open** or **Closed**), **Started**, **Days run** (worked out from when its rounds were actually raced), **Rounds**, **Recorded** and **Notes**. The current race day is marked **[CURRENT]**.
 

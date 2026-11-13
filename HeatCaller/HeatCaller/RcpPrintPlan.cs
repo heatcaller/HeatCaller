@@ -175,9 +175,11 @@ public sealed record RcpBuildStep(string Heading, IReadOnlyList<string> Lines);
 
 /// <summary>
 /// The order a track goes down in, for the sheet printed with the plan
-/// (Track Designer overhaul, Phase 7, 25 Oct 2026): the floor row by row,
-/// then the rails round it, the dividers between the lanes, the turns, and
-/// last the markings - each named by the grid on the printed plan, columns
+/// (Track Designer overhaul, Phase 7, 25 Oct 2026): the pieces row by row -
+/// each tile with its rail already on, since railed tiles Phase 3 (13 Nov
+/// 2026), where it used to be the floor and then the rails, dividers and
+/// turns - then the loose rail parts, and last the markings - each named by
+/// the grid on the printed plan, columns
 /// lettered A, B, C from the plan's left and rows numbered 1, 2, 3 from its
 /// top (Cell).
 /// </summary>
@@ -203,6 +205,64 @@ public static class RcpBuildList
     public static string Cell((int Col, int Row) origin, int col, int row) =>
         RcpPrintLayout.ColumnName(col - origin.Col) + (row - origin.Row + 1);
 
+    /// <summary>A piece by its name: "rail tile", "outer curve tile".</summary>
+    public static string PieceName(RcpPiece piece) => piece switch
+    {
+        RcpPiece.Rail => "rail tile",
+        RcpPiece.Finish => "finish rail tile",
+        RcpPiece.Arched => "arched rail tile",
+        RcpPiece.OuterCurve => "outer curve tile",
+        RcpPiece.InnerCorner => "inner corner tile",
+        RcpPiece.Blank => "blank tile",
+        _ => "plain tile",
+    };
+
+    /// <summary>
+    /// The short mark a piece has in its cell on the printed sheets - the
+    /// same as the build list names it by: R rail tile, F finish, A arched,
+    /// OC outer curve, IC inner corner, B blank. Nothing for a plain tile.
+    /// </summary>
+    public static string Code(RcpPiece piece) => piece switch
+    {
+        RcpPiece.Rail => "R",
+        RcpPiece.Finish => "F",
+        RcpPiece.Arched => "A",
+        RcpPiece.OuterCurve => "OC",
+        RcpPiece.InnerCorner => "IC",
+        RcpPiece.Blank => "B",
+        _ => string.Empty,
+    };
+
+    /// <summary>What goes in one cell: "rail tile, rail north", "outer curve tile, turn across its north-east corner".</summary>
+    public static string Describe(RcpTile tile, bool custom = false)
+    {
+        var what = tile.Piece switch
+        {
+            RcpPiece.Rail or RcpPiece.Finish or RcpPiece.Arched => $"{PieceName(tile.Piece)}, rail {EdgeName(tile.Facing)}",
+            RcpPiece.OuterCurve => $"{PieceName(tile.Piece)}, turn across its {CornerName(tile.Corner)} corner",
+            RcpPiece.InnerCorner => $"{PieceName(tile.Piece)}, piece in its {CornerName(tile.Corner)} corner",
+            _ => PieceName(tile.Piece),
+        };
+
+        return custom ? what + " (custom: a second rail)" : what;
+    }
+
+    private static string EdgeName(RcpEdge edge) => edge switch
+    {
+        RcpEdge.North => "north",
+        RcpEdge.East => "east",
+        RcpEdge.South => "south",
+        _ => "west",
+    };
+
+    private static string CornerName(RcpQuadrant corner) => corner switch
+    {
+        RcpQuadrant.NorthEast => "north-east",
+        RcpQuadrant.SouthEast => "south-east",
+        RcpQuadrant.SouthWest => "south-west",
+        _ => "north-west",
+    };
+
     /// <summary>The steps for <paramref name="design"/>. Empty for an empty plan; a step with nothing in it is left out.</summary>
     public static IReadOnlyList<RcpBuildStep> For(RcpTrackDesign design)
     {
@@ -215,7 +275,7 @@ public static class RcpBuildList
 
         var origin = Origin(design);
         var inventory = RcpPlan.Count(design);
-        var (outer, inner) = RcpPlan.CornerTiles(design);
+
 
         string Named(IEnumerable<(int Col, int Row)> cells)
         {
@@ -226,131 +286,81 @@ public static class RcpBuildList
                 : string.Join(", ", list.Take(MostNamed).Select(c => Cell(origin, c.Col, c.Row))) + $" and {list.Count - MostNamed} more";
         }
 
-        // --- The floor -------------------------------------------------------
-        var floor = design.Tiles.Where(t => t.Kind != RcpTileKind.Infield).ToList();
+        // --- The pieces ------------------------------------------------------
+        // Each tile goes down with its rail already on, so the floor, the
+        // rails, the dividers and the turns are one step, row by row, each
+        // cell saying what goes there (railed tiles, Phase 3, 13 Nov 2026).
+        // Worked out on a copy, so a plan whose pieces were never worked out
+        // (a starter layout, a file) is read the same as one on the board.
+        var pieces = design.Clone();
+        var report = RcpPieces.Adopt(pieces);
+        var custom = report.CustomTiles.ToHashSet();
+        var floor = pieces.Tiles.Where(t => t.Kind != RcpTileKind.Infield).ToList();
 
         if (floor.Count > 0)
         {
+            var counts = floor
+                .GroupBy(t => t.Piece)
+                .OrderBy(g => g.Key)
+                .Select(g => Plural.Of(g.Count(), PieceName(g.Key)))
+                .ToList();
+
             var lines = new List<string>
             {
-                $"{Plural.Of(floor.Count, "tile")}: {inventory.PlainTiles} plain, {inventory.OuterCurveTiles} outer curve, "
-                + $"{inventory.InnerCornerTiles} inner corner. Start at the top and lay each row from the left, joining each tile "
-                + "to the row before it. A blank square on the plan is left empty.",
+                $"{Plural.Of(floor.Count, "piece")}: {string.Join(", ", counts)}. Start at the top and lay each row from the left, "
+                + "each tile with its rail already on, joining each to the row before it. A blank square on the plan is left empty.",
             };
 
             foreach (var row in floor.GroupBy(t => t.Row).OrderBy(g => g.Key))
             {
-                var cols = row.Select(t => t.Col).Distinct().OrderBy(c => c).ToList();
+                var cells = row.OrderBy(t => t.Col).ToList();
                 var runs = new List<string>();
 
-                for (var i = 0; i < cols.Count;)
+                for (var i = 0; i < cells.Count;)
                 {
+                    var what = Describe(cells[i], custom.Contains((cells[i].Col, cells[i].Row)));
                     var j = i;
 
-                    while (j + 1 < cols.Count && cols[j + 1] == cols[j] + 1)
+                    while (j + 1 < cells.Count && cells[j + 1].Col == cells[j].Col + 1
+                           && Describe(cells[j + 1], custom.Contains((cells[j + 1].Col, cells[j + 1].Row))) == what)
                     {
                         j++;
                     }
 
-                    var from = RcpPrintLayout.ColumnName(cols[i] - origin.Col);
-                    var to = RcpPrintLayout.ColumnName(cols[j] - origin.Col);
-                    runs.Add(i == j ? from : $"{from} to {to}");
+                    var from = RcpPrintLayout.ColumnName(cells[i].Col - origin.Col);
+                    var to = RcpPrintLayout.ColumnName(cells[j].Col - origin.Col);
+                    runs.Add($"{(i == j ? from : $"{from} to {to}")} {what}");
 
                     i = j + 1;
                 }
 
-                var outerHere = cols.Where(c => outer.Contains((c, row.Key))).Select(c => RcpPrintLayout.ColumnName(c - origin.Col)).ToList();
-                var innerHere = cols.Where(c => inner.Contains((c, row.Key))).Select(c => RcpPrintLayout.ColumnName(c - origin.Col)).ToList();
-
-                var corners = new List<string>();
-
-                if (outerHere.Count > 0)
-                {
-                    corners.Add($"outer curve at {string.Join(", ", outerHere)}");
-                }
-
-                if (innerHere.Count > 0)
-                {
-                    corners.Add($"inner corner at {string.Join(", ", innerHere)}");
-                }
-
-                lines.Add($"Row {row.Key - origin.Row + 1}: {string.Join(", ", runs)} - {Plural.Of(cols.Count, "tile")}"
-                          + (corners.Count > 0 ? $" ({string.Join("; ", corners)})" : string.Empty));
+                lines.Add($"Row {row.Key - origin.Row + 1}: {string.Join("; ", runs)}");
             }
 
-            steps.Add(new RcpBuildStep("Lay the floor", lines));
+            if (inventory.Dividers > 0)
+            {
+                lines.Add($"{Plural.Of(inventory.Dividers, "divider")} between the lanes: two rail tiles back to back, each lane's rail on its own tile. The tiles either side of a divider aren't joined across it.");
+            }
+
+            steps.Add(new RcpBuildStep("Lay the pieces", lines));
         }
 
-        // --- The rails ---------------------------------------------------------
-        var single = design.Walls.Count(w => !w.Double);
-
-        if (single > 0)
+        // --- What goes on after ----------------------------------------------
+        // The loose rail parts: they join pieces already down, so they go on
+        // last - and the rails the club has no piece for, which are custom.
         {
-            var lines = new List<string>
-            {
-                $"{Plural.Of(single, "straight rail")} along the edges drawn on the plan, each on the tile it runs beside.",
-            };
+            var lines = new List<string>();
 
             if (inventory.EndCaps > 0)
             {
                 lines.Add($"{Plural.Of(inventory.EndCaps, "end cap")} on the rail ends left open.");
             }
 
-            steps.Add(new RcpBuildStep("Put the rails round it", lines));
-        }
-
-        var dividers = design.Walls.Count(w => w.Double);
-
-        if (dividers > 0)
-        {
-            var lines = new List<string>
-            {
-                $"{Plural.Of(dividers, "divider")} between the lanes - each one two straight rails back to back, so {dividers * 2} rails.",
-            };
-
             // Each open end of a divider: two corner rail pieces, one on each
             // lane's tile, the rails plugged into them (Asher, 8 Nov 2026).
             if (inventory.DividerEndQuarters > 0)
             {
                 lines.Add($"{Plural.Of(inventory.DividerEndQuarters, "corner rail piece")} closing the dividers' open ends, two at each - the inner corner piece.");
-            }
-
-            steps.Add(new RcpBuildStep("Put in the dividers", lines));
-        }
-
-        // --- The turns ---------------------------------------------------------
-        // The turn rails round the outside of bends, as the parts list counts
-        // them (RcpInventory.OuterTurnRails). A turn put round an inside
-        // corner bulges off the track and stands in for that corner's inner
-        // corner piece, so it is the inner corner line that sends a builder
-        // there - listed here too, it was a rail the parts never counted on
-        // a square with no floor (review, 25 Oct 2026).
-        var outerTurns = design.Curves.Where(c => outer.Contains(RcpPlan.QuadrantCell(c))).ToList();
-
-        if (outerTurns.Count > 0 || inventory.InnerCornerPieces > 0)
-        {
-            var lines = new List<string>();
-
-            foreach (var size in outerTurns.GroupBy(c => c.Radius).OrderBy(g => g.Key))
-            {
-                var name = size.Key switch
-                {
-                    < 0.99f => "half-tile",
-                    < 1.01f => "one-tile",
-                    < 2.01f and > 1.99f => "two-tile",
-                    _ => $"{size.Key:0.#}-tile",
-                };
-
-                var rails = size.Sum(c => c.Double ? 2 : 1);
-
-                lines.Add($"{Plural.Of(rails, $"{name} turn rail")}"
-                          + (size.Any(c => c.Double) ? " (back-to-back pairs counted as two)" : string.Empty)
-                          + $", on the tiles at {Named(size.Select(RcpPlan.QuadrantCell))}.");
-            }
-
-            if (inventory.InnerCornerTiles > 0)
-            {
-                lines.Add($"{Plural.Of(inventory.InnerCornerTiles, "inner corner piece")}, one on each inner corner tile: {Named(inner)}.");
             }
 
             // Rail posts laid by hand: the same quarter piece, on the tiles
@@ -361,7 +371,26 @@ public static class RcpBuildList
                 lines.Add($"{Plural.Of(inventory.PostQuarters, "rail post quarter")} - the inner corner piece - on the tiles at {Named(posts)}.");
             }
 
-            steps.Add(new RcpBuildStep("Put the turns in", lines));
+            if (report.SecondRails > 0)
+            {
+                lines.Add($"{Plural.Of(report.SecondRails, "second rail")} on a tile that already has one - custom work, two more holes and a rail cut to fit - at {Named(custom)}.");
+            }
+
+            if (report.RailsWithNoTile > 0)
+            {
+                lines.Add($"{Plural.Of(report.RailsWithNoTile, "rail")} with no tile under it - a loose rail, stood on its own.");
+            }
+
+            if (report.OtherTurns + report.TurnsWithNoTile > 0)
+            {
+                var turns = pieces.Curves.Where(c => RcpPieces.TurnTile(pieces, c) is null).ToList();
+                lines.Add($"{Plural.Of(turns.Count, "turn rail")} that isn't one tile's own turn - a two-tile turn, a back-to-back pair or one with no outer curve tile under it - at {Named(turns.Select(RcpPlan.QuadrantCell))}.");
+            }
+
+            if (lines.Count > 0)
+            {
+                steps.Add(new RcpBuildStep("Put the loose rail parts on", lines));
+            }
         }
 
         // --- The markings ------------------------------------------------------

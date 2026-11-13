@@ -19,7 +19,7 @@ Re-checked against the code on 13 Nov 2026. The installer now has a public downl
 | **Practice rounds are not counted in the cold open's "races to run".** `CommentaryReaders.NightAhead` filters tonight's programme to `round.Kind != RoundKind.Practice`, the same judgement `RacesIn` makes about the history. A club whose evening is ten heats and twenty practice slots is told ten, and that is correct: "thirty races to run" would be the app reading out its own booking sheet as a race meeting. Kept on 7 Nov 2026 as the defensible answer. | announcer/commentary.md (The top and tail of the night) |
 | **The after-flag "who can still win it" stays quiet on some nights on purpose.** `CommentaryReaders.ChampionshipAfter` marks nobody out unless it can prove it: no planned length, a race not on a race day, two counting races on one day, another counting round still on tonight's programme (a B-main), a scheme that takes points away, or a table over forty drivers. Each is the proof refusing rather than guessing. | announcer/commentary.md (What the championship still has riding on it) |
 
-## Fixed since 0.60.0 (Unreleased)
+## Fixed in 0.61.0
 
 Fixed on 7 Nov 2026 (tests in `KnownIssues4Tests`):
 
