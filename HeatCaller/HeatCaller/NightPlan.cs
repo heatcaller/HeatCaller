@@ -438,6 +438,103 @@ public static class NightPlan
             : new StopEarly(new RoundName(number, RoundNameOf(number, qualifiers.Where(q => RoundNumber(q.RoundLabel) == number))), dropped);
     }
 
+    /// <summary>How much shorter "run the finals shorter" makes each main.</summary>
+    public const int FinalsShorterBy = 2;
+
+    /// <summary>
+    /// What "We're done after this round" can also offer for the finals
+    /// (12 Nov 2026, setup plan step 8), with the minutes each saves.
+    /// </summary>
+    /// <param name="MinutesShorter">How much shorter each main would be - <see cref="FinalsShorterBy"/>.</param>
+    /// <param name="ShorterSaves">What running every main that much shorter saves; zero when no main is long enough to lose it.</param>
+    /// <param name="FewerSaves">What one main fewer in each class with more than one saves; zero when none has.</param>
+    /// <param name="FewerClasses">The classes that would lose a main.</param>
+    public sealed record FinalsCut(int MinutesShorter, TimeSpan ShorterSaves, TimeSpan FewerSaves, IReadOnlyList<string> FewerClasses)
+    {
+        public bool CanShorten => ShorterSaves > TimeSpan.Zero;
+
+        public bool CanDropOne => FewerSaves > TimeSpan.Zero;
+    }
+
+    /// <summary>
+    /// The finals cuts "We're done after this round" can offer (setup plan
+    /// step 8): only when the night has an out-by time, and only the ones that
+    /// save something. Read off the same projection the Next Steps card uses,
+    /// so the minutes agree with "To finish in time: ...". Null with no out-by
+    /// time or no finals still to run.
+    ///
+    /// WHY: dropping a qualifying round is the usual answer to a curfew, but
+    /// it isn't always enough - and the finals are where the time is. The
+    /// director deciding at 21:15 to finish early wants the other two levers
+    /// in the same breath, with what each buys, not a hunt through the
+    /// class settings afterwards.
+    /// </summary>
+    public static FinalsCut? FinalsCuts(Projection? plan)
+    {
+        if (plan is not { OutByUtc: not null })
+        {
+            return null;
+        }
+
+        var mains = plan.Slots.Where(s => s.Kind == RoundKind.Main && (s.Round is null || !s.Round.IsRecorded)).ToList();
+
+        if (mains.Count == 0)
+        {
+            return null;
+        }
+
+        var shorter = TimeSpan.FromMinutes(FinalsShorterBy);
+        var shortenable = mains.Count(s => s.Length - shorter >= ShortestToShorten);
+
+        var fewer = mains
+            .GroupBy(s => s.ClassName, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .Select(g => (Class: g.Key, Saves: g.First().Length + plan.Gap))
+            .ToList();
+
+        return new FinalsCut(
+            FinalsShorterBy,
+            TimeSpan.FromTicks(shorter.Ticks * shortenable),
+            TimeSpan.FromTicks(fewer.Sum(f => f.Saves.Ticks)),
+            fewer.Select(f => f.Class).ToList());
+    }
+
+    /// <summary>
+    /// A main's format with tonight's cut taken off (setup plan step 8): the
+    /// time limit <paramref name="minutesShorter"/> minutes shorter, never
+    /// below <see cref="ShortestToShorten"/>. Null when nothing changes - a
+    /// lap race, no cut, or a main already as short as it goes - so the main
+    /// keeps the class's format as usual.
+    /// </summary>
+    public static RaceFormat? Shortened(RaceFormat format, int minutesShorter)
+    {
+        if (minutesShorter <= 0 || format.TimeLimitMinutes <= 0)
+        {
+            return null;
+        }
+
+        var limit = Math.Max((int)ShortestToShorten.TotalMinutes, format.TimeLimitMinutes - minutesShorter);
+
+        if (limit >= format.TimeLimitMinutes)
+        {
+            return null;
+        }
+
+        var shortened = format.Clone();
+        shortened.TimeLimitMinutes = limit;
+        return shortened;
+    }
+
+    /// <summary>
+    /// The seeding with one main fewer (setup plan step 8): the lowest main of
+    /// a class with more than one is left out - its drivers' night ends with
+    /// qualifying. Unchanged with one main.
+    /// </summary>
+    public static MainsBuilder.SeedPlan OneMainFewer(MainsBuilder.SeedPlan plan) =>
+        plan.TierCount <= 1
+            ? plan
+            : new MainsBuilder.SeedPlan(plan.TierCount - 1, plan.MainSize, plan.Tiers.Take(plan.TierCount - 1).ToList());
+
     /// <summary>
     /// What the announcer says once the later rounds are dropped: "Change of
     /// plan, everyone: qualifying finishes after Q2, and the finals are

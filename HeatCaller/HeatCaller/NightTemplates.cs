@@ -37,6 +37,9 @@ public sealed class NightTemplate
 
     public int ShareHeatsUnder { get; set; }
 
+    /// <summary>Races off between a driver's races (setup plan step 8) - see RaceEvent.RacesOffBetween.</summary>
+    public int RacesOffBetween { get; set; } = RestOrder.DefaultGap;
+
     public decimal EntryFee { get; set; }
 
     public decimal ExtraClassFee { get; set; }
@@ -82,6 +85,7 @@ public static class NightTemplates
         DriversPerHeat = day.DriversPerHeat,
         FirstRoundSeeding = day.FirstRoundSeeding,
         ShareHeatsUnder = day.ShareHeatsUnder,
+        RacesOffBetween = day.RacesOffBetween,
         EntryFee = day.EntryFee,
         ExtraClassFee = day.ExtraClassFee,
         BetweenRacesPreset = day.BetweenRacesPreset ?? string.Empty,
@@ -119,6 +123,7 @@ public static class NightTemplates
 
         day.FirstRoundSeeding = template.FirstRoundSeeding;
         day.ShareHeatsUnder = template.ShareHeatsUnder;
+        day.RacesOffBetween = template.RacesOffBetween;
         day.EntryFee = template.EntryFee;
         day.ExtraClassFee = template.ExtraClassFee;
         day.BetweenRacesPreset = template.BetweenRacesPreset;

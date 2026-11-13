@@ -442,13 +442,17 @@ If the next round's class runs tech and someone in it hasn't passed tech today, 
 
 With [Auto start](#auto-start-between-races) on, **NEXT** also says when the next race starts, for example "Q2 Heat 3 (Stock) · starts in 1:42", and **Hold** beside **Start Next** holds and resumes the count.
 
+### Skip a driver in the next race (DNS)
+
+A car that's broken, or a driver who's gone home: right-click the Next Up bar (between races) and pick the driver under **Skip in Q2 Heat 3 (DNS)**, or right-click them on the board and choose **Skip *name* in Q2 Heat 3 (DNS)**. They come out of the next race's grid and are scored **DNS** (did not start) for it: the saved result lists them in **Race History**, greyed below the finishers with **DNS** for their position (and in **Export Session...**, with Status DNS), says "DNS (did not start): Max Power" in the event report, and under points qualifying the round reads "DNS". **Undo** puts them back (and takes the DNS off the result if the race has run since), and the same Next Up menu lists **Put *name* back in Q2 Heat 3** until it runs. A driver's own **Car broken - skip me** from their phone, once you approve it, does the same (see [More time and skip my race at the desk](../online/driver-requests.md#more-time-and-skip-my-race-at-the-desk)).
+
 ### Auto start between races
 
 After each race, HeatCaller counts down a gap and starts the next race by itself, so nobody has to press **Start Next**. It's on by default. The switch is at the foot of the leaderboard: **Auto start: Off | On**.
 
 - **When it counts.** From the checkered flag of a race on the program. It doesn't count after a demo, a Quick Race or a race kept on its own, and it doesn't start the first race of the night. The gap is 2:30 unless you choose another: right-click the switch for 1:30 to 5:00.
 - **The call-ups follow it.** The call-ups are timed to the real start, whether or not the timetable has times, and so is the spoken countdown ("one minute") when it's ticked on the **Between races** card. Phones show the start time too.
-- **A rest for back-to-back drivers.** When a driver in the next race raced the race just run (two classes, or a bump-up), that race waits an extra 2 minutes, and **NEXT** says who the rest is for.
+- **A rest for back-to-back drivers.** When a driver in the next race raced too recently (two classes, or a bump-up), that race waits an extra 2 minutes, and **NEXT** says who the rest is for. "Too recently" is closer than **Races off between a driver's races:** on **Setup** allows: with 1 (the default), the race just run; with 2 or 3, any of the last 2 or 3. With 0 there's no rest.
 - **Planned breaks.** A break planned on **Setup**, such as watering the track after Q2, is added to the gap before the race that follows, and the announcer says it as it begins: "Time for a 10-minute break - water the track. Racing starts again about 20:40." See [Planned breaks](../race-day/program-and-mains.md#planned-breaks).
 - **Hold.** **Hold** on the Next Up bar stops the count, and **Resume** carries on from where it stood. Right-click **Hold** for **+1 min** (the same as Call Up's) and **Start now**.
 - **The announcer comes first.** If the count runs out while the recap is still being spoken, the race starts the moment it ends.

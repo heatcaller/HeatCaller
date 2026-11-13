@@ -357,15 +357,16 @@ public sealed partial class RaceControlControl
         MarshalPostsFor(round).Select(p => (p.Name, p.Post)).ToList();
 
     /// <summary>
-    /// <see cref="MarshalsFor"/> with each marshal's main transponder too (12
-    /// Nov 2026, setup plan step 8), so a marshal saying from their phone
-    /// they're at their post can be matched to their post.
+    /// <see cref="MarshalsFor"/> with each marshal's main transponder and the
+    /// transponder they were put down on (12 Nov 2026, setup plan step 8): the
+    /// main matches a marshal saying from their phone they're at their post;
+    /// the transponder finds their results for the club's marshal rule.
     /// </summary>
-    private IReadOnlyList<(string Main, string Name, string Post)> MarshalPostsFor(RoundDefinition round)
+    private IReadOnlyList<(string Main, string Name, string Post, string Transponder)> MarshalPostsFor(RoundDefinition round)
     {
         if (_rounds is null)
         {
-            return Array.Empty<(string, string, string)>();
+            return Array.Empty<(string, string, string, string)>();
         }
 
         try
@@ -377,19 +378,19 @@ public sealed partial class RaceControlControl
 
             if (assignment is null)
             {
-                return Array.Empty<(string, string, string)>();
+                return Array.Empty<(string, string, string, string)>();
             }
 
             return assignment.Posts
                 .Where(p => p.IsFilled)
-                .Select(p => (MainOf(p.Transponder!), SpokenNameOf(p.Transponder!), p.Name ?? string.Empty))
+                .Select(p => (MainOf(p.Transponder!), SpokenNameOf(p.Transponder!), p.Name ?? string.Empty, p.Transponder!))
                 .ToList();
         }
         catch (Exception ex)
         {
             // A call-up without marshals beats no call-up.
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [gap] Couldn't work out the marshals for {round.RoundLabel}: {ex.Message}");
-            return Array.Empty<(string, string, string)>();
+            return Array.Empty<(string, string, string, string)>();
         }
     }
 

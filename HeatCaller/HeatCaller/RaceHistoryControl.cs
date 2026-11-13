@@ -484,7 +484,30 @@ public sealed class RaceHistoryControl : UserControl
                 _detailGrid.Rows[rowIndex].Cells[5].Style.Font = AppTheme.BoldFont;
             }
         }
+
+        // 12 Nov 2026: who was taken off the grid and scored DNS - see
+        // SkipDns. Below the finishers, greyed, with no laps or times
+        // (they never ran) and no Report Card on their row.
+        foreach (var transponder in session.DidNotStart ?? new List<string>())
+        {
+            var dnsIndex = _detailGrid.Rows.Add(null, DriverNameOf(transponder), "-", null, "-", string.Empty, string.Empty, "-", "-");
+            var dnsRow = _detailGrid.Rows[dnsIndex];
+            dnsRow.Cells["pos"].Tag = DnsMark;
+            dnsRow.Cells["pos"].ToolTipText = DnsHover;
+            dnsRow.Cells["driver"].ToolTipText = DnsHover;
+            dnsRow.DefaultCellStyle.ForeColor = AppTheme.TextMuted;
+        }
     }
+
+    /// <summary>What the Pos cell of a DNS row says.</summary>
+    internal const string DnsMark = "DNS";
+
+    /// <summary>The hover on a DNS row.</summary>
+    internal const string DnsHover = "Did not start: taken off the grid before the race and scored DNS.";
+
+    /// <summary>A driver's name from their profile, or the transponder when there is none.</summary>
+    private string DriverNameOf(string transponder) =>
+        _profiles?.Get(transponder)?.DriverName is { Length: > 0 } name ? name : transponder;
 
     /// <summary>
     /// Prints the selected races' results for the pit board - one after
@@ -547,6 +570,14 @@ public sealed class RaceHistoryControl : UserControl
     /// </summary>
     private void FormatHandCountedLaps(object? sender, DataGridViewCellFormattingEventArgs e)
     {
+        // A DNS row's Pos (12 Nov 2026): empty underneath, so the column still sorts as numbers.
+        if (e.RowIndex >= 0 && e.ColumnIndex >= 0 && _detailGrid.Columns[e.ColumnIndex].Name == "pos" && _detailGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].Tag is DnsMark)
+        {
+            e.Value = DnsMark;
+            e.FormattingApplied = true;
+            return;
+        }
+
         if (e.RowIndex < 0 || e.ColumnIndex < 0 || _detailGrid.Columns[e.ColumnIndex].Name != "laps")
         {
             return;
@@ -1378,6 +1409,12 @@ public sealed class RaceHistoryControl : UserControl
                     // Last, so a sheet built against the old columns still
                     // finds every one where it was (22 Oct 2026).
                     HandCountedLaps.In(r)));
+            }
+
+            // Then who did not start (12 Nov 2026, see SkipDns): no position, laps or times, Status DNS.
+            foreach (var transponder in session.DidNotStart ?? new List<string>())
+            {
+                lines.Add(CsvHelper.BuildRow(string.Empty, DriverNameOf(transponder), string.Empty, string.Empty, string.Empty, string.Empty, DnsMark, string.Empty));
             }
 
             File.WriteAllLines(dialog.FileName, lines, CsvHelper.FileEncoding);

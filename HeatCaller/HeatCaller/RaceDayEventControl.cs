@@ -83,6 +83,14 @@ public sealed partial class RaceDayEventControl : UserControl
     /// <summary>Small classes share a heat under this many drivers (RaceEvent.ShareHeatsUnder, 11 Nov 2026, Phase 4.1). 0 = off.</summary>
     private readonly NumericUpDown _numShareUnder = new();
 
+    /// <summary>Races off between a driver's races (RaceEvent.RacesOffBetween, 12 Nov 2026, setup plan step 8). 0-3.</summary>
+    private readonly NumericUpDown _numRacesOff = new();
+
+    /// <summary>The club's marshal rule (AppSettings.MarshalNoShowRule, setup plan step 8) and its seconds.</summary>
+    private readonly ComboBox _cmbMarshalRule = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+
+    private readonly NumericUpDown _numMarshalSeconds = new();
+
     /// <summary>The entry fee and the fee for each extra class (RaceEvent.EntryFee, ExtraClassFee - 11 Nov 2026).</summary>
     private readonly NumericUpDown _numEntryFee = new() { DecimalPlaces = 2, Maximum = 1000, Increment = 1 };
 
@@ -115,6 +123,12 @@ public sealed partial class RaceDayEventControl : UserControl
     private readonly CheckBox _chkMemberships = new ThemedCheckBox();
 
     private const string EntriesCloseCaption = "Entries close at:";
+
+    /// <summary>The rest gap's row (setup plan step 8) - RaceEvent.RacesOffBetween.</summary>
+    internal const string RacesOffCaption = "Races off between a driver's races:";
+
+    /// <summary>The marshal rule's row (setup plan step 8) - AppSettings.MarshalNoShowRule.</summary>
+    internal const string MarshalRuleCaption = "A marshal who doesn't turn up:";
 
     /// <summary>
     /// When entries close (RaceEvent.EntriesCloseLocalTime, 12 Nov 2026, setup
@@ -248,7 +262,7 @@ public sealed partial class RaceDayEventControl : UserControl
     /// Pieces.PickerWidth. Forgotten whenever the lists are rebuilt (see
     /// RefitFields).
     /// </summary>
-    private (Font Font, int Count, int Width)? _eventWidth, _shapeWidth, _venueWidth, _layoutWidth, _championshipWidth, _scopeWidth, _gapPresetWidth, _firstRoundWidth;
+    private (Font Font, int Count, int Width)? _eventWidth, _shapeWidth, _venueWidth, _layoutWidth, _championshipWidth, _scopeWidth, _gapPresetWidth, _firstRoundWidth, _marshalRuleWidth;
 
     /// <summary>The widths the fields had at the normal text size, before any of them was measured - see SizeFields.</summary>
     private const int FieldWidth = 320;
@@ -588,6 +602,56 @@ public sealed partial class RaceDayEventControl : UserControl
         _numShareUnder.Maximum = 19;
         _numShareUnder.Value = 0;
         programGrid.AddRow("Share a heat under (drivers):", _numShareUnder);
+
+        // The rest gap (12 Nov 2026, setup plan step 8): 1, the one race off
+        // every build gave, unless a night says otherwise.
+        _numRacesOff.Minimum = 0;
+        _numRacesOff.Maximum = RestOrder.MostGap;
+        _numRacesOff.Value = RestOrder.DefaultGap;
+        programGrid.AddRow(RacesOffCaption, _numRacesOff);
+
+        // The club's marshal rule (setup plan step 8). Every night, not just
+        // this one, so it saves straight to the club's settings - as the
+        // closing checklist below does.
+        foreach (var rule in Enum.GetValues<MarshalNoShowRule>())
+        {
+            _cmbMarshalRule.Items.Add(MarshalRule.Words(rule));
+        }
+
+        _cmbMarshalRule.SelectedIndex = Math.Clamp((int)(_settings?.MarshalNoShowRule ?? MarshalNoShowRule.LosesBestQualifier), 0, _cmbMarshalRule.Items.Count - 1);
+        _cmbMarshalRule.Enabled = _settings is not null;
+        _numMarshalSeconds.Minimum = 1;
+        _numMarshalSeconds.Maximum = MarshalRule.MostPenaltySeconds;
+        _numMarshalSeconds.Value = Math.Clamp(_settings?.MarshalNoShowPenaltySeconds ?? MarshalRule.DefaultPenaltySeconds, 1, MarshalRule.MostPenaltySeconds);
+        _numMarshalSeconds.Enabled = _settings?.MarshalNoShowRule == MarshalNoShowRule.TimePenalty;
+
+        _cmbMarshalRule.SelectedIndexChanged += (_, _) =>
+        {
+            var rule = (MarshalNoShowRule)Math.Max(0, _cmbMarshalRule.SelectedIndex);
+            _numMarshalSeconds.Enabled = rule == MarshalNoShowRule.TimePenalty;
+
+            if (_settings is null || _settings.MarshalNoShowRule == rule)
+            {
+                return;
+            }
+
+            _settings.MarshalNoShowRule = rule;
+            _settings.Save();
+        };
+
+        _numMarshalSeconds.ValueChanged += (_, _) =>
+        {
+            if (_settings is null || _settings.MarshalNoShowPenaltySeconds == (int)_numMarshalSeconds.Value)
+            {
+                return;
+            }
+
+            _settings.MarshalNoShowPenaltySeconds = (int)_numMarshalSeconds.Value;
+            _settings.Save();
+        };
+
+        programGrid.AddRow(MarshalRuleCaption, FieldGrid.Inline(_cmbMarshalRule, _numMarshalSeconds, new Label { Text = "seconds", AutoSize = true }));
+        programGrid.AddHint("Logged from Race Control's Someone's missing... Losing the best qualifying result takes it from the driver's class tonight; a time penalty goes on their next race. Click the same line again to take a no-show off. For every night, not just this one.");
         programGrid.AddRow("Entry fee:", _numEntryFee);
         programGrid.AddRow("Each extra class:", _numExtraFee);
 
@@ -801,6 +865,9 @@ public sealed partial class RaceDayEventControl : UserControl
         Fit(_numHeatSize, number);
         Fit(_cmbFirstRound, Math.Max(UiLayout.AtTextSize(160), Pieces.PickerWidth(_cmbFirstRound, ref _firstRoundWidth)));
         Fit(_numShareUnder, number);
+        Fit(_numRacesOff, number);
+        Fit(_numMarshalSeconds, number);
+        Fit(_cmbMarshalRule, Math.Max(UiLayout.AtTextSize(220), Pieces.PickerWidth(_cmbMarshalRule, ref _marshalRuleWidth)));
         Fit(_numEntryFee, number);
         Fit(_numExtraFee, number);
         Fit(_cmbAutoAdvanceScope, Math.Max(UiLayout.AtTextSize(ScopePickerWidth), Pieces.PickerWidth(_cmbAutoAdvanceScope, ref _scopeWidth)));
@@ -912,6 +979,7 @@ public sealed partial class RaceDayEventControl : UserControl
         _numHeatSize.ValueChanged += (_, _) => CommitNow();
         _cmbFirstRound.SelectedIndexChanged += (_, _) => CommitNow();
         _numShareUnder.ValueChanged += (_, _) => CommitNow();
+        _numRacesOff.ValueChanged += (_, _) => CommitNow();
         _numEntryFee.ValueChanged += (_, _) => CommitNow();
         _numExtraFee.ValueChanged += (_, _) => CommitNow();
         _chkCheckedInOnly.CheckedChanged += (_, _) => CommitNow();
@@ -1104,6 +1172,11 @@ public sealed partial class RaceDayEventControl : UserControl
         if (onScreen.FirstRoundSeeding != baseline.FirstRoundSeeding)
         {
             target.FirstRoundSeeding = onScreen.FirstRoundSeeding;
+        }
+
+        if (onScreen.RacesOffBetween != baseline.RacesOffBetween)
+        {
+            target.RacesOffBetween = onScreen.RacesOffBetween;
         }
 
         if (onScreen.ShareHeatsUnder != baseline.ShareHeatsUnder)
@@ -1511,6 +1584,7 @@ public sealed partial class RaceDayEventControl : UserControl
         _numHeatSize.Value = _events.HeatSizeFor(raceEvent);
         _cmbFirstRound.SelectedIndex = Math.Clamp((int)raceEvent.FirstRoundSeeding, 0, _cmbFirstRound.Items.Count - 1);
         _numShareUnder.Value = Math.Clamp(raceEvent.ShareHeatsUnder, (int)_numShareUnder.Minimum, (int)_numShareUnder.Maximum);
+        _numRacesOff.Value = Math.Clamp(raceEvent.RacesOffBetween, (int)_numRacesOff.Minimum, (int)_numRacesOff.Maximum);
         _numEntryFee.Value = Math.Clamp(raceEvent.EntryFee, _numEntryFee.Minimum, _numEntryFee.Maximum);
         _numExtraFee.Value = Math.Clamp(raceEvent.ExtraClassFee, _numExtraFee.Minimum, _numExtraFee.Maximum);
         _chkCheckedInOnly.Checked = raceEvent.CheckedInDriversOnly;
@@ -1575,6 +1649,7 @@ public sealed partial class RaceDayEventControl : UserControl
         _numHeatSize.Enabled = editable;
         _cmbFirstRound.Enabled = editable;
         _numShareUnder.Enabled = editable;
+        _numRacesOff.Enabled = editable;
         _numEntryFee.Enabled = editable;
         _numExtraFee.Enabled = editable;
         _chkCheckedInOnly.Enabled = editable;
@@ -1857,6 +1932,7 @@ public sealed partial class RaceDayEventControl : UserControl
         raceEvent.DriversPerHeat = (int)_numHeatSize.Value;
         raceEvent.FirstRoundSeeding = (FirstRoundSeeding)Math.Max(0, _cmbFirstRound.SelectedIndex);
         raceEvent.ShareHeatsUnder = (int)_numShareUnder.Value;
+        raceEvent.RacesOffBetween = (int)_numRacesOff.Value;
         raceEvent.EntryFee = _numEntryFee.Value;
         raceEvent.ExtraClassFee = _numExtraFee.Value;
 
@@ -1936,6 +2012,7 @@ public sealed partial class RaceDayEventControl : UserControl
                     current.DriversPerHeat = old.DriversPerHeat;
                     current.FirstRoundSeeding = old.FirstRoundSeeding;
                     current.ShareHeatsUnder = old.ShareHeatsUnder;
+                    current.RacesOffBetween = old.RacesOffBetween;
                     current.EntryFee = old.EntryFee;
                     current.ExtraClassFee = old.ExtraClassFee;
                     current.CheckedInDriversOnly = old.CheckedInDriversOnly;
@@ -1973,6 +2050,7 @@ public sealed partial class RaceDayEventControl : UserControl
         && a.DriversPerHeat == b.DriversPerHeat
         && a.FirstRoundSeeding == b.FirstRoundSeeding
         && a.ShareHeatsUnder == b.ShareHeatsUnder
+        && a.RacesOffBetween == b.RacesOffBetween
         && a.EntryFee == b.EntryFee
         && a.ExtraClassFee == b.ExtraClassFee
         && a.CheckedInDriversOnly == b.CheckedInDriversOnly

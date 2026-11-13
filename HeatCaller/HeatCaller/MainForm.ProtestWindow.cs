@@ -1,30 +1,35 @@
 namespace HeatCaller;
 
 /// <summary>
-/// The protest window everywhere (11 Nov 2026). Once a class's last
-/// qualifier is in, its results are provisional for the club's window
-/// (AppSettings.ProtestMinutes, set on the Club Website page):
+/// The protest window everywhere (11 Nov 2026). Once a round's results are
+/// in, they are provisional for the club's window (AppSettings.ProtestMinutes,
+/// set on the Club Website page):
 ///
 /// - the Schedule page's qualifying card and a driver's own qualifying line
 ///   say "Provisional until 20:42" (BuildQualifyingDocument);
-/// - each of that class's heats on a driver's night carries the moment the
-///   window closes, and the phone takes "Something wrong?" away then;
-/// - the announcer says once that results are provisional and queries go
-///   to the desk.
+/// - each race on a driver's night carries the moment its window closes,
+///   and the phone takes "Something wrong?" away then;
+/// - the announcer says once, per round, that results are provisional and
+///   queries go to the desk;
+/// - the Big Screen's finished board says "PROVISIONAL UNTIL 20:42";
+/// - a query asked inside a window goes to the top of Driver Requests.
 ///
-/// Mains, and a class still qualifying, have no window: their phones are as
-/// they were. All of it reads ProtestWindow, where it is tested.
+/// 12 Nov 2026, setup plan step 8: a window now opens after EVERY
+/// qualifying round of a class (once all that round's heats are in) and
+/// after every main, not only after the last qualifier. Seeding the finals
+/// still waits only for the last qualifying round's window. All of it reads
+/// ProtestWindow, where it is tested.
 /// </summary>
 public partial class MainForm
 {
-    /// <summary>The classes whose window has been announced, by race day and class - so it is said once.</summary>
+    /// <summary>The windows that have been announced, by race day, class and round - so each is said once.</summary>
     private readonly HashSet<string> _protestWindowsSaid = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// A result has just been filed: when it was a class's last qualifier,
-    /// say the window has opened and send every driver of that class's
-    /// qualifiers their night again, so their heats carry the closing time.
-    /// Never throws into the filing path.
+    /// A result has just been filed: when it completed a qualifying round of
+    /// a class, or was a main, say the window has opened and send every
+    /// driver of that class's races tonight their night again, so their races
+    /// carry the closing time. Never throws into the filing path.
     /// </summary>
     private void ProtestWindowAfterFiling(SessionRecord record)
     {
@@ -32,7 +37,7 @@ public partial class MainForm
         {
             if (record.IsNotScored()
                 || record.RoundId is not { Length: > 0 } roundId
-                || _rounds.Get(roundId) is not { Kind: RoundKind.Qualifier } round
+                || _rounds.Get(roundId) is not { Kind: RoundKind.Qualifier or RoundKind.Main } round
                 || _raceProgram is null
                 || _raceEvents.Active is not { IsLegacy: false } day)
             {
@@ -41,20 +46,20 @@ public partial class MainForm
 
             foreach (var className in MixedHeats.ClassesOf(round))
             {
-                if (_raceProgram.ProtestClosesAtUtc(className, record) is null
-                    || !_protestWindowsSaid.Add($"{day.Id}|{className}"))
+                if (_raceProgram.RoundProtestWindow(round, className, record) is not { } window
+                    || !_protestWindowsSaid.Add($"{day.Id}|{className}|{window.Key}"))
                 {
                     continue;
                 }
 
                 var minutes = _raceProgram.ProtestMinutesTonight;
-                var line = ProtestWindow.Announcement(className, minutes);
+                var line = ProtestWindow.Announcement(className, minutes, window);
                 _announcer.SpeakReminder(line, showOnScreens: true, onAir: "Notice");
-                OnClientRawMessage($"[program] {className}: qualifying is in - results are provisional for {Plural.Of(minutes, "minute")}.");
+                OnClientRawMessage($"[program] {className}: {window.What} is in - results are provisional for {Plural.Of(minutes, "minute")}.");
 
                 // After this filing has linked the round, so the nights see it.
                 var cls = className;
-                BeginInvoke(() => PublishNightsFor(DriversInClassQualifiers(cls)));
+                BeginInvoke(() => PublishNightsFor(DriversInClassRaces(cls)));
             }
         }
         catch (Exception ex)
@@ -63,13 +68,13 @@ public partial class MainForm
         }
     }
 
-    /// <summary>Everybody in tonight's qualifiers of a class.</summary>
-    private IEnumerable<string> DriversInClassQualifiers(string className)
+    /// <summary>Everybody in tonight's recorded qualifiers and mains of a class.</summary>
+    private IEnumerable<string> DriversInClassRaces(string className)
     {
         var scope = _raceEvents.ActiveRoundScope();
 
         return _rounds.All
-            .Where(r => r.Kind == RoundKind.Qualifier && r.IsRecorded && (scope is null || scope.Contains(r.Id)) && MixedHeats.RunsClass(r, className))
+            .Where(r => r.Kind is RoundKind.Qualifier or RoundKind.Main && r.IsRecorded && (scope is null || scope.Contains(r.Id)) && MixedHeats.RunsClass(r, className))
             .Select(r => _sessionHistory.Get(r.LinkedSessionId!))
             .OfType<SessionRecord>()
             .SelectMany(DriversIn)
@@ -78,7 +83,25 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// A night's races with each qualifier's query deadline on - see
+    /// When a race's own window closes (setup plan step 8): its round's - the
+    /// qualifying round it is part of, or the main - for the driver's class.
+    /// Null for no window, a practice, or a round still being run.
+    /// </summary>
+    private DateTime? RaceProtestClosesAtUtc(SessionRecord race, string? who = null)
+    {
+        if (_raceProgram is null
+            || race.RoundId is not { Length: > 0 } roundId
+            || _rounds.Get(roundId) is not { Kind: RoundKind.Qualifier or RoundKind.Main } round)
+        {
+            return null;
+        }
+
+        var className = who is null ? round.ClassName : MixedHeats.ClassOfDriver(round, who, _profiles);
+        return _raceProgram.RoundProtestWindow(round, className)?.ClosesAtUtc;
+    }
+
+    /// <summary>
+    /// A night's races with each one's query deadline on - see
     /// NightRace.QueryUntil. Unchanged with queries off.
     /// </summary>
     private IReadOnlyList<NightRace> WithQueryWindows(string who, IReadOnlyList<NightRace> races)
@@ -93,9 +116,8 @@ public partial class MainForm
             return races.Select(race =>
             {
                 if (race.Kind is not null
-                    || _sessionHistory.Get(race.Sid) is not { RoundId: { Length: > 0 } roundId }
-                    || _rounds.Get(roundId) is not { Kind: RoundKind.Qualifier } round
-                    || _raceProgram.ProtestClosesAtUtc(MixedHeats.ClassOfDriver(round, who, _profiles)) is not { } closes)
+                    || _sessionHistory.Get(race.Sid) is not { } session
+                    || RaceProtestClosesAtUtc(session, who) is not { } closes)
                 {
                     return race;
                 }
@@ -112,17 +134,76 @@ public partial class MainForm
 
     /// <summary>
     /// The qualifying card's "Provisional until 20:42" while the class's
-    /// window is open, as (words, Unix ms it closes) - else nulls.
+    /// latest qualifying round's window is open, as (words, Unix ms it
+    /// closes) - else nulls.
     /// </summary>
     private (string? Words, long? Until) ProvisionalFor(string className)
     {
-        if (_raceProgram?.ProtestClosesAtUtc(className) is { } closes && ProtestWindow.IsProvisional(closes, DateTime.UtcNow))
+        if (_raceProgram?.LatestProtestWindow(className, RoundKind.Qualifier) is { } window && ProtestWindow.IsProvisional(window.ClosesAtUtc, DateTime.UtcNow))
         {
-            return (ProtestWindow.PhoneWords(closes), UnixMs(closes));
+            return (ProtestWindow.PhoneWords(window.ClosesAtUtc), UnixMs(window.ClosesAtUtc));
         }
 
         return (null, null);
     }
+
+    /// <summary>
+    /// The Big Screen's finished board (setup plan step 8): "PROVISIONAL
+    /// UNTIL 20:42" while the window of the race on the board - tonight's
+    /// last recorded race - is open. Null otherwise.
+    /// </summary>
+    private string? ProvisionalBoardLine()
+    {
+        // The Big Screen asks on every refresh tick; the answer only moves
+        // when a race is filed or the window closes, so a few seconds' cache
+        // keeps the screen's tick cheap.
+        var now = DateTime.UtcNow;
+
+        if (_provisionalBoardCache is { } cached && now - cached.AtUtc < TimeSpan.FromSeconds(3))
+        {
+            return cached.Line;
+        }
+
+        var line = ProvisionalBoardLineNow();
+        _provisionalBoardCache = (now, line);
+        return line;
+    }
+
+    private (DateTime AtUtc, string? Line)? _provisionalBoardCache;
+
+    private string? ProvisionalBoardLineNow()
+    {
+        try
+        {
+            var scope = _raceEvents.ActiveRoundScope();
+
+            if (_raceProgram is null || scope is null)
+            {
+                return null;
+            }
+
+            var latest = _rounds.All
+                .Where(r => r.Kind is RoundKind.Qualifier or RoundKind.Main && r.IsRecorded && scope.Contains(r.Id))
+                .Select(r => (Round: r, Session: _sessionHistory.Get(r.LinkedSessionId!)))
+                .Where(x => x.Session is not null && !x.Session.IsNotScored())
+                .MaxBy(x => x.Session!.EndedAtUtc);
+
+            if (latest.Session is null || RaceProtestClosesAtUtc(latest.Session) is not { } closes || !ProtestWindow.IsProvisional(closes, DateTime.UtcNow))
+            {
+                return null;
+            }
+
+            return ProtestWindow.BoardWords(closes);
+        }
+        catch (Exception)
+        {
+            return null; // a board line is never worth a broken screen
+        }
+    }
+
+    /// <summary>Whether a driver's query came in while its race's window was open - Driver Requests puts those first.</summary>
+    private bool QueryInProtestWindow(SessionRecord race, DateTime askedUtc) =>
+        ProtestWindow.AskedInside(askedUtc, race.EndedAtUtc, RaceProtestClosesAtUtc(race));
 
     private static long UnixMs(DateTime utc) =>
         new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)).ToUnixTimeMilliseconds();

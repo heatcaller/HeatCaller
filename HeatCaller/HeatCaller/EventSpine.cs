@@ -303,6 +303,7 @@ public static class EventSpine
         raceEvent.FirstRaceLocalTime = lastLikeThis.FirstRaceLocalTime;
         raceEvent.FirstRoundSeeding = lastLikeThis.FirstRoundSeeding;
         raceEvent.ShareHeatsUnder = lastLikeThis.ShareHeatsUnder;
+        raceEvent.RacesOffBetween = lastLikeThis.RacesOffBetween; // setup plan step 8
         raceEvent.BetweenRacesPreset = lastLikeThis.BetweenRacesPreset ?? string.Empty;
         raceEvent.CheckedInDriversOnly = lastLikeThis.CheckedInDriversOnly;
 

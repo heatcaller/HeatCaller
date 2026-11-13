@@ -129,7 +129,13 @@ public static class QualifyingCalculator
         /// </summary>
         string PointsDetail = "",
         /// <summary>The driver's best finish in any one round - the first tie-breaker. Zero when never ranked.</summary>
-        int BestRoundFinish = 0)
+        int BestRoundFinish = 0,
+        /// <summary>
+        /// The result the club's marshal rule took away (12 Nov 2026, setup
+        /// plan step 8): "Lost Q2 Heat 1 (14 laps) - marshal no-show, Q3
+        /// Heat 2 (Turn 1)". Empty for nearly everybody.
+        /// </summary>
+        string Forfeit = "")
     {
         /// <summary>
         /// A points total in words: "6 pts (best 2 of 3)", "9 pts (3 rounds)",
@@ -443,17 +449,71 @@ public static class QualifyingCalculator
             }
         }
 
+        // The club's marshal rule (12 Nov 2026, setup plan step 8): a driver
+        // logged as a marshal no-show under "loses their best qualifying
+        // result" has their best counted heat taken out before anything is
+        // counted - so their next-best stands in for it, best-N drops one
+        // fewer, and the standings say which heat went and why. Read from
+        // the rounds themselves (MarshalRule.ForfeitsFor), so every caller -
+        // the standings, the mains, the phones, the event report - agrees.
+        var forfeitWords = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var forfeitReasons = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (transponder, reason) in MarshalRule.ForfeitsFor(className, rounds.All, roundFilter))
+        {
+            var key = DriverKey(transponder, profiles);
+
+            if (!byDriver.TryGetValue(key, out var heats) || heats.Count == 0 || forfeitReasons.ContainsKey(key))
+            {
+                continue;
+            }
+
+            forfeitReasons[key] = reason;
+
+            if (method == QualifyingMethod.RoundPoints)
+            {
+                continue; // RankByPoints takes their best ROUND - see there
+            }
+
+            var best = OrderBest(heats, method)[0];
+            heats.Remove(best);
+            forfeitWords[key] = $"Lost {best.RoundLabel} ({Plural.Of(best.Laps, "lap")}) - {reason}";
+
+            // Nothing else run: they stay in the standings, at the foot,
+            // rather than vanishing from the finals altogether.
+            if (heats.Count == 0)
+            {
+                heats.Add(new HeatScore("#forfeit", "result lost", null, best.StartedAtUtc, 0, 0, 0, 0, 0));
+            }
+        }
+
         if (method == QualifyingMethod.RoundPoints)
         {
-            return RankByPoints(byDriver, names, disqualified, countBest);
+            return RankByPoints(byDriver, names, disqualified, countBest, forfeitReasons);
         }
 
         var entries = byDriver
-            .Select(kv => BuildEntry(kv.Key, names[kv.Key], kv.Value, method, countBest))
+            .Select(kv => BuildEntry(kv.Key, names[kv.Key], kv.Value, method, countBest) is var entry && forfeitWords.TryGetValue(kv.Key, out var lost)
+                ? entry with { Forfeit = lost }
+                : entry)
             .ToList();
 
         return Rank(entries, method);
     }
+
+    /// <summary>A driver's heats best first under the class's rule - the order BuildEntry counts them in.</summary>
+    private static List<HeatScore> OrderBest(List<HeatScore> heats, QualifyingMethod method) =>
+        method == QualifyingMethod.BestConsecutiveLaps
+            ? heats
+                .OrderBy(h => h.ConsecutiveMs > 0 ? 0 : 1)
+                .ThenBy(h => h.ConsecutiveMs)
+                .ThenByDescending(h => h.Laps)
+                .ThenBy(h => h.ElapsedMs)
+                .ToList()
+            : heats
+                .OrderByDescending(h => h.Laps)
+                .ThenBy(h => h.ElapsedMs)
+                .ToList();
 
     /// <summary>Compares (driver, round) pairs ignoring the case of the transponder, as every driver lookup here does.</summary>
     private sealed class DriverGroupComparer : IEqualityComparer<(string Driver, string Group)>
@@ -539,7 +599,8 @@ public static class QualifyingCalculator
     /// this (DriverKey, AddHeat).
     /// </summary>
     private static List<Entry> RankByPoints(Dictionary<string, List<HeatScore>> byDriver,
-        Dictionary<string, (string Driver, string Car)> names, HashSet<(string Driver, string Group)> disqualified, int countBest)
+        Dictionary<string, (string Driver, string Car)> names, HashSet<(string Driver, string Group)> disqualified, int countBest,
+        IReadOnlyDictionary<string, string>? forfeits = null)
     {
         var field = byDriver.Count;
         var missed = field + 1;
@@ -585,6 +646,37 @@ public static class QualifyingCalculator
             }
         }
 
+        // The marshal rule's lost result (12 Nov 2026, setup plan step 8):
+        // under points it is the driver's best ROUND that goes - their place
+        // in it is taken away and the round scores as one they missed. Every
+        // other driver keeps the place they earned in it.
+        var lost = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var lostWords = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (driver, reason) in forfeits ?? new Dictionary<string, string>())
+        {
+            if (!places.TryGetValue(driver, out var mine))
+            {
+                continue;
+            }
+
+            var best = groups
+                .Select((g, index) => (g, index, Place: mine.TryGetValue(g.Key, out var p) ? p : 0))
+                .Where(x => x.Place > 0)
+                .OrderBy(x => x.Place)
+                .ThenBy(x => x.index)
+                .FirstOrDefault();
+
+            if (best.Place <= 0)
+            {
+                continue;
+            }
+
+            mine.Remove(best.g.Key);
+            lost[driver] = best.g.Key;
+            lostWords[driver] = $"Lost {best.g.Name} ({Ordinal(best.Place)}) - {reason}";
+        }
+
         var entries = new List<Entry>();
 
         foreach (var (driver, heats) in byDriver)
@@ -608,6 +700,7 @@ public static class QualifyingCalculator
             string Finish((string Key, string Name, DateTime Start) group, int place) =>
                 place > 0 ? Ordinal(place)
                 : disqualified.Contains((driver, group.Key)) ? "DQ"
+                : lost.TryGetValue(driver, out var lostKey) && lostKey == group.Key ? "lost (marshal)"
                 : "DNS";
 
             string PointsText(int points) => points == 1 ? "1 pt" : $"{points} pts";
@@ -644,7 +737,8 @@ public static class QualifyingCalculator
                 PointsRoundsCounted: counted.Count,
                 PointsRoundsRun: groups.Count,
                 PointsDetail: detail,
-                BestRoundFinish: bestFinish));
+                BestRoundFinish: bestFinish,
+                Forfeit: lostWords.TryGetValue(driver, out var lostLine) ? lostLine : string.Empty));
         }
 
         return entries

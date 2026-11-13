@@ -393,6 +393,37 @@ public sealed class RaceFilingService
             MixedHeats.StampClasses(record.Results, round, _profiles);
         }
 
+        // 12 Nov 2026, setup plan step 8: who was skipped from this race's
+        // grid goes on the result as DNS (SkipDns), and a marshal no-show's
+        // time penalty goes on the driver's next race (MarshalRule) - as a
+        // correction with its reason, so Race History shows it.
+        if (record.RoundId is not null && round is not null)
+        {
+            SkipDns.StampOnResult(record, round);
+
+            if (_rounds is not null)
+            {
+                try
+                {
+                    var pending = MarshalRule.PendingPenalties(record.Results, round.Id, _rounds.All, _events?.ActiveRoundScope());
+
+                    foreach (var line in MarshalRule.ApplyPenalties(record, pending))
+                    {
+                        StatusMessage(line);
+                    }
+
+                    foreach (var changed in pending.Select(p => p.Round).Distinct())
+                    {
+                        _rounds.Update(changed);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    StatusMessage($"[marshals] A marshal no-show's time penalty could not be added to this race - add it in Race History: {ex.Message}");
+                }
+            }
+        }
+
         record.SectorCut = TrackLayout.CutOfResults(
             _trackLayouts.All.FirstOrDefault(t => !string.IsNullOrEmpty(record.TrackLayoutName) && t.Name == record.TrackLayoutName),
             results);

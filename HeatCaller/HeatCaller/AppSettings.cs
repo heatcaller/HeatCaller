@@ -693,6 +693,18 @@ public sealed class AppSettings
     public bool MarshalSwapsNeedDesk { get; set; } = true;
 
     /// <summary>
+    /// "A marshal who doesn't turn up:" (12 Nov 2026, setup plan step 8) -
+    /// the club's rule for a no-show logged from Race Control's Someone's
+    /// missing...: nothing, loses their best qualifying result tonight (the
+    /// default, the usual club rule), or a time penalty in their next race.
+    /// Set on Race Day > Setup; for every night. See MarshalRule.
+    /// </summary>
+    public MarshalNoShowRule MarshalNoShowRule { get; set; } = MarshalNoShowRule.LosesBestQualifier;
+
+    /// <summary>The time penalty, in seconds, under MarshalNoShowRule.TimePenalty. 10 unless changed.</summary>
+    public int MarshalNoShowPenaltySeconds { get; set; } = MarshalRule.DefaultPenaltySeconds;
+
+    /// <summary>
     /// Close the night with a checklist to tick off (11 Nov 2026 - see
     /// CloseNightChecklist). On: when every race has run, Next Steps offers
     /// "Close the night...", a window listing what is left with a button to
