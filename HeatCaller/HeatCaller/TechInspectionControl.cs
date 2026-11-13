@@ -163,11 +163,7 @@ public sealed class TechInspectionControl : UserControl
         {
             _grid.Columns["result"]!.DefaultCellStyle.Font = AppTheme.BoldFont;
 
-            Pieces.KeepHeadingsWhole(
-                _grid,
-                ("when", "88:88 PM"),
-                ("result", "Passed (note)"),
-                ("checks", "88 ok, 88 fail"));
+            KeepColumnsWhole();
         });
 
         _grid.CellDoubleClick += (_, args) =>
@@ -279,6 +275,31 @@ public sealed class TechInspectionControl : UserControl
         _filterRow.PerformLayout();
     }
 
+    private const string WhenWidestTimeOnly = "88:88 PM";
+    private const string WhenWidestWithDate = "88/88/8888 88:88 PM";
+
+    /// <summary>What the When column is kept wide enough for - see RefreshGrid.</summary>
+    private string _whenWidest = WhenWidestTimeOnly;
+
+    /// <summary>
+    /// The When cell: the time alone for an inspection made today, and the
+    /// date with it for any other day.
+    ///
+    /// It was the time alone for every row. The log lists a whole weekend
+    /// meeting (and, with Today only unticked, everything), so Saturday's
+    /// and Sunday's inspections of one car both read "9:05 AM" and Edit or
+    /// Delete could land on the wrong day's (bug hunt 17).
+    /// </summary>
+    internal static string WhenText(DateTime local, DateTime today) =>
+        local.Date == today.Date ? AppTime.TimeOfDay(local) : AppTime.DateAndTime(local);
+
+    private void KeepColumnsWhole() =>
+        Pieces.KeepHeadingsWhole(
+            _grid,
+            ("when", _whenWidest),
+            ("result", "Passed (note)"),
+            ("checks", "88 ok, 88 fail"));
+
     private void RefreshGrid()
     {
         _grid.Rows.Clear();
@@ -291,6 +312,20 @@ public sealed class TechInspectionControl : UserControl
             .Where(i => SelectedClass is null || string.Equals(i.ClassName, SelectedClass, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
+        var today = DateTime.Now;
+
+        // The When column is kept wide enough for a date only while a row
+        // shows one, so a single night's log keeps the narrow column it had.
+        var whenWidest = inspections.Any(i => i.InspectedAtUtc.ToLocalTime().Date != today.Date)
+            ? WhenWidestWithDate
+            : WhenWidestTimeOnly;
+
+        if (whenWidest != _whenWidest)
+        {
+            _whenWidest = whenWidest;
+            KeepColumnsWhole();
+        }
+
         foreach (var inspection in inspections)
         {
             var checks = inspection.ItemsFailed.Count > 0
@@ -298,7 +333,7 @@ public sealed class TechInspectionControl : UserControl
                 : $"{inspection.ItemsPassed.Count} ok";
 
             var rowIndex = _grid.Rows.Add(
-                AppTime.TimeOfDay(inspection.InspectedAtUtc.ToLocalTime()),
+                WhenText(inspection.InspectedAtUtc.ToLocalTime(), today),
                 string.IsNullOrWhiteSpace(inspection.DriverName) ? inspection.Transponder : inspection.DriverName,
                 string.IsNullOrWhiteSpace(inspection.ClassName) ? "-" : inspection.ClassName,
                 string.IsNullOrWhiteSpace(inspection.CarModel) ? "-" : inspection.CarModel,

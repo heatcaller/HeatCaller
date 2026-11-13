@@ -350,6 +350,10 @@ public sealed class TechInspectionEditForm : Form
         _txtInspector.Text = Result.Inspector;
 
         _txtNotes.Multiline = true;
+
+        // Enter starts a new line, as in every other notes box. Without
+        // this it pressed Save, part-way through a note (bug hunt 17).
+        _txtNotes.AcceptsReturn = true;
         _txtNotes.ScrollBars = ScrollBars.Vertical;
         _txtNotes.Text = Result.Notes;
     }

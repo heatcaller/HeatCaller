@@ -281,7 +281,7 @@ public static class SoundPacks
         {
             try
             {
-                if (File.Exists(custom))
+                if (File.Exists(custom) && CanBePlayed(custom))
                 {
                     return custom;
                 }
@@ -293,6 +293,55 @@ public static class SoundPacks
         }
 
         return FileFor(config.BuiltInSound, kind);
+    }
+
+    /// <summary>What CanBePlayed found for a file, and the size and date it had then.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (long Length, DateTime WrittenUtc, bool Playable)> Checked =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether this PC can decode the club's own file.
+    ///
+    /// WHY (bug hunt 17): a file that was there but could not be decoded -
+    /// an .ogg picked through "All files", a download that isn't audio -
+    /// was still chosen, and the player gives up on such a file without a
+    /// sound. That effect was silent in every race, where a missing file
+    /// falls back to the pack. Now it falls back the same way.
+    ///
+    /// Opened the way the player opens it, once: the answer is kept until
+    /// the file's size or date changes, so a lap sound isn't opened twice
+    /// each time it plays.
+    /// </summary>
+    internal static bool CanBePlayed(string path)
+    {
+        var info = new FileInfo(path);
+        var length = info.Length;
+        var written = info.LastWriteTimeUtc;
+
+        if (Checked.TryGetValue(path, out var known) && known.Length == length && known.WrittenUtc == written)
+        {
+            return known.Playable;
+        }
+
+        bool playable;
+        try
+        {
+            using var reader = new NAudio.Wave.AudioFileReader(path);
+            playable = true;
+        }
+        catch (IOException)
+        {
+            // Busy or unreadable just now, which says nothing about the
+            // file: not kept, so the next play looks again.
+            return false;
+        }
+        catch
+        {
+            playable = false;
+        }
+
+        Checked[path] = (length, written, playable);
+        return playable;
     }
 
     /// <summary>

@@ -67,6 +67,17 @@ internal sealed class StandbyMirror : IDisposable
 
     public WarmStandby.MirrorStatus Status => _status;
 
+    /// <summary>
+    /// How long the copy may stop arriving part-way before the ask is given
+    /// up. The 30 seconds on the request only covers the wait for the
+    /// answer to start; a timing PC that lost power or dropped off the
+    /// network mid-copy sent nothing more and never closed, so the read
+    /// waited for good, no later ask ever ran, and the standby sat on an
+    /// old copy without saying why (bug hunt 17). Counted from the last
+    /// bytes that came, so a slow copy that keeps coming is not cut off.
+    /// </summary>
+    internal TimeSpan StalledAfter { get; set; } = TimeSpan.FromSeconds(30);
+
     /// <summary>The newest good copy.</summary>
     public string LatestPath => Path.Combine(_mirrorFolder, WarmStandby.LatestFileName);
 
@@ -176,15 +187,26 @@ internal sealed class StandbyMirror : IDisposable
             Directory.CreateDirectory(_mirrorFolder);
             var partial = Path.Combine(_mirrorFolder, WarmStandby.LatestFileName + ".partial");
 
+            using var stalled = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+
             await using (var body = await response.Content.ReadAsStreamAsync(cancel).ConfigureAwait(false))
             await using (var file = new FileStream(partial, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
             {
                 var buffer = new byte[81920];
                 long total = 0;
-                int read;
 
-                while ((read = await body.ReadAsync(buffer, cancel).ConfigureAwait(false)) > 0)
+                while (true)
                 {
+                    // Each read has StalledAfter to bring something - see there.
+                    stalled.CancelAfter(StalledAfter);
+                    var read = await body.ReadAsync(buffer, stalled.Token).ConfigureAwait(false);
+
+                    if (read <= 0)
+                    {
+                        break;
+                    }
+
+                    stalled.CancelAfter(Timeout.InfiniteTimeSpan);
                     total += read;
                     if (total > WarmStandby.MaxSnapshotBytes)
                     {
@@ -257,9 +279,9 @@ internal sealed class StandbyMirror : IDisposable
 
             return true;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException or UnauthorizedAccessException)
         {
-            Fail(ex is TaskCanceledException
+            Fail(ex is OperationCanceledException
                 ? "The timing PC didn't answer in time."
                 : "Can't reach the timing PC. Check both are on the same network and its Local Screens server is running.");
             return false;

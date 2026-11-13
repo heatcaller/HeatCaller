@@ -431,6 +431,34 @@ public sealed class StreamDecoderClient : IDisposable
         public void Dispose() => _port.Dispose();
     }
 
+    /// <summary>
+    /// Has Windows ask a network decoder "still there?" after a few quiet
+    /// seconds, and fail the socket when it stops answering.
+    ///
+    /// WHY (bug hunt 17): nothing is sent after the greeting, so a decoder
+    /// that lost power, or a switch that dropped, was never noticed - no
+    /// close ever arrives, the read just waits. The state stayed Connected
+    /// and the retry never ran, with the decoder back up and waiting for a
+    /// new connection. About ten seconds of silence from a dead peer now
+    /// ends the connection, and Run tries again as it does for any other
+    /// drop. A decoder that is merely quiet (a Cano between cars) still
+    /// answers, and is left alone.
+    /// </summary>
+    internal static void WatchForADeadPeer(Socket socket)
+    {
+        try
+        {
+            socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+            socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 5);
+            socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 1);
+            socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 5);
+        }
+        catch (SocketException)
+        {
+            // A Windows too old for these: connected as before, without the watch.
+        }
+    }
+
     private sealed class TcpLink : IDecoderLink
     {
         private readonly TcpClient _client;
@@ -472,6 +500,7 @@ public sealed class StreamDecoderClient : IDisposable
                 throw;
             }
 
+            WatchForADeadPeer(client.Client);
             return new TcpLink(client);
         }
 

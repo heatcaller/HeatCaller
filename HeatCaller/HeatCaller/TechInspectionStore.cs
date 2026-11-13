@@ -399,11 +399,6 @@ public sealed class TechInspectionStore
             .OrderByDescending(i => i.InspectedAtUtc)
             .FirstOrDefault();
 
-        if (atEvent is not null)
-        {
-            return atEvent;
-        }
-
         // No event at all, or the legacy holder, and recent. The holder had
         // to be in here: scrutineering usually starts before anybody opens
         // the race day, so those passes are stamped with the holder, and
@@ -411,13 +406,24 @@ public sealed class TechInspectionStore
         // the moment the day was opened - every car that had already been
         // through came up as never inspected. The recent window is what
         // keeps the holder honest; it is doing that job either way.
-        return _inspections
+        var recent = _inspections
             .Where(i => Matches(i)
                         && (string.IsNullOrEmpty(i.EventId)
                             || string.Equals(i.EventId, RaceEventStore.LegacyEventId, StringComparison.Ordinal))
                         && IsRecent(i))
             .OrderByDescending(i => i.InspectedAtUtc)
             .FirstOrDefault();
+
+        // The newer of the two. The event's own used to win outright, so a
+        // car passed on Saturday, then failed on Sunday morning while the
+        // day was closed (stamped with the holder), read as cleared again
+        // the moment the day was reopened (bug hunt 17).
+        if (atEvent is null || (recent is not null && recent.InspectedAtUtc > atEvent.InspectedAtUtc))
+        {
+            return recent;
+        }
+
+        return atEvent;
     }
 
     /// <summary>
