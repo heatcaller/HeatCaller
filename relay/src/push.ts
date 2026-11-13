@@ -24,6 +24,8 @@ import { StoreReadError, type Store } from "./store.js";
  *   - their marshal duty has just become the next race - from driverlive;
  *   - their race's estimated start has just come inside five minutes
  *     (11 Nov 2026, Auto start) - from driverlive, once per race;
+ *   - their marshal duty's estimated start has just come inside five
+ *     minutes (12 Nov 2026, setup plan step 8) - the same, once per race;
  *   - a race of theirs has just been filed on their night - from nights.
  *     A demo race is filed there too, marked as a demo, so a demo is a way
  *     to try alerts out.
@@ -292,6 +294,12 @@ function startsSoon(n: unknown, atMs: number | undefined): boolean {
   return Number.isFinite(eta) && eta - atMs <= SOON_MS && eta - atMs > -60 * 1000;
 }
 
+/** "You're marshalling Q2 Heat 3 in about 5 minutes - Turn 3": a marshal duty's soon push, in words. */
+export function marshalSoonWords(m: Record<string, unknown>): string {
+  const post = typeof m["post"] === "string" && m["post"].trim() !== "" ? " - " + m["post"].trim() : "";
+  return "You're marshalling " + String(m["race"] ?? "the next race") + " in about 5 minutes" + post;
+}
+
 export function liveAlerts(before: unknown, after: unknown, url: string, beforeAtMs?: number, afterAtMs?: number): PushMessage[] {
   if (!isObject(before) || !isObject(after)) {
     return [];
@@ -326,6 +334,18 @@ export function liveAlerts(before: unknown, after: unknown, url: string, beforeA
 
   if (race !== "" && startsSoon(n, afterAtMs) && !wasSoon && !out.some((message) => message.tag === "hc-race")) {
     out.push({ title: "Your race is in about 5 minutes", body: race, tag: "hc-soon", url });
+  }
+
+  // "You're marshalling Q2 Heat 3 in about 5 minutes - Turn 3" (12 Nov 2026,
+  // setup plan step 8): the same once-per-race rule, from the marshal duty's
+  // own estimate (marshal.eta, which the laptop sends from then on). Not in
+  // the same breath as "Marshal duty next", which already sent them there,
+  // and not while they have said they're at their post.
+  const duty = isObject(m) && typeof m["race"] === "string" ? m["race"] : "";
+  const dutyWasSoon = startsSoon(before["marshal"], beforeAtMs) && isObject(before["marshal"]) && before["marshal"]["race"] === duty;
+
+  if (duty !== "" && isObject(m) && m["in"] !== true && startsSoon(m, afterAtMs) && !dutyWasSoon && !out.some((message) => message.tag === "hc-marshal")) {
+    out.push({ title: "Marshal duty in about 5 minutes", body: marshalSoonWords(m), tag: "hc-marshal-soon", url });
   }
 
   return out;
