@@ -64,7 +64,10 @@ public partial class MainForm
 
             // Ctrl+Z is the app's Undo - unless a text box has the focus,
             // where it belongs to the box's own undo.
-            if (keyData == (Keys.Control | Keys.Z) && !FocusedControlHasOwnUndo())
+            // Not from the desk view either: there it is a text box's own
+            // undo and nothing more, or a volunteer's Ctrl+Z on the grid
+            // took back the race director's last change.
+            if (keyData == (Keys.Control | Keys.Z) && !_deskOnly && !FocusedControlHasOwnUndo())
             {
                 // Not btnUndo.PerformClick(): in Race Mode the footer is
                 // hidden, and a hidden button ignores PerformClick.
@@ -176,6 +179,16 @@ public partial class MainForm
         // Shift is allowed through for the few keys that use it (Shift+P,
         // Shift+W, ?) - never with an F-key, which stays bare.
         if (e.Control || e.Alt)
+        {
+            return;
+        }
+
+        // The desk view's keys are typing and nothing else (setup plan D8).
+        // A letter typed with the Who's Racing grid focused is not "typing
+        // in a text field", so a bare M muted the PA mid-race and Shift+S
+        // opened the setup wizard. Not marked handled: the key still goes
+        // to whatever has the focus.
+        if (_deskOnly)
         {
             return;
         }

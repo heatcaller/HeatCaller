@@ -57,6 +57,13 @@ public partial class MainForm
         lstNav.Enabled = false;
         txtNavSearch.Enabled = false;
 
+        // And the foot of the sidebar: Manage Navigation, Mute, Undo and the
+        // chips above them are one click from the desk. The panel, not each
+        // button, so Undo's own on-and-off (it follows the undo list) is
+        // left as it is underneath.
+        pnlSidebarFooter.Enabled = false;
+        btnCollapseNav.Enabled = false;
+
         OnClientRawMessage($"{AppTime.LogStampNow()}  [desk] Desk view on: this laptop is on Who's Racing until it's unlocked.");
         ShowDeskBanner();
     }
@@ -86,6 +93,8 @@ public partial class MainForm
         _deskPin = null;
         lstNav.Enabled = true;
         txtNavSearch.Enabled = true;
+        pnlSidebarFooter.Enabled = true;
+        btnCollapseNav.Enabled = true;
 
         if (_deskBanner is { IsDisposed: false } open)
         {
@@ -156,6 +165,18 @@ public partial class MainForm
 
         var unlock = new Button { Text = "Unlock...", AutoSize = true };
         unlock.Click += (_, _) => UnlockDeskView();
+
+        // Alt+F4 closes a window even with no close box, and this one holds
+        // the only Unlock: closed, the laptop stayed locked until HeatCaller
+        // itself was closed with the PIN. Unlocking clears _deskOnly before
+        // it closes the banner, and the app closing is not UserClosing here.
+        banner.FormClosing += (_, e) =>
+        {
+            if (_deskOnly && e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+            }
+        };
 
         var page = new FillPage();
         page.Add(new ButtonBar(tight: true).With(lbl, unlock), gapBelow: 0);

@@ -111,7 +111,9 @@ internal static class LlmText
         {
             // Strip a leading label like "Commentary:" or "Announcer:".
             var colon = line.IndexOf(':');
-            if (colon > 0 && colon < 16 && !line[..colon].Contains(' '))
+            // Letters only: "2:30 left on the clock" opens with a time, not
+            // a label, and lost its minutes here.
+            if (colon > 0 && colon < 16 && line[..colon].All(char.IsLetter))
             {
                 line = line[(colon + 1)..].Trim();
             }

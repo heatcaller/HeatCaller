@@ -110,6 +110,14 @@ internal sealed class ListenStream : IDisposable
     /// <summary>Past this much held, a bed is trimmed back to <see cref="BedLeadSeconds"/>.</summary>
     internal const double BedMostSeconds = 1.2;
 
+    /// <summary>
+    /// The most a bed ever holds. Only reached when the bus has stopped
+    /// reading (its speaker dropped out), so nothing is laying the bed under
+    /// anything: the oldest goes rather than the music piling up, ten
+    /// megabytes a minute, until the bus comes back.
+    /// </summary>
+    internal const double BedStalledSeconds = 5.0;
+
     /// <summary>How long after a stream fails before another is started.</summary>
     private static readonly TimeSpan RetryEvery = TimeSpan.FromSeconds(30);
 
@@ -235,6 +243,15 @@ internal sealed class ListenStream : IDisposable
                     Stop(run);
                     _run = null;
                     _retryAt = DateTime.MinValue;
+                }
+                else if (want && run is { Finished: false })
+                {
+                    // The bus is the clock, and a speaker dropping out closes
+                    // it until the next announcer line or chime. The music
+                    // finds the new speaker by itself, so without this the
+                    // room had music and the listeners had silence. Returns
+                    // at once while the bus is open.
+                    AudioBus.Warm();
                 }
             }
             catch (Exception ex)
@@ -697,6 +714,15 @@ internal sealed class ListenStream : IDisposable
 
                 _parts.Enqueue(mono);
                 _held += mono.Length;
+
+                // Nothing is taking it (see BedStalledSeconds). Not counted
+                // as a trim here: Under counts the jump when the bus is back.
+                var most = (int)(BedStalledSeconds * SampleRate);
+
+                if (_held > most)
+                {
+                    Skip(_held - most);
+                }
 
                 if (sourceRate > 0)
                 {
