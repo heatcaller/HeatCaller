@@ -61,7 +61,8 @@ internal static class DriverAsk
     /// <summary>
     /// "I need 5 more minutes" before their next race (11 Nov 2026, race-night
     /// build plan, Phase 1). Waits for the desk; approved, the race goes back
-    /// five minutes when it is the next one out - see RaceControlControl.GiveDriverMoreTime.
+    /// five minutes when it is the next one out, kept until then when it isn't
+    /// yet (12 Nov 2026) - see RaceControlControl.GiveDriverMoreTime and MoreTimeOwed.
     /// </summary>
     public const string Late = "late";
 

@@ -534,6 +534,12 @@ public partial class MainForm
         var daySchedule = new DayScheduleControl(_daySchedule, _raceClasses, _announcer, _undo, _rounds, _raceEvents) { Dock = DockStyle.Fill, Settings = _settings };
         _daySchedulePage = daySchedule;
 
+        // The lines still to come are expected later when the next race is
+        // put back - an approved "Need 5 minutes", +1 min, Hold (12 Nov
+        // 2026, see ScheduleExpected) - and the sheet redraws when it moves.
+        daySchedule.NextStart = () => _raceControlControl?.NextStartForPlan;
+        _raceControlControl.NextStartMoved += daySchedule.NextStartMoved;
+
         // Who's Racing IS the merged roster: present, tech and inspect
         // per row. The Tech Log tab keeps the scrutineer's full record
         // list; the gate itself is one sheet.

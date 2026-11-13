@@ -612,6 +612,9 @@ public sealed partial class RaceControlControl
     /// <summary>How long a driver's "Need 5 minutes" puts the next race back.</summary>
     internal const int LateMinutes = 5;
 
+    /// <summary>"Need 5 minutes" approved for races not next yet, given when each is - see MoreTimeOwed.</summary>
+    private readonly MoreTimeOwed _moreTimeOwed = new();
+
     /// <summary>
     /// A driver asked for more time before their next race, and the desk
     /// said yes: when that race is the next one out, it goes back
@@ -624,7 +627,20 @@ public sealed partial class RaceControlControl
 
         if (next is null || !next.AssignedTransponders.Contains(transponder, StringComparer.OrdinalIgnoreCase))
         {
-            return $"{name}'s race isn't the next one out - nothing to hold yet. Ask again when it's next.";
+            // 12 Nov 2026 (the first night on step 8): kept for their race
+            // rather than refused. Drivers ask while they are still fixing
+            // the car, two races out, and "ask again when it's next" meant a
+            // second ask and a second yes - or a race that went without them.
+            // ApplyOwedMoreTime gives it when that race's gap opens.
+            if (NextRaceOf(transponder) is not { } theirs)
+            {
+                return $"{name} isn't in a race still to run - nothing to hold.";
+            }
+
+            var owed = _moreTimeOwed.Owe(theirs.Id, transponder, name, LateMinutes);
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] {name} asked for more time from their phone - {theirs.RoundLabel} isn't next yet, "
+                                  + $"so it goes back {Plural.Of(owed, "minute")} when it is.");
+            return $"{theirs.RoundLabel} will go back {Plural.Of(owed, "minute")} for you when it's next.";
         }
 
         var now = DateTime.UtcNow;
@@ -633,6 +649,48 @@ public sealed partial class RaceControlControl
         NoteGap(next.Id, GapNoteKind.DriverAskedForTime, now, TimeSpan.FromMinutes(LateMinutes));
         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] {next.RoundLabel} goes back {LateMinutes} minutes for {name} (asked from their phone).");
         return $"{next.RoundLabel} goes back {LateMinutes} minutes for you.";
+    }
+
+    /// <summary>
+    /// The gap tick, once it knows the next race: what drivers were promised
+    /// for it while it wasn't next goes on now (12 Nov 2026) - the same
+    /// push-back, gap note and console line as a yes given while it was.
+    /// What no longer stands is dropped first: a race that ran or was
+    /// deleted, a driver who left their race. Returns whether it moved the
+    /// race, so the tick reads its facts again.
+    /// </summary>
+    private bool ApplyOwedMoreTime(DateTime now, string? nextId)
+    {
+        if (!_moreTimeOwed.Any)
+        {
+            return false;
+        }
+
+        var active = _activeRound?.Invoke()?.Id;
+        var program = OrderedProgram();
+        _moreTimeOwed.Keep(id => program.FirstOrDefault(r => string.Equals(r.Id, id, StringComparison.Ordinal)
+                                                             && !r.IsRecorded
+                                                             && !string.Equals(r.Id, active, StringComparison.Ordinal)));
+
+        var asks = _moreTimeOwed.Take(nextId);
+
+        if (asks.Count == 0 || program.FirstOrDefault(r => string.Equals(r.Id, nextId, StringComparison.Ordinal)) is not { } next)
+        {
+            return false;
+        }
+
+        var minutes = asks.Sum(a => a.Minutes);
+        Gap.PushBack(now, minutes);
+        _gapFacts = null;
+
+        foreach (var ask in asks)
+        {
+            NoteGap(next.Id, GapNoteKind.DriverAskedForTime, now, TimeSpan.FromMinutes(ask.Minutes));
+        }
+
+        var names = string.Join(" and ", asks.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase));
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] {next.RoundLabel} goes back {Plural.Of(minutes, "minute")} for {names} (asked from their phone before it was next).");
+        return true;
     }
 
     /// <summary>
