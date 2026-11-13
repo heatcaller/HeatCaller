@@ -81,13 +81,13 @@ The **Garage** space on **Me** lets a driver keep their own packs, cars, car pho
 
 Each race card on the night page has a **Something wrong?** link. Tapping it opens a box, **What looks wrong with this race?**, with "0 of 300 characters. The desk reads it and notes it against the race." under it, and **Send to the desk** and **Cancel**.
 
-A query never changes a result by itself. The desk reads it and, if it's about a race on the laptop, notes it against that race (see [Noting a query](#noting-a-query)). If the result does need correcting, the race director does that the usual way; see [Correcting a saved result](../race-control/corrections-and-recovery.md#correcting-a-saved-result).
+A query asked while its race's [protest window](../race-day/program-and-mains.md#the-protest-window) is open goes to the top of the waiting list, with **In the protest window** first in its notes, since its answer can still change a result before it's final. A query never changes a result by itself. The desk reads it and, if it's about a race on the laptop, notes it against that race (see [Noting a query](#noting-a-query)). If the result does need correcting, the race director does that the usual way; see [Correcting a saved result](../race-control/corrections-and-recovery.md#correcting-a-saved-result).
 
 A driver can send at most 10 queries in a night. One more is declined at once with "Too many".
 
 **Let drivers query a result** on the Club Website page turns this off on its own. Unticked, **Something wrong?** goes from every race card within a few seconds, a query sent from a page that still shows it is refused with "Your club is not taking result queries online. Ask at the desk.", and the driver's other requests carry on.
 
-Once a class's last qualifier is in, its heats can be queried only until its protest window closes: then **Something wrong?** goes from those heats, at that minute. Mains, and a class still qualifying, aren't affected. See [The protest window](../race-day/program-and-mains.md#the-protest-window).
+Each qualifying round of a class, once all its heats are in, and each main can be queried only until its protest window closes: then **Something wrong?** goes from those races, at that minute. A round with heats still to run isn't affected. See [The protest window](../race-day/program-and-mains.md#the-protest-window).
 
 ### More time, or skip my race
 
@@ -205,7 +205,7 @@ When the laptop doesn't have the race the query is about, **Noted** says "This l
 Select the request and click **Approve**, then **Yes**. The **Desk** button on Race Control lights up for these, as for every request.
 
 - **More time:** when the driver's race is the next one out, it goes back 5 minutes, and with [Auto start](../race-control/running-a-race.md#auto-start-between-races) on, its count moves with it. The phone shows "Q2 Heat 3 goes back 5 minutes for you." When their race isn't next yet, nothing is held and the phone says to ask again when it's next.
-- **Skip my race:** the driver comes out of their next race that hasn't run, and the phone shows "You're out of Q2 Heat 3. Tell the desk when your car is fixed." **Undo** puts them back in.
+- **Skip my race:** the driver comes out of their next race that hasn't run and is scored **DNS** (did not start) for it, the same as the desk's own skip (see [Skip a driver in the next race](../race-control/running-a-race.md#skip-a-driver-in-the-next-race-dns)). The phone shows "You're out of Q2 Heat 3 - it's a DNS. Tell the desk when your car is fixed." **Undo** puts them back in.
 
 Neither happens until the desk approves it. To say no, **Decline** it with a reason.
 

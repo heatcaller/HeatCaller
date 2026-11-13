@@ -4,6 +4,16 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **The program and results, for the night as clubs run it (12 November).**
+    - **A protest window after every round.** Each qualifying round of a class, and each main, now has its own window: the announcer names the round ("That's Q1 done for Stock..."), the **Big Screen**'s finished board says "PROVISIONAL UNTIL 20:42", and a query asked inside a window goes to the top of **Driver Requests**, marked **In the protest window**. The finals still wait only for the last round's. See [The protest window](race-day/program-and-mains.md#the-protest-window).
+    - **Stop early, finals too.** With an out-by time, **We're Done After This Round...** also offers the finals 2 minutes shorter, or one main fewer per class, with the minutes each saves, applied when the finals are built. See [We're done after this round](race-day/program-and-mains.md#were-done-after-this-round).
+    - **Skip a driver, scored DNS.** Right-click the Next Up bar, or a driver on the board, for **Skip in this race (DNS)**. An approved **Car broken - skip me** from a phone does the same. **Undo** puts them back. See [Skip a driver in the next race](race-control/running-a-race.md#skip-a-driver-in-the-next-race-dns).
+    - **The marshal rule.** **A marshal who doesn't turn up:** on **Setup**: nothing, loses their best qualifying result (the default), or a time penalty in their next race. A no-show from **Someone's missing...** applies it, **Qualifying Standings** and the event report say why, and clicking the line again takes it off. See [Marshals in place](race-day/program-and-mains.md#marshals-in-place).
+    - **By race number.** **First round seeded:** has **By race number**, the BRCA way.
+    - **Races off between a driver's races:** on **Setup** (0 to 3, 1 as before) for the build and Auto start's rest. **Move Drivers Between Heats** and dragging the running order warn before saving a change that puts a driver closer: "Max Power would race in Q2 Heat 1 and Q2 Heat 2 back to back."
+
+  Update HeatCaller on the race PC. Nothing new on the relay.
+
 - **Loose ends from setting up the night (12 November).**
     - **Templates on nights.** **When...** beside **Templates:** on **Race Day → Setup** sets the nights a template is for, such as every Tuesday or a monthly date. On those nights **Next Steps** offers **Start tonight's Tuesday club night**.
     - **Racing's off, by push too.** **Call It Off...** can also send a push to every phone signed up for the club's alerts.

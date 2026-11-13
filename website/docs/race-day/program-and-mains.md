@@ -227,6 +227,14 @@ Everything else is on the round menu. Right-click the list to open it: on a roun
 
 For rain, a curfew, or a track that has to close early. Right-click the list and choose **We're Done After This Round...**. HeatCaller lists the races it would drop: every heat of the later qualifying rounds (Q3, Q4...), none of them run. The round under way is the one on track, or else the next to run, and it's finished as normal. Click **Yes** to drop them.
 
+When the race day has an **Out by** time and finals still to run, the question also offers the finals' share, with what each saves from tonight's estimate:
+
+- **...and finals 2 min shorter**: every main that stays at least 3 minutes long runs 2 minutes shorter than its format.
+- **...and one main fewer**: each class with more than one main runs one fewer. The lowest main isn't built, so its drivers' night ends with qualifying.
+- **Just finish after this round** drops the rounds and leaves the finals as they are.
+
+The choice is kept on the race day and applied when the finals are built: **Build the finals from qualifying** says "Tonight's finals are cut to finish in time" and builds them that way, and the night's finish estimate counts them that way. **Undo** takes the choice off with the dropped rounds.
+
 - Nothing that has run is touched, and the dropped races' lines leave the timetable.
 - The announcer tells the room, with the words on the Big Screen: "Change of plan, everyone: qualifying finishes after Q2, and the finals are next." On a club night: "...tonight finishes after Race 2."
 - When the round is done, the next-step card offers **Build the finals from qualifying** as usual, from the qualifying that ran.
@@ -243,11 +251,11 @@ The command is grayed out when there's no later qualifying round still to run, a
 HeatCaller builds every planned qualifying round for every class that's racing and has drivers:
 
 - **Heats per round.** Each class's drivers are split into as few heats as the **Drivers per heat:** setting allows. For example, 13 drivers with 8 per heat makes 2 heats (7 and 6). Drivers are dealt into the heats in turn, so heats come out within one driver of each other.
-- **The first round, by recent pace.** With **First round seeded:** on **By recent pace** (the default), Q1 puts similar pace together: each driver's best lap in the class over the last 60 days, the fastest in the last heat, the next fastest in the one before it, and drivers with no lap yet (a rookie, say) in the first heat with the slowest. Later rounds are dealt in turn from that order. A class where nobody has a recent lap is dealt alphabetically, as with **Alphabetical**. **Random** shuffles the field, the same way for every rebuild of that race day. **Heads-up (HRQF, from practice)** builds every round its own way: see [Heads-up qualifying](#heads-up-qualifying).
+- **The first round, by recent pace.** With **First round seeded:** on **By recent pace** (the default), Q1 puts similar pace together: each driver's best lap in the class over the last 60 days, the fastest in the last heat, the next fastest in the one before it, and drivers with no lap yet (a rookie, say) in the first heat with the slowest. Later rounds are dealt in turn from that order. A class where nobody has a recent lap is dealt alphabetically, as with **Alphabetical**. **Random** shuffles the field, the same way for every rebuild of that race day. **By race number** (the BRCA way) deals the drivers into the heats in race-number order, from the **Race number** on each driver's profile: numbers in number order (2 before 10), then any other number such as "7a", then drivers with no number, alphabetically. **Heads-up (HRQF, from practice)** builds every round its own way: see [Heads-up qualifying](#heads-up-qualifying).
 - **Drivers in more than one class** are dealt into each class's heats. See [A driver in more than one class](drivers-and-classes.md#a-driver-in-more-than-one-class).
 - **Rotation.** In each new round, the starting point in the driver list moves on by one heat's worth, so the same drivers aren't first out on a cold track every round. When the heats divide the class exactly (16 drivers in two heats of 8, say), the groups are mixed as well from Q2 on, so the same drivers don't share a heat every round.
 - **Names.** Heats are called "Heat 1", "Heat 2" and so on when there's one qualifying round, or "Q1 Heat 1", "Q2 Heat 3" and so on when there's more than one. On a club night they're races: "Race 1", "Race 2", or "Race 1 Heat 2" when a class is split into groups.
-- **Order.** All classes' Q1 heats come first, then all Q2 heats, and so on. Within a round the classes run in the order set by **Class running order:** on **Setup** (the **Classes** page's order until you set one), turned round each round if you ticked that. Then the heats are put in an order that gives a driver in two classes a race off between their races: if one class's last heat and the next class's first heat share a driver, a later heat is brought forward between them. When every heat left shares a driver, the built order stands, and [Auto start](../race-control/running-a-race.md#auto-start-between-races) gives that driver an extra 2 minutes instead. The build's message says how many drivers were kept from racing back to back.
+- **Order.** All classes' Q1 heats come first, then all Q2 heats, and so on. Within a round the classes run in the order set by **Class running order:** on **Setup** (the **Classes** page's order until you set one), turned round each round if you ticked that. Then the heats are put in an order that gives a driver in two classes the rest set by **Races off between a driver's races:** on **Setup** (1 unless you change it, 0 to 3): if a heat would put a driver back on track sooner than that, a later heat is brought forward between them. When every heat left is too close, the one whose driver raced longest ago goes, and [Auto start](../race-control/running-a-race.md#auto-start-between-races) gives that driver an extra 2 minutes instead. The build's message says how many drivers were kept apart. With 0, the built order stands.
 - **Track.** Every heat starts on the race day's **Track layout:**.
 
 Rebuilding replaces any of today's qualifiers for those classes that haven't been run yet. Recorded rounds, and rounds from earlier race days, are never touched. A qualifying round that already has a recorded heat isn't built again, and its heats still to run stay as they are, so a rebuild after Q1 has started builds only the rounds after it; the summary marks those rounds "already run". If every planned round has already been run, the build is refused with **Qualifying already run**: to fit a driver into a heat still to run, use [Move Drivers Between Heats...](#balance-heats). A heat that's out on track can't be replaced: the build is refused until it has been recorded. You can undo the build with **Undo**.
@@ -292,7 +300,7 @@ For a no-show or a late entry across every heat still to run, **Redo Remaining H
 - The line at the bottom shows the spread, for example "3 heats, between 6 and 7 drivers each."
 - **Group by pace** and **Spread by pace** re-sort every qualifying round's heats by pace. See [Heats by pace](#heats-by-pace).
 
-Nothing is saved until you click **Save**, and **Cancel** discards everything. If a heat ends up empty, HeatCaller asks before saving. The whole session's changes are one step for **Undo**.
+Nothing is saved until you click **Save**, and **Cancel** discards everything. If a heat ends up empty, HeatCaller asks before saving. If a move puts a driver closer than tonight's **Races off between a driver's races:**, **Save** asks first, naming them: "Max Power would race in Q2 Heat 1 and Q2 Heat 2 back to back." **No** leaves the window open so you can move them back. Only clashes your changes make are named. The whole session's changes are one step for **Undo**.
 
 #### Heats by pace
 
@@ -311,7 +319,7 @@ Drag rounds up or down the list to reorder them — a line shows where they'll l
 
 A drag that starts on a round that's already selected moves it. A drag that starts on a round that isn't selected selects every round you pass instead. So to move a run of rounds, drag down them to select them, then drag them to where they go. **Move Up** and **Move Down** on the round menu do the same one place at a time. **Move Up** and **Move Down** on a round's line in the Timetable move the round here too.
 
-When the list is filtered to one class, moves are made relative to what you can see. A move can be undone with **Undo**, which puts the whole running order back as it was.
+When the list is filtered to one class, moves are made relative to what you can see. A drag that would put a driver closer than tonight's **Races off between a driver's races:** asks first, with the same warning as **Move Drivers Between Heats** ("... would race in Q2 Heat 1 and Q2 Heat 2 back to back"). A move can be undone with **Undo**, which puts the whole running order back as it was.
 
 ### Delete rounds
 
@@ -504,13 +512,14 @@ Seeding only looks at the current race day's mains. If the class already has mai
 
 ### The protest window
 
-After a class's last qualifier is recorded, its results stay provisional for the club's **Protest window (min):**, so a lap-count query can be dealt with before the finals are built. It's set on the **Club Website** page, under **Let drivers query a result** (5 minutes unless you change it, up to 60). It used to be on **Race Day → Setup**; a race day that had its own value hands it over the first time you open this version.
+Each qualifying round of a class, once all its heats are recorded, and each main, as soon as it's recorded, has results that stay provisional for the club's **Protest window (min):**, so a lap-count query can be dealt with while it can still be put right. It's set on the **Club Website** page, under **Let drivers query a result** (5 minutes unless you change it, up to 60). It used to be on **Race Day → Setup**; a race day that had its own value hands it over the first time you open this version.
 
-- The next-step card says "Results are provisional until 20:42 (the protest window)." above **Build the finals from qualifying**.
-- Building the finals before then is allowed. The question starts with the same words and "A query still to come could change this order."
-- Once every qualifier of the class is in, the announcer says it once, for example "That's qualifying done for Stock. Results are provisional for five minutes - any queries to the race desk, please."
-- On the phones, the class's qualifying on the **Schedule** page, and a driver's own qualifying line, say "Provisional until 20:42" while the window is open.
-- Drivers can query a result from their phone in the meantime (see [Querying a result](../online/driver-requests.md#querying-a-result)). When the window closes, **Something wrong?** goes from that class's heats on each driver's night page. Mains, and a class still qualifying, keep it as before.
+- The announcer says it once per round, naming it: "That's Q1 done for Stock. Results are provisional for five minutes - any queries to the race desk, please." After the last round: "That's Q3 done for Stock, and that's qualifying." After a main: "That's the A-Main done for Stock."
+- On the phones, the class's qualifying on the **Schedule** page, and a driver's own qualifying line, say "Provisional until 20:42" while the latest qualifying round's window is open.
+- The **Big Screen**'s finished board says "RACE COMPLETE — PROVISIONAL UNTIL 20:42" while the window of the race on it is open.
+- Drivers can query a result from their phone in the meantime (see [Querying a result](../online/driver-requests.md#querying-a-result)). When a round's window closes, **Something wrong?** goes from its races on each driver's night page. A round with heats still to run keeps it as before.
+- A query asked while its race's window was open goes to the top of **Driver Requests**, marked **In the protest window** in its notes.
+- The finals still wait only for the class's last qualifying round: the next-step card says "Results are provisional until 20:42 (the protest window)." above **Build the finals from qualifying**. Building the finals before then is allowed. The question starts with the same words and "A query still to come could change this order."
 - A window of 0 turns it off, and the phones behave as before.
 
 If the class has no recorded qualifying yet, seeding offers to add a main by hand instead.
@@ -577,7 +586,11 @@ To stop Auto start going green with empty posts, right-click the **Auto start** 
 - A minute before the start, a banner names them: "Marshals for Q2 Heat 3: Hugh Turn (Turn 1), Rhoda Rage (Turn 2). In place?"
 - **Marshals in place** confirms them, and the race starts on time.
 - If nobody has confirmed by zero, the race waits: the banner reads "Q2 Heat 3 is waiting for its marshals", and the announcer calls them once: "Marshals for Q2 Heat 3, to your posts please: Hugh Turn on Turn 1 and Rhoda Rage on Turn 2."
-- **Someone's missing...** logs a marshal who didn't turn up, for your club's marshal rule. The event report lists them under **Marshal no-shows**. Get someone onto the post, then press **Marshals in place**.
+- **Someone's missing...** logs a marshal who didn't turn up, and applies your club's rule, **A marshal who doesn't turn up:** on **Setup** (see [Setup](events-and-entries.md)). Get someone onto the post, then press **Marshals in place**.
+    - **Loses their best qualifying result** (the default): their best counted qualifier tonight in their class goes, and their next best stands in. Under points qualifying it's their best round, which then scores as missed. **Qualifying Standings** marks them with a * and says which and why: "Marshal rule: Max Power: Lost Q1 Heat 1 (14 laps) - marshal no-show, Q3 Heat 2 (Turn 1)." The mains are seeded from it, and the event report shows it.
+    - **Time penalty in their next race** (10 seconds unless you change it): added when their next race is saved, as a correction with its reason, so **Race History** shows it.
+    - **Nothing**: logged only.
+    - The event report lists every no-show under **Marshal no-shows**, with what the rule did. Clicking the same line in **Someone's missing...** again ("... did turn up - take the no-show off") takes it back off, the time penalty too. So does **Undo**.
 - **Start now** on the Hold button's menu starts without waiting.
 
 A race with nobody on a post (a layout with no **Corner marshal posts:**) never waits.
