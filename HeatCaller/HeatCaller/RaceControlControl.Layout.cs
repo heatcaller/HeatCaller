@@ -382,6 +382,9 @@ public sealed partial class RaceControlControl
         // And its "marshals in place?" ask (12 Nov 2026, setup plan D4).
         BuildMarshalsAsk();
         _page.Add(_marshalsBanner, gapBelow: UiLayout.RowGap);
+
+        // A late or failed marshal swap from phones (13 Nov 2026), built with the ask.
+        _page.Add(_swapNotice, gapBelow: UiLayout.RowGap);
         _page.AddFill(body, body.LeastHeight, gapBelow: 0);
 
         Controls.Add(_page);

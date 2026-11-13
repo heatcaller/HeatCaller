@@ -251,6 +251,11 @@ public sealed class SetupStep8PhonesTests : IDisposable
         public DriverRequestDesk Requests { get; }
         public List<(string Round, string Marshal, string Cover)> Swaps { get; } = new();
         public List<(string Round, string Who)> InPlace { get; } = new();
+        public List<(string Round, string Cover, string Made)> MadeByPhones { get; } = new();
+        public List<string> Failed { get; } = new();
+
+        /// <summary>Why the program refuses the next swap, or null to make it.</summary>
+        public string? Refusal { get; set; }
 
         public Desk(bool needDesk)
         {
@@ -277,10 +282,17 @@ public sealed class SetupStep8PhonesTests : IDisposable
                 CoverCandidates = (round, main) => new[] { ("200", Hugh) },
                 ApplyMarshalCover = (round, marshal, cover) =>
                 {
+                    if (Refusal is not null)
+                    {
+                        return Refusal;
+                    }
+
                     Swaps.Add((round, marshal, cover));
                     return null;
                 },
             };
+            Requests.MarshalSwappedByPhones = (round, cover, made) => MadeByPhones.Add((round, cover, made));
+            Requests.MarshalSwapFailed = Failed.Add;
         }
 
         public DriverRequest Ask(string kind, Dictionary<string, string> texts, string badge)
@@ -374,6 +386,38 @@ public sealed class SetupStep8PhonesTests : IDisposable
         var yes = desk.Ask(DriverAsk.Cover, new() { ["offer"] = swap.Id, ["answer"] = "yes" }, Hugh);
         Assert.Equal(DriverAsk.Approved, yes.State);
         Assert.Single(desk.Swaps);
+
+        // The host is told what the swap did, to decide whether it was late (13 Nov 2026).
+        var made = Assert.Single(desk.MadeByPhones);
+        Assert.Equal((Round, "200", "Hugh T. is covering Max P.'s post (Turn 3) in Q2 Heat 3 (Stock)"), made);
+        Assert.Empty(desk.Failed);
+    }
+
+    [Fact]
+    public void A_yes_the_program_refuses_tells_race_control_the_old_marshal_is_still_on()
+    {
+        var desk = new Desk(needDesk: false) { Refusal = "Q2 Heat 3 has already run." };
+        var swap = desk.Ask(DriverAsk.Swap, new() { ["round"] = Round, ["to"] = MarshalSwaps.KeyOf(Hugh) }, Max);
+
+        var yes = desk.Ask(DriverAsk.Cover, new() { ["offer"] = swap.Id, ["answer"] = "yes" }, Hugh);
+
+        Assert.Equal(DriverAsk.Declined, yes.State);
+        Assert.Empty(desk.MadeByPhones);
+        Assert.Equal("Marshal swap didn't go through: Hugh T. said yes to covering Max P. (Turn 3) in Q2 Heat 3 (Stock), "
+                     + "but Q2 Heat 3 has already run. Max P. is still on the post.", Assert.Single(desk.Failed));
+    }
+
+    [Fact]
+    public void A_swap_the_desk_approves_raises_no_phone_notice()
+    {
+        var desk = new Desk(needDesk: true);
+        var swap = desk.Ask(DriverAsk.Swap, new() { ["round"] = Round, ["to"] = MarshalSwaps.KeyOf(Hugh) }, Max);
+        var yes = desk.Ask(DriverAsk.Cover, new() { ["offer"] = swap.Id, ["answer"] = "yes" }, Hugh);
+
+        Assert.True(desk.Requests.ApproveCover(yes, out var refusal), refusal);
+        Assert.Single(desk.Swaps);
+        Assert.Empty(desk.MadeByPhones);
+        Assert.Empty(desk.Failed);
     }
 
     [Fact]

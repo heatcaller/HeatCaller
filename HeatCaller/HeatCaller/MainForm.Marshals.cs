@@ -18,6 +18,29 @@ public partial class MainForm
         desk.DutyOf = MarshalDutyOf;
         desk.CoverCandidates = CoverCandidatesFor;
         desk.ApplyMarshalCover = ApplyMarshalCoverFromPhones;
+
+        // Swaps the phones make by themselves (13 Nov 2026): an early one is
+        // in the log already; a late one, or a yes that couldn't be made, is
+        // put in front of the director (MarshalSwapNotices).
+        desk.MarshalSwappedByPhones = (roundId, cover, made) =>
+        {
+            if (_raceControlControl is { } raceControl && raceControl.MarshalSwapLateness(roundId, DateTime.UtcNow) is { } late)
+            {
+                var name = MarshalSwaps.ShortName(_profiles.Get(cover)?.DriverName);
+                raceControl.ShowMarshalSwapNotice(MarshalSwapNotices.LateNotice(made, late, name));
+            }
+        };
+        desk.MarshalSwapFailed = notice =>
+        {
+            if (_raceControlControl is { } raceControl)
+            {
+                raceControl.ShowMarshalSwapNotice(notice);
+            }
+            else
+            {
+                OnClientRawMessage($"[marshals] {notice}");
+            }
+        };
     }
 
     /// <summary>A driver's (main transponder's) marshal duty in a round, or null.</summary>
