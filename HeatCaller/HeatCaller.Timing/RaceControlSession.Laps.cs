@@ -88,6 +88,10 @@ public sealed partial class RaceControlSession
             {
                 _mergedInto.Add(primary);
                 _heardAsByRow = new Dictionary<string, string>(_heardAsByRow, StringComparer.OrdinalIgnoreCase) { [primary] = id };
+
+                // Bug hunt 17: a countdown jump booked under this
+                // transponder's own id follows it into the owner's row.
+                RefileCountdownJumpToOwner(id, primary);
             }
             else
             {
@@ -633,9 +637,22 @@ public sealed partial class RaceControlSession
             // within each lap stopped meaning anything. Moved once, from the
             // wall clock, the same way the start-reference check above does
             // it; the next driver through finds it already right.
-            if (!lap.IsSynthetic && !IsDemoMode && RaceStartUtc.HasValue && elapsedSinceStart < 0)
+            //
+            // Bug hunt 17: not only when elapsed came out negative. A decoder
+            // plugged in shortly before the green has a small reference, and
+            // its restarted clock can read above it by the first crossing -
+            // elapsed was then positive but minutes short, the reference
+            // stayed on the old clock, and every elapsed time for the rest of
+            // the race was measured from the wrong zero. So it is moved
+            // whenever the decoder and the race clock disagree by more than
+            // a few seconds, as the start-reference check judges it.
+            var wallSinceGreenMs = MsSinceGreen;
+            var decoderSinceMs = StartType == RaceStartType.Qualifier ? rawQualifierSinceGreenMs : elapsedSinceStart;
+            var clockSinceMs = StartType == RaceStartType.Qualifier ? wallSinceGreenMs : wallSinceGreenMs - releaseZeroMs;
+
+            if (!lap.IsSynthetic && !IsDemoMode && RaceStartUtc.HasValue
+                && (elapsedSinceStart < 0 || Math.Abs(decoderSinceMs - clockSinceMs) > 5000))
             {
-                var wallSinceGreenMs = MsSinceGreen;
                 _raceStartDeviceTimeMs = lap.DeviceTimeMs - Math.Max(1, wallSinceGreenMs);
                 Log($"Race start reference moved onto the decoder's new clock ({wallSinceGreenMs}ms since the green).");
             }
@@ -662,6 +679,15 @@ public sealed partial class RaceControlSession
         // reach its lap limit at all.
         var realCarsRacing = _standings.Keys.Any(k => !Ghosts.IsGhost(k));
         var isGhost = realCarsRacing && Ghosts.IsGhost(standing.TransponderId);
+
+        // Bug hunt 17: the lap after one taken off by hand is timed from the
+        // crossing that was taken off, so it is not a timed lap either - see
+        // _lapTimedFromRemovedCrossing. Kept out of bests and streaks the
+        // same way as the first lap after a recovery.
+        if (isValid && _lapTimedFromRemovedCrossing.Remove(standing.TransponderId))
+        {
+            firstLapAfterRecovery = true;
+        }
 
         if (isValid)
         {
