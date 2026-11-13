@@ -37,7 +37,7 @@ Every item has been checked against the **code**, not just the docs (paths are r
 | 17 | Standby PC | **Missing.** Backups only. | `BackupService.cs`, `CloudBackup.cs` | 6 |
 | 18 | Night-pace metrics, close-the-night checklist | **Partial.** Event report, night recap, night emails. The median start gap is computed in `RaceEta` but never reported. | `EventReportBuilder.cs`, `NightRecap.cs` | 0, 2 |
 | 19 | "You're up" push | **Exists, counted in races.** It fires when the race is next, not at a set number of minutes. | `relay/src/push.ts:20-27, 270-290` | 1 |
-| 20 | Sanctioning presets | **Partial.** PNWC, IFMAR clocks and BRCA on-road. No ROAR, EFRA or NZRCA. | `SanctioningPreset.cs:120-200` | 5 |
+| 20 | Sanctioning presets | **Done (12 Nov).** PNWC, IFMAR clocks, BRCA on-road, and ROAR, EFRA, NZRCA and Reedy Race from their own rulebooks. No points scales. | `SanctioningPreset.cs:120-200` | 5 |
 | 21 | Mid-pack "something to race for" lines | **Partial.** Driver score, report card, close-battle calls. No personal after-race lines. | relay Me page, `NightEmail.cs` | 7 |
 
 ---
