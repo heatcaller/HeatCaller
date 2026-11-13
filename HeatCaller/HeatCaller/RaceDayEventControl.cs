@@ -118,6 +118,11 @@ public sealed partial class RaceDayEventControl : UserControl
     private readonly Label _lblBreaks = new();
 
     private readonly Button _btnBreaks = new();
+
+    /// <summary>Tonight's class running order on one line (setup plan D7), and the button that changes it.</summary>
+    private readonly Label _lblClassOrder = new();
+
+    private readonly Button _btnClassOrder = new();
     private readonly ComboBox _cmbAutoAdvanceScope = new();
 
     /// <summary>Between-race talk for this day: the club's Between races settings, or one of the card's presets over them (31 Oct 2026).</summary>
@@ -609,6 +614,17 @@ public sealed partial class RaceDayEventControl : UserControl
         }
 
         _cmbGapPreset.SelectedIndex = 0;
+
+        // The class running order (12 Nov 2026, setup plan D7).
+        _lblClassOrder.AutoSize = true;
+        _lblClassOrder.Margin = new Padding(0, 6, 8, 0);
+        _lblClassOrder.Text = "As on the Classes page";
+        _btnClassOrder.Text = "Order...";
+        _btnClassOrder.AutoSize = true;
+        _btnClassOrder.Click += (_, _) => EditClassOrder();
+        programGrid.AddRow("Class running order:", FieldGrid.Inline(_lblClassOrder, _btnClassOrder));
+        programGrid.AddHint("Which class goes first in each round, and whether the order turns round each round. It decides who marshals for whom and when a class finishes. Used when the heats are built.");
+
         programGrid.AddRow("Between-race talk:", _cmbGapPreset);
         programGrid.AddHint("How much the announcer says between races tonight. A preset here is for this day only - the club's own settings are on the AI Commentary tab.");
 
@@ -1444,6 +1460,7 @@ public sealed partial class RaceDayEventControl : UserControl
         _chkEntriesClose.Checked = raceEvent.EntriesCloseLocalTime is not null;
         _dtpEntriesClose.Value = raceEvent.EntriesCloseLocalTime ?? TimeSpan.FromHours(18.5);
         _lblBreaks.Text = NightBreaks.Summary(raceEvent.Breaks, raceEvent.IsClubNight);
+        _lblClassOrder.Text = ClassRunningOrder.Summary(ClassesTonight(raceEvent), raceEvent.ClassRunningOrder, raceEvent.RotateClassOrder);
 
         // Zero means "whatever was used last" - the number the program builds
         // with (RaceEventStore.HeatSizeFor), so that is what the box shows. It
@@ -1508,6 +1525,7 @@ public sealed partial class RaceDayEventControl : UserControl
         _chkEntriesClose.Enabled = editable;
         _dtpEntriesClose.Enabled = editable && _chkEntriesClose.Checked;
         _btnBreaks.Enabled = editable;
+        _btnClassOrder.Enabled = editable;
         _txtNotes.Enabled = editable;
         _cmbVenue.Enabled = editable;
         _cmbLayout.Enabled = editable;

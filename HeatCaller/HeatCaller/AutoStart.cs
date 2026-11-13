@@ -18,6 +18,12 @@ public enum AutoStartState
     /// <summary>Time's up, and a car in the next race hasn't been heard by the loop. Waiting for the director to say start without it.</summary>
     WaitingForCars,
 
+    /// <summary>
+    /// Time's up, the club waits for its marshals (12 Nov 2026, setup plan D4),
+    /// and nobody has said they're in place yet. Waiting for Marshals in place.
+    /// </summary>
+    WaitingForMarshals,
+
     /// <summary>Start the next race now. Given once per gap.</summary>
     Start,
 }
@@ -69,7 +75,14 @@ public sealed class AutoStartClock
     private DateTime? _heldSinceUtc;
     private bool _startNow;
     private bool _carsApproved;
+    private bool _marshalsConfirmed;
     private bool _started;
+
+    /// <summary>How long before the start the marshals can be said to be in place, so a confirmed race never stops at zero.</summary>
+    public static readonly TimeSpan AskForMarshalsFrom = TimeSpan.FromSeconds(60);
+
+    /// <summary>True once somebody has said the next race's marshals are in place.</summary>
+    public bool MarshalsConfirmed => _marshalsConfirmed;
 
     /// <summary>The next race this gap is counting down to, or null when it isn't open.</summary>
     public string? RoundId { get; private set; }
@@ -117,6 +130,7 @@ public sealed class AutoStartClock
         _rest = Resting.Count > 0 ? RestForBackToBack : TimeSpan.Zero;
         NotSeen = Array.Empty<string>();
         _carsApproved = false;
+        _marshalsConfirmed = false;
         _started = false;
         _startNow = false;
 
@@ -142,6 +156,7 @@ public sealed class AutoStartClock
         _heldFor = TimeSpan.Zero;
         _startNow = false;
         _carsApproved = false;
+        _marshalsConfirmed = false;
         _started = false;
     }
 
@@ -202,6 +217,15 @@ public sealed class AutoStartClock
         }
     }
 
+    /// <summary>The marshals are in place for the next race (setup plan D4), from the banner.</summary>
+    public void ConfirmMarshals()
+    {
+        if (IsOpen)
+        {
+            _marshalsConfirmed = true;
+        }
+    }
+
     /// <summary>
     /// What to do this second.
     /// </summary>
@@ -209,7 +233,12 @@ public sealed class AutoStartClock
     /// <param name="floorBusy">The announcer is talking (the recap show): a start waits for it.</param>
     /// <param name="notSeen">Drivers in the next race the loop hasn't heard. Looked at only from <see cref="LookForCarsFrom"/> before the start.</param>
     /// <param name="pushedBackMinutes">Minutes the director pushed the race back (Call Up's +1 min).</param>
-    public AutoStartState Step(DateTime nowUtc, bool floorBusy, IReadOnlyList<string> notSeen, int pushedBackMinutes = 0)
+    /// <param name="waitForMarshals">
+    /// The club waits for its marshals and the next race has some (setup plan
+    /// D4): at zero, the start waits for <see cref="ConfirmMarshals"/>. Start
+    /// now doesn't wait, because pressing it says the director has looked.
+    /// </param>
+    public AutoStartState Step(DateTime nowUtc, bool floorBusy, IReadOnlyList<string> notSeen, int pushedBackMinutes = 0, bool waitForMarshals = false)
     {
         if (!IsOpen || _started)
         {
@@ -243,6 +272,11 @@ public sealed class AutoStartClock
             return AutoStartState.WaitingForCars;
         }
 
+        if (waitForMarshals && !_marshalsConfirmed && !_startNow)
+        {
+            return AutoStartState.WaitingForMarshals;
+        }
+
         _started = true;
         return AutoStartState.Start;
     }
@@ -269,6 +303,7 @@ public sealed class AutoStartClock
             AutoStartState.Held => "start held - press Resume",
             AutoStartState.WaitingForFloor => "starts when the announcer finishes",
             AutoStartState.WaitingForCars => $"waiting for {Names(notSeen)} - not seen by the loop",
+            AutoStartState.WaitingForMarshals => "waiting for the marshals - press Marshals in place",
             AutoStartState.Start => "starting",
             _ => string.Empty,
         };
@@ -283,7 +318,7 @@ public sealed class AutoStartClock
     {
         AutoStartState.Counting when remaining is { } left => $"NEXT RACE IN {Clock(left)}",
         AutoStartState.Held => "NEXT RACE ON HOLD",
-        AutoStartState.WaitingForFloor or AutoStartState.WaitingForCars or AutoStartState.Start => "NEXT RACE SOON",
+        AutoStartState.WaitingForFloor or AutoStartState.WaitingForCars or AutoStartState.WaitingForMarshals or AutoStartState.Start => "NEXT RACE SOON",
         _ => string.Empty,
     };
 

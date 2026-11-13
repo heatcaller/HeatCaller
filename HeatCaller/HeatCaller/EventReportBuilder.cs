@@ -73,6 +73,7 @@ public static class EventReportBuilder
         WriteSummary(sb, sessions, profiles);
         WriteNightPace(sb, sessions, rounds, ReportEvent(options));
         WriteMoney(sb, sessions, ReportEvent(options), payments, profiles);
+        WriteMarshalNoShows(sb, rounds, ReportEvent(options));
 
         // Outstanding items first when there are any - the point of putting
         // them in a report is that someone acts on them, and nobody acts on
@@ -319,6 +320,39 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     /// share of the night spent racing. Left out with fewer than two races,
     /// where there are no gaps to speak of. See NightPace.
     /// </summary>
+    /// <summary>
+    /// The marshals who didn't turn up to their post tonight (12 Nov 2026,
+    /// setup plan D4), round by round, for the club's marshal rule. Nothing
+    /// when there were none.
+    /// </summary>
+    private static void WriteMarshalNoShows(StringBuilder sb, RoundDefinitionStore rounds, RaceEvent? raceEvent)
+    {
+        if (raceEvent is null)
+        {
+            return;
+        }
+
+        var ids = raceEvent.RoundIds.ToHashSet(StringComparer.Ordinal);
+        var missed = rounds.All
+            .Where(r => ids.Contains(r.Id) && r.MarshalNoShows is { Count: > 0 })
+            .ToList();
+
+        if (missed.Count == 0)
+        {
+            return;
+        }
+
+        sb.AppendLine("<h2>Marshal no-shows</h2>");
+        sb.AppendLine("<ul>");
+
+        foreach (var round in missed)
+        {
+            sb.AppendLine($"<li>{Esc(round.RoundLabel)}: {Esc(string.Join(", ", round.MarshalNoShows!))}</li>");
+        }
+
+        sb.AppendLine("</ul>");
+    }
+
     private static void WriteNightPace(StringBuilder sb, List<SessionRecord> sessions, RoundDefinitionStore rounds, RaceEvent? raceEvent)
     {
         if (NightPace.For(sessions, rounds.All, raceEvent?.RoundIds) is not { } pace)

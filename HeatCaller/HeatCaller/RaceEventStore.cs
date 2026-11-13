@@ -201,6 +201,22 @@ public sealed class RaceEvent
     /// </summary>
     public List<PlannedBreak> Breaks { get; set; } = new();
 
+    /// <summary>
+    /// The order tonight's classes run in within each round (12 Nov 2026,
+    /// setup plan D7), first class first. Empty, as on every day before
+    /// this, runs them in the Classes page's order. A class not listed runs
+    /// after the listed ones. See ClassRunningOrder.
+    /// </summary>
+    public List<string> ClassRunningOrder { get; set; } = new();
+
+    /// <summary>
+    /// Turn the class order round each round (setup plan D7): Q1 runs Stock,
+    /// Mod, Truck; Q2 runs Mod, Truck, Stock. So the same class isn't always
+    /// first out on a green track, or always last. Off: every round runs in
+    /// the same order.
+    /// </summary>
+    public bool RotateClassOrder { get; set; }
+
     // --- Rolling into the next race -------------------------------------
     //
     // Whether finishing a race arms the next one by itself, and which race
@@ -404,6 +420,7 @@ public sealed class RaceEventStore
             e.RoundIds = (e.RoundIds ?? new List<string>()).Where(id => id is not null).ToList();
             e.ClassNames = (e.ClassNames ?? new List<string>()).Where(n => n is not null).ToList();
             e.Breaks = (e.Breaks ?? new List<PlannedBreak>()).Where(b => b is not null).ToList();
+            e.ClassRunningOrder = (e.ClassRunningOrder ?? new List<string>()).Where(n => n is not null).ToList();
 
             foreach (var b in e.Breaks)
             {

@@ -99,6 +99,13 @@ public sealed partial class RaceControlControl
                 menu.Items.Add(item);
             }
 
+            // Setup plan D4: the start waits for Marshals in place.
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(new ToolStripMenuItem("Wait for the marshals before starting", null, (_, _) => ToggleWaitForMarshals())
+            {
+                Checked = _settings.AutoStartWaitForMarshals,
+            });
+
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(new ToolStripMenuItem("Off until I switch it on again", null, (_, _) => SetAutoStart(false, forTonightOnly: false))
             {
@@ -304,7 +311,13 @@ public sealed partial class RaceControlControl
                                   + $"{NightPlan.Minutes(NightBreaks.Length(breaks))}, {NightPlan.About(resumes)}.");
         }
 
-        _autoStartState = _autoStart.Step(now, floorBusy, NotSeenIn(next, now), Gap.PushedBackMinutes);
+        // Marshals in place (12 Nov 2026, setup plan D4): only for a club that
+        // waits for them, and only for a race with somebody on a post.
+        var waitForMarshals = _settings.AutoStartWaitForMarshals && facts.Marshals.Count > 0;
+
+        _autoStartState = _autoStart.Step(now, floorBusy, NotSeenIn(next, now), Gap.PushedBackMinutes, waitForMarshals);
+
+        ShowMarshalsAsk(next, facts.Marshals, waitForMarshals, now);
 
         switch (_autoStartState)
         {
@@ -346,6 +359,7 @@ public sealed partial class RaceControlControl
         _autoStartState = AutoStartState.Off;
         _carsCalledFor = null;
         ShowCarsBanner(false);
+        HideMarshalsAsk();
         UpdateAutoHoldButton();
     }
 

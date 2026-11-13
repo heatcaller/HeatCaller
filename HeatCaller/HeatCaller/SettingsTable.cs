@@ -202,6 +202,7 @@ internal static class SettingsTable
             nameof(AppSettings.RaceStartWithOnAir),
             nameof(AppSettings.AutoStartBetweenRaces),
             nameof(AppSettings.UseCloseNightChecklist),
+            nameof(AppSettings.AutoStartWaitForMarshals),
             nameof(AppSettings.PostHeatsBeforeFirstRace),
             nameof(AppSettings.CloseNightOwnItems),
 

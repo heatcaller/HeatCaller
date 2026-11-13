@@ -4,6 +4,12 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Marshals in place, and the class running order (12 November).**
+    - **Marshals in place.** Tick **Wait for the marshals before starting** on the **Auto start** switch's right-click menu and a race with marshals waits at zero until somebody presses **Marshals in place**. A minute before, a banner names the marshals and their posts. If they're not confirmed in time, the announcer calls them once. **Someone's missing...** logs a no-show, and the event report lists them. Off to start with. See [Marshals in place](race-day/program-and-mains.md#marshals-in-place).
+    - **Class running order.** **Order...** on **Race Day → Setup** sets which class goes first in each round, and can turn the order round each round. A new race day keeps it. See [Race Day → Setup](race-day/events-and-entries.md#building-the-program).
+
+  Update HeatCaller on the race PC; nothing changes on the relay.
+
 - **Less to set up each week (12 November).** A few quick wins for the race director:
     - **A new race day keeps last week's settings.** Besides the venue, layout, championship and heat sizes, it now keeps the entry fees and, from the last day of the same kind, **First race at:**, the first-round seeding, sharing heats, the between-race talk and the check-in rule. See [New Race Day](race-day/events-and-entries.md#new-race-day).
     - **Change a driver's classes at the desk.** Click their **Class** on **Who's Racing** to tick the classes they race tonight. The column now shows every class a driver races. See [Who's Racing](race-day/events-and-entries.md#race-day-whos-racing).

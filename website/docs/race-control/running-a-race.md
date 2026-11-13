@@ -457,6 +457,7 @@ After each race, HeatCaller counts down a gap and starts the next race by itself
     - The announcer asks Frank once to get the car on the track.
     - **Start without them** starts the race, **Wait** holds it, and a car that turns up clears the banner by itself.
     - With no decoder connected, or in a demo, cars aren't looked for.
+- **Marshals in place.** With **Wait for the marshals before starting** ticked on the switch's right-click menu, a race with marshals waits at zero until somebody presses **Marshals in place** on the banner that names them a minute before. See [Marshals in place](../race-day/program-and-mains.md#marshals-in-place).
 - **The start itself** is **Start Next**'s, so it goes through On Air when **Start races On Air** is on, and it never runs a step that's owed first. When bump-ups or the finals are due, the count stops and **Start Next** offers them for you to do.
 - **Off is for tonight only.** Switch it off and races wait for **Start Next** until tomorrow's racing. To keep it off, right-click the switch and choose **Off until I switch it on again**.
 - **On the Big Screen**, the countdown band says "NEXT RACE IN 1:42" between races, "NEXT RACE ON HOLD" while it's held, and "NEXT RACE SOON" at zero. A missing car isn't named there.

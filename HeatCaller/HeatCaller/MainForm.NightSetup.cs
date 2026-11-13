@@ -44,6 +44,24 @@ public partial class MainForm
         raceControl.PlannedBreaks = () => _raceEvents.Active is { IsLegacy: false } day ? day.Breaks : null;
         raceControl.ConfirmPostedChange = (owner, what) => raceProgram.ChangePostedHeatsOk(owner, what);
 
+        // A marshal who didn't turn up (setup plan D4), kept on the round for
+        // the event report and the club's marshal rule.
+        raceControl.MarshalNoShow += (round, who) =>
+        {
+            if (_rounds.Get(round.Id) is not { } saved)
+            {
+                return;
+            }
+
+            saved.MarshalNoShows ??= new List<string>();
+
+            if (!saved.MarshalNoShows.Contains(who, StringComparer.OrdinalIgnoreCase))
+            {
+                saved.MarshalNoShows.Add(who);
+                _rounds.Update(saved);
+            }
+        };
+
         _entriesCloseTimer.Tick += (_, _) => EntriesCloseTick();
         _entriesCloseTimer.Start();
         FormClosed += (_, _) => _entriesCloseTimer.Dispose();

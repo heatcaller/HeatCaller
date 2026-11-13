@@ -2185,7 +2185,11 @@ public sealed partial class RaceProgramControl : UserControl
             // guard) - see RestOrder.
             var roundHeats = new List<RoundDefinition>();
 
-            foreach (var raceClass in classes)
+            // In tonight's class running order (12 Nov 2026, setup plan D7),
+            // turned round each round when the day says so.
+            var inOrder = ClassRunningOrder.Arrange(classes, c => c.Name, ActiveDay?.ClassRunningOrder, ActiveDay?.RotateClassOrder == true, round);
+
+            foreach (var raceClass in inOrder)
             {
                 // A round this class has already run is left alone - see
                 // runByClass above.

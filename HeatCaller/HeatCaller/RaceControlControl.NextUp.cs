@@ -497,7 +497,7 @@ public sealed partial class RaceControlControl
             if (AutoStartWords(DateTime.UtcNow) is { Length: > 0 } auto)
             {
                 parts = $"{RoundTitle(next)} · {auto}" + parts[RoundTitle(next).Length..];
-                warning |= _autoStartState is AutoStartState.WaitingForCars or AutoStartState.Held;
+                warning |= _autoStartState is AutoStartState.WaitingForCars or AutoStartState.WaitingForMarshals or AutoStartState.Held;
             }
 
             nextText = parts;
