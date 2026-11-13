@@ -278,11 +278,29 @@ public sealed class AutoStartTests
         var control = Source("RaceControlControl.cs");
         var web = Source("WebServerService.cs");
 
-        Assert.Contains("or \"autohold\" or \"autoplus\"))", control);
+        Assert.Contains("or \"autohold\" or \"autoplus\"", control);
         Assert.Contains("case \"autohold\":", control);
-        Assert.Contains("\"callup\", \"autohold\", \"autoplus\" };", web);
+        Assert.Contains("\"callup\", \"autohold\", \"autoplus\"", web);
         Assert.Contains("go('autohold')", web);
         Assert.Contains("go('autoplus')", web);
+    }
+
+    /// <summary>
+    /// Hand the desk over (12 Nov 2026, setup plan D8): a deputy's phone can
+    /// also start the next race now and say the marshals are in place.
+    /// </summary>
+    [Fact]
+    public void The_phone_remote_can_start_now_and_say_the_marshals_are_in()
+    {
+        var control = Source("RaceControlControl.cs");
+        var web = Source("WebServerService.cs");
+
+        Assert.Contains("or \"autonow\" or \"marshalsin\"))", control);
+        Assert.Contains("case \"autonow\":", control);
+        Assert.Contains("case \"marshalsin\":", control);
+        Assert.Contains("\"autoplus\", \"autonow\", \"marshalsin\" };", web);
+        Assert.Contains("go('autonow')", web);
+        Assert.Contains("go('marshalsin')", web);
     }
 
     [Fact]

@@ -15,7 +15,7 @@ A new install is in Simple mode, which shows what a race night needs and hides t
 - You have at least two cars with transponders, or you're happy to try it with [Demo Mode](../race-control/practice-and-ghosts.md) first.
 - Optional: a different announcer voice. A new install already speaks with the free Kokoro voice, which runs on the laptop itself and sounds like a person, so the announcer works with nothing set up. If your club is set up on the **Club Website** page, the HeatCaller voice is included as well — nothing to sign up for. Your own ElevenLabs API key is the third way, and gives you control of every word. See [Choose the voice](../announcer/voice.md#choose-the-voice).
 
-If you ran the first-run wizard, you may already have a track, a class and one driver. That's fine. Carry on from step 1 and add the rest.
+If you ran the first-run wizard, you may already have a track, a class and some drivers. That's fine. Carry on from step 1 and add the rest. Coming from another timing system? The wizard's **Drivers** step has **Import a List...**, for an RCSignup or LiveTime export, a LiveRC entry list or any spreadsheet: drivers, transponders and classes in one go, with any class the list names that you haven't got added for you (at a 5-minute race length). See [Switching from LiveTime](switching-from-livetime.md).
 
 ## Step 1: Connect the decoder
 

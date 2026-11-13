@@ -1,7 +1,7 @@
 namespace HeatCaller;
 
 /// <summary>Turn the local web server on/off, set the port and the remote, check-in and manager PINs, and see the URLs to open on other devices.</summary>
-public sealed class WebServerControl : UserControl
+public sealed partial class WebServerControl : UserControl
 {
     private readonly WebServerService _server;
     private readonly AppSettings _settings;
@@ -1043,5 +1043,31 @@ public sealed class WebServerControl : UserControl
         }
 
         base.Dispose(disposing);
+    }
+}
+
+/// <summary>Handing the desk to a phone (12 Nov 2026, setup plan D8).</summary>
+public sealed partial class WebServerControl
+{
+    /// <summary>
+    /// The phone remote's QR code, worded for a deputy: Hold, +1 min, Start
+    /// now and Marshals in from their phone while the director races. Starts
+    /// the phone pages first when they aren't running, after asking.
+    /// </summary>
+    public void ShowDeskHandover()
+    {
+        if (!_server.IsRunning)
+        {
+            if (AppDialog.Show(this, "The phone pages aren't running, so there's no remote to hand over. Start them now?",
+                    "Hand the desk to a phone", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            {
+                return;
+            }
+
+            StartServer(silent: false);
+        }
+
+        ShowPoster(_txtRemoteUrl.Text, "HAND THE DESK OVER",
+            "Scan to run the starts from your phone - Hold, +1 min, Start now, Marshals in. Then type the Remote PIN. Same Wi-Fi as this laptop.");
     }
 }

@@ -284,3 +284,51 @@ public sealed partial class RaceProgramControl
         return DeskPapers.PostingWords(drivers);
     }
 }
+
+/// <summary>What Ready to race asks of the program (12 Nov 2026, setup plan B3 and D10).</summary>
+public sealed partial class RaceProgramControl
+{
+    /// <summary>Tonight's rounds still to race - the program's day, for the Ready to race checklist.</summary>
+    internal IReadOnlyList<RoundDefinition> TonightsDayRounds() => DayRounds();
+
+    /// <summary>The drivers on tonight's heats whose papers aren't in order, or null when the club checks neither.</summary>
+    internal IReadOnlyList<string>? PapersNotInOrderTonight()
+    {
+        if (!_settings.AskForWaivers && !_settings.CheckMemberships)
+        {
+            return null;
+        }
+
+        return DayRounds()
+            .Where(r => r is not null && !r.IsRecorded && r.Kind != RoundKind.Practice)
+            .SelectMany(r => r.AssignedTransponders)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(t => _profiles.Get(t))
+            .OfType<DriverProfile>()
+            .Where(p => DeskPapers.Problems(p, _settings.AskForWaivers, _settings.WaiverMonths, _settings.CheckMemberships, DateTime.Today).Count > 0)
+            .Select(p => string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName.Trim())
+            .ToList();
+    }
+
+    /// <summary>What the drivers' meeting is built from, for tonight's day, or null with none open.</summary>
+    internal DriversMeeting.Facts? MeetingFacts()
+    {
+        if (ActiveDay is not { IsLegacy: false } day)
+        {
+            return null;
+        }
+
+        var rounds = DayRounds();
+        var classes = ClassRunningOrder.Arrange(RacingClassNames(), n => n, day.ClassRunningOrder, rotate: false, round: 0);
+        var hasPosts = classes.Any(c => LayoutOf(DayRoundsForClass(c)) is { } layout && layout.MarshalPostCount > 0);
+
+        return new DriversMeeting.Facts(
+            day,
+            classes,
+            rounds.Count(r => r.Kind == RoundKind.Qualifier),
+            _settings.AutoStartWaitForMarshals,
+            hasPosts,
+            _settings.ProtestMinutesFor(day),
+            _settings.AskForWaivers || _settings.CheckMemberships);
+    }
+}

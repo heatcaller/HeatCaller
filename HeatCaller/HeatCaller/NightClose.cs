@@ -108,6 +108,16 @@ internal enum CloseNightKind
 
     /// <summary>One of the club's own lines ("Lock the clubhouse"), ticked by hand.</summary>
     Own,
+
+    // Ready to race's lines (12 Nov 2026, setup plan B3) - the same window
+    // at the start of the night. See ReadyChecklist.
+    Decoder,
+    PhoneServer,
+    Voice,
+    Heats,
+    Cars,
+    Papers,
+    Meeting,
 }
 
 /// <summary>

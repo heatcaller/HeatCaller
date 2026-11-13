@@ -705,6 +705,12 @@ public partial class MainForm
 
     private void ShowPage(string name)
     {
+        // The desk view keeps to Who's Racing (12 Nov 2026, setup plan D8).
+        if (DeskViewRefusesPage(name))
+        {
+            return;
+        }
+
         var item = _navItems.FirstOrDefault(i => i.Name == name);
         if (item is null)
         {

@@ -905,7 +905,7 @@ public sealed partial class RaceControlControl : UserControl
         }
 
         if (action is not ("stage" or "countdown" or "green" or "yellow" or "red" or "checkered" or "reset"
-                or "skip" or "holdtalk" or "callup" or "autohold" or "autoplus"))
+                or "skip" or "holdtalk" or "callup" or "autohold" or "autoplus" or "autonow" or "marshalsin"))
         {
             return RemoteCommandOutcome.Refused("Unknown command.");
         }
@@ -1007,6 +1007,19 @@ public sealed partial class RaceControlControl : UserControl
                     }
 
                     break;
+
+                // Hand the desk over (12 Nov 2026, setup plan D8): Start now, and
+                // Marshals in place, from the deputy's phone.
+                case "autonow":
+                case "marshalsin":
+                    talkAnswer = (action == "autonow" ? RemoteAutoNow(out var nowRefused) : RemoteMarshalsIn(out nowRefused)) ?? string.Empty;
+
+                    if (nowRefused is not null)
+                    {
+                        NoteRemoteRefusal(nowRefused);
+                    }
+
+                    break;
             }
 
             if (_remoteRefusal is { } refusal)
@@ -1040,7 +1053,7 @@ public sealed partial class RaceControlControl : UserControl
                 "red" => "Red flag out.",
                 "checkered" => "Checkered flag out.",
                 "reset" => "Race reset.",
-                "skip" or "holdtalk" or "callup" or "autohold" or "autoplus" => talkAnswer,
+                "skip" or "holdtalk" or "callup" or "autohold" or "autoplus" or "autonow" or "marshalsin" => talkAnswer,
                 _ => "Done.",
             });
         }

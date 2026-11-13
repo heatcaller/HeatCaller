@@ -30,97 +30,25 @@ public sealed partial class CheckInControl
 
     private void ImportEntriesFromFile()
     {
-        using var dialog = new OpenFileDialog { Filter = "CSV files (*.csv)|*.csv|Text files (*.txt)|*.txt|All files (*.*)|*.*" };
-
-        if (dialog.ShowDialog(this) != DialogResult.OK)
+        if (EntryImportFlow.FromFile(this) is { } list)
         {
-            return;
+            ImportEntries(list);
         }
-
-        // As Driver Hub reads one: bytes decoded by CsvHelper (Excel's plain
-        // CSV is in the Windows code page), blank lines dropped but each line
-        // keeping its number for "Row 12".
-        List<(string Text, int LineNumber)> lines;
-
-        try
-        {
-            lines = CsvHelper.NonBlankLines(CsvHelper.DecodeText(File.ReadAllBytes(dialog.FileName)));
-        }
-        catch (Exception ex)
-        {
-            AppDialog.Show(this, $"Couldn't read that file: {ex.Message}", "Import failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return;
-        }
-
-        if (lines.Count < 2)
-        {
-            AppDialog.Show(this,
-                lines.Count == 0 ? "That file is empty." : "That file has a heading row and nothing under it.",
-                "Nothing to import", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
-        }
-
-        var delimiter = DriverImport.DetectDelimiter(lines[0].Text);
-        var headers = DriverImport.ParseLine(lines[0].Text, delimiter);
-        var rows = lines.Skip(1).Select(line => DriverImport.ParseLine(line.Text, delimiter)).ToList();
-
-        ImportEntries(Path.GetFileName(dialog.FileName), headers, rows, lines.Skip(1).Select(line => line.LineNumber).ToList(), fromFile: true);
     }
 
     private void ImportEntriesFromClipboard()
     {
-        string? html = null;
-        string? text = null;
-
-        try
+        if (EntryImportFlow.FromClipboard(this) is { } list)
         {
-            if (Clipboard.ContainsText(TextDataFormat.Html))
-            {
-                html = Clipboard.GetText(TextDataFormat.Html);
-            }
-
-            if (Clipboard.ContainsText(TextDataFormat.UnicodeText))
-            {
-                text = Clipboard.GetText(TextDataFormat.UnicodeText);
-            }
+            ImportEntries(list);
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.ExternalException or ThreadStateException)
-        {
-            AppDialog.Show(this, $"Couldn't read the clipboard just now ({ex.Message}). Try again.",
-                "Import entries", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
-        }
-
-        // PastedTable reads a LiveRC entry list's one-table-per-class page
-        // into one table with a Class column, the doubled names undoubled.
-        if (PastedTable.Read(html, text) is not { } table)
-        {
-            AppDialog.Show(this,
-                "There's no table on the clipboard to import.\n\n"
-                + "On the entry list's web page (LiveRC's, say) or in the spreadsheet, select the whole list - its headings "
-                + "and every driver's row - and copy it (Ctrl+C). Then choose Import Entries > Paste a Table here.",
-                "Nothing to paste", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
-        }
-
-        var source = PastedResult.SourceName(html) == "LiveRC" ? "a LiveRC entry list" : "a pasted table";
-
-        ImportEntries(source, table.Headers.ToList(), table.Rows.ToList(), table.RowNumbers.ToList(), fromFile: false);
     }
 
-    /// <summary>The column picks, the preview, and then the import itself - with its one Undo.</summary>
-    private void ImportEntries(string source, List<string> headers, List<List<string>> rows, List<int> lineNumbers, bool fromFile)
+    /// <summary>The column picks, the preview (EntryImportFlow), and then the import itself - with its one Undo.</summary>
+    private void ImportEntries(EntryImportFlow.Read list)
     {
-        using var mapping = new CsvMappingForm(source, headers, rows, DriverImport.GuessAll(headers), Array.Empty<Season>(),
-            fromFile ? "in the file" : "in the table", entries: true);
-
-        if (mapping.ShowDialog(this) != DialogResult.OK)
-        {
-            return;
-        }
-
+        var source = list.Source;
         var classes = _raceClasses.All.Select(c => c.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToList();
-        var entryRows = EntryImport.ReadRows(rows, lineNumbers, mapping.Columns, classes);
 
         // What the check-in tick can do tonight: a closed day takes none
         // (CheckInStore.ClosedCurrentDay), and with no race day open the
@@ -129,20 +57,18 @@ public sealed partial class CheckInControl
             ? null
             : _events?.Active is { IsLegacy: false } day ? $"\"{day.DisplayName}\"" : string.Empty;
 
-        using var preview = new EntryImportForm(source, entryRows, _profiles.All.ToList(), classes, checkInTo);
-
-        if (preview.ShowDialog(this) != DialogResult.OK)
+        if (EntryImportFlow.Preview(this, list, _profiles.All.ToList(), classes, checkInTo) is not { } previewed)
         {
             return;
         }
 
-        var plan = preview.Plan;
+        var plan = previewed.Plan;
 
         // Only the check-ins this import makes are undone - a driver who was
         // checked in already stays checked in - and at the day they were
         // made, whatever day is current when Undo is pressed.
         var eventId = _checkIns.CurrentEventId;
-        var newCheckIns = preview.CheckIn
+        var newCheckIns = previewed.CheckIn
             ? plan.CheckIns.Where(t => !_checkIns.IsCheckedIn(t)).ToList()
             : new List<string>();
 
@@ -193,7 +119,7 @@ public sealed partial class CheckInControl
 
         var summary = plan.Summary();
 
-        if (preview.CheckIn)
+        if (previewed.CheckIn)
         {
             summary += $"\n\n{Plural.Of(newCheckIns.Count, "driver")} checked in"
                        + (plan.CheckIns.Count > newCheckIns.Count ? $" ({plan.CheckIns.Count - newCheckIns.Count} already were)." : ".");

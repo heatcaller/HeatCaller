@@ -79,6 +79,8 @@ public sealed class ProfileForm : Form
     private readonly TextBox _txtRaceNumber = new();
     private readonly TextBox _txtHomeTrack = new();
     private readonly TextBox _txtSkillLevel = new();
+    private readonly CheckBox _chkNovice = new ThemedCheckBox();
+    private readonly TextBox _txtMentor = new();
     private readonly TextBox _txtContact = new();
     private readonly TextBox _txtEmail = new();
 
@@ -308,6 +310,14 @@ public sealed class ProfileForm : Form
         captions.Add(AddLabeledTextBox(fields, "Home track:", _txtHomeTrack, Result.HomeTrack));
         captions.Add(AddLabeledTextBox(fields, "Skill level:", _txtSkillLevel, Result.SkillLevel));
         _txtSkillLevel.PlaceholderText = "e.g. Novice / Intermediate / Expert";
+
+        // New to racing (12 Nov 2026, setup plan D12).
+        _chkNovice.Text = "New to racing (the desk shows it, and the announcer welcomes them)";
+        _chkNovice.AutoSize = true;
+        _chkNovice.Checked = Result.IsNovice;
+        fields.AddField(_chkNovice);
+        captions.Add(AddLabeledTextBox(fields, "Mentor:", _txtMentor, Result.Mentor ?? string.Empty));
+        _txtMentor.PlaceholderText = "who's looking after them tonight";
 
         captions.Add(AddLabeledTextBox(fields, "Contact:", _txtContact, Result.Contact));
         _txtContact.PlaceholderText = "organizer use only - never announced";
@@ -1231,6 +1241,10 @@ public sealed class ProfileForm : Form
             RaceNumber = _txtRaceNumber.Text.Trim(),
             HomeTrack = _txtHomeTrack.Text.Trim(),
             SkillLevel = _txtSkillLevel.Text.Trim(),
+
+            // New to racing (12 Nov 2026, setup plan D12).
+            IsNovice = _chkNovice.Checked,
+            Mentor = _txtMentor.Text.Trim(),
             Contact = _txtContact.Text.Trim(),
             Email = _txtEmail.Text.Trim(),
             Transponders = _transponders.ToList(),

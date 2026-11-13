@@ -146,7 +146,32 @@ The card is only a shortcut. Every program command it offers is also on the prog
 
 The **Ready to race** card beside it shows how ready the day is, as a bar and a count such as "3 of 6 ready". Under the bar, **Still to do:** lists what's left: open tonight's race day (or start a new one, when this one is closed), add your classes, choose tonight's classes, check drivers in (or add drivers to tonight's classes), build the program (build the races, on a club night), and connect the timer.
 
-**Finish Setting Up** opens the Set Up Tonight wizard at the first step that isn't done (see [The Set Up Tonight wizard](events-and-entries.md#the-set-up-tonight-wizard)). When only the timer is left, the button is **Connect Timer**, which opens the **Connection** page. Once everything is done, the card says **All set**.
+**Finish Setting Up** opens the Set Up Tonight wizard at the first step that isn't done (see [The Set Up Tonight wizard](events-and-entries.md#the-set-up-tonight-wizard)). When only the timer is left, the button is **Connect Timer**, which opens the **Connection** page. Once everything is done, the card says **All set**, and until the first race has run its button is **Ready to Race...** (see [The Ready to race checklist](#the-ready-to-race-checklist)).
+
+### The Ready to race checklist
+
+**Ready to Race...** opens a list of what to check before the first race, the start-of-night twin of [the closing checklist](#the-closing-checklist). Each line ticks itself as HeatCaller sees it done, has a button to the screen that sorts it, and can be ticked off by hand:
+
+- **The decoder is connected and hearing cars**: connected, and a car has crossed the loop tonight. **Connection**.
+- **The phone pages are up on the Wi-Fi**, when the club uses them. **Local Screens**.
+- **The club website is taking tonight's results**, when publishing is on. **Club Website**.
+- **The announcer has a voice**, or why it can't speak (the same reason **Sounds → Mixer** gives). **Mixer**.
+- **Tonight's heats are built and posted**. **Next Steps**.
+- **Every car on tonight's heats has been on the loop**, or which haven't (see [Post the heats](#post-the-heats)). **Race Control**.
+- **Everybody's papers are in order**, when the club checks waivers or memberships (see [Papers](events-and-entries.md#papers-waivers-and-memberships)). **Who's Racing**.
+- **Backed up in the last week**. **Back Up Now** takes one.
+- **Hold the drivers' meeting**. **Meeting Sheet...** opens it (see below), and printing it or reading it out ticks this line.
+
+**Your Own Lines...** adds your club's own jobs, such as "Water the track" or "Set out the marshal posts". They're on the list every night, ticked off by hand. Hand ticks are kept for tonight's race day only. The window stays open beside the rest of the app and checks again every couple of seconds.
+
+### The drivers' meeting
+
+**Meeting Sheet...** on the Ready to race checklist writes the drivers' meeting from tonight's day, one point to a line: the classes in running order, how many rounds and heats, the first race, the breaks, the out-by time, the marshal rule (each heat marshals the next, and whether the start waits for them), how long results stay provisional, the papers, and the day's **Notes:** from **Setup**. Change anything in the box, then:
+
+- **Print...** prints it on a page for the board.
+- **Read It Out** has the announcer say it to the room.
+
+Changes in the box are for tonight only. To say something every week, put it in the day's **Notes:**.
 
 ### The day so far
 
