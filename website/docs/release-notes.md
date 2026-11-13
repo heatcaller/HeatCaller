@@ -10,6 +10,8 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
     - **Entry fee at the top of Me.** "Entry: $15.00 - pay at the desk" (or "Paid") is now right under your name on every part of Me, not only on the Check in card.
     - **More times follow the 24-hour tick:** Driver Requests' sent time, online sign-ups, backups, seasons, pace analysis, transponder transfers and the voice and relay settings.
     - **I'm coming from Home.** While the club is taking entries, Home's **Next race night** card says "Coming? Tap to put yourself down" and opens Me at the **I'm coming** card. Before, tapping it did nothing.
+    - **I'm coming works days before.** The **I'm coming** card used to need tonight's check-in open, like every other request from a phone, so between race nights it never showed. It now only needs driver requests on, the next night taking entries, and the driver's own night page. With driver requests off, the phones don't say the night is taking entries.
+    - **Pop-ups in the club's colours.** The small "Following Sam" style pop-ups on the phone pages now use the club's colours, to match the alert banner.
     - **Alerts as a banner.** In-app alerts on a driver's night ("Your race is next", "Your result is in", marshal duty) drop in from the top as a banner in the club's colours, title over the details. Tap it to put it away.
     - **The leaderboard in "Your result is in".** The push and the banner list the race's top three with their laps, with your own line marked "(you)".
     - **The post in the marshal push.** The 5-minute marshal push now names the post in its title: "Marshal at Turn 3 in about 5 minutes".

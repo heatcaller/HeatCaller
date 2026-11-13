@@ -439,8 +439,12 @@ header:has(.brand) { padding-top: 8px; }
 .hc-banner span:first-of-type { color: var(--text); }
 @media (prefers-reduced-motion: reduce) { .hc-banner { transition: none; } }
 .toast { position: fixed; left: 50%; top: max(14px, var(--sa-t)); transform: translateX(-50%);
-         background: var(--text); color: var(--bg); border-radius: 10px; padding: 10px 16px; font-size: 0.9rem;
-         font-weight: 600; z-index: 20; max-width: calc(100% - 32px); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35); }
+         border-radius: 10px; padding: 10px 16px; font-size: 0.9rem;
+         font-weight: 600; z-index: 20; max-width: calc(100% - 32px); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+         /* In the club's colours like the alert banner (12 Nov 2026), not
+            inverted: the page's surface tinted by its primary, an accent edge. */
+         color: var(--text); background: color-mix(in srgb, var(--primary) 18%, var(--surface));
+         border: 1px solid color-mix(in srgb, var(--primary) 45%, transparent); border-left: 4px solid var(--accent); }
 
 /* Check-in */
 .solo { text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
