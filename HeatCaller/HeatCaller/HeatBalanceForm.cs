@@ -174,6 +174,13 @@ public sealed class HeatBalanceForm : Form
     private Column? _dropColumn;
     private int _dropIndex = -1;
 
+    /// <summary>
+    /// The rest-gap check (12 Nov 2026, setup plan step 8): the changes about
+    /// to be saved, to the warning to ask about - "Max Power would race in Q2
+    /// Heat 1 and Q2 Heat 2 back to back" - or null when they are fine.
+    /// </summary>
+    private readonly Func<IReadOnlyList<RosterChange>, string?>? _restCheck;
+
     /// <summary>What changed. Empty when nothing did, even after an OK.</summary>
     public IReadOnlyList<RosterChange> Changes { get; private set; } = new List<RosterChange>();
 
@@ -185,8 +192,10 @@ public sealed class HeatBalanceForm : Form
         Color accent,
         bool roundsAreOneRaceDay = false,
         string? onTrackRoundId = null,
-        IReadOnlyDictionary<string, long>? pace = null)
+        IReadOnlyDictionary<string, long>? pace = null,
+        Func<IReadOnlyList<RosterChange>, string?>? restCheck = null)
     {
+        _restCheck = restCheck;
         _accent = accent;
         _pace = pace;
         _roundsAreOneRaceDay = roundsAreOneRaceDay;
@@ -1451,6 +1460,16 @@ public sealed class HeatBalanceForm : Form
                     ? "One heat has no drivers in it. Save anyway?"
                     : $"{emptied} heats have no drivers in them. Save anyway?",
                 "Empty heats", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        // Too close together for tonight's races off: asked here, so No
+        // leaves the form open to move them back (setup plan step 8).
+        if (changes.Count > 0
+            && _restCheck?.Invoke(changes) is { } tooClose
+            && AppDialog.Show(this, tooClose, "Too close together", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2) != DialogResult.Yes)
         {
             return;
         }

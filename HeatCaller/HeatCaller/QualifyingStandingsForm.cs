@@ -244,6 +244,31 @@ public sealed class QualifyingStandingsForm : Form
         };
         page.Add(lblRule);
 
+        // The club's marshal rule (12 Nov 2026, setup plan step 8): whose
+        // result it took, which, and why - said here, not left to be noticed
+        // in the order. Taken back off in Race Control (Someone's missing...).
+        var lost = entries.Where(e => !string.IsNullOrWhiteSpace(e.Forfeit)).ToList();
+
+        if (lost.Count > 0)
+        {
+            page.Add(new Label
+            {
+                Text = "Marshal rule: " + string.Join("; ", lost.Select(e => $"{e.DriverName}: {e.Forfeit}")) + ".",
+                AutoSize = true,
+                ForeColor = AppTheme.Warning,
+                Font = AppTheme.SmallFont,
+            });
+
+            foreach (DataGridViewRow row in grid.Rows)
+            {
+                if (row.Tag is QualifyingCalculator.Entry { Forfeit.Length: > 0 } entry)
+                {
+                    row.Cells[1].ToolTipText = entry.Forfeit;
+                    row.Cells[1].Value = $"{entry.DriverName} *";
+                }
+            }
+        }
+
         grid.CellDoubleClick += (_, args) =>
         {
             // Read from the row, not from the list by position: sorting the

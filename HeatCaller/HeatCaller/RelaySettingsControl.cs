@@ -910,9 +910,10 @@ public sealed class RelaySettingsControl : UserControl
         _linedUp.Add(_protestGrid);
 
         _lblProtestHint = HintLabel(
-            $"{ProtestWindow.DefaultMinutes} minutes unless you change it; 0 turns it off. Once a class's last "
-            + "qualifier is in, its results show \"Provisional until\" a time on the phones, the announcer says "
-            + "queries go to the desk, and when the time is up \"Something wrong?\" goes from that class's heats.");
+            $"{ProtestWindow.DefaultMinutes} minutes unless you change it; 0 turns it off. Once each qualifying round "
+            + "of a class is in, and each main, its results show \"Provisional until\" a time on the phones and the "
+            + "Big Screen, the announcer says queries go to the desk, and when the time is up \"Something wrong?\" goes "
+            + "from those races.");
 
         _chkNightEmail.Text = "Offer drivers their night by email";
         _chkNightEmail.AutoSize = true;

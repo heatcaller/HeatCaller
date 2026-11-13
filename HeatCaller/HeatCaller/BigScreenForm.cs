@@ -335,6 +335,14 @@ public sealed class BigScreenForm : Form
     /// only while the race itself has nothing there. Null from Practice.
     /// </summary>
     private readonly Func<string>? _nextRaceIn;
+
+    /// <summary>
+    /// "PROVISIONAL UNTIL 20:42" on the finished board while that race's
+    /// protest window is open (12 Nov 2026, setup plan step 8) - the room
+    /// sees the result can still change, the way the phones already did.
+    /// Null, or a null answer, for none.
+    /// </summary>
+    private readonly Func<string?>? _provisional;
     private bool _tickerShowing;
 
     /// <summary>
@@ -386,9 +394,10 @@ public sealed class BigScreenForm : Form
         TransponderWatch? watch = null, Func<IReadOnlyList<string>>? roster = null,
         Func<(TrackLine? Line, IReadOnlyList<TrackPositions.Car> Cars)>? trackMap = null,
         Func<IReadOnlyList<AttractCard>>? attract = null, Func<IfItEndedNow?>? ifItEndedNow = null,
-        Func<string>? nextRaceIn = null)
+        Func<string>? nextRaceIn = null, Func<string?>? provisional = null)
     {
         _nextRaceIn = nextRaceIn;
+        _provisional = provisional;
         _trackMap = trackMap;
         _attract = attract;
         _ifItEndedNow = ifItEndedNow;
@@ -2568,9 +2577,26 @@ public sealed class BigScreenForm : Form
             RaceState.Racing => "RACE IN PROGRESS",
             RaceState.Staging => "STAGING — GET READY",
             RaceState.Countdown => "COUNTDOWN — STAND BY",
-            RaceState.Finished => "RACE COMPLETE",
+            RaceState.Finished => FinishedWords(),
             _ => "Waiting for the race to start...",
         };
+    }
+
+    /// <summary>"RACE COMPLETE", or "RACE COMPLETE — PROVISIONAL UNTIL 20:42" inside the protest window (setup plan step 8).</summary>
+    private string FinishedWords()
+    {
+        string? provisional = null;
+
+        try
+        {
+            provisional = _provisional?.Invoke();
+        }
+        catch (Exception)
+        {
+            // A board line is never worth a broken screen.
+        }
+
+        return string.IsNullOrWhiteSpace(provisional) ? "RACE COMPLETE" : $"RACE COMPLETE — {provisional}";
     }
 
 

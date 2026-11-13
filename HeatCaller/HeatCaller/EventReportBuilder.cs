@@ -347,7 +347,16 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
         foreach (var round in missed)
         {
-            sb.AppendLine($"<li>{Esc(round.RoundLabel)}: {Esc(string.Join(", ", round.MarshalNoShows!))}</li>");
+            // What the club's rule did to each (12 Nov 2026, setup plan step
+            // 8): "Hugh Turn (Turn 3) - loses their best Stock qualifying
+            // result tonight". A no-show logged before the rule existed has
+            // its name only.
+            var each = round.MarshalNoShows!.Select(who =>
+                round.NoShowMarshals?.FirstOrDefault(n => string.Equals(n.Who, who, StringComparison.OrdinalIgnoreCase)) is { } noShow
+                    ? $"{who} - {MarshalRule.Consequence(noShow)}"
+                    : who);
+
+            sb.AppendLine($"<li>{Esc(round.RoundLabel)}: {Esc(string.Join(", ", each))}</li>");
         }
 
         sb.AppendLine("</ul>");
@@ -548,6 +557,13 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
                 sb.AppendLine("</table>");
 
+                // Who was skipped from the grid and scored DNS (12 Nov 2026,
+                // setup plan step 8) - see SkipDns.
+                if (SkipDns.Words(session, t => NameFor(t, t, profiles)) is { Length: > 0 } dns)
+                {
+                    sb.AppendLine($"<p class=\"sub\">{Esc(dns)}</p>");
+                }
+
                 // 22 Oct 2026: what the * after a lap count means - see HandCountedLaps.
                 if (session.Results.Any(r => HandCountedLaps.In(r) > 0))
                 {
@@ -690,7 +706,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
                               + $"<td class=\"num\">{e.BestLaps}</td>"
                               + (consecutive ? $"<td class=\"num\">{(e.BestConsecutiveMs > 0 ? $"{Secs(e.BestConsecutiveMs)}s" : "-")}</td>" : string.Empty)
                               + $"<td class=\"num\">{(e.BestFastLapMs > 0 ? $"{Secs(e.BestFastLapMs)}s" : "-")}</td>"
-                              + $"<td>{Esc(e.SourceRoundLabel)}</td>"
+                              + $"<td>{Esc(e.SourceRoundLabel)}{(string.IsNullOrWhiteSpace(e.Forfeit) ? string.Empty : $" <em>({Esc(e.Forfeit)})</em>")}</td>"
                               + "</tr>");
             }
 

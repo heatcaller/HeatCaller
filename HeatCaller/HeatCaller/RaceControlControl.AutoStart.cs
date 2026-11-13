@@ -292,7 +292,7 @@ public sealed partial class RaceControlControl
         }
 
         var lastRound = _activeRound?.Invoke();
-        var justRan = lastRound?.AssignedTransponders;
+        var justRan = RecentlyRan(next, lastRound);
         var resting = AutoStartClock.BackToBack(justRan, next.AssignedTransponders).Select(SpokenNameOf).ToList();
 
         // A break planned between the race just run and this one (12 Nov
@@ -478,29 +478,13 @@ public sealed partial class RaceControlControl
     /// </summary>
     internal string SkipDriverInNextRace(string transponder, string name)
     {
-        var race = OrderedProgram()
-            .FirstOrDefault(r => !r.IsRecorded
-                                 && !string.Equals(r.Id, _activeRound?.Invoke()?.Id, StringComparison.Ordinal)
-                                 && r.AssignedTransponders.Contains(transponder, StringComparer.OrdinalIgnoreCase));
-
-        if (race is null)
+        // 12 Nov 2026, setup plan step 8: scored DNS for the race, not just
+        // taken off its grid - see SkipDns and RaceControlControl.SkipDns.
+        if (SkipDriverDns(transponder, name, "car broken (asked from their phone)") is not { } race)
         {
             return $"{name} isn't in a race still to run.";
         }
 
-        var before = race.AssignedTransponders.ToList();
-        race.AssignedTransponders = before
-            .Where(t => !string.Equals(t, transponder, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        _rounds?.Update(race);
-
-        _undo.Capture($"Skip {name} in {race.RoundLabel}", () =>
-        {
-            race.AssignedTransponders = before;
-            _rounds?.Update(race);
-        });
-
-        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] {name} is out of {race.RoundLabel} - car broken (asked from their phone).");
-        return $"You're out of {race.RoundLabel}. Tell the desk when your car is fixed.";
+        return $"You're out of {race.RoundLabel} - it's a DNS. Tell the desk when your car is fixed.";
     }
 }

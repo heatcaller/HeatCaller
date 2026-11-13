@@ -193,7 +193,10 @@ internal sealed class DriverRequestsForm : Form
         var selectedWaiting = SelectedWaiting()?.Id;
         _gridWaiting.Rows.Clear();
 
-        foreach (var request in all.Where(r => r.IsWaiting))
+        // Queries asked inside a protest window first (12 Nov 2026, setup
+        // plan step 8): their answer can still change a result before it is
+        // final. Everything else as it came.
+        foreach (var request in ProtestWindow.DeskOrder(all.Where(r => r.IsWaiting), _desk.InProtestWindow))
         {
             var index = _gridWaiting.Rows.Add(
                 WhenText(request.AskedUtc),

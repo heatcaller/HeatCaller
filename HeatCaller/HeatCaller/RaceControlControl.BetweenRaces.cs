@@ -353,11 +353,15 @@ public sealed partial class RaceControlControl
     /// Marshals dialog and the grid call work it out (MarshalAssigner), so
     /// all three name the same people. Empty when nobody is posted.
     /// </summary>
-    private IReadOnlyList<(string Name, string Post)> MarshalsFor(RoundDefinition round)
+    private IReadOnlyList<(string Name, string Post)> MarshalsFor(RoundDefinition round) =>
+        MarshalPostsFor(round).Select(p => (p.Name, p.Post)).ToList();
+
+    /// <summary>MarshalsFor with each marshal's transponder (12 Nov 2026, setup plan step 8), for the marshal rule.</summary>
+    private IReadOnlyList<(string Name, string Post, string Transponder)> MarshalPostsFor(RoundDefinition round)
     {
         if (_rounds is null)
         {
-            return Array.Empty<(string, string)>();
+            return Array.Empty<(string, string, string)>();
         }
 
         try
@@ -369,19 +373,19 @@ public sealed partial class RaceControlControl
 
             if (assignment is null)
             {
-                return Array.Empty<(string, string)>();
+                return Array.Empty<(string, string, string)>();
             }
 
             return assignment.Posts
                 .Where(p => p.IsFilled)
-                .Select(p => (SpokenNameOf(p.Transponder!), p.Name ?? string.Empty))
+                .Select(p => (SpokenNameOf(p.Transponder!), p.Name ?? string.Empty, p.Transponder!))
                 .ToList();
         }
         catch (Exception ex)
         {
             // A call-up without marshals beats no call-up.
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [gap] Couldn't work out the marshals for {round.RoundLabel}: {ex.Message}");
-            return Array.Empty<(string, string)>();
+            return Array.Empty<(string, string, string)>();
         }
     }
 

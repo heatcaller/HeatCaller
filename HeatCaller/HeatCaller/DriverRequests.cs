@@ -1102,6 +1102,12 @@ internal sealed partial class DriverRequestDesk
     {
         var notes = new List<string>();
 
+        // First, so it reads before anything else (setup plan step 8).
+        if (InProtestWindow(request))
+        {
+            notes.Add(InProtestWindowWords);
+        }
+
         if (DriverOf(request) is null)
         {
             notes.Add("Unknown driver - nobody on this laptop has that badge");
@@ -1538,6 +1544,36 @@ internal sealed partial class DriverRequestDesk
     /// <summary>The saved race a query is about, or null.</summary>
     public SessionRecord? RaceOf(DriverRequest request) =>
         request.Text("race") is { Length: > 0 } id ? _history.Get(id) : null;
+
+    /// <summary>
+    /// Whether a query about this race, asked then, came in while the race's
+    /// protest window was open (12 Nov 2026, setup plan step 8). Set by
+    /// MainForm; null leaves every query where it falls.
+    /// </summary>
+    public Func<SessionRecord, DateTime, bool>? QueryInWindow { get; set; }
+
+    /// <summary>The marker Driver Requests shows on such a query, first in its notes.</summary>
+    public const string InProtestWindowWords = "In the protest window";
+
+    /// <summary>
+    /// A query asked inside its race's protest window: it goes to the top of
+    /// the waiting list, marked, because its answer can still change a
+    /// result before it is final - and the finals are seeded from it.
+    /// </summary>
+    public bool InProtestWindow(DriverRequest request)
+    {
+        try
+        {
+            return request.Kind == DriverAsk.Query
+                   && QueryInWindow is { } inWindow
+                   && RaceOf(request) is { } race
+                   && inWindow(race, request.AskedUtc);
+        }
+        catch (Exception)
+        {
+            return false; // the order of a list is never worth a broken page
+        }
+    }
 
     /// <summary>Whether the driver has a row in the race their query is about.</summary>
     public bool InThatRace(DriverRequest request)

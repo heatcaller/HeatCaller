@@ -24,10 +24,14 @@ public sealed partial class RaceControlControl
     private string? _marshalsCalledFor;
 
     /// <summary>
-    /// A marshal didn't turn up for a round: the round, and "Name (Post)".
-    /// MainForm saves it on the round.
+    /// A marshal didn't turn up for a round: the round, "Name (Post)" and
+    /// their transponder. MainForm saves it on the round and applies the
+    /// club's marshal rule.
     /// </summary>
-    public event Action<RoundDefinition, string>? MarshalNoShow;
+    public event Action<RoundDefinition, string, string>? MarshalNoShow;
+
+    /// <summary>A no-show taken back off (setup plan step 8): the round, and "Name (Post)". MainForm undoes the rule.</summary>
+    public event Action<RoundDefinition, string>? MarshalNoShowTakenBack;
 
     /// <summary>The marshals of the round the banner is showing, for Someone's missing.</summary>
     private IReadOnlyList<(string Name, string Post)> _marshalsShown = Array.Empty<(string, string)>();
@@ -126,14 +130,29 @@ public sealed partial class RaceControlControl
 
         var menu = new ContextMenuStrip();
 
+        // Each marshal's transponder too (12 Nov 2026, setup plan step 8), so
+        // the club's marshal rule can find their results.
+        var posts = MarshalPostsFor(round);
+
         foreach (var (name, post) in _marshalsShown)
         {
             var who = MarshalsInPlace.Who(name, post);
+            var transponder = posts.FirstOrDefault(p => p.Name == name && p.Post == post).Transponder ?? string.Empty;
             var logged = round.MarshalNoShows?.Contains(who, StringComparer.OrdinalIgnoreCase) == true;
-            var item = new ToolStripMenuItem($"{who} didn't turn up") { Checked = logged, Enabled = !logged };
+
+            // Logged already: the same line takes it back off (setup plan
+            // step 8) - a no-show logged by mistake costs a driver a result.
+            var item = new ToolStripMenuItem(logged ? $"{who} did turn up - take the no-show off" : $"{who} didn't turn up") { Checked = logged };
             item.Click += (_, _) =>
             {
-                MarshalNoShow?.Invoke(round, who);
+                if (logged)
+                {
+                    MarshalNoShowTakenBack?.Invoke(round, who);
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] Marshal no-show taken off for {round.RoundLabel}: {who}.");
+                    return;
+                }
+
+                MarshalNoShow?.Invoke(round, who, transponder);
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] Marshal no-show logged for {round.RoundLabel}: {who}. "
                                       + "Get someone onto the post, then press Marshals in place.");
             };

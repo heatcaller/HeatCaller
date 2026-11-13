@@ -72,6 +72,21 @@ public sealed class RoundDefinition
     public List<string>? MarshalNoShows { get; set; }
 
     /// <summary>
+    /// The same no-shows with the transponder and the club's rule as it
+    /// stood (12 Nov 2026, setup plan step 8), so the rule can be applied -
+    /// see MarshalRule. Null for none, and on every round logged before.
+    /// </summary>
+    public List<MarshalNoShow>? NoShowMarshals { get; set; }
+
+    /// <summary>
+    /// Drivers taken out of this race by the desk or their own approved
+    /// "Skip me" (12 Nov 2026, setup plan step 8), by transponder: they are
+    /// off the grid and scored DNS - did not start - for the round, and the
+    /// saved result carries them (SessionRecord.DidNotStart). Null for none.
+    /// </summary>
+    public List<string>? SkippedDns { get; set; }
+
+    /// <summary>
     /// Which leg of a multi-leg A-main this is (11 Nov 2026, race-night build
     /// plan, Phase 5.3): 1, 2 or 3, or 0 for every other round - including an
     /// A-main run as one race, the usual case. The legs are scored together
