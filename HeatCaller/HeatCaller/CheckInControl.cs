@@ -1227,8 +1227,8 @@ public sealed partial class CheckInControl : UserControl
             {
                 var displayName = string.IsNullOrWhiteSpace(profile.DriverName) ? profile.Transponder : profile.DriverName;
                 var rowIndex = _tech is null
-                    ? _grid.Rows.Add(_checkIns.IsCheckedIn(profile.Transponder), displayName, profile.ClassName)
-                    : _grid.Rows.Add(_checkIns.IsCheckedIn(profile.Transponder), displayName, profile.ClassName,
+                    ? _grid.Rows.Add(_checkIns.IsCheckedIn(profile.Transponder), displayName, ClassCellText(profile))
+                    : _grid.Rows.Add(_checkIns.IsCheckedIn(profile.Transponder), displayName, ClassCellText(profile),
                         TechCellText(profile));
 
                 _grid.Rows[rowIndex].Tag = profile;
@@ -1505,6 +1505,13 @@ public sealed partial class CheckInControl : UserControl
         if (e.RowIndex >= 0 && _batteries is not null && e.ColumnIndex == _grid.Columns["pack"]?.Index)
         {
             PickPack(e.RowIndex);
+            return;
+        }
+
+        // The Class cell: tonight's classes, to tick (setup plan A3).
+        if (e.RowIndex >= 0 && e.ColumnIndex == _grid.Columns["class"]?.Index)
+        {
+            PickClasses(e.RowIndex);
             return;
         }
 

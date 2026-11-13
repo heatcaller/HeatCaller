@@ -1983,6 +1983,15 @@ public sealed class AppSettings
     public string WebServerCheckInPin { get; set; } = string.Empty;
     public bool WebServerAutoStart { get; set; }
 
+    /// <summary>
+    /// Whether "Start the server automatically" has been turned on for the
+    /// club once already (12 Nov 2026, setup plan A2). The first time Start
+    /// Server works, the tick goes on by itself, so phones work next week
+    /// without anyone visiting Local Screens. It's done once only: a club
+    /// that unticks it afterwards keeps it off.
+    /// </summary>
+    public bool WebServerAutoStartOffered { get; set; }
+
     // --- Updates ------------------------------------------------------
     //
     // See AppUpdates. Only what has to outlive the process is here: the

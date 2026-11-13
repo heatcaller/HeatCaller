@@ -103,7 +103,8 @@ public sealed class RaceClassEditForm : Form
 
     public RaceClassEditForm(RaceClass? existing, RaceClassStore? store = null)
     {
-        Result = existing ?? new RaceClass();
+        // A new class starts with a race length (setup plan A5): see RaceFormat.ForNewClass.
+        Result = existing ?? new RaceClass { Format = RaceFormat.ForNewClass(store?.AppDefaultFormat?.Invoke()) };
         _store = store;
 
         Text = existing is null ? "Add Class" : "Edit Class";

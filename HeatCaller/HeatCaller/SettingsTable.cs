@@ -87,6 +87,7 @@ internal static class SettingsTable
 
             // Local Screens: the Server card's start.
             nameof(AppSettings.WebServerAutoStart),
+            nameof(AppSettings.WebServerAutoStartOffered),
 
             // Club Website: the Relay card's switch, Online check-in on or off.
             nameof(AppSettings.RelayEnabled),

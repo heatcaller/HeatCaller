@@ -902,10 +902,20 @@ public partial class MainForm
     /// "has answered", not "has completed" - and the button on The Day is
     /// there for ever either way.
     ///
-    /// Not offered while a race day is already open: somebody mid-event who
-    /// restarted the app is not setting up, and that is the moment it would
-    /// be most unwelcome.
+    /// Not offered while a race day is already open and under way: somebody
+    /// mid-event who restarted the app is not setting up, and that is the
+    /// moment it would be most unwelcome.
+    ///
+    /// An open day with nothing in it - no classes picked, no rounds - doesn't
+    /// count (12 Nov 2026, setup plan A4). A fresh install opens one by itself
+    /// (EventSpine.StartFirstDayIfNever), so the old rule meant a new club was
+    /// never offered the wizard at all. The wizard takes that day over rather
+    /// than starting another.
     /// </summary>
+    /// <summary>A race day nobody has done anything with yet: no classes picked and no rounds.</summary>
+    internal static bool IsEmptyDay(RaceEvent day) =>
+        (day.ClassNames?.Count ?? 0) == 0 && (day.RoundIds?.Count ?? 0) == 0;
+
     private void OfferRaceDaySetupOnce()
     {
         if (_settings.HasSeenRaceDaySetup || IsDisposed || _openRaceDaySetup is null)
@@ -913,7 +923,7 @@ public partial class MainForm
             return;
         }
 
-        if (_raceEvents.Active is { IsLegacy: false, IsOpen: true })
+        if (_raceEvents.Active is { IsLegacy: false, IsOpen: true } open && !IsEmptyDay(open))
         {
             return;
         }

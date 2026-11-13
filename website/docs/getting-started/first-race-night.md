@@ -37,7 +37,7 @@ Full detail and troubleshooting: [Decoders](../timing/decoders.md).
 
 1. Open the **Classes** page and click **Add a Class**.
 2. Give it a **Name:**. For a first night, the defaults are sensible: qualifying on total laps, one heat counting, mains of 8, and 2 bump-ups.
-3. Set a race length. On a new install, races have **no lap or time limit**, so they run until you throw the checkered flag. You can set a limit per class in its race format, or set the app default with **Race Format** on the **Race Control** page.
+3. Check the race length. A new class starts at **5 minutes**, because a new install's own default has no lap or time limit and a race would otherwise run until you throw the checkered flag. Change it with **Race Format...** in the class, or set the app default with **Race Format** on the **Race Control** page. Once the app default has a limit, new classes follow it instead.
 4. Click **Save**.
 
 If your club follows a sanctioning body's rules, **Sanctioning Preset** can fill in a class for you. See [Drivers and classes](../race-day/drivers-and-classes.md).
@@ -62,7 +62,7 @@ Full detail: [Drivers and classes](../race-day/drivers-and-classes.md) and [Tran
 
 Everything on race night (check-ins, tech, the program, the timetable) is filed against a race day. Starting a new one gives you a clean sheet, and last week's stays with last week.
 
-1. Open **Race Day → Setup**.
+1. Open **Race Day → Setup**. A new install has already opened a race day for you, named with the date HeatCaller was installed, with nothing in it. If **Working on:** shows that day, you can use it: skip to step 3, tick tonight's classes under **Classes racing:**, and give it a proper **Name:**. Or click **Set Up Tonight**, which takes that day over (see the end of this step).
 2. Click **New Race Day**. In the **Start a race day** window, choose **Race day - heats, then finals** (or **Club night - just races** if your club just races, with no finals), tick the classes running tonight, and click **Start the Day**.
 3. The new day is current straight away, named with today's date. Type a better **Name:** if you like.
 4. Set **Track layout:**.
@@ -92,7 +92,7 @@ Full detail: [Events and entries](../race-day/events-and-entries.md).
 3. Look over the heats. If they look lopsided, right-click the list and choose **Move Drivers Between Heats...**.
 4. The card now says "Tonight's heats are built - post them next." Click **Post the heats...**, then **Post the Heats**. It prints the heat sheets and the marshal list for the board and tells the room. If the card lists a car the loop hasn't heard tonight, get it out on the track before the first race. See [Post the heats](../race-day/program-and-mains.md#post-the-heats).
 
-If the card says something else comes first, such as "No race day is open.", its button does that instead.
+If the card says something else comes first, its button does that instead. For "No race day is open." it opens the Set Up Tonight wizard, not the two-question **New Race Day** window.
 
 Optional: click **Timetable** under the program for a timed running order. It fills itself from the program and ticks itself off as heats are recorded; **Fill In the Times...** on its **More** menu puts a time against every line.
 
