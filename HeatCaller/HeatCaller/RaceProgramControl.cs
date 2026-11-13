@@ -2109,6 +2109,7 @@ public sealed partial class RaceProgramControl : UserControl
         // same set so the count and the delete can never disagree.
         var replaceable = classes
             .SelectMany(c => ReplaceableQualifiers(DayRoundsForClass(c.Name)))
+            .DistinctBy(r => r.Id, StringComparer.Ordinal)
             .ToList();
 
         // The heat out on track is unrecorded, so the build would delete it
@@ -2206,8 +2207,12 @@ public sealed partial class RaceProgramControl : UserControl
             return PlanQualifyingBuild();
         }
 
+        // A heat two classes share comes back once for each of them (see
+        // DayRoundsForClass), so it is counted once here: twice over, the
+        // lookup by id below threw and nothing could be rebuilt.
         var replaced = classes
             .SelectMany(c => ReplaceableQualifiers(DayRoundsForClass(c.Name)))
+            .DistinctBy(r => r.Id, StringComparer.Ordinal)
             .ToList();
 
         // Started while the question was open: refused, for the reason
@@ -3378,7 +3383,21 @@ public sealed partial class RaceProgramControl : UserControl
 
         using var form = new RoundRosterForm(round, _profiles, roster);
 
-        if (form.ShowDialog(this) != DialogResult.OK)
+        // Late check-ins wait while this is open - see RosterEditOpen. The
+        // save below follows straight on, before the next one can be added.
+        RosterEditOpen = true;
+        DialogResult answered;
+
+        try
+        {
+            answered = form.ShowDialog(this);
+        }
+        finally
+        {
+            RosterEditOpen = false;
+        }
+
+        if (answered != DialogResult.OK)
         {
             return;
         }
@@ -3887,20 +3906,46 @@ public sealed partial class RaceProgramControl : UserControl
             r => r.SharedClassOf is null ? null : new Dictionary<string, string>(r.SharedClassOf, StringComparer.OrdinalIgnoreCase),
             StringComparer.Ordinal);
 
-        _undo.Capture(undoPrefix + $"Late entry: {name}", () =>
+        // The undo takes the driver out only of a heat that is not on track,
+        // has not been run since and still holds exactly what this gave it
+        // (see CheckRosterRestore) - the rules every other roster undo here
+        // keeps. It used to write the old rosters back whatever had happened
+        // since, so "add late, run their first heat, Ctrl+Z" took the driver
+        // out of a heat they had just raced in. Each heat only gained this
+        // one driver, so unlike a move they need not go back together: a
+        // heat run since keeps the driver and the rest still let them go.
+        var label = undoPrefix + $"Late entry: {name}";
+        var restores = places
+            .Select(r => new RosterRestore(r.Id, r.LinkedSessionId, r.AssignedTransponders.Append(transponder).ToList(), before[r.Id]))
+            .ToList();
+
+        Action? undoLate = null;
+        undoLate = () =>
         {
-            foreach (var round in places)
+            RefuseRosterUndoWhileOnTrack(label, undoLate!, restores.Select(r => r.RoundId));
+
+            var free = LateEntryRestorable(restores, _rounds.Get);
+
+            if (free.Count == 0 && restores.Any(r => _rounds.Get(r.RoundId) is not null))
             {
-                if (_rounds.Get(round.Id) is { } current && before.TryGetValue(round.Id, out var roster))
+                throw new InvalidOperationException(
+                    $"every heat {name} was added to has been run or had its drivers changed since, so {name} was not taken out. Nothing was changed.");
+            }
+
+            foreach (var restore in free)
+            {
+                if (_rounds.Get(restore.RoundId) is { } current)
                 {
-                    current.AssignedTransponders = roster;
-                    current.SharedClassOf = mapsBefore[round.Id];
+                    current.AssignedTransponders = restore.Old.ToList();
+                    current.SharedClassOf = mapsBefore[restore.RoundId];
                     _rounds.Update(current);
                 }
             }
 
             RefreshAll();
-        });
+        };
+
+        _undo.Capture(label, undoLate);
 
         foreach (var round in places)
         {
@@ -3924,6 +3969,41 @@ public sealed partial class RaceProgramControl : UserControl
             $"{name} added to {string.Join(", ", places.Select(r => r.RoundLabel))}. Nobody else moved.");
     }
 
+    /// <summary>
+    /// The heats an undo of a late entry may take the driver out of again:
+    /// those still on file that have not been run since and still hold
+    /// exactly what the late entry gave them (CheckRosterRestore).
+    /// </summary>
+    internal static List<RosterRestore> LateEntryRestorable(IReadOnlyList<RosterRestore> restores, Func<string, RoundDefinition?> currentOf) =>
+        restores
+            .Where(r => currentOf(r.RoundId) is { } current && CheckRosterRestore(current, r) == RosterRestoreBlock.None)
+            .ToList();
+
+    /// <summary>
+    /// When every heat of <paramref name="className"/> tonight is one it
+    /// shares under another class's name, who to open Move Drivers Between
+    /// Heats on instead; null when it has heats of its own, or none at all.
+    /// </summary>
+    internal string? SharedHeatsOnlyNote(string className)
+    {
+        var hosts = DayRoundsForClass(className)
+            .Select(r => r.ClassName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return hosts.Count == 0 || hosts.Contains(className, StringComparer.OrdinalIgnoreCase)
+            ? null
+            : $"Every heat \"{className}\" is in tonight is shared with {string.Join(" and ", hosts.Select(h => $"\"{h}\""))}. "
+              + $"Use Move Drivers Between Heats on {(hosts.Count == 1 ? "that class" : "those classes")} to see them.";
+    }
+
+    /// <summary>
+    /// True while Move Drivers Between Heats or Edit Drivers is open. Each
+    /// saves the rosters as it showed them, so a late check-in added
+    /// underneath it would be wiped by its Save - see AbsorbLateArrivals.
+    /// </summary>
+    internal bool RosterEditOpen { get; set; }
+
     private void BalanceHeats()
     {
         if (TargetClass() is not { } className)
@@ -3934,6 +4014,15 @@ public sealed partial class RaceProgramControl : UserControl
         var rounds = DayRounds()
             .Where(r => string.Equals(r.ClassName, className, StringComparison.OrdinalIgnoreCase))
             .ToList();
+
+        // A class folded into another's heats (mixed-class heats) has none
+        // under its own name. This used to say it "has no heats yet" and
+        // offer to build tonight's - on a night that was already built.
+        if (rounds.Count == 0 && SharedHeatsOnlyNote(className) is { } shared)
+        {
+            AppDialog.Show(this, shared, "Shared heats", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
 
         if (rounds.Count == 0)
         {
@@ -3971,18 +4060,29 @@ public sealed partial class RaceProgramControl : UserControl
             // Asked at Save (12 Nov 2026, setup plan step 8).
             restCheck: RosterRestWarning);
 
-        if (form.ShowDialog(this) != DialogResult.OK || form.Changes.Count == 0)
-        {
-            return;
-        }
+        // Late check-ins wait until the form's changes are saved (or
+        // dropped): it shows the heats as they were when it opened.
+        RosterEditOpen = true;
 
-        // Posted heats (12 Nov 2026, setup plan D2): drivers have looked theirs up.
-        if (!ChangePostedHeatsOk(this, $"This moves drivers in {Plural.Of(form.Changes.Count, "heat")} of {className}."))
+        try
         {
-            return;
-        }
+            if (form.ShowDialog(this) != DialogResult.OK || form.Changes.Count == 0)
+            {
+                return;
+            }
 
-        ApplyRosterChanges(className, form.Changes.ToList(), string.Empty);
+            // Posted heats (12 Nov 2026, setup plan D2): drivers have looked theirs up.
+            if (!ChangePostedHeatsOk(this, $"This moves drivers in {Plural.Of(form.Changes.Count, "heat")} of {className}."))
+            {
+                return;
+            }
+
+            ApplyRosterChanges(className, form.Changes.ToList(), string.Empty);
+        }
+        finally
+        {
+            RosterEditOpen = false;
+        }
     }
 
     /// <summary>

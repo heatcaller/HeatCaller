@@ -124,6 +124,16 @@ public sealed partial class RaceProgramControl
             return null;
         }
 
+        // Not while Move Drivers Between Heats or Edit Drivers is open (this
+        // is called from a timer, which still ticks then). The window saves
+        // the heats as it showed them, so a driver added underneath it was
+        // wiped by its Save and, already noted as known, never offered
+        // again. They are picked up on the first tick after it closes.
+        if (RosterEditOpen)
+        {
+            return null;
+        }
+
         var added = new List<string>();
 
         foreach (var arrival in LateArrivalsTonight())
@@ -189,15 +199,27 @@ public sealed partial class RaceProgramControl
             return;
         }
 
+        AnswerLateArrivals(lines.Select(l => l.Arrival).ToList(), form.Ticked, raceDay);
+    }
+
+    /// <summary>The late arrivals window's answer: each ticked driver added, each unticked one not asked about again tonight.</summary>
+    internal void AnswerLateArrivals(IReadOnlyList<LateArrivals.Arrival> arrivals, Func<int, bool> ticked, RaceEvent raceDay)
+    {
+        if (_events is null)
+        {
+            return;
+        }
+
         var added = new List<string>();
         var declined = new List<string>();
+        var declinedArrivals = new List<LateArrivals.Arrival>();
 
-        for (var i = 0; i < lines.Count; i++)
+        for (var i = 0; i < arrivals.Count; i++)
         {
-            var arrival = lines[i].Arrival;
+            var arrival = arrivals[i];
             MarkKnown(arrival);
 
-            if (form.Ticked(i))
+            if (ticked(i))
             {
                 var answer = AddLateEntryFor(arrival.ClassName, arrival.Transponder, string.Empty);
 
@@ -209,6 +231,7 @@ public sealed partial class RaceProgramControl
             else
             {
                 declined.Add(LateArrivals.Key(arrival.ClassName, arrival.Transponder));
+                declinedArrivals.Add(arrival);
             }
         }
 
@@ -224,6 +247,17 @@ public sealed partial class RaceProgramControl
                 {
                     current.LateEntriesDeclined = current.LateEntriesDeclined.Except(declined, StringComparer.OrdinalIgnoreCase).ToList();
                     _events.Upsert(current);
+
+                    // Asked about again as well: being noted as known is
+                    // what keeps a driver off the card, so with only the
+                    // declined list cleared the undo brought nothing back.
+                    foreach (var arrival in declinedArrivals)
+                    {
+                        if (_knownRoster.TryGetValue(KnownKey(current, arrival.ClassName), out var known))
+                        {
+                            known.Remove(arrival.Transponder);
+                        }
+                    }
                 }
 
                 RefreshAll();
