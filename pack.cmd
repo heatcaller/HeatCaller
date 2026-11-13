@@ -153,7 +153,9 @@ if not defined SIGNFILE goto :done
 echo Check the signature took. Right-click the Setup exe in %RELDIR%,
 echo Properties, Digital Signatures - it should name Asher Kent. Or:
 echo.
-echo   powershell -NoProfile -Command "Get-AuthenticodeSignature '%RELDIR%\HeatCallerApp-beta-Setup.exe' ^| Format-List Status, SignerCertificate"
+rem No caret before the pipe: inside the double quotes it is not an escape, so
+rem it would be printed as part of the command and break it when pasted.
+echo   powershell -NoProfile -Command "Get-AuthenticodeSignature '%RELDIR%\HeatCallerApp-beta-Setup.exe' | Format-List Status, SignerCertificate"
 echo.
 echo Status Valid is what you want. NotTrusted on a --test pack is correct
 echo and expected - that is the test root doing its job.
