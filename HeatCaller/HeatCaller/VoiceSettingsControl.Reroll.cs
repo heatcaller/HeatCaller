@@ -82,6 +82,32 @@ public sealed partial class VoiceSettingsControl
         return null;
     }
 
+    /// <summary>
+    /// The profile a saved line was made with, of the two a race speaks
+    /// with: <paramref name="profile"/> itself, or the same on the race-calls
+    /// model when one is set (AnnouncementService.ForRaceCall) and the line's
+    /// key is that one's. A race call ("Last lap!") is saved under the
+    /// race-calls model, so checked against the main model alone it was
+    /// refused as "a different voice or different settings" - and a new take
+    /// made on the main model would be one the race never asks for.
+    /// </summary>
+    internal static VoiceProfile ProfileSavedUnder(VoiceProfile profile, VoiceLibrary.SavedLine line)
+    {
+        if (string.IsNullOrWhiteSpace(line.Text)
+            || string.Equals(VoiceLibrary.KeyFor(profile, line.Text), line.Key, StringComparison.OrdinalIgnoreCase))
+        {
+            return profile;
+        }
+
+        // Any race call does: they all go to the one race-calls model.
+        var onRaceModel = AnnouncementService.ForRaceCall(profile, AnnouncementEventType.LastLap);
+
+        return !ReferenceEquals(onRaceModel, profile)
+               && string.Equals(VoiceLibrary.KeyFor(onRaceModel, line.Text), line.Key, StringComparison.OrdinalIgnoreCase)
+            ? onRaceModel
+            : profile;
+    }
+
     private void WireRerollButton()
     {
         _btnRerollLine.Text = "Re-roll Line...";
@@ -106,8 +132,10 @@ public sealed partial class VoiceSettingsControl
 
         // The SAVED profile, which is what a race speaks with - not the
         // boxes on screen, which may be part-way through a change.
-        var profile = _store.Current;
         var line = item.Line;
+
+        // On the race-calls model when that is what the line was saved with.
+        var profile = ProfileSavedUnder(_store.Current, line);
 
         var textTheRaceSends = Announcer?.TextForCloudVoice(line.Text);
 

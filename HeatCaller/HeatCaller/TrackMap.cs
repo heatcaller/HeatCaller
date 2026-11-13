@@ -201,6 +201,16 @@ public sealed class TrackPositions
         public long LineAt;
         public int Split;
         public long SplitAt;
+
+        /// <summary>
+        /// The split loops this car has been heard at this race, a bit each
+        /// (bit 0 = Split 1). Only these are waited for: a split drawn on
+        /// the plan may have no decoder behind it tonight - the split loop
+        /// switched off, unplugged, or deaf to this transponder - and a car
+        /// held short of a loop that never hears it was called stopped on
+        /// every lap.
+        /// </summary>
+        public int SplitsHeard;
     }
 
     private readonly Dictionary<string, Seen> _seen = new(StringComparer.OrdinalIgnoreCase);
@@ -299,6 +309,11 @@ public sealed class TrackPositions
         {
             seen.Split = (int)point;
             seen.SplitAt = nowMs;
+
+            if (seen.Split is >= 1 and <= 31)
+            {
+                seen.SplitsHeard |= 1 << (seen.Split - 1);
+            }
         }
 
         _saidStopped.Remove(transponder);
@@ -361,11 +376,24 @@ public sealed class TrackPositions
     /// <summary>One car's place, from its last loop - the arithmetic, apart for testing.</summary>
     internal static Car Place(string transponder, int position, Seen seen, IReadOnlyList<float> splitAt, long typicalMs, long nowMs, bool racing)
     {
-        // The last loop it crossed, and the next it should reach.
+        // The last loop it crossed, and the next it should reach: the next
+        // split loop that has heard this car this race, else the line. A
+        // split on the plan that has never heard it is not waited for - see
+        // Seen.SplitsHeard.
         var fromSplit = seen.Split > 0 && seen.SplitAt >= seen.LineAt && seen.Split <= splitAt.Count ? seen.Split : 0;
         var from = fromSplit == 0 ? 0f : splitAt[fromSplit - 1];
         var at = fromSplit == 0 ? seen.LineAt : seen.SplitAt;
-        var next = fromSplit < splitAt.Count ? splitAt[fromSplit] : 1f;
+        var nextSplit = 0;
+
+        for (var i = fromSplit + 1; i <= Math.Min(splitAt.Count, 31) && nextSplit == 0; i++)
+        {
+            if ((seen.SplitsHeard & (1 << (i - 1))) != 0)
+            {
+                nextSplit = i;
+            }
+        }
+
+        var next = nextSplit > 0 ? splitAt[nextSplit - 1] : 1f;
 
         var since = Math.Max(0, nowMs - at);
         var expected = typicalMs * (double)(next - from);
@@ -375,7 +403,11 @@ public sealed class TrackPositions
         {
             // Somewhere in that stretch - shown halfway along it.
             var middle = from + (next - from) / 2;
-            return new Car(transponder, position, middle, true, Stretch(fromSplit, splitAt.Count), 0, middle);
+            var where = fromSplit == 0 && nextSplit == 0
+                ? Stretch(0, 0)
+                : $"between {(fromSplit == 0 ? "the line" : $"Split {fromSplit}")} and {(nextSplit == 0 ? "the line" : $"Split {nextSplit}")}";
+
+            return new Car(transponder, position, middle, true, where, 0, middle);
         }
 
         var fraction = from + (float)(since / (double)typicalMs);
@@ -386,8 +418,9 @@ public sealed class TrackPositions
         return new Car(transponder, position, Math.Max(from, fraction), false, string.Empty, 1000f / typicalMs, next - 0.01f);
     }
 
+    /// <summary>The same, for a car that every split loop on the plan has heard this race.</summary>
     internal static Car Place(string transponder, int position, long lineAt, int split, long splitAt, IReadOnlyList<float> splitFractions, long typicalMs, long nowMs, bool racing) =>
-        Place(transponder, position, new Seen { LineAt = lineAt, Split = split, SplitAt = splitAt }, splitFractions, typicalMs, nowMs, racing);
+        Place(transponder, position, new Seen { LineAt = lineAt, Split = split, SplitAt = splitAt, SplitsHeard = -1 }, splitFractions, typicalMs, nowMs, racing);
 
     /// <summary>
     /// The best-lap ghost: how far round the car would be by

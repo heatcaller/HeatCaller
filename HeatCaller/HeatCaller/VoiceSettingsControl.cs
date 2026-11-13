@@ -535,6 +535,12 @@ public sealed partial class VoiceSettingsControl : UserControl
         foreach (var box in new Control[] { _txtApiKey, _cmbModel, _txtLanguageCode, _txtOutputFormat })
         {
             box.Leave += (_, _) => ElevenLabsBoxLeft();
+
+            // Closing the app raises no Leave on the box with the focus, so
+            // a key pasted in and the window closed straight after was lost.
+            // A closing window does validate that box, before anything is
+            // taken down - and a box already taken into use changes nothing.
+            box.Validated += (_, _) => ElevenLabsBoxLeft();
             box.KeyDown += (_, e) =>
             {
                 // An open model list is left to take Enter as its own pick.
@@ -1334,6 +1340,12 @@ public sealed partial class VoiceSettingsControl : UserControl
         _txtVoiceRelayUrl.Leave += (_, _) => VoiceRelayBoxLeft(tidyAddress: true);
         _txtVoiceRelayClub.Leave += (_, _) => VoiceRelayBoxLeft(tidyAddress: false);
         _txtVoiceRelayToken.Leave += (_, _) => VoiceRelayBoxLeft(tidyAddress: false);
+
+        // And when the app is closed with one of them still in focus, which
+        // raises no Leave - see the ElevenLabs boxes in the constructor.
+        _txtVoiceRelayUrl.Validated += (_, _) => VoiceRelayBoxLeft(tidyAddress: true);
+        _txtVoiceRelayClub.Validated += (_, _) => VoiceRelayBoxLeft(tidyAddress: false);
+        _txtVoiceRelayToken.Validated += (_, _) => VoiceRelayBoxLeft(tidyAddress: false);
 
         _txtVoiceRelayUrl.KeyDown += (_, e) => VoiceRelayBoxKeyDown(e, tidyAddress: true);
         _txtVoiceRelayClub.KeyDown += (_, e) => VoiceRelayBoxKeyDown(e, tidyAddress: false);
@@ -4557,6 +4569,19 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// to it. Placeholders are filled with sample values; an unresolved
     /// {driver} would tell you nothing about how the line sounds.
     /// </summary>
+    /// <summary>
+    /// The profile a row's Test speaks with: at the event's own speed, and on
+    /// the race-calls model when the event is a race call and one is set
+    /// (AnnouncementService.ForRaceCall) - as the race says it. Tested on the
+    /// main model, a "Last lap!" was heard, paid for and saved as a take the
+    /// race never plays.
+    /// </summary>
+    internal static VoiceProfile TestProfileFor(VoiceProfile profile, AnnouncementEventType type, double speed) =>
+        AnnouncementService.ForRaceCall(profile, type).CloneForDelivery(
+            profile.Stability,
+            profile.Style,
+            Math.Clamp(profile.Speed * speed, 0.7, 1.2));
+
     private async void TestEventLine(AnnouncementEventType type, TextBox box, NumericUpDown speed, Button button)
     {
         var lines = box.Text
@@ -4660,10 +4685,7 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         // Spoken at this event's own rate, so a slowed-down position report
         // is tested at the speed it will actually be read at.
-        var testProfile = profile.CloneForDelivery(
-            profile.Stability,
-            profile.Style,
-            Math.Clamp(profile.Speed * (double)speed.Value, 0.7, 1.2));
+        var testProfile = TestProfileFor(profile, type, (double)speed.Value);
 
         // Tags stripped for models that can't use them, exactly as the real
         // announcement path does - otherwise a v2 test would read the
@@ -4730,7 +4752,8 @@ public sealed partial class VoiceSettingsControl : UserControl
             // the model was changed again while this test was playing.
             // Either way the fix is the model box, not a button.
             // The model only matters to ElevenLabs.
-            var savedModel = _store.Current.ModelId;
+            // For a race call, the race-calls model on both sides.
+            var savedModel = AnnouncementService.ForRaceCall(_store.Current, type).ModelId;
             var unsaved = !kokoro && !string.Equals(savedModel, testProfile.ModelId, StringComparison.OrdinalIgnoreCase);
 
             // Kept short on the label, which wraps into the section below if

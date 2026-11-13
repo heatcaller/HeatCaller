@@ -252,10 +252,24 @@ public sealed class TrendChartControl : UserControl
             points.Add(new TrendPoint(
                 session.StartedAtUtc.ToLocalTime(),
                 result.FastLapMs,
-                session.StartedAtUtc.ToLocalTime().ToString("M/d")));
+                DayLabel(session.StartedAtUtc.ToLocalTime(), System.Globalization.CultureInfo.CurrentCulture)));
         }
 
         return points;
+    }
+
+    /// <summary>
+    /// A session's day under its point, day and month in the order this PC
+    /// writes dates: a fixed month/day read as the wrong date wherever the
+    /// day comes first - 3 November as "11/3", which is 11 March there.
+    /// </summary>
+    internal static string DayLabel(DateTime local, System.Globalization.CultureInfo culture)
+    {
+        var pattern = culture.DateTimeFormat.ShortDatePattern;
+        var day = pattern.IndexOf('d');
+        var month = pattern.IndexOf('M');
+
+        return local.ToString(day >= 0 && month >= 0 && day < month ? "d/M" : "M/d", culture);
     }
 
     private void Redraw()
