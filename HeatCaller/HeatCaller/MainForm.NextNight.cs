@@ -111,7 +111,10 @@ public partial class MainForm
 
         try
         {
-            result = await PinMailer.SendBatchAsync(_settings, messages, null, _pinMailCancel.Token);
+            // Its own words for what went: left to SendBatchAsync it read
+            // "Emailed 12 drivers their night", as if the recap had gone.
+            result = await PinMailer.SendBatchAsync(_settings, messages, null, _pinMailCancel.Token,
+                n => $"Told {Plural.Of(n, "driver")} the night is off.");
         }
         catch (Exception ex)
         {
@@ -139,13 +142,23 @@ public partial class MainForm
         try
         {
             _relayPublisher.PublishSnapshot(RelayChannel.NextNight,
-                _settings.NextNight is { } night ? NextNight.Document(night, _settings.RelayDriverRequests) : NextNight.Withdrawn());
+                _settings.NextNight is { } night ? NextNight.Document(night, PhonesCanSayComing(_settings)) : NextNight.Withdrawn());
         }
         catch (Exception ex)
         {
             OnClientRawMessage($"[program] The next race night couldn't be sent: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// Whether a phone's "I'm coming" can get anywhere: Driver requests ticked
+    /// AND drivers' nights, the same two the relay's gate and the laptop's
+    /// collecting need (RelayPublisher.Requests.AsksWanted). Driver requests
+    /// stays ticked when nights are switched off, so on its own it offered a
+    /// "Coming?" button on Home that led nowhere.
+    /// </summary>
+    internal static bool PhonesCanSayComing(AppSettings settings) =>
+        settings.RelayDriverRequests && settings.PublishDriverNightsToTheRelay;
 
     /// <summary>Who said they're coming tonight (the night that began at 6am), for Who's Racing.</summary>
     private IReadOnlyList<PreEntry> ComingTonightList() =>

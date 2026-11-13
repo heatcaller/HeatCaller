@@ -2442,6 +2442,9 @@ public partial class MainForm : Form
                 }
             }
 
+            // Before the tick is stopped - see RefreshPrivacyBeforeClosing.
+            RefreshPrivacyBeforeClosing();
+
             _closingDown = true;
             _webServer.HostReady = false;
 

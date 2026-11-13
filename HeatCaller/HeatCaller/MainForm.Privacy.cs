@@ -147,6 +147,27 @@ public partial class MainForm
     }
 
     /// <summary>
+    /// One last look at the register as the window closes, before
+    /// _closingDown stops the tick. A flagged driver deleted in the two
+    /// seconds before closing was otherwise never retained
+    /// (PublicPrivacy.Retain needs the register still in memory), and the next
+    /// start could not tell who they had been - so their saved results could
+    /// go out again under the full name. An unchanged roster costs one string
+    /// compare. A crash inside those two seconds is still not covered.
+    /// </summary>
+    private void RefreshPrivacyBeforeClosing()
+    {
+        try
+        {
+            RefreshPrivacyRegister();
+        }
+        catch
+        {
+            // Best effort - closing must not be stopped by it.
+        }
+    }
+
+    /// <summary>
     /// Rebuilds PublicPrivacy.Current when any driver's names or flags have
     /// changed, and notes who now needs their saved results sent again.
     /// </summary>

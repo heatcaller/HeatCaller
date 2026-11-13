@@ -896,6 +896,7 @@ public partial class MainForm
             if (_checkInChangedUtc.TryGetValue(transponder, out var changedUtc) && tap.AtUtc < changedUtc)
             {
                 OnClientRawMessage($"[relay] Ignored a check-{(tap.Wanted ? "in" : "out")} for {name} from their phone - it was changed here since.");
+                SendCheckInListAgainSoon();
                 return true;
             }
 
@@ -911,10 +912,12 @@ public partial class MainForm
             // Not onto a closed day - see CheckInStore.ClosedCurrentDay.
             // Refused like the old and overruled taps above: said on the
             // console and acknowledged, so the relay does not keep offering
-            // it, and the phone's next look at the roster shows it unchanged.
+            // it, and the phone's next look at the roster shows it unchanged -
+            // once the list has gone again (SendCheckInListAgainSoon).
             if (CheckInStore.ClosedCurrentDay(_raceEvents) is { } closedDay)
             {
                 OnClientRawMessage($"[relay] Refused a check-{(tap.Wanted ? "in" : "out")} for {name} from their phone - this day is closed (\"{closedDay.DisplayName}\"). Start tonight's race day, or reopen that one, first.");
+                SendCheckInListAgainSoon();
                 return true;
             }
 
@@ -932,6 +935,20 @@ public partial class MainForm
             OnClientRawMessage($"[relay] Could not apply a check-in from a phone: {ex.Message}. It will be tried again.");
             return false;
         }
+    }
+
+    /// <summary>
+    /// The check-in list sent again within a moment although nothing here
+    /// changed, after a phone's tap was refused. The relay had already
+    /// answered the phone "checked in" and marked its own copy of the list;
+    /// this laptop's list is the same as the last one sent, so it was not
+    /// sent, and the relay went on showing the driver checked in for up to
+    /// ten minutes when they never were.
+    /// </summary>
+    private void SendCheckInListAgainSoon()
+    {
+        _lastRelayDocuments.Remove(RelayChannel.CheckIn);
+        PublishCheckInRosterSoon();
     }
 
     /// <summary>
@@ -1497,7 +1514,7 @@ public partial class MainForm
         // D13). Sent like the rest, so one the relay lost comes back; with
         // none announced, the card is taken down rather than left standing.
         SendToRelayIfChanged(RelayChannel.NextNight, "the next race night",
-            () => _settings.NextNight is { } night ? NextNight.Document(night, _settings.RelayDriverRequests) : NextNight.Withdrawn());
+            () => _settings.NextNight is { } night ? NextNight.Document(night, PhonesCanSayComing(_settings)) : NextNight.Withdrawn());
 
         SendToRelayIfChanged(RelayChannel.Tracks, "the tracks", () => RelayDocuments.Tracks(
             _trackLayouts, _sessionHistory.SavedView(), _profiles, _pbResets, _raceEvents.Current.TrackLayoutName, abbreviate, _relayTrackImages));
@@ -2005,7 +2022,7 @@ public partial class MainForm
         {
             var change = (edit.Change ?? string.Empty).Trim();
 
-            if (change.Length == 0 || ids.Any(id => change.Contains(id, StringComparison.OrdinalIgnoreCase)))
+            if (change.Length == 0 || CorrectionCarriesTransponder(change, ids))
             {
                 continue;
             }
@@ -2026,6 +2043,30 @@ public partial class MainForm
         }
 
         return lines.Count == 0 ? null : lines;
+    }
+
+    /// <summary>The numbers ResultEditor.DescribeChanges writes itself: "laps added 0 -> +1", "time penalty 0s -> 5s", "lap penalty 0 -> 1".</summary>
+    private static readonly System.Text.RegularExpressions.Regex CorrectionOwnNumbers = new(
+        @"\b(?:laps added|time penalty|lap penalty) [+-]?\d+(?:[.,]\d+)?s? -> [+-]?\d+(?:[.,]\d+)?s?",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// True when a correction's words carry one of the race's transponder
+    /// numbers as a whole word - outside the laps and seconds the editor
+    /// writes itself, which are never one.
+    /// </summary>
+    /// <remarks>
+    /// WHY (bug hunt 17): this was a plain "contains", so at a club whose
+    /// decoder numbers its cars 1, 2, 5, 12 the car numbered 5 hid every
+    /// "time penalty 0s -> 5s" from the public log, and car 1 nearly every
+    /// correction there is.
+    /// </remarks>
+    internal static bool CorrectionCarriesTransponder(string change, IReadOnlyList<string> ids)
+    {
+        var words = CorrectionOwnNumbers.Replace(change, " ")
+            .Split(new[] { ' ', ',', ';', ':', '(', ')', '"', '\'', '#', '>', '/', '.', '[', ']' }, StringSplitOptions.RemoveEmptyEntries);
+
+        return ids.Any(id => id.Length > 0 && words.Any(word => string.Equals(word, id, StringComparison.OrdinalIgnoreCase)));
     }
 
     /// <summary>The championship a round is part of, or the meeting's own name, or nothing.</summary>
