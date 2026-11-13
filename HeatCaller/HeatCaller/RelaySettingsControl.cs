@@ -3197,7 +3197,7 @@ public sealed class RelaySettingsControl : UserControl
         }
 
         var when = _settings.RelayLastGoodUtc?.ToLocalTime();
-        var stamp = when is null ? string.Empty : $" ({when.Value:g})";
+        var stamp = when is null ? string.Empty : $" ({AppTime.DateAndTime(when.Value)})";
 
         if (MatchesLastGood())
         {

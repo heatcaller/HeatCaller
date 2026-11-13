@@ -1186,7 +1186,7 @@ public sealed partial class BackupRestoreControl : UserControl
         // wrong (see BackupListItem) - and Delete, which is far less harm,
         // named its file when this did not.
         var backupFile = new FileInfo(zipPath);
-        var whichBackup = $"Backup: {backupFile.Name}\nTaken: {BackupService.BackupTime(backupFile):yyyy-MM-dd HH:mm}\n\n";
+        var whichBackup = $"Backup: {backupFile.Name}\nTaken: {BackupService.BackupTime(backupFile):yyyy-MM-dd} {AppTime.TimeOfDay(BackupService.BackupTime(backupFile))}\n\n";
 
         var confirm = AppDialog.Show(this,
             whichBackup +
@@ -1441,7 +1441,7 @@ public sealed partial class BackupRestoreControl : UserControl
     private void RefreshLastBackupLabel()
     {
         _lblLastBackup.Text = _settings.LastAutoBackupUtc is { } last
-            ? $"Last backup: {last.ToLocalTime():yyyy-MM-dd HH:mm}"
+            ? $"Last backup: {last.ToLocalTime():yyyy-MM-dd} {AppTime.TimeOfDay(last.ToLocalTime())}"
             : "Last backup: never";
     }
 
@@ -1476,6 +1476,6 @@ public sealed partial class BackupRestoreControl : UserControl
     private sealed record BackupListItem(FileInfo File)
     {
         public override string ToString() =>
-            $"{BackupService.BackupTime(File):yyyy-MM-dd HH:mm}   {File.Length / 1024.0:0.#} KB   {File.Name}";
+            $"{BackupService.BackupTime(File):yyyy-MM-dd} {AppTime.TimeOfDay(BackupService.BackupTime(File))}   {File.Length / 1024.0:0.#} KB   {File.Name}";
     }
 }

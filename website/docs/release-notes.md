@@ -4,6 +4,14 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Fixes from the first night on step 8 (12 November).**
+    - **More time moves the schedule.** Approving a driver's **Need 5 more minutes** (or **+1 min** or **Hold**) now moves every "about" time after that race: the program, the phones' **Schedule** and the Big Screen's **UP NEXT**, not only Auto start's count.
+    - **The Setup tile goes to Setup first time.** Tapping **Setup** on Me went to the car card on the first tap and to Setup only on the second.
+    - **Entry fee at the top of Me.** "Entry: $15.00 - pay at the desk" (or "Paid") is now right under your name on every part of Me, not only on the Check in card.
+    - **More times follow the 24-hour tick:** Driver Requests' sent time, online sign-ups, backups, seasons, pace analysis, transponder transfers and the voice and relay settings.
+
+  The two phone fixes need the relay redeployed.
+
 - **The 24-hour tick on Themes now reaches every time (12 November).** With **Use 24-hour (military) time** ticked, the times in status lines ("Saved at"), the developer log, achievements, driver requests, the Finish Camera stamp, the Wi-Fi pages and your club's online pages are all 24-hour; with it off they are all AM/PM. The phone pages used each phone's own setting before, and they need the relay redeployed for this. See [Looks and the club logo](screens/looks-and-logo.md).
 
 - **Marshals, the countdown and entry money on phones (12 November).**

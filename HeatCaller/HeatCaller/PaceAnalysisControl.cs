@@ -24,7 +24,7 @@ public sealed class PaceAnalysisControl : UserControl
         {
             var when = Session.StartedAtUtc == default
                 ? "undated"
-                : Session.StartedAtUtc.ToLocalTime().ToString("d MMM HH:mm");
+                : Session.StartedAtUtc.ToLocalTime().ToString("d MMM ") + AppTime.TimeOfDay(Session.StartedAtUtc.ToLocalTime());
 
             var what = string.IsNullOrWhiteSpace(Session.Label)
                 ? Session.SessionType.ToString()

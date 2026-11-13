@@ -285,7 +285,7 @@ internal sealed class SignupsForm : Form
                 request.ClassName,
                 request.TransponderText,
                 request.Email.Length == 0 ? "(none)" : request.Email,
-                request.SubmittedUtc.ToLocalTime().ToString("ddd HH:mm", System.Globalization.CultureInfo.CurrentCulture),
+                request.SubmittedUtc.ToLocalTime().ToString("ddd ", System.Globalization.CultureInfo.CurrentCulture) + AppTime.TimeOfDay(request.SubmittedUtc.ToLocalTime()),
                 note);
             _gridWaiting.Rows[index].Tag = request;
 
@@ -935,7 +935,7 @@ internal sealed class ApproveSignupForm : Form
     {
         var lines = new List<string>
         {
-            $"Signed up online {request.SubmittedUtc.ToLocalTime():ddd d MMM HH:mm}. Check the details, then Approve.",
+            $"Signed up online {request.SubmittedUtc.ToLocalTime():ddd d MMM} {AppTime.TimeOfDay(request.SubmittedUtc.ToLocalTime())}. Check the details, then Approve.",
         };
 
         if (request.WantsRental)

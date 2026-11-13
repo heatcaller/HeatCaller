@@ -886,7 +886,7 @@ public partial class MainForm
             // meeting by checking in everybody from the last one.
             if (DateTime.UtcNow - tap.AtUtc > TimeSpan.FromHours(12))
             {
-                OnClientRawMessage($"[relay] Ignored an old check-{(tap.Wanted ? "in" : "out")} for {name} from {tap.AtUtc.ToLocalTime():g}.");
+                OnClientRawMessage($"[relay] Ignored an old check-{(tap.Wanted ? "in" : "out")} for {name} from {AppTime.DateAndTime(tap.AtUtc.ToLocalTime())}.");
                 return true;
             }
 
