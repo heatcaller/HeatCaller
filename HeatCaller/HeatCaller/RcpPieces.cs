@@ -484,7 +484,21 @@ public static class RcpPieces
                 }
             }
 
-            design.Curves.Add(turn);
+            // A turn already round this corner - drawn by hand before the
+            // floor, or one the tile under it couldn't carry - becomes this
+            // tile's own, as a hand rail does above: a second one on top of
+            // it was a turn too many in the stock count and the 3D view, and
+            // taking the tile up left one behind (bug hunt 17).
+            if (design.Curves.FirstOrDefault(c => c.Col == turn.Col && c.Row == turn.Row && c.Quadrant == turn.Quadrant) is { } there)
+            {
+                there.Radius = 1f;
+                there.Double = false;
+                there.Auto = false;
+            }
+            else
+            {
+                design.Curves.Add(turn);
+            }
         }
 
         return (removedWalls, removedCurves);

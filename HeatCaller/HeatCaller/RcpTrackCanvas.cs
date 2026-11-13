@@ -153,6 +153,9 @@ public sealed class RcpTrackCanvas : Control
     /// <summary>Where the eraser last was, in pixels, for the same reason.</summary>
     private Point? _lastErasedAt;
 
+    /// <summary>The cells the erase drag being made has already emptied - see EraseAt.</summary>
+    private readonly HashSet<Point> _erasedThisStroke = new();
+
     // --- The rail run being dragged ------------------------------------------
     // Rail is laid as a run of grid points rather than as separate seams,
     // which is what makes a corner possible to spot: three points that do
@@ -339,6 +342,17 @@ public sealed class RcpTrackCanvas : Control
                     _painting = false;
                 }
 
+                // So does a marquee half drawn: let go under the new tool it
+                // picked what it covered, with nothing drawn to show it, and
+                // Delete or an arrow key then acted on it (bug hunt 17).
+                if (_marqueeFrom is not null)
+                {
+                    _marqueeFrom = null;
+                    _marqueeAt = null;
+                    _marqueeAdds = false;
+                    _painting = false;
+                }
+
                 ClearSelection();
             }
 
@@ -517,6 +531,12 @@ public sealed class RcpTrackCanvas : Control
 
     private void Remember()
     {
+        // A nudge run still waiting for its timer is landed first, whatever
+        // is asking: a snapshot with the nudged pieces stacked on what they
+        // hit is what Undo would bring back, with nothing left to settle it
+        // (bug hunt 17 - Bug Hunt 8's A31-1 for every caller it missed).
+        FlushPendingSettle();
+
         // Inside a drag, only the first change is worth recording. The user
         // made one stroke, so one press of Undo should take the whole
         // stroke back - and cloning the plan on every tile of a long drag
@@ -596,6 +616,7 @@ public sealed class RcpTrackCanvas : Control
     {
         _strokeOpen = true;
         _strokeRemembered = false;
+        _erasedThisStroke.Clear();
     }
 
     private void EndStroke()
@@ -634,6 +655,7 @@ public sealed class RcpTrackCanvas : Control
         _strokeRemembered = false;
         _lastPaintedCell = null;
         _lastErasedAt = null;
+        _erasedThisStroke.Clear();
         _railAt = null;
         _railPrev = null;
         _railDir = null;
@@ -2405,12 +2427,17 @@ public sealed class RcpTrackCanvas : Control
         }
 
         // On a lane's own rail: the lane's tile beside it, whichever side
-        // of the rail the pointer is on.
-        if (EdgeAt(pixel) is { } laneEdge
+        // of the rail the pointer is on. Not from a cell this same drag has
+        // just emptied: the lane puts a rail round the gap at once, under a
+        // pointer that hasn't moved, and the tile across it went too - the
+        // eraser took two rows for one (bug hunt 17).
+        if (!_erasedThisStroke.Contains(ToCell(pixel))
+            && EdgeAt(pixel) is { } laneEdge
             && _design.WallAt(laneEdge.Col, laneEdge.Row, laneEdge.Vertical) is { Auto: true }
             && LaneTileBeside(laneEdge, ToCell(pixel)) is { } laneTile)
         {
             Remember();
+            ErasedInStroke(laneTile);
             _design.Tiles.Remove(laneTile);
             Unpick(_selection.Forget(laneTile));
             RaiseChanged();
@@ -2443,6 +2470,7 @@ public sealed class RcpTrackCanvas : Control
         if (_design.At(cell.X, cell.Y) is { } tile)
         {
             Remember();
+            ErasedInStroke(tile);
 
             var (takenWalls, takenCurves) = RcpPieces.TakeUp(_design, tile);
             var forgot = _selection.Forget(tile);
@@ -2459,6 +2487,15 @@ public sealed class RcpTrackCanvas : Control
 
             Unpick(forgot);
             RaiseChanged();
+        }
+    }
+
+    /// <summary>Notes a cell an erase drag has emptied. A single click (the right button) is no drag, and notes nothing.</summary>
+    private void ErasedInStroke(RcpTile tile)
+    {
+        if (_strokeOpen)
+        {
+            _erasedThisStroke.Add(new Point(tile.Col, tile.Row));
         }
     }
 
@@ -3411,6 +3448,12 @@ public sealed class RcpTrackCanvas : Control
             Cursor = Cursors.SizeAll;
             return;
         }
+
+        // A nudge run still waiting to settle lands before the press does
+        // anything: an erase must see the plan as it will be, and the timer
+        // must not fire part-way through a drag and settle the block over
+        // whatever it is passing (bug hunt 17).
+        FlushPendingSettle();
 
         if (e.Button == MouseButtons.Right)
         {

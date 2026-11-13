@@ -1043,10 +1043,14 @@ public sealed class RcpTrackEditorForm : Form
         {
             var empty = Result.IsEmpty;
 
-            foreach (var item in new[] { savePicture, copyPicture, print, savePlan, clear })
+            foreach (var item in new[] { savePicture, copyPicture, print, savePlan })
             {
                 item.Enabled = !empty;
             }
+
+            // Markings and a racing line are something to clear, as ClearAll
+            // has it - a plan holding only those is "empty" by IsEmpty.
+            clear.Enabled = !empty || Result.Decals.Count > 0 || Result.Route.Count > 0;
 
             foreach (var (item, name, pixels) in pictureSizes)
             {

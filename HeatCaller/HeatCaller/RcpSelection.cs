@@ -764,7 +764,10 @@ public sealed class RcpSelection
         var cells = _tiles.Select(t => (t.Col, t.Row)).ToHashSet();
         var marks = _decals.Select(d => (d.Col, d.Row)).ToHashSet();
         var seams = _walls.Select(w => (w.Col, w.Row, w.Vertical)).ToHashSet();
-        var anchors = _curves.Select(c => (c.Col, c.Row)).ToHashSet();
+        // A turn is one per quarter of a grid point: two outer curve tiles
+        // that meet at a corner each have their turn on the same point, and
+        // one landing there must not take the other's (bug hunt 17).
+        var anchors = _curves.Select(c => (c.Col, c.Row, c.Quadrant)).ToHashSet();
 
         design.Tiles.RemoveAll(t => !_tiles.Contains(t) && cells.Contains((t.Col, t.Row)));
         design.Decals.RemoveAll(d => !_decals.Contains(d) && marks.Contains((d.Col, d.Row)));
@@ -799,7 +802,7 @@ public sealed class RcpSelection
         }
 
         design.Walls.RemoveAll(w => !_walls.Contains(w) && seams.Contains((w.Col, w.Row, w.Vertical)));
-        design.Curves.RemoveAll(c => !_curves.Contains(c) && anchors.Contains((c.Col, c.Row)));
+        design.Curves.RemoveAll(c => !_curves.Contains(c) && anchors.Contains((c.Col, c.Row, c.Quadrant)));
 
         // One Split 1 on a plan, one Split 2, one Split 3 - a track has one
         // of each, and RcpPlan.MeasureSectors measures between them. Paste
