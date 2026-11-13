@@ -76,8 +76,30 @@ internal static class DriverAsk
     /// </summary>
     public const string Coming = "coming";
 
-    /// <summary>The kinds the laptop applies by itself, with no desk in between - the relay's DRIVER_WRITE_KINDS, and photos.</summary>
-    public static bool IsWrite(string? kind) => kind is Pack or PackEdit or Car or Setup or Photo or Coming;
+    /// <summary>
+    /// "I'm at my post" from a marshal's phone (12 Nov 2026, setup plan step
+    /// 8): field "round" (the round's id). Applied by itself - Race Control
+    /// records them in place for that round; see DriverRequestDesk.ApplyPost.
+    /// </summary>
+    public const string Post = "post";
+
+    /// <summary>
+    /// "Ask someone to cover my post" (12 Nov 2026, setup plan step 8): fields
+    /// "round" and "to" (the asked driver's <see cref="MarshalSwaps.KeyOf"/>).
+    /// Filed by itself: it only asks - nothing changes until they say yes.
+    /// </summary>
+    public const string Swap = "swap";
+
+    /// <summary>
+    /// The asked driver's yes or no to a <see cref="Swap"/> (12 Nov 2026):
+    /// fields "offer" (the swap's relay id) and "answer" ("yes" or "no"). A no
+    /// is filed by itself; a yes waits for the desk while the club's "Marshal
+    /// swaps from phones need the desk's OK" is on - see DriverRequestDesk.NeedsDesk.
+    /// </summary>
+    public const string Cover = "cover";
+
+    /// <summary>The kinds the laptop applies by itself, with no desk in between - the relay's DRIVER_WRITE_KINDS, and photos. A "yes" cover may still wait for the desk.</summary>
+    public static bool IsWrite(string? kind) => kind is Pack or PackEdit or Car or Setup or Photo or Coming or Post or Swap or Cover;
 
     // --- States -----------------------------------------------------------
 
@@ -142,7 +164,7 @@ internal static class DriverAsk
     }
 
     /// <summary>True for one of the four kinds, exactly as the relay spells them.</summary>
-    public static bool IsKind(string? kind) => kind is Details or Pack or Query or Setup or PackEdit or Car or Photo or Late or Skip or Coming;
+    public static bool IsKind(string? kind) => kind is Details or Pack or Query or Setup or PackEdit or Car or Photo or Late or Skip or Coming or Post or Swap or Cover;
 
     /// <summary>True for one of the four states, exactly as the phone reads them.</summary>
     public static bool IsState(string? state) => state is Waiting or Approved or Noted or Declined;

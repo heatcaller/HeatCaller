@@ -217,6 +217,10 @@ public partial class MainForm
         raceControl.StatusMessage += OnClientRawMessage;
         raceControl.AttachUnknownTransponders(_unknownTransponders);
 
+        // The next race's countdown on the relay's Live and Schedule pages
+        // (12 Nov 2026, setup plan step 8) - safe off the UI thread.
+        _webServer.NextRaceCountdown = () => raceControl.CountdownForPhones;
+
         // The TIMING line on the Next Up bar, worked out every race tick in
         // UpdateTimingWatch whichever page is showing.
         raceControl.TimingProblem = () => _timingProblemText;

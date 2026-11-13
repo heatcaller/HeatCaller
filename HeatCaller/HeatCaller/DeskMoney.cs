@@ -95,6 +95,33 @@ public static class DeskMoney
         return new Totals(cash, card, comps, owing);
     }
 
+    /// <summary>A driver's own entry money for their phone: the fee in words, whether it's settled, and the line the phone shows.</summary>
+    public sealed record PhoneMoney(string Fee, bool Paid, string Words);
+
+    /// <summary>
+    /// What a driver's own check-in card and Me page say about tonight's
+    /// entry (12 Nov 2026, setup plan step 8): "Paid ✓" once the desk has
+    /// them as paid by cash or card or comped, else "Entry: $15.00 - pay at
+    /// the desk". Null on a night with no fee - nothing is said. Never how
+    /// they paid or how much anyone else owes: it goes only in their own
+    /// private live entry, behind their badge code.
+    /// </summary>
+    public static PhoneMoney? ForPhone(decimal fee, EntryPayment? payment)
+    {
+        if (fee <= 0)
+        {
+            return null;
+        }
+
+        var paid = (payment?.How ?? PaidHow.Owing) != PaidHow.Owing;
+
+        var money = Money(fee);
+
+        return paid
+            ? new PhoneMoney(money, true, "Paid ✓")
+            : new PhoneMoney(money, false, $"Entry: {money} - pay at the desk");
+    }
+
     /// <summary>Money as the club writes it, in this PC's currency format: "$15.00".</summary>
     public static string Money(decimal amount) => amount.ToString("C", CultureInfo.CurrentCulture);
 

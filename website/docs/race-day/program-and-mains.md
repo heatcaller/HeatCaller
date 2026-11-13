@@ -580,6 +580,10 @@ To stop Auto start going green with empty posts, right-click the **Auto start** 
 - **Someone's missing...** logs a marshal who didn't turn up, for your club's marshal rule. The event report lists them under **Marshal no-shows**. Get someone onto the post, then press **Marshals in place**.
 - **Start now** on the Hold button's menu starts without waiting.
 
+**From the marshals' own phones.** While a driver's marshal duty is the next race to start, their night page offers **I'm at my post (Turn 3)**. A tap tells Race Control they're in, and the banner says who's in and who isn't: "Marshals for Q2 Heat 3 - 2 of 3 in: Hugh Turn, Rhoda Rage; waiting for Axel Grease (Turn 3)." When every marshal of the race has tapped it, the race no longer waits for them, as if you'd pressed **Marshals in place**. At zero the announcer calls only the posts still empty. **Marshals in place** still confirms them all, whatever the phones say. This needs the driver's own night and [Driver requests](../online/driver-requests.md) turned on.
+
+**Swaps from phones.** On their marshal duty a driver can tap **Ask someone to cover...** and pick a driver who's checked in tonight and isn't racing or marshalling that race. The asked driver's phone says "Max P. asks you to cover Turn 3 in Q2 Heat 3 (Stock)" with **Accept** and **Decline**. A yes is the same swap **Swap...** makes. While **Marshal swaps from phones need the desk's OK** is ticked in the **Driver Requests** window (it is to start with), the yes waits there as a **Marshal swap** for you to **Approve...**. Untick it and the swap is made by itself. A no never waits.
+
 A race with nobody on a post (a layout with no **Corner marshal posts:**) never waits.
 
 The same marshal list is what the announcer reads out for the `{marshals}` placeholder in grid calls. See [Voice announcements](../announcer/voice.md). The Next Up bar on **Race Control** also names the round that marshals the next one.

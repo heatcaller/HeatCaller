@@ -119,7 +119,11 @@ public partial class MainForm
         var eventName = current.Id == RaceEventStore.LegacyEventId ? string.Empty : current.Name;
 
         SendToRelayIfChanged(RelayChannel.CheckIn, "the check-in list", () => RelayDocuments.CheckIn(
-            roster, _profiles, _settings, eventName, _relayCheckInPhotos));
+            roster, _profiles, _settings, eventName, _relayCheckInPhotos,
+
+            // Each driver's own entry, paid or owing (setup plan step 8) -
+            // handed by the relay only to that driver's badge or PIN.
+            DriverLiveMoneyOf));
     }
 
     /// <summary>
@@ -1021,6 +1025,7 @@ public partial class MainForm
         var changed = state != _lastRelayRaceState;
 
         _lastRelayRaceState = state;
+        changed |= CountdownChanged(ref _lastRelayCountdown);
 
         if (!live && !changed)
         {

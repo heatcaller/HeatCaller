@@ -321,9 +321,23 @@ public sealed partial class RaceControlControl
         // waits for them, and only for a race with somebody on a post.
         var waitForMarshals = _settings.AutoStartWaitForMarshals && facts.Marshals.Count > 0;
 
+        // Marshals in place from their own phones (12 Nov 2026, setup plan
+        // step 8): all of them in opens the gate by itself, and the banner
+        // says who's in and who isn't. Worked out only when the club waits.
+        IReadOnlyList<bool>? arrived = null;
+        IReadOnlyList<(string Name, string Post)> shown = facts.Marshals;
+
+        if (waitForMarshals)
+        {
+            var posts = MarshalPostsFor(next);
+            arrived = MarshalsFromPhones(next, posts);
+            shown = posts.Select(p => (p.Name, p.Post)).ToList();
+        }
+
         _autoStartState = _autoStart.Step(now, floorBusy, NotSeenIn(next, now), Gap.PushedBackMinutes, waitForMarshals);
 
-        ShowMarshalsAsk(next, facts.Marshals, waitForMarshals, now);
+        ShowMarshalsAsk(next, shown, waitForMarshals, now, arrived);
+        UpdatePhoneCountdown(now);
 
         switch (_autoStartState)
         {
@@ -363,6 +377,7 @@ public sealed partial class RaceControlControl
         }
 
         _autoStartState = AutoStartState.Off;
+        _phoneCountdown = null;
         _carsCalledFor = null;
         ShowCarsBanner(false);
         HideMarshalsAsk();

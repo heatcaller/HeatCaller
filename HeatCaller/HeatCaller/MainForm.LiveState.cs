@@ -43,6 +43,31 @@ public partial class MainForm
     /// <summary>PublishStateToRelay's _lastRelayRaceState, threaded: the worker's alone.</summary>
     private RaceState _lastRelayRaceStateOffUi;
 
+    /// <summary>The phones' countdown last sent with the live state, threaded: the worker's alone (setup plan step 8).</summary>
+    private string _lastRelayCountdownOffUi = string.Empty;
+
+    /// <summary>The phones' countdown last sent with the live state, inline: the UI thread's (setup plan step 8).</summary>
+    private string _lastRelayCountdown = string.Empty;
+
+    /// <summary>
+    /// Whether the next race's countdown has changed since it was last sent
+    /// (12 Nov 2026, setup plan step 8). The live state goes to the relay only
+    /// while a race is on or as one stops, so without this the phones would
+    /// never hear that a gap opened, was held or resumed. Safe on any thread.
+    /// </summary>
+    private bool CountdownChanged(ref string last)
+    {
+        var key = PhoneCountdown.KeyOf(_raceControlControl?.CountdownForPhones);
+
+        if (key == last)
+        {
+            return false;
+        }
+
+        last = key;
+        return true;
+    }
+
     /// <summary>The relay settings PublishStateToRelay reads, as last read on the UI thread.</summary>
     private volatile bool _frozenRelayEnabled;
 
@@ -213,6 +238,7 @@ public partial class MainForm
         var changed = state != _lastRelayRaceStateOffUi;
 
         _lastRelayRaceStateOffUi = state;
+        changed |= CountdownChanged(ref _lastRelayCountdownOffUi);
 
         if (!live && !changed)
         {

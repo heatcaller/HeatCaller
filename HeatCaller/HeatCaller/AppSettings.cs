@@ -682,6 +682,17 @@ public sealed class AppSettings
     public bool AutoStartWaitForMarshals { get; set; }
 
     /// <summary>
+    /// Marshal swaps from phones need the desk's OK (12 Nov 2026, setup plan
+    /// step 8). A driver with marshal duty can ask another driver, from their
+    /// Me page, to cover their post; once the asked driver says yes, the swap
+    /// waits in Driver Requests for the desk to approve while this is on (the
+    /// default - a swap moves who stands on a corner, and the desk should
+    /// know), or is made by itself when it's off. A no never waits for anyone.
+    /// The tick is on the Driver Requests window.
+    /// </summary>
+    public bool MarshalSwapsNeedDesk { get; set; } = true;
+
+    /// <summary>
     /// Close the night with a checklist to tick off (11 Nov 2026 - see
     /// CloseNightChecklist). On: when every race has run, Next Steps offers
     /// "Close the night...", a window listing what is left with a button to

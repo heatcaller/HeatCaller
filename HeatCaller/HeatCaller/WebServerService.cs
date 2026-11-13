@@ -3239,6 +3239,13 @@ public sealed partial class WebServerService
     /// driver is "Unnamed driver" rather than their id, and the Transponder
     /// column is dropped whatever columns the club picked for the LAN page.
     /// </param>
+    /// <summary>
+    /// The next race's countdown for the phones (RaceControlControl.CountdownForPhones),
+    /// read from whichever thread builds the state. Null leaves it out.
+    /// 12 Nov 2026, setup plan step 8.
+    /// </summary>
+    public Func<PhoneCountdown?>? NextRaceCountdown { get; set; }
+
     public string BuildStateJson(bool abbreviateNames = false, bool forRelay = false)
     {
         lock (_stateGate)
@@ -3438,6 +3445,21 @@ public sealed partial class WebServerService
             if (_race.LapLimit is null && _race.TimeLimit is { } timeLimit && timeLimit > TimeSpan.Zero)
             {
                 relayNode["raceSecs"] = (int)Math.Round(timeLimit.TotalSeconds);
+            }
+
+            // The next race's countdown between races (12 Nov 2026, setup
+            // plan step 8): the Big Screen band's "NEXT RACE IN 1:42", for
+            // the relay's Live and Schedule pages to count down themselves -
+            // the start time, never the time left, so a phone keeps counting
+            // between publishes. Only while nothing is on track.
+            if ((view?.State ?? _race.State) is RaceState.Idle or RaceState.Finished
+                && NextRaceCountdown?.Invoke() is { } next)
+            {
+                relayNode["nextStart"] = new System.Text.Json.Nodes.JsonObject
+                {
+                    ["state"] = next.State,
+                    ["at"] = next.AtUtc?.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture),
+                };
             }
 
             // The live track map on the relay's Live tab (4 Nov 2026, Asher:

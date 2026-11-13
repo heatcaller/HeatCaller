@@ -84,8 +84,15 @@ export const ASK_OBJECT_ID = /^[0-9a-f]{32}$/;
  * the desk would only be clicking yes to every one. The laptop files it
  * on its entry list and says so in its answer ("You're down for Tue 18
  * Nov"); a second one for the same day replaces the first.
+ *
+ * "post", "swap" and "cover" joined them the same day (setup plan step 8):
+ * a marshal's "I'm at my post", "ask someone to cover my post" and the
+ * asked driver's yes or no. The laptop files them as they come - Race
+ * Control takes the first, the second only asks - and a yes to covering
+ * waits there for the desk while the club wants to OK swaps, so the relay
+ * has nothing to tell apart: all three are writes, with the writes' room.
  */
-export const DRIVER_WRITE_KINDS: readonly DriverAskKind[] = ["pack", "packedit", "car", "setup", "coming"];
+export const DRIVER_WRITE_KINDS: readonly DriverAskKind[] = ["pack", "packedit", "car", "setup", "coming", "post", "swap", "cover"];
 
 /** Whether a kind is one the laptop applies by itself. */
 export function isWriteKind(kind: string): boolean {
@@ -145,15 +152,21 @@ const EMAIL = /^[^\s@<>()",;:\\[\]]+@[^\s@<>()",;:\\[\]]+\.[^\s@<>()",;:\\[\]]+$
 // more minutes" and "my car's broken - skip me", both for the desk to approve.
 // "coming" (12 Nov 2026, setup plan C1): "I'm coming to the next race night,
 // in these classes" - applied by the laptop by itself (DRIVER_WRITE_KINDS).
-export type DriverAskKind = "details" | "pack" | "query" | "setup" | "packedit" | "car" | "late" | "skip" | "coming";
+export type DriverAskKind = "details" | "pack" | "query" | "setup" | "packedit" | "car" | "late" | "skip" | "coming" | "post" | "swap" | "cover";
 
-export const DRIVER_ASK_KINDS: readonly DriverAskKind[] = ["details", "pack", "query", "setup", "packedit", "car", "late", "skip", "coming"];
+export const DRIVER_ASK_KINDS: readonly DriverAskKind[] = ["details", "pack", "query", "setup", "packedit", "car", "late", "skip", "coming", "post", "swap", "cover"];
 
 /** The longest note a "late" or "skip" can carry. */
 export const ASK_MAX_RACE_NOTE = 120;
 
 /** A "coming" ask's night: the next night snapshot's own day, yyyy-mm-dd. */
 export const ASK_NIGHT_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A "swap" ask's driver asked: the laptop's cover key (MarshalSwaps.KeyOf), twelve hex. */
+export const ASK_COVER_KEY = /^[0-9a-f]{12}$/;
+
+/** A "cover" ask's offer: the relay's id for the swap ask it answers (randomBytes(12)). */
+export const ASK_OFFER_ID = /^[0-9a-f]{24}$/;
 
 /** A "coming" ask's classes, comma-separated on one line. */
 export const ASK_MAX_COMING_CLASSES = 200;
@@ -303,6 +316,42 @@ export function askFieldsFrom(kind: string, f: unknown, withPin: boolean): AskCh
     const classes = raw.split(",").map((one) => one.trim()).filter((one) => one !== "").join(",");
 
     return { ok: true, f: { day, classes } };
+  }
+
+  // Marshals from their phones (12 Nov 2026, setup plan step 8). The round
+  // is a round id as the driver's live entry named it; the driver asked is
+  // a cover key from the same entry (a hash, never a badge code); the offer
+  // is the relay's own id for the swap ask, as the asked driver's entry
+  // named it. Whether any of it is true is the laptop's to check.
+  if (kind === "post" || kind === "swap") {
+    const round = typeof input["round"] === "string" ? input["round"].trim().toLowerCase() : "";
+
+    if (!ASK_OBJECT_ID.test(round)) {
+      return refuse(400, "Which race is it?");
+    }
+
+    if (kind === "post") {
+      return { ok: true, f: { round } };
+    }
+
+    const to = typeof input["to"] === "string" ? input["to"].trim().toLowerCase() : "";
+
+    if (!ASK_COVER_KEY.test(to)) {
+      return refuse(400, "Pick who you are asking.");
+    }
+
+    return { ok: true, f: { round, to } };
+  }
+
+  if (kind === "cover") {
+    const offer = typeof input["offer"] === "string" ? input["offer"].trim().toLowerCase() : "";
+    const answer = input["answer"];
+
+    if (!ASK_OFFER_ID.test(offer) || (answer !== "yes" && answer !== "no")) {
+      return refuse(400, "That request could not be read.");
+    }
+
+    return { ok: true, f: { offer, answer } };
   }
 
   if (kind === "setup" && (input["car"] !== undefined || input["sheet"] !== undefined)) {

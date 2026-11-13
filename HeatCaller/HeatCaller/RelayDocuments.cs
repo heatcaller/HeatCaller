@@ -910,7 +910,8 @@ internal static class RelayDocuments
         ProfileStore profiles,
         AppSettings settings,
         string eventName,
-        Dictionary<string, string?> photoCache)
+        Dictionary<string, string?> photoCache,
+        Func<string, DeskMoney.PhoneMoney?>? moneyOf = null)
     {
         if (!settings.RelayCheckInEnabled)
         {
@@ -990,6 +991,7 @@ internal static class RelayDocuments
                         // club's own photo setting says.
                         Photo = withPhotos && !privacy.NoPhoto(d.Transponder) ? PhotoFor(profile, photoCache) : null,
                         RacerPin = RacerPinFor(settings, club, salt, d.Transponder),
+                        Entry = moneyOf?.Invoke(d.Transponder) is { } money ? new CheckInEntryMoney(money.Words, money.Paid) : null,
                     };
                 }).ToList(),
             });
@@ -1032,7 +1034,21 @@ internal static class RelayDocuments
         [JsonPropertyName("rp")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? RacerPin { get; init; }
+
+        /// <summary>
+        /// Tonight's entry, paid or owing (12 Nov 2026, setup plan step 8):
+        /// {words, paid}. Left out with no fee. The relay hands it only to
+        /// this driver's own badge or PIN, never on the staff list.
+        /// </summary>
+        [JsonPropertyName("entry")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public CheckInEntryMoney? Entry { get; init; }
     }
+
+    /// <summary>A driver's own entry on their check-in card: the line to show, and whether it's settled.</summary>
+    private sealed record CheckInEntryMoney(
+        [property: JsonPropertyName("words")] string Words,
+        [property: JsonPropertyName("paid")] bool Paid);
 
     /// <summary>The hash a driver's personal PIN is published as, or null when personal PINs are off or they have none yet.</summary>
     private static string? RacerPinFor(AppSettings settings, string club, string salt, string transponder)

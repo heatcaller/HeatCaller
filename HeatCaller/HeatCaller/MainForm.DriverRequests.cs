@@ -89,6 +89,9 @@ public partial class MainForm
                     : raceControl.SkipDriverInNextRace(transponder, name),
         };
 
+        // Marshals from their phones (12 Nov 2026, setup plan step 8).
+        WireMarshalsFromPhones(_driverRequestDesk);
+
         _driverRequestDesk.GarageChangedByPhone += () =>
         {
             SetupLogChangedByPhone();

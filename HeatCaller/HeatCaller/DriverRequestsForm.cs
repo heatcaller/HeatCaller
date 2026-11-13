@@ -31,6 +31,7 @@ internal sealed class DriverRequestsForm : Form
 
     private readonly Label _lblState = new();
     private readonly CheckBox _chkQueriesOnly = new ThemedCheckBox();
+    private readonly CheckBox _chkSwapsNeedDesk = new ThemedCheckBox();
     private readonly DataGridView _gridWaiting = new();
     private readonly DataGridView _gridAnswered = new();
     private readonly Button _btnApprove = new() { Text = "Approve..." };
@@ -64,6 +65,13 @@ internal sealed class DriverRequestsForm : Form
         _chkQueriesOnly.Text = "Result queries only";
         _chkQueriesOnly.AutoSize = true;
         _chkQueriesOnly.CheckedChanged += (_, _) => RefreshAll(force: true);
+
+        // 12 Nov 2026, setup plan step 8: a club setting, kept beside the
+        // requests it decides about.
+        _chkSwapsNeedDesk.Text = "Marshal swaps from phones need the desk's OK";
+        _chkSwapsNeedDesk.AutoSize = true;
+        _chkSwapsNeedDesk.Checked = desk.SwapsNeedDesk;
+        _chkSwapsNeedDesk.CheckedChanged += (_, _) => _desk.SwapsNeedDesk = _chkSwapsNeedDesk.Checked;
 
         var lblWaiting = new Label { Text = "Waiting for you", AutoSize = true, Font = AppTheme.BoldFont };
         var lblAnswered = new Label { Text = "Answered (kept 30 days)", AutoSize = true, Font = AppTheme.BoldFont };
@@ -107,7 +115,8 @@ internal sealed class DriverRequestsForm : Form
 
         var page = new FillPage();
         page.Add(_lblState, gapBelow: UiLayout.RowGap);
-        page.Add(_chkQueriesOnly, stretch: false, gapBelow: UiLayout.RowGap);
+        page.Add(_chkQueriesOnly, stretch: false, gapBelow: UiLayout.HintGap);
+        page.Add(_chkSwapsNeedDesk, stretch: false, gapBelow: UiLayout.RowGap);
         page.Add(lblWaiting, stretch: false, gapBelow: UiLayout.HintGap);
         page.AddFill(_gridWaiting, _ => LeastListHeight(_gridWaiting), gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar().With(_btnApprove, _btnNoted, _btnDecline, _btnDiscard));
@@ -245,7 +254,7 @@ internal sealed class DriverRequestsForm : Form
         var request = SelectedWaiting();
         var known = request is not null && _desk.DriverOf(request) is not null;
 
-        _btnApprove.Enabled = known && request!.Kind is DriverAsk.Details or DriverAsk.Pack or DriverAsk.Late or DriverAsk.Skip;
+        _btnApprove.Enabled = known && request!.Kind is DriverAsk.Details or DriverAsk.Pack or DriverAsk.Late or DriverAsk.Skip or DriverAsk.Cover;
         _btnNoted.Enabled = request is { Kind: DriverAsk.Query };
         _btnDecline.Enabled = request is not null;
         _btnDiscard.Enabled = request is not null && !known;
@@ -340,6 +349,27 @@ internal sealed class DriverRequestsForm : Form
                 if (!_desk.ApproveRaceAsk(current, out refusal))
                 {
                     AppDialog.Show(this, refusal, "Not changed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+
+                break;
+
+            // A marshal swap two drivers agreed on their phones (12 Nov 2026,
+            // setup plan step 8): approved, the program makes it.
+            case DriverAsk.Cover:
+                if (_desk.DriverOf(current) is null)
+                {
+                    return;
+                }
+
+                if (AppDialog.Show(this, $"{_desk.NameFor(current)}: {_desk.Summary(current)}. Make the swap?",
+                        "Marshal swap", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                {
+                    return;
+                }
+
+                if (!_desk.ApproveCover(current, out refusal))
+                {
+                    AppDialog.Show(this, refusal, "Not swapped", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
 
                 break;
