@@ -194,7 +194,9 @@ public sealed class RaceHistoryControl : UserControl
         );
 
         // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
-        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_detailGrid));
+        // Room for "DNS" in Pos too (12 Nov 2026): a narrow window squeezed
+        // the column to "D...", which reads as nothing at all.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_detailGrid, ("pos", DnsMark)));
 
         _detailGrid.CellFormatting += FormatHandCountedLaps;
 
