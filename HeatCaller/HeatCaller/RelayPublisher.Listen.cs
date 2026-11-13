@@ -462,6 +462,15 @@ public sealed partial class RelayPublisher
                 return false;
             }
 
+            // Told the club it was sent to, which may not be this one any
+            // more - see TellTheRelayNotesAreOpen. A Save while this was in
+            // flight cleared the flag for the new club; marking it told here
+            // would let a close owed to the new club pass as already sent.
+            if (target != _target)
+            {
+                return true;
+            }
+
             _listenOpenAsTold = wanted;
             _listenOpenTold = true;
             _nextListenOpenTick = 0;

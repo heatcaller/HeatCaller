@@ -106,6 +106,9 @@ public sealed partial class RelayPublisher : IDisposable
     /// <summary>Kept under the relay's own default body limit so a payload is refused here, with a readable message, rather than there.</summary>
     private const int MaxPayloadBytes = 900 * 1024;
 
+    /// <summary>The most of any one answer that is read. Has to hold the relay's fullest driver/inbox - see where the client is made.</summary>
+    internal const int MaxAnswerBytes = 4 * 1024 * 1024;
+
     private static readonly TimeSpan[] Backoff =
     {
         TimeSpan.FromSeconds(1),
@@ -198,10 +201,15 @@ public sealed partial class RelayPublisher : IDisposable
         // sent on to wherever "there" is. A relay that moves gets its new
         // address typed in, deliberately.
         //
-        // A megabyte for any answer. Everything the relay says back is a
-        // line or two of JSON, and the inbox is capped on its side; a
-        // misconfigured address that answers with a video stream must not
-        // be read into memory whole.
+        // Four megabytes for any answer. Nearly everything the relay says
+        // back is a line or two of JSON; a misconfigured address that
+        // answers with a video stream must not be read into memory whole.
+        //
+        // Four, not one, because of the drivers' requests: the relay holds
+        // up to 200 of them at up to 12 KB each (a setup sheet) and gives
+        // them all in one answer - 2.4 MB at the very most. Over the limit
+        // that answer could never be read, so nothing was ever confirmed
+        // and the inbox never emptied.
         _http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
         {
             // A backstop only. The real limit is per request and is worked
@@ -210,7 +218,7 @@ public sealed partial class RelayPublisher : IDisposable
             // them short, because HttpClient.Timeout is a hard ceiling that
             // a per-request token cannot extend.
             Timeout = TimeSpan.FromSeconds(60),
-            MaxResponseContentBufferSize = 1024 * 1024,
+            MaxResponseContentBufferSize = MaxAnswerBytes,
         };
 
         _worker = new Thread(Run)
@@ -4283,7 +4291,8 @@ public sealed partial class RelayPublisher : IDisposable
         || segment.Equals("standings", StringComparison.OrdinalIgnoreCase)
         || segment.Equals("badges", StringComparison.OrdinalIgnoreCase)
         || segment.Equals("tracks", StringComparison.OrdinalIgnoreCase)
-        || segment.Equals("checkin", StringComparison.OrdinalIgnoreCase);
+        || segment.Equals("checkin", StringComparison.OrdinalIgnoreCase)
+        || segment.Equals("mynight", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Makes a session id safe to be a file name on the relay.
