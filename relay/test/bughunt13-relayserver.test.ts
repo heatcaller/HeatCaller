@@ -27,11 +27,12 @@ function sub(endpoint: string): PushSub {
 }
 
 /** A photo body sent a little at a time - chunked, no Content-Length - and never finished until told. */
-function trickle(base: string): { req: ClientRequest; status: Promise<number> } {
+function trickle(base: string, address?: string): { req: ClientRequest; status: Promise<number> } {
   const url = new URL(`${base}${API}/driver/photo`);
   let req!: ClientRequest;
+  const from: Record<string, string> = address === undefined ? {} : { "fly-client-ip": address };
   const status = new Promise<number>((resolve) => {
-    req = httpRequest({ host: url.hostname, port: url.port, path: url.pathname, method: "POST", headers: { "content-type": "application/json" } }, (res) => {
+    req = httpRequest({ host: url.hostname, port: url.port, path: url.pathname, method: "POST", headers: { "content-type": "application/json", ...from } }, (res) => {
       res.resume();
       resolve(res.statusCode ?? 0);
     });
@@ -65,20 +66,28 @@ describe("bug hunt 13: a car photo does not lift the 30-second ceiling for just 
   it("reads only a few at once across the relay, and frees the place when one stops", async () => {
     await openEverything(h);
 
-    const held = Array.from({ length: 6 }, () => trickle(h.base));
-    await wait(200);
-    assert.equal((h.relay as unknown as { photoUploadsInFlight: number }).photoUploadsInFlight, 6);
+    // Six different addresses (Bug Hunt 17): one address is now held to
+    // two of the six places - see bughunt17-server.test.ts.
+    process.env["FLY_APP_NAME"] = "test";
 
-    const busy = await call(h, "POST", `${API}/driver/photo`, { json: { id: BILL, car: CAR, data: JPEG } });
-    assert.equal(busy.status, 429);
+    try {
+      const held = Array.from({ length: 6 }, (_, i) => trickle(h.base, `10.13.0.${i + 1}`));
+      await wait(200);
+      assert.equal((h.relay as unknown as { photoUploadsInFlight: number }).photoUploadsInFlight, 6);
 
-    for (const one of held) {
-      one.req.destroy();
+      const busy = await call(h, "POST", `${API}/driver/photo`, { json: { id: BILL, car: CAR, data: JPEG } });
+      assert.equal(busy.status, 429);
+
+      for (const one of held) {
+        one.req.destroy();
+      }
+
+      await wait(200);
+      assert.equal((h.relay as unknown as { photoUploadsInFlight: number }).photoUploadsInFlight, 0);
+      assert.equal((await call(h, "POST", `${API}/driver/photo`, { json: { id: BILL, car: CAR, data: JPEG } })).status, 200);
+    } finally {
+      delete process.env["FLY_APP_NAME"];
     }
-
-    await wait(200);
-    assert.equal((h.relay as unknown as { photoUploadsInFlight: number }).photoUploadsInFlight, 0);
-    assert.equal((await call(h, "POST", `${API}/driver/photo`, { json: { id: BILL, car: CAR, data: JPEG } })).status, 200);
   });
 });
 

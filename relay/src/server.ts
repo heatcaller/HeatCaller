@@ -302,6 +302,23 @@ const NIGHTS_CHANNEL = "nights";
  */
 const PHOTO_UPLOADS_IN_FLIGHT_MAX = 6;
 
+/**
+ * And from one address, with how long one may take from first byte to
+ * last.
+ *
+ * WHY (13 Nov 2026, Bug Hunt 17): the places above are taken before the
+ * badge code can be read - it is inside the body - and an upload had only
+ * an idle timeout, which a byte every twenty seconds resets. So six slow
+ * uploads from one address, no badge code in any of them, held every
+ * place for five minutes at a time, and every driver at every club was
+ * told "Busy with other photos". Two at once is plenty for one phone, and
+ * a paddock behind one address that sends a third in the same second is
+ * asked to try again; ninety seconds is half a megabyte over a very poor
+ * connection.
+ */
+const PHOTO_UPLOADS_PER_ADDRESS = 2;
+const PHOTO_UPLOAD_MAX_MS = 90_000;
+
 /** The collection the announcer's lines arrive in - see CHANNELS.listen. */
 const LISTEN_CHANNEL = "listen";
 
@@ -1198,6 +1215,8 @@ export class Relay {
   private clipUploadsInFlight = 0;
   /** Car photos being read right now, across every club - see driverPhoto. */
   private photoUploadsInFlight = 0;
+  /** The same, counted by address - see PHOTO_UPLOADS_PER_ADDRESS. Only addresses with one in flight are held. */
+  private readonly photoUploadsFrom = new Map<string, number>();
   /**
    * How many times each club's clips have been wiped - by closing nights or
    * deleting everything. An upload that started before and finishes after
@@ -3223,23 +3242,31 @@ export class Relay {
     const channel = spec.name;
     const maxItems = spec.maxItems ?? Number.POSITIVE_INFINITY;
 
+    // WHY (13 Nov 2026, Bug Hunt 17): a channel with a budget of its own
+    // needs only its own documents' sizes, and returns before any of the
+    // rest is looked at - yet every listen segment, every three seconds,
+    // walked the club's whole folder first (usage), inside the lock the
+    // live board's next frame was waiting on. Those reads are asked for
+    // only by a channel that is counted against the club's quota.
+    const own = spec.ownBudget !== undefined;
+
     const [items, used, tunnel, signups, votes, notes, inbox, asks, photos, pushSubs] = await Promise.all([
       this.store.itemSizes(club, channel),
-      this.store.usage(club),
-      this.store.snapshotBytes(club, MANAGE_QUEUE),
-      this.store.snapshotBytes(club, SIGNUP_BOX),
-      this.store.itemSizes(club, VOTE_CHANNEL),
-      this.store.itemSizes(club, NOTES_CHANNEL),
-      this.store.snapshotBytes(club, INBOX),
+      own ? 0 : this.store.usage(club),
+      own ? 0 : this.store.snapshotBytes(club, MANAGE_QUEUE),
+      own ? 0 : this.store.snapshotBytes(club, SIGNUP_BOX),
+      own ? [] : this.store.itemSizes(club, VOTE_CHANNEL),
+      own ? [] : this.store.itemSizes(club, NOTES_CHANNEL),
+      own ? 0 : this.store.snapshotBytes(club, INBOX),
       // Drivers' asks are written by phones too (22 Oct 2026, driver
       // experience), with a ceiling of their own (DRIVER_ASKS_PER_CLUB).
-      this.store.itemSizes(club, DRIVER_ASKS_CHANNEL),
+      own ? [] : this.store.itemSizes(club, DRIVER_ASKS_CHANNEL),
       // And their car photos on the way to the laptop (5 Nov 2026), with
       // a ceiling of their own (DRIVER_PHOTOS_PER_CLUB).
-      this.store.itemSizes(club, DRIVER_PHOTOS_CHANNEL),
+      own ? [] : this.store.itemSizes(club, DRIVER_PHOTOS_CHANNEL),
       // And phones signed up for alerts (7 Nov 2026, Bug Hunt 13): written
       // by phones, with a ceiling of their own (PUSH_SUBS_PER_CLUB).
-      this.store.itemSizes(club, PUSH_CHANNEL),
+      own ? [] : this.store.itemSizes(club, PUSH_CHANNEL),
     ]);
     const replaced = items.find((item) => item.id === id);
     const others = items.filter((item) => item.id !== id).sort((a, b) => a.at - b.at);
@@ -4022,6 +4049,17 @@ export class Relay {
    * listing. A result is read each time, as before; it is a few
    * kilobytes and a page asks for results by ?ids=. Either way, a read
    * that has to go to the disk counts against the address's allowance.
+   *
+   * WHY LISTEN IS HELD TOO (13 Nov 2026, Bug Hunt 17): every phone
+   * listening along reads each three-second stretch of the stream as one
+   * document - twenty a minute each - and every one of those went to the
+   * disk and came off the allowance the whole venue's address shares.
+   * Thirty listeners on the club's Wi-Fi used all 600 by themselves, and
+   * then the results pages beside them were told "Too many requests" as
+   * well. Held, a stretch is read from the disk once for however many
+   * are listening, and only that one read is counted. The next stretch
+   * published drops what is held (forgetListing), so it is never more
+   * than the newest few.
    */
   private async readItem(
     request: IncomingMessage,
@@ -4040,7 +4078,8 @@ export class Relay {
     }
 
     const key = this.itemKey(club, spec.name, id);
-    const held = spec.name === PREVIEW_CHANNEL ? this.listings.get(key) : undefined;
+    const kept = spec.name === PREVIEW_CHANNEL || spec.name === LISTEN_CHANNEL;
+    const held = kept ? this.listings.get(key) : undefined;
 
     if (held !== undefined) {
       sendPublicBytes(response, 200, held);
@@ -4056,7 +4095,7 @@ export class Relay {
 
     this.collectionReads.hit(who);
 
-    if (spec.name !== PREVIEW_CHANNEL) {
+    if (!kept) {
       const doc = await this.store.getItem(club, channel, id);
 
       if (doc === undefined) {
@@ -4068,11 +4107,13 @@ export class Relay {
       return;
     }
 
+    // A stretch of audio is one small read that somebody is waiting to
+    // hear, so it does not queue behind a big listing being built.
     const bytes = await this.buildOnce(key, this.listingKey(club, spec.name, false), async () => {
       const doc = await this.store.getItem(club, spec.name, id);
 
       return doc === undefined ? undefined : Buffer.from(JSON.stringify(doc), "utf8");
-    });
+    }, spec.name !== LISTEN_CHANNEL);
 
     if (bytes === undefined) {
       sendJson(response, 404, { ok: false, error: "No such document." });
@@ -4941,19 +4982,38 @@ export class Relay {
       // The sign-ups themselves - names, transponder numbers, emails - are
       // in the club's folder, so the wipe takes them; nothing of them is
       // held in memory to forget.
-      await this.pinGuard.forget(club, () =>
-        this.managePinGuard.forget(club, () =>
-          this.signupPinGuard.forget(club, () => this.forgetPushSubs(club, () => this.store.deleteClub(club))),
-        ),
-      );
+      //
+      // WHY THE FINALLY (13 Nov 2026, Bug Hunt 17): everything the relay
+      // holds of the club in memory used to be forgotten further down,
+      // after the voice's wipe - so a wipe step that threw (a disk error,
+      // or a line being cached at that moment) left the laptop with a
+      // failed delete and the relay still answering with the club's
+      // results, site and check-in roster, PIN hashes and all, until it
+      // restarted. Forgotten here whatever the wipe did: what is held is
+      // only ever a copy of the disk, so the worst a needless forget costs
+      // is one read.
+      try {
+        await this.pinGuard.forget(club, () =>
+          this.managePinGuard.forget(club, () =>
+            this.signupPinGuard.forget(club, () => this.forgetPushSubs(club, () => this.store.deleteClub(club))),
+          ),
+        );
+      } finally {
+        // The pass key went with the folder; the one held in memory goes
+        // too, so a club set up again under this id starts with a new one
+        // and no pass from before the delete opens anything.
+        this.passKeys.delete(club);
+        // 17 Oct 2026, Bug Hunt 8, A19-3: a club set up again starts fresh.
+        this.lastStaffPin.delete(club);
+        this.lastManagePin.delete(club);
+        this.forgetDriverDoc(club, DRIVER_LIVE_CHANNEL);
+        this.forgetDriverDoc(club, DRIVER_ME_CHANNEL);
+        this.forgetClubListings(club);
+        this.forgetCheckin(club);
+        this.forgetSite(club);
+        this.forgetPreviews(club);
+      }
 
-      // The pass key went with the folder; the one held in memory goes too,
-      // so a club set up again under this id starts with a new one and no
-      // pass from before the delete opens anything.
-      this.passKeys.delete(club);
-      // 17 Oct 2026, Bug Hunt 8, A19-3: a club set up again starts fresh.
-      this.lastStaffPin.delete(club);
-      this.lastManagePin.delete(club);
       // Its drivers' clips, kept outside the club's folder (clips.ts).
       //
       // WHY (22 Oct 2026, Bug Hunt 9): an upload whose body was still
@@ -4963,8 +5023,6 @@ export class Relay {
       // nothing. (The podium videos were wiped here the same way until 28
       // Oct 2026, when they stopped coming to the relay.)
       await this.wipeClips(club);
-      this.forgetDriverDoc(club, DRIVER_LIVE_CHANNEL);
-      this.forgetDriverDoc(club, DRIVER_ME_CHANNEL);
 
       // And the voice's lines for this club - drivers' names, spoken -
       // which the voice keeps in a folder of its own rather than the
@@ -4974,10 +5032,6 @@ export class Relay {
       // once. Wiping the count would give the club a fresh allowance on
       // every delete and erase what it is billed by.
       await this.voice?.forget(club);
-      this.forgetClubListings(club);
-      this.forgetCheckin(club);
-      this.forgetSite(club);
-      this.forgetPreviews(club);
 
       // WHY (20 Oct 2026, Bug Hunt 8): the top-up asks stay too, so the
       // monthly cap and the operator's queue still hold, but their notes -
@@ -7437,6 +7491,30 @@ export class Relay {
   }
 
   /**
+   * askGateOf's rule again, for asking INSIDE the club's lock, where the
+   * roster is read as it is on the disk (as the check-in tap does).
+   *
+   * WHY NOT askGateOf THERE (13 Nov 2026, Bug Hunt 17): it goes through
+   * checkinOf, which makes the club's pass key when none is held - and
+   * making it takes the club's lock (passKeyOf: "never called from inside
+   * withLock"). An "I'm coming" let in with no check-in, then queued behind
+   * the laptop's first roster, asked for the key from inside the lock and
+   * waited on itself for ever - and every later write that club made,
+   * live timing included, waited behind it until the relay restarted.
+   * Nothing here needs a pass, so nothing here asks for the key.
+   */
+  private async askGateInLock(club: string, id: string): Promise<boolean> {
+    if (!(await this.nightsOpenFor(club)) || !(await this.driverAsksOpenFor(club))) {
+      return false;
+    }
+
+    const body = (await this.store.getSnapshot(club, "checkin").catch(() => undefined))?.body;
+
+    return isPlainObject(body) && body["enabled"] === true && Array.isArray(body["drivers"])
+      && (body["drivers"] as unknown[]).some((entry) => isPlainObject(entry) && entry["id"] === id);
+  }
+
+  /**
    * Whether this driver may say "I'm coming" to the next race night (12 Nov
    * 2026, Asher: "theres no way to say you're coming to the next race").
    *
@@ -7576,7 +7654,7 @@ export class Relay {
       // Read again inside the lock, as sendClubNote does: the club may have
       // closed asks or nights, or taken them off the list, while this
       // waited for it - and closing deletes what is held under this lock.
-      if ((await this.askGateOf(club, id)) === undefined && !(comingOnly && await this.comingGateOf(club, id))) {
+      if (!(await this.askGateInLock(club, id)) && !(comingOnly && await this.comingGateOf(club, id))) {
         return "closed" as const;
       }
 
@@ -7785,7 +7863,10 @@ export class Relay {
       return;
     }
 
-    if (this.photoUploadsInFlight >= PHOTO_UPLOADS_IN_FLIGHT_MAX) {
+    const address = clientAddress(request);
+    const fromHere = this.photoUploadsFrom.get(address) ?? 0;
+
+    if (this.photoUploadsInFlight >= PHOTO_UPLOADS_IN_FLIGHT_MAX || fromHere >= PHOTO_UPLOADS_PER_ADDRESS) {
       await discardRest(request, response);
       sendJson(response, 429, { ok: false, error: "Busy with other photos. Try again in a minute." });
       return;
@@ -7793,20 +7874,33 @@ export class Relay {
 
     // A phone on the venue's Wi-Fi can take more than the 30-second
     // ceiling to send half a megabyte - an idle timeout instead, as a
-    // clip has.
+    // clip has, and a longer ceiling of its own (PHOTO_UPLOAD_MAX_MS).
     this.photoUploadsInFlight += 1;
+    this.photoUploadsFrom.set(address, fromHere + 1);
     liftCeiling();
     request.setTimeout(30_000, () => request.destroy());
+    const tooLong = setTimeout(() => request.destroy(), PHOTO_UPLOAD_MAX_MS);
+    tooLong.unref();
 
     let body: unknown;
 
     try {
       body = await readBody(request, response, DRIVER_PHOTO_MAX_BODY);
     } finally {
+      clearTimeout(tooLong);
+
       if (!request.destroyed) {
         request.setTimeout(0);
       }
       this.photoUploadsInFlight -= 1;
+
+      const left = (this.photoUploadsFrom.get(address) ?? 1) - 1;
+
+      if (left > 0) {
+        this.photoUploadsFrom.set(address, left);
+      } else {
+        this.photoUploadsFrom.delete(address);
+      }
     }
 
     if (body === "too-big") {
@@ -7859,7 +7953,7 @@ export class Relay {
     const stored: DriverPhotoBody = { b: id, car, v: withPin ? "pin" : "badge", data: body["data"] as string, at: at.toISOString() };
 
     const outcome = await this.withLock(club, async () => {
-      if ((await this.askGateOf(club, id)) === undefined) {
+      if (!(await this.askGateInLock(club, id))) {
         return "closed" as const;
       }
 
