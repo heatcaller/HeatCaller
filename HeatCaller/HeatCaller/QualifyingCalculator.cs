@@ -299,9 +299,18 @@ public static class QualifyingCalculator
             };
         var scoredHeats = liveRound is null ? qualifiers : qualifiers.Append(liveRound).ToList();
 
+        // Whether this class's unnumbered heats ARE its first round - see
+        // RoundGroupOf. Asked of every qualifier of the day, run or not, as
+        // the build asks it (RaceProgramControl.BuildRoundOf).
+        var unnumberedIsRoundOne = !rounds.ForClass(className)
+            .Where(r => r.Kind == RoundKind.Qualifier)
+            .Where(r => roundFilter is null || roundFilter.Contains(r.Id))
+            .Concat(scoredHeats)
+            .Any(r => HeatBalanceForm.QualifyingRoundOf(r) == "Q1");
+
         foreach (var round in qualifiers)
         {
-            var (group, groupName) = RoundGroupOf(round, scoredHeats);
+            var (group, groupName) = RoundGroupOf(round, scoredHeats, unnumberedIsRoundOne);
             var session = history.Get(round.LinkedSessionId!);
 
             // A DEMO-LINKED HEAT DOES SEED, and that is the point of a
@@ -408,7 +417,7 @@ public static class QualifyingCalculator
 
         if (live is not null)
         {
-            var (liveGroup, liveGroupName) = RoundGroupOf(liveRound!, scoredHeats);
+            var (liveGroup, liveGroupName) = RoundGroupOf(liveRound!, scoredHeats, unnumberedIsRoundOne);
 
             foreach (var result in live.Results)
             {
@@ -540,10 +549,30 @@ public static class QualifyingCalculator
     /// own - folding it into Q1 would rank its drivers against heats they
     /// never shared a track with, and dropping it would throw away a heat
     /// they really ran.
+    ///
+    /// WHY (13 Nov 2026, bug hunt 17) <paramref name="unnumberedIsRoundOne"/>:
+    /// a night built with one qualifying round has "Heat 1", "Heat 2"; raise
+    /// the round count and Build adds "Q2 Heat 1" beside them, with no Q1.
+    /// Those unnumbered heats are the first round, not heats added by hand,
+    /// and the build already counts them so (RaceProgramControl.BuildRoundOf).
+    /// Scored as a round each, the standings reshuffled the moment the first
+    /// Q2 heat was saved: every driver was ranked inside their own heat and
+    /// given a missed round for the other. So while the class has no
+    /// numbered first round they are scored together as round 1.
     /// </summary>
-    private static (string Key, string Name) RoundGroupOf(RoundDefinition round, IReadOnlyList<RoundDefinition> scoredHeats)
+    private static (string Key, string Name) RoundGroupOf(RoundDefinition round, IReadOnlyList<RoundDefinition> scoredHeats,
+        bool unnumberedIsRoundOne)
     {
         var key = HeatBalanceForm.RoundKeyFor(round, scoredHeats);
+
+        if (key is null && unnumberedIsRoundOne && HeatBalanceForm.QualifyingRoundOf(round) is { Length: 0 })
+        {
+            // Named the way the numbered rounds beside it are.
+            var races = scoredHeats.Any(r => HeatBalanceForm.QualifyingRoundOf(r) is { Length: > 0 }
+                && (r.RoundLabel ?? string.Empty).TrimStart().StartsWith("Race", StringComparison.OrdinalIgnoreCase));
+
+            return ("Q1", races ? "Race 1" : "Q1");
+        }
 
         if (key is null)
         {

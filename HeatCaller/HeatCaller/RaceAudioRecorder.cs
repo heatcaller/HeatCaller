@@ -122,6 +122,27 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
     private static readonly ConcurrentDictionary<string, byte> Publishing = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// The wavs (and their video beds) a recorder still has open, by full
+    /// path - from StartFor until Stop has closed the file.
+    /// </summary>
+    // WHY (13 Nov 2026, bug hunt 17): with videos queued, the race before's
+    // Publish can reach its sweep while this race is still being recorded.
+    // The sweep told a live file from a crashed one only by a write in the
+    // last two minutes, which a PC with no sound device never makes (and
+    // Windows may not show for a file held open), so it tried to encode,
+    // rename and delete the live recording and logged three false failures.
+    // SweepOrphans skips these by name instead.
+    private static readonly ConcurrentDictionary<string, byte> Live = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>True while a recorder or a Publish holds this file - what SweepOrphans leaves alone.</summary>
+    private static bool InUse(string path)
+    {
+        var full = Path.GetFullPath(path);
+
+        return Publishing.ContainsKey(full) || Live.ContainsKey(full);
+    }
+
+    /// <summary>
     /// How many converted buffers may wait for the writer.
     ///
     /// The bus hands over about ten buffers a second (WaveOutEvent at 300ms
@@ -353,6 +374,10 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             var maxSamples = (long)store.MaxMinutes * 60 * SampleRate;
 
             var recorder = new RaceAudioRecorder(wav, wavPath, folder, baseName, startedUtc, maxSamples, minFreeBytes);
+
+            // Until Stop has closed it - see Live.
+            Live[Path.GetFullPath(wavPath)] = 0;
+
             recorder._writer.Start();
 
             // SOMETHING WAS ALREADY RECORDING, and this takes the tap off
@@ -400,6 +425,11 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             if (withVideoBed && store.MusicUnderVideos && store.DriverHighlights && store.HighlightVideos != HighlightVideo.Who.Off)
             {
                 recorder._bed = RecapBed.StartFor(folder, baseName, startedUtc, maxSamples, log);
+
+                if (recorder._bed is { } bed)
+                {
+                    Live[Path.GetFullPath(bed.Path)] = 0;
+                }
             }
 
             // Last, so the tap can never be handed a buffer before the
@@ -876,6 +906,19 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         // The bed's last seconds and its header. Its own bounded wait, on
         // this same background thread; it never throws.
         _bed?.Stop();
+
+        // Closed, so no longer live (see Live) - the sweep's own two-minute
+        // wait covers it until Publish takes it up. A file a stuck writer
+        // still holds stays listed.
+        if (!writerStuck)
+        {
+            Live.TryRemove(Path.GetFullPath(_wavPath), out _);
+        }
+
+        if (_bed is { } stoppedBed)
+        {
+            Live.TryRemove(Path.GetFullPath(stoppedBed.Path), out _);
+        }
 
         _result = Describe();
         return _result;
@@ -1637,8 +1680,9 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
                 }
 
                 // Another race's Publish is still working from it, queued
-                // behind the videos (22 Oct 2026) - see Publishing.
-                if (Publishing.ContainsKey(Path.GetFullPath(orphan)))
+                // behind the videos (22 Oct 2026) - see Publishing. Or a
+                // race is being recorded to it right now - see Live.
+                if (InUse(orphan))
                 {
                     continue;
                 }
@@ -1720,7 +1764,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             foreach (var bed in Directory.EnumerateFiles(root, "*" + RecapBed.Extension, SearchOption.AllDirectories))
             {
                 if (!bed.EndsWith(RecapBed.Extension, StringComparison.OrdinalIgnoreCase)
-                    || Publishing.ContainsKey(Path.GetFullPath(bed))
+                    || InUse(bed)
                     || DateTime.UtcNow - File.GetLastWriteTimeUtc(bed) < TimeSpan.FromMinutes(2))
                 {
                     continue;

@@ -168,6 +168,14 @@ internal sealed class PublicPrivacy
     {
         var entries = new List<Entry>();
 
+        // WHY (13 Nov 2026, bug hunt 17) every main transponder first, the
+        // extras after: the constructor keeps the FIRST entry per id. An
+        // older profiles file can list one driver's main transponder among
+        // another's extras, and the rest of the app gives that id to the
+        // driver whose main it is (ProfileStore.Get). In one pass, by name
+        // order, "Aaron"'s extra hid "Zoe"'s main and her photo went online.
+        var extras = new List<Entry>();
+
         foreach (var profile in profiles ?? Enumerable.Empty<DriverProfile>())
         {
             if (profile is null || string.IsNullOrWhiteSpace(profile.Transponder) || GhostService.IsGhost(profile.Transponder))
@@ -177,12 +185,17 @@ internal sealed class PublicPrivacy
 
             var name = SingleSpaced(profile.DriverName);
             var announcer = SingleSpaced(profile.AnnouncerName);
+            var main = profile.Transponder.Trim();
 
             foreach (var id in profile.AllTransponderIds)
             {
-                entries.Add(new Entry(id, name, announcer, profile.NoPhotoOnline, profile.NoVideoOnline, profile.InitialsOnline));
+                var entry = new Entry(id, name, announcer, profile.NoPhotoOnline, profile.NoVideoOnline, profile.InitialsOnline);
+
+                (string.Equals(id.Trim(), main, StringComparison.OrdinalIgnoreCase) ? entries : extras).Add(entry);
             }
         }
+
+        entries.AddRange(extras);
 
         // WHY (23 Oct 2026, bug hunt 10): the register was built from the
         // profiles that exist NOW, so deleting a flagged driver's profile
@@ -190,7 +203,11 @@ internal sealed class PublicPrivacy
         // and the privacy batch then republished every saved result of
         // theirs with the full name. A removed driver's flags are kept
         // (AppSettings.PrivacyRetained) and still count here.
-        foreach (var gone in retained ?? Enumerable.Empty<PrivacyRetainedDriver>())
+        //
+        // Newest first (13 Nov 2026, bug hunt 17): Retain adds to the end,
+        // and where two removed drivers had the same transponder in turn it
+        // stays with the later one, as it was while their profile existed.
+        foreach (var gone in (retained ?? Enumerable.Empty<PrivacyRetainedDriver>()).Reverse())
         {
             if (gone is null || !(gone.NoPhoto || gone.NoVideo || gone.Initials))
             {
@@ -252,16 +269,24 @@ internal sealed class PublicPrivacy
             result.Add(gone);
         }
 
+        // WHY (13 Nov 2026, bug hunt 17) by transponder AND name: a kept
+        // driver's transponder can be handed to a second flagged driver who
+        // is deleted in turn. By transponder alone the second was taken as
+        // kept already, lost their protection, and their saved results were
+        // republished under the full name.
+        static string Holding(string? transponder, string? name) =>
+            (transponder ?? string.Empty).Trim().ToUpperInvariant() + "\n" + SingleSpaced(name).ToUpperInvariant();
+
         var already = new HashSet<string>(
-            result.SelectMany(g => g.Transponders ?? new List<string>()).Select(t => (t ?? string.Empty).Trim()),
-            StringComparer.OrdinalIgnoreCase);
+            result.SelectMany(g => (g.Transponders ?? new List<string>()).Select(t => Holding(t, g.Name))),
+            StringComparer.Ordinal);
 
         // One driver per name and flags, holding every id of theirs that is
         // gone - an entry is per transponder.
         var newlyGone = before._byTransponder.Values
             .Where(e => (e.NoPhoto || e.NoVideo || e.Initials)
                         && !owned.Contains(e.Transponder)
-                        && !already.Contains(e.Transponder)
+                        && !already.Contains(Holding(e.Transponder, e.Name))
                         && !liveNames.Contains(e.Name))
             .GroupBy(e => (Name: e.Name.ToUpperInvariant(), Announcer: e.AnnouncerName.ToUpperInvariant(), e.NoPhoto, e.NoVideo, e.Initials))
             .OrderBy(g => g.Key.Name, StringComparer.Ordinal);

@@ -376,6 +376,7 @@ public sealed class RaceClassesControl : UserControl
             // filled in just below.
             _undo?.Capture($"Rename class '{oldName}' to '{newName}'", () =>
             {
+                RefuseUndoIfNameReused(store, existing.Id, newName);
                 store.UndoRename(existing.Id, oldName, before, afterJson, cascade, receipt);
 
                 if (!IsDisposed && !Disposing)
@@ -458,6 +459,24 @@ public sealed class RaceClassesControl : UserControl
     }
 
     /// <summary>
+    /// Refuses the undo of a rename, with nothing changed, when a DIFFERENT
+    /// class now has the name the rename gave.
+    /// </summary>
+    // WHY (13 Nov 2026, bug hunt 17): the undo moves everything under the new
+    // name back to the old one, on the footing that the new name is about to
+    // stop existing. Rename A to B, delete B (or rename it on), add a new
+    // class B: the new class's drivers, rounds and championships were all
+    // dragged to "A" and the new class left empty. The undo step is used up
+    // either way (UndoService), so say what to do by hand instead.
+    internal static void RefuseUndoIfNameReused(RaceClassStore store, string classId, string newName)
+    {
+        if (store.NameTaken(newName, classId))
+        {
+            throw new InvalidOperationException($"a different class is called \"{newName.Trim()}\" now, so undoing the rename would take that class's drivers and heats with it. Rename the classes by hand instead.");
+        }
+    }
+
+    /// <summary>
     /// The second door to the sanctioning presets.
     ///
     /// The first is inside the class editor, which is the right place for
@@ -475,7 +494,9 @@ public sealed class RaceClassesControl : UserControl
         // Taken before the preset writes onto the stored object.
         var before = JsonSerializer.Deserialize<RaceClass>(JsonSerializer.Serialize(existing));
 
-        using var form = new SanctioningPresetForm(existing, _store.AppDefaultFormat?.Invoke());
+        // From this door there is no Save to press afterwards: Yes is the
+        // save (below), and the question has to say so.
+        using var form = new SanctioningPresetForm(existing, _store.AppDefaultFormat?.Invoke(), savedAtOnce: true, canUndo: _undo is not null);
 
         if (form.ShowDialog(this) != DialogResult.OK)
         {
