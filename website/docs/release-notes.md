@@ -9,7 +9,7 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
     - **Marshal swaps from phones.** **Ask someone to cover...** on a driver's marshal duty asks another driver, whose phone offers **Accept** and **Decline**. A yes waits in **Driver Requests** while **Marshal swaps from phones need the desk's OK** is ticked (the default), or is made by itself. See [Marshals from their phones](online/driver-requests.md#marshals-from-their-phones).
     - **Marshal duty in about 5 minutes**, a new alert: "You're marshalling Q2 Heat 3 in about 5 minutes - Turn 3", once per race.
     - **Next race in 1:42** on the Live and Schedule pages while Auto start counts down between races, with "on hold" and "starting soon", like the Big Screen.
-    - **Paid or owing.** With an entry fee on the race day, a driver's own night says **Entry: $15.00 - pay at the desk** or **Paid ✓**. Only their own.
+    - **Paid or owing.** With an entry fee on the race day, a driver's QR check-in card and their own night say **Entry: $15.00 - pay at the desk** or **Paid ✓**. Only their own: it's never on the staff PIN's full list. See [What the racer sees](online/check-in.md#what-the-racer-sees).
 
   Update HeatCaller on the race PC. All of these **need the relay redeployed** (`fly deploy --ha=false`).
 

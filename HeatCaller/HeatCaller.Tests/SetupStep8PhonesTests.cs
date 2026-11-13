@@ -142,6 +142,47 @@ public sealed class SetupStep8PhonesTests : IDisposable
         Assert.Null(DeskMoney.ForPhone(0m, new EntryPayment { How = PaidHow.Cash }));
     }
 
+    [Fact]
+    public void The_check_in_list_carries_each_driver_s_own_entry_and_nothing_without_a_fee()
+    {
+        var profiles = ProfileStore.Load();
+        profiles.Upsert(new DriverProfile { Transponder = "M1", DriverName = "Sam Parker" });
+        profiles.Upsert(new DriverProfile { Transponder = "M2", DriverName = "Alex Jones" });
+
+        var settings = new AppSettings
+        {
+            RelayClub = "acme-rc",
+            RelayCheckInEnabled = true,
+            RelayCheckInSecret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        };
+
+        var roster = new[]
+        {
+            new WebServerService.CheckInEntry("M1", "Sam Parker", "Stock", false),
+            new WebServerService.CheckInEntry("M2", "Alex Jones", "Stock", true),
+        };
+
+        DeskMoney.PhoneMoney? MoneyOf(string t) => t == "M1"
+            ? DeskMoney.ForPhone(15m, null)
+            : DeskMoney.ForPhone(15m, new EntryPayment { How = PaidHow.Card, Amount = 15m });
+
+        using var doc = JsonDocument.Parse(RelayDocuments.CheckIn(roster, profiles, settings, "Tonight", new Dictionary<string, string?>(), MoneyOf));
+        var drivers = doc.RootElement.GetProperty("drivers").EnumerateArray()
+            .ToDictionary(d => d.GetProperty("id").GetString()!, d => d.Clone());
+
+        var sam = drivers[RelayCheckIn.IdFor("M1", settings.RelayCheckInSecret)].GetProperty("entry");
+        var alex = drivers[RelayCheckIn.IdFor("M2", settings.RelayCheckInSecret)].GetProperty("entry");
+
+        Assert.Equal($"Entry: {DeskMoney.Money(15m)} - pay at the desk", sam.GetProperty("words").GetString());
+        Assert.False(sam.GetProperty("paid").GetBoolean());
+        Assert.Equal("Paid ✓", alex.GetProperty("words").GetString());
+        Assert.True(alex.GetProperty("paid").GetBoolean());
+
+        // No fee tonight (or an older caller): no "entry" at all.
+        using var none = JsonDocument.Parse(RelayDocuments.CheckIn(roster, profiles, settings, "Tonight", new Dictionary<string, string?>()));
+        Assert.All(none.RootElement.GetProperty("drivers").EnumerateArray(), d => Assert.False(d.TryGetProperty("entry", out _)));
+    }
+
     // ------------------------------------------------------------ swaps, pure
 
     [Fact]

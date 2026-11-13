@@ -432,6 +432,9 @@ header:has(.brand) { padding-top: 8px; }
 .solo { text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
         padding: 28px 20px; }
 .solo h2 { margin: 14px 0 4px; font-size: 1.6rem; }
+/* The driver's own entry on their check-in card (12 Nov 2026, setup plan step 8). */
+.solo .fee { margin: 10px 0 0; font-weight: 700; color: var(--warn); }
+.solo .fee.ok { color: var(--good); }
 .av { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; flex: none; }
 .av.big { width: 128px; height: 128px; font-size: 2.8rem; }
 .av.ini { display: inline-flex; align-items: center; justify-content: center; background: var(--primary);
@@ -10005,6 +10008,17 @@ async function tap(d) {
 // ---- one driver, from a badge
 
 function drawOne() {
+  // Tonight's entry, paid or owing (12 Nov 2026, setup plan step 8): the
+  // laptop's own words, "Entry: $15.00 - pay at the desk" or "Paid ✓". The
+  // relay only ever hands it with this one driver - to their badge or their
+  // PIN - and never on the staff list, so nobody sees anyone else's money.
+  // Inside drawOne, so drawOne still stands on its own.
+  function entryLine(d) {
+    const e = d && d.entry && typeof d.entry === 'object' ? d.entry : null;
+    if (!e || typeof e.words !== 'string' || e.words.trim() === '') return '';
+    return '<p class="fee' + (e.paid === true ? ' ok' : '') + '">' + esc(e.words) + '</p>';
+  }
+
   const d = drivers[0];
   if (!d) return;
   const on = isIn(d);
@@ -10012,6 +10026,7 @@ function drawOne() {
   box.innerHTML = '<div class="solo">' + avatar(d, 'big') +
     '<h2>' + esc(d.name) + '</h2>' +
     '<div class="when">' + [facts(d), esc(eventName)].filter(Boolean).join(' &middot; ') + '</div>' +
+    entryLine(d) +
     '<button class="go' + (on ? ' on' : '') + '" id="go" type="button">' + (on ? 'Checked in &#10003;' : 'Check in') + '</button>' +
     '<p class="when">' + (on ? 'Tap again if you need to check out.' : 'One tap and the timing desk knows you are here.') + '</p>' +
     '</div>' +
