@@ -40,6 +40,12 @@ public sealed partial class CheckInControl : UserControl
     /// <summary>The "no race day is open" banner, hidden whenever one is.</summary>
     private Section? _pnlNoDay;
 
+    /// <summary>"Entries closed at 18:30..." once the race day's entries have closed (EntriesClose.LateLine).</summary>
+    private readonly Label _lblEntriesClosed = new();
+
+    /// <summary>Whether that line is shown - kept here for the reason _noDayBannerShown is.</summary>
+    private bool _entriesClosedShown;
+
     /// <summary>
     /// The banner's two lines, held so it can say which of its two things
     /// is wrong: no race day at all, or a current day that is closed - see
@@ -565,6 +571,13 @@ public sealed partial class CheckInControl : UserControl
         // covered the class filter would be its own bug - and taking no room
         // at all while it is hidden.
         page.Add(_pnlNoDay, gapBelow: UiLayout.RowGap);
+
+        // Entries closed (12 Nov 2026, setup plan D1): anyone ticked in now
+        // is a late entry. Hidden until the close has passed.
+        _lblEntriesClosed.AutoSize = true;
+        _lblEntriesClosed.ForeColor = AppTheme.Warning;
+        _lblEntriesClosed.Visible = false;
+        page.Add(_lblEntriesClosed, gapBelow: UiLayout.RowGap);
         page.AddFill(body, body.LeastHeight, gapBelow: 0);
 
         Controls.Add(page);
@@ -1063,6 +1076,27 @@ public sealed partial class CheckInControl : UserControl
     public IReadOnlyList<string> InspectClassesFor(DriverProfile profile) =>
         _tech?.TechClassesForDriver(profile, JudgesTechFor) ?? new[] { profile.ClassName };
 
+    /// <summary>Shows "Entries closed at..." once the open day's entries have closed, so a tick now is known to be a late entry.</summary>
+    private void RefreshEntriesClosed()
+    {
+        var day = _events?.Active is { IsLegacy: false, IsOpen: true } open ? open : null;
+        var line = EntriesClose.LateLine(day, DateTime.UtcNow);
+        var wanted = line is not null;
+
+        if (line is not null && _lblEntriesClosed.Text != line)
+        {
+            _lblEntriesClosed.Text = line;
+        }
+
+        if (_entriesClosedShown == wanted)
+        {
+            return;
+        }
+
+        _entriesClosedShown = wanted;
+        _lblEntriesClosed.Visible = wanted;
+    }
+
     /// <summary>
     /// Only the classes racing tonight, and only the one picked in Class:
     /// when one is - see RaceControlControl.DeskJudgesTechFor.
@@ -1074,6 +1108,7 @@ public sealed partial class CheckInControl : UserControl
     public void RefreshAll()
     {
         RefreshNoDayBanner();
+        RefreshEntriesClosed();
         RefreshClassFilter();
         RefreshDriverList();
     }

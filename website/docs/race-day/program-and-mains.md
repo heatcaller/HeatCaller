@@ -49,11 +49,12 @@ The card works out the single next thing to do, with one button that does it. Th
 | None of today's classes has any drivers | "None of today's classes has any drivers." (or "No drivers in Stock." with one class) | **Add Drivers** |
 | Nothing is scheduled yet | "Nothing is scheduled yet." | **Build tonight's heats** (**Build tonight's races** on a club night) |
 | A lower main has finished and bump-ups are due | "B-Main has finished." | **Move the top finishers up** |
+| The heats are built, none has run, and they haven't been posted | "Tonight's heats are built - post them next." | **Post the heats...** (**Post the races...** on a club night). See [Post the heats](#post-the-heats) |
 | A round is waiting to run | "Next up: Q2 Heat 1" | **Start Q2 Heat 1** |
 | Everything has run, and a class has qualified but has no mains | "Qualifying is complete for Stock." | **Build the finals from qualifying** |
 | Everything has run | "The program is complete." | **Qualifying Standings** (**Tonight's Standings** on a club night) |
 
-The line under the headline gives the numbers behind it — for example the class, driver count and track for the next round, and how many rounds have run and how many are left. If one class has no drivers while others do, it says that class will be skipped. While races are still to run, it also says when the night should finish (see [When the night finishes](#when-the-night-finishes)). Once everything has run, it gives the night pace and lists what's left before lights out (see [Closing the night](#closing-the-night)).
+The line under the headline gives the numbers behind it — for example the class, driver count and track for the next round, and how many rounds have run and how many are left. If one class has no drivers while others do, it says that class will be skipped. With **Entries close at:** set on **Setup**, the card counts down to it while the heats are still to build ("Entries close at 18:30, in 12 min."), then says "Entries closed at 18:30 - build the heats and post them." While races are still to run, it also says when the night should finish (see [When the night finishes](#when-the-night-finishes)). Once everything has run, it gives the night pace and lists what's left before lights out (see [Closing the night](#closing-the-night)).
 
 ### When the night finishes
 
@@ -63,6 +64,7 @@ While races are still to run, the next-step card ends with "Finishes about 22:40
 - After each race comes the gap before the next green. Once tonight has run three races, that's tonight's own typical gap (the same figure as the event report's [night pace](../race-control/results-and-championships.md)). Before then it's 3 minutes.
 - A race on track is taken as half done.
 - On a race day, a class with heats but no finals yet is given the finals it will have (one per heat's worth of drivers), so the finish includes them.
+- Each break planned with **Breaks...** on **Setup** is added where it falls, and the card says so: "Finishes about 22:40 (with 30 min of breaks)." See [Planned breaks](#planned-breaks).
 
 With **Out of the venue by:** set on **Setup**, the card says whether that's in time: "Finishes about 22:40, inside the 23:00 out-by time." If it isn't, it says by how much, then what would help, biggest saving first:
 
@@ -71,6 +73,41 @@ With **Out of the venue by:** set on **Setup**, the card says whether that's in 
 - **run one main fewer** in a class with more than one main still to run
 
 For example: "Finishes about 22:40 - 15 min past the 22:00 out-by time. To finish in time: drop Q3 (6 races) to save 48 min; run qualifiers a minute shorter to save 12 min." HeatCaller doesn't make these changes itself. To drop the rest of qualifying, use [We're done after this round](#were-done-after-this-round). The estimate is worked out again whenever the program changes, and each is shown as "about".
+
+### Post the heats
+
+Posting is the moment tonight's heats go on the board. Drivers look up their heat once and trust it, so HeatCaller treats it as a step of its own. With **Post the heats before the first race** ticked on **Race Day → Setup** (on by default), once the heats are built the card reads "Tonight's heats are built - post them next." and its button is **Post the heats...**.
+
+The card also lists any car on tonight's heats that the loop hasn't heard tonight, for example "2 cars on tonight's heats haven't crossed the loop tonight: Al Gorithim and Rhoda Rage." A car counts as heard when it has crossed the line since 6am (practice counts), or when it has a timed lap in a race saved tonight. Get those cars out in practice, or check their transponders, before Q1. In Demo Mode every car counts as heard.
+
+**Post the heats...** opens a window that says the same, with three boxes, all ticked to start with:
+
+- **Print the heat sheets** for every class racing tonight, with their estimated start times (see [Heat sheets](#heat-sheets)).
+- **Print the marshal list**, the same roster as the **Marshals...** window (see [Corner marshals](#corner-marshals)).
+- **Tell the room (the announcer)**: "Tonight's heats are posted. Check the board, or your phone, for your heat and your marshal post."
+
+Click **Post the Heats**. The print preview opens with all the pages together, and the card moves on to **Start Q1 Heat 1**. **Undo** takes the posting back.
+
+Once the heats are posted, **Move Drivers Between Heats** and **Redo Remaining Heats** (on **Race Control**) ask before changing them: "The heats were posted at 18:42, so drivers and marshals may already have looked theirs up." **Add a Late Entry** doesn't ask, because it moves nobody else (see [A late entry](#a-late-entry)).
+
+If you start the first race without posting, the heats count as out and the card stops asking. Untick **Post the heats before the first race** to go straight from building to **Start Q1 Heat 1**, as before.
+
+### Planned breaks
+
+**Breaks...** on **Race Day → Setup** plans breaks into the night before it starts: watering the track, dinner, track repairs. Each break has:
+
+- **When**: **After Q1**, **After Q2** and so on (**After Race 1** on a club night), or **Before the finals**.
+- **Minutes**: from 1 to 120.
+- **What for**: said to the room, for example "water the track". It can be left blank.
+
+Up to four breaks. **No break** on a line leaves it out. The **Breaks:** line on **Setup** sums them up, for example "After Q2, 10 min (water the track) · Before the finals, 20 min (dinner)".
+
+A break falls between the last race of its round and the next race. A break after Q2 still comes before the finals if Q3 is dropped. HeatCaller allows for breaks in:
+
+- **The finish time and estimated starts** on the next-step card, the heat sheets and the phones' **Schedule** page (see [When the night finishes](#when-the-night-finishes)).
+- **Auto start.** The gap before the race after a break is the usual gap plus the break, and the announcer says it as the break begins: "Time for a 10-minute break - water the track. Racing starts again about 20:40." **Hold**, **+1 min** and **Start now** work as usual. With **Auto start** off, nothing is said and the break is yours to time.
+
+A new race day at the same venue starts with the last day's breaks.
 
 ### Closing the night
 

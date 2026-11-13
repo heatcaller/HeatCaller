@@ -90,6 +90,7 @@ Full detail: [Events and entries](../race-day/events-and-entries.md).
 1. Open **Race Day → Next Steps**.
 2. The card at the top tells you what's next. With classes ticked and drivers entered, it says "Nothing is scheduled yet." and offers **Build tonight's heats**. Click it.
 3. Look over the heats. If they look lopsided, right-click the list and choose **Move Drivers Between Heats...**.
+4. The card now says "Tonight's heats are built - post them next." Click **Post the heats...**, then **Post the Heats**. It prints the heat sheets and the marshal list for the board and tells the room. If the card lists a car the loop hasn't heard tonight, get it out on the track before the first race. See [Post the heats](../race-day/program-and-mains.md#post-the-heats).
 
 If the card says something else comes first, such as "No race day is open.", its button does that instead.
 

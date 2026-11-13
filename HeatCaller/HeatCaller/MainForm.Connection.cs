@@ -291,6 +291,10 @@ public partial class MainForm
         // and that is the whole point of keeping them.
         _transponderWatch.Record(lap);
 
+        // And for the whole night, for the cars not heard tonight when the
+        // heats are posted (12 Nov 2026, setup plan D3).
+        NoteTonightsSighting(lap);
+
         // And across nights, so a transponder that is fading shows up before
         // it fails - see TransponderHealthStore. Never throws.
         RecordTransponderHealth(lap);

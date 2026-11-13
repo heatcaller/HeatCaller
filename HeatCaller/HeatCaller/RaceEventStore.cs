@@ -180,6 +180,27 @@ public sealed class RaceEvent
     /// </summary>
     public TimeSpan? OutByLocalTime { get; set; }
 
+    /// <summary>
+    /// When entries close: a local time of day, or null for none (12 Nov 2026,
+    /// setup plan D1). The announcer calls it ten minutes before and as it
+    /// passes, and the Next Steps card counts down to it. A driver checked in
+    /// after it is a late entry. See EntriesClose.
+    /// </summary>
+    public TimeSpan? EntriesCloseLocalTime { get; set; }
+
+    /// <summary>
+    /// When tonight's heats were posted (12 Nov 2026, setup plan D2), or null
+    /// while they haven't been. From then on, something that moves drivers
+    /// between heats asks first. See HeatPosting.
+    /// </summary>
+    public DateTime? HeatsPostedUtc { get; set; }
+
+    /// <summary>
+    /// Breaks planned into the night (12 Nov 2026, setup plan D5): "water the
+    /// track after Q2, 10 minutes". See PlannedBreak and NightBreaks.
+    /// </summary>
+    public List<PlannedBreak> Breaks { get; set; } = new();
+
     // --- Rolling into the next race -------------------------------------
     //
     // Whether finishing a race arms the next one by itself, and which race
@@ -382,6 +403,12 @@ public sealed class RaceEventStore
             e.AutoAdvanceClassName ??= string.Empty;
             e.RoundIds = (e.RoundIds ?? new List<string>()).Where(id => id is not null).ToList();
             e.ClassNames = (e.ClassNames ?? new List<string>()).Where(n => n is not null).ToList();
+            e.Breaks = (e.Breaks ?? new List<PlannedBreak>()).Where(b => b is not null).ToList();
+
+            foreach (var b in e.Breaks)
+            {
+                b.What ??= string.Empty;
+            }
         }
 
         return list;

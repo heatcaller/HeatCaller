@@ -48,7 +48,7 @@
 /// status line says where the menu is until the first command's message
 /// takes its place.
 /// </summary>
-public sealed class RaceProgramControl : UserControl
+public sealed partial class RaceProgramControl : UserControl
 {
     private readonly RaceClassStore _raceClasses;
     private readonly ProfileStore _profiles;
@@ -991,6 +991,36 @@ public sealed class RaceProgramControl : UserControl
             step = step with { Detail = ProtestWindow.Words(finalAt) + " " + step.Detail };
         }
 
+        var now = DateTime.UtcNow;
+
+        // Entries close (12 Nov 2026, setup plan D1): until the heats are
+        // built, the card counts down to it - and once it has passed, says so.
+        if (step.Stage is ProgramStage.BuildQualifying or ProgramStage.NobodyCheckedIn
+            && EntriesClose.AtUtc(ActiveDay, now) is { } closeAt)
+        {
+            step = step with { Detail = EntriesClose.Note(closeAt, now) + " " + step.Detail };
+        }
+
+        // Posting the heats (setup plan D2 and D3): built, nothing run yet,
+        // and not posted. The card asks for that before the first start, and
+        // says which cars the loop hasn't heard tonight.
+        if (step.Stage == ProgramStage.RunNext && HeatPosting.Owed(ActiveDay, day, _settings.PostHeatsBeforeFirstRace))
+        {
+            var clubNight = DayIsClubNight;
+            var notHeard = HeatPosting.NotHeardWords(NotHeardTonight(day));
+
+            return step with
+            {
+                Stage = ProgramStage.PostHeats,
+                Headline = clubNight ? "Tonight's races are built - post them next." : "Tonight's heats are built - post them next.",
+                Detail = $"Posting prints the {(clubNight ? "race" : "heat")} sheets and the marshal list for the board, and the announcer tells the room. "
+                         + $"After that, nothing moves a driver without asking. First up: {step.Round?.RoundLabel ?? "the first race"}."
+                         + (notHeard.Length > 0 ? " " + notHeard : string.Empty)
+                         + (Plan(day) is { } posting ? NightPlan.Note(posting) : string.Empty),
+                ActionCaption = clubNight ? ProgramCaptions.PostRaces : ProgramCaptions.PostHeats,
+            };
+        }
+
         if (step.Stage is ProgramStage.RunNext or ProgramStage.SeedMains or ProgramStage.BumpUps && Plan(day) is { } plan)
         {
             return step with { Detail = step.Detail + NightPlan.Note(plan) };
@@ -1164,7 +1194,8 @@ public sealed class RaceProgramControl : UserControl
                 tonightsGap,
                 raceDay.OutByLocalTime,
                 DateTime.UtcNow,
-                raceDay.FirstRaceLocalTime);
+                raceDay.FirstRaceLocalTime,
+                raceDay.Breaks);
         }
         catch (Exception ex)
         {
@@ -1831,6 +1862,10 @@ public sealed class RaceProgramControl : UserControl
                     StartRound(round);
                 }
 
+                break;
+
+            case ProgramStage.PostHeats:
+                PostTheHeats();
                 break;
 
             case ProgramStage.SeedMains:
@@ -3766,6 +3801,12 @@ public sealed class RaceProgramControl : UserControl
                 DateTime.UtcNow - HeatSeeding.RecentForm, _profiles.PrimaryForAlternate) is { Count: > 0 } recent ? recent : null);
 
         if (form.ShowDialog(this) != DialogResult.OK || form.Changes.Count == 0)
+        {
+            return;
+        }
+
+        // Posted heats (12 Nov 2026, setup plan D2): drivers have looked theirs up.
+        if (!ChangePostedHeatsOk(this, $"This moves drivers in {Plural.Of(form.Changes.Count, "heat")} of {className}."))
         {
             return;
         }

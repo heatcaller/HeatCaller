@@ -244,6 +244,18 @@ public static class EventSpine
             .OrderByDescending(e => e.StartedUtc)
             .FirstOrDefault()?.OutByLocalTime;
 
+        // So do the entries-close time and the planned breaks (12 Nov 2026,
+        // setup plan D1 and D5). They're the club's habits at that venue -
+        // "entries close at 6:30", "water the track after Q2" - so the last
+        // day at the same venue that had them is the best guess too.
+        var sameVenue = events.Real
+            .Where(e => string.Equals(e.VenueName ?? string.Empty, venueName ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(e => e.StartedUtc)
+            .ToList();
+
+        raceEvent.EntriesCloseLocalTime = sameVenue.FirstOrDefault(e => e.EntriesCloseLocalTime is not null)?.EntriesCloseLocalTime;
+        raceEvent.Breaks = NightBreaks.Copy(sameVenue.FirstOrDefault(e => e.Breaks is { Count: > 0 })?.Breaks);
+
         events.Upsert(raceEvent);
         events.SetActive(raceEvent.Id);
 

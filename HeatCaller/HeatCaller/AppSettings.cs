@@ -679,6 +679,17 @@ public sealed class AppSettings
     /// </summary>
     public bool UseCloseNightChecklist { get; set; } = true;
 
+    /// <summary>
+    /// Post the heats before the first race (12 Nov 2026, setup plan D2; see
+    /// HeatPosting). On: once tonight's heats are built, Next Steps offers
+    /// "Post the heats..." before the first start. That prints the heat sheets
+    /// and the marshal list, tells the room, and lists the cars the loop hasn't
+    /// heard tonight. From then on, moving drivers between heats asks first.
+    /// Off: the card goes straight to starting the first race, as before. On
+    /// by default; the tick box is on the Setup tab.
+    /// </summary>
+    public bool PostHeatsBeforeFirstRace { get; set; } = true;
+
     /// <summary>The club's own lines on the closing checklist ("Lock the clubhouse", "Pack up the timing loop"), one each.</summary>
     public List<string> CloseNightOwnItems { get; set; } = new();
 
