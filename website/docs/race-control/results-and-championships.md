@@ -243,7 +243,7 @@ Only sessions recorded as "Race" appear here. Practice sessions, demo races and 
 !!! note
     Championship points use the raw finishing order. Handicaps don't change them.
 
-The **Standings** table shows **Rank**, **Driver**, **Points**, **Carried In**, **Wins**, **Podiums**, **Races**, **DNF** and **Best Finish**. The line under it summarizes the rules in force, for example "12 drivers, 6 races · Stock, mains only · best 5 rounds count" ("hand-picked" when races aren't added automatically). It adds "· 2 forced out" when you've unticked races the rules included, and ends "· 8 drivers carrying points in" when some are.
+The **Standings** table shows **Rank**, **Driver**, **Points**, **Carried In**, **Wins**, **Podiums**, **Races**, **DNF** and **Best Finish**. **Carried In** shows only when somebody has points carried in (see below). The line under it summarizes the rules in force, for example "12 drivers, 6 races · Stock, mains only · best 5 rounds count" ("hand-picked" when races aren't added automatically). It adds "· 2 forced out" when you've unticked races the rules included, and ends "· 8 drivers carrying points in" when some are.
 
 Drivers are matched by the name saved with each result, so keep driver names consistent through a season.
 
