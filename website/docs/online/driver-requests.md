@@ -204,7 +204,7 @@ When the laptop doesn't have the race the query is about, **Noted** says "This l
 
 Select the request and click **Approve**, then **Yes**. The **Desk** button on Race Control lights up for these, as for every request.
 
-- **More time:** when the driver's race is the next one out, it goes back 5 minutes, and with [Auto start](../race-control/running-a-race.md#auto-start-between-races) on, its count moves with it. The phone shows "Q2 Heat 3 goes back 5 minutes for you." When their race isn't next yet, nothing is held and the phone says to ask again when it's next.
+- **More time:** when the driver's race is the next one out, it goes back 5 minutes, and with [Auto start](../race-control/running-a-race.md#auto-start-between-races) on, its count moves with it. Every "about" time after it moves too: the program, the phones' **Schedule** page and the Big Screen's **UP NEXT**. Two approvals put it back 10 minutes. The phone shows "Q2 Heat 3 goes back 5 minutes for you." When their race isn't next yet, nothing is held and the phone says to ask again when it's next.
 - **Skip my race:** the driver comes out of their next race that hasn't run and is scored **DNS** (did not start) for it, the same as the desk's own skip (see [Skip a driver in the next race](../race-control/running-a-race.md#skip-a-driver-in-the-next-race-dns)). The phone shows "You're out of Q2 Heat 3 - it's a DNS. Tell the desk when your car is fixed." **Undo** puts them back in.
 
 Neither happens until the desk approves it. To say no, **Decline** it with a reason.

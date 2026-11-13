@@ -225,6 +225,9 @@ public sealed partial class RaceProgramControl : UserControl
     /// </summary>
     public Func<string?>? RoundOnTrackId { get; set; }
 
+    /// <summary>The next race's start as Race Control has it (12 Nov 2026) - see RaceControlControl.NextStart. Null outside a gap.</summary>
+    public Func<RaceControlControl.NextStartFact?>? NextStart { get; set; }
+
     public RaceProgramControl(
         RaceClassStore raceClasses,
         ProfileStore profiles,
@@ -1268,7 +1271,8 @@ public sealed partial class RaceProgramControl : UserControl
                 DateTime.UtcNow,
                 raceDay.FirstRaceLocalTime,
                 raceDay.Breaks,
-                keepPromises && _settings.AutoStartNeverEarly && _settings.AutoStartBetweenRaces);
+                keepPromises && _settings.AutoStartNeverEarly && _settings.AutoStartBetweenRaces,
+                NextStart?.Invoke());
         }
         catch (Exception ex)
         {

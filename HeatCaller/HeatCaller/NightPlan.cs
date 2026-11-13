@@ -148,7 +148,8 @@ public static class NightPlan
         DateTime nowUtc,
         TimeSpan? firstRaceLocal = null,
         IReadOnlyList<PlannedBreak>? breaks = null,
-        bool keepPromises = false)
+        bool keepPromises = false,
+        RaceControlControl.NextStartFact? nextStart = null)
     {
         var gap = tonightsGap is { } measured && measured > TimeSpan.Zero ? measured : DefaultGap;
         var slots = new List<Slot>();
@@ -204,6 +205,23 @@ public static class NightPlan
             if (nothingRunYet && firstRaceLocal is { } first && NearestOccurrence(first, nowUtc) is var firstUtc && firstUtc > cursor)
             {
                 cursor = firstUtc;
+            }
+
+            // When Race Control will really start the next race (12 Nov
+            // 2026): Auto start's count, which carries a driver's approved
+            // "Need 5 minutes", the desk's +1 min and a Hold; or, with Auto
+            // start off, how far the desk put it back. Everything after it
+            // moves with it.
+            if (nextStart is { } known && firstToRun is not null && string.Equals(known.RoundId, firstToRun.Id, StringComparison.Ordinal))
+            {
+                if (known.StartsAtUtc is { } startsAt)
+                {
+                    cursor = startsAt > nowUtc ? startsAt : nowUtc;
+                }
+                else if (known.PushedBackMinutes > 0)
+                {
+                    cursor += TimeSpan.FromMinutes(known.PushedBackMinutes);
+                }
             }
         }
 
