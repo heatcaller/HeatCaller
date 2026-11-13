@@ -541,6 +541,9 @@ Each preset names the rulebook edition it came from. Check it against your curre
 |---|---|
 | **PN Racing - PNWC 2026 qualifying and mains** | Qualifier format: standard start, 5 minutes, no lap limit. Race format: standard start, 8 minutes, no lap limit. Most laps then time, best 2 heats count, 10 drivers per main, bump-ups off. |
 | **IFMAR - IFMAR-style qualifying clocks** | Qualifier start type set to own clock from first crossing, and most laps then time. Nothing else. |
+| **IFMAR - 1:10 electric off-road (5-minute)** | From IFMAR's 1:10 Electric Off Road rules (version 13 November 2019). Qualifier format: own clock from first crossing, 5 minutes. Race format: grid start, 5 minutes. Most laps then time. 10 drivers per main. A-main in 3 legs, best 2 count. |
+| **IFMAR - 1/10 electric track - ISTC, FWD, E F1 (5-minute)** | From IFMAR's Electric Track rules (September 2024). The same settings as the off-road preset. |
+| **IFMAR - 1/12 electric track (8-minute)** | The same, at 8 minutes. |
 | **BRCA - BRCA on-road qualifying (duration NOT set)** | Qualifier start type set to own clock from first crossing, and most laps then time. The qualifier length is deliberately left for you to set. |
 | **ROAR - 1/10 electric, Level 1-4 (5-minute)** | From the ROAR Rules Ver. 26-10a (October 2026). Qualifier and race formats: 5 minutes, no lap limit. Mains: full-field start. Most laps then time, and the mains set from each driver's single best heat. The qualifier start is left as it is, because ROAR allows either. |
 | **ROAR - 1/12 electric on-road, Level 1-4 (8-minute)** | The same, at 8 minutes. |
@@ -551,7 +554,7 @@ Each preset names the rulebook edition it came from. Check it against your curre
 | **Reedy Race - Touring Car Race of Champions, Open classes (2019)** | From the 2019 event's rules on reedyrace.com, the latest published. Qualifier and race formats: 5 minutes. A-main in 3 legs, best 2 count. Start types are left as they are. |
 
 !!! warning
-    - None of the presets set a points scale. ROAR's and EFRA's qualifying points give the top qualifier 0 points, and HeatCaller's **Points per round** gives 1, so those presets leave the class's qualifying method as it is. The EFRA, NZRCA and Reedy presets set the class's **A-main:** to 3 legs. HeatCaller runs only the A-main in legs, so lower mains that their rules run in legs are run once.
+    - None of the presets set a points scale. IFMAR's, ROAR's and EFRA's qualifying points give the top qualifier 0 points, and HeatCaller's **Points per round** gives 1, so those presets leave the class's qualifying method as it is. The IFMAR section, EFRA, NZRCA and Reedy presets set the class's **A-main:** to 3 legs. HeatCaller runs only the A-main in legs, so lower mains that their rules run in legs are run once.
     - The PNWC preset sets the length of one leg only. It doesn't change the class's **A-main:** setting, so to run PNWC's three-leg A-main, set that yourself (see [Double and triple A-mains](program-and-mains.md#double-and-triple-a-mains)). HeatCaller has no multi-leg lower mains. Read **WHAT IT DOES NOT SET** for each one.
     - If the class was following the app default format, a preset that sets a duration gives the class its own format. Later changes to the app default won't reach it any more. The other settings in that new format start from HeatCaller's built-in values (for example a 3000 ms minimum lap), not from your app default, so check **Race Format** afterwards.
     - Applied from the **Classes** page, the preset is saved as soon as you click **Yes**. Applied from inside the class editor, it's saved when you click **Save** on the class.

@@ -135,6 +135,45 @@ public sealed class SanctioningPresetTests
         AssertClubFormatKept(raceClass.QualifierFormat);
     }
 
+    [Theory]
+    [InlineData("ifmar-electric-offroad-10", 5)]
+    [InlineData("ifmar-electric-track-10", 5)]
+    [InlineData("ifmar-electric-track-12", 8)]
+    public void Ifmar_sections_keep_the_own_clock_start_and_add_lengths_finals_of_ten_and_three_legs(string key, int minutes)
+    {
+        var raceClass = Applied(key);
+
+        Assert.Equal(RaceStartType.Qualifier, raceClass.QualifierFormat!.StartType);
+        Assert.Equal(minutes, raceClass.QualifierFormat.TimeLimitMinutes);
+        Assert.Equal(0, raceClass.QualifierFormat.LapLimit);
+        Assert.Equal(minutes, raceClass.Format!.TimeLimitMinutes);
+        Assert.Equal(RaceStartType.Standard, raceClass.Format.StartType);
+        Assert.Equal(QualifyingMethod.TotalLaps, raceClass.QualifyingMethod);
+        Assert.Equal(10, raceClass.MainSize);
+        Assert.Equal(3, raceClass.AMainLegs);
+        Assert.Equal(2, raceClass.AMainLegsCounted);
+
+        // IFMAR's best-3-of-5/6 is a points count, not the app's heats count.
+        Assert.Equal(3, raceClass.CountBestRounds);
+        Assert.Equal(5, raceClass.ConsecutiveLapCount);
+        Assert.Equal(4, raceClass.BumpUpCount);
+        AssertClubFormatKept(raceClass.Format);
+        AssertClubFormatKept(raceClass.QualifierFormat);
+    }
+
+    [Fact]
+    public void The_ifmar_convention_preset_still_sets_only_the_start_and_the_heat_ranking()
+    {
+        var raceClass = Applied("ifmar-qualifying");
+
+        Assert.Equal(RaceStartType.Qualifier, raceClass.QualifierFormat!.StartType);
+        Assert.Equal(11, raceClass.QualifierFormat.TimeLimitMinutes);
+        Assert.Equal(QualifyingMethod.TotalLaps, raceClass.QualifyingMethod);
+        Assert.Equal(7, raceClass.MainSize);
+        Assert.Equal(1, raceClass.AMainLegs);
+        Assert.Equal(RaceStartType.HandReleased, raceClass.Format!.StartType);
+    }
+
     [Fact]
     public void Reedy_sets_five_minutes_and_a_three_leg_a_main_and_leaves_every_start_alone()
     {
@@ -170,11 +209,14 @@ public sealed class SanctioningPresetTests
     [InlineData("efra-electric-12")]
     [InlineData("nzrca-ep-offroad-10")]
     [InlineData("nzrca-ep-onroad-5min")]
+    [InlineData("ifmar-electric-offroad-10")]
+    [InlineData("ifmar-electric-track-10")]
+    [InlineData("ifmar-electric-track-12")]
     public void Every_rulebook_preset_cites_its_edition_and_says_to_check_it(string key)
     {
         var preset = Preset(key);
 
-        Assert.Contains("2026", preset.Source);
+        Assert.Matches(@"20[12][0-9]", preset.Source);
         Assert.EndsWith("Check against your current rulebook before a sanctioned meeting.", preset.Source);
         Assert.False(string.IsNullOrWhiteSpace(preset.Caveats));
     }

@@ -203,20 +203,61 @@ public static class SanctioningPresets
             "ifmar-qualifying",
             "IFMAR",
             "IFMAR-style qualifying clocks",
-            "IFMAR general rules as published in 2017 and 2019. Those are the most recent versions I could "
-            + "reach, and they may well have been superseded - treat this as the CONVENTION rather than as a "
-            + "current rulebook.",
+            "The IFMAR convention, for any class. Checked in November 2026 against IFMAR's current World "
+            + "Championship rules on ifmar.org (General Rules 2023 V0; Electric Off Road Racing and Technical "
+            + "Rules, version 13 Nov 2019; Electric Track Racing and Technical Rules, September 2024). For a "
+            + "section's lengths, finals and legs, use that section's IFMAR preset below.",
 
-            "Nothing but the start type and the scoring rule: each driver's clock starts at their own first "
-            + "crossing, so the run from the grid to the timing loop costs nobody anything, and the heat is "
-            + "scored on laps then time.",
+            "Nothing but the start type and the heat ranking: each driver's clock starts at their own first "
+            + "crossing, so the run from the grid to the timing loop costs nobody anything, and each heat is "
+            + "ranked on laps then time - which is how IFMAR places a driver in a round (off-road 1.7, track "
+            + "1.4.5).",
 
-            "No durations, no round count, no main sizes and no points. The documents I could reach are old "
-            + "enough that putting a figure from them into your app would be worse than leaving the club's own "
-            + "settings in place - which is what this does.",
+            "No durations, no round count, no main sizes and no points. IFMAR then turns each round's placing "
+            + "into points - 0 for the fastest, 2 for second, 3 for third - and adds the best three of five or "
+            + "six. HeatCaller's points per round gives the fastest 1, which can swap two drivers, so that is "
+            + "not switched on. IFMAR also calls cars away one at a time; HeatCaller sends them together and "
+            + "starts each clock at its own first crossing.",
 
             Qualifier: f => f.StartType = RaceStartType.Qualifier,
             Method: QualifyingMethod.TotalLaps),
+
+        // IFMAR's section rules (ifmar.org, Rules page), World
+        // Championship format. Each keeps the convention preset's own-clock
+        // qualifier start, and adds what the section states:
+        //   1:10 Electric Off Road Racing and Technical Rules, version
+        //   13 Nov 2019 (file "2022 IFMAR WC Electric OFFROAD Rules V2"):
+        //     1.9.1  (p. 6) all heats and finals 5 min.
+        //     1.8.1-1.8.3 (p. 6) the A final is three races of the top ten,
+        //            all finals ten drivers, 1 point for a final's winner,
+        //            best 2 of 3.
+        //     1.10.8 (p. 6) qualifying staggered, car by car; 1.10.9 each
+        //            car's time runs from its own start.
+        //     1.10.10 (p. 6) main finals from a staggered grid of ten rows.
+        //   Electric Track Racing and Technical Rules, 1/12th, 1/10th ISTC,
+        //   FWD & E F1, September 2024:
+        //     1.7.1 / 1.7.2 (p. 11) 1/12 heats and finals 8 min; ISTC, E F1
+        //            and FWD 5 min.
+        //     1.6.1-1.6.3 (p. 10) main finals three races of the top ten,
+        //            all finals ten drivers, 1 point for the winner, best 2
+        //            of 3.
+        //     1.8.2 (p. 11) qualifying staggered, car by car; 1.8.3 main
+        //            finals from an F1 grid of ten rows.
+        // Not set: qualifying scoring (off-road 1.7, track 1.4.5 - 0 points
+        // for the TQ, see the points trap), the round count (five or six),
+        // bump-ups (neither section has any), the lower finals' legs (track
+        // 1.6.1 runs them two or three times; the app runs only the A-main
+        // in legs). Ties: IFMAR's second tie-breaker is laps and times from
+        // the best finish, AMainLegs the last leg's order.
+        Ifmar("ifmar-electric-offroad-10", "1:10 electric off-road (5-minute)",
+            "1:10 Electric Off Road Racing and Technical Rules, version 13 Nov 2019: 1.8.1-1.8.3 finals, 1.9.1 race "
+            + "length, 1.10.8-1.10.10 starts (p. 6)", 5),
+        Ifmar("ifmar-electric-track-10", "1/10 electric track - ISTC, FWD, E F1 (5-minute)",
+            "Electric Track Racing and Technical Rules, September 2024: 1.6.1-1.6.3 finals (p. 10), 1.7.2 race "
+            + "length, 1.8.2-1.8.3 starts (p. 11)", 5),
+        Ifmar("ifmar-electric-track-12", "1/12 electric track (8-minute)",
+            "Electric Track Racing and Technical Rules, September 2024: 1.6.1-1.6.3 finals (p. 10), 1.7.1 race "
+            + "length, 1.8.2-1.8.3 starts (p. 11)", 8),
 
         new(
             "brca-onroad",
@@ -446,6 +487,35 @@ public static class SanctioningPresets
         Main: GridStart(minutes),
         Method: QualifyingMethod.TotalLaps,
         CountBestRounds: 1);
+
+    private static SanctioningPreset Ifmar(string key, string name, string citation, int minutes) => new(
+        key,
+        "IFMAR",
+        name,
+        $"IFMAR World Championship rules (ifmar.org, Rules): {citation}. " + CheckRulebook,
+
+        $"Qualifiers: {minutes} minutes, each driver's clock from their own first crossing. Finals: {minutes} "
+        + "minutes from a grid start. 10 drivers per final. A-main in 3 legs, best 2 count, 1 point for the "
+        + "winner. Each heat ranked on laps then time.",
+
+        "Qualifying points: IFMAR gives the fastest in a round 0 points, second 2, third 3, and adds the best "
+        + "three of five or six rounds; HeatCaller's points per round gives the fastest 1, which can swap two "
+        + "drivers, so that is not switched on and the class's count of heats stays as it is. IFMAR calls cars away one at a time; HeatCaller sends "
+        + "them together and starts each clock at its own first crossing. Bump-ups (none in the rules). Lower "
+        + "finals in legs (HeatCaller runs only the A-main in legs). Ties: IFMAR's second tie-breaker is laps "
+        + "and times from the best finish; HeatCaller's is the last leg.",
+
+        Qualifier: f =>
+        {
+            f.StartType = RaceStartType.Qualifier;
+            f.TimeLimitMinutes = minutes;
+            f.LapLimit = 0;
+        },
+        Main: GridStart(minutes),
+        Method: QualifyingMethod.TotalLaps,
+        MainSize: 10,
+        AMainLegs: 3,
+        AMainLegsCounted: 2);
 
     private static SanctioningPreset Efra(string key, string name, string classes, int minutes) => new(
         key,
