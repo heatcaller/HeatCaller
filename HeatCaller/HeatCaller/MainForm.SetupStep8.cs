@@ -12,7 +12,16 @@ namespace HeatCaller;
 public partial class MainForm
 {
     /// <summary>A marshal didn't turn up: saved on the round, under the club's rule as it stands.</summary>
-    private void LogMarshalNoShow(RoundDefinition round, string who, string transponder)
+    private void LogMarshalNoShow(RoundDefinition round, string who, string transponder) =>
+        LogMarshalNoShow(round, who, transponder, withUndo: true);
+
+    /// <summary>
+    /// The same, without an undo step when it is itself the undo of taking
+    /// one off (bug hunt 17): a step pushed from inside an undo was what the
+    /// next Ctrl+Z, or the rest of a several-step undo, then undid - taking
+    /// the no-show straight back off instead of the older change.
+    /// </summary>
+    private void LogMarshalNoShow(RoundDefinition round, string who, string transponder, bool withUndo)
     {
         if (_rounds.Get(round.Id) is not { } saved)
         {
@@ -43,8 +52,11 @@ public partial class MainForm
         OnClientRawMessage($"{AppTime.LogStampNow()}  [marshals] {saved.RoundLabel}: {who} didn't marshal"
                            + (noShow is null ? "." : $" - {MarshalRule.Consequence(noShow)}."));
 
-        var roundId = saved.Id;
-        _undo.Capture($"Marshal no-show: {who}", () => TakeMarshalNoShowBack(roundId, who, withUndo: false));
+        if (withUndo)
+        {
+            var roundId = saved.Id;
+            _undo.Capture($"Marshal no-show: {who}", () => TakeMarshalNoShowBack(roundId, who, withUndo: false));
+        }
 
         _raceProgram?.RefreshAll();
     }
@@ -102,7 +114,7 @@ public partial class MainForm
             {
                 if (_rounds.Get(roundId) is { } round)
                 {
-                    LogMarshalNoShow(round, who, transponder);
+                    LogMarshalNoShow(round, who, transponder, withUndo: false);
                 }
             });
         }
@@ -115,20 +127,54 @@ public partial class MainForm
     /// raced in tonight before the round they should have marshalled (the
     /// heat before marshals - MarshalAssigner), else their class in that
     /// round, else the round's own.
+    ///
+    /// A driver who has not qualified yet tonight and is not of the round's
+    /// class - a Mod driver covering a post on a Stock heat before Mod's
+    /// first qualifier - was filed under the round's class, where they have
+    /// no result to lose, so the rule never reached them (bug hunt 17). They
+    /// go under a class they qualify in tonight, or failing that their
+    /// profile's, unless the round's class is one of those anyway.
     /// </summary>
-    private string NoShowClassOf(RoundDefinition marshalled, string transponder)
-    {
-        var scope = _raceEvents.ActiveRoundScope();
+    private string NoShowClassOf(RoundDefinition marshalled, string transponder) =>
+        NoShowClassOf(marshalled, transponder, _rounds.All, _raceEvents.ActiveRoundScope(), _profiles);
 
-        var lastRaced = _rounds.All
-            .Where(r => r.Order < marshalled.Order
-                        && r.Kind == RoundKind.Qualifier
+    internal static string NoShowClassOf(RoundDefinition marshalled, string transponder,
+        IEnumerable<RoundDefinition> rounds, IReadOnlySet<string>? scope, ProfileStore? profiles)
+    {
+        var qualifiers = rounds
+            .Where(r => r.Kind == RoundKind.Qualifier
                         && (scope is null || scope.Contains(r.Id))
                         && r.AssignedTransponders.Contains(transponder, StringComparer.OrdinalIgnoreCase))
-            .LastOrDefault();
+            .ToList();
 
-        return lastRaced is not null
-            ? MixedHeats.ClassOfDriver(lastRaced, transponder, _profiles)
-            : MixedHeats.ClassOfDriver(marshalled, transponder, _profiles);
+        if (qualifiers.LastOrDefault(r => r.Order < marshalled.Order) is { } lastRaced)
+        {
+            return MixedHeats.ClassOfDriver(lastRaced, transponder, profiles);
+        }
+
+        var here = MixedHeats.ClassOfDriver(marshalled, transponder, profiles);
+        bool IsHere(string? name) => string.Equals(name?.Trim(), here?.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        var tonight = qualifiers.Select(r => MixedHeats.ClassOfDriver(r, transponder, profiles)).ToList();
+
+        if (tonight.Count > 0)
+        {
+            return tonight.Any(IsHere) ? here : tonight[0];
+        }
+
+        if (profiles?.Get(transponder) is { } profile)
+        {
+            var theirs = (profile.Classes ?? new List<string>()).Prepend(profile.ClassName)
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Select(c => c.Trim())
+                .ToList();
+
+            if (theirs.Count > 0 && !theirs.Any(IsHere))
+            {
+                return theirs[0];
+            }
+        }
+
+        return here;
     }
 }

@@ -4917,8 +4917,16 @@ public sealed partial class RaceProgramControl : UserControl
         var owner = round.MarshalCovers?.FirstOrDefault(kv => string.Equals(kv.Value, marshal, StringComparison.OrdinalIgnoreCase)).Key ?? marshal;
         var driving = round.AssignedTransponders.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        // Nobody already on another post of this race: picked, they stood on
+        // two posts on the sheet and one corner was empty (bug hunt 17).
+        var onAnotherPost = assignment.Posts
+            .Where(p => p.Index != post.Index && p.Transponder is not null)
+            .Select(p => p.Transponder!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         var candidates = _profiles.AllRaceable
-            .Where(p => !driving.Contains(p.Transponder) && !string.Equals(p.Transponder, owner, StringComparison.OrdinalIgnoreCase))
+            .Where(p => !driving.Contains(p.Transponder) && !onAnotherPost.Contains(p.Transponder)
+                        && !string.Equals(p.Transponder, owner, StringComparison.OrdinalIgnoreCase))
             .Select(p => (p.Transponder, string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName))
             .OrderBy(c => c.Item2, StringComparer.CurrentCultureIgnoreCase)
             .ToList();

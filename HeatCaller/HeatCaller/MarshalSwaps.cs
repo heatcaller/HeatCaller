@@ -84,8 +84,15 @@ public static class MarshalSwaps
     /// the round, the way Swap... in the Marshals window does: when the
     /// marshal is covering somebody already, it is that somebody's post that
     /// moves. Null when done, or the reason it can't be.
+    ///
+    /// Nobody stands on two posts of one race (bug hunt 17): two marshals who
+    /// each asked the same free driver both got a yes, and one corner was
+    /// empty while the roster showed it covered. So a cover already covering
+    /// another post of the round is refused, and so is one already
+    /// marshalling it when the caller says who is
+    /// (<paramref name="marshalling"/>, the round's posts as they stand).
     /// </summary>
-    public static string? Cover(RoundDefinition round, string marshal, string cover)
+    public static string? Cover(RoundDefinition round, string marshal, string cover, IEnumerable<string>? marshalling = null)
     {
         if (round.AssignedTransponders.Contains(cover, StringComparer.OrdinalIgnoreCase))
         {
@@ -94,8 +101,17 @@ public static class MarshalSwaps
 
         var owner = round.MarshalCovers?.FirstOrDefault(kv => string.Equals(kv.Value, marshal, StringComparison.OrdinalIgnoreCase)).Key ?? marshal;
         var covers = round.MarshalCovers ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var takingBack = string.Equals(cover, owner, StringComparison.OrdinalIgnoreCase);
+        var onItAlready = covers.TryGetValue(owner, out var current) && string.Equals(current, cover, StringComparison.OrdinalIgnoreCase);
 
-        if (string.Equals(cover, owner, StringComparison.OrdinalIgnoreCase))
+        if (!takingBack && !onItAlready
+            && (covers.Values.Contains(cover, StringComparer.OrdinalIgnoreCase)
+                || (marshalling?.Contains(cover, StringComparer.OrdinalIgnoreCase) ?? false)))
+        {
+            return "They're already marshalling that race, so they can't take a second post.";
+        }
+
+        if (takingBack)
         {
             covers.Remove(owner);
         }

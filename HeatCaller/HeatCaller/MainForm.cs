@@ -1023,6 +1023,18 @@ public partial class MainForm : Form
             // Other pages redraw from the stores when they are next opened.
             TryPost(() =>
             {
+                // A shared heat's saved result names each driver's class too
+                // (MixedHeats.StampClasses). Left under the old name, the
+                // renamed class's championship dropped the heat (bug hunt 17).
+                // Here rather than above: saving a result republishes it.
+                foreach (var session in _sessionHistory.All
+                             .Where(s => s.RoundId is { Length: > 0 } roundId
+                                         && MixedHeats.RenameStamps(s.Results, _rounds.Get(roundId), oldName, newName))
+                             .ToList())
+                {
+                    _sessionHistory.SaveEdited(session);
+                }
+
                 RefreshCurrentPage();
                 _raceControlControl?.RefreshFormat();
             });
@@ -1520,9 +1532,11 @@ public partial class MainForm : Form
         _announcer.PracticeModeProvider = () => _race.IsPracticeMode;
 
         // A shared heat's classes, so the flag names each class's winner
-        // (11 Nov 2026, Phase 4.1). No profile lookups: this can be read off
-        // the UI thread, and the heat records every driver's class itself.
-        _announcer.SharedHeatClasses = () => MixedHeats.ClassMapFor(_activeRound);
+        // (11 Nov 2026, Phase 4.1). This can be read off the UI thread, so
+        // the profiles are asked through their any-thread view: a driver put
+        // in the heat by hand is not in the heat's own record, and was called
+        // in its main class while the result put them in their own (bug hunt 17).
+        _announcer.SharedHeatClasses = () => MixedHeats.ClassMapFor(_activeRound, _profiles.AnyThread);
         _announcer.AnnounceGhostsProvider = () => _ghostStore.Current.AnnounceGhosts;
 
         // How chatty the club wants it, asked on demand for the same

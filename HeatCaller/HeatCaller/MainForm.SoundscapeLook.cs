@@ -45,14 +45,20 @@ public partial class MainForm
                 return;
             }
 
-            var restart = AppDialog.Show(
-                this,
-                $"{theme.Name} wears the \"{look.Name}\" look. The app needs to restart to put it on.\n\nRestart now?",
-                "Change the look",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question);
+            // The race is checked again once the question is answered (bug
+            // hunt 17), as the restores do: practice can start at the gate
+            // while it is on screen, and a yes then restarted over it.
+            var startedMeanwhile = false;
 
-            if (restart == DialogResult.Yes)
+            if (ConfirmedWithNothingStarted(
+                () => AppDialog.Show(
+                    this,
+                    $"{theme.Name} wears the \"{look.Name}\" look. The app needs to restart to put it on.\n\nRestart now?",
+                    "Change the look",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question) == DialogResult.Yes,
+                RaceUnderWayForRestore,
+                () => startedMeanwhile = true))
             {
                 RestartForNewLook();
                 return;
@@ -64,7 +70,8 @@ public partial class MainForm
             _looksControl?.RefreshAll();
 
             OnClientRawMessage(
-                $"{AppTime.LogStampNow()}  [looks] The app switches to \"{look.Name}\" when HeatCaller next starts.");
+                $"{AppTime.LogStampNow()}  [looks] The app switches to \"{look.Name}\" when HeatCaller next starts"
+                + (startedMeanwhile ? ", since a practice or race started while the question was open." : "."));
         }
         catch (Exception ex)
         {

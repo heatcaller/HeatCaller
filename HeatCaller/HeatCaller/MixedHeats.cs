@@ -119,7 +119,11 @@ public static class MixedHeats
     /// first, then their profile, then the round's main class - see the
     /// class notes. Always the main class for a one-class round.
     /// </summary>
-    public static string ClassOfDriver(RoundDefinition round, string transponder, ProfileStore? profiles = null)
+    public static string ClassOfDriver(RoundDefinition round, string transponder, ProfileStore? profiles = null) =>
+        ClassOfDriverBy(round, transponder, profiles is null ? null : key => profiles.Get(profiles.PrimaryForAlternate(key) ?? key));
+
+    /// <summary><see cref="ClassOfDriver"/>, with the profile found by whatever lookup the caller can use on its thread.</summary>
+    private static string ClassOfDriverBy(RoundDefinition round, string transponder, Func<string, DriverProfile?>? profileOf)
     {
         if (!IsShared(round))
         {
@@ -136,11 +140,9 @@ public static class MixedHeats
             return known;
         }
 
-        if (profiles is not null && key.Length > 0)
+        if (profileOf is not null && key.Length > 0)
         {
-            var primary = profiles.PrimaryForAlternate(key) ?? key;
-
-            if (profiles.Get(primary) is { } profile)
+            if (profileOf(key) is { } profile)
             {
                 var fromProfile = ProfileClasses(profile).FirstOrDefault(p => classes.Any(c => Same(c, p)));
                 if (fromProfile is not null)
@@ -199,6 +201,37 @@ public static class MixedHeats
                 result.ClassName = ClassOfDriver(round, result.Transponder, profiles);
             }
         }
+    }
+
+    /// <summary>
+    /// A class was renamed: moves the stamps on a shared heat's saved result
+    /// to the new name (bug hunt 17). The round has its new name by now, so
+    /// a stamp still saying the old one - no longer one of the round's
+    /// classes - is the renamed class's. Left alone, the renamed class's
+    /// championship found no row stamped with its name and scored the heat
+    /// as nothing (<see cref="ScoringFields"/>). The same call with the names
+    /// swapped is the undo. True when a stamp changed.
+    /// </summary>
+    public static bool RenameStamps(IEnumerable<SessionResultEntry> results, RoundDefinition? round, string oldName, string newName)
+    {
+        if (round is null || string.IsNullOrWhiteSpace(oldName) || RunsClass(round, oldName)
+            || ClassesOf(round).FirstOrDefault(c => Same(c, newName)) is not { } renamed)
+        {
+            return false;
+        }
+
+        var changed = false;
+
+        foreach (var result in results)
+        {
+            if (Same(result.ClassName, oldName))
+            {
+                result.ClassName = renamed;
+                changed = true;
+            }
+        }
+
+        return changed;
     }
 
     /// <summary>
@@ -363,6 +396,31 @@ public static class MixedHeats
         foreach (var transponder in round.AssignedTransponders)
         {
             map[transponder.Trim()] = ClassOfDriver(round, transponder, profiles);
+        }
+
+        return map;
+    }
+
+    /// <summary>
+    /// <see cref="ClassMapFor(RoundDefinition?, ProfileStore?)"/> for a reader
+    /// off the UI thread - the announcer (bug hunt 17). A driver put in the
+    /// heat by hand has no entry in the heat's own record, so their profile
+    /// decides, as it does when the result is saved; without it the announcer
+    /// called them in the heat's main class and the results did not.
+    /// <paramref name="drivers"/> is ProfileStore.AnyThread.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string>? ClassMapFor(RoundDefinition? round, IDriverLookup drivers)
+    {
+        if (round is null || !IsShared(round))
+        {
+            return null;
+        }
+
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var transponder in round.AssignedTransponders)
+        {
+            map[transponder.Trim()] = ClassOfDriverBy(round, transponder, drivers.Get);
         }
 
         return map;

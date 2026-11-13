@@ -112,7 +112,14 @@ public partial class MainForm
 
         var before = round.MarshalCovers is null ? null : new Dictionary<string, string>(round.MarshalCovers, StringComparer.OrdinalIgnoreCase);
 
-        if (MarshalSwaps.Cover(round, held, cover) is { } refusal)
+        // Who is on the round's posts as they stand, so a driver who took a
+        // post since they were asked is not given a second one (bug hunt 17).
+        var marshalling = MarshalAssigner.DutiesForDay(_rounds, _raceEvents, _trackLayouts, _profiles)
+            .Where(d => d.RoundId == roundId)
+            .Select(d => d.Transponder)
+            .ToList();
+
+        if (MarshalSwaps.Cover(round, held, cover, marshalling) is { } refusal)
         {
             return refusal;
         }
