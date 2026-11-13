@@ -30,6 +30,17 @@ internal sealed partial class DriverRequestDesk
     /// <summary>Makes a swap: (round id, the marshal's main, the cover's main) to null when done, or why not. Set by the host.</summary>
     public Func<string, string, string, string?>? ApplyMarshalCover { get; set; }
 
+    /// <summary>
+    /// A swap two phones made by themselves (desk approval off): the round id,
+    /// the cover's main transponder and what it did ("Sam P. is covering Max
+    /// P.'s post (Turn 3) in Q2 Heat 3"). The host tells Race Control when it
+    /// was a late one (MarshalSwapNotices) - 13 Nov 2026.
+    /// </summary>
+    public Action<string, string, string>? MarshalSwappedByPhones { get; set; }
+
+    /// <summary>A yes to covering a post that couldn't be made: the notice for Race Control (MarshalSwapNotices.FailedNotice) - 13 Nov 2026.</summary>
+    public Action<string>? MarshalSwapFailed { get; set; }
+
     /// <summary>"Marshal swaps from phones need the desk's OK" - the Driver Requests window's tick.</summary>
     public bool SwapsNeedDesk
     {
@@ -122,7 +133,20 @@ internal sealed partial class DriverRequestDesk
             return true;
         }
 
-        return MakeCover(request, offer, out said);
+        if (!MakeCover(request, offer, out said, out var made, out var failed))
+        {
+            // Both drivers agreed and think it's sorted: the desk has to know
+            // the original marshal is still on the post (13 Nov 2026).
+            if (failed is not null)
+            {
+                MarshalSwapFailed?.Invoke(failed);
+            }
+
+            return false;
+        }
+
+        MarshalSwappedByPhones?.Invoke(offer.Text("round"), DriverOf(request)!.Transponder, made);
+        return true;
     }
 
     /// <summary>The desk approves a yes to covering a post: the swap is made, and both phones follow it.</summary>
@@ -140,7 +164,7 @@ internal sealed partial class DriverRequestDesk
             return false;
         }
 
-        if (OfferFor(request, out refusal) is not { } offer || !MakeCover(request, offer, out var said))
+        if (OfferFor(request, out refusal) is not { } offer || !MakeCover(request, offer, out var said, out _, out _))
         {
             return false;
         }
@@ -172,8 +196,13 @@ internal sealed partial class DriverRequestDesk
         return offer;
     }
 
-    private bool MakeCover(DriverRequest request, DriverRequest offer, out string said)
+    /// <param name="made">What the swap did, for the desk (MarshalSwapNotices.Made) - empty unless made.</param>
+    /// <param name="failed">The desk's notice when both drivers agreed but the swap couldn't be made - null otherwise.</param>
+    private bool MakeCover(DriverRequest request, DriverRequest offer, out string said, out string made, out string? failed)
     {
+        made = string.Empty;
+        failed = null;
+
         if (DriverOf(request) is not { } cover)
         {
             said = "HeatCaller doesn't know your badge - ask at the desk.";
@@ -186,14 +215,18 @@ internal sealed partial class DriverRequestDesk
             return false;
         }
 
+        // No full stop of its own: the short name ends in one ("Max P.").
+        var ownerName = MarshalSwaps.ShortName(owner.DriverName);
+        var coverName = MarshalSwaps.ShortName(cover.DriverName);
+
         if (ApplyMarshalCover!(offer.Text("round"), owner.Transponder, cover.Transponder) is { } refusal)
         {
             said = refusal;
+            failed = MarshalSwapNotices.FailedNotice(coverName, ownerName, offer.Text("post"), offer.Text("title"), refusal);
             return false;
         }
 
-        // No full stop of its own: the short name ends in one ("Max P.").
-        var ownerName = MarshalSwaps.ShortName(owner.DriverName);
+        made = MarshalSwapNotices.Made(coverName, ownerName, offer.Text("post"), offer.Text("title"));
         said = $"You're covering {PostWords(offer.Text("post"))} in {offer.Text("title")} for {ownerName}" + (ownerName.EndsWith('.') ? string.Empty : ".");
         _log("[driver requests] A marshal swap from two phones was made.");
         return true;

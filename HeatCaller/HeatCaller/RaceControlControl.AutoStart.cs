@@ -412,6 +412,7 @@ public sealed partial class RaceControlControl
         // step 8): all of them in opens the gate by itself, and the banner
         // says who's in and who isn't. Worked out only when the club waits.
         IReadOnlyList<bool>? arrived = null;
+        IReadOnlyList<string?>? coveringFor = null;
         IReadOnlyList<(string Name, string Post)> shown = facts.Marshals;
 
         if (waitForMarshals)
@@ -419,6 +420,7 @@ public sealed partial class RaceControlControl
             var posts = MarshalPostsFor(next);
             arrived = MarshalsFromPhones(next, posts);
             shown = posts.Select(p => (p.Name, p.Post)).ToList();
+            coveringFor = posts.Select(p => CoveringFor(next, p.Transponder)).ToList();
         }
 
         // Never more than 2 minutes early (12 Nov 2026, setup plan step 8):
@@ -438,7 +440,7 @@ public sealed partial class RaceControlControl
 
         _autoStartState = _autoStart.Step(now, floorBusy, NotSeenIn(next, now), Gap.PushedBackMinutes, waitForMarshals);
 
-        ShowMarshalsAsk(next, shown, waitForMarshals, now, arrived);
+        ShowMarshalsAsk(next, shown, waitForMarshals, now, arrived, coveringFor);
         UpdatePhoneCountdown(now);
 
         switch (_autoStartState)

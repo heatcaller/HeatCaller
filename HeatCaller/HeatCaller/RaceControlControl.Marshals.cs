@@ -64,6 +64,95 @@ public sealed partial class RaceControlControl
         _btnMarshalsMissing.Click += (_, _) => ShowMarshalsMissingMenu();
 
         _marshalsBanner.Controls.Add(new ButtonBar(tight: true).With(_lblMarshalsBanner, inPlace, _btnMarshalsMissing));
+
+        BuildSwapNotice();
+    }
+
+    // ── Late and failed swaps from phones (13 Nov 2026) ─────────────────────
+    //
+    // A swap two phones agree early is routine: the log and Driver Requests'
+    // Answered list have it, and the banner above names the cover. A late one,
+    // or a yes that couldn't be made, can leave a corner wrong - that comes
+    // up here, in the same warning frame, until the desk says Got it.
+    // See MarshalSwapNotices.
+
+    private readonly TableLayoutPanel _swapNotice = new();
+    private readonly Label _lblSwapNotice = new();
+
+    private void BuildSwapNotice()
+    {
+        _swapNotice.AutoSize = true;
+        _swapNotice.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _swapNotice.ColumnCount = 1;
+        _swapNotice.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        _swapNotice.Padding = new Padding(14, 10, 14, 10);
+        _swapNotice.Visible = false;
+        _swapNotice.Paint += (_, e) =>
+        {
+            using var pen = new Pen(AppTheme.Warning, 2);
+            e.Graphics.DrawRectangle(pen, 1, 1, _swapNotice.Width - 2, _swapNotice.Height - 2);
+        };
+
+        _lblSwapNotice.AutoSize = true;
+        _lblSwapNotice.Font = AppTheme.BoldFont;
+        _lblSwapNotice.Margin = new Padding(0, 6, 12, 0);
+        _lblSwapNotice.MaximumSize = new Size(720, 0);
+
+        var gotIt = new Button { Text = "Got it" };
+        gotIt.Click += (_, _) =>
+        {
+            _swapNotice.Visible = false;
+            _lblSwapNotice.Text = string.Empty;
+        };
+
+        _swapNotice.Controls.Add(new ButtonBar(tight: true).With(_lblSwapNotice, gotIt));
+    }
+
+    /// <summary>
+    /// Puts a late or failed swap in front of the director, and in the log.
+    /// A second one before Got it goes under the first, so neither is lost.
+    /// </summary>
+    public void ShowMarshalSwapNotice(string notice)
+    {
+        if (string.IsNullOrWhiteSpace(notice))
+        {
+            return;
+        }
+
+        _lblSwapNotice.Text = _swapNotice.Visible && _lblSwapNotice.Text.Length > 0
+            ? _lblSwapNotice.Text + Environment.NewLine + notice
+            : notice;
+        _swapNotice.Visible = true;
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [marshals] {notice}");
+    }
+
+    /// <summary>Why a swap just made for this round is late (MarshalSwapNotices.Lateness), or null when it isn't.</summary>
+    public string? MarshalSwapLateness(string roundId, DateTime nowUtc)
+    {
+        var active = _activeRound?.Invoke();
+        var onTrack = string.Equals(active?.Id, roundId, StringComparison.Ordinal)
+                      && _race.State is not (RaceState.Idle or RaceState.Finished);
+        var isNext = string.Equals(NextRound()?.Id, roundId, StringComparison.Ordinal);
+        var counting = _autoStart.IsOpen && string.Equals(_autoStart.RoundId, roundId, StringComparison.Ordinal);
+
+        return MarshalSwapNotices.Lateness(
+            onTrack,
+            isNext,
+            marshalsCalled: string.Equals(_marshalsCalledFor, roundId, StringComparison.Ordinal),
+            marshalsBeingChecked: _marshalsBanner.Visible && string.Equals(_marshalsRound?.Id, roundId, StringComparison.Ordinal),
+            untilStart: counting ? _autoStart.Remaining(nowUtc, Gap.PushedBackMinutes) : null);
+    }
+
+    /// <summary>Who a marshal on a round is covering for, by the name the announcer uses - null when it's their own post.</summary>
+    private string? CoveringFor(RoundDefinition round, string transponder)
+    {
+        if (round.MarshalCovers is not { Count: > 0 } covers || string.IsNullOrWhiteSpace(transponder))
+        {
+            return null;
+        }
+
+        var owner = covers.FirstOrDefault(kv => string.Equals(kv.Value?.Trim(), transponder.Trim(), StringComparison.OrdinalIgnoreCase)).Key;
+        return string.IsNullOrWhiteSpace(owner) ? null : SpokenNameOf(owner);
     }
 
     /// <summary>
@@ -71,7 +160,7 @@ public sealed partial class RaceControlControl
     /// start until somebody confirms, and at zero calls the posts once.
     /// </summary>
     private void ShowMarshalsAsk(RoundDefinition next, IReadOnlyList<(string Name, string Post)> marshals, bool waitForMarshals, DateTime nowUtc,
-        IReadOnlyList<bool>? arrived = null)
+        IReadOnlyList<bool>? arrived = null, IReadOnlyList<string?>? coveringFor = null)
     {
         var remaining = _autoStart.Remaining(nowUtc, Gap.PushedBackMinutes);
         var show = waitForMarshals
@@ -88,7 +177,14 @@ public sealed partial class RaceControlControl
         _marshalsShown = marshals;
         _marshalsRound = next;
 
-        var text = MarshalsInPlace.Ask(next.RoundLabel, marshals, waiting: _autoStartState == AutoStartState.WaitingForMarshals, arrived);
+        // "Sam for Max" on a covered post (13 Nov 2026), so the director looks
+        // for the right person on the corner. Only on the banner: the
+        // announcer calls Sam, and Someone's missing... matches the plain names.
+        var labelled = coveringFor is null
+            ? marshals
+            : marshals.Select((m, i) => (MarshalSwapNotices.BannerName(m.Name, i < coveringFor.Count ? coveringFor[i] : null), m.Post)).ToList();
+
+        var text = MarshalsInPlace.Ask(next.RoundLabel, labelled, waiting: _autoStartState == AutoStartState.WaitingForMarshals, arrived);
 
         if (_lblMarshalsBanner.Text != text)
         {
