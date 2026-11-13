@@ -40,6 +40,12 @@ rem An absolute path, so the folder is the same one whatever directory this
 rem was called from.
 for %%P in ("%OUT%") do set "OUT=%%~fP"
 
+rem No trailing backslash (tab-completion adds one): "folder\" ends in \",
+rem which dotnet reads as a quote that is part of the path, and the publish
+rem would fail after the previous one had already been cleared. A drive
+rem root (D:\) keeps its backslash.
+if "%OUT:~-1%"=="\" if not "%OUT:~-2,1%"==":" set "OUT=%OUT:~0,-1%"
+
 echo.
 echo === HeatCaller: self-contained publish ===
 echo   from: %~dp0

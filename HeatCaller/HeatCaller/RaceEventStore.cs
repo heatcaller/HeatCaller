@@ -765,8 +765,18 @@ public sealed class RaceEventStore
             return moved;
         }
 
+        // The days whose class order or declined late entries named the old
+        // class - kept for the undo, apart from the returned list, because a
+        // day can name a class there without listing it in ClassNames.
+        var setupMoved = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var raceEvent in _events)
         {
+            if (RenameInNightSetup(raceEvent, oldName, newName))
+            {
+                setupMoved.Add(raceEvent.Id);
+            }
+
             if (raceEvent.ClassNames is null
                 || !raceEvent.ClassNames.Any(c => string.Equals(c, oldName, StringComparison.OrdinalIgnoreCase)))
             {
@@ -781,12 +791,67 @@ public sealed class RaceEventStore
             moved.Add(raceEvent.Id);
         }
 
-        if (moved.Count > 0)
+        _nightSetupRenames[NightSetupRenameKey(oldName, newName)] = setupMoved;
+
+        if (moved.Count > 0 || setupMoved.Count > 0)
         {
             Save();
         }
 
         return moved;
+    }
+
+    /// <summary>
+    /// For each class rename made on this store, the days whose night setup
+    /// (ClassRunningOrder, LateEntriesDeclined) it moved - so UndoRenameClass
+    /// puts back those days and no others. Not saved: an undo does not
+    /// outlive the app either.
+    /// </summary>
+    private readonly Dictionary<string, HashSet<string>> _nightSetupRenames = new(StringComparer.OrdinalIgnoreCase);
+
+    private static string NightSetupRenameKey(string oldName, string newName) => $"{oldName.Trim()}\n{newName.Trim()}";
+
+    /// <summary>
+    /// Moves one day's class order and declined late entries from one class
+    /// name to another. True when anything changed.
+    ///
+    /// Bug hunt 17: a rename only rewrote ClassNames, so a day's
+    /// ClassRunningOrder went on naming the old class - the renamed class
+    /// matched nothing in it and ran after every listed class, on that day
+    /// and on every later day copied from it - and a late entry declined as
+    /// "Stock|1234" was asked about again.
+    /// </summary>
+    private static bool RenameInNightSetup(RaceEvent raceEvent, string from, string to)
+    {
+        bool IsFrom(string? name) => string.Equals(name?.Trim(), from.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        var changed = false;
+
+        if (raceEvent.ClassRunningOrder is { } order && order.Any(IsFrom))
+        {
+            raceEvent.ClassRunningOrder = order
+                .Select(c => IsFrom(c) ? to : c)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            changed = true;
+        }
+
+        // Kept as LateArrivals.Key, "class|transponder" - the class is
+        // everything before the last bar.
+        bool IsDeclinedFrom(string key) => key.LastIndexOf('|') is >= 0 and var bar && IsFrom(key[..bar]);
+
+        if (raceEvent.LateEntriesDeclined is { } declined && declined.Any(IsDeclinedFrom))
+        {
+            raceEvent.LateEntriesDeclined = declined
+                .Select(k => IsDeclinedFrom(k) ? LateArrivals.Key(to, k[(k.LastIndexOf('|') + 1)..]) : k)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            changed = true;
+        }
+
+        return changed;
     }
 
     /// <summary>
@@ -832,8 +897,17 @@ public sealed class RaceEventStore
         var merged = moved.Where(id => keep.Contains(id)).ToHashSet(StringComparer.Ordinal);
         var changed = false;
 
+        // The days whose class order or declined late entries the rename
+        // moved go back too - see RenameInNightSetup.
+        _nightSetupRenames.Remove(NightSetupRenameKey(oldName, newName), out var setupMoved);
+
         foreach (var raceEvent in _events)
         {
+            if (setupMoved is not null && setupMoved.Contains(raceEvent.Id) && RenameInNightSetup(raceEvent, newName, oldName))
+            {
+                changed = true;
+            }
+
             if (raceEvent.ClassNames is null
                 || !raceEvent.ClassNames.Any(c => string.Equals(c, newName, StringComparison.OrdinalIgnoreCase)))
             {

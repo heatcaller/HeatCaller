@@ -1268,10 +1268,23 @@ public sealed class SoundEffectsControl : UserControl
         {
             btnTest.Enabled = false;
             _lblStatus.Text = $"Playing {SoundEffectsProfile.Describe(kind).ToLowerInvariant()}... (volume={CurrentVolume():0.00})";
+            _lblStatus.ForeColor = AppTheme.TextMuted;
             try
             {
+                // Looked at before it plays: what the row is about to play.
+                var passedOver = OwnFilePassedOver(kind, cmbSound, row.FilePath);
+
                 await PlayRowAsync(kind, cmbSound, row.FilePath);
-                _lblStatus.Text = "Done.";
+
+                if (passedOver is null)
+                {
+                    _lblStatus.Text = "Done.";
+                }
+                else
+                {
+                    _lblStatus.Text = OwnFileNotPlayedStatus(SoundEffectsProfile.Describe(kind), passedOver);
+                    _lblStatus.ForeColor = AppTheme.Danger;
+                }
             }
             catch (Exception ex)
             {
@@ -1455,6 +1468,31 @@ public sealed class SoundEffectsControl : UserControl
     }
 
     /// <summary>
+    /// The row's own file when PlayRowAsync would not play it - there, but
+    /// not something this PC can decode, or gone - else null.
+    ///
+    /// WHY (bug hunt 17): such a file falls back to the pack sound or the
+    /// tone, and Test said "Done." and Test All "everything played" over a
+    /// sound that was not the club's. Before the fallback, silence was the
+    /// clue; now the status line says so.
+    /// </summary>
+    private static string? OwnFilePassedOver(SoundEffectKind kind, ComboBox sound, string filePath) =>
+        SoundPacks.OwnFilePassedOver(
+            new SoundEffectConfig { BuiltInSound = SoundKeyOf(sound), CustomFilePath = filePath.Trim() }, kind);
+
+    /// <summary>What Test says when the row's own file was passed over and the pack sound or tone played in its place.</summary>
+    internal static string OwnFileNotPlayedStatus(string effect, string filePath) =>
+        $"{effect}: your own file ({DisplayNameOf(filePath)}) could not be played - it is missing, or not a sound this PC can read. "
+        + "The pack sound or tone played instead.";
+
+    /// <summary>What Test All says at the end: every sound played as set, or which rows' own files were passed over.</summary>
+    internal static string TestedAllStatus(int tested, IReadOnlyList<string> passedOver) =>
+        passedOver.Count == 0
+            ? $"Tested all {tested} enabled sounds - everything played."
+            : $"Tested all {tested} enabled sounds, but {(passedOver.Count == 1 ? "one of your own files" : $"{passedOver.Count} of your own files")} "
+              + $"could not be played - the pack sound or tone played instead: {string.Join(", ", passedOver)}.";
+
+    /// <summary>
     /// Writes the page out as soon as anything on it changes.
     ///
     /// This page used to wait for a Save button, and that button cost two
@@ -1503,9 +1541,21 @@ public sealed class SoundEffectsControl : UserControl
         var races = profile.Effects.Values.Count(c => c.Enabled);
         var practice = profile.Effects.Values.Count(c => c.EnabledInPractice ?? c.Enabled);
 
-        _lblStatus.Text = $"Saved {AppTime.TimeWithSeconds(DateTime.Now)} - {Plural.Of(races, "sound")} on for races, {practice} for practice.";
-        _lblStatus.ForeColor = AppTheme.TextMuted;
+        _lblStatus.Text = SavedStatus(_store.LoadedUnreadable, AppTime.TimeWithSeconds(DateTime.Now), races, practice);
+        _lblStatus.ForeColor = _store.LoadedUnreadable ? AppTheme.Danger : AppTheme.TextMuted;
     }
+
+    /// <summary>
+    /// The status line after a save. 13 Nov 2026, Bug hunt 17: it said
+    /// "Saved" even while the store was holding its writes (the file could
+    /// not be read at startup - SoundEffectsStore.LoadedUnreadable), so an
+    /// evening's set-up looked saved and was gone at the next start.
+    /// </summary>
+    internal static string SavedStatus(bool notWritten, string time, int races, int practice) =>
+        notWritten
+            ? "Not saved - the sounds file (sound-effects.json) couldn't be read when HeatCaller started, so it is left as it is. "
+              + "These changes play until HeatCaller closes. Restart HeatCaller to save changes."
+            : $"Saved {time} - {Plural.Of(races, "sound")} on for races, {practice} for practice.";
 
     /// <summary>
     /// Puts one of this page's bulk or destructive changes on the undo
@@ -1668,6 +1718,10 @@ public sealed class SoundEffectsControl : UserControl
                 return;
             }
 
+            // The rows whose own file was passed over for the pack or tone.
+            var passedOver = new List<string>();
+            _lblStatus.ForeColor = AppTheme.TextMuted;
+
             for (var i = 0; i < enabled.Count; i++)
             {
                 var kind = enabled[i].Key;
@@ -1676,6 +1730,11 @@ public sealed class SoundEffectsControl : UserControl
 
                 try
                 {
+                    if (OwnFilePassedOver(kind, row.Sound, row.FilePath) is not null)
+                    {
+                        passedOver.Add(SoundEffectsProfile.Describe(kind));
+                    }
+
                     await PlayRowAsync(kind, row.Sound, row.FilePath);
                 }
                 catch (Exception ex)
@@ -1687,7 +1746,8 @@ public sealed class SoundEffectsControl : UserControl
                 await Task.Delay(350);
             }
 
-            _lblStatus.Text = $"Tested all {enabled.Count} enabled sounds - everything played.";
+            _lblStatus.Text = TestedAllStatus(enabled.Count, passedOver);
+            _lblStatus.ForeColor = passedOver.Count == 0 ? AppTheme.TextMuted : AppTheme.Danger;
         }
         finally
         {

@@ -106,6 +106,9 @@ public sealed partial class RelayPublisher : IDisposable
     /// <summary>Kept under the relay's own default body limit so a payload is refused here, with a readable message, rather than there.</summary>
     private const int MaxPayloadBytes = 900 * 1024;
 
+    /// <summary>The most of any one answer that is read. Has to hold the relay's fullest driver/inbox - see where the client is made.</summary>
+    internal const int MaxAnswerBytes = 4 * 1024 * 1024;
+
     private static readonly TimeSpan[] Backoff =
     {
         TimeSpan.FromSeconds(1),
@@ -188,6 +191,7 @@ public sealed partial class RelayPublisher : IDisposable
         // A ledger from before it recorded its relay describes the one in
         // use: until now the window was cleared whenever that changed.
         AdoptLedger(_target);
+        KeepWindowWithLedger();
 
         // A timeout, not the default of 100 seconds. A socket that hangs
         // must not hold the queue for a minute and a half.
@@ -198,10 +202,15 @@ public sealed partial class RelayPublisher : IDisposable
         // sent on to wherever "there" is. A relay that moves gets its new
         // address typed in, deliberately.
         //
-        // A megabyte for any answer. Everything the relay says back is a
-        // line or two of JSON, and the inbox is capped on its side; a
-        // misconfigured address that answers with a video stream must not
-        // be read into memory whole.
+        // Four megabytes for any answer. Nearly everything the relay says
+        // back is a line or two of JSON; a misconfigured address that
+        // answers with a video stream must not be read into memory whole.
+        //
+        // Four, not one, because of the drivers' requests: the relay holds
+        // up to 200 of them at up to 12 KB each (a setup sheet) and gives
+        // them all in one answer - 2.4 MB at the very most. Over the limit
+        // that answer could never be read, so nothing was ever confirmed
+        // and the inbox never emptied.
         _http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
         {
             // A backstop only. The real limit is per request and is worked
@@ -210,7 +219,7 @@ public sealed partial class RelayPublisher : IDisposable
             // them short, because HttpClient.Timeout is a hard ceiling that
             // a per-request token cannot extend.
             Timeout = TimeSpan.FromSeconds(60),
-            MaxResponseContentBufferSize = 1024 * 1024,
+            MaxResponseContentBufferSize = MaxAnswerBytes,
         };
 
         _worker = new Thread(Run)
@@ -1233,6 +1242,13 @@ public sealed partial class RelayPublisher : IDisposable
                     _settings.Save();
                 }
 
+                // The ledger's own copy of the window - see Ledger.From.
+                if (now != _ledger.From)
+                {
+                    _ledger.From = now;
+                    changed = true;
+                }
+
                 if (changed)
                 {
                     _ledger.Save();
@@ -1357,6 +1373,39 @@ public sealed partial class RelayPublisher : IDisposable
         catch
         {
             // Adopted in memory, written with the ledger's next change.
+        }
+    }
+
+    /// <summary>
+    /// Makes the window in settings and the ledger's own copy of it agree,
+    /// at startup - see RelayResultsIndex.Ledger.From. After a standby PC's
+    /// Take Over the ledger is the timing PC's and the settings are still
+    /// this PC's, and the ledger's window is the one its exceptions mean.
+    /// Never throws.
+    /// </summary>
+    private void KeepWindowWithLedger()
+    {
+        try
+        {
+            lock (_ledgerGate)
+            {
+                var window = _ledger.KeepWindow(_settings.RelayResultsFromUtc, out var changed);
+
+                if (window != _settings.RelayResultsFromUtc)
+                {
+                    _settings.RelayResultsFromUtc = window;
+                    _settings.Save();
+                }
+
+                if (changed)
+                {
+                    _ledger.Save();
+                }
+            }
+        }
+        catch
+        {
+            // Settled in memory, written with the next change to either.
         }
     }
 
@@ -1660,7 +1709,46 @@ public sealed partial class RelayPublisher : IDisposable
 
     /// <param name="Reissued">Already sent once with a fresh seq after the relay said it held a newer one. See Drain.</param>
     /// <param name="Result">A session's result, for the results index once the relay has answered for it; null for anything else. See PublishResult.</param>
-    private sealed record Pending(string Channel, string? ItemId, string Json, long Seq, bool Reissued = false, ResultNote? Result = null);
+    /// <param name="QueuedTick">When it was queued, on TickSource - for a live frame, what "held" is counted from. See HeldMs.</param>
+    private sealed record Pending(string Channel, string? ItemId, string Json, long Seq, bool Reissued = false, ResultNote? Result = null, long QueuedTick = 0);
+
+    /// <summary>
+    /// The clock a waiting frame is timed on: Environment.TickCount64, unless
+    /// a test has put its own here. Never the wall clock, which Windows can
+    /// step - see _nextAttemptTick.
+    /// </summary>
+    internal Func<long> TickSource { get; set; } = static () => Environment.TickCount64;
+
+    /// <summary>
+    /// How long a frame queued at <paramref name="queuedTick"/> has been held
+    /// by <paramref name="nowTick"/>, in milliseconds - never negative.
+    ///
+    /// WHY (13 Nov 2026, bug hunt 17, #173): the relay notes when each car's
+    /// newest lap reached it, and a phone reading lap times out drops a lap
+    /// more than a few seconds old by that. But a frame can wait here - a
+    /// backoff, a request that timed out, a big upload ahead of it - and
+    /// stamped on arrival its laps looked new, so they were said late. The
+    /// live state now says on each row how old the lap was when the frame
+    /// was built (RelayLapAge), and its publish says how long the frame then
+    /// waited ("held"), worked out at each send - so a frame sent again says
+    /// more than it did the first time. The relay takes both off the arrival.
+    ///
+    /// The time the request then spends on the network is not counted and
+    /// cannot be: that would need this laptop's clock and the relay's to
+    /// agree to the second, and nothing makes them.
+    /// </summary>
+    internal static long HeldMs(long queuedTick, long nowTick) => Math.Max(0, nowTick - queuedTick);
+
+    /// <summary>
+    /// Where a document is published. "held" goes on the live state only,
+    /// and as a query the relay reads beside seq - a relay from before it
+    /// reads seq alone and takes the frame as it always did.
+    /// </summary>
+    internal static string PublishPath(string root, string club, string channel, string? itemId, long seq, long? heldMs) =>
+        itemId is null
+            ? $"{root}/api/v1/c/{club}/publish/{channel}?seq={seq}"
+              + (heldMs is { } held ? $"&held={held.ToString(System.Globalization.CultureInfo.InvariantCulture)}" : string.Empty)
+            : $"{root}/api/v1/c/{club}/publish/{channel}/{itemId}?seq={seq}";
 
     /// <param name="result">For a session's result, what the worker notes for the results index once the relay answers. See Pending.</param>
     /// <returns>Whether it was queued - false when it was dropped, which PublishResult has to know. See NoteResultsWindow.</returns>
@@ -1687,7 +1775,7 @@ public sealed partial class RelayPublisher : IDisposable
 
             lock (_gate)
             {
-                var item = new Pending(channel, itemId, json, NextSeq(), Result: result);
+                var item = new Pending(channel, itemId, json, NextSeq(), Result: result, QueuedTick: TickSource());
 
                 if (itemId is null)
                 {
@@ -3445,9 +3533,14 @@ public sealed partial class RelayPublisher : IDisposable
             return SendOutcome.Retry;
         }
 
-        var path = item.ItemId is null
-            ? $"{root}/api/v1/c/{club}/publish/{item.Channel}?seq={item.Seq}"
-            : $"{root}/api/v1/c/{club}/publish/{item.Channel}/{item.ItemId}?seq={item.Seq}";
+        // How long the live frame has waited, as of THIS attempt - see HeldMs.
+        var path = PublishPath(
+            root,
+            club,
+            item.Channel,
+            item.ItemId,
+            item.Seq,
+            item.ItemId is null && item.Channel == NameOf(RelayChannel.State) ? HeldMs(item.QueuedTick, TickSource()) : null);
 
         try
         {
@@ -4283,7 +4376,8 @@ public sealed partial class RelayPublisher : IDisposable
         || segment.Equals("standings", StringComparison.OrdinalIgnoreCase)
         || segment.Equals("badges", StringComparison.OrdinalIgnoreCase)
         || segment.Equals("tracks", StringComparison.OrdinalIgnoreCase)
-        || segment.Equals("checkin", StringComparison.OrdinalIgnoreCase);
+        || segment.Equals("checkin", StringComparison.OrdinalIgnoreCase)
+        || segment.Equals("mynight", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Makes a session id safe to be a file name on the relay.

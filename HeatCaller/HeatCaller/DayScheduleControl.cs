@@ -494,7 +494,7 @@ public sealed class DayScheduleControl : UserControl
     {
         // Generated lines tick themselves off once their round is recorded
         // - the whole point of a line knowing which heat it is.
-        _schedule.AutoCompleteRecorded(id => _rounds.Get(id)?.IsRecorded == true);
+        _schedule.AutoCompleteRecorded(id => _rounds.Get(id)?.IsRecorded == true, id => _rounds.Get(id) is not null);
 
         // A move asks for a particular line back; otherwise whatever the
         // cursor was on.
@@ -1198,6 +1198,13 @@ public sealed class DayScheduleControl : UserControl
             // page to follow. Nothing to refresh from here.
             _reselect = entry.Id;
             MoveRoundRequested?.Invoke(entry.RoundId, direction);
+
+            // That redraw happens inside the call above, and takes the line
+            // with it. When the programme refuses the move - the first heat
+            // up, the last one down - nothing redraws, and a line left here
+            // would pull the cursor back to this heat at some later redraw,
+            // off whatever had been clicked since.
+            _reselect = null;
 
             return;
         }

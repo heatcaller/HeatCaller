@@ -1505,6 +1505,10 @@ public sealed partial class RaceControlSession
         _heardThisRace.Clear();
         _bothCarsWarned.Clear();
         _jumpFiledFromAlternate.Clear();
+
+        // Here because this runs wherever the standings are wiped.
+        _lapTimedFromRemovedCrossing.Clear();
+        _removedLapTimes.Clear();
     }
 
     /// <summary>
@@ -1587,6 +1591,81 @@ public sealed partial class RaceControlSession
 
         Log($"{mainId} is on track as well as its alternate {alternate} - the jump start before the green "
             + $"was {alternate}'s, so it has been moved to {alternate}.");
+    }
+
+    /// <summary>
+    /// RefileCountdownJumpToAlternate the other way round. Called when an
+    /// alternate's first pass after the green is merged into its owner's
+    /// row: a jump start booked under the alternate's own id before the
+    /// green - with its penalty, its crossing and any start lap the green
+    /// credited for it - goes to the owner's row with it.
+    /// </summary>
+    /// <remarks>
+    /// WHY (13 Nov 2026, bug hunt 17): the owner's main car rolled over the
+    /// loop once during staging, so their spare, jumping in the countdown,
+    /// was kept as a car of its own and the jump was booked under the
+    /// spare. The green forgets the decisions, the spare's next pass merged
+    /// into the owner's row, and nothing moved the jump: the penalty was
+    /// never applied, and the spare's credited start lap sat on the board
+    /// as a one-lap row that the finish then waited on.
+    /// </remarks>
+    private void RefileCountdownJumpToOwner(string alternate, string primary)
+    {
+        if (State != RaceState.Racing)
+        {
+            return;
+        }
+
+        var moved = false;
+
+        if (_jumpStarters.Remove(alternate))
+        {
+            _jumpStarters.Add(primary);
+            moved = true;
+        }
+
+        // Never on top of what the owner's own id already holds: one
+        // driver, one jump, one penalty.
+        if (_pendingJumpStartPenalties.Remove(alternate, out var owed))
+        {
+            _pendingJumpStartPenalties.TryAdd(primary, owed);
+            moved = true;
+        }
+
+        if (_jumpStartCrossingMs.Remove(alternate, out var crossedAt))
+        {
+            _jumpStartCrossingMs.TryAdd(primary, crossedAt);
+            moved = true;
+        }
+
+        // Only a row that is still exactly what the green made it - the
+        // credited start lap and nothing since. The owner's own row, when
+        // there is one already, is the driver's; the alternate's is dropped.
+        if (_standings.TryGetValue(alternate, out var credited)
+            && credited.StartLapCredited && credited.Laps == 1 && credited.LapTimesMs.Count == 1)
+        {
+            _standings.Remove(alternate);
+
+            if (!_standings.ContainsKey(primary))
+            {
+                var row = new RacerStanding
+                {
+                    TransponderId = primary,
+                    StartPosition = StartPositionOf(primary),
+                };
+
+                CreditStartLap(row, credited.LastLapDeviceTimeMs);
+                _standings[primary] = row;
+            }
+
+            RenumberStartPositionsOverStarters();
+            moved = true;
+        }
+
+        if (moved)
+        {
+            Log($"{alternate} is being timed as {primary} - its jump start before the green has been moved to {primary}.");
+        }
     }
 
     public event Action<RaceState>? StateChanged;
@@ -1697,6 +1776,13 @@ public sealed partial class RaceControlSession
         var before = standing.Laps;
         var mergedAny = false;
 
+        // What the one timed lap merged below was, for the lap that follows
+        // it - see _removedLapTimes.
+        var timedLapsMerged = 0;
+        long removedLapMs = 0;
+        var removedARecoveryLap = false;
+        var startLapWasCredited = standing.StartLapCredited;
+
         // Taking a lap off has to take its TIME with it, or the count and
         // the lap list disagree. It used to change the count alone, so a
         // double read corrected by hand left its phantom split in place: a
@@ -1721,6 +1807,10 @@ public sealed partial class RaceControlSession
             }
 
             var lastIndex = standing.LapTimesMs.Count - 1;
+
+            timedLapsMerged++;
+            removedLapMs = standing.LapTimesMs[lastIndex];
+            removedARecoveryLap |= standing.IsRecoveryLap(lastIndex);
 
             if (standing.LapTimesMs.Count >= 2)
             {
@@ -1794,6 +1884,36 @@ public sealed partial class RaceControlSession
             RecomputeAfterLapRemoval(standing);
         }
 
+        // The crossing that ended the lap just taken off is still what the
+        // next lap is timed from - see _lapTimedFromRemovedCrossing.
+        // Not once the lap list is empty: the reference is cleared above and
+        // the next lap is the start lap.
+        if (mergedAny && standing.LapTimesMs.Count > 0 && standing.LastLapDeviceTimeMs > 0)
+        {
+            var alreadyWaiting = !_lapTimedFromRemovedCrossing.Add(standing.TransponderId);
+
+            // The removed lap's time is kept, so the next lap can be given
+            // it - see _removedLapTimes. Only for the plain case, one timed
+            // lap folded into the one before it: a second lap taken off
+            // before the next crossing, a lap through a crash recovery, or
+            // a credited jump-starter's start lap leave no telling whose
+            // the time is, and the next lap is only kept out of the bests.
+            if (timedLapsMerged == 1 && !alreadyWaiting && removedLapMs > 0 && !removedARecoveryLap && !startLapWasCredited)
+            {
+                _removedLapTimes[standing.TransponderId] =
+                    new RemovedLapTime(standing.LapTimesMs.Count - 1, removedLapMs, standing.LapTimesMs[^1]);
+            }
+            else
+            {
+                _removedLapTimes.Remove(standing.TransponderId);
+            }
+        }
+        else if (mergedAny)
+        {
+            _lapTimedFromRemovedCrossing.Remove(standing.TransponderId);
+            _removedLapTimes.Remove(standing.TransponderId);
+        }
+
         Log($"Manual adjustment: {transponderId} laps {before} -> {standing.Laps}");
         SafeRaise(StandingAdjusted, h => h(standing), nameof(StandingAdjusted));
 
@@ -1801,6 +1921,105 @@ public sealed partial class RaceControlSession
         // taken for a correction made after the flag.
         ApplyLapLimitAfterCorrection(standing, before);
         return true;
+    }
+
+    /// <summary>
+    /// Drivers whose most recent counted crossing had its lap taken off by
+    /// hand (-1 Lap), until their next counted lap - which is not a timed
+    /// lap: it stays out of bests, the race's fastest lap and streaks, the
+    /// same as a lap run through a crash recovery.
+    /// </summary>
+    /// <remarks>
+    /// WHY (13 Nov 2026, bug hunt 17): the lap taken off is folded into the
+    /// one before it, but its crossing stays the reference the next lap is
+    /// timed from. When that crossing was the false one - a car carried
+    /// back over the loop after a crash at the line, and -1 Lap pressed
+    /// straight away, as the guide says to - the next real lap was timed
+    /// from it and came out short: an 11 s lap booked as 7 s, the driver's
+    /// best and the race's fastest lap, called out and saved. Nothing says
+    /// which of the two crossings was the false one, so the lap is counted
+    /// (the laps still add up to the elapsed time) but never made a best.
+    /// </remarks>
+    private readonly HashSet<string> _lapTimedFromRemovedCrossing = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A lap taken off by hand and folded into the lap before it, kept
+    /// until the driver's next counted lap: which lap in the list it was
+    /// folded into, how long it was, and what the folded lap came to.
+    /// </summary>
+    public readonly record struct RemovedLapTime(int LapIndex, long RemovedMs, long MergedMs);
+
+    /// <summary>
+    /// The time of the lap taken off each driver in
+    /// _lapTimedFromRemovedCrossing, where it is known whose it could be -
+    /// see GiveRemovedLapToTheShorterLap.
+    /// </summary>
+    /// <remarks>
+    /// WHY (13 Nov 2026, bug hunt 17, second pass): keeping the lap after
+    /// -1 Lap out of the session's bests was not enough. Its false short
+    /// time was still in the lap list, and everything that reads the saved
+    /// list - best-lap and best-consecutive qualifying, the highlights, the
+    /// driver's records - took the 7 s "lap" as a best. The stored times
+    /// have to be right, so the removed lap's time is moved to where it
+    /// leaves no lap falsely short.
+    /// </remarks>
+    private readonly Dictionary<string, RemovedLapTime> _removedLapTimes = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Called for the first lap counted after one was taken off by hand,
+    /// timed (lapTimeMs) from the crossing that was taken off. Decides
+    /// which of the two laps either side of that crossing the removed
+    /// lap's time belongs to, moves it there, and returns this lap's time.
+    /// </summary>
+    /// <remarks>
+    /// Three crossings: the one before the lap taken off, the one that
+    /// ended it, and this one. Either the middle one was false (the lap
+    /// before really ran on to the removed crossing: the fold is right,
+    /// and so is this lap as timed) or the removed one was (a car carried
+    /// back over the loop: the lap before was right as it stood, and this
+    /// lap really began a removed-lap's-time earlier). Nothing says which.
+    /// So the time goes to whichever of the two laps is the shorter
+    /// without it: that is the reading in which neither lap comes out
+    /// shorter than the driver's real shorter lap of the two, whichever
+    /// crossing was false - so no false best, here or in anything that
+    /// reads the saved lap list. The other reading can leave a lap short
+    /// by the whole removed time (an 11 s lap booked as 7 s). The laps add
+    /// up to the elapsed time either way.
+    ///
+    /// A start lap is never read as a best, so when the lap before is one
+    /// (or ran through a crash recovery) the time always goes to this lap.
+    /// </remarks>
+    private long GiveRemovedLapToTheShorterLap(RacerStanding standing, RemovedLapTime removed, long lapTimeMs)
+    {
+        var index = standing.LapTimesMs.Count - 1;
+
+        // Only while the lap list is still as the correction left it.
+        if (index < 0 || index != removed.LapIndex || standing.LapTimesMs[index] != removed.MergedMs
+            || removed.RemovedMs <= 0 || removed.MergedMs < removed.RemovedMs)
+        {
+            return lapTimeMs;
+        }
+
+        var lapBeforeMs = removed.MergedMs - removed.RemovedMs;
+        var lastStartLapIndex = standing.StartLapCredited ? 1 : 0;
+        var lapBeforeIsFlying = index > lastStartLapIndex && !standing.IsRecoveryLap(index);
+
+        if (lapBeforeIsFlying && lapBeforeMs <= lapTimeMs)
+        {
+            // The fold stands: this lap is the longer of the two as timed.
+            return lapTimeMs;
+        }
+
+        standing.LapTimesMs[index] = lapBeforeMs;
+
+        // The lap before is itself again, and may be the driver's best -
+        // or the race's fastest lap - as it was before the false crossing.
+        RecomputeAfterLapRemoval(standing);
+
+        Log($"{standing.TransponderId}: the {removed.RemovedMs}ms lap taken off by hand goes with this lap rather than the one before "
+            + $"(lap before {lapBeforeMs}ms, this lap {lapTimeMs}ms + {removed.RemovedMs}ms).");
+
+        return lapTimeMs + removed.RemovedMs;
     }
 
     /// <summary>
@@ -2190,6 +2409,15 @@ public sealed partial class RaceControlSession
         internal long LastLapDeviceTimeBefore { get; init; }
         internal bool LapReferenceCleared { get; set; }
 
+        // Whether the driver's next lap was already marked as timed from a
+        // crossing taken off (see _lapTimedFromRemovedCrossing). Undo puts
+        // the mark back as it was, while no lap has been counted since.
+        internal bool LapTimedFromRemovedCrossingBefore { get; init; }
+
+        // And the removed lap's time that went with the mark, if any - see
+        // _removedLapTimes.
+        internal RemovedLapTime? RemovedLapTimeBefore { get; init; }
+
         // Stamped once the correction has been made.
         internal int LapsAfter { get; set; }
         internal List<long> LapTimesAfter { get; set; } = new();
@@ -2253,6 +2481,10 @@ public sealed partial class RaceControlSession
             TookTheFlagBefore = _tookTheFlag.Contains(standing.TransponderId),
             StartLapCreditedBefore = standing.StartLapCredited,
             LastLapDeviceTimeBefore = standing.LastLapDeviceTimeMs,
+            LapTimedFromRemovedCrossingBefore = _lapTimedFromRemovedCrossing.Contains(standing.TransponderId),
+            RemovedLapTimeBefore = _removedLapTimes.TryGetValue(standing.TransponderId, out var removedLapBefore)
+                ? (RemovedLapTime?)removedLapBefore
+                : null,
         };
 
         if (!change())
@@ -2317,7 +2549,32 @@ public sealed partial class RaceControlSession
             var afterCount = edit.LapTimesAfter.Count;
             var lapsSince = standing.LapTimesMs.Count - afterCount;
 
-            if (lapsSince < 0 || !standing.LapTimesMs.Take(afterCount).SequenceEqual(edit.LapTimesAfter)
+            // Bug hunt 17: the lap this correction took off may have been
+            // moved since from the lap before it onto the lap counted next -
+            // see GiveRemovedLapToTheShorterLap. That is this correction's
+            // own doing, not a later one: the lap before then reads exactly
+            // the removed lap short of what the correction left (nothing
+            // else ever shortens a lap), and the time comes back out of the
+            // next lap below.
+            long movedOntoNextLapMs = 0;
+
+            if (lapsSince >= 1 && afterCount >= 1 && edit.LapTimesBefore.Count == afterCount + 1)
+            {
+                var removedMs = edit.LapTimesBefore[^1];
+
+                if (removedMs > 0
+                    && standing.LapTimesMs[afterCount - 1] == edit.LapTimesAfter[afterCount - 1] - removedMs
+                    && standing.LapTimesMs[afterCount] >= removedMs
+                    && standing.LapTimesMs.Take(afterCount - 1).SequenceEqual(edit.LapTimesAfter.Take(afterCount - 1)))
+                {
+                    movedOntoNextLapMs = removedMs;
+                }
+            }
+
+            var lapsAsLeft = movedOntoNextLapMs > 0
+                             || standing.LapTimesMs.Take(afterCount).SequenceEqual(edit.LapTimesAfter);
+
+            if (lapsSince < 0 || !lapsAsLeft
                 || standing.Laps - edit.LapsAfter < lapsSince)
             {
                 throw new InvalidOperationException(
@@ -2325,6 +2582,12 @@ public sealed partial class RaceControlSession
             }
 
             var newTimes = standing.LapTimesMs.Skip(afterCount).ToList();
+
+            if (movedOntoNextLapMs > 0)
+            {
+                newTimes[0] -= movedOntoNextLapMs;
+            }
+
             var newStreaks = standing.StreakAtLap.Skip(edit.StreakCountAfter).ToList();
             // By lap index, so each new lap keeps its own sectors whatever
             // length the list had - one restored from an older journal is short.
@@ -2381,6 +2644,25 @@ public sealed partial class RaceControlSession
                 standing.StreakBaselineLapMs = edit.StreakBaselineBefore;
                 standing.StreakLapTimeSumMs = edit.StreakSumBefore;
                 standing.StreakLapCount = edit.StreakCountBefore;
+
+                // The lap taken off is back, and its crossing with it.
+                if (edit.LapTimedFromRemovedCrossingBefore)
+                {
+                    _lapTimedFromRemovedCrossing.Add(standing.TransponderId);
+                }
+                else
+                {
+                    _lapTimedFromRemovedCrossing.Remove(standing.TransponderId);
+                }
+
+                if (edit.RemovedLapTimeBefore is { } removedLapBefore)
+                {
+                    _removedLapTimes[standing.TransponderId] = removedLapBefore;
+                }
+                else
+                {
+                    _removedLapTimes.Remove(standing.TransponderId);
+                }
             }
 
             // Works the best lap, the run and the race's fastest lap out again
@@ -3409,7 +3691,49 @@ public sealed partial class RaceControlSession
         // Whether the grid is the last race's order, numbered over the cars
         // that race - see RenumberStartPositionsOverStarters. Null - a
         // journal written before it was stored - leaves it as it is.
-        bool? RenumberGridOverStarters = null);
+        bool? RenumberGridOverStarters = null,
+
+        // Bug hunt 17. Drivers whose next lap is timed from a crossing taken
+        // off by hand - see _lapTimedFromRemovedCrossing. Null - the journal
+        // - marks none.
+        IReadOnlyList<string>? LapTimedFromRemovedCrossing = null,
+
+        // Bug hunt 17. When the race was called to the grid - see
+        // StagedAtUtc. A Stage that abandons a running race stamps its own,
+        // and undoing it has to put this race's back. Null - the journal, or
+        // a race never staged - leaves it as it is.
+        DateTime? StagedAtUtc = null,
+
+        // Bug hunt 17. The race start, the start of a red that was out, and
+        // the moment the snapshot was taken, as read on the monotonic clock
+        // (see _raceStartClockMs). Without them a race put back had its
+        // clock worked out again from the UTC stamps, so a Windows time step
+        // earlier in the race - which the live clock had ignored - moved it
+        // by the size of the step, and the time limit with it. Readings are
+        // only good inside the app run that took them: null in the journal,
+        // which places the stamps from the wall clock as before. Each is
+        // kept with the stamp it was read for, and is only used while the
+        // snapshot still holds that stamp.
+        ClockReading? RaceStartReading = null,
+        ClockReading? RedFlagStartedReading = null,
+        long? TakenClockMs = null,
+
+        // Bug hunt 17. The time of the lap taken off each of the drivers in
+        // LapTimedFromRemovedCrossing - see _removedLapTimes. Null - the
+        // journal - holds none, and the next lap is only kept out of bests.
+        IReadOnlyDictionary<string, RemovedLapTime>? RemovedLapTimes = null)
+    {
+        /// <summary>The race start's reading, while RaceStartUtc is still the stamp it was taken for.</summary>
+        internal long? RaceStartClockMs =>
+            RaceStartReading is { } reading && reading.Utc == RaceStartUtc ? reading.ClockMs : null;
+
+        /// <summary>The red's reading, while RedFlagStartedUtc is still the stamp it was taken for.</summary>
+        internal long? RedFlagStartedClockMs =>
+            RedFlagStartedReading is { } reading && reading.Utc == RedFlagStartedUtc ? reading.ClockMs : null;
+    }
+
+    /// <summary>A UTC stamp and what the monotonic clock read at that moment - see SessionSnapshot.RaceStartReading.</summary>
+    public readonly record struct ClockReading(DateTime Utc, long ClockMs);
 
     public SessionSnapshot CreateSnapshot()
     {
@@ -3480,7 +3804,13 @@ public sealed partial class RaceControlSession
             _finalMinuteAnnounced,
             _elapsedAtFinish,
             _restoredGenerations.Append(SessionGeneration).ToList(),
-            _renumberGridOverStarters);
+            _renumberGridOverStarters,
+            _lapTimedFromRemovedCrossing.ToList(),
+            StagedAtUtc,
+            RaceStartUtc is { } startUtc && _raceStartClockMs is { } startClockMs ? new ClockReading(startUtc, startClockMs) : null,
+            _redFlagStartedUtc is { } redUtc && _redFlagStartedClockMs is { } redClockMs ? new ClockReading(redUtc, redClockMs) : null,
+            NowMs,
+            new Dictionary<string, RemovedLapTime>(_removedLapTimes, StringComparer.OrdinalIgnoreCase));
 
         // WHY (23 Oct 2026, timing layer, P0): recorded, and remembered by
         // its line, so a Restore can say which snapshot it put back and a
@@ -3610,8 +3940,10 @@ public sealed partial class RaceControlSession
         _redFlagStartedUtc = snapshot.RedFlagStartedUtc;
 
         // Placed on the monotonic clock once, here - see _raceStartClockMs.
-        _raceStartClockMs = RaceStartUtc is { } restoredStart ? ClockMsAt(restoredStart) : null;
-        _redFlagStartedClockMs = _redFlagStartedUtc is { } restoredRed ? ClockMsAt(restoredRed) : null;
+        // Bug hunt 17: the snapshot's own readings where it has them, so a
+        // time step earlier in the race does not move the clock put back.
+        _raceStartClockMs = RaceStartUtc is { } restoredStart ? snapshot.RaceStartClockMs ?? ClockMsAt(restoredStart) : null;
+        _redFlagStartedClockMs = _redFlagStartedUtc is { } restoredRed ? snapshot.RedFlagStartedClockMs ?? ClockMsAt(restoredRed) : null;
         _raceFastestLapMs = snapshot.RaceFastestLapMs;
         _raceFastestLapTransponder = snapshot.RaceFastestLapTransponder;
 
@@ -3645,6 +3977,8 @@ public sealed partial class RaceControlSession
         RestoreInto(_jumpStarters, snapshot.JumpStarters);
         RestoreInto(_pendingJumpStartPenalties, snapshot.PendingJumpStartPenalties);
         RestoreInto(_jumpStartCrossingMs, snapshot.JumpStartCrossingMs);
+        RestoreInto(_lapTimedFromRemovedCrossing, snapshot.LapTimedFromRemovedCrossing);
+        RestoreInto(_removedLapTimes, snapshot.RemovedLapTimes);
 
         // After the standings and clock above, because an older journal
         // that did not store these has them worked out from both.
@@ -3666,6 +4000,14 @@ public sealed partial class RaceControlSession
         // handlers see it too - see GreenFlag.
         GreenStartedTheRace = false;
         SetState(snapshot.State);
+
+        // The call-up time of the race put back, not of whatever replaced
+        // it - see SetState. After SetState, which may stamp or clear it.
+        if (snapshot.StagedAtUtc is { } stagedAt)
+        {
+            StagedAtUtc = stagedAt;
+        }
+
         SetFlag(snapshot.Flag);
         Log("Session restored (reset undone).");
     }
@@ -3774,6 +4116,14 @@ public sealed partial class RaceControlSession
         {
             redBeforeSnapshot = takenUtc - redStartedUtc;
 
+            // Bug hunt 17: on the monotonic clock where the snapshot has the
+            // readings, so a time step while that red was out is not banked
+            // as red time (or taken off it).
+            if (snapshot.RedFlagStartedClockMs is { } redStartedClockMs && snapshot.TakenClockMs is { } takenClockMs)
+            {
+                redBeforeSnapshot = TimeSpan.FromMilliseconds(takenClockMs - redStartedClockMs);
+            }
+
             if (redBeforeSnapshot < TimeSpan.Zero)
             {
                 redBeforeSnapshot = TimeSpan.Zero;
@@ -3820,6 +4170,13 @@ public sealed partial class RaceControlSession
             AccumulatedRedTime = snapshot.AccumulatedRedTime + redBeforeSnapshot,
             RedFlagStartedUtc = now,
             FinishingSinceUtc = snapshot.FinishingSinceUtc is { } finishingSince ? finishingSince + gap : null,
+
+            // Bug hunt 17: the start's own reading moves by the same gap,
+            // so the clock comes back where it stood whatever the wall
+            // clock did earlier in the race. The red starts now and has no
+            // reading yet.
+            RaceStartReading = snapshot.RaceStartClockMs is { } startClockMs ? new ClockReading(start + gap, startClockMs + gapMs) : null,
+            RedFlagStartedReading = null,
         });
 
         // The live rows rather than the snapshot's, so this moves the one
@@ -4556,7 +4913,11 @@ public sealed partial class RaceControlSession
         // pace): the first move into staging or the countdown from rest. A
         // countdown after a stage keeps the stage's time - the grid wait is
         // from when the drivers were called, not from the last press.
-        if (state is RaceState.Staging or RaceState.Countdown && State is RaceState.Idle or RaceState.Finished)
+        //
+        // Bug hunt 17: from a running race too. Stage or Countdown pressed
+        // over a race abandons it, and the race called now was called now -
+        // it used to be saved with the abandoned race's call-up time.
+        if (state is RaceState.Staging or RaceState.Countdown && State is not (RaceState.Staging or RaceState.Countdown))
         {
             StagedAtUtc = UtcNow;
         }

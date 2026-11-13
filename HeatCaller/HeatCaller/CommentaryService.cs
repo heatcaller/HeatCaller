@@ -256,6 +256,23 @@ public sealed class CommentaryService
             .Take(8)
             .ToList();
 
+    /// <summary>
+    /// How many drivers are in a round - all of them, not the eight
+    /// <see cref="IntroGrid"/> names. A ten-car main was announced as "8
+    /// drivers on the grid" and the introductions then introduced ten.
+    /// Counted the way the intro's names are, so a round of eight or fewer
+    /// counts exactly the names it lists.
+    /// </summary>
+    private int FieldSize(IEnumerable<string> transponders) =>
+        transponders
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Select(PromptName)
+            .Count(n => !string.IsNullOrWhiteSpace(n));
+
+    /// <summary>The fact line that gives the size of a field the facts name only the first eight of, or nothing when they name all of it.</summary>
+    private static string FieldSizeFact(int fieldSize, int named) =>
+        fieldSize > named ? $"Drivers in the race: {fieldSize} (not all of them are named here)\n" : string.Empty;
+
     /// <summary>Configured externally so the settings page can rebuild it without restarting anything.</summary>
     public ICommentaryBrain? Client { get; set; }
 
@@ -585,6 +602,7 @@ public sealed class CommentaryService
 
         return named
             .Where(n => n.Value.Count == 1 && n.Value.First().Length > 0)
+            .Where(n => NamedOnItsOwn(facts, n.Key, named.Keys))
             .OrderBy(n => facts.IndexOf(n.Key, StringComparison.Ordinal))
             .Take(12)
             .Select(n => $"{n.Key}: {n.Value.First()}")
@@ -607,6 +625,24 @@ public sealed class CommentaryService
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Whether the facts use <paramref name="name"/> somewhere other than
+    /// inside a longer name they also use. The roster holds everybody who
+    /// has ever raced, so "Sam" - not here tonight - was found inside
+    /// "Sam Jones", and her facts gained "Sam: he/him" beside her own line.
+    /// </summary>
+    private static bool NamedOnItsOwn(string facts, string name, IEnumerable<string> matched)
+    {
+        var rest = facts;
+
+        foreach (var longer in matched.Where(m => m.Length > name.Length && Names(m, name)).OrderByDescending(m => m.Length))
+        {
+            rest = rest.Replace(longer, "\n", StringComparison.Ordinal);
+        }
+
+        return Names(rest, name);
     }
 
     /// <summary>
@@ -1218,6 +1254,14 @@ public sealed class CommentaryService
         var positions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var result in session.Results)
         {
+            // A car that turned no lap, retired or was disqualified keeps a
+            // place on the record, and "finished ahead of" a driver who did
+            // not finish is not a result - the placings' own rule.
+            if (!Classified(result))
+            {
+                continue;
+            }
+
             var name = _profiles.Get(result.Transponder)?.DriverName;
             if (!string.IsNullOrWhiteSpace(name))
             {
@@ -1236,8 +1280,8 @@ public sealed class CommentaryService
                 continue;
             }
 
-            // Both must have actually raced - a rivalry with one driver
-            // absent has no result to report.
+            // Both must have actually raced, and finished - a rivalry with
+            // one driver absent or unclassified has no result to report.
             if (!positions.TryGetValue(rivalry.DriverA, out var posA)
                 || !positions.TryGetValue(rivalry.DriverB, out var posB))
             {
@@ -1380,6 +1424,9 @@ public sealed class CommentaryService
         {
             return null;
         }
+
+        // The size of the whole field, which is not the number named - see FieldSize.
+        var fieldSize = FieldSize(round.AssignedTransponders);
 
         // For the same drivers named above, and no others - see IntroGrid.
         var rivalries = RivalryLinesFor(onTrack);
@@ -1623,6 +1670,7 @@ public sealed class CommentaryService
                 ? $"Classes: {string.Join(" and ", MixedHeats.ClassesOf(round).Select(Field))} share this race, each scored on its own\n"
                 : $"Class: {Field(round.ClassName)}\n") +
             $"Drivers on track:{string.Join(", ", names)}\n" +
+            FieldSizeFact(fieldSize, names.Count) +
             (string.IsNullOrWhiteSpace(round.TrackLayoutName) ? "" : $"Track: {Field(round.TrackLayoutName)}\n") +
             (rivalries.Count > 0 ? string.Join("\n", rivalries) + "\n" : string.Empty) +
             (details.Count > 0 ? "Driver details:\n" + string.Join("\n", details) + "\n" : string.Empty) +
@@ -1828,8 +1876,8 @@ public sealed class CommentaryService
                 timeout: BetweenRacesTimeout),
             // And the size of the field, which the facts list by name but
             // never count - "six drivers on the grid" is true and was not in
-            // them. See ImpliedCounts.
-            CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose) + "\n" + ImpliedCounts(names.Count),
+            // them. See ImpliedCounts. The whole field, not the eight named.
+            CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose) + "\n" + ImpliedCounts(fieldSize),
             "round intro", repair: true);
 
         if (!string.IsNullOrWhiteSpace(answer))
@@ -1879,7 +1927,7 @@ public sealed class CommentaryService
             if (introductionsFollow && answer is not null)
             {
                 answer = IntroRepeats.WithoutRollCall(answer, names, notes)
-                         ?? $"Up next, {Field(round.RoundLabel)}: {Plural.Of(names.Count, "driver")} on the grid.";
+                         ?? $"Up next, {Field(round.RoundLabel)}: {Plural.Of(fieldSize, "driver")} on the grid.";
             }
 
             if (notes.Count > 0)
@@ -3361,6 +3409,13 @@ public sealed class CommentaryService
         var ordered = session.Results.OrderBy(r => r.Position).Take(finisherCount).ToList();
         var winner = ordered[0];
 
+        // Position 1 is the winner only when it is a classified finisher -
+        // see ClassifiedWinner. A one-car main black-flagged was recapped
+        // with "naming the winner Sam" under "P1 Sam - disqualified". The
+        // recap is still written - what happened is still worth telling -
+        // but it names no winner and credits nobody as one.
+        var won = Classified(winner);
+
         // Per-driver best laps deliberately OMITTED.
         //
         // Listing a lap time on every result line, plus a separate
@@ -3437,7 +3492,7 @@ public sealed class CommentaryService
 
         // The winner's team and sponsors only. The whole field's would turn
         // a sign-off into a list of names; the winner is who gets credited.
-        var winnerDetails = DriverDetailLinesFor(new[] { winner.Transponder });
+        var winnerDetails = won ? DriverDetailLinesFor(new[] { winner.Transponder }) : new List<string>();
 
         // THE HISTORY THE RECAP NEVER HAD (10 Oct 2026).
         //
@@ -3526,7 +3581,7 @@ public sealed class CommentaryService
             .ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 
         var mainsPack = HistoryPack(
-            CommentaryRaceFacts.ForTheMainsHere(mains, winner.Transponder, PromptName(winner.Transponder), $"night:{mainsNight}"),
+            CommentaryRaceFacts.ForTheMainsHere(won ? mains : null, winner.Transponder, PromptName(winner.Transponder), $"night:{mainsNight}"),
             MaxMainsChars);
 
         var mainsLines = HistoryLines(mainsPack);
@@ -3637,7 +3692,10 @@ public sealed class CommentaryService
                 : string.Empty) +
             (handicapLines.Count > 0 ? string.Join("\n", handicapLines) + "\n" : string.Empty) +
             // 11 Nov 2026: the last leg of a multi-leg A-main decides it overall.
-            (string.IsNullOrWhiteSpace(aMainOverall) ? string.Empty : $"{aMainOverall.Trim()}\n") +
+            // Cleaned like every other typed value: it is built by the
+            // caller around drivers' names, which could otherwise close the
+            // facts block or break the line. A sentence, so a night fact's length.
+            (Field(aMainOverall, MaxNightFactChars) is { Length: > 0 } overall ? $"{overall}\n" : string.Empty) +
             (targetLines.Count > 0 ? $"Lap targets: {string.Join("; ", targetLines)}\n" : string.Empty) +
             (directorNote.Length > 0 ? $"Race director's note on this race: \"{directorNote}\"\n" : string.Empty) +
             FactsClose + "\n" +
@@ -3663,7 +3721,13 @@ public sealed class CommentaryService
             //
             // Nor does it promise what comes next, interview or honours -
             // either can still be dropped.
-            + (moreFollows
+            + (!won
+                ? (moreFollows
+                      ? "\nWrap up the race for the broadcast audience - but don't sign off, and don't hand over to anybody."
+                      : "\nSign off the race for the broadcast audience.")
+                  + " Nobody was classified as a finisher, so this race has no winner: do not call anybody the winner"
+                  + " or say that anybody won, and say what the results show instead."
+                : moreFollows
                 ? $"\nWrap up the race for the broadcast audience, naming the winner {PromptName(winner.Transponder)} - "
                   + "but don't sign off: end on the result, and don't hand over to anybody."
                 : $"\nSign off the race for the broadcast audience, naming the winner {PromptName(winner.Transponder)}.")
@@ -4049,7 +4113,9 @@ public sealed class CommentaryService
             return null;
         }
 
-        var winner = session.Results.OrderBy(r => r.Position).First();
+        // Null when nobody was classified - a one-car main black-flagged had
+        // "Winner: Sam" here all the same. See ClassifiedWinner.
+        var winner = ClassifiedWinner(session);
         var showName = Field(context.ShowName, MaxShowNameChars);
         var upNext = Field(context.UpNext, MaxFieldChars * 2);
         var host = Field(context.AnnouncerName, MaxShowNameChars);
@@ -4060,7 +4126,7 @@ public sealed class CommentaryService
             (host.Length > 0 ? $"Host: {host}\n" : string.Empty) +
             $"Race just finished: {SpokenLabel(session)}\n" +
             (context.Kind is not null ? $"Type: {context.Kind}\n" : string.Empty) +
-            $"Winner: {PromptName(winner.Transponder)}\n" +
+            (winner is not null ? $"Winner: {PromptName(winner.Transponder)}\n" : string.Empty) +
             (upNext.Length > 0 ? $"Up next on the program: {upNext}\n" : string.Empty) +
             FactsClose + "\n" +
             "\nWrite the closing line of this race's broadcast segment in the style of a flashy TV sports broadcast - "
@@ -4075,7 +4141,9 @@ public sealed class CommentaryService
                 ? ", teeing up what is up next on the program by the name given there"
                 : ", without naming any next race - none is given, and the race just finished is not next")
             + (host.Length > 0 ? ", signing off as the Host named in the facts" : string.Empty)
-            + ". The result has already been told: name the winner once at most and add nothing else about the race. "
+            + (winner is not null
+                ? ". The result has already been told: name the winner once at most and add nothing else about the race. "
+                : ". The result has already been told and the race had no classified winner: name no winner and add nothing about the race. ")
             + $"One or two short sentences, under {ClosingWords + 10} words.";
 
         // Its figures checked against its facts (8 Nov 2026). Dropped, the
@@ -5107,6 +5175,9 @@ public sealed class CommentaryService
             .Where(n => n.Length > 0)
             .ToList();
 
+        // The size of the whole field, which is not the number named - see FieldSize.
+        var fieldSize = FieldSize(round.AssignedTransponders);
+
         var teammates = team.Length == 0
             ? new List<string>()
             : onTrack
@@ -5148,6 +5219,7 @@ public sealed class CommentaryService
             (car.Length > 0 ? $"Driver's car: {car}\n" : string.Empty) +
             (team.Length > 0 ? $"Driver's team: {team}\n" : string.Empty) +
             (grid.Count > 0 ? $"On the grid: {string.Join(", ", grid)}\n" : string.Empty) +
+            FieldSizeFact(fieldSize, grid.Count) +
             (teammates.Count > 0 ? $"The team's other drivers in this race: {string.Join(", ", teammates)}\n" : string.Empty) +
             (rivalries.Count > 0 ? string.Join("\n", rivalries) + "\n" : string.Empty) +
             (night.Count > 0 ? string.Join("\n", night) + "\n" : string.Empty) +
@@ -5210,7 +5282,7 @@ public sealed class CommentaryService
         var exchanges = await AskForInterviewAsync(
             facts, name, PrincipalLabels, new[] { driver, name, car, team, Field(round.RoundLabel) },
             timeout: null, log, ct, interviewer: interviewer,
-            impliedCounts: ImpliedCounts(grid.Count));
+            impliedCounts: ImpliedCounts(fieldSize));
 
         // HELD TO IT (19 Oct 2026): asked for hopes and respect for the
         // rivals, a principal answered "with Al, Terry, Ela and Dee all

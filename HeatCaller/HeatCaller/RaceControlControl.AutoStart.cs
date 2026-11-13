@@ -639,6 +639,17 @@ public sealed partial class RaceControlControl
                 return $"{name} isn't in a race still to run - nothing to hold.";
             }
 
+            // Theirs is the race in the Round box, picked and not started
+            // (bug hunt 17, with NextRaceOf): there is no count to move, and
+            // minutes owed to it would never be given - it is not "next" at
+            // any gap. The desk starts it by hand, so the desk is told.
+            if (string.Equals(theirs.Id, _activeRound?.Invoke()?.Id, StringComparison.Ordinal))
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] {name} asked for more time from their phone - {theirs.RoundLabel} is the race in hand, "
+                                      + $"so give them {LateMinutes} minutes before you start it.");
+                return $"The desk knows you need {LateMinutes} minutes before {theirs.RoundLabel}.";
+            }
+
             var owed = _moreTimeOwed.Owe(theirs.Id, transponder, name, LateMinutes);
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] {name} asked for more time from their phone - {theirs.RoundLabel} isn't next yet, "
                                   + $"so it goes back {Plural.Of(owed, "minute")} when it is.");

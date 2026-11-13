@@ -254,7 +254,13 @@ internal static class SettingsRestore
         // 2026-11-05, Bug hunt 11: never the copy being put back. With ten
         // already there, Put Back's own copy pruned the oldest - and when
         // that was the one picked, it was deleted before it was read.
+        //
+        // 13 Nov 2026, Bug hunt 17: nor the copy just made. With ten copies
+        // named later than the clock reads now (a clock set back, a dead
+        // clock battery), the new one sorted as the oldest and was deleted
+        // on the spot - and the restore then ran with nothing to put back.
         foreach (var old in Copies(root).Skip(CopiesKept)
+            .Where(old => !string.Equals(Path.GetFullPath(old.Path), Path.GetFullPath(zip), StringComparison.OrdinalIgnoreCase))
             .Where(old => keep is null || !string.Equals(Path.GetFullPath(old.Path), Path.GetFullPath(keep), StringComparison.OrdinalIgnoreCase)))
         {
             try

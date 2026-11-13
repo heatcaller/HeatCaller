@@ -155,10 +155,7 @@ public static class AppDialog
 
             var answer = owner is not null ? dialog.ShowDialog(owner) : dialog.ShowDialog();
 
-            // Make() gives the buttons DialogResult.Yes, No, Cancel, Retry...
-            // in order; anything else (the window closed) is the last label.
-            var picked = Array.IndexOf(CustomResults, answer);
-            return picked >= 0 && picked <= last ? picked : last;
+            return IndexChosen(answer, labels.Length);
         }
         catch
         {
@@ -176,9 +173,25 @@ public static class AppDialog
                 ? MessageBox.Show(owner, spelled, caption, buttons, icon, DefaultButtonAt(defaultIndex))
                 : MessageBox.Show(spelled, caption, buttons, icon, DefaultButtonAt(defaultIndex));
 
-            var picked = Array.IndexOf(CustomResults, answer);
-            return picked >= 0 && picked <= last ? picked : last;
+            // The system box's own Yes and No are the first two labels, and
+            // anything else it can answer - Cancel, OK, closed - is the last.
+            return answer == DialogResult.Yes ? 0
+                : answer == DialogResult.No ? Math.Min(1, last)
+                : last;
         }
+    }
+
+    /// <summary>
+    /// Which of Choose's buttons an answer from the themed window is.
+    /// MakeButtons(string[]) gives the buttons CustomResults in order;
+    /// anything else (the window closed) is the last label.
+    /// </summary>
+    internal static int IndexChosen(DialogResult answer, int labelCount)
+    {
+        var last = labelCount - 1;
+        var picked = Array.IndexOf(CustomResults, answer);
+
+        return picked >= 0 && picked <= last ? picked : last;
     }
 
     /// <summary>
@@ -193,10 +206,18 @@ public static class AppDialog
         _ => MessageBoxDefaultButton.Button1,
     };
 
-    /// <summary>The results Choose's buttons carry, in order - see MakeButtons(string[]).</summary>
-    private static readonly DialogResult[] CustomResults =
+    /// <summary>
+    /// The results Choose's buttons carry, in order - see MakeButtons(string[]).
+    ///
+    /// Never DialogResult.Cancel (bug hunt 17). That is what WinForms hands
+    /// back for a window closed without a button - Alt+F4 - and the third
+    /// button used to carry it, so with four buttons a closed window was
+    /// taken for the third one: "We're Done After This Round" dropped a main
+    /// from every class when the operator had closed the question.
+    /// </summary>
+    internal static readonly DialogResult[] CustomResults =
     {
-        DialogResult.Yes, DialogResult.No, DialogResult.Cancel, DialogResult.Retry, DialogResult.Abort, DialogResult.Ignore,
+        DialogResult.Yes, DialogResult.No, DialogResult.OK, DialogResult.Retry, DialogResult.Abort, DialogResult.Ignore,
     };
 
     /// <summary>What those results are called on a system message box, for the fallback in Choose.</summary>

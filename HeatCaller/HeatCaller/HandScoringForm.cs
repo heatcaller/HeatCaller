@@ -37,10 +37,13 @@ public sealed class HandScoringForm : Form
     private readonly Dictionary<string, CarButton> _buttons = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The cars tapped, latest last - what Undo last tap takes back.</summary>
-    private readonly Stack<string> _taps = new();
+    private readonly List<string> _taps = new();
 
-    /// <summary>The order the buttons were last laid out in; a new car on the board lays them out again.</summary>
-    private string _layoutKey = string.Empty;
+    /// <summary>The order the buttons were last laid out in; a new car on the board lays them out again. Null lays them out whatever is on it.</summary>
+    private string? _layoutKey = string.Empty;
+
+    /// <summary>True once the mode has lapsed with this window still up - the race ended, or it was stopped.</summary>
+    private bool _over;
 
     public HandScoringForm(
         Func<IReadOnlyList<HandScoring.Car>> cars,
@@ -249,7 +252,17 @@ public sealed class HandScoringForm : Form
 
         if (!_isOn())
         {
-            _refresh.Stop();
+            // The timer is left running: the window is often still up when
+            // the mode is switched on again - the next race with the decoder
+            // still down - and it has to come back to life then. Stopped
+            // here, it sat greyed out showing the last race's cars and
+            // counted nothing.
+            if (_over)
+            {
+                return;
+            }
+
+            _over = true;
 
             foreach (var button in _buttons.Values)
             {
@@ -259,6 +272,17 @@ public sealed class HandScoringForm : Form
             _btnUndo.Enabled = false;
             Say("Hand scoring is over for this race - the race has ended, or it was stopped. Correct the saved result with Edit Result on Race History.");
             return;
+        }
+
+        if (_over)
+        {
+            // On again. Fresh buttons - the old ones are greyed out, and may
+            // be another race's cars - and the last race's taps are not this
+            // one's to undo.
+            _over = false;
+            _taps.Clear();
+            _layoutKey = null;
+            Say("Every tap is a lap counted by hand - it shows as \"12*\" in the result.");
         }
 
         var cars = _cars();
@@ -339,7 +363,7 @@ public sealed class HandScoringForm : Form
         }
     }
 
-    private void Tap(string transponder, int delta)
+    private void Tap(string transponder, int delta, bool undo = false)
     {
         var refusal = _lap(transponder, delta);
 
@@ -351,7 +375,18 @@ public sealed class HandScoringForm : Form
 
         if (delta > 0)
         {
-            _taps.Push(transponder);
+            _taps.Add(transponder);
+        }
+        else if (!undo)
+        {
+            // A right-click has taken this car's latest tap back, so it is
+            // not there for Undo last tap to take back a second time.
+            var latest = _taps.FindLastIndex(t => string.Equals(t, transponder, StringComparison.OrdinalIgnoreCase));
+
+            if (latest >= 0)
+            {
+                _taps.RemoveAt(latest);
+            }
         }
 
         if (_buttons.TryGetValue(transponder, out var button))
@@ -370,7 +405,10 @@ public sealed class HandScoringForm : Form
             return;
         }
 
-        Tap(_taps.Pop(), -1);
+        var last = _taps[^1];
+        _taps.RemoveAt(_taps.Count - 1);
+
+        Tap(last, -1, undo: true);
     }
 
     /// <summary>One car: its name big, its laps under it, drawn to fill the button.</summary>

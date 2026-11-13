@@ -311,6 +311,19 @@ public sealed class RaceFilingService
         // next race is set up, so it is still this race's here.
         var results = RaceFiling.ResultsFrom(racers, _profiles, finished is null ? _race.HasJumpStarted : finished.HasJumpStarted);
 
+        // Each car's own clock zero goes with its row (bug hunt 17): in a
+        // qualifying start or a staggered start on "own release" the lap
+        // times run from each car's own start, and "Held off Sam for 4 laps"
+        // was worked out as if they shared one clock. The rows are in the
+        // racers' order. Read at the flag, as the recording's offsets are.
+        var startType = _race.StartType;
+        var staggerClock = _race.StaggerClockMode;
+
+        for (var i = 0; i < results.Count && i < racers.Count; i++)
+        {
+            results[i].ClockZeroMs = RaceControlControl.ClockZeroSinceGreenMs(racers[i], startType, staggerClock);
+        }
+
         // The Round box's choice, or the round a restored race was run for.
         // (The page lets go of the restored race's round as it answers.)
         var round = input.TakeRound?.Invoke();

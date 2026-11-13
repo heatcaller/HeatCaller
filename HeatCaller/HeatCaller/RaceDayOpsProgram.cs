@@ -163,8 +163,10 @@ public sealed partial class RaceDayService
                 id = DriverIdFor(p.Transponder),
                 name = ShownName(p.DriverName, p.Transponder, context.Channel),
                 checkedIn = _host.CheckIns.IsCheckedIn(p.Transponder),
+                // By his alternate transponder too, as inHeat above - or a
+                // driver seated in another heat under it looked free.
                 inHeats = classRounds
-                    .Where(r => r.AssignedTransponders.Contains(p.Transponder, StringComparer.OrdinalIgnoreCase))
+                    .Where(r => r.AssignedTransponders.Any(t => string.Equals(MainTransponderOf(t), p.Transponder, StringComparison.OrdinalIgnoreCase)))
                     .Select(r => r.RoundLabel)
                     .ToList(),
             })
@@ -345,6 +347,9 @@ public sealed partial class RaceDayService
         return OpResult.Done($"Skipped bump-ups into {target.RoundLabel}", $"Skipped bump-ups into {target.RoundLabel}.");
     }
 
+    /// <summary>A heat's transponder as its driver's main one: an alternate becomes its owner's main transponder, anything else is itself.</summary>
+    private string MainTransponderOf(string transponder) => _host.Profiles.PrimaryForAlternate(transponder) ?? transponder;
+
     /// <summary>
     /// Moves one driver: from a heat to another heat of the same class, into
     /// a heat from nowhere (fromRoundId missing), or out of a heat
@@ -414,14 +419,18 @@ public sealed partial class RaceDayService
 
         if (to is not null)
         {
+            // Everybody by their main transponder, the driver being moved
+            // included: the rules compare transponders, and a driver seated
+            // in one heat under his alternate was put into a second heat of
+            // the same qualifying round under his main one.
             var heats = classRounds
-                .Select(r => new HeatBalanceForm.HeatState(r, r.IsRecorded, r.AssignedTransponders))
+                .Select(r => new HeatBalanceForm.HeatState(r, r.IsRecorded, r.AssignedTransponders.Select(MainTransponderOf).ToList()))
                 .ToList();
 
             // The refusal goes back to the phone, so it names drivers as the
             // phone's channel may see them - see ShownNameOf.
             if (HeatBalanceForm.DescribeMoveBlocker(
-                    heats, from, to, transponder, _host.Program.HasRaceDay, t => ShownNameOfTransponder(t, context.Channel)) is { } refusal)
+                    heats, from, to, MainTransponderOf(transponder), _host.Program.HasRaceDay, t => ShownNameOfTransponder(t, context.Channel)) is { } refusal)
             {
                 throw new OpRefused(refusal);
             }

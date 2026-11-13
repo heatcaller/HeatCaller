@@ -109,8 +109,12 @@ public static class NightMeasures
 
         if (figures.EntriesToHeats is { } entries)
         {
+            // Never posted, the span runs to the first green - so a race sent
+            // off before the close is a green before the close, not a posting.
             parts.Add(entries < TimeSpan.Zero
-                ? $"heats posted {NightPace.Clock(-entries)} before entries closed"
+                ? figures.HeatsNotPosted
+                    ? $"first green {NightPace.Clock(-entries)} before entries closed (heats not posted)"
+                    : $"heats posted {NightPace.Clock(-entries)} before entries closed"
                 : figures.HeatsNotPosted
                     ? $"entries close to first green {NightPace.Clock(entries)} (heats not posted)"
                     : $"entries close to heats posted {NightPace.Clock(entries)}");

@@ -25,6 +25,9 @@ public partial class RaceControlControl
 
     private NextStartFact? _nextStart;
 
+    /// <summary>The start NextStartMoved was last raised for - what the program last drew. UI thread.</summary>
+    private NextStartFact? _nextStartTold;
+
     /// <summary>
     /// The next race's start between races, or null while a race is on (the
     /// plan has the race on track then). Written on the UI thread each gap
@@ -41,16 +44,37 @@ public partial class RaceControlControl
             ? new NextStartFact(id, AutoStartsAtUtc(id, now), Gap.PushedBackMinutes)
             : null;
 
-        var was = Volatile.Read(ref _nextStart);
         Volatile.Write(ref _nextStart, fact);
 
-        if (Moved(was, fact))
+        if (MovedSinceTold(ref _nextStartTold, fact))
         {
             NextStartMoved?.Invoke();
         }
     }
 
-    private void ForgetNextStart() => Volatile.Write(ref _nextStart, null);
+    private void ForgetNextStart()
+    {
+        Volatile.Write(ref _nextStart, null);
+        _nextStartTold = null;
+    }
+
+    /// <summary>
+    /// Whether the start has moved from the one last told, which becomes this
+    /// one when it has. Measured from the last one told, not from the tick
+    /// before (bug hunt 17): a Hold slides the start a second a tick, never
+    /// half a minute between two ticks, so the program was never redrawn
+    /// however long the hold ran.
+    /// </summary>
+    internal static bool MovedSinceTold(ref NextStartFact? told, NextStartFact? now)
+    {
+        if (!Moved(told, now))
+        {
+            return false;
+        }
+
+        told = now;
+        return true;
+    }
 
     /// <summary>
     /// A move worth redrawing for: another race, another push-back, or Auto

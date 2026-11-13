@@ -96,6 +96,12 @@ internal static class IntroRepeats
 
         var sentences = Sentences(text);
         var seen = new HashSet<int>();
+
+        // Who has had a sentence of their own, as against being named in
+        // somebody else's ("On pole, Sam Smith, two tenths clear of Bill
+        // Jones."): of the drivers a sentence names, the one highest up the
+        // grid who has not had one yet.
+        var own = new HashSet<int>();
         int? first = null;
         var cutAt = -1;
 
@@ -121,7 +127,12 @@ internal static class IntroRepeats
                 continue;
             }
 
-            var allIntroduced = seen.Count >= drivers.Count;
+            // Everybody named - but a sentence about one driver who has only
+            // been named in passing so far is their introduction, not a
+            // second pass. Cut, it cost the last driver theirs whenever an
+            // earlier line mentioned them.
+            var allIntroduced = seen.Count >= drivers.Count
+                                && named.Count(d => !own.Contains(d)) != 1;
             var backToTheStart = first is { } opener
                                  && named.Contains(opener)
                                  && seen.Count > RollCallNames
@@ -138,6 +149,13 @@ internal static class IntroRepeats
             foreach (var driver in named)
             {
                 seen.Add(driver);
+            }
+
+            var introduced = named.FindIndex(d => !own.Contains(d));
+
+            if (introduced >= 0)
+            {
+                own.Add(named[introduced]);
             }
         }
 

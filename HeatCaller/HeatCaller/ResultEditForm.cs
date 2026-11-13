@@ -315,6 +315,15 @@ public sealed class ResultEditForm : Form
                 return list;
             }
 
+            // 13 Nov 2026, Bug hunt 17: a Laps entry SyncLaps could not read
+            // ("12*", "l2") used to stay in the cell with Added Laps unmoved
+            // and nothing said, so the correction saved without it.
+            if (HandScoring.ParseLapCount(Convert.ToString(row.Cells["laps"].Value)) is null)
+            {
+                error = $"{driverName}: laps has to be a whole number, 0 or more.";
+                return list;
+            }
+
             var outcome = ResultEditor.NormaliseOutcome(Convert.ToString(row.Cells["outcome"].Value));
 
             if (outcome is null)

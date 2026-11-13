@@ -17,13 +17,14 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        var today = DateTime.Today;
-        var night = NightEmail.NightKey(TonightAtTheTrack.NightOf(DateTime.Now));
+        // The time, not the date: a first night is the 6am night (see NewDrivers.FirstNight).
+        var now = DateTime.Now;
+        var night = NightEmail.NightKey(TonightAtTheTrack.NightOf(now));
 
         var newcomers = next.AssignedTransponders
             .Where(t => !string.IsNullOrWhiteSpace(t) && !GhostService.IsGhost(t))
             .Select(t => (Transponder: t, Profile: _profiles.Get(t)))
-            .Where(d => d.Profile is { } p && NewDrivers.IsNew(p, today) && !_welcomed.Contains($"{night}|{d.Transponder}"))
+            .Where(d => d.Profile is { } p && NewDrivers.IsNew(p, now) && !_welcomed.Contains($"{night}|{d.Transponder}"))
             .ToList();
 
         if (newcomers.Count == 0)
@@ -36,7 +37,7 @@ public sealed partial class RaceControlControl
             _welcomed.Add($"{night}|{transponder}");
         }
 
-        var line = NewDrivers.Welcome(newcomers.Select(d => (SpokenNameOf(d.Transponder), NewDrivers.FirstNight(d.Profile!, today))).ToList());
+        var line = NewDrivers.Welcome(newcomers.Select(d => (SpokenNameOf(d.Transponder), NewDrivers.FirstNight(d.Profile!, now))).ToList());
 
         if (line is not null)
         {

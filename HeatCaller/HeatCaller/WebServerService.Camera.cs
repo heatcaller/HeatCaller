@@ -178,8 +178,8 @@ public sealed partial class WebServerService
         const cams = document.getElementById('cams');
         const every = document.getElementById('every');
         const CAM_KEY = 'hcCamera', EVERY_KEY = 'hcCameraEvery';
-        let frames = [], stream = null, last = -1, run = '', pending = [], keptCount = 0, cameraOk = false, appOk = false, polling = false;
-        const queued = new Set();
+        let frames = [], stream = null, last = -1, run = '', pending = [], keptCount = 0, cameraOk = false, appOk = false, polling = false, uploading = false;
+        const queued = new Set(), jobs = [];
 
         try { every.checked = localStorage.getItem(EVERY_KEY) === '1'; } catch(e) {}
         every.addEventListener('change', () => { try { localStorage.setItem(EVERY_KEY, every.checked ? '1' : '0'); } catch(e) {} });
@@ -261,7 +261,7 @@ public sealed partial class WebServerService
             appOk = true;
             // First answer, or HeatCaller restarted - its shots are numbered
             // from 1 again, so what was queued under the old numbers goes.
-            if (last < 0 || d.run !== run) { last = d.latest; run = d.run; queued.clear(); pending = []; }
+            if (last < 0 || d.run !== run) { last = d.latest; run = d.run; queued.clear(); pending = []; jobs.length = 0; }
             else {
               (d.shots || []).forEach(s => {
                 last = Math.max(last, s.id);
@@ -273,38 +273,50 @@ public sealed partial class WebServerService
             if (document.hidden) state('This window is hidden or minimized - the browser slows it down and frames will be missed. Keep it on screen.', false);
             else state(appOk ? 'Ready - ' + keptCount + ' kept' : 'Camera on, but HeatCaller is not answering', appOk);
           }
-          try { await send(); } finally { polling = false; }
+          try { pick(); } finally { polling = false; }
         }
         setInterval(poll, 250);
 
-        async function send(){
+        // Every ready shot's frames picked the moment it is ready, and the
+        // sending left to upload(): a pack crossing together is many
+        // uploads, and the frames before the later shots would be gone from
+        // the buffer by their turn. Not waited for either - the poll used to
+        // wait for the uploads, so a car crossing during a long batch was
+        // only heard of afterwards, with its frames already gone.
+        function pick(){
           const now = Date.now();
           const ready = pending.filter(s => now >= s.at + AFTER + 150);
           pending = pending.filter(s => now < s.at + AFTER + 150);
+          ready.forEach(s => jobs.push({ s, picked: frames.filter(f => f.t >= s.at - BEFORE && f.t <= s.at + AFTER) }));
+          upload();
+        }
 
-          // Every ready shot's frames picked now, before any is sent: a pack
-          // crossing together is many uploads, and the frames before the
-          // later shots would be gone from the buffer by their turn.
-          const jobs = ready.map(s => ({ s, picked: frames.filter(f => f.t >= s.at - BEFORE && f.t <= s.at + AFTER) }));
-          for (const { s, picked } of jobs){
-            if (!picked.length) continue;
-            let sent = 0;
-            for (const f of picked){
-              try {
-                const r = await fetch('/api/camera/frame?shot=' + s.id + '&t=' + (f.t - s.at),
-                  { method: 'POST', headers: { 'X-HeatCaller': '1', 'Content-Type': 'image/jpeg' }, body: f.b });
-                if (r.ok) sent++;
-              } catch(e) {}
+        // One at a time, in the order they were picked.
+        async function upload(){
+          if (uploading) return;
+          uploading = true;
+          try {
+            while (jobs.length){
+              const { s, picked } = jobs.shift();
+              if (!picked.length) continue;
+              let sent = 0;
+              for (const f of picked){
+                try {
+                  const r = await fetch('/api/camera/frame?shot=' + s.id + '&t=' + (f.t - s.at),
+                    { method: 'POST', headers: { 'X-HeatCaller': '1', 'Content-Type': 'image/jpeg' }, body: f.b });
+                  if (r.ok) sent++;
+                } catch(e) {}
+              }
+              if (!sent) continue;
+              keptCount++;
+              const li = document.createElement('li');
+              const b = document.createElement('b'); b.textContent = s.finish ? (s.pos ? 'P' + s.pos + ' ' : '') + 'finish' : 'lap ' + s.lap;
+              li.appendChild(b); li.appendChild(document.createTextNode(' ' + s.name + ' - ' + sent + ' frames'));
+              const list = document.getElementById('kept'); list.insertBefore(li, list.firstChild);
+              while (list.children.length > 30) list.removeChild(list.lastChild);
+              showLast(picked.reduce((a, f) => Math.abs(f.t - s.at) < Math.abs(a.t - s.at) ? f : a, picked[0]));
             }
-            if (!sent) continue;
-            keptCount++;
-            const li = document.createElement('li');
-            const b = document.createElement('b'); b.textContent = s.finish ? (s.pos ? 'P' + s.pos + ' ' : '') + 'finish' : 'lap ' + s.lap;
-            li.appendChild(b); li.appendChild(document.createTextNode(' ' + s.name + ' - ' + sent + ' frames'));
-            const list = document.getElementById('kept'); list.insertBefore(li, list.firstChild);
-            while (list.children.length > 30) list.removeChild(list.lastChild);
-            showLast(picked.reduce((a, f) => Math.abs(f.t - s.at) < Math.abs(a.t - s.at) ? f : a, picked[0]));
-          }
+          } finally { uploading = false; }
         }
 
         async function showLast(f){

@@ -80,6 +80,18 @@ public sealed partial class AnnouncementService
         return WinnerCallConfig() is { } winner ? (winner, winner.EffectiveTemplates, false) : null;
     }
 
+    /// <summary>
+    /// A qualifier scored by best consecutive laps has no winner to name
+    /// (bug hunt 17): the car in front on the road has the most laps, and the
+    /// heat's top qualifier - the one called on provisional pole - is whoever
+    /// has the quickest run, often somebody else. The finish then names
+    /// nobody, as in practice.
+    /// </summary>
+    internal static bool LeaderIsNotTheTopQualifier(bool qualifying, QualifyingMethod method) =>
+        qualifying && method == QualifyingMethod.BestConsecutiveLaps;
+
+    private bool NoWinnerToName => LeaderIsNotTheTopQualifier(IsQualifyingMode, _qualifyingMethod);
+
     /// <summary>Whether the lines made ahead are the finish call's own - see WinnerLines. Under _winnerCallsLock.</summary>
     private bool _winnerCallsAreTheFinish;
 
@@ -103,6 +115,11 @@ public sealed partial class AnnouncementService
     {
         try
         {
+            if (NoWinnerToName)
+            {
+                return;
+            }
+
             if (IsPracticeMode || Muted || WinnerLines() is not { } lines
                 || RunningOrderNow(WinnerContenders) is not { Count: > 0 } order)
             {
@@ -230,8 +247,17 @@ public sealed partial class AnnouncementService
     {
         (string Text, string? Key, Task<SynthesisResult>? Render) call;
 
+        // A shared heat's class winners, made before anything below can
+        // return (bug hunt 17): the line used to be built only once the
+        // Winner named call was, so a finish that named the winner itself
+        // left the class winners unsaid. Whatever is not queued behind the
+        // winner's own call goes out by itself - see the finally.
+        QueuedVoiceItem? classWinners = null;
+
         try
         {
+            classWinners = TheClassWinnersCall();
+
             lock (_winnerCallsLock)
             {
                 // Named in the finish call itself - see TrySpeakTheFinishWithTheWinner.
@@ -251,6 +277,11 @@ public sealed partial class AnnouncementService
             }
 
             var winner = _currentLeaderTransponder;
+
+            if (NoWinnerToName)
+            {
+                return;
+            }
 
             if (winner is null || IsPracticeMode || Muted || WinnerCallConfig() is not { } config)
             {
@@ -288,36 +319,6 @@ public sealed partial class AnnouncementService
                 }
             });
 
-            // A shared heat (11 Nov 2026, Phase 4.1, mixed-class heats):
-            // each class's winner, said straight after the overall winner -
-            // see MixedHeats.ClassWinnersLine. Null, and nothing extra, for
-            // every one-class race.
-            QueuedVoiceItem? classWinners = null;
-
-            if (SharedHeatClasses?.Invoke() is { } classOf
-                && MixedHeats.ClassWinnersLine(
-                    _standings.Values
-                        .Where(s => !GhostService.IsGhost(s.Transponder))
-                        .OrderByDescending(s => s.Laps)
-                        .ThenBy(s => s.ElapsedMs)
-                        .Select(s => s.Transponder)
-                        .ToList(),
-                    classOf,
-                    t => _standings.TryGetValue(t, out var s) ? SpokenNameFor(s) : DisplayNameFor(t)) is { } line)
-            {
-                classWinners = new QueuedVoiceItem(AnnouncementEventType.RaceCompleted, winner, OnAir: "Class winners", ShownText: line, Work: async () =>
-                {
-                    try
-                    {
-                        await SynthesizeAndPlayAsync(line, "[voice] Class winners", speedOverride: speed);
-                    }
-                    catch (Exception ex)
-                    {
-                        StatusMessage?.Invoke($"[voice] Playback failed: {ex.Message}");
-                    }
-                });
-            }
-
             lock (_voiceQueueLock)
             {
                 _voiceQueue.Insert(0, queued);
@@ -334,11 +335,80 @@ public sealed partial class AnnouncementService
             {
                 _voiceQueueSignal.Release();
             }
+
+            classWinners = null;
         }
         catch (Exception ex)
         {
             StatusMessage?.Invoke($"[voice] The winner's call could not be queued ({ex.Message}).");
         }
+        finally
+        {
+            // The finish call named the winner, so there is no winner's call
+            // to follow: the class winners go first in the queue themselves,
+            // and are said the moment the finish call has been.
+            if (classWinners is not null)
+            {
+                lock (_voiceQueueLock)
+                {
+                    _voiceQueue.Insert(0, classWinners);
+                }
+
+                _voiceQueueSignal.Release();
+            }
+        }
+    }
+
+    /// <summary>
+    /// A shared heat (11 Nov 2026, Phase 4.1, mixed-class heats): each
+    /// class's winner, said straight after the overall winner - see
+    /// MixedHeats.ClassWinnersLine. Null, and nothing extra, for every
+    /// one-class race, and whenever the winner is not being named at the
+    /// flag at all. Named either by the Winner named row or by the finish
+    /// call that has just said the name itself (bug hunt 17).
+    /// </summary>
+    private QueuedVoiceItem? TheClassWinnersCall()
+    {
+        bool namedByTheFinish;
+
+        lock (_winnerCallsLock)
+        {
+            namedByTheFinish = _finishNamedTheWinner;
+        }
+
+        var winner = _currentLeaderTransponder;
+
+        var config = WinnerCallConfig()
+            ?? (namedByTheFinish ? _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.RaceCompleted)) : null);
+
+        if (winner is null || IsPracticeMode || Muted || NoWinnerToName || config is null
+            || SharedHeatClasses?.Invoke() is not { } classOf
+            || MixedHeats.ClassWinnersLine(
+                _standings.Values
+                    .Where(s => !GhostService.IsGhost(s.Transponder))
+                    .OrderByDescending(s => s.Laps)
+                    .ThenBy(s => s.ElapsedMs)
+                    .Select(s => s.Transponder)
+                    .ToList(),
+                classOf,
+                t => _standings.TryGetValue(t, out var s) ? SpokenNameFor(s) : DisplayNameFor(t)) is not { } line)
+        {
+            return null;
+        }
+
+        var speed = config.SpeedFor(_voiceStore.Current.Speed);
+
+        return new QueuedVoiceItem(AnnouncementEventType.RaceCompleted, winner, OnAir: "Class winners", ShownText: line, Work: async () =>
+        {
+            try
+            {
+                await SynthesizeAndPlayAsync(line, "[voice] Class winners", speedOverride: speed);
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke($"[voice] Playback failed: {ex.Message}");
+            }
+        });
     }
 
     /// <summary>
@@ -360,7 +430,7 @@ public sealed partial class AnnouncementService
     {
         var winner = _currentLeaderTransponder;
 
-        if (winner is null || IsPracticeMode || FinishLinesNamingTheWinner(config.EffectiveTemplates) is not { Count: > 0 } named)
+        if (winner is null || IsPracticeMode || NoWinnerToName || FinishLinesNamingTheWinner(config.EffectiveTemplates) is not { Count: > 0 } named)
         {
             return false;
         }

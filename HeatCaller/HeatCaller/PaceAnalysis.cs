@@ -127,7 +127,7 @@ public static class PaceAnalysis
     /// <summary>One driver's pace.</summary>
     public static Row For(SessionResultEntry entry)
     {
-        var laps = CountedLaps(entry.LapTimesMs);
+        var laps = CountedLaps(entry);
 
         if (laps.Count == 0)
         {
@@ -170,11 +170,17 @@ public static class PaceAnalysis
     /// bars it from setting a best lap for exactly this reason, and letting
     /// it into an average would drag every figure here off by however far
     /// back the car was parked.
+    ///
+    /// Bug hunt 17: nor is the second, for a driver who was past the line at
+    /// the green and credited with the start lap. Their first entry is a
+    /// zero and the next runs from their crossing before the green - the
+    /// rest of the start, which the session bars from a best lap as well. It
+    /// showed here as their Best, against a result that said otherwise.
     /// </summary>
-    private static List<long> CountedLaps(List<long> lapTimesMs) =>
-        lapTimesMs.Count <= 1
+    private static List<long> CountedLaps(SessionResultEntry entry) =>
+        entry.LapTimesMs.Count <= 1
             ? new List<long>()
-            : lapTimesMs.Skip(1).Where(l => l > 0).ToList();
+            : entry.LapTimesMs.Skip(entry.StartSlots(entry.LapTimesMs)).Where(l => l > 0).ToList();
 
     private static long Median(List<long> laps)
     {

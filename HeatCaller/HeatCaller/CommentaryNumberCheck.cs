@@ -778,8 +778,10 @@ internal static class CommentaryNumberCheck
             return ReadDigits(ws, i, forFacts, found);
         }
 
-        // "point three", with no whole number in front.
-        if (w == "point" && DigitWords(ws, i + 1) is { } bare)
+        // "point three", with no whole number in front. Not "at this point
+        // three drivers", where the point is a noun and the three a count.
+        if (w == "point" && DigitWords(ws, i + 1) is { } bare
+            && !Is(ws, i - 1, PointAsNoun) && !Is(ws, i + 1 + bare.Length, Counted))
         {
             found.Add(new Figure(Said(ws, i, 1 + bare.Length), Parse("0." + bare.Digits), false, Math.Pow(10, -bare.Digits.Length)));
             return 1 + bare.Length;
@@ -834,8 +836,10 @@ internal static class CommentaryNumberCheck
 
         var after = i + c.Length;
 
-        // "four point nine".
-        if (Is(ws, after, "point") && DigitWords(ws, after + 1) is { } digits)
+        // "four point nine". Not "by one point five rounds from the end":
+        // one point, and a count of something nobody has a decimal of.
+        if (Is(ws, after, "point") && DigitWords(ws, after + 1) is { } digits
+            && !(c.Value == 1 && c.Length == 1 && Is(ws, after + 1 + digits.Length, Counted)))
         {
             var len = c.Length + 1 + digits.Length;
             found.Add(new Figure(Said(ws, i, len), Parse($"{c.Value}.{digits.Digits}"), false, Math.Pow(10, -digits.Digits.Length)));
@@ -1255,6 +1259,23 @@ internal static class CommentaryNumberCheck
         var at = Array.IndexOf(Tens, w);
         return at >= 2 ? at * 10 : null;
     }
+
+    // THE NOUN "POINT" (bug hunt 17): "at this point three drivers can
+    // still win it" was read as 0.3 and "one point five rounds from the
+    // end" as 1.5, and a correct sentence was cut as an invented figure.
+    // A word in front that only a noun takes, or a count of whole things
+    // after the number, says the point is not a decimal point.
+    private static readonly string[] PointAsNoun =
+    [
+        "this", "that", "which", "what", "some", "any", "every", "each", "no", "single",
+        "turning", "halfway", "starting", "breaking", "bonus", "championship",
+    ];
+
+    private static readonly string[] Counted =
+    [
+        "drivers", "cars", "racers", "rounds", "races", "heats", "mains", "finals", "laps", "nights", "meetings",
+        "corners", "turns", "places", "positions", "spots", "wins", "podiums", "points",
+    ];
 
     private static bool Is(List<Word> ws, int i, params string[] any) =>
         i >= 0 && i < ws.Count && any.Contains(ws[i].Low);

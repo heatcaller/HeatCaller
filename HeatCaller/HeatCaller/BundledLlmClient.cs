@@ -234,6 +234,26 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
     private static string? _loadingKey;
 
     /// <summary>
+    /// The process's weights when they are the ones this key asks for and
+    /// no load is pending, or null - the check the callers make without
+    /// LoadGate.
+    ///
+    /// The ORDER of the three reads is the point: pending load first, the
+    /// weights last. LoadSharedAsync installs the other way round (weights,
+    /// key, then clears the pending load), so seeing "nothing pending" here
+    /// means that install had finished and the key and weights read after
+    /// it are the new ones - never the set it is about to dispose.
+    /// </summary>
+    private static LLamaWeights? HeldWeightsFor(string? clientKey)
+    {
+        var pending = Volatile.Read(ref _loading) is not null;
+        var loadedKey = Volatile.Read(ref _loadedKey);
+        var held = Volatile.Read(ref _loadedWeights);
+
+        return CanUseHeldWeights(loadedKey, clientKey, pending) ? held : null;
+    }
+
+    /// <summary>
     /// Set when loading failed in a way that will not get better by trying
     /// again: no model file, not enough RAM, or the native library refusing
     /// to load on this CPU. Checked before every call so a machine that
@@ -553,9 +573,9 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
         // writing every line with someone else's override all night. While
         // a load is pending, the slow path's SharedWeightsAsync must see this
         // client's request, so it can mark that load overtaken.
-        var held = _loadedWeights;
+        var held = HeldWeightsFor(_weightsKey);
 
-        if (held is not null && _parameters is not null && CanUseHeldWeights(_loadedKey, _weightsKey, _loading is not null))
+        if (held is not null && _parameters is not null)
         {
             return (held, _parameters);
         }
@@ -564,9 +584,9 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
 
         try
         {
-            held = _loadedWeights;
+            held = HeldWeightsFor(_weightsKey);
 
-            if (held is not null && _parameters is not null && CanUseHeldWeights(_loadedKey, _weightsKey, _loading is not null))
+            if (held is not null && _parameters is not null)
             {
                 return (held, _parameters);
             }
@@ -661,9 +681,9 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
 
         // Ungated only while nothing is loading: a pending load has to hear
         // about this request (below), so that case takes the gate.
-        if (_loadedKey == key && _loadedWeights is not null && _loading is null)
+        if (HeldWeightsFor(key) is { } held)
         {
-            return _loadedWeights;
+            return held;
         }
 
         Task<LLamaWeights> load;
@@ -767,16 +787,22 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
                 return weights;
             }
 
-            _loading = null;
-            _loadingKey = null;
-
             // A different model than the one held - swapped on the
             // Commentary page. Let the old one go; nothing else can be
             // holding it, since every executor is rebuilt from this.
             var previous = _loadedWeights;
 
-            _loadedWeights = weights;
-            _loadedKey = key;
+            // THE NEW SET FIRST, THE PENDING LOAD CLEARED LAST - and
+            // HeldWeightsFor reads them in the opposite order. The pending
+            // load used to be cleared first, so a line starting at that
+            // instant could see "nothing loading" with the old weights and
+            // key still in place, take them, and have them disposed below
+            // a moment later.
+            Volatile.Write(ref _loadedWeights, weights);
+            Volatile.Write(ref _loadedKey, key);
+
+            _loadingKey = null;
+            Volatile.Write(ref _loading, null);
 
             if (previous is not null && !ReferenceEquals(previous, weights))
             {

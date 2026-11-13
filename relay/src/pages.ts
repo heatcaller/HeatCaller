@@ -123,7 +123,7 @@ function aboutSheet(name: string): string {
   <p class="wordmark hcword" id="hcabout-title">Heat<span class="hcc">Caller</span></p>
   <p class="tag">Club nights, produced like a broadcast</p>
   <p>${name} times its races, calls them out loud and puts every lap on your phone with HeatCaller.</p>
-  <a class="go" href="https://heatcaller.com">Bring HeatCaller to your track</a>
+  <a class="go" href="https://heatcaller.com" target="_blank" rel="noopener">Bring HeatCaller to your track</a>
   <button type="button" class="close" data-hc-close>Close</button>
 </div>
 </div>`;
@@ -1576,12 +1576,16 @@ function readsOf(page) {
     return Array.isArray(list) ? list.filter((p) => typeof p === 'string').slice(0, 8) : [];
   } catch (e) { return []; }
 }
-function noteRead(path) {
+// page: whose read it is, when not this page's own - a read made ahead for
+// the tab being touched is that tab's, and filed here it had every page's
+// list filling with the others' reads.
+function noteRead(path, page) {
   if (seenFor(path) === 0) return;
-  const list = readsOf(location.pathname);
+  const whose = page || location.pathname;
+  const list = readsOf(whose);
   if (list.indexOf(path) >= 0) return;
   list.push(path);
-  try { sessionStorage.setItem(READS + location.pathname, JSON.stringify(list.slice(-8))); } catch (e) { /* no reading ahead */ }
+  try { sessionStorage.setItem(READS + whose, JSON.stringify(list.slice(-8))); } catch (e) { /* no reading ahead */ }
 }
 
 // Runs a page's first read, and once more straight after if it was drawn
@@ -1617,14 +1621,14 @@ function relayClock() {
 // A read that never came back - a phone moving between networks, venue
 // Wi-Fi dropping - left that view waiting on it for good, so it stopped
 // updating. Without waitMs, or AbortController, a read is as it was.
-async function grab(path, waitMs) {
+async function grab(path, waitMs, page) {
   if (warm) {
     const kept = seenRead(path);
     if (kept) {
       // A copy read ahead a moment ago is as good as a new read.
       if (Date.now() - kept.at > SEEN_FRESH_MS) warmed += 1;
       if (warmAt === 0 || kept.at < warmAt) warmAt = kept.at;
-      noteRead(path);
+      noteRead(path, page);
       return kept.missing ? { missing: true, status: 404, seen: true } : { body: kept.body, seen: true };
     }
   }
@@ -1638,12 +1642,12 @@ async function grab(path, waitMs) {
     if (!response.ok) {
       // Nothing published yet is an answer worth keeping too; busy or
       // broken is not.
-      if (response.status === 404) { seenKeep(path, undefined, true); noteRead(path); }
+      if (response.status === 404) { seenKeep(path, undefined, true); noteRead(path, page); }
       return { missing: true, status: response.status };
     }
     const body = await response.json();
     seenKeep(path, body);
-    noteRead(path);
+    noteRead(path, page);
     return { body: body };
   } finally {
     if (stop) clearTimeout(timer);
@@ -2125,7 +2129,7 @@ function hcHushListen() {
     if (page === '' || page === location.pathname) return;
     const list = readsOf(page);
     aheadFor = page;
-    ahead = list.length === 0 ? null : Promise.all(list.map((p) => grab(p).catch(() => null)));
+    ahead = list.length === 0 ? null : Promise.all(list.map((p) => grab(p, 0, page).catch(() => null)));
   });
   tabs.addEventListener('click', (e) => {
     const a = e.target instanceof Element ? e.target.closest('a') : null;
@@ -6509,9 +6513,17 @@ function picksWrite(list) {
 // A pick just made: one per race, the latest standing.
 function picksAdd(race, name) {
   const list = picksRead().filter((x) => !(x.right === null && x.race === race));
-  list.push({ race: race, name: name, at: Date.now(), right: null });
+  list.push({ race: race, name: name, at: Date.now(), right: null, over: picksOver });
   picksWrite(list);
 }
+
+// The finished race last seen on the board: its winner and how long they
+// ran. A pick made with that board still up is for the race after it, and
+// the laptop sends the same board again, newly stamped, whenever the
+// next-race countdown changes - which settled the pick against the race
+// before its own (Bug hunt 17). '' when no finish has been seen, or it came
+// without lap times to tell it from another by.
+let picksOver = '';
 
 // A race has finished at finishedAt with winner first: settle the picks waiting for it.
 //
@@ -6528,7 +6540,10 @@ function picksAdd(race, name) {
 function picksSettle(winner, finishedAt, raceMs, watchingSince) {
   const list = picksRead();
   let changed = false;
+  picksOver = typeof raceMs === 'number' && raceMs > 0 ? winner + '|' + raceMs : '';
   for (const x of list) {
+    // Not the finish that was already up when the pick was made.
+    if (picksOver !== '' && x.over === picksOver) continue;
     if (x.right === null && finishedAt > x.at && finishedAt - x.at < 3 * 3600000) {
       const watched = typeof watchingSince !== 'number' || watchingSince <= x.at;
       const soon = typeof raceMs === 'number' && raceMs > 0 && finishedAt - x.at < 2 * raceMs;
@@ -7579,6 +7594,9 @@ const LISTEN_JS = `
       stats.behind += 1;
       dropAll();
       at = now + (said.kind === 'mix' ? streamAhead : START_AHEAD_S);
+      // dropAll forgot which stretch this is, and the one after it then
+      // started on top of it rather than joining on.
+      if (said.kind === 'mix') { lastRun = said.run; lastN = said.n; }
     }
 
     const source = ctx.createBufferSource();
@@ -10283,7 +10301,10 @@ function drawList() {
   const classes = [...new Set(drivers.map((d) => d.className).filter(Boolean))].sort();
   const chosen = picker.value;
 
-  if (picker.options.length !== classes.length + 1) {
+  // By name, not by how many: a class renamed, or one gone as another
+  // came, left the old name in the picker to match nobody.
+  const offered = [...picker.options].slice(1).map((o) => o.value);
+  if (picker.options.length !== classes.length + 1 || offered.some((v, i) => v !== classes[i])) {
     picker.innerHTML = '<option value="">Every class</option>' +
       classes.map((c) => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('');
     picker.value = classes.includes(chosen) ? chosen : '';
@@ -12813,7 +12834,9 @@ function raceStory(r, field) {
   const typical = sorted.length % 2 === 1
     ? sorted[(sorted.length - 1) / 2]
     : (sorted.at(sorted.length / 2 - 1) + sorted.at(sorted.length / 2)) / 2;
-  const slips = laps.map((ms, i) => ({ ms, n: i + 1 })).filter((x) => x.ms > typical * 1.1);
+  // Numbered as the Lap times tab numbers them: from 2 after a start lap.
+  const first = lxHasStart(r.startMs) ? 2 : 1;
+  const slips = laps.map((ms, i) => ({ ms, n: i + first })).filter((x) => x.ms > typical * 1.1);
   const lost = slips.reduce((a, x) => a + (x.ms - typical), 0);
   const secs = (ms) => (ms / 1000).toFixed(ms >= 10000 ? 1 : 2) + 's';
 
@@ -14058,9 +14081,14 @@ function fillQuery(part, sid, q) {
 // Drawn again only when what it shows has changed and nobody is typing in
 // it, so a twenty-second refresh never takes a half-typed change away.
 function refreshAsks() {
-  const key = JSON.stringify([asksOpen, me]);
+  // Whether the live card is up is in the key: it holds the pack box while
+  // it is, and Your details takes the box back when it goes.
+  const key = JSON.stringify([asksOpen, me, !!live]);
   if (key === asksKey) return;
-  if (edited && asksOpen && me) return;
+  // With the form in Me's sheet there is no typing here to protect: this
+  // card only says what the desk has, and the sheet is not touched. One
+  // letter typed there and left unsent kept the card stale for the visit.
+  if (edited && asksOpen && me && !ydSheetCan()) return;
   asksKey = key;
   drawAsks('');
 }
@@ -14618,6 +14646,8 @@ async function pollLive() {
 
   watchCheck();
   drawLive();
+  // After the live card: the pack box moves between it and Your details.
+  refreshAsks();
   schedule();
 }
 

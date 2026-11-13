@@ -160,6 +160,9 @@ public sealed class HeatBalanceForm : Form
     /// </summary>
     private readonly IReadOnlyDictionary<string, long>? _pace;
 
+    /// <summary>The drivers' profiles - which class a driver runs in in a heat two classes share.</summary>
+    private readonly ProfileStore _profiles;
+
     /// <summary>
     /// With no race day open, how recently a run heat must have been made
     /// to count as tonight's. Long enough for the longest meeting, short
@@ -198,6 +201,7 @@ public sealed class HeatBalanceForm : Form
         _restCheck = restCheck;
         _accent = accent;
         _pace = pace;
+        _profiles = profiles;
         _roundsAreOneRaceDay = roundsAreOneRaceDay;
         _onTrackRoundId = onTrackRoundId;
 
@@ -1276,12 +1280,8 @@ public sealed class HeatBalanceForm : Form
 
         foreach (var heats in rounds)
         {
-            var sizes = heats.Select(c => c.List.Items.Count).ToList();
-            var pool = heats.SelectMany(c => c.Current).ToList();
-
-            var seeded = group
-                ? HeatSeeding.Group(sizes, pool, _pace)
-                : HeatSeeding.Spread(sizes, pool, _pace);
+            var seeded = SeedRoundByPace(
+                heats.Select(c => (c.Round!, (IReadOnlyList<string>)c.Current)).ToList(), _pace, group, _profiles);
 
             for (var i = 0; i < heats.Count; i++)
             {
@@ -1300,6 +1300,43 @@ public sealed class HeatBalanceForm : Form
         }
 
         AfterChange();
+    }
+
+    /// <summary>
+    /// One qualifying round's heats re-sorted by pace, each keeping the
+    /// number of drivers it had. In a heat another class shares (MixedHeats)
+    /// only the heat's own class is sorted: the other class's drivers stay
+    /// in that heat, after the rest. They have no pace in this class, so
+    /// sorted with everybody else they came last and were dealt out to the
+    /// heats nobody shares - where they would have raced, and been scored,
+    /// as this class.
+    /// </summary>
+    internal static List<List<string>> SeedRoundByPace(
+        IReadOnlyList<(RoundDefinition Round, IReadOnlyList<string> Drivers)> heats,
+        IReadOnlyDictionary<string, long> pace,
+        bool group,
+        ProfileStore? profiles = null)
+    {
+        var visitors = heats
+            .Select(h => MixedHeats.IsShared(h.Round)
+                ? h.Drivers.Where(t => !MixedHeats.Counts(h.Round, h.Round.ClassName, t, null, profiles)).ToList()
+                : new List<string>())
+            .ToList();
+
+        var own = heats.Select((h, i) => h.Drivers.Except(visitors[i]).ToList()).ToList();
+        var sizes = own.Select(o => o.Count).ToList();
+        var pool = own.SelectMany(o => o).ToList();
+
+        var seeded = group
+            ? HeatSeeding.Group(sizes, pool, pace)
+            : HeatSeeding.Spread(sizes, pool, pace);
+
+        for (var i = 0; i < seeded.Count; i++)
+        {
+            seeded[i].AddRange(visitors[i]);
+        }
+
+        return seeded;
     }
 
     private void AfterChange()

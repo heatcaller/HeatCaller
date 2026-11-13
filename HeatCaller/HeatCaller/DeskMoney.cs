@@ -268,29 +268,67 @@ public sealed class EntryPaymentStore
         var path = Path.Combine(AppPaths.Root, "entry-payments.json");
         var loaded = new Dictionary<string, Dictionary<string, EntryPayment>>(StringComparer.Ordinal);
 
+        var unreadable = false;
+
         try
         {
-            if (File.Exists(path)
-                && JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, EntryPayment>>>(File.ReadAllText(path)) is { } read)
+            if (File.Exists(path))
             {
-                foreach (var (eventId, payments) in read)
+                if (JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, EntryPayment>>>(SafeFile.ReadAllTextWithRetry(path)) is { } read)
                 {
-                    if (payments is not null)
+                    foreach (var (eventId, payments) in read)
                     {
-                        loaded[eventId] = new Dictionary<string, EntryPayment>(
-                            payments.Where(p => p.Value is not null), StringComparer.OrdinalIgnoreCase);
+                        if (payments is null)
+                        {
+                            continue;
+                        }
+
+                        // One at a time, the last one winning: two keys that
+                        // differ only by case would throw out of the
+                        // dictionary's own constructor and lose the whole file.
+                        var day = new Dictionary<string, EntryPayment>(StringComparer.OrdinalIgnoreCase);
+
+                        foreach (var (transponder, payment) in payments)
+                        {
+                            if (payment is not null)
+                            {
+                                day[transponder] = payment;
+                            }
+                        }
+
+                        loaded[eventId] = day;
                     }
+                }
+                else
+                {
+                    // Present, and not the shape this store writes (the
+                    // literal "null", say). Not a new install either.
+                    unreadable = true;
                 }
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // A file that can't be read leaves the desk with nothing marked
             // paid, which the treasurer will notice; it never stops the app.
+            //
+            // WHY (13 Nov 2026, bug hunt 17): and it is never saved over.
+            // The first driver marked paid used to write that one payment
+            // over every earlier race day's takings (see LoadedUnreadable).
+            loaded.Clear();
+            unreadable = SafeFile.HoldWritesAfterUnreadable(path, ex);
         }
 
-        return new EntryPaymentStore(loaded, path);
+        return new EntryPaymentStore(loaded, path) { LoadedUnreadable = unreadable };
     }
+
+    /// <summary>
+    /// True when the file was there at startup but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. What the desk marks this session
+    /// is then kept in memory only, and nothing is saved over the club's
+    /// real file.
+    /// </summary>
+    public bool LoadedUnreadable { get; private init; }
 
     /// <summary>Raised after any change, for the desk and the report.</summary>
     public event Action? Changed;
@@ -323,8 +361,9 @@ public sealed class EntryPaymentStore
 
     private void Save()
     {
-        if (_path is null)
+        if (_path is null || LoadedUnreadable)
         {
+            // See LoadedUnreadable: the club's real file stays as it is.
             return;
         }
 

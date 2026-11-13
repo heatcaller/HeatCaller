@@ -134,6 +134,58 @@ public static class NightTemplates
         day.Breaks = NightBreaks.Copy(template.Breaks);
     }
 
+    /// <summary>
+    /// Follows a class being renamed, in every template: its classes and
+    /// their running order. True when any template changed, so the caller
+    /// saves only then.
+    ///
+    /// Bug hunt 17: templates were left naming the old class, so a night
+    /// started from one listed a class that no longer existed and the
+    /// renamed class was not racing that night, with nothing said.
+    /// Matched ignoring case, and a name listed twice afterwards is listed
+    /// once, as the race days do it (RaceEventStore.RenameClass).
+    /// </summary>
+    public static bool RenameClass(IEnumerable<NightTemplate>? templates, string oldName, string newName)
+    {
+        if (string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName))
+        {
+            return false;
+        }
+
+        var changed = false;
+
+        foreach (var template in templates ?? Enumerable.Empty<NightTemplate>())
+        {
+            if (template is null)
+            {
+                continue;
+            }
+
+            if (Renamed(template.ClassNames, oldName, newName) is { } names)
+            {
+                template.ClassNames = names;
+                changed = true;
+            }
+
+            if (Renamed(template.ClassRunningOrder, oldName, newName) is { } order)
+            {
+                template.ClassRunningOrder = order;
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    /// <summary>A list of class names with one renamed, or null when the list doesn't hold the old name.</summary>
+    internal static List<string>? Renamed(List<string>? names, string oldName, string newName) =>
+        names is null || !names.Any(n => string.Equals(n, oldName, StringComparison.OrdinalIgnoreCase))
+            ? null
+            : names
+                .Select(n => string.Equals(n, oldName, StringComparison.OrdinalIgnoreCase) ? newName : n)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
     /// <summary>The templates with this one saved: replacing one of the same name (ignoring case), the rest in name order.</summary>
     public static List<NightTemplate> Saved(IEnumerable<NightTemplate>? templates, NightTemplate template) =>
         (templates ?? Enumerable.Empty<NightTemplate>())

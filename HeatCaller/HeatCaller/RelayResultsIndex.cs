@@ -451,6 +451,46 @@ internal static class RelayResultsIndex
         public string? Club { get; set; }
 
         /// <summary>
+        /// The window these exceptions are exceptions to: a copy of
+        /// AppSettings.RelayResultsFromUtc, kept here so the two are never
+        /// parted. Null in a ledger from before it was kept, and before
+        /// anything is published.
+        ///
+        /// WHY (13 Nov 2026, Bug hunt 17): a standby PC's Take Over puts the
+        /// timing PC's ledger in place but keeps the standby's own settings,
+        /// so the ledger arrived without its window. A standby that had never
+        /// published had none, the next results index listed only the
+        /// exceptions, and the club's archive lost every race day the old PC
+        /// had published. See KeepWindow.
+        /// </summary>
+        public DateTime? From { get; set; }
+
+        /// <summary>
+        /// Settles the window at startup, between the one in settings and
+        /// the one kept here, and returns the one to use. The ledger's own
+        /// wins when it has one - it is what these exceptions were written
+        /// against - and a ledger from before it kept one takes the
+        /// setting's. <paramref name="changed"/> says the ledger needs saving.
+        /// </summary>
+        public DateTime? KeepWindow(DateTime? settingsFrom, out bool changed)
+        {
+            changed = false;
+
+            if (From is { } own)
+            {
+                return own;
+            }
+
+            if (settingsFrom is not null)
+            {
+                From = settingsFrom;
+                changed = true;
+            }
+
+            return settingsFrom;
+        }
+
+        /// <summary>
         /// Whether this ledger describes that relay and club. One that never
         /// recorded which is taken to be the one in use, as it always was.
         /// </summary>
@@ -483,6 +523,7 @@ internal static class RelayResultsIndex
         {
             Withheld.Clear();
             Extra.Clear();
+            From = null;
             Relay = relay;
             Club = club;
         }
@@ -607,6 +648,9 @@ internal static class RelayResultsIndex
             had |= HoldWrites;
             HoldWrites = false;
 
+            had |= From is not null;
+            From = null;
+
             Withheld.Clear();
             Extra.Clear();
             Owed.Clear();
@@ -633,6 +677,7 @@ internal static class RelayResultsIndex
                             Owed = new HashSet<string>(loaded.Owed ?? new(), StringComparer.Ordinal),
                             Relay = loaded.Relay,
                             Club = loaded.Club,
+                            From = loaded.From,
                         };
                     }
                 }

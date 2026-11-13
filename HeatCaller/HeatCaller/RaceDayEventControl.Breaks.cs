@@ -75,6 +75,9 @@ internal sealed class BreaksForm : Form
             }))
             .ToList();
 
+    /// <summary>A saved break's "when" choice: its round, or "before the finals" for anything at or below that mark.</summary>
+    private static int PointOf(PlannedBreak b) => Math.Max(b.AfterRound, PlannedBreak.BeforeFinals);
+
     public BreaksForm(IReadOnlyList<PlannedBreak>? breaks, int rounds, bool clubNight)
     {
         Text = "Breaks";
@@ -83,6 +86,16 @@ internal sealed class BreaksForm : Form
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterParent;
 
+        var ordered = NightBreaks.Ordered(breaks ?? Array.Empty<PlannedBreak>());
+
+        // A saved break at a point the night no longer offers - after a
+        // round past the round count, or before the finals on a club night -
+        // keeps its choice. It used to open on "No break" and Save then
+        // dropped it, although nobody had touched it: "After Q4, dinner" was
+        // lost by cutting qualifying to three rounds and then changing some
+        // other break. (It still falls before the mains - NightBreaks.Between.)
+        var saved = ordered.Select(b => PointOf(b)).ToHashSet();
+
         _points.Add(null);
 
         for (var n = 1; n <= rounds; n++)
@@ -90,7 +103,12 @@ internal sealed class BreaksForm : Form
             _points.Add(n);
         }
 
-        if (!clubNight)
+        foreach (var later in saved.Where(p => p > rounds).OrderBy(p => p))
+        {
+            _points.Add(later);
+        }
+
+        if (!clubNight || saved.Contains(PlannedBreak.BeforeFinals))
         {
             _points.Add(PlannedBreak.BeforeFinals);
         }
@@ -121,8 +139,6 @@ internal sealed class BreaksForm : Form
         grid.Controls.Add(new Label { Text = "Minutes", AutoSize = true, Margin = new Padding(0, 0, 8, 4) }, 1, 0);
         grid.Controls.Add(new Label { Text = "What for (said to the room)", AutoSize = true, Margin = new Padding(0, 0, 0, 4) }, 2, 0);
 
-        var ordered = NightBreaks.Ordered(breaks ?? Array.Empty<PlannedBreak>());
-
         for (var i = 0; i < Lines; i++)
         {
             var when = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 170, Margin = new Padding(0, 2, 8, 2) };
@@ -140,7 +156,7 @@ internal sealed class BreaksForm : Form
 
             if (i < ordered.Count)
             {
-                var index = _points.IndexOf(ordered[i].AfterRound);
+                var index = _points.IndexOf(PointOf(ordered[i]));
                 when.SelectedIndex = index > 0 ? index : 0;
                 minutes.Value = Math.Clamp(ordered[i].Minutes, 1, NightBreaks.MaxMinutes);
                 what.Text = ordered[i].What;

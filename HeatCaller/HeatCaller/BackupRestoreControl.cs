@@ -1221,9 +1221,12 @@ public sealed partial class BackupRestoreControl : UserControl
     /// the point of no return, the restart. <paramref name="keepAsTheyAre"/>
     /// goes to BackupService.RestoreBackup; <paramref name="refused"/> runs
     /// when the restore was refused with nothing touched, for Take Over to
-    /// put back what it changed first.
+    /// put back what it changed first. <paramref name="atPointOfNoReturn"/>
+    /// runs once the safety backup is made and the backup has unpacked, just
+    /// before the first file is replaced and while saving still works - for
+    /// Take Over to leave its marker, which must not be in the safety backup.
     /// </summary>
-    private void RunRestore(string zipPath, IReadOnlyCollection<string>? keepAsTheyAre, Action? refused)
+    private void RunRestore(string zipPath, IReadOnlyCollection<string>? keepAsTheyAre, Action? refused, Action? atPointOfNoReturn = null)
     {
         // Set the moment the restore reaches the point of no return. After
         // that the app restarts whatever happens, success or not.
@@ -1232,6 +1235,15 @@ public sealed partial class BackupRestoreControl : UserControl
         void BeforeReplacing()
         {
             filesTouched = true;
+
+            try
+            {
+                atPointOfNoReturn?.Invoke();
+            }
+            catch
+            {
+                // The restore goes on: it is past stopping cleanly.
+            }
 
             // Files closed first, so anything closing them saves lands
             // before the restored files go in rather than after.

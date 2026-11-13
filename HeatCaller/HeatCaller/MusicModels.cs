@@ -184,6 +184,7 @@ public sealed class MusicStore
                         .Where(t => !IsForeignNetworkPath(t.FilePath))
                         .ToList();
                     store.Current = loaded;
+                    store.ReadInstalledBundled(text);
                 }
                 else
                 {
@@ -242,6 +243,45 @@ public sealed class MusicStore
     /// field they don't know.
     /// </summary>
     private const string MusicFolderPathField = "MusicFolderPath";
+
+    /// <summary>
+    /// The extra field in music.json listing the included tracks' files
+    /// already copied into the music folder, by file name (see
+    /// InstallBundledFrom). A field of its own for the same reason as
+    /// MusicFolderPathField: older versions ignore a field they don't know.
+    /// </summary>
+    private const string InstalledBundledField = "InstalledIncludedFiles";
+
+    /// <summary>
+    /// The included tracks' files this library has had copied in, by file
+    /// name. One the club has since deleted from the music folder is in
+    /// here and no longer on disk, and is not copied in again.
+    /// </summary>
+    private readonly HashSet<string> _installedBundled = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Reads InstalledBundledField. A file without it - any written before it existed - has installed nothing as far as this knows.</summary>
+    private void ReadInstalledBundled(string json)
+    {
+        try
+        {
+            if (JsonNode.Parse(json)?[InstalledBundledField] is not JsonArray names)
+            {
+                return;
+            }
+
+            foreach (var name in names)
+            {
+                if (name is JsonValue value && value.TryGetValue<string>(out var file) && !string.IsNullOrWhiteSpace(file))
+                {
+                    _installedBundled.Add(file);
+                }
+            }
+        }
+        catch
+        {
+            // Unreadable: the worst that happens is one more copy.
+        }
+    }
 
     /// <summary>
     /// How a track's path inside the music folder is written to music.json
@@ -440,7 +480,8 @@ public sealed class MusicStore
     /// </summary>
     public void ReinstallBundledTracks()
     {
-        InstallBundledTracks();
+        // Asked for by name, so a track the club deleted comes back too.
+        InstallBundledTracks(again: true);
         SyncBuiltInTracks(save: true);
     }
 
@@ -501,7 +542,7 @@ public sealed class MusicStore
         yield return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Assets", "Music"));
     }
 
-    private void InstallBundledTracks()
+    private void InstallBundledTracks(bool again = false)
     {
         try
         {
@@ -517,23 +558,52 @@ public sealed class MusicStore
                 return;
             }
 
-            Directory.CreateDirectory(MusicDirectory);
-
-            // Not the removed tracks: a build folder from before 9 Nov 2026
-            // still holds their files, since a build never clears old output.
-            foreach (var source in Directory.GetFiles(bundled)
-                         .Where(f => IsSupportedAudio(f) && !RemovedTitles.Contains(TitleForFile(f))))
-            {
-                var target = Path.Combine(MusicDirectory, Path.GetFileName(source));
-                if (!File.Exists(target))
-                {
-                    File.Copy(source, target);
-                }
-            }
+            InstallBundledFrom(bundled, again);
         }
         catch
         {
             // Best-effort - a failed install must not stop the app opening.
+        }
+    }
+
+    /// <summary>
+    /// Copies the shipped tracks in <paramref name="bundled"/> into the
+    /// music folder - each one once.
+    ///
+    /// WHY ONCE (13 Nov 2026, bug hunt 17): every shipped file missing from
+    /// the music folder used to be copied in at every launch. Remove says an
+    /// included track comes back "unless you delete the file from the music
+    /// folder" - and deleting it was exactly what brought it back, listed
+    /// and ticked, to play over the PA again. Each file copied is now
+    /// remembered in music.json, and one the club has deleted since stays
+    /// deleted. A track new in a later version is not in the list, so it
+    /// still arrives by itself.
+    ///
+    /// Everything is copied regardless when <paramref name="again"/> is set
+    /// (Restore Included Tracks), and when the music folder has no audio in
+    /// it at all: that is a new PC or a restored backup whose music.json
+    /// came without its files, not a club that deleted every song.
+    /// </summary>
+    internal void InstallBundledFrom(string bundled, bool again)
+    {
+        Directory.CreateDirectory(MusicDirectory);
+
+        var everything = again || !Directory.GetFiles(MusicDirectory).Any(IsSupportedAudio);
+
+        // Not the removed tracks: a build folder from before 9 Nov 2026
+        // still holds their files, since a build never clears old output.
+        foreach (var source in Directory.GetFiles(bundled)
+                     .Where(f => IsSupportedAudio(f) && !RemovedTitles.Contains(TitleForFile(f))))
+        {
+            var name = Path.GetFileName(source);
+            var target = Path.Combine(MusicDirectory, name);
+
+            if (!File.Exists(target) && (everything || !_installedBundled.Contains(name)))
+            {
+                File.Copy(source, target);
+            }
+
+            _installedBundled.Add(name);
         }
     }
 
@@ -929,6 +999,13 @@ public sealed class MusicStore
                         entry[MusicFolderPathField] = inMusicFolder;
                     }
                 }
+            }
+
+            // Which included tracks have been copied in - see InstallBundledFrom.
+            if (document is JsonObject root && _installedBundled.Count > 0)
+            {
+                root[InstalledBundledField] = new JsonArray(
+                    _installedBundled.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).Select(n => (JsonNode?)JsonValue.Create(n)).ToArray());
             }
 
             // SafeFile rather than a bare write, like the other stores: an

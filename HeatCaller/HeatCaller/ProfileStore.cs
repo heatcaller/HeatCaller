@@ -676,6 +676,16 @@ public sealed class ProfileStore : IDriverLookup
         .ToList();
 
     /// <summary>
+    /// AllIncludingGhosts from any thread (bug hunt 17): the same list, from
+    /// the profiles as of the last change to them - see GetForAnyThread -
+    /// never the live dictionary the UI thread edits.
+    /// </summary>
+    public IReadOnlyList<DriverProfile> AllIncludingGhostsForAnyThread => _alternateIndex.Profiles.Values
+        .OrderBy(p => p.DriverName)
+        .ThenBy(p => p.Transponder)
+        .ToList();
+
+    /// <summary>
     /// Adds a NEW driver, refusing - rather than replacing anybody - when
     /// either of its transponders is already someone else's.
     ///

@@ -503,11 +503,13 @@ public sealed record PhoneCountdown(DateTime? AtUtc, string State)
     /// Screen band's three states (<see cref="AutoStartClock.Band"/>), with
     /// the start time instead of the time left, so a phone counts it down
     /// itself between two of the laptop's publishes. Null with the clock off.
-    /// To the second, so the same count is the same document.
+    /// To the second, so the same count is the same document. A race waiting
+    /// for the time drivers were given counts down to that time, as the band
+    /// says it ("NEXT RACE AT 20:40").
     /// </summary>
     public static PhoneCountdown? For(AutoStartState state, DateTime? startsAtUtc) => state switch
     {
-        AutoStartState.Counting when startsAtUtc is { } at => new PhoneCountdown(
+        AutoStartState.Counting or AutoStartState.WaitingForTime when startsAtUtc is { } at => new PhoneCountdown(
             new DateTime(at.Ticks - at.Ticks % TimeSpan.TicksPerSecond, DateTimeKind.Utc), "counting"),
         AutoStartState.Held => new PhoneCountdown(null, "held"),
         AutoStartState.WaitingForFloor or AutoStartState.WaitingForCars or AutoStartState.WaitingForMarshals or AutoStartState.Start

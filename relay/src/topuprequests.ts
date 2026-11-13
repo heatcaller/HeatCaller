@@ -252,8 +252,10 @@ export class TopUpRequests {
     return this.serialise(club, async (): Promise<AutoGiven | undefined> => {
       // The ask's own month, not the moment this runs: an ask a breath
       // before midnight on the last day is answered in the month it was made.
-      const now = askedAt !== undefined && !Number.isNaN(Date.parse(askedAt)) ? new Date(Date.parse(askedAt)) : this.now();
-      const month = monthOf(now);
+      // Only the month comes from the ask: an ask can wait open for weeks
+      // before it is answered, and <at> is when it was given.
+      const now = this.now();
+      const month = monthOf(askedAt !== undefined && !Number.isNaN(Date.parse(askedAt)) ? new Date(Date.parse(askedAt)) : now);
       const path = autoTopUpPath(this.dataDir, club);
       const raw = await readJsonFile(path);
 

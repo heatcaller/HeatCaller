@@ -363,6 +363,40 @@ export function liveAlerts(before: unknown, after: unknown, url: string, beforeA
   return out;
 }
 
+/**
+ * Keeps the "in about 5 minutes" pushes to once a race (Bug Hunt 17).
+ * liveAlerts only sees the document before, and the laptop's estimate can
+ * step back over the five-minute line and in again - an estimate that moves
+ * with the clock, rounded to the minute, does it every minute - so the phone
+ * was buzzed each time. `sent` remembers, for each driver, the race and the
+ * marshal duty already inside five minutes; a soon push for the same one is
+ * dropped. Forgotten when their next race, or duty, is a different one.
+ */
+export function onceSoon(sent: Map<string, string>, who: string, entry: unknown, atMs: number | undefined, alerts: PushMessage[]): PushMessage[] {
+  let out = alerts;
+
+  for (const [field, tag] of [["next", "hc-soon"], ["marshal", "hc-marshal-soon"]] as const) {
+    const part = isObject(entry) ? entry[field] : undefined;
+    const race = isObject(part) && typeof part["race"] === "string" ? part["race"] : "";
+    const key = `${who}|${field}`;
+
+    if (sent.get(key) !== race) {
+      sent.delete(key);
+    } else if (race !== "") {
+      out = out.filter((message) => message.tag !== tag);
+    }
+
+    // Remembered whether or not it was pushed: "Your race is next" going at
+    // the same moment stands in for it. Not a marshal who is at their post,
+    // who is told nothing and has not been.
+    if (race !== "" && startsSoon(part, atMs) && !(field === "marshal" && isObject(part) && part["in"] === true)) {
+      sent.set(key, race);
+    }
+  }
+
+  return out;
+}
+
 function racesOf(night: unknown): unknown[] {
   return isObject(night) && Array.isArray(night["races"]) ? night["races"] : [];
 }
@@ -450,6 +484,8 @@ export class PushService {
    * Only the reading and writing is held, never a post.
    */
   private readonly locks = new Map<string, Promise<void>>();
+  /** The race and marshal duty each driver has already had "in about 5 minutes" for (onceSoon). */
+  private readonly soonSent = new Map<string, string>();
 
   constructor(options: PushOptions) {
     this.store = options.store;
@@ -694,7 +730,7 @@ export class PushService {
       const afterAt = isObject(after) && typeof after["at"] === "string" ? Date.parse(after["at"]) : this.now().getTime();
 
       for (const id of ids) {
-        for (const message of liveAlerts(was[id], now[id], myNightUrl(club), beforeAt, afterAt)) {
+        for (const message of onceSoon(this.soonSent, `${club}|${id}`, now[id], afterAt, liveAlerts(was[id], now[id], myNightUrl(club), beforeAt, afterAt))) {
           await this.send(club, id, message);
         }
       }

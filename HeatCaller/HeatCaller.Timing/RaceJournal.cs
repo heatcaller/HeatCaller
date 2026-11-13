@@ -249,6 +249,16 @@ public sealed class RaceJournal
         public TimeSpan AccumulatedRedTime { get; set; }
         public DateTime? RedFlagStartedUtc { get; set; }
 
+        // Bug hunt 17. How long since the green, and how long a red that
+        // was out had been out, at the write - measured on the monotonic
+        // clock the live race runs on. The restore used to work both out
+        // from the UTC stamps, so a Windows time step earlier in the race
+        // moved the restored clock, and the time limit, by the size of the
+        // step. Absent from an older journal, which is restored from the
+        // stamps as before.
+        public long? RaceClockMs { get; set; }
+        public long? RedClockMs { get; set; }
+
         public long RaceFastestLapMs { get; set; }
         public string RaceFastestLapTransponder { get; set; } = string.Empty;
 
@@ -465,6 +475,8 @@ public sealed class RaceJournal
                 RaceStartDeviceTimeMs = snapshot.RaceStartDeviceTimeMs,
                 AccumulatedRedTime = snapshot.AccumulatedRedTime,
                 RedFlagStartedUtc = snapshot.RedFlagStartedUtc,
+                RaceClockMs = snapshot.TakenClockMs - snapshot.RaceStartClockMs,
+                RedClockMs = snapshot.TakenClockMs - snapshot.RedFlagStartedClockMs,
                 RaceFastestLapMs = snapshot.RaceFastestLapMs,
                 RaceFastestLapTransponder = snapshot.RaceFastestLapTransponder,
                 IsFinishing = snapshot.IsFinishing,
@@ -1157,7 +1169,9 @@ public sealed class RaceJournal
 
         if (entry.RedFlagStartedUtc is { } redStartedUtc)
         {
-            redBeforeWrite = entry.SavedUtc - redStartedUtc;
+            redBeforeWrite = entry.RedClockMs is { } redClockMs
+                ? TimeSpan.FromMilliseconds(redClockMs)
+                : entry.SavedUtc - redStartedUtc;
 
             if (redBeforeWrite < TimeSpan.Zero)
             {
@@ -1172,7 +1186,13 @@ public sealed class RaceJournal
 
             // Moved forward by the outage, so the race clock picks up where
             // it stopped instead of counting the time the app was shut.
-            entry.RaceStartUtc is { } started ? started + outage : null,
+            // Bug hunt 17: put where the race's own clock stood at the
+            // write, when the journal has it - see Entry.RaceClockMs.
+            entry.RaceStartUtc is { } started
+                ? entry.RaceClockMs is { } raceClockMs && raceClockMs >= 0
+                    ? now - TimeSpan.FromMilliseconds(raceClockMs)
+                    : started + outage
+                : null,
 
             entry.RaceStartDeviceTimeMs,
 

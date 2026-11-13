@@ -3197,5 +3197,5 @@ public partial class MainForm
     /// On its own so a test can run the same thing the handler does.
     /// </summary>
     internal static int TickOffRecordedHeats(DayScheduleStore schedule, RoundDefinitionStore rounds) =>
-        schedule.AutoCompleteRecorded(id => rounds.Get(id)?.IsRecorded == true);
+        schedule.AutoCompleteRecorded(id => rounds.Get(id)?.IsRecorded == true, id => rounds.Get(id) is not null);
 }

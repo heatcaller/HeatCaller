@@ -399,6 +399,29 @@ internal sealed class ClubNotes
         }
 
         NewMeeting(null);
+
+        // ALREADY ON NO DAY, AND NewMeeting DID NOTHING (13 Nov 2026, bug
+        // hunt 17). A club that had no day open last week left its notes
+        // under no day, and "no day to no day" is not a change - so they
+        // were never cleared: unsaid ones waited to be read out at a later
+        // meeting, and said ones filled the caps for good. The same age
+        // rule as adopting them onto a day. A note from earlier tonight
+        // (a restart before the day is opened) is inside it and kept.
+        lock (_gate)
+        {
+            var now = DateTime.UtcNow;
+            var old = _file.Notes.Where(one => now - one.AddedAtUtc > AdoptedWithin).ToList();
+
+            if (old.Count == 0)
+            {
+                return;
+            }
+
+            Forget(old);
+            _file.Notes.RemoveAll(old.Contains);
+
+            Save();
+        }
     }
 
     /// <summary>

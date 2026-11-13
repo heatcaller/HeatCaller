@@ -849,8 +849,18 @@ public partial class MainForm
         {
             var grid = _race.GetOrderedStandings().Select(s => s.TransponderId).ToList();
 
+            // The round's MAIN class's drivers for the records, which is
+            // everybody unless the heat is shared (13 Nov 2026, bug hunt
+            // 17): they are counted over one class and worded with its
+            // name, so the other class's drivers are left out rather than
+            // read out under a class they are not racing. The championship
+            // below still takes the whole grid.
+            var ownClass = _activeRound is not { } onTrack
+                ? grid
+                : grid.Where(t => MixedHeats.Counts(onTrack, onTrack.ClassName, t, null, _profiles)).ToList();
+
             var (form, rivalries) = CommentaryReaders.GridHistory(
-                grid,
+                ownClass,
                 _activeRound?.ClassName,
                 _profiles,
                 _sessionHistory,

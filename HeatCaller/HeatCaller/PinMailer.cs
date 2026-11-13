@@ -452,11 +452,16 @@ internal static class PinMailer
     /// the burst the pause exists to avoid. Everything is copied out of
     /// settings before the first await, so call this on the UI thread.
     /// </summary>
+    /// <param name="summaryFor">
+    /// What to say went, given how many - for a batch that isn't the night
+    /// emails (a night called off). Left out, it is the night emails' wording.
+    /// </param>
     public static async Task<MailResult> SendBatchAsync(
         AppSettings settings,
         IReadOnlyList<(string Key, string To, string ToName, string Subject, string Body)> messages,
         IProgress<string>? progress,
-        CancellationToken cancel)
+        CancellationToken cancel,
+        Func<int, string>? summaryFor = null)
     {
         if (ConfigurationProblem(settings) is { } problem)
         {
@@ -490,7 +495,7 @@ internal static class PinMailer
         try
         {
             return await Task.Run(
-                    () => SendAllAsync(server, outgoing, Array.Empty<string>(), progress, cancel, isTest: false, summaryFor: n => $"Emailed {Plural.Of(n, "driver")} their night."),
+                    () => SendAllAsync(server, outgoing, Array.Empty<string>(), progress, cancel, isTest: false, summaryFor: summaryFor ?? (n => $"Emailed {Plural.Of(n, "driver")} their night.")),
                     CancellationToken.None)
                 .ConfigureAwait(false);
         }

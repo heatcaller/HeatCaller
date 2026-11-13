@@ -1967,6 +1967,13 @@ public partial class AnnouncerControl
             }
         }
 
+        // Between races the class is the picked round's, not the last
+        // race's - see CommentaryDirector.ClassBetweenRaces.
+        if (!racing)
+        {
+            director.ClassBetweenRaces(RaceClassName?.Invoke());
+        }
+
         // The next race on its way closes the gap after the last one, so no
         // paid read lands on the grid. See CommentaryDirector.ReadsBelongHere.
         if (_race.State is RaceState.Staging or RaceState.Countdown)
@@ -2915,7 +2922,7 @@ public partial class AnnouncerControl
 
         async Task<bool> SpeakRenderedAsync(SpokenSegment one)
         {
-            _renderedTurns = await RenderTurnsAsync(one).ConfigureAwait(true);
+            var rendered = await RenderTurnsAsync(one).ConfigureAwait(true);
 
             // WHY (20 Oct 2026, Bug Hunt 8): rendering takes seconds, and a
             // mute or a staged race inside them still had the turns spoken
@@ -2931,7 +2938,7 @@ public partial class AnnouncerControl
                 return false;
             }
 
-            SpeakPlainly(one);
+            SpeakPlainly(one, rendered);
             return true;
         }
     }
@@ -2962,15 +2969,22 @@ public partial class AnnouncerControl
         // waits for each turn to be heard before queueing the next, so a
         // turn rendered late puts its network round trip in the hand-over -
         // see RenderTurnsAsync.
+        //
+        // Kept HERE, by this segment, not in a field of the page (bug hunt
+        // 17). On Air's Tonight Open can start while a block is still pacing
+        // its turns, and with one slot between them the block's remaining
+        // turns were said with the Tonight Open's audio.
+        IReadOnlyList<AnnouncementService.PreparedSpeech?> rendered = Array.Empty<AnnouncementService.PreparedSpeech?>();
+
         if (said.IsExchange)
         {
             var clock = System.Diagnostics.Stopwatch.StartNew();
 
-            _renderedTurns = await RenderTurnsAsync(said).ConfigureAwait(true);
+            rendered = await RenderTurnsAsync(said).ConfigureAwait(true);
 
             var ready = 0;
 
-            foreach (var one in _renderedTurns)
+            foreach (var one in rendered)
             {
                 if (one is not null)
                 {
@@ -3008,7 +3022,7 @@ public partial class AnnouncerControl
         void SpeakOnce()
         {
             spoken = true;
-            SpeakPlainly(said);
+            SpeakPlainly(said, rendered);
         }
 
         void SpeakTurn(ExchangeTurn turn, CommentaryExchange.ExchangeRun run)
@@ -3036,7 +3050,7 @@ public partial class AnnouncerControl
                 run,
                 said.Kind,
                 opening: at == 0,
-                prepared: at >= 0 && at < _renderedTurns.Count ? _renderedTurns[at] : null,
+                prepared: at >= 0 && at < rendered.Count ? rendered[at] : null,
                 about: said.About,
                 facts: said.Facts);
         }
@@ -3255,20 +3269,18 @@ public partial class AnnouncerControl
     }
 
     /// <summary>Says it with no music in front of it - what every segment did before the show treatment.</summary>
-    /// <summary>
-    /// The audio for the turns of the exchange being spoken, index for
-    /// index with them, or empty when nothing was rendered ahead.
-    ///
-    /// A field rather than an argument because the show block speaks its
-    /// turns through a callback it owns the shape of (ShowTreatment), so
-    /// there is nowhere to thread this through. Only ever one exchange is
-    /// in the air at a time - the director writes one segment at a time and
-    /// waits for it - so one slot is enough.
-    /// </summary>
-    private IReadOnlyList<AnnouncementService.PreparedSpeech?> _renderedTurns =
-        Array.Empty<AnnouncementService.PreparedSpeech?>();
+    private void SpeakPlainly(SpokenSegment said) =>
+        SpeakPlainly(said, Array.Empty<AnnouncementService.PreparedSpeech?>());
 
-    private void SpeakPlainly(SpokenSegment said)
+    /// <summary>
+    /// Says it plainly, with <paramref name="rendered"/> the audio for the
+    /// turns of the exchange, index for index with them, or empty when
+    /// nothing was rendered ahead. Handed in by whoever rendered them
+    /// rather than kept in a field (bug hunt 17): two exchanges CAN be in
+    /// the air at once - On Air's Tonight Open over a block still pacing
+    /// its turns - and one slot gave the first the second's audio.
+    /// </summary>
+    private void SpeakPlainly(SpokenSegment said, IReadOnlyList<AnnouncementService.PreparedSpeech?> rendered)
     {
         if (_settings is null)
         {
@@ -3309,7 +3321,7 @@ public partial class AnnouncerControl
                 CommentaryExchange.ExchangeRun.At(at, said.Turns.Count),
                 said.Kind,
                 opening: at == 0,
-                prepared: at < _renderedTurns.Count ? _renderedTurns[at] : null,
+                prepared: at < rendered.Count ? rendered[at] : null,
                 about: said.About,
                 facts: said.Facts);
         }

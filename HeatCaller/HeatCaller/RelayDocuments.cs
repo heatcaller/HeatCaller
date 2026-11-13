@@ -859,7 +859,17 @@ internal static class RelayDocuments
             }
 
             // A heading only from the first line: "Parking: round the back".
+            // Not the colon inside a time or a link ("Doors open 18:30",
+            // "Sign up at https://..."), which is words; the next one is tried.
             var colon = flat.IndexOf(':');
+
+            while (colon > 0 && colon + 1 < flat.Length
+                   && ((char.IsDigit(flat[colon - 1]) && char.IsDigit(flat[colon + 1]))
+                       || string.CompareOrdinal(flat, colon + 1, "//", 0, 2) == 0))
+            {
+                colon = flat.IndexOf(':', colon + 1);
+            }
+
             var firstBreak = flat.IndexOf('\n');
             var heading = colon > 0 && colon <= MaxGuideHeading && (firstBreak < 0 || colon < firstBreak) ? flat[..colon].Trim() : string.Empty;
             var words = heading.Length > 0 ? flat[(colon + 1)..].Trim() : flat;

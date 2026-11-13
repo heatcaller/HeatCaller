@@ -628,11 +628,23 @@ internal sealed class RelaySignupDesk
     private void Reopen(SignupInvite invite, bool newCode)
     {
         var was = (invite.Code, invite.Club, invite.Salt, invite.EmailedUtc, invite.State, invite.AnsweredUtc,
-            invite.Transponder, invite.AnswerMessage, invite.AnswerCheckedIn);
+            invite.Transponder, invite.AnswerMessage, invite.AnswerCheckedIn, invite.ExpiresUtc);
 
         if (newCode)
         {
             Store.NewCode(invite, _settings);
+
+            // A new code is a new invite to them, so it gets an invite's
+            // time. The sign-up can be answered after the invite's own two
+            // weeks ran out (the relay holds it for its own two weeks), and
+            // the invite then came back already expired: never published,
+            // while the console said to send the new code (Bug hunt 17).
+            var fresh = DateTime.UtcNow + SignupStore.InviteLifetime;
+
+            if (invite.ExpiresUtc < fresh)
+            {
+                invite.ExpiresUtc = fresh;
+            }
         }
 
         invite.State = SignupInviteState.Open;
@@ -650,7 +662,7 @@ internal sealed class RelaySignupDesk
         if (!Store.Save())
         {
             (invite.Code, invite.Club, invite.Salt, invite.EmailedUtc, invite.State, invite.AnsweredUtc,
-                invite.Transponder, invite.AnswerMessage, invite.AnswerCheckedIn) = was;
+                invite.Transponder, invite.AnswerMessage, invite.AnswerCheckedIn, invite.ExpiresUtc) = was;
 
             throw new InvalidOperationException("the invite couldn't be saved, so it was left as it was. "
                 + "Close anything that might have signups.json open (a backup or sync tool is the usual cause) and try again.");

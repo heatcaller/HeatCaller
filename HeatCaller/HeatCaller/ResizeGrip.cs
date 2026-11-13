@@ -20,6 +20,9 @@ internal sealed class ResizeGrip : Control
     /// <summary>The part's height when the drag started.</summary>
     private int _downHeight;
 
+    /// <summary>Whether the mouse has moved up or down since it went down: a click is not a drag.</summary>
+    private bool _moved;
+
     private bool _hot;
 
     /// <summary>The height the part has now, asked when a drag starts.</summary>
@@ -100,10 +103,14 @@ internal sealed class ResizeGrip : Control
     {
         base.OnMouseDown(e);
 
-        if (e.Button == MouseButtons.Left)
+        // Not the second press of a double-click: that is Reset's, and a
+        // drag started under it ended by saving the height Reset had just
+        // forgotten (Bug hunt 17).
+        if (e.Button == MouseButtons.Left && e.Clicks < 2)
         {
             _downY = Cursor.Position.Y;
             _downHeight = CurrentHeight?.Invoke() ?? 0;
+            _moved = false;
             Invalidate();
         }
     }
@@ -114,7 +121,16 @@ internal sealed class ResizeGrip : Control
 
         if (_downY is { } y)
         {
-            Dragged?.Invoke(Math.Max(0, _downHeight + Cursor.Position.Y - y));
+            var nowY = Cursor.Position.Y;
+
+            // Windows sends a move with a press, mouse still: not a drag yet.
+            if (nowY == y && !_moved)
+            {
+                return;
+            }
+
+            _moved = true;
+            Dragged?.Invoke(Math.Max(0, _downHeight + nowY - y));
         }
     }
 
@@ -160,7 +176,14 @@ internal sealed class ResizeGrip : Control
 
         _downY = null;
         Invalidate();
-        Finished?.Invoke();
+
+        // A click that never moved changed nothing, so there is nothing to
+        // save - saving it pinned a part that was fitting itself as "dragged".
+        if (_moved)
+        {
+            _moved = false;
+            Finished?.Invoke();
+        }
     }
 
     protected override void OnPaint(PaintEventArgs e)

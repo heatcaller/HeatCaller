@@ -10,7 +10,17 @@ public partial class MainForm
     /// <summary>How long a night-email count is reused: planning one builds every email, and the card refreshes often.</summary>
     private static readonly TimeSpan NightEmailCountFor = TimeSpan.FromSeconds(60);
 
-    private (DateTime AtUtc, int? Count)? _nightEmailCount;
+    private (DateTime AtUtc, int? Count, string Stamp)? _nightEmailCount;
+
+    /// <summary>
+    /// What a kept night-email count was counted against: who has been sent
+    /// tonight's, and how many races the day has. The count is only reused
+    /// while this still reads the same - it used to be kept the full minute
+    /// regardless, so the checklist went on saying "12 night emails to send"
+    /// just after they went, and missed a race filed inside the minute.
+    /// </summary>
+    internal static string NightEmailCountStamp(AppSettings settings, int racesFiled) =>
+        $"{settings.NightEmailSentFor}|{settings.NightEmailSentTo?.Count ?? 0}|{racesFiled}";
 
     /// <summary>What is still to do tonight, given the day's saved races.</summary>
     private NightClose.Facts NightClosingFacts(IReadOnlyList<SessionRecord> daySessions, RaceEvent? day)
@@ -34,7 +44,7 @@ public partial class MainForm
 
         return new NightClose.Facts(
             rentalsOut,
-            NightEmailsToSend(),
+            NightEmailsToSend(daySessions.Count),
             notOnline,
             _settings.LastAutoBackupUtc,
             day is { IsLegacy: false, IsOpen: true },
@@ -72,13 +82,16 @@ public partial class MainForm
     /// <summary>
     /// Night emails still to send, or null when they are switched off or
     /// can't go out (no mailbox set up). Reused for a minute - see
-    /// NightEmailCountFor.
+    /// NightEmailCountFor - unless emails have gone or a race has been filed
+    /// since (NightEmailCountStamp).
     /// </summary>
-    private int? NightEmailsToSend()
+    private int? NightEmailsToSend(int racesFiled)
     {
         var now = DateTime.UtcNow;
+        var stamp = NightEmailCountStamp(_settings, racesFiled);
 
-        if (_nightEmailCount is { } cached && now - cached.AtUtc < NightEmailCountFor)
+        if (_nightEmailCount is { } cached && now - cached.AtUtc < NightEmailCountFor
+            && string.Equals(cached.Stamp, stamp, StringComparison.Ordinal))
         {
             return cached.Count;
         }
@@ -96,7 +109,7 @@ public partial class MainForm
             count = null;
         }
 
-        _nightEmailCount = (now, count);
+        _nightEmailCount = (now, count, stamp);
         return count;
     }
 

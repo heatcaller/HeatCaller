@@ -756,55 +756,33 @@ public sealed partial class RaceControlControl
         var skipped = new List<string>();
         var leftAlone = new List<string>();
 
-        foreach (var classGroup in pending.GroupBy(r => r.ClassName, StringComparer.OrdinalIgnoreCase))
-        {
-            // Everyone checked in who races the class - as their main class
-            // or one of their others - and then anyone checked in who is in
-            // one of these heats already without racing the class: a driver
-            // added to a heat by hand (RoundRosterForm's Add Driver, for a
-            // class they aren't registered in). This used to rebuild from
-            // the main class alone, and silently dropped every one of those
-            // from every heat it redid.
-            var roster = _profiles.All
-                .Where(p => p.RunsClass(classGroup.Key) && _checkIns.IsCheckedIn(p.Transponder))
+        // Worked out for every class before a heat is changed - a shared heat
+        // is dealt by each of its classes. See RedealAcrossClasses.
+        CheckInStore checkIns = _checkIns;
+
+        var redo = RedealAcrossClasses(
+            program,
+            className => _profiles.All
+                .Where(p => p.RunsClass(className) && checkIns.IsCheckedIn(p.Transponder))
                 .Select(p => p.Transponder)
-                .ToList();
+                .ToList(),
+            checkIns.IsCheckedIn,
+            (round, transponder) => MixedHeats.ClassOfDriver(round, transponder, _profiles));
 
-            var addedByHand = classGroup
-                .SelectMany(r => r.AssignedTransponders)
-                .Where(t => !string.IsNullOrWhiteSpace(t)
-                            && !roster.Contains(t, StringComparer.OrdinalIgnoreCase)
-                            && _checkIns.IsCheckedIn(t))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
+        skipped.AddRange(redo.NobodyIn);
+        leftAlone.AddRange(redo.LeftAlone.Select(heat => $"{heat.ClassName} {heat.RoundLabel}"));
 
-            roster.AddRange(addedByHand);
-
-            if (roster.Count == 0)
+        foreach (var heat in pending)
+        {
+            if (!redo.Rosters.TryGetValue(heat.Id, out var given))
             {
-                skipped.Add(classGroup.Key);
                 continue;
             }
 
-            var classDayRounds = program
-                .Where(r => string.Equals(r.ClassName, classGroup.Key, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            var dealt = RedealRemainingHeats(classDayRounds, roster);
-
-            foreach (var heat in classGroup)
-            {
-                if (!dealt.TryGetValue(heat.Id, out var given))
-                {
-                    leftAlone.Add($"{heat.ClassName} {heat.RoundLabel}");
-                    continue;
-                }
-
-                heat.AssignedTransponders = given;
-                _rounds.Update(heat);
-                after[heat.Id] = given.ToList();
-                touched++;
-            }
+            heat.AssignedTransponders = given;
+            _rounds.Update(heat);
+            after[heat.Id] = given.ToList();
+            touched++;
         }
 
         var note = $"{AppTime.LogStampNow()}  [day] Rebuilt {Plural.Of(touched, "heat")} from the live check-in sheet.";
@@ -821,6 +799,128 @@ public sealed partial class RaceControlControl
 
         StatusMessage?.Invoke(note);
         UpdateNextUpBar();
+    }
+
+    /// <summary>What Redo Remaining Heats hands out: each rebuilt heat's roster by round id, the classes with nobody checked in, and the heats left as they are because everyone has raced their round.</summary>
+    internal sealed record RedoRosters(
+        Dictionary<string, List<string>> Rosters, List<string> NobodyIn, List<RoundDefinition> LeftAlone);
+
+    /// <summary>
+    /// The rosters Redo Remaining Heats deals every not-yet-run qualifier on
+    /// <paramref name="program"/>, class by class. Pure: who is checked in
+    /// for a class, whether a driver is checked in, and which class a driver
+    /// of a shared heat runs in (MixedHeats.ClassOfDriver) are asked for.
+    ///
+    /// WHY (bug hunt 17): this grouped the heats by their main class alone.
+    /// A heat shared with another class (MixedHeats) was dealt as if every
+    /// car in it were the main class's - so with Stock in two heats and Mod
+    /// run together with one of them, the Mod drivers were spread over both
+    /// and those landing in the Stock-only heat were scored as Stock; and a
+    /// class sharing another class's heat while keeping one of its own had
+    /// its drivers dealt into its own heat and left in the shared one too.
+    /// Now each class's drivers are dealt among the heats that class runs
+    /// in, shared ones included, and a shared heat's roster is its classes'
+    /// shares one after another. A one-class heat comes out as it always did.
+    /// </summary>
+    internal static RedoRosters RedealAcrossClasses(
+        IReadOnlyList<RoundDefinition> program,
+        Func<string, IReadOnlyList<string>> checkedInFor,
+        Func<string, bool> isCheckedIn,
+        Func<RoundDefinition, string, string> classOfDriver)
+    {
+        // A one-class heat's class is read exactly as it always was.
+        static IReadOnlyList<string> ClassesIn(RoundDefinition round) =>
+            MixedHeats.IsShared(round) ? MixedHeats.ClassesOf(round) : new[] { round.ClassName };
+
+        static bool Runs(RoundDefinition round, string className) =>
+            MixedHeats.IsShared(round)
+                ? MixedHeats.RunsClass(round, className)
+                : string.Equals(round.ClassName, className, StringComparison.OrdinalIgnoreCase);
+
+        bool InClass(RoundDefinition round, string transponder, string className) =>
+            !MixedHeats.IsShared(round)
+            || string.Equals(classOfDriver(round, transponder)?.Trim(), className.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        var pending = program
+            .Where(r => r.Kind == RoundKind.Qualifier && !r.IsRecorded)
+            .ToList();
+
+        var dealtFor = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.OrdinalIgnoreCase);
+        var nobodyIn = new List<string>();
+
+        foreach (var className in pending.SelectMany(ClassesIn).Distinct(StringComparer.OrdinalIgnoreCase).ToList())
+        {
+            // Everyone checked in who races the class - as their main class
+            // or one of their others - and then anyone checked in who is in
+            // one of these heats already without racing the class: a driver
+            // added to a heat by hand (RoundRosterForm's Add Driver, for a
+            // class they aren't registered in). This used to rebuild from
+            // the main class alone, and silently dropped every one of those
+            // from every heat it redid. In a shared heat, only the drivers
+            // running there as this class.
+            var roster = checkedInFor(className).ToList();
+
+            var addedByHand = pending
+                .Where(r => Runs(r, className))
+                .SelectMany(r => r.AssignedTransponders.Where(t => !string.IsNullOrWhiteSpace(t) && InClass(r, t, className)))
+                .Where(t => !roster.Contains(t, StringComparer.OrdinalIgnoreCase) && isCheckedIn(t))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            roster.AddRange(addedByHand);
+
+            if (roster.Count == 0)
+            {
+                nobodyIn.Add(className);
+                continue;
+            }
+
+            var classDayRounds = program.Where(r => Runs(r, className)).ToList();
+
+            dealtFor[className] = RedealRemainingHeats(classDayRounds, roster);
+        }
+
+        var rosters = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var leftAlone = new List<RoundDefinition>();
+
+        foreach (var heat in pending)
+        {
+            var given = new List<string>();
+            var dealtAny = false;
+            var triedAny = false;
+
+            foreach (var className in ClassesIn(heat))
+            {
+                if (dealtFor.TryGetValue(className, out var dealt))
+                {
+                    triedAny = true;
+
+                    if (dealt.TryGetValue(heat.Id, out var theirs))
+                    {
+                        dealtAny = true;
+                        given.AddRange(theirs);
+                        continue;
+                    }
+                }
+
+                // Nobody checked in for this class, or all of them have
+                // raced the round: its drivers in the heat stay as they are.
+                given.AddRange(heat.AssignedTransponders.Where(t => InClass(heat, t, className)));
+            }
+
+            if (dealtAny)
+            {
+                rosters[heat.Id] = MixedHeats.IsShared(heat)
+                    ? given.Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+                    : given;
+            }
+            else if (triedAny)
+            {
+                leftAlone.Add(heat);
+            }
+        }
+
+        return new RedoRosters(rosters, nobodyIn, leftAlone);
     }
 
     /// <summary>
@@ -1208,17 +1308,26 @@ public sealed partial class RaceControlControl
     private static string DerivedRoundName(RoundDefinition round) =>
         $"{round.ClassName} - {round.RoundLabel}".Trim();
 
+    /// <summary>The ways AppTime.TimeOfDay writes the Quick Race stamp's time.</summary>
+    private static readonly string[] QuickRaceStampTimes = { "HH:mm", "h:mm tt", "h:mm" }; // read with TryParseExact, never written
+
     /// <summary>
-    /// Whether a name is the "Quick Race HH:mm" stamp Quick Race writes. The
-    /// time is read in the current culture, as it was written, since the
-    /// ":" in a format string is the culture's time separator.
+    /// Whether a name is the "Quick Race 19:05" or "Quick Race 7:05 PM" stamp
+    /// Quick Race writes. The time is read in the current culture, as it was
+    /// written, since the ":" in a format string is the culture's time
+    /// separator.
+    ///
+    /// Either clock, whichever is ticked now (bug hunt 17): the stamp is
+    /// written with AppTime.TimeOfDay, and this read "HH:mm" only - so on the
+    /// default 12-hour clock no stamp was ever recognised, and it stuck to the
+    /// races after it again. "h:mm" is for a culture with no AM/PM words.
     /// </summary>
     private static bool IsQuickRaceStamp(string label)
     {
         const string prefix = "Quick Race ";
 
         return label.StartsWith(prefix, StringComparison.Ordinal)
-            && DateTime.TryParseExact(label[prefix.Length..], "HH:mm",
+            && DateTime.TryParseExact(label[prefix.Length..].Trim(), QuickRaceStampTimes,
                 System.Globalization.CultureInfo.CurrentCulture,
                 System.Globalization.DateTimeStyles.None, out _);
     }

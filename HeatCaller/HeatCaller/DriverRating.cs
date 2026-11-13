@@ -148,8 +148,14 @@ public static class DriverRating
             return new Dictionary<string, double>();
         }
 
+        // The cars that raced: a lap or more, AchievementEvaluator's field.
+        // A hand-released grid files the whole roster at the green, so the
+        // rows of cars that never moved made one runner "first of six" and
+        // gave the no-shows a rating for a race they were not in. A DQ is
+        // cut to no laps but did race, and is rated nothing below.
         var real = session.Results
             .Where(e => !string.IsNullOrWhiteSpace(e.Transponder) && !GhostService.IsGhost(e.Transponder))
+            .Where(e => e.Laps >= 1 || string.Equals(e.Outcome, "DQ", StringComparison.OrdinalIgnoreCase))
             .OrderBy(e => e.Position)
             .ToList();
 
@@ -178,8 +184,10 @@ public static class DriverRating
     /// </summary>
     public static IReadOnlyDictionary<string, double> ForStandings(IReadOnlyList<RacerStanding> ordered)
     {
+        // A lap or more, as in ForSession, so the flag and the saved result agree.
         var real = (ordered ?? Array.Empty<RacerStanding>())
             .Where(s => !string.IsNullOrWhiteSpace(s.TransponderId) && !GhostService.IsGhost(s.TransponderId))
+            .Where(s => s.Laps >= 1)
             .ToList();
 
         var gridOrder = GridSlots(real.Where(s => s.StartPosition > 0).OrderBy(s => s.StartPosition).Select(s => s.TransponderId));

@@ -340,12 +340,14 @@ public partial class MainForm
     /// <summary>A driver's own entry fee tonight, paid or owing, for their phone - null with no race day open or no fee (setup plan step 8).</summary>
     private DeskMoney.PhoneMoney? DriverLiveMoneyOf(string main)
     {
-        if (_raceEvents.Active is not { IsLegacy: false, EntryFee: > 0 } day || _profiles.Get(main) is not { } profile)
+        if (_raceEvents.Active is not { IsLegacy: false } day || _profiles.Get(main) is not { } profile)
         {
             return null;
         }
 
-        return DeskMoney.ForPhone(CheckInControl.FeeFor(profile, day), _payments.Get(day.Id, profile.Transponder));
+        // With the classes' own fees, as the desk works it out - see PhoneMoneyFor.
+        return CheckInControl.PhoneMoneyFor(
+            profile, day, DeskMoney.ClassLookup(_raceClasses.All), _payments.Get(day.Id, profile.Transponder));
     }
 
     /// <summary>The transponders behind every badge with a request to hear back about - see DriverRequestStore.BadgesWithAnswers.</summary>

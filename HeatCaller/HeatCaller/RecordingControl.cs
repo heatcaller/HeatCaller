@@ -908,6 +908,10 @@ public sealed class RecordingControl : UserControl
             return;
         }
 
+        var picked = _cmbSeason.SelectedIndex >= 0 && _cmbSeason.SelectedIndex < _seasons.Count
+            ? _seasons[_cmbSeason.SelectedIndex].Id
+            : string.Empty;
+
         FillSeasons();
 
         if (_cmbSeason.SelectedIndex < 0 || _cmbSeason.SelectedIndex >= _seasons.Count)
@@ -921,6 +925,16 @@ public sealed class RecordingControl : UserControl
         }
 
         var (id, name) = _seasons[_cmbSeason.SelectedIndex];
+
+        // The one picked has been deleted since: the refill put the box on
+        // the first in the list, which nobody chose. Asked again, not played.
+        if (picked.Length > 0 && !string.Equals(id, picked, StringComparison.Ordinal))
+        {
+            _lblSeason.Text = "That championship is not in the list any more - pick one and press again.";
+            _lblSeason.ForeColor = AppTheme.Accent;
+
+            return;
+        }
 
         _seasonRunning = true;
         _btnSeason.Enabled = false;
@@ -984,6 +998,10 @@ public sealed class RecordingControl : UserControl
         // spoken and saved under the old name. The pick is found again by
         // transponder, so it stays on the same driver.
         // (10 Nov 2026, bug hunt 16)
+        var picked = _cmbDriverCut.SelectedIndex >= 0 && _cmbDriverCut.SelectedIndex < _driversTonight.Count
+            ? _driversTonight[_cmbDriverCut.SelectedIndex].Transponder
+            : string.Empty;
+
         FillDriversTonight();
 
         if (_cmbDriverCut.SelectedIndex < 0 || _cmbDriverCut.SelectedIndex >= _driversTonight.Count)
@@ -997,6 +1015,17 @@ public sealed class RecordingControl : UserControl
         }
 
         var (transponder, name) = _driversTonight[_cmbDriverCut.SelectedIndex];
+
+        // The driver picked is no longer in tonight's list (their race was
+        // deleted, or their transponder changed): the refill put the box on
+        // the first name, which nobody chose. Asked again, not played.
+        if (picked.Length > 0 && !string.Equals(transponder, picked, StringComparison.OrdinalIgnoreCase))
+        {
+            _lblDriverCut.Text = "That driver is not in tonight's list any more - pick a driver and press again.";
+            _lblDriverCut.ForeColor = AppTheme.Accent;
+
+            return;
+        }
 
         _driverCutRunning = true;
         _btnDriverCut.Enabled = false;

@@ -31,7 +31,7 @@ describe("relay branding: HeatCaller on every club page", () => {
       assert.match(footer, /<a class="hcmark" href="https:\/\/heatcaller\.com" aria-label="What's HeatCaller\?" data-hc-about>/, path);
       assert.match(footer, /<span class="hcword">Heat<span class="hcc">Caller<\/span><\/span>/, path);
       assert.match(page, /<div class="hcabout" id="hcabout"[^>]*hidden>/, path);
-      assert.match(page, /<a class="go" href="https:\/\/heatcaller\.com">Bring HeatCaller to your track<\/a>/, path);
+      assert.match(page, /<a class="go" href="https:\/\/heatcaller\.com" target="_blank" rel="noopener">Bring HeatCaller to your track<\/a>/, path);
     }
   });
 

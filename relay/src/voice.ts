@@ -312,6 +312,8 @@ export interface VoiceServiceOptions {
   readonly render?: RenderFn | undefined;
   /** Streams a line as ElevenLabs makes it - see speakStream. Absent: a stream asked for is answered whole. */
   readonly stream?: StreamFn | undefined;
+  /** The longest a streamed line may go without a piece arriving. See DEFAULT_STREAM_IDLE_MS. */
+  readonly streamIdleMs?: number;
   readonly now?: () => Date;
   readonly log?: (line: string) => void;
   /**
@@ -421,11 +423,21 @@ const DEFAULT_CLUB_CACHE_BYTES = 25 * 1024 * 1024;
  */
 const MAX_AUDIO_BYTES = 4 * 1024 * 1024;
 
+/**
+ * The longest a streamed line may go without a piece arriving before it is
+ * given up. ElevenLabs can answer 200 and then send nothing; with no limit
+ * the line kept one of its club's two slots until the connection died of
+ * its own accord, minutes later, long after the laptop had said the line
+ * in Kokoro. Audio that is flowing arrives many times a second.
+ */
+const DEFAULT_STREAM_IDLE_MS = 15_000;
+
 export class VoiceService {
   private readonly config: VoiceConfig;
   private readonly dataDir: string;
   private readonly render: RenderFn | undefined;
   private readonly streamer: StreamFn | undefined;
+  private readonly streamIdleMs: number;
   private readonly now: () => Date;
   private readonly log: (line: string) => void;
   private readonly maxInFlight: number;
@@ -489,6 +501,7 @@ export class VoiceService {
     this.dataDir = options.dataDir;
     this.render = options.render;
     this.streamer = options.stream;
+    this.streamIdleMs = options.streamIdleMs ?? DEFAULT_STREAM_IDLE_MS;
     this.now = options.now ?? (() => new Date());
     this.log = options.log ?? (() => {});
     this.maxInFlight = options.maxInFlight ?? DEFAULT_MAX_IN_FLIGHT;
@@ -1010,12 +1023,37 @@ export class VoiceService {
     };
 
     const log = this.log;
+    const idleMs = this.streamIdleMs;
 
     async function* relay(): AsyncGenerator<Uint8Array> {
       let sent = 0;
+      const pieces = upstream[Symbol.asyncIterator]();
 
       try {
-        for await (const piece of upstream) {
+        for (;;) {
+          // Each piece is waited for only so long - see DEFAULT_STREAM_IDLE_MS.
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const idle = new Promise<"idle">((resolve) => {
+            timer = setTimeout(() => resolve("idle"), idleMs);
+          });
+          let next: IteratorResult<Uint8Array> | "idle";
+
+          try {
+            next = await Promise.race([pieces.next(), idle]);
+          } finally {
+            clearTimeout(timer);
+          }
+
+          if (next === "idle") {
+            log(`[voice] "${club}": a streamed line stalled - nothing from ElevenLabs for ${idleMs} ms - and was given up.`);
+            // A fault, not an ending: half a line must not pass for a whole one.
+            throw new Error(`ElevenLabs sent nothing for ${idleMs} ms`);
+          }
+
+          if (next.done === true) break;
+
+          const piece = next.value;
+
           if (piece.length === 0) continue;
 
           if (sent + piece.length > MAX_AUDIO_BYTES) {
@@ -1028,6 +1066,8 @@ export class VoiceService {
         }
       } finally {
         await settle(sent);
+        // Not waited for: a stalled upstream may never answer this either.
+        void Promise.resolve(pieces.return?.()).catch(() => {});
       }
     }
 

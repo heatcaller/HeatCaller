@@ -139,7 +139,12 @@ public sealed class BugHunt14_AfterRaceTests
         var source = Source("RaceControlControl.AfterRace.cs");
 
         Assert.Contains("var (podium, fastest) = FlagResultRows(record);", source, StringComparison.Ordinal);
-        Assert.Equal(2, CountOf(source, "FlagResultRows(record).Podium is { Count: > 0 } podium ? WinnerName(podium[0])"));
+
+        // Bug hunt 17: read once, on the UI thread, and handed to both throws
+        // (the built-in one and the AI's brief) - see flagWinner.
+        Assert.Equal(1, CountOf(source, "FlagResultRows(record).Podium is { Count: > 0 } flagPodium ? WinnerName(flagPodium[0])"));
+        Assert.Contains("FlagHandOffBrief(flagWinner, resultRead)", source, StringComparison.Ordinal);
+        Assert.Contains("RenderFlagThrowAsync(flagWinner, followOnWork.Token)", source, StringComparison.Ordinal);
     }
 
     private static int CountOf(string text, string needle)

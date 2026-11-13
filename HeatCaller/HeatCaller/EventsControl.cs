@@ -284,6 +284,11 @@ public sealed class EventsControl : UserControl
             return;
         }
 
+        if (IsLegacyHolder(existing))
+        {
+            return;
+        }
+
         // Taken BEFORE the dialog opens: its Save writes straight into the
         // race day it was given.
         var previousName = existing.Name;
@@ -314,9 +319,29 @@ public sealed class EventsControl : UserControl
         RefreshGrid();
     }
 
+    /// <summary>
+    /// True, with a line saying why nothing happened, when the row is the
+    /// legacy holder. It is in the list (RefreshGrid shows every event) but
+    /// it is not a race day: The Day never makes it current, closes it or
+    /// renames it, and Delete here filters it out. Stored as the current day
+    /// it stops a reopened real day becoming current, and closing it sends
+    /// the night emails for races run with no day open.
+    /// </summary>
+    private bool IsLegacyHolder(RaceEvent raceEvent)
+    {
+        if (!raceEvent.IsLegacy)
+        {
+            return false;
+        }
+
+        _lblStatus.Text = $"\"{raceEvent.DisplayName}\" holds the rounds from before race days. "
+                          + "It isn't a race day, so it can't be switched to, closed or renamed.";
+        return true;
+    }
+
     private void MakeActive()
     {
-        if (Selected() is not { } raceEvent)
+        if (Selected() is not { } raceEvent || IsLegacyHolder(raceEvent))
         {
             return;
         }
@@ -378,7 +403,9 @@ public sealed class EventsControl : UserControl
 
     private void CloseOrReopen()
     {
-        if (Selected() is not { } raceEvent)
+        // Closing is what the holder refuses; one closed by an older version
+        // can still be reopened, which is how it is meant to stand.
+        if (Selected() is not { } raceEvent || (raceEvent.IsOpen && IsLegacyHolder(raceEvent)))
         {
             return;
         }

@@ -72,7 +72,7 @@ internal sealed partial class DriverRequestDesk
         {
             var name = onTheNight.Count == 0
                 ? raw
-                : onTheNight.FirstOrDefault(c => string.Equals(c.Trim(), raw, StringComparison.OrdinalIgnoreCase))?.Trim();
+                : onTheNight.FirstOrDefault(c => string.Equals(OnTheWire(c), OnTheWire(raw), StringComparison.OrdinalIgnoreCase))?.Trim();
 
             if (name is { Length: > 0 } && !chosen.Contains(name, StringComparer.OrdinalIgnoreCase))
             {
@@ -82,4 +82,12 @@ internal sealed partial class DriverRequestDesk
 
         return chosen;
     }
+
+    /// <summary>
+    /// A class name as the Me page sends it: the ticked classes come as one
+    /// comma-separated line, so the page turns a comma inside a name
+    /// ("Buggy, 2WD") into a space and runs of spaces into one.
+    /// </summary>
+    private static string OnTheWire(string name) =>
+        string.Join(' ', name.Replace(',', ' ').Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 }

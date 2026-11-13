@@ -237,10 +237,21 @@ public sealed class LapBeepControl : UserControl
 
         var drivers = _profiles.AllRaceable.OrderBy(p => p.DriverName).ToList();
 
+        // The cues of the drivers listed, which is what the line under the
+        // list counts. A cue outlives its driver - deleted, or given another
+        // transponder - and counting every cue kept read "8 of 7 drivers
+        // have a cue", or warned of a share with somebody not in the list.
+        var listed = new List<DriverLapBeep>();
+
         foreach (var driver in drivers)
         {
             var beep = _store.Get(driver.Transponder);
             var assigned = beep is not null;
+
+            if (beep is not null && !listed.Contains(beep))
+            {
+                listed.Add(beep);
+            }
 
             var rowIndex = _grid.Rows.Add(
                 string.IsNullOrWhiteSpace(driver.DriverName) ? driver.Transponder : driver.DriverName,
@@ -269,13 +280,13 @@ public sealed class LapBeepControl : UserControl
 
         // Two drivers sharing a cue defeats the point, so it's called out
         // rather than left for someone to notice mid-race.
-        var duplicates = _store.All
+        var duplicates = listed
             .Where(b => b.Enabled)
             .GroupBy(b => b.ToneIndex)
             .Where(g => g.Count() > 1)
             .ToList();
 
-        var assignedCount = _store.All.Count(b => b.Enabled);
+        var assignedCount = listed.Count(b => b.Enabled);
 
         // Hoisted out of the line below so the verb can agree with it
         // without summing the same groups twice.

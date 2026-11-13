@@ -96,9 +96,30 @@ public partial class MainForm
             return $"{round.RoundLabel} has already run.";
         }
 
+        // The desk knows the marshal by their main transponder, but the post
+        // is held under the one they were gridded on in the heat before -
+        // their second car's, perhaps - and covers are looked up by that one
+        // (MarshalAssigner.Assign). Filed under the main, the swap would be
+        // reported as made and change nothing.
+        var held = MarshalAssigner.DutiesForDay(_rounds, _raceEvents, _trackLayouts, _profiles)
+            .FirstOrDefault(d => d.RoundId == roundId && string.Equals(MainOfTransponder(d.Transponder), marshal, StringComparison.OrdinalIgnoreCase))
+            ?.Transponder;
+
+        if (held is null)
+        {
+            return $"{(_profiles.Get(marshal) is { DriverName.Length: > 0 } who ? who.DriverName : "The marshal")} isn't marshalling {round.RoundLabel} any more.";
+        }
+
         var before = round.MarshalCovers is null ? null : new Dictionary<string, string>(round.MarshalCovers, StringComparer.OrdinalIgnoreCase);
 
-        if (MarshalSwaps.Cover(round, marshal, cover) is { } refusal)
+        // Who is on the round's posts as they stand, so a driver who took a
+        // post since they were asked is not given a second one (bug hunt 17).
+        var marshalling = MarshalAssigner.DutiesForDay(_rounds, _raceEvents, _trackLayouts, _profiles)
+            .Where(d => d.RoundId == roundId)
+            .Select(d => d.Transponder)
+            .ToList();
+
+        if (MarshalSwaps.Cover(round, held, cover, marshalling) is { } refusal)
         {
             return refusal;
         }

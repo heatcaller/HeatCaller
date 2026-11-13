@@ -8,8 +8,8 @@ namespace HeatCaller;
 /// Not modal, and one at a time (MainForm.ShowPhotoFinish): it is opened in
 /// the moments after a close finish, next to Race Control. It looks for new
 /// shots every couple of seconds, so a finish just kept appears without
-/// asking - by counting the night's shots, which costs nothing, and
-/// reading them again only when that changes.
+/// asking - by listing the night's folders, and reading only the shots it
+/// has not listed yet (WithNewShots).
 ///
 /// On the layout pieces: the night and its buttons across the top, the list
 /// of shots and the picture side by side taking the height, the slider and
@@ -144,19 +144,25 @@ public sealed class PhotoFinishForm : Form
     /// reads as a list and one that leaves the picture the room; past that,
     /// the list scrolls sideways.
     /// </summary>
-    private void FitSide()
+    /// <param name="from">The first item not measured yet: shots added to the end of the list are measured, the rest are not measured again.</param>
+    private void FitSide(int from = 0)
     {
-        var widest = _lstShots.Items.Cast<object>()
-            .Select(item => TextRenderer.MeasureText(item.ToString(), _lstShots.Font).Width)
-            .DefaultIfEmpty(0)
-            .Max();
+        if (from == 0)
+        {
+            _widestTitle = 0;
+        }
 
-        _side.Width = Math.Clamp(widest + SystemInformation.VerticalScrollBarWidth + UiLayout.AtTextSize(24),
+        for (var i = from; i < _lstShots.Items.Count; i++)
+        {
+            _widestTitle = Math.Max(_widestTitle, TextRenderer.MeasureText(_lstShots.Items[i].ToString(), _lstShots.Font).Width);
+        }
+
+        _side.Width = Math.Clamp(_widestTitle + SystemInformation.VerticalScrollBarWidth + UiLayout.AtTextSize(24),
             UiLayout.AtTextSize(240), UiLayout.AtTextSize(420));
     }
 
-    /// <summary>The night's shot folders counted when the list was last read - see CheckForNew.</summary>
-    private int _foldersSeen = -1;
+    /// <summary>The widest shot title in the list, in pixels - see FitSide.</summary>
+    private int _widestTitle;
 
     /// <summary>
     /// Left and Right step a frame wherever the focus is, but the two lists,
@@ -183,16 +189,58 @@ public sealed class PhotoFinishForm : Form
     }
 
     /// <summary>
-    /// How many shots the night has: folders with their details written.
-    /// The details go in before any frame, and whole (PhotoFinish), so a
-    /// shot counted here is one ShotsOn lists.
+    /// The night's shots brought up to date from <paramref name="have"/>, the
+    /// shots already listed - or null when nothing has been added or removed.
+    ///
+    /// Bug hunt 17: only a folder not listed yet is opened. This used to
+    /// read every shot of the night again each time one arrived, in the
+    /// window's own thread - with every crossing kept that is thousands of
+    /// files every couple of seconds late in a night, beside Race Control.
+    /// A shot's details go in before any frame, and whole (PhotoFinish), so
+    /// one read here needs no second look; a folder without them yet is
+    /// tried again next time.
     /// </summary>
-    private static int FoldersOn(string night)
+    internal static IReadOnlyList<PhotoFinish.SavedShot>? WithNewShots(string night, IReadOnlyList<PhotoFinish.SavedShot> have)
     {
         var folder = Path.Combine(PhotoFinish.Root, night);
-        return Directory.Exists(folder)
-            ? Directory.GetDirectories(folder).Count(dir => File.Exists(Path.Combine(dir, "shot.json")))
-            : 0;
+        var onDisk = Directory.Exists(folder) ? Directory.GetDirectories(folder) : Array.Empty<string>();
+        var listed = have.Select(shot => shot.Folder).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var added = new List<PhotoFinish.SavedShot>();
+
+        foreach (var dir in onDisk)
+        {
+            if (listed.Contains(dir))
+            {
+                continue;
+            }
+
+            try
+            {
+                var details = Path.Combine(dir, "shot.json");
+
+                if (File.Exists(details)
+                    && System.Text.Json.JsonSerializer.Deserialize<PhotoFinish.SavedShot>(File.ReadAllText(details)) is { } shot)
+                {
+                    added.Add(shot with { Folder = dir });
+                }
+            }
+            catch
+            {
+                // Half-written or hand-edited: not listed, as in PhotoFinish.ShotsOn.
+            }
+        }
+
+        var still = onDisk.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var kept = have.Where(shot => still.Contains(shot.Folder)).ToList();
+
+        if (added.Count == 0 && kept.Count == have.Count)
+        {
+            return null;
+        }
+
+        // Stable, so shots already listed keep their order and a new one
+        // (later than them all, but for a clock put back) goes on the end.
+        return kept.Concat(added).OrderBy(shot => shot.AtUtc).ToList();
     }
 
     /// <summary>Shots kept since the list was read, tonight - the newest picked, so a finish just in is on screen.</summary>
@@ -205,12 +253,10 @@ public sealed class PhotoFinishForm : Form
 
         try
         {
-            var count = FoldersOn(night);
-
-            if (count != _foldersSeen)
+            if (WithNewShots(night, _shots) is { } shots)
             {
                 var atEnd = _lstShots.SelectedIndex < 0 || _lstShots.SelectedIndex == _shots.Count - 1;
-                LoadShots(keepSelection: !atEnd);
+                ShowShots(shots, keepSelection: !atEnd);
             }
             else if (_lstShots.SelectedIndex >= 0 && _lstShots.SelectedIndex < _shots.Count)
             {
@@ -230,7 +276,24 @@ public sealed class PhotoFinishForm : Form
         }
     }
 
+    /// <summary>The picked night's shots, all read afresh - when the night is picked. New ones after that come through CheckForNew.</summary>
     private void LoadShots(bool keepSelection)
+    {
+        IReadOnlyList<PhotoFinish.SavedShot> shots;
+
+        try
+        {
+            shots = Night is { } night ? PhotoFinish.ShotsOn(night) : Array.Empty<PhotoFinish.SavedShot>();
+        }
+        catch
+        {
+            shots = Array.Empty<PhotoFinish.SavedShot>();
+        }
+
+        ShowShots(shots, keepSelection);
+    }
+
+    private void ShowShots(IReadOnlyList<PhotoFinish.SavedShot> shots, bool keepSelection)
     {
         // The shot being looked at, and where in it - kept when new shots come in.
         var wasFolder = keepSelection && _lstShots.SelectedIndex >= 0 && _lstShots.SelectedIndex < _shots.Count
@@ -238,14 +301,39 @@ public sealed class PhotoFinishForm : Form
             : null;
         var wasFrame = _slider.Value;
 
-        try
+        // Bug hunt 17: new shots nearly always go on the end, and are then
+        // added to the list as it stands - not the whole night's list
+        // cleared, filled and measured again for each one.
+        var listedBefore = _shots.Count;
+        var addedToEnd = listedBefore > 0 && shots.Count >= listedBefore && _lstShots.Items.Count == listedBefore;
+
+        for (var i = 0; addedToEnd && i < listedBefore; i++)
         {
-            _foldersSeen = Night is { } counted ? FoldersOn(counted) : 0;
-            _shots = Night is { } night ? PhotoFinish.ShotsOn(night) : Array.Empty<PhotoFinish.SavedShot>();
+            addedToEnd = ReferenceEquals(shots[i], _shots[i]);
         }
-        catch
+
+        _shots = shots;
+
+        if (addedToEnd)
         {
-            _shots = Array.Empty<PhotoFinish.SavedShot>();
+            _lstShots.BeginUpdate();
+
+            for (var i = listedBefore; i < _shots.Count; i++)
+            {
+                _lstShots.Items.Add(_shots[i].Title);
+            }
+
+            _lstShots.EndUpdate();
+            FitSide(from: listedBefore);
+
+            // The shot being looked at is still picked, on the frame it was
+            // on; only a list that was on its newest shot moves to the new one.
+            if (wasFolder is null)
+            {
+                _lstShots.SelectedIndex = _shots.Count - 1;
+            }
+
+            return;
         }
 
         var was = wasFolder is null ? -1 : _shots.ToList().FindIndex(s => s.Folder == wasFolder);

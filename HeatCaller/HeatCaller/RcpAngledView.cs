@@ -215,9 +215,14 @@ public static class RcpAngledView
         // not from the seam (railed tiles, Phase 5, 13 Nov 2026). A
         // divider's two rails stand one on each lane's tile.
         var sides = RcpTrackPainter.RailSides(design);
+        // Two arched tiles can face one seam - an arched rail each side of a
+        // divider - so the first is kept rather than a lookup that threw on
+        // the second and stopped the view drawing. Such a seam is a double
+        // wall, drawn as two rails below.
         var arched = design.Tiles
             .Where(t => t.Piece == RcpPiece.Arched)
-            .ToDictionary(t => RcpPlan.EdgeLine(t.Col, t.Row, t.Facing), t => t);
+            .GroupBy(t => RcpPlan.EdgeLine(t.Col, t.Row, t.Facing))
+            .ToDictionary(g => g.Key, g => g.First());
 
         foreach (var wall in design.Walls)
         {

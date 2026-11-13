@@ -147,22 +147,29 @@ internal sealed class DriverPaidForm : Form
     {
         _grid.Rows.Clear();
         decimal total = 0;
+        var settled = 0;
 
         foreach (var profile in _drivers)
         {
             var fee = _feeFor(profile);
-            total += fee;
             var name = string.IsNullOrWhiteSpace(profile.DriverName) ? profile.Transponder : profile.DriverName;
             var words = _paidWords(profile);
+
+            // Only what is still owed is money to take - see ToSettle.
+            if (AlreadySettled(words))
+            {
+                settled++;
+            }
+            else
+            {
+                total += fee;
+            }
+
             var row = _grid.Rows[_grid.Rows.Add(name, DeskMoney.Money(fee), words)];
-            row.Cells["now"].Style.ForeColor = words.StartsWith("Owes", StringComparison.Ordinal) || words.Length == 0
-                ? AppTheme.Warning
-                : AppTheme.Success;
+            row.Cells["now"].Style.ForeColor = AlreadySettled(words) ? AppTheme.Success : AppTheme.Warning;
         }
 
-        _lblTotal.Text = _drivers.Count == 0
-            ? "Nobody on the slip yet."
-            : $"{Plural.Of(_drivers.Count, "driver")} - {DeskMoney.Money(total)} to take";
+        _lblTotal.Text = TotalWords(_drivers.Count, settled, total);
 
         var any = _drivers.Count > 0;
         _btnCash.Enabled = any;
@@ -194,8 +201,49 @@ internal sealed class DriverPaidForm : Form
             return;
         }
 
-        _settle(_drivers.ToList(), how, note);
+        _settle(ToSettle(_drivers, _paidWords), how, note);
         _drivers.Clear();
         RefreshRows();
+    }
+
+    /// <summary>Whether the Paid column's words say a driver has settled already: paid by cash or card, or comped. "Owes ..." and nothing at all are not.</summary>
+    internal static bool AlreadySettled(string paidWords) =>
+        paidWords.Length > 0 && !paidWords.StartsWith("Owes", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Who a press of Paid Cash, Paid Card or Comp settles: the drivers on
+    /// the slip who have not settled yet.
+    ///
+    /// WHY (13 Nov 2026, bug hunt 17): it used to be everyone. A family of
+    /// three with dad comped earlier as a marshal read "$45.00 to take" with
+    /// $30 owed, and Paid Cash then wrote Cash over his comp - a fee more in
+    /// the night's takings than was in the till, and the comp reason gone.
+    ///
+    /// A slip holding ONLY settled drivers is the desk putting right how
+    /// somebody paid (cash that was really card), so that still changes them.
+    /// </summary>
+    internal static IReadOnlyList<DriverProfile> ToSettle(IReadOnlyList<DriverProfile> onTheSlip, Func<DriverProfile, string> paidWords)
+    {
+        var owing = onTheSlip.Where(profile => !AlreadySettled(paidWords(profile))).ToList();
+
+        return owing.Count > 0 ? owing : onTheSlip.ToList();
+    }
+
+    /// <summary>The line under the slip: how many drivers, what there is to take from the ones still owing, and what a press does to the rest.</summary>
+    internal static string TotalWords(int drivers, int settled, decimal toTake)
+    {
+        if (drivers == 0)
+        {
+            return "Nobody on the slip yet.";
+        }
+
+        if (settled == 0)
+        {
+            return $"{Plural.Of(drivers, "driver")} - {DeskMoney.Money(toTake)} to take";
+        }
+
+        return settled >= drivers
+            ? $"{Plural.Of(drivers, "driver")} - nothing to take, already settled. Paid or Comp changes how."
+            : $"{Plural.Of(drivers, "driver")} - {DeskMoney.Money(toTake)} to take ({settled} already settled, left as {(settled == 1 ? "it is" : "they are")})";
     }
 }

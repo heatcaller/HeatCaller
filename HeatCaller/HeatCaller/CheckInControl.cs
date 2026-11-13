@@ -1253,7 +1253,7 @@ public sealed partial class CheckInControl : UserControl
             foreach (var profile in CurrentlyShownProfiles())
             {
                 // New to racing (setup plan D12): " · first night", " · novice, mentor Al".
-                var displayName = (string.IsNullOrWhiteSpace(profile.DriverName) ? profile.Transponder : profile.DriverName) + NewDrivers.Badge(profile, DateTime.Today);
+                var displayName = (string.IsNullOrWhiteSpace(profile.DriverName) ? profile.Transponder : profile.DriverName) + NewDrivers.Badge(profile, DateTime.Now);
                 var rowIndex = _tech is null
                     ? _grid.Rows.Add(_checkIns.IsCheckedIn(profile.Transponder), displayName, ClassCellText(profile))
                     : _grid.Rows.Add(_checkIns.IsCheckedIn(profile.Transponder), displayName, ClassCellText(profile),
@@ -1640,6 +1640,14 @@ public sealed partial class CheckInControl : UserControl
 
         _lblSummary.Text =
             $"{checkedInShown} of {shown.Count} checked in ({_checkIns.Count} total checked in across all classes){rule}";
+
+        // Every check-in ends here - a tick, a scan, a phone - and only
+        // RefreshAll used to bring these two lines up to date, so "0 here"
+        // and its still-to-come names stayed as they were while the desk
+        // ticked everybody in. Neither touches its label when nothing has
+        // changed.
+        RefreshEntriesClosed();
+        RefreshComing();
     }
     // ------------------------------------------------------------ packs
 

@@ -40,12 +40,15 @@ public static class AMainLegs
         int LastLegFinish,
         string Detail)
     {
+        /// <summary>The number of the first leg in the table - 1 unless leg 1 is not among the recorded ones.</summary>
+        public int FirstLeg { get; init; } = 1;
+
         /// <summary>"3 pts (best 2 of 3 legs)", "2 pts (2 legs)", or "1 pt (Leg 1)" after one leg.</summary>
         public string Words()
         {
             var total = Points == 1 ? "1 pt" : $"{Points} pts";
 
-            return LegsRun <= 1 ? $"{total} (Leg 1)"
+            return LegsRun <= 1 ? $"{total} (Leg {FirstLeg})"
                 : LegsCounted < LegsRun ? $"{total} (best {LegsCounted} of {LegsRun} legs)"
                 : $"{total} ({LegsRun} legs)";
         }
@@ -71,11 +74,15 @@ public static class AMainLegs
     /// result in leg order (a leg not yet run is left out, so the table after
     /// leg 1 is leg 1's result). Ghosts are left out; a driver's alternate
     /// transponder is folded into their main one, and their better row in a
-    /// leg stands.
+    /// leg stands. <paramref name="legNumbers"/> is each of those legs' own
+    /// number, for when they are not simply 1, 2, 3: with leg 2 skipped or
+    /// not yet in, leg 3's result used to be printed as "Leg 2".
     /// </summary>
-    public static List<Standing> Overall(IReadOnlyList<SessionRecord> legs, int countBest, Func<string, string?>? primaryForAlternate = null)
+    public static List<Standing> Overall(IReadOnlyList<SessionRecord> legs, int countBest, Func<string, string?>? primaryForAlternate = null, IReadOnlyList<int>? legNumbers = null)
     {
         string Key(string t) => primaryForAlternate?.Invoke(t) ?? t;
+
+        int Number(int i) => legNumbers is not null && i < legNumbers.Count ? legNumbers[i] : i + 1;
 
         // Each leg's finishing order, one place per driver.
         var orders = new List<List<(string Driver, string Name)>>();
@@ -101,6 +108,14 @@ public static class AMainLegs
                 if (result.Outcome == ResultEditor.Dq)
                 {
                     dq.Add(driver);
+                    continue;
+                }
+
+                // A row with no laps never crossed the line (a grid car put
+                // on the board by a hand-released green, or added by hand and
+                // never tapped): in the field, but it did not start this leg.
+                if (result.Laps <= 0)
+                {
                     continue;
                 }
 
@@ -135,7 +150,7 @@ public static class AMainLegs
                 .ToList();
 
             var detail = string.Join(", ", finishes.Select((f, i) =>
-                $"Leg {i + 1} {(f > 0 ? Ordinal(f) : dqs[i].Contains(driver) ? "DQ" : "DNS")} ({(points[i] == 1 ? "1 pt" : $"{points[i]} pts")})"
+                $"Leg {Number(i)} {(f > 0 ? Ordinal(f) : dqs[i].Contains(driver) ? "DQ" : "DNS")} ({(points[i] == 1 ? "1 pt" : $"{points[i]} pts")})"
                 + (counted.Any(c => c.i == i) ? string.Empty : " dropped")));
 
             standings.Add(new Standing(
@@ -146,7 +161,10 @@ public static class AMainLegs
                 legs.Count,
                 finishes.Where(f => f > 0).DefaultIfEmpty(0).Min(),
                 finishes.Count > 0 ? finishes[^1] : 0,
-                detail));
+                detail)
+            {
+                FirstLeg = Number(0),
+            });
         }
 
         static int OrLast(int finish) => finish > 0 ? finish : int.MaxValue;
@@ -187,12 +205,22 @@ public static class AMainLegs
             return null;
         }
 
+        // WHY (Bug hunt 17): one round for each OTHER leg number of this
+        // A-main, and where there are several, the one built with this leg
+        // (MainsBuilder makes an A-main's legs together). With no race day
+        // open the scope is every round there is, and the class's legs from
+        // an earlier meeting were taken as legs of tonight's: six legs scored
+        // into tonight's winner, or no winner at all if an old one never ran.
         var siblings = roundsInScope
             .Where(r => r.Kind == RoundKind.Main
                         && r.MainTier <= 0
                         && r.MainLeg > 0
+                        && r.MainLeg != justRun.MainLeg
+                        && (justRun.MainLegCount <= 0 || r.MainLeg <= justRun.MainLegCount)
                         && !string.Equals(r.Id, justRun.Id, StringComparison.Ordinal)
                         && string.Equals(r.ClassName, justRun.ClassName, StringComparison.OrdinalIgnoreCase))
+            .GroupBy(r => r.MainLeg)
+            .Select(g => g.MinBy(r => (r.CreatedAtUtc - justRun.CreatedAtUtc).Duration())!)
             .ToList();
 
         var legs = new List<(int Leg, SessionRecord Result)> { (justRun.MainLeg, justRunResult) };
@@ -215,9 +243,10 @@ public static class AMainLegs
             return null;
         }
 
-        var ordered = legs.OrderBy(l => l.Leg).Select(l => l.Result).ToList();
+        var inOrder = legs.OrderBy(l => l.Leg).ToList();
+        var ordered = inOrder.Select(l => l.Result).ToList();
         var counting = LegsCounting(legCount, countedSetting);
-        var table = Overall(ordered, counting, primaryForAlternate);
+        var table = Overall(ordered, counting, primaryForAlternate, inOrder.Select(l => l.Leg).ToList());
 
         return table.Count == 0 ? null : new Decided(table, counting, legCount);
     }

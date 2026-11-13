@@ -601,6 +601,26 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>
+    /// A new race: what the last one left behind that would change what
+    /// this one says - its winner's calls, never said (10 Nov 2026), its
+    /// passes made ready and the final minute (11 Nov 2026), and its
+    /// milestones.
+    ///
+    /// From staging (ResetAnnouncerLoad) AND from ResetSession, which the
+    /// green that starts a race calls too. These used to be cleared at
+    /// staging alone, so a race started with Green or Countdown and no Stage
+    /// after a timed one was still "in the final minute" and had the gap
+    /// for the lead called every lap from its second.
+    /// </summary>
+    private void ForgetTheLastRace()
+    {
+        ForgetTheWinnerCalls();
+        ForgetThePredictedPasses(newRace: true);
+        ForgetMilestones();
+        _inTheFinalMinute = false;
+    }
+
+    /// <summary>
     /// A new race: the count goes and so does the pacing clock.
     ///
     /// CALLED FROM STAGING, which happens once per race before the
@@ -622,12 +642,7 @@ public sealed partial class AnnouncementService
         // And where each line's time went, for the same race (10 Nov 2026).
         Timings.Reset();
 
-        // And the last race's winner's calls, never said (10 Nov 2026), and
-        // its passes made ready (11 Nov 2026).
-        ForgetTheWinnerCalls();
-        ForgetThePredictedPasses(newRace: true);
-        ForgetMilestones();
-        _inTheFinalMinute = false;
+        ForgetTheLastRace();
 
         // Not counted: the count it would go into has just been cleared,
         // and a call kept from the last race is nothing this race offered.

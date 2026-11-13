@@ -128,8 +128,12 @@ internal static class RaceLines
             return null;
         }
 
-        var mine = Crossings(row.LapTimesMs);
-        var theirs = Crossings(behind.LapTimesMs);
+        // Both from the green. In a qualifying start, or a staggered start
+        // on "own release", each car's lap times run from its own start, so
+        // without its clock zero two cars half a lap apart all race read as
+        // nose to tail.
+        var mine = Crossings(row.LapTimesMs, row.ClockZeroMs);
+        var theirs = Crossings(behind.LapTimesMs, behind.ClockZeroMs);
         var laps = 0;
 
         // Lap by lap back from their last crossing, while the car behind
@@ -285,11 +289,11 @@ internal static class RaceLines
     private static bool SameText(string? a, string? b) =>
         string.Equals((a ?? string.Empty).Trim(), (b ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Race time at each crossing, the start lap first.</summary>
-    private static List<long> Crossings(IReadOnlyList<long>? lapTimes)
+    /// <summary>Time since the green at each crossing, the start lap first - the car's own clock zero (SessionResultEntry.ClockZeroMs) and then its laps.</summary>
+    private static List<long> Crossings(IReadOnlyList<long>? lapTimes, long clockZeroMs)
     {
         var at = new List<long>();
-        long sum = 0;
+        var sum = Math.Max(0, clockZeroMs);
 
         foreach (var ms in lapTimes ?? Array.Empty<long>())
         {

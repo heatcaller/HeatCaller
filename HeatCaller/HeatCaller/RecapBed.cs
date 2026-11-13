@@ -282,6 +282,12 @@ internal sealed class RecapBed
             if (_writer.IsAlive && !_writer.Join(TimeSpan.FromSeconds(15)))
             {
                 _problem ??= "the last few seconds could not be written";
+
+                // Still inside a write on a disk that has stalled. The file
+                // is the writer's to close when it comes back (see WriteLoop):
+                // a WaveFileWriter is not thread-safe, and closing it here
+                // rewrites its header underneath that write.
+                return;
             }
         }
         catch
@@ -341,6 +347,20 @@ internal sealed class RecapBed
             _problem ??= ex.Message;
             Interlocked.Exchange(ref _closed, 1);
             Interlocked.CompareExchange(ref _current, null, this);
+        }
+        finally
+        {
+            // Closed by the thread that writes it, so a Stop that gave up
+            // waiting never has to close it under a write. Stop closes it
+            // again when it did not give up, which does nothing.
+            try
+            {
+                _wav.Dispose();
+            }
+            catch
+            {
+                // The header was flushed as it went; the file still reads.
+            }
         }
     }
 

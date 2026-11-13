@@ -162,8 +162,15 @@ internal static class ClubLogo
                     ? "data:image/png;base64," + Convert.ToBase64String(bytes)
                     : null;
             }
-            catch
+            catch (Exception ex)
             {
+                // Held by another program just now: not remembered, so the
+                // next ask reads it again - see MayReadLater.
+                if (MayReadLater(ex))
+                {
+                    return null;
+                }
+
                 // A logo file that has gone missing costs the club its logo,
                 // not its pages.
                 uri = null;
@@ -205,8 +212,13 @@ internal static class ClubLogo
             {
                 bytes = ReadStoredLogo(fileName);
             }
-            catch
+            catch (Exception ex)
             {
+                if (MayReadLater(ex))
+                {
+                    return null;
+                }
+
                 bytes = null;
             }
 
@@ -279,6 +291,22 @@ internal static class ClubLogo
             : null;
     }
 
+    /// <summary>
+    /// Whether a read that threw is worth asking for again - the file is
+    /// there but could not be opened just now, which is another program (a
+    /// sync, a backup, a virus scan) holding it for a moment.
+    ///
+    /// The three caches here remember "no logo" per file name, and used to
+    /// remember this too: one such moment on the first read after launch
+    /// took the logo off the club's online and Wi-Fi pages until the app
+    /// was restarted, with the file intact. So this answer is not
+    /// remembered, and the next ask reads again. A file that is not there
+    /// at all still is remembered: it is asked for every two seconds, and
+    /// RestoreFromHolding clears it when the file comes back.
+    /// </summary>
+    internal static bool MayReadLater(Exception ex) =>
+        ex is IOException and not (FileNotFoundException or DirectoryNotFoundException);
+
     private static string? _samplesFile;
     private static Color[]? _samples;
 
@@ -308,7 +336,8 @@ internal static class ClubLogo
 
         try
         {
-            using var image = Load(fileName);
+            // Decode rather than Load, which would hide a read that threw.
+            using var image = Decode(fileName);
 
             if (image is Bitmap bitmap)
             {
@@ -330,8 +359,13 @@ internal static class ClubLogo
                 samples = list.Count > 0 ? list.ToArray() : null;
             }
         }
-        catch
+        catch (Exception ex)
         {
+            if (MayReadLater(ex))
+            {
+                return null;
+            }
+
             samples = null;
         }
 
@@ -464,25 +498,35 @@ internal static class ClubLogo
 
         try
         {
-            // Only a file that passes the same test as the pages' copies.
-            // This used to decode whatever the file held - see
-            // ReadStoredLogo for what that let a restored backup do.
-            if (ReadStoredLogo(fileName!) is not { } bytes)
-            {
-                return null;
-            }
-
-            using var stream = new MemoryStream(bytes);
-            using var decoded = Image.FromStream(stream);
-
-            // Copied out, so the returned image does not depend on a stream
-            // that is about to be disposed.
-            return new Bitmap(decoded);
+            return Decode(fileName);
         }
         catch
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Load's work, for a name already checked - throwing when the file
+    /// can't be read or decoded, so that SolidSamples can tell a file held
+    /// for a moment from one that is no logo.
+    /// </summary>
+    private static Bitmap? Decode(string fileName)
+    {
+        // Only a file that passes the same test as the pages' copies.
+        // This used to decode whatever the file held - see
+        // ReadStoredLogo for what that let a restored backup do.
+        if (ReadStoredLogo(fileName) is not { } bytes)
+        {
+            return null;
+        }
+
+        using var stream = new MemoryStream(bytes);
+        using var decoded = Image.FromStream(stream);
+
+        // Copied out, so the returned image does not depend on a stream
+        // that is about to be disposed.
+        return new Bitmap(decoded);
     }
 
     /// <summary>

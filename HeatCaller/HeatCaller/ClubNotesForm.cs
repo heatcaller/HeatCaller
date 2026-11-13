@@ -62,6 +62,19 @@ internal sealed class ClubNotesForm : Form
     private readonly System.Windows.Forms.Timer _tick = new() { Interval = 2000 };
     private string _drawn = "";
 
+    /// <summary>
+    /// A note was just added from the box and the box has not been left
+    /// since - Enter does not approve while this is set.
+    ///
+    /// WHY (13 Nov 2026, bug hunt 17): adding a note empties the box, and
+    /// an empty box makes Approve the accept button. An Enter held a
+    /// little long, or tapped twice, was then one press to add and the
+    /// next to approve whichever note from the room the list had current -
+    /// the oldest waiting one when no row had been clicked - unread.
+    /// Clicking the list or a button leaves the box and puts Enter back.
+    /// </summary>
+    private bool _justAdded;
+
     public ClubNotesForm(ClubNotes notes)
     {
         _notes = notes;
@@ -119,11 +132,24 @@ internal sealed class ClubNotesForm : Form
             if (e.KeyCode == Keys.Enter)
             {
                 e.SuppressKeyPress = true;
-                AddTyped();
+
+                // Nothing typed is nothing to add - the Enter after one
+                // was added must not put up "Not added" either.
+                if (_txtNote.Text.Trim().Length > 0)
+                {
+                    AddTyped();
+                }
             }
         };
 
         _txtNote.TextChanged += (_, _) => UpdateButtons();
+
+        // See _justAdded.
+        _txtNote.Leave += (_, _) =>
+        {
+            _justAdded = false;
+            UpdateButtons();
+        };
 
         _btnAdd.Text = "Add";
         _btnAdd.Click += (_, _) => AddTyped();
@@ -328,7 +354,7 @@ internal sealed class ClubNotesForm : Form
         _btnApprove.Enabled = selected is { Approved: false };
         _btnRemove.Enabled = selected is not null;
 
-        AcceptButton = typing ? _btnAdd : _btnApprove.Enabled ? _btnApprove : null;
+        AcceptButton = typing ? _btnAdd : _btnApprove.Enabled && !_justAdded ? _btnApprove : null;
     }
 
     private void AddTyped()
@@ -338,6 +364,10 @@ internal sealed class ClubNotesForm : Form
             AppDialog.Show(this, why, "Not added", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
+
+        // Set before the box is emptied, which is what works out the
+        // accept button. See _justAdded.
+        _justAdded = true;
 
         _txtNote.Clear();
         Fill();

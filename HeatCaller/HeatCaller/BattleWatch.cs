@@ -276,8 +276,12 @@ public sealed class BattleWatch
     /// a minute, and a fight for the lead beats the same fight for
     /// seventh. Takes nothing and changes nothing - call Said when the
     /// line has actually been written.
+    ///
+    /// <paramref name="skip"/> passes over a fight the caller cannot use,
+    /// so the next one down is offered instead (13 Nov 2026, bug hunt 17) -
+    /// see CommentaryDirector's BattleWatch candidates for the one it has.
     /// </summary>
-    public Battle? Pick()
+    public Battle? Pick(Func<Battle, bool>? skip = null)
     {
         var now = _clock();
 
@@ -297,7 +301,7 @@ public sealed class BattleWatch
                 s.Closest,
                 s.Now,
                 s.LeadChanges))
-            .FirstOrDefault();
+            .FirstOrDefault(battle => skip?.Invoke(battle) != true);
     }
 
     /// <summary>

@@ -1209,7 +1209,7 @@ They're genuinely different groups, which is the same argument the shout-outs ma
 
 **There is no approval list, and there doesn't need to be.** A club note is a stranger's *words*, which is why that route has a gate in front of it. A vote is a tap on one of the names your club put on the ballot — nothing a phone sends here can become a word the announcer says. The worst a stranger on your Wi-Fi can achieve is being wrong about who wins.
 
-- **One vote per phone.** A second vote replaces the first, so somebody who tapped the wrong name on a phone screen can fix it and nobody gets two. On the club's web page it's one vote per internet connection, so two phones on the same home Wi-Fi share one.
+- **One vote per phone.** A second vote replaces the first, so somebody who tapped the wrong name on a phone screen can fix it without getting a second vote. On your Wi-Fi a phone is known by its network address and by a random id its browser keeps, so a phone that reconnects is still the same voter. There's no sign-in, so somebody determined to cheat could still get an extra vote in — it's a bit of fun, not a ballot. On the club's web page it's one vote per internet connection, so two phones on the same home Wi-Fi share one.
 - **No running tally is ever shown to a phone.** A room that can see what it's voting for is a bandwagon, not a prediction — and the announcer's line is only worth anything if each vote was that person's own guess.
 - **Nothing is stored about who voted.** The phone is the voter; there's no name, no sign-in, and nothing kept beyond the fact that it has voted once.
 - The page redraws itself every few seconds, so a phone left on it through two races is never offering the wrong grid.

@@ -389,14 +389,24 @@ public sealed partial class RaceControlControl
         var jumpStartCostsTheLap = _race.JumpStartCostsTheLap;
         var warningLadder = _race.WarningLadder;
 
+        // Which session this undo is good for - moved on by a Stage pressed
+        // again before the green, see StageKeepingAbandonedRaceUndo.
+        var goodFor = new AbandonedRaceUndo { Generation = generationAfter };
+        _abandonedRaceUndo = goodFor;
+
         _undo.Capture(description, () =>
         {
-            if (_race.SessionGeneration != generationAfter()
+            if (_race.SessionGeneration != goodFor.Generation()
                 || _race.State is not (RaceState.Staging or RaceState.Countdown))
             {
                 throw new InvalidOperationException(
                     "the new race has already gone green (or been reset), and undoing now would overwrite it. "
                     + "Nothing was changed.");
+            }
+
+            if (ReferenceEquals(_abandonedRaceUndo, goodFor))
+            {
+                _abandonedRaceUndo = null;
             }
 
             // Or the start sequence would carry on from under the race
@@ -491,6 +501,58 @@ public sealed partial class RaceControlControl
             NoteStartPutBack();
         });
     }
+
+    /// <summary>The session generation an abandoned-race undo is good for, read when Undo is pressed.</summary>
+    private sealed class AbandonedRaceUndo
+    {
+        public required Func<int> Generation { get; set; }
+    }
+
+    /// <summary>The newest abandoned-race undo (CaptureAbandonedRaceUndo), or null once it has been used.</summary>
+    private AbandonedRaceUndo? _abandonedRaceUndo;
+
+    /// <summary>
+    /// Stages the session for the Stage button, and keeps an abandoned
+    /// race's undo good when this Stage only restarts a start that has not
+    /// gone green.
+    ///
+    /// Bug hunt 17: every Stage moves the session generation on, and the
+    /// undo was good for the generation of the FIRST Stage only. So after
+    /// "Abandon the running race?" was answered Yes by mistake, a second
+    /// Stage - F1 pressed twice, a second "stage" from the phone, or Stage
+    /// after a Countdown over the race - made Undo refuse with "the new race
+    /// has already gone green", although no green had been thrown and there
+    /// was nothing to overwrite. The abandoned race's laps were gone.
+    /// </summary>
+    /// <param name="stateBefore">The state Stage was pressed in.</param>
+    /// <param name="tookOverDemo">Whether this Stage ended a demo - the start it replaces is then the demo's.</param>
+    private void StageKeepingAbandonedRaceUndo(RaceState stateBefore, bool tookOverDemo)
+    {
+        var undo = _abandonedRaceUndo;
+        var keeps = undo is not null
+                    && RestageKeepsAbandonedRaceUndo(stateBefore, tookOverDemo, _race.SessionGeneration, undo.Generation());
+
+        _race.Stage();
+
+        if (keeps)
+        {
+            var restaged = _race.SessionGeneration;
+            undo!.Generation = () => restaged;
+        }
+    }
+
+    /// <summary>
+    /// Whether a Stage leaves an abandoned race's undo good: only when it
+    /// is pressed during the staging or countdown of the very start that
+    /// undo was waiting on, which has therefore not gone green or been
+    /// reset (both move the generation on, and leave another state).
+    /// </summary>
+    /// <param name="generationBefore">The session generation as Stage was pressed.</param>
+    /// <param name="undoGeneration">The generation the abandoned-race undo is good for.</param>
+    internal static bool RestageKeepsAbandonedRaceUndo(RaceState stateBefore, bool tookOverDemo, int generationBefore, int undoGeneration) =>
+        !tookOverDemo
+        && stateBefore is (RaceState.Staging or RaceState.Countdown)
+        && undoGeneration == generationBefore;
 
     /// <summary>
     /// After an undo has put a race back: tells the director, when it came

@@ -46,6 +46,20 @@ public sealed partial class CheckInControl
         return DeskMoney.FeeFor(names.Select(name => DeskMoney.FeeOf(classNamed?.Invoke(name), day.EntryFee, day.ExtraClassFee)));
     }
 
+    /// <summary>
+    /// A driver's own entry money for their phone - the same sum the Paid
+    /// column shows, or null on a night that charges nothing.
+    ///
+    /// The phone used to be given the race day's fees alone, and only when
+    /// the day itself had one: a junior in a $5 class was told $15, and on a
+    /// night priced by its classes the phone said nothing about money at all.
+    /// </summary>
+    internal static DeskMoney.PhoneMoney? PhoneMoneyFor(
+        DriverProfile profile, RaceEvent? day, Func<string, RaceClass?> classNamed, EntryPayment? payment) =>
+        day is not null && DeskMoney.Charges(day, classNamed)
+            ? DeskMoney.ForPhone(FeeFor(profile, day, classNamed), payment)
+            : null;
+
     /// <summary>Fills a row's Paid cell.</summary>
     private void ShowPaid(DataGridViewRow row)
     {

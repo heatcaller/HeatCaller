@@ -119,7 +119,11 @@ public static class MixedHeats
     /// first, then their profile, then the round's main class - see the
     /// class notes. Always the main class for a one-class round.
     /// </summary>
-    public static string ClassOfDriver(RoundDefinition round, string transponder, ProfileStore? profiles = null)
+    public static string ClassOfDriver(RoundDefinition round, string transponder, ProfileStore? profiles = null) =>
+        ClassOfDriverBy(round, transponder, profiles is null ? null : key => profiles.Get(profiles.PrimaryForAlternate(key) ?? key));
+
+    /// <summary><see cref="ClassOfDriver"/>, with the profile found by whatever lookup the caller can use on its thread.</summary>
+    private static string ClassOfDriverBy(RoundDefinition round, string transponder, Func<string, DriverProfile?>? profileOf)
     {
         if (!IsShared(round))
         {
@@ -136,11 +140,9 @@ public static class MixedHeats
             return known;
         }
 
-        if (profiles is not null && key.Length > 0)
+        if (profileOf is not null && key.Length > 0)
         {
-            var primary = profiles.PrimaryForAlternate(key) ?? key;
-
-            if (profiles.Get(primary) is { } profile)
+            if (profileOf(key) is { } profile)
             {
                 var fromProfile = ProfileClasses(profile).FirstOrDefault(p => classes.Any(c => Same(c, p)));
                 if (fromProfile is not null)
@@ -199,6 +201,37 @@ public static class MixedHeats
                 result.ClassName = ClassOfDriver(round, result.Transponder, profiles);
             }
         }
+    }
+
+    /// <summary>
+    /// A class was renamed: moves the stamps on a shared heat's saved result
+    /// to the new name (bug hunt 17). The round has its new name by now, so
+    /// a stamp still saying the old one - no longer one of the round's
+    /// classes - is the renamed class's. Left alone, the renamed class's
+    /// championship found no row stamped with its name and scored the heat
+    /// as nothing (<see cref="ScoringFields"/>). The same call with the names
+    /// swapped is the undo. True when a stamp changed.
+    /// </summary>
+    public static bool RenameStamps(IEnumerable<SessionResultEntry> results, RoundDefinition? round, string oldName, string newName)
+    {
+        if (round is null || string.IsNullOrWhiteSpace(oldName) || RunsClass(round, oldName)
+            || ClassesOf(round).FirstOrDefault(c => Same(c, newName)) is not { } renamed)
+        {
+            return false;
+        }
+
+        var changed = false;
+
+        foreach (var result in results)
+        {
+            if (Same(result.ClassName, oldName))
+            {
+                result.ClassName = renamed;
+                changed = true;
+            }
+        }
+
+        return changed;
     }
 
     /// <summary>
@@ -363,6 +396,33 @@ public static class MixedHeats
         foreach (var transponder in round.AssignedTransponders)
         {
             map[transponder.Trim()] = ClassOfDriver(round, transponder, profiles);
+        }
+
+        return map;
+    }
+
+    /// <summary>
+    /// <see cref="ClassMapFor(RoundDefinition?, ProfileStore?)"/> for a reader
+    /// off the UI thread - the announcer (bug hunt 17). A driver put in the
+    /// heat by hand has no entry in the heat's own record, so their profile
+    /// decides, as it does when the result is saved; without it the announcer
+    /// called them in the heat's main class and the results did not.
+    /// <paramref name="drivers"/> is ProfileStore.AnyThread, whose profiles
+    /// are the live objects: their strings are safe to read here, and their
+    /// list of other classes is read as a copy that cannot throw (ProfileClasses).
+    /// </summary>
+    public static IReadOnlyDictionary<string, string>? ClassMapFor(RoundDefinition? round, IDriverLookup drivers)
+    {
+        if (round is null || !IsShared(round))
+        {
+            return null;
+        }
+
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var transponder in round.AssignedTransponders)
+        {
+            map[transponder.Trim()] = ClassOfDriverBy(round, transponder, drivers.Get);
         }
 
         return map;
@@ -767,20 +827,49 @@ public static class MixedHeats
         return pairs;
     }
 
-    private static IEnumerable<string> ProfileClasses(DriverProfile profile)
+    /// <summary>
+    /// The driver's classes, main class first, as a list of its own.
+    ///
+    /// WHY IT IS A COPY TAKEN BY INDEX (bug hunt 17): the announcer reads
+    /// this off the UI thread (<see cref="ClassMapFor(RoundDefinition?, IDriverLookup)"/>),
+    /// and DriverProfile.Classes is a list the UI thread edits in place -
+    /// ticking a class at check-in (CheckInControl.SetRunsClass). Walking it
+    /// with foreach while it changed threw "Collection was modified" into
+    /// the announcer's position report. Read by index, a change underneath
+    /// can at worst run past the end, which is caught: the classes read so
+    /// far stand - the main class always, since it is a string - and the
+    /// next call, a moment later, reads the list as it settled.
+    /// </summary>
+    private static IReadOnlyList<string> ProfileClasses(DriverProfile profile)
     {
-        if (!string.IsNullOrWhiteSpace(profile.ClassName))
+        var found = new List<string>();
+
+        if (profile.ClassName is { } main && !string.IsNullOrWhiteSpace(main))
         {
-            yield return profile.ClassName.Trim();
+            found.Add(main.Trim());
         }
 
-        foreach (var other in profile.Classes ?? new List<string>())
+        try
         {
-            if (!string.IsNullOrWhiteSpace(other))
+            // One read of the property: the undo swaps in a whole new list.
+            var others = profile.Classes;
+
+            for (var i = 0; others is not null && i < others.Count; i++)
             {
-                yield return other.Trim();
+                var other = others[i];
+
+                if (!string.IsNullOrWhiteSpace(other))
+                {
+                    found.Add(other.Trim());
+                }
             }
         }
+        catch (Exception e) when (e is ArgumentOutOfRangeException or IndexOutOfRangeException or InvalidOperationException)
+        {
+            // The list changed under the read - see above.
+        }
+
+        return found;
     }
 
     private static SessionResultEntry Clone(SessionResultEntry entry) =>

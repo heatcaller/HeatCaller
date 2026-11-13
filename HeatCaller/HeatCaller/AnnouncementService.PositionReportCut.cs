@@ -105,9 +105,90 @@ public sealed partial class AnnouncementService
         return read.Count == now.Count ? -1 : shared;
     }
 
-    /// <summary>The correction's line, before {positions} is filled - see the class remarks.</summary>
-    internal static string ReportCorrectionTemplate(string driver, int place, bool byRuling)
+    /// <summary>
+    /// Each car's place as a report of a heat classes share says it
+    /// (WordSharedRunningOrder): its class and its place in it, or - for a
+    /// car the map does not know - no class and its place overall.
+    /// </summary>
+    private static List<(string Class, int Place)> ClassPlaces(IReadOnlyList<string> order, IReadOnlyDictionary<string, string> classOf)
     {
+        var places = new List<(string Class, int Place)>(order.Count);
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        for (var i = 0; i < order.Count; i++)
+        {
+            if (!classOf.TryGetValue(order[i]?.Trim() ?? string.Empty, out var cls) || string.IsNullOrWhiteSpace(cls))
+            {
+                places.Add((string.Empty, i + 1));
+                continue;
+            }
+
+            places.Add((cls, counts[cls] = counts.GetValueOrDefault(cls) + 1));
+        }
+
+        return places;
+    }
+
+    /// <summary>
+    /// FirstChangedPlace for a heat classes share (13 Nov 2026, bug hunt
+    /// 17): the first car, from the top of <paramref name="now"/>, whose
+    /// place in its own class is not the one <paramref name="read"/> gave
+    /// it, or -1 when every car is where the report said. The report names
+    /// class places only, so two cars of different classes swapping on the
+    /// road change no word of it - and it was cut off and "corrected" with
+    /// an overall place and the same class places it had just read.
+    /// </summary>
+    internal static int FirstChangedClassPlace(IReadOnlyList<string> read, IReadOnlyList<string> now, IReadOnlyDictionary<string, string> classOf)
+    {
+        var readPlaces = ClassPlaces(read, classOf);
+        var was = new Dictionary<string, (string Class, int Place)>(StringComparer.OrdinalIgnoreCase);
+
+        for (var i = 0; i < read.Count; i++)
+        {
+            was[read[i]] = readPlaces[i];
+        }
+
+        var nowPlaces = ClassPlaces(now, classOf);
+
+        for (var i = 0; i < now.Count; i++)
+        {
+            if (!was.TryGetValue(now[i], out var before)
+                || before.Place != nowPlaces[i].Place
+                || !string.Equals(before.Class, nowPlaces[i].Class, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        // The same cars in the same class places, less some: it differs
+        // where the shorter one ends, as FirstChangedPlace has it.
+        return read.Count == now.Count ? -1 : Math.Min(read.Count, now.Count);
+    }
+
+    /// <summary>
+    /// Where the order now differs from the one a report read: by overall
+    /// place, or by class place in a heat classes share.
+    /// </summary>
+    private int FirstChangedPlaceAsReported(IReadOnlyList<string> read, IReadOnlyList<string> now) =>
+        SharedHeatClasses?.Invoke() is { Count: > 0 } classOf
+            ? FirstChangedClassPlace(read, now, classOf)
+            : FirstChangedPlace(read, now);
+
+    /// <summary>The correction's line, before {positions} is filled - see the class remarks.</summary>
+    /// <param name="className">
+    /// In a heat classes share, the mover's class, with <paramref name="place"/>
+    /// its place in that class: "takes the lead in Stock", "through into
+    /// second in Stock" - the places the report itself gives.
+    /// </param>
+    internal static string ReportCorrectionTemplate(string driver, int place, bool byRuling, string? className = null)
+    {
+        if (!string.IsNullOrWhiteSpace(className))
+        {
+            return ReportCorrectionTemplate(driver, place, byRuling)
+                .Replace("takes the lead!", $"takes the lead in {className}!", StringComparison.Ordinal)
+                .Replace($"into {LeadTracker.SpokenOrdinal(place)}!", $"into {LeadTracker.SpokenOrdinal(place)} in {className}!", StringComparison.Ordinal);
+        }
+
         var template = (byRuling, place <= 1) switch
         {
             (false, true) => ReportCorrectionForTheLead,
@@ -226,7 +307,7 @@ public sealed partial class AnnouncementService
             nowOrder = nowOrder.Take(read.Count).ToList();
         }
 
-        var place = FirstChangedPlace(read, nowOrder);
+        var place = FirstChangedPlaceAsReported(read, nowOrder);
 
         if (place < 0 || !report.MarkCut())
         {
@@ -319,7 +400,14 @@ public sealed partial class AnnouncementService
     private void QueuePositionReportCorrection(List<PositionReportOrder.Row> now, int place, int depth, bool byRuling)
     {
         var mover = now[place].Standing;
-        var template = ReportCorrectionTemplate(SpokenNameFor(mover), place + 1, byRuling);
+        var worded = OrderOf(now);
+
+        // In a heat classes share the mover is named by the class place it
+        // has taken, as the order after it is (13 Nov 2026, bug hunt 17).
+        var inClass = SharedHeatClasses?.Invoke() is { Count: > 0 } classOf
+            ? ClassPlaces(worded, classOf)[place]
+            : (Class: string.Empty, Place: place + 1);
+        var template = ReportCorrectionTemplate(SpokenNameFor(mover), inClass.Place, byRuling, inClass.Class);
         var words = WordRunningOrder(now, template, sayGaps: false, placesOnly: true);
 
         if (words.Length == 0)
@@ -327,8 +415,7 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        var worded = OrderOf(now);
-        var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.PositionReport));
+        var config =_voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.PositionReport));
         var speed = config?.SpeedFor(_voiceStore.Current.Speed);
 
         RaiseAnnouncementText(words, mover.Transponder);
@@ -345,7 +432,7 @@ public sealed partial class AnnouncementService
                     // Not cut in its turn (see the class remarks) - dropped
                     // unsaid if the order moves again before it is heard.
                     await SynthesizeAndPlayAsync(words, "[voice] Position report correction", speedOverride: speed,
-                        whyNotNow: () => RunningOrderNow(depth) is { Count: >= 2 } after && FirstChangedPlace(worded, OrderOf(after)) >= 0
+                        whyNotNow: () => RunningOrderNow(depth) is { Count: >= 2 } after && FirstChangedPlaceAsReported(worded, OrderOf(after)) >= 0
                             ? "the order moved again before it was said"
                             : null);
                 }

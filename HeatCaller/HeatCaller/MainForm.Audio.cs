@@ -106,6 +106,9 @@ public partial class MainForm
 
             if (!_ambience.IsRunning)
             {
+                // Off because of the mute: the unmute sets the mood this
+                // change would have (see _ambienceMoodMissed).
+                _ambienceMoodMissed |= _ambienceStoppedByMute;
                 return;
             }
 
@@ -131,6 +134,7 @@ public partial class MainForm
         {
             if (!_ambience.IsRunning || _race.State != RaceState.Racing)
             {
+                _ambienceMoodMissed |= _ambienceStoppedByMute && !_ambience.IsRunning;
                 return;
             }
 
@@ -689,6 +693,10 @@ public partial class MainForm
             // ends (StopSessionAudio) is taken off the record again there.
             _ambience.Settings = _ambienceStore.Current;
             _ambienceStoppedByMute = true;
+
+            // It never had this session's mood at all: whatever it comes
+            // back with is left over from the last race.
+            _ambienceMoodMissed = true;
             OnClientRawMessage($"{AppTime.LogStampNow()}  [audio] Ambience held for the new session - it starts when the sound is unmuted.");
         }
         else if (_settings.AudioStartAmbience && !_ambience.IsRunning)
@@ -830,6 +838,29 @@ public partial class MainForm
     private bool _musicPausedByMute;
 
     /// <summary>
+    /// The race changed state or flag while the mute had the crowd off, so
+    /// the mood the crowd stopped at is no longer the race's. The crowd only
+    /// follows the race while it is running, and it used to come back from a
+    /// mute at whatever it had when it stopped: idle under a green flag, or
+    /// a racing crowd at an empty track. Only means anything while
+    /// _ambienceStoppedByMute is set.
+    /// </summary>
+    private volatile bool _ambienceMoodMissed;
+
+    /// <summary>The crowd's mood for the race as it stands - what the state and flag changes would have left it at.</summary>
+    internal static AmbienceService.Intensity AmbienceMoodFor(RaceState state, FlagState flag) => state switch
+    {
+        RaceState.Staging or RaceState.Countdown => AmbienceService.Intensity.Anticipation,
+        RaceState.Racing => flag switch
+        {
+            FlagState.Red => AmbienceService.Intensity.Idle,
+            FlagState.Yellow => AmbienceService.Intensity.Anticipation,
+            _ => AmbienceService.Intensity.Racing,
+        },
+        _ => AmbienceService.Intensity.Idle,
+    };
+
+    /// <summary>
     /// The session's crowd is on its way out: StopSessionAudio has scheduled
     /// its finish celebration and fade, and that has not yet finished. From
     /// _ambienceFadeStartsAtUtc the fade is under way (or was due to start),
@@ -876,6 +907,12 @@ public partial class MainForm
             var ambienceRunning = _ambience.IsRunning && !_ambience.IsHeld;
             var musicPlaying = _music.IsPlaying && !_music.IsPaused;
 
+            // A new record starts with nothing missed.
+            if (!(wasMuted && _ambienceStoppedByMute))
+            {
+                _ambienceMoodMissed = false;
+            }
+
             _ambienceStoppedByMute = (wasMuted && _ambienceStoppedByMute) || ambienceRunning;
             _musicPausedByMute = (wasMuted && _musicPausedByMute) || musicPlaying;
 
@@ -907,11 +944,19 @@ public partial class MainForm
             if (_ambienceStoppedByMute && !crowdWasEnding)
             {
                 _ambience.Start(ignoreEnabledSetting: true);
+
+                // The race moved on while it was off (see _ambienceMoodMissed).
+                if (_ambienceMoodMissed && _ambience.IsRunning)
+                {
+                    _ambience.SetIntensity(AmbienceMoodFor(_race.State, _race.Flag));
+                }
             }
             else if (_ambienceStoppedByMute)
             {
                 OnClientRawMessage($"{AppTime.LogStampNow()}  [audio] Ambience left off - the session had ended and the crowd was fading out.");
             }
+
+            _ambienceMoodMissed = false;
 
             if (_musicPausedByMute)
             {

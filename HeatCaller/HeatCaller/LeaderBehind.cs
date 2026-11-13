@@ -46,11 +46,37 @@ internal static class LeaderBehind
     /// <summary>How many recent flying laps make "usual pace" - the middle of them, so one crash lap does not.</summary>
     internal const int PaceLaps = 3;
 
-    /// <summary>The approach for one car against the race leader, or null for none - see the class notes.</summary>
+    /// <summary>
+    /// The approach for one car against whoever leads this running order, or
+    /// null for none.
+    ///
+    /// The leader is the first REAL car (bug hunt 17). A ghost laps quicker
+    /// than its driver by design and usually tops the order, and taking it
+    /// as the leader told real drivers to move over for a car that is not
+    /// on the track - and, while it led, never warned them about the real
+    /// leader at all. A ghost is never warned either.
+    /// </summary>
+    internal static int? Approach(RacerStanding car, IReadOnlyList<RacerStanding> ordered) =>
+        car is null || ordered is null || Ghosts.IsGhost(car.TransponderId)
+            ? null
+            : Approach(car, ordered.FirstOrDefault(s => !Ghosts.IsGhost(s.TransponderId))!);
+
+    /// <summary>
+    /// The approach for one car against the race leader, or null for none - see the class notes.
+    ///
+    /// Each car's time penalty is taken off first (bug hunt 17). ElapsedMs
+    /// carries it, which is right for the order and the board's gaps, but
+    /// this is about where the cars are on the track: with it left in, a
+    /// 5 s penalty on a backmarker made a leader 7 s behind look 2 s behind
+    /// ("Leader behind" most of a lap early, and nothing when it arrived),
+    /// and one really 2 s behind look as if it had already gone by.
+    /// </summary>
     internal static int? Approach(RacerStanding car, RacerStanding leader) =>
         car is null || leader is null || ReferenceEquals(car, leader)
             ? null
-            : Approach(car.LapTimesMs, car.Laps, car.ElapsedMs, leader.LapTimesMs, leader.Laps, leader.ElapsedMs);
+            : Approach(
+                car.LapTimesMs, car.Laps, car.ElapsedMs - car.PenaltyMs,
+                leader.LapTimesMs, leader.Laps, leader.ElapsedMs - leader.PenaltyMs);
 
     /// <summary>
     /// The approach worked out from lap histories alone, for tests and any

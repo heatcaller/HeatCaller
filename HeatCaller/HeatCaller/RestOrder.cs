@@ -129,10 +129,18 @@ public static class RestOrder
     public static List<TooCloseRace> NewlyTooClose(IReadOnlyList<(string Label, IReadOnlyCollection<string> Drivers)> before,
         IReadOnlyList<(string Label, IReadOnlyCollection<string> Drivers)> after, int gap)
     {
-        var already = TooCloseAll(before, gap).Select(Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // How close each clash already was. A clash the change makes closer
+        // - one race between down to back to back - is the change's fault
+        // too, so it is only "already there" when it is no closer than before.
+        var already = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var t in TooCloseAll(before, gap))
+        {
+            already[Key(t)] = already.TryGetValue(Key(t), out var was) ? Math.Min(was, t.RacesBetween) : t.RacesBetween;
+        }
 
         return TooCloseAll(after, gap)
-            .Where(t => !already.Contains(Key(t)))
+            .Where(t => !already.TryGetValue(Key(t), out var was) || t.RacesBetween < was)
             .GroupBy(t => t.Transponder, StringComparer.OrdinalIgnoreCase)
             .Select(g => g.First())
             .ToList();

@@ -63,8 +63,25 @@ public sealed class SanctioningPresetForm : Form
     /// </summary>
     private readonly RaceFormat _appDefault;
 
-    public SanctioningPresetForm(RaceClass raceClass, RaceFormat? appDefault = null)
+    /// <summary>How the question before applying ends - see SavingNote.</summary>
+    private readonly string _savingNote;
+
+    /// <summary>
+    /// What the question before applying says about saving. The class
+    /// editor saves with its own Save; the Classes page's button
+    /// (<paramref name="savedAtOnce"/>) saves on Yes.
+    /// </summary>
+    // WHY (13 Nov 2026, bug hunt 17): both doors said "not saved until you
+    // press Save on the class itself", and from the Classes page there is no
+    // Save - Yes had already written the class's rules to disk.
+    internal static string SavingNote(bool savedAtOnce, bool canUndo) =>
+        !savedAtOnce ? "This is not saved until you press Save on the class itself."
+        : canUndo ? "This is saved straight away; Undo puts it back."
+        : "This is saved straight away.";
+
+    public SanctioningPresetForm(RaceClass raceClass, RaceFormat? appDefault = null, bool savedAtOnce = false, bool canUndo = false)
     {
+        _savingNote = SavingNote(savedAtOnce, canUndo);
         _raceClass = raceClass;
         _appDefault = appDefault ?? new RaceFormat();
 
@@ -261,8 +278,7 @@ public sealed class SanctioningPresetForm : Form
 
         if (AppDialog.Show(this,
                 $"Apply {preset.Body} - {preset.Name} to \"{_raceClass.Name}\"?\r\n\r\n{summary}\r\n\r\n"
-                + "Everything else on this class is left alone. This is not saved until you press Save on the "
-                + "class itself.",
+                + "Everything else on this class is left alone. " + _savingNote,
                 "Apply preset", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
         {
             return;

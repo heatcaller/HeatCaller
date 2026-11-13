@@ -259,6 +259,46 @@ internal static class HighlightVideo
     internal static string ShownName(string transponder, string? driverName) =>
         string.IsNullOrWhiteSpace(driverName) ? transponder : driverName;
 
+    /// <summary>
+    /// How a video's name ends while it is still being written.
+    /// </summary>
+    // WHY (13 Nov 2026, bug hunt 17): a video was written straight to its
+    // own name, so closing the app part way through one left an mp4 in the
+    // Highlights folder that looked finished and would not play. Now it is
+    // written as "<name>.part.mp4" and renamed only once it is whole, and
+    // RaceAudioRecorder.SweepOrphans removes a part left behind. Still ending
+    // ".mp4" on purpose: Windows' writer picks the container from the file's
+    // extension, and the night folders' tidy-up (RaceAudioStore.
+    // DeleteOurOwnFrom) only removes what ends in .mp4.
+    internal const string PartEnding = ".part.mp4";
+
+    /// <summary>The name <paramref name="mp4Path"/> is written under until it is finished - see <see cref="PartEnding"/>.</summary>
+    internal static string PartPathFor(string mp4Path) =>
+        Path.Combine(
+            Path.GetDirectoryName(mp4Path) ?? string.Empty,
+            Path.GetFileNameWithoutExtension(mp4Path) + PartEnding);
+
+    /// <summary>
+    /// Gives a finished video its real name. Tried for a second: Windows can
+    /// still be letting go of the file just after the writer has closed it.
+    /// Never over a file already there - throws instead, as File.Move does.
+    /// </summary>
+    internal static void MoveIntoPlace(string partPath, string mp4Path)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(partPath, mp4Path);
+                return;
+            }
+            catch (IOException) when (attempt < 5 && File.Exists(partPath) && !File.Exists(mp4Path))
+            {
+                Thread.Sleep(200);
+            }
+        }
+    }
+
     /// <summary>The newest video made for a driver this session, or null.</summary>
     public static string? LatestFor(string transponder) =>
         Latest.TryGetValue(transponder, out var path) && File.Exists(path) ? path : null;
@@ -348,6 +388,9 @@ internal static class HighlightVideo
         var previousPriority = Thread.CurrentThread.Priority;
         var gateTaken = false;
 
+        // Written here, and renamed to mp4Path once it is whole - see PartEnding.
+        var partPath = PartPathFor(mp4Path);
+
         try
         {
             // Below everything the night is doing: this is a courtesy.
@@ -405,7 +448,10 @@ internal static class HighlightVideo
 
             try
             {
-                opened = Mp4Writer.Open(mp4Path, Width, Height, FramesPerSecond, format);
+                // A part of the same name can only be one an earlier close left.
+                TryDeleteMp4(partPath);
+
+                opened = Mp4Writer.Open(partPath, Width, Height, FramesPerSecond, format);
             }
             catch (Exception ex) when (ex is Mp4Writer.NoEncoderException or DllNotFoundException or EntryPointNotFoundException)
             {
@@ -417,7 +463,7 @@ internal static class HighlightVideo
                         + "Audio clips are unaffected.");
                 }
 
-                TryDeleteMp4(mp4Path);
+                TryDeleteMp4(partPath);
                 return null;
             }
 
@@ -464,6 +510,11 @@ internal static class HighlightVideo
 
             writer.Finish();
 
+            // Whole now: the file is let go of (a second Dispose, at the end
+            // of this block, does nothing) and given its real name.
+            writer.Dispose();
+            MoveIntoPlace(partPath, mp4Path);
+
             Latest[transponder] = mp4Path;
 
             try
@@ -483,7 +534,7 @@ internal static class HighlightVideo
                 + "Their audio clip is unaffected. A PC without Windows' video encoder - an \"N\" edition of Windows "
                 + "without the Media Feature Pack - cannot make these.");
 
-            TryDeleteMp4(mp4Path);
+            TryDeleteMp4(partPath);
             return null;
         }
         finally

@@ -807,7 +807,9 @@ public sealed partial class RaceControlControl
                 stateBefore, tookOverDemo, _currentRaceIsQuick, _currentRaceIsRerun, _rerunPending);
             _rerunPending = false;
 
-            _race.Stage();
+            // Staged so that an abandoned race's undo, still waiting from an
+            // earlier Stage or Countdown, survives this one - see there.
+            StageKeepingAbandonedRaceUndo(stateBefore, tookOverDemo);
             generationAfterStage = _race.SessionGeneration;
 
             // STAGE FIRES NO BROADCAST SEGMENT (18 Oct 2026). It is the

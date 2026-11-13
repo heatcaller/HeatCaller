@@ -2450,6 +2450,11 @@ public sealed partial class WebServerService
                     {
                         id = requestId,
                         ok = false,
+
+                        // The laptop was reached and said no: the page keeps
+                        // the line up rather than letting its next poll wipe
+                        // it (see sayFailure in the page).
+                        notSent = true,
                         error = $"NOT sent - the laptop is still carrying out {running}. "
                             + "Check the flag, then press again if it is still needed.",
                     }));
@@ -2463,6 +2468,7 @@ public sealed partial class WebServerService
                     {
                         id = requestId,
                         ok = false,
+                        notSent = true,
                         error = "NOT sent - too many commands in the last minute. Wait a minute, and check the laptop.",
                     }));
                     StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [web] Race-day manager flag: {flagName} - turned away, too many commands in the last minute.");
@@ -2725,9 +2731,7 @@ public sealed partial class WebServerService
             return;
         }
 
-        // Set once the image starts going out. From then on a 500 cannot be
-        // sent - see the catches below.
-        var sending = false;
+        byte[] bytes;
 
         try
         {
@@ -2735,12 +2739,14 @@ public sealed partial class WebServerService
             // header (see SponsorStore.ReadSlide). This used to read the whole
             // file for every request whatever its size - a planted file of
             // any length, pulled into memory once per phone per page load.
-            if (SlideBytes(path) is not { } bytes)
+            if (SlideBytes(path) is not { } slide)
             {
                 context.Response.StatusCode = 404;
                 WriteText(context, "Not found");
                 return;
             }
+
+            bytes = slide;
 
             // From what the bytes are rather than the file's extension, since
             // these pages tell the phone not to guess (nosniff): a PNG saved
@@ -2750,11 +2756,40 @@ public sealed partial class WebServerService
                 : bytes is [0x42, 0x4D, ..] ? "image/bmp"
                 : "image/jpeg";
             context.Response.ContentLength64 = bytes.Length;
-            sending = true;
-            context.Response.OutputStream.Write(bytes, 0, bytes.Length);
+        }
+        catch
+        {
+            // Before anything went out - the slide could not be read - so
+            // there is still time to say so.
+            context.Response.StatusCode = 500;
+            WriteText(context, "Error");
+            return;
+        }
+
+        // Sent without holding this request's thread - see SendSponsorSlideAsync.
+        _ = SendSponsorSlideAsync(context, bytes);
+    }
+
+    /// <summary>
+    /// Sends a sponsor picture, and lets the request's thread go while the
+    /// phone takes it.
+    ///
+    /// WHY (13 Nov 2026, Bug Hunt 17): slides and videos need no PIN, and
+    /// each used to be written with a blocking Write - one thread-pool
+    /// thread held for as long as the phone took to read it. A handful of
+    /// slow or stalled readers on the Wi-Fi pinned the threads the flag
+    /// commands, the state polls and the announcer's own work share. Written
+    /// this way a slow reader costs the bytes it is waiting for and nothing
+    /// else.
+    /// </summary>
+    private static async Task SendSponsorSlideAsync(HttpListenerContext context, byte[] bytes)
+    {
+        try
+        {
+            await context.Response.OutputStream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
             context.Response.OutputStream.Close();
         }
-        catch when (sending)
+        catch
         {
             // WHY (7 Nov 2026, Bug Hunt 13): nearly always a phone or TV
             // that moved on, or dropped off the Wi-Fi, partway through a
@@ -2762,7 +2797,7 @@ public sealed partial class WebServerService
             // would throw again - and that reached the console as a
             // "Request failed" line for an ordinary disconnect, over and
             // over with enough screens. Let go of it instead, the way
-            // HandleSponsorVideo does.
+            // SendSponsorVideoAsync does.
             try
             {
                 context.Response.Abort();
@@ -2771,13 +2806,6 @@ public sealed partial class WebServerService
             {
                 // Already gone.
             }
-        }
-        catch
-        {
-            // Before anything went out - the slide could not be read - so
-            // there is still time to say so.
-            context.Response.StatusCode = 500;
-            WriteText(context, "Error");
         }
     }
 
@@ -2794,12 +2822,12 @@ public sealed partial class WebServerService
     ///
     /// Nothing is held in memory: an 80 KB buffer walks the file, so twenty
     /// phones streaming the same ad cost twenty buffers rather than twenty
-    /// copies.
+    /// copies. Nor is a thread: the reads and writes are awaited, so a phone
+    /// that takes the video slowly, or stops taking it, holds none of the
+    /// thread pool while it does (see SendSponsorSlideAsync).
     /// </summary>
     private void HandleSponsorVideo(HttpListenerContext context, string path)
     {
-        const int ChunkBytes = 80 * 1024;
-
         // OPENED BEFORE ANYTHING IS SENT, on its own. A video removed or
         // locked after ResolvePath found it used to throw inside the catch
         // below, which said nothing and closed nothing - the phone hung
@@ -2808,7 +2836,7 @@ public sealed partial class WebServerService
 
         try
         {
-            file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous);
         }
         catch
         {
@@ -2817,9 +2845,17 @@ public sealed partial class WebServerService
             return;
         }
 
+        _ = SendSponsorVideoAsync(context, file, path);
+    }
+
+    /// <summary>The sending half of HandleSponsorVideo, which opened the file. Never throws.</summary>
+    private static async Task SendSponsorVideoAsync(HttpListenerContext context, FileStream file, string path)
+    {
+        const int ChunkBytes = 80 * 1024;
+
         try
         {
-            using var held = file;
+            await using var held = file;
 
             var length = file.Length;
             var from = 0L;
@@ -2860,7 +2896,7 @@ public sealed partial class WebServerService
 
             while (left > 0)
             {
-                var read = file.Read(buffer, 0, (int)Math.Min(buffer.Length, left));
+                var read = await file.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, left))).ConfigureAwait(false);
 
                 if (read <= 0)
                 {
@@ -2870,7 +2906,7 @@ public sealed partial class WebServerService
                     break;
                 }
 
-                context.Response.OutputStream.Write(buffer, 0, read);
+                await context.Response.OutputStream.WriteAsync(buffer, 0, read).ConfigureAwait(false);
                 left -= read;
             }
 
@@ -3418,8 +3454,9 @@ public sealed partial class WebServerService
                     // about to lap this car - which approach it is, one more
                     // than the laps already down - so the driver's lap voice
                     // can say "Leader behind" once. See LeaderBehind. Only
-                    // when it is so; never on the leader.
-                    if (i > 0 && LeaderBehind.Approach(car, ordered[0]) is { } lapping)
+                    // when it is so; never on the leader. Against the first
+                    // real car, never a ghost - see LeaderBehind.Approach.
+                    if (i > 0 && LeaderBehind.Approach(car, ordered) is { } lapping)
                     {
                         row["lapping"] = lapping;
                     }
@@ -5895,11 +5932,14 @@ public sealed partial class WebServerService
         }
         // A failed answer. Anything but a 200 is the laptop not reached
         // (a PIN, the connection, the laptop starting up); a 200 that says
-        // no is the laptop turning the request down.
+        // no is the laptop turning the request down. So is a Race-tab flag
+        // answered "NOT sent" (d.notSent - a 503 or 429 from the flag gate):
+        // as a 'gate' message the next poll's good answer wiped it within
+        // four seconds, and the marshal never saw that the flag had not gone.
         function sayFailure(d, fallback){
           var text = d.error || fallback || 'Failed';
           if (d.needPin && pinWasWrong) { text = 'Wrong PIN. Enter the manager PIN again.'; }
-          say(text, false, d._status === 200 ? 'error' : 'gate');
+          say(text, false, (d._status === 200 || d.notSent) ? 'error' : 'gate');
         }
         // How long a read that refreshes the page is waited for: past the ten
         // seconds the laptop takes to say it couldn't get to a request
@@ -5969,9 +6009,15 @@ public sealed partial class WebServerService
         function showTab(name){
           active = name;
           say('');
+          // A box still being typed in on a tab that is about to be hidden.
+          // Some phones (Safari) leave it focused when a tab button is
+          // tapped, and refreshActive - here and on every poll - took that
+          // for typing and never loaded the tab just opened.
+          var typing = document.activeElement;
           TABS.forEach(function(t){
             var page = document.getElementById('tab-' + t);
             var nav = document.getElementById('nav-' + t);
+            if (page && t !== name && typing && typing.blur && page.contains(typing)) { typing.blur(); }
             if (page) { page.style.display = (t === name) ? 'block' : 'none'; }
             if (nav) { nav.className = 'navbtn' + (t === name ? ' on' : ''); }
           });

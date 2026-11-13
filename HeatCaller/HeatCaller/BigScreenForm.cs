@@ -1331,6 +1331,34 @@ public sealed class BigScreenForm : Form
             _sponsorIndex = still;
         }
 
+        // IN A BREAK, PAST A SLIDE WHOSE FILE HAS GONE. Out of a break
+        // NextStillSlide has already stepped over it; in one, nothing had,
+        // so a break that opened on a missing file showed no sponsor at all
+        // and sat on the standings for what was left of LeaderboardSeconds
+        // - which can be the whole break.
+        //
+        // THE SLIDES STEPPED OVER HAVE HAD THEIR SLOTS. The break ends after
+        // one slot per slide (see _breakSlidesShown), so a step that was not
+        // counted bought the break a slot too many and a sponsor was shown
+        // twice: A, gone, C went A, C, A. And a step that goes all the way
+        // round to a slide this break has shown is the end of the pass, not
+        // another slide - the one that is up holds, as it does at the end
+        // of any break (see SponsorSlotEnded).
+        if (!stillsOnly && NextSlideThatIsThere() is { } there)
+        {
+            var slides = _sponsors.SlideFileNames.Count;
+
+            _breakSlidesShown += (there - _sponsorIndex + slides) % slides;
+
+            if (there != _sponsorIndex && _breakSlidesShown > slides)
+            {
+                CommercialBreak.EverySponsorShown();
+                return;
+            }
+
+            _sponsorIndex = there;
+        }
+
         var fileName = _sponsors.SlideFileNames[_sponsorIndex];
 
         // Every slide the club has is a video and no break is on. Nothing
@@ -1491,6 +1519,36 @@ public sealed class BigScreenForm : Form
             var at = (from + step) % names.Count;
 
             if (!SponsorMedia.IsVideoName(names[at]) && _sponsors.ResolvePath(names[at]) is not null)
+            {
+                return at;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The index of the next slide, still or video, whose file is there -
+    /// at or after the current one, wrapping once - or null when none is.
+    /// </summary>
+    private int? NextSlideThatIsThere()
+    {
+        if (_sponsors is null)
+        {
+            return null;
+        }
+
+        var names = _sponsors.SlideFileNames;
+
+        // From zero when nothing has been shown yet, for the reason
+        // NextVideoSlide gives at length.
+        var from = Math.Max(0, _sponsorIndex);
+
+        for (var step = 0; step < names.Count; step++)
+        {
+            var at = (from + step) % names.Count;
+
+            if (_sponsors.ResolvePath(names[at]) is not null)
             {
                 return at;
             }

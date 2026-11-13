@@ -394,7 +394,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
         if (measures.EntriesToHeats is { } entries)
         {
             var (value, label) = entries < TimeSpan.Zero
-                ? (NightPace.Clock(-entries), "Heats posted before entries closed")
+                ? (NightPace.Clock(-entries), measures.HeatsNotPosted ? "First green before entries closed (heats not posted)" : "Heats posted before entries closed")
                 : (NightPace.Clock(entries), measures.HeatsNotPosted ? "Entries close to first green (heats not posted)" : "Entries close to heats posted");
             sb.AppendLine($"<div class=\"card\"><div class=\"k\">{value}</div><div class=\"l\">{Esc(label)}</div></div>");
         }
@@ -676,7 +676,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
             var ordered = group.OrderBy(x => x.Round!.MainLeg).Select(x => x.Session).ToList();
             var legCount = Math.Max(group.Max(x => x.Round!.MainLegCount), ordered.Count);
             var counting = AMainLegs.LegsCounting(legCount, raceClass?.AMainLegsCounted ?? 0);
-            var overall = AMainLegs.Overall(ordered, counting, profiles.PrimaryForAlternate);
+            var overall = AMainLegs.Overall(ordered, counting, profiles.PrimaryForAlternate,
+                group.OrderBy(x => x.Round!.MainLeg).Select(x => x.Round!.MainLeg).ToList());
 
             sb.AppendLine($"<h2>{Esc(group.Key)} A-Main overall</h2>");
             sb.AppendLine($"<p>{Plural.Of(ordered.Count, "leg")} of {legCount} run; the best {counting} count, fewest points wins. {Esc(AMainLegs.TieBreakWords)}</p>");

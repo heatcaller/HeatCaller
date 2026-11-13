@@ -249,11 +249,34 @@ public partial class MainForm
         {
             _relayPublisher.PublishSnapshot(
                 RelayChannel.State,
-                _webServer.BuildStateJson(_frozenRelayAbbreviate, forRelay: true));
+                RelayStateJson(_frozenRelayAbbreviate));
         }
         catch (Exception ex)
         {
             OnClientRawMessage($"[relay] Could not build the live state: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// The relay's live frame, with how old each car's newest lap is put on
+    /// its row (13 Nov 2026, bug hunt 17, #173 - see RelayLapAge). Either
+    /// thread: the race is read in one trip, from one moment, as the frame's
+    /// own build reads it. A failure to read it sends the frame without -
+    /// the relay then goes by when the frame arrived, as it always did.
+    /// </summary>
+    private string RelayStateJson(bool abbreviateNames)
+    {
+        var json = _webServer.BuildStateJson(abbreviateNames, forRelay: true);
+
+        try
+        {
+            var view = _race.ReadLiveView();
+
+            return RelayLapAge.Stamp(json, view.Ordered, view.DeviceNowMs, transponder => _webServer.RelayRowTag(transponder));
+        }
+        catch
+        {
+            return json;
         }
     }
 }
