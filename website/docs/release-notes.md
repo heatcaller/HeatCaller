@@ -18,6 +18,8 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
     - **Alerts as a banner.** In-app alerts on a driver's night ("Your race is next", "Your result is in", marshal duty) drop in from the top as a banner in the club's colours, title over the details. Tap it to put it away.
     - **The leaderboard in "Your result is in".** The push and the banner list the race's top three with their laps, with your own line marked "(you)".
     - **The post in the marshal push.** The 5-minute marshal push now names the post in its title: "Marshal at Turn 3 in about 5 minutes".
+    - **DNS on every result.** A driver skipped and scored DNS is now also listed under the finishers on **Print Results**, in **Export Results...** (a row with Status DNS in the Results CSV, and `didNotStart` in the JSON; the columns are where they were, so old sheets still read it) and on the club's **Results** page online, in grey. See [Exporting results](race-control/results-and-championships.md).
+    - **One name in "Your result is in".** The top three in the push are named exactly as the race's result online names them. With a ghost car or a DNS driver in the race whose name shortens the same way as a driver's, the push could say "Alex K" while the result said "Alex Ken".
 
   The phone fixes need the relay redeployed.
 

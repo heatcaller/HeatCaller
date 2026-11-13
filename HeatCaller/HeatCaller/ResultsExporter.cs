@@ -96,6 +96,33 @@ public static class ResultsExporter
                     HandCountedLaps.In(result).ToString(CultureInfo.InvariantCulture),
                 }));
             }
+
+            // 12 Nov 2026: then who was skipped and scored DNS (SkipDns) -
+            // rows in the same columns, so a sheet reading them by position
+            // still parses: no position, laps or times (they never ran),
+            // Status DNS. Without them a DNS driver read as "not in this
+            // heat", which the points sheet can't tell from didn't start.
+            foreach (var transponder in session.DidNotStart ?? new List<string>())
+            {
+                sb.AppendLine(string.Join(",", new[]
+                {
+                    Csv(local.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+                    Csv(local.ToString("HH:mm:ss", CultureInfo.InvariantCulture)),
+                    Csv(session.Label),
+                    Csv(round?.RoundLabel ?? string.Empty),
+                    Csv(round?.ClassName ?? string.Empty),
+                    Csv(session.TrackLayoutName),
+                    string.Empty,
+                    Csv(DnsNameFor(transponder, profiles)),
+                    Csv(transponder),
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    Csv(Dns),
+                    string.Empty,
+                }));
+            }
         }
 
         return sb.ToString();
@@ -125,6 +152,9 @@ public static class ResultsExporter
             var round = session.RoundId is null ? null : rounds?.Get(session.RoundId);
             var local = session.StartedAtUtc.ToLocalTime();
 
+            // No rows for a DNS driver (12 Nov 2026, SkipDns): a lap file is
+            // one row per lap, and they never turned one. The Results CSV and
+            // the JSON carry them.
             foreach (var result in session.Results.OrderBy(r => r.Position))
             {
                 long cumulative = 0;
@@ -201,6 +231,17 @@ public static class ResultsExporter
                     status = r.Status,
                     outcome = string.IsNullOrEmpty(r.Outcome) ? null : r.Outcome,
                 }),
+
+                // 12 Nov 2026: who was skipped and scored DNS (SkipDns), after
+                // everything a reader already knows - an empty list for a race
+                // with nobody DNS. Not in results: they have no position, laps
+                // or times, and a tool walking results expects those.
+                didNotStart = (session.DidNotStart ?? new List<string>()).Select(t => new
+                {
+                    driver = DnsNameFor(t, profiles),
+                    transponder = t,
+                    status = Dns,
+                }),
             };
         });
 
@@ -229,6 +270,13 @@ public static class ResultsExporter
 
         return string.IsNullOrWhiteSpace(result.DriverName) ? result.Transponder : result.DriverName;
     }
+
+    /// <summary>What a DNS driver's Status says (12 Nov 2026), as Race History's grid and CSV say it.</summary>
+    internal const string Dns = "DNS";
+
+    /// <summary>A DNS driver's name (12 Nov 2026): their profile's, or the transponder - they have no result row to carry one.</summary>
+    private static string DnsNameFor(string transponder, ProfileStore profiles) =>
+        profiles.Get(transponder)?.DriverName is { Length: > 0 } name ? name : transponder;
 
     /// <summary>Invariant culture throughout - a decimal comma would break the CSV for anyone on a European locale.</summary>
     private static string Seconds(long ms) =>

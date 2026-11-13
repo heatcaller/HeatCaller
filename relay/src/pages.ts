@@ -571,6 +571,7 @@ table.res tbody.drv:nth-of-type(odd) tr { background: var(--row-alt); }
 table.res tbody.drv td.pos { color: var(--muted); font-weight: 400; }
 table.res tbody.drv:first-of-type tr:first-child td.pos { color: var(--primary); font-weight: 700; }
 table.res tr.lxr td { padding-top: 0; white-space: normal; }
+table.res tbody.dns td { color: var(--muted); }
 details.lx { background: none; border: none; border-radius: 0; margin: 0; overflow: visible; }
 details.lx > summary { padding: 0 0 6px; color: var(--accent); font-size: 0.85rem; display: inline-block; }
 details.lx[open] > summary { color: var(--text); }
@@ -2929,6 +2930,18 @@ function rows(results, sid) {
   }).join('');
 }
 
+// 12 Nov 2026: who was skipped and scored DNS (did not start), under the
+// finishers and greyed - the laptop sends their public names as body.dns,
+// in the same name pass as the rows. No position, laps or times: they never
+// ran. Nothing at all for a result without them (and from an older laptop).
+function dnsRows(body) {
+  const list = body && Array.isArray(body.dns) ? body.dns.filter((n) => typeof n === 'string' && n.trim() !== '') : [];
+  if (list.length === 0) return '';
+  return '<tbody class="dns">' + list.map((n) =>
+    '<tr><td class="pos">DNS</td><td>' + nm(n) + '</td><td class="n"></td>' +
+    '<td class="n">Did not start</td><td class="n"></td><td class="n"></td></tr>').join('') + '</tbody>';
+}
+
 // Which drivers' View laps are open, by session and row, so a refresh puts
 // them back as they were. The panel is only written while open: a club
 // night of sixty heats is not sixty times every driver's lap list.
@@ -3110,7 +3123,7 @@ function card(line, body, mine) {
         '<div class="tw"><table class="res"><thead><tr>' +
         '<th class="pos">Pos</th><th>Driver</th><th class="n">Qual</th>' +
         '<th class="n">Laps/Time</th><th class="n">Behind</th><th class="n">Best</th>' +
-        '</tr></thead>' + withLength(body, () => rows(results, line.id)) + '</table></div>' +
+        '</tr></thead>' + withLength(body, () => rows(results, line.id)) + dnsRows(body) + '</table></div>' +
         positionGraph(results) + raceControlLog(body)) +
     '</details>';
 }

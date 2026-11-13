@@ -222,6 +222,7 @@ Each race on the **Results** page is laid out the way LiveRC lays out a heat:
 - **Best**: their best lap, with their best sectors under it on a split loop.
 - **View laps**, under each driver: their lap stats (as on their own night, see [Race cards](#race-cards)), with **Theoretical best** on a split loop, and every lap with its **Pace**, and in a race their **Pos** after that lap. Their best lap is highlighted. Pace is the laps and time they'd have done at their average so far, for example "18/3:02.034", and is only shown for a timed race.
 - **Lap-by-lap position graph**, under the table: a colored line for each driver showing where they were running after every lap, starting from their grid slot, with a key of names under it. Practice and qualifying have no graph.
+- **DNS** drivers: anyone skipped from the race and scored DNS is listed in grey under the finishers, with **DNS** for their position and "Did not start", by the same public name as everyone else on the page (shortened, or initials only, as your club's settings say).
 
 Results published by an older version of HeatCaller have no laps, so they show without **View laps**, **Qual** or the graph.
 

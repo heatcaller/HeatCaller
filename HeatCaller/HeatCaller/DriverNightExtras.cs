@@ -56,13 +56,19 @@ internal static class DriverNightExtras
     /// page leaves them out of the night at a glance and the Driver score,
     /// and has a tick box to hide them. Imported results never go.
     /// </param>
+    /// <param name="profileNameOf">
+    /// A transponder's profile name, for naming a race's DNS drivers as its
+    /// public result does (RelayDocuments.ResultNames) - so the top three in
+    /// the push are named in the same pass as the result page's rows.
+    /// </param>
     internal static IReadOnlyList<NightRace> Races(
         string? transponder,
         IEnumerable<SessionRecord>? tonight,
         Func<string, RoundDefinition?>? roundOf,
         IEnumerable<SessionRecord>? runs = null,
         bool abbreviate = false,
-        IReadOnlyList<SessionRecord>? history = null)
+        IReadOnlyList<SessionRecord>? history = null,
+        Func<string, string?>? profileNameOf = null)
     {
         var who = transponder?.Trim();
 
@@ -202,7 +208,7 @@ internal static class DriverNightExtras
                 Out = practice ? null : OutOf(row),
                 Rating = rating,
                 Field = kind is null ? null : FieldOf(results, practice, abbreviate),
-                Top = TopOf(results, practice, abbreviate),
+                Top = TopOf(session, practice, abbreviate, profileNameOf),
                 Lines = said.Count > 0 ? said.ToList() : null,
             });
         }
@@ -539,8 +545,17 @@ internal static class DriverNightExtras
     /// the same names the race's public result shows. Null for a practice run
     /// or a race of one.
     /// </summary>
-    internal static List<NightTopRow>? TopOf(IReadOnlyList<SessionResultEntry> results, bool practice, bool abbreviate)
+    /// <remarks>
+    /// 12 Nov 2026: named by RelayDocuments.ResultNames over the whole
+    /// session - ghosts and DNS drivers in the pass, as the result page's
+    /// rows are - and only then are the ghosts left out. Named by a pass of
+    /// its own over the field without the ghosts, a driver whose name
+    /// clashed with a ghost's (or a DNS driver's) was "Alex K" in the push
+    /// and "Alex Ken" on the results page they tapped through to.
+    /// </remarks>
+    internal static List<NightTopRow>? TopOf(SessionRecord session, bool practice, bool abbreviate, Func<string, string?>? profileNameOf = null)
     {
+        var results = session.Results ?? new List<SessionResultEntry>();
         var rows = results.Where(r => r is not null && !Ghosts.IsGhost(r.Transponder)).ToList();
 
         if (practice || rows.Count < 2)
@@ -548,13 +563,11 @@ internal static class DriverNightExtras
             return null;
         }
 
-        var names = RelayPublisher.DisplayNames(
-            rows.Select(r => RelayDocuments.PublicNameOrUnnamed(r.DriverName, r.Transponder)).ToList(),
-            abbreviate,
-            rows.Select(r => (string?)r.Transponder).ToList());
+        var names = RelayDocuments.ResultNames(session, abbreviate, profileNameOf).Rows;
 
-        var top = rows
+        var top = results
             .Select((r, i) => (Row: r, Name: names[i]))
+            .Where(x => x.Row is not null && !Ghosts.IsGhost(x.Row.Transponder))
             .Where(x => x.Row.Position is >= 1 and <= 3)
             .OrderBy(x => x.Row.Position)
             .Select(x => new NightTopRow { Pos = x.Row.Position, Name = x.Name, Laps = x.Row.Laps })

@@ -590,8 +590,17 @@ public sealed class RaceHistoryControl : UserControl
         }
     }
 
-    /// <summary>One race's block on the printed sheet: what it was, where and when, and its results in finishing order.</summary>
-    private static ResultsSheetSection PrintSectionFor(SessionRecord session)
+    /// <summary>One race's block on the printed sheet, with driver names from the profiles.</summary>
+    private ResultsSheetSection PrintSectionFor(SessionRecord session) => PrintSectionFor(session, DriverNameOf);
+
+    /// <summary>
+    /// One race's block on the printed sheet: what it was, where and when,
+    /// its results in finishing order - and, 12 Nov 2026, who was scored DNS
+    /// (SkipDns), named by <paramref name="nameOf"/> as Race History's grid
+    /// names them, so the sheet pinned to the board says "didn't start"
+    /// rather than leaving them off as if they were never in the heat.
+    /// </summary>
+    internal static ResultsSheetSection PrintSectionFor(SessionRecord session, Func<string, string> nameOf)
     {
         var label = string.IsNullOrWhiteSpace(session.Label) ? "" : $" - {session.Label}";
         var track = string.IsNullOrWhiteSpace(session.TrackLayoutName) ? "" : $"{session.TrackLayoutName}  -  ";
@@ -599,7 +608,8 @@ public sealed class RaceHistoryControl : UserControl
         return new ResultsSheetSection(
             $"{TypeText(session, full: true)}{label}",
             $"{track}{AppTime.DateAndTime(session.StartedAtUtc.ToLocalTime())}",
-            session.Results.OrderBy(r => r.Position).ToList());
+            session.Results.OrderBy(r => r.Position).ToList(),
+            session.DidNotStart is { Count: > 0 } dns ? dns.Select(nameOf).ToList() : null);
     }
 
     /// <summary>"-", "\u26A0 2", or "\u2691 Black flag" for the history grid.</summary>

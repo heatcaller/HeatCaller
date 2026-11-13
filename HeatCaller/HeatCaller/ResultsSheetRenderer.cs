@@ -1,7 +1,18 @@
 namespace HeatCaller;
 
-/// <summary>One race on a printed results sheet: its heading, the line under it, and its results in finishing order.</summary>
-public sealed record ResultsSheetSection(string Title, string Subtitle, IReadOnlyList<SessionResultEntry> Results);
+/// <summary>
+/// One race on a printed results sheet: its heading, the line under it, its
+/// results in finishing order, and - 12 Nov 2026, see SkipDns - the names of
+/// the drivers scored DNS, drawn under the finishers.
+/// </summary>
+public sealed record ResultsSheetSection(string Title, string Subtitle, IReadOnlyList<SessionResultEntry> Results, IReadOnlyList<string>? DidNotStart = null)
+{
+    /// <summary>The DNS names, or none.</summary>
+    public IReadOnlyList<string> Dns => DidNotStart ?? Array.Empty<string>();
+
+    /// <summary>Every row the race's block draws: the finishers, then the DNS drivers.</summary>
+    public int RowCount => Results.Count + Dns.Count;
+}
 
 /// <summary>
 /// PRINTED RESULTS (22 Oct 2026). Race History's results drawn as Letter
@@ -128,7 +139,7 @@ public static class ResultsSheetRenderer
     public static IReadOnlyList<Bitmap> RenderPages(string sheetTitle, IReadOnlyList<ResultsSheetSection> sections)
     {
         var plan = PlanPages(
-            sections.Select(s => s.Results.Count).ToList(),
+            sections.Select(s => s.RowCount).ToList(),
             sections.Select(s => s.Results.Any(r => HandCountedLaps.In(r) > 0)).ToList());
 
         var pages = new List<Bitmap>(plan.Count);
@@ -162,6 +173,13 @@ public static class ResultsSheetRenderer
     /// <summary>"1:23.456" for a total time; "-" for none.</summary>
     internal static string TotalTime(long ms) =>
         ms <= 0 ? "-" : $"{ms / 60000}:{ms / 1000 % 60:00}.{ms % 1000:000}";
+
+    /// <summary>
+    /// A DNS driver's row (12 Nov 2026, see SkipDns): their name and DNS, and
+    /// a dash for everything they never ran - no position, laps or times.
+    /// </summary>
+    internal static string[] DnsCells(string name) =>
+        new[] { "DNS", name, "-", "-", "-", "-", "DNS" };
 
     /// <summary>What the Status column says: the outcome a correction set (DNF, DQ), or nothing for an ordinary finisher.</summary>
     internal static string StatusText(SessionResultEntry r) =>
@@ -231,14 +249,31 @@ public static class ResultsSheetRenderer
             g.DrawLine(linePen, Margin, y, PageWidth - Margin, y);
             y += 6;
 
-            if (section.Results.Count == 0)
+            if (section.RowCount == 0)
             {
                 g.DrawString("(no results recorded)", bodyFont, grey, colX[1], y + 4);
                 y += RowHeight;
             }
 
-            foreach (var r in section.Results.Skip(part.FirstRow).Take(part.RowCount))
+            for (var row = part.FirstRow; row < part.FirstRow + part.RowCount; row++)
             {
+                // Past the finishers, the DNS drivers - greyed, as Race
+                // History's grid shows them (12 Nov 2026).
+                if (row >= section.Results.Count)
+                {
+                    var dnsCells = DnsCells(section.Dns[row - section.Results.Count]);
+
+                    for (var i = 0; i < dnsCells.Length; i++)
+                    {
+                        g.DrawString(dnsCells[i], bodyFont, grey, new RectangleF(colX[i], y + 4, ColumnWidth(i), RowHeight), clipped);
+                    }
+
+                    y += RowHeight;
+                    g.DrawLine(linePen, Margin, y, PageWidth - Margin, y);
+                    continue;
+                }
+
+                var r = section.Results[row];
                 string[] cells =
                 {
                     r.Position.ToString(),
