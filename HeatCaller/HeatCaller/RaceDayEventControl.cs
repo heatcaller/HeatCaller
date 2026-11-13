@@ -103,6 +103,12 @@ public sealed partial class RaceDayEventControl : UserControl
     /// </summary>
     private readonly CheckBox _chkPostHeats = new ThemedCheckBox();
 
+    /// <summary>Build the heats when entries close (setup plan B2 - AppSettings.BuildHeatsWhenEntriesClose). The club's.</summary>
+    private readonly CheckBox _chkBuildAtClose = new ThemedCheckBox();
+
+    /// <summary>Add late check-ins to posted heats without asking (setup plan D6 - AppSettings.AddLateCheckInsWithoutAsking). The club's.</summary>
+    private readonly CheckBox _chkLateWithoutAsking = new ThemedCheckBox();
+
     private const string EntriesCloseCaption = "Entries close at:";
 
     /// <summary>
@@ -647,6 +653,17 @@ public sealed partial class RaceDayEventControl : UserControl
         };
         programGrid.AddField(_chkPostHeats);
         programGrid.AddHint("Once the heats are built, Next Steps offers Post the heats... before the first race: it prints the heat sheets and the marshal list, tells the room, and lists any car the loop hasn't heard tonight. After that, moving drivers between heats asks first. For every night, not just this one.");
+
+        // Setup plan B2 and D6: the club's, like the posting tick above.
+        ClubTick(_chkBuildAtClose, "Build the heats when entries close",
+            () => _settings!.BuildHeatsWhenEntriesClose, on => _settings!.BuildHeatsWhenEntriesClose = on, true);
+        programGrid.AddField(_chkBuildAtClose);
+        programGrid.AddHint("With Entries close at: set, the heats build themselves as it passes, ready to post. Undo takes the build back.");
+
+        ClubTick(_chkLateWithoutAsking, "Add late check-ins to posted heats without asking",
+            () => _settings!.AddLateCheckInsWithoutAsking, on => _settings!.AddLateCheckInsWithoutAsking = on, false);
+        programGrid.AddField(_chkLateWithoutAsking);
+        programGrid.AddHint("A driver who checks in after the heats are built goes into the heat nearest their pace that has room, and nobody else moves. Before the heats are posted that happens by itself. After, Next Steps asks you first - unless this is ticked.");
 
         // The closing checklist (11 Nov 2026). Every night, not just this
         // one, so it saves straight to the club's settings.
@@ -1659,6 +1676,23 @@ public sealed partial class RaceDayEventControl : UserControl
     /// of it would be the same two questions twice. Everything else is the
     /// same path - StartDayFrom, carry-forward and undo entry included.
     /// </summary>
+    /// <summary>
+    /// Starts tonight like the last race day (12 Nov 2026, setup plan B1):
+    /// its kind of night and its classes, and everything else a new day
+    /// carries forward. The same path as New Race Day, undo entry included.
+    /// False when there is no last day with classes to go by.
+    /// </summary>
+    public bool StartLikeLastDay()
+    {
+        if (LastRealDay() is not { ClassNames.Count: > 0 } last)
+        {
+            return false;
+        }
+
+        StartDayFrom(last, last.Shape, last.ClassNames.ToList());
+        return true;
+    }
+
     public bool StartNewDayFromWizard(RaceDayShape shape, IReadOnlyList<string> classNames)
     {
         StartDayFrom(LastRealDay(), shape, classNames);

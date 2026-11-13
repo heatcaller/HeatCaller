@@ -52,6 +52,21 @@ internal enum ProgramStage
     /// </summary>
     PostHeats,
 
+    /// <summary>
+    /// Drivers checked in after the heats were posted, and the club asks
+    /// before adding them (12 Nov 2026, setup plan D6). Made by
+    /// RaceProgramControl.NextStep from RunNext or PostHeats. See LateArrivals.
+    /// </summary>
+    LateArrivals,
+
+    /// <summary>
+    /// No race day is open, and there is a last one to start tonight's like
+    /// (12 Nov 2026, setup plan B1). Made by RaceProgramControl.NextStep from
+    /// NoEvent or DayClosed. Its one button starts tonight with the last
+    /// day's kind of night, classes and settings.
+    /// </summary>
+    StartLikeLast,
+
     /// <summary>Every scheduled round has been run, and a class still has no mains. Never reached on a club night.</summary>
     SeedMains,
 
@@ -120,6 +135,12 @@ internal static class ProgramCaptions
 
     /// <summary>The same on a club night, which has races rather than heats.</summary>
     public const string PostRaces = "Post the races...";
+
+    /// <summary>Late check-ins after posting (12 Nov 2026). Never on the Next Up bar.</summary>
+    public const string LateArrivals = "Add them to the heats...";
+
+    /// <summary>Starting tonight from the last race day (12 Nov 2026). Never on the Next Up bar.</summary>
+    public const string StartLikeLast = "Start tonight like last time";
 
     /// <summary>The finished program's button when the club closes the night with the checklist (11 Nov 2026). Never on the Next Up bar.</summary>
     public const string CloseNight = "Close the night...";

@@ -993,6 +993,20 @@ public sealed partial class RaceProgramControl : UserControl
 
         var now = DateTime.UtcNow;
 
+        // Start tonight like last time (12 Nov 2026, setup plan B1): with no
+        // day open and a last one to go by, one press starts tonight's.
+        if (step.Stage is ProgramStage.NoEvent or ProgramStage.DayClosed && StartLikeLastStep(step) is { } likeLast)
+        {
+            return likeLast;
+        }
+
+        // Late check-ins after posting (setup plan D6), when the club asks
+        // first. Before posting they go in by themselves (AbsorbLateArrivals).
+        if (step.Stage == ProgramStage.RunNext && LateArrivalsStep(day) is { } late)
+        {
+            return late;
+        }
+
         // Entries close (12 Nov 2026, setup plan D1): until the heats are
         // built, the card counts down to it - and once it has passed, says so.
         if (step.Stage is ProgramStage.BuildQualifying or ProgramStage.NobodyCheckedIn
@@ -1883,6 +1897,14 @@ public sealed partial class RaceProgramControl : UserControl
                 }
 
                 break;
+
+            case ProgramStage.LateArrivals:
+                ShowLateArrivals();
+                break;
+
+            case ProgramStage.StartLikeLast:
+                StartLikeLastRequested?.Invoke();
+                break;
         }
     }
 
@@ -2289,6 +2311,10 @@ public sealed partial class RaceProgramControl : UserControl
                        : string.Empty)
                    + HeadsUpBuildNote(classes.Select(c => c.Name).ToList(), roundCount, runByClass);
         _lblStatus.Text = done;
+
+        // Everybody on the rosters now is in the heats; only a check-in after
+        // this is a late arrival (setup plan D6).
+        SeedKnownRosters();
         RefreshAll();
 
         return new ProgramAnswer(true, DayIsClubNight ? "Tonight's races built" : "Tonight's heats built", done);
@@ -3710,7 +3736,8 @@ public sealed partial class RaceProgramControl : UserControl
             return shut;
         }
 
-        var places = LateEntry.Place(DayRoundsForClass(className), transponder, RoundOnTrackId?.Invoke());
+        // The heat nearest their pace that has room (12 Nov 2026, setup plan D6).
+        var places = LateEntry.Place(DayRoundsForClass(className), transponder, RoundOnTrackId?.Invoke(), RecentBestLaps(className), HeatSize());
         var name = _profiles.Get(transponder) is { DriverName.Length: > 0 } profile ? profile.DriverName : transponder;
 
         if (places.Count == 0)

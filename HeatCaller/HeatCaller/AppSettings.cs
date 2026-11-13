@@ -702,6 +702,25 @@ public sealed class AppSettings
     /// </summary>
     public bool PostHeatsBeforeFirstRace { get; set; } = true;
 
+    /// <summary>
+    /// Build the heats when entries close (12 Nov 2026, setup plan B2). On:
+    /// with an Entries close at: time on the race day, the heats are built by
+    /// themselves the moment it passes, if they haven't been already, and Next
+    /// Steps moves on to posting them. Undo takes the build back. On by
+    /// default; it does nothing on a day with no entries-close time.
+    /// </summary>
+    public bool BuildHeatsWhenEntriesClose { get; set; } = true;
+
+    /// <summary>
+    /// Add late check-ins to posted heats without asking (12 Nov 2026, setup
+    /// plan D6). A driver who checks in after the heats are built goes in by
+    /// Add a Late Entry's rule, which moves nobody else. Before the heats are
+    /// posted that always happens by itself. After, Next Steps asks first
+    /// unless this is on. Off by default, because posted heats are the
+    /// director's to change.
+    /// </summary>
+    public bool AddLateCheckInsWithoutAsking { get; set; }
+
     /// <summary>The club's own lines on the closing checklist ("Lock the clubhouse", "Pack up the timing loop"), one each.</summary>
     public List<string> CloseNightOwnItems { get; set; } = new();
 
