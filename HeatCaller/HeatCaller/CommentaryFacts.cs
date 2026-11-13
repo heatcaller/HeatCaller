@@ -1010,7 +1010,8 @@ public static class CommentaryFacts
     /// <summary>"2nd", "3rd" - for a position in a sentence.</summary>
     internal static string Ordinal(int position)
     {
-        if (position is >= 11 and <= 13)
+        // 111th, 212th: a count of starts or wins gets past a hundred.
+        if ((position % 100) is >= 11 and <= 13)
         {
             return $"{position}th";
         }

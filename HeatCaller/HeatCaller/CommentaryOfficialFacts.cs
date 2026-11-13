@@ -290,6 +290,11 @@ internal static class CommentaryOfficialFacts
         var counted = session.Results
             .Where(r => r is not null && !GhostService.IsGhost(r.Transponder))
             .Where(r => Penalised(r) || string.IsNullOrEmpty(ResultEditor.NormaliseOutcome(r.Outcome)))
+
+            // A penalised driver marked DNF is left out like any other
+            // retirement: the DNF put them under every finisher, and the
+            // places that cost were being put down to the penalty.
+            .Where(r => ResultEditor.NormaliseOutcome(r.Outcome) != ResultEditor.Dnf)
             .ToList();
 
         if (!counted.Any(Penalised))
@@ -328,19 +333,20 @@ internal static class CommentaryOfficialFacts
 
         var placesLines = 0;
 
-        foreach (var entry in road)
+        // Places are counted among the cars still classified: a
+        // disqualified car is high on the road and at the foot of the
+        // result, which hid a place somebody behind it lost to a penalty.
+        var roadKept = road.Where(r => ResultEditor.NormaliseOutcome(r.Outcome) != ResultEditor.Dq).ToList();
+        var classifiedKept = classified.Where(r => ResultEditor.NormaliseOutcome(r.Outcome) != ResultEditor.Dq).ToList();
+
+        foreach (var entry in roadKept)
         {
             if (placesLines >= MostPlacesLost || ReferenceEquals(entry, roadWinner) || !Penalised(entry))
             {
                 continue;
             }
 
-            if (ResultEditor.NormaliseOutcome(entry.Outcome) == ResultEditor.Dq)
-            {
-                continue;
-            }
-
-            var lost = classified.IndexOf(entry) - road.IndexOf(entry);
+            var lost = classifiedKept.IndexOf(entry) - roadKept.IndexOf(entry);
             var name = CommentaryService.Field(nameFor(entry.Transponder));
 
             if (lost > 0 && name.Length > 0)
