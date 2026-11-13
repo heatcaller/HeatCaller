@@ -8,7 +8,7 @@ penalties, qualifying, mains, championships), keeps and corrects the
 results, publishes them to phones and the club's website, and calls the
 race out loud with an announcer, AI commentary and soundscapes.
 
-Version **0.60.0 BETA** (the one number is `<Version>` in
+Version **0.62.0 BETA** (the one number is `<Version>` in
 `HeatCaller\HeatCaller.csproj`; `AppVersion` reads it back from the
 assembly). What changed in each release is in
 `..\website\docs\release-notes.md`.

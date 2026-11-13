@@ -34,7 +34,7 @@ After the checkered flag, **Edit Result** on Race Control's flag row opens the r
 
 Below the results is a notes box, for the weather, the track surface, incidents or anything else worth remembering. Notes are saved when you click away from the box, or when you close HeatCaller.
 
-![Race History listing saved demo races, none selected yet, with the results columns and the action buttons below](../assets/images/race-history.png)
+![Race History listing saved demo races, none selected yet, with the results columns and the action buttons below, from Replay to Delete Session](../assets/images/race-history.png)
 
 | Button | What it does |
 |---|---|
@@ -188,7 +188,7 @@ When a class uses handicaps, the results show a **Handicap pos** column, and the
 
 The **Championship** page has two tabs, **Standings** and **Calendar**. The **Standings** tab is where you build a championship (a season) and see its table. It's laid out in three columns: your championships, the scoring setup, and the standings. See [Championship → Calendar](../race-day/events-and-entries.md#championship-calendar) for the **Calendar** tab.
 
-<!-- screenshot: Championship → Standings with a season selected, points scheme, session list and standings -->
+![Championship → Standings with the Fall Series 2026 - Stock championship selected: the points scheme (25, 20, 16, 13, 11 down the places), the races counted with seven Stock A-Mains ticked and one heat left out, and the standings table of seven drivers with points, wins, podiums, races and DNFs, under "best 6 rounds count"](../assets/images/championship-standings.png)
 
 ### Create a championship
 
@@ -243,7 +243,7 @@ Only sessions recorded as "Race" appear here. Practice sessions, demo races and 
 !!! note
     Championship points use the raw finishing order. Handicaps don't change them.
 
-The **Standings** table shows **Rank**, **Driver**, **Points**, **Carried In**, **Wins**, **Podiums**, **Races**, **DNF** and **Best Finish**. The line under it summarizes the rules in force, for example "12 drivers, 6 races · Stock, mains only · best 5 rounds count" ("hand-picked" when races aren't added automatically). It adds "· 2 forced out" when you've unticked races the rules included, and ends "· 8 drivers carrying points in" when some are.
+The **Standings** table shows **Rank**, **Driver**, **Points**, **Carried In**, **Wins**, **Podiums**, **Races**, **DNF** and **Best Finish**. **Carried In** shows only when somebody has points carried in (see below). The line under it summarizes the rules in force, for example "12 drivers, 6 races · Stock, mains only · best 5 rounds count" ("hand-picked" when races aren't added automatically). It adds "· 2 forced out" when you've unticked races the rules included, and ends "· 8 drivers carrying points in" when some are.
 
 Drivers are matched by the name saved with each result, so keep driver names consistent through a season.
 
@@ -268,7 +268,7 @@ Either way, the sidebar **Undo** button puts the points back as they were.
 
 **Race Analytics** reads your saved history. Each tab refreshes when you open it, so it's up to date as soon as a race finishes.
 
-<!-- screenshot: Race Analytics Overview tab -->
+![Race Analytics → Overview: At a glance tiles for races run, laps counted, drivers seen and the best lap ever, with who set it and where, and the Track records table with each layout's lap record, who holds it, when it was set and how many races it has had](../assets/images/race-analytics-overview.png)
 
 ### Overview
 

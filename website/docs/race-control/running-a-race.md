@@ -5,7 +5,7 @@ The **Race Control** page is where you run every race: you pick what's about to 
 !!! note
     HeatCaller runs its own race control, reading the decoder (EasyLap or I-Lap) directly. See [Decoders](../timing/decoders.md).
 
-![The Race Control page during a demo race: the flag buttons, the clock at 01:05 under GREEN FLAG with 8 LAPS TO GO, the buttons down the clock column, and the leaderboard with seven drivers](../assets/images/race-control-racing.png)
+![The Race Control page during a demo race: the Green flag lit, the clock at 01:05 under GREEN FLAG with 3 LAPS TO GO, the Now and Next bar, and seven drivers on the leaderboard with their laps, gaps, last and best laps and streaks, with Auto start on below](../assets/images/race-control-racing.png)
 
 ## The page at a glance
 

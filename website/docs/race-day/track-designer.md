@@ -194,7 +194,7 @@ The markings include **Split 1 loop**, **Split 2 loop** and **Split 3 loop**: a 
 
 The **Plan**, **Room**, **Lap** and **Auto** sections, and the **Photo** tool, have:
 
-![The Plan section open: the track name with Show this plan as the track's main picture, Start from a kit, the tile size set to 50 cm, and Check against a kit. The Select tool is in hand, its bar over the board offering Turn, Flip across, Flip down, Duplicate and Remove](../assets/images/track-designer-plan.png)
+![The Plan section open: the track name with Show this plan as the track's main picture, Start from a kit, the tile size set to 50 cm, and Check against a kit. The Select tool is in hand with the whole plan picked up, its bar over the board offering Turn, Flip across, Flip down, Duplicate and Remove](../assets/images/track-designer-plan.png)
 
 - **Track name** (Plan), with **Show this plan as the track's main picture** under it — required before you can save.
 - **Tile size** (Plan) — **30 cm**, **50 cm**, or any size in mm.

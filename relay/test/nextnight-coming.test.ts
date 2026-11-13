@@ -38,11 +38,11 @@ const night = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("Home's next race night card says I'm coming (12 Nov 2026)", () => {
-  it("is a link to Me's I'm coming card while the club takes entries", () => {
+  // A button like See the running order since 13 Nov 2026; the card itself stays still.
+  it("has a button to Me's I'm coming card while the club takes entries", () => {
     const html = card(night(), null);
-    assert.match(html, /^<a class="hero next" href="\/c\/acme-rc\/mynight#s=tonight&amp;go=coming">/);
-    assert.match(html, /Coming\? Tap to put yourself down/);
-    assert.ok(html.endsWith("</a>"));
+    assert.match(html, /^<div class="hero next" style="cursor:default">/);
+    assert.match(html, /<a class="page wide hp-go nn-go" href="\/c\/acme-rc\/mynight#s=tonight&amp;go=coming">Coming\? Put yourself down<\/a><\/div>$/);
   });
 
   it("goes by the Me tab's own link when the phone has the driver", () => {

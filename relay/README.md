@@ -166,6 +166,7 @@ is the part that can be wrong on a machine where every test passes.
 | `preview` | snapshot | a preview of a meeting that has not happened yet, with its own expiry |
 | `qualifying` | snapshot | where qualifying stands on the race day in hand, and the main each driver would make |
 | `sponsors` | snapshot | the club's sponsors for the foot of Live: name, line, logo, website |
+| `nextnight` | snapshot | the club's next race night: date, classes, times, or that it's off |
 | `captions` | snapshot | the announcer's last few lines, as text (16 KB at most) |
 | `listen` | collection | the room's last couple of minutes as audio: 40 documents, 8 MB of its own |
 | `checkin` | snapshot, **private** | online check-in: roster, photos, PIN hashes |
@@ -1213,6 +1214,7 @@ garage and every photo still waiting.
 GET  /api/v1/c/:club/push/key           -> {key}   the relay's public key, for the browser
 POST /api/v1/c/:club/push/subscribe     {id, sub}  -> {ok}   sub is PushSubscription.toJSON()
 POST /api/v1/c/:club/push/unsubscribe   {id, sub: {endpoint}}
+POST /api/v1/c/:club/push/broadcast     token; {title, body, tag?} -> {ok, badges, sent, failed}
 ```
 
 Web Push, with no dependencies (`src/push.ts`: ECDH, HKDF, AES-128-GCM and
@@ -1231,7 +1233,21 @@ Alerts are worked out on the relay from what the laptop publishes, never
 on the first look at a driver: their race has just become the next one or
 been staged and their marshal duty has just become next (from
 `driverlive`), and a race newly filed on their night (from `nights`; a demo
-race or practice run says so). Each is encrypted for its one phone (RFC
+race or practice run says so). Since 11-12 Nov 2026 there are two more from
+`driverlive`, each once per race: "Your race is in about 5 minutes"
+(`hc-soon`, not sent with "Your race is next") and "Marshal at Turn 3 in
+about 5 minutes" (`hc-marshal-soon`, from the duty's own estimate, not
+while the marshal has said they're at their post). "Your result is in"
+(`hc-result`) lists the race's top three with their laps, the driver's own
+line marked "(you)", named as the race's result online names them.
+
+`push/broadcast` is the laptop telling every signed-up phone at once, with
+its publish token, never a phone's: Call It Off's "the next race night is
+off". The body is strict - a title of 1-60 characters, a body of 1-240, an
+optional tag (`nextnight` if absent) and nothing else - three an hour per
+club (`429` past it), and the alert lives 6 hours at the push service.
+With alerts not working on the relay it answers `503`, so the laptop can say
+nobody was told. Each is encrypted for its one phone (RFC
 8291), lives 10 minutes at the push service, and carries no badge code - a
 tap opens `/c/:club/mynight`. A phone the push service answers 404 or 410
 for is forgotten. No `Topic` header: Apple refuses it. The log has a line

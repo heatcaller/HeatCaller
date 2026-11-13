@@ -14,6 +14,8 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
     See [Track Designer](race-day/track-designer.md).
 
+- **Whole names in the championship standings (13 November).** In a 1280-wide window the **Standings** table cut drivers to "Bil..." and "As...", because every heading kept its full width and **Driver** got what was left. **Driver** and **Races** ("6 of 7") are now kept wide enough for what they show, the two narrower columns of the page give up room first, and **Carried In** shows only when somebody has points carried in. See [Championship](race-control/results-and-championships.md#championship).
+
 - **Fixes from the first night on step 8 (12 November).**
     - **More time moves the schedule.** Approving a driver's **Need 5 more minutes** (or **+1 min** or **Hold**) now moves every "about" time after that race: the program, the phones' **Schedule** and the Big Screen's **UP NEXT**, not only Auto start's count.
     - **More time asked early is kept.** Approving it while the driver's race isn't next used to change nothing ("ask again when it's next"). Now it's kept, and the race goes back 5 minutes by itself when it becomes the next one out. The phone says "Q3 Heat 2 will go back 5 minutes for you when it's next." Two approvals add up, and it's dropped if the race runs or is deleted first, or the driver comes out of it. See [More time and skip my race at the desk](online/driver-requests.md#more-time-and-skip-my-race-at-the-desk).
@@ -118,7 +120,7 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
   Update HeatCaller on the race PC; nothing changes on the relay.
 
 - **Less to set up each week (12 November).** A few quick wins for the race director:
-    - **A new race day keeps last week's settings.** Besides the venue, layout, championship and heat sizes, it now keeps the entry fees and, from the last day of the same kind, **First race at:**, the first-round seeding, sharing heats, the between-race talk and the check-in rule. See [New Race Day](race-day/events-and-entries.md#new-race-day).
+    - **A new race day keeps last week's settings.** Besides the venue, layout, championship and heat sizes, it now keeps the entry fees and, from the last day of the same kind, **First race at:**, the first-round seeding, sharing heats, the between-race talk and the check-in rule. See [New Race Day](race-day/events-and-entries.md#the-start-tonight-window).
     - **Change a driver's classes at the desk.** Click their **Class** on **Who's Racing** to tick the classes they race tonight. The column now shows every class a driver races. See [Who's Racing](race-day/events-and-entries.md#race-day-whos-racing).
     - **The phone server starts by itself next time.** The first time **Start Server** works on **Local Screens**, **Start the server automatically when the app opens** is ticked for you, once. See [Phone and web](screens/phone-and-web.md).
     - **New classes have a race length.** While the app default has no lap or time limit, a new class starts at 5 minutes, so a first night's heat doesn't run until somebody finds **Checkered**.

@@ -119,7 +119,7 @@ If no round is picked, the check uses whoever is already on the leaderboard.
 4. Use the flag buttons if you need them: **Yellow**, **Red**, and **Green** to resume. **Red** has to be pressed and held for about a second, so a stray click can't stop the race. You can also use <kbd>F1</kbd> to <kbd>F6</kbd>, which act on a single press (see [Keyboard shortcuts](../reference/keyboard-shortcuts.md)).
 5. The race ends by itself at its lap or time limit. With no limit, press and hold **Checkered** (or press <kbd>F6</kbd>).
 
-After the first heat, the **Next Up** bar on **Race Control** shows what's next. Its **Start Next** button starts the next heat without leaving the page.
+After the first heat, the **Next Up** bar on **Race Control** shows what's next. Its **Start Next** button starts the next heat without leaving the page. You may not need it: **Auto start** is on by default, so 2:30 after each heat's checkered flag the next one starts by itself. **Hold** on the same bar stops the count. See [Auto start between races](../race-control/running-a-race.md#auto-start-between-races).
 
 !!! tip "Keep your hands free"
     Press <kbd>F11</kbd> for **Race Mode**: full screen, no sidebar, just the race. Press <kbd>F11</kbd> or <kbd>Esc</kbd> to come back.

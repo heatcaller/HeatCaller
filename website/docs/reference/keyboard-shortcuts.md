@@ -67,7 +67,7 @@ If no driver is selected, nothing happens and the Race Control log says why. See
 | Key | What it does |
 |---|---|
 | <kbd>?</kbd> | Shows the keyboard shortcuts sheet. |
-| <kbd>Shift</kbd>+<kbd>S</kbd> | Opens the Set Up Tonight wizard, which sets up a race night step by step. See [The Set Up Tonight wizard](../race-day/events-and-entries.md#the-set-up-tonight-wizard). |
+| <kbd>Shift</kbd>+<kbd>S</kbd> | Opens the Set Up Tonight wizard, which sets up a race night step by step. With no race day open, the **Start Tonight** window comes first (see [The Start Tonight window](../race-day/events-and-entries.md#the-start-tonight-window)). See [The Set Up Tonight wizard](../race-day/events-and-entries.md#the-set-up-tonight-wizard). |
 | <kbd>Shift</kbd>+<kbd>T</kbd> | Starts the app tour, a short look around the main pages. See [The app tour](../getting-started/install.md#the-app-tour). Not in Race Mode. |
 | <kbd>M</kbd> | Mutes or unmutes all sound, the same as the mute button at the bottom of the sidebar. |
 | <kbd>Ctrl</kbd>+<kbd>Z</kbd> | Undo, the same as the **Undo** button at the bottom of the sidebar. In a text box, it undoes your typing instead. |
