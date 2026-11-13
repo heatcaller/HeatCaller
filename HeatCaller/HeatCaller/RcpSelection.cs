@@ -48,18 +48,26 @@ public sealed class RcpSelection
     private readonly HashSet<RcpDecal> _decals = new();
     private readonly HashSet<RcpRoutePoint> _route = new();
 
+    // Dividers only half picked, each with the picked lane's tile: one
+    // lane's tile is in the selection and the other lane's isn't. A divider
+    // is one RcpWall standing for two rails, one bolted to each tile, so the
+    // picked half can't simply be carried off - it is split off when the
+    // selection first moves (Detach); until then only a copy and a delete
+    // need to know about it (railed tiles, Phase 3, 13 Nov 2026).
+    private readonly Dictionary<RcpWall, RcpTile> _halves = new();
+
     public IReadOnlyCollection<RcpTile> Tiles => _tiles;
     public IReadOnlyCollection<RcpWall> Walls => _walls;
     public IReadOnlyCollection<RcpCurve> Curves => _curves;
     public IReadOnlyCollection<RcpDecal> Decals => _decals;
     public IReadOnlyCollection<RcpRoutePoint> Route => _route;
 
-    public int Count => _tiles.Count + _walls.Count + _curves.Count + _decals.Count + _route.Count;
+    public int Count => _tiles.Count + _walls.Count + _halves.Count + _curves.Count + _decals.Count + _route.Count;
 
     public bool IsEmpty => Count == 0;
 
     /// <summary>Just the track itself - what a turn or a mirror has to get right.</summary>
-    public int Pieces => _tiles.Count + _walls.Count + _curves.Count + _decals.Count;
+    public int Pieces => _tiles.Count + _walls.Count + _halves.Count + _curves.Count + _decals.Count;
 
     public bool Holds(RcpTile tile) => _tiles.Contains(tile);
 
@@ -79,7 +87,7 @@ public sealed class RcpSelection
 
     public bool Forget(RcpTile tile) => _tiles.Remove(tile);
 
-    public bool Forget(RcpWall wall) => _walls.Remove(wall);
+    public bool Forget(RcpWall wall) => _walls.Remove(wall) | _halves.Remove(wall);
 
     public bool Forget(RcpCurve curve) => _curves.Remove(curve);
 
@@ -97,11 +105,15 @@ public sealed class RcpSelection
     /// last one. The marquee is snapped out to whole tiles before it gets
     /// here, so there is no question of a tile being half picked.
     ///
-    /// A rail comes along when BOTH its ends are inside the block, lines
-    /// included - which is what puts the rails round the edge of a block of
-    /// tiles in with the block, rather than leaving a layout's outside wall
-    /// behind every time somebody slides it across the room. A rail just
-    /// outside has one end outside, so it stays where it is.
+    /// A rail comes with the tile it is bolted to (railed tiles, Phase 3,
+    /// 13 Nov 2026). On a real track a rail never comes off its tile, so a
+    /// picked tile brings its rail or its turn, and a rail bolted to a tile
+    /// outside the block stays with that tile - even one lying along the
+    /// block's edge. Half a divider comes with the one lane's tile that is
+    /// picked (see _halves). Only a rail no tile carries - one drawn before
+    /// the floor under it, or a custom second rail - still goes by where it
+    /// lies: it comes along when BOTH its ends are inside the block, lines
+    /// included.
     /// </summary>
     public static RcpSelection In(RcpTrackDesign design, Rectangle cells)
     {
@@ -131,17 +143,42 @@ public sealed class RcpSelection
             }
         }
 
+        var carriers = Carriers(design);
+
         foreach (var wall in design.Walls)
         {
-            if (PointInside(wall.From) && PointInside(wall.To))
+            if (!carriers.TryGetValue((wall.Col, wall.Row, wall.Vertical), out var on))
+            {
+                if (PointInside(wall.From) && PointInside(wall.To))
+                {
+                    picked._walls.Add(wall);
+                }
+
+                continue;
+            }
+
+            var held = on.Where(picked._tiles.Contains).ToList();
+
+            if (held.Count == on.Count)
             {
                 picked._walls.Add(wall);
+            }
+            else if (held.Count > 0 && wall.Double)
+            {
+                picked._halves[wall] = held[0];
             }
         }
 
         foreach (var curve in design.Curves)
         {
-            if (PointInside(curve.At))
+            if (RcpPieces.TurnTile(design, curve) is { } tile)
+            {
+                if (picked._tiles.Contains(tile))
+                {
+                    picked._curves.Add(curve);
+                }
+            }
+            else if (PointInside(curve.At))
             {
                 picked._curves.Add(curve);
             }
@@ -157,6 +194,76 @@ public sealed class RcpSelection
         }
 
         return picked;
+    }
+
+    /// <summary>
+    /// The tiles each seam's straight rail is bolted to, as the pieces say
+    /// (RcpPieces.Adopt keeps them up to date after every edit): one for a
+    /// rail, two for a divider.
+    /// </summary>
+    private static Dictionary<(int Col, int Row, bool Vertical), List<RcpTile>> Carriers(RcpTrackDesign design)
+    {
+        var carriers = new Dictionary<(int, int, bool), List<RcpTile>>();
+
+        foreach (var tile in design.Tiles)
+        {
+            if (!RcpPieces.HasStraight(tile.Piece))
+            {
+                continue;
+            }
+
+            var seam = RcpPlan.EdgeLine(tile.Col, tile.Row, tile.Facing);
+
+            if (design.WallAt(seam.Col, seam.Row, seam.Vertical) is null)
+            {
+                continue;
+            }
+
+            if (!carriers.TryGetValue(seam, out var list))
+            {
+                carriers[seam] = list = new List<RcpTile>();
+            }
+
+            list.Add(tile);
+        }
+
+        return carriers;
+    }
+
+    /// <summary>Whether a divider is half picked - one lane's tile in the selection, the other's not.</summary>
+    public bool HoldsHalfOf(RcpWall wall) => _halves.ContainsKey(wall);
+
+    /// <summary>
+    /// Splits off the picked half of each divider only half picked, so it
+    /// can go with its tile: the divider stays as the other lane's single
+    /// rail, and a rail of the picked tile's own on the same seam is added
+    /// to the plan and to the selection. Called on the plan as it is, before
+    /// the first move, turn or mirror - inside that edit's undo step. Does
+    /// nothing a second time. The two rails share the seam only until the
+    /// move lands; landing back where they were joins them again (Settle).
+    /// </summary>
+    public void Detach(RcpTrackDesign design)
+    {
+        if (design is null || _halves.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var half in _halves.Keys)
+        {
+            if (!design.Walls.Contains(half) || !half.Double)
+            {
+                continue;
+            }
+
+            half.Double = false;
+
+            var mine = new RcpWall { Col = half.Col, Row = half.Row, Vertical = half.Vertical, Auto = half.Auto };
+            design.Walls.Add(mine);
+            _walls.Add(mine);
+        }
+
+        _halves.Clear();
     }
 
     /// <summary>The whole plan - what Ctrl+A picks, and what a copy of a plan is made out of.</summary>
@@ -191,6 +298,26 @@ public sealed class RcpSelection
         _curves.UnionWith(other._curves);
         _decals.UnionWith(other._decals);
         _route.UnionWith(other._route);
+
+        // A divider with one half picked here and the other half there is
+        // the whole divider picked.
+        foreach (var (wall, tile) in other._halves)
+        {
+            if (_halves.TryGetValue(wall, out var mine) && mine != tile)
+            {
+                _halves.Remove(wall);
+                _walls.Add(wall);
+            }
+            else if (!_walls.Contains(wall))
+            {
+                _halves[wall] = tile;
+            }
+        }
+
+        foreach (var wall in _halves.Keys.Where(_walls.Contains).ToList())
+        {
+            _halves.Remove(wall);
+        }
     }
 
     /// <summary>Takes a selection back out of this one - Shift over something already picked.</summary>
@@ -199,6 +326,28 @@ public sealed class RcpSelection
         if (other is null)
         {
             return;
+        }
+
+        // A whole divider with one lane's tile taken back out is half picked.
+        foreach (var (wall, tile) in other._halves)
+        {
+            if (_walls.Remove(wall))
+            {
+                if (_tiles.FirstOrDefault(t => t != tile && RcpPieces.HasStraight(t.Piece)
+                        && RcpPlan.EdgeLine(t.Col, t.Row, t.Facing) == (wall.Col, wall.Row, wall.Vertical)) is { } kept)
+                {
+                    _halves[wall] = kept;
+                }
+            }
+            else if (_halves.TryGetValue(wall, out var mine) && mine == tile)
+            {
+                _halves.Remove(wall);
+            }
+        }
+
+        foreach (var wall in other._walls.Where(_halves.ContainsKey))
+        {
+            _halves.Remove(wall);
         }
 
         _tiles.ExceptWith(other._tiles);
@@ -213,6 +362,7 @@ public sealed class RcpSelection
         other is not null
         && other._tiles.IsSubsetOf(_tiles)
         && other._walls.IsSubsetOf(_walls)
+        && other._halves.Keys.All(wall => _walls.Contains(wall) || _halves.ContainsKey(wall))
         && other._curves.IsSubsetOf(_curves)
         && other._decals.IsSubsetOf(_decals)
         && other._route.IsSubsetOf(_route);
@@ -618,6 +768,36 @@ public sealed class RcpSelection
 
         design.Tiles.RemoveAll(t => !_tiles.Contains(t) && cells.Contains((t.Col, t.Row)));
         design.Decals.RemoveAll(d => !_decals.Contains(d) && marks.Contains((d.Col, d.Row)));
+
+        // A rail tile landed against a rail tile across the seam, each with
+        // its rail on that seam, stands back to back with it: a divider, as
+        // laying the piece there would make (RcpPieces.Lay) - and what
+        // putting half a divider back where it came from gives (Detach).
+        // Any other rail it lands on goes.
+        foreach (var wall in _walls.Where(w => !w.Double))
+        {
+            var seam = (wall.Col, wall.Row, wall.Vertical);
+
+            if (design.Walls.FirstOrDefault(w => !_walls.Contains(w) && (w.Col, w.Row, w.Vertical) == seam && !w.Double) is not { } other)
+            {
+                continue;
+            }
+
+            var (aCol, aRow) = wall.Vertical ? (wall.Col - 1, wall.Row) : (wall.Col, wall.Row - 1);
+            var a = design.At(aCol, aRow);
+            var b = design.At(wall.Col, wall.Row);
+
+            bool Carries(RcpTile? tile) =>
+                tile is not null && RcpPieces.HasStraight(tile.Piece) && RcpPlan.EdgeLine(tile.Col, tile.Row, tile.Facing) == seam;
+
+            if (a is not null && b is not null && _tiles.Contains(a) != _tiles.Contains(b) && Carries(a) && Carries(b))
+            {
+                wall.Double = true;
+                wall.Auto = wall.Auto && other.Auto;
+                design.Walls.Remove(other);
+            }
+        }
+
         design.Walls.RemoveAll(w => !_walls.Contains(w) && seams.Contains((w.Col, w.Row, w.Vertical)));
         design.Curves.RemoveAll(c => !_curves.Contains(c) && anchors.Contains((c.Col, c.Row)));
 
@@ -654,6 +834,12 @@ public sealed class RcpSelection
 
         design.Tiles.RemoveAll(_tiles.Contains);
         design.Walls.RemoveAll(_walls.Contains);
+
+        // Half a divider goes with its tile; the other lane keeps its rail.
+        foreach (var half in _halves.Keys)
+        {
+            half.Double = false;
+        }
         design.Curves.RemoveAll(_curves.Contains);
         design.Decals.RemoveAll(_decals.Contains);
 
@@ -686,6 +872,14 @@ public sealed class RcpSelection
         foreach (var wall in _walls)
         {
             bag.Walls.Add(wall.Clone());
+        }
+
+        // Half a divider is the one rail bolted to the picked tile.
+        foreach (var half in _halves.Keys)
+        {
+            var rail = half.Clone();
+            rail.Double = false;
+            bag.Walls.Add(rail);
         }
 
         foreach (var curve in _curves)
@@ -811,9 +1005,9 @@ public sealed class RcpSelection
             parts.Add(Plural.Of(_tiles.Count, "tile"));
         }
 
-        if (_walls.Count > 0)
+        if (_walls.Count + _halves.Count > 0)
         {
-            parts.Add(Plural.Of(_walls.Count, "rail"));
+            parts.Add(Plural.Of(_walls.Count + _halves.Count, "rail"));
         }
 
         if (_curves.Count > 0)

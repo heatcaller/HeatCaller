@@ -3118,6 +3118,7 @@ public sealed class RcpTrackCanvas : Control
         _nudgedAt = now;
 
         LineTouchedByHand(deleting: false);
+        _selection.Detach(_design);
         _selection.Move(cols, rows);
 
         // Restarted on every press, so it only fires once the run stops.
@@ -3192,6 +3193,8 @@ public sealed class RcpTrackCanvas : Control
         Remember();
         LineTouchedByHand(deleting: false);
 
+        _selection.Detach(_design);
+
         for (var i = 0; i < turns; i++)
         {
             _selection.TurnClockwise();
@@ -3226,6 +3229,8 @@ public sealed class RcpTrackCanvas : Control
 
         Remember();
         LineTouchedByHand(deleting: false);
+
+        _selection.Detach(_design);
 
         if (leftToRight)
         {
@@ -3775,6 +3780,7 @@ public sealed class RcpTrackCanvas : Control
                 Remember();
                 LineTouchedByHand(deleting: false);
 
+                _selection.Detach(_design);
                 _selection.Move(now.X - last.X, now.Y - last.Y);
                 _moveLast = now;
                 _moved = true;
@@ -4302,6 +4308,7 @@ public sealed class RcpTrackCanvas : Control
         RcpTrackPainter.Draw(g, _design, _scale, _origin, ShowRoute, showLabels: true, backdrop: _backdrop);
 
         DrawCustomTiles(g);
+        DrawNotPieces(g);
         DrawSelection(g);
         DrawHover(g);
 
@@ -4446,6 +4453,21 @@ public sealed class RcpTrackCanvas : Control
 
         g.DrawLine(halo, from, to);
         g.DrawLine(pen, from, to);
+    }
+
+    /// <summary>A ghost of a shape given in grid units: a wash, dashed round - or, <paramref name="solid"/>, filled like a rail.</summary>
+    private void DrawGhostShape(Graphics g, PointF[] grid, Color colour, bool solid = false)
+    {
+        var points = grid.Select(p => new PointF(_origin.X + p.X * _scale, _origin.Y + p.Y * _scale)).ToArray();
+
+        using var wash = new SolidBrush(Color.FromArgb(solid ? 200 : 60, colour));
+        g.FillPolygon(wash, points);
+
+        if (!solid)
+        {
+            using var outline = new Pen(colour, 2f) { DashStyle = DashStyle.Dash };
+            g.DrawPolygon(outline, points);
+        }
     }
 
     /// <summary>A wash over cells, dashed round each - the ghost of floor about to go down.</summary>
@@ -4598,6 +4620,73 @@ public sealed class RcpTrackCanvas : Control
         }
     }
 
+    /// <summary>
+    /// The rest of what the pieces can't build, marked as the custom tiles
+    /// are (railed tiles, 13 Nov 2026 - found in Phase 1, shown now there is
+    /// a way to fix it): a rail with no tile under it, dashed along its seam
+    /// and tagged "no tile", and a turn that isn't one of the club's pieces -
+    /// a two-tile turn, a back-to-back pair, or one with no outer curve tile
+    /// under it - dashed round its arc and tagged "not a piece".
+    /// </summary>
+    private void DrawNotPieces(Graphics g)
+    {
+        var seams = PieceReport.RailsWithNoTileAt;
+        var turns = PieceReport.TurnsNotPieces;
+
+        if (seams.Count == 0 && turns.Count == 0)
+        {
+            return;
+        }
+
+        var colour = AppTheme.Warning;
+
+        using var dash = new Pen(colour, Math.Max(2f, _scale / 24f)) { DashStyle = DashStyle.Dash };
+        using var tagBack = new SolidBrush(Color.FromArgb(220, BoardFloor));
+        using var font = new Font(AppTheme.SmallFont.FontFamily, Math.Clamp(_scale / 7f, 7f, 11f), FontStyle.Bold, GraphicsUnit.Pixel);
+
+        void Tag(string text, PointF at)
+        {
+            if (_scale < 40f)
+            {
+                return;
+            }
+
+            var size = TextRenderer.MeasureText(text, font);
+            var box = new Rectangle((int)(at.X - size.Width / 2f), (int)(at.Y - size.Height / 2f), size.Width, size.Height);
+
+            g.FillRectangle(tagBack, box);
+            TextRenderer.DrawText(g, text, font, box, colour, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+        }
+
+        foreach (var (col, row, vertical) in seams)
+        {
+            var from = new PointF(_origin.X + col * _scale, _origin.Y + row * _scale);
+            var to = vertical ? new PointF(from.X, from.Y + _scale) : new PointF(from.X + _scale, from.Y);
+            var off = _scale * 0.18f;
+            var (ox, oy) = vertical ? (off, 0f) : (0f, off);
+
+            // Either side of the rail, so the rail itself still shows.
+            g.DrawLine(dash, from.X - ox, from.Y - oy, to.X - ox, to.Y - oy);
+            g.DrawLine(dash, from.X + ox, from.Y + oy, to.X + ox, to.Y + oy);
+            Tag("no tile", new PointF((from.X + to.X) / 2f, (from.Y + to.Y) / 2f));
+        }
+
+        foreach (var curve in turns)
+        {
+            var arc = RcpAngledView.Arc(curve, Math.Max(0.1f, curve.Radius))
+                .Select(p => new PointF(_origin.X + p.X * _scale, _origin.Y + p.Y * _scale))
+                .ToArray();
+
+            if (arc.Length < 2)
+            {
+                continue;
+            }
+
+            g.DrawLines(dash, arc);
+            Tag("not a piece", arc[arc.Length / 2]);
+        }
+    }
+
     private void DrawHover(Graphics g)
     {
         switch (Tool)
@@ -4607,13 +4696,28 @@ public sealed class RcpTrackCanvas : Control
                 // The whole piece that would go down: the tile, and the rail
                 // on it - on the edge or across the corner it would take.
                 var (facing, corner) = _painting ? (PieceFacing, PieceCorner) : _hoverPiece;
+                var piece = PieceFor(Item);
+                var ghost = new RcpTile { Col = pieceCell.X, Row = pieceCell.Y, Piece = piece, Facing = facing, Corner = corner };
 
-                DrawGhostCells(g, new[] { pieceCell }, AppTheme.Accent);
-
-                switch (PieceFor(Item))
+                // The tile in its own shape, as the painter draws it (railed
+                // tiles, Phase 5): an outer curve tile is a quarter circle.
+                if (piece == RcpPiece.OuterCurve)
                 {
-                    case RcpPiece.Rail or RcpPiece.Finish or RcpPiece.Arched:
+                    DrawGhostShape(g, RcpTrackPainter.QuarterDisc(ghost, 24), AppTheme.Accent);
+                }
+                else
+                {
+                    DrawGhostCells(g, new[] { pieceCell }, AppTheme.Accent);
+                }
+
+                switch (piece)
+                {
+                    case RcpPiece.Rail or RcpPiece.Finish:
                         DrawGhostRail(g, RcpPlan.EdgeLine(pieceCell.X, pieceCell.Y, facing), AppTheme.Accent);
+                        break;
+
+                    case RcpPiece.Arched:
+                        DrawGhostShape(g, RcpTrackPainter.ArchOutline(ghost), AppTheme.Accent, solid: true);
                         break;
 
                     case RcpPiece.OuterCurve:

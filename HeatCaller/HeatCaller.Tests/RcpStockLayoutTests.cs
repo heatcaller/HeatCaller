@@ -89,14 +89,16 @@ public sealed class RcpStockLayoutTests
 
             Assert.NotEmpty(design.Walls);
 
-            // Four single corners round the outside. The radius varies -
-            // the curve-heavy sets use two-tile sweepers, which is the
-            // only way their straights reach - so what is asserted is
-            // that there are four of them and that they sweep a corner of
-            // the floor rather than cut across it.
+            // A single corner round each corner of the floor. The radius
+            // varies - the curve-heavy sets use two-tile sweepers, which is
+            // the only way their straights reach - so what is asserted is
+            // that there is one at each and that it sweeps a corner of the
+            // floor rather than cut across it. Any other turn is a one-tile
+            // turn where a divider meets the wall (railed tiles, 13 Nov 2026).
             var corners = design.Curves.Where(c => !c.Double).ToList();
 
-            Assert.Equal(4, corners.Count);
+            Assert.True(corners.Count >= 4, choice.Name);
+            Assert.All(corners.Skip(4), c => Assert.Equal(1f, c.Radius));
 
             var cols = design.Tiles.Max(t => t.Col) + 1;
             var rows = design.Tiles.Max(t => t.Row) + 1;
@@ -107,6 +109,30 @@ public sealed class RcpStockLayoutTests
             Assert.Contains(corners, c => c.Col == 0 && c.Row == rows && c.Quadrant == RcpQuadrant.NorthEast);
 
             Assert.Contains(design.Decals, d => d.Kind == RcpDecalKind.FinishLine);
+        }
+    }
+
+    [Fact]
+    public void Every_layout_is_built_from_the_clubs_pieces_with_nothing_custom()
+    {
+        // Railed tiles (13 Nov 2026): each rail on a tile of its own - no
+        // tile with two rails, no rail with no tile. The serpentines and the
+        // Wide L meet the wall with a turn either side of the divider, and
+        // the 50cm Oval is split by a divider; the only turns that aren't
+        // the club's pieces are the two-tile sweepers the curve-heavy boxes
+        // are built for.
+        foreach (var choice in RcpStockLayout.All)
+        {
+            var design = RcpStockLayout.Build(choice.Name)!;
+            var report = RcpPieces.Adopt(design);
+
+            Assert.True(report.SecondRails == 0 && report.RailsWithNoTile == 0 && report.TurnsWithNoTile == 0, $"{choice.Name}: {report}");
+            Assert.True(report.OtherTurns == design.Curves.Count(c => c.Radius > 1.01f), $"{choice.Name}: {report}");
+        }
+
+        foreach (var name in new[] { "30cm Mini-96 - serpentine", "50cm Large-96 - serpentine", "50cm Oval", "30cm Double Oval Wide" })
+        {
+            Assert.True(RcpPieces.Adopt(RcpStockLayout.Build(name)!).AllOnTiles, name);
         }
     }
 

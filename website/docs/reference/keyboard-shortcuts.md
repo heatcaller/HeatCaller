@@ -175,7 +175,7 @@ With the mouse:
 
 ### Picking part of a plan up
 
-Take the **Select** tool (<kbd>8</kbd>) and drag a box round part of the plan. Everything the box covers is picked up, and because the box snaps out to whole tiles, the rails round the edge of a block of tiles come with it rather than being left behind.
+Take the **Select** tool (<kbd>8</kbd>) and drag a box round part of the plan. Everything the box covers is picked up. Each tile brings the rail or turn bolted to it, so the rails round the edge of a block of tiles come with it, and a rail on the box's edge bolted to a tile outside it stays with that tile.
 
 Then:
 

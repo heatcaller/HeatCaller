@@ -72,9 +72,17 @@ public static class RcpPieces
         int SecondRails,
         int TurnsWithNoTile,
         int OtherTurns,
-        IReadOnlyList<(int Col, int Row)> CustomTiles)
+        IReadOnlyList<(int Col, int Row)> CustomTiles,
+        IReadOnlyList<(int Col, int Row, bool Vertical)>? LooseSeams = null,
+        IReadOnlyList<RcpCurve>? LooseTurns = null)
     {
         public static Report None { get; } = new(0, 0, 0, 0, Array.Empty<(int, int)>());
+
+        /// <summary>Where each rail with no tile under it is (railed tiles, 13 Nov 2026) - shown on the board.</summary>
+        public IReadOnlyList<(int Col, int Row, bool Vertical)> RailsWithNoTileAt => LooseSeams ?? Array.Empty<(int, int, bool)>();
+
+        /// <summary>Each turn that isn't one of the club's pieces - a two-tile turn, a back-to-back pair, or one with no tile under it.</summary>
+        public IReadOnlyList<RcpCurve> TurnsNotPieces => LooseTurns ?? Array.Empty<RcpCurve>();
 
         /// <summary>Every rail and turn is on a tile of its own: the plan can be built from the club's pieces with nothing custom.</summary>
         public bool AllOnTiles => RailsWithNoTile == 0 && SecondRails == 0 && TurnsWithNoTile == 0 && OtherTurns == 0;
@@ -116,6 +124,25 @@ public static class RcpPieces
 
     /// <summary>The corner of its tile a one-tile turn rail's arc runs across.</summary>
     public static RcpQuadrant CornerOf(RcpCurve curve) => Opposite(curve.Quadrant);
+
+    /// <summary>
+    /// The outer curve tile a turn rail is part of, when it is one tile's own
+    /// turn - null for a two-tile turn, a back-to-back pair, or a turn with
+    /// no outer curve tile under it (as the pieces were last worked out).
+    /// </summary>
+    public static RcpTile? TurnTile(RcpTrackDesign design, RcpCurve curve)
+    {
+        if (curve.Double || Math.Abs(curve.Radius - 1f) > 0.01f)
+        {
+            return null;
+        }
+
+        var (col, row) = RcpPlan.QuadrantCell(curve);
+
+        return design.At(col, row) is { Piece: RcpPiece.OuterCurve } tile && tile.Corner == CornerOf(curve)
+            ? tile
+            : null;
+    }
 
     /// <summary>
     /// Puts every rail of the plan on the tile it is bolted to, setting each
@@ -174,6 +201,8 @@ public static class RcpPieces
         var turnsWithNoTile = 0;
         var otherTurns = 0;
         var custom = new List<(int, int)>();
+        var looseSeams = new List<(int, int, bool)>();
+        var looseTurns = new List<RcpCurve>();
 
         // --- turns: the outer curve tiles -----------------------------------
         foreach (var curve in design.Curves.OrderBy(c => c.Row).ThenBy(c => c.Col).ThenBy(c => c.Quadrant))
@@ -183,6 +212,7 @@ public static class RcpPieces
             if (Math.Abs(curve.Radius - 1f) > 0.01f || curve.Double)
             {
                 otherTurns++;
+                looseTurns.Add(curve);
                 continue;
             }
 
@@ -196,6 +226,7 @@ public static class RcpPieces
             else
             {
                 turnsWithNoTile++;
+                looseTurns.Add(curve);
             }
         }
 
@@ -261,6 +292,7 @@ public static class RcpPieces
                     else
                     {
                         railsWithNoTile++;
+                        looseSeams.Add(seam);
                     }
                 }
 
@@ -311,10 +343,11 @@ public static class RcpPieces
             if (!onFloor)
             {
                 railsWithNoTile++;
+                looseSeams.Add(seam);
             }
         }
 
-        return new Report(railsWithNoTile, secondRails, turnsWithNoTile, otherTurns, custom);
+        return new Report(railsWithNoTile, secondRails, turnsWithNoTile, otherTurns, custom, looseSeams, looseTurns);
     }
 
     private static void Bolt(RcpTile tile, RcpEdge edge)

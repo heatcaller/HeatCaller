@@ -2,7 +2,7 @@
 
 **Asked for:** "plan on how we can make it better" (Asher, 25 Oct 2026, straight after the eight-phase overhaul was finished).
 
-**Status (25 Oct 2026):** a plan, nothing built (still true on 6 Nov 2026). Phase A comes first because it is about finding out, not guessing. After that, the order is Asher's to choose.
+**Status (25 Oct 2026):** a plan. **13 Nov 2026:** Phase C was done by the railed-tiles work (`track-designer-railed-tiles-plan.md`): the outer curve tile is drawn as the quarter circle in the photo and the inner corner tile with its corner piece (C1, the inner corner from the description until there is a photo of it), and the printed sheets mark each tile R, F, A, OC, IC or B (C2). Phases A, B and D to G are not started. Phase A comes first because it is about finding out, not guessing. After that, the order is Asher's to choose.
 
 **Where it stands.** In one day the overhaul gave the designer:
 - RCP's real tile joints, a new look and the Lane tool;

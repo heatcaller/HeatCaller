@@ -104,8 +104,8 @@ public sealed class RcpBuildForm : Form
             (layout.LapTiles > 0 ? $"Lap {lapMetres:0.0} m ({lapMetres * 3.28084:0} ft)" : "No racing line yet - trace or draw it")
             + $" · {bounds.Width:0} x {bounds.Height:0} tiles, "
             + $"{RoomFit.Feet(bounds.Width * plan.TileSizeMm)} x {RoomFit.Feet(bounds.Height * plan.TileSizeMm)}",
-            $"{used.Tiles} tiles ({used.OuterCurveTiles} outer curve, {used.InnerCornerTiles} inner corner), "
-            + $"{used.StraightRails} straight rails, {used.TurnRails} turn rails",
+            $"{Plural.Of(used.Tiles, "piece")}: {used.Pieces.Rail} rail tiles, {used.Pieces.OuterCurve} outer curve, {used.Pieces.InnerCorner} inner corner, "
+            + $"{used.Pieces.Plain + used.Pieces.Blank + used.Pieces.Finish + used.Pieces.Arched} other",
         };
 
         var shortOf = stock?.Check(used, plan.TileSizeMm).Where(line => line.Short).ToList();

@@ -723,7 +723,8 @@ public sealed class RcpTrackEditorForm : Form
     /// <summary>The parts the Stock tab lists, in the order RcpStock.Check gives them.</summary>
     private static readonly string[] StockParts =
     {
-        "Tiles, all kinds", "Outer curve tiles", "Inner corner tiles", "Straight rails", "Turn rails", "Inner corner pieces", "End caps",
+        "Tiles, all kinds", "Plain and blank tiles", "Rail tiles", "Finish rail tiles", "Arched rail tiles", "Outer curve tiles", "Inner corner tiles",
+        "Loose straight rails", "Loose turn rails", "Corner rail pieces", "End caps",
     };
 
     /// <summary>Opens What the club owns, and keeps what it comes back with - in the club's settings too.</summary>
@@ -783,12 +784,15 @@ public sealed class RcpTrackEditorForm : Form
 
         _lblOwned.Text = (shortOf.Count == 0
                              ? $"The club has enough for this plan, in {sizeName} tiles."
-                             : $"The club is short of {Plural.Of(shortOf.Count, "part")} for this plan, in {sizeName} tiles - in red below.")
+                             : $"The club is short of {Plural.Of(shortOf.Count, "piece")} for this plan, in {sizeName} tiles - in red below.")
+                         + (owned.Notes.Count > 0
+                             ? $" The {string.Join(" and the ", owned.Notes)} {(owned.Notes.Count == 1 ? "has" : "have")} more straight rails than tiles to bolt them to, so the rest are counted as loose rails."
+                             : string.Empty)
                          + (owned.Unlisted.Count > 0
                              ? $" RCP doesn't list the parts in the {string.Join(" or the ", owned.Unlisted.Distinct())}, so only its tiles are counted."
                              : string.Empty)
                          + (inventory.TwoTileTurns > 0
-                             ? $" {Plural.Of(inventory.TwoTileTurns, "two-tile turn")} counted as one outer curve tile and one turn rail each - RCP's boxes don't say what one takes."
+                             ? $" {Plural.Of(inventory.TwoTileTurns, "two-tile turn")} counted as loose turn rails - the club's pieces have only the one-tile turn."
                              : string.Empty);
         _lblOwned.ForeColor = shortOf.Count == 0 ? AppTheme.Success : AppTheme.Danger;
 

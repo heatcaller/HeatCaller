@@ -28,6 +28,17 @@ namespace HeatCaller;
 /// from this deserves to know it is a starting point rather than a
 /// drawing of the box art.
 ///
+/// BUILT FROM PIECES where the club's pieces can build it (railed tiles,
+/// 13 Nov 2026): each rail on a tile of its own, so no layout asks for
+/// custom work. The serpentines and the Wide L meet the wall with a turn
+/// either side of the divider, and the 50cm Oval is split by a divider
+/// rather than an island that left its lanes one tile wide. The Wide L,
+/// the Oblong and the 30cm Oval Wide still sweep their corners with
+/// two-tile turns: their boxes are built for them (the Wide L has 16
+/// straight rails against 24 curved pieces), and nothing published says
+/// which of RCP's pieces make one, so the board shows those turns as not
+/// a piece of the club's rather than guessing.
+///
 /// The two 96-tile sets are ONE layout at two tile sizes - RCP use a
 /// single photograph for both, and the only difference is whether the
 /// tiles are 30cm or 50cm.
@@ -65,7 +76,7 @@ public static class RcpStockLayout
         new Choice(
             "50cm Oval",
             "50cm Oval",
-            "A simple oval, one lane each side of the island. 4 by 7 tiles."),
+            "A simple oval round a divider down the middle, two tiles wide each side. 4 by 7 tiles."),
 
         new Choice(
             "30cm Oval Wide",
@@ -117,7 +128,7 @@ public static class RcpStockLayout
                 break;
 
             case "50cm Oval":
-                Oval(design, 4, 7, corners: 1, island: new Rectangle(1, 2, 2, 3));
+                SplitOval(design);
                 break;
 
             case "30cm Oval Wide":
@@ -159,6 +170,15 @@ public static class RcpStockLayout
         Divider(design, fromCol: 5, row: 4, toCol: 12);
         Divider(design, fromCol: 0, row: 6, toCol: 6);
 
+        // Where each meets the wall, a turn either side of it rather than a
+        // square corner (railed tiles, 13 Nov 2026): a square corner there
+        // is two rails on one tile, which is custom work, and the outer
+        // curve tile is the piece made for it - the box has 12, and the
+        // four round the outside leave eight.
+        WallTee(design, wallCol: 0, row: 2, westWall: true);
+        WallTee(design, wallCol: 12, row: 4, westWall: false);
+        WallTee(design, wallCol: 0, row: 6, westWall: true);
+
         StartLine(design, 3, 0);
     }
 
@@ -184,6 +204,13 @@ public static class RcpStockLayout
             design.Walls.Add(new RcpWall { Col = 4, Row = row, Vertical = true, Double = true });
         }
 
+        // A turn either side where it meets the top wall, not two square
+        // corners - see WallTee.
+        design.Walls.RemoveAll(w => !w.Vertical && w.Row == 0 && w.Col is 3 or 4);
+        design.Walls.RemoveAll(w => w.Vertical && w.Col == 4 && w.Row == 0);
+        design.Curves.Add(RcpPieces.TurnFor(3, 0, RcpQuadrant.NorthEast));
+        design.Curves.Add(RcpPieces.TurnFor(4, 0, RcpQuadrant.NorthWest));
+
         StartLine(design, 3, 4);
     }
 
@@ -207,6 +234,24 @@ public static class RcpStockLayout
         // Halfway down the left-hand lane: clear of the corner sweeps,
         // which a start line laid in a corner tile would be drawn under.
         StartLine(design, 0, rows / 2);
+    }
+
+    /// <summary>
+    /// The 50cm Oval's 28 tiles, 4 by 7, round a divider down the middle
+    /// (railed tiles, 13 Nov 2026). It was an island two tiles wide, which
+    /// left the lanes either side of it one tile wide - and a tile with the
+    /// outside wall on one edge and the island's rail on the other is two
+    /// rails on one tile, which the club's pieces aren't. A divider leaves
+    /// both lanes two tiles wide, each tile with its one rail, and a hairpin
+    /// at each end.
+    /// </summary>
+    private static void SplitOval(RcpTrackDesign design)
+    {
+        Floor(design, 4, 7);
+        Perimeter(design, 4, 7, corners: 1);
+        CentreDivider(design, col: 2, fromRow: 2, toRow: 5);
+
+        StartLine(design, 0, 3);
     }
 
     /// <summary>108 tiles, 12 by 9, with two islands - so a lap crosses the middle twice.</summary>
@@ -282,6 +327,35 @@ public static class RcpStockLayout
         for (var col = Math.Min(fromCol, toCol); col < Math.Max(fromCol, toCol); col++)
         {
             design.Walls.Add(new RcpWall { Col = col, Row = row, Double = true });
+        }
+    }
+
+    /// <summary>
+    /// Where a divider along grid row <paramref name="row"/> meets the side
+    /// wall: a one-tile turn on the corner tile either side of it, in place
+    /// of the wall's two rails there and the divider's last tile. The T the
+    /// club's own floor has where a divider drops from another (Asher's
+    /// Drift photos, 8 Nov 2026): a turn either side, the divider's two
+    /// rails running into them. Square, each of those two tiles would carry
+    /// two rails - custom work.
+    /// </summary>
+    private static void WallTee(RcpTrackDesign design, int wallCol, int row, bool westWall)
+    {
+        var col = westWall ? wallCol : wallCol - 1;
+
+        design.Walls.RemoveAll(w => w.Vertical && w.Col == wallCol && (w.Row == row - 1 || w.Row == row));
+        design.Walls.RemoveAll(w => !w.Vertical && w.Row == row && w.Col == col);
+
+        design.Curves.Add(RcpPieces.TurnFor(col, row - 1, westWall ? RcpQuadrant.SouthWest : RcpQuadrant.SouthEast));
+        design.Curves.Add(RcpPieces.TurnFor(col, row, westWall ? RcpQuadrant.NorthWest : RcpQuadrant.NorthEast));
+    }
+
+    /// <summary>A divider down the middle of the floor, open at both ends - the island of an oval two tiles wide each side.</summary>
+    private static void CentreDivider(RcpTrackDesign design, int col, int fromRow, int toRow)
+    {
+        for (var row = fromRow; row < toRow; row++)
+        {
+            design.Walls.Add(new RcpWall { Col = col, Row = row, Vertical = true, Double = true });
         }
     }
 

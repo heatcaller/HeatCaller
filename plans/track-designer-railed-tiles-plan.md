@@ -2,7 +2,13 @@
 
 **Asked for (Asher, 7 Nov 2026):** "the rails are always attached to the tiles. the editor should be laying them as one whole piece put together not a tile and then comeback and put a rail on." And: "don't be fooled online. they show the pieces not assembled into one with the tile and rail."
 
-**Status:** a plan, nothing built. Asher answered most of the questions on 7 Nov 2026 (see "Answers" at the end). The model below follows those answers and the three photos he sent the same day. Phase 1 has everything it needs. All that is still open is a name and two photos for the drawing.
+**Status (13 Nov 2026): all five phases built**, on the branch `claude/railed-tiles-rest`. See the "as built" sections near the end.
+- **Phases 1 and 2** built 7 Nov 2026 (e51e354, 7afffcd). **Phase 5's first part** 8 Nov 2026 (343f188 and the rail-post commits after it).
+- **Phases 3 and 4, the rest of Phase 5, and the leftovers** built 13 Nov 2026: selecting, stretching and the build list in pieces; the cupboard in pieces; the quarter-circle outer curve tile, the arched rail and the 3D view from the tiles; the board's report of rails with no tile and turns that aren't pieces; and RCP's starter layouts redrawn from pieces where the pieces can build them.
+- **One thing kept from Phase 2's change of approach:** the seams (`Walls`, `Curves`) are still what is saved. Phase 3 left them saved, because every reader of the plan (the lap, Trace route, the map, sector lengths) reads seams, and the pieces are worked out after every edit and kept right. Saving the pieces themselves would change the file format for nothing a club can see.
+- Also landed since, outside these phases: the redesigned designer window (bbb0284, 8 Nov 2026) and fixes from bug hunts 15 and 16.
+
+**From when it was planned:** Asher answered most of the questions on 7 Nov 2026 (see "Answers" at the end). The model below follows those answers and the three photos he sent the same day. Phase 1 has everything it needs. All that is still open is a name and two photos for the drawing.
 
 **Asher's answers, in short:**
 - the rails stay on;
@@ -357,6 +363,37 @@ Asher circled three spots on his "Drift 2.0" plan and sent two photos of the flo
 - **Laying a turn took away the rail across the seam,** for example the rail along the top of a T. Now a turn only removes rails bolted to its own tile (`RcpPieces.Lay`).
 - **Not done yet:** the outer curve tile's floor is still drawn square, not as a quarter circle, and the angled view still extrudes rails on their seams.
 - **Tests:** two in `RcpPieceToolTests`; 341 designer, map, sector and layout tests pass.
+
+## Phases 3 and 4, the rest of 5, and the leftovers - as built (13 Nov 2026)
+
+**Phase 3, select, copy, stretch and the build list:**
+- **`RcpSelection.In`** takes a rail with the tile it is bolted to (the pieces, as `Adopt` last worked them out). A rail on the box's edge bolted to a tile outside it stays. A rail no tile carries still goes by the old rule: both ends inside. A turn goes with its outer curve tile (`RcpPieces.TurnTile`).
+- **Half a divider:** one lane's tile picked and the other's not. The selection holds the divider as a half (`HoldsHalfOf`). `Detach`, called by the board before the first move, turn or mirror (inside that edit's undo step), leaves the divider as the other lane's single rail and adds the picked tile's own. `Settle` makes two rail tiles that land back to back on one seam a divider again, as `Lay` does. A copy of a half is one rail; deleting it leaves the other lane's rail. Two halves picked one after the other are the whole divider.
+- **`RcpStretch`** repeats whole pieces: a rail tile with its rail along the stretch comes with its rail, one with its rail across the stretch (on the line) is repeated as plain floor, and an outer curve or inner corner tile's copies are plain floor. A one-tile turn on a tile no longer stops a stretch; only a turn that is no tile's own (a two-tile turn) does. Fixed on the way: a row stretch reads every piece across the diagonal, and it wasn't turning tiles' `Facing` and `Corner` with it, so an arched or finish tile (kept as laid) came out with its rail on another edge.
+- **`RcpBuildList.For`:** one **Lay the pieces** step, row by row, each run of cells saying what goes there (`RcpBuildList.Describe`: "rail tile, rail north", "outer curve tile, turn across its north-east corner"), custom tiles saying so. Then **Put the loose rail parts on** (end caps, dividers' corner pieces, rail posts, second rails, rails with no tile, turns that aren't pieces), then the markings. Worked out on a copy of the plan, so it reads the same however the plan was made.
+- **The printed sheets** mark each cell R, F, A, OC, IC or B (`RcpBuildList.Code`), with * for a custom tile, when a tile prints 7 mm or more; the parts pages say what the marks mean. That is also next-plan Phase C2.
+
+**Phase 4, stock in pieces:**
+- **`RcpLooseParts`** holds pieces: plain and blank tiles, rail tiles, finish rail tiles, arched rail tiles, outer curve tiles (with their turn rails), inner corner tiles (with their pieces), and the loose straight rails, turn rails, corner pieces and end caps. The old field names are kept, so a settings file still opens.
+- **Old files:** `PiecesVersion` is 0 on a file from before. `Tidied` (run when the settings load) pairs each straight rail with a plain tile, takes each outer curve tile's turn rail and each inner corner tile's piece off the loose counts, keeps what is over, and sets it to 1. A new loose entry (`LooseFor`) is pieces from the start.
+- **Boxed sets** count as the pieces they make (`RcpStock.KitPieces`): straight rails go on the start/finish tiles first, then the straights. More rails than tiles stay loose, and the Stock tab names the box.
+- **`RcpStock.Check`** goes piece for piece. Plain and blank tiles are one line (a plain tile does in place of a blank one), and spare finish rail tiles count towards rail tiles. Second rails and rails with no tile take loose straight rails; a turn that isn't a piece takes a loose turn rail; dividers' ends and rail posts take corner pieces. A line no plan uses and no cupboard has isn't listed.
+- **`RcpInventory.Pieces`** (`RcpPieceCount.Of`) counts the plan in pieces, worked out on a copy.
+- The Stock form, the Stock tab's rows, the printed parts list and Build me a track's cards all read pieces.
+
+**Phase 5, the rest:**
+- **The outer curve tile** is drawn as the quarter circle in the photo (`RcpTrackPainter.QuarterDisc`), its teeth kept on its two straight edges, bare room in the corner beyond the arc. The angled view draws it the same.
+- **The arched rail** (`RcpTrackPainter.ArchOutline`): a straight rail along its edge whose lane side rises to 0.22 of a tile at the middle (from the photo), with three bolts. To every reader of the seams it is still a straight rail, so the lap and the map are unchanged. The angled view raises it in its shape.
+- **The angled view** raises each single rail from the tile it is bolted to (`RailSides`), and single turns a rail's inset inside their tile, as the board does.
+- **The ghost** under the pointer shows the quarter circle and the arch.
+
+**Leftovers:**
+- **The report on the board:** `Report` now says where each rail with no tile is (`RailsWithNoTileAt`) and which turns aren't the club's pieces (`TurnsNotPieces`). The board dashes them in amber and tags them "no tile" and "not a piece", next to the custom tiles' rings.
+- **RCP's starter layouts** (`RcpStockLayout`): the serpentines and the Wide L meet the wall with a one-tile turn either side of the divider (`WallTee`), the T in Asher's Drift photos, instead of two custom tiles. The 50cm Oval goes round a divider down the middle, so both lanes are two tiles wide, instead of an island that left them one tile wide. Every layout still fits its own box. Not redrawn: the two-tile sweepers of the Wide L, the Oblong and the 30cm Oval Wide. Their boxes are built for them, one-tile corners would take more straight rails than the boxes hold, and nothing published says which of RCP's pieces make a two-tile sweep - so the board shows them as "not a piece" rather than guessing.
+
+**Tests:** `RcpRailedTilesRestTests` (16), new piece tests in `RcpStockTests` (6), `RcpPrintPlanTests` (the build list in pieces, custom tiles, the sheet marks) and `RcpStockLayoutTests` (every layout built from pieces). The full suite passes: 7,544 tests.
+
+**Still open:** the two questions below, and the inner corner tile still drawn from the description, not a photo.
 
 ## Answers (Asher, 7 Nov 2026)
 
