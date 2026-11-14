@@ -151,6 +151,31 @@ public sealed class RaceAnalyticsPersonalBestsTests
     }
 
     [Fact]
+    public void Sorting_by_a_heading_keeps_each_pill_on_its_own_track()
+    {
+        // Bug hunt 18: the pills were kept by row index, so a header-click
+        // sort painted one track's pill and dots on another track's row.
+        var shown = StaThread.Run(() =>
+        {
+            using var data = new TempAppData();
+
+            using var page = new PersonalBestsControl(History(), PersonalBestResetStore.Load(), new UndoService());
+            page.SelectDriver("Sam");
+            page.RefreshAll();
+
+            page.Grid.Sort(page.Grid.Columns["track"]!, System.ComponentModel.ListSortDirection.Descending);
+
+            return page.Grid.Rows.Cast<DataGridViewRow>()
+                .Select(r => (Track: r.Cells["track"].Value?.ToString(), Real: r.Cells["real"].Value?.ToString(),
+                    Painted: page.ReadingAt(r.Index)?.Label))
+                .ToList();
+        }, TimeSpan.FromSeconds(30), () => "sorting Personal Bests");
+
+        Assert.Equal(new[] { "Outer Loop", "Club Infield" }, shown.Select(r => r.Track));
+        Assert.All(shown, r => Assert.Equal(r.Real, r.Painted));
+    }
+
+    [Fact]
     public void A_reset_still_leaves_a_row_to_clear_it_from()
     {
         var means = StaThread.Run(() =>
