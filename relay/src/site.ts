@@ -392,6 +392,7 @@ export function socialFrom(value: unknown): readonly SocialLink[] {
 
   const links: SocialLink[] = [];
   const seen = new Set<string>();
+  const seenUrls = new Set<string>();
 
   for (const item of value) {
     const entry = record(item);
@@ -412,11 +413,42 @@ export function socialFrom(value: unknown): readonly SocialLink[] {
       continue;
     }
 
+    // EACH LINK GOES WHERE IT SAYS, ONCE (14 Nov 2026, driver phone plan
+    // item 23). Upstate Mini Z had six icons - Instagram, YouTube, TikTok,
+    // X, Discord and Facebook - all to the same Facebook page, so a driver
+    // tapping "Instagram" got Facebook and a screen reader read the same
+    // link six times. A link whose address isn't its service's own is
+    // dropped, and an address already shown is shown once.
+    if (!socialHostFits(kind, url) || seenUrls.has(url.toLowerCase())) {
+      continue;
+    }
+
+    seenUrls.add(url.toLowerCase());
     seen.add(kind);
     links.push({ kind, label: SOCIAL_LABELS[kind] as string, url });
   }
 
   return links;
+}
+
+/** Each service's own hosts (and their subdomains); a website may be anywhere. */
+const SOCIAL_HOSTS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  facebook: ["facebook.com", "fb.com", "fb.me"],
+  instagram: ["instagram.com", "instagr.am"],
+  youtube: ["youtube.com", "youtu.be"],
+  tiktok: ["tiktok.com"],
+  x: ["x.com", "twitter.com"],
+  discord: ["discord.gg", "discord.com"],
+  whatsapp: ["wa.me", "whatsapp.com"],
+});
+
+/** Whether a link's address is on its service's own host. */
+export function socialHostFits(kind: string, url: string): boolean {
+  const hosts = SOCIAL_HOSTS[kind];
+  if (hosts === undefined) return true;
+  let host = "";
+  try { host = new URL(url).hostname.toLowerCase(); } catch { return false; }
+  return hosts.some((h) => host === h || host.endsWith(`.${h}`));
 }
 
 /** An absolute http(s) address fit for an href, or undefined. */

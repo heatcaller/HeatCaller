@@ -1315,6 +1315,26 @@ Driver phone plan items 4 and 18 (mockup: `mockups/live-phone-board.html`).
   history, so Android's Back walks back through the tabs to Home and only
   then leaves.
 
+### Zoom, text size, high contrast, social links (14 Nov 2026)
+
+Driver phone plan items 6, 12 and 23.
+
+- **Pinch-zoom is back** (it was off from 6 to 14 Nov). What the no-zoom
+  rule guarded against is fixed where it was: a text box or picker under
+  16 px is bumped to 16 px before it takes focus (no jump-zoom on a tap),
+  buttons, tabs and board rows are `touch-action: manipulation` (no
+  double-tap zoom), and "Fit to screen" appears after three seconds zoomed
+  in.
+- **Text size and High contrast**, in every footer, kept per phone
+  (`hg-textsize`, `hg-contrast`; they survive a sign-out). Text is 100, 115
+  or 130%. High contrast is white on black, or black on white for bright
+  sun (a second tap), on any club's look, every pair at least 4.5:1 and text
+  7:1 (`test/driver-phone-e.test.ts` checks). It follows the phone's own
+  Increase Contrast until chosen here.
+- **Social links once, where they say.** A link whose address isn't its
+  service's own (an "Instagram" link to Facebook) is dropped, and an address
+  already shown is shown once.
+
 ### Install, alerts by kind, other apps' browsers (14 Nov 2026)
 
 Driver phone plan items 7, 9 and 16.

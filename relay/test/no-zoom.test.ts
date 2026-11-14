@@ -4,10 +4,14 @@ import { appShellPage, homePage, managePage, schedulePage } from "../src/pages.j
 import { DEFAULT_CONTEXT } from "../src/pages.js";
 
 /**
- * NO PINCH OR DOUBLE-TAP ZOOM (6 Nov 2026, Asher: "don't allow for pinch
- * and zoom on relay"): every kind of relay page carries all three parts.
+ * PINCH-ZOOM IS BACK (14 Nov 2026, driver phone plan item 6, Asher: "you
+ * can add pinch to zoom and high contrast"). From 6 Nov the pages turned
+ * zoom off ("don't allow for pinch and zoom on relay"); now every kind of
+ * relay page allows it, and fixes what the no-zoom rule was for: no text box
+ * under 16px to jump-zoom into, no double-tap zoom on buttons, and Fit to
+ * screen for a page left zoomed in.
  */
-describe("the relay's pages cannot be pinched or double-tapped into zoom", () => {
+describe("the relay's pages can be pinched to zoom", () => {
   const pages: [string, string][] = [
     ["home", homePage("acme-rc", "Acme RC", DEFAULT_CONTEXT)],
     ["schedule", schedulePage("acme-rc", "Acme RC", DEFAULT_CONTEXT)],
@@ -16,11 +20,15 @@ describe("the relay's pages cannot be pinched or double-tapped into zoom", () =>
   ];
 
   for (const [name, html] of pages) {
-    it(`${name}: viewport, touch-action and Safari's gesture events`, () => {
-      assert.match(html, /<meta name="viewport" content="[^"]*maximum-scale=1, user-scalable=no/);
+    it(`${name}: a viewport that allows zoom, and none of the old blocks`, () => {
+      assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">/);
       assert.equal((html.match(/name="viewport"/g) ?? []).length, 1, "one viewport tag");
-      assert.match(html, /html \{ touch-action: pan-x pan-y; \}/);
-      assert.match(html, /addEventListener\('gesturestart', \(e\) => e\.preventDefault\(\)\)/);
+      assert.doesNotMatch(html, /user-scalable=no|maximum-scale=1"/);
+      assert.doesNotMatch(html, /touch-action: pan-x pan-y/);
+      assert.doesNotMatch(html, /addEventListener\('gesturestart', \(e\) => e\.preventDefault\(\)\)/);
+      assert.match(html, /touch-action: manipulation/, "no double-tap zoom on buttons");
+      assert.match(html, /function hcBigEnough\(el\)/, "no box under 16px to jump-zoom into");
+      assert.match(html, /Fit to screen/);
     });
   }
 });

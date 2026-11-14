@@ -1425,6 +1425,32 @@ html.hcoffline .wrap > :not(header):not(.hcoff):not(footer) { opacity: 0.55; fil
 details.lastrace > summary { display: flex; align-items: center; min-height: 48px; padding: 0 16px; cursor: pointer;
   font-weight: 700; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
 details.lastrace[open] > summary { margin-bottom: 10px; }
+/* READABLE OUTDOORS (14 Nov 2026, driver phone plan item 6). Text size per
+   phone - A, A+ (115%), A++ (130%) - and High contrast, in the dark or the
+   light, on any club's look: pure white on black (or black on white), solid
+   borders, and the club's colours swapped for ones that pass 4.5:1 or more.
+   html.hc is more particular than the club's own :root colours, so it wins
+   over them without touching them. "Fit to screen" (pinch-zoom) too. */
+html { font-size: calc(100% * var(--ts, 1)); }
+body { font-size: calc(16px * var(--ts, 1)); }
+html[data-ts="115"] { --ts: 1.15; }
+html[data-ts="130"] { --ts: 1.3; }
+html.hc { --bg: #000000; --surface: #000000; --row-alt: #000000; --text: #FFFFFF; --muted: #E6E6E6; --border: #FFFFFF;
+  --primary: #FF66C4; --on-primary: #000000; --accent: #5CF0FF; --good: #5CFF9E; --bad: #FF8095; --warn: #FFD15C;
+  --tonal: #000000; --on-tonal: #FFFFFF; --ring: #FFFFFF; }
+html.hc.light, html.hc.hcl { --bg: #FFFFFF; --surface: #FFFFFF; --row-alt: #FFFFFF; --text: #000000; --muted: #222222; --border: #000000;
+  --primary: #A3005A; --on-primary: #FFFFFF; --accent: #005F6B; --good: #006B2E; --bad: #A0001A; --warn: #7A5200;
+  --tonal: #FFFFFF; --on-tonal: #000000; --ring: #000000; }
+html.hc .card, html.hc .lc, html.hc .flagbar, html.hc .you, html.hc details, html.hc .hero { border: 2px solid var(--border); }
+html.hc .you { border-color: var(--primary); }
+html.hc #board tr.me td { outline: 2px solid var(--primary); outline-offset: -2px; }
+html.hc .stale, html.hc.hcoffline .wrap > :not(header):not(.hcoff):not(footer) { opacity: 0.8; filter: none; }
+.hcread { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 0; font-size: 0.85rem; color: var(--muted); }
+.hcread button { min-height: 44px; min-width: 44px; padding: 0 12px; font: inherit; font-weight: 700; color: var(--text);
+  background: transparent; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; }
+.hcread button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); border-color: transparent; }
+.hcfit { position: fixed; left: 50%; transform: translateX(-50%); top: calc(12px + var(--sa-t)); z-index: 45; min-height: 44px; padding: 0 18px;
+  border: 0; border-radius: 999px; font: inherit; font-weight: 700; background: var(--primary); color: var(--on-primary); }
 /* A BOARD MADE FOR A PHONE (item 4): four columns under 480 px, the rest a
    tap away, the driver's own row stuck to the edge it scrolls off. */
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -1498,21 +1524,85 @@ body.has-you #follow { display: none; }
 `;
 
 /**
- * NO PINCH OR DOUBLE-TAP ZOOM (6 Nov 2026, Asher: "don't allow for pinch
- * and zoom on relay"): the pages are laid out for a phone already, and a
- * pinch at the track left drivers stuck half-zoomed on a board that is
- * meant to fit. Three parts, because no one of them is enough everywhere:
- * the viewport tag (Android browsers), touch-action on the page (pinch and
- * double-tap on Chrome and newer Safari), and NO_ZOOM_JS (Safari on an
- * iPhone, which ignores user-scalable=no by design). maximum-scale=1 also
- * stops Safari zooming into a box with small text the moment it is tapped.
+ * PINCH-ZOOM IS BACK (14 Nov 2026, driver phone plan item 6, Asher: "you
+ * can add pinch to zoom and high contrast"). From 6 Nov to 14 Nov the pages
+ * turned zoom off ("don't allow for pinch and zoom on relay"), because a
+ * pinch at the track left drivers stuck half-zoomed on a board meant to
+ * fit - and that shut out everybody who needs bigger text. The viewport
+ * tag allows zoom again, and the old problems are fixed where they were:
+ *  - Safari zooming into a box with small text the moment it is tapped:
+ *    every text box and picker is at least 16px (VIEWPORT_JS);
+ *  - a fast double tap on a button zooming: buttons, tabs and board rows
+ *    are touch-action: manipulation, while a pinch anywhere still works;
+ *  - stuck half-zoomed: "Fit to screen" shows after three seconds zoomed in
+ *    with no touch, and puts the page back in one tap.
+ * The names stay (NO_ZOOM_HEAD, NO_ZOOM_JS) so every page that used them
+ * gets the change.
  */
-const NO_ZOOM_HEAD = `<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<style>html { touch-action: pan-x pan-y; }</style>`;
+const NO_ZOOM_HEAD = `<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>.go, .btn, .page, .rtab, .share, nav a, nav button, #board tr, .me-chip, summary { touch-action: manipulation; }</style>`;
 
 const NO_ZOOM_JS = `
-document.addEventListener('gesturestart', (e) => e.preventDefault());
-document.addEventListener('gesturechange', (e) => e.preventDefault());
+// No box smaller than 16px when it is tapped (see PINCH-ZOOM IS BACK):
+// bumped before it takes focus, so Safari has nothing to zoom into. A box
+// already bigger (the PIN box) is left as it is.
+function hcTypeable(el) {
+  if (!el || !el.tagName) return false;
+  const tag = String(el.tagName).toLowerCase();
+  if (tag === 'select' || tag === 'textarea') return true;
+  if (tag !== 'input') return false;
+  const type = String(el.type || 'text').toLowerCase();
+  return ['checkbox', 'radio', 'range', 'button', 'submit', 'reset', 'file', 'color', 'hidden', 'image'].indexOf(type) < 0;
+}
+function hcBigEnough(el) {
+  try {
+    if (hcTypeable(el) && parseFloat(getComputedStyle(el).fontSize) < 16) el.style.fontSize = '16px';
+  } catch (e) { /* left as it is */ }
+}
+try {
+  document.addEventListener('pointerdown', (e) => hcBigEnough(e.target), true);
+  document.addEventListener('focusin', (e) => hcBigEnough(e.target), true);
+} catch (e) { /* no events here */ }
+
+// FIT TO SCREEN: three seconds zoomed in with no touch, and a button puts
+// the page back at its own size - briefly asking the viewport for no zoom,
+// then allowing it again.
+(function () {
+  try {
+    const vv = window.visualViewport;
+    if (!vv || typeof vv.addEventListener !== 'function') return;
+    let quiet = 0;
+    let button = null;
+    const hide = () => { if (button) { button.remove(); button = null; } };
+    const show = () => {
+      if (button || vv.scale <= 1.05) return;
+      button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'go hcfit';
+      button.textContent = 'Fit to screen';
+      button.addEventListener('click', () => {
+        const meta = document.querySelector('meta[name=viewport]');
+        if (meta) {
+          const was = meta.getAttribute('content') || '';
+          meta.setAttribute('content', was + ', maximum-scale=1');
+          setTimeout(() => meta.setAttribute('content', was), 400);
+        }
+        if (typeof hcCount === 'function') hcCount('zoom_fit_used');
+        hide();
+      });
+      document.body.appendChild(button);
+    };
+    const moved = () => {
+      clearTimeout(quiet);
+      if (vv.scale <= 1.05) { hide(); return; }
+      quiet = setTimeout(show, 3000);
+    };
+    vv.addEventListener('resize', moved);
+    vv.addEventListener('scroll', moved);
+    document.addEventListener('touchstart', () => clearTimeout(quiet), { passive: true });
+    document.addEventListener('touchend', moved, { passive: true });
+  } catch (e) { /* no button */ }
+})();
 `;
 
 // Portrait only (7 Nov 2026, Asher: "disable landscape mode web app wide"):
@@ -1898,6 +1988,60 @@ function hcOfferReload() {
   });
   document.body.appendChild(b);
 }
+
+// READABLE OUTDOORS (14 Nov 2026, driver phone plan item 6): text size and
+// High contrast, per phone (they stay through a sign-out - they are the
+// phone's, not a driver's). High contrast follows the phone's own "Increase
+// contrast" until it is chosen here. In a club's dark look, High contrast
+// is light-on-dark; tapping it again gives the light version for bright
+// sun; a third tap goes back to the club's own look.
+const HC_TS_KEY = 'hg-textsize';
+const HC_HC_KEY = 'hg-contrast';
+function hcReading() {
+  let ts = '100';
+  let hc = '';
+  try { ts = localStorage.getItem(HC_TS_KEY) || '100'; hc = localStorage.getItem(HC_HC_KEY) || ''; } catch (e) { /* the club's look */ }
+  if (hc === '') {
+    try { if (window.matchMedia && window.matchMedia('(prefers-contrast: more)').matches) hc = 'high'; } catch (e) { /* not asked */ }
+  }
+  return { ts: ['100', '115', '130'].indexOf(ts) >= 0 ? ts : '100', hc: hc };
+}
+function hcApplyReading() {
+  try {
+    const r = hcReading();
+    const d = document.documentElement;
+    if (r.ts === '100') d.removeAttribute('data-ts'); else d.setAttribute('data-ts', r.ts);
+    d.classList.toggle('hc', r.hc === 'high' || r.hc === 'light');
+    d.classList.toggle('hcl', r.hc === 'light');
+    const box = document.getElementById('hcread');
+    if (!box) return;
+    box.querySelectorAll('[data-ts]').forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-ts') === r.ts)));
+    const hcb = box.querySelector('[data-hc]');
+    if (hcb) {
+      hcb.setAttribute('aria-pressed', String(r.hc === 'high' || r.hc === 'light'));
+      hcb.textContent = r.hc === 'high' ? 'High contrast: dark' : r.hc === 'light' ? 'High contrast: light' : 'High contrast';
+    }
+  } catch (e) { /* the club's look */ }
+}
+try {
+  document.addEventListener('click', (e) => {
+    const t = e.target && typeof e.target.closest === 'function' ? e.target.closest('#hcread button') : null;
+    if (!t) return;
+    const r = hcReading();
+    try {
+      if (t.hasAttribute('data-ts')) {
+        localStorage.setItem(HC_TS_KEY, t.getAttribute('data-ts'));
+        if (t.getAttribute('data-ts') !== '100') hcCount('text_size_' + t.getAttribute('data-ts'));
+      } else {
+        const next = r.hc === '' || r.hc === 'club' ? 'high' : r.hc === 'high' ? 'light' : 'club';
+        localStorage.setItem(HC_HC_KEY, next);
+        if (next !== 'club') hcCount('contrast_high');
+      }
+    } catch (err) { /* this page only */ }
+    hcApplyReading();
+  });
+} catch (e) { /* no events here */ }
+hcApplyReading();
 
 // INSIDE ANOTHER APP'S BROWSER (14 Nov 2026, driver phone plan item 16).
 // Clubs share their links on Facebook, and tapping one opens these pages
@@ -3151,7 +3295,7 @@ ${overrides}${sunset ? HC_SUNSET_STYLE : ""}
     ${subTab("badges", "Achievements")}
   </nav>` : ""}
   ${page.body}
-  <footer><span id="stamp">&nbsp;</span>${links}<span class="tip">Tap any driver's name to follow them on every page.</span><a class="hcmark" href="https://heatcaller.com" aria-label="What's HeatCaller?" data-hc-about>${HC_SUN}${HC_WORD}</a></footer>
+  <footer><span id="stamp">&nbsp;</span>${links}<span class="tip">Tap any driver's name to follow them on every page.</span><span class="hcread" id="hcread" role="group" aria-label="Reading"><span>Text</span><button type="button" data-ts="100" aria-label="Text size normal">A</button><button type="button" data-ts="115" aria-label="Text size larger">A+</button><button type="button" data-ts="130" aria-label="Text size largest">A++</button><button type="button" data-hc="1">High contrast</button></span><a class="hcmark" href="https://heatcaller.com" aria-label="What's HeatCaller?" data-hc-about>${HC_SUN}${HC_WORD}</a></footer>
 </div>
 ${aboutSheet(name)}
 <div id="follow" class="follow" hidden></div>
