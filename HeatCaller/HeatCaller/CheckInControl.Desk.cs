@@ -196,8 +196,11 @@ public sealed partial class CheckInControl
         RefreshDeskCard();
     }
 
-    /// <summary>A desk change to the check-in marks - not to be logged as a phone's.</summary>
-    private void RefreshMarksFromDesk()
+    /// <summary>
+    /// A desk change to the check-in marks - not to be logged as a phone's.
+    /// Set Up Tonight's Drivers step calls it too: its ticks are the desk's.
+    /// </summary>
+    public void RefreshMarksFromDesk()
     {
         _deskMarking = true;
 
@@ -563,6 +566,17 @@ internal sealed class DeskLogView : Control
     }
 
     public IReadOnlyList<Entry> Entries => _entries;
+
+    /// <summary>Takes the newest line off when it is this one - a change put straight back.</summary>
+    public void RemoveNewest(string who, string what)
+    {
+        if (_entries.Count > 0 && _entries[0].Who == who && _entries[0].What == what)
+        {
+            _entries.RemoveAt(0);
+            AccessibleName = _entries.Count > 0 ? $"{_entries[0].Who} {_entries[0].What}" : null;
+            Invalidate();
+        }
+    }
 
     public void Add(Entry entry)
     {
