@@ -1425,6 +1425,13 @@ html.hcoffline .wrap > :not(header):not(.hcoff):not(footer) { opacity: 0.55; fil
 details.lastrace > summary { display: flex; align-items: center; min-height: 48px; padding: 0 16px; cursor: pointer;
   font-weight: 700; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
 details.lastrace[open] > summary { margin-bottom: 10px; }
+/* RACING TONIGHT? on Home (item 22), and Me's email link (item 17). */
+.rtw-steps { margin: 8px 0 0; padding-left: 22px; }
+.rtw-steps li { margin: 10px 0; }
+.rtw-steps .more { display: inline-flex; align-items: center; min-height: 44px; margin-left: 4px; }
+.mn-mail { margin-top: 14px; }
+.mn-mail > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; color: var(--accent); }
+.mn-mail input { font-size: 16px; }
 /* THE PAGES AFTER A DEPLOY (item 21): the kit's primary, above the bar. */
 .hcnew { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + var(--sa-b)); z-index: 40;
          min-height: 44px; padding: 0 18px; border: 0; border-radius: 999px; font: inherit; font-weight: 700;
@@ -2077,8 +2084,74 @@ function meCode() {
   } catch (e) { return ''; }
 }
 
-function meRemember(code) {
-  try { if (/^[0-9a-f]{20}$/.test(String(code))) localStorage.setItem(ME_KEY, String(code)); } catch (e) { /* asked again next time */ }
+// SEVERAL DRIVERS ON ONE PHONE (14 Nov 2026, driver phone plan item 8). A
+// parent with two kids racing, or a driver with a second car under another
+// name, had to sign out and back in each time. ME_KEY is still the driver
+// shown now, so everything that reads meCode() works as it did; beside it,
+// the drivers this phone has signed in (up to five), each with the name
+// their night gave, newest first. Only ever badge codes the relay has
+// answered with a night, as ME_KEY always was.
+const ME_LIST_KEY = 'hg-me-list-' + CLUB;
+const ME_MAX = 5;
+
+function meDrivers() {
+  try {
+    const list = JSON.parse(localStorage.getItem(ME_LIST_KEY) || '[]');
+    const seen = {};
+    return (Array.isArray(list) ? list : [])
+      .filter((d) => d && typeof d.c === 'string' && /^[0-9a-f]{20}$/.test(d.c) && !seen[d.c] && (seen[d.c] = true))
+      .map((d) => ({ c: d.c, n: typeof d.n === 'string' ? d.n.slice(0, 60) : '' }))
+      .slice(0, ME_MAX);
+  } catch (e) { return []; }
+}
+
+function meKeepDrivers(list) {
+  try {
+    if (list.length > 0) localStorage.setItem(ME_LIST_KEY, JSON.stringify(list.slice(0, ME_MAX)));
+    else localStorage.removeItem(ME_LIST_KEY);
+  } catch (e) { /* this phone keeps only the one */ }
+}
+
+// STAYING SIGNED IN (14 Nov 2026, driver phone plan item 17). Safari clears
+// a site's storage after a week without a visit unless it is on the Home
+// Screen, and club nights are often weekly - so a remembered driver could
+// be gone by the next race night with no word why. After a sign-in this
+// phone asks the browser to keep its storage (Chrome usually agrees; on an
+// iPhone the Home Screen is what really keeps it), and keeps a marker that
+// is not the code, so Me can say "this phone forgot you" when the code went
+// but the marker didn't. Signing out takes both.
+const ME_WAS_KEY = 'hg-me-was-' + CLUB;
+let mePersistAsked = false;
+
+function meKeepStorage() {
+  try { localStorage.setItem(ME_WAS_KEY, '1'); } catch (e) { /* not noted */ }
+  if (mePersistAsked) return;
+  mePersistAsked = true;
+  try { if (navigator.storage && typeof navigator.storage.persist === 'function') navigator.storage.persist().catch(() => {}); } catch (e) { /* the browser decides */ }
+}
+
+// Whether this phone signed a driver in once and has since forgotten them
+// by itself (storage cleared), rather than by a sign-out.
+function meForgotten() {
+  try { return meCode() === '' && localStorage.getItem(ME_WAS_KEY) === '1'; } catch (e) { return false; }
+}
+
+function meRemember(code, name) {
+  if (!/^[0-9a-f]{20}$/.test(String(code))) return;
+  try { localStorage.setItem(ME_KEY, String(code)); } catch (e) { /* asked again next time */ }
+  meKeepStorage();
+  const list = meDrivers();
+  const was = list.find((d) => d.c === code);
+  const one = { c: String(code), n: typeof name === 'string' && name.trim() !== '' ? name.trim().slice(0, 60) : (was ? was.n : '') };
+  const rest = list.filter((d) => d.c !== code);
+  // A sixth driver pushes out the one signed in longest ago, alerts and all.
+  while (rest.length >= ME_MAX) { const old = rest.pop(); meStopPush(old.c); }
+  meKeepDrivers([one].concat(rest));
+}
+
+// A driver's first name, for an alert's title on a phone with more than one.
+function meFirstName(name) {
+  return String(name || '').trim().split(/\\s+/)[0].slice(0, 20);
 }
 
 function meForget() {
@@ -2117,12 +2190,29 @@ function meStopPush(code) {
   } catch (e) { /* the relay drops a phone the push service says is gone */ }
 }
 
+// Signs one driver out of this phone. With another driver still on it, that
+// one becomes the driver shown, and their code is answered (''  when none).
 function meSignOut(code) {
   meStopPush(code);
-  meForget();
+  const others = meDrivers().filter((d) => d.c !== code);
+  meKeepDrivers(others);
+  if (others.length > 0) {
+    try { localStorage.setItem(ME_KEY, others[0].c); } catch (e) { /* asked again */ }
+  } else {
+    meForget();
+    try { localStorage.removeItem(ME_WAS_KEY); } catch (e) { /* nothing was kept */ }
+  }
   for (const k of ME_LEFTOVERS) {
     try { localStorage.removeItem(k); } catch (e) { /* nothing was kept */ }
   }
+  // The pages' own copies of what the relay answered, for when there is no
+  // signal (14 Nov 2026): forgotten with the rest.
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf(HC_LAST) === 0) localStorage.removeItem(k);
+    }
+  } catch (e) { /* they age out by themselves */ }
   try { sessionStorage.removeItem('hg-night-pass-' + CLUB); } catch (e) { /* nothing was kept */ }
   try {
     const pin = 'hg-pin-' + CLUB;
@@ -2139,6 +2229,17 @@ function meSignOut(code) {
     }
   } catch (e) { /* the copies age out by themselves */ }
   try { if (/^[0-9a-f]{20}$/.test(String(code))) sessionStorage.setItem(ME_OUT_KEY, String(code)); } catch (e) { /* not noted */ }
+  return others.length > 0 ? others[0].c : '';
+}
+
+// Everyone off this phone: each driver's alerts stopped, then the lot forgotten.
+function meSignOutAll() {
+  const list = meDrivers();
+  const current = meCode();
+  for (const d of list) if (d.c !== current) meStopPush(d.c);
+  meKeepDrivers([]);
+  meSignOut(current || (list[0] ? list[0].c : ''));
+  meForget();
 }
 
 // Whether this tab signed out of this code and is being taken back to it -
@@ -2817,7 +2918,7 @@ ${preview}${twitter}
 <style>${STYLE}</style>
 ${overrides}${sunset ? HC_SUNSET_STYLE : ""}
 </head>
-<body data-club="${club}" data-club-name="${name}" data-build="${PAGES_BUILD}"${look.guide.length > 0 ? ` data-guide="${escapeHtml(JSON.stringify(look.guide))}"` : ""}${look.updates.length > 0 ? ` data-updates="${escapeHtml(JSON.stringify(look.updates))}"` : ""}>${sunset ? HC_SUNSET : ""}
+<body data-club="${club}" data-club-name="${name}" data-build="${PAGES_BUILD}"${look.emailLink ? ' data-email-link="1"' : ""}${look.guide.length > 0 ? ` data-guide="${escapeHtml(JSON.stringify(look.guide))}"` : ""}${look.updates.length > 0 ? ` data-updates="${escapeHtml(JSON.stringify(look.updates))}"` : ""}>${sunset ? HC_SUNSET : ""}
 <div class="wrap">
   <header${page.active === "live" ? ' class="onair-room"' : ""}>
     <div class="hcname">${brand}</div>
@@ -9033,6 +9134,28 @@ function nextNightComingHref() {
   return href + (href.indexOf('#') >= 0 ? '&' : '#') + 's=tonight&go=coming';
 }
 
+// RACING TONIGHT? (14 Nov 2026, driver phone plan item 22). Home's "New
+// here?" card explains the club; it didn't say what to do tonight. On a
+// race night, for a phone with no driver signed in, three steps lead off
+// Home: sign in, check in at the track, turn on alerts. Once a driver is
+// signed in the card goes - their own page has the rest.
+function drawRacingTonight(prog) {
+  const at = document.getElementById('rtw');
+  if (!at) return;
+  const p = prog && !prog.missing && prog.body ? prog.body.body || {} : null;
+  const ev = p && p.event ? p.event : null;
+  const tonight = !!(ev && ev.startedUtc && hcIsTonight(ev.startedUtc));
+  if (!tonight || meCode() !== '') { at.innerHTML = ''; return; }
+  const me = BASE + '/mynight';
+  at.innerHTML = '<section class="lc rtw"><h3>Racing tonight?</h3>'
+    + (ev.name ? '<p class="note">' + esc(ev.name) + ' is on today.</p>' : '')
+    + '<ol class="rtw-steps">'
+    + '<li><b>Sign in</b> with the PIN the club emailed you, or the link on your badge. <a class="more" href="' + me + '">Sign in &rarr;</a></li>'
+    + '<li><b>Check in</b> on your page once you\\u2019re at the track, so the desk puts you in the heats.</li>'
+    + '<li><b>Turn on alerts</b> on your page to hear when your race is next. On an iPhone, add this page to your Home Screen first.</li>'
+    + '</ol></section>';
+}
+
 async function load() {
   const [state, prog, pre, nn] = await Promise.all([
     grab('/snapshot/state').catch(() => null),
@@ -9045,6 +9168,7 @@ async function load() {
   // meeting is exactly who wants to know about the next one.
   const nnAt = document.getElementById('nn');
   if (nnAt) nnAt.innerHTML = nextNightHtml(nn);
+  drawRacingTonight(prog);
 
   if (state === null && prog === null) {
     now.innerHTML = '<p class="note bad">Can’t reach the club’s live pages right now. This page keeps trying.</p>';
@@ -9407,6 +9531,10 @@ export function homePage(club: string, clubName: string, context: PageContext = 
       // The club's next race night, or that it is off (12 Nov 2026, setup
       // plan D13), right under the club's updates: filled by load().
       '<div id="nn"></div>' +
+      // Racing tonight? (14 Nov 2026, driver phone plan item 22): three steps
+      // for somebody who has just scanned the poster, filled in by HOME_JS.
+      // Above Your next race, which only a signed-in phone ever shows.
+      '<div id="rtw"></div>' +
       '<section class="lc" id="mine" hidden></section>' +
       `<div id="now" data-when="${escapeHtml(n.when)}"><p class="note">Loading&hellip;</p></div>` +
       // No "Check in: tap Me and type your PIN" line any more (5 Nov 2026,
@@ -11816,7 +11944,7 @@ function pushOn() {
         if (!alertsOn) { try { await sub.unsubscribe(); } catch (e) { /* gone already */ } }
         return;
       }
-      const a = await post('/push/subscribe', { id: CODE, sub: sub.toJSON() });
+      const a = await post('/push/subscribe', { id: CODE, sub: sub.toJSON(), label: pushLabel() });
       if (run !== pushRun) return;
       pushState = a.status === 200 ? 'on' : 'failed';
     } catch (e) {
@@ -11853,7 +11981,7 @@ async function pushResume() {
     const reg = await navigator.serviceWorker.getRegistration(workerUrl());
     const sub = reg ? await reg.pushManager.getSubscription() : null;
     if (!sub) { pushState = ''; return; }
-    const a = await post('/push/subscribe', { id: CODE, sub: sub.toJSON() });
+    const a = await post('/push/subscribe', { id: CODE, sub: sub.toJSON(), label: pushLabel() });
     pushState = a.status === 200 ? 'on' : 'failed';
   } catch (e) {
     pushState = 'failed';
@@ -12530,6 +12658,7 @@ async function loadCheckIn() {
   } else if (a.status === 200 && a.body.driver) {
     ci.shown = true;
     ci.on = a.body.driver.checkedIn === true;
+    ci.event = typeof a.body.event === 'string' ? a.body.event : '';
     if (a.body.firstNight === true) firstNight = true;
   }
 
@@ -15126,7 +15255,8 @@ function meRemembered(code) {
   // Signed out of in this tab and come back to by Back or a reload: the
   // PIN again, never remembered again.
   if (meSignedOut(code)) { meToPin(); return; }
-  meRemember(code);
+  // With the name the night gives, so the phone can say who is on it (item 8).
+  meRemember(code, typeof night === 'object' && night && typeof night.driver === 'string' ? night.driver : '');
   if (meCode() !== code) return;
   meSignedInButton();
 }
@@ -15135,33 +15265,76 @@ function meRemembered(code) {
 // signed in button you should get a popup asking to confirming signing
 // out"). Top of Me, on every space, once this phone remembers the night it
 // is showing - the one way to sign out on Me since the foot's link went
-// (7 Nov 2026).
+// (7 Nov 2026). With more than one driver on the phone (14 Nov 2026, driver
+// phone plan item 8) it says whose page this is, and its sheet switches
+// between them, adds another, and signs one or all of them out.
 function meSignedInButton() {
   const at = document.getElementById('mesi');
   if (!at) return;
-  if (at.getAttribute('data-on') !== '1') {
-    const b = tapButton('Signed in', 'me-chip ok', meAskSignOut);
-    b.setAttribute('aria-label', 'Signed in on this phone. Tap to sign out.');
+  const many = meDrivers().length > 1;
+  const mine = meDrivers().find((d) => d.c === CODE);
+  const words = many && mine && mine.n ? meFirstName(mine.n) + ' \\u25BE' : 'Signed in';
+  let b = at.querySelector('button');
+  if (!b) {
+    b = tapButton(words, 'me-chip ok', meAskSignOut);
     at.appendChild(b);
     at.setAttribute('data-on', '1');
+  } else if (b.textContent !== words) {
+    b.textContent = words;
   }
+  b.setAttribute('aria-label', many ? 'Signed in as ' + (mine && mine.n ? mine.n : 'this driver') + '. Tap to switch driver or sign out.' : 'Signed in on this phone. Tap to sign out.');
   at.hidden = false;
+}
+
+// Whose alerts these are, for a phone with more than one driver on it
+// (item 8): their first name goes before each alert's title. Nothing for
+// a phone with one, whose alerts read as they always did.
+function pushLabel() {
+  if (meDrivers().length < 2) return undefined;
+  const name = meFirstName(typeof night === 'object' && night && night.driver);
+  return name === '' ? undefined : name;
+}
+
+// Opens another driver's page on this phone: they become the one shown.
+function meSwitchTo(code) {
+  meRemember(code);
+  const to = '/c/' + encodeURIComponent(CLUB) + '/night#d=' + code;
+  try { location.replace(to); } catch (e) { location.href = to; }
 }
 
 function meAskSignOut() {
   const code = CODE;
-  const out = () => { meSignOut(code); meToPin(); };
-  const words = 'This phone forgets you: your night, your PIN sign-in and everything Me kept here. '
-    + 'To open Me again on this phone, a personal PIN is needed.';
+  const list = meDrivers();
+  const others = list.filter((d) => d.c !== code);
+  const mine = list.find((d) => d.c === code);
+  const name = mine && mine.n ? meFirstName(mine.n) : '';
+  // Signed out with another driver still on the phone: their page, not the PIN.
+  const after = (next) => { if (next) meSwitchTo(next); else meToPin(); };
+  const out = () => after(meSignOut(code));
+  const words = 'This phone forgets ' + (name || 'you') + ': ' + (name ? 'their' : 'your') + ' night, PIN sign-in and everything Me kept here. '
+    + 'To open ' + (name ? 'their' : 'your') + ' page again on this phone, a personal PIN is needed.';
   if (!document.getElementById('me-sheet') || typeof meOpenSheet !== 'function') {
     let yes = false;
     try { yes = window.confirm('Sign out on this phone? ' + words); } catch (e) { yes = false; }
     if (yes) out();
     return;
   }
-  meOpenSheet('Sign out on this phone?', (body) => {
+  meOpenSheet(others.length > 0 ? 'On this phone' : 'Sign out on this phone?', (body) => {
+    if (others.length > 0) {
+      for (const d of others) {
+        body.appendChild(tapButton('Switch to ' + (d.n || 'another driver'), 'go quiet', () => meSwitchTo(d.c)));
+      }
+    }
+    if (list.length < ME_MAX) {
+      const add = el('a', 'more', '+ Add a driver to this phone');
+      add.setAttribute('href', '/c/' + encodeURIComponent(CLUB) + '/mynight?add=1');
+      body.appendChild(add);
+    }
     body.appendChild(el('p', 'note', words));
-    body.appendChild(tapButton('Sign out', 'go', out));
+    body.appendChild(tapButton(others.length > 0 && name ? 'Sign out ' + name : 'Sign out', 'go', out));
+    if (others.length > 0) {
+      body.appendChild(tapButton('Sign out everyone on this phone', 'go quiet', () => { meSignOutAll(); meToPin(); }));
+    }
     body.appendChild(tapButton('Stay signed in', 'go quiet', meCloseSheet));
   }, true);
 }
@@ -15277,7 +15450,10 @@ const NIGHT_PASS_KEY = 'hg-night-pass-' + CLUB;
 
 // A driver this phone remembers goes straight to their night (29 Oct 2026,
 // relay navigation round 2). replace, so Back does not land here again.
-const REMEMBERED = meCode();
+// Not when another driver is being added to this phone (?add=1, 14 Nov
+// 2026, driver phone plan item 8): the PIN box, for them.
+const ADDING = /[?&]add=1(&|$)/.test(location.search);
+const REMEMBERED = ADDING ? '' : meCode();
 if (REMEMBERED) {
   const there = '/c/' + encodeURIComponent(CLUB) + '/night#d=' + REMEMBERED;
   try { location.replace(there); } catch (e) { location.href = there; }
@@ -15318,15 +15494,71 @@ function trouble(a) {
   const said = typeof b.error === 'string' && b.error.trim() !== '' ? b.error.trim() : '';
   if (a.status === 200 && b.mode === 'staff') return "That is the club's desk PIN, not your own. Use the personal PIN the club sent you.";
   if (a.status === 403) return said || 'That PIN is not right.';
-  if (a.status === 409) return 'Signing in with your PIN only works while the club has online check-in open. Use the link on your check-in badge or in the club\\'s email, or ask at the desk.';
+  if (a.status === 409) return 'Signing in with your PIN is switched off at this club just now. Use the link on your check-in badge or in the club\\'s email, or ask at the desk.';
   if (a.status === 429) return said || 'Too many tries. Wait a few minutes and try again.';
   return 'The club could not answer just now. Try again in a minute.';
+}
+
+// EMAIL ME A LINK (14 Nov 2026, driver phone plan item 17), only where the
+// club has turned it on: the laptop emails the driver their own page's
+// link if the address is one of its drivers'. The same answer either way.
+function emailLinkBox() {
+  const d = document.createElement('details');
+  d.className = 'mn-mail';
+  const s = document.createElement('summary');
+  s.textContent = 'Email me a link to my page';
+  d.appendChild(s);
+  const label = el('label', 'f', 'The email the club has for you');
+  const input = document.createElement('input');
+  input.type = 'email';
+  input.setAttribute('autocomplete', 'email');
+  input.setAttribute('inputmode', 'email');
+  input.setAttribute('maxlength', '254');
+  label.appendChild(input);
+  d.appendChild(label);
+  const said = el('p', 'note', '');
+  said.setAttribute('role', 'status');
+  const send = el('button', 'go quiet', 'Email me the link');
+  send.type = 'button';
+  send.addEventListener('click', async () => {
+    const email = String(input.value || '').trim();
+    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) { said.textContent = 'That doesn\\u2019t look like an email address.'; return; }
+    send.disabled = true;
+    said.textContent = 'Sending\\u2026';
+    let a = null;
+    try {
+      const r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/signin/email', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: email }), cache: 'no-store',
+      });
+      let b = {};
+      try { b = await r.json(); } catch (e) { /* empty */ }
+      a = { status: r.status, body: b || {} };
+    } catch (e) { a = null; }
+    send.disabled = false;
+    if (a !== null && a.status === 200) { said.textContent = String(a.body.message || 'If that address is on the club\\u2019s list, a link is on its way.'); input.value = ''; return; }
+    if (a !== null && a.status === 429) { said.textContent = 'That\\u2019s a few asks already. Try again in an hour, or ask at the desk.'; return; }
+    if (a !== null && a.status === 400) { said.textContent = 'That doesn\\u2019t look like an email address.'; return; }
+    if (a !== null && a.status === 404) { said.textContent = 'The club isn\\u2019t sending links just now. Ask at the desk.'; return; }
+    said.textContent = 'That didn\\u2019t go through just now. Try again in a moment.';
+  });
+  d.appendChild(send);
+  d.appendChild(said);
+  return d;
 }
 
 function draw(message) {
   box.textContent = '';
   const part = el('div', 'su');
-  part.appendChild(el('p', 'when', 'Type the personal check-in PIN the club emailed you. It checks you in for tonight and opens your own night: your races, your report card and, once you are racing, your live card.'));
+  // A phone that forgot its driver by itself (item 17): say so, and how back.
+  if (!ADDING && typeof meForgotten === 'function' && meForgotten()) {
+    if (typeof hcCount === 'function') hcCount('storage_forgot');
+    part.appendChild(el('p', 'note bad', 'This phone forgot you - browsers clear what a page keeps after a while. Sign in again with your PIN'
+      + (document.body.dataset.emailLink === '1' ? ', or have a link emailed to you below.' : ', or use the link on your badge.')
+      + ' Adding the club\\u2019s page to your Home Screen keeps you signed in.'));
+  }
+  part.appendChild(el('p', 'when', ADDING
+    ? 'Adding another driver to this phone: type their personal PIN. You can switch between drivers from Signed in at the top of Me.'
+    : 'Type the PIN the club emailed you to open your own page on this phone: your races, your report card and, once you are racing, your live card. It doesn\\u2019t check you in - you do that on your page when you\\u2019re at the track.'));
 
   const label = el('label', 'f', 'Your personal PIN');
   const input = document.createElement('input');
@@ -15341,7 +15573,7 @@ function draw(message) {
   const said = el('p', 'note bad', message || '');
   said.setAttribute('role', 'status');
 
-  const button = el('button', 'go', 'Check in');
+  const button = el('button', 'go', 'Sign in');
   button.type = 'button';
   button.addEventListener('click', async () => {
     const p = String(input.value || '').trim();
@@ -15368,22 +15600,12 @@ function draw(message) {
       // Signed in again with the PIN: an earlier sign-out here is over.
       try { sessionStorage.removeItem(ME_OUT_KEY); } catch (e) { /* the badge link clears it too */ }
 
-      // A RIGHT PIN CHECKS THEM IN (30 Oct 2026, asked for by Asher: "On
-      // the relays me tab; entering in a correct pin should check you in.
-      // No need to link to the separate checking page"). PIN sign-in only
-      // answers while online check-in is open, so the same tap the check-in
-      // page makes goes with the pass the PIN just earned. A driver already
-      // checked in is left as they are. A tap that does not go through
-      // still opens their night, whose own Check in button can try again.
-      said.textContent = 'Checking you in\u2026';
-      let inNow = b.driver.checkedIn === true;
-      if (!inNow) {
-        let t = null;
-        try { t = await post('tap', { id: code, pass: pass, wanted: true }); } catch (e) { t = null; }
-        inNow = t !== null && t.status === 200 && t.body.checkedIn === true;
-      }
-
-      said.textContent = inNow ? 'You are checked in. Opening your night\u2026' : 'Opening your night\u2026';
+      // SIGNING IN, NOT CHECKING IN (14 Nov 2026, driver phone plan item
+      // 2, replacing 30 Oct's "a correct pin should check you in"). Looking
+      // at your own page on a Tuesday, from home, or on a night you're not
+      // racing should never put you in the heats. Check-in is its own
+      // button on the night, which asks "Are you at the track?" first.
+      said.textContent = 'Signed in. Opening your page\u2026';
       go('/c/' + encodeURIComponent(CLUB) + '/night#d=' + code);
       return;
     }
@@ -15394,6 +15616,7 @@ function draw(message) {
   part.appendChild(button);
   part.appendChild(said);
   part.appendChild(el('p', 'when', 'No personal PIN? Open your night with the link on your check-in badge or in the club\\'s email - or ask at the timing desk.'));
+  if (document.body.dataset.emailLink === '1') part.appendChild(emailLinkBox());
   part.appendChild(el('p', 'when', 'This phone remembers you once your night opens, until you sign out at the bottom of it.'));
   box.appendChild(part);
 }
@@ -15408,9 +15631,10 @@ export function myNightPage(club: string, clubName: string, context: PageContext
     clubName,
     active: "mynight",
     heading: "My night",
-    sub: "Check in and see your own races from the timing desk - with your personal PIN.",
-    // No link to the check-in page (30 Oct 2026, asked for by Asher): a
-    // right PIN here checks the driver in itself.
+    sub: "See your own races from the timing desk - with your personal PIN.",
+    // No link to the check-in page (30 Oct 2026, asked for by Asher). Since
+    // 14 Nov 2026 a right PIN here signs the driver in only; checking in is
+    // the button on their night (driver phone plan item 2).
     body: '<div id="mn"><p class="note">Loading&hellip;</p></div>',
     script: MYNIGHT_JS,
     noindex: true,

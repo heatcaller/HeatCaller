@@ -6,11 +6,13 @@ import { ACME_TOKEN, call, start, type Harness } from "./helpers.js";
 import { FakePage, pageParts, type Answerer } from "./driverexp-rp1-fakepage.js";
 
 /**
- * A RIGHT PIN ON ME CHECKS THE DRIVER IN (30 Oct 2026, asked for by Asher:
- * "On the relays me tab; entering in a correct pin should check you in. No
- * need to link to the separate checking page"). The PIN signs in as before,
- * then the page makes the check-in page's own tap with the pass the PIN
- * earned, and opens their night.
+ * A RIGHT PIN ON ME SIGNS THE DRIVER IN, AND CHECKS NOBODY IN (14 Nov 2026,
+ * driver phone plan item 2). From 30 Oct to 14 Nov a right PIN here also
+ * checked the driver in (Asher: "entering in a correct pin should check you
+ * in"); the plan Asher approved split the two, because looking at your own
+ * page on a Tuesday, from home, or on a night you're not racing should
+ * never put you in the heats. Check-in is now its own button on the night,
+ * which asks "Are you at the track?" first.
  */
 
 const API = "/api/v1/c/acme-rc";
@@ -18,9 +20,9 @@ const SAM = "0123456789abcdef0123";
 const SAM_PIN = "246813";
 const PASS = "ef".repeat(32);
 
-async function openMe(answer: Answerer): Promise<FakePage> {
+async function openMe(answer: Answerer, search = ""): Promise<FakePage> {
   const { html, script } = pageParts(myNightPage("acme-rc", "Acme RC"));
-  const page = new FakePage(html, answer, {});
+  const page = new FakePage(html, answer, { search });
   page.run(script);
   await page.settle();
   return page;
@@ -28,44 +30,27 @@ async function openMe(answer: Answerer): Promise<FakePage> {
 
 async function typePin(page: FakePage, pin: string): Promise<void> {
   page.get("mnpin").value = pin;
-  page.button(page.get("mn"), /^Check in$/)!.click();
+  page.button(page.get("mn"), /^Sign in$/)!.click();
   await page.settle();
 }
 
-/** The relay: the list answers the PIN as Sam's, and the tap answers `tap`. */
-function relay(checkedIn: boolean, tap: { status: number; body?: unknown }): Answerer {
+/** The relay: the list answers the PIN as Sam's; a tap would be answered too, and must never be asked. */
+function relay(checkedIn: boolean): Answerer {
   return async (url) => {
-    if (url.endsWith("/checkin/list")) return { status: 200, body: { ok: true, mode: "racer", driver: { id: SAM, name: "Sam", checkedIn }, pass: PASS } };
-    if (url.endsWith("/checkin/tap")) return tap;
+    if (url.endsWith("/checkin/list")) return { status: 200, body: { ok: true, mode: "racer", tonight: true, driver: { id: SAM, name: "Sam", checkedIn }, pass: PASS } };
+    if (url.endsWith("/checkin/tap")) return { status: 200, body: { ok: true, checkedIn: true } };
     return { status: 404 };
   };
 }
 
-describe("Me: a right PIN checks the driver in", () => {
-  it("checks them in with the pass the PIN earned, never the PIN, then opens their night", async () => {
-    const page = await openMe(relay(false, { status: 200, body: { ok: true, checkedIn: true } }));
-    await typePin(page, SAM_PIN);
-
-    assert.deepEqual(page.sent.map((s) => s.url), [`${API}/checkin/list`, `${API}/checkin/tap`]);
-    assert.deepEqual(page.sent[1]!.body, { id: SAM, pass: PASS, wanted: true });
-    assert.match(page.get("mn").drawn(), /You are checked in\. Opening your night/);
-    assert.equal(page.eval("location.href"), `/c/acme-rc/night#d=${SAM}`);
-  });
-
-  it("sends no tap for a driver who is already checked in", async () => {
-    const page = await openMe(relay(true, { status: 500 }));
+describe("Me: a right PIN signs the driver in", () => {
+  it("opens their night with the pass the PIN earned, and sends no tap", async () => {
+    const page = await openMe(relay(false));
     await typePin(page, SAM_PIN);
 
     assert.deepEqual(page.sent.map((s) => s.url), [`${API}/checkin/list`]);
-    assert.match(page.get("mn").drawn(), /You are checked in\. Opening your night/);
-    assert.equal(page.eval("location.href"), `/c/acme-rc/night#d=${SAM}`);
-  });
-
-  it("still opens their night when the tap does not go through, without saying they are in", async () => {
-    const page = await openMe(relay(false, { status: 503, body: { ok: false } }));
-    await typePin(page, SAM_PIN);
-
-    assert.doesNotMatch(page.get("mn").drawn(), /You are checked in/);
+    assert.match(page.get("mn").drawn(), /Signed in\. Opening your page/);
+    assert.doesNotMatch(page.get("mn").drawn(), /checked in/i);
     assert.equal(page.eval("location.href"), `/c/acme-rc/night#d=${SAM}`);
   });
 
@@ -80,17 +65,24 @@ describe("Me: a right PIN checks the driver in", () => {
   it("says so on the page, and has no link to the check-in page", () => {
     const html = myNightPage("acme-rc", "Acme RC");
 
-    assert.match(html, /It checks you in for tonight and opens your own night/);
-    assert.doesNotMatch(html, /Check in for tonight/);
+    assert.match(html, /It doesn\\u2019t check you in|It doesn’t check you in/);
+    assert.doesNotMatch(html, /It checks you in for tonight/);
     assert.doesNotMatch(html, /href="\/c\/acme-rc\/checkin"/);
+  });
+
+  it("asks for another driver's PIN when one is being added, even with a driver remembered", async () => {
+    const page = await openMe(relay(false), "?add=1");
+    assert.match(page.get("mn").drawn(), /Adding another driver to this phone/);
   });
 });
 
-describe("Me: a right PIN checks the driver in, against the relay", () => {
+describe("Me: signing in against the relay", () => {
   let harness: Harness;
+  let now = new Date("2026-11-06T18:00:00.000Z");
 
   beforeEach(async () => {
-    harness = await start();
+    now = new Date("2026-11-06T18:00:00.000Z");
+    harness = await start(undefined, undefined, () => now);
     const doc = {
       enabled: true,
       pinSha256: pinHash("acme-rc", "4321"),
@@ -104,16 +96,26 @@ describe("Me: a right PIN checks the driver in, against the relay", () => {
     await harness.close();
   });
 
-  it("queues Sam's check-in for the laptop", async () => {
-    const page = await openMe(async (url, body) => {
-      const answer = await call(harness, "POST", url, { json: body });
-      return { status: answer.status, body: answer.body };
-    });
+  const through = (): Answerer => async (url, body) => {
+    const answer = await call(harness, "POST", url, { json: body });
+    return { status: answer.status, body: answer.body };
+  };
 
+  it("queues no check-in for the laptop", async () => {
+    const page = await openMe(through());
     await typePin(page, SAM_PIN);
 
-    const inbox = (await call(harness, "GET", `${API}/inbox`, { token: ACME_TOKEN })).body.items as { id: string; wanted: boolean }[];
-    assert.deepEqual(inbox.map((i) => ({ id: i.id, wanted: i.wanted })), [{ id: SAM, wanted: true }]);
+    const inbox = (await call(harness, "GET", `${API}/inbox`, { token: ACME_TOKEN })).body.items as unknown[];
+    assert.deepEqual(inbox, []);
     assert.equal(page.eval("location.href"), `/c/acme-rc/night#d=${SAM}`);
+  });
+
+  it("still signs in a week after the night, when check-in itself has closed", async () => {
+    now = new Date("2026-11-14T12:00:00.000Z");
+    const list = await call(harness, "POST", `${API}/checkin/list`, { json: { pin: SAM_PIN } });
+    assert.equal(list.status, 200);
+    assert.equal(list.body.mode, "racer");
+    assert.equal(list.body.tonight, false, "it says check-in isn't open tonight");
+    assert.equal((await call(harness, "POST", `${API}/checkin/one`, { json: { id: SAM } })).status, 409);
   });
 });

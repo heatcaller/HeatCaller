@@ -2466,6 +2466,15 @@ public sealed class AppSettings
     /// </summary>
     public bool RelayCheckInPhotos { get; set; }
 
+    /// <summary>
+    /// Let drivers email themselves a link to their own page from Me on the
+    /// relay (14 Nov 2026, driver phone plan item 17, Asher: "yes to email me
+    /// a sign in link. make it optional"). Off by default: it sends mail from
+    /// the club's own mailbox, so the club turns it on. Only offered while the
+    /// club's mail is set up (PinMailer.IsConfigured).
+    /// </summary>
+    public bool RelayEmailSignInLink { get; set; }
+
     // --- Personal check-in PINs --------------------------------------
     //
     // Every racer can have a PIN of their own - six digits, never shared

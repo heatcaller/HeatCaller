@@ -170,7 +170,7 @@ describe("Me: after signing out, the PIN again", () => {
 
     const input = box.find((n) => n.id === "mnpin")[0]!;
     (input as unknown as { value: string }).value = "4321";
-    page.button(box, /^Check in$/)!.click();
+    page.button(box, /^Sign in$/)!.click();
     await page.settle();
 
     assert.equal(stored(page, OUT), null);

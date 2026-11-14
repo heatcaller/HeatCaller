@@ -75,8 +75,9 @@ import { LapVoiceLibrary } from "./lapvoice.js";
 import { STREAM_FORMAT, VOICE_PLAN_OFF, type MeterUsage, type VoicePlan, type VoiceService } from "./voice.js";
 import { isMeterName, type TopUpRequests } from "./topuprequests.js";
 import type { UsageLog } from "./usagelog.js";
-import { BROADCAST_TTL_SECONDS, myNightUrl, PUSH_CHANNEL, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
+import { BROADCAST_TTL_SECONDS, myNightUrl, PUSH_CHANNEL, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
 import { PAGES_BUILD } from "./pagebuild.js";
+import { SIGNIN_MAIL, SIGNIN_MAIL_MAX, SIGNIN_MAIL_MAX_BODY, SIGNIN_MAIL_PER_HOUR, signinEmailFrom, signinItemsFrom } from "./signinmail.js";
 import { addCounts, countableEvents, PAGE_COUNTS, PAGE_COUNTS_DAYS, PAGE_COUNTS_MAX_BODY, PAGE_COUNTS_PER_ADDRESS, totalsOver } from "./pagecounts.js";
 
 /** The public pages under /c/<club>/, by their last path segment. */
@@ -907,6 +908,8 @@ interface CheckinView {
   readonly enabled: boolean;
   /** When the laptop sent this check-in document (ms), or 0 when it did not say: see CHECKIN_STALE_MS. */
   readonly publishedMs: number;
+  /** Whether the club lets drivers email themselves a sign-in link (signinmail.ts). */
+  readonly emailLink: boolean;
   readonly event: string;
   /** The staff PIN's hash, or "" when the club has not set one. */
   readonly pinSha256: string;
@@ -1204,6 +1207,8 @@ export class Relay {
   private readonly sponsorTraffic: Limiter;
   /** Page counts one address may send a club (see pagecounts.ts): a flood brake. */
   private readonly countTraffic: Limiter;
+  /** Sign-in link asks per connection and per email address (signinmail.ts). */
+  private readonly signinMailTraffic: Limiter;
   /** One laptop rendering lines: a race night's worth in a burst when Prepare Lines runs, and a trickle after that. */
   private readonly voiceTraffic: Limiter;
   /** The two open voice-sample routes, per address - nobody is signed in, so that is all there is. See VOICE_SAMPLES_PER_ADDRESS. */
@@ -1466,6 +1471,7 @@ export class Relay {
     this.voteTraffic = new Limiter(VOTE_SENDS_PER_ADDRESS, 5 * 60 * 1000, () => this.now().getTime());
     this.sponsorTraffic = new Limiter(SPONSOR_SEEN_PER_ADDRESS, 5 * 60 * 1000, () => this.now().getTime());
     this.countTraffic = new Limiter(PAGE_COUNTS_PER_ADDRESS, 5 * 60 * 1000, () => this.now().getTime());
+    this.signinMailTraffic = new Limiter(SIGNIN_MAIL_PER_HOUR, 3600 * 1000, () => this.now().getTime());
 
     // Prepare Lines on the laptop walks a whole announcer style in one go -
     // a hundred or so lines, two at a time - and a club is entitled to do
@@ -1642,10 +1648,13 @@ export class Relay {
   private async lookFor(club: string): Promise<Look> {
     const site = await this.siteOf(club);
     let checkIn = false;
+    let emailLink = false;
     let listening = false;
 
     try {
-      checkIn = this.checkinTonight(await this.checkinOf(club));
+      const view = await this.checkinOf(club);
+      checkIn = this.checkinTonight(view);
+      emailLink = view !== undefined && view.enabled && view.emailLink;
     } catch {
       // As before: a check-in document that cannot be read is check-in closed.
     }
@@ -1681,7 +1690,7 @@ export class Relay {
     return checkIn === site.look.checkIn && listening === site.look.listening
       && notes === site.look.notes && vote === site.look.vote
       ? site.look
-      : { ...site.look, checkIn, listening, notes, vote };
+      : { ...site.look, checkIn, emailLink, listening, notes, vote };
   }
 
   /**
@@ -2836,6 +2845,14 @@ export class Relay {
     if (method === "GET" && rest.length === 1 && rest[0] === "counts") {
       await this.pageCounts(request, response, club);
       return;
+    }
+
+    // Email me a sign-in link (14 Nov 2026, driver phone plan item 17):
+    // a driver asks, the laptop collects and sends - see signinmail.ts.
+    if (rest.length >= 2 && rest[0] === "signin" && rest[1] === "email") {
+      if (method === "POST" && rest.length === 2) { await this.signinMailAsk(request, response, club); return; }
+      if (method === "GET" && rest.length === 3 && rest[2] === "inbox") { await this.signinMailInbox(request, response, club); return; }
+      if (method === "POST" && rest.length === 3 && rest[2] === "ack") { await this.signinMailAck(request, response, club); return; }
     }
 
     // The HeatCaller voice: the laptop asks this relay to speak a line, on
@@ -5131,7 +5148,15 @@ export class Relay {
     const input = body;
     const checkin = await this.checkinOf(club);
 
-    if (checkin === undefined || !this.checkinTonight(checkin)) {
+    // SIGNING IN IS NOT CHECKING IN (14 Nov 2026, driver phone plan item 2).
+    // A racer's PIN through list is how Me signs a driver in, on any day
+    // the club has online check-in switched on; only one (the check-in
+    // button) and tap (checking in) are for tonight alone. list says which
+    // it is (tonight), so a page can sign a driver in and still say that
+    // check-in isn't open.
+    const open = action === "list" ? checkin !== undefined && checkin.enabled : this.checkinTonight(checkin);
+
+    if (checkin === undefined || !open) {
       sendJson(response, 409, { ok: false, error: "Online check-in is not open right now." });
       return;
     }
@@ -5161,7 +5186,7 @@ export class Relay {
 
       if (PASS.test(pass)) {
         if (checkin.staffPass !== "" && sameHash(pass, checkin.staffPass)) {
-          sendJson(response, 200, { ok: true, mode: "staff", event: checkin.event, drivers: staffRows(), pass: checkin.staffPass });
+          sendJson(response, 200, { ok: true, mode: "staff", event: checkin.event, tonight: this.checkinTonight(checkin), drivers: staffRows(), pass: checkin.staffPass });
           return;
         }
 
@@ -5169,7 +5194,7 @@ export class Relay {
         const passRacer = racerByPass(checkin, pass);
 
         if (passRacer !== undefined) {
-          sendJson(response, 200, { ok: true, mode: "racer", event: checkin.event, driver: passRacer, pass });
+          sendJson(response, 200, { ok: true, mode: "racer", event: checkin.event, tonight: this.checkinTonight(checkin), driver: passRacer, pass });
           return;
         }
 
@@ -5239,7 +5264,7 @@ export class Relay {
       const staffHash = wellFormed && checkin.pinSha256 !== "" ? pinHash(club, offered, checkin.salt) : "";
 
       if (staffHash !== "" && sameHash(staffHash, checkin.pinSha256)) {
-        sendJson(response, 200, { ok: true, mode: "staff", event: checkin.event, drivers: staffRows(), pass: checkin.staffPass });
+        sendJson(response, 200, { ok: true, mode: "staff", event: checkin.event, tonight: this.checkinTonight(checkin), drivers: staffRows(), pass: checkin.staffPass });
         return;
       }
 
@@ -5251,7 +5276,7 @@ export class Relay {
       const racer = wellFormed ? checkin.racers.get(racerHash) : undefined;
 
       if (racer !== undefined) {
-        sendJson(response, 200, { ok: true, mode: "racer", event: checkin.event, driver: racer.driver, pass: racer.pass });
+        sendJson(response, 200, { ok: true, mode: "racer", event: checkin.event, tonight: this.checkinTonight(checkin), driver: racer.driver, pass: racer.pass });
         return;
       }
 
@@ -7032,7 +7057,11 @@ export class Relay {
       return;
     }
 
-    const sub = pushSubFrom(body["sub"], this.now().toISOString());
+    // A label, when the phone has more than one driver on it (14 Nov 2026,
+    // driver phone plan item 8): their first name before each title.
+    const parsed = pushSubFrom(body["sub"], this.now().toISOString());
+    const label = pushLabelFrom(body["label"]);
+    const sub = parsed === undefined || label === "" ? parsed : { ...parsed, label };
 
     if (sub === undefined) {
       sendJson(response, 400, { ok: false, error: "This phone's alerts could not be set up." });
@@ -8974,6 +9003,102 @@ export class Relay {
     response.end();
   }
 
+  /**
+   * A driver asks for their sign-in link by email (see signinmail.ts):
+   * {email}. The same answer whether or not the club knows the address.
+   * 404 while the club has it switched off.
+   */
+  private async signinMailAsk(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const checkin = await this.checkinOf(club).catch(() => undefined);
+
+    if (checkin === undefined || !checkin.enabled || !checkin.emailLink) {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    const from = `${club}|${clientAddress(request)}`;
+
+    if (this.signinMailTraffic.blocked(from)) {
+      sendJson(response, 429, { ok: false, error: "Too many asks from this connection. Try again in an hour." });
+      return;
+    }
+
+    this.signinMailTraffic.hit(from);
+    const body = await readBody(request, response, SIGNIN_MAIL_MAX_BODY);
+    const email = isPlainObject(body) ? signinEmailFrom(body["email"]) : "";
+
+    if (email === "") {
+      sendJson(response, 400, { ok: false, error: "That doesn't look like an email address." });
+      return;
+    }
+
+    const said = { ok: true, message: "If that address is on the club's list, a link to your page is on its way. It comes from the club's timing computer while it's on." };
+    const byAddress = `${club}|mail|${createHash("sha256").update(email).digest("hex")}`;
+
+    // Over the hour's asks for this address: the same answer, and nothing
+    // queued - a page cannot tell a held-back ask from a sent one.
+    if (this.signinMailTraffic.blocked(byAddress)) {
+      sendJson(response, 200, said);
+      return;
+    }
+
+    this.signinMailTraffic.hit(byAddress);
+    const at = this.now();
+
+    const kept = await this.withLock(club, async () => {
+      const held = await this.queueSnapshotOf(club, SIGNIN_MAIL);
+      const items = signinItemsFrom(held?.body, at.getTime()).filter((i) => i.email !== email);
+      const last = isPlainObject(held?.body) && Number.isInteger((held.body as Record<string, unknown>)["last"]) ? Number((held.body as Record<string, unknown>)["last"]) : 0;
+      const n = Math.max(last, ...items.map((i) => i.n), 0) + 1;
+      const next = [...items, { n, email, at: at.toISOString() }].slice(-SIGNIN_MAIL_MAX);
+      await this.store.putSnapshot(club, SIGNIN_MAIL, { seq: at.getTime(), publishedAt: at.toISOString(), body: { last: n, items: next } });
+      return true;
+    }).catch(() => false);
+
+    if (!kept) {
+      sendJson(response, 503, { ok: false, error: "Try again in a moment." });
+      return;
+    }
+
+    sendJson(response, 200, said);
+  }
+
+  /** The waiting sign-in link asks, for the laptop. Publish token only. */
+  private async signinMailInbox(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token" || who === "wrong-club") {
+      sendJson(response, who === "no-token" ? 401 : 403, { ok: false, error: who === "no-token" ? "A publish token is required." : "That token does not belong to this club." });
+      return;
+    }
+
+    const held = await this.queueSnapshotOf(club, SIGNIN_MAIL).catch(() => undefined);
+    sendJson(response, 200, { ok: true, items: signinItemsFrom(held?.body, this.now().getTime()) });
+  }
+
+  /** The laptop has collected the asks up to {upTo}: they are dropped. Publish token only. */
+  private async signinMailAck(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token" || who === "wrong-club") {
+      sendJson(response, who === "no-token" ? 401 : 403, { ok: false, error: who === "no-token" ? "A publish token is required." : "That token does not belong to this club." });
+      return;
+    }
+
+    const body = await readBody(request, response, 256);
+    const upTo = isPlainObject(body) && Number.isInteger(body["upTo"]) ? Number(body["upTo"]) : 0;
+    const at = this.now();
+
+    await this.withLock(club, async () => {
+      const held = await this.queueSnapshotOf(club, SIGNIN_MAIL);
+      const last = isPlainObject(held?.body) && Number.isInteger((held.body as Record<string, unknown>)["last"]) ? Number((held.body as Record<string, unknown>)["last"]) : 0;
+      const items = signinItemsFrom(held?.body, at.getTime()).filter((i) => i.n > upTo);
+      await this.store.putSnapshot(club, SIGNIN_MAIL, { seq: at.getTime(), publishedAt: at.toISOString(), body: { last, items } });
+    });
+
+    sendJson(response, 200, { ok: true });
+  }
+
   /** The daily page counts and the last 7 and 30 days' totals, for Manage and the laptop. Publish token only. */
   private async pageCounts(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
     const who = this.authorise(request, club);
@@ -10083,6 +10208,7 @@ function readCheckin(club: string, doc: StoredDocument | undefined, key: Buffer)
   return {
     enabled: checkin["enabled"] === true,
     publishedMs: Number.isFinite(publishedMs) ? publishedMs : 0,
+    emailLink: checkin["emailLink"] === true,
     event: typeof checkin["event"] === "string" ? checkin["event"] : "",
     pinSha256,
     salt: pinSaltOf(checkin),

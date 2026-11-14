@@ -154,6 +154,7 @@ public sealed class RelaySettingsControl : UserControl
     private bool _reissueOffered = true;
 
     private readonly CheckBox _chkCheckInPhotos = new ThemedCheckBox();
+    private readonly CheckBox _chkEmailSignInLink = new ThemedCheckBox();
     private readonly CheckBox _chkRacerPins = new ThemedCheckBox();
     private readonly ComboBox _cmbPinRotation = new();
     private readonly Label _lblPinsState = new();
@@ -1721,6 +1722,24 @@ public sealed class RelaySettingsControl : UserControl
             _settings.Save();
         };
 
+        // EMAIL ME A LINK (14 Nov 2026, driver phone plan item 17, Asher: "yes
+        // to email me a sign in link. make it optional"). Off by default: it
+        // sends from the club's own mailbox. The relay offers it on Me only
+        // while this is on and the mail is set up; this laptop sends each
+        // link to an address it knows, and answers nobody it doesn't.
+        _chkEmailSignInLink.Text = "Let drivers email themselves a link to their page (uses the club's email, below)";
+        _chkEmailSignInLink.AutoSize = true;
+        _chkEmailSignInLink.CheckedChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            _settings.RelayEmailSignInLink = _chkEmailSignInLink.Checked;
+            _settings.Save();
+        };
+
         // Refreshed every second, and says things of different lengths -
         // see KeepLines.
         KeepLines(_lblCheckInState);
@@ -1750,6 +1769,7 @@ public sealed class RelaySettingsControl : UserControl
         card.Add(pin, gapBelow: UiLayout.HintGap);
         card.Add(lblHint);
         card.Add(SimpleMode.Hide(_chkCheckInPhotos), stretch: false);
+        card.Add(SimpleMode.Hide(_chkEmailSignInLink), stretch: false);
         card.Add(_lblCheckInState, gapBelow: UiLayout.HintGap);
         card.Add(new ButtonBar().With(_btnOpenCheckIn, _btnReissueBadges), gapBelow: 0);
 
@@ -3061,6 +3081,7 @@ public sealed class RelaySettingsControl : UserControl
             _txtCheckInPin.Text = _settings.RelayCheckInPin;
             _pinRejected = null;
             _chkCheckInPhotos.Checked = _settings.RelayCheckInPhotos;
+            _chkEmailSignInLink.Checked = _settings.RelayEmailSignInLink;
 
             _chkRacerPins.Checked = _settings.RelayRacerPinsEnabled;
             SelectRotation(_settings.RacerPinRotation);

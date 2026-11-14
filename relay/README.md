@@ -1296,6 +1296,45 @@ Driver phone plan items 1, 3, 14 and 21 (`plans/driver-phone-ux-plan.md`).
 - **Plain words.** Driver pages never say "relay" or "laptop"
   (`test/driver-phone-a.test.ts` checks every driver page).
 
+### Who you are on Me (14 Nov 2026)
+
+Driver phone plan items 2, 8, 17 and 22.
+
+- **Signing in is not checking in.** `checkin/list` with a racer's PIN
+  (Me's sign-in) answers on any day the club has online check-in switched
+  on, and says `tonight: true|false`. Only `checkin/one` (the night's Check
+  in card) and `checkin/tap` are for tonight alone (the check-in document
+  under 24 hours old). Me's PIN box signs in and opens the night; it never
+  taps. The night's Check in card asks "Are you at the track for … tonight?"
+  before it taps.
+- **Several drivers on one phone.** `hg-me-<club>` is still the driver
+  shown; `hg-me-list-<club>` holds up to five codes with the names their
+  nights gave. Signed in's sheet switches between them, adds one
+  (`/mynight?add=1`), and signs one or all of them out. On a phone with more
+  than one, `push/subscribe` carries `label` (a first name, 1–20 letters),
+  kept with that phone's sign-up and put before each alert's title ("Ella:
+  Your race is next").
+- **Staying signed in.** After a sign-in the page asks the browser to keep
+  its storage (`navigator.storage.persist()`) and keeps `hg-me-was-<club>`;
+  Me says "This phone forgot you" when that is there and the code isn't.
+  Signing out takes both, and the pages' no-signal copies.
+- **Racing tonight?** On a race night (the programme's event is today), a
+  phone with nobody signed in gets three steps at the top of Home.
+
+```
+POST /api/v1/c/:club/signin/email        {email}  -> {ok, message}   the same answer for any address
+GET  /api/v1/c/:club/signin/email/inbox  token; -> {items: [{n, email, at}]}
+POST /api/v1/c/:club/signin/email/ack    token; {upTo}
+```
+
+"Email me a link to my page" (`src/signinmail.ts`), only where the laptop's
+check-in document says `emailLink: true` (Club Website > Online check-in >
+"Let drivers email themselves a link", off by default, and only with the
+club's mail set up); `404` otherwise. The relay never knows whether an
+address is a driver's: it queues it (30 minutes at most, 50 at once, three
+an hour per address and per connection), and the laptop emails the one
+driver with that address their own night's link.
+
 ### Page counts (public; reading them needs a token)
 
 ```

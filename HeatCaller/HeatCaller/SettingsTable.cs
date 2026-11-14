@@ -350,6 +350,7 @@ internal static class SettingsTable
             nameof(AppSettings.RelayClubUpdates),
             nameof(AppSettings.RelaySocialLinks),
             nameof(AppSettings.RelayCheckInPhotos),
+            nameof(AppSettings.RelayEmailSignInLink),
             nameof(AppSettings.RelayRacerPinsEnabled),
             nameof(AppSettings.RacerPinRotation),
             nameof(AppSettings.RacerPinsEmailAutomatically),

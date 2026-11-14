@@ -1028,6 +1028,11 @@ internal static class RelayDocuments
                 pinSha256 = RelayCheckIn.IsUsablePin(pin) ? RelayCheckIn.PinHash(club, pin, salt) : string.Empty,
                 pinSalt = salt,
                 @event = eventName,
+
+                // Email me a link on Me (14 Nov 2026, driver phone plan item
+                // 17): only when the club has turned it on AND its mail can
+                // send, so the relay never offers a link nobody will email.
+                emailLink = settings.RelayEmailSignInLink && PinMailer.IsConfigured(settings),
                 drivers = entrants.Select((d, i) =>
                 {
                     var profile = profiles.Get(d.Transponder);

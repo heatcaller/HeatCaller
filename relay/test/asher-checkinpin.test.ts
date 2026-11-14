@@ -249,7 +249,7 @@ describe("My night: a driver's own night with their PIN", () => {
 
   async function signIn(page: FakePage, pin: string) {
     page.get("mnpin").value = pin;
-    page.button(page.get("mn"), /^Check in$/)!.click();
+    page.button(page.get("mn"), /^Sign in$/)!.click();
     await page.settle();
   }
 
@@ -271,7 +271,7 @@ describe("My night: a driver's own night with their PIN", () => {
     const cases: [Reply, RegExp][] = [
       [{ status: 403, body: { ok: false, error: "That PIN is not right." } }, /That PIN is not right\./],
       [{ status: 200, body: { ok: true, mode: "staff", drivers: [], pass: "ab".repeat(32) } }, /desk PIN, not your own/],
-      [{ status: 409, body: { ok: false } }, /online check-in open/],
+      [{ status: 409, body: { ok: false } }, /switched off at this club/],
       [{ status: 429, body: { ok: false, error: "Too many wrong PINs from this connection. Try again in a few minutes." } }, /Too many wrong PINs from this connection/],
     ];
 

@@ -58,7 +58,16 @@ describe("relay navigation, round 2: the night page remembers the driver", () =>
   it("never keeps anything but the code: no PIN and no pass in this phone's long-term storage", async () => {
     const page = await openNight(relay({ ok: true, night: night() }));
 
-    assert.deepEqual([...page.store.entries()], [[ME, CODE]]);
+    // Since 14 Nov 2026 (driver phone plan items 8 and 17) also the list of
+    // drivers on this phone - their codes and the names their nights gave -
+    // and a marker that a driver was signed in. Still never a PIN or a pass.
+    const kept = new Map(page.store.entries());
+    assert.deepEqual([...kept.keys()].sort(), [ME, "hg-me-list-acme-rc", "hg-me-was-acme-rc"].sort());
+    assert.equal(kept.get(ME), CODE);
+    assert.equal(kept.get("hg-me-was-acme-rc"), "1");
+    const list = JSON.parse(String(kept.get("hg-me-list-acme-rc"))) as { c: string; n: string }[];
+    assert.deepEqual(list.map((d) => d.c), [CODE]);
+    assert.doesNotMatch(JSON.stringify([...kept.values()]), /ef{4}|pass|pin/i, "no PIN or pass");
   });
 
   it("forgets the driver, and the details sign-in, on Sign out on this phone, and goes back to Me", async () => {

@@ -82,6 +82,18 @@ export interface PushSub {
   /** The phone's auth secret, base64url - 16 bytes. */
   readonly auth: string;
   readonly since: string;
+  /**
+   * Whose alerts these are, put before each title ("Ella: Your race is
+   * next") - only when the phone has more than one driver on it (14 Nov
+   * 2026, driver phone plan item 8). A first name, never the badge code.
+   */
+  readonly label?: string;
+}
+
+/** A phone's label for a driver's alerts (see PushSub.label): a short name, or "". */
+export function pushLabelFrom(value: unknown): string {
+  const v = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+  return v.length >= 1 && v.length <= 20 && /^[\p{L}\p{M}\p{N}'. -]+$/u.test(v) ? v : "";
 }
 
 /** What a phone is told. */
@@ -610,7 +622,8 @@ export class PushService {
       throw error;
     });
     const list = doc && isObject(doc.body) && Array.isArray(doc.body["subs"]) ? doc.body["subs"] : [];
-    return list.filter((s): s is PushSub => isObject(s) && typeof s["endpoint"] === "string" && typeof s["p256dh"] === "string" && typeof s["auth"] === "string") as PushSub[];
+    return list.filter((s): s is PushSub => isObject(s) && typeof s["endpoint"] === "string" && typeof s["p256dh"] === "string" && typeof s["auth"] === "string")
+      .map((s) => (s.label === undefined || pushLabelFrom(s.label) === s.label ? s : { ...s, label: undefined })) as PushSub[];
   }
 
   private async keep(club: string, id: string, subs: readonly PushSub[]): Promise<void> {
@@ -832,7 +845,7 @@ export class PushService {
             // message already has a newer alert replace the older one on
             // the phone; Topic only folded alerts still queued unsent.
           },
-          body: encryptForPush(payload, sub),
+          body: encryptForPush(sub.label ? Buffer.from(JSON.stringify({ ...message, title: `${sub.label}: ${message.title}` })) : payload, sub),
         });
 
         if (answer.status === 404 || answer.status === 410) {

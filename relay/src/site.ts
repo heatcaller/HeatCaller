@@ -75,6 +75,8 @@ export interface Look {
   readonly iconVersion: string;
   /** Whether online check-in is open, which decides whether its tab shows. */
   readonly checkIn: boolean;
+  /** Whether a driver may email themselves a sign-in link on Me (14 Nov 2026, signinmail.ts). */
+  readonly emailLink: boolean;
   /**
    * Links to the club's own pages elsewhere - Facebook, Instagram, its
    * website - in the order the laptop sent them. Only http(s) addresses
@@ -189,6 +191,7 @@ export const DEFAULT_LOOK: Look = Object.freeze({
   logoPlate: undefined,
   iconVersion: SUN_ICON_VERSION,
   checkIn: false,
+  emailLink: false,
   listening: false,
   notes: false,
   vote: false,
@@ -272,6 +275,7 @@ export function lookFrom(site: StoredDocument | undefined, checkin: StoredDocume
     logoPlate,
     iconVersion: SUN_ICON_VERSION,
     checkIn: record(checkin?.body)?.["enabled"] === true,
+    emailLink: record(checkin?.body)?.["enabled"] === true && record(checkin?.body)?.["emailLink"] === true,
 
     // Merged in by Relay.lookFor from a document of its own, the way
     // checkIn's own flag is above. False here is the honest default for a
