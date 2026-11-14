@@ -377,7 +377,7 @@ Each item gives: what's wrong (with the evidence), the fix, the build steps, the
 
 **Tests.** A manifest test that both icon purposes, the shortcuts, the id and the portrait lock are there.
 
-**Size:** about half a day. Do it together with item 5's icon work.
+**Size:** about half a day. Do it together with item 5.
 
 ---
 
