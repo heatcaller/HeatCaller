@@ -85,7 +85,10 @@ public partial class MainForm
     /// <summary>
     /// When a race's own window closes (setup plan step 8): its round's - the
     /// qualifying round it is part of, or the main - for the driver's class.
-    /// Null for no window, a practice, or a round still being run.
+    /// With no driver (the Big Screen), the latest window of any class the
+    /// heat runs, so a shared heat reads provisional while any of its classes
+    /// does (bug hunt 18). Null for no window, a practice, or a round still
+    /// being run.
     /// </summary>
     private DateTime? RaceProtestClosesAtUtc(SessionRecord race, string? who = null)
     {
@@ -96,8 +99,14 @@ public partial class MainForm
             return null;
         }
 
-        var className = who is null ? round.ClassName : MixedHeats.ClassOfDriver(round, who, _profiles);
-        return _raceProgram.RoundProtestWindow(round, className)?.ClosesAtUtc;
+        if (who is null)
+        {
+            return MixedHeats.ClassesOf(round)
+                .Select(className => _raceProgram.RoundProtestWindow(round, className)?.ClosesAtUtc)
+                .Max();
+        }
+
+        return _raceProgram.RoundProtestWindow(round, MixedHeats.ClassOfDriver(round, who, _profiles))?.ClosesAtUtc;
     }
 
     /// <summary>
@@ -201,9 +210,12 @@ public partial class MainForm
         }
     }
 
-    /// <summary>Whether a driver's query came in while its race's window was open - Driver Requests puts those first.</summary>
-    private bool QueryInProtestWindow(SessionRecord race, DateTime askedUtc) =>
-        ProtestWindow.AskedInside(askedUtc, race.EndedAtUtc, RaceProtestClosesAtUtc(race));
+    /// <summary>
+    /// Whether a driver's query came in while its race's window - for the
+    /// asking driver's class - was open; Driver Requests puts those first.
+    /// </summary>
+    private bool QueryInProtestWindow(SessionRecord race, DateTime askedUtc, string? who) =>
+        ProtestWindow.AskedInside(askedUtc, race.EndedAtUtc, RaceProtestClosesAtUtc(race, who));
 
     private static long UnixMs(DateTime utc) =>
         new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
