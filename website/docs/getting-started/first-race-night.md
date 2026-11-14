@@ -160,7 +160,7 @@ See [Big Screen](../screens/big-screen.md).
 ## Optional: phones in the pits
 
 1. Open **Local Screens**. The first time, click **Set up phone pages** and approve the Windows prompt, so phones are allowed to connect. Then click **Start Server**.
-2. Use the **QR code** buttons to put the **Live results:** or **Driver check-in:** address on screen for people to scan. Phones must be on the same Wi-Fi as the laptop.
+2. Use the **QR code** buttons to put the **Driver check-in:** address on screen for people to scan. Phones must be on the same Wi-Fi as the laptop.
 3. To throw flags from your phone, set a **Remote PIN:** of four or more digits first, then open the **Phone remote:** address.
 
 If phones still can't connect, see [If the server won't start](../screens/phone-and-web.md#if-the-server-wont-start) and check that the phones are on the same Wi-Fi, not mobile data.

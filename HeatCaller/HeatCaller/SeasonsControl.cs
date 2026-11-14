@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 
 namespace HeatCaller;
 
@@ -73,12 +73,6 @@ public sealed class SeasonsControl : UserControl
     private const int SchemeRowsShown = 5;
     private const string SchemeHintText = "Type in the Points column to change what each place scores.";
 
-    /// <summary>The championships' buttons - while there is room, the column is no narrower than the widest of them. See ColumnWidths.</summary>
-    private ButtonBar? _seasonButtons;
-
-    /// <summary>The championships' card - while there is room, the column is no narrower than its caption. See ColumnWidths.</summary>
-    private Section? _seasonsCard;
-
     /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
     protected override void OnFontChanged(EventArgs e)
     {
@@ -94,52 +88,158 @@ public sealed class SeasonsControl : UserControl
     }
 
     /// <summary>
-    /// Four cards in three columns, on the layout pieces (LayoutPieces.cs):
-    /// the championships, their buttons under the list; the points scheme
-    /// over the races that count; and the standings, the widest column.
-    /// Every list takes the height its card has left, down to its headings
-    /// and a few rows, and past that the page scrolls. Nothing is placed by
-    /// hand.
+    /// The championship hub (13 Nov 2026, the rework Asher picked from four
+    /// mock-ups: C, "Championship Hub", with D's "Can they still win?" card
+    /// in it).
     ///
-    /// It used to be three columns placed on every resize, their widths
-    /// shares of the page and their lists stretched to a common floor, over
-    /// a 900x510 minimum the page kept however small its window - and every
-    /// heading, list and button in its own fixed font, so none of it
-    /// followed the text size.
+    /// Down the left, a card per championship: its name, class, how far
+    /// through it is and who leads. On the right, the one picked - its name
+    /// and rules in a line, and four views under chips: Standings (with who
+    /// can still win beside them), Races, Points &amp; Rules, and Carried In.
     ///
-    /// The columns are two Besides, one inside the other: the standings
-    /// down the right of everything else, and the scheme and races down
-    /// the right of the championships.
+    /// It used to be three columns at once: the list, then the points
+    /// scheme over the races counted, then the standings in what was left -
+    /// so the table people come to read got a third of the page, and the
+    /// setup changed once a season took the rest. Reset to Default and
+    /// Delete were as loud as Export.
     /// </summary>
     private void BuildLayout()
     {
         // --- The championships ---
         _lstSeasons.SelectedIndexChanged += (_, _) => LoadSelectedSeasonIntoUi();
 
-        // The lists fill their cards to the pixel: a list that keeps to
-        // whole rows stops short of the room it is given, and its outline
-        // with it.
+        // A card per championship, drawn - see DrawSeasonItem.
         _lstSeasons.IntegralHeight = false;
+        _lstSeasons.DrawMode = DrawMode.OwnerDrawFixed;
+        _lstSeasons.BorderStyle = BorderStyle.None;
+        _lstSeasons.DrawItem += DrawSeasonItem;
+        _textSize.Keep(() =>
+        {
+            _lstSeasons.ItemHeight = Math.Min(255,
+                AppTheme.BoldFont.Height + 2 * AppTheme.SmallFont.Height + UiLayout.AtDpi(44));
+            _lstSeasons.Invalidate();
+        });
 
-        var btnNew = new Button { Text = "New..." };
+        var btnNew = new Button { Text = "+ New Championship..." };
         btnNew.Click += BtnNewSeason_Click;
-
-        var btnRename = new Button { Text = "Rename..." };
-        btnRename.Click += BtnRenameSeason_Click;
-
-        var btnDeleteSeason = new Button { Text = "Delete" };
-        btnDeleteSeason.Click += BtnDeleteSeason_Click;
+        AppTheme.StyleButton(btnNew, AppTheme.ButtonKind.Primary);
 
         var seasons = new Section("Championships");
-        _seasonsCard = seasons;
 
-        seasons.AddFill(_lstSeasons, () => ListLeast(_lstSeasons, 3));
-        // Each only as wide as its caption: three short words, which as
-        // standard buttons - never under 148px - went one under another in
-        // a column this narrow (layout pictures, 29 Sep).
-        _seasonButtons = seasons.Add(new ButtonBar(tight: true).With(btnNew, btnRename, btnDeleteSeason), gapBelow: 0);
+        seasons.Add(new ButtonBar().With(btnNew));
+        seasons.AddFill(_lstSeasons, () => ListLeast(_lstSeasons, 2), gapBelow: 0);
 
-        // --- The points scheme ---
+        // --- The championship picked: its name, its rules, its commands ---
+        _lblName.AutoSize = true;
+        _lblName.Padding = new Padding(0, UiLayout.AtDpi(2), UiLayout.AtDpi(10), 0);
+        _textSize.Wear(_lblName, () => AppTheme.TitleFont);
+
+        _lblRuleLine.AutoSize = true;
+        _lblRuleLine.ForeColor = AppTheme.TextMuted;
+        _lblRuleLine.Padding = new Padding(0, UiLayout.AtDpi(11), 0, 0);
+
+        var btnMore = new Button { Text = "More ▾" };
+        btnMore.Click += (_, _) => ShowMoreMenu(btnMore);
+        _btnMore = btnMore;
+
+        _moreBar = new ButtonBar(alignRight: true).With(btnMore);
+        var head = new SplitBar(new ButtonBar().With(_lblName, _lblRuleLine), _moreBar);
+
+        // The four views, picked on chips under the name.
+        _viewChips.PickedChanged += ShowView;
+
+        // --- Standings ---
+        _dgvStandings.ReadOnly = true;
+        _dgvStandings.AllowUserToAddRows = false;
+        _dgvStandings.AllowUserToDeleteRows = false;
+        _dgvStandings.RowHeadersVisible = false;
+        _dgvStandings.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        _dgvStandings.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        _dgvStandings.Columns.AddRange(
+            new DataGridViewTextBoxColumn { Name = "rank", HeaderText = "Rank", FillWeight = 30 },
+            new DataGridViewTextBoxColumn { Name = "driver", HeaderText = "Driver", FillWeight = 100 },
+            new DataGridViewTextBoxColumn { Name = "points", HeaderText = "Points", FillWeight = 50 },
+
+            // Points behind the leader (13 Nov 2026) - what a driver looks for first.
+            new DataGridViewTextBoxColumn { Name = "gap", HeaderText = "Gap", FillWeight = 40 },
+
+            // Of those points, how many were carried in from before - blank
+            // for everybody who carried none (27 Sep 2026).
+            new DataGridViewTextBoxColumn { Name = "carried", HeaderText = "Carried In", FillWeight = 50 },
+            new DataGridViewTextBoxColumn { Name = "wins", HeaderText = "Wins", FillWeight = 40 },
+            new DataGridViewTextBoxColumn { Name = "podiums", HeaderText = "Podiums", FillWeight = 50 },
+            new DataGridViewTextBoxColumn { Name = "sessions", HeaderText = "Races", FillWeight = 40 },
+            new DataGridViewTextBoxColumn { Name = "dnfs", HeaderText = "DNF", FillWeight = 30 },
+            new DataGridViewTextBoxColumn { Name = "best", HeaderText = "Best Finish", FillWeight = 60 }
+        );
+
+        // What the table adds up: how many drivers and races, and the rule
+        // it scored them by. It wraps rather than being cut short - with a
+        // few drivers carrying points in and races forced out, it runs long.
+        _lblStatus.AutoSize = true;
+        _lblStatus.ForeColor = AppTheme.TextMuted;
+
+        var btnExportStandings = new Button { Text = "Export Standings to CSV..." };
+        btnExportStandings.Click += (_, _) => ExportStandings();
+        AppTheme.StyleButton(btnExportStandings, AppTheme.ButtonKind.Secondary);
+
+        var standings = new Section("Standings");
+
+        standings.AddFill(_dgvStandings, () => GridLeast(_dgvStandings, 3));
+        standings.Add(_lblStatus);
+        standings.Add(new ButtonBar().With(btnExportStandings), gapBelow: 0);
+
+        // Who can still win it - mock-up D's card, the announcer's proof.
+        _lblTitleRace.AutoSize = true;
+        _lblTitleRace.ForeColor = AppTheme.TextMuted;
+        _textSize.Wear(_lblTitleRace, () => AppTheme.SmallFont);
+        _textSize.Keep(() => _titleRace.Remeasure());
+
+        var stillWin = new Section("Can they still win?");
+
+        stillWin.Add(_lblTitleRace);
+        stillWin.Add(_titleRace, gapBelow: 0);
+
+        var standingsView = new Beside(() => UiLayout.AtTextSize(StillWinWidth));
+
+        standingsView.AddFill(standings, standings.LeastHeight);
+        standingsView.AddSideCard(stillWin);
+
+        // --- Races ---
+        _clbSessions.CheckOnClick = true;
+        _clbSessions.IntegralHeight = false;
+        _clbSessions.ItemCheck += (_, _) =>
+        {
+            // ItemCheck fires BEFORE the check state is applied, so defer
+            // saving/recomputing until the UI has actually updated.
+            if (_suppressEvents)
+            {
+                return;
+            }
+            // BeginInvoke throws if the handle doesn't exist yet, and
+            // SetItemChecked during list population raises this event
+            // before the control is ever shown.
+            if (!IsHandleCreated || IsDisposed)
+            {
+                return;
+            }
+
+            BeginInvoke(() => { SaveCurrentSeasonFromUi(); RecomputeStandings(); });
+        };
+
+        var sessionsHint = new Label
+        {
+            Text = "Tick the races that count. Only sessions recorded as \"Race\" type are here - practice never counts toward points.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        var sessions = new Section("Races counted");
+
+        sessions.Add(sessionsHint);
+        sessions.AddFill(_clbSessions, () => ListLeast(_clbSessions, 4), gapBelow: 0);
+
+        // --- Points & Rules ---
         var schemeHint = new Label { Text = SchemeHintText, AutoSize = true, ForeColor = AppTheme.TextMuted };
 
         _dgvPointsScheme.AllowUserToAddRows = false;
@@ -188,187 +288,386 @@ public sealed class SeasonsControl : UserControl
         };
         _dgvPointsScheme.CellEndEdit += (_, _) => { if (!_suppressEvents) { SaveCurrentSeasonFromUi(); RecomputeStandings(); } };
 
-        var btnResetScheme = new Button { Text = "Reset to Default" };
+        // "Use the Default Points", quiet: it was a red "Reset to Default"
+        // beside the table, and Undo puts the old points back.
+        var btnResetScheme = new Button { Text = "Use the Default Points" };
         btnResetScheme.Click += BtnResetScheme_Click;
+        AppTheme.StyleButton(btnResetScheme, AppTheme.ButtonKind.Secondary);
 
-        var btnRules = new Button { Text = "Scoring Rules..." };
-        btnRules.Click += (_, _) => EditRules();
-
-        // A short table, shown a few places tall: the card is as tall as it
-        // needs to be for that, and the races under it get the rest.
         var scheme = new Section("Points scheme");
 
         scheme.Add(schemeHint);
         scheme.AddFill(_dgvPointsScheme, SchemeHeight);
+        scheme.Add(new ButtonBar().With(btnResetScheme), gapBelow: 0);
+
+        // The rules, said in a list, with the window that changes them.
+        _lblRules.AutoSize = true;
+        _lblRules.ForeColor = AppTheme.TextDark;
+
+        var btnRules = new Button { Text = "Edit Scoring Rules..." };
+        btnRules.Click += (_, _) => EditRules();
+        AppTheme.StyleButton(btnRules, AppTheme.ButtonKind.Primary);
+
+        var rules = new Section("Scoring rules");
+
+        rules.Add(_lblRules);
         // Custom scoring rules are Advanced (1 Nov 2026, Simple mode).
-        scheme.Add(new ButtonBar().With(btnResetScheme, SimpleMode.Hide(btnRules)), gapBelow: 0);
+        rules.Add(new ButtonBar().With(SimpleMode.Hide(btnRules)), gapBelow: 0);
 
-        // --- The races that count ---
-        _clbSessions.CheckOnClick = true;
-        _clbSessions.IntegralHeight = false;
-        _clbSessions.ItemCheck += (_, _) =>
+        var pointsView = new Beside(() => UiLayout.AtTextSize(RulesWidth));
+
+        pointsView.AddFill(scheme, scheme.LeastHeight);
+        pointsView.AddSideCard(rules);
+
+        // --- Carried In ---
+        _lblCarried.AutoSize = true;
+        _lblCarried.ForeColor = AppTheme.TextDark;
+
+        var carriedHint = new Label
         {
-            // ItemCheck fires BEFORE the check state is applied, so defer
-            // saving/recomputing until the UI has actually updated.
-            if (_suppressEvents)
-            {
-                return;
-            }
-            // BeginInvoke throws if the handle doesn't exist yet, and
-            // SetItemChecked during list population raises this event
-            // before the control is ever shown.
-            if (!IsHandleCreated || IsDisposed)
-            {
-                return;
-            }
-
-            BeginInvoke(() => { SaveCurrentSeasonFromUi(); RecomputeStandings(); });
-        };
-
-        var sessionsHint = new Label
-        {
-            Text = "Only sessions recorded as \"Race\" type appear below - practice never counts toward points.",
+            Text = "Points a driver brings in from before this championship was run here - a series moved over part way, say. They count in the table like any other points.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
 
-        var sessions = new Section("Races counted");
-
-        sessions.Add(sessionsHint);
-        sessions.AddFill(_clbSessions, () => ListLeast(_clbSessions, 4), gapBelow: 0);
-
-        // --- The standings ---
-        _dgvStandings.ReadOnly = true;
-        _dgvStandings.AllowUserToAddRows = false;
-        _dgvStandings.AllowUserToDeleteRows = false;
-        _dgvStandings.RowHeadersVisible = false;
-        _dgvStandings.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _dgvStandings.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-        _dgvStandings.Columns.AddRange(
-            new DataGridViewTextBoxColumn { Name = "rank", HeaderText = "Rank", FillWeight = 30 },
-            new DataGridViewTextBoxColumn { Name = "driver", HeaderText = "Driver", FillWeight = 100 },
-            new DataGridViewTextBoxColumn { Name = "points", HeaderText = "Points", FillWeight = 50 },
-
-            // Of those points, how many were carried in from before - blank
-            // for everybody who carried none (27 Sep 2026).
-            new DataGridViewTextBoxColumn { Name = "carried", HeaderText = "Carried In", FillWeight = 50 },
-            new DataGridViewTextBoxColumn { Name = "wins", HeaderText = "Wins", FillWeight = 40 },
-            new DataGridViewTextBoxColumn { Name = "podiums", HeaderText = "Podiums", FillWeight = 50 },
-            new DataGridViewTextBoxColumn { Name = "sessions", HeaderText = "Races", FillWeight = 40 },
-            new DataGridViewTextBoxColumn { Name = "dnfs", HeaderText = "DNF", FillWeight = 30 },
-            new DataGridViewTextBoxColumn { Name = "best", HeaderText = "Best Finish", FillWeight = 60 }
-        );
-
-        // What the table adds up: how many drivers and races, and the rule
-        // it scored them by. It wraps rather than being cut short - with a
-        // few drivers carrying points in and races forced out, it runs long.
-        _lblStatus.AutoSize = true;
-        _lblStatus.ForeColor = AppTheme.TextMuted;
-
-        var btnExportStandings = new Button { Text = "Export Standings to CSV..." };
-        btnExportStandings.Click += (_, _) => ExportStandings();
-
-        var btnCarried = new Button { Text = "Points Carried In..." };
+        var btnCarried = new Button { Text = "Edit Points Carried In..." };
         btnCarried.Click += (_, _) => EditCarriedPoints();
+        AppTheme.StyleButton(btnCarried, AppTheme.ButtonKind.Primary);
 
-        var standings = new Section("Standings");
+        var carried = new Section("Points carried in");
 
-        standings.AddFill(_dgvStandings, () => GridLeast(_dgvStandings, 3));
-        standings.Add(_lblStatus);
-        standings.Add(new ButtonBar().With(btnExportStandings, btnCarried), gapBelow: 0);
+        carried.Add(carriedHint);
+        carried.Add(_lblCarried);
+        carried.Add(new ButtonBar().With(btnCarried), gapBelow: 0);
 
         // The hints in the small type, at the text size in use.
         _textSize.Wear(schemeHint, () => AppTheme.SmallFont);
         _textSize.Wear(sessionsHint, () => AppTheme.SmallFont);
+        _textSize.Wear(carriedHint, () => AppTheme.SmallFont);
 
         // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
         _textSize.Keep(() => Pieces.KeepHeadingsWhole(_dgvPointsScheme));
         _textSize.Keep(KeepStandingsWhole);
 
-        // --- The page ---
-        Beside? outer = null;
+        // The four views share one room; the chips show one.
+        foreach (var (key, view) in new (string, Control)[] { ("standings", standingsView), ("races", sessions), ("points", pointsView), ("carried", carried) })
+        {
+            view.Dock = DockStyle.Fill;
+            view.Visible = key == "standings";
+            _views.Controls.Add(view);
+            _viewParts[key] = view;
+        }
 
-        outer = new Beside(() => ColumnWidths(outer?.Width ?? 0).Standings);
+        // --- The page: the cards down the left, the championship beside them ---
+        var picked = new Panel { Tag = AppTheme.KeepBackColor };
+        var pickedPage = new FillPage();
 
-        var inner = new Beside(() => ColumnWidths(outer?.Width ?? 0).Middle);
+        pickedPage.Padding = Padding.Empty;
+        pickedPage.Add(head, gapBelow: UiLayout.HintGap);
+        pickedPage.Add(_viewChips, gapBelow: UiLayout.RowGap);
+        pickedPage.AddFill(_views, ViewLeast, gapBelow: 0);
+        picked.Controls.Add(pickedPage);
+        _pickedPage = pickedPage;
 
-        inner.AddFill(seasons, seasons.LeastHeight);
-        inner.AddSideCard(scheme);
-        inner.AddSideFill(sessions, sessions.LeastHeight, gapBelow: 0);
+        var band = new Beside(() => UiLayout.AtTextSize(CardsWidth)) { SideOnLeft = true };
 
-        outer.AddFill(inner, inner.LeastHeight);
-        outer.AddSideFill(standings, standings.LeastHeight, gapBelow: 0);
+        band.AddFill(picked, width => pickedPage.LeastHeight(width));
+        band.AddSideFill(seasons, seasons.LeastHeight, gapBelow: 0);
 
         var page = new FillPage();
         _page = page;
 
-        page.AddFill(outer, outer.LeastHeight, gapBelow: 0);
+        page.AddFill(band, band.LeastHeight, gapBelow: 0);
 
         Controls.Add(page);
     }
 
-    /// <summary>
-    /// The three columns' widths, given the width of all three: the
-    /// championships under a fifth and the middle column a quarter,
-    /// between 160-280px and 260-420px at the normal text size, at the size
-    /// in use - the championships never too narrow for the widest of their
-    /// buttons or their caption - and the standings the rest, never under 240px at the
-    /// normal text size.
-    ///
-    /// The standings get the most because they need it: nine columns, each
-    /// kept as wide as its heading (Pieces.KeepHeadingsWhole), and past what
-    /// those need the list scrolls sideways. The other two were a fifth and
-    /// a third, up to 460px, and at 150% every standings heading was cut
-    /// short while the scheme's two columns had room to spare (layout
-    /// pictures, 29 Sep).
-    ///
-    /// Too narrow for all three at that - a small window at the largest
-    /// text size - and each gives up the same share of its width. Left to
-    /// the two Besides, the standings would keep their least and the
-    /// championships, whose width is only what the other two leave, would
-    /// give up all of theirs. Nothing here scrolls sideways (FillPage).
-    /// </summary>
-    /// <summary>What the standings card needs across for every shown column at its least, its border and the card's inset.</summary>
-    private int StandingsNeed() =>
-        _dgvStandings.Columns.Cast<DataGridViewColumn>().Where(column => column.Visible).Sum(column => column.MinimumWidth)
-        + 2 + Section.Inset.Horizontal;
+    private readonly Label _lblName = new();
+    private readonly Label _lblRuleLine = new();
+    private readonly Label _lblTitleRace = new();
+    private readonly TitleRaceView _titleRace = new();
+    private readonly Label _lblRules = new();
+    private readonly Label _lblCarried = new();
+    private readonly ChipRow _viewChips = new() { AccessibleDescription = "Championship view" };
+    private readonly Panel _views = new() { Tag = AppTheme.KeepBackColor };
+    private readonly Dictionary<string, Control> _viewParts = new();
+    private FillPage? _pickedPage;
+    private Button? _btnMore;
+    private ButtonBar? _moreBar;
 
-    private (int Seasons, int Middle, int Standings) ColumnWidths(int content)
+    /// <summary>The cards' column, the Can they still win card and the rules card at the normal text size.</summary>
+    private const int CardsWidth = 280;
+    private const int StillWinWidth = 320;
+    private const int RulesWidth = 340;
+
+    /// <summary>For the tests: the view showing, the chips, and the Can they still win card.</summary>
+    internal (string View, IReadOnlyList<ChipRow.Chip> Chips, string TitleLine, IReadOnlyList<TitleRaceView.Row> TitleRows) Shows =>
+        (_viewChips.Picked, _viewChips.Chips, _lblTitleRace.Text, _titleRace.Rows);
+
+    /// <summary>The least the view showing can do with.</summary>
+    private int ViewLeast(int width) =>
+        _viewParts.TryGetValue(_viewChips.Picked.Length > 0 ? _viewChips.Picked : "standings", out var view)
+            ? view switch
+            {
+                Beside beside => beside.LeastHeight(width),
+                Section section => section.LeastHeight(width),
+                _ => 0,
+            }
+            : 0;
+
+    /// <summary>Shows one of the four views.</summary>
+    internal void ShowView(string key)
     {
-        var widestButton = _seasonButtons?.Controls.OfType<Button>().Select(button => button.Width).DefaultIfEmpty(0).Max() ?? 0;
-
-        var seasons = Math.Max(
-            Math.Clamp((int)(content * 0.18f), UiLayout.AtTextSize(160), UiLayout.AtTextSize(280)),
-            Math.Max(widestButton, _seasonsCard?.CaptionWidth ?? 0) + Section.Inset.Horizontal);
-
-        var middle = Math.Clamp((int)(content * 0.25f), UiLayout.AtTextSize(260), UiLayout.AtTextSize(420));
-
-        // The standings' whole headings, driver names and Races values
-        // (KeepStandingsWhole) come first: the middle column, then the
-        // championships, give way down to their least before the table
-        // has to scroll sideways (user-guide pictures, 13 Nov 2026).
-        var seasonsLeast = Math.Max(UiLayout.AtTextSize(160), Math.Max(widestButton, _seasonsCard?.CaptionWidth ?? 0) + Section.Inset.Horizontal);
-        var shortBy = StandingsNeed() - (content - UiLayout.RowGap * 2 - seasons - middle);
-
-        if (shortBy > 0)
+        if (!_viewParts.ContainsKey(key))
         {
-            var fromMiddle = Math.Min(shortBy, Math.Max(0, middle - UiLayout.AtTextSize(260)));
-            middle -= fromMiddle;
-            seasons -= Math.Min(shortBy - fromMiddle, Math.Max(0, seasons - seasonsLeast));
+            return;
         }
 
-        // What the three share: all of it but the gap between each two -
-        // the gap a Beside leaves between its parts and its column.
-        var room = Math.Max(0, content - UiLayout.RowGap * 2);
-        var least = seasons + middle + UiLayout.AtTextSize(240);
+        _viewChips.Picked = key;
 
-        if (least > room)
+        SuspendLayout();
+
+        foreach (var (name, view) in _viewParts)
         {
-            seasons = (int)((long)seasons * room / least);
-            middle = (int)((long)middle * room / least);
+            view.Visible = name == key;
         }
 
-        return (seasons, middle, Math.Max(0, room - seasons - middle));
+        ResumeLayout(true);
+        _pickedPage?.LeastHeightMayHaveChanged();
+    }
+
+    /// <summary>More: Rename and Delete, the second asking first.</summary>
+    private void ShowMoreMenu(Control under)
+    {
+        if (SelectedSeason() is null)
+        {
+            return;
+        }
+
+        var menu = new ContextMenuStrip();
+
+        var rename = new ToolStripMenuItem("Rename...");
+        rename.Click += BtnRenameSeason_Click;
+
+        var delete = new ToolStripMenuItem("Delete Championship...") { ForeColor = AppTheme.Danger };
+        delete.Click += BtnDeleteSeason_Click;
+
+        menu.Items.Add(rename);
+        menu.Items.Add(delete);
+
+        AppTheme.StyleContextMenu(menu);
+        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
+        menu.Show(under, new Point(under.Width - menu.PreferredSize.Width, under.Height));
+    }
+
+    /// <summary>
+    /// One championship's card: its name, its class and how far through it
+    /// is, a bar for that, and who leads - or "Champion" once it is over.
+    /// </summary>
+    private void DrawSeasonItem(object? sender, DrawItemEventArgs e)
+    {
+        var g = e.Graphics;
+
+        using (var back = new SolidBrush(AppTheme.Surface))
+        {
+            g.FillRectangle(back, e.Bounds);
+        }
+
+        if (e.Index < 0 || e.Index >= _lstSeasons.Items.Count || _lstSeasons.Items[e.Index] is not SeasonListItem item)
+        {
+            return;
+        }
+
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+        var selected = (e.State & DrawItemState.Selected) != 0;
+        var card = Rectangle.Inflate(e.Bounds, -UiLayout.AtDpi(2), -UiLayout.AtDpi(4));
+
+        using (var path = AppTheme.RoundedRect(new RectangleF(card.X + 0.5f, card.Y + 0.5f, card.Width - 1f, card.Height - 1f), UiLayout.AtDpi(10)))
+        {
+            using var fill = new SolidBrush(selected ? AppTheme.SecondaryButton : AppTheme.Background);
+            g.FillPath(fill, path);
+            using var pen = new Pen(selected ? AppTheme.Primary : AppTheme.Border, Math.Max(1f, UiLayout.AtDpi(1)));
+            g.DrawPath(pen, path);
+        }
+
+        var pad = UiLayout.AtDpi(12);
+        var x = card.X + pad;
+        var width = Math.Max(1, card.Width - pad * 2);
+        var y = card.Y + UiLayout.AtDpi(9);
+        const TextFormatFlags line = TextFormatFlags.Left | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis;
+
+        TextRenderer.DrawText(g, item.Season.Name, AppTheme.BoldFont, new Rectangle(x, y, width, AppTheme.BoldFont.Height),
+            item.Finished && !selected ? AppTheme.TextMuted : AppTheme.TextDark, line);
+        y += AppTheme.BoldFont.Height + UiLayout.AtDpi(3);
+
+        TextRenderer.DrawText(g, item.Line, AppTheme.SmallFont, new Rectangle(x, y, width, AppTheme.SmallFont.Height), AppTheme.TextMuted, line);
+        y += AppTheme.SmallFont.Height + UiLayout.AtDpi(6);
+
+        if (item.Progress is { } progress)
+        {
+            var bar = new RectangleF(x, y, width, UiLayout.AtDpi(5));
+
+            using (var path = AppTheme.RoundedRect(bar, UiLayout.AtDpi(2)))
+            using (var brush = new SolidBrush(AppTheme.Border))
+            {
+                g.FillPath(brush, path);
+            }
+
+            if (progress > 0)
+            {
+                using var path = AppTheme.RoundedRect(new RectangleF(x, y, Math.Max(UiLayout.AtDpi(5), (float)(width * Math.Clamp(progress, 0, 1))), bar.Height), UiLayout.AtDpi(2));
+                using var brush = new SolidBrush(item.Finished ? AppTheme.TextMuted : AppTheme.Primary);
+                g.FillPath(brush, path);
+            }
+        }
+
+        y += UiLayout.AtDpi(9);
+
+        if (item.Leader.Length > 0)
+        {
+            var label = item.Finished ? "Champion " : "Leader ";
+            var labelWidth = TextRenderer.MeasureText(g, label, AppTheme.SmallFont, Size.Empty, TextFormatFlags.NoPadding).Width;
+
+            TextRenderer.DrawText(g, label, AppTheme.SmallFont, new Rectangle(x, y, labelWidth + 2, AppTheme.SmallFont.Height), AppTheme.TextMuted, line);
+            TextRenderer.DrawText(g, item.Leader, AppTheme.SmallFont, new Rectangle(x + labelWidth, y, Math.Max(1, width - labelWidth), AppTheme.SmallFont.Height),
+                item.Finished ? AppTheme.Warning : AppTheme.TextDark, line);
+        }
+    }
+
+    /// <summary>What a championship's card and header say about how far through it is: "Stock · round 7 of 8".</summary>
+    private (string Line, double? Progress, bool Finished, int Rounds) ProgressOf(Season season, IReadOnlyList<SessionRecord> counted)
+    {
+        var rounds = CommentaryReaders.RoundsCountedSoFar(counted, _events, null) ?? counted.Count;
+        var className = season.ClassName.Length > 0 ? season.ClassName : "Every class";
+
+        if (season.PlannedRounds > 0)
+        {
+            var finished = rounds >= season.PlannedRounds;
+            return ($"{className} · {(finished ? $"finished, {Plural.Of(season.PlannedRounds, "round")}" : $"round {rounds} of {season.PlannedRounds}")}",
+                rounds / (double)season.PlannedRounds, finished, rounds);
+        }
+
+        return ($"{className} · {Plural.Of(counted.Count, "race")} counted", null, false, rounds);
+    }
+
+    /// <summary>The rules in a line under the name: "Stock · mains only · best 6 count · new races added automatically".</summary>
+    private static string RuleLine(Season season)
+    {
+        var bits = new List<string>
+        {
+            season.ClassName.Length > 0 ? season.ClassName : "every class",
+            season.MainsOnly ? "mains only" : "heats and mains",
+        };
+
+        if (season.CountBestRounds > 0)
+        {
+            bits.Add(season.CountBestRounds == 1 ? "best round counts" : $"best {season.CountBestRounds} count");
+        }
+
+        bits.Add(season.AutoInclude ? "new races added automatically" : "races picked by hand");
+        return string.Join(" · ", bits);
+    }
+
+    /// <summary>The rules, a line each, for the Points &amp; Rules view.</summary>
+    private static string RulesList(Season season)
+    {
+        var lines = new List<string>
+        {
+            season.AutoInclude ? "• New races are added automatically" : "• Races are picked by hand, on Races",
+            season.ClassName.Length > 0 ? $"• Class: {season.ClassName}" : "• Every class counts",
+            season.MainsOnly ? "• Only mains count, not qualifying heats" : "• Heats and mains both count",
+            season.IncludedEventIds.Count > 0 ? $"• {Plural.Of(season.IncludedEventIds.Count, "race day")} picked" : "• Every race day counts",
+            season.PlannedRounds > 0 ? $"• The season is {Plural.Of(season.PlannedRounds, "round")} long" : "• Season length not set (needed for Can they still win?)",
+            season.CountBestRounds > 0 ? $"• Each driver's best {Plural.Of(season.CountBestRounds, "round")} count" : "• Every round counts",
+        };
+
+        if (!string.IsNullOrWhiteSpace(season.AnnouncerNote))
+        {
+            lines.Add($"• Announcer note: \"{season.AnnouncerNote.Trim()}\"");
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    /// <summary>
+    /// Everything about the championship picked that isn't the two tables:
+    /// the header, the chips' counts, Can they still win?, the rules and the
+    /// carried-in points. After every recompute.
+    /// </summary>
+    private void RefreshPicked(Season? season, IReadOnlyList<SessionRecord> counted, IReadOnlyList<SeasonStandingEntry> standings)
+    {
+        var any = season is not null;
+
+        _viewChips.Visible = any;
+        _views.Visible = any;
+
+        // The bar and all: a bar with nothing showing in it is squeezed to nothing.
+        if (_moreBar is not null)
+        {
+            _moreBar.Visible = any;
+        }
+
+        if (season is null)
+        {
+            _lblName.Text = _seasons.All.Count == 0 ? "No championships yet" : "Pick a championship";
+            _lblRuleLine.Text = _seasons.All.Count == 0
+                ? "A championship adds up points from the races you choose. Start one with + New Championship."
+                : string.Empty;
+            return;
+        }
+
+        var (progressLine, _, _, _) = ProgressOf(season, counted);
+
+        _lblName.Text = season.Name;
+        _lblRuleLine.Text = $"{progressLine} · {RuleLine(season).Split(" · ", 2).Last()}";
+
+        _viewChips.SetChips(new List<ChipRow.Chip>
+        {
+            new("standings", "Standings", standings.Count),
+            new("races", "Races", counted.Count),
+            new("points", "Points & Rules"),
+            new("carried", "Carried In", season.CarriedPoints.Count),
+        });
+
+        if (_viewChips.Picked.Length == 0)
+        {
+            _viewChips.Picked = "standings";
+        }
+
+        // --- Can they still win? ---
+        var (race, why) = CommentaryReaders.TitleRaceFor(season, counted, _events, _profiles);
+
+        if (race is null)
+        {
+            _lblTitleRace.Text = why;
+            _titleRace.SetRows(Array.Empty<TitleRaceView.Row>());
+        }
+        else
+        {
+            var stillIn = race.Rows.Count(r => r.CanWin);
+            var best = season.PointsForPosition(season.BestPayingPosition());
+
+            _lblTitleRace.Text = race.RoundsLeft == 0
+                ? stillIn == 1 ? $"The season is over. {race.Rows[0].Driver} is champion." : $"The season is over, with {stillIn} level at the top."
+                : stillIn == 1
+                    ? $"{Plural.Of(race.RoundsLeft, "round")} left, and nobody can catch {race.Rows[0].Driver} now."
+                    : $"{Plural.Of(race.RoundsLeft, "round")} left, up to {best} points each. {stillIn} drivers can still win it.";
+
+            _titleRace.SetRows(race.Rows.Select((r, i) => new TitleRaceView.Row(
+                i + 1, r.Driver, r.Points, r.Points - race.Rows[0].Points,
+                i == 0
+                    ? race.RoundsLeft == 0 && stillIn == 1 ? TitleRaceView.State.Champion : TitleRaceView.State.Leading
+                    : r.CanWin ? TitleRaceView.State.StillIn : TitleRaceView.State.OutOfReach)).ToList());
+        }
+
+        _lblRules.Text = RulesList(season);
+
+        _lblCarried.Text = season.CarriedPoints.Count == 0
+            ? "Nobody carries points in."
+            : string.Join(Environment.NewLine, season.CarriedPoints
+                .OrderByDescending(e => e.Points)
+                .Select(e => $"{e.DriverName}: {e.Points} {(Math.Abs(e.Points) == 1 ? "point" : "points")}"));
     }
 
     /// <summary>The points scheme's height: its headings and a few places, as the theme sizes its rows - asked whenever the card is measured, so it follows the text size.</summary>
@@ -559,7 +858,7 @@ public sealed class SeasonsControl : UserControl
         _lstSeasons.Items.Clear();
         foreach (var season in _seasons.All)
         {
-            _lstSeasons.Items.Add(new SeasonListItem(season));
+            _lstSeasons.Items.Add(ItemFor(season));
         }
 
         if (selectId is not null)
@@ -584,6 +883,16 @@ public sealed class SeasonsControl : UserControl
         }
     }
 
+
+    /// <summary>A championship's card, worked out from its table now.</summary>
+    private SeasonListItem ItemFor(Season season)
+    {
+        var counted = EventSpine.SessionsFor(season, _events, _rounds, _history);
+        var standings = SeasonStore.ComputeStandings(season, counted, _profiles);
+        var (line, progress, finished, _) = ProgressOf(season, counted);
+
+        return new SeasonListItem(season, line, progress, finished, standings.Count > 0 ? standings[0].DriverName : string.Empty);
+    }
     private void LoadSelectedSeasonIntoUi()
     {
         _suppressEvents = true;
@@ -601,6 +910,7 @@ public sealed class SeasonsControl : UserControl
             if (season is null)
             {
                 _dgvStandings.Rows.Clear();
+                RefreshPicked(null, Array.Empty<SessionRecord>(), Array.Empty<SeasonStandingEntry>());
                 return;
             }
 
@@ -833,11 +1143,13 @@ public sealed class SeasonsControl : UserControl
 
         if (season is null)
         {
+            RefreshPicked(null, Array.Empty<SessionRecord>(), Array.Empty<SeasonStandingEntry>());
             return;
         }
 
         var sessions = EventSpine.SessionsFor(season, _events, _rounds, _history);
         var standings = SeasonStore.ComputeStandings(season, sessions, _profiles);
+        var leaderPoints = standings.Count > 0 ? standings[0].TotalPoints : 0;
 
         // Carried In is blank unless somebody brought points from before,
         // which most championships never do - so it shows only when it
@@ -851,6 +1163,7 @@ public sealed class SeasonsControl : UserControl
                 rank++,
                 entry.DriverName,
                 entry.TotalPoints,
+                ReferenceEquals(entry, standings[0]) ? string.Empty : (entry.TotalPoints - leaderPoints).ToString(CultureInfo.CurrentCulture),
                 entry.CarriedIn == 0 ? string.Empty : entry.CarriedIn.ToString(),
                 entry.Wins,
                 entry.Podiums,
@@ -907,6 +1220,19 @@ public sealed class SeasonsControl : UserControl
         _lblStatus.Text = standings.Count == 0
             ? $"Nothing counted yet ({rule}). Tick a race, or change the scoring rules."
             : $"{Plural.Of(standings.Count, "driver")}, {Plural.Of(sessions.Count, "race")} \u00b7 {rule}{drop}{overrides}";
+
+        RefreshPicked(season, sessions, standings);
+
+        // The card's leader and progress follow the table.
+        if (_lstSeasons.SelectedItem is SeasonListItem card)
+        {
+            var (line, progress, finished, _) = ProgressOf(season, sessions);
+            card.Line = line;
+            card.Progress = progress;
+            card.Finished = finished;
+            card.Leader = standings.Count > 0 ? standings[0].DriverName : string.Empty;
+            _lstSeasons.Invalidate();
+        }
     }
 
     private void BtnNewSeason_Click(object? sender, EventArgs e)
@@ -1061,8 +1387,15 @@ public sealed class SeasonsControl : UserControl
         return dialog.ShowDialog(this) == DialogResult.OK ? dialog.Answer : null;
     }
 
-    private sealed record SeasonListItem(Season Season)
+    /// <summary>A championship's card in the list: its line, how far through it is, and who leads (or won).</summary>
+    private sealed class SeasonListItem(Season season, string line, double? progress, bool finished, string leader)
     {
+        public Season Season { get; } = season;
+        public string Line { get; set; } = line;
+        public double? Progress { get; set; } = progress;
+        public bool Finished { get; set; } = finished;
+        public string Leader { get; set; } = leader;
+
         public override string ToString() => Season.Name;
     }
 

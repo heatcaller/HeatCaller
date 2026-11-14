@@ -725,22 +725,106 @@ internal sealed class ShowTreatmentCard
     /// Measured rather than set, so this is the only way a club can see
     /// what their file is going to do.
     /// </summary>
+    /// <summary>Which RefreshShowMusic is the latest - a measurement that finishes after a newer one has started is dropped.</summary>
+    private int _showMusicGeneration;
+
     private void RefreshShowMusic()
     {
-        _lblOpenerFile.Text = _showMusic.Describe(ShowPart.Opener);
-        _lblBedFile.Text = _showMusic.Describe(ShowPart.Bed);
-        _lblStingFile.Text = _showMusic.Describe(ShowPart.Sting);
+        var generation = ++_showMusicGeneration;
+        var rejoin = _chkShowRejoin.Checked;
 
-        // And what the running order is going to do with their opener,
-        // which is measured off the file in the same way and so is just as
-        // impossible to guess from the outside. Only worth saying while
-        // the shortening is on: unticked, every show plays it whole and
-        // there is nothing to report.
-        _lblRunningOrder.Text = _chkShowRejoin.Checked
-            ? _showMusic.DescribeRunningOrder()
-            : "every show plays the opener whole.";
+        // What each line says is measured off the file itself, and the bed
+        // in particular is minutes of audio decoded to find its loop.
+        //
+        // WHY (13 Nov 2026, Asher: "make the whole app quicker to load"):
+        // done here, on the window's thread, the bed alone held up the
+        // building of the whole window by about a second at every start -
+        // for a line on a page nobody had opened. Pieces already loaded
+        // (the cache in ShowMusic) are described at once, as before; the
+        // rest say so while they are measured in the background, and the
+        // lines are filled in when that is done. Measuring them early also
+        // means the night's first show finds them loaded.
+        (string Opener, string Bed, string Sting, string Order) Describe() => (
+            _showMusic.Describe(ShowPart.Opener),
+            _showMusic.Describe(ShowPart.Bed),
+            _showMusic.Describe(ShowPart.Sting),
+            rejoin ? _showMusic.DescribeRunningOrder() : "every show plays the opener whole.");
 
+        void Show((string Opener, string Bed, string Sting, string Order) said)
+        {
+            _lblOpenerFile.Text = said.Opener;
+            _lblBedFile.Text = said.Bed;
+            _lblStingFile.Text = said.Sting;
+
+            // And what the running order is going to do with their opener,
+            // which is measured off the file in the same way and so is just
+            // as impossible to guess from the outside. Only worth saying
+            // while the shortening is on: unticked, every show plays it
+            // whole and there is nothing to report.
+            _lblRunningOrder.Text = said.Order;
+
+            UpdateEnabledState();
+        }
+
+        if (_showMusic.AllLoaded())
+        {
+            Show(Describe());
+            return;
+        }
+
+        const string Measuring = "measuring...";
+
+        foreach (var part in new[] { (ShowPart.Opener, _lblOpenerFile), (ShowPart.Bed, _lblBedFile), (ShowPart.Sting, _lblStingFile) })
+        {
+            part.Item2.Text = _showMusic.IsLoaded(part.Item1) ? _showMusic.Describe(part.Item1) : Measuring;
+        }
+
+        _lblRunningOrder.Text = rejoin ? Measuring : "every show plays the opener whole.";
         UpdateEnabledState();
+
+        _ = Task.Run(() =>
+        {
+            (string, string, string, string) said;
+
+            try
+            {
+                said = Describe();
+            }
+            catch (Exception ex)
+            {
+                said = ("couldn't be read", "couldn't be read", "couldn't be read", $"couldn't be measured ({ex.Message})");
+            }
+
+            void Apply()
+            {
+                if (generation == _showMusicGeneration && !Card.IsDisposed)
+                {
+                    Show(said);
+                }
+            }
+
+            try
+            {
+                if (Card.IsHandleCreated)
+                {
+                    Card.BeginInvoke(Apply);
+                }
+                else
+                {
+                    // Not on screen yet: filled in the moment it is.
+                    Card.HandleCreated += (_, _) => Card.BeginInvoke(Apply);
+
+                    if (Card.IsHandleCreated)
+                    {
+                        Card.BeginInvoke(Apply);
+                    }
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                // Closing.
+            }
+        });
     }
 
     /// <summary>

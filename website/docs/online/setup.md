@@ -93,9 +93,9 @@ The **What gets published** card lists what's always sent: "The live race while 
 
 ### Live board columns
 
-**Choose Live Board Columns** picks the columns of the live race on the club's **Live** page. It opens the column picker, titled "Club website live board"; **Restore Defaults** in it goes back to following the Live Results page. The line under the button says which columns are in use, for example "The live race on the club's website. The same columns as the Live Results page: ..." or "... Its own columns: ...", and ends "The transponder number is never shown online."
+**Choose Live Board Columns** picks the columns of the live race on the club's **Live** page. It opens the column picker, titled "Club website live board"; **Restore Defaults** in it goes back to following the OBS overlay's columns. The line under the button says which columns are in use, for example "The live race on the club's website. The same columns as the OBS overlay: ..." or "... Its own columns: ...", and ends "The transponder number is never shown online."
 
-- Until you pick, the club's **Live** page shows the same columns as the **Live Results** page on **Local Screens**, and follows any change made there (see [Live results](../screens/phone-and-web.md#live-results)). A pick that comes out the same as the Live Results page's is kept as no pick, so the board goes on following that page.
+- Until you pick, the club's **Live** page shows the same columns as the OBS overlay on **Local Screens** (**Choose Web Columns**), and follows any change made there (see [OBS overlay](../screens/phone-and-web.md#obs-overlay)). A pick that comes out the same as the overlay's is kept as no pick, so the board goes on following the overlay.
 - The **Transponder** column is never offered here, and never goes online.
 - **Undo** in the sidebar puts the previous columns back ("Change the website's live board columns").
 

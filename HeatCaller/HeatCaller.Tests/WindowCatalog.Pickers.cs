@@ -21,7 +21,7 @@ internal static partial class WindowCatalog
         ("Badge Details (nobody yet)", () => PickerBadgeWindow(AchievementCatalogue.GrandSlam, holders: 0, earned: false)),
         ("Choose columns", () => new KpiPickerForm("Race Control", KpiCatalog.DefaultRaceControl, KpiCatalog.DefaultRaceControl)),
         ("Choose columns (every column picked)", () => new KpiPickerForm(
-            "Live Results page",
+            "OBS overlay",
             KpiCatalog.All.Select(definition => definition.Key).ToList(),
             KpiCatalog.DefaultWeb)),
         ("Choose columns (none picked)", () => new KpiPickerForm("Big Screen", new List<string>(), KpiCatalog.DefaultBigScreen)),

@@ -21,7 +21,7 @@ How the app sounds, rather than how it looks, is on **Sounds → Soundscapes**, 
 |---|---|---|
 | The app's own window and dialogs | The app's look | After the app restarts |
 | The Big Screen | The crowd-screen look | Straight away, even while it's open |
-| The Wi-Fi pages: live results (including the OBS overlay), the phone remote and driver check-in | The crowd-screen look | Within about 5 seconds; the pages reload themselves (the check-in page waits until nobody is part way through checking in) |
+| The Wi-Fi pages: the OBS overlay, the phone remote and driver check-in | The crowd-screen look | Within about 5 seconds; the pages reload themselves (the check-in page waits until nobody is part way through checking in) |
 | Your club's online pages | The crowd-screen look | Within a few seconds |
 
 A few things stay the same in every look:

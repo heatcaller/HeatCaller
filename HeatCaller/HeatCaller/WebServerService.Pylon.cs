@@ -10,7 +10,7 @@ namespace HeatCaller;
 ///
 /// LAN copy only, like the follow cards it sits beside: everything here is
 /// keyed by the roster's opaque id (RosterId), never a transponder, for the
-/// reason AddFollowing gives - /api/state is served to any phone on the
+/// reason AddIdsAndGrid gives - /api/state is served to any phone on the
 /// club Wi-Fi with no PIN.
 /// </summary>
 public sealed partial class WebServerService

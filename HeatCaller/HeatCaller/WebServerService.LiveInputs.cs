@@ -3,7 +3,7 @@ namespace HeatCaller;
 /// <summary>
 /// The window's side of the live state (/api/state and the relay's copy):
 /// what BuildStateJsonCore reads from the stores the UI thread edits - the
-/// web page's columns, on deck, the sponsors - read in one go, and the
+/// web page's columns, on deck, who presents the broadcast's moments - read in one go, and the
 /// profiles it names drivers from.
 /// </summary>
 /// <remarks>
@@ -28,11 +28,6 @@ public sealed partial class WebServerService
         IReadOnlyList<string> WebKpis,
         IReadOnlyList<string> RelayKpis,
         string OnDeck,
-        int SponsorCount,
-        int SponsorLeaderboardSecs,
-        int SponsorSlideSecs,
-        bool SponsorPauseDuringRace,
-        IReadOnlyList<int> SponsorVideos,
         IReadOnlyList<(string Moment, string Sponsor)>? Presented);
 
     /// <summary>The last CaptureUiSide, threaded mode only. Replaced whole.</summary>
@@ -55,20 +50,11 @@ public sealed partial class WebServerService
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
         }
 
-        var sponsorCount = _sponsors?.Current.Enabled == true ? _sponsors.SlideFileNames.Count : 0;
-        var leaderboardSecs = _sponsors?.Current.LeaderboardSeconds ?? 60;
-        var slideSecs = _sponsors?.Current.SlideSeconds ?? 8;
-        var pauseDuringRace = _sponsors?.Current.PauseDuringRace ?? true;
-
-        // Which slots are videos - see sponsorVideos in BuildStateJsonCore.
-        var sponsorVideos = _sponsors?.Current.Enabled == true
-            ? _sponsors.SlideFileNames
-                .Select((name, index) => (name, index))
-                .Where(slide => SponsorMedia.IsVideoName(slide.name))
-                .Select(slide => slide.index)
-                .ToList()
-            : new List<int>();
-
+        // The sponsor slides themselves are no longer on the Wi-Fi pages
+        // (13 Nov 2026): they only ever showed on Live Results, which was
+        // taken off the LAN. The broadcast graphics' "presented by" is all
+        // the live state carries about sponsors now.
+        //
         // Who presents the moments the graphics show - see AddBroadcast.
         // Worked out here rather than copying the sponsor list: a booking's
         // Presents list is edited in place on the Sponsors page, so only the
@@ -99,7 +85,7 @@ public sealed partial class WebServerService
             presented = null;
         }
 
-        return new UiSide(webKpis, relayKpis, onDeck, sponsorCount, leaderboardSecs, slideSecs, pauseDuringRace, sponsorVideos, presented);
+        return new UiSide(webKpis, relayKpis, onDeck, presented);
     }
 
     /// <summary>

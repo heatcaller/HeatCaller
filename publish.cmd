@@ -76,15 +76,17 @@ rem No -p:UseAppHost=false here - that switch belongs to the cloud build
 rem script, which only compiles. This publish has to produce HeatCaller.exe,
 rem because that is what the installer installs and what a club clicks.
 rem
-rem ReadyToRun: recommended ON, once measured both ways. The app's startup
-rem is already heavy (fonts, settings, every page built in code), the .NET
-rem runtime in a self-contained publish is pre-compiled already so this only
-rem adds to HeatCaller's own code and its libraries, and Velopack's delta
-rem updates mean the extra size is paid once. Left commented out rather than
-rem guessed at: publish both ways, read the size line below, and time a cold
-rem start before committing to it. To try it, add to the line below:
-rem   -p:PublishReadyToRun=true
-dotnet publish "HeatCaller\HeatCaller\HeatCaller.csproj" -c Release -r win-x64 --self-contained true -o "%OUT%"
+rem ReadyToRun: ON since 13 Nov 2026, measured both ways first. The .NET
+rem runtime in a self-contained publish is pre-compiled already, so this
+rem pre-compiles HeatCaller's own code and its libraries - which otherwise
+rem are compiled as each piece first runs, at every start.
+rem   Measured on Asher's PC, 3 cold starts each in --rehearsal on the
+rem   club's data: pages built in 3.2-3.5s instead of 3.8-4.1s, and the
+rem   window ready about 0.6-0.9s sooner. Cost: 26 MB on a 1.47 GB folder
+rem   (+1.8%; HeatCaller.dll 9.4 -> 22.8 MB), paid once thanks to
+rem   Velopack's delta updates, and the publish takes about 20s longer.
+rem To go back, take -p:PublishReadyToRun=true off the line below.
+dotnet publish "HeatCaller\HeatCaller\HeatCaller.csproj" -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true -o "%OUT%"
 if errorlevel 1 goto :fail
 
 if not exist "%OUT%\HeatCaller.exe" goto :noexe

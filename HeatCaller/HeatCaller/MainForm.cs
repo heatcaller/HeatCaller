@@ -229,9 +229,7 @@ public partial class MainForm : Form
     partial void RosterTickDriverRequests(); // MainForm.DriverRequests.cs
 
     // Each time a race is filed or corrected, from PublishDriverNightsFor
-    // (MainForm.Relay.cs), whatever the relay switches say - the Wi-Fi
-    // pages want it too.
-    partial void RaceFiledWiFiExtras(SessionRecord session); // MainForm.WiFiExtras.cs
+    // (MainForm.Relay.cs), whatever the relay switches say.
     partial void RaceFiledDriverLive(SessionRecord session); // MainForm.DriverLive.cs
 
     /// <summary>The Entries page, so a check-in arriving from a phone shows up on it straight away.</summary>
@@ -1962,13 +1960,6 @@ public partial class MainForm : Form
 
         // The live track map: following the race's crossings - see MainForm.TrackMap.
         WireTrackMap();
-
-        // The phone coach page's report cards, for a laptop restarted mid-evening - see MainForm.Coach.
-        PublishCoachCards();
-
-        // A target lap set or cleared reaches the phone coach page at once,
-        // not at the driver's next lap - see MainForm.Coach.
-        WatchDriverTargets();
 
         WirePhotoFinish();
 

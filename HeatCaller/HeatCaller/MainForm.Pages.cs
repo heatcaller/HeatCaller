@@ -63,9 +63,11 @@ public partial class MainForm
 
         BuildSoundsPage(announcer);
 
+        StartupMark("Sounds");
+
         BuildThemesPage();
 
-        StartupMark("Sounds and Themes");
+        StartupMark("Themes");
 
         BuildSponsorsPage();
 
@@ -178,6 +180,18 @@ public partial class MainForm
         Shown += (_, _) =>
         {
             var warming = System.Diagnostics.Stopwatch.StartNew();
+
+            // The real window makes its pages ready a page at a time, between
+            // whatever else it is doing - see WarmPagesInTurn. The layout
+            // checks, which build the window to measure it straight away,
+            // still have it done in one go before they look.
+            if (!LayoutCheckMode)
+            {
+                WarmPagesInTurn((busy, slowest) => OnClientRawMessage(
+                    $"{AppTime.LogStampNow()}  [startup] Every page and tab made ready, a page at a time, in {warming.Elapsed.TotalSeconds:0.0}s "
+                    + $"({busy.TotalSeconds:0.0}s of it the pages' own work; the window answered in between). The slowest steps: {slowest}."));
+                return;
+            }
 
             // What the windows made meanwhile cost, when it is slow - see
             // WhereTimeGoes.
@@ -370,7 +384,7 @@ public partial class MainForm
 
         // Tonight's report card for a driver - a right-click on the roster
         // (22 Oct 2026). See MainForm.Coach.
-        driverProfiles.ReportCardFor = transponder => CoachReportFor(transponder, publicNames: false, includeSetup: true);
+        driverProfiles.ReportCardFor = transponder => CoachReportFor(transponder, publicNames: false);
         pageDriverProfiles.Controls.Add(driverProfiles);
         _navRefreshHooks["Driver Hub"] = driverProfiles.RefreshAll;
         _driverHubSetupsRefresh = driverProfiles.RefreshSetups;
@@ -1310,7 +1324,7 @@ public partial class MainForm
         // line is worked out (CoachSetupChange asks about the race day of the
         // night shown), so past nights keep their setup line here.
         raceHistory.ReportCardFor = (transponder, night) =>
-            CoachReportFor(transponder, publicNames: false, includeSetup: true, night: night);
+            CoachReportFor(transponder, publicNames: false, night: night);
     }
 
     /// <summary>

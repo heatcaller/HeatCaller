@@ -2871,7 +2871,7 @@ public sealed class AppSettings
     /// The live board's columns on the club's website (the relay), picked on
     /// Club Website's "What gets published" card (5 Nov 2026, Asher: "add
     /// column picker for the live board on the relay in website settings").
-    /// Empty means "the same as the Live Results page" (WebKpis), which is
+    /// Empty means "the same as the OBS overlay" (WebKpis), which is
     /// what the relay always showed before this - so a club that never opens
     /// the picker sees no change.
     /// </summary>

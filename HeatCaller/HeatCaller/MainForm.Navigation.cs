@@ -198,9 +198,8 @@ public partial class MainForm
         ["Sponsors"] = new[] { "logo", "advert", "slide", "rotation" },
         ["Local Screens"] = new[]
         {
-            "remote", "obs", "overlay", "stream", "server", "url", "browser", "live results",
+            "remote", "obs", "overlay", "stream", "server", "url", "browser",
             "phone", "phones", "web", "wifi", "wi-fi", "local", "network", "screen", "screens",
-            "coach", "coach page", "driver coach", "say my lap time", "lap times in my ear",
         },
         // Absorbs the terms from the former Announcer and Commentary nav
         // items - those are tabs here now, and searching for them must
@@ -1174,6 +1173,226 @@ public partial class MainForm
 
             NoRedraw.End(pnlContent);
         }
+    }
+
+    private enum WarmKind { Page, Layout, Theme, Tab }
+
+    /// <summary>One step of WarmPagesInTurn: a page, the content area, a page's theming, or one of its tabs.</summary>
+    private sealed record WarmStep(WarmKind Kind, NavItem? Nav, TabControl? Tabs, TabPage? Tab);
+
+    /// <summary>Every TabControl in <paramref name="parent"/>, outer ones first - nested ones too, as SubTabsOf finds them.</summary>
+    private static void CollectTabControls(Control parent, List<TabControl> into)
+    {
+        foreach (Control child in parent.Controls)
+        {
+            if (child is TabControl tabs)
+            {
+                into.Add(tabs);
+            }
+
+            CollectTabControls(child, into);
+        }
+    }
+    /// <summary>
+    /// WarmPages, a page at a time, between everything else the window has
+    /// to do - for the real window. Calls <paramref name="done"/> with how
+    /// long the steps themselves took once the last one has run.
+    ///
+    /// WHY (13 Nov 2026, Asher: "make the whole app quicker to load"): run in
+    /// one go from Shown, the walk held the window's thread for 6 to 15
+    /// seconds (the session log, 13 Nov: "Every page and tab made ready in
+    /// 8.6s") - before the window had painted or could answer a click, and
+    /// with auto-connect and everything else queued for after startup
+    /// waiting behind it. HeatCaller was usable about 17s after it was
+    /// started, half of that this walk.
+    ///
+    /// The same walk, the same two passes, in the same order: each page's
+    /// handles first, with the content area's layout held, then each page's
+    /// other tabs. Each step is one page, or one tab, and they are run from a timer,
+    /// whose ticks Windows hands out only when there is nothing else to do -
+    /// after clicks, keys and painting - so the window paints at once and
+    /// answers between pages.
+    ///
+    /// One difference, on purpose: the page somebody has open is not walked
+    /// through its tabs while they are looking at it (selecting a tab runs
+    /// its refresh, and flips it in front of them). It is tried again at the
+    /// end; still open then, its tabs are made as they are clicked, as any
+    /// tab is.
+    /// </summary>
+    private void WarmPagesInTurn(Action<TimeSpan, string> done)
+    {
+        if (!Visible || _navItems.Count == 0)
+        {
+            done(TimeSpan.Zero, string.Empty);
+            return;
+        }
+
+        // Pass one: each page made once, with the content area's layout held.
+        // Then the content area laid out, as WarmPages' ResumeLayout(true)
+        // does. Pass two: each page themed, and each of its tabs made - ONE
+        // TAB A STEP: a page at a time, Sounds took 5s in one go, which is a
+        // window not answering for 5s.
+        var steps = new Queue<WarmStep>();
+
+        foreach (var nav in _navItems)
+        {
+            steps.Enqueue(new WarmStep(WarmKind.Page, nav, null, null));
+        }
+
+        steps.Enqueue(new WarmStep(WarmKind.Layout, null, null, null));
+
+        foreach (var nav in _navItems)
+        {
+            steps.Enqueue(new WarmStep(WarmKind.Theme, nav, null, null));
+
+            var tabControls = new List<TabControl>();
+            CollectTabControls(nav.Page, tabControls);
+
+            foreach (var tabs in tabControls)
+            {
+                foreach (TabPage tab in tabs.TabPages)
+                {
+                    steps.Enqueue(new WarmStep(WarmKind.Tab, nav, tabs, tab));
+                }
+            }
+        }
+
+        var retried = new HashSet<WarmStep>();
+        var busy = TimeSpan.Zero;
+        var slowest = new List<(TimeSpan Took, string What)>();
+        var timer = new System.Windows.Forms.Timer { Interval = 1 };
+
+        timer.Tick += (_, _) =>
+        {
+            if (IsDisposed || Disposing)
+            {
+                timer.Stop();
+                timer.Dispose();
+                return;
+            }
+
+            if (steps.Count == 0)
+            {
+                timer.Stop();
+                timer.Dispose();
+                done(busy, string.Join(", ", slowest.OrderByDescending(s => s.Took).Take(5).Select(s => $"{s.What} {s.Took.TotalSeconds:0.00}s")));
+                return;
+            }
+
+            var next = steps.Dequeue();
+            var nav = next.Nav;
+
+            // On screen: its tabs, and its theming (done as it was opened),
+            // are left - see above. Tried once more at the end.
+            if (next.Kind is WarmKind.Theme or WarmKind.Tab && nav is not null && nav.Page.Visible)
+            {
+                if (retried.Add(next))
+                {
+                    steps.Enqueue(next);
+                }
+
+                return;
+            }
+
+            // A tab already made - the one showing, or one somebody has
+            // clicked since - has nothing to do.
+            if (next.Kind == WarmKind.Tab && (next.Tab!.IsDisposed || ReferenceEquals(next.Tabs!.SelectedTab, next.Tab)))
+            {
+                return;
+            }
+
+            var step = System.Diagnostics.Stopwatch.StartNew();
+            NoRedraw.Begin(pnlContent);
+
+            var hold = next.Kind == WarmKind.Page;
+
+            if (hold)
+            {
+                pnlContent.SuspendLayout();
+            }
+
+            try
+            {
+                switch (next.Kind)
+                {
+                    case WarmKind.Layout:
+                        pnlContent.PerformLayout();
+                        break;
+
+                    case WarmKind.Page:
+                    {
+                        // Shown and put straight back: becoming visible is
+                        // what makes its handle and its controls'.
+                        var wasVisible = nav!.Page.Visible;
+                        nav.Page.Visible = true;
+                        nav.Page.Visible = wasVisible;
+                        break;
+                    }
+
+                    case WarmKind.Theme:
+                        // Themed at the text size in use now, while it is
+                        // still hidden and held, so its first open has none of
+                        // that left to do - what ShowPage does first
+                        // (CatchUpTextSize), and on a first open the biggest
+                        // part of it: the Voice page spent 1.8s of its 3.0s
+                        // there (session log, 13 Nov). A size changed later is
+                        // caught up on the next open, as before.
+                        CatchUpTextSize(nav!.Page);
+                        break;
+
+                    case WarmKind.Tab:
+                    {
+                        // Selected - which makes it, and runs its first
+                        // refresh - and the one that was showing put back, so
+                        // a page opened between steps is as it was left.
+                        var tabs = next.Tabs!;
+                        var previous = tabs.SelectedTab;
+
+                        nav!.Page.Visible = true;
+
+                        try
+                        {
+                            tabs.SelectedTab = next.Tab;
+                        }
+                        finally
+                        {
+                            if (previous is not null && !previous.IsDisposed)
+                            {
+                                tabs.SelectedTab = previous;
+                            }
+
+                            nav.Page.Visible = false;
+                        }
+
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [layout] Building {nav?.Name ?? "the pages"} ahead of time stopped early - {ex.Message}");
+            }
+            finally
+            {
+                if (hold)
+                {
+                    pnlContent.ResumeLayout(false);
+                }
+
+                NoRedraw.End(pnlContent);
+                busy += step.Elapsed;
+
+                slowest.Add((step.Elapsed, next.Kind switch
+                {
+                    WarmKind.Layout => "the content area",
+                    WarmKind.Theme => $"theming {nav!.Name}",
+                    WarmKind.Tab => $"{nav!.Name} > {next.Tab!.Text}",
+                    _ => nav!.Name,
+                }));
+            }
+        };
+
+        timer.Start();
     }
 
     /// <summary>

@@ -68,9 +68,24 @@ public sealed class RaceHistoryControl : UserControl
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
-    /// <summary>The sessions' card at the normal text size - about a third of the page, between these. The least is the old list's width, which the date and time need.</summary>
-    private const int SessionsLeastWidth = 380;
-    private const int SessionsMostWidth = 520;
+    /// <summary>The calendar rail at the normal text size - about a quarter of the page, between these, so the results get the rest.</summary>
+    private const int SessionsLeastWidth = 300;
+    private const int SessionsMostWidth = 380;
+
+    /// <summary>The month of race nights over the list - see RaceCalendar.</summary>
+    private readonly RaceCalendar _calendar = new();
+
+    /// <summary>Which night the list is showing, over it.</summary>
+    private readonly Label _lblNight = new();
+
+    /// <summary>Ticked: the list is every session, as it was before the calendar - for printing or exporting across nights.</summary>
+    private readonly CheckBox _chkEveryNight = new();
+
+    /// <summary>The night picked on the calendar (a local date).</summary>
+    private DateTime? _night;
+
+    /// <summary>The race at a glance, over its results: winner, fastest lap, best ideal lap, warnings.</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
 
     /// <summary>Lines of the notes box kept in view.</summary>
     private const int NotesLines = 3;
@@ -150,20 +165,40 @@ public sealed class RaceHistoryControl : UserControl
         // Ctrl-click for individual rows, Shift-click for a range.
         _sessionList.MultiSelect = true;
         _sessionList.GridLines = true;
-        _sessionList.Columns.Add("Date");
-        _sessionList.Columns.Add("Type");
-        _sessionList.Columns.Add("Track");
-        _sessionList.Columns.Add("Label");
+
+        // The full date, time and label on hover - the rail cuts them short.
+        _sessionList.ShowItemToolTips = true;
+        // 13 Nov 2026 redesign: the night is picked on the calendar above,
+        // so the list is one night's sessions - When is the time alone, and
+        // the track is in the title. With Every night ticked it is the
+        // whole history again and When carries the date.
+        _sessionList.Columns.Add("When");
+        _sessionList.Columns.Add("Session");
         _sessionList.SelectedIndexChanged += (_, _) => ShowDetail();
 
-        // The label takes what the others leave - see Pieces.FitListColumns -
-        // and asks for little of its own: it is often "-", while the date
-        // and time are what a session is picked by.
-        Pieces.FitListColumns(_sessionList, 3, 130, 70, 100, 60);
+        // The session takes what the others leave - see Pieces.FitListColumns.
+        Pieces.FitListColumns(_sessionList, 1, 80, 120);
+
+        _calendar.NightPicked += (_, _) =>
+        {
+            _night = _calendar.Night;
+            FillList(select: null);
+        };
+
+        _lblNight.AutoSize = true;
+        _lblNight.UseMnemonic = false;
+        _textSize.Wear(_lblNight, () => AppTheme.BoldFont);
+
+        _chkEveryNight.Text = "Every night";
+        _chkEveryNight.AutoSize = true;
+        _chkEveryNight.CheckedChanged += (_, _) => FillList(select: _currentSessionId);
 
         var sessions = new Section("Sessions");
 
-        sessions.AddFill(_sessionList, () => _sessionList.Font.Height * 2 + 4 * (_sessionList.Font.Height + 6), gapBelow: 0);
+        sessions.Add(_calendar, gapBelow: UiLayout.RowGap);
+        sessions.Add(_lblNight, gapBelow: UiLayout.HintGap);
+        sessions.Add(_chkEveryNight, gapBelow: UiLayout.HintGap);
+        sessions.AddFill(_sessionList, () => _sessionList.Font.Height * 2 + 3 * (_sessionList.Font.Height + 6), gapBelow: 0);
 
         // --- The one selected ---
         //
@@ -180,10 +215,15 @@ public sealed class RaceHistoryControl : UserControl
         _detailGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _detailGrid.Columns.AddRange(
             new DataGridViewTextBoxColumn { Name = "pos", HeaderText = "Pos", FillWeight = 30 },
-            new DataGridViewTextBoxColumn { Name = "driver", HeaderText = "Driver", FillWeight = 100 },
+            new DataGridViewTextBoxColumn { Name = "driver", HeaderText = "Driver", FillWeight = 160 },
             new DataGridViewTextBoxColumn { Name = "car", HeaderText = "Car", FillWeight = 90 },
             new DataGridViewTextBoxColumn { Name = "laps", HeaderText = "Laps", FillWeight = 40 },
             new DataGridViewTextBoxColumn { Name = "fast", HeaderText = "Fastest Lap", FillWeight = 70 },
+
+            // 13 Nov 2026 (mockup C): each lap of theirs as a line, their
+            // best marked - drawn in PaintCell, from the laps in the cell's
+            // Tag. Given way first when the grid is narrow (FitColumnsToWidth).
+            new DataGridViewTextBoxColumn { Name = "trace", HeaderText = "Lap Times", FillWeight = 110, SortMode = DataGridViewColumnSortMode.NotSortable },
             new DataGridViewTextBoxColumn { Name = "adj", HeaderText = "Handicap Pos", FillWeight = 70 },
             new DataGridViewTextBoxColumn { Name = "warn", HeaderText = "Warnings", FillWeight = 55 },
 
@@ -200,9 +240,13 @@ public sealed class RaceHistoryControl : UserControl
         // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
         // Room for "DNS" in Pos too (12 Nov 2026): a narrow window squeezed
         // the column to "D...", which reads as nothing at all.
-        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_detailGrid, ("pos", DnsMark)));
+        // And room for the race's longest name in Driver (13 Nov 2026), so a narrow
+        // window lets the car and the lap lines go before it cuts names short.
+        _textSize.Keep(KeepHeadingsWhole);
 
         _detailGrid.CellFormatting += FormatHandCountedLaps;
+        _detailGrid.CellPainting += PaintCell;
+        _detailGrid.ClientSizeChanged += (_, _) => FitColumnsToWidth();
 
         // 22 Oct 2026: a driver's report card for the night of this race -
         // right-click their row. See CoachReport. Only once the host has
@@ -250,9 +294,15 @@ public sealed class RaceHistoryControl : UserControl
 
         var btnDelete = new Button { Text = "Delete Session" };
         btnDelete.Click += (_, _) => DeleteSelected();
+        AppTheme.StyleButton(btnDelete, AppTheme.ButtonKind.Danger);
 
+        // The one loud button: watching the race back is what this page is
+        // opened for most. Everything else is the quiet kind, Export
+        // included - two pink Exports in the middle of the bar drew the eye
+        // to the least-used commands.
         var btnReplay = new Button { Text = "Replay..." };
         btnReplay.Click += (_, _) => ShowReplay();
+        AppTheme.StyleButton(btnReplay, AppTheme.ButtonKind.Primary);
 
         var btnPace = new Button { Text = "Pace..." };
         btnPace.Click += (_, _) => ShowPace();
@@ -280,44 +330,71 @@ public sealed class RaceHistoryControl : UserControl
         var btnPasteResult = new Button { Text = "Paste a Result..." };
         btnPasteResult.Click += (_, _) => PasteResult();
 
-        // Ordered by how often a race director reaches for them, not by
-        // the order they were written. Delete goes last because it is the
-        // one that cannot be taken back from here - Edit Result sits just
-        // ahead of it instead, since a correction is undoable. The bar
-        // wraps onto more lines when the card is too narrow for them.
-        var actions = new ButtonBar().With(
-            btnReplay, btnPace, btnShareCard, btnEventReport,
-            btnExportSession, btnExportAll, btnPrintResults, btnPasteResult, btnEditResult, btnDelete);
+        foreach (var quiet in new[] { btnPace, btnShareCard, btnEventReport, btnExportSession, btnExportAll, btnPrintResults, btnEditResult, btnPasteResult })
+        {
+            AppTheme.StyleButton(quiet, AppTheme.ButtonKind.Secondary);
+        }
+
+        // --- The command bar (13 Nov 2026 redesign) ---
+        //
+        // Every command on one bar across the top of the page, in the order
+        // a race director reaches for them: watch it, share it, file it,
+        // fix it. Delete stands alone against the right-hand edge - the
+        // one that cannot be taken back from here, kept away from the
+        // others rather than last in a row of look-alikes. The bar wraps
+        // when the window is too narrow, Delete going under, still right.
+        var commands = new ButtonBar(tight: true).With(
+            btnReplay, btnPace, btnShareCard, btnEventReport, btnPrintResults,
+            btnExportAll, btnExportSession, btnEditResult, btnPasteResult);
+
+        var commandBar = new SplitBar(commands, new ButtonBar(alignRight: true, tight: true).With(btnDelete));
+
+        // --- The tiles: the race at a glance ---
+        var captions = new[] { "Winner", "Fastest lap", "Best ideal lap", "Warnings" };
+
+        for (var i = 0; i < _tiles.Length; i++)
+        {
+            var tile = _tiles[i];
+            _textSize.Wear(tile.Value, () => AppTheme.TitleFont);
+            _textSize.Wear(tile.Caption, () => AppTheme.MicroFont);
+            SetTile(i, "-", captions[i], captions[i]);
+
+            // A narrower tile may need the short caption - see FitTileCaption.
+            var index = i;
+            tile.Panel.SizeChanged += (_, _) => FitTileCaption(index);
+        }
 
         var results = new Section("Results");
 
         results.Add(_lblDetailTitle);
         results.AddFill(_detailGrid, () => _detailGrid.ColumnHeadersHeight + 4 * _detailGrid.RowTemplate.Height);
         results.Add(_lblNotes, gapBelow: UiLayout.HintGap);
-        results.Add(_txtNotes);
-        results.Add(actions, gapBelow: 0);
+        results.Add(_txtNotes, gapBelow: 0);
 
         // --- The page ---
         //
-        // The sessions down the left, picked from; the one picked beside
-        // them, taking the rest of the width.
+        // The commands across the top. Under them the calendar rail down
+        // the left, kept narrow; the results take all the rest of the
+        // width, the tiles over them.
         Beside? band = null;
 
         band = new Beside(() => SessionsWidth(band?.Width ?? 0)) { SideOnLeft = true };
 
+        band.Add(new TileStrip(_tiles), gapBelow: UiLayout.RowGap);
         band.AddFill(results, results.LeastHeight);
         band.AddSideFill(sessions, sessions.LeastHeight, gapBelow: 0);
 
         var page = new FillPage();
 
+        page.Add(commandBar, gapBelow: UiLayout.RowGap);
         page.AddFill(band, band.LeastHeight, gapBelow: 0);
 
         Controls.Add(page);
     }
 
-    /// <summary>The sessions' card: about a third of the page, between 380px and 520px at the normal text size, at the size in use.</summary>
+    /// <summary>The calendar rail: about a quarter of the page, between 300px and 380px at the normal text size, at the size in use.</summary>
     private static int SessionsWidth(int page) =>
-        Math.Clamp((int)(page * 0.35f), UiLayout.AtTextSize(SessionsLeastWidth), UiLayout.AtTextSize(SessionsMostWidth));
+        Math.Clamp((int)(page * 0.25f), UiLayout.AtTextSize(SessionsLeastWidth), UiLayout.AtTextSize(SessionsMostWidth));
 
     /// <summary>Called when this page becomes visible - sessions are saved by Race Control and Practice while it's inactive.</summary>
     public void RefreshAll() => RefreshList();
@@ -345,15 +422,67 @@ public sealed class RaceHistoryControl : UserControl
         // to save it against. Safe for a just-deleted session: Get is null.
         SaveNotes();
 
-        _sessionList.Items.Clear();
-        foreach (var s in _history.All)
+        // The night shown stays put while it still has sessions; otherwise
+        // (first open, or its last session deleted) the latest night.
+        var nights = Nights();
+
+        if (_night is not { } shown || !nights.ContainsKey(shown))
         {
-            var item = new ListViewItem(AppTime.DateAndTime(s.StartedAtUtc.ToLocalTime())) { Tag = s.Id };
-            item.SubItems.Add(TypeText(s));
-            item.SubItems.Add(string.IsNullOrWhiteSpace(s.TrackLayoutName) ? "-" : s.TrackLayoutName);
-            item.SubItems.Add(string.IsNullOrWhiteSpace(s.Label) ? "-" : s.Label);
+            _night = nights.Count == 0 ? null : nights.Keys.Max();
+        }
+
+        FillList(select: _currentSessionId);
+    }
+
+    /// <summary>Each night with saved sessions (local dates), and how many it had.</summary>
+    private Dictionary<DateTime, int> Nights() => _history.All
+        .GroupBy(s => s.StartedAtUtc.ToLocalTime().Date)
+        .ToDictionary(g => g.Key, g => g.Count());
+
+    /// <summary>
+    /// The list, for the night picked - or every night, ticked - with one
+    /// session selected: <paramref name="select"/> when it is listed, else
+    /// the night's latest, so the results beside it are never left blank
+    /// (13 Nov 2026 redesign; they used to read "Select a session").
+    /// </summary>
+    private void FillList(string? select)
+    {
+        SaveNotes();
+
+        var nights = Nights();
+        _calendar.SetNights(nights, _night);
+
+        var everyNight = _chkEveryNight.Checked;
+        var listed = _history.All
+            .Where(s => everyNight || s.StartedAtUtc.ToLocalTime().Date == _night)
+            .ToList();
+
+        _lblNight.Text = _night is not { } night
+            ? "No sessions saved yet"
+            : everyNight
+                ? $"Every night · {_history.All.Count()} sessions"
+                : $"{night.ToString("dddd d MMM", CultureInfo.CurrentCulture)} · {Count(listed.Count, "session")}";
+
+        _sessionList.BeginUpdate();
+        _sessionList.Items.Clear();
+
+        foreach (var s in listed)
+        {
+            var started = s.StartedAtUtc.ToLocalTime();
+            var when = everyNight
+                ? $"{started.ToString("ddd d MMM", CultureInfo.CurrentCulture)} {AppTime.TimeOfDay(started)}"
+                : AppTime.TimeOfDay(started);
+
+            var item = new ListViewItem(when) { Tag = s.Id, ToolTipText = $"{AppTime.DateAndTime(started)}  {s.Label}".TrimEnd() };
+
+            // The type first, then what it was - one column, so the rail stays narrow.
+            item.SubItems.Add(TypeText(s) + " · " + (!string.IsNullOrWhiteSpace(s.Label) ? s.Label
+                : !string.IsNullOrWhiteSpace(s.TrackLayoutName) ? s.TrackLayoutName
+                : "-"));
             _sessionList.Items.Add(item);
         }
+
+        _sessionList.EndUpdate();
 
         _detailGrid.Rows.Clear();
         _lblDetailTitle.Text = "Select a session to see full results.";
@@ -361,6 +490,74 @@ public sealed class RaceHistoryControl : UserControl
         _notesAsLoaded = null;
         _txtNotes.Text = string.Empty;
         _txtNotes.Enabled = false;
+        ShowTiles(null);
+
+        var pick = _sessionList.Items.Cast<ListViewItem>()
+            .FirstOrDefault(item => select is not null && string.Equals(item.Tag as string, select, StringComparison.Ordinal))
+            ?? (_sessionList.Items.Count > 0 ? _sessionList.Items[0] : null);
+
+        if (pick is not null)
+        {
+            pick.Selected = true;
+            pick.Focused = true;
+            pick.EnsureVisible();
+        }
+    }
+
+    private static string Count(int count, string word) => count == 1 ? $"1 {word}" : $"{count} {word}s";
+
+    /// <summary>The tiles for one race, or dashes for none.</summary>
+    private void ShowTiles(SessionRecord? session)
+    {
+        var finishers = session?.Results.OrderBy(r => r.Position).ToList() ?? new List<SessionResultEntry>();
+
+        var winner = finishers.FirstOrDefault();
+        SetTile(0, winner is null ? "-" : winner.DriverName, winner is null ? "Winner" : $"Winner · {Count(winner.Laps, "lap")}", "Winner");
+
+        var fastest = finishers.Where(r => r.FastLapMs > 0).OrderBy(r => r.FastLapMs).FirstOrDefault();
+        SetTile(1, fastest is null ? "-" : $"{fastest.FastLapMs / 1000.0:0.000}s", fastest is null ? "Fastest lap" : $"Fastest lap · {fastest.DriverName}", "Fastest lap");
+
+        var ideal = finishers
+            .Select(r => (Result: r, Bests: Sectors.Bests(r)))
+            .Where(x => x.Bests is not null)
+            .OrderBy(x => x.Bests!.Sum())
+            .FirstOrDefault();
+        SetTile(2, ideal.Bests is null ? "-" : $"{Sectors.Format(ideal.Bests.Sum())}s",
+            ideal.Bests is null ? "Best ideal lap" : $"Best ideal lap · {ideal.Result.DriverName}", "Ideal lap");
+
+        var warnings = finishers.Sum(r => r.Warnings.Count);
+        var warned = finishers.Count(r => r.Warnings.Count > 0);
+        SetTile(3, session is null ? "-" : warnings.ToString(CultureInfo.CurrentCulture),
+            warned == 0 ? "Warnings" : $"Warnings · {Count(warned, "driver")}", "Warnings");
+    }
+
+    /// <summary>What each tile says under its value: the whole caption, and the short one for a tile too narrow for it.</summary>
+    private readonly (string Value, string Full, string Short)[] _tileText = new (string, string, string)[4];
+
+    private void SetTile(int index, string value, string full, string brief)
+    {
+        _tileText[index] = (value, full, brief);
+        FitTileCaption(index);
+    }
+
+    /// <summary>
+    /// The whole caption when it fits the tile, else the short one - "Fastest
+    /// lap" rather than "Fastest lap · Terry B...": at 1000px the names were
+    /// cut to nothing, and the name is in the results under the tiles anyway.
+    /// </summary>
+    private void FitTileCaption(int index)
+    {
+        var tile = _tiles[index];
+        var (value, full, brief) = _tileText[index];
+
+        if (full is null)
+        {
+            return;
+        }
+
+        var room = tile.Panel.Width - UiLayout.RowGap * 2;
+        var wanted = TextRenderer.MeasureText(AppTheme.Spaced(full.ToUpperInvariant()), tile.Caption.Font).Width;
+        tile.Set(value, room <= 0 || wanted <= room ? full : brief);
     }
 
     /// <summary>
@@ -372,24 +569,10 @@ public sealed class RaceHistoryControl : UserControl
     /// </summary>
     internal void ShowSession(string id, bool edit)
     {
-        ListViewItem? Find() => _sessionList.Items.Cast<ListViewItem>()
-            .FirstOrDefault(item => string.Equals(item.Tag as string, id, StringComparison.Ordinal));
-
-        // Not listed yet when the page has not been opened since it was saved.
-        if (Find() is null)
-        {
-            RefreshList();
-        }
-
-        if (Find() is not { } found)
+        if (!SelectSession(id))
         {
             return;
         }
-
-        _sessionList.SelectedItems.Clear();
-        found.Selected = true;
-        found.Focused = true;
-        found.EnsureVisible();
 
         if (edit)
         {
@@ -397,11 +580,42 @@ public sealed class RaceHistoryControl : UserControl
         }
     }
 
+    /// <summary>
+    /// Selects one session alone, its night picked on the calendar and the
+    /// list moved to it - when it is in the history. Not listed yet when the
+    /// page has not been opened since it was saved, or on another night.
+    /// </summary>
+    private bool SelectSession(string id)
+    {
+        if (_history.Get(id) is not { } session)
+        {
+            RefreshList();
+
+            if (_history.Get(id) is null)
+            {
+                return false;
+            }
+
+            session = _history.Get(id)!;
+        }
+
+        if (!_chkEveryNight.Checked)
+        {
+            _night = session.StartedAtUtc.ToLocalTime().Date;
+        }
+
+        FillList(select: id);
+
+        return _sessionList.SelectedItems.Count > 0
+            && string.Equals(_sessionList.SelectedItems[0].Tag as string, id, StringComparison.Ordinal);
+    }
+
     private void ShowDetail()
     {
         _detailGrid.Rows.Clear();
         if (_sessionList.SelectedItems.Count == 0)
         {
+            ShowTiles(null);
             return;
         }
 
@@ -409,9 +623,11 @@ public sealed class RaceHistoryControl : UserControl
         var session = _history.All.FirstOrDefault(s => s.Id == id);
         if (session is null)
         {
+            ShowTiles(null);
             return;
         }
 
+        ShowTiles(session);
         _currentSessionId = session.Id;
         _txtNotes.Text = session.Notes;
         _notesAsLoaded = session.Notes;
@@ -443,6 +659,25 @@ public sealed class RaceHistoryControl : UserControl
         var shared = places.Values.Any(p => p.Place is not null);
         _detailGrid.Columns["cls"]!.Visible = shared;
 
+        // Warnings only when somebody has one - the Warnings tile says 0
+        // otherwise, and the column's width goes to the names.
+        _detailGrid.Columns["warn"]!.Visible = session.Results.Any(r => r.Warnings.Count > 0);
+
+        _longestDriver = session.Results
+            .Select(r => r.DriverName ?? string.Empty)
+            .Select(name => name.Length > 28 ? name[..28] : name)
+            .OrderByDescending(name => TextRenderer.MeasureText(name, _detailGrid.Font).Width)
+            .FirstOrDefault() ?? string.Empty;
+        KeepHeadingsWhole();
+
+        // The session's bests, which PaintCell shades every driver's against:
+        // the fastest lap, the fastest time through each sector, and the
+        // lap times the lap lines are drawn between.
+        _bestLapMs = session.Results.Where(r => r.FastLapMs > 0).Select(r => r.FastLapMs).DefaultIfEmpty(0).Min();
+        _bestSectors = BestSectorsOf(session.Results);
+        _traceRange = TraceRangeOf(session.Results);
+        _hasLapTimes = session.Results.Any(r => LapsToDraw(r).Count >= 2);
+
         foreach (var r in session.Results.OrderBy(r => r.Position))
         {
             var adj = adjusted is not null && adjusted.TryGetValue(r.Transponder, out var a) ? a : null;
@@ -461,6 +696,7 @@ public sealed class RaceHistoryControl : UserControl
                 string.IsNullOrWhiteSpace(r.CarModel) ? "-" : r.CarModel,
                 r.Laps,
                 r.FastLapMs > 0 ? $"{r.FastLapMs / 1000.0:0.000}s" : "-",
+                null,
                 adjText,
                 WarningsText(r),
                 Sectors.Bests(r) is { } bests ? Sectors.Line(bests) : "-",
@@ -469,6 +705,30 @@ public sealed class RaceHistoryControl : UserControl
 
             // The driver, for the Report Card on the right-click menu.
             _detailGrid.Rows[rowIndex].Tag = r.Transponder;
+
+            // What PaintCell draws: their laps as a line, their sectors as
+            // shaded chips, their fastest lap marked when it was the race's.
+            var laps = LapsToDraw(r);
+            var traceCell = _detailGrid.Rows[rowIndex].Cells["trace"];
+            traceCell.Tag = laps;
+
+            if (laps.Count > 0)
+            {
+                var bestAt = laps.IndexOf(laps.Min());
+                traceCell.ToolTipText = $"{Count(laps.Count, "lap")} · best {laps[bestAt] / 1000.0:0.000}s on lap {bestAt + 1}";
+            }
+
+            if (Sectors.Bests(r) is { } shaded)
+            {
+                _detailGrid.Rows[rowIndex].Cells["sectors"].Tag = shaded;
+            }
+
+            // The car on the driver's hover too, for when a narrow grid has
+            // let the Car column go (FitColumnsToWidth).
+            if (!string.IsNullOrWhiteSpace(r.CarModel))
+            {
+                _detailGrid.Rows[rowIndex].Cells["driver"].ToolTipText = r.CarModel;
+            }
 
             // 22 Oct 2026: a count with laps counted by hand says so on
             // hover - see HandCountedLaps.
@@ -492,17 +752,19 @@ public sealed class RaceHistoryControl : UserControl
 
             if (adj is { Moved: true })
             {
-                _detailGrid.Rows[rowIndex].Cells[5].Style.ForeColor = AppTheme.Accent;
-                _detailGrid.Rows[rowIndex].Cells[5].Style.Font = AppTheme.BoldFont;
+                _detailGrid.Rows[rowIndex].Cells["adj"].Style.ForeColor = AppTheme.Accent;
+                _detailGrid.Rows[rowIndex].Cells["adj"].Style.Font = AppTheme.BoldFont;
             }
         }
+
+        FitColumnsToWidth();
 
         // 12 Nov 2026: who was taken off the grid and scored DNS - see
         // SkipDns. Below the finishers, greyed, with no laps or times
         // (they never ran) and no Report Card on their row.
         foreach (var transponder in session.DidNotStart ?? new List<string>())
         {
-            var dnsIndex = _detailGrid.Rows.Add(null, DriverNameOf(transponder), "-", null, "-", string.Empty, string.Empty, "-", "-",
+            var dnsIndex = _detailGrid.Rows.Add(null, DriverNameOf(transponder), "-", null, "-", null, string.Empty, string.Empty, "-", "-",
                 shared && round is not null ? MixedHeats.ClassOfDriver(round, transponder, _profiles) : string.Empty);
             var dnsRow = _detailGrid.Rows[dnsIndex];
             dnsRow.Cells["pos"].Tag = DnsMark;
@@ -517,6 +779,246 @@ public sealed class RaceHistoryControl : UserControl
 
     /// <summary>The hover on a DNS row.</summary>
     internal const string DnsHover = "Did not start: taken off the grid before the race and scored DNS.";
+
+    // --- Shading and lap lines (13 Nov 2026, mockups C and D) ---
+
+    /// <summary>The race's fastest lap, which the Fastest Lap cell that set it is marked for. 0 for none.</summary>
+    private long _bestLapMs;
+
+    /// <summary>The race's fastest time through each sector, or null when it had none.</summary>
+    private long[]? _bestSectors;
+
+    /// <summary>The lap times every lap line is drawn between, fastest at the top - shared, so the lines can be compared.</summary>
+    private (long Low, long High) _traceRange;
+
+    /// <summary>Somebody in the race has two laps or more to draw a line through.</summary>
+    private bool _hasLapTimes;
+
+    /// <summary>Each sector's best across the race - from drivers whose loop was cut the same way as most.</summary>
+    private static long[]? BestSectorsOf(IEnumerable<SessionResultEntry> results)
+    {
+        var all = results.Select(r => Sectors.Bests(r)).Where(b => b is { Length: > 0 }).Select(b => b!).ToList();
+
+        if (all.Count == 0)
+        {
+            return null;
+        }
+
+        var length = all.GroupBy(b => b.Length).OrderByDescending(g => g.Count()).First().Key;
+
+        return Enumerable.Range(0, length)
+            .Select(i => all.Where(b => b.Length == length).Min(b => b[i]))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// The lap times the lines run between: the race's fastest lap at the
+    /// top, and at the bottom a little past the slowest lap most laps come
+    /// in under - so one crash or a long first lap flattens at the floor
+    /// instead of squashing everyone else's laps into a thin band.
+    /// </summary>
+    private static (long Low, long High) TraceRangeOf(IEnumerable<SessionResultEntry> results)
+    {
+        var laps = results.SelectMany(LapsToDraw).OrderBy(ms => ms).ToList();
+
+        if (laps.Count == 0)
+        {
+            return (0, 0);
+        }
+
+        var low = laps[0];
+        var high = (long)(laps[(int)((laps.Count - 1) * 0.9)] * 1.05);
+
+        return (low, Math.Max(high, low + 100));
+    }
+
+    /// <summary>
+    /// Lets columns go, least needed first, when the grid is too narrow for
+    /// them all at their headings' width - the lap lines, then the car (on
+    /// the driver's hover instead) - so a 1000px window reads its results
+    /// without scrolling sideways. They come back when there is room.
+    /// </summary>
+    private void FitColumnsToWidth()
+    {
+        if (_detailGrid.Columns["trace"] is not { } trace || _detailGrid.Columns["car"] is not { } car)
+        {
+            return;
+        }
+
+        // What every column the race wants needs, at its least.
+        int Needs(bool withTrace, bool withCar) => _detailGrid.Columns.Cast<DataGridViewColumn>()
+            .Where(c => c == trace ? withTrace : c == car ? withCar : c.Visible)
+            .Sum(c => Math.Max(c.MinimumWidth, c == trace ? UiLayout.AtTextSize(TraceLeastWidth) : c == car || c.Name == "driver" ? ContentWidth(c) : 0));
+
+        // Less the vertical scrollbar when it shows, and a few pixels the
+        // grid keeps for its edges - without them a grid that just fits
+        // still showed a sideways bar.
+        var room = _detailGrid.ClientSize.Width - (_detailGrid.Controls.OfType<VScrollBar>().FirstOrDefault() is { Visible: true } bar ? bar.Width : 0) - 8;
+
+        var showTrace = _hasLapTimes && Needs(true, true) <= room;
+        var showCar = showTrace || Needs(false, true) <= room;
+
+        if (trace.Visible != showTrace)
+        {
+            trace.Visible = showTrace;
+        }
+
+        if (car.Visible != showCar)
+        {
+            car.Visible = showCar;
+        }
+    }
+
+    /// <summary>A name column's room for its longest entry, held to a sensible most - so a car goes before the drivers' names are cut short.</summary>
+    private static int ContentWidth(DataGridViewColumn column) =>
+        Math.Min(column.GetPreferredWidth(DataGridViewAutoSizeColumnMode.AllCells, fixedHeight: true), UiLayout.AtTextSize(200));
+
+    /// <summary>
+    /// A driver's laps for their line: the timed ones. Not the start lap, a
+    /// part lap from the grid to the line that is quicker than any real one -
+    /// a lap faster than their recorded fastest cannot be a whole lap.
+    /// </summary>
+    private static List<long> LapsToDraw(SessionResultEntry result) =>
+        result.LapTimesMs.Where(ms => ms > 0 && (result.FastLapMs <= 0 || ms >= result.FastLapMs)).ToList();
+
+    /// <summary>The race's longest driver name, which the Driver column is kept wide enough for.</summary>
+    private string _longestDriver = string.Empty;
+
+    private void KeepHeadingsWhole() =>
+        Pieces.KeepHeadingsWhole(_detailGrid, ("pos", DnsMark), ("driver", _longestDriver));
+
+    /// <summary>The least a lap line is drawn in at the normal text size - less than this and it is a scribble.</summary>
+    private const int TraceLeastWidth = 120;
+
+    /// <summary>Draws the lap lines, the shaded sector chips and the race's fastest lap.</summary>
+    private void PaintCell(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.Graphics is not { } g)
+        {
+            return;
+        }
+
+        var column = _detailGrid.Columns[e.ColumnIndex].Name;
+        var cell = _detailGrid.Rows[e.RowIndex].Cells[e.ColumnIndex];
+        var selected = (e.State & DataGridViewElementStates.Selected) != 0;
+        var ground = selected ? e.CellStyle!.SelectionBackColor : e.CellStyle!.BackColor;
+
+        switch (column)
+        {
+            case "trace" when cell.Tag is List<long> { Count: >= 2 } laps && _traceRange.High > _traceRange.Low:
+                e.PaintBackground(e.CellBounds, selected);
+                DrawLapLine(g, e.CellBounds, laps);
+                e.Handled = true;
+                break;
+
+            case "sectors" when cell.Tag is long[] { Length: > 0 } bests && _bestSectors is { } race && race.Length == bests.Length:
+                e.PaintBackground(e.CellBounds, selected);
+                DrawSectorChips(g, e.CellBounds, bests, race, e.CellStyle.Font ?? Font, ground);
+                e.Handled = true;
+                break;
+
+            case "fast" when _bestLapMs > 0 && e.RowIndex < _detailGrid.Rows.Count
+                && cell.Value is string text && text == $"{_bestLapMs / 1000.0:0.000}s":
+                e.PaintBackground(e.CellBounds, selected);
+                DrawChip(g, ChipBounds(e.CellBounds, text, e.CellStyle.Font ?? Font), text, e.CellStyle.Font ?? Font, AppTheme.Primary, AppTheme.OnPrimary);
+                e.Handled = true;
+                break;
+        }
+    }
+
+    private void DrawLapLine(Graphics g, Rectangle bounds, List<long> laps)
+    {
+        var box = Rectangle.Inflate(bounds, -8, -Math.Max(4, bounds.Height / 6));
+
+        if (box.Width < 10 || box.Height < 4)
+        {
+            return;
+        }
+
+        var (low, high) = _traceRange;
+        float X(int i) => box.Left + i * (box.Width - 1f) / (laps.Count - 1);
+        float Y(long ms) => box.Top + Math.Clamp((ms - low) / (float)(high - low), 0f, 1f) * (box.Height - 1f);
+
+        var points = laps.Select((ms, i) => new PointF(X(i), Y(ms))).ToArray();
+        var bestAt = laps.IndexOf(laps.Min());
+        var smooth = g.SmoothingMode;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+        using (var pen = new Pen(AppTheme.Accent, 1.6f) { LineJoin = System.Drawing.Drawing2D.LineJoin.Round })
+        {
+            g.DrawLines(pen, points);
+        }
+
+        var size = Math.Max(5f, box.Height / 3f);
+        using (var dot = new SolidBrush(AppTheme.Primary))
+        {
+            g.FillEllipse(dot, points[bestAt].X - size / 2, points[bestAt].Y - size / 2, size, size);
+        }
+
+        g.SmoothingMode = smooth;
+    }
+
+    /// <summary>
+    /// Each sector's best as a chip, shaded by how close it came to the
+    /// race's best there: the best itself in solid pink, within a tenth
+    /// strongly tinted, within a quarter lightly, the rest plain. Lighter to
+    /// darker as well as by colour, so it reads without colour vision.
+    /// </summary>
+    private static void DrawSectorChips(Graphics g, Rectangle bounds, long[] bests, long[] race, Font font, Color ground)
+    {
+        const int gap = 4;
+        var inner = Rectangle.Inflate(bounds, -4, -Math.Max(3, (bounds.Height - font.Height - 6) / 2));
+        var width = (inner.Width - gap * (bests.Length - 1)) / (float)bests.Length;
+
+        for (var i = 0; i < bests.Length; i++)
+        {
+            var behind = bests[i] - race[i];
+            var (fill, ink) = behind <= 0 ? (AppTheme.Primary, AppTheme.OnPrimary)
+                : behind <= 100 ? (Mix(AppTheme.Primary, ground, 0.55f), AppTheme.TextDark)
+                : behind <= 250 ? (Mix(AppTheme.Primary, ground, 0.25f), AppTheme.TextDark)
+                : (Color.Empty, AppTheme.TextDark);
+
+            var chip = new RectangleF(inner.Left + i * (width + gap), inner.Top, width, inner.Height);
+            DrawChip(g, chip, Sectors.Format(bests[i]), font, fill, ink);
+        }
+    }
+
+    private static RectangleF ChipBounds(Rectangle cell, string text, Font font)
+    {
+        var width = TextRenderer.MeasureText(text, font).Width + 10;
+        var height = font.Height + 6;
+        return new RectangleF(cell.Left + 3, cell.Top + (cell.Height - height) / 2f, Math.Min(width, cell.Width - 6), height);
+    }
+
+    private static void DrawChip(Graphics g, RectangleF chip, string text, Font font, Color fill, Color ink)
+    {
+        if (!fill.IsEmpty)
+        {
+            var smooth = g.SmoothingMode;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            using var path = new System.Drawing.Drawing2D.GraphicsPath();
+            var d = Math.Min(10f, chip.Height);
+            path.AddArc(chip.Left, chip.Top, d, d, 180, 90);
+            path.AddArc(chip.Right - d, chip.Top, d, d, 270, 90);
+            path.AddArc(chip.Right - d, chip.Bottom - d, d, d, 0, 90);
+            path.AddArc(chip.Left, chip.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+
+            using var brush = new SolidBrush(fill);
+            g.FillPath(brush, path);
+            g.SmoothingMode = smooth;
+        }
+
+        var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix
+            | TextFormatFlags.HorizontalCenter;
+        TextRenderer.DrawText(g, text, font, Rectangle.Round(chip), ink, flags);
+    }
+
+    private static Color Mix(Color ink, Color ground, float amount) => Color.FromArgb(
+        (int)(ground.R + (ink.R - ground.R) * amount),
+        (int)(ground.G + (ink.G - ground.G) * amount),
+        (int)(ground.B + (ink.B - ground.B) * amount));
 
     /// <summary>A driver's name from their profile, or the transponder when there is none.</summary>
     private string DriverNameOf(string transponder) =>
@@ -1371,16 +1873,7 @@ public sealed class RaceHistoryControl : UserControl
     private void RefreshListAndSelect(string sessionId)
     {
         RefreshList();
-
-        foreach (ListViewItem item in _sessionList.Items)
-        {
-            if (Equals(item.Tag, sessionId))
-            {
-                item.Selected = true;
-                item.EnsureVisible();
-                break;
-            }
-        }
+        SelectSession(sessionId);
     }
 
     private void ExportSelectedSession()

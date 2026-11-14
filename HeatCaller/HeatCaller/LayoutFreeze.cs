@@ -68,6 +68,9 @@ internal static class LayoutFreeze
     /// <summary>Every container held by a hold here, whichever hold it is in - so none is held twice.</summary>
     private static readonly ConditionalWeakTable<Control, object> Holding = new();
 
+    /// <summary>The layout pieces - everything that calls Adopt, which measure what is in them to lay it out - as against the plain containers that only dock what they hold. See Thaw.</summary>
+    private static readonly ConditionalWeakTable<Control, object> Pieces = new();
+
     /// <summary>The tabs whose VisibleChanged lets them go - hooked once each.</summary>
     private static readonly ConditionalWeakTable<TabPage, object> Watched = new();
 
@@ -147,6 +150,8 @@ internal static class LayoutFreeze
     /// </summary>
     public static void Adopt(Control piece)
     {
+        Pieces.AddOrUpdate(piece, Mark);
+
         if (_building is null)
         {
             return;
@@ -282,7 +287,30 @@ internal static class LayoutFreeze
 
         if (childrenFirst)
         {
-            release.Reverse();
+            // THE PLAIN CONTAINERS FIRST, PARENTS FIRST, THEN THE REST
+            // CHILDREN FIRST (13 Nov 2026, Asher: "fix the PageStack layout
+            // too").
+            //
+            // Children first is right for the pieces - a column let go
+            // before its lines laid out again for every line in it (see the
+            // class notes). But it let go the page, its tab control and the
+            // tab pages - the plain containers that only dock what is in them,
+            // and so are what gives a piece its size - LAST. So every piece in
+            // a tab was laid out at the size a new control is made at, and
+            // then again at its real size: the Voice page's stack six times
+            // at 200 wide - its paragraphs wrapped to a column 150px wide and
+            // 7,000px tall - before its three real layouts.
+            //
+            // Let go first, parents first, those containers dock what they
+            // hold to the size it is shown at - the pieces in them are still
+            // held, so that is all they do - and each piece is then laid out
+            // once, children first, at its real size. Only those outside
+            // every piece: a plain panel in a card is laid out by its card.
+            var sizers = release.Where(control => !Pieces.TryGetValue(control, out _) && !InsideAPiece(control, root)).ToList();
+            var rest = release.Except(sizers).ToList();
+
+            rest.Reverse();
+            release = sizers.Concat(rest).ToList();
         }
 
         var clock = Trace is null ? null : System.Diagnostics.Stopwatch.StartNew();
@@ -317,6 +345,20 @@ internal static class LayoutFreeze
                 Thaw(tab, childrenFirst);
             }
         }
+    }
+
+    /// <summary>Whether something between <paramref name="control"/> and <paramref name="root"/> is a layout piece - see Thaw.</summary>
+    private static bool InsideAPiece(Control control, Control root)
+    {
+        for (var up = control.Parent; up is not null && !ReferenceEquals(up, root.Parent); up = up.Parent)
+        {
+            if (Pieces.TryGetValue(up, out _))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>What to call a held thing in the log - a tab by its caption, anything else by its kind.</summary>
