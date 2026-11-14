@@ -47,7 +47,7 @@ public sealed partial class RaceDayEventControl
             NightSetupChanged?.Invoke();
         });
 
-        _lblBreaks.Text = NightBreaks.Summary(day.Breaks, day.IsClubNight);
+        _fields.ShowBreaks(day);
         NightSetupChanged?.Invoke();
     }
 }

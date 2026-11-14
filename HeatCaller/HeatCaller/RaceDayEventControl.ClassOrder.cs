@@ -63,7 +63,7 @@ public sealed partial class RaceDayEventControl
             RefreshAfterUndo();
         });
 
-        _lblClassOrder.Text = ClassRunningOrder.Summary(tonight, day.ClassRunningOrder, day.RotateClassOrder);
+        _fields.ShowClassOrder(day);
     }
 }
 
