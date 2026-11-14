@@ -4,6 +4,8 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Add a driver takes more than one class (13 November).** The **Add a driver** window, from **Add Driver** on **Who's Racing** and on **Set Up Tonight**, has a tick box for each class in place of the **Class** drop-down that took one. Tick every class they race; the class you were filtered to stays their main one while it's ticked. See [Race Day → Who's Racing](race-day/events-and-entries.md#race-day-whos-racing).
+
 - **Who's Racing reworked: a pit board, and Desk mode (13 November).**
     - **Readiness cards across the top** count, for the class picked, who's checked in, through tech, paid (with the money still owed) and with their papers in order, and how many are ready to race. Click a card to list only the drivers still waiting at that gate.
     - **Chips in place of the filters.** A chip per class, each with how many race it, in place of the **Class:** list. A chip per gate (**Not here**, **Needs tech**, **Owes**, **Papers**, **Ready**) in place of **Only those not through tech**, which only knew about tech.

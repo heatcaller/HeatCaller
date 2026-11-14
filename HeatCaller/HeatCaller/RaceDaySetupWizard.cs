@@ -1904,12 +1904,7 @@ internal sealed class RaceDaySetupWizard : Form
 
         // TryAdd, not Upsert: a create, refused rather than saved over
         // anybody - the backstop if the window's check let a clash by.
-        if (!_profiles.TryAdd(new DriverProfile
-            {
-                Transponder = form.Transponder,
-                DriverName = form.DriverName,
-                ClassName = form.ClassName,
-            }, out var refusal))
+        if (!_profiles.TryAdd(QuickDriverForm.NewProfile(form), out var refusal))
         {
             AppDialog.Show(this, refusal, "Transponder already in use", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
@@ -2459,26 +2454,32 @@ internal sealed class QuickClassForm : Form
 /// owns the save and the check-in, so this has nothing to get out of step.
 ///
 /// On the layout pieces (DialogFit): what it is for, each field under its
-/// caption, two lines kept for what is wrong, and Add Driver and Cancel at
-/// the foot; as tall as that, and wider than it was made when a class's
-/// name needs the drop-down wider. It used to be placed in pixels in a
-/// column 360px wide at every text size, the class drop-down 240px wide
-/// however long a class's name.
+/// caption, a tick box per class wrapping across the window, two lines
+/// kept for what is wrong, and Add Driver and Cancel at the foot; as tall
+/// as that. It used to be placed in pixels in a column 360px wide at every
+/// text size, and the classes were a drop-down that took only one.
 /// </summary>
 internal sealed class QuickDriverForm : Form
 {
-    private const string NoClass = "(no class)";
-
     /// <summary>How wide it is inside its frame at the normal text size: the 360px column it was made with, and the page's margins.</summary>
     private const int DialogWidth = 360 + UiLayout.PageLeft + UiLayout.PageRight;
 
-    /// <summary>The class drop-down's width at the normal text size - wider when a class's name needs it - and the transponder's with it.</summary>
-    private const int ClassPickerWidth = 240;
+    /// <summary>The transponder box's width at the normal text size.</summary>
+    private const int TransponderWidth = 240;
 
     private readonly TextBox _txtName = new();
     private readonly TextBox _txtTransponder = new();
-    private readonly ComboBox _cmbClass = new();
     private readonly Label _lblProblem = new();
+
+    /// <summary>
+    /// A tick box per class (13 Nov 2026): a driver often races two or
+    /// three, and the drop-down this was took one - the rest had to be
+    /// added on the roster afterwards.
+    /// </summary>
+    private readonly List<CheckBox> _classBoxes = new();
+
+    /// <summary>The class the window was opened on - the filter's - which stays the main class while it is ticked.</summary>
+    private readonly string? _startClass;
 
     /// <summary>Who already has a transponder, or null when nobody does.</summary>
     private readonly Func<string, string?> _ownerOf;
@@ -2500,11 +2501,62 @@ internal sealed class QuickDriverForm : Form
 
     public string DriverName => _txtName.Text.Trim();
     public string Transponder => _txtTransponder.Text.Trim();
-    public string ClassName => _cmbClass.SelectedItem is string chosen && chosen != NoClass ? chosen : string.Empty;
+
+    /// <summary>Every class ticked, the main one first; empty for none.</summary>
+    public IReadOnlyList<string> ClassNames
+    {
+        get
+        {
+            var ticked = _classBoxes.Where(box => box.Checked).Select(box => box.Text).ToList();
+
+            if (_startClass is not null && ticked.FindIndex(c => string.Equals(c, _startClass, StringComparison.OrdinalIgnoreCase)) is var at and > 0)
+            {
+                var main = ticked[at];
+                ticked.RemoveAt(at);
+                ticked.Insert(0, main);
+            }
+
+            return ticked;
+        }
+    }
+
+    /// <summary>The main class: the one opened on while it is ticked, else the first ticked; empty for none.</summary>
+    public string ClassName => ClassNames.FirstOrDefault() ?? string.Empty;
+
+    /// <summary>The classes ticked besides the main one.</summary>
+    public IReadOnlyList<string> ExtraClassNames => ClassNames.Skip(1).ToList();
+
+    /// <summary>The driver the window describes: their main class, and the others ticked as classes they race too.</summary>
+    public static DriverProfile NewProfile(QuickDriverForm form)
+    {
+        var profile = new DriverProfile
+        {
+            Transponder = form.Transponder,
+            DriverName = form.DriverName,
+            ClassName = form.ClassName,
+        };
+
+        foreach (var extra in form.ExtraClassNames)
+        {
+            CheckInControl.SetRunsClass(profile, extra, runs: true);
+        }
+
+        return profile;
+    }
+
+    /// <summary>For the tests: ticks or unticks a class's box.</summary>
+    internal void Tick(string className, bool ticked)
+    {
+        foreach (var box in _classBoxes.Where(b => string.Equals(b.Text, className, StringComparison.OrdinalIgnoreCase)))
+        {
+            box.Checked = ticked;
+        }
+    }
 
     public QuickDriverForm(IReadOnlyList<string> classes, string? startClass, Func<string, string?> ownerOf)
     {
         _ownerOf = ownerOf;
+        _startClass = startClass;
 
         Text = "Add a driver";
         Font = AppTheme.BodyFont;
@@ -2528,22 +2580,33 @@ internal sealed class QuickDriverForm : Form
 
         var lblName = Caption("Name");
         var lblTransponder = Caption("Transponder");
-        var lblClass = Caption("Class");
+        var lblClass = Caption("Classes");
 
-        // Rounded, like the Class drop-down under them - not the square
-        // native boxes, which looked like they belonged to another app.
+        // Rounded - not the square native boxes, which looked like they
+        // belonged to another app.
         var nameField = RoundedField.Wrap(_txtName);
         var transponderField = RoundedField.Wrap(_txtTransponder);
 
-        _cmbClass.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbClass.Items.Add(NoClass);
+        // A box per class, wrapping across the window. The class the window
+        // was opened on (the filter's) is ticked to start with.
+        var classRow = new ButtonBar(tight: true);
 
         foreach (var name in classes)
         {
-            _cmbClass.Items.Add(name);
+            var box = new ThemedCheckBox
+            {
+                Text = name,
+                AutoSize = true,
+                Checked = string.Equals(name, startClass, StringComparison.OrdinalIgnoreCase),
+            };
+
+            _classBoxes.Add(box);
+            classRow.With(box);
         }
 
-        _cmbClass.SelectedItem = startClass is not null && _cmbClass.Items.Contains(startClass) ? startClass : NoClass;
+        Control classes_ = classes.Count > 0
+            ? classRow
+            : new Label { Text = "No classes yet - add them on the Classes page.", AutoSize = true, Font = AppTheme.SmallFont, ForeColor = AppTheme.TextMuted };
 
         // Room for two lines, always - so the window does not jump when it
         // has something to say.
@@ -2558,7 +2621,7 @@ internal sealed class QuickDriverForm : Form
         ok.Click += (_, _) => TryAccept();
 
         // Each field under its caption: the name across the page, the
-        // transponder and the class at the class drop-down's width.
+        // transponder narrower, the classes wrapping across the page.
         var page = new FillPage();
         page.Add(lblIntro, gapBelow: UiLayout.SectionGap - UiLayout.HintGap);
 
@@ -2569,8 +2632,7 @@ internal sealed class QuickDriverForm : Form
         page.Add(transponderField, stretch: false, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
 
         page.Add(lblClass, stretch: false, gapBelow: UiLayout.HintGap);
-        page.Add(_cmbClass, stretch: false, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
-        Pieces.KeepHeightTold(_cmbClass);
+        page.Add(classes_, gapBelow: UiLayout.RowGap);
 
         page.Add(_lblProblem, gapBelow: UiLayout.RowGap);
 
@@ -2587,38 +2649,18 @@ internal sealed class QuickDriverForm : Form
         AcceptButton = ok;
         CancelButton = cancel;
 
-        // Themed before the fields are sized: the drop-down's height is its
-        // themed one, which the text fields match.
         AppTheme.ApplyRecursively(this);
         AppTheme.StyleButton(ok, AppTheme.ButtonKind.Primary);
         AppTheme.StyleButton(cancel, AppTheme.ButtonKind.Secondary);
 
-        // Kept here, and never read back from the drop-down: it is in the
-        // page already, whose table cuts a part down to the column it has
-        // now - the width of a window not sized yet. Read back, a long
-        // class's name left the window at its usual width and the drop-down
-        // too narrow for the name (the window test, "Add a driver"), and the
-        // transponder box narrower than the drop-down at a larger text size.
-        (Font Font, int Count, int Width)? classWidth = null;
-        var pickerWidth = Math.Max(UiLayout.AtTextSize(ClassPickerWidth), Pieces.PickerWidth(_cmbClass, ref classWidth));
-        _cmbClass.Width = pickerWidth;
-
-        // One height for all three fields: the drop-down's, which is set by
-        // its font, so the two text fields match it exactly.
-        var fieldHeight = Math.Max(_cmbClass.Height, AppTheme.BodyFont.Height + 12);
+        // One height for both text fields, from the font in use.
+        var fieldHeight = Math.Max(UiLayout.AtTextSize(UiLayout.RowHeight), AppTheme.BodyFont.Height + 12);
 
         nameField.Height = fieldHeight;
-        transponderField.Size = new Size(pickerWidth, fieldHeight);
+        transponderField.Size = new Size(UiLayout.AtTextSize(TransponderWidth), fieldHeight);
 
-        // The column it was made with, at the text size in use - or wider,
-        // when a class's name makes the drop-down wider than that column.
-        var width = Math.Max(
-            UiLayout.AtTextSize(DialogWidth),
-            pickerWidth + UiLayout.PageLeft + UiLayout.PageRight);
-
-        DialogFit.Keep(this, page, width: width, widthMeasured: true);
+        DialogFit.Keep(this, page, width: UiLayout.AtTextSize(DialogWidth), widthMeasured: true);
     }
-
     private void TryAccept()
     {
         var problem = DriverName.Length == 0
