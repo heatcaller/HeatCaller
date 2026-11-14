@@ -445,6 +445,14 @@ public sealed class TrackLayout
     public double? TrackLengthFeet { get; set; }
 
     /// <summary>
+    /// The scale of car raced on this layout ("1/10", "1/28" - a
+    /// RaceCoach.CarScales key), so Race Analytics counts gaps in cars of
+    /// the right length. Null means 1/10, which every layout from before
+    /// 14 Nov 2026 was counted as.
+    /// </summary>
+    public string? CarScale { get; set; }
+
+    /// <summary>
     /// Original filename of an attached photo or drawing (track map, CAD
     /// export, phone photo of the layout, whatever), or null if none is
     /// attached. The actual file lives on disk under

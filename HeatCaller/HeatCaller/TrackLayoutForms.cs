@@ -27,6 +27,7 @@ public sealed class TrackLayoutEditForm : Form
 {
     private readonly TextBox _txtName = new();
     private readonly NumericUpDown _numTrackLength = new();
+    private readonly ComboBox _cmbCarScale = new();
     private readonly NumericUpDown _numAvgLapSeconds = new();
     private readonly TextBox _txtNotes = new();
     private readonly NumericUpDown _numMarshalPosts = new();
@@ -103,7 +104,17 @@ public sealed class TrackLayoutEditForm : Form
         // restored file) threw here, and the track could not be edited.
         _numTrackLength.Value = (decimal)Math.Clamp(Result.TrackLengthFeet ?? 0, 0, 100000);
 
-        var lblLengthHint = Hint("optional, informational only");
+        var lblLengthHint = Hint("optional - gives Race Analytics its car lengths");
+
+        // The scale of car raced here, so a gap is counted in cars of the
+        // right length (RaceCoach.CarScales) - 14 Nov 2026, Asher.
+        _cmbCarScale.DropDownStyle = ComboBoxStyle.DropDownList;
+        foreach (var scale in RaceCoach.CarScales)
+        {
+            _cmbCarScale.Items.Add(scale.Name);
+        }
+
+        _cmbCarScale.SelectedIndex = RaceCoach.CarScales.ToList().IndexOf(RaceCoach.ScaleOf(Result.CarScale));
 
         _numAvgLapSeconds.DecimalPlaces = 2;
         _numAvgLapSeconds.Increment = 0.25m;
@@ -207,6 +218,7 @@ public sealed class TrackLayoutEditForm : Form
         var fields = new FieldGrid();
         fields.AddRow("Name:", _txtName, stretch: true);
         fields.AddRow("Track length (ft):", FieldGrid.Inline(_numTrackLength, lblLengthHint));
+        fields.AddRow("Car scale:", _cmbCarScale);
         fields.AddRow("Average lap time (sec):", _numAvgLapSeconds);
         // The short-track warning that used to take this note's place under
         // 8 seconds was taken out on 13 Nov 2026: the announcer keeps up on
@@ -310,6 +322,8 @@ public sealed class TrackLayoutEditForm : Form
         _numTrackLength.Width = NumberBoxWidth(_numTrackLength);
         _numAvgLapSeconds.Width = NumberBoxWidth(_numAvgLapSeconds);
         _numMarshalPosts.Width = NumberBoxWidth(_numMarshalPosts);
+        (Font Font, int Count, int Width)? scaleWidth = null;
+        _cmbCarScale.Width = Math.Max(NumberBoxWidth(_numTrackLength), Pieces.PickerWidth(_cmbCarScale, ref scaleWidth));
         _txtNotes.Height = NotesLines * Pieces.LineHeight(_txtNotes.Font) + UiLayout.HintGap * 2;
         _lblAttachmentName.Height = NameLines * Pieces.LineHeight(_lblAttachmentName.Font) + _lblAttachmentName.Padding.Vertical;
 
@@ -505,6 +519,7 @@ public sealed class TrackLayoutEditForm : Form
         Result.Name = name;
         Result.Notes = _txtNotes.Text;
         Result.TrackLengthFeet = _numTrackLength.Value > 0 ? (double)_numTrackLength.Value : null;
+        Result.CarScale = _cmbCarScale.SelectedIndex >= 0 ? RaceCoach.CarScales[_cmbCarScale.SelectedIndex].Key : null;
         Result.AverageLapSeconds = _numAvgLapSeconds.Value > 0 ? (double)_numAvgLapSeconds.Value : null;
         Result.MarshalPostCount = (int)_numMarshalPosts.Value;
         Result.PreferPlanImage = _rdoPlanMain.Checked;
@@ -949,7 +964,7 @@ public sealed class TrackLayoutManagerControl : UserControl
                 track.AverageLapSeconds is null ? "not set" : string.Empty, null, AppTheme.Accent),
 
             new("length", "Length", track.TrackLengthFeet is { } feet ? $"{feet:0} ft" : "—",
-                track.TrackLengthFeet is null ? "not set" : string.Empty, null, AppTheme.Accent),
+                track.TrackLengthFeet is null ? "not set" : $"{RaceCoach.ScaleOf(track.CarScale).Key} cars", null, AppTheme.Accent),
 
             new("posts", "Marshal posts", track.MarshalPostCount > 0 ? track.MarshalPostCount.ToString() : "None",
                 track.MarshalPostCount > 0 ? string.Empty : "not tracked", null, AppTheme.Accent),
@@ -1139,6 +1154,7 @@ public sealed class TrackLayoutManagerControl : UserControl
             existing.Name,
             existing.Notes,
             existing.TrackLengthFeet,
+            existing.CarScale,
             existing.AverageLapSeconds,
             existing.MarshalPostCount,
             existing.PreferPlanImage,
@@ -1181,6 +1197,7 @@ public sealed class TrackLayoutManagerControl : UserControl
                 target.Name = before.Name;
                 target.Notes = before.Notes;
                 target.TrackLengthFeet = before.TrackLengthFeet;
+                target.CarScale = before.CarScale;
                 target.AverageLapSeconds = before.AverageLapSeconds;
                 target.MarshalPostCount = before.MarshalPostCount;
                 target.PreferPlanImage = before.PreferPlanImage;

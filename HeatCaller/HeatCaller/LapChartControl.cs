@@ -9,17 +9,62 @@ namespace HeatCaller;
 /// requirements here are a handful of polylines with axes, and this keeps
 /// the app dependency-free and consistent with how the results card and
 /// sidebar icons are already rendered.
+///
+/// 13 Nov 2026, the Race Engineer rework (RaceCoach): the page reads one
+/// driver's race as well as plotting it - the focused driver, picked
+/// beside the session. A sentence over the chart says what the race added
+/// up to; the chart marks the best lap, each mistake with what it cost, and
+/// where a fade starts, over a band for laps at the driver's limit; "Three
+/// things in this race" sits beside it, and a "Try this" under it. Other
+/// ticked drivers stay on the chart, fainter, to compare against. The
+/// consistency table moved under all of that: the figures are evidence
+/// now, not the story.
 /// </summary>
 public sealed class LapChartControl : UserControl
 {
+    /// <summary>The track layouts, for a layout's length - the car lengths beside each gap (RaceCoach). Null says no car lengths.</summary>
+    public TrackLayoutStore? Layouts
+    {
+        get => _layouts;
+        set
+        {
+            // Set after the page is built (MainForm sets it in the initializer),
+            // so the reading is done again with the layout's length to hand.
+            _layouts = value;
+            RefreshCoach();
+            _chartPanel.Invalidate();
+        }
+    }
+
+    private TrackLayoutStore? _layouts;
+
     private readonly SessionHistoryStore _history;
     private readonly AppSettings _settings;
 
     private readonly ComboBox _cmbSession = new();
+    private readonly ComboBox _cmbFocus = new();
     private readonly CheckedListBox _clbDrivers = new ThemedCheckedListBox();
     private readonly Panel _chartPanel = new();
     private readonly Label _lblInfo = new();
     private readonly DataGridView _statsTable = new();
+
+    /// <summary>What the focused driver's race added up to - see RaceCoach.LapTimesHeadline.</summary>
+    private readonly Label _headline;
+
+    /// <summary>"Try this" under the chart - RaceCoach.Drill for the focused driver.</summary>
+    private readonly DrillNote _drill = new();
+
+    /// <summary>The three findings: a bold line and a muted detail each, hidden when there is no finding to show.</summary>
+    private readonly List<(Label Line, Label Detail)> _things = new();
+
+    /// <summary>What the findings card says when there is nothing to read.</summary>
+    private readonly Label _thingsNone = new() { AutoSize = true, ForeColor = AppTheme.TextMuted };
+
+    /// <summary>The focus picker's width as last measured - see Pieces.PickerWidth. Forgotten when the list is refilled.</summary>
+    private (Font Font, int Count, int Width)? _focusWidth;
+
+    /// <summary>Set while the page itself fills or moves the focus picker, so that is not taken for a choice.</summary>
+    private bool _settingFocus;
 
     /// <summary>
     /// Every plotted point with the lap it represents, captured during
@@ -47,6 +92,8 @@ public sealed class LapChartControl : UserControl
         // (FillPage).
         _textSize.Wear(this, () => AppTheme.BodyFont);
 
+        _headline = CoachPieces.Headline(_textSize);
+
         BuildLayout();
         RefreshAll();
     }
@@ -60,11 +107,33 @@ public sealed class LapChartControl : UserControl
     /// <summary>The drivers' card's width at the normal text size.</summary>
     private const int DriversWidth = 220;
 
-    /// <summary>The least the chart gets at the normal text size - below that the page scrolls.</summary>
-    private const int ChartLeastHeight = 220;
+    /// <summary>The least the chart gets at the normal text size - below that the page scrolls. 200 since 13 Nov 2026 (was 220), to make room for the headline and the "Try this" on a 760px page.</summary>
+    private const int ChartLeastHeight = 200;
 
-    /// <summary>Drivers shown in the consistency table without scrolling it.</summary>
-    private const int StatsRowsShown = 4;
+    /// <summary>Drivers shown in the consistency table without scrolling it - three, now it sits under the reading as evidence.</summary>
+    private const int StatsRowsShown = 3;
+
+    /// <summary>The focus picker's least width at the normal text size.</summary>
+    private const int FocusPickerWidth = 200;
+
+    /// <summary>The findings card's width at the normal text size: wide enough that a finding's bold line takes two lines at most.</summary>
+    private const int ThingsWidth = 290;
+
+    /// <summary>The narrowest the findings card gets, at the normal text size, so the chart keeps more of a narrow window.</summary>
+    private const int ThingsLeastWidth = 230;
+
+    /// <summary>
+    /// The findings card: about a third of what the drivers leave, between
+    /// its least and its full width. At its full width on a narrow window it
+    /// left the chart so little that the labels on it had no room.
+    /// </summary>
+    private int ThingsCardWidth() =>
+        Math.Max(
+            Math.Clamp((int)((ClientSize.Width - UiLayout.AtTextSize(DriversWidth)) * 0.32f), UiLayout.AtTextSize(ThingsLeastWidth), UiLayout.AtTextSize(ThingsWidth)),
+            (_thingsCard?.CaptionWidth ?? 0) + Section.Inset.Horizontal);
+
+    /// <summary>The findings card, for its caption's width: never narrower than that, or "Three things in this race" wraps.</summary>
+    private Section? _thingsCard;
 
     /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
     protected override void OnFontChanged(EventArgs e)
@@ -94,13 +163,35 @@ public sealed class LapChartControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "Lap-by-lap pace for a saved race. Tick drivers on the left to compare them.",
+            Text = "Lap-by-lap pace for a saved race, read for the driver you focus on. Tick others on the left to compare them.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
 
         _cmbSession.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbSession.SelectedIndexChanged += (_, _) => LoadSelectedSession();
+
+        // The driver the page reads the race for. Picking one ticks them, so
+        // the driver read about is always on the chart.
+        _cmbFocus.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbFocus.SelectedIndexChanged += (_, _) =>
+        {
+            if (_settingFocus)
+            {
+                return;
+            }
+
+            if (_cmbFocus.SelectedIndex >= 0 && _cmbFocus.SelectedIndex < _clbDrivers.Items.Count
+                && !_clbDrivers.GetItemChecked(_cmbFocus.SelectedIndex))
+            {
+                // Ticking it raises ItemCheck, which reads the race again.
+                _clbDrivers.SetItemChecked(_cmbFocus.SelectedIndex, true);
+                return;
+            }
+
+            _chartPanel.Invalidate();
+            RefreshCoach();
+        };
 
         // What the session holds, beside the picker - on a line of its own
         // when it no longer fits there (FieldRow).
@@ -111,6 +202,8 @@ public sealed class LapChartControl : UserControl
         var sessionRow = new FieldRow();
 
         sessionRow.Add(new Label { Text = "Session:" }, _cmbSession, () => UiLayout.AtTextSize(SessionPickerWidth));
+        sessionRow.Add(new Label { Text = "Focus on:" }, _cmbFocus,
+            () => Math.Max(UiLayout.AtTextSize(FocusPickerWidth), Pieces.PickerWidth(_cmbFocus, ref _focusWidth)));
         sessionRow.AddLast(null, _lblInfo, () => _lblInfo.GetPreferredSize(Size.Empty).Width);
 
         // --- The drivers ---
@@ -123,7 +216,8 @@ public sealed class LapChartControl : UserControl
                 return;
             }
 
-            BeginInvoke(() => { _chartPanel.Invalidate(); RefreshStats(); });
+            // Later, because ItemCheck is raised before the tick changes.
+            BeginInvoke(() => { KeepFocusTicked(); _chartPanel.Invalidate(); RefreshStats(); RefreshCoach(); });
         };
 
         var drivers = new Section("Drivers");
@@ -193,20 +287,47 @@ public sealed class LapChartControl : UserControl
 
         consistency.Add(_statsTable, gapBelow: 0);
 
+        // --- Three things in this race ---
+        //
+        // Three findings at most, each a bold line over a muted detail, and
+        // a muted line in their place when there is nothing to read. Made
+        // once and shown or hidden, so the card never rebuilds its rows.
+        var things = _thingsCard = new Section("Three things in this race");
+
+        for (var i = 0; i < 3; i++)
+        {
+            var line = _textSize.Wear(new Label { AutoSize = true, ForeColor = AppTheme.TextDark }, () => AppTheme.BoldFont);
+            var detail = new Label { AutoSize = true, ForeColor = AppTheme.TextMuted };
+
+            things.Add(line, gapBelow: 2);
+            things.Add(detail, gapBelow: i < 2 ? UiLayout.RowGap : 0);
+            _things.Add((line, detail));
+        }
+
+        things.Add(_thingsNone, gapBelow: 0);
+
         // --- The page ---
         //
-        // The drivers down the left, ticked from; the chart and the table
-        // beside them, taking the rest of the width.
+        // The chart with the findings beside it, as the mock-up has them;
+        // the "Try this" and the figures under both. The drivers down the
+        // left of all of it, ticked from.
+        var reading = new Beside(ThingsCardWidth);
+
+        reading.AddFill(chart, chart.LeastHeight, gapBelow: 0);
+        reading.AddSideCard(things, gapBelow: 0);
+
         var band = new Beside(() => UiLayout.AtTextSize(DriversWidth)) { SideOnLeft = true };
 
-        band.AddFill(chart, chart.LeastHeight, gapBelow: UiLayout.RowGap);
+        band.AddFill(reading, reading.LeastHeight, gapBelow: UiLayout.RowGap);
+        band.Add(_drill, gapBelow: UiLayout.RowGap);
         band.Add(consistency, gapBelow: 0);
         band.AddSideFill(drivers, drivers.LeastHeight, gapBelow: 0);
 
         var page = new FillPage();
 
-        page.Add(lblIntro);
-        page.Add(sessionRow);
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.Add(sessionRow, gapBelow: UiLayout.RowGap);
+        page.Add(_headline, gapBelow: UiLayout.RowGap);
         page.AddFill(band, band.LeastHeight, gapBelow: 0);
 
         Controls.Add(page);
@@ -228,8 +349,10 @@ public sealed class LapChartControl : UserControl
             // Flying laps only, as PaceAnalysis.CountedLaps counts them: the
             // first entry is the run from the green to the first crossing,
             // and a car parked just behind the line made it the "Best" here
-            // and dragged the average and spread with it.
-            var laps = driver.LapTimesMs.Skip(1).Where(l => l > 0).ToList();
+            // and dragged the average and spread with it. RaceCoach.Laps
+            // since 13 Nov 2026, so a driver credited with the start lap
+            // loses its second start slot here too, as the reading above does.
+            var laps = RaceCoach.Laps(driver);
             if (laps.Count == 0)
             {
                 continue;
@@ -264,8 +387,10 @@ public sealed class LapChartControl : UserControl
         {
             _lblInfo.Text = "No saved sessions yet.";
             _clbDrivers.Items.Clear();
+            FillFocus();
             _currentSession = null;
             _chartPanel.Invalidate();
+            RefreshCoach();
 
             // Clearing the driver list raises no ItemCheck, so nothing else
             // would empty the Consistency table - it kept the rows of a
@@ -298,12 +423,14 @@ public sealed class LapChartControl : UserControl
 
         if (_currentSession is null)
         {
+            FillFocus();
             _chartPanel.Invalidate();
 
             // As in RefreshAll: the list was just cleared without raising
             // ItemCheck, so the table has to be emptied here or it goes on
             // showing the previous session's drivers.
             RefreshStats();
+            RefreshCoach();
             return;
         }
 
@@ -328,12 +455,161 @@ public sealed class LapChartControl : UserControl
                 : "This session has no lap-by-lap data recorded."
             : $"{withLaps.Count} driver{(withLaps.Count == 1 ? "" : "s")} with lap data";
 
+        FillFocus();
         _chartPanel.Invalidate();
         RefreshStats();
+        RefreshCoach();
     }
 
     private List<SessionResultEntry> CheckedDrivers() =>
         _clbDrivers.CheckedItems.Cast<DriverComboItem>().Select(i => i.Result).ToList();
+
+    /// <summary>
+    /// The driver the page reads the race for: the one picked to focus on,
+    /// while they are ticked, or else the first ticked. Null with no one
+    /// ticked.
+    /// </summary>
+    private SessionResultEntry? FocusedDriver()
+    {
+        var ticked = CheckedDrivers();
+
+        return _cmbFocus.SelectedItem is DriverComboItem picked && ticked.Contains(picked.Result)
+            ? picked.Result
+            : ticked.FirstOrDefault();
+    }
+
+    /// <summary>The focus picker, filled with the session's drivers in the list's order, the first picked.</summary>
+    private void FillFocus()
+    {
+        _settingFocus = true;
+
+        try
+        {
+            _cmbFocus.Items.Clear();
+            _focusWidth = null;
+
+            foreach (var item in _clbDrivers.Items)
+            {
+                _cmbFocus.Items.Add(item);
+            }
+
+            _cmbFocus.SelectedIndex = _cmbFocus.Items.Count > 0 ? 0 : -1;
+        }
+        finally
+        {
+            _settingFocus = false;
+        }
+    }
+
+    /// <summary>
+    /// The focused driver unticked: the picker moves to whoever the page now
+    /// reads (the first ticked), so it never names a driver the reading is
+    /// not about.
+    /// </summary>
+    private void KeepFocusTicked()
+    {
+        if (FocusedDriver() is not { } focus || ReferenceEquals((_cmbFocus.SelectedItem as DriverComboItem)?.Result, focus))
+        {
+            return;
+        }
+
+        _settingFocus = true;
+
+        try
+        {
+            for (var i = 0; i < _cmbFocus.Items.Count; i++)
+            {
+                if (_cmbFocus.Items[i] is DriverComboItem item && ReferenceEquals(item.Result, focus))
+                {
+                    _cmbFocus.SelectedIndex = i;
+                    break;
+                }
+            }
+        }
+        finally
+        {
+            _settingFocus = false;
+        }
+    }
+
+    /// <summary>
+    /// The reading of the focused driver's race: the headline, the three
+    /// things, and the "Try this". Hidden, all of it, with no one to read.
+    /// </summary>
+    private void RefreshCoach()
+    {
+        var focus = FocusedDriver();
+        var laps = focus is null ? new List<long>() : RaceCoach.Laps(focus);
+
+        if (focus is null || laps.Count == 0)
+        {
+            _headline.Text = string.Empty;
+            _headline.Visible = false;
+            _drill.Say(null);
+
+            ShowThings(new List<RaceCoach.Finding>(), _currentSession is null
+                ? "Pick a session to read a race."
+                : "Tick a driver to read their race.");
+            return;
+        }
+
+        var row = PaceAnalysis.For(focus);
+        var trackCars = RaceCoach.TrackCars(Layouts, _currentSession?.TrackLayoutName);
+
+        _headline.Text = RaceCoach.LapTimesHeadline(row, laps);
+        _headline.Visible = true;
+        _drill.Say(RaceCoach.Drill(row, laps));
+
+        ShowThings(RaceCoach.ThreeThings(laps, RaceCoach.LapNumbers(focus), trackCars), "Too few laps to read anything into.");
+    }
+
+    private void ShowThings(List<RaceCoach.Finding> found, string none)
+    {
+        for (var i = 0; i < _things.Count; i++)
+        {
+            var (line, detail) = _things[i];
+            var shown = i < found.Count;
+
+            line.Text = shown ? $"{i + 1}. {found[i].Line}" : string.Empty;
+            detail.Text = shown ? found[i].Detail : string.Empty;
+            line.Visible = shown;
+            detail.Visible = shown;
+        }
+
+        _thingsNone.Text = none;
+        _thingsNone.Visible = found.Count == 0;
+    }
+
+    /// <summary>The headline, for the tests.</summary>
+    internal string HeadlineText => _headline.Visible ? _headline.Text : string.Empty;
+
+    /// <summary>The findings shown, bold line then detail, for the tests.</summary>
+    internal IReadOnlyList<(string Line, string Detail)> ThingsShown =>
+        _things.Where(t => t.Line.Visible).Select(t => (t.Line.Text, t.Detail.Text)).ToList();
+
+    /// <summary>The "Try this" advice, for the tests.</summary>
+    internal string DrillText => _drill.Visible ? _drill.Advice : string.Empty;
+
+    /// <summary>The marks the chart last drew on screen, their text and whether a label found room - for the tests.</summary>
+    internal IReadOnlyList<(string Text, Rectangle? Label)> MarksDrawn => _marksDrawn;
+
+    private readonly List<(string Text, Rectangle? Label)> _marksDrawn = new();
+
+    /// <summary>Picks the driver to focus on by name, for the tests.</summary>
+    internal void FocusOn(string driverName)
+    {
+        for (var i = 0; i < _cmbFocus.Items.Count; i++)
+        {
+            if (_cmbFocus.Items[i] is DriverComboItem item && item.Result.DriverName == driverName)
+            {
+                _cmbFocus.SelectedIndex = i;
+                return;
+            }
+        }
+    }
+
+    /// <summary>The chart as it would be saved, for the tests and the screenshot.</summary>
+    internal void DrawChartForTest(Graphics g, Rectangle bounds) => DrawChart(g, bounds, ChartPalette.Screen(), onScreen: true);
 
     private void ChartPanel_Paint(object? sender, PaintEventArgs e) =>
         DrawChart(e.Graphics, _chartPanel.ClientRectangle, ChartPalette.Screen());
@@ -362,8 +638,14 @@ public sealed class LapChartControl : UserControl
         // top band of the chart - and the hover called it a "lap 1" quicker
         // than the Best in the table underneath. A lap of zero or less (a
         // jump start's placeholder) says nothing about pace either.
+        //
+        // Since 13 Nov 2026 each driver's laps are RaceCoach.Laps and their
+        // numbers RaceCoach.LapNumbers, so a lap the reading calls "lap 9"
+        // is the point over 9 here, and a driver credited with the start lap
+        // no longer plots the rest of their start as a lap.
         var maxLaps = drivers.Count == 0 ? 0 : drivers.Max(d => d.LapTimesMs.Count);
-        var allTimes = drivers.SelectMany(d => d.LapTimesMs.Skip(1)).Where(ms => ms > 0).ToList();
+        var series = drivers.Select(d => (Driver: d, Laps: RaceCoach.Laps(d), Numbers: RaceCoach.LapNumbers(d))).ToList();
+        var allTimes = series.SelectMany(s => s.Laps).ToList();
 
         if (_currentSession is null || drivers.Count == 0 || allTimes.Count == 0)
         {
@@ -387,20 +669,70 @@ public sealed class LapChartControl : UserControl
             return;
         }
 
+        var focus = FocusedDriver();
+        var focusIndex = focus is null ? -1 : drivers.IndexOf(focus);
+        var focusLaps = focusIndex >= 0 ? series[focusIndex].Laps : new List<long>();
+        var reading = focusLaps.Count >= PaceAnalysis.Window;
+
+        // The legend, along the top above the plot rather than inside it
+        // (13 Nov 2026): inside, it sat on the slow laps at the top, which
+        // is exactly where a crash lap's mark and label go, and on a narrow
+        // chart it ran off the right-hand edge. In tick order, the focused
+        // driver in bold, then what the shaded band means; wrapping onto
+        // another line when the chart is too narrow for one.
+        var legend = Enumerable.Range(0, drivers.Count)
+            .Select(d => (Text: drivers[d].DriverName,
+                Face: d == focusIndex && reading && drivers.Count > 1 ? AppTheme.BoldFont : AppTheme.SmallFont,
+                Swatch: palette.Series[d % palette.Series.Length], Band: false))
+            .ToList();
+
+        if (reading)
+        {
+            legend.Add(("At your limit (within 1.5% of your best)", AppTheme.SmallFont, Color.FromArgb(90, palette.Highlight), true));
+        }
+
         // The room round the plot holds the time labels down the left and
         // the lap numbers and "Lap" under it, all in the small face - so it
         // grows with the text size, or at 200% the labels run into the plot
         // and off the bottom. Worked out on every paint, so a new text size
-        // is picked up by the repaint it brings.
+        // is picked up by the repaint it brings. The legend's lines come on
+        // top of the room above it.
         var padLeft = UiLayout.AtTextSize(64);
         var padRight = UiLayout.AtTextSize(16);
-        var padTop = UiLayout.AtTextSize(16);
         var padBottom = UiLayout.AtTextSize(40);
+
+        var swatchWidth = UiLayout.AtTextSize(14);
+        var swatchHeight = UiLayout.AtTextSize(4);
+        var swatchGap = UiLayout.AtTextSize(6);
+        var itemGap = UiLayout.AtTextSize(16);
+        var legendRow = (int)Math.Ceiling(Math.Max(AppTheme.SmallFont.GetHeight(g), AppTheme.BoldFont.GetHeight(g))) + UiLayout.AtTextSize(2);
+        var legendLeft = bounds.Left + padLeft;
+        var legendRight = bounds.Right - padRight;
+        var placedLegend = new List<(string Text, Font Face, Color Swatch, bool Band, float X, float Y)>();
+        var legendX = (float)legendLeft;
+        var legendY = (float)(bounds.Top + UiLayout.AtTextSize(6));
+
+        foreach (var item in legend)
+        {
+            var width = swatchWidth + swatchGap + g.MeasureString(item.Text, item.Face).Width;
+
+            if (legendX > legendLeft && legendX + width > legendRight)
+            {
+                legendX = legendLeft;
+                legendY += legendRow;
+            }
+
+            placedLegend.Add((item.Text, item.Face, item.Swatch, item.Band, legendX, legendY));
+            legendX += width + itemGap;
+        }
+
+        var padTop = (int)(legendY - bounds.Top) + legendRow + UiLayout.AtTextSize(8);
 
         var plot = new Rectangle(
             bounds.Left + padLeft, bounds.Top + padTop,
             Math.Max(10, bounds.Width - padLeft - padRight),
             Math.Max(10, bounds.Height - padTop - padBottom));
+
 
         var minMs = allTimes.Min();
         var maxMs = allTimes.Max();
@@ -464,43 +796,48 @@ public sealed class LapChartControl : UserControl
             _plotted.Clear();
         }
 
-        // A lap's dot, and the legend's rows, at the text size in use: the
-        // legend's names are in the small face, so rows a fixed 18px apart
-        // overlapped once it grew, and the dots and swatches beside them
-        // grow in step so the chart keeps its proportions.
+        // A lap's dot at the text size in use, so the chart keeps its
+        // proportions as the face grows.
         var dot = (float)UiLayout.AtTextSize(5f);
-        var legendTop = UiLayout.AtTextSize(4);
-        var legendRow = UiLayout.AtTextSize(18);
-        var swatchLeft = UiLayout.AtTextSize(8);
-        var swatchDrop = UiLayout.AtTextSize(4);
-        var swatchWidth = UiLayout.AtTextSize(14);
-        var swatchHeight = UiLayout.AtTextSize(4);
-        var legendTextLeft = UiLayout.AtTextSize(26);
 
-        // One polyline per driver.
-        for (var d = 0; d < drivers.Count; d++)
+        float Y(double ms) => (float)(plot.Bottom - (ms - lowMs) / range * plot.Height);
+
+        // The band of laps within 1.5% of the focused driver's best - "at
+        // your limit" - under everything else, clipped to the plot.
+        if (reading)
         {
-            var driver = drivers[d];
+            var best = focusLaps.Min();
+            var top = Math.Max(plot.Top, Y(best * (1 + RaceCoach.LimitShare)));
+            var bottom = Math.Min(plot.Bottom, Y(best));
+
+            using var band = new SolidBrush(Color.FromArgb(48, palette.Highlight));
+            g.FillRectangle(band, plot.Left, top, plot.Width, Math.Max(1f, bottom - top));
+        }
+
+        // One polyline per driver, the focused one last so it is drawn on
+        // top, thicker; the others fainter when there is a race being read,
+        // so they compare without competing.
+        var order = Enumerable.Range(0, drivers.Count).Where(d => d != focusIndex).Append(focusIndex).Where(d => d >= 0);
+        var focusPoints = new List<PointF>();
+
+        foreach (var d in order)
+        {
+            var (driver, laps, numbers) = series[d];
             var color = palette.Series[d % palette.Series.Length];
-            using var linePen = new Pen(color, 2f);
-            using var dotBrush = new SolidBrush(color);
+            var faint = reading && d != focusIndex && drivers.Count > 1;
+            var ink = faint ? Color.FromArgb(120, color) : color;
+            using var linePen = new Pen(ink, d == focusIndex && drivers.Count > 1 ? 2.75f : faint ? 1.5f : 2f);
+            using var dotBrush = new SolidBrush(ink);
 
             var points = new List<PointF>();
-            for (var lap = 1; lap < driver.LapTimesMs.Count; lap++)
+            for (var i = 0; i < laps.Count; i++)
             {
-                // Same filter as the axis range above, so no point can fall
-                // outside the plot.
-                if (driver.LapTimesMs[lap] <= 0)
-                {
-                    continue;
-                }
-
-                var x = LapX(lap);
-                var y = (float)(plot.Bottom - (driver.LapTimesMs[lap] - lowMs) / range * plot.Height);
+                var x = LapX(numbers[i] - 1);
+                var y = Y(laps[i]);
                 points.Add(new PointF(x, y));
                 if (onScreen)
                 {
-                    _plotted.Add((new PointF(x, y), driver.DriverName, lap + 1, driver.LapTimesMs[lap], color));
+                    _plotted.Add((new PointF(x, y), driver.DriverName, numbers[i], laps[i], color));
                 }
             }
 
@@ -514,11 +851,47 @@ public sealed class LapChartControl : UserControl
                 g.FillEllipse(dotBrush, p.X - dot / 2f, p.Y - dot / 2f, dot, dot);
             }
 
-            // Legend entry, stacked down the top-left inside the plot.
-            var legendY = plot.Top + legendTop + d * legendRow;
-            g.FillRectangle(dotBrush, plot.Left + swatchLeft, legendY + swatchDrop, swatchWidth, swatchHeight);
-            using var legendBrush = new SolidBrush(palette.Text);
-            g.DrawString(driver.DriverName, AppTheme.SmallFont, legendBrush, plot.Left + legendTextLeft, legendY);
+            if (d == focusIndex)
+            {
+                focusPoints = points;
+            }
+        }
+
+        using (var legendBrush = new SolidBrush(palette.Text))
+        {
+            foreach (var item in placedLegend)
+            {
+                var middle = item.Y + legendRow / 2f;
+                var height = item.Band ? swatchHeight * 2.5f : swatchHeight;
+
+                using (var swatchBrush = new SolidBrush(item.Swatch))
+                {
+                    g.FillRectangle(swatchBrush, item.X, middle - height / 2f, swatchWidth, height);
+                }
+
+                var textHeight = item.Face.GetHeight(g);
+                g.DrawString(item.Text, item.Face, legendBrush, item.X + swatchWidth + swatchGap, middle - textHeight / 2f);
+            }
+        }
+
+        // The marks' labels keep off nothing but each other and the marks
+        // now the legend is out of the plot.
+        var taken = new List<RectangleF>();
+
+        if (reading && focus is not null)
+        {
+            var marks = MarksFor(focusLaps, RaceCoach.TrackCars(Layouts, _currentSession?.TrackLayoutName), palette);
+            var drawn = DrawMarks(g, plot, focusPoints, marks, taken, dot, palette.Background);
+
+            if (onScreen)
+            {
+                _marksDrawn.Clear();
+                _marksDrawn.AddRange(drawn);
+            }
+        }
+        else if (onScreen)
+        {
+            _marksDrawn.Clear();
         }
 
         // WHY (20 Oct 2026): the hover point is in the panel's coordinates,
@@ -726,6 +1099,183 @@ public sealed class LapChartControl : UserControl
         {
             AppDialog.Show(this, $"Couldn't save the chart: {ex.Message}", "Save failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    /// <summary>A mark on the focused driver's line: the counted lap it sits on, what its label says, and its colour.</summary>
+    private sealed record Mark(int Lap, string Text, Color Color, bool Line = false);
+
+    /// <summary>
+    /// The marks the chart puts on the focused driver's race: the best lap,
+    /// each mistake with what it cost (and the car lengths, when the layout
+    /// has a length), and where the fade starts. The mistakes come first,
+    /// worst first, so when there is not room for every label the costly
+    /// ones keep theirs; then the best, then the fade.
+    /// </summary>
+    private static List<Mark> MarksFor(IReadOnlyList<long> laps, double? trackCars, ChartPalette palette)
+    {
+        var marks = new List<Mark>();
+        var best = laps.Min();
+        var mistake = palette.Series.Length > 5 ? palette.Series[5] : palette.Text;
+        var fadeInk = palette.Series.Length > 2 ? palette.Series[2] : palette.Text;
+
+        foreach (var i in RaceCoach.MistakeLaps(laps).OrderByDescending(i => laps[i]))
+        {
+            var cost = laps[i] - best;
+            var lengths = RaceCoach.SayLengths(cost, best, trackCars);
+
+            marks.Add(new Mark(i, $"+{RaceCoach.Seconds(cost)}" + (lengths is null ? string.Empty : $", {lengths}"), mistake));
+        }
+
+        marks.Add(new Mark(Enumerable.Range(0, laps.Count).First(i => laps[i] == best), $"Best {PaceAnalysis.Time(best)}", palette.Highlight));
+
+        if (RaceCoach.FadeOf(laps) is { } fade)
+        {
+            marks.Add(new Mark(fade.Start, "Fade starts", fadeInk, Line: true));
+        }
+
+        return marks;
+    }
+
+    /// <summary>
+    /// Rings each mark's point and puts its label beside it: above, below,
+    /// or to a side, whichever first fits inside the plot without covering
+    /// the legend, another label, another mark or (if it can help it) a lap
+    /// on the line. A label that fits nowhere is left off rather than drawn
+    /// over something; its ring stays. A label set off from its point gets
+    /// a short line back to it.
+    /// </summary>
+    private static List<(string Text, Rectangle? Label)> DrawMarks(
+        Graphics g, Rectangle plot, IReadOnlyList<PointF> points, List<Mark> marks, List<RectangleF> taken, float dot, Color background)
+    {
+        var drawn = new List<(string Text, Rectangle? Label)>();
+
+        if (points.Count == 0)
+        {
+            return drawn;
+        }
+
+        using var face = new Font(AppTheme.SmallFont, FontStyle.Bold);
+        var gap = UiLayout.AtTextSize(6);
+        var padX = UiLayout.AtTextSize(4);
+        var padY = UiLayout.AtTextSize(1);
+        var ring = dot * 2.6f;
+
+        // The other marks' points are as much in the way as a label.
+        var markSpots = marks
+            .Where(m => m.Lap < points.Count)
+            .Select(m => new RectangleF(points[m.Lap].X - ring / 2, points[m.Lap].Y - ring / 2, ring, ring))
+            .ToList();
+        var laps = points.Select(p => new RectangleF(p.X - dot, p.Y - dot, dot * 2, dot * 2)).ToList();
+        var placed = new List<RectangleF>();
+
+        foreach (var mark in marks)
+        {
+            if (mark.Lap >= points.Count)
+            {
+                continue;
+            }
+
+            var at = points[mark.Lap];
+
+            using (var ringPen = new Pen(mark.Color, 2f))
+            {
+                if (mark.Line)
+                {
+                    // Where the fade starts: a dashed line down to the axis,
+                    // so the laps from there on read as one stretch.
+                    using var dash = new Pen(Color.FromArgb(150, mark.Color), 1.25f) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dash };
+                    g.DrawLine(dash, at.X, at.Y + ring / 2, at.X, plot.Bottom);
+                }
+
+                g.DrawEllipse(ringPen, at.X - ring / 2, at.Y - ring / 2, ring, ring);
+            }
+
+            var size = TextRenderer.MeasureText(g, mark.Text, face, Size.Empty, TextFormatFlags.NoPadding);
+            var w = size.Width + padX * 2;
+            var h = size.Height + padY * 2;
+            var near = ring / 2 + gap;
+
+            var tries = new[]
+            {
+                new PointF(at.X - w / 2f, at.Y - near - h),
+                new PointF(at.X - w / 2f, at.Y + near),
+                new PointF(at.X + near, at.Y - h / 2f),
+                new PointF(at.X - near - w, at.Y - h / 2f),
+                new PointF(at.X + near / 2, at.Y - near - h),
+                new PointF(at.X - near / 2 - w, at.Y - near - h),
+                new PointF(at.X + near / 2, at.Y + near),
+                new PointF(at.X - near / 2 - w, at.Y + near),
+                new PointF(at.X - w / 2f, at.Y - near * 2.5f - h),
+                new PointF(at.X - w / 2f, at.Y + near * 2.5f),
+            };
+
+            RectangleF? spot = null;
+
+            // First somewhere that covers no lap on the line either; then
+            // anywhere that covers no label, legend or mark.
+            foreach (var strict in new[] { true, false })
+            {
+                foreach (var t in tries)
+                {
+                    var box = new RectangleF(
+                        Math.Clamp(t.X, plot.Left + 1, Math.Max(plot.Left + 1, plot.Right - w - 1)),
+                        Math.Clamp(t.Y, plot.Top + 1, Math.Max(plot.Top + 1, plot.Bottom - h - 1)),
+                        w, h);
+
+                    if (box.Right > plot.Right || box.Bottom > plot.Bottom
+                        || taken.Any(box.IntersectsWith) || placed.Any(box.IntersectsWith)
+                        || markSpots.Any(box.IntersectsWith)
+                        || strict && laps.Any(box.IntersectsWith))
+                    {
+                        continue;
+                    }
+
+                    spot = box;
+                    break;
+                }
+
+                if (spot is not null)
+                {
+                    break;
+                }
+            }
+
+            if (spot is not { } label)
+            {
+                drawn.Add((mark.Text, null));
+                continue;
+            }
+
+            placed.Add(label);
+
+            // A label pushed away from its point gets a line back to it.
+            var nearestX = Math.Clamp(at.X, label.Left, label.Right);
+            var nearestY = Math.Clamp(at.Y, label.Top, label.Bottom);
+            var away = MathF.Sqrt((nearestX - at.X) * (nearestX - at.X) + (nearestY - at.Y) * (nearestY - at.Y));
+
+            if (away > near * 1.6f)
+            {
+                using var leader = new Pen(Color.FromArgb(150, mark.Color), 1f);
+                var dx = nearestX - at.X;
+                var dy = nearestY - at.Y;
+                var start = new PointF(at.X + dx / away * ring / 2, at.Y + dy / away * ring / 2);
+                g.DrawLine(leader, start, new PointF(nearestX, nearestY));
+            }
+
+            using (var back = new SolidBrush(Color.FromArgb(225, background)))
+            {
+                g.FillRectangle(back, label);
+            }
+
+            var whole = Rectangle.Round(label);
+
+            TextRenderer.DrawText(g, mark.Text, face, whole, mark.Color,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+
+            drawn.Add((mark.Text, whole));
+        }
+
+        return drawn;
     }
 
     private sealed record SessionComboItem(SessionRecord Session)

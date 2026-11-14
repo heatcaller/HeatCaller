@@ -1398,23 +1398,23 @@ public partial class MainForm
         var subPageOverview = new TabPage("Overview");
         // 17 Oct 2026, Bug Hunt 8, A30-2: the profiles, so the overview leaves
         // out the drivers the club has hidden, not only ghosts.
-        var overview = new AnalyticsOverviewControl(_sessionHistory, _profiles);
+        var overview = new AnalyticsOverviewControl(_sessionHistory, _profiles) { Layouts = _trackLayouts };
         subPageOverview.Controls.Add(overview);
 
         var subPagePersonalBests = new TabPage("Personal Bests");
-        var personalBests = new PersonalBestsControl(_sessionHistory, _pbResets, _undo) { Dock = DockStyle.Fill };
+        var personalBests = new PersonalBestsControl(_sessionHistory, _pbResets, _undo) { Dock = DockStyle.Fill, Layouts = _trackLayouts, Profiles = _profiles };
         subPagePersonalBests.Controls.Add(personalBests);
 
         var subPageLapTimes = new TabPage("Lap Times");
-        var lapChart = new LapChartControl(_sessionHistory, _settings) { Dock = DockStyle.Fill };
+        var lapChart = new LapChartControl(_sessionHistory, _settings) { Dock = DockStyle.Fill, Layouts = _trackLayouts };
         subPageLapTimes.Controls.Add(lapChart);
 
         var subPageHeadToHead = new TabPage("Head to Head");
-        var headToHead = new HeadToHeadControl(_sessionHistory) { Dock = DockStyle.Fill };
+        var headToHead = new HeadToHeadControl(_sessionHistory) { Dock = DockStyle.Fill, Layouts = _trackLayouts, Profiles = _profiles };
         subPageHeadToHead.Controls.Add(headToHead);
 
         var subPageTrends = new TabPage("Trends");
-        var trend = new TrendChartControl(_sessionHistory, _settings) { Dock = DockStyle.Fill };
+        var trend = new TrendChartControl(_sessionHistory, _settings) { Dock = DockStyle.Fill, Layouts = _trackLayouts };
         subPageTrends.Controls.Add(trend);
 
         // The same table Race Control opens after a race, with a picker on
@@ -1423,7 +1423,7 @@ public partial class MainForm
         // answers best, and it needed a way in that was not "find the race
         // in History and open it".
         var subPagePace = new TabPage("Pace");
-        var pace = new PaceAnalysisControl(_sessionHistory);
+        var pace = new PaceAnalysisControl(_sessionHistory) { Layouts = _trackLayouts };
         subPagePace.Controls.Add(pace);
 
         _tabAnalyticsSubNav.TabPages.Add(subPageOverview);

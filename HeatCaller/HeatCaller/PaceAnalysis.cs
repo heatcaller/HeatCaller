@@ -177,6 +177,9 @@ public static class PaceAnalysis
     /// rest of the start, which the session bars from a best lap as well. It
     /// showed here as their Best, against a result that said otherwise.
     /// </summary>
+    /// <summary>The counted laps, for RaceCoach and the Race Analytics tabs - see CountedLaps.</summary>
+    internal static List<long> CountedLapsOf(SessionResultEntry entry) => CountedLaps(entry);
+
     private static List<long> CountedLaps(SessionResultEntry entry) =>
         entry.LapTimesMs.Count <= 1
             ? new List<long>()
