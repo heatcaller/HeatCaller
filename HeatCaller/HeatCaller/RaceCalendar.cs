@@ -17,8 +17,25 @@ namespace HeatCaller;
 /// </summary>
 internal sealed class RaceCalendar : Control
 {
+    /// <summary>
+    /// One dot under a night: whose colour, and whether it is drawn as a
+    /// ring - Championship's Calendar marks each race day in its own colour,
+    /// and a day started but not yet raced as a ring (14 Nov 2026, mock-up A).
+    /// </summary>
+    public readonly record struct NightMark(Color Colour, bool Hollow);
+
     /// <summary>Each night with sessions (local dates), and how many.</summary>
     private IReadOnlyDictionary<DateTime, int> _nights = new Dictionary<DateTime, int>();
+
+    /// <summary>The dots each night shows, when the page gives its own. A night not in here shows the one dot in the theme's colour.</summary>
+    private IReadOnlyDictionary<DateTime, IReadOnlyList<NightMark>> _marks = new Dictionary<DateTime, IReadOnlyList<NightMark>>();
+
+    /// <summary>
+    /// Nights with nothing on them can be picked too - the Calendar tab, where
+    /// picking tonight's empty night offers a new race day. Race History
+    /// leaves it off: a night without sessions has nothing to show there.
+    /// </summary>
+    public bool EmptyNightsPickable { get; init; }
 
     /// <summary>The first day of the month on show.</summary>
     private DateTime _month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
@@ -58,9 +75,18 @@ internal sealed class RaceCalendar : Control
         Invalidate();
     }
 
+    /// <summary>The nights as SetNights takes them, each with the dots it shows - one per race day on it, in that day's colour.</summary>
+    public void SetMarkedNights(IReadOnlyDictionary<DateTime, IReadOnlyList<NightMark>> marks, DateTime? night)
+    {
+        _marks = marks;
+        SetNights(marks.ToDictionary(pair => pair.Key.Date, pair => pair.Value.Count), night);
+    }
+
+    private bool CanPick(DateTime day) => EmptyNightsPickable || _nights.ContainsKey(day.Date);
+
     private void Pick(DateTime night)
     {
-        if (!_nights.ContainsKey(night.Date))
+        if (!CanPick(night))
         {
             return;
         }
@@ -193,7 +219,7 @@ internal sealed class RaceCalendar : Control
             var picked = Night == day;
             var box = RectangleF.Inflate(cell, -2, -2);
 
-            if (picked || (raced && _hover == day))
+            if (picked || (CanPick(day) && _hover == day))
             {
                 using var path = Rounded(box, 8);
                 using var fill = new SolidBrush(picked ? AppTheme.Primary : AppTheme.PrimaryTint);
@@ -221,9 +247,7 @@ internal sealed class RaceCalendar : Control
 
             if (raced)
             {
-                var size = Math.Max(4f, Font.Height / 4f);
-                using var dot = new SolidBrush(picked ? AppTheme.OnPrimary : AppTheme.Primary);
-                g.FillEllipse(dot, box.X + (box.Width - size) / 2, box.Bottom - size - 3, size, size);
+                DrawDots(g, box, day, picked);
             }
         }
 
@@ -231,6 +255,43 @@ internal sealed class RaceCalendar : Control
         {
             using var focus = new Pen(AppTheme.Primary, 1.4f) { DashStyle = DashStyle.Dot };
             g.DrawRectangle(focus, 0, 0, Width - 1, Height - 1);
+        }
+    }
+
+    /// <summary>
+    /// The dots under a night, side by side and centred: the page's own
+    /// (SetMarkedNights), else one in the theme's colour. On the picked
+    /// night they are all drawn in the ink on the fill, as its number is.
+    /// </summary>
+    private void DrawDots(Graphics g, RectangleF box, DateTime day, bool picked)
+    {
+        var marks = _marks.TryGetValue(day, out var own) && own.Count > 0
+            ? own
+            : new[] { new NightMark(AppTheme.Primary, Hollow: false) };
+
+        // No more than fit under the number; three race days on one night is already a lot.
+        var shown = Math.Min(marks.Count, 4);
+        var size = Math.Max(4f, Font.Height / 4f);
+        var gap = Math.Max(2f, size / 2);
+        var width = shown * size + (shown - 1) * gap;
+        var x = box.X + (box.Width - width) / 2;
+        var y = box.Bottom - size - 3;
+
+        for (var i = 0; i < shown; i++, x += size + gap)
+        {
+            var colour = picked ? AppTheme.OnPrimary : marks[i].Colour;
+
+            if (marks[i].Hollow)
+            {
+                using var ring = new Pen(colour, Math.Max(1.2f, size / 4));
+                var inset = ring.Width / 2;
+                g.DrawEllipse(ring, x + inset, y + inset, size - ring.Width, size - ring.Width);
+            }
+            else
+            {
+                using var dot = new SolidBrush(colour);
+                g.FillEllipse(dot, x, y, size, size);
+            }
         }
     }
 
@@ -278,7 +339,7 @@ internal sealed class RaceCalendar : Control
             Invalidate();
         }
 
-        var over = PreviousZone.Contains(e.Location) || NextZone.Contains(e.Location) || (day is { } d && _nights.ContainsKey(d));
+        var over = PreviousZone.Contains(e.Location) || NextZone.Contains(e.Location) || (day is { } d && CanPick(d));
         Cursor = over ? Cursors.Hand : Cursors.Default;
     }
 

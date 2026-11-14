@@ -466,8 +466,17 @@ public sealed class SeasonsControl : UserControl
     /// </summary>
     private void DrawSeasonItem(object? sender, DrawItemEventArgs e)
     {
-        var g = e.Graphics;
+        // Drawn off-screen and put up in one go (14 Nov 2026). Windows
+        // redraws the picked card whenever the focus comes or goes - a click
+        // anywhere else on the page - and drawn straight to the screen the
+        // card showed blank between its fill and its text: the names flashed.
+        using var buffer = BufferedGraphicsManager.Current.Allocate(e.Graphics, e.Bounds);
+        DrawSeasonCard(buffer.Graphics, e);
+        buffer.Render(e.Graphics);
+    }
 
+    private void DrawSeasonCard(Graphics g, DrawItemEventArgs e)
+    {
         using (var back = new SolidBrush(AppTheme.Surface))
         {
             g.FillRectangle(back, e.Bounds);

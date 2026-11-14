@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace HeatCaller;
 
 /// <summary>
@@ -34,6 +36,35 @@ public sealed class EventsControl : UserControl
     private readonly DataGridView _grid = new();
     private readonly Label _lblActive = new();
     private readonly Label _lblStatus = new();
+
+    // --- The month beside the list (14 Nov 2026, mock-up A) ---
+    //
+    // Every night a race day ran, dotted in that day's colour - the same
+    // colour as the dot on its row - and a day started but not raced yet as
+    // a ring. Picking a night picks the race day that ran it; picking a row
+    // shows its first night. An empty night says so, and tonight's offers
+    // a new race day (one always starts tonight, so no other night can).
+
+    private readonly RaceCalendar _calendar = new() { EmptyNightsPickable = true };
+    private readonly Label _lblNight = new();
+    private readonly Label _lblNightDays = new();
+    private readonly Button _btnNewTonight = new() { Text = "New Race Day..." };
+
+    /// <summary>The night picked on the calendar (a local date), or none.</summary>
+    private DateTime? _night;
+
+    /// <summary>Each race day's nights (local dates) and colour, as the last refresh worked them out.</summary>
+    private readonly Dictionary<string, (IReadOnlyList<DateTime> Nights, DateTime StartedOn, Color Colour)> _dayMarks = new();
+
+    /// <summary>Set while the calendar and the list are being put in step, so neither answers the other's change.</summary>
+    private bool _syncing;
+
+    /// <summary>The colours race days are dotted in, after the current day's (Success), in list order. Not Primary: the picked night is filled with it.</summary>
+    private static IReadOnlyList<Color> DayColours()
+    {
+        var series = AppTheme.SeriesColours();
+        return new[] { AppTheme.Accent, AppTheme.Warning, series[4], series[9], series[5], series[11] };
+    }
 
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
@@ -120,6 +151,8 @@ public sealed class EventsControl : UserControl
         _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _grid.Columns.AddRange(
+            // The race day's dot, in the colour the calendar marks its nights with.
+            new DataGridViewTextBoxColumn { Name = "mark", HeaderText = "", FillWeight = 10, SortMode = DataGridViewColumnSortMode.NotSortable },
             new DataGridViewTextBoxColumn { Name = "name", HeaderText = "Race day", FillWeight = 90 },
             new DataGridViewTextBoxColumn { Name = "state", HeaderText = "State", FillWeight = 45 },
             new DataGridViewTextBoxColumn { Name = "started", HeaderText = "Started", FillWeight = 60 },
@@ -167,6 +200,30 @@ public sealed class EventsControl : UserControl
         _lblStatus.AutoSize = true;
         _lblStatus.ForeColor = AppTheme.TextMuted;
 
+        // A row picked by hand shows its first night on the calendar.
+        _grid.CurrentCellChanged += (_, _) => ShowNightOfSelected();
+
+        _calendar.NightPicked += (_, _) => PickNight(_calendar.Night);
+
+        _lblNight.AutoSize = true;
+        _lblNight.UseMnemonic = false;
+        _textSize.Wear(_lblNight, () => AppTheme.BoldFont);
+
+        _lblNightDays.AutoSize = true;
+        _lblNightDays.UseMnemonic = false;
+        _lblNightDays.ForeColor = AppTheme.TextMuted;
+
+        // The same command as New Race Day under the list - see StartRaceDayRequested.
+        _btnNewTonight.Click += (_, _) => StartRaceDayRequested?.Invoke();
+        _btnNewTonight.Visible = false;
+
+        var nights = new Section("Nights");
+
+        nights.Add(_calendar, gapBelow: UiLayout.RowGap);
+        nights.Add(_lblNight, gapBelow: UiLayout.HintGap);
+        nights.Add(_lblNightDays, gapBelow: UiLayout.RowGap);
+        nights.Add(new ButtonBar().With(_btnNewTonight), gapBelow: 0);
+
         var days = new Section("Race days");
 
         days.Add(_lblActive);
@@ -174,10 +231,19 @@ public sealed class EventsControl : UserControl
         days.Add(new ButtonBar().With(btnNew, btnEdit, btnActive, btnClose, btnRounds, btnDelete));
         days.Add(_lblStatus, gapBelow: 0);
 
+        // The month down the left, kept narrow; the list takes the rest -
+        // as Race History has its calendar beside its results.
+        Beside? band = null;
+
+        band = new Beside(() => NightsWidth(band?.Width ?? 0)) { SideOnLeft = true };
+
+        band.AddFill(days, days.LeastHeight);
+        band.AddSideCard(nights, gapBelow: 0);
+
         var page = new FillPage();
 
         page.Add(lblIntro);
-        page.AddFill(days, days.LeastHeight, gapBelow: 0);
+        page.AddFill(band, band.LeastHeight, gapBelow: 0);
 
         Controls.Add(page);
     }
@@ -189,8 +255,28 @@ public sealed class EventsControl : UserControl
 
     private void RefreshGrid()
     {
+        _syncing = true;
+
+        try
+        {
+            FillGrid();
+        }
+        finally
+        {
+            _syncing = false;
+        }
+
+        RefreshCalendar();
+    }
+
+    private void FillGrid()
+    {
         var selectedId = _grid.CurrentRow?.Tag as string;
         _grid.Rows.Clear();
+        _dayMarks.Clear();
+
+        var colours = DayColours();
+        var nextColour = 0;
 
         var active = _events.Active;
         _lblActive.Text = active switch
@@ -221,7 +307,23 @@ public sealed class EventsControl : UserControl
 
             var isActive = active?.Id == raceEvent.Id;
 
+            // The legacy holder is no race day and ran no nights of its own: no dot.
+            var colour = raceEvent.IsLegacy ? Color.Empty
+                : isActive ? AppTheme.Success
+                : colours[nextColour++ % colours.Count];
+
+            var startedOn = raceEvent.StartedUtc.ToLocalTime().Date;
+
+            if (!raceEvent.IsLegacy)
+            {
+                _dayMarks[raceEvent.Id] = (days, startedOn, colour);
+            }
+
+            // A ring for a day started but not raced yet, as on the calendar.
+            var mark = raceEvent.IsLegacy ? string.Empty : days.Count == 0 ? "○" : "●";
+
             var rowIndex = _grid.Rows.Add(
+                mark,
                 raceEvent.DisplayName + (isActive ? "   [CURRENT]" : string.Empty),
                 raceEvent.IsOpen ? "Open" : "Closed",
                 AppTime.DateAndTime(raceEvent.StartedUtc.ToLocalTime()),
@@ -232,10 +334,19 @@ public sealed class EventsControl : UserControl
 
             _grid.Rows[rowIndex].Tag = raceEvent.Id;
 
+            if (!raceEvent.IsLegacy)
+            {
+                var markCell = _grid.Rows[rowIndex].Cells["mark"];
+                markCell.Style.ForeColor = colour;
+                markCell.Style.SelectionForeColor = colour;
+                markCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
+                markCell.Style.Font = MarkFont();
+            }
+
             if (isActive)
             {
-                _grid.Rows[rowIndex].Cells[0].Style.Font = AppTheme.BoldFont;
-                _grid.Rows[rowIndex].Cells[0].Style.ForeColor = AppTheme.Success;
+                _grid.Rows[rowIndex].Cells["name"].Style.Font = AppTheme.BoldFont;
+                _grid.Rows[rowIndex].Cells["name"].Style.ForeColor = AppTheme.Success;
             }
             else if (!raceEvent.IsOpen)
             {
@@ -245,12 +356,188 @@ public sealed class EventsControl : UserControl
             if (selectedId == raceEvent.Id)
             {
                 _grid.Rows[rowIndex].Selected = true;
-                _grid.CurrentCell = _grid.Rows[rowIndex].Cells[0];
+                _grid.CurrentCell = _grid.Rows[rowIndex].Cells["name"];
             }
         }
 
         _lblStatus.Text = $"{Plural.Of(_events.All.Count, "race day", "race days")}.";
     }
+
+    private Font? _markFont;
+
+    /// <summary>
+    /// The face the row's dot is drawn in. The app's own face has no round
+    /// dot, and Windows' stand-in for one is a speck; Segoe UI's is a proper
+    /// circle. Made again when the text size changes, at the list's size.
+    /// </summary>
+    private Font MarkFont()
+    {
+        var size = _grid.Font.Size;
+
+        if (_markFont is null || Math.Abs(_markFont.Size - size) > 0.01f)
+        {
+            var old = _markFont;
+            _markFont = new Font("Segoe UI", size);
+            old?.Dispose();
+        }
+
+        return _markFont;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _markFont?.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+
+    /// <summary>Whether a race day ran on the night, or was started on it and has run nothing yet.</summary>
+    private static bool Touches((IReadOnlyList<DateTime> Nights, DateTime StartedOn, Color Colour) day, DateTime night) =>
+        day.Nights.Contains(night) || (day.Nights.Count == 0 && day.StartedOn == night);
+
+    /// <summary>
+    /// The calendar's dots from the race days just listed, the night kept -
+    /// or, the first time, the picked row's latest night, else the latest
+    /// night of all, else tonight.
+    /// </summary>
+    private void RefreshCalendar()
+    {
+        var marks = CurrentMarks();
+
+        _night ??= Selected() is { } picked && _dayMarks.TryGetValue(picked.Id, out var own)
+            ? (own.Nights.Count > 0 ? own.Nights[^1] : own.StartedOn)
+            : marks.Count > 0 ? marks.Keys.Max() : DateTime.Today;
+
+        _calendar.SetMarkedNights(marks, _night);
+        ShowNightText();
+    }
+
+    /// <summary>A night picked on the calendar: the first race day that ran it becomes the picked row.</summary>
+    private void PickNight(DateTime? night)
+    {
+        _night = night;
+
+        if (night is { } date && !_syncing)
+        {
+            var row = _grid.Rows.Cast<DataGridViewRow>()
+                .FirstOrDefault(r => r.Tag is string id && _dayMarks.TryGetValue(id, out var day) && Touches(day, date));
+
+            // A row already on this night stays picked - 13 Nov can be two race days' night.
+            var current = _grid.CurrentRow?.Tag is string currentId && _dayMarks.TryGetValue(currentId, out var currentDay) && Touches(currentDay, date);
+
+            if (row is not null && !current)
+            {
+                _syncing = true;
+
+                try
+                {
+                    _grid.ClearSelection();
+                    _grid.CurrentCell = row.Cells["name"];
+                    row.Selected = true;
+                }
+                finally
+                {
+                    _syncing = false;
+                }
+            }
+        }
+
+        ShowNightText();
+    }
+
+    /// <summary>A row picked in the list: the calendar goes to its latest night, or the night it was started on.</summary>
+    private void ShowNightOfSelected()
+    {
+        if (_syncing || Selected() is not { } picked || !_dayMarks.TryGetValue(picked.Id, out var day))
+        {
+            return;
+        }
+
+        // Already on one of its nights: leave it there.
+        if (_night is { } now && Touches(day, now))
+        {
+            return;
+        }
+
+        _night = day.Nights.Count > 0 ? day.Nights[^1] : day.StartedOn;
+
+        _syncing = true;
+
+        try
+        {
+            _calendar.SetMarkedNights(CurrentMarks(), _night);
+        }
+        finally
+        {
+            _syncing = false;
+        }
+
+        ShowNightText();
+    }
+
+    /// <summary>The calendar's dots, from the race days the last refresh listed: one per race day on each night it ran, a ring on the night one was started but has run nothing.</summary>
+    private IReadOnlyDictionary<DateTime, IReadOnlyList<RaceCalendar.NightMark>> CurrentMarks() =>
+        _dayMarks.Values
+            .SelectMany(day => day.Nights.Count == 0
+                ? new[] { (Night: day.StartedOn, Mark: new RaceCalendar.NightMark(day.Colour, Hollow: true)) }
+                : day.Nights.Select(n => (Night: n, Mark: new RaceCalendar.NightMark(day.Colour, Hollow: false))))
+            .GroupBy(x => x.Night)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<RaceCalendar.NightMark>)g.Select(x => x.Mark).ToList());
+
+    /// <summary>Under the calendar: the night, then each race day on it and which of its nights this was.</summary>
+    private void ShowNightText()
+    {
+        if (_night is not { } night)
+        {
+            _lblNight.Text = string.Empty;
+            _lblNightDays.Text = string.Empty;
+            _btnNewTonight.Visible = false;
+            return;
+        }
+
+        var tonight = night == DateTime.Today;
+        _lblNight.Text = (tonight ? "Tonight, " : string.Empty) + night.ToString("dddd d MMMM", CultureInfo.CurrentCulture);
+
+        var lines = _events.All
+            .Where(e => _dayMarks.TryGetValue(e.Id, out var day) && Touches(day, night))
+            .Select(e =>
+            {
+                var day = _dayMarks[e.Id];
+                var index = IndexOf(day.Nights, night);
+
+                return index >= 0
+                    ? $"{e.DisplayName} - night {index + 1} of {day.Nights.Count}"
+                    : $"{e.DisplayName} - started, nothing run yet";
+            })
+            .ToList();
+
+        _lblNightDays.Text = lines.Count > 0
+            ? string.Join("\r\n", lines)
+            : tonight ? "Nothing on tonight yet." : "No race day ran this night.";
+
+        // A race day always starts tonight, so only tonight's empty night can offer one.
+        _btnNewTonight.Visible = tonight && lines.Count == 0;
+
+        static int IndexOf(IReadOnlyList<DateTime> nights, DateTime night)
+        {
+            for (var i = 0; i < nights.Count; i++)
+            {
+                if (nights[i] == night)
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+    }
+
+    /// <summary>The calendar's column: about a quarter of the page, between 300px and 380px at the normal text size, at the size in use - Race History's rail.</summary>
+    private static int NightsWidth(int page) =>
+        Math.Clamp((int)(page * 0.25f), UiLayout.AtTextSize(300), UiLayout.AtTextSize(380));
 
     /// <summary>
     /// Every undo on this page puts back only what its own action changed.

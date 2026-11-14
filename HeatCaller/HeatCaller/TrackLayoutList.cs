@@ -30,6 +30,10 @@ internal sealed class LayoutList : ListBox
         Tag = AppTheme.KeepBackColor;
         BackColor = AppTheme.Surface;
         ForeColor = AppTheme.TextDark;
+
+        // The picked row draws its own outline; the theme's focus ring round
+        // the whole list read as if the list itself were selected.
+        InputOutline.Exclude(this);
         Remeasure();
     }
 
@@ -94,10 +98,21 @@ internal sealed class LayoutList : ListBox
         return picture;
     }
 
+    /// <summary>
+    /// Drawn off-screen and put up in one go: Windows redraws the picked row
+    /// whenever the focus comes or goes, and drawn straight to the screen the
+    /// row showed blank between its fill and its text - a flash on every
+    /// click elsewhere (Championship's cards, 14 Nov 2026).
+    /// </summary>
     protected override void OnDrawItem(DrawItemEventArgs e)
     {
-        var g = e.Graphics;
+        using var buffer = BufferedGraphicsManager.Current.Allocate(e.Graphics, e.Bounds);
+        DrawRow(buffer.Graphics, e);
+        buffer.Render(e.Graphics);
+    }
 
+    private void DrawRow(Graphics g, DrawItemEventArgs e)
+    {
         using (var back = new SolidBrush(AppTheme.Surface))
         {
             g.FillRectangle(back, e.Bounds);
