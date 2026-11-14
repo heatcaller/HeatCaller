@@ -219,4 +219,63 @@ public sealed class CheckInMultiSelectTests : IDisposable
 
             return 0;
         }, TimeSpan.FromMinutes(1), () => "a Ctrl+double-click on a driver not yet picked");
+
+    [Fact]
+    public void A_right_click_on_one_of_the_picked_drivers_keeps_them_all_picked() =>
+        StaThread.Run(() =>
+        {
+            var (page, _, _) = Desk();
+
+            using (page)
+            using (PickedApart(page, out var grid, out _, out var cy))
+            {
+                Assert.Equal(new[] { "1001", "1003" }, Transponders(page.PickForMenu(cy, Keys.None)));
+                Assert.Equal(2, grid.SelectedRows.Count);
+            }
+
+            return 0;
+        }, TimeSpan.FromMinutes(1), () => "a right-click on a picked driver");
+
+    [Fact]
+    public void A_right_click_on_a_driver_not_picked_picks_them_alone_and_ctrl_adds_them() =>
+        StaThread.Run(() =>
+        {
+            var (page, _, _) = Desk();
+
+            using (page)
+            using (PickedApart(page, out var grid, out _, out _))
+            {
+                var ben = grid.Rows.Cast<DataGridViewRow>().Single(row => (row.Tag as DriverProfile)?.Transponder == "1002").Index;
+
+                Assert.Equal(new[] { "1001", "1002", "1003" }, Transponders(page.PickForMenu(ben, Keys.Control)).Order());
+
+                grid.Rows[ben].Selected = false;
+                Assert.Equal(new[] { "1002" }, Transponders(page.PickForMenu(ben, Keys.None)));
+
+                // Not left on the Checked In box, which a current cell puts in edit mode.
+                Assert.Equal("driver", grid.CurrentCell?.OwningColumn.Name);
+            }
+
+            return 0;
+        }, TimeSpan.FromMinutes(1), () => "a right-click on a driver not picked");
+
+    [Fact]
+    public void Checking_out_the_picked_drivers_takes_each_off_and_times_each_as_a_desk_change()
+    {
+        var (page, checkIns, drivers) = Desk();
+
+        using (page)
+        {
+            var timed = new List<string>();
+            checkIns.CheckInAll(drivers.Select(p => p.Transponder).ToList());
+            page.CheckInChangedAtDesk += timed.Add;
+
+            page.CheckOutDrivers(drivers.Take(2).ToList());
+
+            Assert.False(checkIns.IsCheckedIn("1001"));
+            Assert.False(checkIns.IsCheckedIn("1002"));
+            Assert.True(checkIns.IsCheckedIn("1003"));
+            Assert.Equal(new[] { "1001", "1002" }, timed);
+        }
+    }
 }
