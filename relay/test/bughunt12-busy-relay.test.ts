@@ -34,22 +34,24 @@ describe("Live: a busy relay mid-race", () => {
     });
     assert.match(page.get("board").innerHTML, /Sam P\./);
 
+    // Since 14 Nov 2026 (driver phone plan item 1) a busy relay leaves the
+    // last board on screen, dimmed under the strip, rather than an error.
     busy = true;
     await page.advance(3000);
-    assert.match(page.get("board").innerHTML, /Could not reach the relay/);
+    assert.match(page.get("board").innerHTML, /Sam P./, "the last board stays while the relay is busy");
     assert.doesNotMatch(page.get("board").innerHTML, /No race has been published/);
   });
 
   it("still says no race has been published for a 404", async () => {
     const page = await open(livePage("acme-rc", "Acme RC"), async () => ({ status: 404 }));
-    assert.doesNotMatch(page.get("board").innerHTML, /Could not reach the relay/);
+    assert.doesNotMatch(page.get("board").innerHTML, /Can’t reach the club’s live pages/);
   });
 });
 
 describe("Tracks and Standings: a busy relay", () => {
   it("Tracks says it could not reach the relay on a 503, and no tracks only on a 404", async () => {
     const busy = await open(tracksPage("acme-rc", "Acme RC"), async () => BUSY);
-    assert.match(busy.get("list").innerHTML, /Could not reach the relay/);
+    assert.match(busy.get("list").innerHTML, /Can’t reach the club’s live pages/);
 
     const none = await open(tracksPage("acme-rc", "Acme RC"), async () => ({ status: 404 }));
     assert.match(none.get("list").innerHTML, /No tracks have been published yet/);
@@ -57,7 +59,7 @@ describe("Tracks and Standings: a busy relay", () => {
 
   it("Standings says it could not reach the relay on a 502, and no standings only on a 404", async () => {
     const busy = await open(standingsPage("acme-rc", "Acme RC"), async () => ({ status: 502 }));
-    assert.match(busy.get("table").innerHTML, /Could not reach the relay/);
+    assert.match(busy.get("table").innerHTML, /Can’t reach the club’s live pages/);
 
     const none = await open(standingsPage("acme-rc", "Acme RC"), async () => ({ status: 404 }));
     assert.match(none.get("table").innerHTML, /No standings have been published yet/);

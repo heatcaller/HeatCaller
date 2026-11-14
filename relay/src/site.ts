@@ -40,6 +40,12 @@ export interface Look {
   readonly vote: boolean;
   /** 24-hour times (true), 12-hour (false), or the phone's own locale (undefined) - the laptop's tick on Themes. */
   readonly clock24?: boolean | undefined;
+  /** The club's time zone (IANA, "America/New_York"), or undefined for the phone's own (14 Nov 2026, driver phone plan item 15). */
+  readonly timeZone?: string | undefined;
+  /** The name under the home-screen icon, up to 12 characters, or undefined for the club's name cut short (item 5). */
+  readonly shortName?: string | undefined;
+  /** A short address the club chose - /c/<alias> redirects here (item 5) - or undefined. */
+  readonly alias?: string | undefined;
   /** Light-on-dark or dark-on-light, for color-scheme and a few contrast fixes. */
   readonly light: boolean;
   /** CSS custom properties to override, name to value. Empty for the default look. */
@@ -75,6 +81,8 @@ export interface Look {
   readonly iconVersion: string;
   /** Whether online check-in is open, which decides whether its tab shows. */
   readonly checkIn: boolean;
+  /** Whether a driver may email themselves a sign-in link on Me (14 Nov 2026, signinmail.ts). */
+  readonly emailLink: boolean;
   /**
    * Links to the club's own pages elsewhere - Facebook, Instagram, its
    * website - in the order the laptop sent them. Only http(s) addresses
@@ -189,6 +197,7 @@ export const DEFAULT_LOOK: Look = Object.freeze({
   logoPlate: undefined,
   iconVersion: SUN_ICON_VERSION,
   checkIn: false,
+  emailLink: false,
   listening: false,
   notes: false,
   vote: false,
@@ -259,11 +268,19 @@ export function lookFrom(site: StoredDocument | undefined, checkin: StoredDocume
   const light = theme?.["light"] === true;
   const rawClock = body?.["clock24"];
   const clock24 = typeof rawClock === "boolean" ? rawClock : undefined;
+  const timeZone = timeZoneFrom(body?.["timeZone"]);
+  const rawShort = typeof body?.["shortName"] === "string" ? (body["shortName"] as string).replace(/[\u0000-\u001f\u007f]/g, "").trim() : "";
+  const shortName = rawShort.length >= 1 && rawShort.length <= 12 ? rawShort : undefined;
+  const rawAlias = typeof body?.["alias"] === "string" ? (body["alias"] as string).trim().toLowerCase() : "";
+  const alias = /^[a-z0-9]+(-[a-z0-9]+)*$/.test(rawAlias) && rawAlias.length >= 3 && rawAlias.length <= 32 ? rawAlias : undefined;
   const logoVersion = logo === undefined ? undefined : logoVersionOf(logo);
 
   return {
     light,
     clock24,
+    timeZone,
+    shortName,
+    alias,
     vars,
     themeColor: vars["--bg"] ?? DEFAULT_THEME_COLOR,
     tagline,
@@ -272,6 +289,7 @@ export function lookFrom(site: StoredDocument | undefined, checkin: StoredDocume
     logoPlate,
     iconVersion: SUN_ICON_VERSION,
     checkIn: record(checkin?.body)?.["enabled"] === true,
+    emailLink: record(checkin?.body)?.["enabled"] === true && record(checkin?.body)?.["emailLink"] === true,
 
     // Merged in by Relay.lookFor from a document of its own, the way
     // checkIn's own flag is above. False here is the honest default for a
@@ -388,6 +406,7 @@ export function socialFrom(value: unknown): readonly SocialLink[] {
 
   const links: SocialLink[] = [];
   const seen = new Set<string>();
+  const seenUrls = new Set<string>();
 
   for (const item of value) {
     const entry = record(item);
@@ -408,11 +427,53 @@ export function socialFrom(value: unknown): readonly SocialLink[] {
       continue;
     }
 
+    // EACH LINK GOES WHERE IT SAYS, ONCE (14 Nov 2026, driver phone plan
+    // item 23). Upstate Mini Z had six icons - Instagram, YouTube, TikTok,
+    // X, Discord and Facebook - all to the same Facebook page, so a driver
+    // tapping "Instagram" got Facebook and a screen reader read the same
+    // link six times. A link whose address isn't its service's own is
+    // dropped, and an address already shown is shown once.
+    if (!socialHostFits(kind, url) || seenUrls.has(url.toLowerCase())) {
+      continue;
+    }
+
+    seenUrls.add(url.toLowerCase());
     seen.add(kind);
     links.push({ kind, label: SOCIAL_LABELS[kind] as string, url });
   }
 
   return links;
+}
+
+/** A real IANA time zone this runtime knows, or undefined. */
+export function timeZoneFrom(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length < 3 || value.length > 64 || !/^[A-Za-z0-9_+\-/]+$/.test(value)) return undefined;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value });
+    return value;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Each service's own hosts (and their subdomains); a website may be anywhere. */
+const SOCIAL_HOSTS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  facebook: ["facebook.com", "fb.com", "fb.me"],
+  instagram: ["instagram.com", "instagr.am"],
+  youtube: ["youtube.com", "youtu.be"],
+  tiktok: ["tiktok.com"],
+  x: ["x.com", "twitter.com"],
+  discord: ["discord.gg", "discord.com"],
+  whatsapp: ["wa.me", "whatsapp.com"],
+});
+
+/** Whether a link's address is on its service's own host. */
+export function socialHostFits(kind: string, url: string): boolean {
+  const hosts = SOCIAL_HOSTS[kind];
+  if (hosts === undefined) return true;
+  let host = "";
+  try { host = new URL(url).hostname.toLowerCase(); } catch { return false; }
+  return hosts.some((h) => host === h || host.endsWith(`.${h}`));
 }
 
 /** An absolute http(s) address fit for an href, or undefined. */

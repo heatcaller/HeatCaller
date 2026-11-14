@@ -912,7 +912,45 @@ function meFee() {
   at.className = 'me-fee' + (live && live.entry && live.entry.paid === true ? ' ok' : '');
 }
 
+// "Are you at the track?" before a check-in (see the Check in card). Yes
+// taps as the night's own button always did; Not yet sends nothing.
+function meAskCheckIn() {
+  const event = typeof ci === 'object' && ci && typeof ci.event === 'string' && ci.event.trim() !== '' ? ci.event.trim() : '';
+  const question = 'Are you at the track' + (event ? ' for ' + event : '') + ' tonight?';
+  if (typeof meOpenSheet !== 'function' || !document.getElementById('me-sheet')) {
+    let yes = false;
+    try { yes = window.confirm(question); } catch (e) { yes = false; }
+    if (yes) { if (typeof hcCount === 'function') hcCount('checkin_tapped'); tapCheckIn(); }
+    return;
+  }
+  meOpenSheet('Are you at the track?', (body) => {
+    body.appendChild(el('p', 'note', question + ' Checking in tells the timing desk you’re here, so you’re put in the heats.'));
+    body.appendChild(tapButton('Yes, check me in', 'go', () => {
+      meCloseSheet();
+      if (typeof hcCount === 'function') hcCount('checkin_tapped');
+      tapCheckIn();
+    }));
+    body.appendChild(tapButton('Not yet', 'go quiet', meCloseSheet));
+  }, true);
+}
+
+// The first space says "Tonight" only when the night is tonight (14 Nov
+// 2026, driver phone plan item 3); a night from last week says its day.
+// The words only - the space and its place stay as they are.
+function meTonightLabel() {
+  const b = document.querySelector('#me-switch [data-s="tonight"]');
+  if (!b) return;
+  const day = typeof night === 'object' && night && typeof night.night === 'string' ? night.night : '';
+  let words = 'Tonight';
+  if (day !== '' && typeof hcIsTonight === 'function' && !hcIsTonight(day)) {
+    const d = new Date(day + 'T12:00:00');
+    if (!isNaN(d)) words = d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+  if (b.textContent !== words) b.textContent = words;
+}
+
 function meMoment() {
+  meTonightLabel();
   meFee();
   const at = document.getElementById('me-moment');
   if (!at) return;
@@ -927,13 +965,17 @@ function meMoment() {
   let dock = null;
 
   if (typeof ci === 'object' && ci && ci.shown && !checkedIn()) {
+    // CHECK-IN ASKS FIRST (14 Nov 2026, driver phone plan item 2, Asher:
+    // "check-in asks"): signing in no longer checks a driver in, and a
+    // check-in from the sofa would put somebody who isn't there into the
+    // heats - so the button asks "Are you at the track?" before it taps.
     meHeroKind = 'checkin';
-    hero.appendChild(el('span', 'k', 'You have arrived'));
+    hero.appendChild(el('span', 'k', 'Racing tonight?'));
     const big = el('div', 'big', 'Check in');
     big.appendChild(el('br'));
-    big.appendChild(el('small', '', 'one tap tells the timing desk'));
+    big.appendChild(el('small', '', 'tell the timing desk you’re here'));
     hero.appendChild(big);
-    hero.appendChild(tapButton('Check in', 'go', tapCheckIn));
+    hero.appendChild(tapButton('I’m here – check me in', 'go', meAskCheckIn));
   } else if (n && n.now === true) {
     hero.appendChild(el('span', 'k', 'On track · ' + String(n.race || 'your race')));
     hero.appendChild(el('div', 'big', 'Racing now'));

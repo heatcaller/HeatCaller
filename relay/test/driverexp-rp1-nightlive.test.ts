@@ -787,7 +787,7 @@ describe("against R1's relay", () => {
     assert.equal(page.eval("ci.shown"), true, "checkin/one said check-in is open");
     assert.equal(page.button(page.get("lv"), /Check in/), undefined, "offered on the moment card, not Alerts");
     page.eval("meMoment()");
-    assert.ok(page.button(page.get("me-moment"), /Check in/), "the moment card offers it");
+    assert.ok(page.button(page.get("me-moment"), /check me in/), "the moment card offers it");
     assert.match(page.get("nt").textContent, /Nothing is filed for you yet/);
 
     // And the live poll reads the same entry.

@@ -105,6 +105,22 @@ public partial class MainForm
         // Filed on the publisher's own thread - the store is thread-safe.
         _relayPublisher.TonightsDriverRequests = () => store;
 
+        // Email me a link on Me (14 Nov 2026, driver phone plan item 17): the
+        // one driver with this address, from the publisher's own thread - so
+        // the any-thread copy of the profiles, never the UI's live one. Two
+        // drivers on one address match nobody: the link opens one person.
+        _relayPublisher.TransponderForEmail = email =>
+        {
+            var wanted = email.Trim();
+            var matches = _profiles.AllIncludingGhostsForAnyThread
+                .Where(p => !string.IsNullOrWhiteSpace(p.Email) && string.Equals(p.Email.Trim(), wanted, StringComparison.OrdinalIgnoreCase))
+                .Select(p => p.Transponder)
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            return matches.Count == 1 ? matches[0] : null;
+        };
+
         // For the phone: what the desk has answered (driverlive asks).
         _askAnswersFor = badge => store.AnswersFor(badge, DateTime.UtcNow);
 

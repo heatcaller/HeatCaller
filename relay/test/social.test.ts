@@ -89,7 +89,9 @@ describe("club social links: on the pages", () => {
     assert.match(home.text, /<div class="social"><a class="soc" href="https:\/\/www\.facebook\.com\/acmerc\?ref=a&amp;b=%22c%22"[^>]*rel="noopener noreferrer me" aria-label="Facebook" title="Facebook"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">[\s\S]*?<\/svg><\/a><\/div>/);
     assert.doesNotMatch(home.text, />Facebook<\/a>/, "no word on the button");
     assert.doesNotMatch(home.text, /href="javascript:/);
-    assert.doesNotMatch(home.text, /Instagram/);
+    // No link drawn for it - the page's own script names Instagram (the
+    // in-app browser help, 14 Nov 2026), so the check is on the link itself.
+    assert.doesNotMatch(home.text, /aria-label="Instagram"/);
 
     const live = await call(harness, "GET", "/c/acme-rc/live");
 

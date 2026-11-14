@@ -20,7 +20,8 @@ describe("the Live page puts the race board first", () => {
   it("draws the board under the flag bar and above every card, with Listen on", () => {
     const html = livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_CONTEXT.look, listening: true } });
 
-    assert.match(html, /<div id="bar" class="flagbar">[\s\S]*?<\/div><div id="board"><\/div>/);
+    // The driver's own card may sit between (14 Nov 2026, driver phone plan item 4).
+    assert.match(html, /<div id="bar" class="flagbar">[\s\S]*?<\/div>(<section id="you"[^>]*><\/section>)?<div id="board"><\/div>/);
     for (const card of ["listen", "laptalk"]) assert.ok(at(html, "board") < at(html, card), card);
     assert.ok(at(html, "listen") < at(html, "laptalk"));
     // Listen shows the words itself, so no Captions card (4 Nov 2026).

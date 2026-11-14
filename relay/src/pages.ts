@@ -20,7 +20,8 @@ import { DEFAULT_LOOK, type Look, type SocialLink } from "./site.js";
 import { SUN_ICON_SIZE } from "./sun.js";
 import { GARAGE_CSS, GARAGE_EMBED_BODY, garageEmbedScript } from "./garagepage.js";
 import { ME_BODY_END, ME_BODY_TOP, ME_COMING, ME_CSS, ME_JS } from "./mespaces.js";
-import { CLOCK_JS, clockAttr } from "./clock.js";
+import { CLOCK_JS, clockAttr, tzAttr } from "./clock.js";
+import { PAGES_BUILD } from "./pagebuild.js";
 
 /** What a page needs to know beyond its club: how the club looks, and where it is being served from. */
 export interface PageContext {
@@ -1408,24 +1409,202 @@ footer .links:has(a.soc) { gap: 4px 8px; }
 @media (prefers-reduced-motion: reduce) {
   .mvb, .mvgo { transition: none; } .mvb:active, .mvgo:active { transform: none; }
 }
+/* NO SIGNAL (14 Nov 2026, driver phone plan item 1): one strip under the
+   header saying how old what's shown is, and everything below it dimmed so
+   an old copy never looks live. Colours from the look's tokens only. */
+.hcoff { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 14px; padding: 10px 14px; border-radius: 14px;
+         font-size: 0.9rem; color: var(--text); background: var(--surface); border: 1px solid var(--warn); }
+.hcoff[hidden] { display: none; }
+.hcoff > span:first-child { color: var(--warn); }
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  .hcoff { background: color-mix(in srgb, var(--warn) 14%, var(--surface)); }
+}
+html.hcoffline .wrap > :not(header):not(.hcoff):not(footer) { opacity: 0.55; filter: saturate(0.4); transition: opacity 0.2s ease; }
+/* HOW OLD THE BOARD IS (item 3): a board the track stopped updating is
+   dimmed, and twelve hours after the last race it folds away. */
+.stale { opacity: 0.55; filter: saturate(0.4); }
+.flagbar.lost { border-left-color: var(--muted); }
+details.lastrace > summary { display: flex; align-items: center; min-height: 48px; padding: 0 16px; cursor: pointer;
+  font-weight: 700; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+details.lastrace[open] > summary { margin-bottom: 10px; }
+/* READABLE OUTDOORS (14 Nov 2026, driver phone plan item 6). Text size per
+   phone - A, A+ (115%), A++ (130%) - and High contrast, in the dark or the
+   light, on any club's look: pure white on black (or black on white), solid
+   borders, and the club's colours swapped for ones that pass 4.5:1 or more.
+   html.hc is more particular than the club's own :root colours, so it wins
+   over them without touching them. "Fit to screen" (pinch-zoom) too. */
+html { font-size: calc(100% * var(--ts, 1)); }
+body { font-size: calc(16px * var(--ts, 1)); }
+html[data-ts="115"] { --ts: 1.15; }
+html[data-ts="130"] { --ts: 1.3; }
+html.hc { --bg: #000000; --surface: #000000; --row-alt: #000000; --text: #FFFFFF; --muted: #E6E6E6; --border: #FFFFFF;
+  --primary: #FF66C4; --on-primary: #000000; --accent: #5CF0FF; --good: #5CFF9E; --bad: #FF8095; --warn: #FFD15C;
+  --tonal: #000000; --on-tonal: #FFFFFF; --ring: #FFFFFF; }
+html.hc.light, html.hc.hcl { --bg: #FFFFFF; --surface: #FFFFFF; --row-alt: #FFFFFF; --text: #000000; --muted: #222222; --border: #000000;
+  --primary: #A3005A; --on-primary: #FFFFFF; --accent: #005F6B; --good: #006B2E; --bad: #A0001A; --warn: #7A5200;
+  --tonal: #FFFFFF; --on-tonal: #000000; --ring: #000000; }
+html.hc .card, html.hc .lc, html.hc .flagbar, html.hc .you, html.hc details, html.hc .hero { border: 2px solid var(--border); }
+html.hc .you { border-color: var(--primary); }
+html.hc #board tr.me td { outline: 2px solid var(--primary); outline-offset: -2px; }
+html.hc .stale, html.hc.hcoffline .wrap > :not(header):not(.hcoff):not(footer) { opacity: 0.8; filter: none; }
+.hcread { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 0; font-size: 0.85rem; color: var(--muted); }
+.hcread button { min-height: 44px; min-width: 44px; padding: 0 12px; font: inherit; font-weight: 700; color: var(--text);
+  background: transparent; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; }
+.hcread button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); border-color: transparent; }
+.hcfit { position: fixed; left: 50%; transform: translateX(-50%); top: calc(12px + var(--sa-t)); z-index: 45; min-height: 44px; padding: 0 18px;
+  border: 0; border-radius: 999px; font: inherit; font-weight: 700; background: var(--primary); color: var(--on-primary); }
+/* A BOARD MADE FOR A PHONE (item 4): four columns under 480 px, the rest a
+   tap away, the driver's own row stuck to the edge it scrolls off. */
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ballc { margin: 6px 2px 0; }
+.ballc .linkish { min-height: 44px; }
+#board tr[data-row] { cursor: pointer; }
+#board tr.me td { background: var(--tonal); }
+#board tr.me td:first-child { box-shadow: inset 4px 0 0 var(--primary); }
+#board tr.bmore td { padding: 4px 10px 12px 40px; background: var(--bg); }
+#board .bm { display: flex; flex-wrap: wrap; gap: 6px; }
+#board .bm span { display: flex; flex-direction: column; min-width: 72px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+#board .bm b { font-variant-numeric: tabular-nums; }
+#board .bm i { font-style: normal; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+@media (min-width: 481px) { .ballc, #board tr.bmore { display: none; } #board tr[data-row] { cursor: default; } }
+@media (max-width: 480px) {
+  #board .card:not(.all) th:not(.k), #board .card:not(.all) td:not(.k):not(.bmc) { display: none; }
+  #board .card:not(.all) { overflow: visible; }
+  #board .card:not(.all) table { width: 100%; min-width: 0; }
+  #board .card:not(.all) tr.me td { position: sticky; top: var(--sa-t); bottom: calc(68px + var(--sa-b)); z-index: 2; }
+}
+/* YOUR CARD ON LIVE (item 4). The Following chip is the card's job on Live. */
+body.has-you #follow { display: none; }
+.you { margin: 0 0 12px; padding: 12px 14px; border-radius: 16px; background: var(--tonal); border: 1px solid var(--primary); }
+.you[hidden] { display: none; }
+.you .yw { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--on-tonal); }
+.you .yw b { color: var(--text); font-size: 1rem; }
+.you .chip { margin: 0; padding: 2px 9px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; background: var(--primary); color: var(--on-primary); border-color: transparent; }
+.you .chip.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+.you .ym { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; align-items: center; margin-top: 6px; }
+.you .yp { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed; font-weight: 800;
+  font-size: 3.6rem; line-height: 0.9; font-variant-numeric: tabular-nums; }
+.you .yp small { display: block; margin-top: 6px; font: 700 0.7rem/1.2 system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.you .ygs { display: grid; gap: 6px; min-width: 0; }
+.you .yg { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: baseline; gap: 6px; }
+.you .yg .ar { color: var(--muted); }
+.you .yg .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9rem; }
+.you .yg .t { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-weight: 800; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.you .yg .t em { margin-left: 3px; font: 600 0.66rem system-ui, sans-serif; font-style: normal; color: var(--muted); }
+.you .yg.ahead .t { color: var(--warn); }
+.you .yg.behind .t { color: var(--good); }
+.you .yl { position: relative; height: 16px; margin: 10px 4px 2px; }
+.you .yl::before { content: ""; position: absolute; left: 0; right: 0; top: 7px; height: 2px; border-radius: 2px; background: var(--border); }
+.you .ydot { position: absolute; top: 3px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: var(--muted); }
+.you .ydot.me { top: 1px; width: 14px; height: 14px; margin-left: -7px; background: var(--primary); }
+.you .ys { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); text-align: center; }
+.you .ys b { display: block; font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-weight: 800; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.you .ys b.best { color: var(--accent); }
+.you .ys span { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.you .yx { margin-top: 8px; font-size: 0.85rem; color: var(--muted); }
+/* ONTO THE HOME SCREEN (item 7), INSIDE ANOTHER APP'S BROWSER (item 16),
+   and WHICH ALERTS (item 9). */
+.hcinst { margin: 0 0 14px; }
+.hcinst-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.hcinst-acts .go { min-height: 44px; padding: 0 18px; }
+.hcinapp { margin: 10px 0; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--warn); background: var(--surface); }
+.hcinapp .linkish { min-height: 36px; }
+.akinds { display: grid; gap: 4px; margin-top: 8px; }
+.akinds .chk { min-height: 40px; display: flex; align-items: center; gap: 10px; }
+/* RACING TONIGHT? on Home (item 22), and Me's email link (item 17). */
+.rtw-steps { margin: 8px 0 0; padding-left: 22px; }
+.rtw-steps li { margin: 10px 0; }
+.rtw-steps .more { display: inline-flex; align-items: center; min-height: 44px; margin-left: 4px; }
+.mn-mail { margin-top: 14px; }
+.mn-mail > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; color: var(--accent); }
+.mn-mail input { font-size: 16px; }
+/* THE PAGES AFTER A DEPLOY (item 21): the kit's primary, above the bar. */
+.hcnew { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + var(--sa-b)); z-index: 40;
+         min-height: 44px; padding: 0 18px; border: 0; border-radius: 999px; font: inherit; font-weight: 700;
+         background: var(--primary); color: var(--on-primary); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); cursor: pointer; }
+@media (min-width: 641px) { .hcnew { bottom: 24px; } }
 `;
 
 /**
- * NO PINCH OR DOUBLE-TAP ZOOM (6 Nov 2026, Asher: "don't allow for pinch
- * and zoom on relay"): the pages are laid out for a phone already, and a
- * pinch at the track left drivers stuck half-zoomed on a board that is
- * meant to fit. Three parts, because no one of them is enough everywhere:
- * the viewport tag (Android browsers), touch-action on the page (pinch and
- * double-tap on Chrome and newer Safari), and NO_ZOOM_JS (Safari on an
- * iPhone, which ignores user-scalable=no by design). maximum-scale=1 also
- * stops Safari zooming into a box with small text the moment it is tapped.
+ * PINCH-ZOOM IS BACK (14 Nov 2026, driver phone plan item 6, Asher: "you
+ * can add pinch to zoom and high contrast"). From 6 Nov to 14 Nov the pages
+ * turned zoom off ("don't allow for pinch and zoom on relay"), because a
+ * pinch at the track left drivers stuck half-zoomed on a board meant to
+ * fit - and that shut out everybody who needs bigger text. The viewport
+ * tag allows zoom again, and the old problems are fixed where they were:
+ *  - Safari zooming into a box with small text the moment it is tapped:
+ *    every text box and picker is at least 16px (VIEWPORT_JS);
+ *  - a fast double tap on a button zooming: buttons, tabs and board rows
+ *    are touch-action: manipulation, while a pinch anywhere still works;
+ *  - stuck half-zoomed: "Fit to screen" shows after three seconds zoomed in
+ *    with no touch, and puts the page back in one tap.
+ * The names stay (NO_ZOOM_HEAD, NO_ZOOM_JS) so every page that used them
+ * gets the change.
  */
-const NO_ZOOM_HEAD = `<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<style>html { touch-action: pan-x pan-y; }</style>`;
+const NO_ZOOM_HEAD = `<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>.go, .btn, .page, .rtab, .share, nav a, nav button, #board tr, .me-chip, summary { touch-action: manipulation; }</style>`;
 
 const NO_ZOOM_JS = `
-document.addEventListener('gesturestart', (e) => e.preventDefault());
-document.addEventListener('gesturechange', (e) => e.preventDefault());
+// No box smaller than 16px when it is tapped (see PINCH-ZOOM IS BACK):
+// bumped before it takes focus, so Safari has nothing to zoom into. A box
+// already bigger (the PIN box) is left as it is.
+function hcTypeable(el) {
+  if (!el || !el.tagName) return false;
+  const tag = String(el.tagName).toLowerCase();
+  if (tag === 'select' || tag === 'textarea') return true;
+  if (tag !== 'input') return false;
+  const type = String(el.type || 'text').toLowerCase();
+  return ['checkbox', 'radio', 'range', 'button', 'submit', 'reset', 'file', 'color', 'hidden', 'image'].indexOf(type) < 0;
+}
+function hcBigEnough(el) {
+  try {
+    if (hcTypeable(el) && parseFloat(getComputedStyle(el).fontSize) < 16) el.style.fontSize = '16px';
+  } catch (e) { /* left as it is */ }
+}
+try {
+  document.addEventListener('pointerdown', (e) => hcBigEnough(e.target), true);
+  document.addEventListener('focusin', (e) => hcBigEnough(e.target), true);
+} catch (e) { /* no events here */ }
+
+// FIT TO SCREEN: three seconds zoomed in with no touch, and a button puts
+// the page back at its own size - briefly asking the viewport for no zoom,
+// then allowing it again.
+(function () {
+  try {
+    const vv = window.visualViewport;
+    if (!vv || typeof vv.addEventListener !== 'function') return;
+    let quiet = 0;
+    let button = null;
+    const hide = () => { if (button) { button.remove(); button = null; } };
+    const show = () => {
+      if (button || vv.scale <= 1.05) return;
+      button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'go hcfit';
+      button.textContent = 'Fit to screen';
+      button.addEventListener('click', () => {
+        const meta = document.querySelector('meta[name=viewport]');
+        if (meta) {
+          const was = meta.getAttribute('content') || '';
+          meta.setAttribute('content', was + ', maximum-scale=1');
+          setTimeout(() => meta.setAttribute('content', was), 400);
+        }
+        if (typeof hcCount === 'function') hcCount('zoom_fit_used');
+        hide();
+      });
+      document.body.appendChild(button);
+    };
+    const moved = () => {
+      clearTimeout(quiet);
+      if (vv.scale <= 1.05) { hide(); return; }
+      quiet = setTimeout(show, 3000);
+    };
+    vv.addEventListener('resize', moved);
+    vv.addEventListener('scroll', moved);
+    document.addEventListener('touchstart', () => clearTimeout(quiet), { passive: true });
+    document.addEventListener('touchend', moved, { passive: true });
+  } catch (e) { /* no button */ }
+})();
 `;
 
 // Portrait only (7 Nov 2026, Asher: "disable landscape mode web app wide"):
@@ -1583,7 +1762,7 @@ function readsOf(page) {
 // list filling with the others' reads.
 function noteRead(path, page) {
   if (seenFor(path) === 0) return;
-  const whose = page || location.pathname;
+  const whose = page || hcNorm(location.pathname);
   const list = readsOf(whose);
   if (list.indexOf(path) >= 0) return;
   list.push(path);
@@ -1618,6 +1797,441 @@ function relayClock() {
   return relayAhead === null ? null : Date.now() + relayAhead;
 }
 
+// WHEN SAID, IN WORDS A DRIVER READS (14 Nov 2026, driver phone plan
+// items 1 and 3). A time today is just the time; any other day says which,
+// so "7:14 PM" from last night never reads as this evening.
+// A day as YYYY-MM-DD, in the club's zone when the laptop said it (item 15).
+function hcYmd(d) {
+  try { return d.toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }); } catch (e) { return ''; }
+}
+function hcSameDay(a, b) {
+  const x = hcYmd(a);
+  return x !== '' && x === hcYmd(b);
+}
+function whenSaid(at) {
+  const d = new Date(at);
+  if (!(at > 0) || isNaN(d)) return '';
+  const time = d.toLocaleTimeString([], { hour12: HC_H12, hour: 'numeric', minute: '2-digit' }) + (typeof hcZoneWord === 'function' ? hcZoneWord(d) : '');
+  if (hcSameDay(d, new Date())) return time;
+  return d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }) + ', ' + time;
+}
+// IS IT TONIGHT? (14 Nov 2026, driver phone plan item 3). A night's own day
+// ("2026-11-06", or any time that day) against today - with the small hours
+// still counting as the night before, so a race at 11 PM is tonight's at
+// 1 AM. On 14 Nov a night from 6 Nov still said "Tonight" and Schedule said
+// "Today" for a race day a week old.
+function hcIsTonight(dayOrTime) {
+  if (typeof dayOrTime !== 'string' || dayOrTime === '') return false;
+  // A day as the club writes it is already the club's day; a time becomes one.
+  const day = /^\\d{4}-\\d{2}-\\d{2}$/.test(dayOrTime) ? dayOrTime : (isNaN(new Date(dayOrTime)) ? '' : hcYmd(new Date(dayOrTime)));
+  if (day === '') return false;
+  const now = new Date();
+  if (day === hcYmd(now)) return true;
+  let hour = now.getHours();
+  try { hour = Number(now.toLocaleTimeString('en-GB', { hour: '2-digit', hour12: false }).slice(0, 2)); } catch (e) { /* the phone's */ }
+  return hour < 6 && day === hcYmd(new Date(now.getTime() - 24 * 3600 * 1000));
+}
+// The short form, for a big number in a small space: the time today, else
+// the day and the time ("Thu 7:14 PM").
+function whenShort(at) {
+  const d = new Date(at);
+  if (!(at > 0) || isNaN(d)) return '';
+  const time = d.toLocaleTimeString([], { hour12: HC_H12, hour: 'numeric', minute: '2-digit' });
+  return hcSameDay(d, new Date()) ? time : d.toLocaleDateString([], { weekday: 'short' }) + ' ' + time;
+}
+// "40 s ago", "3 min ago", "2 h ago".
+function agoShort(at) {
+  const s = Math.max(0, Math.round((Date.now() - at) / 1000));
+  if (s < 60) return s + ' s ago';
+  if (s < 3600) return Math.round(s / 60) + ' min ago';
+  return Math.round(s / 3600) + ' h ago';
+}
+
+// NO SIGNAL (14 Nov 2026, driver phone plan item 1). A track is a metal
+// building full of phones, and the worst signal comes exactly when most
+// people are checking. A page that loses the relay keeps drawing what it
+// last had - kept on this phone (localStorage, up to twelve hours, never a
+// driver's own night: those are read with their badge code and stay out of
+// it) - dimmed, under one strip that says how old it is. It never passes the
+// old copy off as live: the strip stays until a read comes back.
+//
+// While it can't reach the relay a page asks less often (2, 4, 8, then every
+// 15 seconds) and at once when the phone says it is back online or the page
+// is looked at again, rather than hammering a network that isn't there.
+//
+// The words are plain: drivers think of the club, not of a relay.
+const HC_LAST = 'hc-last-' + CLUB + ':';
+const HC_LAST_FOR_MS = 12 * 3600 * 1000;
+const HC_LAST_MAX_CHARS = 300000;
+const HC_LAST_EVERY_MS = 5000;
+const hcNet = { since: 0, fails: 0, nextTry: 0, why: '', shownAt: 0, lastWrite: {} };
+
+function hcLastKeep(path, body) {
+  if (seenFor(path) === 0) return;
+  const now = Date.now();
+  if (hcNet.lastWrite[path] && now - hcNet.lastWrite[path] < HC_LAST_EVERY_MS) return;
+  hcNet.lastWrite[path] = now;
+  try {
+    const raw = JSON.stringify({ at: now, body: body });
+    if (raw.length > HC_LAST_MAX_CHARS) { localStorage.removeItem(HC_LAST + path); return; }
+    localStorage.setItem(HC_LAST + path, raw);
+  } catch (e) { /* no copy for next time */ }
+}
+function hcLastRead(path) {
+  try {
+    const kept = JSON.parse(localStorage.getItem(HC_LAST + path) || 'null');
+    if (!kept || typeof kept.at !== 'number' || kept.at > Date.now() || Date.now() - kept.at > HC_LAST_FOR_MS) return null;
+    return kept;
+  } catch (e) { return null; }
+}
+function hcBackoffMs() {
+  return Math.min(15000, 2000 * Math.pow(2, Math.max(0, hcNet.fails - 1)));
+}
+// The words for the strip, and for a page with nothing to show.
+function offlineNote(at, why) {
+  const first = why === 'busy' ? 'The club\\u2019s live pages didn\\u2019t answer.' : 'No signal.';
+  const what = at > 0 ? ' Showing what we had at ' + whenSaid(at) + ' (' + agoShort(at) + ').' : '';
+  return first + what + ' Trying again\\u2026';
+}
+function hcStrip() {
+  let el = document.getElementById('hcoff');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'hcoff';
+    el.className = 'hcoff';
+    el.setAttribute('role', 'status');
+    const header = document.querySelector('.wrap > header');
+    if (header && header.parentNode) header.parentNode.insertBefore(el, header.nextSibling);
+    else document.body.insertBefore(el, document.body.firstChild);
+  }
+  return el;
+}
+function hcPaintNet() {
+  const off = hcNet.since > 0;
+  try { document.documentElement.classList.toggle('hcoffline', off && hcNet.shownAt > 0); } catch (e) { /* no page to dim */ }
+  try {
+    const el = off ? hcStrip() : document.getElementById('hcoff');
+    if (!el) return;
+    el.hidden = !off;
+    if (off) el.innerHTML = '<span aria-hidden="true">\\u26A0</span><span>' + esc(offlineNote(hcNet.shownAt, hcNet.why)) + '</span>';
+  } catch (e) { /* no page to show it on */ }
+}
+function hcNetOk() {
+  if (hcNet.since === 0) return;
+  hcNet.since = 0;
+  hcNet.fails = 0;
+  hcNet.nextTry = 0;
+  hcNet.shownAt = 0;
+  hcCount('offline_recovered');
+  hcPaintNet();
+}
+function hcNetFail(why) {
+  if (hcNet.since === 0) { hcNet.since = Date.now(); hcCount('offline_shown'); }
+  hcNet.why = why;
+  // Only a phone with no network waits between tries: a relay that answered
+  // busy is there, and the next redraw asks it again as it always did.
+  if (why === 'net') {
+    hcNet.fails += 1;
+    hcNet.nextTry = Date.now() + hcBackoffMs();
+  }
+}
+// Back online, or looked at again: try now rather than at the next step.
+try { addEventListener('online', () => { hcNet.nextTry = 0; }); } catch (e) { /* no window events here */ }
+document.addEventListener('visibilitychange', () => { if (!document.hidden) hcNet.nextTry = 0; });
+setInterval(() => { if (hcNet.since > 0) hcPaintNet(); }, 5000);
+
+// HOW DRIVERS USE THE PAGES (14 Nov 2026, driver phone plan item 20):
+// a count per club per day of a few fixed events - nothing about who, no
+// badge, no phone, no page address. At most one of each per page load,
+// sent together once a minute and when the page is hidden; lost if the
+// send fails, never retried.
+const hcCounted = {};
+let hcCounts = [];
+function hcCount(event) {
+  if (typeof event !== 'string' || hcCounted[event]) return;
+  hcCounted[event] = true;
+  hcCounts.push(event);
+}
+function hcSendCounts() {
+  if (hcCounts.length === 0 || !CLUB) return;
+  const events = hcCounts.slice(0, 20);
+  hcCounts = [];
+  try {
+    const url = '/api/v1/c/' + encodeURIComponent(CLUB) + '/count';
+    const body = JSON.stringify({ events: events });
+    if (navigator.sendBeacon && navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }))) return;
+    fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: body, keepalive: true }).catch(() => {});
+  } catch (e) { /* not counted */ }
+}
+setInterval(hcSendCounts, 60000);
+document.addEventListener('visibilitychange', () => { if (document.hidden) hcSendCounts(); });
+
+// THE PAGES AFTER A DEPLOY (14 Nov 2026, driver phone plan item 21). A
+// phone keeps the club's pages for when it has no signal, so it can also
+// keep an old page after the relay is updated. Every page knows its build
+// (data-build) and every snapshot answer says the relay's (x-hc-build);
+// when they differ the page offers "Updated - tap to reload", but never
+// while a race is running or Listen is on (hcBusy, which Live sets). It
+// never reloads by itself.
+const HC_BUILD = (document.body && document.body.dataset && document.body.dataset.build) || '';
+let hcNewer = false;
+function hcBuildSeen(response) {
+  try {
+    const b = response && response.headers && typeof response.headers.get === 'function' ? response.headers.get('x-hc-build') : null;
+    if (b && HC_BUILD && b !== HC_BUILD && !hcNewer) { hcNewer = true; hcOfferReload(); }
+  } catch (e) { /* not told */ }
+}
+function hcOfferReload() {
+  if (!hcNewer || document.getElementById('hcnew')) return;
+  let busy = false;
+  try { busy = typeof window.hcBusy === 'function' && window.hcBusy() === true; } catch (e) { busy = false; }
+  if (busy) { setTimeout(hcOfferReload, 5000); return; }
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.id = 'hcnew';
+  b.className = 'go hcnew';
+  b.textContent = 'Updated \\u2013 tap to reload';
+  b.addEventListener('click', () => {
+    try { if (FRAMED) { parent.location.reload(); return; } } catch (e) { /* this page, then */ }
+    location.reload();
+  });
+  document.body.appendChild(b);
+}
+
+// READABLE OUTDOORS (14 Nov 2026, driver phone plan item 6): text size and
+// High contrast, per phone (they stay through a sign-out - they are the
+// phone's, not a driver's). High contrast follows the phone's own "Increase
+// contrast" until it is chosen here. In a club's dark look, High contrast
+// is light-on-dark; tapping it again gives the light version for bright
+// sun; a third tap goes back to the club's own look.
+const HC_TS_KEY = 'hg-textsize';
+const HC_HC_KEY = 'hg-contrast';
+function hcReading() {
+  let ts = '100';
+  let hc = '';
+  try { ts = localStorage.getItem(HC_TS_KEY) || '100'; hc = localStorage.getItem(HC_HC_KEY) || ''; } catch (e) { /* the club's look */ }
+  if (hc === '') {
+    try { if (window.matchMedia && window.matchMedia('(prefers-contrast: more)').matches) hc = 'high'; } catch (e) { /* not asked */ }
+  }
+  return { ts: ['100', '115', '130'].indexOf(ts) >= 0 ? ts : '100', hc: hc };
+}
+function hcApplyReading() {
+  try {
+    const r = hcReading();
+    const d = document.documentElement;
+    if (r.ts === '100') d.removeAttribute('data-ts'); else d.setAttribute('data-ts', r.ts);
+    d.classList.toggle('hc', r.hc === 'high' || r.hc === 'light');
+    d.classList.toggle('hcl', r.hc === 'light');
+    const box = document.getElementById('hcread');
+    if (!box) return;
+    box.querySelectorAll('[data-ts]').forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-ts') === r.ts)));
+    const hcb = box.querySelector('[data-hc]');
+    if (hcb) {
+      hcb.setAttribute('aria-pressed', String(r.hc === 'high' || r.hc === 'light'));
+      hcb.textContent = r.hc === 'high' ? 'High contrast: dark' : r.hc === 'light' ? 'High contrast: light' : 'High contrast';
+    }
+  } catch (e) { /* the club's look */ }
+}
+try {
+  document.addEventListener('click', (e) => {
+    const t = e.target && typeof e.target.closest === 'function' ? e.target.closest('#hcread button') : null;
+    if (!t) return;
+    const r = hcReading();
+    try {
+      if (t.hasAttribute('data-ts')) {
+        localStorage.setItem(HC_TS_KEY, t.getAttribute('data-ts'));
+        if (t.getAttribute('data-ts') !== '100') hcCount('text_size_' + t.getAttribute('data-ts'));
+      } else {
+        const next = r.hc === '' || r.hc === 'club' ? 'high' : r.hc === 'high' ? 'light' : 'club';
+        localStorage.setItem(HC_HC_KEY, next);
+        if (next !== 'club') hcCount('contrast_high');
+      }
+    } catch (err) { /* this page only */ }
+    hcApplyReading();
+  });
+} catch (e) { /* no events here */ }
+hcApplyReading();
+
+// YOUR CLUBS ON THIS PHONE (14 Nov 2026, driver phone plan item 5). Every
+// club on a relay shares its address, so each club's pages note themselves
+// in one list (hc-clubs: id and name, newest first, up to eight), and Me
+// links to the others. Only the club, never anything about a driver.
+const HC_CLUBS_KEY = 'hc-clubs';
+function hcClubs() {
+  try {
+    const list = JSON.parse(localStorage.getItem(HC_CLUBS_KEY) || '[]');
+    return (Array.isArray(list) ? list : []).filter((c) => c && typeof c.c === 'string' && /^[a-z0-9-]{3,32}$/.test(c.c) && typeof c.n === 'string').slice(0, 8);
+  } catch (e) { return []; }
+}
+(function () {
+  try {
+    if (!CLUB) return;
+    const others = hcClubs().filter((c) => c.c !== CLUB);
+    localStorage.setItem(HC_CLUBS_KEY, JSON.stringify([{ c: CLUB, n: String(CLUB_NAME || CLUB).slice(0, 60) }].concat(others).slice(0, 8)));
+  } catch (e) { /* this phone keeps no list */ }
+})();
+function hcOtherClubs() {
+  const others = hcClubs().filter((c) => c.c !== CLUB);
+  if (others.length === 0) return null;
+  const p = document.createElement('p');
+  p.className = 'when hcclubs';
+  p.innerHTML = 'Your other clubs on this phone: ' + others.map((c) => '<a href="/c/' + encodeURIComponent(c.c) + '/mynight">' + esc(c.n) + '</a>').join(' \u00b7 ');
+  return p;
+}
+
+// INSIDE ANOTHER APP'S BROWSER (14 Nov 2026, driver phone plan item 16).
+// Clubs share their links on Facebook, and tapping one opens these pages
+// inside that app's own browser, where storage can be wiped on close, and
+// alerts and Add to Home Screen don't work. Which app, or '' for a real
+// browser. Help is shown only where it matters (signing in, alerts,
+// installing), never just for looking.
+function inAppBrowser() {
+  const ua = (typeof navigator === 'object' && navigator.userAgent) || '';
+  if (/FBAN|FBAV|FB_IAB|Messenger/i.test(ua)) return 'facebook';
+  if (/Instagram/i.test(ua)) return 'instagram';
+  if (/\\bLine\\/|TikTok|musical_ly|Snapchat|Twitter for/i.test(ua)) return 'other';
+  if (/Android/.test(ua) && /; wv\\)/.test(ua)) return 'other';
+  return '';
+}
+function inAppHelp() {
+  const app = inAppBrowser();
+  if (app === '') return null;
+  hcCount('inapp_card_shown_' + app);
+  const box = document.createElement('div');
+  box.className = 'note hcinapp';
+  const name = app === 'facebook' ? 'Facebook\\u2019s' : app === 'instagram' ? 'Instagram\\u2019s' : 'this app\\u2019s';
+  const how = app === 'facebook' ? 'Tap \\u2022\\u2022\\u2022 and choose Open in browser.' : app === 'instagram' ? 'Tap \\u2022\\u2022\\u2022 and choose Open in external browser.' : 'Use the menu to open this page in your browser.';
+  box.innerHTML = '<b>You\\u2019re in ' + name + ' browser.</b> To stay signed in and get race alerts, open this page in Safari or Chrome. ' + how + ' ';
+  const copy = document.createElement('button');
+  copy.type = 'button';
+  copy.className = 'linkish';
+  copy.textContent = 'Copy link';
+  copy.addEventListener('click', () => {
+    try { navigator.clipboard.writeText(location.href).then(() => toast('Link copied - paste it into your browser.')); } catch (e) { toast(location.href); }
+  });
+  box.appendChild(copy);
+  return box;
+}
+
+// AN ALERT TAPPED (14 Nov 2026, item 9): the relay adds ?from=alert-<kind>
+// to where an alert goes, so it can be counted (item 20) - then taken off
+// the address, which stays as the page's own.
+(function () {
+  try {
+    const m = /[?&]from=alert-([a-z]{3,12})(&|$)/.exec(location.search);
+    if (!m) return;
+    hcCount('alert_opened_' + m[1]);
+    const rest = location.search.replace(/[?&]from=alert-[a-z]{3,12}/, '').replace(/^&/, '?');
+    history.replaceState(history.state, '', location.pathname + (rest === '?' ? '' : rest) + location.hash);
+  } catch (e) { /* counted or not, the page is the same */ }
+})();
+
+// ONTO THE HOME SCREEN (14 Nov 2026, driver phone plan item 7). On an
+// iPhone alerts only work from the club's page on the Home Screen, and
+// that was only said inside the alerts text. Now one card, at a good
+// moment: on a phone's second visit or later, never on the first, never
+// while a race is on (hcBusy), never once installed, and never inside
+// another app's browser (which can't install - see inAppBrowser). Android
+// gets the browser's own prompt behind the button; an iPhone in Safari
+// gets the three steps. "Not now" hides it for 14 days, "Don't ask again"
+// for good.
+const HC_INSTALL_KEY = 'hg-install-' + CLUB;
+const HC_VISITS_KEY = 'hg-visits-' + CLUB;
+let hcInstallPrompt = null;
+try {
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); hcInstallPrompt = e; hcInstallCard(); });
+} catch (e) { /* no window events here */ }
+function hcInstalled() {
+  try {
+    const m = (q) => typeof window.matchMedia === 'function' && window.matchMedia(q).matches;
+    return m('(display-mode: standalone)') || m('(display-mode: fullscreen)') || navigator.standalone === true || SHELL || FRAMED;
+  } catch (e) { return false; }
+}
+function hcIPhoneSafari() {
+  const ua = (typeof navigator === 'object' && navigator.userAgent) || '';
+  return /iPhone|iPad|iPod/.test(ua) && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua) && inAppBrowser() === '';
+}
+function hcInstallCard() {
+  try {
+    if (hcInstalled() || inAppBrowser() !== '' || document.getElementById('hcinst')) return;
+    const said = localStorage.getItem(HC_INSTALL_KEY) || '';
+    if (said === 'never' || (Number(said) > Date.now())) return;
+    if (Number(localStorage.getItem(HC_VISITS_KEY) || '0') < 2) return;
+    if (typeof window.hcBusy === 'function' && window.hcBusy() === true) return;
+    const android = hcInstallPrompt !== null;
+    if (!android && !hcIPhoneSafari()) return;
+    hcCount('install_card_shown');
+    const card = document.createElement('section');
+    card.id = 'hcinst';
+    card.className = 'lc hcinst';
+    card.innerHTML = '<h3>Add ' + esc(CLUB_NAME || 'the club') + ' to your Home Screen</h3>'
+      + (android
+        ? '<p class="note">Race alerts with the page closed, and a quicker app that opens with no signal.</p>'
+        : '<p class="note">On an iPhone, race alerts only work from the Home Screen. It takes three taps:</p>'
+          + '<ol class="rtw-steps"><li>Tap <b>Share</b> (the square with an arrow) at the bottom of Safari.</li>'
+          + '<li>Choose <b>Add to Home Screen</b>.</li><li>Open it from your Home Screen and turn on alerts.</li></ol>');
+    const row = document.createElement('div');
+    row.className = 'hcinst-acts';
+    const later = (forever) => {
+      try { localStorage.setItem(HC_INSTALL_KEY, forever ? 'never' : String(Date.now() + 14 * 24 * 3600 * 1000)); } catch (e) { /* asked again */ }
+      hcCount('install_dismissed');
+      card.remove();
+    };
+    if (android) {
+      const go = document.createElement('button');
+      go.type = 'button';
+      go.className = 'go';
+      go.textContent = 'Add to Home Screen';
+      go.addEventListener('click', async () => {
+        const p = hcInstallPrompt;
+        hcInstallPrompt = null;
+        if (!p) { card.remove(); return; }
+        try {
+          p.prompt();
+          const choice = await p.userChoice;
+          if (choice && choice.outcome === 'accepted') hcCount('install_accepted');
+        } catch (e) { /* the browser said no */ }
+        card.remove();
+      });
+      row.appendChild(go);
+    }
+    const not = document.createElement('button');
+    not.type = 'button';
+    not.className = 'go quiet';
+    not.textContent = 'Not now';
+    not.addEventListener('click', () => later(false));
+    const never = document.createElement('button');
+    never.type = 'button';
+    never.className = 'linkish';
+    never.textContent = 'Don\\u2019t ask again';
+    never.addEventListener('click', () => later(true));
+    row.appendChild(not);
+    row.appendChild(never);
+    card.appendChild(row);
+    const header = document.querySelector('.wrap > header');
+    if (header && header.parentNode) header.parentNode.insertBefore(card, header.nextSibling);
+  } catch (e) { /* no card */ }
+}
+(function () {
+  try {
+    if (FRAMED || SHELL) return;
+    const n = Math.min(99, Number(localStorage.getItem(HC_VISITS_KEY) || '0') + 1);
+    localStorage.setItem(HC_VISITS_KEY, String(n));
+  } catch (e) { /* not counted */ }
+  setTimeout(hcInstallCard, 1500);
+})();
+
+// THE CLUB'S PAGES ON THIS PHONE (14 Nov 2026, driver phone plan item 1):
+// the service worker that keeps them for when there is no signal - the same
+// one that shows race alerts (push.ts). Asked for from every page; asking
+// again is harmless.
+(function () {
+  try {
+    if (!CLUB || !('serviceWorker' in navigator) || !window.isSecureContext) return;
+    navigator.serviceWorker.register('/c/' + encodeURIComponent(CLUB) + '/sw.js').catch(() => {});
+  } catch (e) { /* the pages still work, just not with no signal */ }
+})();
+
 // waitMs (26 Oct 2026): give up after that long, for a view that waits
 // for one read to answer before it asks again (the live page's captions).
 // A read that never came back - a phone moving between networks, venue
@@ -1634,26 +2248,54 @@ async function grab(path, waitMs, page) {
       return kept.missing ? { missing: true, status: 404, seen: true } : { body: kept.body, seen: true };
     }
   }
+  // No signal: between tries, the last copy at once (see NO SIGNAL).
+  if (hcNet.since > 0 && Date.now() < hcNet.nextTry) return hcOffline(path, null);
   const stop = waitMs && typeof AbortController === 'function' ? new AbortController() : null;
   const timer = stop ? setTimeout(() => stop.abort(), waitMs) : 0;
+  let response;
   try {
     const asked = Date.now();
-    const response = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + path,
-      stop ? { cache: 'no-store', signal: stop.signal } : { cache: 'no-store' });
+    try {
+      response = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + path,
+        stop ? { cache: 'no-store', signal: stop.signal } : { cache: 'no-store' });
+    } catch (e) {
+      hcNetFail('net');
+      return hcOffline(path, e);
+    }
     learnRelayClock(response, asked, Date.now());
+    hcBuildSeen(response);
     if (!response.ok) {
       // Nothing published yet is an answer worth keeping too; busy or
-      // broken is not.
-      if (response.status === 404) { seenKeep(path, undefined, true); noteRead(path, page); }
+      // broken is not - and a relay that is busy or being deployed (5xx)
+      // is drawn like no signal, from the last copy, rather than as an
+      // empty page.
+      if (response.status === 404) { hcNetOk(); seenKeep(path, undefined, true); noteRead(path, page); }
+      else if (response.status >= 500) { hcNetFail('busy'); const kept = hcLastRead(path); if (kept) return hcFromCopy(kept); }
       return { missing: true, status: response.status };
     }
     const body = await response.json();
+    hcNetOk();
     seenKeep(path, body);
+    hcLastKeep(path, body);
     noteRead(path, page);
     return { body: body };
   } finally {
     if (stop) clearTimeout(timer);
   }
+}
+
+// The last copy of a read, as an answer that says it is one - or the
+// failure as it was, when this phone has no copy.
+function hcFromCopy(kept) {
+  if (!(hcNet.shownAt > 0) || kept.at < hcNet.shownAt) hcNet.shownAt = kept.at;
+  hcPaintNet();
+  return { body: kept.body, seen: true, stale: true, at: kept.at };
+}
+function hcOffline(path, error) {
+  const kept = hcLastRead(path);
+  if (kept) return hcFromCopy(kept);
+  hcPaintNet();
+  throw error || new TypeError('No signal');
 }
 
 // Only a string that is already a data: image may become an src. The
@@ -1822,8 +2464,74 @@ function meCode() {
   } catch (e) { return ''; }
 }
 
-function meRemember(code) {
-  try { if (/^[0-9a-f]{20}$/.test(String(code))) localStorage.setItem(ME_KEY, String(code)); } catch (e) { /* asked again next time */ }
+// SEVERAL DRIVERS ON ONE PHONE (14 Nov 2026, driver phone plan item 8). A
+// parent with two kids racing, or a driver with a second car under another
+// name, had to sign out and back in each time. ME_KEY is still the driver
+// shown now, so everything that reads meCode() works as it did; beside it,
+// the drivers this phone has signed in (up to five), each with the name
+// their night gave, newest first. Only ever badge codes the relay has
+// answered with a night, as ME_KEY always was.
+const ME_LIST_KEY = 'hg-me-list-' + CLUB;
+const ME_MAX = 5;
+
+function meDrivers() {
+  try {
+    const list = JSON.parse(localStorage.getItem(ME_LIST_KEY) || '[]');
+    const seen = {};
+    return (Array.isArray(list) ? list : [])
+      .filter((d) => d && typeof d.c === 'string' && /^[0-9a-f]{20}$/.test(d.c) && !seen[d.c] && (seen[d.c] = true))
+      .map((d) => ({ c: d.c, n: typeof d.n === 'string' ? d.n.slice(0, 60) : '' }))
+      .slice(0, ME_MAX);
+  } catch (e) { return []; }
+}
+
+function meKeepDrivers(list) {
+  try {
+    if (list.length > 0) localStorage.setItem(ME_LIST_KEY, JSON.stringify(list.slice(0, ME_MAX)));
+    else localStorage.removeItem(ME_LIST_KEY);
+  } catch (e) { /* this phone keeps only the one */ }
+}
+
+// STAYING SIGNED IN (14 Nov 2026, driver phone plan item 17). Safari clears
+// a site's storage after a week without a visit unless it is on the Home
+// Screen, and club nights are often weekly - so a remembered driver could
+// be gone by the next race night with no word why. After a sign-in this
+// phone asks the browser to keep its storage (Chrome usually agrees; on an
+// iPhone the Home Screen is what really keeps it), and keeps a marker that
+// is not the code, so Me can say "this phone forgot you" when the code went
+// but the marker didn't. Signing out takes both.
+const ME_WAS_KEY = 'hg-me-was-' + CLUB;
+let mePersistAsked = false;
+
+function meKeepStorage() {
+  try { localStorage.setItem(ME_WAS_KEY, '1'); } catch (e) { /* not noted */ }
+  if (mePersistAsked) return;
+  mePersistAsked = true;
+  try { if (navigator.storage && typeof navigator.storage.persist === 'function') navigator.storage.persist().catch(() => {}); } catch (e) { /* the browser decides */ }
+}
+
+// Whether this phone signed a driver in once and has since forgotten them
+// by itself (storage cleared), rather than by a sign-out.
+function meForgotten() {
+  try { return meCode() === '' && localStorage.getItem(ME_WAS_KEY) === '1'; } catch (e) { return false; }
+}
+
+function meRemember(code, name) {
+  if (!/^[0-9a-f]{20}$/.test(String(code))) return;
+  try { localStorage.setItem(ME_KEY, String(code)); } catch (e) { /* asked again next time */ }
+  meKeepStorage();
+  const list = meDrivers();
+  const was = list.find((d) => d.c === code);
+  const one = { c: String(code), n: typeof name === 'string' && name.trim() !== '' ? name.trim().slice(0, 60) : (was ? was.n : '') };
+  const rest = list.filter((d) => d.c !== code);
+  // A sixth driver pushes out the one signed in longest ago, alerts and all.
+  while (rest.length >= ME_MAX) { const old = rest.pop(); meStopPush(old.c); }
+  meKeepDrivers([one].concat(rest));
+}
+
+// A driver's first name, for an alert's title on a phone with more than one.
+function meFirstName(name) {
+  return String(name || '').trim().split(/\\s+/)[0].slice(0, 20);
 }
 
 function meForget() {
@@ -1862,12 +2570,29 @@ function meStopPush(code) {
   } catch (e) { /* the relay drops a phone the push service says is gone */ }
 }
 
+// Signs one driver out of this phone. With another driver still on it, that
+// one becomes the driver shown, and their code is answered (''  when none).
 function meSignOut(code) {
   meStopPush(code);
-  meForget();
+  const others = meDrivers().filter((d) => d.c !== code);
+  meKeepDrivers(others);
+  if (others.length > 0) {
+    try { localStorage.setItem(ME_KEY, others[0].c); } catch (e) { /* asked again */ }
+  } else {
+    meForget();
+    try { localStorage.removeItem(ME_WAS_KEY); } catch (e) { /* nothing was kept */ }
+  }
   for (const k of ME_LEFTOVERS) {
     try { localStorage.removeItem(k); } catch (e) { /* nothing was kept */ }
   }
+  // The pages' own copies of what the relay answered, for when there is no
+  // signal (14 Nov 2026): forgotten with the rest.
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf(HC_LAST) === 0) localStorage.removeItem(k);
+    }
+  } catch (e) { /* they age out by themselves */ }
   try { sessionStorage.removeItem('hg-night-pass-' + CLUB); } catch (e) { /* nothing was kept */ }
   try {
     const pin = 'hg-pin-' + CLUB;
@@ -1884,6 +2609,17 @@ function meSignOut(code) {
     }
   } catch (e) { /* the copies age out by themselves */ }
   try { if (/^[0-9a-f]{20}$/.test(String(code))) sessionStorage.setItem(ME_OUT_KEY, String(code)); } catch (e) { /* not noted */ }
+  return others.length > 0 ? others[0].c : '';
+}
+
+// Everyone off this phone: each driver's alerts stopped, then the lot forgotten.
+function meSignOutAll() {
+  const list = meDrivers();
+  const current = meCode();
+  for (const d of list) if (d.c !== current) meStopPush(d.c);
+  meKeepDrivers([]);
+  meSignOut(current || (list[0] ? list[0].c : ''));
+  meForget();
 }
 
 // Whether this tab signed out of this code and is being taken back to it -
@@ -1947,8 +2683,14 @@ function hcInside(path) {
     return u.origin === location.origin && (u.pathname === HC_HOME || u.pathname.indexOf(HC_HOME + '/') === 0);
   } catch (e) { return false; }
 }
+// One page whether or not its address ends in a slash: the Home tab is
+// /c/<club>/ since 14 Nov 2026 (inside the service worker's scope, so it
+// opens with no signal), and a phone may still have /c/<club> open.
+function hcNorm(path) {
+  return typeof path === 'string' && path.length > 1 ? path.replace(/[/]+$/, '') : path;
+}
 function hcPathOf(path) {
-  try { return new URL(path, location.origin).pathname; } catch (e) { return ''; }
+  try { return hcNorm(new URL(path, location.origin).pathname); } catch (e) { return ''; }
 }
 function hcFrameFor(path) {
   const f = document.createElement('iframe');
@@ -2032,6 +2774,18 @@ function hcGo(path) {
   hcComing = hcFrameFor(path);
 }
 window.hcGo = hcGo;
+// BACK THROUGH THE TABS (14 Nov 2026, driver phone plan item 18): the bar's
+// page shows whichever page its history now says - a kept page playing out
+// of sight comes back as it was (hcGo), the Live page holding the bar takes
+// it back (hcUnhold). Home with nothing behind it leaves the app.
+try {
+  addEventListener('popstate', () => {
+    if (!SHELL && !hcHeld) return;
+    const path = location.pathname + location.search + location.hash;
+    if (hcHeld && hcPathOf(path) === hcPathOf(hcHeldPath)) { hcUnhold(); return; }
+    if (hcInside(path)) { if (typeof hcCount === 'function') hcCount('back_used'); hcGo(path); }
+  });
+} catch (e) { /* no window events here */ }
 function hcTop() {
   try {
     const doc = hcShown ? hcShown.contentDocument : document;
@@ -2055,7 +2809,7 @@ function hcHold() {
   hcHeldPath = location.pathname + location.search + location.hash;
   hcHeldTitle = document.title;
   // This page's own tab, by its address: the tab just tapped is already lit.
-  hcHeldLit = Array.from(document.querySelectorAll('nav.tabs a')).find((a) => hcPathOf(a.href) === location.pathname)
+  hcHeldLit = Array.from(document.querySelectorAll('nav.tabs a')).find((a) => hcPathOf(a.href) === hcNorm(location.pathname))
     || document.querySelector('nav.tabs a[aria-current]');
   hcKept = 'self';
   if (!document.getElementById('hcprobe')) {
@@ -2121,14 +2875,15 @@ function hcHushListen() {
     tabs.querySelectorAll('a[aria-current]').forEach((x) => { if (x !== a) x.removeAttribute('aria-current'); });
     if (a) a.setAttribute('aria-current', 'page');
   };
-  const pageOf = (a) => { try { return new URL(a.href, location.href).pathname; } catch (e) { return ''; } };
+  const pageOf = (a) => { try { return hcNorm(new URL(a.href, location.href).pathname); } catch (e) { return ''; } };
+  const here = () => hcNorm(location.pathname);
   let ahead = null;
   let aheadFor = '';
   tabs.addEventListener('pointerdown', (e) => {
     const a = e.target instanceof Element ? e.target.closest('a') : null;
     if (!a || e.button !== 0) return;
     const page = pageOf(a);
-    if (page === '' || page === location.pathname) return;
+    if (page === '' || page === here()) return;
     const list = readsOf(page);
     aheadFor = page;
     ahead = list.length === 0 ? null : Promise.all(list.map((p) => grab(p, 0, page).catch(() => null)));
@@ -2144,23 +2899,32 @@ function hcHushListen() {
     if (hcWouldHold()) {
       e.preventDefault();
       ahead = null;
-      if (page === location.pathname) { hcTop(); return; }
+      if (page === here()) { hcTop(); return; }
       hcHold();
     }
     if (SHELL || hcHeld) {
       // The bar stays; only the page under it changes. The page already
       // showing goes back to its top instead.
       e.preventDefault();
-      if (page === location.pathname) { ahead = null; hcTop(); return; }
+      if (page === here()) { ahead = null; hcTop(); return; }
       const u = new URL(a.href, location.href);
       const waiting = ahead && page === aheadFor ? ahead : null;
       ahead = null;
       let sent = false;
-      const send = () => { if (!sent) { sent = true; hcGo(u.pathname + u.search + u.hash); } };
+      // A step in the phone's history for each tab (14 Nov 2026, driver
+      // phone plan item 18): the frames never made one, so Android's Back
+      // left the app from any tab. Back now walks the tabs, to Home and out.
+      const send = () => {
+        if (sent) return;
+        sent = true;
+        const to = u.pathname + u.search + u.hash;
+        try { history.pushState({ hc: 1 }, '', to); } catch (e2) { /* Back leaves, as before */ }
+        hcGo(to);
+      };
       if (waiting) { waiting.then(send, send); setTimeout(send, 300); } else send();
       return;
     }
-    if (!ahead || page !== aheadFor || page === location.pathname) return;
+    if (!ahead || page !== aheadFor || page === here()) return;
     e.preventDefault();
     const waiting = ahead;
     ahead = null;
@@ -2380,7 +3144,7 @@ const SOCIAL_ICONS: Readonly<Record<string, string>> = Object.freeze({
  */
 function tabsNav(club: string, name: string, lit: string): string {
   const tab = (href: string, label: string, key: string, icon: string, cls = "") =>
-    `<a href="/c/${club}${href === "" ? "" : "/" + href}"${cls === "" ? "" : ` class="${cls}"`}${lit === key ? ' aria-current="page"' : ""}>`
+    `<a href="/c/${club}/${href}"${cls === "" ? "" : ` class="${cls}"`}${lit === key ? ' aria-current="page"' : ""}>`
     + (icon === "" ? "" : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${icon}"/></svg>`)
     + `<span>${label}</span>${key === "live" ? '<i class="dot" aria-hidden="true"></i>' : ""}</a>`;
 
@@ -2532,7 +3296,7 @@ export function shell(page: Shell, context: PageContext): string {
   const links = anchors === "" ? "" : `<span class="links">${anchors}</span>`;
 
   return `<!doctype html>
-<html lang="en" class="${look.light ? "light" : "dark"}${sunset ? " synthwave" : ""}"${clockAttr(look.clock24)}>
+<html lang="en" class="${look.light ? "light" : "dark"}${sunset ? " synthwave" : ""}"${clockAttr(look.clock24)}${tzAttr(look.timeZone)}>
 <head>
 <meta charset="utf-8">
 ${NO_ZOOM_HEAD}
@@ -2555,7 +3319,7 @@ ${preview}${twitter}
 <style>${STYLE}</style>
 ${overrides}${sunset ? HC_SUNSET_STYLE : ""}
 </head>
-<body data-club="${club}" data-club-name="${name}"${look.guide.length > 0 ? ` data-guide="${escapeHtml(JSON.stringify(look.guide))}"` : ""}${look.updates.length > 0 ? ` data-updates="${escapeHtml(JSON.stringify(look.updates))}"` : ""}>${sunset ? HC_SUNSET : ""}
+<body data-club="${club}" data-club-name="${name}" data-build="${PAGES_BUILD}"${look.emailLink ? ' data-email-link="1"' : ""}${look.guide.length > 0 ? ` data-guide="${escapeHtml(JSON.stringify(look.guide))}"` : ""}${look.updates.length > 0 ? ` data-updates="${escapeHtml(JSON.stringify(look.updates))}"` : ""}>${sunset ? HC_SUNSET : ""}
 <div class="wrap">
   <header${page.active === "live" ? ' class="onair-room"' : ""}>
     <div class="hcname">${brand}</div>
@@ -2567,7 +3331,7 @@ ${overrides}${sunset ? HC_SUNSET_STYLE : ""}
     ${subTab("badges", "Achievements")}
   </nav>` : ""}
   ${page.body}
-  <footer><span id="stamp">&nbsp;</span>${links}<span class="tip">Tap any driver's name to follow them on every page.</span><a class="hcmark" href="https://heatcaller.com" aria-label="What's HeatCaller?" data-hc-about>${HC_SUN}${HC_WORD}</a></footer>
+  <footer><span id="stamp">&nbsp;</span>${links}<span class="tip">Tap any driver's name to follow them on every page.</span><span class="hcread" id="hcread" role="group" aria-label="Reading"><span>Text</span><button type="button" data-ts="100" aria-label="Text size normal">A</button><button type="button" data-ts="115" aria-label="Text size larger">A+</button><button type="button" data-ts="130" aria-label="Text size largest">A++</button><button type="button" data-hc="1">High contrast</button></span><a class="hcmark" href="https://heatcaller.com" aria-label="What's HeatCaller?" data-hc-about>${HC_SUN}${HC_WORD}</a></footer>
 </div>
 ${aboutSheet(name)}
 <div id="follow" class="follow" hidden></div>
@@ -2859,7 +3623,7 @@ const STEP = 20;
 // says it could not find that session.
 const LOOK = 4;
 
-const OFFLINE = 'Could not reach the relay. This page will keep trying.';
+const OFFLINE = 'Can’t reach the club’s live pages right now. This page keeps trying.';
 
 // Every year the club has published, newest first, and the one on screen.
 let years = [];
@@ -3151,7 +3915,7 @@ function card(line, body, mine) {
       shareFor(linkToSession(line.id), what, String(line.day ?? ''), 'Share ' + what) +
     '</summary>' +
     (body === null
-      ? '<p class="note">That result is not on the relay any more.</p>'
+      ? '<p class="note">That result isn’t online any more.</p>'
       : (lengthWords(body) === '' ? '' : '<p class="len">Length: ' + esc(lengthWords(body)) + '</p>') +
         '<div class="tw"><table class="res"><thead><tr>' +
         '<th class="pos">Pos</th><th>Driver</th><th class="n">Qual</th>' +
@@ -3738,7 +4502,7 @@ async function drawDays() {
   const got = await bodies(ids, live());
 
   if (got === null) {
-    return fail(mine, 'Could not fetch that race day from the relay. Try again in a moment.');
+    return fail(mine, 'Couldn’t load that race day. Try again in a moment.');
   }
 
   const drawn = paint(mine, (pageAt === 0 && seasonPick.value === '' ? clubHealth() : '') + drawGroups(screen, got, ''), pagerFor(before, screen.length, days.length));
@@ -3825,7 +4589,7 @@ async function drawDriver(number) {
   const got = await bodies(take.map((line) => line.id), false);
 
   if (got === null) {
-    return fail(mine, 'Could not fetch those results from the relay. Try again in a moment.');
+    return fail(mine, 'Couldn’t load those results. Try again in a moment.');
   }
 
   const lead = '<p class="when">' + esc(who) + ' raced ' + lines.length + (lines.length === 1 ? ' time' : ' times') +
@@ -3882,7 +4646,7 @@ async function drawSearch(q) {
   const got = await bodies(take.map((line) => line.id), false);
 
   if (got === null) {
-    return fail(mine, 'Could not fetch those results from the relay. Try again in a moment.');
+    return fail(mine, 'Couldn’t load those results. Try again in a moment.');
   }
 
   const lead = '<p class="when">' + lines.length + (lines.length === 1 ? ' session' : ' sessions') +
@@ -4605,7 +5369,7 @@ export function resultsPage(club: string, clubName: string, context: PageContext
     clubName,
     active: "results",
     heading: "Results",
-    sub: "Published from the club's timing laptop. Every session the club has kept, newest first.",
+    sub: "Straight from the club's timing. Every session the club has kept, newest first.",
     // Hidden by inline display rather than the hidden attribute: .tools is
     // display:flex, and an author's rule beats the browser's own [hidden]
     // whatever order they are written in.
@@ -5552,7 +6316,7 @@ const WORDY = /driver|car|name|class|team|status/i;
 // draws as an empty row rather than throwing, which used to blank the whole
 // board until the next good frame. A cell that is not an object is drawn
 // as empty for the same reason.
-function cells(row, columns) {
+function cells(row, columns, roles) {
   const list = row && Array.isArray(row.cells) ? row.cells : [];
   return list.map((raw, i) => {
     const cell = raw && typeof raw === 'object' ? raw : {};
@@ -5560,7 +6324,9 @@ function cells(row, columns) {
     const align = i === 0 || WORDY.test(label) ? '' : ' n';
     const tone = cell.emphasis && cell.emphasis !== 'none' ? ' e-' + esc(cell.emphasis) : '';
     const text = /driver|name/i.test(label) ? nm(cell.text) : esc(cell.text);
-    return '<td class="' + (i === 0 ? 'pos' : '') + align + tone + '">' + text + '</td>';
+    // k: one of the four a phone keeps (see A BOARD MADE FOR A PHONE).
+    const keep = roles && typeof boardKeeps === 'function' && boardKeeps(roles, i) ? ' k' : '';
+    return '<td class="' + (i === 0 ? 'pos' : '') + align + tone + keep + '">' + text + '</td>';
   }).join('');
 }
 
@@ -5641,7 +6407,26 @@ function lbBar(done, total, over) {
 // empty and the last race's is being kept up. at: when that board was
 // last updated, shown on the right of a race that is over. rows: the
 // board the lap and the leader are read from.
-function drawBar(state, over, at, rows) {
+function drawBar(state, over, at, rows, mode) {
+  // Lost touch (see HOW OLD THE BOARD IS): the last update, never a live race.
+  // A copy shown with no signal says only how old it is: the phone, not
+  // the track, may be what lost touch.
+  if (mode === 'old') {
+    bar.className = 'flagbar f-none lost';
+    bar.innerHTML = '<div class="lp-top"><span class="lp-id"><span class="kick"><i></i>Last seen</span>'
+      + '<span class="state">No update</span></span>'
+      + '<span class="lp-time"><b>' + esc(whenShort(at)) + '</b><span>Last update</span></span></div>'
+      + '<div class="lp-foot"><span>No update from the track since ' + esc(whenSaid(at)) + '.</span></div>';
+    return;
+  }
+  if (mode === 'lost') {
+    bar.className = 'flagbar f-none lost';
+    bar.innerHTML = '<div class="lp-top"><span class="lp-id"><span class="kick"><i></i>Lost touch</span>'
+      + '<span class="state">No update</span></span>'
+      + '<span class="lp-time"><b>' + esc(whenShort(at)) + '</b><span>Last update</span></span></div>'
+      + '<div class="lp-foot"><span>Lost touch with the track at ' + esc(whenSaid(at)) + '. The timing may be offline.</span></div>';
+    return;
+  }
   // The warm-up flag (14 Nov 2026) runs between races - after one, the
   // laptop still says Finished - and it is the news, not the race before.
   if (String(state.flag || '').toLowerCase() === 'warmup') over = false;
@@ -5664,7 +6449,8 @@ function drawBar(state, over, at, rows) {
 
   let right = '';
   if (over) {
-    if (at) right = '<span class="lp-time"><b>' + esc(lbClock(at)) + '</b><span>Last update</span></span>';
+    // The day too once it isn't today (item 3): "Thu 13 Nov, 7:14 PM".
+    if (at) right = '<span class="lp-time"><b>' + esc(whenShort(at)) + '</b><span>Last update</span></span>';
   } else if (done > 0) {
     right = '<span class="lp-lap">Lap ' + done + (total > 0 ? '<span> / ' + total + '</span>' : '') + '</span>';
   }
@@ -5694,7 +6480,8 @@ function drawBar(state, over, at, rows) {
   bar.innerHTML = '<div class="lp-top"><span class="lp-id"><span class="kick"><i></i>' + esc(kick) + '</span>'
     + '<span class="state">' + esc(said) + '</span></span>' + right + '</div>'
     + (total > 0 ? lbBar(done, total, over) : lbTimeBar(secsLeft, raceSecs))
-    + (over ? '' : lbFollow(state, list, left))
+    // The followed driver's line lives on their card under this since 14 Nov
+    // 2026 (see YOUR CARD ON LIVE).
     + (info || next ? '<div class="lp-foot"><span>' + info + '</span>' + next + '</div>' : '');
 }
 
@@ -6158,14 +6945,63 @@ const liveMap = (function () {
   return { take: take, hide: hide };
 })();
 
+// A BOARD MADE FOR A PHONE (14 Nov 2026, driver phone plan item 4; mockup
+// relay/mockups/live-phone-board.html). At 375 px the club's seven columns
+// were 479 px in a 342 px box, and GAP and TREND - what a driver in the pits
+// wants most - were off the edge. On a phone (under 480 px) the board keeps
+// four: POS, DRIVER, the club's own gap column and LAST. A tap on a row
+// opens the rest of it in place; "All columns" brings back the full table;
+// the driver's own row sticks to the edge of the screen it is scrolling off.
+// Which column is which is read from the club's own headings.
+function boardRoles(columns) {
+  const at = (re) => columns.findIndex((c) => re.test(String(c)));
+  return {
+    driver: at(/driver|name/i),
+    gap: at(/^(gap|interval|behind)/i),
+    last: at(/last/i),
+    best: at(/best/i),
+    laps: at(/^laps?$/i),
+    trend: at(/trend/i),
+  };
+}
+function boardKeeps(roles, i) {
+  return i === 0 || i === roles.driver || i === roles.gap || i === roles.last;
+}
+function rowName(row, roles) {
+  if (row && typeof row.name === 'string' && row.name !== '') return row.name;
+  const c = row && Array.isArray(row.cells) && roles.driver >= 0 ? row.cells[roles.driver] : null;
+  return c && typeof c === 'object' ? String(c.text || '') : '';
+}
+function cellText(row, i) {
+  const c = row && Array.isArray(row.cells) && i >= 0 ? row.cells[i] : null;
+  return c && typeof c === 'object' ? String(c.text || '') : '';
+}
+// The row a tap opened (by driver), and whether every column is on show.
+let boardOpen = '';
+let boardAll = false;
+let boardState = null;
+
 function drawBoard(state) {
+  boardState = state;
   const columns = Array.isArray(state.columns) ? state.columns : [];
   const rows = Array.isArray(state.standings) ? state.standings : [];
-  const html = '<div class="card"><table><thead><tr>' +
-    columns.map((c, i) => '<th class="' + (i === 0 ? 'pos' : '') + (i === 0 || WORDY.test(c) ? '' : ' n') + '">' + esc(c) + '</th>').join('') +
+  const roles = boardRoles(columns);
+  const mine = typeof youName === 'function' ? youName() : '';
+  const hiding = columns.some((c, i) => !boardKeeps(roles, i));
+  const more = (r) => '<tr class="bmore"><td class="bmc" colspan="' + columns.length + '"><div class="bm">'
+    + columns.map((c, i) => boardKeeps(roles, i) ? '' : '<span><b>' + esc(cellText(r, i) || '-') + '</b><i>' + esc(c) + '</i></span>').join('')
+    + '</div></td></tr>';
+  const html = '<div class="card' + (boardAll ? ' all' : '') + '"><table><thead><tr>' +
+    columns.map((c, i) => '<th class="' + (i === 0 ? 'pos' : '') + (i === 0 || WORDY.test(c) ? '' : ' n') + (boardKeeps(roles, i) ? ' k' : '') + '">' + esc(c) + '</th>').join('') +
     '</tr></thead><tbody>' +
-    rows.map((r) => '<tr>' + cells(r, columns) + '</tr>').join('') +
+    rows.map((r) => {
+      const name = rowName(r, roles);
+      const open = name !== '' && name === boardOpen;
+      return '<tr data-row="' + esc(name) + '"' + (name !== '' && name === mine ? ' class="me"' : '') + (hiding ? ' aria-expanded="' + open + '"' : '') + '>'
+        + cells(r, columns, roles) + '</tr>' + (open && hiding ? more(r) : '');
+    }).join('') +
     '</tbody></table></div>' +
+    (hiding ? '<p class="ballc"><button type="button" class="linkish" data-all>' + (boardAll ? 'Fewer columns' : 'All columns') + '</button></p>' : '') +
     // WHAT THE * MEANS (7 Nov 2026, known issues): the laptop marks a lap
     // count that includes laps race control counted by hand ("12*"), and
     // says so with handCounted, so the board carries the same legend the
@@ -6187,6 +7023,132 @@ function drawBoard(state) {
   if (card) card.scrollLeft = left;
 }
 
+// YOUR CARD ON LIVE (14 Nov 2026, driver phone plan item 4). Above the
+// board, for the driver this phone follows - or, with nobody followed, the
+// driver signed in on Me: a big position, the gap to the car ahead and the
+// car behind with their names, a line spacing the three by their gaps, and
+// last, best, laps and trend. The flag card's one line about the followed
+// driver (closing, losing, what they need a lap) moved in here. "You" when
+// it is the driver signed in on this phone; "Following" for anybody else,
+// so being a driver and following one never look the same (item 2).
+const you = document.getElementById('you');
+let youSaid = '';
+let youSaidAt = 0;
+
+function youSignedIn() {
+  try {
+    const code = meCode();
+    const d = code ? meDrivers().find((x) => x.c === code) : null;
+    return d && d.n ? d.n : '';
+  } catch (e) { return ''; }
+}
+function youName() {
+  return memory || youSignedIn();
+}
+function youHide() {
+  if (!you) return;
+  try { document.body.classList.remove('has-you'); } catch (e) { /* no page */ }
+  you.hidden = true;
+  you.innerHTML = '';
+}
+// The gap from this car to the one ahead (or the next car to this one):
+// the board's own figure when it has one (row.ahead, an Interval column),
+// else worked out from the two cars' Gap to P1 - a club showing Gap to P1
+// still gets both gaps on the card. Laps (+1L) stay laps.
+function youGap(state, row, pos, aheadRow) {
+  const text = lbGapText(state, row, pos);
+  const secs = lbGapSecs(text);
+  if (text !== '' && (secs !== null || /L/i.test(text))) return { text: text, secs: secs };
+  const columns = Array.isArray(state.columns) ? state.columns : [];
+  const at = columns.findIndex((c) => /^gap/i.test(String(c)));
+  if (at < 0 || !aheadRow) return { text: text, secs: secs };
+  const mine = cellText(row, at);
+  const theirs = cellText(aheadRow, at);
+  if (/L/i.test(mine) && !/L/i.test(theirs)) return { text: mine, secs: null };
+  const m = lbGapSecs(mine);
+  const t = pos === 2 ? 0 : lbGapSecs(theirs);
+  if (m === null || t === null) return { text: text, secs: secs };
+  const d = Math.max(0, m - t);
+  return { text: '+' + d.toFixed(2), secs: d };
+}
+function drawYou(state, rows, stale) {
+  if (!you) return;
+  const who = youName();
+  const columns = Array.isArray(state.columns) ? state.columns : [];
+  const roles = boardRoles(columns);
+  const mine = who ? rows.filter((r) => rowName(r, roles) === who) : [];
+  if (mine.length !== 1) { youHide(); return; }
+  const row = mine[0];
+  const pos = rows.indexOf(row) + 1;
+  const ahead = pos > 1 ? rows[pos - 2] : null;
+  const behind = rows[pos] || null;
+  const gA = ahead ? youGap(state, row, pos, ahead) : null;
+  const gB = behind ? youGap(state, behind, pos + 1, row) : null;
+  const isYou = who === youSignedIn() && who !== '';
+  const gapWords = (g, tail) => !g ? '' : g.secs !== null ? g.secs.toFixed(2) + '<em>' + tail + '</em>' : esc(g.text.replace(/^\\+/, ''));
+  const line = (name, g, cls, arrow, tail, none) => '<div class="yg ' + cls + '"><span class="ar" aria-hidden="true">' + arrow + '</span>'
+    + '<span class="n">' + (name ? esc(name) : none) + '</span><span class="t">' + (g ? gapWords(g, tail) : esc(cls === 'ahead' ? 'Leading' : 'Last on road')) + '</span></div>';
+  // The three dots spaced by their gaps, on a scale of the bigger gap.
+  const a = gA && gA.secs !== null ? gA.secs : null;
+  const b = gB && gB.secs !== null ? gB.secs : null;
+  const scale = Math.max(a || 0, b || 0) * 1.2 || 1;
+  const mid = !ahead ? 12 : !behind ? 88 : 50;
+  const half = !ahead || !behind ? 76 : 44;
+  let dots = '<span class="ydot me" style="left:' + mid + '%"></span>';
+  if (ahead) { const x = mid - half * Math.min(1, a === null ? 1 : a / scale); dots += '<span class="ydot" style="left:' + x.toFixed(1) + '%"></span>'; }
+  if (behind) { const x = mid + half * Math.min(1, b === null ? 1 : b / scale); dots += '<span class="ydot" style="left:' + x.toFixed(1) + '%"></span>'; }
+  const stat = (i, label, cls) => '<div><b class="' + (cls || '') + '">' + esc(cellText(row, i) || '-') + '</b><span>' + label + '</span></div>';
+  const left = lbToGo(state.countdown);
+  const extra = state.state === 'Finished' ? '' : lbFollow(state, rows, left);
+  you.className = 'you' + (stale ? ' stale' : '');
+  you.innerHTML = '<div class="yw"><span class="chip' + (isYou ? '' : ' ghost') + '">' + (isYou ? 'You' : '\\u2606 Following') + '</span> <b>' + esc(who) + '</b></div>'
+    + '<div class="ym"><div class="yp">P' + pos + '<small>of ' + rows.length + '</small></div><div class="ygs">'
+    + line(ahead ? rowName(ahead, roles) : '', gA, 'ahead', '\\u25B2', 'to catch', 'Nobody ahead')
+    + line(behind ? rowName(behind, roles) : '', gB, 'behind', '\\u25BC', 'clear', 'Nobody behind')
+    + '</div></div>'
+    + '<div class="yl" aria-hidden="true">' + dots + '</div>'
+    + '<div class="ys">' + stat(roles.last, 'Last') + stat(roles.best, 'Best', 'best') + stat(roles.laps, 'Laps') + stat(roles.trend, 'Trend') + '</div>'
+    + (extra ? '<div class="yx">' + extra.replace(/^<div class="lp-me">|<\\/div>$/g, '') + '</div>' : '')
+    + '<p class="sr" aria-live="polite">' + esc(youSaid) + '</p>';
+  you.hidden = false;
+  // The Following chip says the same thing over the board: not while the card shows.
+  try { document.body.classList.add('has-you'); } catch (e) { /* no page */ }
+  // Said to a screen reader on a change, at most every ten seconds.
+  const words = (isYou ? 'You\\u2019re ' : who + ' is ') + ordinalWord(pos)
+    + (gA && gA.secs !== null && ahead ? ', ' + gA.secs.toFixed(2) + ' behind ' + rowName(ahead, roles) : pos === 1 ? ', leading' : '') + '.';
+  if (words !== youSaid && Date.now() - youSaidAt > 10000) {
+    youSaid = words;
+    youSaidAt = Date.now();
+    const sr = you.querySelector ? you.querySelector('.sr') : null;
+    if (sr) sr.textContent = words;
+  }
+}
+function ordinalWord(n) {
+  const words = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+  return words[n - 1] || ('P' + n);
+}
+
+// A tap on a row opens the rest of it (a name tapped follows, as everywhere);
+// All columns shows the club's whole table.
+if (board && typeof board.addEventListener === 'function') {
+  board.addEventListener('click', (e) => {
+    const t = e.target;
+    if (!t || typeof t.closest !== 'function' || t.closest('.nm')) return;
+    if (t.closest('[data-all]')) {
+      boardAll = !boardAll;
+      boardHtml = '';
+      if (boardState) drawBoard(boardState);
+      return;
+    }
+    const tr = t.closest('tr[data-row]');
+    if (!tr) return;
+    const name = tr.getAttribute('data-row') || '';
+    boardOpen = boardOpen === name ? '' : name;
+    boardHtml = '';
+    if (boardState) drawBoard(boardState);
+  });
+}
+
 // How long this page has been watching without a break, for settling Who
 // wins? picks (2026-11-05, Bug hunt 11). The relay holds only the newest
 // board, and a page hidden or closed reads nothing, so a phone locked from
@@ -6205,13 +7167,64 @@ function raceMsOf(row) {
   return laps.reduce((a, b) => a + b, 0);
 }
 
+// HOW OLD THE BOARD IS (14 Nov 2026, driver phone plan item 3). On 14 Nov
+// at 12:27 PM Live still said "Chequered flag - Race over - 7:14 PM" from
+// the night before: the relay keeps the last frame the laptop sent, and
+// nothing here looked at how old it was. Now every frame is judged by its
+// age, on the relay's clock:
+//  - a race running, staged or counting down with no update for two
+//    minutes: "Lost touch with the track", the board dimmed, never drawn
+//    as live (the trust-over-chatter rule, on the screen);
+//  - a race over, under twelve hours: as before, under "Race over", with
+//    the day once it isn't today;
+//  - a race over twelve hours or more (Asher's pick, 14 Nov 2026: "12
+//    hours after", the same twelve hours the phone keeps the last race):
+//    "Not racing", the last race's time, and its board folded away under
+//    "See the last race".
+// A copy shown because there is no signal and that was itself old says
+// "Last seen - no update since": the phone may be what lost touch.
+const LIVE_STATES = ['Staging', 'Countdown', 'Racing'];
+const LOST_MS = 120000;
+
+function ageOf(at) {
+  if (!(at > 0)) return NaN;
+  const now = relayClock();
+  return (now === null ? Date.now() : now) - at;
+}
+
 // at: when the laptop published this board. empty: what to say when there
-// is no board, and no last race to keep up either.
-function render(state, seen, at, empty) {
+// is no board, and no last race to keep up either. copy: drawn from this
+// phone's copy with no signal.
+function render(state, seen, at, empty, copy) {
   // A copy's laps are not news: only a fresh read is counted for speaking.
   if (!seen) lapTalk.take(state, at);
   const rows = Array.isArray(state.standings) ? state.standings : [];
   const running = String(state.state || 'Idle');
+  const age = ageOf(at);
+  if (board.classList) board.classList.toggle('stale', false);
+
+  if (rows.length > 0 && running === 'Finished' && age >= LB_KEEP_MS) {
+    youHide();
+    drawFolded(state, at);
+    return;
+  }
+  if (LIVE_STATES.includes(running) && age > LOST_MS) {
+    drawBar(state, false, at, rows, copy ? 'old' : 'lost');
+    if (!copy) hcCount('stale_live_shown');
+    liveMap.hide();
+    if (rows.length > 0) {
+      drawBoard(state);
+      drawYou(state, rows, true);
+      if (board.classList) board.classList.toggle('stale', true);
+      posChart.draw(rows);
+    } else {
+      youHide();
+      board.innerHTML = '<p class="note">No update from the track since ' + esc(whenSaid(at)) + '.</p>';
+      boardHtml = '';
+      posChart.hide();
+    }
+    return;
+  }
 
   if (rows.length === 0) {
     // THE NEXT RACE UNDER WAY (4 Nov 2026, Asher: "it didn't show the
@@ -6228,6 +7241,7 @@ function render(state, seen, at, empty) {
         ? 'Green flag. The board fills as the cars cross the line.'
         : 'The cars are lining up. The board fills once the race is under way.') + '</p>';
       boardHtml = '';
+      youHide();
       posChart.hide();
       // The track with nobody on it yet, once the green has gone.
       if (running === 'Racing') liveMap.take(state.map, [], posChart.colourOf); else liveMap.hide();
@@ -6240,9 +7254,11 @@ function render(state, seen, at, empty) {
     drawBar(state, !!kept, kept ? kept.at : 0, kept && Array.isArray(kept.state.standings) ? kept.state.standings : []);
     if (kept) {
       drawBoard(kept.state);
+      drawYou(kept.state, Array.isArray(kept.state.standings) ? kept.state.standings : [], false);
       posChart.draw(Array.isArray(kept.state.standings) ? kept.state.standings : []);
       return;
     }
+    youHide();
     board.innerHTML = '<p class="note">' + (empty || 'Nobody is on track. The board fills as soon as a session starts.') + '</p>';
     boardHtml = '';
     posChart.hide();
@@ -6256,8 +7272,29 @@ function render(state, seen, at, empty) {
   keepRace(state, at || Date.now());
   posChart.take(rows);
   drawBoard(state);
+  drawYou(state, rows, false);
   posChart.draw(rows);
   if (over) liveMap.hide(); else liveMap.take(state.map, rows, posChart.colourOf);
+}
+
+// Twelve hours after the last race (see HOW OLD THE BOARD IS): not racing,
+// when the last race was, and its board one tap away rather than on top.
+function drawFolded(state, at) {
+  bar.className = 'flagbar f-none';
+  const counting = nextStartWords(state.nextStart, nextStartNow(), nextStartAt);
+  const next = state.onDeck ? '<span class="ondeck">Next up: <b>' + esc(state.onDeck) + '</b></span>' : '';
+  bar.innerHTML = '<div class="lp-top"><span class="lp-id"><span class="kick"><i></i>Race control</span>'
+    + '<span class="state">Not racing</span></span></div>'
+    + '<div class="lp-foot"><span>' + (counting ? '<b id="nextin">' + esc(counting) + '</b> \\u00B7 ' : '')
+    + 'Last race: ' + esc(whenSaid(at)) + '</span>' + next + '</div>';
+  liveMap.hide();
+  posChart.hide();
+  const open = board.querySelector ? board.querySelector('details.lastrace') : null;
+  const wasOpen = !!(open && open.open);
+  drawBoard(state);
+  const inner = board.innerHTML;
+  board.innerHTML = '<details class="lastrace"' + (wasOpen ? ' open' : '') + '><summary>See the last race</summary>' + inner + '</details>';
+  boardHtml = '';
 }
 
 // Shows or hides the broadcast bug (see load).
@@ -6275,7 +7312,8 @@ async function load() {
   // or a 502 from the proxy during a deploy turned a running race into
   // Race over on every phone watching it.
   if (answer === null || (answer.missing && answer.status !== 404)) {
-    board.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
+    // Nothing on this phone to show instead (see NO SIGNAL): say so plainly.
+    board.innerHTML = '<p class="note bad">' + esc(offlineNote(0, answer === null ? 'net' : 'busy')) + '</p>';
     boardHtml = '';
     return;
   }
@@ -6297,7 +7335,7 @@ async function load() {
   const at = Date.parse(answer.body.publishedAt);
   nextStart = state.nextStart && typeof state.nextStart === 'object' ? state.nextStart : null;
   nextStartAt = isFinite(at) ? at : 0;
-  render(state, answer.seen === true, isFinite(at) ? at : 0);
+  render(state, answer.seen === true, isFinite(at) ? at : 0, undefined, answer.stale === true);
 
   // The broadcast bug in the corner (30 Oct 2026, relay branding) while a
   // race is staged, counting down or running - the same reading, and the
@@ -6322,6 +7360,11 @@ async function read() {
   reading = true;
   try { await load(); } finally { reading = false; }
 }
+
+// A race on, or Listen on: no "Updated - tap to reload" until it's over
+// (see THE PAGES AFTER A DEPLOY).
+window.hcBusy = () => document.body.classList.contains('on-air')
+  || (typeof window.hcListening === 'function' && window.hcListening() === true);
 
 readFirst(read);
 setInterval(() => {
@@ -6846,7 +7889,7 @@ const CAPTIONS_JS = `
     if (!on || mine !== turn) return;
 
     if (answer === null) {
-      note.textContent = 'Could not reach the relay. This will keep trying.';
+      note.textContent = 'Can’t reach the club’s live pages right now. This keeps trying.';
       return;
     }
 
@@ -6855,7 +7898,7 @@ const CAPTIONS_JS = `
     // what is on screen and tries again.
     if (answer.missing) {
       if (answer.status === 404) drawLines([]);
-      else note.textContent = 'The relay is busy. This will keep trying.';
+      else note.textContent = 'The club’s live pages are busy. This keeps trying.';
       return;
     }
 
@@ -7067,6 +8110,8 @@ export function livePage(club: string, clubName: string, context: PageContext = 
     // second set under Message the announcer said the same thing twice.
     // Without Listen it stays, as the only way to read them.
     body: '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
+      // Your card (driver phone plan item 4), filled by LIVE_JS.
+      + '<section id="you" class="you" aria-label="Your race" hidden></section>'
       + '<div id="board"></div>'
       + '<div id="livemap" class="card livepos" hidden><h3>Track map</h3><div id="lmapbody"></div></div>'
       + '<div id="livepos" class="card livepos" hidden><h3>Position by lap</h3><div id="lposbody"></div></div>'
@@ -7269,7 +8314,9 @@ const LISTEN_JS = `
       statsBox.textContent = [
         'in hand ' + inHand.toFixed(2) + ' s, cushion ' + streamAhead.toFixed(1) + ' s',
         'played ' + stats.played + ', late ' + stats.late + ', skipped numbers ' + stats.skipped,
-        'too far behind ' + stats.behind + ', rejoined ' + stats.rejoins + ', failed fetches ' + stats.failed,
+        'too far behind ' + stats.behind + ', rejoined ' + stats.rejoins + ', failed fetches ' + stats.failed
+          // Spoken lines dropped as more than 8 s late (14 Nov 2026, item 19).
+          + ', late lines dropped ' + (stats.lateDropped || 0),
         'arrived every ' + (stats.gapN === 0 ? '-' : (stats.gapSum / stats.gapN).toFixed(2) + ' s') +
           ', worst ' + (stats.gapN === 0 ? '-' : stats.gapWorst.toFixed(2) + ' s'),
         'fetch ' + ms(stats.fetchLast) + ' (worst ' + ms(stats.fetchWorst) + '), decode ' +
@@ -7351,15 +8398,34 @@ const LISTEN_JS = `
     }
   }
 
+  // NO SIGNAL WHILE LISTENING (14 Nov 2026, driver phone plan item 19): the
+  // page says the audio is held up, asks no more often than the rest of the
+  // page does (hcNet's backoff), and says so again once it is back.
+  let listenPaused = false;
+  function listenHeldUp() {
+    if (!listenPaused) { listenPaused = true; say('Audio paused - no signal. Trying again…'); }
+  }
+  function listenBack() {
+    if (listenPaused) { listenPaused = false; say('Back - listening.'); }
+  }
+
   async function sweepOnce() {
     const mine = turn;
 
+    if (typeof hcNet === 'object' && hcNet.since > 0 && Date.now() < hcNet.nextTry) {
+      listenHeldUp();
+      return;
+    }
+
     try {
-      const listing = await ask('/api/v1/c/' + CLUB + '/collection/listen?meta=1');
+      let listing;
+      try { listing = await ask('/api/v1/c/' + CLUB + '/collection/listen?meta=1'); } catch (e) { listenHeldUp(); return; }
 
       if (!listing.ok) {
         return;
       }
+
+      listenBack();
 
       const body = listing.body || {};
 
@@ -7448,6 +8514,22 @@ const LISTEN_JS = `
 
         if (typeof said.audio !== 'string' || said.audio.length === 0 || (joining && said.kind !== 'mix')) {
           continue;
+        }
+
+        // NEVER A RACE CALL LATE (14 Nov 2026, item 19): the trust-over-
+        // chatter rule on the phone. A line - a lap, a gap, a place - that
+        // would start more than eight seconds after the relay had it is
+        // dropped, not played late; the music and the bed (mix) are not.
+        // On the relay's own clock only (x-relay-now, read with the board):
+        // a phone's clock can be minutes out, and a line is never dropped
+        // on a guess.
+        const relayNowAt = typeof relayClock === 'function' ? relayClock() : null;
+        if (said.kind !== 'mix' && one.at > 0 && relayNowAt !== null) {
+          if (relayNowAt - one.at > 8000) {
+            stats.lateDropped = (stats.lateDropped || 0) + 1;
+            if (typeof hcCount === 'function') hcCount('listen_late_dropped');
+            continue;
+          }
         }
 
         chain = chain.then(() => play(said, mine)).catch(() => {});
@@ -7902,7 +8984,7 @@ async function load() {
   // Only a 404 is "nothing published" (6 Nov 2026): a busy or broken relay
   // said no standings had been published.
   if (answer === null || (answer.missing && answer.status !== 404)) {
-    table.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
+    table.innerHTML = '<p class="note bad">Can’t reach the club’s live pages right now. This page keeps trying.</p>';
     return;
   }
 
@@ -8667,6 +9749,8 @@ function nextNightHtml(answer) {
     (times ? '<span class="when">' + times + '</span>' : '') +
     (word(b.venue) ? '<span class="when">' + esc(word(b.venue)) + '</span>' : '') +
     (comingTo ? '<a class="page wide hp-go nn-go" href="' + esc(comingTo) + '">Coming? Put yourself down</a>' : '') +
+    // Into the phone's calendar (14 Nov 2026, driver phone plan item 10).
+    (word(b.day) && typeof CLUB === 'string' && CLUB ? '<a class="page wide hp-go nn-cal" href="/c/' + encodeURIComponent(CLUB) + '/nextnight.ics" download>Add to calendar</a>' : '') +
     '</div>';
 }
 
@@ -8681,6 +9765,28 @@ function nextNightComingHref() {
   return href + (href.indexOf('#') >= 0 ? '&' : '#') + 's=tonight&go=coming';
 }
 
+// RACING TONIGHT? (14 Nov 2026, driver phone plan item 22). Home's "New
+// here?" card explains the club; it didn't say what to do tonight. On a
+// race night, for a phone with no driver signed in, three steps lead off
+// Home: sign in, check in at the track, turn on alerts. Once a driver is
+// signed in the card goes - their own page has the rest.
+function drawRacingTonight(prog) {
+  const at = document.getElementById('rtw');
+  if (!at) return;
+  const p = prog && !prog.missing && prog.body ? prog.body.body || {} : null;
+  const ev = p && p.event ? p.event : null;
+  const tonight = !!(ev && ev.startedUtc && hcIsTonight(ev.startedUtc));
+  if (!tonight || meCode() !== '') { at.innerHTML = ''; return; }
+  const me = BASE + '/mynight';
+  at.innerHTML = '<section class="lc rtw"><h3>Racing tonight?</h3>'
+    + (ev.name ? '<p class="note">' + esc(ev.name) + ' is on today.</p>' : '')
+    + '<ol class="rtw-steps">'
+    + '<li><b>Sign in</b> with the PIN the club emailed you, or the link on your badge. <a class="more" href="' + me + '">Sign in &rarr;</a></li>'
+    + '<li><b>Check in</b> on your page once you\\u2019re at the track, so the desk puts you in the heats.</li>'
+    + '<li><b>Turn on alerts</b> on your page to hear when your race is next. On an iPhone, add this page to your Home Screen first.</li>'
+    + '</ol></section>';
+}
+
 async function load() {
   const [state, prog, pre, nn] = await Promise.all([
     grab('/snapshot/state').catch(() => null),
@@ -8693,9 +9799,10 @@ async function load() {
   // meeting is exactly who wants to know about the next one.
   const nnAt = document.getElementById('nn');
   if (nnAt) nnAt.innerHTML = nextNightHtml(nn);
+  drawRacingTonight(prog);
 
   if (state === null && prog === null) {
-    now.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
+    now.innerHTML = '<p class="note bad">Can’t reach the club’s live pages right now. This page keeps trying.</p>';
     return;
   }
 
@@ -9034,7 +10141,7 @@ export function homePage(club: string, clubName: string, context: PageContext = 
     clubName,
     active: "home",
     heading: "Home",
-    sub: look.tagline || "Live timing, the day's running order, results and more - straight from the club's timing laptop.",
+    sub: look.tagline || "Live timing, the day's running order, results and more - straight from the club's timing.",
     // "mine" is Your next race (29 Oct 2026, relay navigation round 3),
     // empty and hidden unless this phone remembers a driver (the "you"
     // strip beside it went on 6 Nov 2026). Then what is on now - or the club's
@@ -9055,6 +10162,10 @@ export function homePage(club: string, clubName: string, context: PageContext = 
       // The club's next race night, or that it is off (12 Nov 2026, setup
       // plan D13), right under the club's updates: filled by load().
       '<div id="nn"></div>' +
+      // Racing tonight? (14 Nov 2026, driver phone plan item 22): three steps
+      // for somebody who has just scanned the poster, filled in by HOME_JS.
+      // Above Your next race, which only a signed-in phone ever shows.
+      '<div id="rtw"></div>' +
       '<section class="lc" id="mine" hidden></section>' +
       `<div id="now" data-when="${escapeHtml(n.when)}"><p class="note">Loading&hellip;</p></div>` +
       // No "Check in: tap Me and type your PIN" line any more (5 Nov 2026,
@@ -9225,7 +10336,11 @@ function draw() {
   const q = find.value.trim().toLowerCase();
 
   if (lines.length === 0) {
-    board.innerHTML = '<p class="note">No running order has been published for today yet.</p>';
+    // "today" only when it is (item 3): an old race day had no order.
+    const ev = doc.event || {};
+    board.innerHTML = !ev.startedUtc || hcIsTonight(ev.startedUtc)
+      ? '<p class="note">No running order has been published for today yet.</p>'
+      : '<p class="note">No running order was published for that race day.</p>';
     return;
   }
 
@@ -9289,7 +10404,7 @@ async function load() {
   // 404 means "nothing published" - a 429/5xx is the relay being busy.
   if (answer === null || (answer.missing && answer.status !== 404)) {
     lastText = '';
-    board.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
+    board.innerHTML = '<p class="note bad">Can’t reach the club’s live pages right now. This page keeps trying.</p>';
     return;
   }
 
@@ -9311,8 +10426,10 @@ async function load() {
 
   const ev = doc.event || {};
   const facts = [ev.venue, ev.track ? 'Track: ' + ev.track : '', day(ev.startedUtc)].filter(Boolean);
+  // Today only when it is (item 3): a race day a week old is the last one.
+  const today = !ev.startedUtc || hcIsTonight(ev.startedUtc);
   head.innerHTML = ev.name
-    ? '<div class="hero"><span class="kicker">Today</span><span class="big">' + esc(ev.name) + '</span>' +
+    ? '<div class="hero"><span class="kicker">' + (today ? 'Today' : 'Last race day') + '</span><span class="big">' + esc(ev.name) + '</span>' +
       (facts.length ? '<span class="when">' + facts.map(esc).join(' &middot; ') + '</span>' : '') + '</div>'
     : '';
 
@@ -9636,7 +10753,7 @@ async function load() {
 
   // Only a 404 is "nothing earned yet" (6 Nov 2026), not a busy relay.
   if (answer === null || (answer.missing && answer.status !== 404)) {
-    recent.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
+    recent.innerHTML = '<p class="note bad">Can’t reach the club’s live pages right now. This page keeps trying.</p>';
     return;
   }
 
@@ -9705,7 +10822,7 @@ async function load() {
 
   // Only a 404 is "no tracks published" (6 Nov 2026), not a busy relay.
   if (answer === null || (answer.missing && answer.status !== 404)) {
-    list.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
+    list.innerHTML = '<p class="note bad">Can’t reach the club’s live pages right now. This page keeps trying.</p>';
     return;
   }
 
@@ -10227,7 +11344,7 @@ async function loadOne() {
   const answer = await api('one', { id: BADGE }).catch(() => null);
 
   if (answer === null) {
-    if (drivers.length === 0) box.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
+    if (drivers.length === 0) box.innerHTML = '<p class="note bad">Can’t reach the club’s live pages right now. This page keeps trying.</p>';
     return;
   }
 
@@ -10355,7 +11472,7 @@ async function loadList() {
   if (pin() !== p) return;
 
   if (answer === null) {
-    if (drivers.length === 0) box.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
+    if (drivers.length === 0) box.innerHTML = '<p class="note bad">Can’t reach the club’s live pages right now. This page keeps trying.</p>';
     return;
   }
 
@@ -10411,7 +11528,7 @@ function busy(answer) {
   // relay knows which.
   const why = (answer.body && answer.body.error) || (answer.status === 429
     ? 'Too many attempts from this connection. Wait a few minutes - this page will try again by itself.'
-    : 'The relay could not answer just now. This page will keep trying.');
+    : 'The club’s live pages didn’t answer just now. This page keeps trying.');
   if (drivers.length > 0) toast(why);
   else box.innerHTML = '<p class="note bad">' + esc(why) + '</p>';
 }
@@ -10554,7 +11671,7 @@ async function signIn(code) {
   box.innerHTML = '<p class="note">Checking your code&hellip;</p>';
   const answer = await api('signin', { pin: code, pass: held() }).catch(() => null);
 
-  if (answer === null) { drawCode('Could not reach the relay. Check your connection and try again.'); return; }
+  if (answer === null) { drawCode('Can’t reach the club’s live pages. Check your signal and try again.'); return; }
   if (answer.status === 409) { closedNote(); return; }
   if (answer.status !== 200) { drawCode(answer.body.error || 'That code is not right.'); return; }
 
@@ -10593,7 +11710,7 @@ async function refresh() {
   retrying = false;
 
   if (answer === null) {
-    if (!standing) { trouble('Could not reach the relay. This page will keep trying.'); retrying = true; }
+    if (!standing) { trouble('Can’t reach the club’s live pages right now. This page keeps trying.'); retrying = true; }
     return;
   }
 
@@ -10604,7 +11721,7 @@ async function refresh() {
   if (answer.status === 403) { hold(''); drawCode(answer.body.error || ''); return; }
 
   if (answer.status !== 200) {
-    if (!standing) { trouble(answer.body.error || 'The relay could not answer just now. This page will keep trying.'); retrying = true; }
+    if (!standing) { trouble(answer.body.error || 'The club’s live pages didn’t answer just now. This page keeps trying.'); retrying = true; }
     return;
   }
 
@@ -10712,7 +11829,7 @@ async function send() {
 
   if (answer === null) {
     button.disabled = false;
-    formError('Could not reach the relay. Check your connection and try again - nothing has been lost.');
+    formError('Can’t reach the club’s live pages. Check your signal and try again - nothing has been lost.');
     return;
   }
 
@@ -10723,7 +11840,7 @@ async function send() {
 
   if (answer.status !== 200) {
     button.disabled = false;
-    formError(answer.body.error || 'The relay could not take that just now. Try again in a moment.');
+    formError(answer.body.error || 'That didn’t go through just now. Try again in a moment.');
     return;
   }
 
@@ -10918,9 +12035,22 @@ function draw() {
     return;
   }
 
+  // Whether the night's own name already says its day ("Race Day 6 Nov
+  // 2026"): its day of the month and the month's first three letters.
+  function nightSaysItsDay(n) {
+    const d = n && typeof n.night === 'string' ? new Date(n.night + 'T12:00:00') : null;
+    const title = String((n && n.title) || '').toLowerCase();
+    if (!d || isNaN(d) || title === '') return false;
+    const month = d.toLocaleDateString('en-GB', { month: 'short' }).toLowerCase().slice(0, 3);
+    return new RegExp('(^|\\\\D)' + d.getDate() + '(\\\\D|$)').test(title) && title.indexOf(month) >= 0;
+  }
+
+  // The date once (14 Nov 2026, driver phone plan item 14): a night named
+  // "Race Day 6 Nov 2026" already says its day, so "Friday 6 November 2026"
+  // after it was the same thing twice.
   const head = [
     '<h2>' + esc(night.driver || 'Your night') + '</h2>',
-    '<div class="sub">' + esc([night.title, night.when].filter(Boolean).join(' · ')) + '</div>',
+    '<div class="sub">' + esc([night.title, nightSaysItsDay(night) ? '' : night.when].filter(Boolean).join(' · ')) + '</div>',
   ].join('');
 
   // A night of more than one car (22 Oct 2026, second transponder) draws
@@ -11445,7 +12575,7 @@ function pushOn() {
         if (!alertsOn) { try { await sub.unsubscribe(); } catch (e) { /* gone already */ } }
         return;
       }
-      const a = await post('/push/subscribe', { id: CODE, sub: sub.toJSON() });
+      const a = await post('/push/subscribe', { id: CODE, sub: sub.toJSON(), label: pushLabel(), kinds: alertKinds() });
       if (run !== pushRun) return;
       pushState = a.status === 200 ? 'on' : 'failed';
     } catch (e) {
@@ -11482,12 +12612,48 @@ async function pushResume() {
     const reg = await navigator.serviceWorker.getRegistration(workerUrl());
     const sub = reg ? await reg.pushManager.getSubscription() : null;
     if (!sub) { pushState = ''; return; }
-    const a = await post('/push/subscribe', { id: CODE, sub: sub.toJSON() });
+    const a = await post('/push/subscribe', { id: CODE, sub: sub.toJSON(), label: pushLabel(), kinds: alertKinds() });
     pushState = a.status === 200 ? 'on' : 'failed';
   } catch (e) {
     pushState = 'failed';
   }
   drawLive();
+}
+
+// WHICH ALERTS (14 Nov 2026, driver phone plan item 9): my races, marshal
+// duty, my results and club news, each on or off for this phone. Sent with
+// the sign-up; the relay sends only what is on. All on until changed.
+const ALERT_KINDS_KEY = 'hc-alert-kinds:' + CLUB;
+const ALERT_KIND_WORDS = [['race', 'My races (next, staged, 5 minutes)'], ['marshal', 'Marshal duty'], ['result', 'My results'], ['news', 'Club news (a night called off)']];
+function alertKinds() {
+  try {
+    const kept = JSON.parse(localStorage.getItem(ALERT_KINDS_KEY) || 'null');
+    if (Array.isArray(kept)) return kept.filter((k) => ALERT_KIND_WORDS.some((w) => w[0] === k));
+  } catch (e) { /* all on */ }
+  return ALERT_KIND_WORDS.map((w) => w[0]);
+}
+function alertKindsBox() {
+  const box = el('div', 'akinds');
+  box.setAttribute('role', 'group');
+  box.setAttribute('aria-label', 'Which alerts');
+  const on = alertKinds();
+  for (const [key, words] of ALERT_KIND_WORDS) {
+    const label = el('label', 'chk');
+    const tick = document.createElement('input');
+    tick.type = 'checkbox';
+    tick.checked = on.indexOf(key) >= 0;
+    tick.addEventListener('change', () => {
+      const now = alertKinds().filter((k) => k !== key);
+      if (tick.checked) now.push(key);
+      try { localStorage.setItem(ALERT_KINDS_KEY, JSON.stringify(now)); } catch (e) { /* this visit only */ }
+      // Told again with the new choice; the subscription itself is the same.
+      void pushResume();
+    });
+    label.appendChild(tick);
+    label.appendChild(el('span', '', words));
+    box.appendChild(label);
+  }
+  return box;
 }
 
 // What the card says under the switch.
@@ -12159,6 +13325,7 @@ async function loadCheckIn() {
   } else if (a.status === 200 && a.body.driver) {
     ci.shown = true;
     ci.on = a.body.driver.checkedIn === true;
+    ci.event = typeof a.body.event === 'string' ? a.body.event : '';
     if (a.body.firstNight === true) firstNight = true;
   }
 
@@ -12337,6 +13504,10 @@ function liveCard() {
   if (live) {
     card.appendChild(tapButton(alertsOn ? 'Alerts on - tap to turn off' : 'Turn on alerts', 'go quiet' + (alertsOn ? ' on' : ''), toggleAlerts));
     card.appendChild(el('div', 'when', alertsWords()));
+    // Inside Facebook's (or another app's) browser alerts can't work: say so (item 16).
+    const stuck = typeof inAppHelp === 'function' ? inAppHelp() : null;
+    if (stuck) card.appendChild(stuck);
+    if (alertsOn && pushState === 'on') card.appendChild(alertKindsBox());
 
     const m = live.marshal;
 
@@ -14704,7 +15875,7 @@ async function load() {
   // and tries again shortly. Safe to rerun: tuck() is idempotent and
   // startLive() has its own started guard.
   if (answer.status >= 500) {
-    nothing('The relay could not answer just now. This page will try again in a moment.');
+    nothing('The club’s live pages didn’t answer just now. This page tries again in a moment.');
     setTimeout(load, 15000);
     return;
   }
@@ -14755,7 +15926,8 @@ function meRemembered(code) {
   // Signed out of in this tab and come back to by Back or a reload: the
   // PIN again, never remembered again.
   if (meSignedOut(code)) { meToPin(); return; }
-  meRemember(code);
+  // With the name the night gives, so the phone can say who is on it (item 8).
+  meRemember(code, typeof night === 'object' && night && typeof night.driver === 'string' ? night.driver : '');
   if (meCode() !== code) return;
   meSignedInButton();
 }
@@ -14764,33 +15936,76 @@ function meRemembered(code) {
 // signed in button you should get a popup asking to confirming signing
 // out"). Top of Me, on every space, once this phone remembers the night it
 // is showing - the one way to sign out on Me since the foot's link went
-// (7 Nov 2026).
+// (7 Nov 2026). With more than one driver on the phone (14 Nov 2026, driver
+// phone plan item 8) it says whose page this is, and its sheet switches
+// between them, adds another, and signs one or all of them out.
 function meSignedInButton() {
   const at = document.getElementById('mesi');
   if (!at) return;
-  if (at.getAttribute('data-on') !== '1') {
-    const b = tapButton('Signed in', 'me-chip ok', meAskSignOut);
-    b.setAttribute('aria-label', 'Signed in on this phone. Tap to sign out.');
+  const many = meDrivers().length > 1;
+  const mine = meDrivers().find((d) => d.c === CODE);
+  const words = many && mine && mine.n ? meFirstName(mine.n) + ' \\u25BE' : 'Signed in';
+  let b = at.querySelector('button');
+  if (!b) {
+    b = tapButton(words, 'me-chip ok', meAskSignOut);
     at.appendChild(b);
     at.setAttribute('data-on', '1');
+  } else if (b.textContent !== words) {
+    b.textContent = words;
   }
+  b.setAttribute('aria-label', many ? 'Signed in as ' + (mine && mine.n ? mine.n : 'this driver') + '. Tap to switch driver or sign out.' : 'Signed in on this phone. Tap to sign out.');
   at.hidden = false;
+}
+
+// Whose alerts these are, for a phone with more than one driver on it
+// (item 8): their first name goes before each alert's title. Nothing for
+// a phone with one, whose alerts read as they always did.
+function pushLabel() {
+  if (meDrivers().length < 2) return undefined;
+  const name = meFirstName(typeof night === 'object' && night && night.driver);
+  return name === '' ? undefined : name;
+}
+
+// Opens another driver's page on this phone: they become the one shown.
+function meSwitchTo(code) {
+  meRemember(code);
+  const to = '/c/' + encodeURIComponent(CLUB) + '/night#d=' + code;
+  try { location.replace(to); } catch (e) { location.href = to; }
 }
 
 function meAskSignOut() {
   const code = CODE;
-  const out = () => { meSignOut(code); meToPin(); };
-  const words = 'This phone forgets you: your night, your PIN sign-in and everything Me kept here. '
-    + 'To open Me again on this phone, a personal PIN is needed.';
+  const list = meDrivers();
+  const others = list.filter((d) => d.c !== code);
+  const mine = list.find((d) => d.c === code);
+  const name = mine && mine.n ? meFirstName(mine.n) : '';
+  // Signed out with another driver still on the phone: their page, not the PIN.
+  const after = (next) => { if (next) meSwitchTo(next); else meToPin(); };
+  const out = () => after(meSignOut(code));
+  const words = 'This phone forgets ' + (name || 'you') + ': ' + (name ? 'their' : 'your') + ' night, PIN sign-in and everything Me kept here. '
+    + 'To open ' + (name ? 'their' : 'your') + ' page again on this phone, a personal PIN is needed.';
   if (!document.getElementById('me-sheet') || typeof meOpenSheet !== 'function') {
     let yes = false;
     try { yes = window.confirm('Sign out on this phone? ' + words); } catch (e) { yes = false; }
     if (yes) out();
     return;
   }
-  meOpenSheet('Sign out on this phone?', (body) => {
+  meOpenSheet(others.length > 0 ? 'On this phone' : 'Sign out on this phone?', (body) => {
+    if (others.length > 0) {
+      for (const d of others) {
+        body.appendChild(tapButton('Switch to ' + (d.n || 'another driver'), 'go quiet', () => meSwitchTo(d.c)));
+      }
+    }
+    if (list.length < ME_MAX) {
+      const add = el('a', 'more', '+ Add a driver to this phone');
+      add.setAttribute('href', '/c/' + encodeURIComponent(CLUB) + '/mynight?add=1');
+      body.appendChild(add);
+    }
     body.appendChild(el('p', 'note', words));
-    body.appendChild(tapButton('Sign out', 'go', out));
+    body.appendChild(tapButton(others.length > 0 && name ? 'Sign out ' + name : 'Sign out', 'go', out));
+    if (others.length > 0) {
+      body.appendChild(tapButton('Sign out everyone on this phone', 'go quiet', () => { meSignOutAll(); meToPin(); }));
+    }
     body.appendChild(tapButton('Stay signed in', 'go quiet', meCloseSheet));
   }, true);
 }
@@ -14906,7 +16121,10 @@ const NIGHT_PASS_KEY = 'hg-night-pass-' + CLUB;
 
 // A driver this phone remembers goes straight to their night (29 Oct 2026,
 // relay navigation round 2). replace, so Back does not land here again.
-const REMEMBERED = meCode();
+// Not when another driver is being added to this phone (?add=1, 14 Nov
+// 2026, driver phone plan item 8): the PIN box, for them.
+const ADDING = /[?&]add=1(&|$)/.test(location.search);
+const REMEMBERED = ADDING ? '' : meCode();
 if (REMEMBERED) {
   const there = '/c/' + encodeURIComponent(CLUB) + '/night#d=' + REMEMBERED;
   try { location.replace(there); } catch (e) { location.href = there; }
@@ -14947,15 +16165,75 @@ function trouble(a) {
   const said = typeof b.error === 'string' && b.error.trim() !== '' ? b.error.trim() : '';
   if (a.status === 200 && b.mode === 'staff') return "That is the club's desk PIN, not your own. Use the personal PIN the club sent you.";
   if (a.status === 403) return said || 'That PIN is not right.';
-  if (a.status === 409) return 'Signing in with your PIN only works while the club has online check-in open. Use the link on your check-in badge or in the club\\'s email, or ask at the desk.';
+  if (a.status === 409) return 'Signing in with your PIN is switched off at this club just now. Use the link on your check-in badge or in the club\\'s email, or ask at the desk.';
   if (a.status === 429) return said || 'Too many tries. Wait a few minutes and try again.';
   return 'The club could not answer just now. Try again in a minute.';
+}
+
+// EMAIL ME A LINK (14 Nov 2026, driver phone plan item 17), only where the
+// club has turned it on: the laptop emails the driver their own page's
+// link if the address is one of its drivers'. The same answer either way.
+function emailLinkBox() {
+  const d = document.createElement('details');
+  d.className = 'mn-mail';
+  const s = document.createElement('summary');
+  s.textContent = 'Email me a link to my page';
+  d.appendChild(s);
+  const label = el('label', 'f', 'The email the club has for you');
+  const input = document.createElement('input');
+  input.type = 'email';
+  input.setAttribute('autocomplete', 'email');
+  input.setAttribute('inputmode', 'email');
+  input.setAttribute('maxlength', '254');
+  label.appendChild(input);
+  d.appendChild(label);
+  const said = el('p', 'note', '');
+  said.setAttribute('role', 'status');
+  const send = el('button', 'go quiet', 'Email me the link');
+  send.type = 'button';
+  send.addEventListener('click', async () => {
+    const email = String(input.value || '').trim();
+    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) { said.textContent = 'That doesn\\u2019t look like an email address.'; return; }
+    send.disabled = true;
+    said.textContent = 'Sending\\u2026';
+    let a = null;
+    try {
+      const r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/signin/email', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: email }), cache: 'no-store',
+      });
+      let b = {};
+      try { b = await r.json(); } catch (e) { /* empty */ }
+      a = { status: r.status, body: b || {} };
+    } catch (e) { a = null; }
+    send.disabled = false;
+    if (a !== null && a.status === 200) { said.textContent = String(a.body.message || 'If that address is on the club\\u2019s list, a link is on its way.'); input.value = ''; return; }
+    if (a !== null && a.status === 429) { said.textContent = 'That\\u2019s a few asks already. Try again in an hour, or ask at the desk.'; return; }
+    if (a !== null && a.status === 400) { said.textContent = 'That doesn\\u2019t look like an email address.'; return; }
+    if (a !== null && a.status === 404) { said.textContent = 'The club isn\\u2019t sending links just now. Ask at the desk.'; return; }
+    said.textContent = 'That didn\\u2019t go through just now. Try again in a moment.';
+  });
+  d.appendChild(send);
+  d.appendChild(said);
+  return d;
 }
 
 function draw(message) {
   box.textContent = '';
   const part = el('div', 'su');
-  part.appendChild(el('p', 'when', 'Type the personal check-in PIN the club emailed you. It checks you in for tonight and opens your own night: your races, your report card and, once you are racing, your live card.'));
+  // Inside Facebook's (or another app's) browser this phone may not keep a
+  // sign-in at all (item 16): say so first, with the way out.
+  const stuck = typeof inAppHelp === 'function' ? inAppHelp() : null;
+  if (stuck) part.appendChild(stuck);
+  // A phone that forgot its driver by itself (item 17): say so, and how back.
+  if (!ADDING && typeof meForgotten === 'function' && meForgotten()) {
+    if (typeof hcCount === 'function') hcCount('storage_forgot');
+    part.appendChild(el('p', 'note bad', 'This phone forgot you - browsers clear what a page keeps after a while. Sign in again with your PIN'
+      + (document.body.dataset.emailLink === '1' ? ', or have a link emailed to you below.' : ', or use the link on your badge.')
+      + ' Adding the club\\u2019s page to your Home Screen keeps you signed in.'));
+  }
+  part.appendChild(el('p', 'when', ADDING
+    ? 'Adding another driver to this phone: type their personal PIN. You can switch between drivers from Signed in at the top of Me.'
+    : 'Type the PIN the club emailed you to open your own page on this phone: your races, your report card and, once you are racing, your live card. It doesn\\u2019t check you in - you do that on your page when you\\u2019re at the track.'));
 
   const label = el('label', 'f', 'Your personal PIN');
   const input = document.createElement('input');
@@ -14970,7 +16248,7 @@ function draw(message) {
   const said = el('p', 'note bad', message || '');
   said.setAttribute('role', 'status');
 
-  const button = el('button', 'go', 'Check in');
+  const button = el('button', 'go', 'Sign in');
   button.type = 'button';
   button.addEventListener('click', async () => {
     const p = String(input.value || '').trim();
@@ -14997,22 +16275,12 @@ function draw(message) {
       // Signed in again with the PIN: an earlier sign-out here is over.
       try { sessionStorage.removeItem(ME_OUT_KEY); } catch (e) { /* the badge link clears it too */ }
 
-      // A RIGHT PIN CHECKS THEM IN (30 Oct 2026, asked for by Asher: "On
-      // the relays me tab; entering in a correct pin should check you in.
-      // No need to link to the separate checking page"). PIN sign-in only
-      // answers while online check-in is open, so the same tap the check-in
-      // page makes goes with the pass the PIN just earned. A driver already
-      // checked in is left as they are. A tap that does not go through
-      // still opens their night, whose own Check in button can try again.
-      said.textContent = 'Checking you in\u2026';
-      let inNow = b.driver.checkedIn === true;
-      if (!inNow) {
-        let t = null;
-        try { t = await post('tap', { id: code, pass: pass, wanted: true }); } catch (e) { t = null; }
-        inNow = t !== null && t.status === 200 && t.body.checkedIn === true;
-      }
-
-      said.textContent = inNow ? 'You are checked in. Opening your night\u2026' : 'Opening your night\u2026';
+      // SIGNING IN, NOT CHECKING IN (14 Nov 2026, driver phone plan item
+      // 2, replacing 30 Oct's "a correct pin should check you in"). Looking
+      // at your own page on a Tuesday, from home, or on a night you're not
+      // racing should never put you in the heats. Check-in is its own
+      // button on the night, which asks "Are you at the track?" first.
+      said.textContent = 'Signed in. Opening your page\u2026';
       go('/c/' + encodeURIComponent(CLUB) + '/night#d=' + code);
       return;
     }
@@ -15023,6 +16291,10 @@ function draw(message) {
   part.appendChild(button);
   part.appendChild(said);
   part.appendChild(el('p', 'when', 'No personal PIN? Open your night with the link on your check-in badge or in the club\\'s email - or ask at the timing desk.'));
+  if (document.body.dataset.emailLink === '1') part.appendChild(emailLinkBox());
+  // The phone's other clubs (item 5).
+  const clubs = typeof hcOtherClubs === 'function' ? hcOtherClubs() : null;
+  if (clubs) part.appendChild(clubs);
   part.appendChild(el('p', 'when', 'This phone remembers you once your night opens, until you sign out at the bottom of it.'));
   box.appendChild(part);
 }
@@ -15037,9 +16309,10 @@ export function myNightPage(club: string, clubName: string, context: PageContext
     clubName,
     active: "mynight",
     heading: "My night",
-    sub: "Check in and see your own races from the timing desk - with your personal PIN.",
-    // No link to the check-in page (30 Oct 2026, asked for by Asher): a
-    // right PIN here checks the driver in itself.
+    sub: "See your own races from the timing desk - with your personal PIN.",
+    // No link to the check-in page (30 Oct 2026, asked for by Asher). Since
+    // 14 Nov 2026 a right PIN here signs the driver in only; checking in is
+    // the button on their night (driver phone plan item 2).
     body: '<div id="mn"><p class="note">Loading&hellip;</p></div>',
     script: MYNIGHT_JS,
     noindex: true,
@@ -16080,7 +17353,7 @@ export function managePage(club: string, clubName: string, context: PageContext 
     : `<style>:root{${variables.map(([k, v]) => `${k}:${v}`).join(";")}}</style>`;
 
   return `<!doctype html>
-<html lang="en" class="${look.light ? "light" : "dark"}"${clockAttr(look.clock24)}>
+<html lang="en" class="${look.light ? "light" : "dark"}"${clockAttr(look.clock24)}${tzAttr(look.timeZone)}>
 <head>
 <meta charset="utf-8">
 ${NO_ZOOM_HEAD}
@@ -16380,7 +17653,7 @@ export function appShellPage(club: string, clubName: string, context: PageContex
     : `<style>:root{${variables.map(([k, v]) => `${k}:${v}`).join(";")}}</style>`;
 
   return `<!doctype html>
-<html lang="en" class="hcshell ${look.light ? "light" : "dark"}"${clockAttr(look.clock24)}>
+<html lang="en" class="hcshell ${look.light ? "light" : "dark"}"${clockAttr(look.clock24)}${tzAttr(look.timeZone)}>
 <head>
 <meta charset="utf-8">
 ${NO_ZOOM_HEAD}
@@ -16427,11 +17700,20 @@ export function manifest(club: string, clubName: string, look: Look): string {
 
   return JSON.stringify({
     name: clubName,
-    short_name: clubName.length > 12 ? clubName.slice(0, 12).trim() : clubName,
+    // The name under the icon (14 Nov 2026, driver phone plan item 5): the
+    // club's own when it set one - every club's icon is the same sun, so
+    // this is what tells two clubs apart on a home screen.
+    short_name: look.shortName ?? (clubName.length > 12 ? clubName.slice(0, 12).trim() : clubName),
     description: look.tagline || `${clubName}: live timing, schedule, results and standings.`,
-    start_url: base,
-    // Not "base/": start_url has to sit inside the scope, and "/c/x" is
-    // not inside "/c/x/" - a browser would refuse to install it at all.
+    // The app's identity, which is what start_url used to be, so an app
+    // already on a home screen stays the same app (14 Nov 2026).
+    id: base,
+    // base/ since 14 Nov 2026 (driver phone plan item 1): that is inside
+    // the service worker's scope (/c/x/), so the installed app opens with
+    // no signal. It is still inside the app's scope below.
+    start_url: `${base}/`,
+    // Not "base/": the app's scope still takes in "/c/x" itself, which
+    // older links and alerts open.
     scope: base,
     display: "standalone",
     // Portrait only (7 Nov 2026, Asher: "disable landscape mode web app
@@ -16446,7 +17728,20 @@ export function manifest(club: string, clubName: string, look: Look): string {
     // refuse to install. Versioned like the pages' links (see
     // Look.iconVersion): an installed app picks up a redrawn icon instead
     // of keeping the old one.
-    icons: [{ src: `${base}/icon.png?v=${look.iconVersion}`, sizes: `${SUN_ICON_SIZE}x${SUN_ICON_SIZE}`, type: "image/png", purpose: "any" }],
+    // Maskable too (14 Nov 2026, driver phone plan item 11): Android cuts
+    // an icon to its own shape, and without "maskable" it drew the sun in a
+    // white circle. The sun sits well inside the safe middle 80%.
+    icons: [
+      { src: `${base}/icon.png?v=${look.iconVersion}`, sizes: `${SUN_ICON_SIZE}x${SUN_ICON_SIZE}`, type: "image/png", purpose: "any" },
+      { src: `${base}/icon.png?v=${look.iconVersion}`, sizes: `${SUN_ICON_SIZE}x${SUN_ICON_SIZE}`, type: "image/png", purpose: "maskable" },
+    ],
+    categories: ["sports"],
+    // A long press on the icon (item 11).
+    shortcuts: [
+      { name: "Live", url: `${base}/live` },
+      { name: "My night", url: `${base}/mynight` },
+      { name: "Results", url: `${base}/results` },
+    ],
   });
 }
 

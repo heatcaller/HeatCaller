@@ -10,7 +10,8 @@ describe("Me: the entry fee and the setup tile (12 Nov 2026)", () => {
   });
 
   it("draws it with the moment card, and no longer only on the Check in card", () => {
-    assert.match(ME_JS, /function meMoment\(\) \{\s*meFee\(\);/);
+    // The Tonight tab's words first (14 Nov 2026), then the fee, as before.
+    assert.match(ME_JS, /function meMoment\(\) \{\s*meTonightLabel\(\);\s*meFee\(\);/);
     assert.ok(!ME_JS.includes("hero.appendChild(el('div', 'me-fee'"));
   });
 

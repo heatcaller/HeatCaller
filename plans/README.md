@@ -8,3 +8,5 @@ Design plans kept with the code. The working copies also live in the HeatCaller 
 - [track-designer-next-plan.md](track-designer-next-plan.md): the round after the overhaul (Phases A to G), from 25 Oct 2026; Phase C done with railed tiles, the rest not started.
 - [track-designer-railed-tiles-plan.md](track-designer-railed-tiles-plan.md): laying each tile with its rails already on, as one piece (Phases 1 to 5), from 7 Nov 2026; all five phases built (13 Nov 2026).
 - [decoder-support-plan.md](decoder-support-plan.md): decoders added without buying one (P3, ZRound, Cano, OpenStint, serial EasyLap), from 27 Oct 2026, with status.
+- [driver-phone-ux-plan.md](driver-phone-ux-plan.md): drivers on their phones through the relay: 24 items (13 removed), build steps 0 and A to H, from 14 Nov 2026; not started.
+- [race-video-access-plan.md](race-video-access-plan.md): how a driver gets from the relay pages to their race on YouTube (V1 to V9, with a look-back), from 14 Nov 2026; plan only, video on hold.

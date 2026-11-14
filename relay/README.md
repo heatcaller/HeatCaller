@@ -269,7 +269,8 @@ finished last.
 /c/:club/results/:sessionId/card.png
                              the drawn 1200x630 picture that goes with that link
 /c/:club/manifest.webmanifest   makes "Add to Home Screen" install the pages as an app
-/c/:club/sw.js               the club's service worker: shows push alerts, caches nothing
+/c/:club/sw.js               the club's service worker: shows push alerts, and keeps the club's
+                             pages for a phone with no signal (see "No signal" below)
 /c/:club/icon.png            HeatCaller's sun, the same for every club (src/sun.ts)
 /c/:club/logo.png            the club's logo (404 if it has none)
 ```
@@ -1255,6 +1256,195 @@ for each alert accepted (`[push] "club": hc-race accepted for 2 phones`)
 and each refused, with the push service's reason. iPhones only take alerts
 from the club's pages added to the Home Screen.
 
+### No signal, and the pages after a deploy (14 Nov 2026)
+
+Driver phone plan items 1, 3, 14 and 21 (`plans/driver-phone-ux-plan.md`).
+
+- **The worker keeps the club's pages.** `/c/:club/sw.js` is served to every
+  club, whether or not this relay sends alerts. For Home, Live, Schedule,
+  Results and its tabs, Tracks, Me, check-in and the one-bar app it goes to
+  the network first, and falls back to the copy from the last visit when the
+  network fails or takes over 3 seconds. The versioned icon and logo come
+  from the cache. It never keeps a driver's night or garage, sign-up,
+  Manage, anything under `/api/`, anything but a GET, or another club's
+  address. Its cache is named after the build, so a deploy throws the old
+  pages away. The Home tab and the manifest's `start_url` are `/c/:club/`
+  (inside the worker's scope); the manifest's `id` is `/c/:club`, so an app
+  already on a home screen stays the same app.
+- **The pages keep their last answer.** Each snapshot read is kept in the
+  phone's own storage (up to 12 hours, 300 KB each). With no signal a page
+  draws that copy, dimmed, under one strip: "No signal. Showing what we had
+  at 7:14 PM (40 s ago). Trying again…". It retries after 2, 4 and 8 seconds,
+  then every 15, and at once when the phone is back online or the page is
+  looked at again. A busy relay (5xx) is drawn from the copy too, but asked
+  again on the next redraw as before.
+- **Live judges each board by its age.** A race running with no update for
+  2 minutes says "Lost touch with the track" with the board dimmed (a copy
+  shown with no signal says "Last seen" instead: the phone may be what lost
+  touch). A race over keeps its board under "Race over" for 12 hours, with
+  the day once it isn't today, then folds behind "See the last race".
+  Schedule says "Last race day" for an old one, and a driver's night names
+  its day instead of "Tonight".
+- **Check-in is for tonight.** Check-in itself (the check-in page, a tap,
+  the Me tab's check-in) counts as closed once the laptop's check-in
+  document is more than 24 hours old. A driver's garage and requests still
+  go by the club's switch alone.
+- **The build.** Every page carries `data-build` and every snapshot answer
+  `x-hc-build` (`src/pagebuild.ts`, a hash of the compiled page files). When
+  they differ the page offers "Updated – tap to reload", never while a race
+  is running or Listen is on.
+- **Plain words.** Driver pages never say "relay" or "laptop"
+  (`test/driver-phone-a.test.ts` checks every driver page).
+
+### Live on a phone, and Back (14 Nov 2026)
+
+Driver phone plan items 4 and 18 (mockup: `mockups/live-phone-board.html`).
+
+- **Four columns on a phone.** Under 480 px the board keeps position,
+  driver, the club's own gap column and last lap, read from the club's
+  headings. A tap on a row opens the rest of it in place; "All columns"
+  brings back the whole table. The driver's own row sticks to the edge it is
+  scrolling off (below the status bar, above the tab bar).
+- **Your card.** Above the board, for the followed driver, or with nobody
+  followed the one signed in on Me: a big position, the gap to the car ahead
+  and behind with names (worked out from Gap to P1 when the board has no gap
+  to the car ahead), last, best, laps and trend, and the line that used to
+  sit on the flag card (closing, losing, what they need a lap). "You" for
+  the driver signed in, "Following" for anybody else.
+- **Back.** In the home-screen app each tab is a step in the phone's
+  history, so Android's Back walks back through the tabs to Home and only
+  then leaves.
+
+### Short addresses, the icon, your other clubs (14 Nov 2026)
+
+Driver phone plan items 5 and 11.
+
+- **A club's short address.** The site document may carry `alias` (lower
+  case, digits and hyphens, 3–32), set on Club Website. `/c/<alias>` and
+  anything under it answers `302` to the club's own address, path and query
+  kept. An alias that is another club's id is ignored, and when two clubs
+  claim one the first in the config keeps it. Looked up once a minute.
+- **The name under the icon.** `shortName` (up to 12 characters) is the
+  manifest's `short_name`; without it, the club's name cut to 12. The icon
+  is the sun for every club, so this is what tells clubs apart.
+- **Your other clubs.** Each club's pages note themselves in the phone's
+  `hc-clubs` list (id and name only); Me links to the others.
+- **The manifest** marks the icon `maskable` as well as `any` (the sun sits
+  inside the safe middle), and has long-press `shortcuts` to Live, My night
+  and Results. Still portrait only.
+
+### The club's time zone, and the calendar (14 Nov 2026)
+
+Driver phone plan items 15 and 10.
+
+- **Times in the club's zone.** The laptop sends `timeZone` (the PC's own,
+  as an IANA name) on the site document; every page carries it as
+  `data-tz` on `<html>`, and every date and time a page draws is in that
+  zone unless the page asked for one itself (one hook in `src/clock.ts`).
+  "Today" and "tonight" go by the club's day, and a time says its zone
+  ("7:14 PM EST") when the phone is somewhere else. No zone sent (an older
+  laptop), or one the phone doesn't know: the phone's own, as before.
+- **Add to calendar.** `GET /c/:club/nextnight.ics` (`src/ics.ts`): the next
+  race night from the `nextnight` document - the club's name, venue and
+  classes, the first race's time in the club's zone (all day with no time),
+  four hours long, a reminder two hours before. A night called off is the
+  same event marked cancelled. `404` with no night to offer. Home's next
+  race night card has the button.
+
+### Zoom, text size, high contrast, social links (14 Nov 2026)
+
+Driver phone plan items 6, 12 and 23.
+
+- **Pinch-zoom is back** (it was off from 6 to 14 Nov). What the no-zoom
+  rule guarded against is fixed where it was: a text box or picker under
+  16 px is bumped to 16 px before it takes focus (no jump-zoom on a tap),
+  buttons, tabs and board rows are `touch-action: manipulation` (no
+  double-tap zoom), and "Fit to screen" appears after three seconds zoomed
+  in.
+- **Text size and High contrast**, in every footer, kept per phone
+  (`hg-textsize`, `hg-contrast`; they survive a sign-out). Text is 100, 115
+  or 130%. High contrast is white on black, or black on white for bright
+  sun (a second tap), on any club's look, every pair at least 4.5:1 and text
+  7:1 (`test/driver-phone-e.test.ts` checks). It follows the phone's own
+  Increase Contrast until chosen here.
+- **Social links once, where they say.** A link whose address isn't its
+  service's own (an "Instagram" link to Facebook) is dropped, and an address
+  already shown is shown once.
+
+### Install, alerts by kind, other apps' browsers (14 Nov 2026)
+
+Driver phone plan items 7, 9 and 16.
+
+- **Onto the Home Screen.** From a phone's second visit, one card: the
+  browser's own prompt on Android, the three steps in Safari on an iPhone
+  (where alerts only work from the Home Screen). Never on the first visit,
+  once installed, in another app's browser, or while a race is on. "Not now"
+  is 14 days, "Don't ask again" for good.
+- **Alerts by kind.** `push/subscribe` may carry `kinds`, any of `race`,
+  `marshal`, `result` and `news`; none said is all of them. The relay sends
+  each phone only what it chose (switches under Alerts on the night page).
+  A result alert opens that race's result (`/c/:club/results/<sid>`); an
+  alert with no page of its own opens the club's Home, not the relay's.
+  Every alert's address gets `?from=alert-<kind>`, which the page counts
+  and takes off again.
+- **Another app's browser.** Inside Facebook's, Instagram's or another
+  app's browser (where storage can be wiped and alerts can't work), Me and
+  the Alerts card say so, with the way out and "Copy link".
+
+### Who you are on Me (14 Nov 2026)
+
+Driver phone plan items 2, 8, 17 and 22.
+
+- **Signing in is not checking in.** `checkin/list` with a racer's PIN
+  (Me's sign-in) answers on any day the club has online check-in switched
+  on, and says `tonight: true|false`. Only `checkin/one` (the night's Check
+  in card) and `checkin/tap` are for tonight alone (the check-in document
+  under 24 hours old). Me's PIN box signs in and opens the night; it never
+  taps. The night's Check in card asks "Are you at the track for … tonight?"
+  before it taps.
+- **Several drivers on one phone.** `hg-me-<club>` is still the driver
+  shown; `hg-me-list-<club>` holds up to five codes with the names their
+  nights gave. Signed in's sheet switches between them, adds one
+  (`/mynight?add=1`), and signs one or all of them out. On a phone with more
+  than one, `push/subscribe` carries `label` (a first name, 1–20 letters),
+  kept with that phone's sign-up and put before each alert's title ("Ella:
+  Your race is next").
+- **Staying signed in.** After a sign-in the page asks the browser to keep
+  its storage (`navigator.storage.persist()`) and keeps `hg-me-was-<club>`;
+  Me says "This phone forgot you" when that is there and the code isn't.
+  Signing out takes both, and the pages' no-signal copies.
+- **Racing tonight?** On a race night (the programme's event is today), a
+  phone with nobody signed in gets three steps at the top of Home.
+
+```
+POST /api/v1/c/:club/signin/email        {email}  -> {ok, message}   the same answer for any address
+GET  /api/v1/c/:club/signin/email/inbox  token; -> {items: [{n, email, at}]}
+POST /api/v1/c/:club/signin/email/ack    token; {upTo}
+```
+
+"Email me a link to my page" (`src/signinmail.ts`), only where the laptop's
+check-in document says `emailLink: true` (Club Website > Online check-in >
+"Let drivers email themselves a link", off by default, and only with the
+club's mail set up); `404` otherwise. The relay never knows whether an
+address is a driver's: it queues it (30 minutes at most, 50 at once, three
+an hour per address and per connection), and the laptop emails the one
+driver with that address their own night's link.
+
+### Page counts (public; reading them needs a token)
+
+```
+POST /api/v1/c/:club/count    {events: [name, ...]}  -> 204
+GET  /api/v1/c/:club/counts   token; -> {days: {"2026-11-14": {offline_shown: 3}}, last7, last30}
+```
+
+Anonymous counts per club per day of a fixed list of events
+(`PAGE_COUNT_EVENTS` in `src/pagecounts.ts`). No badge, driver, phone, page
+address or IP is kept, and names not on the list are dropped. A page sends
+at most one of each per load, once a minute and when it is hidden. One
+address may send a club 120 reports in five minutes. Kept 90 days in
+`pagecounts`, never served to the public. Nothing shows them yet: they are
+read with the club's token.
+
 ### Sponsor counts (public; reading them needs a token)
 
 ```
@@ -1683,8 +1873,11 @@ src/pinguard.ts  the club-wide wrong-PIN count and its escalating lockout, kept 
                  one instance guards check-in's PIN, a second and independent one the
                  manager's
 src/pages.ts     every public page, the manifest
+src/pagebuild.ts the fingerprint of this build of the pages (data-build, x-hc-build)
+src/pagecounts.ts the anonymous page counts: the events a page may count, kept by day
 src/push.ts      push alerts: the VAPID key, the push-service allow-list, sign-ups per driver,
                  what to send when, RFC 8291 encryption, and the club's service worker
+                 (which also keeps the club's pages for a phone with no signal)
 src/garage.ts    a driver's garage document and car photos from the phone - the pure half
 src/garagepage.ts the driver's Garage page
 src/site.ts      the club's look, read narrowly from its site document

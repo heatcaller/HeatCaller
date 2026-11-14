@@ -256,7 +256,7 @@ describe("garage page: reading", () => {
 
   it("no garage yet says it is waiting for the laptop", async () => {
     const page = await open(relay({ read: () => ({ status: 200, body: { ok: true, garage: null, pin: false, signedIn: false, asks: [] } }) }));
-    assert.match(page.get("gm").textContent, /Waiting for the timing desk's laptop/);
+    assert.match(page.get("gm").textContent, /Waiting for the timing desk/);
   });
 
   it("draws every section, as elements and never markup", async () => {

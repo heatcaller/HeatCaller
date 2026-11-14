@@ -248,6 +248,23 @@ internal static class RelayDocuments
     /// The car a transponder is in, fit for a public page: blank, or one
     /// carrying the transponder number, is left out as such a name is.
     /// </summary>
+    /// <summary>
+    /// This PC's time zone as an IANA name ("America/New_York") for the
+    /// phone pages (driver phone plan item 15), or null when Windows' zone has
+    /// none - the pages then keep each phone's own zone, as before.
+    /// </summary>
+    internal static string? ClubTimeZone(TimeZoneInfo? zone = null)
+    {
+        var id = (zone ?? TimeZoneInfo.Local).Id;
+
+        if (id.Contains('/', StringComparison.Ordinal))
+        {
+            return id;
+        }
+
+        return TimeZoneInfo.TryConvertWindowsIdToIanaId(id, out var iana) ? iana : null;
+    }
+
     private static string? PublicCar(ProfileStore profiles, string transponder)
     {
         var car = profiles.CarModelFor(transponder).Trim();
@@ -736,6 +753,16 @@ internal static class RelayDocuments
             ["logo"] = logo,
             // 12 Nov 2026: the 24-hour tick on Themes, so the phone pages write times the club's way.
             ["clock24"] = settings.Use24HourTime,
+            // 14 Nov 2026 (driver phone plan item 15): the club's time zone,
+            // as the IANA name a phone knows, so the pages show times the
+            // club's way wherever the phone is. This PC's own zone - the
+            // laptop is at the track. Left out when Windows' zone has no
+            // IANA name, and the phones keep their own.
+            ["timeZone"] = ClubTimeZone(),
+            // A short address and the name under the icon (14 Nov 2026,
+            // driver phone plan item 5). The relay checks both again.
+            ["alias"] = settings.RelayClubAlias.Trim().ToLowerInvariant(),
+            ["shortName"] = settings.RelayShortName.Trim(),
         };
 
         if (plate is Color plateColor)
@@ -1028,6 +1055,11 @@ internal static class RelayDocuments
                 pinSha256 = RelayCheckIn.IsUsablePin(pin) ? RelayCheckIn.PinHash(club, pin, salt) : string.Empty,
                 pinSalt = salt,
                 @event = eventName,
+
+                // Email me a link on Me (14 Nov 2026, driver phone plan item
+                // 17): only when the club has turned it on AND its mail can
+                // send, so the relay never offers a link nobody will email.
+                emailLink = settings.RelayEmailSignInLink && PinMailer.IsConfigured(settings),
                 drivers = entrants.Select((d, i) =>
                 {
                     var profile = profiles.Get(d.Transponder);

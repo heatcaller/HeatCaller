@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live board on a phone – mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+<!--
+  MOCKUP ONLY (14 Nov 2026). Plan item 4, "A race board made for a phone",
+  in plans/driver-phone-ux-plan.md. Not wired to anything: the data is made
+  up and every frame is drawn from the DATA block at the bottom.
+
+  Colours are the relay's look tokens (relay/src/pages.ts :root, the Pit
+  Wall kit's --tonal/--on-tonal/--ring), so a club's own look carries over.
+  The look switch at the top also shows the club light look (look.light,
+  as card.ts draws it) and item 6's high contrast, to check the board holds
+  up in all three.
+-->
+<style>
+:root {
+  --bg: #0F0722; --surface: #1A0F3A; --row-alt: #150B2E; --primary: #FF2E9A; --on-primary: #FFFFFF;
+  --accent: #2EE6FF; --text: #F7F2FF; --muted: #9E8AC7; --border: #33215C; --good: #3DD68C; --bad: #FF5C7A;
+  --warn: #F5B83D; --flag: #3DD68C; --bw: 1px;
+  --tonal: color-mix(in srgb, var(--primary) 16%, var(--surface));
+  --on-tonal: color-mix(in srgb, var(--primary) 45%, var(--text));
+  --ring: color-mix(in srgb, var(--accent) 70%, transparent);
+  --cond: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --page: #0A0518; --page-text: #E9E2FA; --page-muted: #9E8AC7;
+}
+html.light {
+  --bg: #F4F5F7; --surface: #FFFFFF; --row-alt: #EEF0F4; --primary: #E07B39; --accent: #1F7A8C;
+  --text: #11151C; --muted: #5B6475; --border: #D5D9E1; --good: #1E9E5A; --bad: #C8323F; --warn: #D99400; --flag: #1E9E5A;
+  --page: #E6E8EC; --page-text: #11151C; --page-muted: #5B6475;
+}
+html.hc {
+  --bg: #000000; --surface: #000000; --row-alt: #000000; --primary: #FF5CB4; --on-primary: #000000;
+  --accent: #5CF0FF; --text: #FFFFFF; --muted: #E0E0E0; --border: #FFFFFF; --good: #5CFF9E; --bad: #FF8095;
+  --warn: #FFD15C; --flag: #5CFF9E; --tonal: #000000; --on-tonal: #FFFFFF; --ring: #FFFFFF; --bw: 2px;
+  --page: #111111; --page-text: #FFFFFF; --page-muted: #DDDDDD;
+}
+html.hc.light {
+  --bg: #FFFFFF; --surface: #FFFFFF; --row-alt: #FFFFFF; --primary: #A3005A; --on-primary: #FFFFFF;
+  --accent: #005F6B; --text: #000000; --muted: #222222; --border: #000000; --good: #006B2E; --bad: #A0001A;
+  --warn: #7A5200; --flag: #006B2E; --tonal: #FFFFFF; --on-tonal: #000000; --ring: #000000;
+  --page: #EDEDED; --page-text: #000000; --page-muted: #222222;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--page-text);
+       font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+/* ---------- The mockup page around the phones ---------- */
+.intro { max-width: 1180px; margin: 0 auto; padding: 28px 16px 8px; }
+.intro h1 { margin: 0 0 6px; font: 800 2rem/1.1 var(--cond); letter-spacing: .01em; text-transform: uppercase; }
+.intro h1 span { color: var(--primary); }
+.intro p { margin: 6px 0; color: var(--page-muted); max-width: 760px; }
+.looks { display: inline-flex; gap: 4px; padding: 4px; margin: 14px 0 4px; border-radius: 16px;
+         background: var(--surface); border: var(--bw) solid var(--border); }
+.looks button { min-height: 44px; padding: 8px 14px; font: inherit; font-weight: 600; font-size: .9rem;
+                color: var(--muted); background: transparent; border: 0; border-radius: 12px; cursor: pointer; }
+.looks button[aria-pressed=true] { color: var(--on-primary); background: var(--primary); }
+.looks button:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.grid { max-width: 1180px; margin: 0 auto; padding: 16px; display: grid; gap: 36px 28px;
+        grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); justify-items: center; }
+.shot { width: 360px; }
+.shot h2 { margin: 0 0 4px; font: 800 1.25rem/1.15 var(--cond); text-transform: uppercase; letter-spacing: .02em; }
+.shot h2 b { color: var(--primary); margin-right: 6px; }
+.shot .what { margin: 0 0 12px; color: var(--page-muted); font-size: .9rem; min-height: 2.7em; }
+.notes { margin: 14px 0 0; padding: 0 0 0 4px; list-style: none; counter-reset: n; font-size: .88rem; color: var(--page-muted); }
+.notes li { counter-increment: n; position: relative; padding-left: 30px; margin: 8px 0; }
+.notes li::before { content: counter(n); position: absolute; left: 0; top: 1px; width: 21px; height: 21px; border-radius: 50%;
+                    background: var(--primary); color: var(--on-primary); font: 800 .78rem/21px var(--cond); text-align: center; }
+.notes b { color: var(--page-text); }
+.spec { max-width: 1180px; margin: 12px auto 60px; padding: 0 16px; }
+.spec h2 { font: 800 1.5rem/1.1 var(--cond); text-transform: uppercase; margin: 24px 0 8px; }
+.spec table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+.spec th, .spec td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.spec th { color: var(--page-muted); font-weight: 600; white-space: nowrap; }
+.spec code { font-size: .85em; }
+
+/* ---------- The phone ---------- */
+.phone { position: relative; width: 360px; height: 740px; border-radius: 40px; padding: 10px;
+         background: #05030B; box-shadow: 0 18px 50px rgba(0,0,0,.45), inset 0 0 0 2px #2A2340; }
+html.light .phone, html.hc.light .phone { background: #1B1D22; }
+.screen { position: relative; width: 100%; height: 100%; border-radius: 31px; overflow: hidden; background: var(--bg); color: var(--text);
+          display: flex; flex-direction: column; }
+.status { flex: none; height: 30px; display: flex; align-items: center; justify-content: space-between; padding: 0 22px;
+          font-size: .75rem; font-weight: 700; color: var(--text); }
+.status .sig { letter-spacing: 1px; }
+.scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 12px 12px; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+.head { display: flex; align-items: center; gap: 10px; padding: 6px 2px 12px; }
+.logo { width: 38px; height: 38px; border-radius: 10px; flex: none;
+        background: linear-gradient(135deg, var(--primary), var(--accent)); display: grid; place-items: center;
+        font: 800 .8rem var(--cond); color: var(--on-primary); }
+.head .nm { font-weight: 800; font-size: 1.05rem; line-height: 1.1; }
+.head .nm span { color: var(--primary); }
+.tabs { flex: none; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--surface);
+        border-top: var(--bw) solid var(--border); padding: 4px 0 14px; }
+.tabs a { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: .68rem; color: var(--muted); text-decoration: none; }
+.tabs i { width: 52px; height: 28px; border-radius: 999px; display: grid; place-items: center; font-style: normal; font-size: .95rem; }
+.tabs a.on { color: var(--text); font-weight: 600; }
+.tabs a.on i { background: var(--tonal); color: var(--on-tonal); }
+html.hc .tabs a.on i { outline: 2px solid var(--text); }
+
+/* ---------- Flag bar (as on Live today, trimmed) ---------- */
+.flagbar { border-radius: 16px; background: var(--surface); border: var(--bw) solid var(--border); border-left: 6px solid var(--flag);
+           padding: 12px 14px; margin-bottom: 10px; }
+.flagbar .top { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
+.kick { display: flex; align-items: center; gap: 7px; color: var(--flag); font-size: .7rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+.kick i { width: 9px; height: 9px; border-radius: 2px; background: var(--flag); }
+.state { display: block; font: 800 2rem/1 var(--cond); text-transform: uppercase; margin-top: 3px; }
+.clock { text-align: right; }
+.clock b { display: block; font: 800 1.6rem/1 var(--cond); font-variant-numeric: tabular-nums; }
+.clock span { color: var(--muted); font-size: .62rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.bar { display: flex; gap: 3px; margin: 10px 0 6px; }
+.bar i { flex: 1; height: 10px; border-radius: 3px; background: var(--border); }
+.bar i.done { background: var(--muted); } .bar i.now { background: var(--flag); box-shadow: 0 0 10px var(--flag); }
+.flagbar .foot { display: flex; justify-content: space-between; color: var(--muted); font-size: .8rem; }
+.flagbar.stale { --flag: var(--muted); }
+
+/* ---------- The you-card (plan item 4, step 1) ---------- */
+.you { position: relative; border-radius: 16px; padding: 12px 14px 12px; margin-bottom: 10px;
+       background: var(--tonal); border: var(--bw) solid color-mix(in srgb, var(--primary) 55%, transparent); }
+html.hc .you { border: 3px solid var(--primary); }
+.you .who { display: flex; justify-content: space-between; align-items: center; font-size: .78rem; color: var(--on-tonal); }
+.you .who b { color: var(--text); font-size: .95rem; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: .66rem; font-weight: 800;
+        letter-spacing: .1em; text-transform: uppercase; background: var(--primary); color: var(--on-primary); }
+.chip.ghost { background: transparent; color: var(--muted); border: var(--bw) solid var(--border); }
+.you .main { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; align-items: center; margin-top: 6px; }
+.pos { font: 800 4.2rem/0.85 var(--cond); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.pos small { display: block; font: 700 .72rem/1.2 system-ui, sans-serif; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; margin-top: 6px; }
+.gaps { display: grid; gap: 6px; }
+.gap { display: grid; grid-template-columns: 18px 1fr auto; align-items: baseline; gap: 6px; }
+.gap .ar { font-weight: 800; color: var(--muted); }
+.gap .n { font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gap .t { font: 800 1.5rem/1 var(--cond); font-variant-numeric: tabular-nums; text-align: right; }
+.gap .t em { font: 600 .68rem system-ui, sans-serif; font-style: normal; color: var(--muted); margin-left: 3px; }
+.gap.ahead .t { color: var(--warn); } .gap.behind .t { color: var(--good); }
+.gap.none .t { color: var(--muted); font-size: 1.1rem; }
+/* The gap line: the car ahead, you, the car behind, spaced by their gaps. */
+.line { position: relative; height: 26px; margin: 12px 4px 4px; }
+.line::before { content: ""; position: absolute; left: 0; right: 0; top: 12px; height: 2px; background: var(--border); border-radius: 2px; }
+.line .dot { position: absolute; top: 6px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; border: 2px solid var(--bg); }
+.line .dot.me { width: 20px; height: 20px; top: 3px; margin-left: -10px; background: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 35%, transparent); }
+.line .lbl { position: absolute; top: -9px; transform: translateX(-50%); font-size: .6rem; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 10px; border-top: var(--bw) solid color-mix(in srgb, var(--primary) 30%, transparent); padding-top: 8px; }
+html.hc .stats { border-top-color: var(--border); }
+.stats div { text-align: center; }
+.stats b { display: block; font: 800 1.15rem/1.1 var(--cond); font-variant-numeric: tabular-nums; }
+.stats span { font-size: .6rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.stats .up { color: var(--good); } .stats .best { color: var(--accent); }
+.nextrace { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 10px; margin-top: 8px; }
+.nextrace .big { font: 800 1.7rem/1 var(--cond); text-transform: uppercase; }
+.nextrace .eta { text-align: right; font: 800 1.7rem/1 var(--cond); color: var(--accent); }
+.nextrace .sub { font-size: .8rem; color: var(--muted); }
+.go { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 46px; margin-top: 10px; padding: 0 16px;
+      border-radius: 14px; border: 0; font: inherit; font-weight: 700; font-size: .92rem; cursor: pointer;
+      background: var(--primary); color: var(--on-primary); }
+.go.quiet { background: var(--bg); color: var(--text); border: var(--bw) solid var(--border); }
+.hint { display: flex; gap: 10px; align-items: center; padding: 10px 12px; margin-bottom: 10px; border-radius: 14px;
+        border: var(--bw) dashed var(--border); font-size: .82rem; color: var(--muted); }
+.hint b { color: var(--text); }
+
+/* ---------- The phone board (step 2) ---------- */
+/* overflow: clip, not hidden: hidden makes the board its own scroller and
+   the pinned row would stick to the board instead of the screen. */
+.board { border-radius: 16px; background: var(--surface); border: var(--bw) solid var(--border); overflow: clip; }
+.bhead, .row { display: grid; grid-template-columns: 34px minmax(0, 1fr) 70px 62px; align-items: center; column-gap: 6px; padding: 0 12px; }
+.bhead { height: 34px; font-size: .62rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+         border-bottom: var(--bw) solid var(--border); }
+.bhead .r, .row .r { text-align: right; }
+.bhead .which { display: inline-block; padding: 1px 5px; margin-left: 3px; border-radius: 5px; background: var(--bg); color: var(--text); letter-spacing: .04em; }
+.rows { position: relative; }
+.row { min-height: 46px; font-variant-numeric: tabular-nums; cursor: pointer; border-bottom: var(--bw) solid color-mix(in srgb, var(--border) 60%, transparent); background: var(--surface); }
+html.hc .row { border-bottom-color: var(--border); }
+.row:nth-child(even of .row) { background: var(--row-alt); }
+.row .p { font: 800 1.25rem var(--cond); }
+.row .d { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.row .d i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.row .d span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .92rem; }
+.row .g, .row .l { font: 700 1.05rem var(--cond); }
+.row .l.pb { color: var(--accent); }
+.row.me { background: var(--tonal) !important; box-shadow: inset 4px 0 0 var(--primary); }
+.row.me .d span { font-weight: 800; color: var(--text); }
+html.hc .row.me { box-shadow: inset 6px 0 0 var(--primary); outline: 2px solid var(--primary); outline-offset: -2px; }
+.row .star { color: var(--warn); font-size: .8rem; }
+.row.lapped .g { color: var(--muted); }
+.row.pinned { position: sticky; bottom: -12px; top: 0; z-index: 2; box-shadow: inset 4px 0 0 var(--primary), 0 -6px 14px rgba(0,0,0,.35) !important; }
+/* A row opened in place. */
+.more { display: none; grid-column: 1 / -1; padding: 2px 0 10px 40px; }
+.row.open .more { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.row.open { grid-template-rows: 46px auto; }
+.more div { background: var(--bg); border: var(--bw) solid var(--border); border-radius: 10px; padding: 5px 8px; }
+.more b { display: block; font: 800 1rem var(--cond); }
+.more span { font-size: .58rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.bfoot { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; font-size: .78rem; color: var(--muted); }
+.bfoot a { color: var(--accent); font-weight: 700; text-decoration: none; min-height: 32px; display: inline-flex; align-items: center; }
+.bfoot a:focus-visible { outline: 3px solid var(--ring); border-radius: 6px; }
+
+/* ---------- Offline and stale (items 1 and 3, shown on the board) ---------- */
+.strip { display: flex; gap: 8px; align-items: flex-start; padding: 9px 12px; margin-bottom: 10px; border-radius: 14px;
+         background: color-mix(in srgb, var(--warn) 16%, var(--surface)); border: var(--bw) solid color-mix(in srgb, var(--warn) 55%, transparent);
+         font-size: .8rem; color: var(--text); }
+html.hc .strip { background: var(--bg); border: 2px solid var(--warn); }
+.strip b { color: var(--warn); }
+.dim { opacity: .55; filter: saturate(.4); }
+html.hc .dim { opacity: .75; }
+
+/* ---------- The "All columns" sheet (step 4) ---------- */
+.sheetwrap { position: absolute; inset: 30px 0 0; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; z-index: 5; }
+.sheet { width: 100%; max-height: 82%; background: var(--surface); border-radius: 22px 22px 0 0; border-top: var(--bw) solid var(--border);
+         display: flex; flex-direction: column; }
+.sheet .grab { width: 40px; height: 5px; border-radius: 3px; background: var(--border); margin: 8px auto 4px; }
+.sheet .sh { display: flex; justify-content: space-between; align-items: center; padding: 4px 14px 8px; }
+.sheet .sh b { font: 800 1.2rem var(--cond); text-transform: uppercase; }
+.sheet .x { min-width: 44px; min-height: 44px; border-radius: 12px; border: var(--bw) solid var(--border); background: transparent; color: var(--text); font-size: 1rem; }
+.full { overflow: auto; padding: 0 0 20px; }
+.full table { border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; font-size: .85rem; min-width: 520px; }
+.full th { position: sticky; top: 0; background: var(--surface); font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+           text-align: right; padding: 6px 8px; border-bottom: var(--bw) solid var(--border); white-space: nowrap; }
+.full td { text-align: right; padding: 9px 8px; border-bottom: var(--bw) solid color-mix(in srgb, var(--border) 60%, transparent); white-space: nowrap; }
+.full th:nth-child(-n+2), .full td:nth-child(-n+2) { text-align: left; }
+/* Position and driver stay put while the rest scroll sideways. */
+.full th:nth-child(1), .full td:nth-child(1) { position: sticky; left: 0; background: var(--surface); z-index: 1; width: 30px; }
+.full th:nth-child(2), .full td:nth-child(2) { position: sticky; left: 30px; background: var(--surface); z-index: 1; box-shadow: 6px 0 8px -6px rgba(0,0,0,.4); }
+.full th:nth-child(-n+2) { z-index: 2; }
+.full tr.me td { background: var(--tonal); font-weight: 700; }
+.full .swipe { padding: 0 14px 8px; font-size: .72rem; color: var(--muted); }
+
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>Live on a phone · <span>plan item 4</span></h1>
+  <p>Your own card at the top, a four-column board under it, and your row kept in view. Seven states of the same Live tab, each on a 360&nbsp;px phone (the narrowest common Android width). Tap any board row to open it in place; scroll the board in frame 2 to see your row stay pinned.</p>
+  <p>Colours come from the club's look tokens and the Pit Wall kit. The switch shows the club's dark look, a club light look, and item 6's high contrast in dark and light.</p>
+  <div class="looks" role="group" aria-label="Look">
+    <button data-look="" aria-pressed="true">Club dark</button>
+    <button data-look="light" aria-pressed="false">Club light</button>
+    <button data-look="hc" aria-pressed="false">High contrast</button>
+    <button data-look="hc light" aria-pressed="false">High contrast light</button>
+  </div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="spec">
+  <h2>How it's built</h2>
+  <table>
+    <tr><th>Board columns</th><td>Under 480&nbsp;px wide: <b>POS · DRIVER · GAP · LAST</b> (34 / flexible / 70 / 62&nbsp;px). GAP shows the club's own pick (Gap to P1, Gap behind or Interval), named in the header chip. A lapped car shows <code>+1L</code>. Wider screens keep today's full table.</td></tr>
+    <tr><th>You-card</th><td>Shows for the signed-in driver (or the followed one, with a ☆ "Following" label instead of "You") when they're in the running race. Car ahead and behind come from the standings order. Leading: "Leading" with nobody ahead. Last: "Last on the road" with nobody behind. Not in this race: their next race and its time from the programme.</td></tr>
+    <tr><th>Gap line</th><td>The car ahead, you and the car behind, spaced by their gaps on a scale of the larger gap × 1.2 (so both fit). Over 5&nbsp;s or a lap, the dot sits at the end and the label says so.</td></tr>
+    <tr><th>Your row</th><td><code>position: sticky; top: 0; bottom: 0</code> inside the board, so it sticks to the edge it's scrolling off. The tonal fill and primary edge are the same as the you-card, so the eye links them.</td></tr>
+    <tr><th>Open a row</th><td>Tap a row for Best, Laps and Trend in place (and Gap to P1 or Gap ahead, whichever the column isn't showing). One open at a time. <code>aria-expanded</code> on the row. Tap again to close.</td></tr>
+    <tr><th>All columns</th><td>"All columns" under the board opens a sheet with today's seven-column table. Position and driver stay put while the rest scroll sideways. Portrait only (the 7 Nov pick).</td></tr>
+    <tr><th>Freshness</th><td>Every number shown is from a frame under 2&nbsp;s old, or the whole card dims with item 1's strip ("No signal. Showing lap 8 from 14 s ago."). Gaps are never shown as live from an old frame (the trust-over-chatter rule).</td></tr>
+    <tr><th>Screen readers</th><td>One <code>aria-live="polite"</code> line under the you-card, at most every 10&nbsp;s and only on a change: "You're third, 0.42 behind Al Gorithim." The board is a list of rows with a header row, each row a button.</td></tr>
+    <tr><th>Text size and zoom</th><td>Everything in rem, so item 6's A+ / A++ and the phone's own text size grow it. Checked at 130%: names truncate with an ellipsis, numbers never wrap. Pinch-zoom works (item 6).</td></tr>
+    <tr><th>Fonts and colours</th><td>Numbers in Barlow Condensed (the Live flag bar's font), tabular figures so the columns don't jump. Gap ahead in <code>--warn</code>, gap behind in <code>--good</code>, personal-best laps in <code>--accent</code>. No hex outside the look tokens.</td></tr>
+  </table>
+</div>
+
+<script>
+// ---------------- DATA (made up) ----------------
+const COL = ['#FF2E9A', '#2EE6FF', '#F5B83D', '#3DD68C', '#A78BFA', '#FF8A4C', '#5CA8FF', '#E879F9', '#B8E986', '#FFD1DC'];
+const RACE = [
+  // name, laps, last, best, gapP1, trend
+  ['Terry Byte', 8, '6.402', '6.247', '—', '▼0.35'],
+  ['Al Gorithim', 8, '6.388', '6.311', '+1.10', '▼0.46'],
+  ['Ella Vator', 8, '6.511', '6.311', '+1.52', '▲0.18'],
+  ['Annie Wayout', 8, '6.690', '6.499', '+2.62', '▲0.25'],
+  ['Dee Ploy', 8, '7.012', '6.664', '+5.08', '▼0.03'],
+  ['Cy Borg', 8, '6.874', '6.702', '+6.41', '▲0.11'],
+  ['Rob Otic', 7, '7.210', '6.930', '+1L', '▼0.08'],
+  ['Kay Oss', 7, '7.033', '6.981', '+1L', '▲0.40'],
+  ['Max Torque', 7, '7.405', '7.102', '+1L', '▼0.12'],
+  ['Polly Morph', 6, '7.880', '7.390', '+2L', '▲0.65'],
+];
+
+function rowsHtml(meName, followName, opts) {
+  opts = opts || {};
+  return RACE.map((r, i) => {
+    const me = r[0] === meName, fol = r[0] === followName;
+    const pb = r[2] === r[3];
+    const cls = ['row', me ? 'me' : '', me && opts.pin ? 'pinned' : '', r[4].endsWith('L') ? 'lapped' : '', opts.open === r[0] ? 'open' : ''].join(' ');
+    return `<div class="${cls}" role="button" tabindex="0" aria-expanded="${opts.open === r[0]}">
+      <span class="p">${i + 1}</span>
+      <span class="d"><i style="background:${COL[i]}"></i><span>${r[0]}</span>${me ? '<em class="sr"> (you)</em>' : ''}${fol ? ' <em class="star" aria-label="following">☆</em>' : ''}</span>
+      <span class="g r">${r[4]}</span>
+      <span class="l r${pb ? ' pb' : ''}">${r[2]}</span>
+      <div class="more">
+        <div><b>${r[3]}</b><span>Best</span></div>
+        <div><b>${r[1]}</b><span>Laps</span></div>
+        <div><b>${r[5]}</b><span>Trend</span></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function board(meName, followName, opts) {
+  opts = opts || {};
+  const rows = rowsHtml(meName, followName, opts);
+  return `<div class="board${opts.dim ? ' dim' : ''}">
+    <div class="bhead"><span>Pos</span><span>Driver</span><span class="r">Gap<span class="which">P1</span></span><span class="r">Last</span></div>
+    <div class="rows" ${opts.height ? `style="max-height:${opts.height}px;overflow-y:auto"` : ''}>${rows}</div>
+    <div class="bfoot"><span>${opts.foot || 'Lap 8 · tap a row for more'}</span><a href="#" data-sheet>All columns ›</a></div>
+  </div>`;
+}
+
+function flagbar(opts) {
+  opts = opts || {};
+  const segs = Array.from({ length: 12 }, (_, i) => `<i class="${i < 7 ? 'done' : i === 7 ? 'now' : ''}"></i>`).join('');
+  return `<div class="flagbar${opts.stale ? ' stale' : ''}">
+    <div class="top"><div><span class="kick"><i></i>${opts.kick || 'Green flag'}</span><span class="state">${opts.state || 'Lap 8 of 12'}</span></div>
+    <div class="clock"><b>${opts.clock || '2:41'}</b><span>${opts.clockLbl || 'Left'}</span></div></div>
+    <div class="bar">${segs}</div>
+    <div class="foot"><span>Stock · Q1 Heat 1</span><span>10 cars</span></div>
+  </div>`;
+}
+
+function gapLine(ahead, behind, aName, bName, aCol, bCol) {
+  const scale = Math.max(ahead || 0, behind || 0) * 1.2 || 1;
+  const mid = ahead == null ? 12 : behind == null ? 88 : 50;
+  const half = ahead == null || behind == null ? 76 : 44;
+  let h = `<div class="line" aria-hidden="true">`;
+  if (ahead != null) { const x = mid - half * Math.min(1, ahead / scale); h += `<span class="dot" style="left:${x}%;background:${aCol}"></span><span class="lbl" style="left:${x}%">${aName.split(' ')[0]}</span>`; }
+  h += `<span class="dot me" style="left:${mid}%"></span><span class="lbl" style="left:${mid}%">You</span>`;
+  if (behind != null) { const x = mid + half * Math.min(1, behind / scale); h += `<span class="dot" style="left:${x}%;background:${bCol}"></span><span class="lbl" style="left:${x}%">${bName.split(' ')[0]}</span>`; }
+  return h + `</div>`;
+}
+
+function youCard(o) {
+  const gaps = (o.ahead == null
+      ? `<div class="gap none ahead"><span class="ar">▲</span><span class="n">Nobody ahead</span><span class="t">Leading</span></div>`
+      : `<div class="gap ahead"><span class="ar">▲</span><span class="n">${o.aName}</span><span class="t">${o.ahead.toFixed(2)}<em>to catch</em></span></div>`)
+    + (o.behind == null
+      ? `<div class="gap none behind"><span class="ar">▼</span><span class="n">Nobody behind</span><span class="t">Last on road</span></div>`
+      : `<div class="gap behind"><span class="ar">▼</span><span class="n">${o.bName}</span><span class="t">${o.behind.toFixed(2)}<em>clear</em></span></div>`);
+  return `<section class="you${o.dim ? ' dim' : ''}" aria-label="Your race">
+    <div class="who"><span>${o.follow ? '<em class="chip ghost">☆ Following</em>' : '<em class="chip">You</em>'} &nbsp;<b>${o.name}</b></span><span>Car #${o.car}</span></div>
+    <div class="main"><div class="pos">P${o.pos}<small>of 10</small></div><div class="gaps">${gaps}</div></div>
+    ${gapLine(o.ahead, o.behind, o.aName || '', o.bName || '', o.aCol, o.bCol)}
+    <div class="stats">
+      <div><b>${o.last}</b><span>Last</span></div>
+      <div><b class="best">${o.best}</b><span>Best</span></div>
+      <div><b>${o.laps}</b><span>Laps</span></div>
+      <div><b class="${o.trendUp ? 'up' : ''}">${o.trend}</b><span>Trend</span></div>
+    </div>
+    <p class="sr" aria-live="polite">${o.said}</p>
+  </section>`;
+}
+
+function nextCard(o) {
+  return `<section class="you" aria-label="Your next race">
+    <div class="who"><span>${o.follow ? '<em class="chip ghost">☆ Following</em>' : '<em class="chip">You</em>'} &nbsp;<b>${o.name}</b></span></div>
+    <div class="nextrace"><span class="sub">Not in this race. Next:</span><span></span><span class="big">${o.race}</span><span class="eta">~${o.mins} min</span>
+      <span class="sub">${o.when} · ${o.away}</span><span class="sub" style="text-align:right">estimate</span></div>
+    <button class="go quiet">Show my heat line-up</button>
+  </section>`;
+}
+
+function phone(inner, opts) {
+  opts = opts || {};
+  return `<div class="phone"><div class="screen">
+    <div class="status"><span>7:31</span><span class="sig">${opts.sig || '●●●○ 5G ▮'}</span></div>
+    <div class="scroll">
+      <div class="head"><div class="logo">UMZ</div><div class="nm">Upstate Mini Z <span>Live</span></div></div>
+      ${inner}
+    </div>
+    <nav class="tabs"><a><i>⌂</i>Home</a><a class="on"><i>◉</i>Live</a><a><i>◷</i>Schedule</a><a><i>⚑</i>Results</a><a><i>◯</i>Me</a></nav>
+    ${opts.sheet || ''}
+  </div></div>`;
+}
+
+function sheet(meName) {
+  const rows = RACE.map((r, i) => `<tr class="${r[0] === meName ? 'me' : ''}"><td>${i + 1}</td><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td>${r[5]}</td></tr>`).join('');
+  return `<div class="sheetwrap"><div class="sheet" role="dialog" aria-label="All columns">
+    <div class="grab"></div>
+    <div class="sh"><b>All columns</b><button class="x" aria-label="Close">✕</button></div>
+    <div class="full"><p class="swipe">Swipe sideways for more. Position and driver stay put.</p>
+      <table><thead><tr><th>Pos</th><th>Driver</th><th>Laps</th><th>Last lap</th><th>Best lap</th><th>Gap to P1</th><th>Trend</th></tr></thead><tbody>${rows}</tbody></table>
+    </div></div></div>`;
+}
+
+// ---------------- THE FRAMES ----------------
+const ELLA = { name: 'Ella Vator', car: 23, pos: 3, ahead: 0.42, aName: 'Al Gorithim', aCol: COL[1], behind: 1.10, bName: 'Annie Wayout', bCol: COL[3],
+  last: '6.511', best: '6.311', laps: 8, trend: '▲0.18', trendUp: true, said: "You're third, 0.42 behind Al Gorithim." };
+
+const FRAMES = [
+  { t: 'Racing, you\'re P3', what: 'The main case: a signed-in driver mid-race. Your card first, then the board.',
+    html: phone(flagbar() + youCard(ELLA) + board('Ella Vator', '', { open: 'Al Gorithim' })),
+    notes: ['<b>Big position</b> and <b>both gaps with names</b>: "to catch" ahead (amber), "clear" behind (green). The two numbers a driver in the pits wants.',
+            '<b>Gap line</b>: the car ahead, you and the car behind, spaced by their gaps. Readable at a glance from arm\'s length.',
+            '<b>Four columns</b>, nothing off the edge. The header chip says which gap the club picked (P1).',
+            'A <b>tapped row opens in place</b> (Al here) for Best, Laps and Trend.',
+            '<b>Your row</b> carries the same tonal fill and pink edge as your card.'] },
+
+  { t: 'You\'re P8, scrolled', what: 'Your row is below the fold. Scroll the board: your row sticks to its edge.',
+    html: phone(flagbar() + youCard({ name: 'Kay Oss', car: 7, pos: 8, ahead: 0.88, aName: 'Rob Otic', aCol: COL[6], behind: 2.31, bName: 'Max Torque', bCol: COL[8],
+      last: '7.033', best: '6.981', laps: 7, trend: '▲0.40', trendUp: true, said: "You're eighth, 0.88 behind Rob Otic." })
+      + board('Kay Oss', '', { pin: true, foot: 'Lap 8 · your row stays in view' })),
+    notes: ['<b>Pinned row</b>: P8 is below the fold, so your row sits on the screen edge above the tab bar. Scroll this phone: it stays there until it reaches its own place, then scrolls with the board.',
+            'It works the same at the top: scroll past your row and it sticks under the flag bar.',
+            '<b>Lapped cars</b> show <b>+1L</b> in muted text, so a big gap isn\'t mistaken for a close one.'] },
+
+  { t: 'Leading', what: 'P1: nobody ahead. The card says so instead of showing an empty number.',
+    html: phone(flagbar() + youCard({ name: 'Terry Byte', car: 4, pos: 1, ahead: null, behind: 1.10, bName: 'Al Gorithim', bCol: COL[1],
+      last: '6.402', best: '6.247', laps: 8, trend: '▼0.35', trendUp: false, said: "You're leading, 1.10 clear of Al Gorithim." })
+      + board('Terry Byte', '')),
+    notes: ['<b>"Leading"</b> in place of a gap ahead. The gap line puts you at the front with the chaser behind.',
+            'The last car on the road gets <b>"Last on road"</b> the same way.',
+            '<b>Trend</b> uses the club\'s own trend figure (▼ = lap times falling).'] },
+
+  { t: 'Following, not in this race', what: 'A parent following their kid, who races in the next heat.',
+    html: phone(flagbar() + nextCard({ follow: true, name: 'Polly Morph', race: 'Q1 Heat 2', mins: 6, when: 'Stock · about 7:38 PM', away: 'next race' })
+      + board('', 'Polly Morph', { foot: 'Lap 8 · Q1 Heat 1' })),
+    notes: ['<b>"☆ Following"</b> instead of "You": following and being a driver never look the same (plan item 2).',
+            '<b>Next race and a rough time</b> from the programme, in the club\'s time zone (item 15).',
+            'A followed driver on the board gets a ☆, never the "You" chip or fill.'] },
+
+  { t: 'Nobody signed in', what: 'A spectator. No card; one quiet line says how to get one.',
+    html: phone(flagbar() + `<div class="hint"><span>☆</span><span><b>Tap a name</b> to follow a driver and see their gaps here. Racing? <b>Sign in on Me</b>.</span></div>` + board('', '')),
+    notes: ['<b>No empty card</b> taking space. The board moves up.',
+            'The hint goes once a driver is followed or signed in, and is dismissable.'] },
+
+  { t: 'Signal dropped', what: 'Items 1 and 3 on this board: the last frame stays, dimmed, with its age.',
+    html: phone(`<div class="strip"><span>⚠</span><span><b>No signal.</b> Showing lap 8 from 14 s ago. Trying again…</span></div>`
+      + flagbar({ stale: true, kick: 'Last seen', clock: '7:31', clockLbl: '14 s ago' })
+      + youCard(Object.assign({}, ELLA, { dim: true })) + board('Ella Vator', '', { dim: true, foot: 'Lap 8 · 14 s ago' }), { sig: '○○○○ — ▮' }),
+    notes: ['<b>Nothing disappears</b>: the board and card stay, dimmed and grey. Today the board is replaced by an error.',
+            'The <b>flag bar goes grey</b> and says "Last seen, 14 s ago". Gaps are never shown as live from an old frame.',
+            'Plain words, no "relay" (item 14).'] },
+
+  { t: 'All columns', what: 'Tapped "All columns": today\'s seven-column table in a sheet, portrait.',
+    html: phone(flagbar() + youCard(ELLA) + board('Ella Vator', ''), { sheet: sheet('Ella Vator') }),
+    notes: ['The <b>full table</b> for anyone who wants it, without landscape (the 7 Nov portrait-only pick).',
+            '<b>Position and driver stay put</b> while the other columns scroll sideways.',
+            'Closes with ✕, a swipe down, or Back (item 18).'] },
+];
+
+document.getElementById('grid').innerHTML = FRAMES.map((f, i) => `<section class="shot">
+  <h2><b>${i + 1}</b>${f.t}</h2><p class="what">${f.what}</p>${f.html}
+  <ol class="notes">${f.notes.map((n) => `<li>${n}</li>`).join('')}</ol></section>`).join('');
+
+// Tap a row to open it in place (one at a time per board).
+document.addEventListener('click', (e) => {
+  const row = e.target.closest('.row');
+  if (row) {
+    const was = row.classList.contains('open');
+    row.parentElement.querySelectorAll('.row.open').forEach((r) => { r.classList.remove('open'); r.setAttribute('aria-expanded', 'false'); });
+    if (!was) { row.classList.add('open'); row.setAttribute('aria-expanded', 'true'); }
+  }
+  if (e.target.closest('a[data-sheet]')) e.preventDefault();
+});
+document.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('row')) { e.preventDefault(); e.target.click(); } });
+
+// A look named in the address (#hc, #light, #hc-light) opens with it, for screenshots.
+const startLook = location.hash.slice(1).replace('-', ' ');
+if (['light', 'hc', 'hc light'].includes(startLook)) {
+  document.documentElement.className = startLook;
+  document.querySelectorAll('.looks button').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.look === startLook)));
+}
+// Frame 2 starts scrolled so the pinned row is on the screen edge with the board above it.
+const f2 = document.querySelectorAll('.scroll')[1];
+if (f2) f2.scrollTop = 140;
+
+// The look switch.
+document.querySelectorAll('.looks button').forEach((b) => b.addEventListener('click', () => {
+  document.documentElement.className = b.dataset.look;
+  document.querySelectorAll('.looks button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+}));
+</script>
+</body>
+</html>
