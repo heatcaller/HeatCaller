@@ -171,6 +171,23 @@ public sealed class StreamTonight
         Changed?.Invoke();
     }
 
+    /// <summary>Hides every race in piece <paramref name="index"/> - a whole night when it is the only piece - or shows them again (V6).</summary>
+    public void SetPieceHidden(int index, bool hidden)
+    {
+        lock (_gate)
+        {
+            if (index < 0 || index >= _saved.Pieces.Count)
+            {
+                return;
+            }
+
+            _saved.Pieces[index].Hidden = hidden;
+            Save();
+        }
+
+        Changed?.Invoke();
+    }
+
     /// <summary>Hides one race's video everywhere, or shows it again (V6).</summary>
     public void SetRaceHidden(string sessionId, bool hidden)
     {

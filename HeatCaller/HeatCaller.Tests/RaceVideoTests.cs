@@ -116,6 +116,33 @@ public sealed class RaceVideoTests
         Assert.Null(ObsLink.StreamEvent(Event("RecordStateChanged", "OBS_WEBSOCKET_OUTPUT_STARTED")));
     }
 
+    [Theory]
+    [InlineData("early", "20", "Video of Q1 Heat 2 starts in the wrong place - it opens too early, by about 20 s.")]
+    [InlineData("late", "", "Video of Q1 Heat 2 starts in the wrong place - it opens too late.")]
+    [InlineData("", "30", "Video of Q1 Heat 2 starts in the wrong place - off by about 30 s.")]
+    [InlineData("", "9999", "Video of Q1 Heat 2 starts in the wrong place.")]
+    public void Says_what_a_driver_reported_about_a_race_video(string direction, string seconds, string start) =>
+        Assert.StartsWith(start, DriverRequestDesk.VideoOffWords("Q1 Heat 2", direction, seconds));
+
+    [Fact]
+    public void A_hidden_piece_goes_to_the_relay_hidden()
+    {
+        var stream = new StreamTonight();
+        stream.Started(new DateTime(2026, 11, 14, 23, 0, 0, DateTimeKind.Utc));
+        stream.SetLink(0, "AAAAAAAAAAA");
+        stream.SetPieceHidden(0, hidden: true);
+
+        using var doc = JsonDocument.Parse(stream.Document(new AppSettings { VideoEnabled = true }, Array.Empty<string>()));
+        Assert.True(doc.RootElement.GetProperty("pieces")[0].GetProperty("hidden").GetBoolean());
+    }
+
+    [Fact]
+    public void A_drivers_video_report_keeps_which_way_and_how_far()
+    {
+        Assert.Equal(5, DriverRequestStore.LimitOf("d"));
+        Assert.Equal(3, DriverRequestStore.LimitOf("s"));
+    }
+
     [Fact]
     public void Reads_which_videos_YouTube_refused_and_nothing_else()
     {

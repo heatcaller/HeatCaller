@@ -21,6 +21,15 @@ public sealed partial class MainForm
         RelaySettingsControl.Stream = _streamTonight;
         RelaySettingsControl.Obs = _obsLink;
         RelaySettingsControl.DeadVideos = () => _relayPublisher.DeadVideos;
+        RelaySettingsControl.RacesTonight = VideoRacesTonight;
+
+        // A driver's "ask the club to hide this video", approved on the
+        // Driver Requests window (V6): that race's video goes everywhere at
+        // once, the next time the stream document is sent.
+        if (_driverRequestDesk is { } desk)
+        {
+            desk.HideRaceVideo = sid => _streamTonight?.SetRaceHidden(sid, hidden: true);
+        }
         FormClosed += (_, _) => _obsLink?.Dispose();
     }
 
@@ -29,6 +38,17 @@ public sealed partial class MainForm
     {
         var stream = _streamTonight ?? new StreamTonight();
         return stream.Document(_settings, JuniorRacesToday());
+    }
+
+    /// <summary>Tonight's races (the last 20 hours), newest first, for the Race video card's "Hide races..." (V6).</summary>
+    private IReadOnlyList<(string Id, string Label)> VideoRacesTonight()
+    {
+        var since = DateTime.UtcNow.AddHours(-20);
+        return _sessionHistory.SavedView().Saved
+            .Where(s => s.StartedAtUtc >= since)
+            .OrderByDescending(s => s.StartedAtUtc)
+            .Select(s => (s.Id, $"{AppTime.TimeOfDay(s.StartedAtUtc.ToLocalTime())}  {(string.IsNullOrWhiteSpace(s.Label) ? "Race" : s.Label.Trim())}"))
+            .ToList();
     }
 
     /// <summary>

@@ -1306,6 +1306,9 @@ html.framed .hcvideo .sheet { padding-bottom: calc(18px + 58px + var(--sa-b)); }
 .hcvideo .hcvsrc { font-size: 0.8rem; margin: 6px 0 0; }
 .hcvbtn { margin: 8px 8px 0 0; }
 .hcvmiss { color: var(--muted); font-size: 0.85rem; margin: 8px 0 0; }
+.hcvmore { margin: 12px 0 0; }
+.hcvmore summary { cursor: pointer; color: var(--accent); min-height: 44px; display: flex; align-items: center; }
+.hcvmore .page, .hcvmore select { margin: 6px 6px 0 0; min-height: 44px; }
 
 /* PIT WALL (3 Nov 2026, Asher picked direction A of the relay refresh:
    "build a pit wall"). One kit for every control on the club's pages, each
@@ -2077,6 +2080,50 @@ function hcVideoSheet(v, o) {
   sheet.appendChild(hcVel('p', 'note hcvsrc', inAppBrowser() !== ''
     ? 'Plays from YouTube. Open in YouTube opens YouTube\\u2019s website here. If it doesn\\u2019t play, the club may have made it private.'
     : 'Plays from YouTube. If it doesn\\u2019t play, the club may have made it private.'));
+
+  // A driver's own race (V5, V6): tell the club the video starts in the
+  // wrong place, or ask it to hide the video. Buttons only, no typing, so
+  // nothing needs moderating. o.report(kind, fields) sends it and answers
+  // {ok, words}.
+  if (typeof o.report === 'function') {
+    const more = hcVel('details', 'hcvmore');
+    more.appendChild(hcVel('summary', '', 'Something wrong with this video?'));
+    const said = hcVel('p', 'note');
+    said.setAttribute('role', 'status');
+    const send = async (kind, f, counted) => {
+      hcCount(counted);
+      said.textContent = 'Sending\\u2026';
+      const a = await o.report(kind, f);
+      said.textContent = a && a.words ? a.words : 'Could not send that. Try again in a minute.';
+    };
+    more.appendChild(hcVel('p', 'note', 'Starts in the wrong place? Say which way, and the club lines the whole stream up.'));
+    const secs = document.createElement('select');
+    secs.setAttribute('aria-label', 'About how many seconds');
+    [['', 'About how far?'], ['5', 'about 5 s'], ['10', 'about 10 s'], ['30', 'about 30 s'], ['60', 'about a minute'], ['120', 'more than a minute']].forEach((x) => {
+      const opt = document.createElement('option');
+      opt.value = x[0];
+      opt.textContent = x[1];
+      secs.appendChild(opt);
+    });
+    more.appendChild(secs);
+    for (const way of [['early', 'It opens too early'], ['late', 'It opens too late']]) {
+      const b = hcVel('button', 'page', way[1]);
+      b.type = 'button';
+      b.addEventListener('click', () => {
+        const f = { d: way[0] };
+        if (secs.value) f.s = Number(secs.value);
+        void send('videooff', f, 'video_off_reported');
+      });
+      more.appendChild(b);
+    }
+    const hide = hcVel('button', 'page', 'Ask the club to hide this video');
+    hide.type = 'button';
+    hide.addEventListener('click', () => { void send('videohide', {}, 'video_hide_asked'); });
+    more.appendChild(hide);
+    more.appendChild(hcVel('p', 'note', 'Hiding here removes HeatCaller\\u2019s link. To remove the video itself, the club edits it on YouTube.'));
+    more.appendChild(said);
+    sheet.appendChild(more);
+  }
 
   let pushed = false;
   const close = (byBack) => {
@@ -14719,8 +14766,11 @@ function videoPart(r) {
     finish: num(r.pos) > 0 && !r.out ? 'You finished P' + num(r.pos) : '',
     from: from,
     where: 'night',
+    report: report,
   });
   box.appendChild(hcVideoButton('Watch my race', 'Watch my race, ' + name + ', video from YouTube', () => open(undefined)));
+  // V5, V6: from the sheet, through the desk's request queue.
+  const report = (kind, f) => sendAsk(kind, Object.assign({ race: sid }, f || {}));
   if (Array.isArray(v.laps) && typeof v.best === 'number' && typeof v.laps[v.best] === 'number') {
     box.appendChild(hcVideoButton('Jump to my best lap', 'Jump to my best lap in ' + name + ', video from YouTube', () => open(v.laps[v.best])));
   }
@@ -15391,6 +15441,8 @@ function kindWords(kind) {
   if (kind === 'post') return 'At my marshal post';
   if (kind === 'swap') return 'Cover my post';
   if (kind === 'cover') return 'Marshal swap';
+  if (kind === 'videooff') return 'Video in the wrong place';
+  if (kind === 'videohide') return 'Hide a race video';
   return 'Request';
 }
 

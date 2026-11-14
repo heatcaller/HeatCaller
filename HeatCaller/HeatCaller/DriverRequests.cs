@@ -759,6 +759,10 @@ internal sealed class DriverRequestStore
         "offer" => 24 + 8,
         "answer" => 3,
 
+        // 14 Nov 2026, race video V5: "early" or "late", and about how many seconds.
+        "d" => 5,
+        "s" => 3,
+
         // 5 Nov 2026, the garage from the phone.
         "op" => 16,
         "car" or "sheet" or "entry" or "chassis" => 32 + 8,
@@ -1110,6 +1114,15 @@ internal sealed partial class DriverRequestDesk
                 lines.Add($"Needs {RaceControlControl.LateMinutes} more minutes before their next race" + NoteWords(request));
                 break;
 
+            // Race video (14 Nov 2026, V5, V6).
+            case DriverAsk.VideoOff:
+                lines.Add(VideoOffWords(RaceWords(request), request.Text("d"), request.Text("s")));
+                break;
+
+            case DriverAsk.VideoHide:
+                lines.Add($"Hide the video of {RaceWords(request)}");
+                break;
+
             case DriverAsk.Skip:
                 lines.Add("Car broken - skip them in their next race" + NoteWords(request));
                 break;
@@ -1198,6 +1211,8 @@ internal sealed partial class DriverRequestDesk
         DriverAsk.PackEdit => "Their packs",
         DriverAsk.Car => "Their garage",
         DriverAsk.Photo => "Car photo",
+        DriverAsk.VideoOff => "Video in the wrong place",
+        DriverAsk.VideoHide => "Hide a race video",
         DriverAsk.Late => "More time",
         DriverAsk.Skip => "Skip my race",
         DriverAsk.Coming => "Coming next race night",
@@ -1788,6 +1803,62 @@ internal sealed partial class DriverRequestDesk
     /// driver. Set by MainForm (11 Nov 2026, race-night build plan, Phase 1).
     /// </summary>
     public Func<string, string, string, string>? RaceAsk { get; set; }
+
+    /// <summary>Hides one race's video by its session id (MainForm.Video) - for an approved "hide this video".</summary>
+    public Action<string>? HideRaceVideo { get; set; }
+
+    /// <summary>"Video of Q1 Heat 2 starts in the wrong place - it opens too early, by about 20 s".</summary>
+    internal static string VideoOffWords(string race, string direction, string seconds)
+    {
+        var how = direction switch { "early" => "it opens too early", "late" => "it opens too late", _ => string.Empty };
+        var by = int.TryParse(seconds, NumberStyles.None, CultureInfo.InvariantCulture, out var s) && s is >= 1 and <= 600 ? $"about {s} s" : string.Empty;
+        var detail = how.Length > 0 && by.Length > 0 ? $"{how}, by {by}" : how.Length > 0 ? how : by.Length > 0 ? $"off by {by}" : string.Empty;
+        return $"Video of {race} starts in the wrong place" + (detail.Length > 0 ? " - " + detail : string.Empty)
+            + ". Nudge its stream piece on the Relay tab's Race video card.";
+    }
+
+    /// <summary>Noted: "the video starts in the wrong place" was seen. Nothing changes by itself - the club nudges the piece.</summary>
+    public bool NoteVideoOff(DriverRequest request, out string refusal)
+    {
+        if (request.Kind != DriverAsk.VideoOff || !_store.IsWaiting(request.Id))
+        {
+            refusal = "That request has already been answered.";
+            return false;
+        }
+
+        refusal = string.Empty;
+        return _store.Answer(request.Id, DriverAsk.Noted, "Thanks - the club will line the video up.", DateTime.UtcNow)
+            || Refuse(out refusal);
+    }
+
+    /// <summary>Approved: HeatCaller stops showing that race's video, everywhere, at once.</summary>
+    public bool ApproveVideoHide(DriverRequest request, out string refusal)
+    {
+        var race = request.Text("race");
+
+        if (request.Kind != DriverAsk.VideoHide || !_store.IsWaiting(request.Id))
+        {
+            refusal = "That request has already been answered.";
+            return false;
+        }
+
+        if (HideRaceVideo is not { } hide || race.Length != 32)
+        {
+            refusal = "Race video isn't set up on this laptop, so there's nothing to hide.";
+            return false;
+        }
+
+        hide(race);
+        refusal = string.Empty;
+        return _store.Answer(request.Id, DriverAsk.Approved, "Hidden. To remove the video itself, the club edits it on YouTube.", DateTime.UtcNow)
+            || Refuse(out refusal);
+    }
+
+    private static bool Refuse(out string refusal)
+    {
+        refusal = "That request has already been answered.";
+        return false;
+    }
 
     /// <summary>" - "their note"", or empty with no note.</summary>
     private static string NoteWords(DriverRequest request) =>

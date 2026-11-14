@@ -60,7 +60,13 @@ public sealed partial class RelaySettingsControl
             "Stream from a second PC with OBS (never the timing laptop) to the club's own YouTube channel, with YouTube's "
             + "Auto-start and Auto-stop on and Ultra-low latency. In OBS turn on Tools > WebSocket Server Settings. "
             + "HeatCaller notes when the stream starts and stops; paste each piece's YouTube link below, before or after. "
-            + "If a race opens in the wrong place, nudge that piece - every race in it moves.");
+            + "If a race opens in the wrong place, nudge that piece - every race in it moves. "
+            + "HeatCaller only decides where it shows the link: anyone with a Public or Unlisted video's link can watch it. "
+            + "Use Unlisted videos if you show video on drivers' own nights only.");
+
+        // V6: the club hides one race, or a piece (the whole night when it's the only one).
+        var hide = new Button { Text = "Hide races...", AutoSize = true };
+        hide.Click += (_, _) => PickHiddenRaces();
 
         var card = new Section("Race video (YouTube)");
         card.Add(_chkVideo, stretch: false);
@@ -69,7 +75,7 @@ public sealed partial class RelaySettingsControl
         card.Add(hint);
         card.Add(_lblObsState, gapBelow: UiLayout.HintGap);
         card.Add(_pieces, stretch: false);
-        card.Add(new ButtonBar().With(live, stopped), gapBelow: 0);
+        card.Add(new ButtonBar().With(live, stopped, hide), gapBelow: 0);
 
         var deadSeen = string.Empty;
         _obsTimer.Tick += (_, _) =>
@@ -151,7 +157,7 @@ public sealed partial class RelaySettingsControl
             };
             row.Controls.Add(link);
 
-            foreach (var (label, seconds) in new[] { ("-5s", -5.0), ("-1s", -1.0), ("+1s", 1.0), ("+5s", 5.0) })
+            foreach (var (label, seconds) in new[] { ("-30s", -30.0), ("-5s", -5.0), ("-1s", -1.0), ("+1s", 1.0), ("+5s", 5.0), ("+30s", 30.0) })
             {
                 var b = new Button { Text = label, AutoSize = true };
                 b.Click += (_, _) => Stream?.Nudge(index, seconds);
@@ -159,6 +165,9 @@ public sealed partial class RelaySettingsControl
             }
 
             row.Controls.Add(new Label { AutoSize = true, Text = p.NudgeSeconds == 0 ? string.Empty : $"nudged {p.NudgeSeconds:+0;-0}s", Margin = new Padding(6, 6, 0, 0) });
+            var hidden = new ThemedCheckBox { Text = "Hide", AutoSize = true, Checked = p.Hidden, Margin = new Padding(10, 4, 0, 0) };
+            hidden.CheckedChanged += (_, _) => Stream?.SetPieceHidden(index, hidden.Checked);
+            row.Controls.Add(hidden);
             _pieces.Controls.Add(row);
 
             // V7: the relay asked YouTube, and YouTube won't play this one.
@@ -174,5 +183,80 @@ public sealed partial class RelaySettingsControl
         }
 
         _pieces.ResumeLayout();
+    }
+
+    /// <summary>Tonight's races, newest first, by session id and name (MainForm.Video) - for "Hide races...".</summary>
+    internal static Func<IReadOnlyList<(string Id, string Label)>>? RacesTonight { get; set; }
+
+    /// <summary>
+    /// "Hide races..." (V6): tick the races whose video HeatCaller should stop
+    /// showing, everywhere, at once. The video itself stays on YouTube.
+    /// </summary>
+    private void PickHiddenRaces()
+    {
+        if (Stream is not { } stream)
+        {
+            return;
+        }
+
+        var races = RacesTonight?.Invoke() ?? Array.Empty<(string Id, string Label)>();
+
+        if (races.Count == 0)
+        {
+            AppDialog.Show(this, "No races from tonight yet.", "Hide races");
+            return;
+        }
+
+        var hidden = stream.HiddenRaces.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        using var form = new Form
+        {
+            Text = "Hide race videos",
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MinimizeBox = false,
+            MaximizeBox = false,
+            ClientSize = new Size(UiLayout.AtTextSize(420), UiLayout.AtTextSize(360)),
+            BackColor = AppTheme.Background,
+            ForeColor = AppTheme.TextDark,
+        };
+        var note = new Label
+        {
+            Dock = DockStyle.Top,
+            AutoSize = false,
+            Height = UiLayout.AtTextSize(54),
+            Text = "Ticked races show no video on any driver's page. To remove the video itself, edit it on YouTube.",
+        };
+        var list = new CheckedListBox { Dock = DockStyle.Fill, CheckOnClick = true, BackColor = AppTheme.Background, ForeColor = AppTheme.TextDark };
+
+        foreach (var (id, label) in races)
+        {
+            list.Items.Add(label, hidden.Contains(id));
+        }
+
+        var ok = new Button { Text = "Save", DialogResult = DialogResult.OK, AutoSize = true };
+        var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
+        var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, FlowDirection = FlowDirection.RightToLeft };
+        bar.Controls.Add(cancel);
+        bar.Controls.Add(ok);
+        form.Controls.Add(list);
+        form.Controls.Add(note);
+        form.Controls.Add(bar);
+        form.AcceptButton = ok;
+        form.CancelButton = cancel;
+
+        if (form.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        for (var i = 0; i < races.Count; i++)
+        {
+            var want = list.GetItemChecked(i);
+
+            if (want != hidden.Contains(races[i].Id))
+            {
+                stream.SetRaceHidden(races[i].Id, want);
+            }
+        }
     }
 }
