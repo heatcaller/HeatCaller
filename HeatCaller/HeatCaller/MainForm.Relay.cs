@@ -1349,6 +1349,7 @@ public partial class MainForm
         RelayChannel.Qualifying,
         RelayChannel.Sponsors,
         RelayChannel.NextNight,
+        RelayChannel.Stream,
     ];
 
     /// <summary>
@@ -1515,6 +1516,10 @@ public partial class MainForm
         // none announced, the card is taken down rather than left standing.
         SendToRelayIfChanged(RelayChannel.NextNight, "the next race night",
             () => _settings.NextNight is { } night ? NextNight.Document(night, PhonesCanSayComing(_settings)) : NextNight.Withdrawn());
+
+        // Tonight's YouTube stream (14 Nov 2026, race video plan) - see
+        // MainForm.Video. Private on the relay; small, so sent like the rest.
+        SendToRelayIfChanged(RelayChannel.Stream, "tonight's stream", StreamDocument);
 
         SendToRelayIfChanged(RelayChannel.Tracks, "the tracks", () => RelayDocuments.Tracks(
             _trackLayouts, _sessionHistory.SavedView(), _profiles, _pbResets, _raceEvents.Current.TrackLayoutName, abbreviate, _relayTrackImages));

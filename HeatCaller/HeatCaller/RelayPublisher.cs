@@ -44,6 +44,10 @@ public enum RelayChannel
     // 12 Nov 2026 (setup plan D13): the club's next race night, or that it's
     // off - see NextNight. Public: it's what the club tells everybody.
     NextNight,
+
+    // 14 Nov 2026 (race video plan Phase 0): tonight's YouTube stream - see
+    // StreamTonight. PRIVATE: the relay works each race's moment out of it.
+    Stream,
 }
 
 /// <summary>
@@ -3872,6 +3876,7 @@ public sealed partial class RelayPublisher : IDisposable
         RelayChannel.Qualifying => "qualifying",
         RelayChannel.Sponsors => "sponsors",
         RelayChannel.NextNight => "nextnight",
+        RelayChannel.Stream => "stream",
 
         // A NAME THE RELAY WILL REFUSE, not "state" (13 Oct 2026). This
         // arm used to answer "state", so a channel added to the enum and

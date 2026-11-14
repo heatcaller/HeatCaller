@@ -246,6 +246,12 @@ export const CHANNELS: Readonly<Record<string, ChannelSpec>> = Object.freeze({
   // honour its own 'until' the way the preview's is honoured, because the
   // laptop that announced it may never come back to take it down.
   nextnight: { name: "nextnight", kind: "snapshot", what: "the club's next race night: date, classes, times, or that it's off" },
+  // Tonight's stream on the club's own YouTube channel (14 Nov 2026, race
+  // video plan Phase 0): when each piece of the stream started and stopped
+  // on the laptop's clock, its YouTube id, the nudge, the lead-in, and the
+  // races that are hidden or had a junior in them. Private: the relay works
+  // out each race's moment from it (video.ts) and hands out only that.
+  stream: { name: "stream", kind: "snapshot", what: "tonight's YouTube stream: its pieces, and which races are hidden", private: true },
   // Online check-in: who can be checked in, the PIN's hash, and the
   // drivers' names and photos. Private - the relay hands out pieces of
   // it to a PIN or a badge, never the whole thing.

@@ -78,6 +78,7 @@ import type { UsageLog } from "./usagelog.js";
 import { BROADCAST_TTL_SECONDS, myNightUrl, PUSH_CHANNEL, pushKindsFrom, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
 import { PAGES_BUILD } from "./pagebuild.js";
 import { nextNightIcs } from "./ics.js";
+import { liveVideo, raceVideo, streamFrom, type RaceVideo, type Stream } from "./video.js";
 import { SIGNIN_MAIL, SIGNIN_MAIL_MAX, SIGNIN_MAIL_MAX_BODY, SIGNIN_MAIL_PER_HOUR, signinEmailFrom, signinItemsFrom } from "./signinmail.js";
 import { addCounts, countableEvents, PAGE_COUNTS, PAGE_COUNTS_DAYS, PAGE_COUNTS_MAX_BODY, PAGE_COUNTS_PER_ADDRESS, totalsOver } from "./pagecounts.js";
 
@@ -2908,6 +2909,15 @@ export class Relay {
     if (method === "GET" && rest.length === 1 && rest[0] === "counts") {
       await this.pageCounts(request, response, club);
       return;
+    }
+
+    // Race video (14 Nov 2026, race video plan V1): a race's moment in the
+    // club's YouTube stream, worked out here from the private stream
+    // document - see video.ts.
+    if (rest.length >= 2 && rest[0] === "video") {
+      if (method === "GET" && rest.length === 3 && rest[1] === "race") { await this.videoForRace(request, response, club, rest[2] ?? ""); return; }
+      if (method === "POST" && rest.length === 2 && rest[1] === "night") { await this.videoForNight(request, response, club); return; }
+      if (method === "GET" && rest.length === 2 && rest[1] === "live") { await this.videoLive(response, club); return; }
     }
 
     // Email me a sign-in link (14 Nov 2026, driver phone plan item 17):
@@ -9067,6 +9077,98 @@ export class Relay {
 
     response.writeHead(204, BASE_HEADERS);
     response.end();
+  }
+
+  /** The club's stream document, read and checked (video.ts), or undefined. */
+  private async streamOf(club: string): Promise<Stream | undefined> {
+    const doc = await this.store.getSnapshot(club, "stream").catch(() => undefined);
+    return streamFrom(doc?.body, this.deadVideos.get(club) ?? new Set());
+  }
+
+  /** Videos the relay's own check found private, removed or not embeddable, per club (V7). */
+  private readonly deadVideos = new Map<string, Set<string>>();
+
+  /**
+   * A race's moment, for public results: {video: {id, t, end, laps?, best?}}.
+   * 404 for any race with no video - including a hidden race, a junior's,
+   * and every race while the club shows video on drivers' own nights only.
+   * ?n=<name> adds that driver's laps (their row in the race's own result).
+   */
+  private async videoForRace(request: IncomingMessage, response: ServerResponse, club: string, sid: string): Promise<void> {
+    const stream = await this.streamOf(club);
+    const result = /^[0-9a-f]{32}$/.test(sid) ? await this.store.getItem(club, "results", sid).catch(() => undefined) : undefined;
+    const body = isPlainObject(result?.body) ? (result.body as Record<string, unknown>) : undefined;
+
+    if (stream === undefined || body === undefined) {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    const name = new URL(request.url ?? "/", "http://relay.invalid").searchParams.get("n") ?? "";
+    const rows = Array.isArray(body["results"]) ? (body["results"] as unknown[]) : [];
+    const row = name === "" ? undefined : rows.find((r) => isPlainObject(r) && r["name"] === name) as Record<string, unknown> | undefined;
+    const video = raceVideo(stream, { sid, startedUtc: body["startedUtc"], endedUtc: body["endedUtc"] }, true, row);
+
+    if (video === undefined) {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    sendJson(response, 200, { ok: true, video });
+  }
+
+  /**
+   * A driver's own night: {id} (their badge code) -> {videos: {sid: video}}.
+   * Every race of theirs with video, juniors' included - it is their own
+   * night - but never a hidden one.
+   */
+  private async videoForNight(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = `${club}|${clientAddress(request)}`;
+
+    if (this.checkinReads.blocked(who)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
+      return;
+    }
+
+    this.checkinReads.hit(who);
+    const body = await readBody(request, response, CHECKIN_MAX_BODY);
+    const id = isPlainObject(body) && typeof body["id"] === "string" ? body["id"].trim().toLowerCase() : "";
+
+    if (!DRIVER_ID.test(id) || !(await this.nightsOpenFor(club))) {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    const night = await this.store.getItem(club, NIGHTS_CHANNEL, id).catch(() => undefined);
+    const stream = await this.streamOf(club);
+    const races = isPlainObject(night?.body) && Array.isArray((night.body as Record<string, unknown>)["races"])
+      ? ((night.body as Record<string, unknown>)["races"] as unknown[])
+      : [];
+    const videos: Record<string, RaceVideo> = {};
+
+    for (const r of races.slice(0, 60)) {
+      if (!isPlainObject(r) || typeof r["sid"] !== "string") continue;
+      const sid = r["sid"];
+      const result = await this.store.getItem(club, "results", sid).catch(() => undefined);
+      const rb = isPlainObject(result?.body) ? (result.body as Record<string, unknown>) : undefined;
+      if (rb === undefined) continue;
+      const video = raceVideo(stream, { sid, startedUtc: rb["startedUtc"], endedUtc: rb["endedUtc"] }, false, r);
+      if (video !== undefined) videos[sid] = video;
+    }
+
+    sendJson(response, 200, { ok: true, videos });
+  }
+
+  /**
+   * The stream on now: {live: "<video id>"} while a piece is open and the
+   * laptop's race state is under two minutes old, else {live: null} - never
+   * "live" when it isn't.
+   */
+  private async videoLive(response: ServerResponse, club: string): Promise<void> {
+    const stream = await this.streamOf(club);
+    const state = await this.store.getSnapshot(club, "state").catch(() => undefined);
+    const fresh = state !== undefined && this.now().getTime() - Date.parse(state.publishedAt) < 120_000;
+    sendJson(response, 200, { ok: true, live: fresh ? liveVideo(stream) ?? null : null });
   }
 
   /**

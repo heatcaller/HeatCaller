@@ -10,7 +10,7 @@ namespace HeatCaller;
 /// Local Screens page carries a one-line status and a button through to
 /// here, so there are two doors rather than one.
 /// </summary>
-public sealed class RelaySettingsControl : UserControl
+public sealed partial class RelaySettingsControl : UserControl
 {
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
@@ -106,6 +106,10 @@ public sealed class RelaySettingsControl : UserControl
     /// (22 Oct 2026, driver experience.)
     /// </summary>
     internal static NightEmailDesk? NightEmails { get; set; }
+
+    /// <summary>Tonight's YouTube stream and the OBS link, for the Race video card (MainForm.Video).</summary>
+    internal static StreamTonight? Stream { get; set; }
+    internal static ObsLink? Obs { get; set; }
     private readonly Button _btnTest = new();
     private readonly Button _btnSave = new();
     private readonly Button _btnRestore = new();
@@ -395,6 +399,7 @@ public sealed class RelaySettingsControl : UserControl
         page.Add(SimpleMode.Hide(BuildPinsCard()));
         page.Add(SimpleMode.Hide(BuildMailCard()));
         page.Add(SimpleMode.Hide(BuildManagerCard()));
+        page.Add(SimpleMode.Hide(BuildVideoCard()));
         page.Add(BuildShareCard());
 
         // ROOM & WEB (17 Oct 2026): what the room and the people at home can
@@ -3114,6 +3119,7 @@ public sealed class RelaySettingsControl : UserControl
             _pinRejected = null;
             _chkCheckInPhotos.Checked = _settings.RelayCheckInPhotos;
             _chkEmailSignInLink.Checked = _settings.RelayEmailSignInLink;
+            LoadVideoSettings();
 
             _chkRacerPins.Checked = _settings.RelayRacerPinsEnabled;
             SelectRotation(_settings.RacerPinRotation);
