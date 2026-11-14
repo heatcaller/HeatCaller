@@ -49,6 +49,50 @@ public sealed class BugHunt17_RaceControlSession_LapsTests
     }
 
     [Fact]
+    public void A_staggered_spare_that_jumped_is_timed_from_the_owners_own_release()
+    {
+        // Bug hunt 18: Maya owns 100, with 200 as her spare, and is released
+        // 5 s after the green on her own clock. The owner's row the refile
+        // built had no release offset, so she was timed from the green.
+        long nowMs = 1_000_000;
+        var utc0 = new DateTime(2026, 11, 14, 19, 0, 0, DateTimeKind.Utc);
+        var race = new RaceControlSession
+        {
+            NowMsSource = () => nowMs,
+            UtcNowSource = () => utc0.AddMilliseconds(nowMs),
+            StartType = RaceStartType.StaggeredGrid,
+            StaggerClockMode = StaggerClock.OwnRelease,
+            AlternateTransponderOwner = id => string.Equals(id, "200", StringComparison.OrdinalIgnoreCase) ? "100" : null,
+        };
+
+        void Cross(string car, uint deviceTimeMs)
+        {
+            nowMs = 1_000_000 + (deviceTimeMs - 100_000L);
+            race.PollReleases();
+            Seen(race, car, deviceTimeMs);
+        }
+
+        race.Stage();
+        race.SetReleaseSchedule(new Dictionary<string, long> { ["100"] = 5_000 });
+        Cross("100", 80_000); // her main car carried over the loop to the pit table
+
+        race.StartCountdown();
+        Cross("200", 99_500); // she races the spare, and goes early
+        nowMs = 1_000_000;
+        race.GreenFlag(100_000);
+
+        Cross("200", 110_000);
+        Cross("200", 120_000);
+
+        Assert.DoesNotContain(race.GetOrderedStandings(), s => s.TransponderId == "200");
+
+        var maya = StandingOf(race, "100");
+        Assert.Equal(5_000L, maya.ReleaseOffsetMs);
+        Assert.Equal(2, maya.Laps); // the first pass after her release is her start lap
+        Assert.Equal(15_000L, maya.ElapsedMs); // 120 s less the green and her 5 s
+    }
+
+    [Fact]
     public void A_decoder_clock_that_restarts_above_the_start_reference_still_moves_the_reference()
     {
         long nowMs = 1_000_000;
