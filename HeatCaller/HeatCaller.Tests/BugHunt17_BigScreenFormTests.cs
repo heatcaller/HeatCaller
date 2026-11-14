@@ -46,7 +46,7 @@ public sealed class BugHunt17_BigScreenFormTests
     [Fact]
     public void Every_check_in_brings_the_coming_and_entries_closed_lines_up_to_date()
     {
-        var summary = MethodBody(Source("CheckInControl.cs"), "private void UpdateSummary()", "// ------------------------------------------------------------ packs");
+        var summary = MethodBody(Source("CheckInControl.cs"), "private void UpdateSummary()", "\n    }");
 
         Assert.Contains("RefreshEntriesClosed();", summary, StringComparison.Ordinal);
         Assert.Contains("RefreshComing();", summary, StringComparison.Ordinal);
