@@ -8308,7 +8308,9 @@ const LISTEN_JS = `
       statsBox.textContent = [
         'in hand ' + inHand.toFixed(2) + ' s, cushion ' + streamAhead.toFixed(1) + ' s',
         'played ' + stats.played + ', late ' + stats.late + ', skipped numbers ' + stats.skipped,
-        'too far behind ' + stats.behind + ', rejoined ' + stats.rejoins + ', failed fetches ' + stats.failed,
+        'too far behind ' + stats.behind + ', rejoined ' + stats.rejoins + ', failed fetches ' + stats.failed
+          // Spoken lines dropped as more than 8 s late (14 Nov 2026, item 19).
+          + ', late lines dropped ' + (stats.lateDropped || 0),
         'arrived every ' + (stats.gapN === 0 ? '-' : (stats.gapSum / stats.gapN).toFixed(2) + ' s') +
           ', worst ' + (stats.gapN === 0 ? '-' : stats.gapWorst.toFixed(2) + ' s'),
         'fetch ' + ms(stats.fetchLast) + ' (worst ' + ms(stats.fetchWorst) + '), decode ' +
