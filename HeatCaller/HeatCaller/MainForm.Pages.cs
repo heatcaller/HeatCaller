@@ -1388,7 +1388,7 @@ public partial class MainForm
         subPageOverview.Controls.Add(overview);
 
         var subPagePersonalBests = new TabPage("Personal Bests");
-        var personalBests = new PersonalBestsControl(_sessionHistory, _pbResets, _undo) { Dock = DockStyle.Fill, Layouts = _trackLayouts };
+        var personalBests = new PersonalBestsControl(_sessionHistory, _pbResets, _undo) { Dock = DockStyle.Fill, Layouts = _trackLayouts, Profiles = _profiles };
         subPagePersonalBests.Controls.Add(personalBests);
 
         var subPageLapTimes = new TabPage("Lap Times");
