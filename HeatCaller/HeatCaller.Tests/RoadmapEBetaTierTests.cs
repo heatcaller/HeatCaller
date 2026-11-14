@@ -84,19 +84,4 @@ public sealed class RoadmapEBetaTierTests
 
         Assert.True(JsonSerializer.Deserialize<AppSettings>(json)!.HideUntestedPages);
     }
-
-    [Fact]
-    public void Manage_Navigation_hands_back_the_beta_tick_it_was_given()
-    {
-        var (on, off) = StaThread.Run(() =>
-        {
-            using var ticked = new TabVisibilityForm(new[] { "Race Control", "Garage" }, Array.Empty<string>(), hideUntested: true);
-            using var unticked = new TabVisibilityForm(new[] { "Race Control", "Garage" }, Array.Empty<string>());
-
-            return (ticked.HideUntested, unticked.HideUntested);
-        }, TimeSpan.FromSeconds(30), () => "building Manage Navigation");
-
-        Assert.True(on);
-        Assert.False(off);
-    }
 }

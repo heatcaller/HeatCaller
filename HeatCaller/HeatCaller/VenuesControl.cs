@@ -13,7 +13,7 @@ public sealed class VenuesControl : UserControl
     private readonly TrackLayoutStore _trackLayouts;
     private readonly ThemeStore _themes;
 
-    private readonly ListBox _list = new();
+    private readonly VenueList _list = new();
     private readonly TextBox _txtName = new();
     private readonly ComboBox _cmbConnectionType = new();
     private readonly ComboBox _cmbTrackLayout = new();
@@ -24,6 +24,10 @@ public sealed class VenuesControl : UserControl
     private readonly NumericUpDown _numStreakSlowMultiplier = new();
     private readonly Label _lblStatus = new();
     private readonly Button _btnApply = new();
+
+    /// <summary>The selected venue at a glance, over its settings: what applying it sets.</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
+    private static readonly string[] TileCaptions = { "Decoder", "Track layout", "Soundscape", "Race length" };
 
     /// <summary>The venues' card and its buttons, which the column's width is measured from - see VenuesWidth.</summary>
     private Section? _venuesCard;
@@ -38,7 +42,7 @@ public sealed class VenuesControl : UserControl
     private (Font Font, int Count, int Width)? _themeWidth;
 
     /// <summary>The venues' column and the settings' fields at the normal text size.</summary>
-    private const int ListWidth = 240;
+    private const int ListWidth = 300;
     private const int FieldWidth = 280;
 
     /// <summary>The fewest venues the list shows before the page scrolls instead.</summary>
@@ -123,8 +127,8 @@ public sealed class VenuesControl : UserControl
 
         // --- The venues ---
 
-        _list.IntegralHeight = false;
         _list.SelectedIndexChanged += (_, _) => LoadSelectedIntoUi();
+        _textSize.Keep(_list.Remeasure);
 
         var btnNew = new Button { Text = "New Venue" };
         btnNew.Click += BtnNew_Click;
@@ -194,9 +198,6 @@ public sealed class VenuesControl : UserControl
         details.AddRow("Preferred track:", _cmbTrackLayout);
         details.AddRow("Preferred soundscape:", _cmbTheme);
 
-        var lblDefaults = new Label { Text = "Race defaults for this venue:", AutoSize = true };
-        _textSize.Wear(lblDefaults, () => AppTheme.BoldFont);
-
         var defaults = new FieldGrid();
 
         defaults.AddRow("Lap limit (0 = none):", _numLapLimit);
@@ -208,19 +209,44 @@ public sealed class VenuesControl : UserControl
         _lblStatus.AutoSize = true;
         _lblStatus.ForeColor = AppTheme.TextMuted;
 
-        var settings = new Section("Venue settings");
+        // --- The tiles: the venue at a glance ---
 
-        settings.Add(details);
-        settings.Add(lblDefaults, stretch: false);
-        settings.Add(defaults);
-        settings.Add(new ButtonBar().With(_btnApply));
-        settings.Add(_lblStatus, gapBelow: 0);
+        for (var i = 0; i < _tiles.Length; i++)
+        {
+            _textSize.Wear(_tiles[i].Value, () => AppTheme.TitleFont);
+            _textSize.Wear(_tiles[i].Caption, () => AppTheme.MicroFont);
+            _tiles[i].Set("-", TileCaptions[i]);
+        }
+
+        // --- The cards: the venue itself, its race defaults, and Apply ---
+
+        var venueCard = new Section("The venue");
+        venueCard.Add(details, gapBelow: 0);
+
+        var defaultsCard = new Section("Race defaults");
+        defaultsCard.Add(defaults, gapBelow: 0);
+
+        var lblApplyHint = new Label
+        {
+            Text = "Sets the decoder on the Connection page, switches to the soundscape, and on Race Control picks the track layout and race defaults.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+        _textSize.Wear(lblApplyHint, () => AppTheme.SmallFont);
+
+        var applyCard = new Section("Apply");
+        applyCard.Add(lblApplyHint);
+        applyCard.Add(new ButtonBar().With(_btnApply));
+        applyCard.Add(_lblStatus, gapBelow: 0);
 
         // --- The page ---
 
         var band = new Beside(VenuesWidth) { SideOnLeft = true };
 
-        band.Add(settings, gapBelow: 0);
+        band.Add(new TileStrip(_tiles));
+        band.Add(venueCard);
+        band.Add(defaultsCard);
+        band.Add(applyCard, gapBelow: 0);
         band.AddSideFill(_venuesCard, _venuesCard.LeastHeight, gapBelow: 0);
 
         var page = new FillPage();
@@ -453,7 +479,7 @@ public sealed class VenuesControl : UserControl
         _list.Items.Clear();
         foreach (var venue in _venues.All)
         {
-            _list.Items.Add(new VenueListItem(venue));
+            _list.Items.Add(ItemFor(venue));
         }
 
         if (selectId is not null)
@@ -512,6 +538,7 @@ public sealed class VenuesControl : UserControl
         if (venue is null)
         {
             SetEditEnabled(false);
+            ShowTiles(null);
             return;
         }
 
@@ -538,6 +565,7 @@ public sealed class VenuesControl : UserControl
         // A saved choice that has gone shows as "(missing: ...)", which may
         // be longer than anything else in the list.
         RefitPickers();
+        ShowTiles(venue);
     }
 
     private void SaveCurrentFromUi()
@@ -569,10 +597,11 @@ public sealed class VenuesControl : UserControl
         var index = _list.SelectedIndex;
         if (index >= 0)
         {
-            _list.Items[index] = new VenueListItem(venue);
+            _list.Items[index] = ItemFor(venue);
             _list.SelectedIndex = index;
         }
 
+        ShowTiles(venue);
         _lblStatus.Text = "Saved.";
     }
 
@@ -646,6 +675,7 @@ public sealed class VenuesControl : UserControl
         }
 
         VenueApplied?.Invoke(venue);
+        _list.AppliedId = venue.Id;
         _lblStatus.Text = $"Applied \"{venue.Name}\".";
     }
 
@@ -672,8 +702,69 @@ public sealed class VenuesControl : UserControl
         public override string ToString() => $"(missing: {Name})";
     }
 
-    private sealed record VenueListItem(VenueProfile Venue)
+    /// <summary>A venue's card in the list - see VenueList.</summary>
+    private sealed record VenueListItem(VenueProfile Venue, string Line) : VenueList.IVenueRow
     {
+        public string Id => Venue.Id;
+        public string Name => Venue.Name;
         public override string ToString() => Venue.Name;
+    }
+
+    private static VenueListItem ItemFor(VenueProfile venue)
+    {
+        var parts = new List<string> { DecoderName(venue.ConnectionType) };
+
+        if (!string.IsNullOrWhiteSpace(venue.PreferredTrackLayoutName))
+        {
+            parts.Add(venue.PreferredTrackLayoutName.Trim());
+        }
+
+        var theme = ThemeNameToShow(venue.PreferredThemeName);
+        if (!string.IsNullOrWhiteSpace(theme))
+        {
+            parts.Add(theme.Trim());
+        }
+
+        return new VenueListItem(venue, string.Join("  ·  ", parts));
+    }
+
+    /// <summary>The decoder's short name. The retired Next Level Timing number is applied as EasyLap, so it reads as one.</summary>
+    private static string DecoderName(int connectionType) =>
+        DecoderConnection.ShortName(connectionType == DecoderConnection.RetiredNeonApi ? DecoderConnection.EasyLap : connectionType);
+
+    /// <summary>The tiles over the settings: what applying the venue sets. Dashes with no venue picked.</summary>
+    private void ShowTiles(VenueProfile? venue)
+    {
+        if (venue is null)
+        {
+            for (var i = 0; i < _tiles.Length; i++)
+            {
+                _tiles[i].Set("-", TileCaptions[i]);
+            }
+
+            return;
+        }
+
+        var theme = ThemeNameToShow(venue.PreferredThemeName);
+
+        _tiles[0].Set(DecoderName(venue.ConnectionType), TileCaptions[0]);
+        _tiles[1].Set(string.IsNullOrWhiteSpace(venue.PreferredTrackLayoutName) ? "Left as is" : venue.PreferredTrackLayoutName.Trim(), TileCaptions[1]);
+        _tiles[2].Set(string.IsNullOrWhiteSpace(theme) ? "Left as is" : theme.Trim(), TileCaptions[2]);
+        _tiles[3].Set(RaceLength(venue.RaceLapLimit, venue.RaceTimeLimitMinutes), TileCaptions[3]);
+    }
+
+    /// <summary>"20 laps", "5 min", "20 laps or 5 min", or "No limit".</summary>
+    internal static string RaceLength(int laps, int minutes)
+    {
+        var lapPart = laps > 0 ? $"{laps} lap{(laps == 1 ? "" : "s")}" : null;
+        var timePart = minutes > 0 ? $"{minutes} min" : null;
+
+        return (lapPart, timePart) switch
+        {
+            (not null, not null) => $"{lapPart} or {timePart}",
+            (not null, null) => lapPart,
+            (null, not null) => timePart,
+            _ => "No limit",
+        };
     }
 }
