@@ -1603,13 +1603,15 @@ internal static class GapPreview
 }
 
 /// <summary>
-/// "Start the countdown by itself from the run sheet" has two ticks - the
-/// Between races card and the Timetable's Reminder countdown card - over the
-/// one setting. Both write it here and both hear it here, so each shows what
-/// the other did (10 Nov 2026, bug hunt 16). Before, each read the setting
-/// once when it was built: a tick on the Timetable stayed wrong on the card,
-/// and the card's next unrelated edit saved its stale tick back over it, so
-/// the run sheet's countdown calls stopped without a word.
+/// "Start the countdown by itself from the run sheet" is one setting that
+/// more than one control can show. Every one writes it here and hears it
+/// here, so each shows what another did (10 Nov 2026, bug hunt 16). Before,
+/// each read the setting once when it was built, and a card's next unrelated
+/// edit saved its stale tick back over it, so the run sheet's countdown
+/// calls stopped without a word.
+///
+/// The Timetable's Reminder countdown card had the second tick; it was taken
+/// out on 13 Nov 2026, leaving the Between races card as the place to set it.
 /// </summary>
 internal static class AutoCountdownTick
 {

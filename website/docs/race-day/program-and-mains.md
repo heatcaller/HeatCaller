@@ -653,7 +653,7 @@ The timetable is the day's running order with times: every heat and final in the
 
 Click **Timetable** under **Tonight's program** to open it. It opens in a window of its own, titled **Timetable**; close it with **Close** or <kbd>Esc</kbd> to get back to the main window.
 
-<!-- screenshot: Timetable window with done, on-track and up-next lines, and the Reminder countdown card -->
+<!-- screenshot: Timetable window with done, on-track and up-next lines -->
 
 ### It follows the program
 
@@ -726,12 +726,8 @@ The time you started from is written back to the race day's **First race at:**, 
 
 **Print Run Sheet...** saves the sheet as a black-on-white PNG for the drivers' stand, with a tick box, time, class and description for each line. Lines already done are ticked and struck through, and started lines show their start time. It's letter-size, and a long day runs onto more pages, saved beside the first as for the heat sheet. Open each one and print it at full page size.
 
-### Reminder countdown
+### Countdown calls
 
-The **Reminder countdown** card beside the grid announces a countdown to the **Up Next** line through the announcer. Set **Minutes until start:** (1–120) and click **Start**. The announcer calls out at 5 minutes, 1 minute and when time's up, using the line's class and description ("5 minutes to Stock Q1 Heat 2."). **Stop** cancels it quietly.
+The announcer can count down to each race on its own, from the time against it in the grid. Switch it on on **Voice → AI Commentary**: in Simple mode with **Count down to each race by itself, from the Timetable** on the **Countdown** card, or in Advanced mode with **Start the countdown by itself from the run sheet, at** on the **Between races** card, where you also pick which calls it makes (10, 5, 2 or 1 minutes, and time's up). The two are the same setting. It works with commentary off. See [Between races](../announcer/commentary.md#between-races). **Hold Talk** on Race Control holds it too.
 
-Tick **Count down by itself from the run sheet** on the card and the announcer counts down to each race on its own, from the time against it in the grid, without anyone pressing **Start**. Which calls it makes (10, 5, 2 or 1 minutes, and time's up) are set on the **Between races** card on **Voice → AI Commentary**, in Advanced mode, where the same setting is **Start the countdown by itself from the run sheet, at** (see [Between races](../announcer/commentary.md#between-races)). **Hold Talk** on Race Control holds it too.
-
-A countdown started at 5 minutes or less skips the "5 minutes" call, and one started at 1 minute skips the "1 minute" call. The countdown follows the clock, so it stays accurate even if the laptop is busy or a dialog is open.
-
-A countdown you started carries on after you close the **Timetable** window, though nothing on screen shows it. Open the window again to see it or **Stop** it.
+The Timetable used to have a **Reminder countdown** card with its own **Start** button. It was taken out on 13 Nov 2026 because it ran alongside the Between races countdown and could call the same race twice.

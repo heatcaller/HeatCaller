@@ -418,7 +418,7 @@ public sealed class SimpleModeTests : IDisposable
         "MainForm.Pages.cs|Head to Head", "MainForm.Pages.cs|Trends", "MainForm.Pages.cs|Pace",
         "RaceDayEventControl.cs|Which race day", "RaceDayEventControl.cs|About the day", "RaceDayEventControl.cs|Building the program",
         "TodayControl.cs|Ready to race", "RaceProgramControl.cs|Tonight's program", "EventsControl.cs|Race days",
-        "DayScheduleControl.cs|Reminder countdown", "CheckInControl.cs|Drivers", "CheckInControl.cs|Scan to Check In",
+        "CheckInControl.cs|Drivers", "CheckInControl.cs|Scan to Check In",
         "SeasonsControl.cs|Championships", "SeasonsControl.cs|Races counted", "SeasonsControl.cs|Standings", "SeasonsControl.cs|Points scheme",
         "AnalyticsOverviewControl.cs|Track records", "PersonalBestsControl.cs|Personal bests", "LapChartControl.cs|Drivers",
         "LapChartControl.cs|Lap times", "LapChartControl.cs|Consistency", "HeadToHeadControl.cs|Matchup",
@@ -436,7 +436,7 @@ public sealed class SimpleModeTests : IDisposable
         "CastControl.cs|Voices", "CastControl.cs|Announcer", "CastControl.cs|Co-host",
 
         // AI Commentary's Simple view: shown in Simple only (SimpleMode.ShowInSimpleOnly).
-        "CommentaryControl.cs|What it talks about",
+        "CommentaryControl.cs|What it talks about", "CommentaryControl.cs|Countdown",
 
         // On the Race Calls tab, which Simple hides.
         "VoiceSettingsControl.Announcements.cs|How often", "RivalriesControl.cs|Configured rivalries", "RivalriesControl.cs|Edit selected rivalry",
