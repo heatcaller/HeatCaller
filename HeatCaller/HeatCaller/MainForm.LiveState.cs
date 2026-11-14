@@ -18,13 +18,13 @@ namespace HeatCaller;
 /// neither side. It waits on the timing thread for its reads, never on this
 /// window.
 ///
-/// LIVE through a freeze: the state, flag, countdown, "now", the standings
-/// and their cells, the follow cards, captions, sightings, penalties and
-/// the broadcast moments. STALE through a freeze - as this window last read
-/// them on its 500 ms tick (RefreshFrozenLiveInputs): the race in hand,
-/// the call-ups and the follow list's drivers still to race, the track map,
-/// the championship, the lead change count, on deck, the sponsors and the
-/// web page's columns. Names are from the profiles as last saved.
+/// LIVE through a freeze: the state, flag, countdown, the standings and
+/// their cells, each car's laps and gap ahead, captions and the broadcast
+/// moments. STALE through a freeze - as this window last read them on its
+/// 500 ms tick (RefreshFrozenLiveInputs): the race in hand, the grid and
+/// the drivers still to race, the track map, the championship, the lead
+/// change count, on deck, who presents the moments and the web page's
+/// columns. Names are from the profiles as last saved.
 /// </remarks>
 public partial class MainForm
 {

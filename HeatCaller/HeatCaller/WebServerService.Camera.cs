@@ -623,7 +623,7 @@ public sealed partial class WebServerService
           let top = { ms: 0, id: '' };
           // Ghosts set the pace; they don't hold the fastest lap. Told by
           // the row's own flag rather than by the GHOST- on its id: the ids
-          // in /api/state are opaque now (see AddFollowing), and reading a
+          // in /api/state are opaque now (see AddIdsAndGrid), and reading a
           // prefix that is no longer there put a ghost's lap on the stream.
           rows.forEach(s => { if (s.best > 0 && !s.ghost && (!top.ms || s.best < top.ms)) top = { ms: s.best, id: s.id }; });
           if (!racing && !finished) top = { ms: 0, id: '' };

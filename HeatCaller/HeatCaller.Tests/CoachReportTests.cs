@@ -355,7 +355,7 @@ public sealed class CoachReportTests
         // is not something to put their name on a relay for.
         Assert.Null(DriverNight.Document("Bill Hargrove", NightLocal, null, Facts(), BuiltAt, new[] { "Best lap tonight: 8.900s." }));
     }
-    // --- The phone coach page ---------------------------------------------------
+    // --- The phone coach page, gone (13 Nov 2026) --------------------------------
 
     private static WebServerService CoachServer(string transponder)
     {
@@ -382,7 +382,7 @@ public sealed class CoachReportTests
     }
 
     [Fact]
-    public void A_target_set_by_race_control_goes_on_the_driver_s_card_for_the_phone()
+    public void The_coach_page_and_its_target_lap_are_gone_from_the_LAN()
     {
         const string car = "T7701";
         DriverTargets.ClearAll();
@@ -390,59 +390,24 @@ public sealed class CoachReportTests
         try
         {
             var server = CoachServer(car);
-
-            var before = System.Text.Json.Nodes.JsonNode.Parse(server.BuildStateJson())!.AsObject();
-            var id = before["standings"]!.AsArray().Single()!["id"]!.GetValue<string>();
-
-            Assert.Null(before["cards"]![id]!["target"]);
-
             DriverTargets.Set(car, 8_500);
 
-            var after = System.Text.Json.Nodes.JsonNode.Parse(server.BuildStateJson())!.AsObject();
+            // The target lap went onto the board only for the phone coach
+            // page, which was taken off the LAN with Live Results.
+            var state = System.Text.Json.Nodes.JsonNode.Parse(server.BuildStateJson())!.AsObject();
+            var id = state["standings"]!.AsArray().Single()!["id"]!.GetValue<string>();
+            Assert.Null(state["cards"]![id]!["target"]);
 
-            Assert.Equal(8_500, after["cards"]![id]!["target"]!.GetValue<long>());
-
-            // Under the opaque id, never the transponder - a "T" can never
-            // turn up inside a lower-case hex id by chance, so this cannot
-            // pass or fail on the luck of the roster key.
-            Assert.DoesNotContain(car, after["cards"]!.ToJsonString(), StringComparison.OrdinalIgnoreCase);
+            // And the root lists the pages that are left, not /coach.
+            var index = server.BuildIndexPage();
+            Assert.DoesNotContain("/coach", index);
+            Assert.Contains("href=\"/checkin\"", index);
+            Assert.Contains("href=\"/overlay\"", index);
         }
         finally
         {
             DriverTargets.ClearAll();
         }
-    }
-
-    [Fact]
-    public void The_coach_page_reads_only_the_board_and_the_card()
-    {
-        var page = CoachServer("T7702").BuildCoachPage();
-
-        // The same remembered pick as Live Results' Follow.
-        Assert.Contains("'hcFollow'", page);
-        Assert.Contains("fetch('/api/state', { signal: stop.signal })", page);
-        Assert.Contains("/api/coach?id=", page);
-
-        // Nothing else on the wire.
-        Assert.DoesNotContain("/api/roster", page);
-        Assert.DoesNotContain("/api/command", page);
-    }
-
-    [Fact]
-    public void The_coach_page_can_say_the_drivers_own_lap_time_and_beeps_where_it_cannot_buzz()
-    {
-        var page = CoachServer("T7702").BuildCoachPage();
-
-        // Say my lap time (22 Oct 2026): ticked on the phone, remembered there,
-        // the phone's own voice - and only for a lap that has just come in.
-        Assert.Contains("id=\"say\"", page);
-        Assert.Contains("Say my lap time", page);
-        Assert.Contains("'hcCoachSay'", page);
-        Assert.Contains("new SpeechSynthesisUtterance(text)", page);
-        Assert.Contains("laps.length > lapsSeen", page);
-
-        // An iPhone has no vibration for a web page: the new best beeps there.
-        Assert.Contains("if (!buzzed) beep();", page);
     }
 
     [Fact]

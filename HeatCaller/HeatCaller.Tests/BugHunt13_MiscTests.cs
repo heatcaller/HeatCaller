@@ -151,58 +151,6 @@ public sealed class BugHunt13_MiscTests : IDisposable
         }
     }
 
-    // ------------------------------------------------ sponsor slides
-
-    [Fact]
-    public void A_sponsor_slide_whose_screen_left_mid_send_is_let_go_quietly()
-    {
-        // A PNG header for a modest picture, padded out to a few megabytes -
-        // the size of slide a phone is most likely to walk away from.
-        var picked = _data.PathOf("big-slide.png");
-        var png = new byte[6 * 1024 * 1024];
-        new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0x07, 0x80, 0, 0, 0x04, 0x38, 8, 2, 0, 0, 0 }
-            .CopyTo(png, 0);
-        File.WriteAllBytes(picked, png);
-
-        var sponsors = SponsorStore.Load();
-        Assert.NotNull(sponsors.AddSlide(picked, out var error));
-        Assert.Null(error);
-
-        var server = new WebServerService(new RaceTiming(new RaceControlSession()), ProfileStore.Load(), sponsors: sponsors);
-
-        var port = FreePort();
-        using var listener = new HttpListener();
-        listener.Prefixes.Add($"http://localhost:{port}/");
-        listener.Start();
-
-        // The screen asks, then is gone - reset, not a polite close.
-        var client = new TcpClient();
-        client.Connect(IPAddress.Loopback, port);
-        var ask = Encoding.ASCII.GetBytes($"GET /api/sponsor?i=0 HTTP/1.1\r\nHost: localhost:{port}\r\n\r\n");
-        client.GetStream().Write(ask, 0, ask.Length);
-
-        var context = listener.GetContext();
-
-        client.LingerState = new LingerOption(true, 0);
-        client.Close();
-        Thread.Sleep(300);
-
-        // Used to throw from its own catch (a 500 after the headers had
-        // gone), which the console logged as a failed request.
-        var thrown = Record.Exception(() => Call(server, "HandleSponsorImage", context));
-
-        Assert.Null(thrown);
-    }
-
-    private static int FreePort()
-    {
-        var probe = new TcpListener(IPAddress.Loopback, 0);
-        probe.Start();
-        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
-        probe.Stop();
-        return port;
-    }
-
     // ------------------------------------------------ the Mixer's audition
 
     [Fact]

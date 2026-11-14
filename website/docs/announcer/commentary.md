@@ -1137,7 +1137,7 @@ Two switches under **Club notes** on the **Room & Web** card, on **Club Website 
 
 | Switch | Who can send | Where from |
 |---|---|---|
-| **Take them from phones on the club's Wi-Fi** | Anybody in the building | `/shoutout` on this PC's own address — the same one the live results are on |
+| **Take them from phones on the club's Wi-Fi** | Anybody in the building | `/shoutout` on this PC's own address — the one **Local Screens** shows |
 | **Take them from the club's own web page** | Anybody with the link, including the people who couldn't make it | The **Message the announcer** card on your club's **Live** page on the relay |
 
 On the club's page the card has a box for the message, an optional name, and **Send it**. It's only there while the switch is on. A sender is told "Sent to the race director. Thanks!", or why not: too many sent already, tonight's list full, or messages not being taken right now.

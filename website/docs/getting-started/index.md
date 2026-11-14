@@ -17,7 +17,7 @@ HeatCaller is a Windows app for running an RC car race night from one laptop. It
 
 **A big screen.** A separate leaderboard window you can drag onto a TV, with sponsor slides between views. See [Big Screen](../screens/big-screen.md).
 
-**Phones on the club Wi-Fi.** HeatCaller can serve pages to phones and tablets on the same Wi-Fi: live results, a phone remote for throwing flags, a self check-in page, a driver coach page with a driver's own laps, a race-day manager for running entries, the program and results, and a transparent overlay and broadcast graphics for streaming with OBS. See [Local Screens](../screens/phone-and-web.md).
+**Phones on the club Wi-Fi.** HeatCaller can serve pages to phones and tablets on the same Wi-Fi: a phone remote for throwing flags, a self check-in page, a race-day manager for running entries, the program and results, and a transparent overlay and broadcast graphics for streaming with OBS. See [Local Screens](../screens/phone-and-web.md).
 
 **Online pages and check-in.** HeatCaller can also publish to a small online server called the relay. It gives your club a public web address for results, standings, the live race, and online check-in from racers' own phones. See [Online](../online/index.md).
 
@@ -70,7 +70,7 @@ No decoder yet? **Demo Mode** runs a fake race through the same race logic, anno
 | A natural announcer voice, with your own words and your own voices | An [ElevenLabs](https://elevenlabs.io) account and API key. Without one, the HeatCaller voice or the free Kokoro voice does the announcing. |
 | AI commentary between the calls | Nothing, when your club's [Club Website page](../online/setup.md) is set up: the relay writes it. With the internet down, the small model built into HeatCaller writes it on the race PC instead, line by line. Nothing to install either way. See [Commentary](../announcer/commentary.md). |
 | A leaderboard on a TV | A second screen or TV connected to the laptop. |
-| Phones showing live results, or a phone remote | A Wi-Fi network that the laptop and the phones share. You may need to allow HeatCaller through Windows once (see [Local Screens](../screens/phone-and-web.md)). |
+| Phones checking in, or a phone remote | A Wi-Fi network that the laptop and the phones share. You may need to allow HeatCaller through Windows once (see [Local Screens](../screens/phone-and-web.md)). |
 | Results and check-in online | Somewhere to host the relay. The documented route is [Fly.io](https://fly.io). See [Hosting the relay](../admin/relay-hosting.md). |
 | Racers' PINs emailed to them | A club email account (such as Gmail or iCloud) with an app password. See [Emailing racer PINs](../online/email.md). |
 | QR check-ins at the desk | Any USB barcode scanner. They type like a keyboard, so there's nothing to install. |

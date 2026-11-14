@@ -8,8 +8,10 @@ namespace HeatCaller;
 /// <summary>
 /// A small embedded web server serving pages on the local network:
 ///
-///   /        - live results, read-only. Point a browser or an OBS browser
-///              source at this for a spectator display or stream overlay.
+///   /        - a list of the pages below (WebServerService.Index).
+///   /overlay - the results table, see-through, for an OBS browser source.
+///              Live Results and the phone coach page were taken off the
+///              LAN on 13 Nov 2026; this is all that is left of them.
 ///   /remote  - race control from a phone, so whoever's running the race
 ///              can throw flags while standing at the track instead of
 ///              being tethered to the laptop.
@@ -107,23 +109,11 @@ public sealed partial class WebServerService
 
     /// <summary>
     /// The championship as it would stand if the race on track ended now
-    /// (ChampionshipLive), for the Live Results page - null when no race that
+    /// (ChampionshipLive), for the broadcast graphics - null when no race that
     /// counts towards one is on. Asked on the UI thread as the LAN copy of
     /// the live state is built. Never in the relay's copy.
     /// </summary>
     public Func<IfItEndedNow?>? IfItEndedNow { get; set; }
-
-    /// <summary>
-    /// When the decoder last heard a transponder, and how well - "good",
-    /// "weak" or "unknown" - or null when it has not been heard lately (22
-    /// Oct 2026, driver experience, item 4). For the follow view's "Check my
-    /// transponder": the driver drives past the line and the phone says it
-    /// was heard. Set by MainForm.WiFiExtras from TransponderWatch, which
-    /// has its own lock. Asked on the UI thread as the LAN copy of the live
-    /// state is built, for the people on the follow list only. Never in the
-    /// relay's copy.
-    /// </summary>
-    public Func<string, (DateTime SeenUtc, string Signal)?>? SightingOf { get; set; }
 
     /// <summary>
     /// The last few lines the announcer said, oldest first, for the
@@ -138,62 +128,6 @@ public sealed partial class WebServerService
 
     /// <summary>Lines of captions the LAN state carries: the strip shows the newest, and four covers a page that missed a poll or two.</summary>
     internal const int CaptionsInState = 4;
-
-    /// <summary>The most penalty lines one driver's follow card carries - a night of them is still a phone screen.</summary>
-    internal const int PenaltyLinesPerDriver = 12;
-
-    /// <summary>Tonight's penalty lines, by transponder - replaced whole by PublishPenalties, never changed in place.</summary>
-    private volatile IReadOnlyDictionary<string, IReadOnlyList<string>> _penalties =
-        new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Tonight's penalty lines, by transponder - "Q1 Heat 2: +5 s - jump
-    /// start" - for the follow card on the Live Results page (22 Oct 2026,
-    /// driver experience, item 1). Called on the UI thread when a race is
-    /// filed or corrected (MainForm.RaceFiledWiFiExtras), the same way as
-    /// PublishCoachCards. The dictionary is copied, so the caller is free to
-    /// reuse its own.
-    ///
-    /// THE REASONS ARE PRIVATE everywhere but here and the driver's own
-    /// night (see PenaltyWords): the follow view is in the room, where the
-    /// PA has already said them. They go into the LAN copy of the live state
-    /// only, under the roster's opaque id, and never into the relay's.
-    /// </summary>
-    public void PublishPenalties(IReadOnlyDictionary<string, IReadOnlyList<string>> byTransponder)
-    {
-        var copy = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var (who, lines) in byTransponder)
-        {
-            var kept = lines.Where(l => !string.IsNullOrWhiteSpace(l)).ToArray();
-
-            if (!string.IsNullOrWhiteSpace(who) && kept.Length > 0)
-            {
-                // The latest are the ones the driver is asking about.
-                copy[who.Trim()] = kept.Skip(Math.Max(0, kept.Length - PenaltyLinesPerDriver)).ToArray();
-            }
-        }
-
-        _penalties = copy;
-    }
-
-    /// <summary>
-    /// A time as the pages read it - "2026-10-22T19:42:00.000Z", always UTC
-    /// and always the invariant culture (22 Oct 2026, driver experience). A
-    /// time whose kind nobody set is taken to be UTC already, which is what
-    /// every caller here hands over.
-    /// </summary>
-    internal static string IsoUtc(DateTime time)
-    {
-        var utc = time.Kind switch
-        {
-            DateTimeKind.Utc => time,
-            DateTimeKind.Local => time.ToUniversalTime(),
-            _ => DateTime.SpecifyKind(time, DateTimeKind.Utc),
-        };
-
-        return utc.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", System.Globalization.CultureInfo.InvariantCulture);
-    }
 
     private volatile bool _hostReady;
 
@@ -703,7 +637,7 @@ public sealed partial class WebServerService
         _ = Task.Run(() => ListenLoopAsync(listener, cts.Token));
 
         StatusMessage?.Invoke(
-            $"[web] Server started on port {port}. Live results: {LocalUrl()}  "
+            $"[web] Server started on port {port}. Pages: {LocalUrl()}  "
             + $"Remote: {LocalUrl()}remote  Check-in: {LocalUrl()}checkin");
 
         if (!IsUsableRemotePin(Pin))
@@ -1789,7 +1723,16 @@ public sealed partial class WebServerService
         {
             case "":
             case "/":
-                WriteHtml(context, BuildLiveResultsPage());
+                // Live Results is gone from the LAN (13 Nov 2026) - the root
+                // is a list of the pages left (WebServerService.Index). An OBS
+                // scene still pointed at the old /?overlay=1 keeps working.
+                WriteHtml(context, context.Request.QueryString["overlay"] is not null
+                    ? BuildOverlayPage()
+                    : BuildIndexPage());
+                break;
+            case OverlayPath:
+                // The OBS overlay: the results table, see-through, no chrome.
+                WriteHtml(context, BuildOverlayPage());
                 break;
             case "/remote":
                 WriteHtml(context, BuildRemotePage());
@@ -1832,7 +1775,7 @@ public sealed partial class WebServerService
                 // No PIN and no gate, by design: it is the spectator board.
                 // So nothing in it may be worth a PIN - every id in it is
                 // the roster's own opaque one rather than a transponder,
-                // for the reason AddFollowing gives.
+                // for the reason AddIdsAndGrid gives.
                 WriteJson(context, _publishedState);
                 break;
             case "/api/look":
@@ -1843,9 +1786,6 @@ public sealed partial class WebServerService
                 break;
             case "/api/command":
                 HandleCommand(context);
-                break;
-            case "/api/sponsor":
-                HandleSponsorImage(context);
                 break;
             case "/logo.png":
                 HandleLogo(context);
@@ -1873,23 +1813,6 @@ public sealed partial class WebServerService
                 break;
             case "/api/vote":
                 HandleRoomVote(context);
-                break;
-            case "/coach":
-                // One driver's laps, trend and report card on their own
-                // phone - see WebServerService.Coach. No PIN: it shows only
-                // what the spectator board already does, and the card it
-                // adds leaves out anything private (22 Oct 2026).
-                WriteHtml(context, BuildCoachPage());
-                break;
-            case "/api/coach":
-                HandleCoachCard(context);
-                break;
-            case KeepAwake.Address:
-                // The silent video that keeps a phone awake on the pit
-                // board, where the browser will not offer a wake lock to a
-                // plain-http page - see KeepAwake (22 Oct 2026). No PIN: it
-                // is the same few bytes for everybody.
-                HandleKeepAwake(context);
                 break;
             case "/broadcast":
                 // The broadcast graphics for OBS - see WebServerService.Camera.
@@ -2204,7 +2127,7 @@ public sealed partial class WebServerService
         // accepted; no page this server serves is given one as an id any
         // more. That claim was wrong for a while: /api/state, which needs
         // no PIN, keyed its rows, its map cars and its follow list by
-        // transponder until 9 Oct 2026 - see AddFollowing.
+        // transponder until 9 Oct 2026 - see AddIdsAndGrid.
         // Set once this request has used up a write slot, so a badge that
         // turns out to be a real change is not charged twice.
         var reserved = false;
@@ -2606,406 +2529,6 @@ public sealed partial class WebServerService
         // put on the Content-Type header.
         return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
     }
-
-    /// <summary>
-    /// A sponsor slide's bytes, read from disk once and kept until the file
-    /// changes.
-    ///
-    /// Every phone and TV showing the sponsors fetches the current slide on
-    /// every rotation, and each fetch read the whole file again - a 12 MB
-    /// photo is a large-object allocation per request, and twenty screens
-    /// at once kept the garbage collector busy enough to make the race tick
-    /// late (25 Sep security audit). Kept by path and checked against the
-    /// file's size and time, so a slide replaced under the same name is read
-    /// afresh. Bounded: past the budget the cache starts again rather than
-    /// growing with however many slides the club adds.
-    /// </summary>
-    private byte[]? SlideBytes(string path)
-    {
-        long length;
-        DateTime written;
-
-        try
-        {
-            var info = new FileInfo(path);
-
-            if (!info.Exists)
-            {
-                return null;
-            }
-
-            length = info.Length;
-            written = info.LastWriteTimeUtc;
-        }
-        catch
-        {
-            return null;
-        }
-
-        lock (_slideGate)
-        {
-            if (_slides.TryGetValue(path, out var kept) && kept.Length == length && kept.Written == written)
-            {
-                return kept.Bytes;
-            }
-        }
-
-        if (SponsorStore.ReadSlide(path) is not { } bytes)
-        {
-            return null;
-        }
-
-        lock (_slideGate)
-        {
-            if (_slides.TryGetValue(path, out var old))
-            {
-                _slideBytes -= old.Bytes.Length;
-            }
-
-            if (_slideBytes + bytes.Length > SlideCacheBudget)
-            {
-                _slides.Clear();
-                _slideBytes = 0;
-            }
-
-            _slides[path] = (length, written, bytes);
-            _slideBytes += bytes.Length;
-        }
-
-        return bytes;
-    }
-
-    /// <summary>The most sponsor-slide bytes SlideBytes keeps at once.</summary>
-    private const long SlideCacheBudget = 64L * 1024 * 1024;
-
-    private readonly object _slideGate = new();
-    private readonly Dictionary<string, (long Length, DateTime Written, byte[] Bytes)> _slides = new(StringComparer.OrdinalIgnoreCase);
-    private long _slideBytes;
-
-    private void HandleSponsorImage(HttpListenerContext context)
-    {
-        var indexText = context.Request.QueryString["i"];
-
-        // Read ONCE into a local. The list belongs to the UI thread, which
-        // can add or remove a slide between a Count and an indexer - and
-        // this runs on a request thread, where that lands as an unhandled
-        // IndexOutOfRange rather than a 404.
-        List<string>? slides;
-
-        try
-        {
-            slides = _sponsors?.SlideFileNames.ToList();
-        }
-        catch
-        {
-            // The list changed while it was being copied, because the
-            // operator is editing the slides. One missed image is the right
-            // outcome; an unhandled exception on a request thread is not.
-            slides = null;
-        }
-
-        if (slides is null || !int.TryParse(indexText, out var index)
-            || index < 0 || index >= slides.Count)
-        {
-            context.Response.StatusCode = 404;
-            WriteText(context, "Not found");
-            return;
-        }
-
-        var path = _sponsors!.ResolvePath(slides[index]);
-        if (path is null)
-        {
-            context.Response.StatusCode = 404;
-            WriteText(context, "Not found");
-            return;
-        }
-
-        // A video is streamed off disk, never cached. SlideBytes keeps up to
-        // 64 MB of pictures in memory because a picture is small and is
-        // asked for once per phone per turn; a single ad can be bigger than
-        // that whole budget on its own, and every phone in the building asks
-        // for it at once.
-        if (SponsorMedia.IsVideoName(slides[index]))
-        {
-            HandleSponsorVideo(context, path);
-            return;
-        }
-
-        byte[] bytes;
-
-        try
-        {
-            // Only a slide the Sponsors page would take in, sized from its
-            // header (see SponsorStore.ReadSlide). This used to read the whole
-            // file for every request whatever its size - a planted file of
-            // any length, pulled into memory once per phone per page load.
-            if (SlideBytes(path) is not { } slide)
-            {
-                context.Response.StatusCode = 404;
-                WriteText(context, "Not found");
-                return;
-            }
-
-            bytes = slide;
-
-            // From what the bytes are rather than the file's extension, since
-            // these pages tell the phone not to guess (nosniff): a PNG saved
-            // as .jpg would otherwise not be shown at all.
-            context.Response.ContentType = ImageProbe.IsPng(bytes) ? "image/png"
-                : bytes is [0x47, 0x49, 0x46, 0x38, ..] ? "image/gif"
-                : bytes is [0x42, 0x4D, ..] ? "image/bmp"
-                : "image/jpeg";
-            context.Response.ContentLength64 = bytes.Length;
-        }
-        catch
-        {
-            // Before anything went out - the slide could not be read - so
-            // there is still time to say so.
-            context.Response.StatusCode = 500;
-            WriteText(context, "Error");
-            return;
-        }
-
-        // Sent without holding this request's thread - see SendSponsorSlideAsync.
-        _ = SendSponsorSlideAsync(context, bytes);
-    }
-
-    /// <summary>
-    /// Sends a sponsor picture, and lets the request's thread go while the
-    /// phone takes it.
-    ///
-    /// WHY (13 Nov 2026, Bug Hunt 17): slides and videos need no PIN, and
-    /// each used to be written with a blocking Write - one thread-pool
-    /// thread held for as long as the phone took to read it. A handful of
-    /// slow or stalled readers on the Wi-Fi pinned the threads the flag
-    /// commands, the state polls and the announcer's own work share. Written
-    /// this way a slow reader costs the bytes it is waiting for and nothing
-    /// else.
-    /// </summary>
-    private static async Task SendSponsorSlideAsync(HttpListenerContext context, byte[] bytes)
-    {
-        try
-        {
-            await context.Response.OutputStream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
-            context.Response.OutputStream.Close();
-        }
-        catch
-        {
-            // WHY (7 Nov 2026, Bug Hunt 13): nearly always a phone or TV
-            // that moved on, or dropped off the Wi-Fi, partway through a
-            // big slide. The headers have gone, so a 500 and a body now
-            // would throw again - and that reached the console as a
-            // "Request failed" line for an ordinary disconnect, over and
-            // over with enough screens. Let go of it instead, the way
-            // SendSponsorVideoAsync does.
-            try
-            {
-                context.Response.Abort();
-            }
-            catch
-            {
-                // Already gone.
-            }
-        }
-    }
-
-    /// <summary>
-    /// Sends a sponsor video, streamed from disk in chunks and with Range
-    /// requests answered.
-    ///
-    /// Range matters: a &lt;video&gt; element in Safari will not play at all
-    /// from a server that answers every request with the whole file, and
-    /// Chrome asks for a range as soon as anything seeks. Only a single
-    /// "bytes=from-to" range is handled, which is all a browser sends for
-    /// ordinary playback - a multipart range gets the whole file, which is a
-    /// legal answer to a range request as long as the status says 200.
-    ///
-    /// Nothing is held in memory: an 80 KB buffer walks the file, so twenty
-    /// phones streaming the same ad cost twenty buffers rather than twenty
-    /// copies. Nor is a thread: the reads and writes are awaited, so a phone
-    /// that takes the video slowly, or stops taking it, holds none of the
-    /// thread pool while it does (see SendSponsorSlideAsync).
-    /// </summary>
-    private void HandleSponsorVideo(HttpListenerContext context, string path)
-    {
-        // OPENED BEFORE ANYTHING IS SENT, on its own. A video removed or
-        // locked after ResolvePath found it used to throw inside the catch
-        // below, which said nothing and closed nothing - the phone hung
-        // until its browser gave up. Now it is told there is no such file.
-        FileStream file;
-
-        try
-        {
-            file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous);
-        }
-        catch
-        {
-            context.Response.StatusCode = 404;
-            WriteText(context, "Not found");
-            return;
-        }
-
-        _ = SendSponsorVideoAsync(context, file, path);
-    }
-
-    /// <summary>The sending half of HandleSponsorVideo, which opened the file. Never throws.</summary>
-    private static async Task SendSponsorVideoAsync(HttpListenerContext context, FileStream file, string path)
-    {
-        const int ChunkBytes = 80 * 1024;
-
-        try
-        {
-            await using var held = file;
-
-            var length = file.Length;
-            var from = 0L;
-            var to = length - 1;
-
-            // The browser tells the phone not to guess at a type (nosniff),
-            // so this has to be right. From the extension, which AddVideo
-            // vouched for against the file's own header before it was
-            // stored - see SponsorMedia.
-            context.Response.ContentType = Path.GetExtension(path).ToLowerInvariant() switch
-            {
-                ".mp4" or ".m4v" => "video/mp4",
-                ".mov" => "video/quicktime",
-                ".webm" => "video/webm",
-                ".mkv" => "video/x-matroska",
-                ".avi" => "video/x-msvideo",
-                ".wmv" => "video/x-ms-wmv",
-                _ => "application/octet-stream",
-            };
-
-            context.Response.Headers["Accept-Ranges"] = "bytes";
-
-            if (TryReadRange(context.Request.Headers["Range"], length, out var wantedFrom, out var wantedTo))
-            {
-                from = wantedFrom;
-                to = wantedTo;
-
-                context.Response.StatusCode = 206;
-                context.Response.Headers["Content-Range"] = $"bytes {from}-{to}/{length}";
-            }
-
-            var sending = to - from + 1;
-            context.Response.ContentLength64 = sending;
-            file.Seek(from, SeekOrigin.Begin);
-
-            var buffer = new byte[ChunkBytes];
-            var left = sending;
-
-            while (left > 0)
-            {
-                var read = await file.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, left))).ConfigureAwait(false);
-
-                if (read <= 0)
-                {
-                    // The file was truncated under us - stop rather than
-                    // spin. The browser sees a short body and gives up on
-                    // this slide, which is the same outcome as a 404.
-                    break;
-                }
-
-                await context.Response.OutputStream.WriteAsync(buffer, 0, read).ConfigureAwait(false);
-                left -= read;
-            }
-
-            context.Response.OutputStream.Close();
-        }
-        catch
-        {
-            // Nearly always the phone navigating away mid-stream, which
-            // closes the connection under the write above. Nothing to say
-            // and nowhere to say it - and setting a status now would throw
-            // again, because the headers went out with the first chunk.
-            // But the response is still let go of: aborted, so the
-            // connection and the listener's hold on this request are
-            // released rather than left open.
-            try
-            {
-                context.Response.Abort();
-            }
-            catch
-            {
-                // Already gone.
-            }
-        }
-    }
-
-    /// <summary>
-    /// A single "bytes=from-to" Range header, held to the file's length.
-    /// False when there is no range, when it isn't one this understands, or
-    /// when it asks for nothing inside the file - in each of which cases the
-    /// caller sends the whole thing.
-    /// </summary>
-    internal static bool TryReadRange(string? header, long length, out long from, out long to)
-    {
-        from = 0;
-        to = length - 1;
-
-        if (length <= 0 || string.IsNullOrWhiteSpace(header)
-            || !header.StartsWith("bytes=", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var span = header["bytes=".Length..].Trim();
-
-        // A multipart range ("bytes=0-99,200-299") is answered with the
-        // whole file instead. Browsers only send one for playback.
-        if (span.Contains(','))
-        {
-            return false;
-        }
-
-        var dash = span.IndexOf('-');
-        if (dash < 0)
-        {
-            return false;
-        }
-
-        var left = span[..dash].Trim();
-        var right = span[(dash + 1)..].Trim();
-
-        if (left.Length == 0)
-        {
-            // "bytes=-500": the LAST 500 bytes, not the first.
-            if (!long.TryParse(right, out var fromEnd) || fromEnd <= 0)
-            {
-                return false;
-            }
-
-            from = Math.Max(0, length - fromEnd);
-            to = length - 1;
-            return true;
-        }
-
-        if (!long.TryParse(left, out from) || from < 0 || from >= length)
-        {
-            from = 0;
-            return false;
-        }
-
-        if (right.Length == 0)
-        {
-            // "bytes=500-": from there to the end.
-            to = length - 1;
-            return true;
-        }
-
-        if (!long.TryParse(right, out to) || to < from)
-        {
-            from = 0;
-            to = length - 1;
-            return false;
-        }
-
-        // An end past the file is clamped rather than refused, which is what
-        // the HTTP spec asks for.
-        to = Math.Min(to, length - 1);
-        return true;
-    }
-
     /// <summary>
     /// The club logo for the pages' header bar. Only ever the logo file the
     /// app made (ClubLogo.PngBytes checks the stored name and that it really
@@ -3029,44 +2552,6 @@ public sealed partial class WebServerService
         context.Response.ContentLength64 = bytes.Length;
         context.Response.OutputStream.Write(bytes, 0, bytes.Length);
         context.Response.OutputStream.Close();
-    }
-
-    /// <summary>
-    /// /keepawake.mp4: the pit board's keep-awake video (22 Oct 2026, driver
-    /// experience, item 10), with Range answered because Safari asks for one
-    /// before it will play anything - see KeepAwake.Answer.
-    /// </summary>
-    private static void HandleKeepAwake(HttpListenerContext context)
-    {
-        var (status, contentRange, body) = KeepAwake.Answer(context.Request.Headers["Range"]);
-
-        try
-        {
-            context.Response.StatusCode = status;
-            context.Response.ContentType = KeepAwake.ContentType;
-            context.Response.Headers["Accept-Ranges"] = "bytes";
-
-            if (contentRange is not null)
-            {
-                context.Response.Headers["Content-Range"] = contentRange;
-            }
-
-            context.Response.ContentLength64 = body.Length;
-            context.Response.OutputStream.Write(body, 0, body.Length);
-            context.Response.OutputStream.Close();
-        }
-        catch
-        {
-            // The phone went away mid-answer - see HandleSponsorVideo.
-            try
-            {
-                context.Response.Abort();
-            }
-            catch
-            {
-                // Already gone.
-            }
-        }
     }
 
     /// <summary>
@@ -3384,17 +2869,6 @@ public sealed partial class WebServerService
             countdown = view is null ? _race.GetCountdownText() : view.Countdown,
             onDeck,
             columns = columns.Select(k => k.Label).ToList(),
-            sponsorCount = ui.SponsorCount,
-            sponsorLeaderboardSecs = ui.SponsorLeaderboardSecs,
-            sponsorSlideSecs = ui.SponsorSlideSecs,
-            sponsorPauseDuringRace = ui.SponsorPauseDuringRace,
-
-            // Which slots are videos, so a page knows to use its <video>
-            // element rather than its <img> - indexes into the same list
-            // /api/sponsor?i= serves. Sent as indexes rather than a kind per
-            // slide because almost every club's list is all pictures, and
-            // then this is an empty array. Worked out in UiSideNow.
-            sponsorVideos = ui.SponsorVideos,
             standings,
         };
 
@@ -3531,12 +3005,6 @@ public sealed partial class WebServerService
         var node = JsonSerializer.SerializeToNode(document)!.AsObject();
         node["race"] = race;
 
-        // 22 Oct 2026 (driver experience, item 3): the laptop's own clock,
-        // so a phone works out "about 7 min" and "seen 4 s ago" against the
-        // time the ETAs and sightings were measured by, not its own clock,
-        // which may be minutes out.
-        node["now"] = IsoUtc(DateTime.UtcNow);
-
         // 22 Oct 2026 (driver experience, item 9): the last few lines the
         // announcer said, for the captions strip (?captions=1). Left out
         // when nothing has been said. Guarded: the board must not go stale
@@ -3571,32 +3039,22 @@ public sealed partial class WebServerService
         }
 
         // The key the ids below are made with, read once for the whole
-        // document. The board, the map and the follow list all have to call
-        // one driver by one id or the page cannot match them up, and a Start
+        // document. The board, the pylon and the grid all have to call one
+        // driver by one id or the page cannot match them up, and a Start
         // between two reads of the key would key them differently.
         var rosterKey = _rosterKey;
 
-        // Following a driver (PhoneFollow): each row's opaque id, so the
-        // page can pick out the one being followed; their card - position,
-        // laps, last lap, the gaps either side; when each driver's next race
-        // is; and who can be followed. Guarded like the heading above: the
-        // board must not go stale for the sake of the extras.
+        // Each row's opaque id, laps and gap ahead, the grid of the race on
+        // track and the names - what the broadcast graphics match cars by
+        // (AddIdsAndGrid). Guarded like the heading above: the board must
+        // not go stale for the sake of the extras.
         try
         {
-            AddFollowing(node, ordered, rosterKey);
+            AddIdsAndGrid(node, ordered, rosterKey);
         }
         catch
         {
-            // The board without the follow view, rather than no board.
-        }
-
-        try
-        {
-            AddTrackMap(node, rosterKey);
-        }
-        catch
-        {
-            // The board without the track map, rather than no board.
+            // The board without the extras, rather than no board.
         }
 
         try
@@ -3621,62 +3079,6 @@ public sealed partial class WebServerService
     }
 
     /// <summary>
-    /// Adds the live track map to the LAN copy of the live state: the racing
-    /// line (in tiles - the page fits it to the screen), where the split
-    /// loops are, and each car's place on it with its pace, so the page can
-    /// move the dots smoothly between its once-a-second polls. Null when the
-    /// layout being raced on has no plan to draw. See TrackPositions.
-    ///
-    /// Each car is named by the roster's opaque id rather than by its
-    /// transponder, for the reason AddFollowing gives.
-    /// </summary>
-    private void AddTrackMap(System.Text.Json.Nodes.JsonObject node, byte[] rosterKey)
-    {
-        var (line, cars) = TrackMap?.Invoke() ?? (null, Array.Empty<TrackPositions.Car>());
-
-        if (line is null)
-        {
-            node["map"] = null;
-            return;
-        }
-
-        static double Round(float value) => Math.Round(value, 3);
-
-        var points = new System.Text.Json.Nodes.JsonArray(line.Points
-            .Select(p => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonArray(Round(p.X), Round(p.Y)))
-            .ToArray());
-
-        var splits = new System.Text.Json.Nodes.JsonArray(line.SplitAt
-            .Select(f => (System.Text.Json.Nodes.JsonNode?)Round(f))
-            .ToArray());
-
-        var placed = new System.Text.Json.Nodes.JsonArray(cars
-            .Select(c => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject
-            {
-                ["id"] = RosterId(rosterKey, c.Transponder),
-                ["pos"] = c.Position,
-                ["f"] = Round(c.Fraction),
-                ["rate"] = Math.Round(c.Rate, 5),
-                ["cap"] = Round(c.Cap),
-                ["stop"] = c.Stopped,
-                ["where"] = c.Where,
-
-                // The best-lap ghost: where it would be on its best lap, and
-                // how fast that ghost goes round. -1 for none.
-                ["g"] = Round(c.Ghost),
-                ["gr"] = Math.Round(c.GhostRate, 5),
-            })
-            .ToArray());
-
-        node["map"] = new System.Text.Json.Nodes.JsonObject
-        {
-            ["pts"] = points,
-            ["splits"] = splits,
-            ["cars"] = placed,
-        };
-    }
-
-    /// <summary>
     /// The most points of the track's line the relay copy carries. The
     /// frame goes up once a second while a race is on, so a plan drawn with
     /// thousands of points is thinned to this many, evenly along the line,
@@ -3686,9 +3088,9 @@ public sealed partial class WebServerService
 
     /// <summary>
     /// The live track map for the relay copy of the state (4 Nov 2026): the
-    /// same line, split loops and cars as the Wi-Fi copy's "map"
-    /// (<see cref="AddTrackMap"/>), with three differences that the public
-    /// internet asks for.
+    /// racing line, the split loops and each car's place on it, with three
+    /// rules the public internet asks for. (The Wi-Fi copy had its own map
+    /// for the Live Results page, until that page went on 13 Nov 2026.)
     ///
     /// EACH CAR BY ITS ROW'S TAG, never its transponder or the roster's id -
     /// the same opaque <see cref="RelayRowTag"/> the board row carries, so the
@@ -3814,10 +3216,19 @@ public sealed partial class WebServerService
     }
 
     /// <summary>
-    /// Adds what a phone following one driver needs to the LAN copy of the
-    /// live state: an id on each row, a card per car on the board, the
-    /// call-ups for the races still to run, and everyone who can be
-    /// followed, by name. See PhoneFollow.
+    /// Adds what the broadcast graphics match cars by to the LAN copy of the
+    /// live state: an id on each row, each car's laps and gap ahead ("cards"),
+    /// who is gridded in the race on track and where ("callups"), and the
+    /// names to go with the ids ("people").
+    ///
+    /// This was the follow-a-driver data for the Live Results page, and the
+    /// broadcast graphics read the same fields. When that page went (13 Nov
+    /// 2026), what only the follow card read went with it: the position,
+    /// last and best lap and gap behind on each card, this race's warnings
+    /// and penalty time, tonight's penalty lines, the call-up's words, its
+    /// "staged" and its expected start, and when each transponder was last
+    /// heard ("Check my transponder"). The driver's own night page on the
+    /// relay still has all of it - see DriverLive.
     ///
     /// Every id here is the roster's own opaque id (RosterId), not the
     /// driver's transponder. It was the transponder until 9 Oct 2026, and
@@ -3830,7 +3241,7 @@ public sealed partial class WebServerService
     /// document against another in the same document, so which id it is
     /// makes no difference to them.
     /// </summary>
-    private void AddFollowing(System.Text.Json.Nodes.JsonObject node, IReadOnlyList<RacerStanding> ordered, byte[] rosterKey)
+    private void AddIdsAndGrid(System.Text.Json.Nodes.JsonObject node, IReadOnlyList<RacerStanding> ordered, byte[] rosterKey)
     {
         if (node["standings"] is System.Text.Json.Nodes.JsonArray rows)
         {
@@ -3855,60 +3266,16 @@ public sealed partial class WebServerService
             }
         }
 
+        // Laps for the tower and the results, the gap ahead for the battle bar.
         var cards = new System.Text.Json.Nodes.JsonObject();
-
-        // Each car's best lap too, for the lap times spoken in a follower's
-        // earbuds ("best lap") and the broadcast graphics.
-        var bestOf = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-
-        // And each car's standing, for the warnings and penalty time race
-        // control has given it this race (22 Oct 2026, driver experience,
-        // item 1). Read here, on the UI thread, like everything else in it.
-        var standingOf = new Dictionary<string, RacerStanding>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var standing in ordered)
-        {
-            bestOf.TryAdd(standing.TransponderId, standing.FastestLapMs);
-            standingOf.TryAdd(standing.TransponderId, standing);
-        }
 
         foreach (var (id, card) in PhoneFollow.Cards(ordered))
         {
-            // Under the opaque id, like the rows. bestOf stays keyed by
-            // transponder: it is read here and never leaves this method.
             cards[RosterId(rosterKey, id)] = new System.Text.Json.Nodes.JsonObject
             {
-                ["pos"] = card.Position,
                 ["laps"] = card.Laps,
-                ["last"] = card.LastLapMs,
-                ["best"] = bestOf.GetValueOrDefault(id),
                 ["ahead"] = card.Ahead,
-                ["behind"] = card.Behind,
             };
-
-            // The target lap race control set for them, for the phone coach
-            // page (22 Oct 2026) - only when there is one. See TargetLapMsFor.
-            if (TargetLapMsFor(id) is > 0 and var target)
-            {
-                cards[RosterId(rosterKey, id)]!["target"] = target;
-            }
-
-            // This race's warnings and penalty time, under the call-up on
-            // the follow card (22 Oct 2026, driver experience, item 1) -
-            // only when there are any, so a clean card is as it was. The
-            // seconds to a tenth, so a 2.5 s penalty does not read as 3.
-            if (standingOf.TryGetValue(id, out var raced))
-            {
-                if (raced.Warnings.Count > 0)
-                {
-                    cards[RosterId(rosterKey, id)]!["warn"] = raced.Warnings.Count;
-                }
-
-                if (raced.PenaltyMs > 0)
-                {
-                    cards[RosterId(rosterKey, id)]!["penS"] = Math.Round(raced.PenaltyMs / 1000.0, 1);
-                }
-            }
         }
 
         node["cards"] = cards;
@@ -3924,147 +3291,32 @@ public sealed partial class WebServerService
             upcoming = Array.Empty<UpcomingRace>();
         }
 
+        // The grid: who is in the race on track ("now") and their slot.
         var callUps = new System.Text.Json.Nodes.JsonObject();
 
         foreach (var (id, callUp) in PhoneFollow.CallUps(upcoming))
         {
-            var call = new System.Text.Json.Nodes.JsonObject
+            callUps[RosterId(rosterKey, id)] = new System.Text.Json.Nodes.JsonObject
             {
-                ["race"] = callUp.Race,
-                ["away"] = callUp.Away,
                 ["slot"] = callUp.Slot,
                 ["now"] = callUp.OnTrack,
-                ["words"] = PhoneFollow.Words(callUp),
             };
-
-            // 22 Oct 2026 (driver experience, item 3): staged - go to the
-            // driver stand - and when the race is expected to start, for
-            // "about 7 min (19:42)". Only when they apply, so a call-up
-            // without them is as it was.
-            if (callUp.Staged)
-            {
-                call["staged"] = true;
-            }
-
-            if (callUp.EtaUtc is { } eta)
-            {
-                call["eta"] = IsoUtc(eta);
-            }
-
-            callUps[RosterId(rosterKey, id)] = call;
         }
 
         node["callups"] = callUps;
 
-        // Everyone on the board or due in a race to come, by name - the
-        // page's "Follow" list.
-        var followable = ordered.Select(s => s.TransponderId)
+        // Everyone on the board or due in a race to come, by name, for the
+        // ids above.
+        var people = ordered.Select(s => s.TransponderId)
             .Concat(upcoming.SelectMany(r => r.Grid))
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        var people = followable
             .Select(id => (Id: RosterId(rosterKey, id), Name: DisplayNameFor(id, false)))
             .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)
             .Select(p => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject { ["id"] = p.Id, ["name"] = p.Name })
             .ToArray();
 
         node["people"] = new System.Text.Json.Nodes.JsonArray(people);
-
-        // 22 Oct 2026 (driver experience): the follow card's extras, for the
-        // people above only - nobody can follow anyone else, so nobody else
-        // needs them. Each under the same opaque id, and each left out when
-        // there is nothing to say.
-        // Each guarded on its own: a sighting that cannot be read must not
-        // take the follow list it is added to down with it.
-        try
-        {
-            AddSightings(node, followable, rosterKey);
-        }
-        catch
-        {
-            // The follow view without the transponder check.
-        }
-
-        try
-        {
-            AddPenalties(node, followable, rosterKey);
-        }
-        catch
-        {
-            // The follow view without tonight's penalties.
-        }
-    }
-
-    /// <summary>
-    /// "seen": when each followable driver's transponder was last heard -
-    /// seconds ago, by the laptop's clock - and how well (22 Oct 2026,
-    /// driver experience, item 4). The "Check my transponder" button on the
-    /// follow card watches for a sighting newer than the press. Nothing
-    /// new is recorded for it: every pass is already (TransponderWatch).
-    /// Ghosts are never heard, so never here.
-    /// </summary>
-    private void AddSightings(System.Text.Json.Nodes.JsonObject node, IReadOnlyList<string> followable, byte[] rosterKey)
-    {
-        if (SightingOf is not { } sightingOf)
-        {
-            return;
-        }
-
-        var seen = new System.Text.Json.Nodes.JsonObject();
-        var now = DateTime.UtcNow;
-
-        foreach (var transponder in followable)
-        {
-            if (Ghosts.IsGhost(transponder) || sightingOf(transponder) is not { } sighting)
-            {
-                continue;
-            }
-
-            seen[RosterId(rosterKey, transponder)] = new System.Text.Json.Nodes.JsonObject
-            {
-                ["ago"] = Math.Max(0, (int)(now - sighting.SeenUtc).TotalSeconds),
-                ["sig"] = sighting.Signal is "good" or "weak" ? sighting.Signal : "unknown",
-            };
-        }
-
-        if (seen.Count > 0)
-        {
-            node["seen"] = seen;
-        }
-    }
-
-    /// <summary>
-    /// "pens": each followable driver's penalty lines from tonight's filed
-    /// races - "Q1 Heat 2: +5 s - jump start" - as PublishPenalties last
-    /// had them (22 Oct 2026, driver experience, item 1).
-    /// </summary>
-    private void AddPenalties(System.Text.Json.Nodes.JsonObject node, IReadOnlyList<string> followable, byte[] rosterKey)
-    {
-        var penalties = _penalties;
-
-        if (penalties.Count == 0)
-        {
-            return;
-        }
-
-        var pens = new System.Text.Json.Nodes.JsonObject();
-
-        foreach (var transponder in followable)
-        {
-            if (penalties.TryGetValue(transponder.Trim(), out var lines) && lines.Count > 0)
-            {
-                pens[RosterId(rosterKey, transponder)] = new System.Text.Json.Nodes.JsonArray(lines
-                    .Select(l => (System.Text.Json.Nodes.JsonNode?)l)
-                    .ToArray());
-            }
-        }
-
-        if (pens.Count > 0)
-        {
-            node["pens"] = pens;
-        }
     }
 
     /// <summary>
@@ -4331,32 +3583,28 @@ public sealed partial class WebServerService
         .empty { padding:40px; text-align:center; color:var(--muted); }
         .handnote { padding:6px 12px; color:var(--muted); font-size:.85em; }
 
-        /* --- Swipe deck ---
-           One horizontal scroller with snap points rather than a JS carousel:
-           the browser then owns the physics, so the flick feels native and
-           keeps working if the script stalls mid-race. */
-        .deck { display:flex; overflow-x:auto; scroll-snap-type:x mandatory;
-                -webkit-overflow-scrolling:touch; scrollbar-width:none; }
-        .deck::-webkit-scrollbar { display:none; }
-        .page { flex:0 0 100%; scroll-snap-align:start; min-width:100%; }
-        .dots { display:flex; gap:8px; justify-content:center; padding:10px 0 14px;
-                background:var(--bg); position:sticky; bottom:0; }
-        .dot { width:8px; height:8px; border-radius:50%; background:var(--raised); transition:background .2s; }
-        .dot.on { background:var(--primary); }
-        .dots { border-top:1px solid var(--border); }
-        .ptitle { padding:14px 18px 6px; font-size:10px; font-weight:700; letter-spacing:.16em;
-                  color:var(--muted); text-transform:uppercase; }
         canvas { width:100%; display:block; }
-        .legend { display:flex; flex-wrap:wrap; gap:10px; padding:8px 18px 16px; font-size:13px; }
-        .legend span { display:flex; align-items:center; gap:5px; color:var(--soft); }
-        .swatch { width:12px; height:3px; border-radius:2px; }
         """
         // HeatCaller's sign-off at the foot of every page (31 Oct 2026),
         // the relay pages' footer mark - see HeatCallerMark.PageFooterHtml.
         + HeatCallerMark.PageFooterStyle;
 
-    // Internal rather than private so the tests can read its script (BugHunt4WebTests).
-    internal string BuildLiveResultsPage()
+    /// <summary>
+    /// THE OBS OVERLAY (/overlay, and the old /?overlay=1): the results
+    /// table on a see-through background, for an OBS browser source.
+    ///
+    /// All that is left of the Live Results page, which was taken off the
+    /// LAN with the phone coach page on 13 Nov 2026 (Asher). The overlay was
+    /// always that page with its chrome hidden, so the rest - following a
+    /// driver, lap times in your ear, the charts, the track map, the sponsor
+    /// slides and the championship line - never showed in OBS and went with
+    /// it. What it shows: the race state and clock, the ON DECK line, the
+    /// table in the Web Columns, the key to a hand-counted lap's *, and the
+    /// announcer's words with ?captions=1.
+    ///
+    /// Internal rather than private so the tests can read its script.
+    /// </summary>
+    internal string BuildOverlayPage()
     {
         var look = CurrentPageLook();
 
@@ -4364,146 +3612,50 @@ public sealed partial class WebServerService
         <!DOCTYPE html><html class="{{look.Scheme}}"><head>
         <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
         <meta name="color-scheme" content="{{look.Scheme}}"><meta name="theme-color" content="{{look.ThemeColor}}">
-        <title>Live Results</title><style>{{look.Root}}{{SharedStyle}}
+        <title>OBS Overlay</title><style>{{look.Root}}{{SharedStyle}}
         /* Highlight is the accent, as on the Big Screen and the online
            pages; good is the look's own green. */
         .good { color:var(--good); font-weight:700; }
         .highlight { color:var(--accent); font-weight:700; }
         .bad { color:var(--bad); font-weight:700; }
-        .pen { color:var(--bad); font-size:12px; margin-left:6px; }
-        .ondeck { background:var(--surface); color:var(--accent); padding:11px 18px; font-weight:700;
-                  border-bottom:1px solid var(--border); font-size:15px; }
-        #sponsor { display:none; position:fixed; inset:0; background:var(--bg); z-index:99;
-                   align-items:center; justify-content:center; }
-        #sponsor img, #sponsor video { max-width:92%; max-height:92%; object-fit:contain; }
-        /* Overlay mode for OBS: transparent background and no chrome, so it
-           composites cleanly over a video feed instead of covering it. */
+        /* Transparent background and no chrome, so it composites cleanly
+           over a video feed instead of covering it. */
         body.overlay { background:transparent; }
         body.overlay .bar { background:var(--glass-bg); }
         body.overlay td { background:var(--glass-cell) !important; }
         body.overlay tr.p1 td { background:var(--glass-p1) !important; }
         body.overlay th { background:var(--glass-bg); }
-        body.overlay .ondeck { background:var(--glass-surface); }
-        body.overlay #sponsor { display:none !important; }
-        /* Following one driver: a picker, their card, and the call-up for
-           their next race - which flashes when it is next. */
-        .follow { background:var(--surface); border-bottom:1px solid var(--border); padding:10px 18px; }
-        .follow select { font:inherit; font-size:15px; padding:6px 8px; border-radius:8px; max-width:100%;
-                         background:var(--bg); color:var(--text); border:1px solid var(--border); }
-        .fcard { display:none; margin-top:10px; align-items:baseline; gap:16px; flex-wrap:wrap; }
-        .fcard .fpos { font-size:44px; font-weight:800; color:var(--accent); line-height:1; }
-        .fcard .fname { font-size:20px; font-weight:700; }
-        .fcard .fstat { color:var(--soft); font-size:15px; }
-        .fcard .fstat b { color:var(--text); }
-        .callup { display:none; margin-top:10px; padding:12px 14px; border-radius:10px; font-weight:800;
-                  font-size:18px; background:var(--bg); border:2px solid var(--border); }
-        .callup.next { border-color:var(--accent); color:var(--accent); animation:callpulse 1.1s ease-in-out infinite; }
-        .callup.now { border-color:var(--good); color:var(--good); }
-        @keyframes callpulse { 0%,100% { box-shadow:0 0 0 0 transparent; } 50% { box-shadow:0 0 0 6px var(--accent); } }
-        /* 22 Oct 2026 (driver experience): when the race should start, the
-           penalties race control gave tonight and why, and the transponder
-           check - all under the call-up. */
-        .callup .eta { display:block; margin-top:4px; font-size:15px; font-weight:600; }
-        .fpens { display:none; margin-top:10px; font-size:14px; color:var(--soft); line-height:1.45; }
-        .flost { display:none; margin-top:8px; font-size:14px; color:var(--soft); line-height:1.45; }
-        .fpens b { color:var(--bad); }
-        .fpens ul { margin:4px 0 0; padding-left:18px; }
-        .tcheck { display:none; margin-top:10px; }
-        .tcheck .speak { margin-left:0; }
-        .tsay { display:block; margin-top:6px; font-size:15px; font-weight:700; color:var(--soft); }
-        .tsay.ok { color:var(--good); } .tsay.bad { color:var(--bad); }
+        .ondeck { background:var(--glass-surface); color:var(--accent); padding:11px 18px; font-weight:700;
+                  border-bottom:1px solid var(--border); font-size:15px; }
         /* Captions (?captions=1): the line the announcer just said, for
-           anyone who can't hear the PA - on the wall, or over the stream. */
+           anyone who can't hear the PA. */
         #captions { display:none; position:fixed; left:50%; bottom:52px; transform:translateX(-50%); z-index:98;
                     width:max-content; max-width:min(92vw, 1000px); padding:10px 18px; border-radius:10px;
                     background:var(--glass-bg); color:var(--text); font-size:22px; font-weight:600; line-height:1.3;
                     text-align:center; transition:opacity .6s; }
         #captions.on { display:block; }
         #captions.fade { opacity:0; }
-        tr.me td { outline:2px solid var(--accent); outline-offset:-2px; }
-        body.overlay .follow { display:none; }
-        /* Lap times read out on the phone, for earbuds. */
-        .speak { font:inherit; font-size:14px; margin-left:8px; padding:6px 10px; border-radius:8px; cursor:pointer;
-                 background:var(--bg); color:var(--soft); border:1px solid var(--border); }
-        .speak.on { color:var(--accent); border-color:var(--accent); font-weight:700; }
-        /* If it ended now: the championship with this race counted as it stands. */
-        .champ { display:none; background:var(--surface); border-bottom:1px solid var(--border); padding:8px 18px; font-size:14px; }
-        .champ .chead { font-weight:800; color:var(--accent); letter-spacing:.04em; }
-        .champ .crow { display:inline-block; margin:4px 14px 0 0; color:var(--soft); }
-        .champ .crow b { color:var(--text); }
-        .champ .crow.racing b { color:var(--accent); }
-        .champ .up { color:var(--good); } .champ .down { color:var(--bad); }
-        body.overlay .champ { display:none !important; }
-        </style></head><body data-look="{{look.Fingerprint}}">
+        </style></head><body class="overlay" data-look="{{look.Fingerprint}}">
         <div class="bar"><h1>{{look.Logo}}LIVE RESULTS</h1>
           <div><span class="state" id="state">-</span> &nbsp; <span class="countdown" id="countdown"></span></div>
         </div>
         <div class="ondeck" id="ondeck" style="display:none"></div>
-        <div class="champ" id="champ"></div>
-        <div class="follow" id="follow">
-          <select id="followPick"><option value="">Follow a driver...</option></select>
-          <div class="flost" id="flost">Your driver isn't on the list now. If you are racing tonight, pick your driver again above.</div>
-          <button type="button" class="speak" id="speakBtn" style="display:none">Lap times in my ear: off</button>
-          <div class="fcard" id="fcard"><span class="fpos" id="fpos"></span>
-            <span><span class="fname" id="fname"></span><br><span class="fstat" id="fstat"></span></span></div>
-          <div class="callup" id="callup"></div>
-          <div class="fpens" id="fpens"></div>
-          <div class="tcheck" id="tcheck"><button type="button" class="speak" id="tcheckBtn">Check my transponder</button>
-            <span class="tsay" id="tsay" aria-live="polite"></span></div>
-        </div>
-
-        <div class="deck" id="deck">
-          <div class="page">
-            <table><thead><tr id="head"></tr></thead><tbody id="rows"></tbody></table>
-            <div class="empty" id="empty">Waiting for lap data...</div>
-            <div class="handnote" id="handnote" style="display:none"></div>
-          </div>
-          <div class="page">
-            <div class="ptitle">Lap times</div>
-            <canvas id="lapChart" height="300"></canvas>
-            <div class="legend" id="lapLegend"></div>
-          </div>
-          <div class="page">
-            <div class="ptitle">Best lap &amp; consistency</div>
-            <canvas id="paceChart" height="300"></canvas>
-            <div class="legend"><span>Bar length is the best lap - shorter is quicker. The lighter tail is lap-time spread.</span></div>
-          </div>
-          <div class="page">
-            <div class="ptitle">Track map</div>
-            <canvas id="mapChart" height="340"></canvas>
-            <div class="legend" id="mapLegend"><span>Draw the racing line and the finish line on this layout's plan (Track Designer) to see the cars go round.</span></div>
-          </div>
-        </div>
-        <div class="dots"><i class="dot on"></i><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
-
+        <table><thead><tr id="head"></tr></thead><tbody id="rows"></tbody></table>
+        <div class="empty" id="empty">Waiting for lap data...</div>
+        <div class="handnote" id="handnote" style="display:none"></div>
         <div id="captions" aria-live="polite"></div>
-        <div id="sponsor"><img id="sponsorImg" src=""><video id="sponsorVid" muted playsinline preload="auto" style="display:none"></video></div>
         {{HeatCallerMark.PageFooterHtml}}
         <script>
-        // Everything below builds rows with innerHTML, and a driver name is
-        // whatever somebody typed into a profile. Without this, a driver
-        // called "Ash <3 Racing" rendered as "Ash " - the rest swallowed as
-        // a tag - and a name containing a script tag ran on every phone on
-        // the club wifi and on the OBS overlay. The check-in page in this
-        // same file uses textContent and was never exposed; these pages
-        // build markup, so they escape instead.
+        // The rows are built with innerHTML, and a driver name is whatever
+        // somebody typed into a profile. Without this, a driver called
+        // "Ash <3 Racing" rendered as "Ash " - the rest swallowed as a tag -
+        // and a name containing a script tag ran in the OBS source.
         function esc(v){ return String(v==null?'':v).replace(/[&<>"']/g, function(c){
           return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
-        const overlay = new URLSearchParams(location.search).has('overlay');
-        if (overlay) document.body.classList.add('overlay');
-
-        let sponsorCount = 0, sponsorIdx = -1, showingSponsor = false, sinceSwap = 0;
-        // Which slots are videos (indexes into the same list /api/sponsor
-        // serves). Empty for the club whose slides are all pictures.
-        let sponsorVideos = [];
-        // Timings come from the server on every poll rather than being fixed
-        // here, so edits on the Sponsors page take effect on already-open
-        // pages without needing a refresh or a server restart.
-        let leaderboardSecs = 60, slideSecs = 8, pauseDuringRace = true;
 
         // One poll at a time, and none left hanging: on poor Wi-Fi an older
-        // answer arriving after a newer one read a lap out twice and buzzed
-        // twice, and hung requests used up the phone's connections.
+        // answer could arrive after a newer one, and hung requests used up
+        // the browser's connections.
         let ticking = false;
         async function tick(){
           if (ticking) return;
@@ -4511,7 +3663,6 @@ public sealed partial class WebServerService
           const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 3000);
           try{
             const r = await fetch('/api/state', { signal: stop.signal }); const d = await r.json();
-            takeClock(d.now);
             showCaptions(d.captions);
             document.getElementById('state').textContent = d.state + ' - ' + d.flag + ' flag';
             document.getElementById('countdown').textContent = d.countdown || '';
@@ -4523,7 +3674,7 @@ public sealed partial class WebServerService
             document.getElementById('head').innerHTML =
               (d.columns||[]).map((c,i) => `<th class="${i===0?'pos':''}">${esc(c)}</th>`).join('');
             document.getElementById('rows').innerHTML = d.standings.map((s,ri) =>
-              `<tr class="${ri===0?'p1':''}${s.id && s.id===following?' me':''}">` + s.cells.map((c,i) =>
+              `<tr class="${ri===0?'p1':''}">` + s.cells.map((c,i) =>
                 `<td class="${i===0?'pos':''} ${c.emphasis!=='none'?esc(c.emphasis):''}">${esc(c.text)}</td>`
               ).join('') + '</tr>').join('');
             document.getElementById('empty').style.display = d.standings.length ? 'none' : 'block';
@@ -4532,547 +3683,15 @@ public sealed partial class WebServerService
             const hn = document.getElementById('handnote');
             if (d.byHand) { hn.textContent = d.byHand; hn.style.display = 'block'; }
             else { hn.style.display = 'none'; }
-
-            showFollowing(d);
-            takeMap(d.map);
-            showChamp(d.champ);
-
-            window.lastRows = d.standings;
-            drawLaps(d.standings);
-            drawPace(d.standings);
-
-            sponsorCount = d.sponsorCount || 0;
-            sponsorVideos = d.sponsorVideos || [];
-            leaderboardSecs = d.sponsorLeaderboardSecs || 60;
-            slideSecs = d.sponsorSlideSecs || 8;
-            pauseDuringRace = d.sponsorPauseDuringRace !== false;
-            if (!overlay) rotateSponsors(d.state);
           }catch(e){}
           finally { clearTimeout(timer); ticking = false; }
         }
 
-        function rotateSponsors(state){
-          sponsorState = state;
-          if (sponsorCount === 0) { hideSponsor(); return; }
-          sinceSwap++;
-          if (showingSponsor) {
-            // Not over a race that has gone green, a video included: one
-            // started during staging or the countdown used to play on over
-            // the opening laps, as nothing here asked again once it was up.
-            // The Big Screen stops its video when the race is called.
-            if (pauseDuringRace && state === 'Racing') { hideSponsor(); return; }
-            // A video holds the page until it ends (sponsorVid.onended),
-            // exactly as it holds the Big Screen - the slide time is for
-            // still pictures.
-            if (!showingVideo && sinceSwap >= slideSecs) hideSponsor();
-          } else if (sinceSwap >= leaderboardSecs && !(pauseDuringRace && state === 'Racing')) {
-            sponsorIdx = (sponsorIdx + 1) % sponsorCount;
-
-            if (sponsorVideos.indexOf(sponsorIdx) >= 0) { startSponsorVideo(); return; }
-            // Put up only once it has arrived (sponsorImg.onload). The overlay
-            // used to go up as the slide was asked for, and a slide missing
-            // or too big to send - answered 404 - covered the standings with
-            // a blank screen for its whole turn, where the Big Screen skips it.
-            // The count starts again here, so the next slide isn't asked for
-            // while this one loads - only, a whole turn later, in place of
-            // one that never came.
-            loadingSponsor = true; sinceSwap = 0;
-            sponsorImg.src = '/api/sponsor?i=' + sponsorIdx + '&t=' + Date.now();
-          }
-        }
-        const sponsorImg = document.getElementById('sponsorImg');
-        let loadingSponsor = false, sponsorState = '';
-        sponsorImg.onload = function(){
-          if (!loadingSponsor) return;
-          loadingSponsor = false; sinceSwap = 0;
-          // Not over a race that went green while it loaded.
-          if (pauseDuringRace && sponsorState === 'Racing') return;
-          document.getElementById('sponsor').style.display = 'flex';
-          showingSponsor = true;
-        };
-        // Skipped: the board stays up for another full turn, as on the Big Screen.
-        sponsorImg.onerror = function(){
-          if (!loadingSponsor) return;
-          loadingSponsor = false; sinceSwap = 0;
-        };
-
-        // --- Video slides ---------------------------------------------------
-        //
-        // ALWAYS MUTED here, and not a setting. Every browser refuses to
-        // autoplay sound on a page the viewer hasn't interacted with, and a
-        // phone that silently refused to start would simply show no ad at
-        // all - so a muted video that plays beats an unmuted one that
-        // doesn't. The Sponsors page's sound setting is about the Big
-        // Screen, which is HeatCaller's own window and has no such rule.
-        //
-        // This is also why the phones don't need the music muted: there is
-        // no sound coming out of them to be talked over.
-        const sponsorVid = document.getElementById('sponsorVid');
-        let showingVideo = false;
-
-        function startSponsorVideo(){
-          loadingSponsor = true; sinceSwap = 0;
-          sponsorVid.src = '/api/sponsor?i=' + sponsorIdx + '&t=' + Date.now();
-          // load() rather than waiting: a src set on an element that already
-          // played keeps the old buffered data on some browsers.
-          try { sponsorVid.load(); } catch(e){}
-        }
-
-        // Up only once there are frames to show, the same rule the picture
-        // follows - a video that 404s or won't decode never covers the
-        // standings.
-        sponsorVid.oncanplay = function(){
-          if (!loadingSponsor) return;
-          loadingSponsor = false; sinceSwap = 0;
-          if (pauseDuringRace && sponsorState === 'Racing') {
-            // Let go of, not just left hidden: with its src still set it
-            // would carry on buffering the whole file - see hideSponsor.
-            try { sponsorVid.pause(); sponsorVid.removeAttribute('src'); sponsorVid.load(); } catch(e){}
-            return;
-          }
-          sponsorImg.style.display = 'none';
-          sponsorVid.style.display = 'block';
-          document.getElementById('sponsor').style.display = 'flex';
-          showingSponsor = true; showingVideo = true;
-          const playing = sponsorVid.play();
-          // Refused anyway (an older iOS, a battery-saving mode): treated as
-          // a slide that didn't arrive rather than left as a frozen frame.
-          if (playing && playing.catch) playing.catch(function(){ hideSponsor(); });
-        };
-
-        sponsorVid.onended = function(){ hideSponsor(); };
-        sponsorVid.onerror = function(){
-          if (!loadingSponsor) { hideSponsor(); return; }
-          loadingSponsor = false; sinceSwap = 0;
-        };
-
-        // Enough hues to tell a full grid apart, spaced around the wheel so
-        // neighbouring cars never get neighbouring colours. These are the
-        // drivers' colours, not the look's, so they stay the same whatever
-        // look is chosen - except that on a light page each is swapped for a
-        // deeper shade of the same hue: a 2px lime or yellow line on white
-        // is all but invisible.
-        const LIGHT = document.documentElement.classList.contains('light');
-        const COLOURS = LIGHT
-          ? ['#4D7C0F','#0E7490','#C2410C','#15803D','#7E22CE','#A16207','#B91C1C','#047857','#1D4ED8','#BE185D']
-          : ['#C8F031','#22D3EE','#FF9F45','#4ADE80','#B06CFF','#FFE05C','#F0483E','#7CFF5C','#5C9DFF','#FF9ED2'];
-
-        // The chart's own ink - axes, labels, names - from the look, read
-        // from the page's colour variables so the canvas matches the table.
-        const CSSV = getComputedStyle(document.documentElement);
-        function ink(name, fallback){ return (CSSV.getPropertyValue(name) || '').trim() || fallback; }
-        const INK = { text: ink('--text','#F2F4F7'), muted: ink('--muted','#5A6478'),
-                      soft: ink('--soft','#A8B0C0'), line: ink('--border','#161B24') };
-
-        // Canvases are sized in CSS pixels but drawn in device pixels -
-        // without this a chart is a blurry mess on any phone, which is all
-        // of them.
-        // The height each chart was laid out with (its height attribute),
-        // kept from the first draw: the attribute is the drawing size after
-        // that, and dividing it by the screen's pixel ratio again shrank a
-        // chart to a third of its height on a phone.
-        function prep(cv){
-          const dpr = window.devicePixelRatio || 1;
-          if (!cv.dataset.h) cv.dataset.h = cv.getAttribute('height') || '300';
-          const w = cv.clientWidth, h = +cv.dataset.h;
-          cv.style.height = h + 'px';
-          cv.width = w * dpr; cv.height = h * dpr;
-          const g = cv.getContext('2d');
-          g.setTransform(dpr,0,0,dpr,0,0);
-          g.clearRect(0,0,w,h);
-          return {g,w,h};
-        }
-
-        function axes(g,w,h,pad){
-          g.strokeStyle = INK.line; g.lineWidth = 1;
-          g.beginPath(); g.moveTo(pad,8); g.lineTo(pad,h-pad); g.lineTo(w-8,h-pad); g.stroke();
-        }
-
-        function drawLaps(rows){
-          const cv = document.getElementById('lapChart');
-          const runners = (rows||[]).filter(r => r.laps && r.laps.length > 1).slice(0,10);
-          const {g,w,h} = prep(cv);
-          const legend = document.getElementById('lapLegend');
-
-          if (!runners.length){
-            legend.innerHTML = '';
-            g.fillStyle = INK.muted; g.font = '14px system-ui';
-            g.fillText('Two laps needed before there is a shape to draw.', 16, h/2);
-            return;
-          }
-
-          const pad = 44;
-          const all = runners.flatMap(r => r.laps);
-          let lo = Math.min(...all), hi = Math.max(...all);
-
-          // A flat race would otherwise divide by zero and draw nothing.
-          if (hi - lo < 1) { hi = lo + 1; }
-
-          const maxLap = Math.max(...runners.map(r => r.laps.length));
-          const x = i => pad + (maxLap<2?0:(i/(maxLap-1))*(w-pad-12));
-          const y = v => 8 + (1-(v-lo)/(hi-lo))*(h-pad-8);
-
-          axes(g,w,h,pad);
-          g.fillStyle = INK.muted; g.font = '11px system-ui';
-          g.fillText((hi/1000).toFixed(2)+'s', 4, 16);
-          g.fillText((lo/1000).toFixed(2)+'s', 4, h-pad+4);
-
-          runners.forEach((r,ri) => {
-            g.strokeStyle = COLOURS[ri % COLOURS.length];
-            g.lineWidth = 2; g.beginPath();
-            r.laps.forEach((v,i) => i ? g.lineTo(x(i),y(v)) : g.moveTo(x(i),y(v)));
-            g.stroke();
-          });
-
-          legend.innerHTML = runners.map((r,ri) =>
-            `<span><i class="swatch" style="background:${COLOURS[ri % COLOURS.length]}"></i>${esc(r.name)}</span>`).join('');
-        }
-
-        function drawPace(rows){
-          const cv = document.getElementById('paceChart');
-          const runners = (rows||[]).filter(r => r.best > 0).slice(0,10);
-          const {g,w,h} = prep(cv);
-
-          if (!runners.length){
-            g.fillStyle = INK.muted; g.font = '14px system-ui';
-            g.fillText('No lap times yet.', 16, h/2);
-            return;
-          }
-
-          const pad = 8, labelW = 96;
-          const slowest = Math.max(...runners.map(r => r.best));
-          const rowH = Math.min(30, (h - pad*2) / runners.length);
-
-          runners.forEach((r,ri) => {
-            const top = pad + ri*rowH;
-            const len = (r.best/slowest) * (w - labelW - 60);
-
-            g.fillStyle = INK.soft; g.font = '12px system-ui';
-            g.fillText(r.name.slice(0,13), 8, top + rowH*0.65);
-
-            g.fillStyle = COLOURS[ri % COLOURS.length];
-            g.fillRect(labelW, top + 5, len, rowH-12);
-
-            // Spread drawn as a paler tail off the bar: a driver can be
-            // quick and scattered, and the bar alone can't say that.
-            const laps = r.laps || [];
-            if (laps.length > 2){
-              const mean = laps.reduce((a,b)=>a+b,0)/laps.length;
-              const sd = Math.sqrt(laps.reduce((a,b)=>a+(b-mean)*(b-mean),0)/laps.length);
-              const tail = Math.min((sd/slowest) * (w - labelW - 60) * 3, w - labelW - len - 60);
-              g.globalAlpha = 0.32;
-              g.fillRect(labelW + len, top + 5, Math.max(0,tail), rowH-12);
-              g.globalAlpha = 1;
-            }
-
-            g.fillStyle = INK.text; g.font = '12px system-ui';
-            g.fillText((r.best/1000).toFixed(3), labelW + len + 6, top + rowH*0.65);
-          });
-        }
-
-        // Dots follow the scroller rather than driving it, so they stay
-        // honest if the user half-swipes and lets go.
-        const deck = document.getElementById('deck');
-        deck.addEventListener('scroll', () => {
-          const i = Math.round(deck.scrollLeft / deck.clientWidth);
-          document.querySelectorAll('.dot').forEach((d,n) => d.classList.toggle('on', n===i));
-        }, {passive:true});
-
-        window.addEventListener('resize', () => { if (window.lastRows) { drawLaps(window.lastRows); drawPace(window.lastRows); } });
-
-        // --- The track map ----------------------------------------------
-        // Each car is placed where the laptop last worked it out to be, then
-        // moved on at its usual pace between polls - held short of the next
-        // loop, as the laptop holds it - so the dots glide rather than hop
-        // once a second. A car that seems to have stopped is red and pulses.
-        let map = null, mapAt = 0;
-
-        function takeMap(m){
-          map = m || null; mapAt = performance.now();
-          if (map) {
-            const stopped = (map.cars || []).filter(c => c.stop);
-            document.getElementById('mapLegend').innerHTML = stopped.length
-              ? stopped.map(c => `<span style="color:var(--bad)">${esc(nameOf(c.id))} may have stopped ${esc(c.where)}</span>`).join('')
-              : '<span>Each dot is a car, its number its place in the race.' +
-                (following ? ' The dotted ring is your driver on their best lap of the race.' : '') + '</span>';
-          }
-        }
-
-        // --- If it ended now ---------------------------------------------
-        function showChamp(c){
-          const el = document.getElementById('champ');
-          if (!c || !c.rows || !c.rows.length){ el.style.display = 'none'; return; }
-          el.innerHTML = `<div class="chead">IF IT ENDED NOW - ${esc(c.headline)}</div>` + c.rows.slice(0, 6).map(r => {
-            const cls = r.move.startsWith('\u25B2') ? 'up' : r.move.startsWith('\u25BC') ? 'down' : '';
-            return `<span class="crow${r.racing ? ' racing' : ''}">${r.pos}. <b>${esc(r.name)}</b> ${r.pts}` +
-              (r.move ? ` <span class="${cls}">${esc(r.move)}</span>` : '') + '</span>';
-          }).join('');
-          el.style.display = 'block';
-        }
-
-        function nameOf(id){
-          const p = (window.people || []).find(x => x.id === id);
-          return p ? p.name : id;
-        }
-
-        function pointAt(pts, cum, f){
-          f = f - Math.floor(f);
-          const want = f * cum[cum.length-1];
-          for (let i = 1; i < pts.length; i++){
-            if (cum[i] >= want){
-              const seg = cum[i] - cum[i-1], t = seg <= 0 ? 0 : (want - cum[i-1]) / seg;
-              return [pts[i-1][0] + (pts[i][0]-pts[i-1][0])*t, pts[i-1][1] + (pts[i][1]-pts[i-1][1])*t];
-            }
-          }
-          return pts[pts.length-1];
-        }
-
-        function drawMap(){
-          const cv = document.getElementById('mapChart');
-          if (!cv || !cv.clientWidth) return;
-          const {g,w,h} = prep(cv);
-          if (!map || !map.pts || map.pts.length < 2){
-            g.fillStyle = INK.muted; g.font = '14px system-ui';
-            g.fillText('No track plan for this layout.', 16, h/2);
-            return;
-          }
-          const pts = map.pts, cum = [0];
-          for (let i = 1; i < pts.length; i++) cum.push(cum[i-1] + Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]));
-          const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-          const minX = Math.min(...xs), minY = Math.min(...ys);
-          const spanX = Math.max(0.01, Math.max(...xs) - minX), spanY = Math.max(0.01, Math.max(...ys) - minY);
-          const pad = 22, k = Math.min((w-2*pad)/spanX, (h-2*pad)/spanY);
-          const ox = (w - spanX*k)/2 - minX*k, oy = (h - spanY*k)/2 - minY*k;
-          const P = p => [ox + p[0]*k, oy + p[1]*k];
-
-          g.lineJoin = 'round'; g.strokeStyle = INK.line; g.lineWidth = 12;
-          g.beginPath(); pts.forEach((p,i) => { const q = P(p); i ? g.lineTo(q[0],q[1]) : g.moveTo(q[0],q[1]); }); g.stroke();
-
-          const mark = (f, label, colour) => {
-            const a = P(pointAt(pts, cum, f)), b = P(pointAt(pts, cum, f + 0.005));
-            const dx = b[0]-a[0], dy = b[1]-a[1], len = Math.hypot(dx,dy) || 1, nx = -dy/len*12, ny = dx/len*12;
-            g.strokeStyle = colour; g.lineWidth = 3;
-            g.beginPath(); g.moveTo(a[0]-nx, a[1]-ny); g.lineTo(a[0]+nx, a[1]+ny); g.stroke();
-            g.fillStyle = colour; g.font = 'bold 11px system-ui'; g.fillText(label, a[0]+nx*1.3, a[1]+ny*1.3);
-          };
-          mark(0, 'S/F', INK.text);
-          (map.splits || []).forEach((f,i) => mark(f, 'S' + (i+1), INK.soft));
-
-          const secs = (performance.now() - mapAt) / 1000, pulse = (1 - Math.cos(performance.now()/1100*2*Math.PI))/2;
-
-          // The followed driver's best-lap ghost: a dotted ring where they
-          // would be on their best lap of the race. Ahead of it, a PB lap.
-          const mine = (map.cars || []).find(c => c.id === following && !c.stop && c.g >= 0);
-          if (mine){
-            const q = P(pointAt(pts, cum, Math.min(1, mine.g + mine.gr * secs)));
-            g.setLineDash([3, 4]); g.strokeStyle = COLOURS[(mine.pos-1) % COLOURS.length]; g.lineWidth = 2.5;
-            g.beginPath(); g.arc(q[0], q[1], 17, 0, Math.PI*2); g.stroke(); g.setLineDash([]);
-          }
-
-          [...(map.cars || [])].sort((a,b) => b.pos - a.pos).forEach(c => {
-            const f = c.stop ? c.f : Math.min(c.cap, c.f + c.rate * secs);
-            const q = P(pointAt(pts, cum, f));
-            const r = c.id === following ? 11 : 9;
-            if (c.stop){
-              g.strokeStyle = 'rgba(239,68,68,' + (0.9 - pulse*0.6) + ')'; g.lineWidth = 3;
-              g.beginPath(); g.arc(q[0], q[1], r * (1.6 + pulse*1.4), 0, Math.PI*2); g.stroke();
-            }
-            g.fillStyle = c.stop ? '#EF4444' : COLOURS[(c.pos-1) % COLOURS.length];
-            g.beginPath(); g.arc(q[0], q[1], r, 0, Math.PI*2); g.fill();
-            if (c.id === following){ g.strokeStyle = INK.text; g.lineWidth = 2; g.stroke(); }
-            g.fillStyle = c.stop ? '#fff' : '#000'; g.font = 'bold 11px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle';
-            g.fillText(c.stop ? '!' : String(c.pos), q[0], q[1] + 0.5);
-            g.textAlign = 'start'; g.textBaseline = 'alphabetic';
-          });
-        }
-
-        // About ten frames a second, and only while the map page is the one showing.
-        setInterval(() => {
-          const i = Math.round(deck.scrollLeft / Math.max(1, deck.clientWidth));
-          if (i === 3) drawMap();
-        }, 100);
-
-        // --- Following one driver ---------------------------------------
-        // Remembered on this phone, so it is still following them after a
-        // reload. Picking a driver is also the tap that lets the page buzz
-        // and beep later: phones only allow either after a touch.
-        const FOLLOW_KEY = 'hcFollow';
-        let following = '';
-        try { following = localStorage.getItem(FOLLOW_KEY) || ''; } catch(e) {}
-        let lastCallKey = '', audio = null;
-
-        const pick = document.getElementById('followPick');
-        pick.addEventListener('change', () => {
-          following = pick.value;
-          try { localStorage.setItem(FOLLOW_KEY, following); } catch(e) {}
-          wakeAudio();
-          lastCallKey = '';
-          tick();
-        });
-
-        // The beep's player, made - or woken - by a tap: phones only allow
-        // sound after one, and after a reload there has been none yet.
-        function wakeAudio(){
-          try {
-            audio = audio || new (window.AudioContext || window.webkitAudioContext)();
-            if (audio.state !== 'running') audio.resume();
-          } catch(e) {}
-        }
-
-        function fmt(ms){ return ms > 0 ? (ms/1000).toFixed(3) : '-'; }
-
-        function showFollowing(d){
-          // The picker, filled again only when the list of people changes.
-          const people = d.people || [];
-          window.people = people;
-          const sig = people.map(p => p.id).join('|');
-          if (pick.dataset.sig !== sig){
-            pick.innerHTML = '<option value="">Follow a driver...</option>' + people.map(p =>
-              `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
-            pick.dataset.sig = sig;
-          }
-          pick.value = people.some(p => p.id === following) ? following : '';
-
-          // WHY (23 Oct 2026, bug hunt 10): a restart of the web server (the
-          // only way to change a PIN) gives everybody new ids, and a phone
-          // still holding the old one showed nothing while its driver raced.
-          // A pick nobody on the list matches now says to pick again. It is
-          // kept, not wiped - as the coach page does.
-          const lost = !!following && people.length > 0 && !people.some(p => p.id === following);
-          document.getElementById('flost').style.display = lost ? 'block' : 'none';
-
-          const card = (d.cards || {})[following];
-          const fc = document.getElementById('fcard');
-          if (following && card){
-            const who = people.find(p => p.id === following);
-            document.getElementById('fpos').textContent = 'P' + card.pos;
-            document.getElementById('fname').textContent = who ? who.name : following;
-            document.getElementById('fstat').innerHTML =
-              `Lap <b>${card.laps}</b> &nbsp; Last <b>${fmt(card.last)}</b><br>` +
-              `Ahead <b>${esc(card.ahead)}</b> &nbsp; Behind <b>${esc(card.behind)}</b>`;
-            fc.style.display = 'flex';
-          } else {
-            fc.style.display = 'none';
-          }
-
-          speakLap(card);
-
-          const call = (d.callups || {})[following];
-          const cu = document.getElementById('callup');
-          if (following && call){
-            cu.textContent = call.words.toUpperCase() + ' - ' + call.race + ' - grid ' + call.slot;
-            // About when it starts, by the laptop's clock (22 Oct 2026).
-            const eta = etaWords(call);
-            if (eta){ const e = document.createElement('span'); e.className = 'eta'; e.textContent = eta; cu.appendChild(e); }
-            // Staged is the race on track, but it is the one moment the
-            // driver has to move, so it pulses like "next" rather than
-            // sitting green like "on track".
-            cu.className = 'callup ' + (call.staged ? 'next' : call.now ? 'now' : call.away === 0 ? 'next' : '');
-            cu.style.display = 'block';
-
-            // Buzz as their race becomes the next one - and again when it
-            // is staged (22 Oct 2026, driver experience): the key changes at
-            // both, and at nothing in between, because a race that goes on
-            // track keeps the same race and an away of 0.
-            const key = call.race + '|' + call.away + '|' + (call.staged ? 'staged' : '');
-            if (lastCallKey && lastCallKey !== key && (call.staged || (!call.now && call.away === 0))) buzz();
-            lastCallKey = key;
-          } else {
-            cu.style.display = 'none';
-            lastCallKey = lastCallKey || 'none';
-          }
-
-          showPens(d, card);
-          showCheck(d);
-        }
-
-        // --- The laptop's clock (22 Oct 2026, driver experience) ----------
-        // Every "about 7 min" and "seen at" is worked out against the time
-        // the laptop says it is, carried on each poll as "now": a phone's
-        // own clock can be minutes out, and the ETAs and sightings were all
-        // measured by the laptop's.
-        let skew = 0;
-        function takeClock(now){
-          const t = Date.parse(now || '');
-          if (!isNaN(t)) skew = t - Date.now();
-        }
-        function serverNow(){ return Date.now() + skew; }
-        function clockAt(ms){
-          try { return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: !window.HC24 }); }
-          catch(e) { return ''; }
-        }
-
-        // "about 7 min (19:42)" - only for a race still to come. A race
-        // already on track or staged has its own words.
-        function etaWords(call){
-          if (!call || !call.eta || call.now || call.staged) return '';
-          const at = Date.parse(call.eta);
-          if (isNaN(at)) return '';
-          const mins = Math.round((at - serverNow()) / 60000);
-          return (mins >= 1 ? 'about ' + mins + ' min' : 'any minute now') + ' (' + clockAt(at) + ')';
-        }
-
-        // --- Penalties (22 Oct 2026, driver experience) -------------------
-        // This race's warnings and penalty time as they stand, then each
-        // penalty from tonight's filed races with race control's reason.
-        // In the room only: the PA has already said them, and the club's
-        // online pages carry the numbers alone.
-        function showPens(d, card){
-          const box = document.getElementById('fpens');
-          const lines = following ? ((d.pens || {})[following] || []) : [];
-          const now = [];
-          if (following && card){
-            if (card.warn > 0) now.push(card.warn + (card.warn === 1 ? ' warning' : ' warnings'));
-            if (card.penS > 0) now.push('+' + card.penS + ' s penalty');
-          }
-          if (!now.length && !lines.length){ box.style.display = 'none'; box.innerHTML = ''; return; }
-          box.innerHTML = (now.length ? 'This race: <b>' + esc(now.join(', ')) + '</b>' : '') +
-            (lines.length ? (now.length ? '<br>' : '') + 'Tonight:<ul>' + lines.map(l => '<li>' + esc(l) + '</li>').join('') + '</ul>' : '');
-          box.style.display = 'block';
-        }
-
-        // --- Check my transponder (22 Oct 2026, driver experience) --------
-        // Press, drive past the line, and the phone says it was heard and
-        // how well. Nothing special happens on the laptop: every pass is
-        // already recorded, so this only watches "seen" for one newer than
-        // the press.
-        const CHECK_MS = 3 * 60 * 1000;
-        const tcheckBtn = document.getElementById('tcheckBtn'), tsay = document.getElementById('tsay');
-        let checkFor = '', checkFrom = 0;
-
-        function checkSay(text, cls){ tsay.textContent = text; tsay.className = 'tsay' + (cls ? ' ' + cls : ''); }
-
-        tcheckBtn.addEventListener('click', () => {
-          wakeAudio();
-          checkFor = following; checkFrom = serverNow();
-          checkSay('Drive past the line now - watching for it...', '');
-        });
-
-        function showCheck(d){
-          document.getElementById('tcheck').style.display = following ? 'block' : 'none';
-          if (!checkFor) return;
-          if (checkFor !== following){ checkFor = ''; checkSay('', ''); return; }
-          const docNow = isNaN(Date.parse(d.now || '')) ? serverNow() : Date.parse(d.now);
-          const s = (d.seen || {})[following];
-          if (s && docNow - s.ago * 1000 > checkFrom){
-            checkFor = '';
-            const at = docNow - s.ago * 1000;
-            if (s.sig === 'weak') checkSay('Seen at ' + clockAt(at) + ', signal weak - check it is mounted where the loop can see it, and its battery.', 'bad');
-            else checkSay('Seen at ' + clockAt(at) + (s.sig === 'good' ? ', signal good' : ''), 'ok');
-            buzz();
-            return;
-          }
-          if (serverNow() - checkFrom > CHECK_MS){
-            checkFor = '';
-            checkSay('Not seen. Check it is switched on and charged, and mounted with a clear view of the track - then try again.', 'bad');
-          }
-        }
-
-        // --- Captions (?captions=1, 22 Oct 2026, driver experience) -------
-        // The line the announcer has just said, at the bottom of the page,
-        // fading after eight seconds. Only a line said while the page is
-        // open: the first look takes what is there as already said, so an
-        // OBS source reloaded mid-race does not put up an old line.
+        // --- Captions (?captions=1) --------------------------------------
+        // The newest line the announcer said, faded after eight seconds.
+        // Only a line said while the page is open: the first answer is taken
+        // as already said, so reloading the source mid-race puts nothing
+        // old back up.
         const captionsOn = new URLSearchParams(location.search).get('captions') === '1';
         const CAPTION_MS = 8000;
         let captionSeen = -1, captionTimer = 0;
@@ -5093,121 +3712,6 @@ public sealed partial class WebServerService
           captionTimer = setTimeout(() => el.classList.add('fade'), CAPTION_MS);
         }
 
-        // --- Lap times in your ear ---------------------------------------
-        // Each new lap of the driver being followed, read out by the phone's
-        // own voice: "Lap 7, 19.42, best lap, P2, 0.4 seconds behind". On
-        // with the button, remembered on this phone. Turning it on speaks
-        // once straight away, which is what lets a phone speak later.
-        const SPEAK_KEY = 'hcSpeak';
-        const speakBtn = document.getElementById('speakBtn');
-        let speaking = false, unlocked = false;
-        try { speaking = localStorage.getItem(SPEAK_KEY) === '1'; } catch(e) {}
-        let spokenFor = '', spokenLap = -1;
-        const canSpeak = 'speechSynthesis' in window;
-
-        function sayAloud(text){
-          try {
-            window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(text);
-            u.rate = 1.1;
-            window.speechSynthesis.speak(u);
-          } catch(e) {}
-        }
-
-        // A phone only lets a page speak once it has been tapped since it
-        // loaded - so after a reload with this on, it waits for a tap.
-        function showSpeak(){
-          speakBtn.style.display = canSpeak && following ? 'inline-block' : 'none';
-          speakBtn.textContent = 'Lap times in my ear: ' + (!speaking ? 'off' : unlocked ? 'on' : 'tap to resume');
-          speakBtn.classList.toggle('on', speaking);
-        }
-
-        // A click, not a touch going down: iPhones only count a finished tap
-        // as one that lets a page speak or play sound.
-        document.addEventListener('click', e => {
-          wakeAudio();
-          if (unlocked || e.target === speakBtn) return;
-          unlocked = true;
-          if (speaking) sayAloud(' ');
-          showSpeak();
-        }, true);
-
-        // Not reloaded for a change of look while it is talking.
-        function lookBusy(){ return speaking; }
-
-        speakBtn.addEventListener('click', () => {
-          // On, but waiting for a tap since a reload: this tap resumes it.
-          if (speaking && !unlocked){
-            unlocked = true; spokenFor = '';
-            sayAloud('Lap times on'); showSpeak();
-            return;
-          }
-          unlocked = true;
-          speaking = !speaking;
-          try { localStorage.setItem(SPEAK_KEY, speaking ? '1' : '0'); } catch(e) {}
-          if (speaking) sayAloud('Lap times on'); else { try { window.speechSynthesis.cancel(); } catch(e) {} }
-          spokenFor = '';
-          showSpeak();
-        });
-
-        function gapWords(gap){
-          const laps = /^\+(\d+)L$/.exec(gap || '');
-          if (laps) return laps[1] + (laps[1] === '1' ? ' lap' : ' laps') + ' behind';
-          const secs = /^\+(\d+([.,]\d+)?)$/.exec(gap || '');
-          return secs ? secs[1].replace(',', '.') + ' seconds behind' : '';
-        }
-
-        function speakLap(card){
-          showSpeak();
-          if (!speaking || !unlocked || !following || !card) return;
-
-          // A new driver, or a new race: start counting from here, quietly.
-          if (spokenFor !== following || card.laps < spokenLap){
-            spokenFor = following; spokenLap = card.laps;
-            return;
-          }
-
-          if (card.laps <= spokenLap || !(card.last > 0)) return;
-          spokenLap = card.laps;
-
-          const parts = ['Lap ' + card.laps, (card.last / 1000).toFixed(2)];
-          if (card.best > 0 && card.last <= card.best && card.laps > 1) parts.push('best lap');
-          parts.push('P' + card.pos);
-          const gap = gapWords(card.ahead);
-          if (gap) parts.push(gap);
-          sayAloud(parts.join(', '));
-        }
-
-        function buzz(){
-          try { if (navigator.vibrate) navigator.vibrate([250,120,250,120,400]); } catch(e) {}
-          try {
-            if (!audio) return;
-            if (audio.state !== 'running') audio.resume();
-            [0, 0.25].forEach(at => {
-              const o = audio.createOscillator(), g = audio.createGain();
-              o.frequency.value = 880; o.connect(g); g.connect(audio.destination);
-              g.gain.setValueAtTime(0.2, audio.currentTime + at);
-              g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + at + 0.2);
-              o.start(audio.currentTime + at); o.stop(audio.currentTime + at + 0.22);
-            });
-          } catch(e) {}
-        }
-
-        function hideSponsor(){
-          document.getElementById('sponsor').style.display = 'none';
-          showingSponsor = false; loadingSponsor = false; sinceSwap = 0;
-
-          // The video is stopped and let go of, not just hidden: a hidden
-          // <video> with a src keeps the connection open and keeps
-          // buffering, and over a race night that is one stream per slide
-          // per phone, all of them live at once.
-          if (showingVideo) {
-            showingVideo = false;
-            try { sponsorVid.pause(); sponsorVid.removeAttribute('src'); sponsorVid.load(); } catch(e){}
-            sponsorVid.style.display = 'none';
-            sponsorImg.style.display = '';
-          }
-        }
         tick(); setInterval(tick, 1000);
         </script><script>{{LookWatchScript}}</script></body></html>
         """;

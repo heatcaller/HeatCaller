@@ -6,7 +6,7 @@ namespace HeatCaller;
 /// A DRIVER'S REPORT CARD FOR THE NIGHT (22 Oct 2026).
 ///
 /// Six short lines a driver can read after a run, on their own night page,
-/// on the phone coach page, and on the club's screens from a right-click on
+/// in the night email, and on the club's screens from a right-click on
 /// a driver in Driver Hub or a result in Race History: their best lap and the
 /// ideal lap their best sectors add up to, how consistent their clean laps
 /// were, which sector costs them the most, how tonight compares with the
@@ -34,8 +34,8 @@ namespace HeatCaller;
 /// most recent run tonight, and says so.
 ///
 /// Pure: nothing here reads a store, so every line is pinned by
-/// CoachReportTests. The callers (MainForm for the night page, Driver Hub
-/// and Race History, WebServerService for the phone) gather the sessions, the
+/// CoachReportTests. The callers (MainForm for the night page, the night email,
+/// Driver Hub and Race History) gather the sessions, the
 /// setup change and the names.
 /// </summary>
 internal static class CoachReport

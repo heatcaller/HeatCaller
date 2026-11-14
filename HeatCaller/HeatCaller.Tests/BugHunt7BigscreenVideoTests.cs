@@ -136,54 +136,7 @@ public sealed class BugHunt7BigscreenVideoTests : IDisposable
         Assert.Contains(": string.Empty;", text, StringComparison.Ordinal);
     }
 
-    // --- 131: a Live Results video over the opening laps ---------------------------------
-
-    [Fact]
-    public void Live_results_takes_a_sponsor_down_when_the_race_goes_green()
-    {
-        var rotate = FunctionBody(Pages().BuildLiveResultsPage(), "function rotateSponsors(");
-
-        var showing = rotate.IndexOf("if (showingSponsor) {", StringComparison.Ordinal);
-        var green = rotate.IndexOf(
-            "if (pauseDuringRace && state === 'Racing') { hideSponsor(); return; }", showing, StringComparison.Ordinal);
-        var slideTime = rotate.IndexOf("if (!showingVideo && sinceSwap >= slideSecs) hideSponsor();", showing, StringComparison.Ordinal);
-
-        Assert.True(showing >= 0 && green > showing && slideTime > green);
-    }
-
-    [Fact]
-    public void Live_results_lets_go_of_a_video_that_arrives_after_the_green()
-    {
-        var ready = FunctionBody(Pages().BuildLiveResultsPage(), "sponsorVid.oncanplay = function(){");
-
-        var racing = ready.IndexOf("if (pauseDuringRace && sponsorState === 'Racing') {", StringComparison.Ordinal);
-        var released = ready.IndexOf("sponsorVid.removeAttribute('src');", racing, StringComparison.Ordinal);
-        var shown = ready.IndexOf("sponsorVid.style.display = 'block';", StringComparison.Ordinal);
-
-        Assert.True(racing >= 0 && released > racing && shown > released);
-    }
-
     // --- Helpers ----------------------------------------------------------------------------
-
-    /// <summary>
-    /// A server to build the pages from, set to one of the app's own looks
-    /// for the reason BugHunt4WebTests gives: "match the app" reads the
-    /// running theme, whose fonts need GDI+.
-    /// </summary>
-    private static WebServerService Pages() =>
-        new(new RaceTiming(new RaceControlSession()), ProfileStore.Load(), settings: new AppSettings { DisplayLook = Looks.MidnightKey });
-
-    /// <summary>One function of a page's script, from its first line to the brace that closes it at the left margin.</summary>
-    private static string FunctionBody(string page, string start)
-    {
-        var from = page.IndexOf(start, StringComparison.Ordinal);
-        Assert.True(from >= 0, $"No \"{start}\" in the page.");
-
-        var to = page.IndexOf("\n}", from, StringComparison.Ordinal);
-        Assert.True(to > from, $"\"{start}\" never closes.");
-
-        return page[from..to];
-    }
 
     /// <summary>The folder the repo is checked out in, found by the file that is only ever at its root.</summary>
     private static string RepoRoot

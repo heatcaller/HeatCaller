@@ -1,6 +1,6 @@
 # Local Screens
 
-HeatCaller has a small web server built in. Turn it on from the **Local Screens** page and any phone, tablet or computer on the same Wi-Fi as the laptop can open its pages: live results, a race remote for throwing flags from the trackside, a self check-in page for drivers, a driver coach page with a driver's own laps and pit board, a race-day manager for running entries, the program and results from a phone, a transparent overlay for streaming, and broadcast graphics for a stream from this laptop.
+HeatCaller has a small web server built in. Turn it on from the **Local Screens** page and any phone, tablet or computer on the same Wi-Fi as the laptop can open its pages: a race remote for throwing flags from the trackside, a self check-in page for drivers, a race-day manager for running entries, the program and results from a phone, a transparent overlay for streaming, and broadcast graphics for a stream from this laptop.
 
 These pages work only on the venue's own network, with no internet needed. To publish results and check-in to the internet, use the online relay instead; see [The online relay](../online/index.md). The race-day manager can also be reached over the relay if the club turns that on - see [Race-day manager](#race-day-manager) below.
 
@@ -21,7 +21,7 @@ These pages work only on the venue's own network, with no internet needed. To pu
 5. In **Manager PIN:**, enter a PIN of six or more digits if you want the race-day manager reachable from a phone. Leave it blank to leave the manager closed - unlike the check-in PIN, a blank Manager PIN does not open the manager to anyone.
 6. Click **Start Server**, at the foot of the **Server** card.
 
-The status beside the buttons changes from "Stopped" to "Running on port *n* - stop the server to change the port or PINs", and the seven addresses on the **Open these on your phone, tablet, or in OBS** card fill in.
+The status beside the buttons changes from "Stopped" to "Running on port *n* - stop the server to change the port or PINs", and the five addresses on the **Open these on your phone, tablet, or in OBS** card fill in.
 
 While the server is running, you can't change the port or the PINs. Click **Stop Server**, make the change, and start it again.
 
@@ -73,17 +73,17 @@ When the server is running, the page lists one address for each page:
 
 | Caption | Address | Buttons |
 |---|---|---|
-| **Live results:** | `http://<laptop address>:<port>/` | **Copy**, **QR code** |
 | **Phone remote:** | `http://<laptop address>:<port>/remote` | **Copy**, **QR code** |
 | **Driver check-in:** | `http://<laptop address>:<port>/checkin` | **Copy**, **QR code** |
-| **Driver coach:** | `http://<laptop address>:<port>/coach` | **Copy**, **QR code** |
 | **Race manager:** | `http://<laptop address>:<port>/manage` | **Copy**, **QR code** |
-| **OBS overlay:** | `http://<laptop address>:<port>/?overlay=1` | **Copy** |
+| **OBS overlay:** | `http://<laptop address>:<port>/overlay` | **Copy** |
 | **Broadcast graphics:** | `http://localhost:<port>/broadcast` | **Copy** |
 
-**Driver coach** is the page a driver opens to hear their own lap times in their earbuds. See [Coach](#coach).
-
 HeatCaller works out the laptop's address on the local network for you (usually something like `192.168.1.20`). If an address says `localhost`, the laptop isn't connected to a network phones can reach.
+
+The laptop's bare address (`http://<laptop address>:<port>/`) opens a short list of the pages on this Wi-Fi, each with a line on what it's for. The remote and the race manager still ask for their own PIN when opened.
+
+There's no live results page or driver coach page on the club's Wi-Fi. For live results on phones, use the club's online **Live** page (see [The online relay](../online/index.md)). A driver's report card is on their own night page online, and on the laptop from Driver Hub and Race History (see [The report card](#the-report-card)).
 
 The server has three more pages that aren't listed on this card:
 
@@ -97,7 +97,7 @@ The shout-out and vote pages are there even while they're switched off, and then
 
 ### QR posters
 
-Click **QR code** next to an address to open a scan-to-join poster: a large QR code with a heading ("LIVE RESULTS", "RACE REMOTE", "CHECK IN", "DRIVER COACH" or "RACE MANAGER") and a line telling people to use the same Wi-Fi. The poster has **Print**, **Full screen** and **Close** buttons. Press <kbd>Esc</kbd> to leave full screen.
+Click **QR code** next to an address to open a scan-to-join poster: a large QR code with a heading ("RACE REMOTE", "CHECK IN" or "RACE MANAGER") and a line telling people to use the same Wi-Fi. The poster has **Print**, **Full screen** and **Close** buttons. Press <kbd>Esc</kbd> to leave full screen.
 
 The poster opens in its own window, so you can leave it up on a second screen while you carry on racing. If the server isn't running, you'll see "Start the web server first - there's no address to put in a code until it's listening."
 
@@ -105,126 +105,9 @@ The check-in page also has its own wall poster: **Self Check-In Poster** on **Ra
 
 ## The pages
 
-### Live results
+### The report card
 
-The page at `/` is a read-only view of the race, for spectators' phones or a display in the pits. Anyone on the Wi-Fi can open it; it needs no PIN.
-
-- The top bar shows "LIVE RESULTS", the race state and flag (for example "Racing - Green flag") and the race clock.
-- An "ON DECK:" line shows what's next on the race day's **Timetable**, when there is something.
-- During a race that counts towards a championship, an "IF IT ENDED NOW" line shows the championship as it would stand if the race ended now: who'd lead, and the top six with their points and how many places they'd move. Drivers in this race are highlighted. See [If it ended now](big-screen.md#if-it-ended-now).
-- Swipe left and right between four views:
-    - The **standings** table. Choose its columns with **Choose Web Columns** on the **Local Screens** page.
-    - **Lap times**: a line chart of each driver's laps (up to ten drivers). It needs two laps before it has anything to draw.
-    - **Best lap & consistency**: a bar for each driver's best lap, with a paler tail showing how much their lap times vary.
-    - **Track map**: the cars going round the track, as on the Big Screen. It needs a plan for the layout being raced on, and shows "No track plan for this layout." without one. A car that seems to have stopped is red and pulses, and the line under the map says who and where. See [Track map](big-screen.md#track-map).
-- If you've set up sponsor slides on the **Sponsors** page, the page cuts to them between spells of standings, using the timings set there. Videos play to their own end, muted. See [The Big Screen and sponsors](big-screen.md).
-
-The page refreshes itself every second. Before any laps are in, it shows "Waiting for lap data...".
-
-Drivers without a name on their profile appear under their transponder number.
-
-#### Follow a driver
-
-A driver, or a parent at the fence, can follow one driver on their phone. Under the top bar, pick a name from **Follow a driver...**. The list has everyone on the board and everyone in the races still to run.
-
-<!-- screenshot: Live results on a phone following one driver, showing P2, the gaps and a flashing "YOU'RE UP NEXT" call-up -->
-
-While that driver is racing, a card shows:
-
-- their position, large ("P2"),
-- their lap and last lap time,
-- the gap to the car ahead ("Leading" for the leader) and to the car behind, in seconds, or in laps when they're lapped ("+1L").
-
-Their row on the standings is outlined, and on the track map their dot has a ring. A dotted ring in their color is their best-lap ghost: where they'd be on their best lap of the race. Ahead of it, they're on a personal best lap.
-
-Under it, the call-up says when they race next and where they grid:
-
-| Call-up | When |
-|---|---|
-| "STAGED - GO TO THE DRIVER STAND - Q2 Heat 1 (Stock) - grid 3" | Their race is being staged. It flashes. |
-| "ON TRACK NOW - Q2 Heat 1 (Stock) - grid 3" | Their race is running. |
-| "YOU'RE UP NEXT - Q2 Heat 3 (Stock) - grid 4" | Theirs is the next race. It flashes. |
-| "2 RACES BEFORE YOURS - ..." | Races to go before theirs. |
-
-The call-up follows the program on **Race Day → Next Steps**, in running order. The grid slot is their place in the round's roster.
-
-Under a race still to come, the call-up says about when it should start, for example "about 7 min (19:42)", or "any minute now (19:42)" when the time has come. HeatCaller works it out from the time on the day's **Timetable** plus how late the night is running, or, where a line has no time it can read, from how long tonight's races have been taking. With neither, no time is shown. The time is the laptop's, so a phone whose clock is wrong still shows the right minute.
-
-The phone buzzes and beeps twice: once when their race becomes the next one, and again when it's staged, which is the moment to go to the driver stand. Phones only allow this after you've touched the page, and choosing a driver counts. Buzzing works on Android phones; iPhones flash the call-up but don't buzz. Leave the page open, with the screen on.
-
-Under the call-up, when there's something to say, are the driver's penalties:
-
-- **This race:** their warnings and penalty time in the race that's running, for example "This race: 1 warning, +5 s penalty".
-- **Tonight:** each penalty from their races saved tonight, with race control's reason, for example "Q1 Heat 2: +5 s - jump start" or "Q2 Heat 1: Warning 1 - Blocking".
-
-The reasons are on this page because it's in the room, where the PA has already said them. The club's online pages show only the numbers, except on the driver's own night page (see [Penalties on the results](../online/index.md#penalties-on-the-results)).
-
-##### Check my transponder
-
-While you're following a driver, a **Check my transponder** button sits under the call-up. Use it to check a transponder before a race:
-
-1. Tap **Check my transponder**. It says "Drive past the line now - watching for it...".
-2. Drive the car over the timing line.
-3. When the line hears it, the phone buzzes and says, for example, "Seen at 7:42 PM, signal good". A weak signal reads "Seen at 7:42 PM, signal weak - check it is mounted where the loop can see it, and its battery." A decoder that doesn't report signal strength just gives the time.
-
-If it isn't heard within 3 minutes: "Not seen. Check it is switched on and charged, and mounted with a clear view of the track - then try again." Nothing needs doing at the desk: HeatCaller notes every pass over the line anyway, practice included. See [Signal strength](../timing/transponders.md#signal-strength).
-
-The same check is on the driver's own night page online; see [Check my transponder](../online/index.md#check-my-transponder).
-
-The phone remembers who it's following, so it's still following them after a reload. Pick **Follow a driver...** to stop.
-
-#### Lap times in your ear
-
-Once you're following a driver, a **Lap times in my ear: off** button appears beside the **Follow a driver...** list. Tap it (it changes to "on") and the phone reads out each new lap of that driver in its own voice, for example "Lap 7, 19.42, best lap, P2, 0.4 seconds behind":
-
-- the lap and its time,
-- "best lap" when it's their quickest of the race so far,
-- their position,
-- the gap to the car ahead, in seconds or laps. Nothing is said about the gap for the leader.
-
-Put earbuds in and the driver on the rostrum can hear their own laps. The phone says "Lap times on" when you turn it on, which is what lets it speak later. If the page reloads, the button reads "Lap times in my ear: tap to resume" until you tap the page, since phones only let a page speak after a tap. It stays quiet for laps already run when you start following, and starts again from the next one. The phone remembers the setting.
-
-Keep the screen on: most phones stop a page running when the screen goes off.
-
-The follow view is only on the club Wi-Fi page, not on your club's online pages, and never in the OBS overlay.
-
-### Coach
-
-The page at `/coach` is for one driver to watch their own laps on their phone while they practice, or for whoever is coaching them in the pits. It needs no PIN.
-
-- **Pick your driver...** at the top chooses who it's for. The phone remembers the choice, and it's the same choice as following a driver on the live results page, so a phone already following somebody opens on them.
-- **Last lap** shows their latest lap and how far it was off their best, or **Best lap** when it was their best.
-- **Target** shows how far the last lap was from the target lap race control set for them (**Coach *name*** → **Target lap...** on Race Control; see [Coaching a driver](../race-control/running-a-race.md#coaching-a-driver)), or **On target**. It's only there when a target is set.
-- **Last 10 laps** shows the trend of their last ten.
-- **Say my lap time**: tick it and the phone reads out the driver's own lap time after every lap, "nine point two one", with "best lap" on a new best - nobody else's laps. It's the phone's own voice, so it doesn't wait for the PA announcer. The phone remembers the tick; after a reload it reads "Say my lap time: tap to resume" until the page is tapped, since phones only let a page speak after a tap. It's hidden on a phone that can't speak.
-- A new best lap flashes the page and buzzes the phone. An iPhone can't buzz for a web page, so it beeps instead once the page has been tapped (ticking **Say my lap time** counts).
-- Under that is **Your report card** for the night, the same card as on their own night page (see below), worked out each time a race or practice is saved.
-
-"Not on track right now. Your laps show here as soon as you are." means they aren't on the board in the session that's running.
-
-#### The pit board
-
-Once a driver is picked, a **Pit board** button turns the phone into a pit board: a few numbers as big as the screen allows, to read from the driver stand or hold up in the pits.
-
-| Box | What it shows |
-|---|---|
-| **Last lap** | Their latest lap time, the largest number on the board. |
-| **Position** | Their place, for example "P2". |
-| **Laps** | How many laps they've done. |
-| **Gap ahead** | The gap to the car in front. |
-| **To target** | How far the last lap was from their target lap, when race control has set one. |
-
-The whole board flashes green on a new best lap, and the last lap goes red when it was slower than the target. The driver's name is at the top, with **×** to close the board. A box with nothing to show reads "-".
-
-Opening the board makes the page full screen and turns it sideways where the phone allows (an iPhone has no full screen for a web page, so the board just fills the window). To open the coach page straight onto the board, add `?board=1` to the address (`/coach?board=1`) and tap the screen where it says "Tap anywhere to start the pit board": a phone only goes full screen, or stays awake, for a page that's been tapped.
-
-**Keeping the screen on.** While the board is up, the page keeps the phone from going dark. Because the Wi-Fi pages are plain `http`, it usually does this by playing a tiny silent video on a loop, which phones don't sleep through. If that doesn't work on a phone, the board says "If the screen still goes dark, set Auto-Lock to Never (iPhone: Settings, Display & Brightness) or the screen timeout to its longest (Android: Settings, Display) while the pit board is up." Closing the board lets the phone sleep again.
-
-The pit board reads the same live information as the rest of the coach page, so it shows nothing the live results don't.
-
-Anybody on the club's Wi-Fi can open any driver's coach page, so the card here **leaves out the setup line**: what a driver changed on their car is theirs to share. The live laps come from the same board the live results page shows, so nothing appears here that the live results don't already show.
-
-#### The report card
+A driver's report card for the night is on their own night page on the club's online pages (see [The online relay](../online/index.md)), in the night email, and on the laptop: right-click a driver in **Driver Hub**, or a result in **Race History** (see [Results and championships](../race-control/results-and-championships.md)). It's worked out each time a race or practice is saved.
 
 | Line | What it says |
 |---|---|
@@ -240,16 +123,17 @@ A clean lap is a flying lap no slower than 7% over their best on that layout ton
 
 ### OBS overlay
 
-The overlay address (`/?overlay=1`) is the same live results page with a transparent background and no sponsor slides, so it sits cleanly over video. In OBS, add a **Browser** source and paste the **OBS overlay:** address.
+The overlay address (`/overlay`) is the results table with a transparent background and no sponsor slides, so it sits cleanly over video. In OBS, add a **Browser** source and paste the **OBS overlay:** address. An OBS source still set to the old address, `/?overlay=1`, keeps working.
+
+Choose its columns with **Choose Web Columns** on the **Local Screens** page.
 
 ### Captions
 
-The live results page, the OBS overlay and the broadcast graphics can show what the announcer says as text, for viewers watching with the sound off or anyone who can't hear the PA. Add `captions=1` to the address:
+The OBS overlay and the broadcast graphics can show what the announcer says as text, for viewers watching with the sound off or anyone who can't hear the PA. Add `captions=1` to the address:
 
 | Page | Address with captions |
 |---|---|
-| Live results | `http://<laptop address>:<port>/?captions=1` |
-| OBS overlay | `http://<laptop address>:<port>/?overlay=1&captions=1` |
+| OBS overlay | `http://<laptop address>:<port>/overlay?captions=1` |
 | Broadcast graphics | `http://localhost:<port>/broadcast?captions=1` (with `&hide=...` after it if you use that) |
 
 The line the announcer has just said appears near the bottom of the page and fades after eight seconds. A long line, such as the race recap, is shown a sentence or two at a time as the announcer reaches each part. Only lines said while the page is open are shown, so reloading an OBS source in the middle of a race doesn't put an old line back up. On the broadcast graphics, the battle bar and the fastest-lap box move up to make room.
@@ -367,21 +251,15 @@ Changes made from a phone go on the laptop's **Undo** list, named "Phone: ..." (
 
 The manager works the same way, tab for tab, whether it's opened here on the venue's Wi-Fi or - if the club has turned that on - [through the relay from anywhere](../online/setup.md#race-day-manager). The one difference is the **Race** tab: it never appears over the relay, and the laptop refuses a start, a stop or a flag from anywhere but this Wi-Fi even if one were sent, so the manager can never run a race except from here. Over the relay, drivers' transponder numbers are also left out, the same as everywhere else off this Wi-Fi, and **Today** says only how many changes can be undone on the laptop, not what they were.
 
-### Sponsor images and videos
-
-The server also sends the sponsor slides to the live results page. There's nothing to set up here; the slides come from the **Sponsors** page.
-
-Videos are streamed off the laptop's disk rather than held in memory, so a long ad costs the same whether one phone is watching or thirty. They always play **muted** on a phone, whatever the Big Screen's sound setting is: browsers refuse to autoplay sound on a page nobody has tapped. See [Videos](big-screen.md#videos).
-
 ### Colors and logo
 
-The live results page, the overlay, the phone remote and the check-in page all use the crowd-screen look, light looks included, and show the club logo in their header if **Show the logo on the Big Screen and Wi-Fi pages** is ticked. When you change the look or the logo on the **Themes** page, an open page reloads itself within about 5 seconds, so an OBS source or a TV left on Live Results picks it up with nobody touching it. A page waits while someone is typing in it, and the check-in page waits until nobody is part way through checking in. The phone remote's flag buttons always keep their own flag colors. See [Looks and the club logo](looks-and-logo.md).
+The overlay, the phone remote and the check-in page all use the crowd-screen look, light looks included, and show the club logo in their header if **Show the logo on the Big Screen and Wi-Fi pages** is ticked. When you change the look or the logo on the **Themes** page, an open page reloads itself within about 5 seconds, so an OBS source picks it up with nobody touching it. A page waits while someone is typing in it, and the check-in page waits until nobody is part way through checking in. The phone remote's flag buttons always keep their own flag colors. See [Looks and the club logo](looks-and-logo.md).
 
 ## Other settings on this page
 
 | Setting | What it does |
 |---|---|
-| **Choose Web Columns** | Picks the columns on the live results page, the overlay and the remote's table. The live board on the club's website uses them too, until you choose its own with **Choose Live Board Columns** on the **Club Website** page (see [Choose the leaderboard columns](big-screen.md#choose-the-leaderboard-columns)). A transponder column never goes online. |
+| **Choose Web Columns** | Picks the columns on the OBS overlay and the remote's table. The live board on the club's website uses them too, until you choose its own with **Choose Live Board Columns** on the **Club Website** page (see [Choose the leaderboard columns](big-screen.md#choose-the-leaderboard-columns)). A transponder column never goes online. |
 | **Choose Big Screen Columns** | Picks the columns on the Big Screen window. |
 | **Open Big Screen** | Opens the Big Screen window. |
 | **Club Website Settings** | Opens the **Club Website** page. |
@@ -406,7 +284,7 @@ The pages are built for a club's own Wi-Fi. HeatCaller protects them as follows:
 - **Stopping and starting the server** clears all lockouts.
 - **Commands only from the app's own pages.** Flags, check-ins and manager changes can only be sent by the app's own pages, not by a link or an image on some other website.
 - **PINs never go in the address,** so they don't end up in a browser's history. Each page remembers its own PIN on the phone, and the check-in page can't read the remote's.
-- **Live results are always open to view** by anyone on the Wi-Fi. Don't put anything on a driver profile's name that you wouldn't want spectators to see.
+- **The OBS overlay is always open to view** by anyone on the Wi-Fi. Don't put anything on a driver profile's name that you wouldn't want spectators to see.
 
 For the wider picture, see [Security and privacy](../admin/security-and-privacy.md).
 

@@ -204,8 +204,8 @@ public sealed class OutputBrandingTests : IDisposable
 
         foreach (var page in new[]
                  {
-                     server.BuildLiveResultsPage(), server.BuildCheckInPage(), server.BuildRemotePage(), server.BuildManagePage(),
-                     server.BuildCoachPage(), server.BuildNotePage(), server.BuildVotePage(),
+                     server.BuildOverlayPage(), server.BuildCheckInPage(), server.BuildRemotePage(), server.BuildManagePage(),
+                     server.BuildIndexPage(), server.BuildNotePage(), server.BuildVotePage(),
                  })
         {
             Assert.Contains(HeatCallerMark.PageFooterHtml, page);
@@ -222,7 +222,7 @@ public sealed class OutputBrandingTests : IDisposable
         var server = new WebServerService(new RaceTiming(new RaceControlSession()), ProfileStore.Load(),
             settings: new AppSettings { DisplayLook = Looks.SynthwaveKey });
 
-        var page = server.BuildLiveResultsPage();
+        var page = server.BuildOverlayPage();
 
         Assert.Contains("--hcsun:" + HeatCallerMark.SunsetFill + ";", page);
         Assert.Contains("fill:var(--hcsun, currentColor)", page);

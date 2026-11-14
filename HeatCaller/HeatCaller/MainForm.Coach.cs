@@ -13,7 +13,8 @@ public partial class MainForm
     /// The report card for one driver tonight, a line at a time - empty
     /// when they have not run tonight, or when anything it reads cannot be
     /// read. Never throws: a report card is a courtesy, and the callers are
-    /// the night publisher on the filing path and the phone page.
+    /// the night publisher on the filing path, the night email, Driver Hub
+    /// and Race History.
     /// </summary>
     /// <param name="transponder">The driver's transponder.</param>
     /// <param name="publicNames">
@@ -23,14 +24,8 @@ public partial class MainForm
     /// published names" is ticked. The driver's own night is private to
     /// them; the person they are being compared with is not the reader.
     /// </param>
-    /// <param name="includeSetup">
-    /// False for the phone coach page: anybody on the club's Wi-Fi can open
-    /// any driver's card there, and what a driver changed on their car is
-    /// theirs to share. The setup line goes only on their own night (keyed
-    /// by their badge) and on the club's own screens.
-    /// </param>
     /// <param name="night">The night to report on - tonight when null.</param>
-    internal IReadOnlyList<string> CoachReportFor(string transponder, bool publicNames, bool includeSetup = true, DateTime? night = null)
+    internal IReadOnlyList<string> CoachReportFor(string transponder, bool publicNames, DateTime? night = null)
     {
         try
         {
@@ -44,7 +39,7 @@ public partial class MainForm
                 reported,
                 utc => TonightAtTheTrack.NightOf(utc.ToLocalTime()),
                 NamerFor(history, reported, publicNames),
-                includeSetup ? CoachSetupChange(transponder, reported) : null,
+                CoachSetupChange(transponder, reported),
                 utc => utc.ToLocalTime().ToString("t", System.Globalization.CultureInfo.CurrentCulture),
                 reported == thisNight ? "tonight" : "that night"));
         }
@@ -149,108 +144,6 @@ public partial class MainForm
         var what = changes is { Count: > 0 } ? SetupDiff.Describe(changes, max: 2) : null;
 
         return new CoachReport.SetupChange(latest.RecordedAtUtc, what);
-    }
-
-    /// <summary>
-    /// Every driver who has run tonight, their card worked out again and
-    /// handed to the phone coach page (WebServerService.PublishCoachCards).
-    ///
-    /// HERE, ON THE UI THREAD, and the page only ever reads the copy: the
-    /// saved sessions, the Garage and the setup log are read on this thread
-    /// everywhere else, and a request thread walking them while a race is
-    /// filed is the "collection was modified" that blanked the live board
-    /// once (see WebServerService.PublishState). Called when a race or a
-    /// practice is filed - the only moment a card can change, apart from a
-    /// setup logged, which the phone's card leaves out anyway - and once at
-    /// start, so a laptop restarted mid-evening has them straight away.
-    ///
-    /// Full names and no setup line: the LAN pages name people the way the
-    /// live board does, and any phone on the club's Wi-Fi can open any
-    /// driver's card. See CoachReportFor's includeSetup.
-    /// </summary>
-    private void PublishCoachCards()
-    {
-        try
-        {
-            var tonight = TonightAtTheTrack.NightOf(DateTime.Now);
-
-            var drivers = _sessionHistory.All
-                .Where(s => !s.IsNotScored() && TonightAtTheTrack.NightOf(s.StartedAtUtc.ToLocalTime()) == tonight)
-                .SelectMany(s => s.Results)
-                .Select(r => (r.Transponder ?? string.Empty).Trim())
-                .Where(t => t.Length > 0 && !GhostService.IsGhost(t))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            var cards = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var who in drivers)
-            {
-                var card = CoachReportFor(who, publicNames: false, includeSetup: false);
-
-                if (card.Count > 0)
-                {
-                    cards[who] = card;
-                }
-            }
-
-            _webServer.PublishCoachCards(cards);
-        }
-        catch (Exception ex)
-        {
-            OnClientRawMessage($"[web] Could not work out the drivers' report cards: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// A target lap set or cleared on Race Control's Coach menu (22 Oct
-    /// 2026) is put on the phone coach page straight away: the live state
-    /// carries each driver's target (WebServerService.AddFollowing), and
-    /// without this a new target only showed after the driver's next lap
-    /// rebuilt the document. DriverTargets raises Changed on whichever
-    /// thread set it, so the rebuild is marshalled here. Inline the state is
-    /// only ever built on the UI thread; with timing on its own thread it is
-    /// also built on the live-state worker (24 Oct 2026, timing layer, P8 -
-    /// see MainForm.LiveState.cs), and the two builds take turns under
-    /// WebServerService's _stateGate (see BuildAndPublish).
-    /// Unsubscribed when the window closes, the event being static.
-    /// </summary>
-    private void WatchDriverTargets()
-    {
-        void Publish()
-        {
-            if (!IsDisposed)
-            {
-                _webServer.PublishState(force: true);
-            }
-        }
-
-        void OnTargetsChanged()
-        {
-            if (IsDisposed || Disposing || !IsHandleCreated)
-            {
-                return;
-            }
-
-            try
-            {
-                if (InvokeRequired)
-                {
-                    BeginInvoke(new Action(Publish));
-                }
-                else
-                {
-                    Publish();
-                }
-            }
-            catch (InvalidOperationException)
-            {
-                // The window is going - nothing left to publish to.
-            }
-        }
-
-        DriverTargets.Changed += OnTargetsChanged;
-        FormClosed += (_, _) => DriverTargets.Changed -= OnTargetsChanged;
     }
 
     /// <summary>

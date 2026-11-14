@@ -423,7 +423,6 @@ Right-click a driver on the board and open **Coach *name*** to coach them while 
 - A lap half as long again as their best (a spin, a marshal stop) is never coached on.
 - The tones play the moment the car crosses, never queued behind the announcer, at the sound effects' volume but quieter. They stop only when the announcer is muted.
 - The words are lines on **Voice → Race Calls**, **Target lap (coach)**, **Consistency (coach)** and **Gap to their ghost (coach)**, ticked for practice and not for races in a new install. When one is switched off, the console says so as you pick it. See [Every announcement](../announcer/voice.md#every-announcement).
-- A driver can also follow their own laps, their target and their report card on their phone: see [Coach](../screens/phone-and-web.md#coach).
 
 ## The Next Up bar
 

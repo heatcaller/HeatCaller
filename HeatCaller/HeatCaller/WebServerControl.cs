@@ -35,10 +35,8 @@ public sealed partial class WebServerControl : UserControl
     private bool _settingUpPhonePages;
     private readonly Label _lblStatus = new();
     private readonly Label _lblLastAction = new();
-    private readonly TextBox _txtResultsUrl = new();
     private readonly TextBox _txtRemoteUrl = new();
     private readonly TextBox _txtCheckInUrl = new();
-    private readonly TextBox _txtCoachUrl = new();
     private readonly TextBox _txtManageUrl = new();
     private readonly TextBox _txtOverlayUrl = new();
     private readonly TextBox _txtBroadcastUrl = new();
@@ -72,13 +70,6 @@ public sealed partial class WebServerControl : UserControl
     /// <summary>The PIN boxes and the address boxes at the normal text size.</summary>
     private const int PinBoxWidth = 130;
     private const int UrlBoxWidth = 420;
-
-    /// <summary>The line under the coach page's QR code: what a driver does once they've scanned it.</summary>
-    internal const string CoachPosterSubtitle =
-        "Scan, pick your driver, tick Say my lap time. Same Wi-Fi as the timing laptop.";
-
-    /// <summary>The phone coach page's address, from the live results one - the /coach route in WebServerService.</summary>
-    internal static string CoachUrl(string localUrl) => localUrl + "coach";
 
     public WebServerControl(
         WebServerService server,
@@ -188,7 +179,7 @@ public sealed partial class WebServerControl : UserControl
     /// with the app, and Start and Stop with what the server is doing beside
     /// them. Race-day manager: its PIN - in the same caption column as the
     /// server's, so the three PIN boxes line up down the page - its one
-    /// switch, what it is, and what it last did. Then the seven addresses,
+    /// switch, what it is, and what it last did. Then the five addresses,
     /// each with its Copy and QR code buttons. Under the cards the column
     /// pickers and Open Big Screen, the note on the crowd-screen look, and
     /// the relay's line with the way to the Club Website page. On the layout
@@ -208,7 +199,7 @@ public sealed partial class WebServerControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "Serves pages to any device on the same Wi-Fi: live results, a phone remote for throwing flags, "
+            Text = "Serves pages to any device on the same Wi-Fi: a phone remote for throwing flags, "
                  + "a self check-in page for drivers, a race-day manager for entries, the program and results, and "
                  + "overlays for streaming.",
             AutoSize = true,
@@ -224,7 +215,7 @@ public sealed partial class WebServerControl : UserControl
         var btnWebColumns = new Button { Text = "Choose Web Columns..." };
         btnWebColumns.Click += (_, _) =>
         {
-            using var form = new KpiPickerForm("Live Results page", _settings.WebKpis, KpiCatalog.DefaultWeb);
+            using var form = new KpiPickerForm("OBS overlay", _settings.WebKpis, KpiCatalog.DefaultWeb);
             if (form.ShowDialog(this) == DialogResult.OK)
             {
                 // The picker's Restore Defaults lands here too, so the old
@@ -233,7 +224,7 @@ public sealed partial class WebServerControl : UserControl
                 var before = _settings.WebKpis.ToList();
                 if (!before.SequenceEqual(form.SelectedKeys))
                 {
-                    _undo?.Capture("Change the Live Results columns", () =>
+                    _undo?.Capture("Change the OBS overlay columns", () =>
                     {
                         _settings.WebKpis = before.ToList();
                         _settings.Save();
@@ -503,60 +494,49 @@ public sealed partial class WebServerControl : UserControl
     }
 
     /// <summary>
-    /// The seven addresses, their captions in one column, each box followed
+    /// The five addresses, their captions in one column, each box followed
     /// by its Copy and QR code buttons - which go under the box when the
     /// line is too narrow for them (FieldGrid.Inline) - and a note under
     /// them.
+    ///
+    /// Live Results and the phone coach page were taken off the LAN (13 Nov
+    /// 2026) and their rows with them; the results table lives on only as
+    /// the OBS overlay, at /overlay.
     /// </summary>
     private Section BuildUrlCard(out FieldGrid grid)
     {
-        var btnCopyResults = new Button { Text = "Copy" };
-        var btnQrResults = new Button { Text = "QR code" };
         var btnCopyRemote = new Button { Text = "Copy" };
         var btnQrRemote = new Button { Text = "QR code" };
         var btnCopyCheckIn = new Button { Text = "Copy" };
         var btnQrCheckIn = new Button { Text = "QR code" };
-        var btnCopyCoach = new Button { Text = "Copy" };
-        var btnQrCoach = new Button { Text = "QR code" };
         var btnCopyManage = new Button { Text = "Copy" };
         var btnQrManage = new Button { Text = "QR code" };
         var btnCopyOverlay = new Button { Text = "Copy" };
         var btnCopyBroadcast = new Button { Text = "Copy" };
 
-        foreach (var box in new[] { _txtResultsUrl, _txtRemoteUrl, _txtCheckInUrl, _txtCoachUrl, _txtManageUrl, _txtOverlayUrl, _txtBroadcastUrl })
+        foreach (var box in new[] { _txtRemoteUrl, _txtCheckInUrl, _txtManageUrl, _txtOverlayUrl, _txtBroadcastUrl })
         {
             box.ReadOnly = true;
         }
 
         // One column for every caption, as wide as the widest - which is
-        // what makes the seven boxes line up rather than each starting
+        // what makes the five boxes line up rather than each starting
         // wherever its own caption happened to end.
         grid = new FieldGrid();
 
-        grid.AddRow("Live results:", FieldGrid.Inline(_txtResultsUrl, btnCopyResults, btnQrResults));
         grid.AddRow("Phone remote:", FieldGrid.Inline(_txtRemoteUrl, btnCopyRemote, btnQrRemote));
         grid.AddRow("Driver check-in:", FieldGrid.Inline(_txtCheckInUrl, btnCopyCheckIn, btnQrCheckIn));
-
-        // The phone coach page - see WebServerService.Coach. It was served
-        // from 22 Oct 2026 but never listed here, so the only way to it was
-        // typing /coach onto the live results address (29 Oct 2026).
-        grid.AddRow("Driver coach:", FieldGrid.Inline(_txtCoachUrl, btnCopyCoach, btnQrCoach));
         grid.AddRow("Race manager:", FieldGrid.Inline(_txtManageUrl, btnCopyManage, btnQrManage));
         grid.AddRow("OBS overlay:", FieldGrid.Inline(_txtOverlayUrl, btnCopyOverlay));
 
         // The broadcast graphics for a stream - see WebServerService.Camera.
         grid.AddRow("Broadcast graphics:", FieldGrid.Inline(_txtBroadcastUrl, btnCopyBroadcast));
 
-        btnCopyResults.Click += (_, _) => CopyIfPresent(_txtResultsUrl.Text);
         btnCopyRemote.Click += (_, _) => CopyIfPresent(_txtRemoteUrl.Text);
         btnCopyCheckIn.Click += (_, _) => CopyIfPresent(_txtCheckInUrl.Text);
-        btnCopyCoach.Click += (_, _) => CopyIfPresent(_txtCoachUrl.Text);
         btnCopyManage.Click += (_, _) => CopyIfPresent(_txtManageUrl.Text);
         btnCopyOverlay.Click += (_, _) => CopyIfPresent(_txtOverlayUrl.Text);
         btnCopyBroadcast.Click += (_, _) => CopyIfPresent(_txtBroadcastUrl.Text);
-
-        btnQrResults.Click += (_, _) => ShowPoster(
-            _txtResultsUrl.Text, "LIVE RESULTS", "Scan with your phone camera. Same Wi-Fi as this laptop.");
 
         btnQrRemote.Click += (_, _) => ShowPoster(
             _txtRemoteUrl.Text, "RACE REMOTE", "Scan to control the race from your phone. Same Wi-Fi as this laptop.");
@@ -564,15 +544,12 @@ public sealed partial class WebServerControl : UserControl
         btnQrCheckIn.Click += (_, _) => ShowPoster(
             _txtCheckInUrl.Text, "CHECK IN", "Scan, find your name, tap it. Same Wi-Fi as the timing laptop.");
 
-        btnQrCoach.Click += (_, _) => ShowPoster(
-            _txtCoachUrl.Text, "DRIVER COACH", CoachPosterSubtitle);
-
         btnQrManage.Click += (_, _) => ShowPoster(
             _txtManageUrl.Text, "RACE MANAGER", "Scan, then enter the Manager PIN. Same Wi-Fi as the timing laptop.");
 
         var lblUrlHint = new Label
         {
-            Text = "All devices must be on the same Wi-Fi. The OBS overlay is the results page with a transparent "
+            Text = "All devices must be on the same Wi-Fi. The OBS overlay is the results table with a transparent "
                  + "background and no sponsor slides. The check-in wall poster is Self Check-In Poster on Race Day > Who's Racing.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
@@ -709,7 +686,7 @@ public sealed partial class WebServerControl : UserControl
             Fit(box, pin);
         }
 
-        foreach (var box in new[] { _txtResultsUrl, _txtRemoteUrl, _txtCheckInUrl, _txtCoachUrl, _txtManageUrl, _txtOverlayUrl, _txtBroadcastUrl })
+        foreach (var box in new[] { _txtRemoteUrl, _txtCheckInUrl, _txtManageUrl, _txtOverlayUrl, _txtBroadcastUrl })
         {
             Fit(box, url);
         }
@@ -939,12 +916,10 @@ public sealed partial class WebServerControl : UserControl
             _lblStatus.Text = $"Running on port {_server.Port} - stop the server to change the port or PINs";
             _lblStatus.ForeColor = AppTheme.Success;
 
-            _txtResultsUrl.Text = _server.LocalUrl();
             _txtRemoteUrl.Text = _server.LocalUrl() + "remote";
             _txtCheckInUrl.Text = _server.LocalUrl() + "checkin";
-            _txtCoachUrl.Text = CoachUrl(_server.LocalUrl());
             _txtManageUrl.Text = _server.LocalUrl() + "manage";
-            _txtOverlayUrl.Text = _server.LocalUrl() + "?overlay=1";
+            _txtOverlayUrl.Text = _server.LocalUrl() + "overlay";
             // localhost, not the network address: OBS runs on this PC, and a
             // saved source must not break when the venue's Wi-Fi hands the
             // laptop a different address.
@@ -955,10 +930,8 @@ public sealed partial class WebServerControl : UserControl
             _lblStatus.Text = "Stopped";
             _lblStatus.ForeColor = AppTheme.TextMuted;
 
-            _txtResultsUrl.Text = string.Empty;
             _txtRemoteUrl.Text = string.Empty;
             _txtCheckInUrl.Text = string.Empty;
-            _txtCoachUrl.Text = string.Empty;
             _txtManageUrl.Text = string.Empty;
             _txtOverlayUrl.Text = string.Empty;
             _txtBroadcastUrl.Text = string.Empty;
