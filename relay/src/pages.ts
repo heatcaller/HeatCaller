@@ -8363,15 +8363,34 @@ const LISTEN_JS = `
     }
   }
 
+  // NO SIGNAL WHILE LISTENING (14 Nov 2026, driver phone plan item 19): the
+  // page says the audio is held up, asks no more often than the rest of the
+  // page does (hcNet's backoff), and says so again once it is back.
+  let listenPaused = false;
+  function listenHeldUp() {
+    if (!listenPaused) { listenPaused = true; say('Audio paused - no signal. Trying again…'); }
+  }
+  function listenBack() {
+    if (listenPaused) { listenPaused = false; say('Back - listening.'); }
+  }
+
   async function sweepOnce() {
     const mine = turn;
 
+    if (typeof hcNet === 'object' && hcNet.since > 0 && Date.now() < hcNet.nextTry) {
+      listenHeldUp();
+      return;
+    }
+
     try {
-      const listing = await ask('/api/v1/c/' + CLUB + '/collection/listen?meta=1');
+      let listing;
+      try { listing = await ask('/api/v1/c/' + CLUB + '/collection/listen?meta=1'); } catch (e) { listenHeldUp(); return; }
 
       if (!listing.ok) {
         return;
       }
+
+      listenBack();
 
       const body = listing.body || {};
 
@@ -8460,6 +8479,22 @@ const LISTEN_JS = `
 
         if (typeof said.audio !== 'string' || said.audio.length === 0 || (joining && said.kind !== 'mix')) {
           continue;
+        }
+
+        // NEVER A RACE CALL LATE (14 Nov 2026, item 19): the trust-over-
+        // chatter rule on the phone. A line - a lap, a gap, a place - that
+        // would start more than eight seconds after the relay had it is
+        // dropped, not played late; the music and the bed (mix) are not.
+        // On the relay's own clock only (x-relay-now, read with the board):
+        // a phone's clock can be minutes out, and a line is never dropped
+        // on a guess.
+        const relayNowAt = typeof relayClock === 'function' ? relayClock() : null;
+        if (said.kind !== 'mix' && one.at > 0 && relayNowAt !== null) {
+          if (relayNowAt - one.at > 8000) {
+            stats.lateDropped = (stats.lateDropped || 0) + 1;
+            if (typeof hcCount === 'function') hcCount('listen_late_dropped');
+            continue;
+          }
         }
 
         chain = chain.then(() => play(said, mine)).catch(() => {});
