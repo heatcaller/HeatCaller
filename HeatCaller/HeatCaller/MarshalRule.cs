@@ -72,6 +72,14 @@ public static class MarshalRule
         _ => "Loses their best qualifying result",
     };
 
+    /// <summary>What the rule does, in a line - under the rule on Setup's Club rules page.</summary>
+    public static string Effect(MarshalNoShowRule rule) => rule switch
+    {
+        MarshalNoShowRule.Nothing => "The no-show is logged for the record, and nothing more.",
+        MarshalNoShowRule.TimePenalty => "The seconds go on the driver's next race when it is saved.",
+        _ => "The driver's best qualifying result tonight is taken from their class.",
+    };
+
     /// <summary>A new no-show under the club's rule as it stands.</summary>
     public static MarshalNoShow Log(string who, string transponder, string className, MarshalNoShowRule rule, int penaltySeconds, DateTime nowUtc) => new()
     {

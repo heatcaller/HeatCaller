@@ -386,7 +386,15 @@ public sealed partial class RaceDayEventControl : UserControl
         var heatsGrid = new FieldGrid();
         var moneyGrid = new FieldGrid();
         var runGrid = new FieldGrid();
-        var clubGrid = new FieldGrid();
+
+        // Club rules (reworked 14 Nov 2026): four small cards in place of
+        // one long "Every night" one - the heats, marshals, papers and the
+        // end of the night - each tick with a line or two of help, not a
+        // paragraph.
+        var postingGrid = new FieldGrid();
+        var marshalGrid = new FieldGrid();
+        var papersGrid = new FieldGrid();
+        var closingGrid = new FieldGrid();
 
         _fields.AddHeatsRows(heatsGrid);
         _fields.AddMoneyRows(moneyGrid);
@@ -404,12 +412,23 @@ public sealed partial class RaceDayEventControl : UserControl
         _numMarshalSeconds.Minimum = 1;
         _numMarshalSeconds.Maximum = MarshalRule.MostPenaltySeconds;
         _numMarshalSeconds.Value = Math.Clamp(_settings?.MarshalNoShowPenaltySeconds ?? MarshalRule.DefaultPenaltySeconds, 1, MarshalRule.MostPenaltySeconds);
-        _numMarshalSeconds.Enabled = _settings?.MarshalNoShowRule == MarshalNoShowRule.TimePenalty;
+        _numMarshalSeconds.Enabled = _settings is not null;
+
+        // The seconds only beside a time penalty, and a line under the box
+        // saying what the rule picked does.
+        var lblMarshalSeconds = new Label { Text = "seconds", AutoSize = true };
+        var lblMarshalHint = new Label();
+
+        void ShowMarshalRule(MarshalNoShowRule rule)
+        {
+            _numMarshalSeconds.Visible = lblMarshalSeconds.Visible = rule == MarshalNoShowRule.TimePenalty;
+            lblMarshalHint.Text = MarshalRule.Effect(rule);
+        }
 
         _cmbMarshalRule.SelectedIndexChanged += (_, _) =>
         {
             var rule = (MarshalNoShowRule)Math.Max(0, _cmbMarshalRule.SelectedIndex);
-            _numMarshalSeconds.Enabled = rule == MarshalNoShowRule.TimePenalty;
+            ShowMarshalRule(rule);
 
             if (_settings is null || _settings.MarshalNoShowRule == rule)
             {
@@ -431,8 +450,10 @@ public sealed partial class RaceDayEventControl : UserControl
             _settings.Save();
         };
 
-        clubGrid.AddRow(MarshalRuleCaption, FieldGrid.Inline(_cmbMarshalRule, _numMarshalSeconds, new Label { Text = "seconds", AutoSize = true }));
-        clubGrid.AddHint("Logged from Race Control's Someone's missing... Losing the best qualifying result takes it from the driver's class tonight; a time penalty goes on their next race. Click the same line again to take a no-show off. For every night, not just this one.");
+        marshalGrid.AddRow(MarshalRuleCaption, FieldGrid.Inline(_cmbMarshalRule, _numMarshalSeconds, lblMarshalSeconds));
+        marshalGrid.AddHint(lblMarshalHint);
+        marshalGrid.AddHint("Log a no-show from Race Control's Someone's missing... - click the same line again to take it off.");
+        ShowMarshalRule((MarshalNoShowRule)Math.Max(0, _cmbMarshalRule.SelectedIndex));
 
 
         // Rolling into the next race. It used to be a strip at the bottom
@@ -462,48 +483,34 @@ public sealed partial class RaceDayEventControl : UserControl
 
         _fields.AddRunRows(runGrid);
 
-        // Posting the heats (12 Nov 2026, setup plan D2). The club's, like
-        // the closing checklist below.
-        _chkPostHeats.Text = "Post the heats before the first race";
-        _chkPostHeats.AutoSize = true;
-        _chkPostHeats.Checked = _settings?.PostHeatsBeforeFirstRace ?? true;
-        _chkPostHeats.Enabled = _settings is not null;
-        _chkPostHeats.CheckedChanged += (_, _) =>
-        {
-            if (_settings is null || _settings.PostHeatsBeforeFirstRace == _chkPostHeats.Checked)
-            {
-                return;
-            }
-
-            _settings.PostHeatsBeforeFirstRace = _chkPostHeats.Checked;
-            _settings.Save();
-            NightSetupChanged?.Invoke();
-        };
-        clubGrid.AddField(_chkPostHeats);
-        clubGrid.AddHint("Once the heats are built, Next Steps offers Post the heats... before the first race: it prints the heat sheets and the marshal list, tells the room, and lists any car the loop hasn't heard tonight. After that, moving drivers between heats asks first. For every night, not just this one.");
-
-        // Setup plan B2 and D6: the club's, like the posting tick above.
+        // Building and posting the heats (setup plan B2, D2 and D6), in the
+        // order they happen on a night: built, posted, then the late ones.
         ClubTick(_chkBuildAtClose, "Build the heats when entries close",
             () => _settings!.BuildHeatsWhenEntriesClose, on => _settings!.BuildHeatsWhenEntriesClose = on, true);
-        clubGrid.AddField(_chkBuildAtClose);
-        clubGrid.AddHint("With Entries close at: set, the heats build themselves as it passes, ready to post. Undo takes the build back.");
+        postingGrid.AddField(_chkBuildAtClose);
+        postingGrid.AddHint("When Entries close at: passes, the heats build themselves, ready to post. Undo takes the build back.");
+
+        ClubTick(_chkPostHeats, "Post the heats before the first race",
+            () => _settings!.PostHeatsBeforeFirstRace, on => _settings!.PostHeatsBeforeFirstRace = on, true);
+        postingGrid.AddField(_chkPostHeats);
+        postingGrid.AddHint("Next Steps offers Post the heats...: it prints the heat sheets and marshal list, tells the room, and lists any car the loop hasn't heard. After that, moving a driver asks first.");
 
         ClubTick(_chkLateWithoutAsking, "Add late check-ins to posted heats without asking",
             () => _settings!.AddLateCheckInsWithoutAsking, on => _settings!.AddLateCheckInsWithoutAsking = on, false);
-        clubGrid.AddField(_chkLateWithoutAsking);
-        clubGrid.AddHint("A driver who checks in after the heats are built goes into the heat nearest their pace that has room, and nobody else moves. Before the heats are posted that happens by itself. After, Next Steps asks you first - unless this is ticked.");
+        postingGrid.AddField(_chkLateWithoutAsking);
+        postingGrid.AddHint("A late driver goes into the heat nearest their pace that has room; nobody else moves. Off, Next Steps asks first once the heats are posted.");
 
-        // Papers (setup plan D9): the club's.
+        // Papers (setup plan D9).
         ClubTick(_chkWaivers, "Ask every driver for a signed waiver",
             () => _settings!.AskForWaivers, on => _settings!.AskForWaivers = on, false);
-        clubGrid.AddField(_chkWaivers);
+        papersGrid.AddField(_chkWaivers);
+        papersGrid.AddHint("A waiver lasts 12 months. A junior's is signed by a parent or guardian.");
         ClubTick(_chkMemberships, "Check memberships",
             () => _settings!.CheckMemberships, on => _settings!.CheckMemberships = on, false);
-        clubGrid.AddField(_chkMemberships);
-        clubGrid.AddHint("Who's Racing shows a Papers column - \"Waiver missing\", \"Membership expired 3 Oct\" - and Post the heats lists anyone not in order. A junior's waiver is signed by a parent or guardian. Recorded by hand: click a driver's Papers to fill them in. A waiver lasts 12 months.");
+        papersGrid.AddField(_chkMemberships);
+        papersGrid.AddHint("Who's Racing shows a Papers column (\"Waiver missing\", \"Membership expired 3 Oct\") and Post the heats lists anyone not in order. Click a driver's Papers to fill them in.");
 
-        // The closing checklist (11 Nov 2026). Every night, not just this
-        // one, so it saves straight to the club's settings.
+        // The closing checklist (11 Nov 2026).
         _chkCloseNight.Text = "Close the night with a checklist";
         _chkCloseNight.AutoSize = true;
         _chkCloseNight.Checked = _settings?.UseCloseNightChecklist ?? true;
@@ -519,8 +526,8 @@ public sealed partial class RaceDayEventControl : UserControl
             _settings.Save();
             CloseNightChecklistChanged?.Invoke();
         };
-        clubGrid.AddField(_chkCloseNight);
-        clubGrid.AddHint("When every race has run, Next Steps opens a list of what's left - rentals, money, backups, Close Day and your own lines - to tick off. Off, it just says what's left in one line. For every night, not just this one.");
+        closingGrid.AddField(_chkCloseNight);
+        closingGrid.AddHint("When the last race has run, Next Steps opens a list to tick off: rentals, money, backups, Close Day and your own lines. Off, it says what's left in one line.");
 
         var heats = new Section("Heats");
 
@@ -534,9 +541,21 @@ public sealed partial class RaceDayEventControl : UserControl
 
         running.Add(runGrid, gapBelow: 0);
 
-        var club = new Section("Every night");
+        var postingRules = new Section("The heats");
 
-        club.Add(clubGrid, gapBelow: 0);
+        postingRules.Add(postingGrid, gapBelow: 0);
+
+        var marshalRules = new Section("Marshals");
+
+        marshalRules.Add(marshalGrid, gapBelow: 0);
+
+        var papersRules = new Section("Papers");
+
+        papersRules.Add(papersGrid, gapBelow: 0);
+
+        var closingRules = new Section("End of the night");
+
+        closingRules.Add(closingGrid, gapBelow: 0);
 
         // --- The actions ---
         //
@@ -597,12 +616,15 @@ public sealed partial class RaceDayEventControl : UserControl
         _clubPage.Add(
             new Label
             {
-                Text = "These are the club's, for every night - not just tonight. A change here saves straight away and holds for the next night too.",
+                Text = "The club's rules, for every night - not just tonight. A change saves straight away.",
                 AutoSize = true,
                 ForeColor = AppTheme.TextMuted,
             },
             gapBelow: UiLayout.RowGap);
-        _clubPage.Add(club, gapBelow: 0);
+        _clubPage.Add(postingRules);
+        _clubPage.Add(marshalRules);
+        _clubPage.Add(papersRules);
+        _clubPage.Add(closingRules, gapBelow: 0);
 
         BuildTemplatesPage();
         BuildPages();
@@ -615,7 +637,7 @@ public sealed partial class RaceDayEventControl : UserControl
         // size nor the kind of night ever moves the fields sideways. Club
         // rules lines up on its own.
         _textSize.Keep(() => FieldGrid.LineUp(new[] { dayGrid, nightGrid, timesGrid, heatsGrid, moneyGrid, runGrid }, NightFields.HeatsPerDriverCaption, NightFields.RacesPerDriverCaption));
-        _textSize.Keep(() => FieldGrid.LineUp(new[] { clubGrid }, MarshalRuleCaption));
+        _textSize.Keep(() => FieldGrid.LineUp(new[] { marshalGrid }, MarshalRuleCaption));
         _textSize.Keep(SizeFields);
 
         WireAutoSave();
