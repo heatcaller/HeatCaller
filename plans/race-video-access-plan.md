@@ -15,7 +15,9 @@
 | V6 | Built: public or own-night-only, juniors on their own night, hide a race or a piece on the laptop, the driver's "ask the club to hide this video". |
 | V7 | Built: "This race wasn't on the stream", the relay's oEmbed check (the night it arrives, then daily for a week), the laptop's "YouTube won't play this video" line, "Needs signal". |
 | V8, V9 | Built: data-saver second tap, in-app browser note, picture-in-picture allowed, spoken labels; the `video_*` counters. |
-| Not done | VL3's "Re-run: video shows the run that counted" line; "Watch the last race" when the live stream stops (it links to Results instead); the laptop telling the relay it uses Ultra-low latency (the note always says about 20 s). Not yet tried on a real iPhone and Android phone with a real stream. |
+| Look-back (14 Nov, later) | Built: the relay keeps every night's stream (120 nights) and the hidden races, so videos last past the night; the alert's race survives the mynight hop; phones that chose their alert kinds get `video` once; video reports work after check-in closes; dead videos and who had the alert survive a restart; the closing checklist's video line (the app has no Health page); "Watch the last race" on Live; the Ultra-low latency setting; the club guide `website/docs/online/race-video.md`. |
+| Checked, not changed | VL1/VL3: a restored race keeps its original green flag, and a re-run is filed as its own race with its own green, so each opens at its own run. A "Re-run" label on the card would need the laptop to save which race was a re-run; left out. |
+| Not done | Not yet tried on a real iPhone and Android phone with a real stream. |
 
 ## Where this sits
 
