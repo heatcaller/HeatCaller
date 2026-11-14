@@ -269,8 +269,8 @@ public static partial class RaceCoach
     /// Nothing for a race too short to read.
     /// </summary>
     /// <param name="numbers">The chart's lap numbers for the laps (LapNumbers).</param>
-    /// <param name="trackFeet">The layout's length, for car lengths; null leaves them out.</param>
-    public static List<Finding> ThreeThings(IReadOnlyList<long> laps, IReadOnlyList<int> numbers, double? trackFeet)
+    /// <param name="trackCars">The layout's length in its own cars (RaceCoach.TrackCars), for car lengths; null leaves them out.</param>
+    public static List<Finding> ThreeThings(IReadOnlyList<long> laps, IReadOnlyList<int> numbers, double? trackCars)
     {
         var found = new List<Finding>();
 
@@ -307,7 +307,7 @@ public static partial class RaceCoach
         {
             var worst = mistakes.OrderByDescending(i => laps[i]).First();
             var cost = laps[worst] - best;
-            var lengths = SayLengths(cost, best, trackFeet);
+            var lengths = SayLengths(cost, best, trackCars);
             var line = $"Lap {numbers[worst]} alone cost {Seconds(cost)}" + (lengths is null ? string.Empty : $", {lengths}");
 
             string detail;
@@ -354,7 +354,7 @@ public static partial class RaceCoach
                 var gap = lastAverage - (long)Math.Round(rest.Average());
                 var least = FadeLeastMs(best);
                 var leftOut = last.Count < lastCount ? " Mistake laps left out." : string.Empty;
-                var lengths = SayLengths(Math.Abs(gap), best, trackFeet);
+                var lengths = SayLengths(Math.Abs(gap), best, trackCars);
                 var asLengths = lengths is null ? string.Empty : $" ({lengths})";
 
                 var detail = gap >= least

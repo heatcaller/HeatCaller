@@ -126,7 +126,7 @@ public sealed class RaceAnalyticsLapTimesTests : IDisposable
     public void Three_things_are_the_limit_run_the_mistake_against_the_fade_and_the_last_laps()
     {
         var entry = Entry("Sam", 2, Sam);
-        var things = RaceCoach.ThreeThings(RaceCoach.Laps(entry), RaceCoach.LapNumbers(entry), 600);
+        var things = RaceCoach.ThreeThings(RaceCoach.Laps(entry), RaceCoach.LapNumbers(entry), 400);
 
         Assert.Equal(3, things.Count);
 
@@ -134,7 +134,7 @@ public sealed class RaceAnalyticsLapTimesTests : IDisposable
         Assert.StartsWith("6 laps in a row within 1.5% of your best.", things[0].Detail);
         Assert.EndsWith("Best three in a row: 14.118.", things[0].Detail);
 
-        // 15.850 - 14.105 = 1.745 s; of a 14.105 s lap on 600 ft, 49.5 lengths.
+        // 15.850 - 14.105 = 1.745 s; of a 14.105 s lap 400 cars long (600 ft of 1/10), 49.5 lengths.
         Assert.Equal("Lap 10 alone cost 1.75 s, 49 car lengths", things[1].Line);
         Assert.Contains("the fade lost over laps 17 to 21", things[1].Detail);
 
@@ -158,7 +158,7 @@ public sealed class RaceAnalyticsLapTimesTests : IDisposable
     {
         var entry = Entry("Sam", 1, new[] { 14.1, 14.2 });
 
-        Assert.Empty(RaceCoach.ThreeThings(RaceCoach.Laps(entry), RaceCoach.LapNumbers(entry), 600));
+        Assert.Empty(RaceCoach.ThreeThings(RaceCoach.Laps(entry), RaceCoach.LapNumbers(entry), 400));
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public sealed class RaceAnalyticsLapTimesTests : IDisposable
     {
         var entry = Entry("Sam", 2, Sam);
         var laps = RaceCoach.Laps(entry);
-        var said = RaceCoach.ThreeThings(laps, RaceCoach.LapNumbers(entry), 600)
+        var said = RaceCoach.ThreeThings(laps, RaceCoach.LapNumbers(entry), 400)
             .SelectMany(t => new[] { t.Line, t.Detail })
             .Append(RaceCoach.LapTimesHeadline(PaceAnalysis.For(entry), laps));
 

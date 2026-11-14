@@ -418,7 +418,7 @@ public sealed class PaceAnalysisControl : UserControl
         }
 
         var laps = RaceCoach.Laps(entry);
-        var feet = RaceCoach.TrackFeet(Layouts, session.TrackLayoutName);
+        var trackCars = RaceCoach.TrackCars(Layouts, session.TrackLayoutName);
         var result = ResultClause(session, entry);
 
         _headline.Text = string.IsNullOrEmpty(result)
@@ -436,7 +436,7 @@ public sealed class PaceAnalysisControl : UserControl
         else
         {
             _consistency.Show(row.ConsistencyPercent, $"{row.ConsistencyPercent:0.0}%", ConsistencyReading(row, laps));
-            _table.Show(row.PotentialGainMs / 1000.0, $"{row.PotentialGainMs / 1000.0:0.0}s", TableReading(row, feet));
+            _table.Show(row.PotentialGainMs / 1000.0, $"{row.PotentialGainMs / 1000.0:0.0}s", TableReading(row, trackCars));
             _fade.Show(
                 row.FadeMs == 0 ? null : Math.Max(0, row.FadeMs / 1000.0),
                 row.FadeMs == 0 ? "-" : PaceAnalysis.Delta(row.FadeMs),
@@ -517,7 +517,7 @@ public sealed class PaceAnalysisControl : UserControl
     }
 
     /// <summary>What the time left on the table means, with the car lengths a typical lap gave away when the layout's length is set.</summary>
-    internal static string TableReading(PaceAnalysis.Row row, double? trackFeet)
+    internal static string TableReading(PaceAnalysis.Row row, double? trackCars)
     {
         var seconds = row.PotentialGainMs / 1000.0;
 
@@ -525,7 +525,7 @@ public sealed class PaceAnalysisControl : UserControl
             : seconds < 4.0 ? "Some to find. Over the 1.5 s line, where tidying up beats finding speed."
             : "Lots. Clean laps would find more than any setup change.";
 
-        var lengths = RaceCoach.SayLengths(row.AverageOffBestMs, row.BestLapMs, trackFeet);
+        var lengths = RaceCoach.SayLengths(row.AverageOffBestMs, row.BestLapMs, trackCars);
 
         return lengths is null ? lead : $"{lead} A typical lap was {lengths} off your best.";
     }

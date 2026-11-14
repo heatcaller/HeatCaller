@@ -508,7 +508,7 @@ public sealed class TrendChartControl : UserControl
 
         var gap = driverBest - record;
         var who = string.IsNullOrWhiteSpace(holder.DriverName) ? string.Empty : $" by {holder.DriverName}";
-        var lengths = RaceCoach.SayLengths(gap, record, RaceCoach.TrackFeet(Layouts, track));
+        var lengths = RaceCoach.SayLengths(gap, record, RaceCoach.TrackCars(Layouts, track));
 
         return lengths is null
             ? $"Track record {PaceAnalysis.Time(record)}{who}. Your best is {gap / 1000.0:0.000} s off it."

@@ -474,7 +474,7 @@ public sealed class PersonalBestsControl : UserControl
             return "You hold the record";
         }
 
-        var lengths = RaceCoach.SayLengths(gap, record.Result.FastLapMs, RaceCoach.TrackFeet(Layouts, best.Track));
+        var lengths = RaceCoach.SayLengths(gap, record.Result.FastLapMs, RaceCoach.TrackCars(Layouts, best.Track));
 
         return $"+{RaceCoach.Gap(gap)}" + (lengths is null ? string.Empty : $" ({lengths})");
     }

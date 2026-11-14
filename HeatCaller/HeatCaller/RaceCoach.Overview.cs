@@ -190,7 +190,7 @@ public static partial class RaceCoach
                 continue;
             }
 
-            var feet = TrackFeet(layouts, layout);
+            var trackCars = TrackCars(layouts, layout);
 
             if (tonight.Result.FastLapMs < oldRecord.Result.FastLapMs)
             {
@@ -205,7 +205,7 @@ public static partial class RaceCoach
                     NewsKind.Record,
                     $"New {layout} record for {WhoIs(tonight.Result)}",
                     $"{PaceAnalysis.Time(tonight.Result.FastLapMs)} in {SessionName(tonight.Session)}, "
-                    + $"{Gap(gap)}{InLengths(gap, tonight.Result.FastLapMs, feet)} under {whose} "
+                    + $"{Gap(gap)}{InLengths(gap, tonight.Result.FastLapMs, trackCars)} under {whose} "
                     + $"{PaceAnalysis.Time(oldRecord.Result.FastLapMs)}."));
 
                 continue;
@@ -221,7 +221,7 @@ public static partial class RaceCoach
                 + (off == 0
                     ? $"{WhoIs(tonight.Result)} matched it last night."
                     : $"Closest last night: {WhoIs(tonight.Result)}, {PaceAnalysis.Time(tonight.Result.FastLapMs)}, "
-                      + $"{Gap(off)}{InLengths(off, oldRecord.Result.FastLapMs, feet)} off.")));
+                      + $"{Gap(off)}{InLengths(off, oldRecord.Result.FastLapMs, trackCars)} off.")));
         }
 
         // New records first: they are the bigger news.
@@ -264,7 +264,7 @@ public static partial class RaceCoach
         for (var i = 0; i < top.Count; i++)
         {
             var pb = top[i];
-            var feet = TrackFeet(layouts, pb.Layout);
+            var trackCars = TrackCars(layouts, pb.Layout);
             var more = i == top.Count - 1 && count > top.Count
                 ? $" {count - top.Count} more PB{(count - top.Count == 1 ? "" : "s")} on the night."
                 : string.Empty;
@@ -273,7 +273,7 @@ public static partial class RaceCoach
                 NewsKind.PersonalBest,
                 $"{pb.Who} took {Gap(pb.Gain)} off their {pb.Layout} best",
                 $"{PaceAnalysis.Time(pb.Lap)} in {SessionName(pb.Session)}, down from {PaceAnalysis.Time(pb.Old)}"
-                + $"{(SayLengths(pb.Gain, pb.Lap, feet) is { } lengths ? $" ({lengths})" : string.Empty)}.{more}"));
+                + $"{(SayLengths(pb.Gain, pb.Lap, trackCars) is { } lengths ? $" ({lengths})" : string.Empty)}.{more}"));
         }
 
         return news;
@@ -362,8 +362,8 @@ public static partial class RaceCoach
         // Car lengths only while they are a distance you can picture: past
         // forty, "169 car lengths" is just a big number, and the seconds say
         // it better.
-        var feet = TrackFeet(layouts, worst.Session.TrackLayoutName);
-        var lengths = CarLengths(worst.Cost, worst.Row.BestLapMs, feet) is double cars && cars <= MostLengthsToSay
+        var trackCars = TrackCars(layouts, worst.Session.TrackLayoutName);
+        var lengths = CarLengths(worst.Cost, worst.Row.BestLapMs, trackCars) is double cars && cars <= MostLengthsToSay
             ? Lengths(cars)
             : null;
 
@@ -468,8 +468,8 @@ public static partial class RaceCoach
     public static string Gap(long ms) => $"{ms / 1000.0:0.000}s";
 
     /// <summary>", 7 car lengths" after a gap, or nothing when the layout has no length.</summary>
-    private static string InLengths(long gapMs, long lapMs, double? feet) =>
-        SayLengths(gapMs, lapMs, feet) is { } lengths ? $" ({lengths})" : string.Empty;
+    private static string InLengths(long gapMs, long lapMs, double? trackCars) =>
+        SayLengths(gapMs, lapMs, trackCars) is { } lengths ? $" ({lengths})" : string.Empty;
 
     /// <summary>A day as the club says it: "Fri 7 Nov".</summary>
     public static string Day(DateTime utc) => utc.ToLocalTime().ToString("ddd d MMM");

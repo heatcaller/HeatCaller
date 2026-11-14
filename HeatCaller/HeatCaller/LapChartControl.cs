@@ -554,13 +554,13 @@ public sealed class LapChartControl : UserControl
         }
 
         var row = PaceAnalysis.For(focus);
-        var feet = RaceCoach.TrackFeet(Layouts, _currentSession?.TrackLayoutName);
+        var trackCars = RaceCoach.TrackCars(Layouts, _currentSession?.TrackLayoutName);
 
         _headline.Text = RaceCoach.LapTimesHeadline(row, laps);
         _headline.Visible = true;
         _drill.Say(RaceCoach.Drill(row, laps));
 
-        ShowThings(RaceCoach.ThreeThings(laps, RaceCoach.LapNumbers(focus), feet), "Too few laps to read anything into.");
+        ShowThings(RaceCoach.ThreeThings(laps, RaceCoach.LapNumbers(focus), trackCars), "Too few laps to read anything into.");
     }
 
     private void ShowThings(List<RaceCoach.Finding> found, string none)
@@ -880,7 +880,7 @@ public sealed class LapChartControl : UserControl
 
         if (reading && focus is not null)
         {
-            var marks = MarksFor(focusLaps, RaceCoach.TrackFeet(Layouts, _currentSession?.TrackLayoutName), palette);
+            var marks = MarksFor(focusLaps, RaceCoach.TrackCars(Layouts, _currentSession?.TrackLayoutName), palette);
             var drawn = DrawMarks(g, plot, focusPoints, marks, taken, dot, palette.Background);
 
             if (onScreen)
@@ -1111,7 +1111,7 @@ public sealed class LapChartControl : UserControl
     /// worst first, so when there is not room for every label the costly
     /// ones keep theirs; then the best, then the fade.
     /// </summary>
-    private static List<Mark> MarksFor(IReadOnlyList<long> laps, double? trackFeet, ChartPalette palette)
+    private static List<Mark> MarksFor(IReadOnlyList<long> laps, double? trackCars, ChartPalette palette)
     {
         var marks = new List<Mark>();
         var best = laps.Min();
@@ -1121,7 +1121,7 @@ public sealed class LapChartControl : UserControl
         foreach (var i in RaceCoach.MistakeLaps(laps).OrderByDescending(i => laps[i]))
         {
             var cost = laps[i] - best;
-            var lengths = RaceCoach.SayLengths(cost, best, trackFeet);
+            var lengths = RaceCoach.SayLengths(cost, best, trackCars);
 
             marks.Add(new Mark(i, $"+{RaceCoach.Seconds(cost)}" + (lengths is null ? string.Empty : $", {lengths}"), mistake));
         }

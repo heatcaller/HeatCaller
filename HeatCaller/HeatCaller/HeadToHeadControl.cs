@@ -468,7 +468,7 @@ public sealed class HeadToHeadControl : UserControl
         var pair = RaceCoach.Pair(_fields, _nameA, _nameB);
         var (shortA, shortB) = RaceCoach.ShortNames(_nameA, _nameB);
         var (forA, forB) = pair.On(Counting);
-        var feet = RaceCoach.TrackFeet(Layouts, pair.Track);
+        var trackCars = RaceCoach.TrackCars(Layouts, pair.Track);
 
         _lblPair.Text = $"{_nameA} vs {_nameB}";
         _lblScore.Text = $"{forA}–{forB}";
@@ -481,14 +481,14 @@ public sealed class HeadToHeadControl : UserControl
         _valAhead.Text = RaceCoach.Leads(_nameA, _nameB, pair.AheadA, pair.AheadB);
         _valFastest.Text = RaceCoach.Leads(_nameA, _nameB, pair.FastestOfRaceA, pair.FastestOfRaceB);
         _valLastFive.Text = RaceCoach.Leads(_nameA, _nameB, pair.LastFiveA, pair.LastFiveB);
-        _valGap.Text = RaceCoach.BestLapGap(pair, feet) ?? "-";
+        _valGap.Text = RaceCoach.BestLapGap(pair, trackCars) ?? "-";
 
         if (_capGap is not null)
         {
             _capGap.Text = pair.Track.Length > 0 ? $"Best-lap gap, {pair.Track}" : "Best-lap gap";
         }
 
-        _lblReading.Text = RaceCoach.Reading(pair, feet);
+        _lblReading.Text = RaceCoach.Reading(pair, trackCars);
         _lblReading.ForeColor = AppTheme.TextDark;
     }
 

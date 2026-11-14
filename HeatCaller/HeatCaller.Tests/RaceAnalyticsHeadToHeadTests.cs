@@ -205,10 +205,10 @@ public sealed class RaceAnalyticsHeadToHeadTests
     {
         var pair = new RaceCoach.PairRecord { A = "Sam Okafor", B = "Leo Martins", BestA = 15_300, BestB = 15_000 };
 
-        // 0.3 s of a 15 s lap on 180 ft: 3.6 ft, 2.4 lengths.
-        Assert.Equal("Leo by 0.300s, 2 car lengths", RaceCoach.BestLapGap(pair, 180));
+        // 0.3 s of a 15 s lap on a track 120 cars long (180 ft of 1/10): 2.4 lengths.
+        Assert.Equal("Leo by 0.300s, 2 car lengths", RaceCoach.BestLapGap(pair, 120));
         Assert.Equal("Leo by 0.300s", RaceCoach.BestLapGap(pair, null));
-        Assert.Null(RaceCoach.BestLapGap(pair with { BestA = 0 }, 180));
+        Assert.Null(RaceCoach.BestLapGap(pair with { BestA = 0 }, 120));
     }
 
     [Fact]
@@ -250,7 +250,7 @@ public sealed class RaceAnalyticsHeadToHeadTests
 
         Assert.Equal(
             "Priya has the pace and the results: quicker lap in 9 of 10, ahead in 8 of 10. On Club Infield the best laps are 3 car lengths apart.",
-            RaceCoach.Reading(pair, 210));
+            RaceCoach.Reading(pair, 140));
         Assert.EndsWith("ahead in 8 of 10.", RaceCoach.Reading(pair));
     }
 

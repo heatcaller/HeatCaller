@@ -20,12 +20,13 @@ public sealed class RaceCoachTests
     [Fact]
     public void A_gap_is_car_lengths_of_the_layout_s_length()
     {
-        // 0.263 s of a 14.105 s lap on a 600 ft track: 11.19 ft, 7.5 lengths.
-        var lengths = RaceCoach.CarLengths(263, 14_105, 600);
+        // 0.263 s of a 14.105 s lap on a 600 ft track of 1/10 cars (400
+        // of them): 11.19 ft, 7.5 lengths.
+        var lengths = RaceCoach.CarLengths(263, 14_105, 400);
 
         Assert.NotNull(lengths);
         Assert.Equal(7.46, lengths!.Value, 2);
-        Assert.Equal("7 car lengths", RaceCoach.SayLengths(263, 14_105, 600));
+        Assert.Equal("7 car lengths", RaceCoach.SayLengths(263, 14_105, 400));
     }
 
     [Theory]
@@ -55,10 +56,49 @@ public sealed class RaceCoachTests
         store.Upsert(new TrackLayout { Name = "Club Infield", TrackLengthFeet = 600 });
         store.Upsert(new TrackLayout { Name = "Outer Loop" });
 
-        Assert.Equal(600, RaceCoach.TrackFeet(store, " club infield "));
-        Assert.Null(RaceCoach.TrackFeet(store, "Outer Loop"));
-        Assert.Null(RaceCoach.TrackFeet(store, "Nowhere"));
-        Assert.Null(RaceCoach.TrackFeet(null, "Club Infield"));
+        // No scale set is 1/10: 600 ft of 18-inch cars.
+        Assert.Equal(400, RaceCoach.TrackCars(store, " club infield ")!.Value, 6);
+        Assert.Null(RaceCoach.TrackCars(store, "Outer Loop"));
+        Assert.Null(RaceCoach.TrackCars(store, "Nowhere"));
+        Assert.Null(RaceCoach.TrackCars(null, "Club Infield"));
+    }
+
+    [Fact]
+    public void A_layout_s_car_scale_sets_how_long_a_car_length_is()
+    {
+        using var data = new TempAppData();
+        var store = TrackLayoutStore.Load();
+        store.Upsert(new TrackLayout { Name = "Mini-Z Carpet", TrackLengthFeet = 130, CarScale = "1/28" });
+        store.Upsert(new TrackLayout { Name = "Big Dirt", TrackLengthFeet = 1000, CarScale = "1/8" });
+
+        // 130 ft of 6.5-inch cars is 240 of them; 1000 ft of 20-inch cars, 600.
+        Assert.Equal(240, RaceCoach.TrackCars(store, "Mini-Z Carpet")!.Value, 6);
+        Assert.Equal(600, RaceCoach.TrackCars(store, "Big Dirt")!.Value, 6);
+
+        // The same 0.3 s of a 10 s lap: 7 Mini-Z lengths, where counting
+        // them as 1/10 cars said 3.
+        Assert.Equal("7 car lengths", RaceCoach.SayLengths(300, 10_000, RaceCoach.TrackCars(store, "Mini-Z Carpet")));
+    }
+
+    [Theory]
+    [InlineData(null, "1/10")]
+    [InlineData("", "1/10")]
+    [InlineData("1/7", "1/10")]
+    [InlineData(" 1/28 ", "1/28")]
+    [InlineData("1/12", "1/12")]
+    public void An_unknown_or_missing_scale_is_1_10(string? key, string scale) =>
+        Assert.Equal(scale, RaceCoach.ScaleOf(key).Key);
+
+    [Fact]
+    public void A_layout_s_scale_is_saved_with_it()
+    {
+        using var data = new TempAppData();
+        var store = TrackLayoutStore.Load();
+        store.Upsert(new TrackLayout { Name = "Mini-Z Carpet", TrackLengthFeet = 130, CarScale = "1/28" });
+
+        var again = TrackLayoutStore.Load();
+
+        Assert.Equal("1/28", again.All.Single(t => t.Name == "Mini-Z Carpet").CarScale);
     }
 
     [Fact]

@@ -420,7 +420,7 @@ public static partial class RaceCoach
     /// and in car lengths when the layout has a length. Null without two
     /// best laps there.
     /// </summary>
-    public static string? BestLapGap(PairRecord pair, double? trackFeet)
+    public static string? BestLapGap(PairRecord pair, double? trackCars)
     {
         if (pair.BestA <= 0 || pair.BestB <= 0)
         {
@@ -435,7 +435,7 @@ public static partial class RaceCoach
         var gap = Math.Abs(pair.BestA - pair.BestB);
         var (shortA, shortB) = ShortNames(pair.A, pair.B);
         var who = pair.BestA < pair.BestB ? shortA : shortB;
-        var lengths = SayLengths(gap, Math.Min(pair.BestA, pair.BestB), trackFeet);
+        var lengths = SayLengths(gap, Math.Min(pair.BestA, pair.BestB), trackCars);
 
         return lengths is null
             ? $"{who} by {gap / 1000.0:0.000}s"
@@ -447,7 +447,7 @@ public static partial class RaceCoach
     /// pace, who gets the results, and why, when the two disagree. By name
     /// rather than "you", since the club's laptop is read by both of them.
     /// </summary>
-    public static string Reading(PairRecord pair, double? trackFeet = null)
+    public static string Reading(PairRecord pair, double? trackCars = null)
     {
         var (a, b) = ShortNames(pair.A, pair.B);
         var n = pair.Shared;
@@ -495,7 +495,7 @@ public static partial class RaceCoach
 
         // One driver has the results, and the pace too or the pace is even.
         var loser = result == a ? b : a;
-        var tail = pace == result && pair.Track.Length > 0 && Lengths(pair, trackFeet) is { } lengths
+        var tail = pace == result && pair.Track.Length > 0 && Lengths(pair, trackCars) is { } lengths
             ? $" On {pair.Track} the best laps are {lengths} apart."
             : string.Empty;
 
@@ -504,10 +504,10 @@ public static partial class RaceCoach
             : $"{result} finished ahead in {resultWins} of {n}. The pace is even, so {loser} loses it in the race, not on the lap.";
     }
 
-    private static string? Lengths(PairRecord pair, double? trackFeet) =>
+    private static string? Lengths(PairRecord pair, double? trackCars) =>
         pair.BestA <= 0 || pair.BestB <= 0 || pair.BestA == pair.BestB
             ? null
-            : SayLengths(Math.Abs(pair.BestA - pair.BestB), Math.Min(pair.BestA, pair.BestB), trackFeet);
+            : SayLengths(Math.Abs(pair.BestA - pair.BestB), Math.Min(pair.BestA, pair.BestB), trackCars);
 
     private static string Races(int n) => n == 1 ? "race" : "races";
 

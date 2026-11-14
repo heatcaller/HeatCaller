@@ -22,11 +22,30 @@ namespace HeatCaller;
 public static partial class RaceCoach
 {
     /// <summary>
-    /// A car, nose to tail, in feet: a 1/10 buggy or touring car is about
-    /// 18 inches. Smaller scales read long - a Mini-Z gap in "1/10 lengths"
-    /// - which is still the right way round, just generous.
+    /// A car's scale, and how long one of them is nose to tail, in feet.
+    /// Set on each track layout beside its length (14 Nov 2026, Asher):
+    /// before, every gap was counted in 1/10 cars, so a Mini-Z gap read
+    /// about a third as many lengths as the drivers saw.
     /// </summary>
-    public const double CarLengthFeet = 1.5;
+    public sealed record CarScale(string Key, string Name, double LengthFeet);
+
+    /// <summary>The scales a layout can be set to, largest first. A typical car of each, rounded to the inch.</summary>
+    public static readonly IReadOnlyList<CarScale> CarScales =
+    [
+        new("1/8", "1/8 (buggy, truggy)", 20 / 12.0),
+        new("1/10", "1/10 (buggy, touring)", 18 / 12.0),
+        new("1/12", "1/12 (pan car)", 14 / 12.0),
+        new("1/18", "1/18", 10 / 12.0),
+        new("1/24", "1/24", 7.5 / 12.0),
+        new("1/28", "1/28 (Mini-Z)", 6.5 / 12.0),
+    ];
+
+    /// <summary>The scale a layout is raced at when none is set: 1/10, what car lengths assumed before the setting.</summary>
+    public static CarScale DefaultCarScale => CarScales[1];
+
+    /// <summary>A scale by its key ("1/28"), or the default for a key that is null or not one of them.</summary>
+    public static CarScale ScaleOf(string? key) =>
+        CarScales.FirstOrDefault(s => string.Equals(s.Key, key?.Trim(), StringComparison.Ordinal)) ?? DefaultCarScale;
 
     /// <summary>
     /// A lap this far off the driver's own best is a mistake - a spin, a
@@ -45,15 +64,17 @@ public static partial class RaceCoach
     /// <summary>
     /// The car lengths a gap is worth on a lap of a layout, or null when the
     /// layout's length is not set (or there is no gap to measure).
+    /// <paramref name="trackCars"/> is the lap's length in the layout's own
+    /// cars (TrackCars).
     /// </summary>
-    public static double? CarLengths(long gapMs, long lapMs, double? trackFeet)
+    public static double? CarLengths(long gapMs, long lapMs, double? trackCars)
     {
-        if (trackFeet is not double feet || feet <= 0 || lapMs <= 0 || gapMs <= 0)
+        if (trackCars is not double cars || cars <= 0 || lapMs <= 0 || gapMs <= 0)
         {
             return null;
         }
 
-        return gapMs / (double)lapMs * feet / CarLengthFeet;
+        return gapMs / (double)lapMs * cars;
     }
 
     /// <summary>"7 car lengths", "1 car length", "under a car length".</summary>
@@ -63,14 +84,15 @@ public static partial class RaceCoach
         : $"{Math.Round(lengths):0} car lengths";
 
     /// <summary>A gap as car lengths, or null when the layout's length is not set.</summary>
-    public static string? SayLengths(long gapMs, long lapMs, double? trackFeet) =>
-        CarLengths(gapMs, lapMs, trackFeet) is double lengths ? Lengths(lengths) : null;
+    public static string? SayLengths(long gapMs, long lapMs, double? trackCars) =>
+        CarLengths(gapMs, lapMs, trackCars) is double lengths ? Lengths(lengths) : null;
 
     /// <summary>
-    /// A layout's length in feet, found by the name a session saved, or
-    /// null when there is no such layout or it has no length set.
+    /// How many of its own cars long a layout is, found by the name a
+    /// session saved: its length over the length of a car of its scale.
+    /// Null when there is no such layout or it has no length set.
     /// </summary>
-    public static double? TrackFeet(TrackLayoutStore? layouts, string? layoutName)
+    public static double? TrackCars(TrackLayoutStore? layouts, string? layoutName)
     {
         if (layouts is null || string.IsNullOrWhiteSpace(layoutName))
         {
@@ -80,7 +102,7 @@ public static partial class RaceCoach
         var layout = layouts.All.FirstOrDefault(t =>
             string.Equals(t.Name.Trim(), layoutName.Trim(), StringComparison.OrdinalIgnoreCase));
 
-        return layout?.TrackLengthFeet is double feet && feet > 0 ? feet : null;
+        return layout?.TrackLengthFeet is double feet && feet > 0 ? feet / ScaleOf(layout.CarScale).LengthFeet : null;
     }
 
     /// <summary>The laps a driver counted in a race, as PaceAnalysis counts them - the run to the first crossing left out.</summary>

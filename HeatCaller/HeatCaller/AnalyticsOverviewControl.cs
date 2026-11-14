@@ -279,7 +279,7 @@ public sealed class AnalyticsOverviewControl : UserControl
                     if (other.Result is not null)
                     {
                         var gap = other.Result.FastLapMs - result.FastLapMs;
-                        var lengths = RaceCoach.SayLengths(gap, result.FastLapMs, RaceCoach.TrackFeet(Layouts, group.Key));
+                        var lengths = RaceCoach.SayLengths(gap, result.FastLapMs, RaceCoach.TrackCars(Layouts, group.Key));
 
                         next = $"{RaceCoach.WhoIs(other.Result)}, +{RaceCoach.Gap(gap)}"
                             + (lengths is null ? string.Empty : $" ({lengths})");

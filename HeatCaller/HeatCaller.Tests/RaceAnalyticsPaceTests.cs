@@ -150,7 +150,7 @@ public sealed class RaceAnalyticsPaceTests : IDisposable
         Assert.StartsWith("At your limit.", PaceAnalysisControl.ConsistencyReading(tidy, RaceCoach.Laps(Driver(14000, 14050, 14020, 14010, 14030, 14040))));
         Assert.StartsWith("Tidy.", PaceAnalysisControl.TableReading(tidy, null));
         Assert.Equal("Held pace from start to finish.", PaceAnalysisControl.FadeReading(tidy));
-        Assert.Contains("under a car length", PaceAnalysisControl.TableReading(tidy, 600));
+        Assert.Contains("under a car length", PaceAnalysisControl.TableReading(tidy, 400));
 
         var all = new[] { "At your limit.", "Normal.", "Scrappy.", "Tidy.", "Some to find.", "Lots." };
         Assert.All(all, s => Assert.DoesNotContain("—", s));
