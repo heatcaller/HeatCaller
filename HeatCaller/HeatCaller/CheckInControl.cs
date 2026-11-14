@@ -15,13 +15,6 @@ public sealed partial class CheckInControl : UserControl
     private readonly AppSettings _settings;
     private readonly TechInspectionStore? _tech;
 
-    /// <summary>
-    /// The battery packs, for the Pack column: which pack is in each
-    /// driver's car tonight - what each race they run is recorded on
-    /// (BatteryPackStore.AutoTag). None, and there is no such column.
-    /// </summary>
-    private readonly BatteryPackStore? _batteries;
-
     /// <summary>Who paid tonight (11 Nov 2026, Phase 4 - see DeskMoney). Null: no Paid column.</summary>
     private readonly EntryPaymentStore? _payments;
 
@@ -136,19 +129,6 @@ public sealed partial class CheckInControl : UserControl
     /// </summary>
     public event Action? TechLogRequested;
 
-    /// <summary>
-    /// Narrows the roster to the cars that still have to be looked at.
-    ///
-    /// The other half of folding Scrutineering in: "who is left to inspect"
-    /// was the one question the old tab answered that this page could not, and
-    /// it is a filter over the roster rather than a page of its own. Only
-    /// built when there is a tech store to ask.
-    /// </summary>
-    private readonly CheckBox _chkNeedsTech = new ThemedCheckBox();
-
-    /// <summary>Opens the scrutineer's full record list. Not on the page when there is no tech store.</summary>
-    private readonly Button _btnTechLog = new() { Text = "Scrutineering Log..." };
-
     /// <summary>The Online Sign-ups button, held so its caption can say how many are waiting.</summary>
     private readonly Button _btnSignups = new() { Text = "Online Sign-ups (00)" };
 
@@ -160,7 +140,6 @@ public sealed partial class CheckInControl : UserControl
     private readonly Button _btnDriverRequests = new() { Text = "Driver Requests (00)", Visible = false };
     private readonly UndoService _undo;
 
-    private readonly ComboBox _cmbClassFilter = new();
     private readonly RosterGrid _grid = new();
 
     /// <summary>Inspect Selected Car, held so its caption can say "Cars" while more than one row is picked.</summary>
@@ -211,22 +190,17 @@ public sealed partial class CheckInControl : UserControl
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
-    /// <summary>The class filter, its caption and the tech filter - held so a rebuilt class list can re-measure it.</summary>
-    private FieldRow? _filterRow;
-
-    /// <summary>The class filter's width, measured from its choices - see Pieces.PickerWidth. Forgotten when the list is rebuilt.</summary>
-    private (Font Font, int Count, int Width)? _classPickerWidth;
-
-    /// <summary>The width the scan card was designed at, at the normal text size - see ScanColumnWidth.</summary>
-    private const int ScanWidth = 300;
-
     private bool _suppressGridEvents;
 
     public CheckInControl(ProfileStore profiles, CheckInStore checkIns, RaceClassStore raceClasses, AppSettings settings, UndoService undo,
         TechInspectionStore? tech = null, WebServerService? web = null, RaceEventStore? events = null,
         BatteryPackStore? batteries = null, EntryPaymentStore? payments = null)
     {
-        _batteries = batteries;
+        // The packs are not this page's any more (13 Nov 2026): Asher had the
+        // Pack column taken off - which pack is in a car is nothing to do with
+        // who is here and ready. The store is still taken, so the callers
+        // need not change; Driver Hub and Race Control still pick packs.
+        _ = batteries;
         _payments = payments;
         _web = web;
         _events = events;
@@ -247,20 +221,13 @@ public sealed partial class CheckInControl : UserControl
 
         BuildLayout();
         RefreshAll();
-
-        // A pack put in a car anywhere else - Driver Hub, Race Control, the
-        // phone, an undo - shows in the column.
-        if (_batteries is not null)
-        {
-            _batteries.Changed += OnBatteriesChanged;
-        }
     }
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing && _batteries is not null)
+        if (disposing)
         {
-            _batteries.Changed -= OnBatteriesChanged;
+            _searchPause.Dispose();
         }
 
         base.Dispose(disposing);
@@ -308,44 +275,44 @@ public sealed partial class CheckInControl : UserControl
         // "what it builds", not "heat building": this page is the same page
         // on a club night, where the programme is races rather than heats,
         // and this text is written once for both.
+        //
+        // 13 Nov 2026 (the pit board rework): one line. It used to explain
+        // the Tech column, the tech filter and the log in a paragraph; the
+        // strip and the chips say that now by being there.
         var lblIntro = new Label
         {
-            Text = "Mark who's here today. Whether tonight's program uses checked-in drivers only is set on the Setup tab. " +
-                   "Scrutineering is here too: the Tech column is the gate, the filter beside the class list shows who is " +
-                   "still to be looked at, and Scrutineering Log holds the full record.",
+            Text = "Who's here tonight, and who's ready to race. Click a card to see who is still waiting at that gate. " +
+                   "Whether tonight's program uses checked-in drivers only is set on the Setup tab.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
 
         _pnlNoDay = BuildNoDayBanner();
 
-        // --- The filter row ---
-        var lblFilter = new Label { Text = "Class:" };
+        // --- The filters ---
+        //
+        // A chip per class with how many race it, in place of the drop-down
+        // that hid them; a chip per gate, in place of "Only those not through
+        // tech" (which only knew about tech); and the search box at the end
+        // of the gate chips, which is where a USB scanner types too - a scan
+        // checks the driver in, anything else typed narrows the list.
+        BuildFilters();
 
-        _cmbClassFilter.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbClassFilter.SelectedIndexChanged += (_, _) =>
-        {
-            RefreshDriverList();
-            var selected = _cmbClassFilter.SelectedItem as string;
-            _settings.LastCheckInClassFilter = selected is null || selected.StartsWith("(all") ? string.Empty : selected;
-            _settings.Save();
-        };
+        _txtScan.PlaceholderText = "Find a driver, or scan a QR check-in";
+        _txtScan.KeyDown += TxtScan_KeyDown;
 
-        _chkNeedsTech.Text = "Only those not through tech";
-        _chkNeedsTech.AutoSize = true;
-        _chkNeedsTech.CheckedChanged += (_, _) => RefreshDriverList();
+        var gateRow = new FieldRow();
 
-        var filterRow = new FieldRow();
+        gateRow.Add(null, _showChips, () => _showChips.GetPreferredSize(Size.Empty).Width);
+        gateRow.AddLast(null, _txtScan, () => UiLayout.AtTextSize(240));
 
-        filterRow.Add(lblFilter, _cmbClassFilter, ClassFilterWidth);
-
-        // Only with a tech store to ask - see _chkNeedsTech.
-        if (_tech is not null)
-        {
-            filterRow.Add(null, _chkNeedsTech);
-        }
-
-        _filterRow = filterRow;
+        // The scan line: what the last scan, tick or bulk change did. In the
+        // roster's bottom-left corner, which the picked bar takes while two
+        // or more drivers are picked.
+        _lblScanStatus.AutoSize = true;
+        _lblScanStatus.Text = string.Empty;
+        _lblScanStatus.Padding = new Padding(0, UiLayout.AtDpi(9), 0, 0);
+        _textSize.Wear(_lblScanStatus, () => AppTheme.BoldFont);
 
         // On a line of its own under the filter, wrapping to the card.
         //
@@ -373,12 +340,16 @@ public sealed partial class CheckInControl : UserControl
         // Right-click anywhere on the list: the menu for the drivers picked
         // (13 Nov 2026) - see OnRowMenuRequested.
         _grid.RowMenuRequested += OnRowMenuRequested;
-        _grid.SelectionChanged += (_, _) => ShowInspectCaption();
+        _grid.SelectionChanged += (_, _) =>
+        {
+            ShowInspectCaption();
+            ShowPickedBar();
+        };
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _grid.Columns.AddRange(
-            new DataGridViewCheckBoxColumn { Name = "checkedIn", HeaderText = "Checked In", FillWeight = 30 },
+            new DataGridViewCheckBoxColumn { Name = "checkedIn", HeaderText = "Here", FillWeight = 16 },
             new DataGridViewTextBoxColumn { Name = "driver", HeaderText = "Driver", FillWeight = 60, ReadOnly = true },
-            new DataGridViewTextBoxColumn { Name = "class", HeaderText = "Class", FillWeight = 40, ReadOnly = true }
+            new DataGridViewTextBoxColumn { Name = "class", HeaderText = "Classes", FillWeight = 55, ReadOnly = true }
         );
 
         if (_tech is not null)
@@ -387,26 +358,24 @@ public sealed partial class CheckInControl : UserControl
             // the other, so this reads per (driver, class) rather than
             // showing one status per person - the same scoping tech
             // inspection itself uses, so the two pages can't disagree.
-            _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "tech", HeaderText = "Tech", FillWeight = 35, ReadOnly = true });
-        }
-
-        if (_batteries is not null)
-        {
-            // Click it to pick: the pack in the car tonight is what each
-            // race they run is recorded on.
-            _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "pack", HeaderText = "Pack", FillWeight = 35, ReadOnly = true });
+            _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "tech", HeaderText = "Tech", FillWeight = 32, ReadOnly = true });
         }
 
         if (_payments is not null)
         {
             // Money at the desk (11 Nov 2026): shown only on a race day with an
             // entry fee - see RefreshDriverList. Right-click to settle.
-            _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "paid", HeaderText = "Paid", FillWeight = 35, ReadOnly = true, Visible = false });
+            _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "paid", HeaderText = "Payment", FillWeight = 38, ReadOnly = true, Visible = false });
         }
 
         // Papers (12 Nov 2026, setup plan D9): shown only while the club
         // checks waivers or memberships - see RefreshDriverList. Click to record.
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "papers", HeaderText = "Papers", FillWeight = 45, ReadOnly = true, Visible = false });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "papers", HeaderText = "Papers", FillWeight = 42, ReadOnly = true, Visible = false });
+
+        // Ready (13 Nov 2026): a bar per gate and how many are done, or
+        // "Ready" once the driver is through them all - see ShowStatus.
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ready", HeaderText = "Ready", FillWeight = 30, ReadOnly = true });
+        _grid.CellPainting += PaintRosterCell;
         _grid.CellClick += Grid_CellClick;
         _grid.CellDoubleClick += Grid_CellDoubleClick;
         _grid.CurrentCellDirtyStateChanged += (_, _) =>
@@ -428,13 +397,11 @@ public sealed partial class CheckInControl : UserControl
         };
         _grid.CellValueChanged += Grid_CellValueChanged;
 
-        var btnCheckInAll = new Button { Text = "Check In All Shown" };
-        btnCheckInAll.Click += (_, _) => CheckInEveryoneShown();
-
         // Somebody at the desk who is not on file yet - the same small window
         // the Set Up Tonight wizard's Drivers step opens.
         var btnAddDriver = new Button { Text = "Add Driver..." };
         btnAddDriver.Click += (_, _) => AddDriver();
+        AppTheme.StyleButton(btnAddDriver, AppTheme.ButtonKind.Primary);
 
         // Tonight's entry list - RCSignup, LiveTime, LiveRC or any CSV -
         // matched onto the drivers here and checked in (11 Nov 2026, build
@@ -444,63 +411,15 @@ public sealed partial class CheckInControl : UserControl
         var entriesMenu = BuildEntriesMenu();
         btnEntries.Click += (_, _) => entriesMenu.Show(btnEntries, new Point(0, btnEntries.Height));
 
-        var btnCheckOutAll = new Button { Text = "Check Out Everyone" };
+        // One pink button on the page, Add Driver (13 Nov 2026): the theme's
+        // own rule made this one pink too.
+        AppTheme.StyleButton(btnEntries, AppTheme.ButtonKind.Secondary);
 
-        // Named for what it acts on, like the two buttons beside it. It was
-        // "Inspect...", sitting next to "Check In All Shown" and "Check Out
-        // Everyone" - both of which say their scope - and leaving the one
-        // button that works on a single row the only one that did not.
-        //
-        // "Cars" while more than one row is picked: then it logs one
-        // inspection for all of them - see RequestInspection.
+        // Named for what it acts on. "Cars" while more than one row is
+        // picked: then it logs one inspection for all of them - see
+        // RequestInspection. It lives on the picked bar now; one car is
+        // inspected from its Tech cell, or from More.
         _btnInspect.Click += (_, _) => RequestInspection();
-
-        _btnTechLog.Click += (_, _) => TechLogRequested?.Invoke();
-        btnCheckOutAll.Click += (_, _) =>
-        {
-            // Not on a closed day: its sheet is the record of who was at
-            // that meeting, and this used to wipe it - see
-            // CheckInStore.ClosedCurrentDay.
-            if (RefusedOnClosedDay())
-            {
-                return;
-            }
-
-            if (AppDialog.Show(this, "Clear all check-ins? Do this at the start of a new event day.",
-                "Confirm check-out", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-            {
-                // Which event, as well as who: an undo made after switching
-                // events must put them back where they were checked out.
-                var snapshot = _checkIns.SnapshotCheckedIn();
-                var eventId = _checkIns.CurrentEventId;
-                _undo.Capture($"Check out everyone ({Plural.Of(snapshot.Count, "driver")})", () =>
-                {
-                    _checkIns.RestoreCheckedIn(eventId, snapshot);
-
-                    // Only when the check-ins put back are the ones on show.
-                    // Undone after switching to another race day, they went
-                    // back to the day they came from - and a desk change
-                    // raised for them here blocked pending phone check-ins
-                    // for the same drivers at the race day now open.
-                    if (string.Equals(eventId, _checkIns.CurrentEventId, StringComparison.Ordinal))
-                    {
-                        RaiseDeskChanges(snapshot);
-                    }
-
-                    // The page may be gone by the time Undo is pressed; the
-                    // store is what matters, and the page re-reads it when
-                    // it is next shown.
-                    if (!IsDisposed && !Disposing)
-                    {
-                        RefreshDriverList();
-                    }
-                });
-
-                _checkIns.CheckOutAll();
-                RaiseDeskChanges(snapshot);
-                RefreshDriverList();
-            }
-        };
 
         _btnSignups.Click += (_, _) => SignupsRequested?.Invoke();
         _btnDriverRequests.Click += (_, _) => DriverRequestsRequested?.Invoke();
@@ -509,16 +428,11 @@ public sealed partial class CheckInControl : UserControl
         // says, and again every time the count changes.
         SetSignupCount(0);
 
-        // Only the buttons that exist: a club with no tech store gets neither
-        // Inspect nor the log.
-        var actions = new ButtonBar().With(btnAddDriver, btnEntries, btnCheckInAll, btnCheckOutAll);
-
-        if (_tech is not null)
-        {
-            actions.With(_btnInspect, _btnTechLog);
-        }
-
-        actions.With(_btnSignups, _btnDriverRequests);
+        // The commands for the night, against the right-hand edge: Add Driver
+        // furthest right, then the ways drivers arrive, then More for the
+        // rest (13 Nov 2026 - nine buttons of one size became three, a count
+        // or two, and a menu).
+        var actions = new ButtonBar(alignRight: true).With(btnAddDriver, btnEntries, _btnSignups, _btnDriverRequests);
 
         // Money at the desk: the slip a double-click on a name adds to.
         if (_payments is not null)
@@ -527,68 +441,38 @@ public sealed partial class CheckInControl : UserControl
             actions.With(_btnDriverPaid);
         }
 
+        actions.With(BuildMoreButton());
+
         var roster = new Section("Drivers");
 
-        roster.Add(filterRow);
+        roster.Add(_classChips);
+        roster.Add(gateRow);
         roster.Add(_lblSummary);
         roster.AddFill(_grid, LeastGridHeight);
-        roster.Add(actions, gapBelow: 0);
+        roster.Add(new SplitBar(BuildPickedBar(), actions), gapBelow: 0);
 
-        // --- The scan card ---
-        //
-        // A card beside the roster, as tall as what is in it at the column's
-        // width: the help wraps to it, and the status line keeps two lines
-        // of its own so the buttons under it do not hop as drivers are
-        // scanned in.
-        var lblScanHelp = _textSize.Wear(
-            new Label
-            {
-                Text = "Click the box below, then scan a driver's QR check-in with any USB barcode scanner (no setup needed). " +
-                       "They're checked in instantly.\r\n\r\n" +
-                       "Or let drivers sign themselves on: start the web server and put the poster below on the wall. " +
-                       "They tap their own name and it appears here.",
-                AutoSize = true,
-                ForeColor = AppTheme.TextMuted,
-            },
-            () => AppTheme.SmallFont);
+        // --- Desk mode (mock-up D) ---
+        var desk = BuildDesk();
 
-        // In the page's own face now. It was a fixed 11pt, which neither
-        // grew with the text size nor matched anything else on the page.
-        _txtScan.PlaceholderText = "Waiting for scan...";
-        _txtScan.KeyDown += TxtScan_KeyDown;
-
-        _lblScanStatus.AutoSize = true;
-        _lblScanStatus.Text = string.Empty;
-        _textSize.Wear(_lblScanStatus, () => AppTheme.BoldFont);
-        _textSize.ReserveLines(_lblScanStatus, 2);
-
-        var btnBadges = new Button { Text = "Print QR Check-ins..." };
-        btnBadges.Click += (_, _) => GenerateBadges();
-
-        var btnPoster = new Button { Text = "Self Check-In Poster..." };
-        btnPoster.Click += (_, _) => ShowSelfCheckInPoster();
-
-        var scan = new Section("Scan to Check In");
-
-        scan.Add(lblScanHelp);
-        scan.Add(_txtScan, gapBelow: UiLayout.HintGap);
-        scan.Add(_lblScanStatus);
-
-        // Desk view (12 Nov 2026, setup plan D8): this laptop locked to
-        // check-ins and money, for a volunteer, while the director races.
-        var btnDeskView = new Button { Text = "Desk View..." };
-        btnDeskView.Click += (_, _) => DeskViewRequested?.Invoke();
-
-        var scanButtons = scan.Add(new ButtonBar().With(btnBadges, btnPoster, btnDeskView), gapBelow: 0);
-
-        var body = new Beside(() => ScanColumnWidth(scanButtons));
-
-        body.AddFill(roster, roster.LeastHeight);
-        body.AddSideCard(scan);
+        // The two views share the room under the strip; the switch shows one.
+        _views.Controls.Add(roster);
+        _views.Controls.Add(desk);
+        roster.Dock = DockStyle.Fill;
+        desk.Dock = DockStyle.Fill;
+        desk.Visible = false;
+        _rosterView = roster;
+        _deskView = desk;
 
         // --- The page ---
         var page = new FillPage();
 
+        // Roster or Desk mode (13 Nov 2026): the switch is the first thing
+        // on the page, so it is where it always is in both.
+        _modeSwitch.OnChanged += (_, _) => ShowDeskMode(_modeSwitch.On);
+        _modeSwitch.AutoSize = true;
+        _modeSwitch.AccessibleDescription = "Who's Racing view";
+
+        page.Add(_modeSwitch, stretch: false, gapBelow: UiLayout.RowGap);
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
 
         // In the flow rather than floating over the page - a warning that
@@ -608,32 +492,18 @@ public sealed partial class CheckInControl : UserControl
         _lblComing.ForeColor = AppTheme.TextMuted;
         _lblComing.Visible = false;
         page.Add(_lblComing, gapBelow: UiLayout.RowGap);
-        page.AddFill(body, body.LeastHeight, gapBelow: 0);
+
+        // The readiness strip (13 Nov 2026): one card per gate, over both views.
+        _textSize.Keep(_strip.Remeasure);
+        page.Add(_strip, gapBelow: UiLayout.RowGap);
+        page.AddFill(_views, ViewsLeastHeight, gapBelow: 0);
 
         Controls.Add(page);
     }
 
-    /// <summary>
-    /// The class filter: wide enough for the longest class name, and never
-    /// under the 220px it always had at the normal text size.
-    /// </summary>
-    private int ClassFilterWidth() =>
-        Math.Max(UiLayout.AtTextSize(220), Pieces.PickerWidth(_cmbClassFilter, ref _classPickerWidth, "(all classes)"));
-
     /// <summary>The least height the roster's grid can do with: its headings and three drivers. Below that the page scrolls instead - see FillPage.</summary>
     private int LeastGridHeight() =>
         _grid.ColumnHeadersHeight + 3 * _grid.RowTemplate.Height;
-
-    /// <summary>
-    /// The scan card's width: the 300px it was designed at, at the text size
-    /// in use - so its help wraps to a column about as many words wide
-    /// whatever the size, not to a sliver at 200% - and never too narrow for
-    /// the wider of its two buttons, whose captions the column cannot see.
-    /// </summary>
-    private static int ScanColumnWidth(ButtonBar buttons) =>
-        Math.Max(
-            UiLayout.AtTextSize(ScanWidth),
-            buttons.Controls.OfType<Button>().Select(button => button.Width).DefaultIfEmpty(0).Max() + Section.Inset.Horizontal);
 
     /// <summary>
     /// "No race day is open", and one press that opens one.
@@ -759,9 +629,16 @@ public sealed partial class CheckInControl : UserControl
 
         var shown = CurrentlyShownProfiles().Select(p => p.Transponder).ToList();
 
+        var newlyIn = shown.Count(t => !_checkIns.IsCheckedIn(t));
+
         _checkIns.CheckInAll(shown);
         RaiseDeskChanges(shown);
         RefreshDriverList();
+
+        if (newlyIn > 0)
+        {
+            LogDesk(Plural.Of(newlyIn, "driver"), "checked in together");
+        }
     }
 
     /// <summary>Shows how many online sign-ups are waiting for the desk on the button that opens them.</summary>
@@ -770,6 +647,7 @@ public sealed partial class CheckInControl : UserControl
         // The bar it is in re-measures it: the caption gets longer or
         // shorter with the count, and the button with it.
         _btnSignups.Text = waiting > 0 ? $"Online Sign-ups ({Math.Min(waiting, 99)})" : "Online Sign-ups";
+        _btnDeskSignups.Text = _btnSignups.Text;
     }
 
     /// <summary>
@@ -810,38 +688,103 @@ public sealed partial class CheckInControl : UserControl
         e.Handled = true;
         e.SuppressKeyPress = true; // stop the Windows "ding" on Enter in a single-line textbox
 
-        var scanned = _txtScan.Text.Trim();
-        _txtScan.Clear();
+        HandleEntry(_txtScan, fromDesk: false);
+    }
 
-        if (string.IsNullOrWhiteSpace(scanned))
+    /// <summary>
+    /// Enter in a scan box - the roster's search, or Desk mode's big box. A
+    /// QR check-in checks its driver in. Anything else is a name: one driver
+    /// it can only mean is checked in; more than one, and the box keeps the
+    /// words so more can be typed (13 Nov 2026 - the search box and the
+    /// scanner are one box now).
+    /// </summary>
+    internal void HandleEntry(TextBox box, bool fromDesk)
+    {
+        var typed = box.Text.Trim();
+
+        if (string.IsNullOrWhiteSpace(typed))
         {
             return;
         }
 
-        var transponder = QrBadgeRenderer.ParsePayload(scanned);
-        if (transponder is null)
+        var transponder = QrBadgeRenderer.ParsePayload(typed);
+
+        if (transponder is not null)
         {
-            // An online badge whose id no driver here has any more - printed
-            // before Reissue All Badges on the Club Website page, with another
-            // laptop's key, or for a driver since deleted. This used to say
-            // it didn't look like a HeatCaller badge, which it plainly is.
-            SetScanStatus(
-                RelayCheckIn.IdFromScan(scanned) is not null
-                    ? "That QR check-in is out of date - print a new one."
-                    : "That doesn't look like a HeatCaller QR check-in.",
-                AppTheme.Danger);
+            box.Clear();
+
+            var scanned = _profiles.All.FirstOrDefault(p => string.Equals(p.Transponder, transponder, StringComparison.OrdinalIgnoreCase));
+
+            if (scanned is null)
+            {
+                SetScanStatus($"No driver profile found for transponder {transponder}.", AppTheme.Danger);
+                return;
+            }
+
+            CheckInAtDesk(scanned, "by scan");
             return;
         }
 
-        var profile = _profiles.All.FirstOrDefault(p => string.Equals(p.Transponder, transponder, StringComparison.OrdinalIgnoreCase));
-        if (profile is null)
+        // An online badge whose id no driver here has any more - printed
+        // before Reissue All Badges on the Club Website page, with another
+        // laptop's key, or for a driver since deleted.
+        if (RelayCheckIn.IdFromScan(typed) is not null)
         {
-            SetScanStatus($"No driver profile found for transponder {transponder}.", AppTheme.Danger);
+            box.Clear();
+            SetScanStatus("That QR check-in is out of date - print a new one.", AppTheme.Danger);
             return;
         }
 
+        var matches = DriversNamed(typed);
+
+        switch (matches.Count)
+        {
+            case 0:
+                SetScanStatus($"No driver called \"{typed}\". Add Driver puts somebody new on the list.", AppTheme.Danger);
+                break;
+
+            case 1:
+                box.Clear();
+                CheckInAtDesk(matches[0], "at the desk");
+                break;
+
+            default:
+                SetScanStatus($"{matches.Count} drivers match \"{typed}\" - type more of the name.", AppTheme.Warning);
+
+                // The roster shows them at once, rather than after the pause.
+                if (!fromDesk)
+                {
+                    _searchPause.Stop();
+                    ApplySearch();
+                }
+
+                break;
+        }
+    }
+
+    /// <summary>
+    /// The drivers a typed name can mean: the one whose name it is, or else
+    /// everyone whose name or transponder has it in it.
+    /// </summary>
+    internal List<DriverProfile> DriversNamed(string typed)
+    {
+        var exact = _profiles.All
+            .Where(p => string.Equals((p.DriverName ?? string.Empty).Trim(), typed, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(p.Transponder, typed, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        return exact.Count > 0 ? exact : _profiles.All.Where(p => Matches(p, typed)).ToList();
+    }
+
+    /// <summary>
+    /// Checks one driver in from the desk - a scan, or a name typed - and
+    /// puts them on Desk mode's card, with what they still need.
+    /// </summary>
+    private void CheckInAtDesk(DriverProfile profile, string how)
+    {
         if (_checkIns.IsCheckedIn(profile.Transponder))
         {
+            ShowOnDesk(profile, "Already checked in", AppTheme.Accent);
             SetScanStatus($"{DisplayName(profile)} was already checked in.", AppTheme.TextMuted);
             return;
         }
@@ -856,10 +799,11 @@ public sealed partial class CheckInControl : UserControl
 
         _checkIns.SetCheckedIn(profile.Transponder, true);
         CheckInChangedAtDesk?.Invoke(profile.Transponder);
+        LogDesk(DisplayName(profile), $"checked in {how}");
+        ShowOnDesk(profile, $"Checked in · {DateTime.Now:t}", AppTheme.Success);
         RefreshDriverList();
         SetScanStatus($"Checked in: {DisplayName(profile)}", AppTheme.Success);
     }
-
     /// <summary>
     /// Adds somebody new and checks them in, from the small window the
     /// setup wizard uses - name, transponder and class, checked before it
@@ -879,7 +823,7 @@ public sealed partial class CheckInControl : UserControl
 
         // Starts on the class being filtered to - somebody working through
         // Stock who meets a new face is adding a Stock driver.
-        var startClass = _cmbClassFilter.SelectedIndex > 0 ? _cmbClassFilter.SelectedItem as string : null;
+        var startClass = ClassFilter;
 
         using var form = new QuickDriverForm(classes, startClass, QuickDriverForm.OwnerNameIn(_profiles));
 
@@ -904,17 +848,28 @@ public sealed partial class CheckInControl : UserControl
         _checkIns.SetCheckedIn(form.Transponder, true);
         CheckInChangedAtDesk?.Invoke(form.Transponder);
 
-        // A class filter that would hide them is taken off, so the person
-        // just added is on screen. Changing it refreshes the list itself.
-        if (_cmbClassFilter.SelectedIndex > 0
-            && !string.Equals(_cmbClassFilter.SelectedItem as string, form.ClassName, StringComparison.OrdinalIgnoreCase))
+        // A filter that would hide them is taken off, so the person just
+        // added is on screen: a class they are not in, a gate they are
+        // through, or a search for somebody else.
+        if (ClassFilter is { } filter && !string.Equals(filter, form.ClassName, StringComparison.OrdinalIgnoreCase))
         {
-            _cmbClassFilter.SelectedIndex = 0;
+            _classFilter = null;
+            _classChips.Picked = string.Empty;
         }
-        else
+
+        if (_show is RosterShow.NotHere or RosterShow.Ready)
         {
-            RefreshDriverList();
+            _show = RosterShow.Everyone;
         }
+
+        if (_search.Length > 0)
+        {
+            _txtScan.Clear();
+            _search = string.Empty;
+        }
+
+        RefreshAll();
+        LogDesk(form.DriverName, "added and checked in");
 
         foreach (DataGridViewRow row in _grid.Rows)
         {
@@ -969,6 +924,10 @@ public sealed partial class CheckInControl : UserControl
     {
         _lblScanStatus.Text = message;
         _lblScanStatus.ForeColor = color;
+
+        // Desk mode's own line, under its scan box.
+        _lblDeskStatus.Text = message;
+        _lblDeskStatus.ForeColor = color;
     }
 
     /// <summary>
@@ -1070,16 +1029,6 @@ public sealed partial class CheckInControl : UserControl
 
     /// <summary>Call whenever this tab becomes visible - profiles and classes can change elsewhere while it's not active.</summary>
 
-    /// <summary>Text for the Tech column - what state, and what today's inspection actually said if there was one.</summary>
-    private string TechCellText(DriverProfile profile)
-    {
-        // Latest, the same inspection Race Control's tech warning goes by -
-        // by race day, not calendar date - so the desk and the gate never
-        // disagree about whether a car is cleared.
-        var inspection = TechFor(profile);
-        return inspection is null ? "-" : inspection.ResultText;
-    }
-
     /// <summary>
     /// The inspection the desk goes by for a driver: across every class they
     /// race that runs tech (TechInspectionStore.LatestForDriver), judged
@@ -1132,8 +1081,7 @@ public sealed partial class CheckInControl : UserControl
     /// when one is - see RaceControlControl.DeskJudgesTechFor.
     /// </summary>
     private bool JudgesTechFor(string className) =>
-        RaceControlControl.DeskJudgesTechFor(className, _raceClasses.All, _tech!, _events?.Active,
-            _cmbClassFilter.SelectedIndex > 0 ? _cmbClassFilter.SelectedItem as string : null);
+        RaceControlControl.DeskJudgesTechFor(className, _raceClasses.All, _tech!, _events?.Active, ClassFilter);
 
     public void RefreshAll()
     {
@@ -1177,6 +1125,14 @@ public sealed partial class CheckInControl : UserControl
                 if (row.Cells[0].Value is not bool shown || shown != isIn)
                 {
                     row.Cells[0].Value = isIn;
+                    ShowStatus(row);
+
+                    // Not the desk's own change (CheckInDrivers and the rest
+                    // say theirs): a driver's phone, or the self check-in page.
+                    if (!_deskMarking)
+                    {
+                        LogDesk(DisplayName(profile), isIn ? "checked in from a phone" : "checked out from a phone");
+                    }
                 }
             }
 
@@ -1213,40 +1169,36 @@ public sealed partial class CheckInControl : UserControl
         }
     }
 
+    /// <summary>Whether the class picked last time has been put back yet - once, when the page is first filled.</summary>
+    private bool _classFilterRestored;
+
+    /// <summary>The class chips, rebuilt from the club's classes - and, the first time, the class picked last time put back.</summary>
     private void RefreshClassFilter()
     {
-        var previous = _cmbClassFilter.SelectedItem as string ?? (_settings.LastCheckInClassFilter.Length > 0 ? _settings.LastCheckInClassFilter : null);
-        _cmbClassFilter.Items.Clear();
-        _cmbClassFilter.Items.Add("(all classes)");
-        foreach (var c in _raceClasses.All)
+        if (!_classFilterRestored)
         {
-            _cmbClassFilter.Items.Add(c.Name);
+            _classFilterRestored = true;
+            _classFilter = _settings.LastCheckInClassFilter.Length > 0 ? _settings.LastCheckInClassFilter : null;
         }
-        var idx = previous is not null ? _cmbClassFilter.Items.IndexOf(previous) : -1;
-        _cmbClassFilter.SelectedIndex = idx >= 0 ? idx : 0;
 
-        // The longest class may have come or gone: measured again, and the
-        // row with it.
-        _classPickerWidth = null;
-        _filterRow?.PerformLayout();
+        RefreshClassChips();
     }
 
-    private List<DriverProfile> CurrentlyShownProfiles()
-    {
-        var classFilter = _cmbClassFilter.SelectedIndex > 0 ? (string)_cmbClassFilter.SelectedItem! : null;
-
-        // "Not through tech" means not cleared, which covers both the car
-        // nobody has looked at and the car that was looked at and failed. Read
-        // per (driver, class), the same scoping the Tech column and tech
-        // inspection itself use, so a driver legal in one car and not the
-        // other shows up for the car that needs work.
-        var needsTech = _tech is not null && _chkNeedsTech.Checked;
-
-        return _profiles.All
-            .Where(p => classFilter is null || p.RunsClass(classFilter))
-            .Where(p => !needsTech || TechFor(p) is not { IsCleared: true })
+    /// <summary>
+    /// The drivers the roster shows: in the class picked, waiting at the gate
+    /// picked, and matching the search.
+    ///
+    /// "Needs tech" means not cleared, which covers both the car nobody has
+    /// looked at and the car that was looked at and failed. Read per (driver,
+    /// class), the same scoping the Tech column and tech inspection itself
+    /// use, so a driver legal in one car and not the other shows up for the
+    /// car that needs work.
+    /// </summary>
+    private List<DriverProfile> CurrentlyShownProfiles() =>
+        InClass()
+            .Where(p => _show == RosterShow.Everyone || Shows(_show, ReadinessOf(p)))
+            .Where(p => Matches(p, _search))
             .ToList();
-    }
 
     private void RefreshDriverList()
     {
@@ -1258,28 +1210,12 @@ public sealed partial class CheckInControl : UserControl
             {
                 // New to racing (setup plan D12): " · first night", " · novice, mentor Al".
                 var displayName = (string.IsNullOrWhiteSpace(profile.DriverName) ? profile.Transponder : profile.DriverName) + NewDrivers.Badge(profile, DateTime.Now);
-                var rowIndex = _tech is null
-                    ? _grid.Rows.Add(_checkIns.IsCheckedIn(profile.Transponder), displayName, ClassCellText(profile))
-                    : _grid.Rows.Add(_checkIns.IsCheckedIn(profile.Transponder), displayName, ClassCellText(profile),
-                        TechCellText(profile));
+                var rowIndex = _grid.Rows.Add(_checkIns.IsCheckedIn(profile.Transponder), displayName, ClassCellText(profile));
 
                 _grid.Rows[rowIndex].Tag = profile;
-                ShowPack(_grid.Rows[rowIndex]);
                 ShowPaid(_grid.Rows[rowIndex]);
                 ShowPapers(_grid.Rows[rowIndex]);
-
-                if (_tech is not null)
-                {
-                    var techCol = _grid.Columns["tech"]!.Index;
-                    var inspection = TechFor(profile);
-
-                    _grid.Rows[rowIndex].Cells[techCol].Style.ForeColor = inspection switch
-                    {
-                        { IsCleared: true } => AppTheme.Success,
-                        not null => AppTheme.Danger,
-                        _ => AppTheme.TextMuted,
-                    };
-                }
+                ShowStatus(_grid.Rows[rowIndex]);
             }
         }
         finally
@@ -1382,10 +1318,6 @@ public sealed partial class CheckInControl : UserControl
 
             case "class":
                 BeginInvoke(new Action(() => ReopenPicker(rowIndex, profile, PickClasses)));
-                break;
-
-            case "pack" when _batteries is not null:
-                BeginInvoke(new Action(() => ReopenPicker(rowIndex, profile, PickPack)));
                 break;
 
             case "tech" when _tech is not null:
@@ -1610,7 +1542,8 @@ public sealed partial class CheckInControl : UserControl
         }
 
         RaiseDeskChanges(transponders);
-        RefreshCheckInMarks();
+        RefreshMarksFromDesk();
+        LogDesk(drivers.Count == 1 ? DisplayName(drivers[0]) : Plural.Of(drivers.Count, "driver"), "checked out");
         SetScanStatus($"Checked out {Plural.Of(transponders.Count, "driver")}.", AppTheme.Success);
     }
 
@@ -1633,7 +1566,12 @@ public sealed partial class CheckInControl : UserControl
 
         _checkIns.CheckInAll(transponders);
         RaiseDeskChanges(transponders);
-        RefreshCheckInMarks();
+        RefreshMarksFromDesk();
+
+        if (newlyIn > 0)
+        {
+            LogDesk(drivers.Count == 1 ? DisplayName(drivers[0]) : Plural.Of(newlyIn, "driver"), "checked in");
+        }
 
         SetScanStatus(
             newlyIn == transponders.Count
@@ -1692,12 +1630,6 @@ public sealed partial class CheckInControl : UserControl
         // ticked each one as it went, and a Pack cell opened its menu.
         if (e.RowIndex >= 0 && (ModifierKeys & (Keys.Control | Keys.Shift)) != 0)
         {
-            return;
-        }
-
-        if (e.RowIndex >= 0 && _batteries is not null && e.ColumnIndex == _grid.Columns["pack"]?.Index)
-        {
-            PickPack(e.RowIndex);
             return;
         }
 
@@ -1770,6 +1702,8 @@ public sealed partial class CheckInControl : UserControl
             var isChecked = (bool)(_grid.Rows[e.RowIndex].Cells[0].Value ?? false);
             _checkIns.SetCheckedIn(profile.Transponder, isChecked);
             CheckInChangedAtDesk?.Invoke(profile.Transponder);
+            ShowStatus(_grid.Rows[e.RowIndex]);
+            LogDesk(DisplayName(profile), isChecked ? "checked in" : "checked out");
             UpdateSummary();
         }
     }
@@ -1799,6 +1733,10 @@ public sealed partial class CheckInControl : UserControl
         _lblSummary.Text =
             $"{checkedInShown} of {shown.Count} checked in ({_checkIns.Count} total checked in across all classes){rule}";
 
+        // The chips, the strip, and the driver on the desk (13 Nov 2026).
+        RefreshCounts();
+        RefreshDeskCard();
+
         // Every check-in ends here - a tick, a scan, a phone - and only
         // RefreshAll used to bring these two lines up to date, so "0 here"
         // and its still-to-come names stayed as they were while the desk
@@ -1806,132 +1744,6 @@ public sealed partial class CheckInControl : UserControl
         // changed.
         RefreshEntriesClosed();
         RefreshComing();
-    }
-    // ------------------------------------------------------------ packs
-
-    /// <summary>
-    /// A row's Pack cell: the pack in the driver's car, "Pick..." when they
-    /// have packs to choose from (theirs or the club's) and none is in, or
-    /// blank when there is nothing to pick.
-    /// </summary>
-    private void ShowPack(DataGridViewRow row)
-    {
-        if (_batteries is null || _grid.Columns["pack"] is not { } column || row.Tag is not DriverProfile profile)
-        {
-            return;
-        }
-
-        var key = BatteryPackStore.DriverKey(_profiles, profile.Transponder);
-        var inCar = _batteries.CurrentPack(key);
-        var cell = row.Cells[column.Index];
-
-        if (inCar is not null)
-        {
-            cell.Value = inCar.DisplayName + (inCar.IsClubPack ? " (club)" : string.Empty);
-            cell.Style.ForeColor = AppTheme.TextDark;
-        }
-        else
-        {
-            cell.Value = _batteries.ChoicesFor(profile).Count > 0 ? "Pick..." : string.Empty;
-            cell.Style.ForeColor = AppTheme.TextMuted;
-        }
-    }
-
-    /// <summary>Posted, since the store does not promise which thread it changes on. Only the Pack cells change.</summary>
-    private void OnBatteriesChanged()
-    {
-        if (IsDisposed || !IsHandleCreated)
-        {
-            return;
-        }
-
-        try
-        {
-            BeginInvoke(new Action(() =>
-            {
-                if (IsDisposed)
-                {
-                    return;
-                }
-
-                _suppressGridEvents = true;
-
-                try
-                {
-                    foreach (DataGridViewRow row in _grid.Rows)
-                    {
-                        ShowPack(row);
-                    }
-                }
-                finally
-                {
-                    _suppressGridEvents = false;
-                }
-            }));
-        }
-        catch (InvalidOperationException)
-        {
-            // The window went between the check and the post.
-        }
-    }
-
-    /// <summary>
-    /// The Pack cell clicked: the driver's packs in rotation and the club's,
-    /// the one in the car ticked, and - while one is in - "No pack in the
-    /// car". Picked, it goes in their car, with an undo.
-    /// </summary>
-    private void PickPack(int rowIndex)
-    {
-        if (_batteries is not { } store || _grid.Rows[rowIndex].Tag is not DriverProfile profile)
-        {
-            return;
-        }
-
-        var key = BatteryPackStore.DriverKey(_profiles, profile.Transponder);
-        var inCar = store.CurrentPackId(key);
-        var choices = store.ChoicesFor(profile);
-        var name = string.IsNullOrWhiteSpace(profile.DriverName) ? profile.Transponder : profile.DriverName.Trim();
-
-        if (choices.Count == 0 && inCar is null)
-        {
-            return;
-        }
-
-        var menu = new ContextMenuStrip();
-
-        void Add(string text, string? packId, bool ticked)
-        {
-            var item = new ToolStripMenuItem(text) { Checked = ticked };
-            item.Click += (_, _) =>
-            {
-                BatteryActions.PutInCar(store, _undo, key, name, packId);
-
-                if (!IsDisposed && rowIndex < _grid.Rows.Count && ReferenceEquals(_grid.Rows[rowIndex].Tag, profile))
-                {
-                    ShowPack(_grid.Rows[rowIndex]);
-                }
-            };
-            menu.Items.Add(item);
-        }
-
-        foreach (var pack in choices)
-        {
-            Add(pack.DisplayName + (pack.IsClubPack ? "  (club)" : string.Empty), pack.Id, pack.Id == inCar);
-        }
-
-        if (inCar is not null)
-        {
-            menu.Items.Add(new ToolStripSeparator());
-            Add("No pack in the car", null, ticked: false);
-        }
-
-        AppTheme.StyleContextMenu(menu);
-
-        // Let go once it has closed and its click has run.
-        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
-
-        var cell = _grid.GetCellDisplayRectangle(_grid.Columns["pack"]!.Index, rowIndex, cutOverflow: true);
-        menu.Show(_grid, new Point(cell.Left, cell.Bottom));
     }
 }
 

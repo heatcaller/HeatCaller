@@ -335,7 +335,7 @@ Each row shows a driver's name and class, marked **TAP** or **HERE**. The top ba
 
 Behind the scenes, the page identifies each driver by a random code rather than their transponder number, so the list on a phone never reveals transponder numbers. The codes change every time the server starts, so a code seen at one meeting is useless at the next.
 
-The check-in page doesn't offer camera scanning of QR check-ins on the local network, because phone browsers only allow the camera on secure (https) pages. Use a USB scanner in the **Scan to Check In** box on **Race Day → Who's Racing** for QR check-ins. See [Events and entries](../race-day/events-and-entries.md) and, for internet check-in, [Online check-in](../online/check-in.md).
+The check-in page doesn't offer camera scanning of QR check-ins on the local network, because phone browsers only allow the camera on secure (https) pages. Use a USB scanner in the search box on **Race Day → Who's Racing** (or in **Desk mode**) for QR check-ins. See [Events and entries](../race-day/events-and-entries.md) and, for internet check-in, [Online check-in](../online/check-in.md).
 
 ### Race-day manager
 

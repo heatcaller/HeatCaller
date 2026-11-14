@@ -161,7 +161,7 @@ Yes. On the **Themes** page, pick one of the 18 built-in looks or make your own 
 
 Yes, in three ways:
 
-- **At the desk:** scan printed QR check-ins with a USB scanner in the **Scan to Check In** box on **Race Day → Who's Racing**.
+- **At the desk:** scan printed QR check-ins with a USB scanner in the search box on **Race Day → Who's Racing**, or in **Desk mode** there.
 - **On the club Wi-Fi:** drivers use the self check-in page from **Local Screens**.
 - **From anywhere:** with online check-in on the **Club Website** page, drivers use a QR check-in or their own PIN.
 

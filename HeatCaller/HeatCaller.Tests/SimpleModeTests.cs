@@ -418,7 +418,7 @@ public sealed class SimpleModeTests : IDisposable
         "MainForm.Pages.cs|Head to Head", "MainForm.Pages.cs|Trends", "MainForm.Pages.cs|Pace",
         "RaceDayEventControl.cs|Which race day", "RaceDayEventControl.cs|About the day", "RaceDayEventControl.cs|Building the program",
         "TodayControl.cs|Ready to race", "RaceProgramControl.cs|Tonight's program", "EventsControl.cs|Race days",
-        "CheckInControl.cs|Drivers", "CheckInControl.cs|Scan to Check In",
+        "CheckInControl.cs|Drivers", "CheckInControl.Desk.cs|Scan to Check In", "CheckInControl.Desk.cs|Tonight at the Desk",
         "SeasonsControl.cs|Championships", "SeasonsControl.cs|Races counted", "SeasonsControl.cs|Standings", "SeasonsControl.cs|Points scheme",
         "AnalyticsOverviewControl.cs|Track records", "PersonalBestsControl.cs|Personal bests", "LapChartControl.cs|Drivers",
         "LapChartControl.cs|Lap times", "LapChartControl.cs|Consistency", "HeadToHeadControl.cs|Matchup",

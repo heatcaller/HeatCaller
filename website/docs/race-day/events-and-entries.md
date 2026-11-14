@@ -170,7 +170,23 @@ The three "Also" choices can only be ticked while the races themselves are being
 
 ## Race Day → Who's Racing
 
-**Who's Racing** is the sign-on desk: who's here today, and whether their car has passed tech. It's also where scrutineering happens: the **Tech** column is the gate, and the **Scrutineering Log** button opens the full record.
+**Who's Racing** is the sign-on desk: who's here tonight, and who's ready to race. Each driver goes through the night's gates: checked in, tech (when the club runs it), paid (on a night with an entry fee) and papers (while the club checks waivers or memberships). A driver through every gate is ready to race. It's also where scrutineering happens: the **Tech** column is the gate, and **More → Scrutineering Log** opens the full record.
+
+The switch at the top of the page picks the view: **Roster**, the full list, or **Desk mode**, for the queue at the desk before the first heat (see [Desk mode](#desk-mode)).
+
+### The readiness cards
+
+A row of cards across the top counts the drivers in the class you've picked, one card per gate the night has:
+
+| Card | What it counts |
+|---|---|
+| **Checked in** | Drivers here, of everyone in the class. |
+| **Through tech** | Cars cleared, of the drivers here, and how many failed. |
+| **Paid** | Drivers here who have paid (or are comped), and the money still owed by drivers here. |
+| **Papers** | Drivers here whose papers are in order. |
+| **Ready to race** | Drivers checked in and through every gate. |
+
+Click a card to show only the drivers still waiting at that gate: **Checked in** shows who isn't here yet, **Ready to race** shows who is ready. Click it again to show everyone.
 
 ![Race Day, Who's Racing tab: six of nine drivers checked in, with their classes, tech, pack, Paid and Papers columns, the buttons from Add Driver and Import Entries to Driver Paid, and the Scan to Check In card with Print QR Check-ins, Self Check-In Poster and Desk View](../assets/images/race-day-whos-racing.png)
 
@@ -184,44 +200,65 @@ Each row is a driver profile. The class shown is the class on the driver's profi
 
 | Column | What it shows |
 |---|---|
-| **Checked In** | Tick when the driver arrives. |
+| **Here** | Tick when the driver arrives. Drivers who aren't here yet have their name greyed. |
 | **Driver** | The driver's name. |
-| **Class** | The driver's class. |
-| **Tech** | The result of the inspection that counts for this driver: **Passed**, **FAILED**, **Passed (note)**, or **-** if they haven't been inspected. A driver in more than one class that runs tech shows as cleared only once they're cleared in each (see [A driver in more than one class](drivers-and-classes.md#a-driver-in-more-than-one-class)). Passes are green, fails red. Double-click the cell to inspect the car. |
-| **Pack** | The battery pack in the driver's car, which each race they run tonight is recorded on. Click the cell to pick one of their packs or the club's, or **No pack in the car**. It reads **Pick...** when they have packs and none is in, and is blank when there are none to pick. See [A driver's batteries](drivers-and-classes.md#a-drivers-batteries). |
+| **Classes** | Every class the driver races tonight, one tag each. When they don't all fit, the last tag reads "+2". |
+| **Tech** | The inspection that counts for this driver: **Passed** or **Passed (note)** in green, **Failed** in red (point at it to see what failed), **Waiting** in amber for a driver who is here and hasn't been inspected, or **—** for a driver not here yet. A driver in more than one class that runs tech shows as cleared only once they're cleared in each (see [A driver in more than one class](drivers-and-classes.md#a-driver-in-more-than-one-class)). Double-click the cell to inspect the car. |
+| **Payment** | On a night with an entry fee: **Owes $15.00**, **Cash $15.00**, **Card $15.00** or **Comp**. See [Money at the desk](#money-at-the-desk). |
+| **Papers** | While the club checks waivers or memberships: **OK**, or what isn't in order. See [Papers: waivers and memberships](#papers-waivers-and-memberships). |
+| **Ready** | One short bar per gate (green done, amber still to do, red failed tech) and how many are done, for example "2/4". It reads **Ready** once the driver is through them all. Point at it to see what's still to do. |
 
-A single click on a checkbox ticks or unticks it straight away. Check-ins are kept per race day, so a new race day starts with an empty sheet.
+A single click on a checkbox ticks or unticks it straight away. Check-ins are kept per race day, so a new race day starts with an empty sheet. Which pack is in a driver's car isn't on this page: pick it on [Driver Hub](drivers-and-classes.md#a-drivers-batteries) or in Race Control.
 
 ### Several drivers at once
 
 Pick more than one driver, then double-click any of them to deal with them all together:
 
-1. Hold <kbd>Ctrl</kbd> and click each driver you want, or click one and hold <kbd>Shift</kbd> as you click another to pick everyone in between. <kbd>Ctrl</kbd>+<kbd>A</kbd> picks the whole list. While <kbd>Ctrl</kbd> or <kbd>Shift</kbd> is held, a click only picks the row: it doesn't tick **Checked In** or open the **Pack** menu.
+1. Hold <kbd>Ctrl</kbd> and click each driver you want, or click one and hold <kbd>Shift</kbd> as you click another to pick everyone in between. <kbd>Ctrl</kbd>+<kbd>A</kbd> picks the whole list. While <kbd>Ctrl</kbd> or <kbd>Shift</kbd> is held, a click only picks the row: it doesn't tick **Here** or open the **Classes** menu.
 2. Double-click any of the picked rows. A menu opens with:
-    - **Check In *n* Drivers** ticks them all in. Drivers already checked in stay checked in, and the line under **Scan to Check In** says how many were new.
+    - **Check In *n* Drivers** ticks them all in. Drivers already checked in stay checked in, and the line in the bottom corner says how many were new.
     - **Log Inspection for *n* Drivers...** records one inspection for all their cars. See [Inspect several cars at once](#inspect-several-cars-at-once).
 
 You can keep <kbd>Ctrl</kbd> held for the double-click: on a picked driver it still covers everyone picked, and on a driver who isn't picked yet it adds them to the rest. The drivers stay picked afterwards, so you can check them in and then log their inspection with two double-clicks. A double-click on a driver who isn't one of the picked ones works as it always has: on their **Tech** cell it inspects that one car.
 
+With two or more drivers picked, a bar in the bottom-left corner of the card says who they are and has **Check In**, **Check Out**, **Paid Cash** and **Paid Card** (on a night with an entry fee), **Inspect Selected Cars** (logs one inspection for all of them, see [Inspect several cars at once](#inspect-several-cars-at-once)) and **Clear**.
+
 Above the list:
 
-- The **Class:** filter shows one class at a time, or **(all classes)**. HeatCaller remembers your choice.
-- **Only those not through tech** narrows the list to the cars still to be cleared: not inspected, or failed. With **(all classes)** in the **Class:** filter, it covers every class at once. See [Who still needs inspecting](#who-still-needs-inspecting).
+- **The class chips** show one class at a time, or **All classes**. Each says how many drivers race it. HeatCaller remembers your choice.
+- **The gate chips** narrow the list to the drivers still waiting at one gate: **Not here**, **Needs tech** (not inspected, or failed: see [Who still needs inspecting](#who-still-needs-inspecting)), **Owes**, **Papers**, or **Ready** for the drivers through them all. **Everyone** shows the whole class again. Each chip says how many. Only the gates tonight has are there.
+- **The search box** narrows the list to drivers whose name or transponder has what you type in it. <kbd>Esc</kbd> clears it. It's also where a USB scanner types: a scanned QR check-in checks its driver in (see [Scan QR check-ins](#scan-qr-check-ins)). Type a name and press <kbd>Enter</kbd> to check in the one driver it matches; when it matches more than one, the line in the bottom corner says so and you can type more of the name.
 - The summary reads, for example, "9 of 12 checked in (21 total checked in across all classes)", followed by how tonight's program is built: "heats are built from checked-in drivers only" or "everyone in a racing class is in the heats, checked in or not" (on a club night, "tonight's races").
 
-The buttons under the list:
+Also on the list:
+
+- **New drivers** show beside their name: "Max Power · first night" for a driver first seen today, or "· novice, mentor Al Gorithim" for one ticked **New to racing** on their profile (see [Drivers and classes](drivers-and-classes.md)).
+- **Click a driver's Classes** to change the classes they race, without going to **Driver Hub**. The menu lists tonight's classes (every class, when the day has none picked) with theirs ticked. Click one to put them in it or take them out. It changes their profile, so it lasts beyond tonight, and **Undo** puts it back. If tonight's heats are already built, put them in the new class's heats with **Add a Late Entry** on the program (see [A late entry](program-and-mains.md#a-late-entry)).
+
+The buttons under the list, against the right-hand edge:
 
 - **Add Driver** opens the **Add a driver** window for someone who isn't on file yet: **Name**, **Transponder** and **Class**. Click **Add Driver** and they're saved with the drivers on file and checked in straight away.
 - **Import Entries** brings in tonight's entry list from a CSV file or a table you copied, such as an RCSignup export or a LiveRC entry list. See [Import entries](#import-entries).
-- **Check In All Shown** ticks in every driver currently in the list (so it respects the filters).
-- **New drivers** show beside their name: "Max Power · first night" for a driver first seen today, or "· novice, mentor Al Gorithim" for one ticked **New to racing** on their profile (see [Drivers and classes](drivers-and-classes.md)).
-- **Click a driver's Class** to change the classes they race, without going to **Driver Hub**. The menu lists tonight's classes (every class, when the day has none picked) with theirs ticked. Click one to put them in it or take them out. The **Class** column shows every class a driver races, for example "Stock + Mod". It changes their profile, so it lasts beyond tonight, and **Undo** puts it back. If tonight's heats are already built, put them in the new class's heats with **Add a Late Entry** on the program (see [A late entry](program-and-mains.md#a-late-entry)).
-- **Check Out Everyone** clears all check-ins for the current race day, after you confirm. You can undo it with **Undo**: the drivers are checked back in to the race day they were checked out of, and anyone who checked in since stays checked in. You don't normally need it — a new race day already starts with an empty sheet.
-- **Inspect Selected Car** opens a tech inspection for the selected driver. See [Inspect a car](#inspect-a-car). With more than one driver picked it reads **Inspect Selected Cars** and logs one inspection for all of them. See [Inspect several cars at once](#inspect-several-cars-at-once).
-- **Scrutineering Log** opens the full list of inspections. See [The Scrutineering log](#the-scrutineering-log).
 - **Online Sign-ups** opens the drivers who have signed up online, waiting to be approved. The button shows how many are waiting, for example **Online Sign-ups (3)**. See [Driver sign-up](../online/sign-up.md).
 - **Driver Requests** opens the changes drivers have asked for from their phones, and their result queries, waiting for the desk. The button shows how many are waiting, for example **Driver Requests (2)**. It's only there while the club takes requests, or while some are still waiting. See [Driver requests](../online/driver-requests.md).
+- **Driver Paid** opens the payment slip, on a night with an entry fee. See [Money at the desk](#money-at-the-desk).
+- **More** holds the rest:
+    - **Check In Everyone** (or **Check In Everyone Shown** while a filter is on) ticks in every driver currently in the list.
+    - **Check Out Everyone...** clears all check-ins for the current race day, after you confirm. You can undo it with **Undo**: the drivers are checked back in to the race day they were checked out of, and anyone who checked in since stays checked in. You don't normally need it — a new race day already starts with an empty sheet.
+    - **Inspect Selected Car...** opens a tech inspection for the selected driver. See [Inspect a car](#inspect-a-car).
+    - **Scrutineering Log...** opens the full list of inspections. See [The Scrutineering log](#the-scrutineering-log).
+    - **Print QR Check-ins...** and **Self Check-In Poster...**: see [Scan QR check-ins](#scan-qr-check-ins) and [Self check-in poster](#self-check-in-poster).
+    - **Desk View...** locks this laptop to check-ins, papers and money for a volunteer.
 
+### Desk mode
+
+**Desk mode** is for the queue at the desk before the first heat. Pick it on the switch at the top of **Who's Racing**; **Roster** takes you back. The readiness cards stay at the top.
+
+- **The scan box** is large, and stays ready for the next scan. Scan a driver's QR check-in, or type their name and press <kbd>Enter</kbd>. Under it, a line says what happened, with the same messages as the roster (see [Scan QR check-ins](#scan-qr-check-ins)).
+- **The driver's card** shows the driver just scanned, large enough to read from across the desk: their initials, name and classes, and "Checked in · 7:52 PM", "Already checked in" or "Not checked in".
+- **What they still need** lists each of tonight's gates for that driver. A gate they're through is a green line ("Paid: Cash $10.00"). One still to do has its buttons: **Inspect Car...** (or **Inspect Again...** after a fail), **Paid Cash** and **Paid Card**, **Record Papers...**, or **Check In**. A driver checked in by mistake has **Undo** beside **Checked in**. After any of them, the scan box is ready again.
+- Under it are **Add Walk-Up...** (the same **Add a driver** window as **Add Driver**), **Print QR Check-ins...**, **Self Check-In Poster...** and **Online Sign-ups**.
+- **Tonight at the Desk**, beside it, lists the evening as it happens, newest at the top: check-ins and check-outs at the desk, payments, and drivers who checked in from their phones. On a night with an entry fee, the line at its foot says what has been taken: "Taken tonight: $33.00 cash · $16.00 card". The list is kept until HeatCaller is closed.
 ### Papers: waivers and memberships
 
 With **Ask every driver for a signed waiver** or **Check memberships** ticked on **Setup**, **Who's Racing** has a **Papers** column. It shows **OK**, or what isn't in order:
@@ -288,12 +325,12 @@ Online taps reach the laptop a few seconds late. If the desk changes a driver's 
 
 ### Scan QR check-ins
 
-The **Scan to Check In** card lets you check drivers in by scanning their QR check-in with a USB barcode scanner. Scanners plug in and type like a keyboard, so there's nothing to set up.
+You can check drivers in by scanning their QR check-in with a USB barcode scanner. Scanners plug in and type like a keyboard, so there's nothing to set up.
 
-1. Click in the box that says **Waiting for scan...**.
+1. Click in the search box above the list (**Find a driver, or scan a QR check-in**), or in the big box in [Desk mode](#desk-mode).
 2. Scan a driver's QR check-in.
 
-The driver is checked in immediately, and the card tells you what happened:
+The driver is checked in immediately, and the line in the bottom corner of the card (or under the box in Desk mode) tells you what happened:
 
 | Message | Meaning |
 |---|---|
@@ -302,14 +339,15 @@ The driver is checked in immediately, and the card tells you what happened:
 | **Not checked in: this day is closed ("*day*"). Start tonight's race day first.** | The current race day is closed. See [Race Day → Who's Racing](#race-day-whos-racing). |
 | **No driver profile found for transponder *number*.** | The QR check-in is for a transponder that has no profile. |
 | **That QR check-in is out of date - print a new one.** | An online QR check-in whose code no driver here has any more: printed before **Reissue All QR Check-ins** was used, printed on another laptop's QR check-in key, or for a driver since deleted. Print a new QR check-in. |
-| **That doesn't look like a HeatCaller QR check-in.** | Whatever was scanned isn't a HeatCaller QR check-in — for example a product barcode. |
+| **No driver called "*text*". Add Driver puts somebody new on the list.** | What was scanned or typed isn't a QR check-in, and no driver's name or transponder has it in it — for example a product barcode. |
+| ***n* drivers match "*text*" - type more of the name.** | A name typed that more than one driver has in theirs. Nobody was checked in. |
 
 The scanner reads both kinds of QR check-in described below, so QR check-ins you printed earlier keep working, except online QR check-ins printed before **Reissue All QR Check-ins** was used (see [Reissue all QR check-ins](../online/check-in.md#reissue-all-qr-check-ins)).
 
 ### Print QR check-ins
 
-1. On **Who's Racing**, set the **Class:** filter to the drivers you want QR check-ins for (or all classes).
-2. Click **Print QR Check-ins** and choose where to save.
+1. On **Who's Racing**, pick the class chip for the drivers you want QR check-ins for (or **All classes**).
+2. Click **More → Print QR Check-ins...** (or **Print QR Check-ins...** in Desk mode) and choose where to save.
 3. Print the saved images, cut the QR check-ins out and hand them to drivers.
 
 HeatCaller saves the QR check-ins as PNG images sized for letter paper, 12 QR check-ins (3 across, 4 down) per page, with dashed cut lines. If there's more than one page, each page is saved as its own file, numbered after the name you chose (`qr-check-ins-page1.png`, `qr-check-ins-page2.png` and so on). Each QR check-in shows a QR code, the driver's name, and their class and transponder.
@@ -338,7 +376,7 @@ The poster opens in its own window, so you can leave it on a second screen by th
 
 ### Money at the desk
 
-With an **Entry fee:** set on **Setup**, or a class racing tonight that has its own fee, the **Drivers** card has a **Paid** column. HeatCaller only records what happens at the desk; it never takes a payment.
+With an **Entry fee:** set on **Setup**, or a class racing tonight that has its own fee, the **Drivers** card has a **Payment** column, and the readiness cards a **Paid** card. HeatCaller only records what happens at the desk; it never takes a payment.
 
 - **Owes .00** (in amber): what the driver owes tonight. With one fee for the night, it's the entry fee plus **Each extra class:** for each of tonight's classes they race after the first. See [Fees per class](#fees-per-class) for classes with their own.
 - Right-click a driver (or several) and choose **Paid Cash**, **Paid Card**, **Comp** (then **Marshal**, **Volunteer**, **Junior** or **Other**), or **Still Owing** to undo a mistake. **Undo** works too.
@@ -375,7 +413,7 @@ The gate is the **Tech** column on **Who's Racing**. You record inspections from
 
 ### Inspect a car
 
-1. On **Who's Racing**, select the driver and click **Inspect Selected Car** (or double-click their **Tech** cell). Or click **New Inspection** in the Scrutineering log.
+1. On **Who's Racing**, double-click their **Tech** cell, or select the driver and choose **More → Inspect Selected Car...**. In [Desk mode](#desk-mode), click **Inspect Car...**. Or click **New Inspection** in the Scrutineering log.
 
     From **Who's Racing**, if the car was already inspected today (or in the last 6 hours, for a club night that runs past midnight), that inspection opens to edit instead of starting a new one. An older inspection, such as Saturday's at a weekend meeting, is left as it was, and a new one is recorded for today. To change an older inspection, pick it in the Scrutineering log and use **Edit**.
 
@@ -410,7 +448,7 @@ Recording or editing an inspection can be undone with **Undo**. **Cancel** in th
 When a line of cars goes through tech together, or a batch is turned back for the same reason, record them in one go:
 
 1. On **Who's Racing**, pick the drivers with <kbd>Ctrl</kbd>+click or <kbd>Shift</kbd>+click. See [Several drivers at once](#several-drivers-at-once).
-2. Double-click one of them and choose **Log Inspection for *n* Drivers...**, or click **Inspect Selected Cars**.
+2. Double-click one of them and choose **Log Inspection for *n* Drivers...**, or click **Inspect Selected Cars** on the bar that appears for the drivers picked.
 3. The **Log Inspection for *n* Drivers** window names who it's for. Choose the **Result:** (**Passed**, **Passed with a note** or **FAILED**), and enter the **Inspector:** and any **Notes:**.
 4. Click **Save *n* Inspections**.
 
@@ -427,11 +465,11 @@ The whole batch is one step for **Undo**.
 
 ### Who still needs inspecting
 
-Tick **Only those not through tech** on **Who's Racing** to list every driver who isn't cleared yet at the current race day — either not inspected or failed — across all classes. Use the **Class:** filter to narrow it to one class (the **Tech** column then shows each driver's result in that class), and **Inspect Selected Car** to deal with each one.
+Click the **Needs tech** chip (or the **Through tech** card) on **Who's Racing** to list every driver who isn't cleared yet at the current race day — either not inspected or failed — across all classes. Pick a class chip to narrow it to one class (the **Tech** column then shows each driver's result in that class), and double-click each driver's **Tech** cell to inspect their car.
 
 Inspections are filed against the current race day, so a car cleared on the first day of a two-day meeting stays cleared on the second. Re-inspecting a car files the new inspection under the race day that's open now. With no race day open, a pass counts for 18 hours after it was recorded, so a club night that runs past midnight doesn't lose its passes.
 
-The **Tech** column, **Only those not through tech** and the tech warning on Race Control all use the same rule, so they agree on who's cleared. For a driver who races [more than one class](drivers-and-classes.md#a-driver-in-more-than-one-class), **Who's Racing** and the phone look at every class they race that runs tech, and show them cleared only once they're cleared in each. If the race day has its **Classes racing:** ticked, only those classes count, so a class that isn't racing today never holds a driver up.
+The **Tech** column, the **Needs tech** chip and the tech warning on Race Control all use the same rule, so they agree on who's cleared. For a driver who races [more than one class](drivers-and-classes.md#a-driver-in-more-than-one-class), **Who's Racing** and the phone look at every class they race that runs tech, and show them cleared only once they're cleared in each. If the race day has its **Classes racing:** ticked, only those classes count, so a class that isn't racing today never holds a driver up.
 
 ### The Scrutineering log
 

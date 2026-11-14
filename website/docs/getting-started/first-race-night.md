@@ -81,10 +81,10 @@ Full detail: [Events and entries](../race-day/events-and-entries.md).
 ## Step 5: Check drivers in
 
 1. Open **Race Day → Who's Racing**.
-2. Tick **Checked In** for each driver as they arrive. **Check In All Shown** does everyone in the list at once.
+2. Tick **Here** for each driver as they arrive. **More → Check In Everyone** does everyone in the list at once. The cards across the top count who's checked in, through tech, paid, and ready to race.
 3. Someone new at the desk? **Add Driver** puts them on file and checks them in.
 
-Want it faster? Print QR check-ins (**Print QR Check-ins**) and scan them with a USB barcode scanner into the **Scan to Check In** box. Or start the web server on **Local Screens** and put up the **Self Check-In Poster**, so drivers can check themselves in from their phones. The online relay can also do this from anywhere (see [Online check-in](../online/check-in.md)).
+Want it faster? Print QR check-ins (**More → Print QR Check-ins**) and scan them with a USB barcode scanner into the search box above the list, or switch to **Desk mode** for a big scan box and each driver's to-do list. Or start the web server on **Local Screens** and put up the **Self Check-In Poster**, so drivers can check themselves in from their phones. The online relay can also do this from anywhere (see [Online check-in](../online/check-in.md)).
 
 Full detail: [Events and entries](../race-day/events-and-entries.md).
 

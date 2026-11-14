@@ -26,16 +26,33 @@ public sealed partial class CheckInControl
             return;
         }
 
+        // A chip says one thing (13 Nov 2026): the first problem, "+1" for
+        // any more, and all of them in the cell's tip.
         var problems = PapersProblems(profile);
         var cell = row.Cells[column.Index];
-        cell.Value = DeskPapers.Cell(problems);
+        cell.Value = problems.Count switch
+        {
+            0 => DeskPapers.Cell(problems),
+            1 => problems[0],
+            _ => $"{problems[0]} +{problems.Count - 1}",
+        };
+        cell.ToolTipText = problems.Count > 1 ? DeskPapers.Cell(problems) : string.Empty;
         cell.Style.ForeColor = problems.Count == 0 ? AppTheme.Success : AppTheme.Warning;
     }
 
     /// <summary>The Papers cell was clicked: the papers window for that driver.</summary>
     private void EditPapers(int rowIndex)
     {
-        if (_grid.Rows[rowIndex].Tag is not DriverProfile profile || !ChecksPapers)
+        if (_grid.Rows[rowIndex].Tag is DriverProfile profile)
+        {
+            EditPapersFor(profile);
+        }
+    }
+
+    /// <summary>The papers window for one driver - from their Papers cell, or Desk mode's Record Papers.</summary>
+    private void EditPapersFor(DriverProfile profile)
+    {
+        if (!ChecksPapers)
         {
             return;
         }
