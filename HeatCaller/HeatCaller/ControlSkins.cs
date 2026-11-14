@@ -506,7 +506,12 @@ internal static class InputOutline
             // content palette. The sidebar is dark chrome in every mode, so
             // in Light Mode the content palette's near-white hairline put a
             // white box around the nav search field.
-            var edge = child.Focused && child.Enabled
+            //
+            // A list never lights up: its picked row shows where you are,
+            // and a ring round the whole list read as the list itself being
+            // selected (Race History's sessions, 14 Nov 2026).
+            var lit = child.Focused && child.Enabled && child is not (ListBox or ListView);
+            var edge = lit
                 ? AppTheme.Primary
                 : AppTheme.EdgeOn(parent.BackColor);
 

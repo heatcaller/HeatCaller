@@ -826,13 +826,16 @@ internal class ThemedCheckedListBox : CheckedListBox
         var text = GetItemText(Items[e.Index]);
         var selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
 
-        // A picked row is marked behind its text, as Windows marks it; the box
-        // keeps the list's background so it reads the same picked or not.
-        var ink = !Enabled ? AppTheme.TextMuted : selected ? e.ForeColor : ForeColor;
+        // A picked row is marked behind its text in the theme's soft tint, not
+        // Windows' blue (14 Nov 2026); the box keeps the list's background so
+        // it reads the same picked or not. The tick is what a checked list
+        // means, so the picked row stays quiet, and there is no dotted focus
+        // box - the tint already shows which row the keys act on.
+        var ink = !Enabled ? AppTheme.TextMuted : ForeColor;
 
         if (selected)
         {
-            using var mark = new SolidBrush(e.BackColor);
+            using var mark = new SolidBrush(AppTheme.PrimaryTint);
             g.FillRectangle(mark, textBounds);
         }
 
@@ -840,10 +843,5 @@ internal class ThemedCheckedListBox : CheckedListBox
             | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding;
 
         TextRenderer.DrawText(g, text, Font, textBounds, ink, Flags);
-
-        if ((e.State & DrawItemState.Focus) == DrawItemState.Focus && (e.State & DrawItemState.NoFocusRect) == 0)
-        {
-            ControlPaint.DrawFocusRectangle(g, textBounds, ink, selected ? e.BackColor : BackColor);
-        }
     }
 }
