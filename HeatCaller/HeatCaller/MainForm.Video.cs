@@ -20,6 +20,7 @@ public sealed partial class MainForm
         _obsLink.Start();
         RelaySettingsControl.Stream = _streamTonight;
         RelaySettingsControl.Obs = _obsLink;
+        RelaySettingsControl.DeadVideos = () => _relayPublisher.DeadVideos;
         FormClosed += (_, _) => _obsLink?.Dispose();
     }
 

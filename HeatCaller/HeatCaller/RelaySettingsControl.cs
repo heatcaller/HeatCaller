@@ -110,6 +110,8 @@ public sealed partial class RelaySettingsControl : UserControl
     /// <summary>Tonight's YouTube stream and the OBS link, for the Race video card (MainForm.Video).</summary>
     internal static StreamTonight? Stream { get; set; }
     internal static ObsLink? Obs { get; set; }
+    /// <summary>The videos the relay says YouTube won't play (V7) - RelayPublisher.DeadVideos.</summary>
+    internal static Func<IReadOnlyCollection<string>>? DeadVideos { get; set; }
     private readonly Button _btnTest = new();
     private readonly Button _btnSave = new();
     private readonly Button _btnRestore = new();

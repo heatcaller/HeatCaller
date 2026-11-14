@@ -143,3 +143,80 @@ export function liveVideo(stream: Stream | undefined): string | undefined {
   const open = stream.pieces.filter((p) => p.endMs === undefined && p.videoId !== "" && !p.hidden && !stream.dead.has(p.videoId));
   return open.length > 0 ? open[open.length - 1]!.videoId : undefined;
 }
+
+/**
+ * YOUTUBE'S OWN ANSWER FOR A VIDEO (V7): the HTTP status of its public
+ * oEmbed address for that video, or undefined when YouTube didn't answer.
+ * Server to server, so no driver's phone tells Google anything.
+ */
+export type OEmbedAsk = (videoId: string) => Promise<number | undefined>;
+
+/** The real ask: youtube.com/oembed, no key, five seconds at most. */
+export const askYouTube: OEmbedAsk = async (videoId) => {
+  try {
+    const url = "https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + videoId);
+    const answer = await fetch(url, { signal: AbortSignal.timeout(5000), redirect: "manual" });
+    await answer.body?.cancel().catch(() => {});
+    return answer.status;
+  } catch {
+    return undefined;
+  }
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Videos one club's checks have seen. */
+const VIDEO_CHECK_MAX = 200;
+
+/**
+ * Checks each video the night it arrives, then once a day for a week (V7).
+ * 401 (embedding turned off), 403 and 404 (private, removed) make it dead:
+ * no race shows it. A 200 brings it back - a video still processing after
+ * the stream, or made public again. YouTube not answering changes nothing.
+ * Kept in memory: a relay restart checks again, which costs one ask a video.
+ */
+export class VideoCheck {
+  private readonly seen = new Map<string, Map<string, { firstMs: number; lastMs: number; dead: boolean; asking: boolean }>>();
+
+  constructor(private readonly ask: OEmbedAsk, private readonly now: () => Date) {}
+
+  /** The club's dead videos now. */
+  dead(club: string): ReadonlySet<string> {
+    const mine = this.seen.get(club);
+    return new Set(mine ? [...mine].filter(([, v]) => v.dead).map(([id]) => id) : []);
+  }
+
+  /** Asks about any of these videos that is new, or due its daily check. Resolves when those asks are done. */
+  async saw(club: string, ids: readonly string[]): Promise<void> {
+    let mine = this.seen.get(club);
+    if (mine === undefined) {
+      mine = new Map();
+      this.seen.set(club, mine);
+    }
+    const now = this.now().getTime();
+    const due: string[] = [];
+
+    for (const id of new Set(ids)) {
+      if (!YOUTUBE_ID.test(id)) continue;
+      const known = mine.get(id);
+      if (known === undefined) {
+        if (mine.size >= VIDEO_CHECK_MAX) continue;
+        mine.set(id, { firstMs: now, lastMs: now, dead: false, asking: true });
+        due.push(id);
+      } else if (!known.asking && now - known.lastMs >= DAY_MS && now - known.firstMs < 7 * DAY_MS) {
+        known.lastMs = now;
+        known.asking = true;
+        due.push(id);
+      }
+    }
+
+    await Promise.all(due.map(async (id) => {
+      const status = await this.ask(id).catch(() => undefined);
+      const v = mine.get(id);
+      if (v === undefined) return;
+      v.asking = false;
+      if (status === 200) v.dead = false;
+      else if (status === 401 || status === 403 || status === 404) v.dead = true;
+    }));
+  }
+}

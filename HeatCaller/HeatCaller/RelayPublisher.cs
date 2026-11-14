@@ -304,6 +304,9 @@ public sealed partial class RelayPublisher : IDisposable
     /// <summary>Email me a link to my page - see RelayPublisher.SignInMail. Its own thirty-second tick.</summary>
     partial void CollectSignInMailPass(CancellationToken token);
 
+    /// <summary>Race video: which videos YouTube refused - see RelayPublisher.VideoCheck. Its own ten-minute tick.</summary>
+    partial void CollectVideoCheckPass(CancellationToken token);
+
     /// <summary>
     /// Whether a refused CLOSE (a switch going off) may count as taken.
     /// A 404 on these routes means the relay has no such route (an old
@@ -2235,6 +2238,9 @@ public sealed partial class RelayPublisher : IDisposable
                     // Email me a link on Me (14 Nov 2026, driver phone plan
                     // item 17) - see RelayPublisher.SignInMail.
                     CollectSignInMailPass(pass.Token);
+
+                    // Race video (14 Nov 2026, V7) - see RelayPublisher.VideoCheck.
+                    CollectVideoCheckPass(pass.Token);
 
                     // What phones saw of the sponsors on Live (5 Nov 2026) -
                     // see RelayPublisher.Sponsors. Its own three-minute tick.

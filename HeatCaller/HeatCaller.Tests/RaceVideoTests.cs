@@ -117,6 +117,15 @@ public sealed class RaceVideoTests
     }
 
     [Fact]
+    public void Reads_which_videos_YouTube_refused_and_nothing_else()
+    {
+        var dead = RelayPublisher.ParseDeadVideos("{\"ok\":true,\"dead\":[\"AAAAAAAAAAA\",\"not an id\",5,\"AAAAAAAAAAA\"]}");
+        Assert.Equal(new[] { "AAAAAAAAAAA" }, dead);
+        Assert.Empty(RelayPublisher.ParseDeadVideos("not json"));
+        Assert.Empty(RelayPublisher.ParseDeadVideos("[]"));
+    }
+
+    [Fact]
     public void The_OBS_password_is_sealed_with_the_other_secrets_never_in_the_plain_settings()
     {
         var settings = new AppSettings { VideoObsPassword = "obs-secret" };

@@ -14,6 +14,7 @@ import { LAP_VOICE_DIR, LapVoiceLibrary } from "./lapvoice.js";
 import { TopUpRequests } from "./topuprequests.js";
 import { UsageLog } from "./usagelog.js";
 import { PushService } from "./push.js";
+import { askYouTube } from "./video.js";
 import { ADMIN_COMMANDS, voiceAdmin, type AdminCommand } from "./voiceadmin.js";
 
 /**
@@ -170,6 +171,9 @@ async function serve(): Promise<number> {
         || (process.env["FLY_APP_NAME"] ? `https://${process.env["FLY_APP_NAME"]}.fly.dev` : "https://localhost"),
       log: (line) => console.log(line),
     }),
+    // Race video (V7): each club's YouTube video checked with YouTube's
+    // public oEmbed address - see video.ts.
+    videoCheck: askYouTube,
   });
 
   if (voice !== undefined) {

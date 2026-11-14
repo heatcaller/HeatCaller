@@ -78,7 +78,7 @@ import type { UsageLog } from "./usagelog.js";
 import { BROADCAST_TTL_SECONDS, myNightUrl, PUSH_CHANNEL, pushKindsFrom, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
 import { PAGES_BUILD } from "./pagebuild.js";
 import { nextNightIcs } from "./ics.js";
-import { liveVideo, raceVideo, streamFrom, type RaceVideo, type Stream } from "./video.js";
+import { liveVideo, raceVideo, streamFrom, VideoCheck, type OEmbedAsk, type RaceVideo, type Stream } from "./video.js";
 import { SIGNIN_MAIL, SIGNIN_MAIL_MAX, SIGNIN_MAIL_MAX_BODY, SIGNIN_MAIL_PER_HOUR, signinEmailFrom, signinItemsFrom } from "./signinmail.js";
 import { addCounts, countableEvents, PAGE_COUNTS, PAGE_COUNTS_DAYS, PAGE_COUNTS_MAX_BODY, PAGE_COUNTS_PER_ADDRESS, totalsOver } from "./pagecounts.js";
 
@@ -1119,6 +1119,12 @@ export interface RelayOptions {
    * relay takes no sign-ups and the Me page keeps its on-screen alerts.
    */
   readonly push?: PushService | undefined;
+  /**
+   * Race video (V7): how the relay asks YouTube whether a club's video is
+   * still there and embeddable - video.ts's askYouTube in production.
+   * Absent, no video is ever checked and every one is taken as fine.
+   */
+  readonly videoCheck?: OEmbedAsk | undefined;
 }
 
 interface Parsed {
@@ -1505,6 +1511,7 @@ export class Relay {
     // 22 Oct 2026, driver experience: clips and drivers' asks. See the fields.
     this.clips = options.clips;
     this.push = options.push;
+    this.videoCheck = options.videoCheck === undefined ? undefined : new VideoCheck(options.videoCheck, this.now);
     this.clipReads = new Limiter(900, 60 * 1000, () => this.now().getTime());
     this.clipUploads = new Limiter(120, 60 * 1000, () => this.now().getTime());
     this.askTraffic = new Limiter(300, 10 * 60 * 1000, () => this.now().getTime());
@@ -2918,6 +2925,7 @@ export class Relay {
       if (method === "GET" && rest.length === 3 && rest[1] === "race") { await this.videoForRace(request, response, club, rest[2] ?? ""); return; }
       if (method === "POST" && rest.length === 2 && rest[1] === "night") { await this.videoForNight(request, response, club); return; }
       if (method === "GET" && rest.length === 2 && rest[1] === "live") { await this.videoLive(response, club); return; }
+      if (method === "GET" && rest.length === 2 && rest[1] === "check") { await this.videoHealth(request, response, club); return; }
     }
 
     // Email me a sign-in link (14 Nov 2026, driver phone plan item 17):
@@ -3222,6 +3230,13 @@ export class Relay {
 
         if (spec.name === "site") {
           this.forgetSite(club);
+        }
+
+        // Race video (V7): a new video is checked with YouTube the night it
+        // arrives. Not waited for.
+        if (spec.name === "stream" && this.videoCheck !== undefined && !unreadable) {
+          const stream = streamFrom(body);
+          if (stream !== undefined) void this.videoCheck.saw(club, stream.pieces.map((p) => p.videoId));
         }
 
         if (spec.name === "manage") {
@@ -9079,14 +9094,36 @@ export class Relay {
     response.end();
   }
 
-  /** The club's stream document, read and checked (video.ts), or undefined. */
+  /**
+   * The club's stream document, read and checked (video.ts), or undefined.
+   * Each read also starts any check that is due (V7) - not waited for, so
+   * a video found dead drops out from the next read on.
+   */
   private async streamOf(club: string): Promise<Stream | undefined> {
     const doc = await this.store.getSnapshot(club, "stream").catch(() => undefined);
-    return streamFrom(doc?.body, this.deadVideos.get(club) ?? new Set());
+    const stream = streamFrom(doc?.body, this.videoCheck?.dead(club));
+    if (stream !== undefined && this.videoCheck !== undefined) void this.videoCheck.saw(club, stream.pieces.map((p) => p.videoId));
+    return stream;
   }
 
-  /** Videos the relay's own check found private, removed or not embeddable, per club (V7). */
-  private readonly deadVideos = new Map<string, Set<string>>();
+  /** Checks the club's videos with YouTube (V7); undefined when this relay doesn't. */
+  private readonly videoCheck: VideoCheck | undefined;
+
+  /**
+   * For the laptop's Health page (V7): {dead: [ids]}, the club's videos
+   * YouTube says are private, removed or not embeddable. Publish token only.
+   */
+  private async videoHealth(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token" || who === "wrong-club") {
+      sendJson(response, who === "no-token" ? 401 : 403, { ok: false, error: who === "no-token" ? "A publish token is required." : "That token does not belong to this club." });
+      return;
+    }
+
+    await this.streamOf(club);
+    sendJson(response, 200, { ok: true, dead: [...(this.videoCheck?.dead(club) ?? [])] });
+  }
 
   /**
    * A race's moment, for public results: {video: {id, t, end, laps?, best?}}.
@@ -9145,6 +9182,12 @@ export class Relay {
       ? ((night.body as Record<string, unknown>)["races"] as unknown[])
       : [];
     const videos: Record<string, RaceVideo> = {};
+    // V7: their races the stream missed - it was on that night with a link
+    // in, but dropped (or hadn't started) by this race. Never a hidden race:
+    // that one simply has no button.
+    const missed: string[] = [];
+    const linked = stream === undefined || !stream.on ? [] : stream.pieces.filter((p) => p.videoId !== "");
+    const firstMs = linked.length > 0 ? Math.min(...linked.map((p) => p.startMs)) : NaN;
 
     for (const r of races.slice(0, 60)) {
       if (!isPlainObject(r) || typeof r["sid"] !== "string") continue;
@@ -9153,10 +9196,13 @@ export class Relay {
       const rb = isPlainObject(result?.body) ? (result.body as Record<string, unknown>) : undefined;
       if (rb === undefined) continue;
       const video = raceVideo(stream, { sid, startedUtc: rb["startedUtc"], endedUtc: rb["endedUtc"] }, false, r);
+      const green = typeof rb["startedUtc"] === "string" ? Date.parse(rb["startedUtc"]) : NaN;
       if (video !== undefined) videos[sid] = video;
+      else if (stream !== undefined && !stream.hidden.has(sid) && green >= firstMs - 12 * 60 * 60 * 1000 && green < this.now().getTime()
+        && !stream.pieces.some((p) => green >= p.startMs && (p.endMs === undefined || green <= p.endMs))) missed.push(sid);
     }
 
-    sendJson(response, 200, { ok: true, videos });
+    sendJson(response, 200, { ok: true, videos, missed });
   }
 
   /**
@@ -11145,7 +11191,10 @@ function sendHtml(response: ServerResponse, status: number, html: string, nonce:
     // one bar shows the club's pages in a frame of its own (appShellPage),
     // so a page here may be framed by another page here and by nothing
     // else, and may frame only pages here.
-    "frame-src 'self'",
+    // Race video (V3, 14 Nov 2026): and YouTube's privacy-enhanced player,
+    // nothing more - no YouTube script or image, since the player sheet
+    // shows no thumbnail and seeks by postMessage.
+    "frame-src 'self' https://www.youtube-nocookie.com",
     "frame-ancestors 'self'",
   ].join("; ");
 

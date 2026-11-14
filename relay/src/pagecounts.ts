@@ -67,6 +67,17 @@ export const PAGE_COUNT_EVENTS: readonly string[] = [
   "alert_opened_result",
   "alert_opened_nextnight",
   "alert_opened_video",
+  // Race video (14 Nov 2026, race video plan V9).
+  "video_live_opened",
+  "video_race_opened_night",
+  "video_race_opened_results",
+  "video_race_opened_alert",
+  "video_race_opened_home",
+  "video_lap_jump",
+  "video_youtube_app",
+  "video_off_reported",
+  "video_hide_asked",
+  "video_unavailable_shown",
 ];
 
 const KNOWN = new Set(PAGE_COUNT_EVENTS);

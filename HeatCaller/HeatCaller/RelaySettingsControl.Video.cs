@@ -71,7 +71,19 @@ public sealed partial class RelaySettingsControl
         card.Add(_pieces, stretch: false);
         card.Add(new ButtonBar().With(live, stopped), gapBelow: 0);
 
-        _obsTimer.Tick += (_, _) => _lblObsState.Text = ObsWords();
+        var deadSeen = string.Empty;
+        _obsTimer.Tick += (_, _) =>
+        {
+            _lblObsState.Text = ObsWords();
+
+            // Redrawn when the relay's word on a video changes (V7).
+            var dead = string.Join(",", (DeadVideos?.Invoke() ?? Array.Empty<string>()).Order(StringComparer.Ordinal));
+            if (dead != deadSeen)
+            {
+                deadSeen = dead;
+                DrawPieces();
+            }
+        };
         _obsTimer.Start();
         Disposed += (_, _) => _obsTimer.Dispose();
 
@@ -148,6 +160,17 @@ public sealed partial class RelaySettingsControl
 
             row.Controls.Add(new Label { AutoSize = true, Text = p.NudgeSeconds == 0 ? string.Empty : $"nudged {p.NudgeSeconds:+0;-0}s", Margin = new Padding(6, 6, 0, 0) });
             _pieces.Controls.Add(row);
+
+            // V7: the relay asked YouTube, and YouTube won't play this one.
+            if (p.VideoId is { Length: > 0 } id && DeadVideos?.Invoke().Contains(id) == true)
+            {
+                _pieces.Controls.Add(new Label
+                {
+                    AutoSize = true,
+                    ForeColor = AppTheme.Warning,
+                    Text = "YouTube won't play this video for drivers. Check in YouTube Studio that it's Public or Unlisted and that Allow embedding is on.",
+                });
+            }
         }
 
         _pieces.ResumeLayout();

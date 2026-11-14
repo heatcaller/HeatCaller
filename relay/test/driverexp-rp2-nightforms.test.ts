@@ -492,7 +492,7 @@ describe("what never leaves the page the wrong way", () => {
     for (const s of page.sent) {
       assert.doesNotMatch(s.url, new RegExp(CODE));
       assert.doesNotMatch(s.url, /\?/);
-      assert.match(s.url, /^\/api\/v1\/c\/acme-rc\/(night|checkin\/one|checkin\/list|driver\/ask|driver\/garage)$/);
+      assert.match(s.url, /^\/api\/v1\/c\/acme-rc\/(night|checkin\/one|checkin\/list|driver\/ask|driver\/garage|video\/night)$/);
     }
   });
 

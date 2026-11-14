@@ -1284,6 +1284,28 @@ body.on-air .onair { visibility: visible; animation: onair 2.4s ease-in-out infi
 .hcabout .go { display: block; margin: 18px 0 12px; padding: 14px; border-radius: 12px; background: #FF2E88; color: #FFFFFF;
                font-weight: 700; text-decoration: none; box-shadow: 0 0 22px rgba(255, 46, 136, 0.45); }
 .hcabout .close { background: none; border: 0; padding: 8px 16px; font: inherit; font-size: 0.9rem; color: #8E7BB8; cursor: pointer; }
+/* Race video's player sheet (14 Nov 2026, race video plan V3): the club's
+   own look, a 16:9 player, the lap list and Open in YouTube under it. */
+.hcvideo { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center;
+           background: rgba(0, 0, 0, 0.6); }
+.hcvideo .sheet { width: 100%; max-width: 640px; max-height: 100%; overflow-y: auto; box-sizing: border-box;
+                  border-radius: 18px 18px 0 0; background: var(--surface); color: var(--text);
+                  padding: 14px 14px calc(18px + var(--sa-b)); }
+html.framed .hcvideo .sheet { padding-bottom: calc(18px + 58px + var(--sa-b)); }
+@media (min-width: 641px) { .hcvideo { align-items: center; } .hcvideo .sheet { border-radius: 18px; } }
+.hcvhead { display: flex; align-items: center; gap: 10px; }
+.hcvhead h2 { flex: 1; margin: 0; font-size: 1.1rem; }
+.hcvideo .when { margin: 4px 0 10px; }
+.hcvplayer { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 10px; overflow: hidden;
+             display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+.hcvplayer iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.hcvplayer .note { color: #FFFFFF; margin: 0; }
+.hcvlaps { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 4px; }
+.hcvlaps .best { border-color: var(--primary); color: var(--primary); font-weight: 700; }
+.hcvideo .hcvyt { display: block; margin: 12px 0 6px; text-align: center; }
+.hcvideo .hcvsrc { font-size: 0.8rem; margin: 6px 0 0; }
+.hcvbtn { margin: 8px 8px 0 0; }
+.hcvmiss { color: var(--muted); font-size: 0.85rem; margin: 8px 0 0; }
 
 /* PIT WALL (3 Nov 2026, Asher picked direction A of the relay refresh:
    "build a pit wall"). One kit for every control on the club's pages, each
@@ -1928,6 +1950,156 @@ function hcSendCounts() {
 }
 setInterval(hcSendCounts, 60000);
 document.addEventListener('visibilitychange', () => { if (document.hidden) hcSendCounts(); });
+
+// RACE VIDEO (14 Nov 2026, race video plan V3, V7, V8): a race's moment in
+// the club's YouTube stream, played in a sheet over the page. The relay
+// works the moment out (video.ts) and hands the page {id, t, end, laps?,
+// best?}. Nothing comes from YouTube until a tap: the button is plain kit,
+// with no thumbnail. The player is YouTube's privacy-enhanced one, and the
+// lap list seeks it by postMessage, so no YouTube script runs in our page.
+const HC_YT = 'https://www.youtube-nocookie.com';
+function hcVideoOk(v) {
+  return !!v && typeof v === 'object' && typeof v.id === 'string' && /^[A-Za-z0-9_-]{11}$/.test(v.id)
+    && typeof v.t === 'number' && typeof v.end === 'number';
+}
+// The player's address, opening at "from" (the race's start unless a lap was asked for).
+function hcVideoSrc(v, from) {
+  return HC_YT + '/embed/' + encodeURIComponent(v.id) + '?start=' + Math.max(0, Math.floor(from)) + '&end=' + Math.ceil(v.end)
+    + '&playsinline=1&rel=0&enablejsapi=1&autoplay=1&origin=' + encodeURIComponent(location.origin);
+}
+function hcVideoYouTube(v, t) {
+  return 'https://www.youtube.com/watch?v=' + encodeURIComponent(v.id) + '&t=' + Math.max(0, Math.floor(t)) + 's';
+}
+function hcVideoSeek(frame, t) {
+  try {
+    frame.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'seekTo', args: [t, true] }), HC_YT);
+  } catch (e) { /* the player isn't there yet */ }
+}
+function hcVel(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text) e.textContent = text;
+  return e;
+}
+// A Watch button, drawn the same everywhere (V2): the kit's quiet button
+// with a play mark, or the primary one for Watch live. With no signal it
+// says so and waits (V7) - checked as it is tapped too.
+function hcVideoButton(label, spoken, onTap, primary) {
+  const b = hcVel('button', (primary ? 'go' : 'go quiet') + ' hcvbtn');
+  b.type = 'button';
+  const show = () => {
+    const off = typeof navigator === 'object' && navigator.onLine === false;
+    b.disabled = off;
+    b.textContent = off ? 'Needs signal' : '\\u25B6 ' + label;
+    b.setAttribute('aria-label', off ? spoken + ' (needs signal)' : spoken);
+  };
+  show();
+  try { addEventListener('online', show); addEventListener('offline', show); } catch (e) { /* stays as drawn */ }
+  b.addEventListener('click', () => { show(); if (!b.disabled) onTap(b); });
+  return b;
+}
+let hcVideoShut = null;
+// The sheet. o: title (the race), when, finish ("You finished P3"), from
+// (seconds, for Jump to my best lap), where (for the count).
+function hcVideoSheet(v, o) {
+  if (!hcVideoOk(v)) return null;
+  if (hcVideoShut) hcVideoShut(false);
+  o = o || {};
+  const back = document.activeElement;
+  const wrap = hcVel('div', 'hcvideo');
+  wrap.setAttribute('role', 'dialog');
+  wrap.setAttribute('aria-modal', 'true');
+  wrap.setAttribute('aria-labelledby', 'hcvideo-title');
+  const sheet = hcVel('div', 'sheet');
+  wrap.appendChild(sheet);
+  const head = hcVel('div', 'hcvhead');
+  const title = hcVel('h2', '', o.title || 'Race video');
+  title.id = 'hcvideo-title';
+  head.appendChild(title);
+  const shut = hcVel('button', 'page hcvclose', 'Close');
+  shut.type = 'button';
+  head.appendChild(shut);
+  sheet.appendChild(head);
+  if (o.when || o.finish) sheet.appendChild(hcVel('p', 'when', [o.when, o.finish].filter(Boolean).join(' \\u00b7 ')));
+
+  const box = hcVel('div', 'hcvplayer');
+  sheet.appendChild(box);
+  let frame = null;
+  const from = typeof o.from === 'number' ? o.from : v.t;
+  const play = (at) => {
+    box.textContent = '';
+    frame = document.createElement('iframe');
+    frame.src = hcVideoSrc(v, at);
+    frame.title = (o.title || 'Race video') + ', ' + CLUB_NAME;
+    frame.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; fullscreen');
+    frame.setAttribute('allowfullscreen', '');
+    frame.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+    box.appendChild(frame);
+  };
+  // Saving data (V8): say what it costs, and wait for a second tap.
+  const saving = typeof navigator === 'object' && navigator.connection && navigator.connection.saveData === true;
+  if (saving) {
+    box.appendChild(hcVel('p', 'note', 'Uses about 25 MB.'));
+    const go = hcVel('button', 'go', '\\u25B6 Play');
+    go.type = 'button';
+    go.addEventListener('click', () => play(from));
+    box.appendChild(go);
+  } else {
+    play(from);
+  }
+
+  // The lap list (V3): a tap seeks the player to that lap.
+  const laps = Array.isArray(v.laps) ? v.laps.filter((x) => typeof x === 'number') : [];
+  if (laps.length > 0) {
+    const list = hcVel('div', 'hcvlaps');
+    list.setAttribute('role', 'group');
+    list.setAttribute('aria-label', 'Jump to a lap');
+    laps.forEach((t, i) => {
+      const best = i === v.best;
+      const b = hcVel('button', 'page' + (best ? ' best' : ''), (best ? '\\u2605 ' : '') + 'Lap ' + (i + 1));
+      b.type = 'button';
+      b.setAttribute('aria-label', 'Lap ' + (i + 1) + (best ? ', your best' : ''));
+      b.addEventListener('click', () => {
+        hcCount('video_lap_jump');
+        if (frame) hcVideoSeek(frame, t); else play(t);
+      });
+      list.appendChild(b);
+    });
+    sheet.appendChild(list);
+  }
+
+  const out = hcVel('a', 'page hcvyt', 'Open in YouTube');
+  out.href = hcVideoYouTube(v, from);
+  out.target = '_blank';
+  out.rel = 'noopener';
+  out.addEventListener('click', () => hcCount('video_youtube_app'));
+  sheet.appendChild(out);
+  sheet.appendChild(hcVel('p', 'note hcvsrc', inAppBrowser() !== ''
+    ? 'Plays from YouTube. Open in YouTube opens YouTube\\u2019s website here. If it doesn\\u2019t play, the club may have made it private.'
+    : 'Plays from YouTube. If it doesn\\u2019t play, the club may have made it private.'));
+
+  let pushed = false;
+  const close = (byBack) => {
+    if (hcVideoShut !== close) return;
+    hcVideoShut = null;
+    wrap.remove();
+    if (pushed && !byBack) { try { history.back(); } catch (e) { /* stays */ } }
+    if (back && typeof back.focus === 'function') back.focus();
+  };
+  hcVideoShut = close;
+  shut.addEventListener('click', () => close(false));
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) close(false); });
+  wrap.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(false); });
+  // Back closes the sheet, not the page (driver phone plan item 18).
+  try { history.pushState({ hcvideo: 1 }, ''); pushed = true; } catch (e) { /* Back leaves, as before */ }
+  document.body.appendChild(wrap);
+  try { shut.focus(); } catch (e) { /* no focus here */ }
+  hcCount('video_race_opened_' + (o.where || 'night'));
+  return wrap;
+}
+try {
+  addEventListener('popstate', () => { if (hcVideoShut) hcVideoShut(true); });
+} catch (e) { /* no Back to listen for */ }
 
 // THE PAGES AFTER A DEPLOY (14 Nov 2026, driver phone plan item 21). A
 // phone keeps the club's pages for when it has no signal, so it can also
@@ -2659,6 +2831,10 @@ function hcFrameFor(path) {
   const f = document.createElement('iframe');
   f.className = 'hcnext';
   f.title = CLUB_NAME;
+  // Race video (V3): a player nested in a page here can only go fullscreen,
+  // or picture-in-picture, if every frame above it allows it.
+  f.allow = 'fullscreen; picture-in-picture; autoplay; encrypted-media';
+  f.allowFullscreen = true;
   f.addEventListener('load', () => hcLanded(f));
   f.src = path;
   hcStage.appendChild(f);
@@ -14404,10 +14580,63 @@ function raceRow(r, value, top, open, onTap) {
 // tabs (28 Oct 2026, as LiveRC's driver window), then its penalties, its
 // call and "Something wrong?". The tabs switch without a redraw, so a call
 // playing in the card keeps playing.
+// RACE VIDEO ON THEIR NIGHT (14 Nov 2026, race video plan V2, V3, V7):
+// the relay answers which of their races have video (and where), and which
+// the stream missed, for their badge code alone. Asked once the night is
+// drawn and every five minutes while the page is open, since the club's
+// links usually come in after the racing.
+let nightVideos = {};
+let nightMissed = [];
+async function loadVideos() {
+  if (!CODE || document.hidden) return;
+  try {
+    const answer = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/video/night', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: CODE }),
+      cache: 'no-store',
+    });
+    if (!answer.ok) return;
+    const body = await answer.json();
+    const videos = body && typeof body.videos === 'object' && body.videos !== null ? body.videos : {};
+    const missed = body && Array.isArray(body.missed) ? body.missed.filter((s) => typeof s === 'string') : [];
+    const before = JSON.stringify([nightVideos, nightMissed]);
+    nightVideos = videos;
+    nightMissed = missed;
+    if (JSON.stringify([nightVideos, nightMissed]) !== before) drawExtras();
+  } catch (e) { /* no video this time; the race cards are unchanged */ }
+}
+function videoPart(r) {
+  const sid = raceSid(r);
+  const v = sid ? nightVideos[sid] : undefined;
+  const name = typeof r.label === 'string' && r.label !== '' ? r.label : 'your race';
+  if (!hcVideoOk(v)) {
+    if (sid && nightMissed.includes(sid)) {
+      hcCount('video_unavailable_shown');
+      return el('p', 'hcvmiss', 'This race wasn\\u2019t on the stream.');
+    }
+    return null;
+  }
+  const box = el('div', 'rc-video');
+  const open = (from) => hcVideoSheet(v, {
+    title: name,
+    finish: num(r.pos) > 0 && !r.out ? 'You finished P' + num(r.pos) : '',
+    from: from,
+    where: 'night',
+  });
+  box.appendChild(hcVideoButton('Watch my race', 'Watch my race, ' + name + ', video from YouTube', () => open(undefined)));
+  if (Array.isArray(v.laps) && typeof v.best === 'number' && typeof v.laps[v.best] === 'number') {
+    box.appendChild(hcVideoButton('Jump to my best lap', 'Jump to my best lap in ' + name + ', video from YouTube', () => open(v.laps[v.best])));
+  }
+  return box;
+}
+
 function raceDetail(r, stats, own) {
   const c = el('div', 'rc');
   const facts = raceFacts(r);
   if (facts) c.appendChild(el('div', 'rc-facts', facts));
+  const video = videoPart(r);
+  if (video) c.appendChild(video);
 
   // Their own lines for the race (11 Nov 2026, build plan 7.4): "Held off
   // Sam for 4 laps", "Best Stock finish this year" - worked out on the
@@ -15873,6 +16102,8 @@ async function load() {
   startLive();
   loadCheckIn();
   meRemembered(CODE);
+  void loadVideos();
+  setInterval(() => { void loadVideos(); }, 300000);
 }
 
 load();

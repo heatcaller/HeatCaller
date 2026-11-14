@@ -92,7 +92,9 @@ describe("the club's pages", () => {
     for (const html of [homePage("acme-rc", "Acme RC"), resultsPage("acme-rc", "Acme RC"), nightPage("acme-rc", "Acme RC")]) {
       assert.doesNotMatch(html, /href="\/c\/acme-rc\/videos/);
       assert.doesNotMatch(html, />Videos</);
-      assert.doesNotMatch(html, /\/video\//);
+      // Race video (14 Nov 2026) has routes of its own under /video/ -
+      // night, race, live, check - and none of the podium videos' old ones.
+      assert.doesNotMatch(html, /\/video\/(?!night'|race\/|live'|check')/);
       assert.doesNotMatch(html, /Your podium videos/);
     }
 
