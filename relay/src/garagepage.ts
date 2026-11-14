@@ -774,7 +774,7 @@ async function readGarage() {
   // read the pack in the car, the car tonight and the pack charts from here.
   try { document.dispatchEvent(new CustomEvent('hg-garage', { detail: garage })); } catch (e) { /* an old browser: no tiles from it */ }
   const stamp = document.getElementById('stamp');
-  if (stamp) stamp.textContent = 'Updated ' + new Date(Date.now()).toLocaleTimeString(undefined, { hour12: ({ '24': false, '12': true })[document.documentElement.getAttribute('data-clock') || ''], hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  if (stamp) stamp.textContent = 'Updated ' + new Date(Date.now()).toLocaleTimeString(undefined, { hour12: ({ '24': false, '12': true })[document.documentElement.getAttribute('data-clock') || ''], hour: '2-digit', minute: '2-digit' });
   schedule();
 }
 

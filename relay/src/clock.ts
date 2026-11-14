@@ -11,6 +11,43 @@
  */
 export const CLOCK_JS = `
 var HC_H12 = (function () { try { return ({ '24': false, '12': true })[document.documentElement.getAttribute('data-clock') || '']; } catch (e) { return undefined; } })();
+// THE CLUB'S TIME ZONE (14 Nov 2026, driver phone plan item 15). The laptop
+// says which zone the club is in (data-tz on <html>, an IANA name); every
+// date and time the pages draw is then in the club's zone, not the phone's
+// - so a parent at home in another zone, or a driver away at an event, sees
+// the start, the heats and "last race" as the club means them. Done once,
+// here: toLocaleTimeString, toLocaleDateString and toLocaleString are given
+// the club's zone whenever a page didn't ask for one itself. A zone the
+// phone doesn't know, or none sent (an older laptop), leaves the phone's.
+var HC_TZ = (function () {
+  try {
+    var tz = document.documentElement.getAttribute('data-tz') || '';
+    if (!tz) return undefined;
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return tz;
+  } catch (e) { return undefined; }
+})();
+var HC_PHONE_TZ = (function () { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) { return ''; } })();
+if (HC_TZ && !Date.prototype.hcTz) {
+  ['toLocaleTimeString', 'toLocaleDateString', 'toLocaleString'].forEach(function (name) {
+    var own = Date.prototype[name];
+    Date.prototype[name] = function (locales, options) {
+      var o = {};
+      if (options) for (var k in options) o[k] = options[k];
+      if (!o.timeZone) o.timeZone = HC_TZ;
+      try { return own.call(this, locales, o); } catch (e) { return own.call(this, locales, options); }
+    };
+  });
+  Date.prototype.hcTz = HC_TZ;
+}
+// "EST" after a time, only when the phone is somewhere other than the club.
+function hcZoneWord(d) {
+  if (!HC_TZ || HC_TZ === HC_PHONE_TZ) return '';
+  try {
+    var part = new Intl.DateTimeFormat('en-US', { timeZone: HC_TZ, timeZoneName: 'short' }).formatToParts(d).filter(function (p) { return p.type === 'timeZoneName'; })[0];
+    return part ? ' ' + part.value : '';
+  } catch (e) { return ''; }
+}
 function hcHm(s) {
   s = String(s == null ? '' : s);
   var m = /^([0-9]{1,2}):([0-9]{2})$/.exec(s);
@@ -19,6 +56,11 @@ function hcHm(s) {
   return ((h % 12) || 12) + ':' + m[2] + (h < 12 ? ' AM' : ' PM');
 }
 `;
+
+/** The data-tz attribute for <html> (the club's IANA zone), or nothing when the laptop has not said. */
+export function tzAttr(tz: string | undefined): string {
+  return tz === undefined ? "" : ` data-tz="${tz.replace(/[^A-Za-z0-9_+\-/]/g, "")}"`;
+}
 
 /** The data-clock attribute for <html>, or nothing when the club has not said. */
 export function clockAttr(clock24: boolean | undefined): string {

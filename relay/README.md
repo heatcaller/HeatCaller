@@ -1315,6 +1315,24 @@ Driver phone plan items 4 and 18 (mockup: `mockups/live-phone-board.html`).
   history, so Android's Back walks back through the tabs to Home and only
   then leaves.
 
+### The club's time zone, and the calendar (14 Nov 2026)
+
+Driver phone plan items 15 and 10.
+
+- **Times in the club's zone.** The laptop sends `timeZone` (the PC's own,
+  as an IANA name) on the site document; every page carries it as
+  `data-tz` on `<html>`, and every date and time a page draws is in that
+  zone unless the page asked for one itself (one hook in `src/clock.ts`).
+  "Today" and "tonight" go by the club's day, and a time says its zone
+  ("7:14 PM EST") when the phone is somewhere else. No zone sent (an older
+  laptop), or one the phone doesn't know: the phone's own, as before.
+- **Add to calendar.** `GET /c/:club/nextnight.ics` (`src/ics.ts`): the next
+  race night from the `nextnight` document - the club's name, venue and
+  classes, the first race's time in the club's zone (all day with no time),
+  four hours long, a reminder two hours before. A night called off is the
+  same event marked cancelled. `404` with no night to offer. Home's next
+  race night card has the button.
+
 ### Zoom, text size, high contrast, social links (14 Nov 2026)
 
 Driver phone plan items 6, 12 and 23.

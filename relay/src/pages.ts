@@ -20,7 +20,7 @@ import { DEFAULT_LOOK, type Look, type SocialLink } from "./site.js";
 import { SUN_ICON_SIZE } from "./sun.js";
 import { GARAGE_CSS, GARAGE_EMBED_BODY, garageEmbedScript } from "./garagepage.js";
 import { ME_BODY_END, ME_BODY_TOP, ME_COMING, ME_CSS, ME_JS } from "./mespaces.js";
-import { CLOCK_JS, clockAttr } from "./clock.js";
+import { CLOCK_JS, clockAttr, tzAttr } from "./clock.js";
 import { PAGES_BUILD } from "./pagebuild.js";
 
 /** What a page needs to know beyond its club: how the club looks, and where it is being served from. */
@@ -1798,13 +1798,18 @@ function relayClock() {
 // WHEN SAID, IN WORDS A DRIVER READS (14 Nov 2026, driver phone plan
 // items 1 and 3). A time today is just the time; any other day says which,
 // so "7:14 PM" from last night never reads as this evening.
+// A day as YYYY-MM-DD, in the club's zone when the laptop said it (item 15).
+function hcYmd(d) {
+  try { return d.toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }); } catch (e) { return ''; }
+}
 function hcSameDay(a, b) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const x = hcYmd(a);
+  return x !== '' && x === hcYmd(b);
 }
 function whenSaid(at) {
   const d = new Date(at);
   if (!(at > 0) || isNaN(d)) return '';
-  const time = d.toLocaleTimeString([], { hour12: HC_H12, hour: 'numeric', minute: '2-digit' });
+  const time = d.toLocaleTimeString([], { hour12: HC_H12, hour: 'numeric', minute: '2-digit' }) + (typeof hcZoneWord === 'function' ? hcZoneWord(d) : '');
   if (hcSameDay(d, new Date())) return time;
   return d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }) + ', ' + time;
 }
@@ -1815,12 +1820,14 @@ function whenSaid(at) {
 // "Today" for a race day a week old.
 function hcIsTonight(dayOrTime) {
   if (typeof dayOrTime !== 'string' || dayOrTime === '') return false;
-  const d = /^\\d{4}-\\d{2}-\\d{2}$/.test(dayOrTime) ? new Date(dayOrTime + 'T12:00:00') : new Date(dayOrTime);
-  if (isNaN(d)) return false;
+  // A day as the club writes it is already the club's day; a time becomes one.
+  const day = /^\\d{4}-\\d{2}-\\d{2}$/.test(dayOrTime) ? dayOrTime : (isNaN(new Date(dayOrTime)) ? '' : hcYmd(new Date(dayOrTime)));
+  if (day === '') return false;
   const now = new Date();
-  if (hcSameDay(d, now)) return true;
-  const before = new Date(now.getTime() - 24 * 3600 * 1000);
-  return now.getHours() < 6 && hcSameDay(d, before);
+  if (day === hcYmd(now)) return true;
+  let hour = now.getHours();
+  try { hour = Number(now.toLocaleTimeString('en-GB', { hour: '2-digit', hour12: false }).slice(0, 2)); } catch (e) { /* the phone's */ }
+  return hour < 6 && day === hcYmd(new Date(now.getTime() - 24 * 3600 * 1000));
 }
 // The short form, for a big number in a small space: the time today, else
 // the day and the time ("Thu 7:14 PM").
@@ -3260,7 +3267,7 @@ export function shell(page: Shell, context: PageContext): string {
   const links = anchors === "" ? "" : `<span class="links">${anchors}</span>`;
 
   return `<!doctype html>
-<html lang="en" class="${look.light ? "light" : "dark"}${sunset ? " synthwave" : ""}"${clockAttr(look.clock24)}>
+<html lang="en" class="${look.light ? "light" : "dark"}${sunset ? " synthwave" : ""}"${clockAttr(look.clock24)}${tzAttr(look.timeZone)}>
 <head>
 <meta charset="utf-8">
 ${NO_ZOOM_HEAD}
@@ -9672,6 +9679,8 @@ function nextNightHtml(answer) {
     (times ? '<span class="when">' + times + '</span>' : '') +
     (word(b.venue) ? '<span class="when">' + esc(word(b.venue)) + '</span>' : '') +
     (comingTo ? '<a class="page wide hp-go nn-go" href="' + esc(comingTo) + '">Coming? Put yourself down</a>' : '') +
+    // Into the phone's calendar (14 Nov 2026, driver phone plan item 10).
+    (word(b.day) && typeof CLUB === 'string' && CLUB ? '<a class="page wide hp-go nn-cal" href="/c/' + encodeURIComponent(CLUB) + '/nextnight.ics" download>Add to calendar</a>' : '') +
     '</div>';
 }
 
@@ -17271,7 +17280,7 @@ export function managePage(club: string, clubName: string, context: PageContext 
     : `<style>:root{${variables.map(([k, v]) => `${k}:${v}`).join(";")}}</style>`;
 
   return `<!doctype html>
-<html lang="en" class="${look.light ? "light" : "dark"}"${clockAttr(look.clock24)}>
+<html lang="en" class="${look.light ? "light" : "dark"}"${clockAttr(look.clock24)}${tzAttr(look.timeZone)}>
 <head>
 <meta charset="utf-8">
 ${NO_ZOOM_HEAD}
@@ -17571,7 +17580,7 @@ export function appShellPage(club: string, clubName: string, context: PageContex
     : `<style>:root{${variables.map(([k, v]) => `${k}:${v}`).join(";")}}</style>`;
 
   return `<!doctype html>
-<html lang="en" class="hcshell ${look.light ? "light" : "dark"}"${clockAttr(look.clock24)}>
+<html lang="en" class="hcshell ${look.light ? "light" : "dark"}"${clockAttr(look.clock24)}${tzAttr(look.timeZone)}>
 <head>
 <meta charset="utf-8">
 ${NO_ZOOM_HEAD}

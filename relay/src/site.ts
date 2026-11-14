@@ -40,6 +40,8 @@ export interface Look {
   readonly vote: boolean;
   /** 24-hour times (true), 12-hour (false), or the phone's own locale (undefined) - the laptop's tick on Themes. */
   readonly clock24?: boolean | undefined;
+  /** The club's time zone (IANA, "America/New_York"), or undefined for the phone's own (14 Nov 2026, driver phone plan item 15). */
+  readonly timeZone?: string | undefined;
   /** Light-on-dark or dark-on-light, for color-scheme and a few contrast fixes. */
   readonly light: boolean;
   /** CSS custom properties to override, name to value. Empty for the default look. */
@@ -262,11 +264,13 @@ export function lookFrom(site: StoredDocument | undefined, checkin: StoredDocume
   const light = theme?.["light"] === true;
   const rawClock = body?.["clock24"];
   const clock24 = typeof rawClock === "boolean" ? rawClock : undefined;
+  const timeZone = timeZoneFrom(body?.["timeZone"]);
   const logoVersion = logo === undefined ? undefined : logoVersionOf(logo);
 
   return {
     light,
     clock24,
+    timeZone,
     vars,
     themeColor: vars["--bg"] ?? DEFAULT_THEME_COLOR,
     tagline,
@@ -429,6 +433,17 @@ export function socialFrom(value: unknown): readonly SocialLink[] {
   }
 
   return links;
+}
+
+/** A real IANA time zone this runtime knows, or undefined. */
+export function timeZoneFrom(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length < 3 || value.length > 64 || !/^[A-Za-z0-9_+\-/]+$/.test(value)) return undefined;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value });
+    return value;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Each service's own hosts (and their subdomains); a website may be anywhere. */

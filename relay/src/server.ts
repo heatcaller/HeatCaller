@@ -77,6 +77,7 @@ import { isMeterName, type TopUpRequests } from "./topuprequests.js";
 import type { UsageLog } from "./usagelog.js";
 import { BROADCAST_TTL_SECONDS, myNightUrl, PUSH_CHANNEL, pushKindsFrom, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
 import { PAGES_BUILD } from "./pagebuild.js";
+import { nextNightIcs } from "./ics.js";
 import { SIGNIN_MAIL, SIGNIN_MAIL_MAX, SIGNIN_MAIL_MAX_BODY, SIGNIN_MAIL_PER_HOUR, signinEmailFrom, signinItemsFrom } from "./signinmail.js";
 import { addCounts, countableEvents, PAGE_COUNTS, PAGE_COUNTS_DAYS, PAGE_COUNTS_MAX_BODY, PAGE_COUNTS_PER_ADDRESS, totalsOver } from "./pagecounts.js";
 
@@ -2304,6 +2305,28 @@ export class Relay {
           // Served whether or not this relay sends alerts (14 Nov 2026,
           // driver phone plan item 1): it also keeps the club's pages for a
           // phone with no signal, and names its cache after this build.
+          // The next race night for a phone's calendar (14 Nov 2026, driver
+          // phone plan item 10; see ics.ts). 404 with no night to offer.
+          if (page === "nextnight.ics") {
+            const next = (await this.store.getSnapshot(tenant.club, "nextnight").catch(() => undefined))?.body;
+            const look = await this.lookFor(tenant.club);
+            const ics = nextNightIcs(tenant.club, tenant.name, next, look.timeZone, this.now());
+
+            if (ics === undefined) {
+              sendBody(response, 404, "text/plain; charset=utf-8", "There's no race night to add just now.", "no-cache");
+              return;
+            }
+
+            response.writeHead(200, {
+              ...BASE_HEADERS,
+              "content-type": "text/calendar; charset=utf-8",
+              "content-disposition": `attachment; filename="${tenant.club}-race-night.ics"`,
+              "cache-control": "no-cache",
+            });
+            response.end(ics);
+            return;
+          }
+
           if (page === "sw.js") {
             sendBody(response, 200, "text/javascript; charset=utf-8", serviceWorkerFor(PAGES_BUILD), "no-cache");
             return;
