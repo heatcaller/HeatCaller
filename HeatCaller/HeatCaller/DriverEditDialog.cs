@@ -18,6 +18,7 @@ internal static class DriverEditDialog
         // The driver as on file before the form opens - the form may edit
         // the record in place - so Undo can put every field back.
         var before = existing is null ? null : System.Text.Json.JsonSerializer.Serialize(existing);
+        var openedOn = existing is null ? null : ProfileStore.Snapshot(existing);
 
         using var form = new ProfileForm(existing, raceClasses, fixedTransponder: transponder, undo: undo, profiles: profiles);
 
@@ -26,7 +27,7 @@ internal static class DriverEditDialog
             return false;
         }
 
-        var saved = form.Result;
+        var saved = ToSave(openedOn, form.Result, profiles.Get(transponder));
         var after = System.Text.Json.JsonSerializer.Serialize(saved);
         var key = saved.Transponder;
 
@@ -73,4 +74,16 @@ internal static class DriverEditDialog
         profiles.Upsert(saved);
         return true;
     }
+
+    /// <summary>
+    /// What the save stores: the form's profile, except that a field the
+    /// desk left alone keeps what is on file now.
+    ///
+    /// WHY (14 Nov 2026, bug hunt 18): a phone's "racing tonight" pick is
+    /// applied on the roster tick with no desk step, so it can land while
+    /// this dialog is open - and saving it put the old car straight back.
+    /// Driver Hub's edit has had the same guard since bug hunt 15.
+    /// </summary>
+    internal static DriverProfile ToSave(DriverProfile? openedOn, DriverProfile edited, DriverProfile? onFile) =>
+        openedOn is null ? edited : ProfileStore.KeepChangesMadeSince(openedOn, edited, onFile);
 }
