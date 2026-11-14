@@ -2050,6 +2050,33 @@ try {
 } catch (e) { /* no events here */ }
 hcApplyReading();
 
+// YOUR CLUBS ON THIS PHONE (14 Nov 2026, driver phone plan item 5). Every
+// club on a relay shares its address, so each club's pages note themselves
+// in one list (hc-clubs: id and name, newest first, up to eight), and Me
+// links to the others. Only the club, never anything about a driver.
+const HC_CLUBS_KEY = 'hc-clubs';
+function hcClubs() {
+  try {
+    const list = JSON.parse(localStorage.getItem(HC_CLUBS_KEY) || '[]');
+    return (Array.isArray(list) ? list : []).filter((c) => c && typeof c.c === 'string' && /^[a-z0-9-]{3,32}$/.test(c.c) && typeof c.n === 'string').slice(0, 8);
+  } catch (e) { return []; }
+}
+(function () {
+  try {
+    if (!CLUB) return;
+    const others = hcClubs().filter((c) => c.c !== CLUB);
+    localStorage.setItem(HC_CLUBS_KEY, JSON.stringify([{ c: CLUB, n: String(CLUB_NAME || CLUB).slice(0, 60) }].concat(others).slice(0, 8)));
+  } catch (e) { /* this phone keeps no list */ }
+})();
+function hcOtherClubs() {
+  const others = hcClubs().filter((c) => c.c !== CLUB);
+  if (others.length === 0) return null;
+  const p = document.createElement('p');
+  p.className = 'when hcclubs';
+  p.innerHTML = 'Your other clubs on this phone: ' + others.map((c) => '<a href="/c/' + encodeURIComponent(c.c) + '/mynight">' + esc(c.n) + '</a>').join(' \u00b7 ');
+  return p;
+}
+
 // INSIDE ANOTHER APP'S BROWSER (14 Nov 2026, driver phone plan item 16).
 // Clubs share their links on Facebook, and tapping one opens these pages
 // inside that app's own browser, where storage can be wiped on close, and
@@ -16257,6 +16284,9 @@ function draw(message) {
   part.appendChild(said);
   part.appendChild(el('p', 'when', 'No personal PIN? Open your night with the link on your check-in badge or in the club\\'s email - or ask at the timing desk.'));
   if (document.body.dataset.emailLink === '1') part.appendChild(emailLinkBox());
+  // The phone's other clubs (item 5).
+  const clubs = typeof hcOtherClubs === 'function' ? hcOtherClubs() : null;
+  if (clubs) part.appendChild(clubs);
   part.appendChild(el('p', 'when', 'This phone remembers you once your night opens, until you sign out at the bottom of it.'));
   box.appendChild(part);
 }
@@ -17662,7 +17692,10 @@ export function manifest(club: string, clubName: string, look: Look): string {
 
   return JSON.stringify({
     name: clubName,
-    short_name: clubName.length > 12 ? clubName.slice(0, 12).trim() : clubName,
+    // The name under the icon (14 Nov 2026, driver phone plan item 5): the
+    // club's own when it set one - every club's icon is the same sun, so
+    // this is what tells two clubs apart on a home screen.
+    short_name: look.shortName ?? (clubName.length > 12 ? clubName.slice(0, 12).trim() : clubName),
     description: look.tagline || `${clubName}: live timing, schedule, results and standings.`,
     // The app's identity, which is what start_url used to be, so an app
     // already on a home screen stays the same app (14 Nov 2026).
@@ -17687,7 +17720,20 @@ export function manifest(club: string, clubName: string, look: Look): string {
     // refuse to install. Versioned like the pages' links (see
     // Look.iconVersion): an installed app picks up a redrawn icon instead
     // of keeping the old one.
-    icons: [{ src: `${base}/icon.png?v=${look.iconVersion}`, sizes: `${SUN_ICON_SIZE}x${SUN_ICON_SIZE}`, type: "image/png", purpose: "any" }],
+    // Maskable too (14 Nov 2026, driver phone plan item 11): Android cuts
+    // an icon to its own shape, and without "maskable" it drew the sun in a
+    // white circle. The sun sits well inside the safe middle 80%.
+    icons: [
+      { src: `${base}/icon.png?v=${look.iconVersion}`, sizes: `${SUN_ICON_SIZE}x${SUN_ICON_SIZE}`, type: "image/png", purpose: "any" },
+      { src: `${base}/icon.png?v=${look.iconVersion}`, sizes: `${SUN_ICON_SIZE}x${SUN_ICON_SIZE}`, type: "image/png", purpose: "maskable" },
+    ],
+    categories: ["sports"],
+    // A long press on the icon (item 11).
+    shortcuts: [
+      { name: "Live", url: `${base}/live` },
+      { name: "My night", url: `${base}/mynight` },
+      { name: "Results", url: `${base}/results` },
+    ],
   });
 }
 

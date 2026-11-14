@@ -759,6 +759,10 @@ internal static class RelayDocuments
             // laptop is at the track. Left out when Windows' zone has no
             // IANA name, and the phones keep their own.
             ["timeZone"] = ClubTimeZone(),
+            // A short address and the name under the icon (14 Nov 2026,
+            // driver phone plan item 5). The relay checks both again.
+            ["alias"] = settings.RelayClubAlias.Trim().ToLowerInvariant(),
+            ["shortName"] = settings.RelayShortName.Trim(),
         };
 
         if (plate is Color plateColor)

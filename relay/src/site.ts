@@ -42,6 +42,10 @@ export interface Look {
   readonly clock24?: boolean | undefined;
   /** The club's time zone (IANA, "America/New_York"), or undefined for the phone's own (14 Nov 2026, driver phone plan item 15). */
   readonly timeZone?: string | undefined;
+  /** The name under the home-screen icon, up to 12 characters, or undefined for the club's name cut short (item 5). */
+  readonly shortName?: string | undefined;
+  /** A short address the club chose - /c/<alias> redirects here (item 5) - or undefined. */
+  readonly alias?: string | undefined;
   /** Light-on-dark or dark-on-light, for color-scheme and a few contrast fixes. */
   readonly light: boolean;
   /** CSS custom properties to override, name to value. Empty for the default look. */
@@ -265,12 +269,18 @@ export function lookFrom(site: StoredDocument | undefined, checkin: StoredDocume
   const rawClock = body?.["clock24"];
   const clock24 = typeof rawClock === "boolean" ? rawClock : undefined;
   const timeZone = timeZoneFrom(body?.["timeZone"]);
+  const rawShort = typeof body?.["shortName"] === "string" ? (body["shortName"] as string).replace(/[\u0000-\u001f\u007f]/g, "").trim() : "";
+  const shortName = rawShort.length >= 1 && rawShort.length <= 12 ? rawShort : undefined;
+  const rawAlias = typeof body?.["alias"] === "string" ? (body["alias"] as string).trim().toLowerCase() : "";
+  const alias = /^[a-z0-9]+(-[a-z0-9]+)*$/.test(rawAlias) && rawAlias.length >= 3 && rawAlias.length <= 32 ? rawAlias : undefined;
   const logoVersion = logo === undefined ? undefined : logoVersionOf(logo);
 
   return {
     light,
     clock24,
     timeZone,
+    shortName,
+    alias,
     vars,
     themeColor: vars["--bg"] ?? DEFAULT_THEME_COLOR,
     tagline,

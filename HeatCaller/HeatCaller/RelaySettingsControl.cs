@@ -118,6 +118,8 @@ public sealed class RelaySettingsControl : UserControl
     /// <summary>Whether the Status card is naming a restored backup's relay address, as it does in Simple mode where the address row is hidden.</summary>
     private bool _restoredAddressNamed;
     private readonly TextBox _txtTagline = new();
+    private readonly TextBox _txtClubAlias = new();
+    private readonly TextBox _txtShortName = new();
     private readonly TextBox _txtNewcomerWhere = new();
     private readonly TextBox _txtNewcomerWhen = new();
     private readonly TextBox _txtNewcomerJoin = new();
@@ -429,6 +431,8 @@ public sealed class RelaySettingsControl : UserControl
         Fit(_txtClub, UiLayout.AtTextSize(ClubWidth));
         Fit(_txtToken, address);
         Fit(_txtTagline, address);
+        Fit(_txtClubAlias, UiLayout.AtTextSize(ClubWidth));
+        Fit(_txtShortName, UiLayout.AtTextSize(ClubWidth));
         Fit(_txtNewcomerWhere, address);
         Fit(_txtNewcomerWhen, address);
         Fit(_txtNewcomerJoin, address);
@@ -1221,6 +1225,32 @@ public sealed class RelaySettingsControl : UserControl
         var tagline = new FieldGrid();
 
         tagline.AddRow("Welcome line:", _txtTagline);
+
+        // A short address and the name under the icon (14 Nov 2026, driver
+        // phone plan item 5). Live like the welcome line.
+        _txtClubAlias.MaxLength = 32;
+        _txtClubAlias.PlaceholderText = "upstateminiz";
+        _txtClubAlias.TextChanged += (_, _) =>
+        {
+            if (!_loading)
+            {
+                _settings.RelayClubAlias = _txtClubAlias.Text.Trim().ToLowerInvariant();
+            }
+        };
+        _txtClubAlias.Leave += (_, _) => _settings.Save();
+        tagline.AddRow("Short address:", _txtClubAlias);
+
+        _txtShortName.MaxLength = 12;
+        _txtShortName.PlaceholderText = "Upstate MZ";
+        _txtShortName.TextChanged += (_, _) =>
+        {
+            if (!_loading)
+            {
+                _settings.RelayShortName = _txtShortName.Text.Trim();
+            }
+        };
+        _txtShortName.Leave += (_, _) => _settings.Save();
+        tagline.AddRow("Name under the icon:", _txtShortName);
 
         _linedUp.Add(tagline);
 
@@ -3064,6 +3094,8 @@ public sealed class RelaySettingsControl : UserControl
             _chkRelayCaptions.Checked = _settings.RelayCaptions;
 
             _txtTagline.Text = _settings.RelayTagline;
+            _txtClubAlias.Text = _settings.RelayClubAlias;
+            _txtShortName.Text = _settings.RelayShortName;
             _txtNewcomerWhere.Text = _settings.RelayNewcomerWhere;
             _txtNewcomerWhen.Text = _settings.RelayNewcomerWhen;
             _txtNewcomerJoin.Text = _settings.RelayNewcomerJoin;

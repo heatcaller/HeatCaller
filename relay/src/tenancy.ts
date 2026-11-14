@@ -136,6 +136,11 @@ export class TenantRegistry {
     return this.byClub.size;
   }
 
+  /** Every club, in the order the config lists them (for a club's short alias - see Relay.aliasFor). */
+  all(): readonly Tenant[] {
+    return [...this.byClub.values()];
+  }
+
   club(id: string): Tenant | undefined {
     return this.byClub.get(id);
   }

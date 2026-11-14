@@ -1646,6 +1646,30 @@ export class Relay {
    * and all - and the whole check-in roster for each of them was work
    * anybody could make the relay do as fast as they could ask.
    */
+  /** Which club's short address this is (see A CLUB'S SHORT ADDRESS), held a minute. */
+  private aliasCache: { at: number; map: Map<string, string> } | undefined;
+
+  private async aliasOwner(alias: string): Promise<string | undefined> {
+    const now = this.now().getTime();
+
+    if (this.aliasCache === undefined || now - this.aliasCache.at > 60_000) {
+      const map = new Map<string, string>();
+      const ids = new Set(this.tenants.all().map((t) => t.club));
+
+      for (const t of this.tenants.all()) {
+        const mine = await this.siteOf(t.club).then((s) => s.look.alias).catch(() => undefined);
+
+        if (mine !== undefined && !ids.has(mine) && !map.has(mine)) {
+          map.set(mine, t.club);
+        }
+      }
+
+      this.aliasCache = { at: now, map };
+    }
+
+    return this.aliasCache.map.get(alias);
+  }
+
   private async lookFor(club: string): Promise<Look> {
     const site = await this.siteOf(club);
     let checkIn = false;
@@ -2260,6 +2284,22 @@ export class Relay {
 
       if (name !== undefined && isValidClubId(name)) {
         const tenant = this.tenants.club(name);
+
+        // A CLUB'S SHORT ADDRESS (14 Nov 2026, driver phone plan item 5):
+        // /c/upstateminiz for a club whose id is horizon-test - the one on
+        // the poster, that a driver can type. Never another club's id, and
+        // the first club (in the config's order) to claim an alias has it.
+        if (tenant === undefined) {
+          const owner = await this.aliasOwner(name);
+
+          if (owner !== undefined) {
+            const rest = segments.slice(2).map(encodeURIComponent).join("/");
+            const search = (request.url ?? "").includes("?") ? (request.url ?? "").slice((request.url ?? "").indexOf("?")) : "";
+            response.writeHead(302, { ...BASE_HEADERS, location: `/c/${encodeURIComponent(owner)}${rest === "" ? "" : `/${rest}`}${search}`, "cache-control": "no-cache" });
+            response.end();
+            return;
+          }
+        }
 
         // A paused club (24 Oct 2026, relay admin): every page, file and
         // icon under its address is the one notice. Its results stay on

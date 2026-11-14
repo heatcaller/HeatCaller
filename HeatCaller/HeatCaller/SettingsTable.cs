@@ -343,6 +343,8 @@ internal static class SettingsTable
             nameof(AppSettings.RoomVoteFromTheRelay),
             nameof(AppSettings.RelaySiteTheme),
             nameof(AppSettings.RelayTagline),
+            nameof(AppSettings.RelayClubAlias),
+            nameof(AppSettings.RelayShortName),
             nameof(AppSettings.RelayNewcomerWhere),
             nameof(AppSettings.RelayNewcomerWhen),
             nameof(AppSettings.RelayNewcomerJoin),

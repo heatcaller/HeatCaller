@@ -2373,6 +2373,20 @@ public sealed class AppSettings
     public string RelayTagline { get; set; } = string.Empty;
 
     /// <summary>
+    /// A short address for the club's pages, for posters and typing -
+    /// /c/upstateminiz - that the relay sends to the club's own (14 Nov 2026,
+    /// driver phone plan item 5). Lower-case letters, digits and hyphens.
+    /// </summary>
+    public string RelayClubAlias { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The name under the club's home-screen icon, up to 12 characters (item
+    /// 5). Every club's icon is the same sun, so this is what tells clubs apart.
+    /// Empty: the club's name cut short.
+    /// </summary>
+    public string RelayShortName { get; set; } = string.Empty;
+
+    /// <summary>
     /// The "New here?" card on the club's home page (30 Oct 2026, relay
     /// navigation round 6): where the club races - "Kent Hobbies, 12 Main St".
     /// All three left empty means no card.

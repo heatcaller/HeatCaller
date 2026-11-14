@@ -1315,6 +1315,24 @@ Driver phone plan items 4 and 18 (mockup: `mockups/live-phone-board.html`).
   history, so Android's Back walks back through the tabs to Home and only
   then leaves.
 
+### Short addresses, the icon, your other clubs (14 Nov 2026)
+
+Driver phone plan items 5 and 11.
+
+- **A club's short address.** The site document may carry `alias` (lower
+  case, digits and hyphens, 3–32), set on Club Website. `/c/<alias>` and
+  anything under it answers `302` to the club's own address, path and query
+  kept. An alias that is another club's id is ignored, and when two clubs
+  claim one the first in the config keeps it. Looked up once a minute.
+- **The name under the icon.** `shortName` (up to 12 characters) is the
+  manifest's `short_name`; without it, the club's name cut to 12. The icon
+  is the sun for every club, so this is what tells clubs apart.
+- **Your other clubs.** Each club's pages note themselves in the phone's
+  `hc-clubs` list (id and name only); Me links to the others.
+- **The manifest** marks the icon `maskable` as well as `any` (the sun sits
+  inside the safe middle), and has long-press `shortcuts` to Live, My night
+  and Results. Still portrait only.
+
 ### The club's time zone, and the calendar (14 Nov 2026)
 
 Driver phone plan items 15 and 10.
