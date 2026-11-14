@@ -217,9 +217,31 @@ public static class NightPlan
         // The race before the next one placed, for the breaks between them.
         RoundDefinition? previous;
 
+        // The furthest round the night has got to, run or placed: a break
+        // behind it was crossed already. A Q1 heat held and run after Q2
+        // Heat 1 must not bring the after-Q1 break round again before Q2
+        // Heat 2 (14 Nov 2026, bug hunt 18).
+        int? reached = null;
+
+        void Reach(RoundDefinition? round)
+        {
+            if (NightBreaks.PositionOf(round) is { } position && (reached is not { } furthest || position > furthest))
+            {
+                reached = position;
+            }
+        }
+
+        foreach (var run in dayRounds)
+        {
+            if (run is not null && run.IsRecorded && run.Kind != RoundKind.Practice)
+            {
+                Reach(run);
+            }
+        }
+
         TimeSpan BreakBefore(RoundDefinition next)
         {
-            var length = NightBreaks.Length(NightBreaks.Between(previous, next, breaks));
+            var length = NightBreaks.Length(NightBreaks.Between(previous, next, breaks, reached));
             breakTime += length;
             return length;
         }
@@ -239,6 +261,7 @@ public static class NightPlan
             slots.Add(new Slot(onTrack, onTrack.RoundLabel, onTrack.ClassName, onTrack.Kind, length, start));
             cursor = start + length + gap;
             previous = onTrack;
+            Reach(onTrack);
         }
         else
         {
@@ -246,7 +269,7 @@ public static class NightPlan
             // is still to come, from its finish.
             previous = dayRounds.LastOrDefault(r => r is not null && r.IsRecorded && r.Kind != RoundKind.Practice);
             var firstToRun = toRun.FirstOrDefault();
-            var pause = firstToRun is null ? TimeSpan.Zero : NightBreaks.Length(NightBreaks.Between(previous, firstToRun, breaks));
+            var pause = firstToRun is null ? TimeSpan.Zero : NightBreaks.Length(NightBreaks.Between(previous, firstToRun, breaks, reached));
 
             cursor = lastFinishUtc is { } finished && finished + gap + pause > nowUtc ? finished + gap + pause : nowUtc;
 
@@ -266,6 +289,7 @@ public static class NightPlan
             if (firstToRun is not null)
             {
                 previous = firstToRun;
+                Reach(firstToRun);
             }
 
             // Nothing of tonight has raced yet: start at the time the club
@@ -331,6 +355,7 @@ public static class NightPlan
             slots.Add(new Slot(round, round.RoundLabel, round.ClassName, round.Kind, length, cursor));
             cursor += length + gap;
             previous = round;
+            Reach(round);
         }
 
         // A stand-in for the mains still to be built, so a break before the
@@ -343,6 +368,7 @@ public static class NightPlan
             {
                 cursor += BreakBefore(unbuiltMain);
                 previous = unbuiltMain;
+                Reach(unbuiltMain);
             }
 
             // Lowest first, the order the mains run in.
