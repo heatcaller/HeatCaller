@@ -1827,18 +1827,49 @@ const HC_LAST = 'hc-last-' + CLUB + ':';
 const HC_LAST_FOR_MS = 12 * 3600 * 1000;
 const HC_LAST_MAX_CHARS = 300000;
 const HC_LAST_EVERY_MS = 5000;
+const HC_LAST_MOST = 40;
 const hcNet = { since: 0, fails: 0, nextTry: 0, why: '', shownAt: 0, lastWrite: {} };
+
+// The copies are only ever a fallback, and every club on this address
+// shares one storage (Bug hunt 18): left alone they filled it over weeks,
+// and then nothing on the phone could be remembered - not even who is
+// signed in. So each page drops the ones too old to be shown and all but
+// this club's newest HC_LAST_MOST, and a full storage drops them all.
+function hcLastSweep(everything) {
+  try {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf('hc-last-') === 0) keys.push(k);
+    }
+    const now = Date.now();
+    const mine = [];
+    for (const k of keys) {
+      const m = everything ? null : /^[{]"at":([0-9]+)[,}]/.exec(String(localStorage.getItem(k) || '').slice(0, 40));
+      const at = m ? Number(m[1]) : NaN;
+      if (!(at <= now) || now - at > HC_LAST_FOR_MS) localStorage.removeItem(k);
+      else if (k.indexOf(HC_LAST) === 0) mine.push([at, k]);
+    }
+    mine.sort((a, b) => b[0] - a[0]);
+    for (const old of mine.slice(HC_LAST_MOST)) localStorage.removeItem(old[1]);
+  } catch (e) { /* nothing kept to sweep */ }
+}
+hcLastSweep(false);
 
 function hcLastKeep(path, body) {
   if (seenFor(path) === 0) return;
   const now = Date.now();
   if (hcNet.lastWrite[path] && now - hcNet.lastWrite[path] < HC_LAST_EVERY_MS) return;
   hcNet.lastWrite[path] = now;
+  let raw;
+  try { raw = JSON.stringify({ at: now, body: body }); } catch (e) { return; }
   try {
-    const raw = JSON.stringify({ at: now, body: body });
     if (raw.length > HC_LAST_MAX_CHARS) { localStorage.removeItem(HC_LAST + path); return; }
     localStorage.setItem(HC_LAST + path, raw);
-  } catch (e) { /* no copy for next time */ }
+  } catch (e) {
+    hcLastSweep(true);
+    try { localStorage.setItem(HC_LAST + path, raw); } catch (e2) { /* no copy for next time */ }
+  }
 }
 function hcLastRead(path) {
   try {
@@ -7285,9 +7316,14 @@ async function load() {
   }
 
   // A read that answered: still watching, or watching again after a break.
-  const looked = Date.now();
-  if (lastLook === 0 || looked - lastLook > LOOK_GAP_MS) watchingSince = looked;
-  lastLook = looked;
+  // A copy from this phone's own storage (no signal) is not watching
+  // (Bug hunt 18): the gap has to show, or a pick made before the outage
+  // is settled against a race that ran during it.
+  if (answer.stale !== true) {
+    const looked = Date.now();
+    if (lastLook === 0 || looked - lastLook > LOOK_GAP_MS) watchingSince = looked;
+    lastLook = looked;
+  }
 
   if (answer.missing) {
     render({}, true, 0, 'No race has been published yet.');
@@ -15739,7 +15775,9 @@ async function refreshNight() {
   if (live === null) live = was;
   if (JSON.stringify([night, clips, asksOpen, queriesOff]) !== before) paintNight();
   const races = night && Array.isArray(night.races) ? night.races : [];
-  if (alertsOn && racesSeen >= 0 && races.length > racesSeen) {
+  // Each kind as Which alerts has it (Bug hunt 18): one ticked off there
+  // stops the buzz and banner here too, not only the push.
+  if (alertsOn && racesSeen >= 0 && races.length > racesSeen && alertKinds().includes('result')) {
     const r = races[races.length - 1] || {};
     alertNow('Your result is in', [[String(r.label || ''), finishWords(r)].filter(Boolean).join(' - '), ...topLines(r)].join('\\n'));
   }
@@ -15757,12 +15795,13 @@ function takeLive(entry) {
   const now = n && typeof n === 'object' ? String(n.race || '') : '';
 
   if (alertsOn) {
-    if (worthABuzz(lastKey, n)) alertNow(callWords(n), String(n.race || ''));
+    const kinds = alertKinds();
+    if (worthABuzz(lastKey, n) && kinds.includes('race')) alertNow(callWords(n), String(n.race || ''));
     lastKey = callKey(n);
     // Their marshal duty, once, when it becomes the next race.
     const m = live && live.marshal;
     const duty = dutyKey(m);
-    if (lastDuty !== '' && duty !== lastDuty && m && typeof m === 'object' && num(m.away) === 0) {
+    if (lastDuty !== '' && duty !== lastDuty && m && typeof m === 'object' && num(m.away) === 0 && kinds.includes('marshal')) {
       alertNow('Marshal duty next', String(m.race || '') + (typeof m.post === 'string' && m.post !== '' ? ' - ' + m.post : ''));
     }
     lastDuty = duty;
@@ -15933,10 +15972,15 @@ function pushLabel() {
 }
 
 // Opens another driver's page on this phone: they become the one shown.
+// On the night page itself only the hash changes, and that loads nothing
+// (Bug hunt 18): the old driver stayed on screen. So that one reloads.
 function meSwitchTo(code) {
   meRemember(code);
-  const to = '/c/' + encodeURIComponent(CLUB) + '/night#d=' + code;
+  const path = '/c/' + encodeURIComponent(CLUB) + '/night';
+  const to = path + '#d=' + code;
+  const here = location.pathname === path;
   try { location.replace(to); } catch (e) { location.href = to; }
+  if (here && code !== CODE) { try { location.reload(); } catch (e) { /* the address is right; a reload by hand shows them */ } }
 }
 
 function meAskSignOut() {
