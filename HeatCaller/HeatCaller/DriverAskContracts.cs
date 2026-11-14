@@ -37,6 +37,16 @@ internal static class DriverAsk
     public const string Query = "query";
 
     /// <summary>
+    /// "This race's video starts in the wrong place" (14 Nov 2026, race video
+    /// plan V5): fields "race", and optionally "d" (early or late) and "s"
+    /// (about how many seconds). Noted: the club nudges that stream piece.
+    /// </summary>
+    public const string VideoOff = "videooff";
+
+    /// <summary>"Ask the club to hide this video" (race video plan V6): field "race". Approved, HeatCaller stops showing that race's video.</summary>
+    public const string VideoHide = "videohide";
+
+    /// <summary>
     /// A setup change for the Garage's setup log (4 Nov 2026, from the relay
     /// roadmap): the sheet's five short parts and a note. Filed by itself -
     /// see DriverRequestDesk.FileSetup - since it changes nothing but adds a

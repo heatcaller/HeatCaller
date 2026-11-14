@@ -1284,6 +1284,44 @@ body.on-air .onair { visibility: visible; animation: onair 2.4s ease-in-out infi
 .hcabout .go { display: block; margin: 18px 0 12px; padding: 14px; border-radius: 12px; background: #FF2E88; color: #FFFFFF;
                font-weight: 700; text-decoration: none; box-shadow: 0 0 22px rgba(255, 46, 136, 0.45); }
 .hcabout .close { background: none; border: 0; padding: 8px 16px; font: inherit; font-size: 0.9rem; color: #8E7BB8; cursor: pointer; }
+/* Race video's player sheet (14 Nov 2026, race video plan V3): the club's
+   own look, a 16:9 player, the lap list and Open in YouTube under it. */
+.hcvideo { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center;
+           background: rgba(0, 0, 0, 0.6); }
+.hcvideo .sheet { width: 100%; max-width: 640px; max-height: 100%; overflow-y: auto; box-sizing: border-box;
+                  border-radius: 18px 18px 0 0; background: var(--surface); color: var(--text);
+                  padding: 14px 14px calc(18px + var(--sa-b)); }
+html.framed .hcvideo .sheet { padding-bottom: calc(18px + 58px + var(--sa-b)); }
+@media (min-width: 641px) { .hcvideo { align-items: center; } .hcvideo .sheet { border-radius: 18px; } }
+.hcvhead { display: flex; align-items: center; gap: 10px; }
+.hcvhead h2 { flex: 1; margin: 0; font-size: 1.1rem; }
+.hcvideo .when { margin: 4px 0 10px; }
+.hcvplayer { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 10px; overflow: hidden;
+             display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+.hcvplayer iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.hcvplayer .note { color: #FFFFFF; margin: 0; }
+.hcvlaps { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 4px; }
+.hcvlaps .best { border-color: var(--primary); color: var(--primary); font-weight: 700; }
+.hcvideo .hcvyt { display: block; margin: 12px 0 6px; text-align: center; }
+.hcvideo .hcvsrc { font-size: 0.8rem; margin: 6px 0 0; }
+.hcvbtn { margin: 8px 8px 0 0; }
+.hcvmiss { color: var(--muted); font-size: 0.85rem; margin: 8px 0 0; }
+/* Live's docked player (race video V4): sticky at the top, the board
+   scrolling under it; small, a corner player over the page. */
+.hcdock { position: sticky; top: var(--sa-t); z-index: 20; background: var(--bg); padding: 6px 0 4px; }
+.hcdock[hidden] { display: none; }
+.hcdock .hcdbar { position: absolute; top: 12px; right: 6px; display: flex; gap: 6px; }
+.hcdock .hcdbar .page { min-width: 44px; min-height: 44px; padding: 0; background: rgba(0, 0, 0, 0.6); color: #FFFFFF; border-color: transparent; }
+.hcdock .hcdnote { font-size: 0.8rem; margin: 4px 0 0; }
+.hcdock.small { position: fixed; top: auto; right: 10px; bottom: calc(70px + var(--sa-b)); width: 46vw; max-width: 280px; padding: 0;
+                border-radius: 10px; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5); }
+.hcdock.small .hcdnote { display: none; }
+.hcdock.small .hcdbar { top: 4px; right: 4px; }
+.hcwatch { margin: 8px 0; }
+.hcwatch .hcvbtn { margin: 0; width: 100%; }
+.hcvmore { margin: 12px 0 0; }
+.hcvmore summary { cursor: pointer; color: var(--accent); min-height: 44px; display: flex; align-items: center; }
+.hcvmore .page, .hcvmore select { margin: 6px 6px 0 0; min-height: 44px; }
 
 /* PIT WALL (3 Nov 2026, Asher picked direction A of the relay refresh:
    "build a pit wall"). One kit for every control on the club's pages, each
@@ -1928,6 +1966,199 @@ function hcSendCounts() {
 }
 setInterval(hcSendCounts, 60000);
 document.addEventListener('visibilitychange', () => { if (document.hidden) hcSendCounts(); });
+
+// RACE VIDEO (14 Nov 2026, race video plan V3, V7, V8): a race's moment in
+// the club's YouTube stream, played in a sheet over the page. The relay
+// works the moment out (video.ts) and hands the page {id, t, end, laps?,
+// best?}. Nothing comes from YouTube until a tap: the button is plain kit,
+// with no thumbnail. The player is YouTube's privacy-enhanced one, and the
+// lap list seeks it by postMessage, so no YouTube script runs in our page.
+const HC_YT = 'https://www.youtube-nocookie.com';
+function hcVideoOk(v) {
+  return !!v && typeof v === 'object' && typeof v.id === 'string' && /^[A-Za-z0-9_-]{11}$/.test(v.id)
+    && typeof v.t === 'number' && typeof v.end === 'number';
+}
+// The player's address, opening at "from" (the race's start unless a lap was asked for).
+function hcVideoSrc(v, from) {
+  return HC_YT + '/embed/' + encodeURIComponent(v.id) + '?start=' + Math.max(0, Math.floor(from)) + '&end=' + Math.ceil(v.end)
+    + '&playsinline=1&rel=0&enablejsapi=1&autoplay=1&origin=' + encodeURIComponent(location.origin);
+}
+function hcVideoYouTube(v, t) {
+  return 'https://www.youtube.com/watch?v=' + encodeURIComponent(v.id) + '&t=' + Math.max(0, Math.floor(t)) + 's';
+}
+function hcVideoSeek(frame, t) {
+  try {
+    frame.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'seekTo', args: [t, true] }), HC_YT);
+  } catch (e) { /* the player isn't there yet */ }
+}
+function hcVel(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text) e.textContent = text;
+  return e;
+}
+// A Watch button, drawn the same everywhere (V2): the kit's quiet button
+// with a play mark, or the primary one for Watch live. With no signal it
+// says so and waits (V7) - checked as it is tapped too.
+function hcVideoButton(label, spoken, onTap, primary) {
+  const b = hcVel('button', (primary ? 'go' : 'go quiet') + ' hcvbtn');
+  b.type = 'button';
+  const show = () => {
+    const off = typeof navigator === 'object' && navigator.onLine === false;
+    b.disabled = off;
+    b.textContent = off ? 'Needs signal' : '\\u25B6 ' + label;
+    b.setAttribute('aria-label', off ? spoken + ' (needs signal)' : spoken);
+  };
+  show();
+  try { addEventListener('online', show); addEventListener('offline', show); } catch (e) { /* stays as drawn */ }
+  b.addEventListener('click', () => { show(); if (!b.disabled) onTap(b); });
+  return b;
+}
+let hcVideoShut = null;
+// The sheet. o: title (the race), when, finish ("You finished P3"), from
+// (seconds, for Jump to my best lap), where (for the count).
+function hcVideoSheet(v, o) {
+  if (!hcVideoOk(v)) return null;
+  if (hcVideoShut) hcVideoShut(false);
+  o = o || {};
+  const back = document.activeElement;
+  const wrap = hcVel('div', 'hcvideo');
+  wrap.setAttribute('role', 'dialog');
+  wrap.setAttribute('aria-modal', 'true');
+  wrap.setAttribute('aria-labelledby', 'hcvideo-title');
+  const sheet = hcVel('div', 'sheet');
+  wrap.appendChild(sheet);
+  const head = hcVel('div', 'hcvhead');
+  const title = hcVel('h2', '', o.title || 'Race video');
+  title.id = 'hcvideo-title';
+  head.appendChild(title);
+  const shut = hcVel('button', 'page hcvclose', 'Close');
+  shut.type = 'button';
+  head.appendChild(shut);
+  sheet.appendChild(head);
+  if (o.when || o.finish) sheet.appendChild(hcVel('p', 'when', [o.when, o.finish].filter(Boolean).join(' \\u00b7 ')));
+
+  const box = hcVel('div', 'hcvplayer');
+  sheet.appendChild(box);
+  let frame = null;
+  const from = typeof o.from === 'number' ? o.from : v.t;
+  const play = (at) => {
+    box.textContent = '';
+    frame = document.createElement('iframe');
+    frame.src = hcVideoSrc(v, at);
+    frame.title = (o.title || 'Race video') + ', ' + CLUB_NAME;
+    frame.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; fullscreen');
+    frame.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+    box.appendChild(frame);
+  };
+  // Saving data (V8): say what it costs, and wait for a second tap.
+  const saving = typeof navigator === 'object' && navigator.connection && navigator.connection.saveData === true;
+  if (saving) {
+    box.appendChild(hcVel('p', 'note', 'Uses about 25 MB.'));
+    const go = hcVel('button', 'go', '\\u25B6 Play');
+    go.type = 'button';
+    go.addEventListener('click', () => play(from));
+    box.appendChild(go);
+  } else {
+    play(from);
+  }
+
+  // The lap list (V3): a tap seeks the player to that lap.
+  const laps = Array.isArray(v.laps) ? v.laps.filter((x) => typeof x === 'number') : [];
+  if (laps.length > 0) {
+    const list = hcVel('div', 'hcvlaps');
+    list.setAttribute('role', 'group');
+    list.setAttribute('aria-label', 'Jump to a lap');
+    laps.forEach((t, i) => {
+      const best = i === v.best;
+      const b = hcVel('button', 'page' + (best ? ' best' : ''), (best ? '\\u2605 ' : '') + 'Lap ' + (i + 1));
+      b.type = 'button';
+      b.setAttribute('aria-label', 'Lap ' + (i + 1) + (best ? ', your best' : ''));
+      b.addEventListener('click', () => {
+        hcCount('video_lap_jump');
+        if (frame) hcVideoSeek(frame, t); else play(t);
+      });
+      list.appendChild(b);
+    });
+    sheet.appendChild(list);
+  }
+
+  const out = hcVel('a', 'page hcvyt', 'Open in YouTube');
+  out.href = hcVideoYouTube(v, from);
+  out.target = '_blank';
+  out.rel = 'noopener';
+  out.addEventListener('click', () => hcCount('video_youtube_app'));
+  sheet.appendChild(out);
+  sheet.appendChild(hcVel('p', 'note hcvsrc', inAppBrowser() !== ''
+    ? 'Plays from YouTube. Open in YouTube opens YouTube\\u2019s website here. If it doesn\\u2019t play, the club may have made it private.'
+    : 'Plays from YouTube. If it doesn\\u2019t play, the club may have made it private.'));
+
+  // A driver's own race (V5, V6): tell the club the video starts in the
+  // wrong place, or ask it to hide the video. Buttons only, no typing, so
+  // nothing needs moderating. o.report(kind, fields) sends it and answers
+  // {ok, words}.
+  if (typeof o.report === 'function') {
+    const more = hcVel('details', 'hcvmore');
+    more.appendChild(hcVel('summary', '', 'Something wrong with this video?'));
+    const said = hcVel('p', 'note');
+    said.setAttribute('role', 'status');
+    const send = async (kind, f, counted) => {
+      hcCount(counted);
+      said.textContent = 'Sending\\u2026';
+      const a = await o.report(kind, f);
+      said.textContent = a && a.words ? a.words : 'Could not send that. Try again in a minute.';
+    };
+    more.appendChild(hcVel('p', 'note', 'Starts in the wrong place? Say which way, and the club lines the whole stream up.'));
+    const secs = document.createElement('select');
+    secs.setAttribute('aria-label', 'About how many seconds');
+    [['', 'About how far?'], ['5', 'about 5 s'], ['10', 'about 10 s'], ['30', 'about 30 s'], ['60', 'about a minute'], ['120', 'more than a minute']].forEach((x) => {
+      const opt = document.createElement('option');
+      opt.value = x[0];
+      opt.textContent = x[1];
+      secs.appendChild(opt);
+    });
+    more.appendChild(secs);
+    for (const way of [['early', 'It opens too early'], ['late', 'It opens too late']]) {
+      const b = hcVel('button', 'page', way[1]);
+      b.type = 'button';
+      b.addEventListener('click', () => {
+        const f = { d: way[0] };
+        if (secs.value) f.s = Number(secs.value);
+        void send('videooff', f, 'video_off_reported');
+      });
+      more.appendChild(b);
+    }
+    const hide = hcVel('button', 'page', 'Ask the club to hide this video');
+    hide.type = 'button';
+    hide.addEventListener('click', () => { void send('videohide', {}, 'video_hide_asked'); });
+    more.appendChild(hide);
+    more.appendChild(hcVel('p', 'note', 'Hiding here removes HeatCaller\\u2019s link. To remove the video itself, the club edits it on YouTube.'));
+    more.appendChild(said);
+    sheet.appendChild(more);
+  }
+
+  let pushed = false;
+  const close = (byBack) => {
+    if (hcVideoShut !== close) return;
+    hcVideoShut = null;
+    wrap.remove();
+    if (pushed && !byBack) { try { history.back(); } catch (e) { /* stays */ } }
+    if (back && typeof back.focus === 'function') back.focus();
+  };
+  hcVideoShut = close;
+  shut.addEventListener('click', () => close(false));
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) close(false); });
+  wrap.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(false); });
+  // Back closes the sheet, not the page (driver phone plan item 18).
+  try { history.pushState({ hcvideo: 1 }, ''); pushed = true; } catch (e) { /* Back leaves, as before */ }
+  document.body.appendChild(wrap);
+  try { shut.focus(); } catch (e) { /* no focus here */ }
+  hcCount('video_race_opened_' + (o.where || 'night'));
+  return wrap;
+}
+try {
+  addEventListener('popstate', () => { if (hcVideoShut) hcVideoShut(true); });
+} catch (e) { /* no Back to listen for */ }
 
 // THE PAGES AFTER A DEPLOY (14 Nov 2026, driver phone plan item 21). A
 // phone keeps the club's pages for when it has no signal, so it can also
@@ -2659,6 +2890,9 @@ function hcFrameFor(path) {
   const f = document.createElement('iframe');
   f.className = 'hcnext';
   f.title = CLUB_NAME;
+  // Race video (V3): a player nested in a page here can only go fullscreen,
+  // or picture-in-picture, if every frame above it allows it.
+  f.allow = 'fullscreen; picture-in-picture; autoplay; encrypted-media';
   f.addEventListener('load', () => hcLanded(f));
   f.src = path;
   hcStage.appendChild(f);
@@ -3879,7 +4113,8 @@ function card(line, body, mine) {
     '</summary>' +
     (body === null
       ? '<p class="note">That result isn’t online any more.</p>'
-      : (lengthWords(body) === '' ? '' : '<p class="len">Length: ' + esc(lengthWords(body)) + '</p>') +
+      : '<div class="rvid" data-rv="' + esc(line.id) + '"></div>' +
+        (lengthWords(body) === '' ? '' : '<p class="len">Length: ' + esc(lengthWords(body)) + '</p>') +
         '<div class="tw"><table class="res"><thead><tr>' +
         '<th class="pos">Pos</th><th>Driver</th><th class="n">Qual</th>' +
         '<th class="n">Laps/Time</th><th class="n">Behind</th><th class="n">Best</th>' +
@@ -5168,6 +5403,52 @@ async function load() {
 // should not shut itself thirty seconds later, or on the way back from a
 // look at somebody's history. Opening one also makes it what the address
 // bar names, so the link in it is a link to what is being read.
+// RACE VIDEO ON RESULTS (14 Nov 2026, race video plan V2): an opened race
+// asks the relay for its moment in the club's stream, once every five
+// minutes at most, and shows Watch this race when there is one - never for
+// a junior's race, a hidden one, or while the club keeps video to drivers'
+// own nights (the relay answers 404 for all of those). A driver's View laps
+// adds Watch their best lap.
+const raceVideos = new Map();
+async function raceVideoOf(sid, name) {
+  const key = sid + '|' + (name || '');
+  const kept = raceVideos.get(key);
+  if (kept && Date.now() - kept.at < 300000) return kept.v;
+  let v = null;
+  try {
+    const answer = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/video/race/' + encodeURIComponent(sid)
+      + (name ? '?n=' + encodeURIComponent(name) : ''), { cache: 'no-store' });
+    const body = answer.ok ? await answer.json() : null;
+    v = body && hcVideoOk(body.video) ? body.video : null;
+  } catch (e) { /* no signal: no button this time */ }
+  raceVideos.set(key, { at: Date.now(), v: v });
+  return v;
+}
+function raceTitleIn(details) {
+  const t = details && details.querySelector ? details.querySelector('.title') : null;
+  return t && t.textContent ? t.textContent : 'Race';
+}
+async function showRaceVideo(sid, details) {
+  const v = await raceVideoOf(sid, '');
+  const at = details && details.querySelector ? details.querySelector('.rvid') : null;
+  if (!v || !at || at.firstChild) return;
+  const title = raceTitleIn(details);
+  at.appendChild(hcVideoButton('Watch this race', 'Watch this race, ' + title + ', video from YouTube',
+    () => hcVideoSheet(v, { title: title, where: 'results' })));
+}
+async function showBestLapVideo(sid, row, lx) {
+  if (!row || typeof row.name !== 'string' || !(await raceVideoOf(sid, ''))) return;
+  const panel = lx && lx.querySelector ? lx.querySelector('.lxp') : null;
+  if (!panel || panel.querySelector('.hcvbtn')) return;
+  const title = raceTitleIn(lx.closest ? lx.closest('details[data-id]') : null);
+  panel.insertBefore(hcVideoButton('Watch their best lap', 'Watch ' + row.name + '\\u2019s best lap in ' + title + ', video from YouTube', async () => {
+    const v = await raceVideoOf(sid, row.name);
+    if (!v) return;
+    const best = Array.isArray(v.laps) && typeof v.best === 'number' ? v.laps[v.best] : undefined;
+    hcVideoSheet(v, { title: title + ', ' + row.name, from: typeof best === 'number' ? best : undefined, where: 'results' });
+  }), panel.firstChild);
+}
+
 feed.addEventListener('toggle', (e) => {
   // A driver's View laps (28 Oct 2026): remembered like a session, and its
   // panel written the first time it opens - rows() leaves it out while shut.
@@ -5185,6 +5466,11 @@ feed.addEventListener('toggle', (e) => {
     } else if (!e.target.open) {
       lapsOpen.delete(lx);
     }
+    if (e.target.open) {
+      const at = lx.lastIndexOf(':');
+      const body = bodyOf.get(lx.slice(0, at));
+      void showBestLapVideo(lx.slice(0, at), body && Array.isArray(body.results) ? body.results[Number(lx.slice(at + 1))] : null, e.target);
+    }
     return;
   }
 
@@ -5200,6 +5486,7 @@ feed.addEventListener('toggle', (e) => {
     if (!opened.has(id)) marked = id;
 
     opened.add(id);
+    void showRaceVideo(id, e.target);
   } else {
     opened.delete(id);
 
@@ -8072,7 +8359,11 @@ export function livePage(club: string, clubName: string, context: PageContext = 
     // Asher): Listen shows the announcer's words as they are heard, so a
     // second set under Message the announcer said the same thing twice.
     // Without Listen it stays, as the only way to read them.
-    body: '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
+    // The docked live player and its Watch live button (race video V4),
+    // filled by LIVE_VIDEO_JS - empty and hidden until the stream is on.
+    body: '<div id="hcdock" class="hcdock" hidden></div>'
+      + '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
+      + '<div id="hcwatch" class="hcwatch" hidden></div>'
       // Your card (driver phone plan item 4), filled by LIVE_JS.
       + '<section id="you" class="you" aria-label="Your race" hidden></section>'
       + '<div id="board"></div>'
@@ -8087,9 +8378,155 @@ export function livePage(club: string, clubName: string, context: PageContext = 
       // The club's sponsors, last on the page (5 Nov 2026) - see SPONSORS_JS.
       + '<div id="sponsors" class="card livepos sponsors" hidden><h3>Our sponsors</h3><div id="spbody"></div></div>',
     script: LAPVOICE_JS + LIVE_JS + (context.look.listening ? LISTEN_JS : CAPTIONS_JS)
-      + (context.look.notes ? NOTE_JS : "") + (context.look.vote ? VOTE_JS : "") + SPONSORS_JS,
+      + (context.look.notes ? NOTE_JS : "") + (context.look.vote ? VOTE_JS : "") + SPONSORS_JS + LIVE_VIDEO_JS,
   }, context);
 }
+
+/**
+ * WATCHING LIVE ALONGSIDE THE BOARD (14 Nov 2026, race video plan V4; Asher:
+ * "Dock it"). While the relay says the club's stream is on (a piece open and
+ * the laptop still sending), Watch live docks YouTube's player at the top of
+ * Live, sticky, with the board scrolling under it. Shrink makes it a small
+ * corner player; close takes it away - both remembered for the night. The
+ * board is never held back to match the video: the video is the late one,
+ * and says so. Watching turns Listen off, since the stream carries the
+ * room's sound. The stream stopping says so, with the way to the results.
+ */
+const LIVE_VIDEO_JS = `
+(function () {
+  const dock = document.getElementById('hcdock');
+  const watch = document.getElementById('hcwatch');
+  if (!dock || !watch) return;
+  const KEY = 'hc-video-dock:' + CLUB;
+  const DAY = new Date().toDateString();
+  let liveId = null;
+  let shown = null;
+  let small = false;
+  let gone = false;
+  let lowLatency = false;
+  let lastRace = null;
+
+  function kept() {
+    try {
+      const k = JSON.parse(localStorage.getItem(KEY) || 'null');
+      return k && k.day === DAY ? k.state : '';
+    } catch (e) { return ''; }
+  }
+  function keep(state) {
+    try { localStorage.setItem(KEY, JSON.stringify({ day: DAY, state: state })); } catch (e) { /* this visit only */ }
+  }
+  function button(text, label, onTap) {
+    const b = hcVel('button', 'page', text);
+    b.type = 'button';
+    b.setAttribute('aria-label', label);
+    b.addEventListener('click', onTap);
+    return b;
+  }
+  function controls() {
+    const bar = hcVel('div', 'hcdbar');
+    // Only the size changes: the player keeps playing.
+    const size = button('', '', () => {
+      small = !small;
+      keep(small ? 'small' : 'open');
+      dock.className = 'hcdock' + (small ? ' small' : '');
+      label();
+    });
+    const label = () => {
+      size.textContent = small ? '\\u2197' : '\\u2013';
+      size.setAttribute('aria-label', small ? 'Make the player bigger' : 'Make the player smaller');
+    };
+    label();
+    bar.appendChild(size);
+    bar.appendChild(button('\\u2715', 'Close the player', () => close(true)));
+    return bar;
+  }
+  function open(id, byTap) {
+    if (!id) return;
+    hcCount('video_live_opened');
+    shown = id;
+    gone = false;
+    dock.hidden = false;
+    dock.className = 'hcdock' + (small ? ' small' : '');
+    dock.textContent = '';
+    const box = hcVel('div', 'hcvplayer');
+    const f = document.createElement('iframe');
+    f.src = HC_YT + '/embed/' + encodeURIComponent(id) + '?autoplay=' + (byTap ? 1 : 0) + '&playsinline=1&rel=0&origin=' + encodeURIComponent(location.origin);
+    f.title = 'Live stream, ' + CLUB_NAME;
+    f.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; fullscreen');
+    box.appendChild(f);
+    dock.appendChild(box);
+    dock.appendChild(controls());
+    const notes = [lowLatency ? 'The video runs a few seconds behind the timing.' : 'The video runs about 20 s behind the timing.'];
+    if (typeof window.hcStopListen === 'function' && typeof window.hcListening === 'function' && window.hcListening() === true) {
+      window.hcStopListen();
+      notes.push('Listen is off while you watch.');
+    }
+    dock.appendChild(hcVel('p', 'note hcdnote', notes.join(' ')));
+    drawButton();
+  }
+  function close(byUser) {
+    shown = null;
+    gone = false;
+    dock.hidden = true;
+    dock.textContent = '';
+    if (byUser) keep('closed');
+    drawButton();
+  }
+  function stopped() {
+    gone = true;
+    dock.className = 'hcdock' + (small ? ' small' : '');
+    dock.textContent = '';
+    const box = hcVel('div', 'hcvplayer');
+    box.appendChild(hcVel('p', 'note', 'The stream has stopped.'));
+    if (lastRace) {
+      const watchLast = lastRace;
+      box.appendChild(hcVideoButton('Watch the last race', 'Watch the last race, ' + watchLast.title + ', video from YouTube', () => hcVideoSheet(watchLast.video, { title: watchLast.title, where: 'live' })));
+    }
+    const res = hcVel('a', 'page', 'See the results');
+    res.href = '/c/' + encodeURIComponent(CLUB) + '/results';
+    box.appendChild(res);
+    dock.appendChild(box);
+    dock.appendChild(controls());
+  }
+  function drawButton() {
+    watch.textContent = '';
+    watch.hidden = !liveId || shown !== null;
+    if (watch.hidden) return;
+    watch.appendChild(hcVideoButton('Watch live', 'Watch the club\\u2019s stream live, video from YouTube', () => {
+      keep(small ? 'small' : 'open');
+      open(liveId, true);
+    }, true));
+  }
+  async function check() {
+    let id = null;
+    try {
+      const answer = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/video/live', { cache: 'no-store' });
+      const body = answer.ok ? await answer.json() : null;
+      id = body && typeof body.live === 'string' && /^[A-Za-z0-9_-]{11}$/.test(body.live) ? body.live : null;
+      lowLatency = !!(body && body.lowLatency === true);
+      lastRace = body && body.last && typeof body.last === 'object' && hcVideoOk(body.last.video) ? body.last : null;
+    } catch (e) { id = liveId; /* no signal: as it was */ }
+    liveId = id;
+    // Drawn again while stopped, so Watch the last race appears once the relay knows it.
+    if (shown && !liveId) stopped();
+    else if (shown && gone && liveId) open(liveId, false);
+    else if (shown && liveId && liveId !== shown) open(liveId, false);
+    else if (!shown && liveId) {
+      // Docked by itself when Home's Watch sent them here, or they had it
+      // docked earlier tonight - without playing until they tap it.
+      const was = kept();
+      const asked = /[?&]watch=1(&|$)/.test(location.search || '');
+      if (asked || was === 'open' || was === 'small') {
+        small = was === 'small';
+        open(liveId, false);
+      }
+    }
+    drawButton();
+  }
+  void check();
+  setInterval(() => { if (!document.hidden) void check(); }, 60000);
+})();
+`;
 
 /**
  * The player.
@@ -9750,6 +10187,35 @@ function drawRacingTonight(prog) {
     + '</ol></section>';
 }
 
+// LIVE ON YOUTUBE (14 Nov 2026, race video plan V2): under the On track
+// card while the club's stream is on - the relay says so only while a piece
+// is open and the laptop is still sending. Read fresh each time, never from
+// a kept copy, so it is never "live" when it isn't. Watch opens Live with
+// the player docked at the top (V4).
+let homeLive = { at: 0, id: null };
+async function homeLiveVideo() {
+  // Asked at most once a minute; Home redraws its card every poll.
+  if (Date.now() - homeLive.at > 60000) {
+    let id = null;
+    try {
+      const answer = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/video/live', { cache: 'no-store' });
+      const body = answer.ok ? await answer.json() : null;
+      id = body && typeof body.live === 'string' ? body.live : null;
+    } catch (e) { /* no signal: no button */ }
+    homeLive = { at: Date.now(), id: id };
+  }
+  const live = homeLive.id;
+  const hero = now.querySelector ? now.querySelector('.hero.live') : null;
+  if (!live || !hero || now.querySelector('.hcvlive')) return;
+  const a = document.createElement('a');
+  a.className = 'go hcvlive';
+  a.href = BASE + '/live?watch=1';
+  a.textContent = '\\u{1F534} Live on YouTube now \\u00b7 Watch';
+  a.setAttribute('aria-label', 'Watch the club\\u2019s stream live, video from YouTube');
+  a.addEventListener('click', () => hcCount('video_race_opened_home'));
+  hero.insertAdjacentElement('afterend', a);
+}
+
 async function load() {
   const [state, prog, pre, nn] = await Promise.all([
     grab('/snapshot/state').catch(() => null),
@@ -9791,6 +10257,7 @@ async function load() {
       '<span class="big">' + esc(running ? lineTitle(running) : s.state) + '</span>' +
       '<span class="when">' + esc(s.state) + (s.countdown ? ' &middot; ' + esc(s.countdown) : '') +
       ' &middot; follow it live &rarr;</span>' + heroLeader(s) + '</a>';
+    void homeLiveVideo();
   } else if (coming) {
     now.innerHTML = coming;
   } else if (next && !running) {
@@ -12587,11 +13054,24 @@ async function pushResume() {
 // duty, my results and club news, each on or off for this phone. Sent with
 // the sign-up; the relay sends only what is on. All on until changed.
 const ALERT_KINDS_KEY = 'hc-alert-kinds:' + CLUB;
-const ALERT_KIND_WORDS = [['race', 'My races (next, staged, 5 minutes)'], ['marshal', 'Marshal duty'], ['result', 'My results'], ['news', 'Club news (a night called off)']];
+const ALERT_KIND_WORDS = [['race', 'My races (next, staged, 5 minutes)'], ['marshal', 'Marshal duty'], ['result', 'My results'], ['news', 'Club news (a night called off)'], ['video', 'Race videos are up']];
 function alertKinds() {
   try {
     const kept = JSON.parse(localStorage.getItem(ALERT_KINDS_KEY) || 'null');
-    if (Array.isArray(kept)) return kept.filter((k) => ALERT_KIND_WORDS.some((w) => w[0] === k));
+    if (Array.isArray(kept)) {
+      // A kind added since the phone chose (race video, 14 Nov 2026) starts
+      // on, as it does for a phone that never chose - once, so turning it
+      // off afterwards sticks. hc-alert-kinds-seen lists the kinds offered.
+      const SEEN_KEY = 'hc-alert-kinds-seen:' + CLUB;
+      const seen = JSON.parse(localStorage.getItem(SEEN_KEY) || '["race","marshal","result","news"]');
+      const fresh = ALERT_KIND_WORDS.map((w) => w[0]).filter((k) => Array.isArray(seen) && seen.indexOf(k) < 0);
+      if (fresh.length > 0) {
+        fresh.forEach((k) => { if (kept.indexOf(k) < 0) kept.push(k); });
+        localStorage.setItem(ALERT_KINDS_KEY, JSON.stringify(kept));
+        localStorage.setItem(SEEN_KEY, JSON.stringify(ALERT_KIND_WORDS.map((w) => w[0])));
+      }
+      return kept.filter((k) => ALERT_KIND_WORDS.some((w) => w[0] === k));
+    }
   } catch (e) { /* all on */ }
   return ALERT_KIND_WORDS.map((w) => w[0]);
 }
@@ -12608,7 +13088,10 @@ function alertKindsBox() {
     tick.addEventListener('change', () => {
       const now = alertKinds().filter((k) => k !== key);
       if (tick.checked) now.push(key);
-      try { localStorage.setItem(ALERT_KINDS_KEY, JSON.stringify(now)); } catch (e) { /* this visit only */ }
+      try {
+        localStorage.setItem(ALERT_KINDS_KEY, JSON.stringify(now));
+        localStorage.setItem('hc-alert-kinds-seen:' + CLUB, JSON.stringify(ALERT_KIND_WORDS.map((w) => w[0])));
+      } catch (e) { /* this visit only */ }
       // Told again with the new choice; the subscription itself is the same.
       void pushResume();
     });
@@ -14404,10 +14887,79 @@ function raceRow(r, value, top, open, onTap) {
 // tabs (28 Oct 2026, as LiveRC's driver window), then its penalties, its
 // call and "Something wrong?". The tabs switch without a redraw, so a call
 // playing in the card keeps playing.
+// RACE VIDEO ON THEIR NIGHT (14 Nov 2026, race video plan V2, V3, V7):
+// the relay answers which of their races have video (and where), and which
+// the stream missed, for their badge code alone. Asked once the night is
+// drawn and every five minutes while the page is open, since the club's
+// links usually come in after the racing.
+let nightVideos = {};
+let nightMissed = [];
+let videoRaceShown = false;
+async function loadVideos() {
+  if (!CODE || document.hidden) return;
+  try {
+    const answer = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/video/night', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: CODE }),
+      cache: 'no-store',
+    });
+    if (!answer.ok) return;
+    const body = await answer.json();
+    const videos = body && typeof body.videos === 'object' && body.videos !== null ? body.videos : {};
+    const missed = body && Array.isArray(body.missed) ? body.missed.filter((s) => typeof s === 'string') : [];
+    const before = JSON.stringify([nightVideos, nightMissed]);
+    nightVideos = videos;
+    nightMissed = missed;
+    // The "videos are up" alert opens the night at its race (?race=<sid>),
+    // once - then the race list is theirs again.
+    const asked = /[?&]race=([0-9a-f]{32})(&|$)/.exec(location.search || '');
+    const races = night && Array.isArray(night.races) ? night.races : [];
+    const want = asked && !videoRaceShown ? races.find((r) => raceSid(r) === asked[1]) : null;
+    if (want) {
+      videoRaceShown = true;
+      view.race = raceKey(want);
+      view.scroll = view.race;
+      drawExtras();
+      return;
+    }
+    if (JSON.stringify([nightVideos, nightMissed]) !== before) drawExtras();
+  } catch (e) { /* no video this time; the race cards are unchanged */ }
+}
+function videoPart(r) {
+  const sid = raceSid(r);
+  const v = sid ? nightVideos[sid] : undefined;
+  const name = typeof r.label === 'string' && r.label !== '' ? r.label : 'your race';
+  if (!hcVideoOk(v)) {
+    if (sid && nightMissed.includes(sid)) {
+      hcCount('video_unavailable_shown');
+      return el('p', 'hcvmiss', 'This race wasn\\u2019t on the stream.');
+    }
+    return null;
+  }
+  const box = el('div', 'rc-video');
+  const open = (from) => hcVideoSheet(v, {
+    title: name,
+    finish: num(r.pos) > 0 && !r.out ? 'You finished P' + num(r.pos) : '',
+    from: from,
+    where: 'night',
+    report: report,
+  });
+  box.appendChild(hcVideoButton('Watch my race', 'Watch my race, ' + name + ', video from YouTube', () => open(undefined)));
+  // V5, V6: from the sheet, through the desk's request queue.
+  const report = (kind, f) => sendAsk(kind, Object.assign({ race: sid }, f || {}));
+  if (Array.isArray(v.laps) && typeof v.best === 'number' && typeof v.laps[v.best] === 'number') {
+    box.appendChild(hcVideoButton('Jump to my best lap', 'Jump to my best lap in ' + name + ', video from YouTube', () => open(v.laps[v.best])));
+  }
+  return box;
+}
+
 function raceDetail(r, stats, own) {
   const c = el('div', 'rc');
   const facts = raceFacts(r);
   if (facts) c.appendChild(el('div', 'rc-facts', facts));
+  const video = videoPart(r);
+  if (video) c.appendChild(video);
 
   // Their own lines for the race (11 Nov 2026, build plan 7.4): "Held off
   // Sam for 4 laps", "Best Stock finish this year" - worked out on the
@@ -15066,6 +15618,8 @@ function kindWords(kind) {
   if (kind === 'post') return 'At my marshal post';
   if (kind === 'swap') return 'Cover my post';
   if (kind === 'cover') return 'Marshal swap';
+  if (kind === 'videooff') return 'Video in the wrong place';
+  if (kind === 'videohide') return 'Hide a race video';
   return 'Request';
 }
 
@@ -15873,6 +16427,8 @@ async function load() {
   startLive();
   loadCheckIn();
   meRemembered(CODE);
+  void loadVideos();
+  setInterval(() => { void loadVideos(); }, 300000);
 }
 
 load();
@@ -16088,8 +16644,11 @@ const NIGHT_PASS_KEY = 'hg-night-pass-' + CLUB;
 // 2026, driver phone plan item 8): the PIN box, for them.
 const ADDING = /[?&]add=1(&|$)/.test(location.search);
 const REMEMBERED = ADDING ? '' : meCode();
+// The race a "videos are up" alert named (?race=<sid>) goes along, so the
+// night opens at it (race video V2; look-back, 14 Nov 2026).
+const RACE_ASKED = (/[?&]race=([0-9a-f]{32})(&|$)/.exec(location.search) || [])[1] || '';
 if (REMEMBERED) {
-  const there = '/c/' + encodeURIComponent(CLUB) + '/night#d=' + REMEMBERED;
+  const there = '/c/' + encodeURIComponent(CLUB) + '/night' + (RACE_ASKED ? '?race=' + RACE_ASKED : '') + '#d=' + REMEMBERED;
   try { location.replace(there); } catch (e) { location.href = there; }
 }
 
@@ -16244,7 +16803,7 @@ function draw(message) {
       // racing should never put you in the heats. Check-in is its own
       // button on the night, which asks "Are you at the track?" first.
       said.textContent = 'Signed in. Opening your page\u2026';
-      go('/c/' + encodeURIComponent(CLUB) + '/night#d=' + code);
+      go('/c/' + encodeURIComponent(CLUB) + '/night' + (RACE_ASKED ? '?race=' + RACE_ASKED : '') + '#d=' + code);
       return;
     }
 

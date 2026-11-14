@@ -152,9 +152,13 @@ const EMAIL = /^[^\s@<>()",;:\\[\]]+@[^\s@<>()",;:\\[\]]+\.[^\s@<>()",;:\\[\]]+$
 // more minutes" and "my car's broken - skip me", both for the desk to approve.
 // "coming" (12 Nov 2026, setup plan C1): "I'm coming to the next race night,
 // in these classes" - applied by the laptop by itself (DRIVER_WRITE_KINDS).
-export type DriverAskKind = "details" | "pack" | "query" | "setup" | "packedit" | "car" | "late" | "skip" | "coming" | "post" | "swap" | "cover";
+// "videooff" and "videohide" (14 Nov 2026, race video plan V5, V6): "this
+// race's video starts in the wrong place" and "ask the club to hide this
+// video" - which race, and for videooff which way and about how far. No free
+// text, so nothing needs moderating. Both for the desk.
+export type DriverAskKind = "details" | "pack" | "query" | "setup" | "packedit" | "car" | "late" | "skip" | "coming" | "post" | "swap" | "cover" | "videooff" | "videohide";
 
-export const DRIVER_ASK_KINDS: readonly DriverAskKind[] = ["details", "pack", "query", "setup", "packedit", "car", "late", "skip", "coming", "post", "swap", "cover"];
+export const DRIVER_ASK_KINDS: readonly DriverAskKind[] = ["details", "pack", "query", "setup", "packedit", "car", "late", "skip", "coming", "post", "swap", "cover", "videooff", "videohide"];
 
 /** The longest note a "late" or "skip" can carry. */
 export const ASK_MAX_RACE_NOTE = 120;
@@ -272,6 +276,25 @@ export function askFieldsFrom(kind: string, f: unknown, withPin: boolean): AskCh
     }
 
     return { ok: true, f: { race, m } };
+  }
+
+  // Race video (V5, V6): which race, and for "videooff" whether the video
+  // opens too early or too late and about how many seconds (both optional).
+  if (kind === "videooff" || kind === "videohide") {
+    const race = typeof input["race"] === "string" ? input["race"].trim().toLowerCase() : "";
+
+    if (!/^[0-9a-f]{32}$/.test(race)) {
+      return refuse(400, "Which race is it about?");
+    }
+
+    if (kind === "videohide") {
+      return { ok: true, f: { race } };
+    }
+
+    const out: Record<string, string> = { race };
+    if (input["d"] === "early" || input["d"] === "late") out["d"] = input["d"];
+    if (typeof input["s"] === "number" && Number.isInteger(input["s"]) && input["s"] >= 1 && input["s"] <= 600) out["s"] = String(input["s"]);
+    return { ok: true, f: out };
   }
 
   // More time, or skip my race: a short note, nothing else. Which race is the

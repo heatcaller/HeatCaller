@@ -31,7 +31,15 @@ public static class NightClose
         int? ResultsNotOnline,
         DateTime? LastBackupUtc,
         bool DayOpen,
-        IReadOnlyList<string>? Owing = null);
+        IReadOnlyList<string>? Owing = null,
+        VideoLeft? Video = null);
+
+    /// <summary>
+    /// Race video at the end of the night (14 Nov 2026, look-back): stream
+    /// pieces still without their YouTube link, and links YouTube won't play
+    /// for drivers. Null when race video is off or nothing streamed.
+    /// </summary>
+    public sealed record VideoLeft(int Unlinked, int Refused);
 
     /// <summary>
     /// The list, as the Next Steps card says it, starting with a space:
@@ -48,6 +56,15 @@ public static class NightClose
         return left.Count == 0
             ? " All wrapped up - lights out."
             : $" Before lights out: {string.Join(" · ", left)}.";
+    }
+
+    /// <summary>"paste the YouTube link for 1 stream piece · YouTube won't play 1 video".</summary>
+    internal static string VideoWords(VideoLeft video)
+    {
+        var parts = new List<string>();
+        if (video.Unlinked > 0) parts.Add($"paste the YouTube link for {Plural.Of(video.Unlinked, "stream piece")}");
+        if (video.Refused > 0) parts.Add($"YouTube won't play {Plural.Of(video.Refused, "race video")} - check it's Public or Unlisted, with embedding on");
+        return string.Join(" · ", parts);
     }
 
     /// <summary>Each thing still to do, in the order to do it.</summary>
@@ -76,6 +93,11 @@ public static class NightClose
         if (facts.NightEmailsToSend is > 0 and var emails)
         {
             left.Add($"{Plural.Of(emails, "night email")} to send");
+        }
+
+        if (facts.Video is { } video && (video.Unlinked > 0 || video.Refused > 0))
+        {
+            left.Add(VideoWords(video));
         }
 
         // A backup taken before the last race finished hasn't got it.
@@ -108,6 +130,9 @@ internal enum CloseNightKind
 
     /// <summary>One of the club's own lines ("Lock the clubhouse"), ticked by hand.</summary>
     Own,
+
+    /// <summary>Race video (14 Nov 2026): every stream piece has its YouTube link, and YouTube plays them all.</summary>
+    Video,
 
     // Ready to race's lines (12 Nov 2026, setup plan B3) - the same window
     // at the start of the night. See ReadyChecklist.
@@ -195,6 +220,13 @@ internal static class CloseNightChecklist
 
         var backedUp = facts.LastBackupUtc is { } backup
                        && (lastRaceEndedUtc is not { } ended || backup >= ended);
+        if (facts.Video is { } video)
+        {
+            Add("video", CloseNightKind.Video, video.Unlinked == 0 && video.Refused == 0,
+                "Tonight's race videos are linked",
+                NightClose.VideoWords(video));
+        }
+
         Add("backup", CloseNightKind.Backup, backedUp,
             "Tonight's results are backed up",
             "back up tonight's results");

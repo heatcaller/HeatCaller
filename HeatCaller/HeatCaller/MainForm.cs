@@ -215,6 +215,7 @@ public partial class MainForm : Form
     // made and wired - BEFORE the pages are built (PopulateTabs), so
     // _raceControlControl and _checkInControl are not there yet.
     partial void WireDriverRequests();   // MainForm.DriverRequests.cs
+    partial void WireRaceVideo();        // MainForm.Video.cs
     partial void WireDriverLive();       // MainForm.DriverLive.cs
     partial void WireWiFiExtras();       // MainForm.WiFiExtras.cs
     partial void WireCaptions();         // MainForm.Captions.cs
@@ -1371,6 +1372,7 @@ public partial class MainForm : Form
         // _webRosterTimer. Here, with the server and publisher wired and
         // before the roster timer starts, so the first tick finds them ready.
         WireDriverRequests();
+        WireRaceVideo();
         WireDriverLive();
         WireWiFiExtras();
         WireCaptions();

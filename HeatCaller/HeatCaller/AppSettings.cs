@@ -2398,6 +2398,43 @@ public sealed class AppSettings
     /// </summary>
     public string RelayShortName { get; set; } = string.Empty;
 
+    // --- Race video on YouTube (14 Nov 2026, race video plan) ---------
+    //
+    // The club streams from a second PC with OBS to its own YouTube
+    // channel; this laptop only lines the races up with the video
+    // (StreamTonight, ObsLink) and tells the relay, which puts "Watch my
+    // race" on the drivers' pages. Off until the club turns it on.
+
+    /// <summary>Race video on: OBS is watched, and the relay offers each race's video.</summary>
+    public bool VideoEnabled { get; set; }
+
+    /// <summary>The streaming PC running OBS, on the club's network: an address or a name.</summary>
+    public string VideoObsHost { get; set; } = string.Empty;
+
+    /// <summary>OBS's WebSocket server port (Tools > WebSocket Server Settings).</summary>
+    public int VideoObsPort { get; set; } = 4455;
+
+    /// <summary>OBS's WebSocket password, if it has one. Never sent to the relay. Sealed with the other secrets.</summary>
+    [JsonIgnore]
+    public string VideoObsPassword { get; set; } = string.Empty;
+
+    /// <summary>How many seconds before the green flag a race's video opens (0-30): the grid, not the first corner.</summary>
+    public int VideoLeadInSeconds { get; set; } = 10;
+
+    /// <summary>
+    /// The club streams with YouTube's Ultra-low latency (V4): Live's docked
+    /// player then says the video runs "a few seconds" behind the timing,
+    /// not about 20. Off: YouTube's normal latency.
+    /// </summary>
+    public bool VideoUltraLowLatency { get; set; }
+
+    /// <summary>
+    /// Show race video on the club's public results too (Asher, 14 Nov 2026:
+    /// "public"), not only on each driver's own night. Juniors' races stay on
+    /// their own night whatever this says.
+    /// </summary>
+    public bool VideoOnPublicResults { get; set; } = true;
+
     /// <summary>
     /// The "New here?" card on the club's home page (30 Oct 2026, relay
     /// navigation round 6): where the club races - "Kent Hobbies, 12 Main St".
@@ -2678,6 +2715,7 @@ public sealed class AppSettings
         public string? SmtpPassword { get; set; }
         public string? BackupPassword { get; set; }
         public string? StandbyPin { get; set; }
+        public string? VideoObsPassword { get; set; }
         public Dictionary<string, string>? RacerPins { get; set; }
     }
 
@@ -2695,6 +2733,7 @@ public sealed class AppSettings
         SmtpPassword = SmtpPassword,
         BackupPassword = BackupPassword,
         StandbyPin = StandbyPin,
+        VideoObsPassword = VideoObsPassword,
         RacerPins = new Dictionary<string, string>(RacerPins, StringComparer.OrdinalIgnoreCase),
     };
 
@@ -2716,6 +2755,7 @@ public sealed class AppSettings
         RelayCheckInSecret = fields.RelayCheckInSecret ?? string.Empty;
         SmtpPassword = fields.SmtpPassword ?? string.Empty;
         StandbyPin = fields.StandbyPin ?? string.Empty;
+        VideoObsPassword = fields.VideoObsPassword ?? string.Empty;
         RacerPins = fields.RacerPins is null
             ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             : new Dictionary<string, string>(fields.RacerPins, StringComparer.OrdinalIgnoreCase);
@@ -2750,6 +2790,7 @@ public sealed class AppSettings
         || !string.IsNullOrEmpty(SmtpPassword)
         || !string.IsNullOrEmpty(BackupPassword)
         || !string.IsNullOrEmpty(StandbyPin)
+        || !string.IsNullOrEmpty(VideoObsPassword)
         || RacerPins.Count > 0;
 
     /// <summary>

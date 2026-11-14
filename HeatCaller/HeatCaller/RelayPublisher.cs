@@ -44,6 +44,10 @@ public enum RelayChannel
     // 12 Nov 2026 (setup plan D13): the club's next race night, or that it's
     // off - see NextNight. Public: it's what the club tells everybody.
     NextNight,
+
+    // 14 Nov 2026 (race video plan Phase 0): tonight's YouTube stream - see
+    // StreamTonight. PRIVATE: the relay works each race's moment out of it.
+    Stream,
 }
 
 /// <summary>
@@ -299,6 +303,9 @@ public sealed partial class RelayPublisher : IDisposable
 
     /// <summary>Email me a link to my page - see RelayPublisher.SignInMail. Its own thirty-second tick.</summary>
     partial void CollectSignInMailPass(CancellationToken token);
+
+    /// <summary>Race video: which videos YouTube refused - see RelayPublisher.VideoCheck. Its own ten-minute tick.</summary>
+    partial void CollectVideoCheckPass(CancellationToken token);
 
     /// <summary>
     /// Whether a refused CLOSE (a switch going off) may count as taken.
@@ -2232,6 +2239,9 @@ public sealed partial class RelayPublisher : IDisposable
                     // item 17) - see RelayPublisher.SignInMail.
                     CollectSignInMailPass(pass.Token);
 
+                    // Race video (14 Nov 2026, V7) - see RelayPublisher.VideoCheck.
+                    CollectVideoCheckPass(pass.Token);
+
                     // What phones saw of the sponsors on Live (5 Nov 2026) -
                     // see RelayPublisher.Sponsors. Its own three-minute tick.
                     CollectSponsorViewsPass(pass.Token);
@@ -3872,6 +3882,7 @@ public sealed partial class RelayPublisher : IDisposable
         RelayChannel.Qualifying => "qualifying",
         RelayChannel.Sponsors => "sponsors",
         RelayChannel.NextNight => "nextnight",
+        RelayChannel.Stream => "stream",
 
         // A NAME THE RELAY WILL REFUSE, not "state" (13 Oct 2026). This
         // arm used to answer "state", so a channel added to the enum and

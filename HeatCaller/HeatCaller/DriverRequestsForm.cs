@@ -257,8 +257,8 @@ internal sealed class DriverRequestsForm : Form
         var request = SelectedWaiting();
         var known = request is not null && _desk.DriverOf(request) is not null;
 
-        _btnApprove.Enabled = known && request!.Kind is DriverAsk.Details or DriverAsk.Pack or DriverAsk.Late or DriverAsk.Skip or DriverAsk.Cover;
-        _btnNoted.Enabled = request is { Kind: DriverAsk.Query };
+        _btnApprove.Enabled = known && request!.Kind is DriverAsk.Details or DriverAsk.Pack or DriverAsk.Late or DriverAsk.Skip or DriverAsk.Cover or DriverAsk.VideoHide;
+        _btnNoted.Enabled = request is { Kind: DriverAsk.Query or DriverAsk.VideoOff };
         _btnDecline.Enabled = request is not null;
         _btnDiscard.Enabled = request is not null && !known;
     }
@@ -331,6 +331,23 @@ internal sealed class DriverRequestsForm : Form
                 if (!_desk.Note(current, out refusal))
                 {
                     AppDialog.Show(this, refusal, "Not noted", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+
+                break;
+
+            // Race video (14 Nov 2026, V5, V6).
+            case DriverAsk.VideoOff:
+                if (!_desk.NoteVideoOff(current, out refusal))
+                {
+                    AppDialog.Show(this, refusal, "Not noted", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+
+                break;
+
+            case DriverAsk.VideoHide:
+                if (!_desk.ApproveVideoHide(current, out refusal))
+                {
+                    AppDialog.Show(this, refusal, "Not hidden", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
 
                 break;
