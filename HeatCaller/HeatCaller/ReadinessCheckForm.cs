@@ -104,7 +104,9 @@ public sealed class ReadinessCheckForm : Form
 
         // Each column at least as wide as it was made, or its heading; what
         // the decoder hears takes the rest - see Pieces.FitListColumns.
-        Pieces.FitListColumns(_list, 3, 34, 170, 110, 420);
+        // WHY (13 Nov 2026): the mark column was 34, which cut "OK" to "O..."
+        // once the list's own padding was taken off; 48 holds it.
+        Pieces.FitListColumns(_list, 3, 48, 170, 110, 420);
 
         DialogFit.Keep(this, page, width: 760, height: 520);
     }

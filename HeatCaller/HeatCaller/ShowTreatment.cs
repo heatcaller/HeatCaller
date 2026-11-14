@@ -263,6 +263,25 @@ internal sealed class ShowMusic
     /// <summary>One piece, loaded once and kept - see Cached.</summary>
     public ShowClip? Clip(ShowPart part, out string? problem) => Cached(PathOf(part), out problem);
 
+    /// <summary>Whether this part is ready to describe without loading anything - loaded already, or with no file to load.</summary>
+    public bool IsLoaded(ShowPart part)
+    {
+        var path = PathOf(part);
+
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return true;
+        }
+
+        lock (Gate)
+        {
+            return Loaded.ContainsKey(path);
+        }
+    }
+
+    /// <summary>Whether every part is - see IsLoaded.</summary>
+    public bool AllLoaded() => IsLoaded(ShowPart.Opener) && IsLoaded(ShowPart.Bed) && IsLoaded(ShowPart.Sting);
+
     /// <inheritdoc cref="Clip"/>
     public ShowClip? Opener(out string? problem) => Clip(ShowPart.Opener, out problem);
 
@@ -290,6 +309,8 @@ internal sealed class ShowMusic
             return null;
         }
 
+        int generation;
+
         lock (Gate)
         {
             if (Loaded.TryGetValue(path, out var held))
@@ -297,9 +318,34 @@ internal sealed class ShowMusic
                 return held;
             }
 
-            var clip = ShowClip.Load(path, out problem);
+            generation = _loadedGeneration;
+        }
 
-            if (clip is not null)
+        // Loaded OUTSIDE the lock. WHY (13 Nov 2026): the Show treatment
+        // card now measures the pieces in the background at startup (see
+        // ShowTreatmentCard.RefreshShowMusic), and a bed is minutes of audio
+        // to decode. Held under the lock, any question asked of the cache on
+        // the window's thread meanwhile - is it loaded yet, describe the
+        // opener - waited for the whole decode, which put the second back
+        // that measuring in the background was meant to save. Two looks at
+        // the same file at once may both load it; the first one kept wins.
+        var clip = ShowClip.Load(path, out problem);
+
+        if (clip is null)
+        {
+            return null;
+        }
+
+        lock (Gate)
+        {
+            if (Loaded.TryGetValue(path, out var first))
+            {
+                return first;
+            }
+
+            // Not kept if the music was changed while it loaded (Reload):
+            // it may be the file that was there before.
+            if (generation == _loadedGeneration)
             {
                 Loaded[path] = clip;
             }
@@ -307,6 +353,9 @@ internal sealed class ShowMusic
             return clip;
         }
     }
+
+    /// <summary>Moved on by every Reload, so a load that began before one is not kept after it.</summary>
+    private static int _loadedGeneration;
 
     /// <summary>
     /// Forgets the loaded audio, so the next look reads the files again.
@@ -319,6 +368,7 @@ internal sealed class ShowMusic
         lock (Gate)
         {
             Loaded.Clear();
+            _loadedGeneration++;
         }
     }
 

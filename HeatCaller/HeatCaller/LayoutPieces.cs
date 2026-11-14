@@ -176,6 +176,21 @@ internal sealed class PageStack : Panel
         var width = Math.Max(1, ClientSize.Width - Padding.Horizontal);
         var height = _column.GetPreferredSize(new Size(width, 0)).Height;
 
+        // Taller than the page and not scrolling yet: it is about to, and the
+        // bar takes its width from the column. Placed at that width now
+        // rather than at this one and then again once the bar is in - that
+        // second placing laid the whole column out again on every page that
+        // scrolls, as it was first opened (13 Nov 2026; Voice, Sounds, Club
+        // Website). A measuring, not a layout: if the bar does not come after
+        // all, the next layout widens it back, as before.
+        if (!VerticalScroll.Visible
+            && Padding.Top + height + Math.Max(Padding.Bottom, AutoScrollMargin.Height) > ClientSize.Height
+            && width > SystemInformation.VerticalScrollBarWidth * 4)
+        {
+            width -= SystemInformation.VerticalScrollBarWidth;
+            height = _column.GetPreferredSize(new Size(width, 0)).Height;
+        }
+
         // Scrolled: the column's top is above the panel's by however far.
         var bounds = new Rectangle(
             Padding.Left + AutoScrollPosition.X,
@@ -2715,48 +2730,94 @@ internal sealed class SteadyLabel : Label
         AutoSize = true;
     }
 
+    private IReadOnlyList<string> _wordings = Array.Empty<string>();
+
     /// <summary>Everything it can say - or, for text built from numbers, the longest it can come to. Measured alongside what it says now.</summary>
-    public IReadOnlyList<string> Wordings { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> Wordings
+    {
+        get => _wordings;
+        set
+        {
+            _wordings = value ?? Array.Empty<string>();
+            _measured.Clear();
+        }
+    }
+
+    /// <summary>
+    /// The widest and tallest of the wordings, by the width they were
+    /// wrapped to - measured once per width and font.
+    ///
+    /// WHY (13 Nov 2026, Sanctioning Preset taking seconds to open and a
+    /// second or two for every preset clicked): layout asks a label its size
+    /// many times over, and each time every wording was measured afresh -
+    /// thirteen rulebook paragraphs, in three labels, on every pass. The
+    /// wordings don't change between passes, so neither does what they
+    /// measure; only the current text (base) is measured each time.
+    /// </summary>
+    private readonly Dictionary<int, Size> _measured = new();
+
+    protected override void OnFontChanged(EventArgs e)
+    {
+        _measured.Clear();
+        base.OnFontChanged(e);
+    }
 
     public override Size GetPreferredSize(Size proposedSize)
     {
         var size = base.GetPreferredSize(proposedSize);
 
-        if (Wordings.Count == 0)
+        if (_wordings.Count == 0)
         {
             return size;
         }
 
         // A label treats a width of 1 as none at all; so does this.
         var bounded = proposedSize.Width is > 1 and < int.MaxValue / 4;
+        var roomWidth = bounded ? Math.Max(1, proposedSize.Width - Padding.Horizontal) : int.MaxValue;
 
-        var room = new Size(
-            bounded ? Math.Max(1, proposedSize.Width - Padding.Horizontal) : int.MaxValue,
-            int.MaxValue);
+        // The mnemonic setting changes what is measured, so it is part of the key.
+        var key = UseMnemonic ? roomWidth : -roomWidth;
 
-        // The flags a label wraps its text with.
-        var flags = TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl;
-
-        if (!UseMnemonic)
+        if (!_measured.TryGetValue(key, out var needed))
         {
-            flags |= TextFormatFlags.NoPrefix;
-        }
+            // The flags a label wraps its text with.
+            var flags = TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl;
 
-        foreach (var wording in Wordings)
-        {
-            if (string.IsNullOrEmpty(wording))
+            if (!UseMnemonic)
             {
-                continue;
+                flags |= TextFormatFlags.NoPrefix;
             }
 
-            var needed = TextRenderer.MeasureText(wording, Font, room, flags);
+            var room = new Size(roomWidth, int.MaxValue);
 
-            size = new Size(
-                Math.Max(size.Width, bounded ? Math.Min(proposedSize.Width, needed.Width + Padding.Horizontal) : needed.Width + Padding.Horizontal),
-                Math.Max(size.Height, needed.Height + Padding.Vertical));
+            foreach (var wording in _wordings)
+            {
+                if (string.IsNullOrEmpty(wording))
+                {
+                    continue;
+                }
+
+                var one = TextRenderer.MeasureText(wording, Font, room, flags);
+                needed = new Size(Math.Max(needed.Width, one.Width), Math.Max(needed.Height, one.Height));
+            }
+
+            // A label being resized by hand can ask at every width there is.
+            if (_measured.Count > 64)
+            {
+                _measured.Clear();
+            }
+
+            _measured[key] = needed;
         }
 
-        return size;
+        if (needed == Size.Empty)
+        {
+            return size;
+        }
+
+        return new Size(
+            Math.Max(size.Width, bounded ? Math.Min(proposedSize.Width, needed.Width + Padding.Horizontal) : needed.Width + Padding.Horizontal),
+            Math.Max(size.Height, needed.Height + Padding.Vertical));
     }
 }
 

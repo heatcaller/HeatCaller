@@ -248,18 +248,16 @@ public sealed class PublishLayoutTests
     }
 
     [Fact]
-    public void ReadyToRun_is_written_down_in_the_publish_script_but_not_switched_on()
+    public void ReadyToRun_is_switched_on_with_what_it_was_measured_at()
     {
-        // Recommended on, once measured both ways - but a guess is not a
-        // measurement, so the flag sits in a comment until someone has timed
-        // a cold start and read the size line.
-        var mentions = PublishScript
-            .Split('\n')
-            .Where(line => line.Contains("PublishReadyToRun", StringComparison.Ordinal))
-            .ToList();
-
-        Assert.NotEmpty(mentions);
-        Assert.All(mentions, line => Assert.StartsWith("rem", line.TrimStart()));
+        // It sat in a comment until somebody had timed a cold start both ways
+        // and read the size line (a guess is not a measurement). That was
+        // done on 13 Nov 2026 - pages built about 0.6s sooner for 26 MB - and
+        // it was switched on with the numbers written beside it, so whoever
+        // wonders whether it is worth it can read why.
+        Assert.Contains("-p:PublishReadyToRun=true", PublishCommandLine);
+        Assert.Contains("Measured on", PublishScript);
+        Assert.Contains("26 MB", PublishScript);
     }
 
     [Fact]

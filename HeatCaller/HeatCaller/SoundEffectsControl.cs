@@ -1060,17 +1060,75 @@ public sealed class SoundEffectsControl : UserControl
             return;
         }
 
-        if (field.Height > _col.RowHeight - RowPad * 2)
+        // Gathered, and dealt with once the field has finished settling.
+        //
+        // WHY (13 Nov 2026, Asher: "optimize loading times for all the
+        // pages"): a drop-down changes its height several times over while
+        // Windows is making it, and each change moved it, which made it lay
+        // itself out and report again. The Effects tab's first showing went
+        // through about 1,600 moves for its 21 drop-downs and took 2 to 5s,
+        // most of it here. Once a field is quiet, it is placed once.
+        _resizedFields[field] = row;
+
+        if (_resizedPending)
+        {
+            return;
+        }
+
+        _resizedPending = true;
+
+        if (IsHandleCreated)
+        {
+            BeginInvoke(PlaceResizedFields);
+        }
+        else
+        {
+            PlaceResizedFields();
+        }
+    }
+
+    /// <summary>The fields that changed height since they were last placed - see FieldResized.</summary>
+    private readonly Dictionary<Control, EffectRow> _resizedFields = new();
+
+    /// <summary>Set while a PlaceResizedFields is waiting to run.</summary>
+    private bool _resizedPending;
+
+    /// <summary>
+    /// Each field that settled on a height of its own centred on its row
+    /// again - or, should one no longer fit, every row placed again, taller.
+    /// </summary>
+    private void PlaceResizedFields()
+    {
+        _resizedPending = false;
+
+        if (IsDisposed || _placing || _col.RowHeight == 0)
+        {
+            _resizedFields.Clear();
+            return;
+        }
+
+        var fields = _resizedFields.ToList();
+        _resizedFields.Clear();
+
+        if (fields.Any(pair => !pair.Key.IsDisposed && pair.Key.Height > _col.RowHeight - RowPad * 2))
         {
             PlaceRows();
             return;
         }
 
-        var top = row.Middle + _rowsPanel.AutoScrollPosition.Y - field.Height / 2;
-
-        if (field.Top != top)
+        foreach (var (field, row) in fields)
         {
-            field.Top = top;
+            if (field.IsDisposed)
+            {
+                continue;
+            }
+
+            var top = row.Middle + _rowsPanel.AutoScrollPosition.Y - field.Height / 2;
+
+            if (field.Top != top)
+            {
+                field.Top = top;
+            }
         }
     }
 
