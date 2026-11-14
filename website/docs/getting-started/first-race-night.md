@@ -63,18 +63,18 @@ Full detail: [Drivers and classes](../race-day/drivers-and-classes.md) and [Tran
 
 Everything on race night (check-ins, tech, the program, the timetable) is filed against a race day. Starting a new one gives you a clean sheet, and last week's stays with last week.
 
-There's one way to start a night: the **Start Tonight** window. Every button that starts a race day opens it, wherever it is (see [Start a race day](../race-day/events-and-entries.md#start-a-race-day)). A new install doesn't have a race day until you start one.
+Nights start on the **Templates** tab of **Race Day → Setup** (see [Start a race day](../race-day/events-and-entries.md#start-a-race-day)). A new install doesn't have a race day until you start one.
 
-1. Open **Race Day → Setup** and click **New Race Day** (or **Start Tonight...** on **Next Steps**). The **Start Tonight** window opens.
-2. On your first night it asks two questions. Choose **Race day - heats, then finals** (or **Club night - just races** if your club just races, with no finals), tick the classes running tonight, and click **Start Tonight**. From the second night on, the window also offers **Like last time** with the date of your last race day, which starts tonight exactly like it, and any night templates you've saved.
-3. The new day is current straight away, named with today's date. Type a better **Name:** if you like.
+1. Open **Race Day → Setup**. With no race day open it shows the **Templates** tab. On your first night the banner offers **Something different...**: click **Choose...** and the **Start Tonight** window opens.
+2. On your first night it asks two questions. Choose **Race day - heats, then finals** (or **Club night - just races** if your club just races, with no finals), tick the classes running tonight, and click **Start Tonight**. From the second night on, the **Templates** tab also has a **Like last time** card for your last race day, which starts tonight exactly like it in one press of **Start Tonight**, and a card for each night template you've saved.
+3. The new day is current straight away and Setup moves to its **Tonight** tab, named with today's date. Type a better **Name:** if you like.
 4. Set **Track layout:**.
 5. Check **Heats each driver gets:** (default 3) and **Drivers per heat:**.
 6. Check **Only include drivers who have checked in**. On a race day it starts ticked, so heats are built only from the drivers who are actually here. Untick it if you don't run a sign-on desk.
 
 There's no Save button: every change on **Setup** saves itself.
 
-Would you rather be walked through it? Click **Set Up Tonight** instead (HeatCaller also offers it when the first-run wizard finishes). With no race day open, it opens the same **Start Tonight** window first, then takes you through the day, tonight's classes, who's here and the program, one step at a time, and covers steps 4 to 6 of this walkthrough too.
+Would you rather be walked through it? Click **Walk me through it...** on the **Templates** banner instead (the **Set Up Tonight** wizard;  HeatCaller also offers it when the first-run wizard finishes). With no race day open, it opens the same **Start Tonight** window first, then takes you through the day, tonight's classes, who's here and the program, one step at a time, and covers steps 4 to 6 of this walkthrough too.
 
 Full detail: [Events and entries](../race-day/events-and-entries.md).
 

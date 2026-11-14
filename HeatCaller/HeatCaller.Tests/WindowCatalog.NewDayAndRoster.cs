@@ -66,6 +66,33 @@ internal static partial class WindowCatalog
 
                 return new NewRaceDayForm(options, 0, ClassNames(8), ClassNames(3), RaceDayShape.ClubNight, openDay: "Race Day 11 Nov 2026");
             }),
+            // A template edited on Setup's Templates tab (14 Nov 2026): every
+            // field set, more classes than the list shows, and a forecast line
+            // long enough to wrap; and a new one, with nothing to forecast.
+            ("Edit Template", () => new TemplateEditForm(
+                new NightTemplate
+                {
+                    Name = "Monthly points round for the Kyosho Mini-Z championship",
+                    ClassNames = ClassNames(5),
+                    QualifyingRounds = 3,
+                    DriversPerHeat = 8,
+                    EntryFee = 25,
+                    ExtraClassFee = 10,
+                    EntriesCloseLocalTime = TimeSpan.FromHours(9.5),
+                    FirstRaceLocalTime = TimeSpan.FromHours(10),
+                    OutByLocalTime = TimeSpan.FromHours(17),
+                    Breaks = new List<PlannedBreak> { new() { AfterRound = 2, Minutes = 30, What = "Lunch" } },
+                },
+                isNew: false,
+                new[] { "Tuesday club night" },
+                ClassNames(12),
+                new[] { "Riverside Raceway" },
+                new[] { "Outdoor clay - long" },
+                Array.Empty<Season>(),
+                _ => ("~42 drivers (from the last 6 nights like it) · 18 heats + 10 finals · finishes about 16:50, 10 min to spare", false))),
+            ("Edit Template (new, nothing to forecast)", () => new TemplateEditForm(
+                new NightTemplate(), isNew: true, Array.Empty<string>(), ClassNames(3),
+                Array.Empty<string>(), Array.Empty<string>(), Array.Empty<Season>(), _ => null)),
             ("Drivers in Round", () => Roster(classSize: 18, inRound: 11)),
             ("Drivers in Round (nobody in the class)", () => Roster(classSize: 0, inRound: 0)),
             ("Add a Driver to This Round", () => new RoundRosterForm.DriverPicker(Drivers(30))),

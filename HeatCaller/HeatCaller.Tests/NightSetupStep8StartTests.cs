@@ -121,13 +121,19 @@ public sealed class NightSetupStep8StartTests : IDisposable
         var templates = Source("RaceDayEventControl.Templates.cs");
         var pages = Source("MainForm.Pages.cs");
 
-        // Setup's New Race Day, the Calendar's, Who's Racing's banner and Next
-        // Steps' Start Tonight..., "like last time" and template cards.
-        Assert.Contains("private bool StartNewDay() => StartTonightWindow(null, null);", day);
+        // The Calendar's New Race Day and Next Steps' "like last time" and
+        // template cards - doors that already know which choice they mean.
         Assert.Contains("StartTonightWindow(wanted, templateName);", day);
         Assert.Contains("public bool StartLikeLastDay() => StartTonightWindow(StartTonightKind.LikeLast, null);", day);
         Assert.Contains("StartTonightWindow(StartTonightKind.Template, name)", templates);
-        Assert.Contains("StartTonightWindow(StartTonightKind.Template, template.Name)", templates);
+
+        // Setup's Templates tab (14 Nov 2026) took over New Race Day: its
+        // Start goes the one way every door goes (StartTonightAs), and only
+        // Something different... opens the window, for its two questions.
+        Assert.DoesNotContain("New Race Day\"", day);
+        var shelfStart = Between(templates, "private void StartFromShelf(StartTonightOption option)", "/// <summary>When..., Duplicate and Delete");
+        Assert.Contains("StartTonightAs(option,", shelfStart);
+        Assert.Contains("StartTonightWindow(StartTonightKind.Different, null)", shelfStart);
 
         // The one-press template start no longer asks its own question.
         Assert.DoesNotContain("Start tonight from a template", templates);
@@ -137,9 +143,15 @@ public sealed class NightSetupStep8StartTests : IDisposable
         var openSetup = Between(pages, "_openRaceDaySetup = startStep =>", "using var wizard");
         Assert.Contains("eventTab.StartNewDayFromElsewhere()", openSetup);
 
-        var startRaceDay = Between(pages, "_startRaceDay = () =>", "eventsPage.StartRaceDayRequested");
-        Assert.Contains("eventTab.StartNewDayFromElsewhere()", startRaceDay);
+        // "Start a Race Day" goes to Setup's Templates tab - or, in the desk
+        // view that can't go there, the window.
+        var startRaceDay = Between(pages, "_startRaceDay = () =>", "tabRaceDay.SelectedIndexChanged");
+        Assert.Contains("eventTab.ShowTab(RaceDayEventControl.TemplatesTab)", startRaceDay);
+        Assert.Contains("_startRaceDayInWindow?.Invoke()", startRaceDay);
         Assert.DoesNotContain("_openRaceDaySetup", startRaceDay);
+
+        var inWindow = Between(pages, "_startRaceDayInWindow = () =>", "eventTab.ComingTonight");
+        Assert.Contains("eventTab.StartNewDayFromElsewhere()", inWindow);
     }
 
     // --- No empty first day on a fresh install --------------------------------

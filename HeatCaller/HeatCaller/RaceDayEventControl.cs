@@ -155,7 +155,6 @@ public sealed partial class RaceDayEventControl : UserControl
     private readonly Label _lblAutoAdvanceHint = new();
     private Label? _lblAutoAdvanceScope;
     private readonly AppSettings? _settings;
-    private readonly Button _btnNew = new();
     private readonly Button _btnWizard = new();
 
     /// <summary>
@@ -395,7 +394,7 @@ public sealed partial class RaceDayEventControl : UserControl
         var lblIntro = new Label
         {
             Text = "Check-ins, scrutineering, the heats and the timetable are all filed against the race day picked here. "
-                 + "A new race day starts them fresh and keeps last week's under last week's day. Changes save as you make them.",
+                 + "Start a new one on the Templates tab; last week's stays under last week's day. Changes save as you make them.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -443,33 +442,29 @@ public sealed partial class RaceDayEventControl : UserControl
             }
         };
 
-        _btnNew.Text = "New Race Day";
-        _btnNew.Click += (_, _) => _ = StartNewDay();
-
-        // The wizard's front door, beside the button that starts a day the
-        // short way. Both are here because both are "I am setting up
-        // tonight" - one for somebody who knows what they want, one for
-        // somebody who would rather be asked. On the same line as the picker
-        // when there is room for all three, and wrapping under it when there
-        // is not - at a larger text size, or on a narrow window.
-        _btnWizard.Text = "Set Up Tonight...";
+        // New Race Day and Set Up Tonight... used to sit beside this box.
+        // Starting a night is the Templates tab's now (14 Nov 2026), and the
+        // wizard's front door is there too, on tonight's banner, as "Walk me
+        // through it...". This box only says which day the page is about.
+        _btnWizard.Text = "Walk me through it...";
+        _btnWizard.AutoSize = true;
         _btnWizard.Click += (_, _) => SetUpTonightRequested?.Invoke();
 
         _lblStatus.ForeColor = AppTheme.TextMuted;
 
         var dayGrid = new FieldGrid();
 
-        dayGrid.AddRow("Working on:", FieldGrid.Inline(_cmbEvent, _btnNew, _btnWizard));
+        dayGrid.AddRow("Race day:", _cmbEvent);
 
         var which = new Section("Which race day");
 
         which.Add(dayGrid);
         which.Add(_lblStatus, gapBelow: 0);
 
-        // --- What the day is ---
-        var aboutGrid = new FieldGrid();
+        // --- The night ---
+        var nightGrid = new FieldGrid();
 
-        aboutGrid.AddRow("Name:", _txtName);
+        nightGrid.AddRow("Name:", _txtName);
 
         // What kind of night: second, right under the name, because it
         // decides more about what the rest of the app shows than every field
@@ -481,20 +476,36 @@ public sealed partial class RaceDayEventControl : UserControl
         _cmbShape.Items.Add(new ShapeChoice(RaceDayShape.ClubNight, "Club night - just races"));
         _cmbShape.SelectedIndex = 0;
 
-        aboutGrid.AddRow(ShapeCaption, _cmbShape);
-        aboutGrid.AddHint(_lblShapeHint);
+        nightGrid.AddRow(ShapeCaption, _cmbShape);
+        nightGrid.AddHint(_lblShapeHint);
 
         // Editable combos: the venue and layout lists are suggestions, not
         // gatekeepers - a club night at a friend's garage should not need a
         // venue profile made first.
         _cmbVenue.DropDownStyle = ComboBoxStyle.DropDown;
-        aboutGrid.AddRow("Venue:", _cmbVenue);
+        nightGrid.AddRow("Venue:", _cmbVenue);
 
         _cmbLayout.DropDownStyle = ComboBoxStyle.DropDown;
-        aboutGrid.AddRow("Track layout:", _cmbLayout);
+        nightGrid.AddRow("Track layout:", _cmbLayout);
 
         _cmbChampionship.DropDownStyle = ComboBoxStyle.DropDownList;
-        aboutGrid.AddRow("Championship:", _cmbChampionship);
+        nightGrid.AddRow("Championship:", _cmbChampionship);
+
+        // Tell the drivers (12 Nov 2026, setup plan D13).
+        nightGrid.AddRow("Next night on phones:", BuildNextNightRow());
+        nightGrid.AddHint("Announce the next race night on the Home page of the club's phone pages - the classes on and the times - so drivers can say they're coming. Call It Off tells them it's off, and emails the regulars.");
+
+        _txtNotes.Multiline = true;
+        _txtNotes.AcceptsReturn = true;
+        _txtNotes.ScrollBars = ScrollBars.Vertical;
+        nightGrid.AddRow("Notes:", _txtNotes);
+
+        var night = new Section("The night");
+
+        night.Add(nightGrid, gapBelow: 0);
+
+        // --- Times ---
+        var timesGrid = new FieldGrid();
 
         // --- When it starts ---
         //
@@ -516,8 +527,6 @@ public sealed partial class RaceDayEventControl : UserControl
         _chkFirstRace.Text = "Set";
         _chkFirstRace.AutoSize = true;
 
-        aboutGrid.AddRow(FirstRaceCaption, FieldGrid.Inline(_dtpFirstRace, _chkFirstRace));
-
         _dtpOutBy.AutoSize = true;
         _dtpOutBy.Value = TimeSpan.FromHours(22);
         _textSize.Wear(_dtpOutBy, () => AppTheme.BodyFont);
@@ -525,11 +534,9 @@ public sealed partial class RaceDayEventControl : UserControl
         _chkOutBy.Text = "Set";
         _chkOutBy.AutoSize = true;
 
-        aboutGrid.AddRow(OutByCaption, FieldGrid.Inline(_dtpOutBy, _chkOutBy));
-
-        // Entries close (12 Nov 2026, setup plan D1): above the first race in
-        // the night, but kept below it here so the rows people already know
-        // don't move.
+        // Entries close (12 Nov 2026, setup plan D1), first: it comes first in
+        // the night. The Times card is new (14 Nov 2026), so nothing moves
+        // under anybody by putting it there.
         _dtpEntriesClose.AutoSize = true;
         _dtpEntriesClose.Value = TimeSpan.FromHours(18.5);
         _textSize.Wear(_dtpEntriesClose, () => AppTheme.BodyFont);
@@ -537,8 +544,10 @@ public sealed partial class RaceDayEventControl : UserControl
         _chkEntriesClose.Text = "Set";
         _chkEntriesClose.AutoSize = true;
 
-        aboutGrid.AddRow(EntriesCloseCaption, FieldGrid.Inline(_dtpEntriesClose, _chkEntriesClose));
-        aboutGrid.AddHint("After this, a driver who checks in is a late entry. The announcer calls it ten minutes before and as it passes, and Next Steps counts down to it.");
+        timesGrid.AddRow(EntriesCloseCaption, FieldGrid.Inline(_dtpEntriesClose, _chkEntriesClose));
+        timesGrid.AddHint("After this, a driver who checks in is a late entry. The announcer calls it ten minutes before and as it passes, and Next Steps counts down to it.");
+        timesGrid.AddRow(FirstRaceCaption, FieldGrid.Inline(_dtpFirstRace, _chkFirstRace));
+        timesGrid.AddRow(OutByCaption, FieldGrid.Inline(_dtpOutBy, _chkOutBy));
 
         // The night's planned breaks (setup plan D5): a line saying what they
         // are, and a window to change them.
@@ -549,44 +558,39 @@ public sealed partial class RaceDayEventControl : UserControl
         _btnBreaks.AutoSize = true;
         _btnBreaks.Click += (_, _) => EditBreaks();
 
-        aboutGrid.AddRow("Breaks:", FieldGrid.Inline(_lblBreaks, _btnBreaks));
-        aboutGrid.AddHint("Watering the track, dinner, track repairs. The finish time, every estimated start and the gap before the next race allow for them, and the announcer tells the room.");
+        timesGrid.AddRow("Breaks:", FieldGrid.Inline(_lblBreaks, _btnBreaks));
+        timesGrid.AddHint("Watering the track, dinner, track repairs. The finish time, every estimated start and the gap before the next race allow for them, and the announcer tells the room.");
 
-        // Tell the drivers (12 Nov 2026, setup plan D13).
-        aboutGrid.AddRow("Next night on phones:", BuildNextNightRow());
+        var times = new Section("Times");
 
-        // Night templates (12 Nov 2026, setup plan B4).
-        aboutGrid.AddRow("Templates:", BuildTemplatesRow());
-        aboutGrid.AddHint("Announce the next race night on the Home page of the club's phone pages - the classes on and the times - so drivers can say they're coming. Call It Off tells them it's off, and emails the regulars.");
-
-        _txtNotes.Multiline = true;
-        _txtNotes.AcceptsReturn = true;
-        _txtNotes.ScrollBars = ScrollBars.Vertical;
-        aboutGrid.AddRow("Notes:", _txtNotes);
-
-        var about = new Section("About the day");
-
-        about.Add(aboutGrid, gapBelow: 0);
+        times.Add(timesGrid, gapBelow: 0);
 
         // --- What the program is built from ---
         _numQualRounds.Minimum = 1;
         _numQualRounds.Maximum = 10;
         _numQualRounds.Value = 3;
 
-        var programGrid = new FieldGrid();
+        // Five cards now where there were two (14 Nov 2026): the heats, the
+        // money, running the night - and the ticks that are the club's, for
+        // every night, on a tab of their own (Club rules) rather than among
+        // tonight's settings.
+        var heatsGrid = new FieldGrid();
+        var moneyGrid = new FieldGrid();
+        var runGrid = new FieldGrid();
+        var clubGrid = new FieldGrid();
 
-        _lblQualRounds = programGrid.AddRow(HeatsPerDriverCaption, _numQualRounds);
+        _lblQualRounds = heatsGrid.AddRow(HeatsPerDriverCaption, _numQualRounds);
 
         _lstClasses.CheckOnClick = true;
         _lstClasses.BorderStyle = BorderStyle.None;
         _lstClasses.IntegralHeight = false;
-        programGrid.AddRow("Classes racing:", _lstClasses);
-        programGrid.AddHint(_lblClassHint);
+        heatsGrid.AddRow("Classes racing:", _lstClasses);
+        heatsGrid.AddHint(_lblClassHint);
 
         _numHeatSize.Minimum = 2;
         _numHeatSize.Maximum = 20;
         _numHeatSize.Value = 8;
-        programGrid.AddRow("Drivers per heat:", _numHeatSize);
+        heatsGrid.AddRow("Drivers per heat:", _numHeatSize);
 
         foreach (var mode in Enum.GetValues<FirstRoundSeeding>())
         {
@@ -594,21 +598,21 @@ public sealed partial class RaceDayEventControl : UserControl
         }
 
         _cmbFirstRound.SelectedIndex = 0;
-        programGrid.AddRow("First round seeded:", _cmbFirstRound);
+        heatsGrid.AddRow("First round seeded:", _cmbFirstRound);
 
         // Mixed-class heats (11 Nov 2026, Phase 4.1): 0 is off, which is
         // every race day until somebody sets it.
         _numShareUnder.Minimum = 0;
         _numShareUnder.Maximum = 19;
         _numShareUnder.Value = 0;
-        programGrid.AddRow("Share a heat under (drivers):", _numShareUnder);
+        heatsGrid.AddRow("Share a heat under (drivers):", _numShareUnder);
 
         // The rest gap (12 Nov 2026, setup plan step 8): 1, the one race off
         // every build gave, unless a night says otherwise.
         _numRacesOff.Minimum = 0;
         _numRacesOff.Maximum = RestOrder.MostGap;
         _numRacesOff.Value = RestOrder.DefaultGap;
-        programGrid.AddRow(RacesOffCaption, _numRacesOff);
+        heatsGrid.AddRow(RacesOffCaption, _numRacesOff);
 
         // The club's marshal rule (setup plan step 8). Every night, not just
         // this one, so it saves straight to the club's settings - as the
@@ -650,14 +654,14 @@ public sealed partial class RaceDayEventControl : UserControl
             _settings.Save();
         };
 
-        programGrid.AddRow(MarshalRuleCaption, FieldGrid.Inline(_cmbMarshalRule, _numMarshalSeconds, new Label { Text = "seconds", AutoSize = true }));
-        programGrid.AddHint("Logged from Race Control's Someone's missing... Losing the best qualifying result takes it from the driver's class tonight; a time penalty goes on their next race. Click the same line again to take a no-show off. For every night, not just this one.");
-        programGrid.AddRow("Entry fee:", _numEntryFee);
-        programGrid.AddRow("Each extra class:", _numExtraFee);
+        clubGrid.AddRow(MarshalRuleCaption, FieldGrid.Inline(_cmbMarshalRule, _numMarshalSeconds, new Label { Text = "seconds", AutoSize = true }));
+        clubGrid.AddHint("Logged from Race Control's Someone's missing... Losing the best qualifying result takes it from the driver's class tonight; a time penalty goes on their next race. Click the same line again to take a no-show off. For every night, not just this one.");
+        moneyGrid.AddRow("Entry fee:", _numEntryFee);
+        moneyGrid.AddRow("Each extra class:", _numExtraFee);
 
         _chkCheckedInOnly.Text = "Only include drivers who have checked in";
         _chkCheckedInOnly.AutoSize = true;
-        programGrid.AddField(_chkCheckedInOnly);
+        heatsGrid.AddField(_chkCheckedInOnly);
 
         // Rolling into the next race. It used to be a strip at the bottom
         // of the programme, among the buttons pressed every ten minutes -
@@ -671,17 +675,17 @@ public sealed partial class RaceDayEventControl : UserControl
         // has to be able to tell apart from the label alone.
         _chkAutoAdvance.Text = "Start the next race automatically";
         _chkAutoAdvance.AutoSize = true;
-        programGrid.AddField(_chkAutoAdvance);
+        runGrid.AddField(_chkAutoAdvance);
 
         _cmbAutoAdvanceScope.DropDownStyle = ComboBoxStyle.DropDownList;
-        _lblAutoAdvanceScope = programGrid.AddRow("Next race is:", _cmbAutoAdvanceScope);
+        _lblAutoAdvanceScope = runGrid.AddRow("Next race is:", _cmbAutoAdvanceScope);
 
         _lblAutoAdvanceHint.Text = "Which race it reaches for when the one that just finished is recorded.";
-        programGrid.AddHint(_lblAutoAdvanceHint);
+        runGrid.AddHint(_lblAutoAdvanceHint);
 
         // Which race it reaches for is Advanced (1 Nov 2026, Simple mode);
         // the tick above stays.
-        SimpleMode.HideRow(programGrid, _cmbAutoAdvanceScope);
+        SimpleMode.HideRow(runGrid, _cmbAutoAdvanceScope);
 
         // BETWEEN-RACE TALK FOR THE DAY (31 Oct 2026): a big event can run
         // busier than club night without the club's own settings changing.
@@ -704,11 +708,11 @@ public sealed partial class RaceDayEventControl : UserControl
         _btnClassOrder.Text = "Order...";
         _btnClassOrder.AutoSize = true;
         _btnClassOrder.Click += (_, _) => EditClassOrder();
-        programGrid.AddRow("Class running order:", FieldGrid.Inline(_lblClassOrder, _btnClassOrder));
-        programGrid.AddHint("Which class goes first in each round, and whether the order turns round each round. It decides who marshals for whom and when a class finishes. Used when the heats are built.");
+        heatsGrid.AddRow("Class running order:", FieldGrid.Inline(_lblClassOrder, _btnClassOrder));
+        heatsGrid.AddHint("Which class goes first in each round, and whether the order turns round each round. It decides who marshals for whom and when a class finishes. Used when the heats are built.");
 
-        programGrid.AddRow("Between-race talk:", _cmbGapPreset);
-        programGrid.AddHint("How much the announcer says between races tonight. A preset here is for this day only - the club's own settings are on the AI Commentary tab.");
+        runGrid.AddRow("Between-race talk:", _cmbGapPreset);
+        runGrid.AddHint("How much the announcer says between races tonight. A preset here is for this day only - the club's own settings are on the AI Commentary tab.");
 
         // Posting the heats (12 Nov 2026, setup plan D2). The club's, like
         // the closing checklist below.
@@ -727,28 +731,28 @@ public sealed partial class RaceDayEventControl : UserControl
             _settings.Save();
             NightSetupChanged?.Invoke();
         };
-        programGrid.AddField(_chkPostHeats);
-        programGrid.AddHint("Once the heats are built, Next Steps offers Post the heats... before the first race: it prints the heat sheets and the marshal list, tells the room, and lists any car the loop hasn't heard tonight. After that, moving drivers between heats asks first. For every night, not just this one.");
+        clubGrid.AddField(_chkPostHeats);
+        clubGrid.AddHint("Once the heats are built, Next Steps offers Post the heats... before the first race: it prints the heat sheets and the marshal list, tells the room, and lists any car the loop hasn't heard tonight. After that, moving drivers between heats asks first. For every night, not just this one.");
 
         // Setup plan B2 and D6: the club's, like the posting tick above.
         ClubTick(_chkBuildAtClose, "Build the heats when entries close",
             () => _settings!.BuildHeatsWhenEntriesClose, on => _settings!.BuildHeatsWhenEntriesClose = on, true);
-        programGrid.AddField(_chkBuildAtClose);
-        programGrid.AddHint("With Entries close at: set, the heats build themselves as it passes, ready to post. Undo takes the build back.");
+        clubGrid.AddField(_chkBuildAtClose);
+        clubGrid.AddHint("With Entries close at: set, the heats build themselves as it passes, ready to post. Undo takes the build back.");
 
         ClubTick(_chkLateWithoutAsking, "Add late check-ins to posted heats without asking",
             () => _settings!.AddLateCheckInsWithoutAsking, on => _settings!.AddLateCheckInsWithoutAsking = on, false);
-        programGrid.AddField(_chkLateWithoutAsking);
-        programGrid.AddHint("A driver who checks in after the heats are built goes into the heat nearest their pace that has room, and nobody else moves. Before the heats are posted that happens by itself. After, Next Steps asks you first - unless this is ticked.");
+        clubGrid.AddField(_chkLateWithoutAsking);
+        clubGrid.AddHint("A driver who checks in after the heats are built goes into the heat nearest their pace that has room, and nobody else moves. Before the heats are posted that happens by itself. After, Next Steps asks you first - unless this is ticked.");
 
         // Papers (setup plan D9): the club's.
         ClubTick(_chkWaivers, "Ask every driver for a signed waiver",
             () => _settings!.AskForWaivers, on => _settings!.AskForWaivers = on, false);
-        programGrid.AddField(_chkWaivers);
+        clubGrid.AddField(_chkWaivers);
         ClubTick(_chkMemberships, "Check memberships",
             () => _settings!.CheckMemberships, on => _settings!.CheckMemberships = on, false);
-        programGrid.AddField(_chkMemberships);
-        programGrid.AddHint("Who's Racing shows a Papers column - \"Waiver missing\", \"Membership expired 3 Oct\" - and Post the heats lists anyone not in order. A junior's waiver is signed by a parent or guardian. Recorded by hand: click a driver's Papers to fill them in. A waiver lasts 12 months.");
+        clubGrid.AddField(_chkMemberships);
+        clubGrid.AddHint("Who's Racing shows a Papers column - \"Waiver missing\", \"Membership expired 3 Oct\" - and Post the heats lists anyone not in order. A junior's waiver is signed by a parent or guardian. Recorded by hand: click a driver's Papers to fill them in. A waiver lasts 12 months.");
 
         // The closing checklist (11 Nov 2026). Every night, not just this
         // one, so it saves straight to the club's settings.
@@ -767,12 +771,24 @@ public sealed partial class RaceDayEventControl : UserControl
             _settings.Save();
             CloseNightChecklistChanged?.Invoke();
         };
-        programGrid.AddField(_chkCloseNight);
-        programGrid.AddHint("When every race has run, Next Steps opens a list of what's left - rentals, money, backups, Close Day and your own lines - to tick off. Off, it just says what's left in one line. For every night, not just this one.");
+        clubGrid.AddField(_chkCloseNight);
+        clubGrid.AddHint("When every race has run, Next Steps opens a list of what's left - rentals, money, backups, Close Day and your own lines - to tick off. Off, it just says what's left in one line. For every night, not just this one.");
 
-        var program = new Section("Building the program");
+        var heats = new Section("Heats");
 
-        program.Add(programGrid, gapBelow: 0);
+        heats.Add(heatsGrid, gapBelow: 0);
+
+        var money = new Section("Money");
+
+        money.Add(moneyGrid, gapBelow: 0);
+
+        var running = new Section("Running the night");
+
+        running.Add(runGrid, gapBelow: 0);
+
+        var club = new Section("Every night");
+
+        club.Add(clubGrid, gapBelow: 0);
 
         // --- The actions ---
         //
@@ -809,25 +825,49 @@ public sealed partial class RaceDayEventControl : UserControl
             },
             () => AppTheme.SmallFont);
 
-        // --- The page ---
-        var page = new PageStack();
+        // Save as template, from the night on show (it was the Templates
+        // row's "Save This Day As...", on the page before this one).
+        _btnSaveTemplate.Text = "Save as Template...";
+        _btnSaveTemplate.Click += (_, _) => SaveAsTemplate();
 
-        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.Add(which);
-        page.Add(about);
-        page.Add(program);
-        page.Add(FieldGrid.Inline(_btnCloseDay, _btnDeleteDay, _lblSaved), gapBelow: UiLayout.RowGap);
-        page.Add(lblHint, gapBelow: 0);
+        // --- The pages ---
+        //
+        // Three of them, one on show at a time (14 Nov 2026): Templates,
+        // where a night starts; Tonight, the day's own settings; and Club
+        // rules, the ticks that are for every night. Templates opens when no
+        // night is open, Tonight when one is - see ShowDefaultTab.
+        _tonightPage.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        _tonightPage.Add(which);
+        _tonightPage.Add(night);
+        _tonightPage.Add(times);
+        _tonightPage.Add(heats);
+        _tonightPage.Add(money);
+        _tonightPage.Add(running);
+        _tonightPage.Add(FieldGrid.Inline(_btnCloseDay, _btnDeleteDay, _btnSaveTemplate, _lblSaved), gapBelow: UiLayout.RowGap);
+        _tonightPage.Add(lblHint, gapBelow: 0);
 
-        Controls.Add(page);
+        _clubPage.Add(
+            new Label
+            {
+                Text = "These are the club's, for every night - not just tonight. A change here saves straight away and holds for the next night too.",
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+            },
+            gapBelow: UiLayout.RowGap);
+        _clubPage.Add(club, gapBelow: 0);
+
+        BuildTemplatesPage();
+        BuildPages();
 
         // Once the fields are on the page and wear its face - what they are
         // measured in.
         //
-        // One caption column down all three cards, wide enough for both
+        // One caption column down Tonight's cards, wide enough for both
         // wordings of the rounds-per-driver caption, so neither the text
-        // size nor the kind of night ever moves the fields sideways.
-        _textSize.Keep(() => FieldGrid.LineUp(new[] { dayGrid, aboutGrid, programGrid }, HeatsPerDriverCaption, RacesPerDriverCaption));
+        // size nor the kind of night ever moves the fields sideways. Club
+        // rules lines up on its own.
+        _textSize.Keep(() => FieldGrid.LineUp(new[] { dayGrid, nightGrid, timesGrid, heatsGrid, moneyGrid, runGrid }, HeatsPerDriverCaption, RacesPerDriverCaption));
+        _textSize.Keep(() => FieldGrid.LineUp(new[] { clubGrid }, MarshalRuleCaption));
         _textSize.Keep(SizeFields);
 
         // The two shape-worded captions and the two hints, filled once here
@@ -1395,6 +1435,12 @@ public sealed partial class RaceDayEventControl : UserControl
         // Every list was rebuilt from the stores - a longer venue or
         // championship name, a day added.
         RefitFields();
+
+        // The Templates tab follows the templates and the days, and the page
+        // follows tonight: Templates while no night is open, Tonight once one
+        // is (only when that changes - see ChooseTabForTonight).
+        RefreshShelf();
+        ChooseTabForTonight();
     }
 
     private sealed record SeasonChoice(Season Season)
@@ -1858,8 +1904,6 @@ public sealed partial class RaceDayEventControl : UserControl
             .OrderByDescending(e => e.StartedUtc)
             .FirstOrDefault();
 
-    /// <summary>Setup's New Race Day: the Start Tonight window. False when it was cancelled.</summary>
-    private bool StartNewDay() => StartTonightWindow(null, null);
 
     /// <summary>
     /// Makes the day, with everything the dialog did not ask about carried

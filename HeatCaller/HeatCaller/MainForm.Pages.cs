@@ -707,8 +707,15 @@ public partial class MainForm
         // template cards (see StartTonight). It used to open the Set Up Tonight
         // wizard, which asked its own questions; now a repeat night is "Like
         // last time" and Start, and the Ready to Race bar's button is there for
-        // the rest. Stays on the page it was pressed on.
-        _startRaceDay = () =>
+        // the rest.
+        //
+        // SETUP'S TEMPLATES TAB (14 Nov 2026): that door now goes to Setup ›
+        // Templates, where every way to start the night is on show with its
+        // forecast and one Start - see _startRaceDay below, set once the tabs
+        // exist. The window stays for the doors that already know which
+        // choice they mean (Next Steps' "like last time" and template cards,
+        // the Calendar's New Race Day).
+        _startRaceDayInWindow = () =>
         {
             if (!eventTab.StartNewDayFromElsewhere())
             {
@@ -718,6 +725,16 @@ public partial class MainForm
             _raceProgram.RefreshAll();
             _todayControl?.RefreshAll();
             RefreshCurrentPage();
+        };
+
+        // The phones' "I'm coming" is the forecast's best guess at turnout.
+        eventTab.ComingTonight = ComingTonightList;
+
+        // A night started on the Templates tab: the other pages catch up.
+        eventTab.NightStarted += () =>
+        {
+            _raceProgram.RefreshAll();
+            _todayControl?.RefreshAll();
         };
 
         // The Calendar's New Race Day is that same command - one window,
@@ -776,6 +793,24 @@ public partial class MainForm
         {
             GoToPage("Race Day");
             tabRaceDay.SelectedTab = subPageEvent;
+        };
+
+        // "Start a Race Day" on Next Steps and the banner on Who's Racing:
+        // Setup › Templates (14 Nov 2026). The desk view keeps to Who's
+        // Racing and can't go there, so it still gets the Start Tonight
+        // window.
+        _startRaceDay = () =>
+        {
+            _goToDayTab?.Invoke();
+
+            if (tabRaceDay.SelectedTab == subPageEvent)
+            {
+                eventTab.ShowTab(RaceDayEventControl.TemplatesTab);
+            }
+            else
+            {
+                _startRaceDayInWindow?.Invoke();
+            }
         };
 
         tabRaceDay.SelectedIndexChanged += (_, _) => RefreshSubTab(tabRaceDay);

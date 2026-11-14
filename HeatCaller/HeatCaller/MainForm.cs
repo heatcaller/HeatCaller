@@ -241,8 +241,11 @@ public partial class MainForm : Form
     /// <summary>The Timetable tab, so the programme can keep its generated lines in step.</summary>
     private DayScheduleControl? _daySchedulePage;
 
-    /// <summary>Starts a race day and shows it, from wherever the ask came from. Wired once the Race Day tabs exist.</summary>
+    /// <summary>"Start a Race Day" from Next Steps or Who's Racing: Setup's Templates tab (14 Nov 2026). Wired once the Race Day tabs exist.</summary>
     private Action? _startRaceDay;
+
+    /// <summary>The Start Tonight window, for a "Start a Race Day" that can't go to Setup - the desk view.</summary>
+    private Action? _startRaceDayInWindow;
 
     /// <summary>Puts the window on Race Day, on The Day tab. Wired once the Race Day tabs exist.</summary>
     private Action? _goToDayTab;

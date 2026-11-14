@@ -263,7 +263,7 @@ public partial class MainForm
                 "timetable", "run sheet", "schedule", "reminder", "timeline", "on deck",
                 "late", "running late", "drift", "times",
             }),
-            ("Setup", new[] { "set up", "set up tonight", "details", "the day", "day", "event", "meeting", "weekend", "race day", "kind of night", "delete day" }),
+            ("Setup", new[] { "set up", "set up tonight", "details", "the day", "day", "event", "meeting", "weekend", "race day", "kind of night", "delete day", "template", "templates", "new race day", "start tonight", "club rules", "close day", "forecast" }),
             // Who's Racing absorbed the Scrutineering tab, so its words land
             // here. Kept, for the same reason as Today's: somebody who learnt
             // "tech log" should still arrive where the log now lives.
