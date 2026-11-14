@@ -108,7 +108,7 @@ public sealed class RaceVideoTests
     public void Hears_the_stream_starting_and_stopping_and_nothing_else()
     {
         static JsonElement Event(string type, string state) =>
-            JsonDocument.Parse($$$"""{"op":5,"d":{"eventType":"{{{type}}}","eventData":{"outputActive":true,"outputState":"{{{state}}}"}}}""").RootElement;
+            JsonDocument.Parse("{\"op\":5,\"d\":{\"eventType\":\"" + type + "\",\"eventData\":{\"outputActive\":true,\"outputState\":\"" + state + "\"}}}").RootElement;
 
         Assert.True(ObsLink.StreamEvent(Event("StreamStateChanged", "OBS_WEBSOCKET_OUTPUT_STARTED")));
         Assert.False(ObsLink.StreamEvent(Event("StreamStateChanged", "OBS_WEBSOCKET_OUTPUT_STOPPED")));
