@@ -35,6 +35,28 @@ export function icsFold(line: string): string {
   return parts.join("\r\n ");
 }
 
+/** How far the zone's wall clock is ahead of UTC at one instant, in ms. */
+function zoneOffset(at: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).formatToParts(new Date(at));
+  const n = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  return Date.UTC(n("year"), n("month") - 1, n("day"), n("hour"), n("minute"), n("second")) - Math.floor(at / 1000) * 1000;
+}
+
+/** A wall-clock time in a zone as the UTC instant, or undefined for a zone Intl doesn't know. */
+export function zonedToUtc(year: number, month: number, dayOfMonth: number, hour: number, minute: number, timeZone: string): Date | undefined {
+  try {
+    const wall = Date.UTC(year, month - 1, dayOfMonth, hour, minute);
+    // Twice, so a night across a clock change gets the offset on its own side.
+    let utc = wall - zoneOffset(wall, timeZone);
+    utc = wall - zoneOffset(utc, timeZone);
+    return Number.isFinite(utc) ? new Date(utc) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
 const CLOCK = /^(\d{1,2}):(\d{2})$/;
 
@@ -73,9 +95,11 @@ export function nextNightIcs(club: string, clubName: string, body: unknown, time
   if (clock !== null) {
     const hh = clock[1]!.padStart(2, "0");
     const start = `${ymd}T${hh}${clock[2]}00`;
-    // In the club's zone when the laptop said it; else a floating time,
-    // which a calendar reads in the phone's own zone.
-    lines.push(timeZone ? `DTSTART;TZID=${timeZone}:${start}` : `DTSTART:${start}`);
+    // In the club's zone when the laptop said it, written as UTC: a TZID
+    // needs a VTIMEZONE block (RFC 5545 3.2.19), which Outlook insists on.
+    // Else a floating time, which a calendar reads in the phone's own zone.
+    const utc = timeZone ? zonedToUtc(Number(day[1]), Number(day[2]), Number(day[3]), Number(hh), Number(clock[2]), timeZone) : undefined;
+    lines.push(utc !== undefined ? `DTSTART:${utc.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "")}` : `DTSTART:${start}`);
     lines.push("DURATION:PT4H");
   } else {
     lines.push(`DTSTART;VALUE=DATE:${ymd}`);

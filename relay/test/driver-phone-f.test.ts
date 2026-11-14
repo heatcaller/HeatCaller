@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { icsFold, icsText, nextNightIcs } from "../src/ics.js";
+import { icsFold, icsText, nextNightIcs, zonedToUtc } from "../src/ics.js";
 import { lookFrom, timeZoneFrom } from "../src/site.js";
 import { tzAttr } from "../src/clock.js";
 import { homePage } from "../src/pages.js";
@@ -46,13 +46,27 @@ describe("the next race night in a phone's calendar (item 10)", () => {
   it("is one event at the first race, in the club's zone, with a reminder", () => {
     const ics = nextNightIcs("acme-rc", "Acme RC", NIGHT, "America/New_York", NOW)!;
     assert.match(ics, /^BEGIN:VCALENDAR\r\nVERSION:2\.0\r\n/);
-    assert.match(ics, /\r\nDTSTART;TZID=America\/New_York:20261126T190000\r\n/);
+    // 19:00 Eastern on 26 Nov is midnight UTC. Written as UTC, since a
+    // TZID with no VTIMEZONE block is wrong by RFC 5545 and Outlook misreads it.
+    assert.match(ics, /\r\nDTSTART:20261127T000000Z\r\n/);
+    assert.doesNotMatch(ics, /TZID/);
     assert.match(ics, /\r\nDURATION:PT4H\r\n/);
     assert.match(ics, /\r\nSUMMARY:Corn Dog Day at Acme RC\r\n/);
     assert.match(ics, /\r\nLOCATION:Upstate Hobbies\\, Main St\\; back room\r\n/);
     assert.match(ics, /\r\nSTATUS:CONFIRMED\r\n/);
     assert.match(ics, /\r\nTRIGGER:-PT2H\r\n/);
     assert.match(ics, /\r\nEND:VCALENDAR\r\n$/);
+  });
+
+  it("turns the club's wall clock into UTC on either side of a clock change", () => {
+    const summer = new Date("2026-06-01T12:00:00.000Z");
+    const july = { ...NIGHT, day: "2026-07-09", until: "2026-07-10T06:00:00.000Z" };
+    assert.match(nextNightIcs("acme-rc", "Acme RC", july, "America/New_York", summer)!, /\r\nDTSTART:20260709T230000Z\r\n/);
+    assert.match(nextNightIcs("acme-rc", "Acme RC", { ...july, firstRace: "9:30" }, "Europe/London", summer)!, /\r\nDTSTART:20260709T083000Z\r\n/);
+    // 1 Nov 2026 is the US fall-back day: 19:00 that evening is already EST.
+    const fallBack = { ...NIGHT, day: "2026-11-01", until: "2026-11-02T06:00:00.000Z" };
+    assert.match(nextNightIcs("acme-rc", "Acme RC", fallBack, "America/New_York", summer)!, /\r\nDTSTART:20261102T000000Z\r\n/);
+    assert.equal(zonedToUtc(2026, 11, 26, 19, 0, "Not/AZone"), undefined);
   });
 
   it("is all day with no first race, floating with no zone, and struck out when called off", () => {
