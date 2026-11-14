@@ -153,6 +153,20 @@ public static class HeadsUpQualifying
     }
 
     /// <summary>
+    /// How many rounds' points <paramref name="round"/> (0-based) is seeded
+    /// on, or 0 when it is seeded from practice. An odd round reverses the
+    /// round before it, so it takes the same points that round did: the
+    /// fourth round the points after rounds 1 and 2, like the third - not
+    /// after rounds 1-3, and not the practice seed while round 3 is unrun
+    /// (14 Nov 2026, bug hunt 18: Q4 repeated Q2, or didn't mirror Q3).
+    /// </summary>
+    public static int PointsRoundsFor(int round)
+    {
+        var reseededAt = round % 2 == 1 ? round - 1 : round;
+        return reseededAt >= 2 ? reseededAt : 0;
+    }
+
+    /// <summary>
     /// <paramref name="order"/> narrowed to the drivers in <paramref name="seed"/>
     /// (the class's roster tonight), with anybody it does not hold - a late
     /// entry with no points - added at the back in seed order.
