@@ -589,7 +589,7 @@ internal sealed class DeskLogView : Control
             return;
         }
 
-        var timeWidth = TextRenderer.MeasureText(g, DateTime.Today.AddHours(22).AddMinutes(48).ToString("t"), AppTheme.SmallFont, Size.Empty, TextFormatFlags.NoPadding).Width
+        var timeWidth = TextRenderer.MeasureText(g, AppTime.TimeOfDay(DateTime.Today.AddHours(22).AddMinutes(48)), AppTheme.SmallFont, Size.Empty, TextFormatFlags.NoPadding).Width
             + UiLayout.AtDpi(12);
         var rowHeight = AppTheme.BoldFont.Height + AppTheme.SmallFont.Height + UiLayout.AtDpi(12);
         var y = 0;
@@ -605,7 +605,7 @@ internal sealed class DeskLogView : Control
 
             var top = y + UiLayout.AtDpi(6);
 
-            TextRenderer.DrawText(g, entry.At.ToString("t"), AppTheme.SmallFont, new Rectangle(0, top + 1, timeWidth, AppTheme.SmallFont.Height),
+            TextRenderer.DrawText(g, AppTime.TimeOfDay(entry.At), AppTheme.SmallFont, new Rectangle(0, top + 1, timeWidth, AppTheme.SmallFont.Height),
                 AppTheme.TextMuted, line);
 
             var x = timeWidth;
