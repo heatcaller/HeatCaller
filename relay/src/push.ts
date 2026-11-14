@@ -97,13 +97,14 @@ export interface PushSub {
 }
 
 /** The kinds of alert a phone can switch on and off (see PushSub.kinds). */
-export const ALERT_KINDS: readonly string[] = ["race", "marshal", "result", "news"];
+export const ALERT_KINDS: readonly string[] = ["race", "marshal", "result", "news", "video"];
 
 /** Which kind an alert is, by its tag. */
 export function alertKindOf(tag: string): string {
   if (tag === "hc-race" || tag === "hc-soon") return "race";
   if (tag.startsWith("hc-marshal")) return "marshal";
   if (tag === "hc-result") return "result";
+  if (tag === "hc-video") return "video";
   return "news";
 }
 
@@ -523,6 +524,12 @@ export class PushService {
   private readonly locks = new Map<string, Promise<void>>();
   /** The race and marshal duty each driver has already had "in about 5 minutes" for (onceSoon). */
   private readonly soonSent = new Map<string, string>();
+  /**
+   * The night each driver last had "videos are up" for (race video V2), so
+   * it comes once a night. In memory: a relay restart mid-night can send it
+   * once more, which beats keeping a list of who raced on disk.
+   */
+  private readonly videoSent = new Map<string, string>();
 
   constructor(options: PushOptions) {
     this.store = options.store;
@@ -790,6 +797,28 @@ export class PushService {
       }
     } catch (e) {
       this.log(`[push] "${club}": could not work out a result alert: ${String(e)}`);
+    }
+  }
+
+  /**
+   * "Videos from tonight are up" (14 Nov 2026, race video plan V2): once a
+   * night to each signed-up driver who raced in a race with video. night
+   * names the night (the stream's first piece); messageFor reads the
+   * driver's own races and answers undefined while none has video yet, so
+   * a driver whose race is in a later piece still hears once it is up.
+   */
+  async afterVideos(club: string, night: string, messageFor: (id: string) => Promise<PushMessage | undefined>): Promise<void> {
+    try {
+      for (const id of await this.signedUp(club)) {
+        const key = `${club}|${id}`;
+        if (this.videoSent.get(key) === night) continue;
+        const message = await messageFor(id);
+        if (message === undefined) continue;
+        this.videoSent.set(key, night);
+        await this.send(club, id, message, BROADCAST_TTL_SECONDS);
+      }
+    } catch (e) {
+      this.log(`[push] "${club}": could not send the race video alerts: ${String(e)}`);
     }
   }
 

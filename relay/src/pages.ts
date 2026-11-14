@@ -4055,7 +4055,8 @@ function card(line, body, mine) {
     '</summary>' +
     (body === null
       ? '<p class="note">That result isn’t online any more.</p>'
-      : (lengthWords(body) === '' ? '' : '<p class="len">Length: ' + esc(lengthWords(body)) + '</p>') +
+      : '<div class="rvid" data-rv="' + esc(line.id) + '"></div>' +
+        (lengthWords(body) === '' ? '' : '<p class="len">Length: ' + esc(lengthWords(body)) + '</p>') +
         '<div class="tw"><table class="res"><thead><tr>' +
         '<th class="pos">Pos</th><th>Driver</th><th class="n">Qual</th>' +
         '<th class="n">Laps/Time</th><th class="n">Behind</th><th class="n">Best</th>' +
@@ -5344,6 +5345,52 @@ async function load() {
 // should not shut itself thirty seconds later, or on the way back from a
 // look at somebody's history. Opening one also makes it what the address
 // bar names, so the link in it is a link to what is being read.
+// RACE VIDEO ON RESULTS (14 Nov 2026, race video plan V2): an opened race
+// asks the relay for its moment in the club's stream, once every five
+// minutes at most, and shows Watch this race when there is one - never for
+// a junior's race, a hidden one, or while the club keeps video to drivers'
+// own nights (the relay answers 404 for all of those). A driver's View laps
+// adds Watch their best lap.
+const raceVideos = new Map();
+async function raceVideoOf(sid, name) {
+  const key = sid + '|' + (name || '');
+  const kept = raceVideos.get(key);
+  if (kept && Date.now() - kept.at < 300000) return kept.v;
+  let v = null;
+  try {
+    const answer = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/video/race/' + encodeURIComponent(sid)
+      + (name ? '?n=' + encodeURIComponent(name) : ''), { cache: 'no-store' });
+    const body = answer.ok ? await answer.json() : null;
+    v = body && hcVideoOk(body.video) ? body.video : null;
+  } catch (e) { /* no signal: no button this time */ }
+  raceVideos.set(key, { at: Date.now(), v: v });
+  return v;
+}
+function raceTitleIn(details) {
+  const t = details && details.querySelector ? details.querySelector('.title') : null;
+  return t && t.textContent ? t.textContent : 'Race';
+}
+async function showRaceVideo(sid, details) {
+  const v = await raceVideoOf(sid, '');
+  const at = details && details.querySelector ? details.querySelector('.rvid') : null;
+  if (!v || !at || at.firstChild) return;
+  const title = raceTitleIn(details);
+  at.appendChild(hcVideoButton('Watch this race', 'Watch this race, ' + title + ', video from YouTube',
+    () => hcVideoSheet(v, { title: title, where: 'results' })));
+}
+async function showBestLapVideo(sid, row, lx) {
+  if (!row || typeof row.name !== 'string' || !(await raceVideoOf(sid, ''))) return;
+  const panel = lx && lx.querySelector ? lx.querySelector('.lxp') : null;
+  if (!panel || panel.querySelector('.hcvbtn')) return;
+  const title = raceTitleIn(lx.closest ? lx.closest('details[data-id]') : null);
+  panel.insertBefore(hcVideoButton('Watch their best lap', 'Watch ' + row.name + '\\u2019s best lap in ' + title + ', video from YouTube', async () => {
+    const v = await raceVideoOf(sid, row.name);
+    if (!v) return;
+    const best = Array.isArray(v.laps) && typeof v.best === 'number' ? v.laps[v.best] : undefined;
+    hcVideoSheet(v, { title: title + ', ' + row.name, from: typeof best === 'number' ? best : undefined, where: 'results' });
+  }), panel.firstChild);
+}
+
 feed.addEventListener('toggle', (e) => {
   // A driver's View laps (28 Oct 2026): remembered like a session, and its
   // panel written the first time it opens - rows() leaves it out while shut.
@@ -5361,6 +5408,11 @@ feed.addEventListener('toggle', (e) => {
     } else if (!e.target.open) {
       lapsOpen.delete(lx);
     }
+    if (e.target.open) {
+      const at = lx.lastIndexOf(':');
+      const body = bodyOf.get(lx.slice(0, at));
+      void showBestLapVideo(lx.slice(0, at), body && Array.isArray(body.results) ? body.results[Number(lx.slice(at + 1))] : null, e.target);
+    }
     return;
   }
 
@@ -5376,6 +5428,7 @@ feed.addEventListener('toggle', (e) => {
     if (!opened.has(id)) marked = id;
 
     opened.add(id);
+    void showRaceVideo(id, e.target);
   } else {
     opened.delete(id);
 
@@ -9926,6 +9979,35 @@ function drawRacingTonight(prog) {
     + '</ol></section>';
 }
 
+// LIVE ON YOUTUBE (14 Nov 2026, race video plan V2): under the On track
+// card while the club's stream is on - the relay says so only while a piece
+// is open and the laptop is still sending. Read fresh each time, never from
+// a kept copy, so it is never "live" when it isn't. Watch opens Live with
+// the player docked at the top (V4).
+let homeLive = { at: 0, id: null };
+async function homeLiveVideo() {
+  // Asked at most once a minute; Home redraws its card every poll.
+  if (Date.now() - homeLive.at > 60000) {
+    let id = null;
+    try {
+      const answer = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/video/live', { cache: 'no-store' });
+      const body = answer.ok ? await answer.json() : null;
+      id = body && typeof body.live === 'string' ? body.live : null;
+    } catch (e) { /* no signal: no button */ }
+    homeLive = { at: Date.now(), id: id };
+  }
+  const live = homeLive.id;
+  const hero = now.querySelector ? now.querySelector('.hero.live') : null;
+  if (!live || !hero || now.querySelector('.hcvlive')) return;
+  const a = document.createElement('a');
+  a.className = 'go hcvlive';
+  a.href = BASE + '/live?watch=1';
+  a.textContent = '\\u{1F534} Live on YouTube now \\u00b7 Watch';
+  a.setAttribute('aria-label', 'Watch the club\\u2019s stream live, video from YouTube');
+  a.addEventListener('click', () => hcCount('video_race_opened_home'));
+  hero.insertAdjacentElement('afterend', a);
+}
+
 async function load() {
   const [state, prog, pre, nn] = await Promise.all([
     grab('/snapshot/state').catch(() => null),
@@ -9967,6 +10049,7 @@ async function load() {
       '<span class="big">' + esc(running ? lineTitle(running) : s.state) + '</span>' +
       '<span class="when">' + esc(s.state) + (s.countdown ? ' &middot; ' + esc(s.countdown) : '') +
       ' &middot; follow it live &rarr;</span>' + heroLeader(s) + '</a>';
+    void homeLiveVideo();
   } else if (coming) {
     now.innerHTML = coming;
   } else if (next && !running) {
@@ -12763,7 +12846,7 @@ async function pushResume() {
 // duty, my results and club news, each on or off for this phone. Sent with
 // the sign-up; the relay sends only what is on. All on until changed.
 const ALERT_KINDS_KEY = 'hc-alert-kinds:' + CLUB;
-const ALERT_KIND_WORDS = [['race', 'My races (next, staged, 5 minutes)'], ['marshal', 'Marshal duty'], ['result', 'My results'], ['news', 'Club news (a night called off)']];
+const ALERT_KIND_WORDS = [['race', 'My races (next, staged, 5 minutes)'], ['marshal', 'Marshal duty'], ['result', 'My results'], ['news', 'Club news (a night called off)'], ['video', 'Race videos are up']];
 function alertKinds() {
   try {
     const kept = JSON.parse(localStorage.getItem(ALERT_KINDS_KEY) || 'null');
@@ -14587,6 +14670,7 @@ function raceRow(r, value, top, open, onTap) {
 // links usually come in after the racing.
 let nightVideos = {};
 let nightMissed = [];
+let videoRaceShown = false;
 async function loadVideos() {
   if (!CODE || document.hidden) return;
   try {
@@ -14603,6 +14687,18 @@ async function loadVideos() {
     const before = JSON.stringify([nightVideos, nightMissed]);
     nightVideos = videos;
     nightMissed = missed;
+    // The "videos are up" alert opens the night at its race (?race=<sid>),
+    // once - then the race list is theirs again.
+    const asked = /[?&]race=([0-9a-f]{32})(&|$)/.exec(location.search || '');
+    const races = night && Array.isArray(night.races) ? night.races : [];
+    const want = asked && !videoRaceShown ? races.find((r) => raceSid(r) === asked[1]) : null;
+    if (want) {
+      videoRaceShown = true;
+      view.race = raceKey(want);
+      view.scroll = view.race;
+      drawExtras();
+      return;
+    }
     if (JSON.stringify([nightVideos, nightMissed]) !== before) drawExtras();
   } catch (e) { /* no video this time; the race cards are unchanged */ }
 }

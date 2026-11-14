@@ -3239,6 +3239,11 @@ export class Relay {
           if (stream !== undefined) void this.videoCheck.saw(club, stream.pieces.map((p) => p.videoId));
         }
 
+        // Race video (V2): "videos from tonight are up", once a night.
+        if (spec.name === "stream" && this.push !== undefined && !unreadable) {
+          void this.videoAlerts(club, this.push);
+        }
+
         if (spec.name === "manage") {
           // A new manager PIN makes every wrong guess so far a guess at a
           // PIN that no longer exists, so its own club-wide count starts
@@ -9104,6 +9109,40 @@ export class Relay {
     const stream = streamFrom(doc?.body, this.videoCheck?.dead(club));
     if (stream !== undefined && this.videoCheck !== undefined) void this.videoCheck.saw(club, stream.pieces.map((p) => p.videoId));
     return stream;
+  }
+
+  /**
+   * "Videos from tonight are up" (V2): for each signed-up driver, their
+   * first race tonight with video, opening their night at that race.
+   * Never waited for, never throws.
+   */
+  private async videoAlerts(club: string, push: PushService): Promise<void> {
+    try {
+      const stream = await this.streamOf(club);
+      const linked = stream === undefined || !stream.on ? [] : stream.pieces.filter((p) => p.videoId !== "" && !p.hidden);
+      if (stream === undefined || linked.length === 0) return;
+      const night = String(Math.min(...linked.map((p) => p.startMs)));
+
+      await push.afterVideos(club, night, async (id) => {
+        const doc = await this.store.getItem(club, NIGHTS_CHANNEL, id).catch(() => undefined);
+        const races = isPlainObject(doc?.body) && Array.isArray((doc.body as Record<string, unknown>)["races"])
+          ? ((doc.body as Record<string, unknown>)["races"] as unknown[])
+          : [];
+
+        for (const r of races.slice(0, 60)) {
+          if (!isPlainObject(r) || typeof r["sid"] !== "string") continue;
+          const result = await this.store.getItem(club, "results", r["sid"]).catch(() => undefined);
+          const rb = isPlainObject(result?.body) ? (result.body as Record<string, unknown>) : undefined;
+          if (rb === undefined || raceVideo(stream, { sid: r["sid"], startedUtc: rb["startedUtc"], endedUtc: rb["endedUtc"] }, false) === undefined) continue;
+          const label = typeof r["label"] === "string" && r["label"].trim() !== "" ? r["label"].trim().slice(0, 60) : "your race";
+          return { title: "Videos from tonight are up", body: `Watch ${label}.`, tag: "hc-video", url: `${myNightUrl(club)}?race=${r["sid"]}` };
+        }
+
+        return undefined;
+      });
+    } catch (e) {
+      this.log(`[video] "${club}": could not work out the video alerts: ${String(e)}`);
+    }
   }
 
   /** Checks the club's videos with YouTube (V7); undefined when this relay doesn't. */
