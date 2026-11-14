@@ -637,11 +637,18 @@ Mini-Z and RC tracks are rebuilt often, so HeatCaller lets you name and describe
 
 ![The Track Layouts page with two layouts listed, one with a 76-tile plan, and the Selected Track card beside it showing that plan, with Add, Edit, Delete, Reset Record and Track Designer below](../assets/images/track-layouts.png)
 
-The list shows **Name**, **Record**, **Attachment** and **Plan** (how many tiles the drawn plan has). Selecting a layout shows its name and picture beside the list, under **Selected track**.
+The list down the left shows each layout with a picture of its plan (or photo), and under its name how many tiles the plan has and its lap record. The layout tonight's race day races on is marked **Tonight**. Pick one and it fills the rest of the page:
+
+- **The bar above the plan** has the layout's name, **RACING TONIGHT** when it's tonight's track, and its commands: **Open in Track Designer** (or **Draw in Track Designer** for a layout with no plan yet), **Use Tonight**, **Edit Details** and **More**, which holds **Reset Record** and **Delete Layout**.
+- **The plan or photo**, as large as the page allows.
+- **A strip of facts** under it: **Lap record** (with who set it and when), **Average lap**, **Length**, **Marshal posts** and **Pieces** (the tiles in the plan, its size in tiles, or how many pieces the club is short of to build it, from what you've told the designer you own). Click a fact to change it: **Pieces** opens the designer, the others **Edit Details**.
+- **A line or two under the strip** with the marshal posts by name, the sector records, and the notes.
+
+**Use Tonight** makes the layout the open race day's track: the one Race Control's **Track** box follows, and the one tonight's records, lap pace and marshal posts are filed under. It's only there while a race day is open, and **Undo** puts the day's track back. It's the same setting as the track on **Race Day → Setup**.
 
 ### Add or edit a layout
 
-Click **Add** or **Edit**. The **Add Track Layout** / **Edit Track Layout** dialog has:
+Click **+ New Layout → Name and Photo Only...**, or **Edit Details** for the layout picked (or double-click it in the list). The **Add Track Layout** / **Edit Track Layout** dialog has:
 
 | Field | What it's for |
 |---|---|
@@ -659,11 +666,11 @@ A photo is checked as soon as you pick it: a file over 50 MB, a picture over 200
 
 ### Reset a track record
 
-Each layout keeps its all-time fastest lap and who set it. With a [split loop](../timing/decoders.md#a-split-loop), it also keeps a **sector record** for each sector: the quickest anyone has gone through it in a race, by the same rules as the lap record (no practice, demo, ghost, rental or excluded drivers). The **Record** column shows them after the lap record, for example "S1 3.41, S2 5.80", and hovering over the row shows who holds each. Sector records belong to where the split loops are. Move a split loop to another tile on the layout's plan, or add or remove one, and the records set with the old placement are put aside: they show again if you put the loops back. Records set before you drew the split loops on the plan move to the first placement you draw. Redrawing the racing line or changing the tile size doesn't affect them. A sector more than a quarter quicker than its record, or than that sector usually takes in the race, is treated as a misread and doesn't count. A driver's best sectors on the **Stats** tab only use laps run with the split loops where they were on their latest night on that layout. If you change the physical layout, select it and click **Reset Record** to clear the lap record and the sector records. You can undo this.
+Each layout keeps its all-time fastest lap and who set it. With a [split loop](../timing/decoders.md#a-split-loop), it also keeps a **sector record** for each sector: the quickest anyone has gone through it in a race, by the same rules as the lap record (no practice, demo, ghost, rental or excluded drivers). The **Record** column shows them after the lap record, for example "S1 3.41, S2 5.80", and hovering over the row shows who holds each. Sector records belong to where the split loops are. Move a split loop to another tile on the layout's plan, or add or remove one, and the records set with the old placement are put aside: they show again if you put the loops back. Records set before you drew the split loops on the plan move to the first placement you draw. Redrawing the racing line or changing the tile size doesn't affect them. A sector more than a quarter quicker than its record, or than that sector usually takes in the race, is treated as a misread and doesn't count. A driver's best sectors on the **Stats** tab only use laps run with the split loops where they were on their latest night on that layout. If you change the physical layout, pick it and choose **More → Reset Record...** to clear the lap record and the sector records. You can undo this.
 
 ### Draw the layout in the Track Designer
 
-Select a layout and click **Track Designer** to draw its plan: an RCP-style tile track with its rails, turns, markings and racing line. The plan becomes the layout's picture, gives Race Control its sector lengths and the Big Screen its track map, and can be printed to scale with a parts and build list. See [Track Designer](track-designer.md).
+Pick a layout and click **Open in Track Designer** (or, for a new layout, **+ New Layout → Draw It in Track Designer...**) to draw its plan: an RCP-style tile track with its rails, turns, markings and racing line. The plan becomes the layout's picture, gives Race Control its sector lengths and the Big Screen its track map, and can be printed to scale with a parts and build list. See [Track Designer](track-designer.md).
 
 <a id="setup-log"></a>
 

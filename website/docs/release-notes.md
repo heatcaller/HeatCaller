@@ -4,6 +4,15 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Track Layouts reworked (13 November).** The page is built round the plan now.
+    - **A list with pictures.** Each layout shows its plan (or photo), its tile count and its record, with **Tonight** on the one tonight's race day races on.
+    - **The plan as large as the page allows,** with the layout's commands on the bar above it: **Open in Track Designer**, **Use Tonight**, **Edit Details** and **More**. **Reset Record** and **Delete** are under **More**, no longer two red buttons beside **Edit**.
+    - **Facts under the plan:** the lap record with who set it, average lap, length, marshal posts and pieces, including how many pieces the club is short of to build it. The marshal posts' names, the sector records and the notes are in a line under them.
+    - **Use Tonight** makes the layout the open race day's track, which Race Control's **Track** box follows. **Undo** puts it back.
+    - **+ New Layout** starts in the Track Designer, or with just a name and photo.
+    - **Buttons keep their colour.** A button the page makes the main one (pink) or a quiet one stays that way when the theme is applied again: **+ New Layout** was losing its pink, and Who's Racing's **Import Entries** getting it back.
+
+    See [Track Layouts](race-day/drivers-and-classes.md#track-layouts).
 - **Add a driver takes more than one class (13 November).** The **Add a driver** window, from **Add Driver** on **Who's Racing** and on **Set Up Tonight**, has a tick box for each class in place of the **Class** drop-down that took one. Tick every class they race; the class you were filtered to stays their main one while it's ticked. See [Race Day → Who's Racing](race-day/events-and-entries.md#race-day-whos-racing).
 
 - **Who's Racing reworked: a pit board, and Desk mode (13 November).**
