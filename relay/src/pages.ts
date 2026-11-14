@@ -2048,7 +2048,6 @@ function hcVideoSheet(v, o) {
     frame.src = hcVideoSrc(v, at);
     frame.title = (o.title || 'Race video') + ', ' + CLUB_NAME;
     frame.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; fullscreen');
-    frame.setAttribute('allowfullscreen', '');
     frame.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
     box.appendChild(frame);
   };
@@ -2894,7 +2893,6 @@ function hcFrameFor(path) {
   // Race video (V3): a player nested in a page here can only go fullscreen,
   // or picture-in-picture, if every frame above it allows it.
   f.allow = 'fullscreen; picture-in-picture; autoplay; encrypted-media';
-  f.allowFullscreen = true;
   f.addEventListener('load', () => hcLanded(f));
   f.src = path;
   hcStage.appendChild(f);
@@ -8424,11 +8422,19 @@ const LIVE_VIDEO_JS = `
   }
   function controls() {
     const bar = hcVel('div', 'hcdbar');
-    bar.appendChild(button(small ? '\\u2197' : '\\u2013', small ? 'Make the player bigger' : 'Make the player smaller', () => {
+    // Only the size changes: the player keeps playing.
+    const size = button('', '', () => {
       small = !small;
       keep(small ? 'small' : 'open');
-      if (gone) stopped(); else open(shown, false);
-    }));
+      dock.className = 'hcdock' + (small ? ' small' : '');
+      label();
+    });
+    const label = () => {
+      size.textContent = small ? '\\u2197' : '\\u2013';
+      size.setAttribute('aria-label', small ? 'Make the player bigger' : 'Make the player smaller');
+    };
+    label();
+    bar.appendChild(size);
     bar.appendChild(button('\\u2715', 'Close the player', () => close(true)));
     return bar;
   }
@@ -8445,7 +8451,6 @@ const LIVE_VIDEO_JS = `
     f.src = HC_YT + '/embed/' + encodeURIComponent(id) + '?autoplay=' + (byTap ? 1 : 0) + '&playsinline=1&rel=0&origin=' + encodeURIComponent(location.origin);
     f.title = 'Live stream, ' + CLUB_NAME;
     f.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; fullscreen');
-    f.setAttribute('allowfullscreen', '');
     box.appendChild(f);
     dock.appendChild(box);
     dock.appendChild(controls());
