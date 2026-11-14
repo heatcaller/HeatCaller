@@ -1749,6 +1749,67 @@ public partial class MainForm
         // that the program loses its least.
         programGrip.CurrentHeight = () => todaySplit.SplitterDistance;
 
+        // Next Steps is held at its full height while the grip is dragged,
+        // and the top half only clips it (13 Nov 2026, asked for by Asher:
+        // dragged up past the tiles, a white bar flashed down the right and
+        // another along the bottom, then went away). Left docked, the page
+        // shrank under its content on every move: Windows put its own
+        // scrollbars up at once, in the system colours, and the themed bars
+        // that cover them only catch up on their 150ms poll - the sideways
+        // one for the one layout the page was too wide while the bar took
+        // its width. Held, nothing on the top half lays out while the mouse
+        // moves, which is most of what made the drag feel heavy too. Fitted
+        // once when the drag ends - see ReleaseToday.
+        var todayHeld = false;
+
+        void HoldToday()
+        {
+            var height = Math.Max(todaySplit.Panel1.Height, today.ContentHeight);
+
+            if (!todayHeld)
+            {
+                todayHeld = true;
+                today.Dock = DockStyle.None;
+                today.Bounds = new Rectangle(0, 0, todaySplit.Panel1.Width, height);
+
+                // Scrolling when the drag began: made tall enough not to, so
+                // its bars go now rather than on the next tick.
+                ThinScrollBar.SyncNow();
+            }
+            else if (today.Height < height)
+            {
+                // Dragged down past it: it grows with the half, so no strip
+                // of nothing opens under it. Taller than its content never
+                // scrolls, so this brings no bars.
+                today.Height = height;
+            }
+        }
+
+        // Docked again, scrollbars and all, with painting held off until the
+        // themed bars are over the native ones - so the one layout that may
+        // bring them is never seen in the system colours.
+        void ReleaseToday()
+        {
+            if (!todayHeld)
+            {
+                return;
+            }
+
+            todayHeld = false;
+            NoRedraw.Begin(todaySplit);
+
+            try
+            {
+                today.Dock = DockStyle.Fill;
+                todaySplit.Panel1.PerformLayout();
+                ThinScrollBar.SyncNow();
+            }
+            finally
+            {
+                NoRedraw.End(todaySplit);
+            }
+        }
+
         programGrip.Dragged += asked =>
         {
             if (!todaySplitPlaced || todaySplit.IsDisposed)
@@ -1756,7 +1817,11 @@ public partial class MainForm
                 return;
             }
 
+            // Held before the move, so not even the first step shrinks it;
+            // asked again after, for when the move made the half taller.
+            HoldToday();
             MoveTodaySplitter(ResizeGrip.Clamp(asked, todaySplit.Panel1MinSize, TodayTopMost()));
+            HoldToday();
 
             // Painted now rather than when the drag next pauses, so the
             // halves keep up with the mouse instead of trailing it.
@@ -1765,6 +1830,8 @@ public partial class MainForm
 
         programGrip.Finished += () =>
         {
+            ReleaseToday();
+
             if (!todaySplitPlaced || todaySplit.IsDisposed)
             {
                 return;
