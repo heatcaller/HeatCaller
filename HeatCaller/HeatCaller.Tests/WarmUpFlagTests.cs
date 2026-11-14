@@ -224,4 +224,19 @@ public sealed class WarmUpFlagTests : IDisposable
         Assert.Contains("var afterWarmUp = _warmUpJustFinished;", layout, StringComparison.Ordinal);
         Assert.Contains("if (_fmt.AutoAdvance || afterWarmUp)", layout, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Auto_starts_next_race_in_counts_on_past_the_warm_up_to_the_green()
+    {
+        // The gap's clock runs out when Auto start starts the race; with a
+        // warm-up first, the band, the Next Up words and the phones count on
+        // to the green - and only while counting, not to a promised time.
+        var autoStart = Source("RaceControlControl.AutoStart.cs");
+
+        Assert.Contains("AutoStartClock.Band(_autoStartState, ToTheGreen(", autoStart, StringComparison.Ordinal);
+        Assert.Contains("AutoStartClock.Words(_autoStartState, ToTheGreen(", autoStart, StringComparison.Ordinal);
+        Assert.Contains("_autoStartState == AutoStartState.Counting && remaining is { } left ? left + WarmUpAhead() : remaining", autoStart, StringComparison.Ordinal);
+        Assert.Contains("WarmUpSecondsFor(EffectiveFormat(out _).WarmUpSeconds, StartWithWarmUp)", autoStart, StringComparison.Ordinal);
+        Assert.Contains("_autoStartState == AutoStartState.Counting ? at + WarmUpAhead()", Source("RaceControlControl.Marshals.cs"), StringComparison.Ordinal);
+    }
 }
