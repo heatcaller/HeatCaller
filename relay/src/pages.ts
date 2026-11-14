@@ -1432,7 +1432,7 @@ details.lastrace[open] > summary { margin-bottom: 10px; }
    light, on any club's look: pure white on black (or black on white), solid
    borders, and the club's colours swapped for ones that pass 4.5:1 or more.
    html.hc is more particular than the club's own :root colours, so it wins
-   over them without touching them. "Fit to screen" (pinch-zoom) too. */
+   over them without touching them. */
 html { font-size: calc(100% * var(--ts, 1)); }
 body { font-size: calc(16px * var(--ts, 1)); }
 html[data-ts="115"] { --ts: 1.15; }
@@ -1451,8 +1451,6 @@ html.hc .stale, html.hc.hcoffline .wrap > :not(header):not(.hcoff):not(footer) {
 .hcread button { min-height: 44px; min-width: 44px; padding: 0 12px; font: inherit; font-weight: 700; color: var(--text);
   background: transparent; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; }
 .hcread button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); border-color: transparent; }
-.hcfit { position: fixed; left: 50%; transform: translateX(-50%); top: calc(12px + var(--sa-t)); z-index: 45; min-height: 44px; padding: 0 18px;
-  border: 0; border-radius: 999px; font: inherit; font-weight: 700; background: var(--primary); color: var(--on-primary); }
 /* A BOARD MADE FOR A PHONE (item 4): four columns under 480 px, the rest a
    tap away, the driver's own row stuck to the edge it scrolls off. */
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -1536,8 +1534,8 @@ body.has-you #follow { display: none; }
  *    every text box and picker is at least 16px (VIEWPORT_JS);
  *  - a fast double tap on a button zooming: buttons, tabs and board rows
  *    are touch-action: manipulation, while a pinch anywhere still works;
- *  - stuck half-zoomed: "Fit to screen" shows after three seconds zoomed in
- *    with no touch, and puts the page back in one tap.
+ *  - stuck half-zoomed: a pinch back out. (A "Fit to screen" button did
+ *    this from 14 Nov; it came up on its own, and went on 15 Nov 2026.)
  * The names stay (NO_ZOOM_HEAD, NO_ZOOM_JS) so every page that used them
  * gets the change.
  */
@@ -1566,45 +1564,10 @@ try {
   document.addEventListener('focusin', (e) => hcBigEnough(e.target), true);
 } catch (e) { /* no events here */ }
 
-// FIT TO SCREEN: three seconds zoomed in with no touch, and a button puts
-// the page back at its own size - briefly asking the viewport for no zoom,
-// then allowing it again.
-(function () {
-  try {
-    const vv = window.visualViewport;
-    if (!vv || typeof vv.addEventListener !== 'function') return;
-    let quiet = 0;
-    let button = null;
-    const hide = () => { if (button) { button.remove(); button = null; } };
-    const show = () => {
-      if (button || vv.scale <= 1.05) return;
-      button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'go hcfit';
-      button.textContent = 'Fit to screen';
-      button.addEventListener('click', () => {
-        const meta = document.querySelector('meta[name=viewport]');
-        if (meta) {
-          const was = meta.getAttribute('content') || '';
-          meta.setAttribute('content', was + ', maximum-scale=1');
-          setTimeout(() => meta.setAttribute('content', was), 400);
-        }
-        if (typeof hcCount === 'function') hcCount('zoom_fit_used');
-        hide();
-      });
-      document.body.appendChild(button);
-    };
-    const moved = () => {
-      clearTimeout(quiet);
-      if (vv.scale <= 1.05) { hide(); return; }
-      quiet = setTimeout(show, 3000);
-    };
-    vv.addEventListener('resize', moved);
-    vv.addEventListener('scroll', moved);
-    document.addEventListener('touchstart', () => clearTimeout(quiet), { passive: true });
-    document.addEventListener('touchend', moved, { passive: true });
-  } catch (e) { /* no button */ }
-})();
+// NO FIT TO SCREEN BUTTON (15 Nov 2026, Asher: "fit to screen keeps
+// poping up at top of relay. get rid of it"): the button that offered to
+// undo a zoom came up on its own on phones that were not zoomed in by the
+// driver. Gone; pinch-zoom itself stays (14 Nov 2026).
 `;
 
 // Portrait only (7 Nov 2026, Asher: "disable landscape mode web app wide"):

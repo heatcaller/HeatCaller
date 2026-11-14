@@ -8,8 +8,8 @@ import { DEFAULT_CONTEXT } from "../src/pages.js";
  * can add pinch to zoom and high contrast"). From 6 Nov the pages turned
  * zoom off ("don't allow for pinch and zoom on relay"); now every kind of
  * relay page allows it, and fixes what the no-zoom rule was for: no text box
- * under 16px to jump-zoom into, no double-tap zoom on buttons, and Fit to
- * screen for a page left zoomed in.
+ * under 16px to jump-zoom into, and no double-tap zoom on buttons. (The Fit to
+ * screen button came up on its own and went on 15 Nov 2026.)
  */
 describe("the relay's pages can be pinched to zoom", () => {
   const pages: [string, string][] = [
@@ -28,7 +28,7 @@ describe("the relay's pages can be pinched to zoom", () => {
       assert.doesNotMatch(html, /addEventListener\('gesturestart', \(e\) => e\.preventDefault\(\)\)/);
       assert.match(html, /touch-action: manipulation/, "no double-tap zoom on buttons");
       assert.match(html, /function hcBigEnough\(el\)/, "no box under 16px to jump-zoom into");
-      assert.match(html, /Fit to screen/);
+      assert.doesNotMatch(html, /hcfit|textContent = 'Fit to screen'/, "no Fit to screen button (15 Nov 2026)");
     });
   }
 });

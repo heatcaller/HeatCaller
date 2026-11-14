@@ -550,19 +550,56 @@ public sealed partial class RaceControlControl
 
     /// <summary>
     /// The gap's clock, carried on to the green (14 Nov 2026): Auto start's
-    /// clock runs out when it starts the race, and a race that opens with a
-    /// warm-up gets its green that much later. Only while the gap is
-    /// counting - a race waiting for the time drivers were given keeps that
-    /// time ("NEXT RACE AT 20:40"), which is when its warm-up opens.
+    /// clock runs out when it starts the race, and the green comes a warm-up,
+    /// a staging and a countdown later. Only while the gap is counting - a
+    /// race waiting for the time drivers were given keeps that time ("NEXT
+    /// RACE AT 20:40"), which is when its start opens.
     /// </summary>
     private TimeSpan? ToTheGreen(TimeSpan? remaining) =>
-        _autoStartState == AutoStartState.Counting && remaining is { } left ? left + WarmUpAhead() : remaining;
+        _autoStartState == AutoStartState.Counting && remaining is { } left ? left + StartToGreen() : remaining;
 
-    /// <summary>The warm-up the next race will open with when it starts - none when it won't open one.</summary>
-    private TimeSpan WarmUpAhead() =>
-        _race.IsPracticeMode
-            ? TimeSpan.Zero
-            : TimeSpan.FromSeconds(Math.Max(0, WarmUpSecondsFor(EffectiveFormat(out _).WarmUpSeconds, StartWithWarmUp)));
+    /// <summary>How long the next race's start runs before its green, by its format - see LeadToTheGreen.</summary>
+    private TimeSpan StartToGreen()
+    {
+        if (_race.IsPracticeMode)
+        {
+            return TimeSpan.Zero;
+        }
+
+        var format = EffectiveFormat(out _);
+
+        return LeadToTheGreen(
+            WarmUpSecondsFor(format.WarmUpSeconds, StartWithWarmUp), format.AutoAdvance, format.StagingSeconds, format.CountdownSeconds);
+    }
+
+    /// <summary>
+    /// From pressing Start to the green, by the format's lengths (14 Nov
+    /// 2026): the warm-up, then staging and the countdown - but only the
+    /// steps the start runs through by itself. Staging goes on to the
+    /// countdown with auto-advance or after a warm-up; the countdown goes on
+    /// to the green only with auto-advance. Otherwise the clock counts to the
+    /// last step that comes by itself, since nobody can say when a button
+    /// will be pressed. With the announcer speaking, staging and the
+    /// countdown follow the calls rather than the seconds, so this is the
+    /// format's best guess, not a promise.
+    /// </summary>
+    internal static TimeSpan LeadToTheGreen(int warmUpSeconds, bool autoAdvance, int stagingSeconds, int countdownSeconds)
+    {
+        var warmUp = Math.Max(0, warmUpSeconds);
+        var seconds = warmUp;
+
+        if (autoAdvance || warmUp > 0)
+        {
+            seconds += Math.Max(0, stagingSeconds);
+
+            if (autoAdvance)
+            {
+                seconds += Math.Max(0, countdownSeconds);
+            }
+        }
+
+        return TimeSpan.FromSeconds(seconds);
+    }
 
     /// <summary>
     /// Each round's estimated start, "about 20:42" (NightPlan.AboutOf, the

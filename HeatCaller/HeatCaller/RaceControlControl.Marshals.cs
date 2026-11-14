@@ -466,9 +466,9 @@ public sealed partial class RaceControlControl
         return arrived;
     }
 
-    /// <summary>The phones' countdown, worked out again: after every gap tick, and when the gap closes. While counting it runs on to the green, past a warm-up (14 Nov 2026) - see ToTheGreen.</summary>
+    /// <summary>The phones' countdown, worked out again: after every gap tick, and when the gap closes. While counting it runs on to the green, past a warm-up, staging and the countdown (14 Nov 2026) - see ToTheGreen.</summary>
     private void UpdatePhoneCountdown(DateTime now) =>
         _phoneCountdown = AutoStartOn && _autoStart.IsOpen
-            ? PhoneCountdown.For(_autoStartState, _autoStart.StartsAtUtc(now, Gap.PushedBackMinutes) is { } at && _autoStartState == AutoStartState.Counting ? at + WarmUpAhead() : _autoStart.StartsAtUtc(now, Gap.PushedBackMinutes))
+            ? PhoneCountdown.For(_autoStartState, _autoStart.StartsAtUtc(now, Gap.PushedBackMinutes) is { } at && _autoStartState == AutoStartState.Counting ? at + StartToGreen() : _autoStart.StartsAtUtc(now, Gap.PushedBackMinutes))
             : null;
 }
