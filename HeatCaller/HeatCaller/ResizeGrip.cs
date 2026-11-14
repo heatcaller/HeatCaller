@@ -62,7 +62,7 @@ internal sealed class ResizeGrip : Control
     /// </summary>
     public string TipText
     {
-        get => _tip.GetToolTip(this);
+        get => _tip.GetToolTip(this) ?? string.Empty;
         set => _tip.SetToolTip(this, value);
     }
 

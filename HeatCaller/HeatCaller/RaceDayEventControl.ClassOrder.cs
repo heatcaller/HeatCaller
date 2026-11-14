@@ -104,9 +104,9 @@ internal sealed class ClassOrderForm : Form
         _list.IntegralHeight = false;
 
         var btnUp = new Button { Text = "Move Up", AutoSize = true };
-        btnUp.Click += (_, _) => Move(-1);
+        btnUp.Click += (_, _) => MoveSelected(-1);
         var btnDown = new Button { Text = "Move Down", AutoSize = true };
-        btnDown.Click += (_, _) => Move(+1);
+        btnDown.Click += (_, _) => MoveSelected(+1);
 
         _chkRotate.Text = "Turn the order round each round (Q2 starts with the second class)";
         _chkRotate.AutoSize = true;
@@ -130,7 +130,7 @@ internal sealed class ClassOrderForm : Form
         DialogFit.Keep(this, page, width: 500, height: 420);
     }
 
-    private void Move(int by)
+    private void MoveSelected(int by)
     {
         var at = _list.SelectedIndex;
         var to = at + by;

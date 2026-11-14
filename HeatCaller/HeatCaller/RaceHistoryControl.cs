@@ -696,7 +696,7 @@ public sealed class RaceHistoryControl : UserControl
                 string.IsNullOrWhiteSpace(r.CarModel) ? "-" : r.CarModel,
                 r.Laps,
                 r.FastLapMs > 0 ? $"{r.FastLapMs / 1000.0:0.000}s" : "-",
-                null,
+                null!,
                 adjText,
                 WarningsText(r),
                 Sectors.Bests(r) is { } bests ? Sectors.Line(bests) : "-",
@@ -764,7 +764,7 @@ public sealed class RaceHistoryControl : UserControl
         // (they never ran) and no Report Card on their row.
         foreach (var transponder in session.DidNotStart ?? new List<string>())
         {
-            var dnsIndex = _detailGrid.Rows.Add(null, DriverNameOf(transponder), "-", null, "-", null, string.Empty, string.Empty, "-", "-",
+            var dnsIndex = _detailGrid.Rows.Add(null!, DriverNameOf(transponder), "-", null!, "-", null!, string.Empty, string.Empty, "-", "-",
                 shared && round is not null ? MixedHeats.ClassOfDriver(round, transponder, _profiles) : string.Empty);
             var dnsRow = _detailGrid.Rows[dnsIndex];
             dnsRow.Cells["pos"].Tag = DnsMark;

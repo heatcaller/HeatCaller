@@ -253,7 +253,7 @@ public sealed class CheckInMultiSelectTests : IDisposable
                 Assert.Equal(new[] { "1002" }, Transponders(page.PickForMenu(ben, Keys.None)));
 
                 // Not left on the Checked In box, which a current cell puts in edit mode.
-                Assert.Equal("driver", grid.CurrentCell?.OwningColumn.Name);
+                Assert.Equal("driver", grid.CurrentCell?.OwningColumn?.Name);
             }
 
             return 0;

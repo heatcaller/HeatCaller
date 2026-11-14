@@ -24,7 +24,7 @@ public sealed class NightSetupTests : IDisposable
         AssignedTransponders = cars.ToList(),
     };
 
-    private static RoundDefinition Main(string label, bool run = false) => new()
+    private static RoundDefinition MainRound(string label, bool run = false) => new()
     {
         RoundLabel = label,
         ClassName = "Stock",
@@ -51,7 +51,7 @@ public sealed class NightSetupTests : IDisposable
     [Fact]
     public void A_break_after_Q2_still_comes_when_Q3_was_dropped_and_the_finals_are_next()
     {
-        Assert.Single(NightBreaks.Between(Heat("Q2 Heat 4"), Main("A-Main"), new[] { After(2) }));
+        Assert.Single(NightBreaks.Between(Heat("Q2 Heat 4"), MainRound("A-Main"), new[] { After(2) }));
     }
 
     [Fact]
@@ -59,9 +59,9 @@ public sealed class NightSetupTests : IDisposable
     {
         var breaks = new[] { After(PlannedBreak.BeforeFinals, 20, "dinner") };
 
-        Assert.Single(NightBreaks.Between(Heat("Q3 Heat 2"), Main("C-Main"), breaks));
+        Assert.Single(NightBreaks.Between(Heat("Q3 Heat 2"), MainRound("C-Main"), breaks));
         Assert.Empty(NightBreaks.Between(Heat("Q2 Heat 2"), Heat("Q3 Heat 1"), breaks));
-        Assert.Empty(NightBreaks.Between(Main("C-Main"), Main("B-Main"), breaks));
+        Assert.Empty(NightBreaks.Between(MainRound("C-Main"), MainRound("B-Main"), breaks));
     }
 
     [Fact]
