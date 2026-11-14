@@ -502,7 +502,7 @@ describe("the check-in page", () => {
 
       offline = true;
       await page.poll();
-      assert.match(page.byId.get("ci")?.innerHTML ?? "", /Could not reach the relay/);
+      assert.match(page.byId.get("ci")?.innerHTML ?? "", /Can’t reach the club’s live pages/);
 
       offline = false;
       drivers = [{ id: SAM, name: "Sam", className: "Stock", number: "7", checkedIn: false, photo: "" }];

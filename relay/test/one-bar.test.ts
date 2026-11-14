@@ -55,7 +55,9 @@ describe("the home-screen icon's one bar", () => {
 
   it("hands a tab's tap to the stage instead of loading a new page", () => {
     assert.match(shell, /if \(SHELL \|\| hcHeld\) \{\s*\/\/[^\n]*\n[^\n]*\n\s*e\.preventDefault\(\);/);
-    assert.match(shell, /if \(page === location\.pathname\) \{ ahead = null; hcTop\(\); return; \}/);
+    // here(): the page's own address with any trailing slash taken off
+    // (14 Nov 2026), so /c/club and /c/club/ are one page.
+    assert.match(shell, /if \(page === here\(\)\) \{ ahead = null; hcTop\(\); return; \}/);
   });
 
   for (const [name, html] of pages) {

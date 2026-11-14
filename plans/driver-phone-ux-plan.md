@@ -755,6 +755,13 @@ There will be more to find in those.
 
 Each step is one PR. Every relay change needs a `fly deploy` from `relay/` and an app restart. Items 15, 17 (step 4) and 23 also change the app.
 
+## Status
+
+| Step | State | What's in, and what's left |
+|---|---|---|
+| **0** | Done 14 Nov 2026 | First walk-through; findings recorded under item 24. A second walk is planned after step B. |
+| **A** | Built 14 Nov 2026, not deployed | **In:** the worker keeps the club's pages; the pages keep their last answer, dim it under a "No signal" strip and back off; Live says "Lost touch" / "Last seen", keeps "Race over" with its day for 12 hours, then folds; Schedule's "Last race day"; the night's day in place of "Tonight", and the date said once; check-in closes once its document is a day old (check-in only, not the garage); plain words on every driver page, with a test; the build fingerprint and "Updated – tap to reload"; the anonymous page counts (`POST /count`, `GET /counts` with the token). **Left, on purpose:** item 1 step 6 (moving the shared script and style into one cached file, which matters most for Achievements at 739 KB) needs its own change; nothing shows the page counts yet (the laptop or relay admin reads them with the token); item 21 step 5 (an old page offering a reload on a 404). The garage's "Racing tonight" tag is the car chosen for racing, not a date, and stays. |
+
 ## Decisions
 
 All decided on 14 Nov 2026 unless noted. Nothing is open.

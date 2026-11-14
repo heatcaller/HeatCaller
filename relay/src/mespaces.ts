@@ -912,7 +912,23 @@ function meFee() {
   at.className = 'me-fee' + (live && live.entry && live.entry.paid === true ? ' ok' : '');
 }
 
+// The first space says "Tonight" only when the night is tonight (14 Nov
+// 2026, driver phone plan item 3); a night from last week says its day.
+// The words only - the space and its place stay as they are.
+function meTonightLabel() {
+  const b = document.querySelector('#me-switch [data-s="tonight"]');
+  if (!b) return;
+  const day = typeof night === 'object' && night && typeof night.night === 'string' ? night.night : '';
+  let words = 'Tonight';
+  if (day !== '' && typeof hcIsTonight === 'function' && !hcIsTonight(day)) {
+    const d = new Date(day + 'T12:00:00');
+    if (!isNaN(d)) words = d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+  if (b.textContent !== words) b.textContent = words;
+}
+
 function meMoment() {
+  meTonightLabel();
   meFee();
   const at = document.getElementById('me-moment');
   if (!at) return;

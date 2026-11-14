@@ -743,7 +743,7 @@ async function readGarage() {
   }
 
   if (a.status >= 500) {
-    if (!loaded) message('The relay could not answer just now. This page will try again in a moment.', true);
+    if (!loaded) message('The club’s live pages didn’t answer just now. This page tries again in a moment.', true);
     schedule();
     return;
   }
@@ -767,7 +767,7 @@ async function readGarage() {
 
   loaded = true;
   take(a.body, p);
-  message(garage === null ? "Waiting for the timing desk's laptop… Your garage shows here once HeatCaller sends it." : '');
+  message(garage === null ? "Waiting for the timing desk… Your garage shows here once HeatCaller sends it." : '');
   paintAll();
   matchAsks();
   // For the rest of Me (5 Nov 2026): the Tonight tiles and the status strip

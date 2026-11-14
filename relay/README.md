@@ -269,7 +269,8 @@ finished last.
 /c/:club/results/:sessionId/card.png
                              the drawn 1200x630 picture that goes with that link
 /c/:club/manifest.webmanifest   makes "Add to Home Screen" install the pages as an app
-/c/:club/sw.js               the club's service worker: shows push alerts, caches nothing
+/c/:club/sw.js               the club's service worker: shows push alerts, and keeps the club's
+                             pages for a phone with no signal (see "No signal" below)
 /c/:club/icon.png            HeatCaller's sun, the same for every club (src/sun.ts)
 /c/:club/logo.png            the club's logo (404 if it has none)
 ```
@@ -1255,6 +1256,61 @@ for each alert accepted (`[push] "club": hc-race accepted for 2 phones`)
 and each refused, with the push service's reason. iPhones only take alerts
 from the club's pages added to the Home Screen.
 
+### No signal, and the pages after a deploy (14 Nov 2026)
+
+Driver phone plan items 1, 3, 14 and 21 (`plans/driver-phone-ux-plan.md`).
+
+- **The worker keeps the club's pages.** `/c/:club/sw.js` is served to every
+  club, whether or not this relay sends alerts. For Home, Live, Schedule,
+  Results and its tabs, Tracks, Me, check-in and the one-bar app it goes to
+  the network first, and falls back to the copy from the last visit when the
+  network fails or takes over 3 seconds. The versioned icon and logo come
+  from the cache. It never keeps a driver's night or garage, sign-up,
+  Manage, anything under `/api/`, anything but a GET, or another club's
+  address. Its cache is named after the build, so a deploy throws the old
+  pages away. The Home tab and the manifest's `start_url` are `/c/:club/`
+  (inside the worker's scope); the manifest's `id` is `/c/:club`, so an app
+  already on a home screen stays the same app.
+- **The pages keep their last answer.** Each snapshot read is kept in the
+  phone's own storage (up to 12 hours, 300 KB each). With no signal a page
+  draws that copy, dimmed, under one strip: "No signal. Showing what we had
+  at 7:14 PM (40 s ago). Trying again…". It retries after 2, 4 and 8 seconds,
+  then every 15, and at once when the phone is back online or the page is
+  looked at again. A busy relay (5xx) is drawn from the copy too, but asked
+  again on the next redraw as before.
+- **Live judges each board by its age.** A race running with no update for
+  2 minutes says "Lost touch with the track" with the board dimmed (a copy
+  shown with no signal says "Last seen" instead: the phone may be what lost
+  touch). A race over keeps its board under "Race over" for 12 hours, with
+  the day once it isn't today, then folds behind "See the last race".
+  Schedule says "Last race day" for an old one, and a driver's night names
+  its day instead of "Tonight".
+- **Check-in is for tonight.** Check-in itself (the check-in page, a tap,
+  the Me tab's check-in) counts as closed once the laptop's check-in
+  document is more than 24 hours old. A driver's garage and requests still
+  go by the club's switch alone.
+- **The build.** Every page carries `data-build` and every snapshot answer
+  `x-hc-build` (`src/pagebuild.ts`, a hash of the compiled page files). When
+  they differ the page offers "Updated – tap to reload", never while a race
+  is running or Listen is on.
+- **Plain words.** Driver pages never say "relay" or "laptop"
+  (`test/driver-phone-a.test.ts` checks every driver page).
+
+### Page counts (public; reading them needs a token)
+
+```
+POST /api/v1/c/:club/count    {events: [name, ...]}  -> 204
+GET  /api/v1/c/:club/counts   token; -> {days: {"2026-11-14": {offline_shown: 3}}, last7, last30}
+```
+
+Anonymous counts per club per day of a fixed list of events
+(`PAGE_COUNT_EVENTS` in `src/pagecounts.ts`). No badge, driver, phone, page
+address or IP is kept, and names not on the list are dropped. A page sends
+at most one of each per load, once a minute and when it is hidden. One
+address may send a club 120 reports in five minutes. Kept 90 days in
+`pagecounts`, never served to the public. Nothing shows them yet: they are
+read with the club's token.
+
 ### Sponsor counts (public; reading them needs a token)
 
 ```
@@ -1683,8 +1739,11 @@ src/pinguard.ts  the club-wide wrong-PIN count and its escalating lockout, kept 
                  one instance guards check-in's PIN, a second and independent one the
                  manager's
 src/pages.ts     every public page, the manifest
+src/pagebuild.ts the fingerprint of this build of the pages (data-build, x-hc-build)
+src/pagecounts.ts the anonymous page counts: the events a page may count, kept by day
 src/push.ts      push alerts: the VAPID key, the push-service allow-list, sign-ups per driver,
                  what to send when, RFC 8291 encryption, and the club's service worker
+                 (which also keeps the club's pages for a phone with no signal)
 src/garage.ts    a driver's garage document and car photos from the phone - the pure half
 src/garagepage.ts the driver's Garage page
 src/site.ts      the club's look, read narrowly from its site document

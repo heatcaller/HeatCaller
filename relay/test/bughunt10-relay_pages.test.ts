@@ -51,9 +51,12 @@ describe("#21 the schedule page after a failed poll", () => {
 
       assert.match(page.get("board").innerHTML, /Heat 1/);
 
+      // Since 14 Nov 2026 (driver phone plan item 1) a failed read keeps
+      // what this phone last had on screen, dimmed under a strip that says
+      // how old it is, rather than replacing it with an error.
       next = "bad";
       await page.advance(15000);
-      assert.match(page.get("board").innerHTML, /Could not reach the relay/);
+      assert.match(page.get("board").innerHTML, /Heat 1/, "the last programme stays while the relay can't be reached");
 
       next = "good";
       await page.advance(15000);
@@ -84,7 +87,7 @@ describe("#62 the sign-up page keeps trying after a failed first read", () => {
     page.run(script);
     await page.settle();
 
-    assert.match(page.get("su").innerHTML, /This page will keep trying/);
+    assert.match(page.get("su").innerHTML, /This page keeps trying/);
     const first = page.sent.length;
 
     await page.advance(10000);
@@ -120,7 +123,7 @@ describe("#69 the night page and a relay fault", () => {
       return { status: 409, body: { ok: false } };
     }, `#d=${CODE}`);
 
-    assert.match(page.get("nt").drawn(), /could not answer just now/);
+    assert.match(page.get("nt").drawn(), /didn’t answer just now/);
     assert.doesNotMatch(page.get("nt").drawn(), /No night was found/);
 
     status = 200;

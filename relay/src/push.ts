@@ -880,13 +880,100 @@ export function myNightUrl(club: string): string {
 
 /**
  * The service worker, served at /c/<club>/sw.js so it covers that club's
- * pages and no other club's. It only shows what a push brings and opens
- * the page on a tap: no fetch handler, so it caches nothing and changes
- * nothing about how the pages load.
+ * pages and no other club's. It shows what a push brings and opens the
+ * page on a tap.
+ *
+ * THE PAGES WITH NO SIGNAL (14 Nov 2026, driver phone plan item 1). It
+ * also keeps the club's pages for a phone that loses its signal - a race
+ * night in a metal building, where the worst signal comes exactly when
+ * most people are checking. What it keeps, and what it never does:
+ *
+ *  - The club's own pages (Home, Live, Schedule, Results and its tabs,
+ *    Tracks, Me, check-in, the one-bar app): network first, and the copy
+ *    from the last visit when the network is gone or takes over three
+ *    seconds. Kept by address, without the query, so one copy a page.
+ *  - The icon and the logo, which are versioned (?v=): the copy first.
+ *  - NEVER a driver's own night or garage, a sign-up, Manage, anything
+ *    under /api/ (the pages keep their own last answer, and private
+ *    answers stay out of a shared cache), or anything but a GET.
+ *  - Never another club's address: only paths under this worker's scope.
+ *
+ * The cache is named after the build (PAGES_BUILD, filled in when it is
+ * served), so a deploy throws the old pages away the moment the new worker
+ * takes over. A page never opened on this phone answers a short page of
+ * its own saying so, rather than the browser's "no internet".
  */
-export const SERVICE_WORKER_JS = `'use strict';
+const SERVICE_WORKER_TEMPLATE = `'use strict';
+const HC_BUILD = '__HC_BUILD__';
+const HC_CACHE = 'hc-pages-' + HC_BUILD;
+const HC_PAGES = ['', 'live', 'schedule', 'results', 'standings', 'badges', 'tracks', 'mynight', 'checkin', 'app'];
+const HC_STATIC = ['icon.png', 'logo.png'];
+const HC_WAIT_MS = 3000;
 self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener('activate', (e) => e.waitUntil(Promise.all([
+  self.clients.claim(),
+  typeof caches === 'undefined' ? null : caches.keys()
+    .then((keys) => Promise.all(keys.filter((k) => k.indexOf('hc-pages-') === 0 && k !== HC_CACHE).map((k) => caches.delete(k))))
+    .catch(() => null),
+])));
+// What a request is to this worker: a club page, a versioned picture, or
+// nothing (left to the network as if there were no worker).
+function hcRoute(req) {
+  if (!req || req.method !== 'GET') return null;
+  let u, scope;
+  try { u = new URL(req.url); scope = new URL(self.registration.scope); } catch (e) { return null; }
+  if (u.origin !== scope.origin) return null;
+  const base = scope.pathname.replace(/\\/$/, '');
+  if (u.pathname !== base && u.pathname.indexOf(base + '/') !== 0) return null;
+  const rest = u.pathname.slice(base.length).replace(/^\\//, '').replace(/\\/$/, '');
+  if (HC_PAGES.indexOf(rest) >= 0) return { page: true, key: u.origin + base + (rest === '' ? '/' : '/' + rest) };
+  if (HC_STATIC.indexOf(rest) >= 0 && /^\\?v=[0-9A-Za-z_-]{1,64}$/.test(u.search)) return { page: false, key: u.href };
+  return null;
+}
+function hcNotHere() {
+  const html = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+    + '<title>No signal</title><body style="margin:0;padding:32px 20px;font:17px/1.5 system-ui,sans-serif;background:#0F0722;color:#F7F2FF">'
+    + '<h1 style="font-size:1.4rem">No signal</h1><p>This page hasn\\u2019t been opened on this phone yet, so there\\u2019s no copy of it to show.</p>'
+    + '<p>It opens as soon as the phone is back online.</p><p><a href="" style="color:#2EE6FF">Try again</a></p></body>';
+  return new Response(html, { status: 503, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
+}
+// Network first; the kept copy when the network fails or is slow; the
+// network's answer kept for next time whenever it comes.
+function hcPage(req, key) {
+  return caches.open(HC_CACHE).then((cache) => new Promise((resolve) => {
+    let done = false;
+    const give = (res) => { if (!done && res) { done = true; resolve(res); } };
+    const kept = () => cache.match(key).catch(() => undefined);
+    const slow = setTimeout(() => { kept().then(give); }, HC_WAIT_MS);
+    fetch(req).then((res) => {
+      clearTimeout(slow);
+      if (res && res.ok && res.type === 'basic') cache.put(key, res.clone()).catch(() => null);
+      give(res);
+    }).catch(() => {
+      clearTimeout(slow);
+      kept().then((hit) => give(hit || hcNotHere()));
+    });
+  })).catch(() => fetch(req));
+}
+function hcStatic(req, key) {
+  return caches.open(HC_CACHE).then((cache) => cache.match(key).then((hit) => hit || fetch(req).then((res) => {
+    if (res && res.ok && res.type === 'basic') cache.put(key, res.clone()).catch(() => null);
+    return res;
+  }))).catch(() => fetch(req));
+}
+self.addEventListener('fetch', (e) => {
+  if (typeof caches === 'undefined') return;
+  const route = hcRoute(e.request);
+  if (route === null) return;
+  e.respondWith(route.page ? hcPage(e.request, route.key) : hcStatic(e.request, route.key));
+});`;
+
+/** The service worker for one build of the pages (see PAGES_BUILD in pagebuild.ts). */
+export function serviceWorkerFor(build: string): string {
+  return SERVICE_WORKER_TEMPLATE.replace("__HC_BUILD__", /^[0-9a-z]{1,40}$/.test(build) ? build : "dev") + SERVICE_WORKER_REST;
+}
+
+const SERVICE_WORKER_REST = `
 self.addEventListener('push', (e) => {
   let m = {};
   try { m = e.data ? e.data.json() : {}; } catch (err) { m = {}; }
@@ -922,3 +1009,6 @@ self.addEventListener('notificationclick', (e) => {
   }));
 });
 `;
+
+/** The worker as served before there was a build to name its cache after; what the tests run. */
+export const SERVICE_WORKER_JS = serviceWorkerFor("dev");

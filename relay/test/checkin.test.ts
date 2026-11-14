@@ -375,7 +375,11 @@ describe("the club's look", () => {
 
     assert.equal(answer.status, 200);
     assert.equal(answer.body.name, "Acme RC");
-    assert.equal(answer.body.start_url, "/c/acme-rc");
+    // Inside the service worker's scope (/c/acme-rc/) since 14 Nov 2026, so
+    // the installed app opens with no signal; its id is the old start_url,
+    // so an app already on a home screen stays the same app.
+    assert.equal(answer.body.start_url, "/c/acme-rc/");
+    assert.equal(answer.body.id, "/c/acme-rc");
     assert.ok(answer.body.start_url.startsWith(answer.body.scope), "start_url sits inside scope");
     assert.equal(answer.body.display, "standalone");
     assert.equal(answer.body.orientation, "portrait", "portrait only (7 Nov 2026)");
