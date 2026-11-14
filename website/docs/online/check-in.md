@@ -68,14 +68,14 @@ The line under the photos checkbox says whether check-in is working:
 
 ## QR check-ins
 
-QR check-ins are printed from **Race Day → Who's Racing** with **Print QR Check-ins**, on the **Scan to Check In** card. It saves QR check-in sheets as PNG images (12 QR check-ins to a page, one file per page) for the drivers currently shown, which you then print and cut up.
+QR check-ins are printed from **Race Day → Who's Racing** with **More → Print QR Check-ins**. It saves QR check-in sheets as PNG images (12 QR check-ins to a page, one file per page) for the drivers currently shown, which you then print and cut up.
 
 What the QR code holds depends on whether online check-in is on when you print:
 
 - **Online check-in on** (and publishing set up): the code is a web link to that driver's card on your club's check-in page. The QR check-in also says "Scan with your phone camera to check in". Any phone camera opens it.
 - **Online check-in off**: the code is the older Wi-Fi-only form, which only the desk's USB scanner and the laptop's Wi-Fi check-in page understand.
 
-The desk's USB scanner (the **Scan to Check In** box on **Race Day → Who's Racing**) reads both kinds, so every QR check-in ever printed keeps working at the desk, except online QR check-ins printed before the QR check-ins were reissued (see [Reissue all QR check-ins](#reissue-all-qr-check-ins)).
+The desk's USB scanner (the search box on **Race Day → Who's Racing**, or the big box in **Desk mode**) reads both kinds, so every QR check-in ever printed keeps working at the desk, except online QR check-ins printed before the QR check-ins were reissued (see [Reissue all QR check-ins](#reissue-all-qr-check-ins)).
 
 A QR check-in link never contains the transponder number. It carries a code the laptop makes from the transponder with a secret key that never leaves the laptop, so it can't be guessed. The code stays the same from meeting to meeting, so a QR check-in printed once works all season, until you reissue the QR check-ins. QR check-ins of the older Wi-Fi-only kind don't use the key, so a reissue doesn't affect them.
 

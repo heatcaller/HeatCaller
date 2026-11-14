@@ -144,6 +144,15 @@ public sealed partial class CheckInControl
             RefreshDriverList();
         });
 
+        LogDesk(drivers.Count == 1 ? DisplayName(drivers[0]) : Plural.Of(drivers.Count, "driver"), how switch
+        {
+            PaidHow.Owing => "marked as still owing",
+            PaidHow.Comp => note.Length > 0 ? $"comp ({note})" : "comp",
+            _ => drivers.Count == 1 && TonightsFees() is { } night
+                ? $"paid {DeskMoney.Money(FeeFor(drivers[0], night.Day, ClassNamed))} {how.ToString().ToLowerInvariant()}"
+                : $"paid by {how.ToString().ToLowerInvariant()}",
+        });
+
         RefreshDriverList();
         SetScanStatus(how == PaidHow.Owing
             ? $"{Plural.Of(drivers.Count, "driver")} marked as still owing."

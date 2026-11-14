@@ -4,6 +4,17 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Who's Racing reworked: a pit board, and Desk mode (13 November).**
+    - **Readiness cards across the top** count, for the class picked, who's checked in, through tech, paid (with the money still owed) and with their papers in order, and how many are ready to race. Click a card to list only the drivers still waiting at that gate.
+    - **Chips in place of the filters.** A chip per class, each with how many race it, in place of the **Class:** list. A chip per gate (**Not here**, **Needs tech**, **Owes**, **Papers**, **Ready**) in place of **Only those not through tech**, which only knew about tech.
+    - **Status you can read at a glance.** **Tech**, **Payment** and **Papers** show as coloured chips, classes as tags (no more "Mod + 50% + B..."), and a new **Ready** column shows a bar per gate, or **Ready**. Drivers not here yet are greyed, and **Tech** reads **Waiting** only for a driver who is here.
+    - **One box to find and scan.** The search box above the list narrows it by name or transponder, and is where a USB scanner types. A name typed with <kbd>Enter</kbd> checks in the one driver it matches. The **Scan to Check In** card is gone, and the list has its width.
+    - **Fewer buttons.** **Add Driver** is the one pink button. With two or more drivers picked, a bar for them has **Check In**, **Check Out**, **Paid Cash**, **Paid Card**, **Inspect Selected Cars** and **Clear**. **Check In Everyone**, **Check Out Everyone**, **Inspect Selected Car**, **Scrutineering Log**, **Print QR Check-ins**, **Self Check-In Poster** and **Desk View** are under **More**.
+    - **No Pack column.** Which pack is in a car is picked on **Driver Hub** or in Race Control.
+    - **Desk mode,** on the switch at the top, is for the queue before the first heat: a big scan box, the driver just scanned in large with only what they still need and a button for each (**Inspect Car...**, **Paid Cash**, **Record Papers...**, **Undo**), and **Tonight at the Desk**, the evening's check-ins and payments as they happen with what has been taken in cash and card.
+
+    See [Race Day → Who's Racing](race-day/events-and-entries.md#race-day-whos-racing) and [Desk mode](race-day/events-and-entries.md#desk-mode).
+
 - **Shared heats: places by class everywhere (13 November).** A race two classes shared was scored by class in championships, qualifying and the mains, but listed as one field. Now, as a championship counts it:
     - **The position report** calls each car by its place in its own class: "Mo leads Mod, Sam leads Stock, Bea second in Stock." No gaps are said in a shared heat, since they're measured to the overall leader.
     - **Race History** has a **Class Place** column for a shared race, and the printed results sheet puts each driver's class place beside their name.

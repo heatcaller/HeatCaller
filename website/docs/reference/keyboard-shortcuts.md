@@ -124,7 +124,7 @@ This covers the "scan to join" posters opened from **Local Screens** (**QR code*
 
 ## Race Day → Who's Racing: scanning QR check-ins
 
-Click the box in the **Scan to Check In** card, then scan a driver's QR check-in. A USB barcode scanner types the code and then presses <kbd>Enter</kbd>, which checks the driver in. You can also type a code and press <kbd>Enter</kbd> yourself. See [Events and entries](../race-day/events-and-entries.md).
+Click the search box above the **Who's Racing** list (or the big box in **Desk mode**), then scan a driver's QR check-in. A USB barcode scanner types the code and then presses <kbd>Enter</kbd>, which checks the driver in. You can also type a code, or a driver's name, and press <kbd>Enter</kbd> yourself. <kbd>Esc</kbd> clears the box. See [Events and entries](../race-day/events-and-entries.md).
 
 ## Move drivers between heats
 
