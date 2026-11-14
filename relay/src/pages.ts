@@ -1306,6 +1306,19 @@ html.framed .hcvideo .sheet { padding-bottom: calc(18px + 58px + var(--sa-b)); }
 .hcvideo .hcvsrc { font-size: 0.8rem; margin: 6px 0 0; }
 .hcvbtn { margin: 8px 8px 0 0; }
 .hcvmiss { color: var(--muted); font-size: 0.85rem; margin: 8px 0 0; }
+/* Live's docked player (race video V4): sticky at the top, the board
+   scrolling under it; small, a corner player over the page. */
+.hcdock { position: sticky; top: var(--sa-t); z-index: 20; background: var(--bg); padding: 6px 0 4px; }
+.hcdock[hidden] { display: none; }
+.hcdock .hcdbar { position: absolute; top: 12px; right: 6px; display: flex; gap: 6px; }
+.hcdock .hcdbar .page { min-width: 44px; min-height: 44px; padding: 0; background: rgba(0, 0, 0, 0.6); color: #FFFFFF; border-color: transparent; }
+.hcdock .hcdnote { font-size: 0.8rem; margin: 4px 0 0; }
+.hcdock.small { position: fixed; top: auto; right: 10px; bottom: calc(70px + var(--sa-b)); width: 46vw; max-width: 280px; padding: 0;
+                border-radius: 10px; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5); }
+.hcdock.small .hcdnote { display: none; }
+.hcdock.small .hcdbar { top: 4px; right: 4px; }
+.hcwatch { margin: 8px 0; }
+.hcwatch .hcvbtn { margin: 0; width: 100%; }
 .hcvmore { margin: 12px 0 0; }
 .hcvmore summary { cursor: pointer; color: var(--accent); min-height: 44px; display: flex; align-items: center; }
 .hcvmore .page, .hcvmore select { margin: 6px 6px 0 0; min-height: 44px; }
@@ -8348,7 +8361,11 @@ export function livePage(club: string, clubName: string, context: PageContext = 
     // Asher): Listen shows the announcer's words as they are heard, so a
     // second set under Message the announcer said the same thing twice.
     // Without Listen it stays, as the only way to read them.
-    body: '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
+    // The docked live player and its Watch live button (race video V4),
+    // filled by LIVE_VIDEO_JS - empty and hidden until the stream is on.
+    body: '<div id="hcdock" class="hcdock" hidden></div>'
+      + '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
+      + '<div id="hcwatch" class="hcwatch" hidden></div>'
       // Your card (driver phone plan item 4), filled by LIVE_JS.
       + '<section id="you" class="you" aria-label="Your race" hidden></section>'
       + '<div id="board"></div>'
@@ -8363,9 +8380,139 @@ export function livePage(club: string, clubName: string, context: PageContext = 
       // The club's sponsors, last on the page (5 Nov 2026) - see SPONSORS_JS.
       + '<div id="sponsors" class="card livepos sponsors" hidden><h3>Our sponsors</h3><div id="spbody"></div></div>',
     script: LAPVOICE_JS + LIVE_JS + (context.look.listening ? LISTEN_JS : CAPTIONS_JS)
-      + (context.look.notes ? NOTE_JS : "") + (context.look.vote ? VOTE_JS : "") + SPONSORS_JS,
+      + (context.look.notes ? NOTE_JS : "") + (context.look.vote ? VOTE_JS : "") + SPONSORS_JS + LIVE_VIDEO_JS,
   }, context);
 }
+
+/**
+ * WATCHING LIVE ALONGSIDE THE BOARD (14 Nov 2026, race video plan V4; Asher:
+ * "Dock it"). While the relay says the club's stream is on (a piece open and
+ * the laptop still sending), Watch live docks YouTube's player at the top of
+ * Live, sticky, with the board scrolling under it. Shrink makes it a small
+ * corner player; close takes it away - both remembered for the night. The
+ * board is never held back to match the video: the video is the late one,
+ * and says so. Watching turns Listen off, since the stream carries the
+ * room's sound. The stream stopping says so, with the way to the results.
+ */
+const LIVE_VIDEO_JS = `
+(function () {
+  const dock = document.getElementById('hcdock');
+  const watch = document.getElementById('hcwatch');
+  if (!dock || !watch) return;
+  const KEY = 'hc-video-dock:' + CLUB;
+  const DAY = new Date().toDateString();
+  let liveId = null;
+  let shown = null;
+  let small = false;
+  let gone = false;
+
+  function kept() {
+    try {
+      const k = JSON.parse(localStorage.getItem(KEY) || 'null');
+      return k && k.day === DAY ? k.state : '';
+    } catch (e) { return ''; }
+  }
+  function keep(state) {
+    try { localStorage.setItem(KEY, JSON.stringify({ day: DAY, state: state })); } catch (e) { /* this visit only */ }
+  }
+  function button(text, label, onTap) {
+    const b = hcVel('button', 'page', text);
+    b.type = 'button';
+    b.setAttribute('aria-label', label);
+    b.addEventListener('click', onTap);
+    return b;
+  }
+  function controls() {
+    const bar = hcVel('div', 'hcdbar');
+    bar.appendChild(button(small ? '\\u2197' : '\\u2013', small ? 'Make the player bigger' : 'Make the player smaller', () => {
+      small = !small;
+      keep(small ? 'small' : 'open');
+      if (gone) stopped(); else open(shown, false);
+    }));
+    bar.appendChild(button('\\u2715', 'Close the player', () => close(true)));
+    return bar;
+  }
+  function open(id, byTap) {
+    if (!id) return;
+    hcCount('video_live_opened');
+    shown = id;
+    gone = false;
+    dock.hidden = false;
+    dock.className = 'hcdock' + (small ? ' small' : '');
+    dock.textContent = '';
+    const box = hcVel('div', 'hcvplayer');
+    const f = document.createElement('iframe');
+    f.src = HC_YT + '/embed/' + encodeURIComponent(id) + '?autoplay=' + (byTap ? 1 : 0) + '&playsinline=1&rel=0&origin=' + encodeURIComponent(location.origin);
+    f.title = 'Live stream, ' + CLUB_NAME;
+    f.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; fullscreen');
+    f.setAttribute('allowfullscreen', '');
+    box.appendChild(f);
+    dock.appendChild(box);
+    dock.appendChild(controls());
+    const notes = ['The video runs about 20 s behind the timing.'];
+    if (typeof window.hcStopListen === 'function' && typeof window.hcListening === 'function' && window.hcListening() === true) {
+      window.hcStopListen();
+      notes.push('Listen is off while you watch.');
+    }
+    dock.appendChild(hcVel('p', 'note hcdnote', notes.join(' ')));
+    drawButton();
+  }
+  function close(byUser) {
+    shown = null;
+    gone = false;
+    dock.hidden = true;
+    dock.textContent = '';
+    if (byUser) keep('closed');
+    drawButton();
+  }
+  function stopped() {
+    gone = true;
+    dock.className = 'hcdock' + (small ? ' small' : '');
+    dock.textContent = '';
+    const box = hcVel('div', 'hcvplayer');
+    box.appendChild(hcVel('p', 'note', 'The stream has stopped.'));
+    const res = hcVel('a', 'page', 'See the results');
+    res.href = '/c/' + encodeURIComponent(CLUB) + '/results';
+    box.appendChild(res);
+    dock.appendChild(box);
+    dock.appendChild(controls());
+  }
+  function drawButton() {
+    watch.textContent = '';
+    watch.hidden = !liveId || shown !== null;
+    if (watch.hidden) return;
+    watch.appendChild(hcVideoButton('Watch live', 'Watch the club\\u2019s stream live, video from YouTube', () => {
+      keep(small ? 'small' : 'open');
+      open(liveId, true);
+    }, true));
+  }
+  async function check() {
+    let id = null;
+    try {
+      const answer = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/video/live', { cache: 'no-store' });
+      const body = answer.ok ? await answer.json() : null;
+      id = body && typeof body.live === 'string' && /^[A-Za-z0-9_-]{11}$/.test(body.live) ? body.live : null;
+    } catch (e) { id = liveId; /* no signal: as it was */ }
+    liveId = id;
+    if (shown && !gone && !liveId) stopped();
+    else if (shown && gone && liveId) open(liveId, false);
+    else if (shown && liveId && liveId !== shown) open(liveId, false);
+    else if (!shown && liveId) {
+      // Docked by itself when Home's Watch sent them here, or they had it
+      // docked earlier tonight - without playing until they tap it.
+      const was = kept();
+      const asked = /[?&]watch=1(&|$)/.test(location.search || '');
+      if (asked || was === 'open' || was === 'small') {
+        small = was === 'small';
+        open(liveId, false);
+      }
+    }
+    drawButton();
+  }
+  void check();
+  setInterval(() => { if (!document.hidden) void check(); }, 60000);
+})();
+`;
 
 /**
  * The player.
