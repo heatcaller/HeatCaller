@@ -16,6 +16,18 @@ public enum FlagState
     Yellow,
     Red,
     Checkered,
+
+    /// <summary>
+    /// Warm-up (14 Nov 2026): timed free laps before a race is staged. Out
+    /// only while a warm-up is open (RaceControlSession.IsWarmingUp), which
+    /// is always between races - the session stays Idle or Finished and no
+    /// pass is counted. Ending the warm-up puts back the flag it replaced.
+    ///
+    /// LAST, and it must stay last: the race journal stores the flag as a
+    /// number, so a value put in the middle would change what an old
+    /// journal reads back as.
+    /// </summary>
+    WarmUp,
 }
 
 /// <summary>A racer's live standing within the current direct-decoder session.</summary>
@@ -2866,6 +2878,16 @@ public sealed partial class RaceControlSession
 
     public bool IsWarmingUp => WarmUpEndsUtc.HasValue;
 
+    /// <summary>The flag the warm-up flag went out over, put back when it ends - see FlagState.WarmUp.</summary>
+    private FlagState _flagBeforeWarmUp = FlagState.None;
+
+    /// <summary>
+    /// The flag as a snapshot keeps it: never the warm-up's. A warm-up is not
+    /// put back by Undo or the journal (its timer is Race Control's), so the
+    /// flag it went out over is kept instead.
+    /// </summary>
+    private FlagState FlagForSnapshot => Flag == FlagState.WarmUp ? _flagBeforeWarmUp : Flag;
+
     /// <summary>Time left in the warm-up, rounded UP to the second so it reads 0:01 until it is really over.</summary>
     public TimeSpan WarmUpRemaining
     {
@@ -2899,6 +2921,15 @@ public sealed partial class RaceControlSession
 
         WarmUpLength = length;
         WarmUpEndsUtc = UtcNowSource() + length;
+
+        // The warm-up flag goes out over whatever was showing - after a race,
+        // its checkered - and that flag comes back when the warm-up ends.
+        if (Flag != FlagState.WarmUp)
+        {
+            _flagBeforeWarmUp = Flag;
+        }
+
+        SetFlag(FlagState.WarmUp);
         Log($"Warm-up open - {WarmUpText.Describe((int)length.TotalSeconds)} of free laps. Passes are not counted.");
         SafeRaise(WarmUpChanged, h => h(), nameof(WarmUpChanged));
         return true;
@@ -2913,6 +2944,16 @@ public sealed partial class RaceControlSession
         }
 
         WarmUpEndsUtc = null;
+
+        // The flag the warm-up went out over comes back - a finished race's
+        // checkered, or none. Before WarmUpChanged, so whatever hears that
+        // reads the flag as it now is. A Stage or Reset sets its own flag
+        // straight after.
+        if (Flag == FlagState.WarmUp)
+        {
+            SetFlag(_flagBeforeWarmUp);
+        }
+
         Log(reason);
         SafeRaise(WarmUpChanged, h => h(), nameof(WarmUpChanged));
     }
@@ -3784,7 +3825,7 @@ public sealed partial class RaceControlSession
         }).ToList();
 
         // Copies, not the live collections - Reset clears those in place.
-        var snapshot = new SessionSnapshot(copies, State, Flag, RaceStartUtc, _raceStartDeviceTimeMs, _accumulatedRedTime, _redFlagStartedUtc,
+        var snapshot = new SessionSnapshot(copies, State, FlagForSnapshot, RaceStartUtc, _raceStartDeviceTimeMs, _accumulatedRedTime, _redFlagStartedUtc,
             _raceFastestLapMs, _raceFastestLapTransponder,
             IsFinishing,
             _finishingOnTime,
@@ -3999,6 +4040,13 @@ public sealed partial class RaceControlSession
         // back under. Set before the state changes, so StateChanged
         // handlers see it too - see GreenFlag.
         GreenStartedTheRace = false;
+
+        // A race put back ends any warm-up open over it: the warm-up was for
+        // the race that replaced it. SetState only ends one for a race put
+        // back staged or running, so it is ended here for Idle and Finished
+        // too - otherwise the warm-up flag would be overwritten below while
+        // the warm-up still ran.
+        EndWarmUp("Warm-up ended - race restored.");
         SetState(snapshot.State);
 
         // The call-up time of the race put back, not of whatever replaced
@@ -4008,7 +4056,10 @@ public sealed partial class RaceControlSession
             StagedAtUtc = stagedAt;
         }
 
-        SetFlag(snapshot.Flag);
+        // Never the warm-up flag: no warm-up comes back with a snapshot, and
+        // one taken while a warm-up was open keeps the flag it went out over
+        // (FlagForSnapshot).
+        SetFlag(snapshot.Flag == FlagState.WarmUp ? FlagState.None : snapshot.Flag);
         Log("Session restored (reset undone).");
     }
 

@@ -37,6 +37,13 @@ internal enum RaceBarButtons
 
     /// <summary>Call Up: the next race's drivers and marshals called now. F12.</summary>
     CallUp = 1 << 13,
+
+    /// <summary>
+    /// Warm-up (14 Nov 2026): the warm-up flag - timed free laps, then Stage,
+    /// then the countdown. Lit while the warm-up is open; pressed again then,
+    /// it skips the rest and stages. Leftmost, as it comes first.
+    /// </summary>
+    WarmUp = 1 << 14,
 }
 
 /// <summary>Where the race is, as the flag row names it at its left.</summary>
@@ -64,7 +71,7 @@ public enum RacePhase
 /// Hiding a button takes nothing away from the keys or the phone: F1-F7
 /// and the remote call the same actions as before, whatever is on screen.
 ///
-///   Before the green   Stage, Countdown, Green, Reset - from a cold
+///   Before the green   Warm-up, Stage, Countdown, Green, Reset - from a cold
 ///                      start, and the same through On Air, a warm-up,
 ///                      staging and the countdown, until the race goes green
 ///                      ("they all remain up until green gets pressed or is
@@ -133,7 +140,7 @@ internal static class RaceBar
             // way on to the next one.
             RaceState.Finished => talkButtons
                 ? AfterTheFlag
-                : (nextWaiting ? RaceBarButtons.None : RaceBarButtons.Stage) | RaceBarButtons.EditResult | RaceBarButtons.Reset,
+                : (nextWaiting ? RaceBarButtons.None : RaceBarButtons.WarmUp | RaceBarButtons.Stage) | RaceBarButtons.EditResult | RaceBarButtons.Reset,
 
             // Idle - a cold start, or after a Reset: the next race's buttons.
             _ => BeforeTheGreen,
@@ -144,9 +151,14 @@ internal static class RaceBar
     internal const RaceBarButtons AfterTheFlag =
         RaceBarButtons.Skip | RaceBarButtons.HoldTalk | RaceBarButtons.CallUp | RaceBarButtons.EditResult | RaceBarButtons.Reset;
 
-    /// <summary>The row from a cold start until the race goes green: Stage, Countdown, Green, Reset.</summary>
+    /// <summary>
+    /// The row from a cold start until the race goes green: Warm-up, Stage,
+    /// Countdown, Green, Reset. Warm-up stays on through staging and the
+    /// countdown (14 Nov 2026) so the row does not move until the green; it
+    /// says why it does nothing there.
+    /// </summary>
     internal const RaceBarButtons BeforeTheGreen =
-        RaceBarButtons.Stage | RaceBarButtons.Countdown | RaceBarButtons.Green | RaceBarButtons.Reset;
+        RaceBarButtons.WarmUp | RaceBarButtons.Stage | RaceBarButtons.Countdown | RaceBarButtons.Green | RaceBarButtons.Reset;
 
     /// <summary>Where the race is.</summary>
     internal static RacePhase PhaseFor(RaceState state, FlagState flag, bool practice, bool warmingUp)

@@ -2594,7 +2594,7 @@ public sealed class BigScreenForm : Form
 
         _lblRaceState.Text = _race.IsWarmingUp
             ? "WARM-UP"
-            : $"{_race.State.ToString().ToUpperInvariant()} — {_race.Flag.ToString().ToUpperInvariant()} FLAG";
+            : $"{_race.State.ToString().ToUpperInvariant()} — {FlagText.Shouted(_race.Flag)}";
 
         RefreshAnnouncementFallback();
         _lblElapsed.Text = ElapsedText();
@@ -2878,7 +2878,7 @@ public sealed class BigScreenForm : Form
         // announcement's few seconds are up.
         _lblRaceState.Text = _race.IsWarmingUp
             ? "WARM-UP"
-            : $"{_race.State.ToString().ToUpperInvariant()} — {_race.Flag.ToString().ToUpperInvariant()} FLAG";
+            : $"{_race.State.ToString().ToUpperInvariant()} — {FlagText.Shouted(_race.Flag)}";
         RefreshAnnouncementFallback();
     }
 

@@ -1,0 +1,227 @@
+namespace HeatCaller.Tests;
+
+/// <summary>
+/// The warm-up flag (14 Nov 2026): a warm-up is a track flag of its own,
+/// FlagState.WarmUp, out while the warm-up is open and gone - with the flag
+/// it went out over back - when it ends. It has a button on the flag row,
+/// before Stage, and a "Warm-up first" switch at the foot of the board makes
+/// every start open one. Warm-up, then staging, then the countdown.
+/// </summary>
+public sealed class WarmUpFlagTests : IDisposable
+{
+    private readonly TempAppData _data = new();
+
+    public void Dispose() => _data.Dispose();
+
+    private static string Source(string file)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "check.cmd")))
+        {
+            dir = dir.Parent;
+        }
+
+        Assert.NotNull(dir);
+        return File.ReadAllText(Path.Combine(dir!.FullName, "HeatCaller", "HeatCaller", file));
+    }
+
+    [Fact]
+    public void The_warm_up_flag_is_the_last_flag_so_old_journals_read_back_the_same()
+    {
+        // The journal stores the flag as a number.
+        Assert.Equal(5, (int)FlagState.WarmUp);
+        Assert.Equal(FlagState.WarmUp, Enum.GetValues<FlagState>().Last());
+        Assert.Equal(4, (int)FlagState.Checkered);
+    }
+
+    [Fact]
+    public void Opening_a_warm_up_puts_the_warm_up_flag_out()
+    {
+        var race = new RaceControlSession();
+        var flags = new List<FlagState>();
+        race.FlagChanged += flags.Add;
+
+        Assert.True(race.BeginWarmUp(TimeSpan.FromMinutes(2)));
+
+        Assert.Equal(FlagState.WarmUp, race.Flag);
+        Assert.Equal(RaceState.Idle, race.State);
+        Assert.Equal(new[] { FlagState.WarmUp }, flags);
+    }
+
+    [Fact]
+    public void Ending_it_puts_back_the_flag_it_went_out_over()
+    {
+        var race = new RaceControlSession();
+        race.BeginWarmUp(TimeSpan.FromMinutes(2));
+
+        race.EndWarmUp();
+
+        Assert.False(race.IsWarmingUp);
+        Assert.Equal(FlagState.None, race.Flag);
+    }
+
+    [Fact]
+    public void After_a_race_the_checkered_comes_back_when_the_warm_up_ends()
+    {
+        var race = new RaceControlSession();
+        race.Stage();
+        race.StartCountdown();
+        race.GreenFlag(100_000);
+        race.CheckeredFlag();
+        Assert.Equal(FlagState.Checkered, race.Flag);
+
+        // A checkered with no car to take it may leave the race finishing
+        // rather than finished; the warm-up is only for between races.
+        if (race.State != RaceState.Finished)
+        {
+            return;
+        }
+
+        Assert.True(race.BeginWarmUp(TimeSpan.FromMinutes(2)));
+        Assert.Equal(FlagState.WarmUp, race.Flag);
+
+        race.EndWarmUp();
+        Assert.Equal(FlagState.Checkered, race.Flag);
+    }
+
+    [Fact]
+    public void Staging_ends_the_warm_up_and_its_flag()
+    {
+        var race = new RaceControlSession();
+        race.BeginWarmUp(TimeSpan.FromMinutes(2));
+
+        race.Stage();
+
+        Assert.False(race.IsWarmingUp);
+        Assert.Equal(RaceState.Staging, race.State);
+        Assert.Equal(FlagState.None, race.Flag);
+    }
+
+    [Fact]
+    public void A_countdown_or_green_pressed_early_ends_it_too()
+    {
+        var countdown = new RaceControlSession();
+        countdown.BeginWarmUp(TimeSpan.FromMinutes(2));
+        countdown.StartCountdown();
+        Assert.False(countdown.IsWarmingUp);
+        Assert.NotEqual(FlagState.WarmUp, countdown.Flag);
+
+        var green = new RaceControlSession();
+        green.BeginWarmUp(TimeSpan.FromMinutes(2));
+        green.GreenFlag(100_000);
+        Assert.False(green.IsWarmingUp);
+        Assert.Equal(FlagState.Green, green.Flag);
+    }
+
+    [Fact]
+    public void Reset_ends_it_with_no_flag_out()
+    {
+        var race = new RaceControlSession();
+        race.BeginWarmUp(TimeSpan.FromMinutes(2));
+
+        race.Reset();
+
+        Assert.False(race.IsWarmingUp);
+        Assert.Equal(FlagState.None, race.Flag);
+    }
+
+    [Fact]
+    public void A_snapshot_never_keeps_the_warm_up_flag()
+    {
+        // Undo and the journal do not bring a warm-up back - its timer is
+        // Race Control's - so they keep the flag it went out over instead.
+        var race = new RaceControlSession();
+        race.BeginWarmUp(TimeSpan.FromMinutes(2));
+
+        var snapshot = race.CreateSnapshot();
+        Assert.Equal(FlagState.None, snapshot.Flag);
+
+        race.RestoreSnapshot(snapshot with { Flag = FlagState.WarmUp });
+        Assert.False(race.IsWarmingUp);
+        Assert.Equal(FlagState.None, race.Flag);
+    }
+
+    [Fact]
+    public void No_warm_up_over_a_race_that_is_staged()
+    {
+        var race = new RaceControlSession();
+        race.Stage();
+
+        Assert.False(race.BeginWarmUp(TimeSpan.FromMinutes(2)));
+        Assert.Equal(FlagState.None, race.Flag);
+    }
+
+    [Fact]
+    public void The_flag_reads_Warm_up_with_its_hyphen()
+    {
+        Assert.Equal("Warm-up", FlagText.Name(FlagState.WarmUp));
+        Assert.Equal("WARM-UP FLAG", FlagText.Shouted(FlagState.WarmUp));
+        Assert.Equal("Green", FlagText.Name(FlagState.Green));
+        Assert.Equal("CHECKERED FLAG", FlagText.Shouted(FlagState.Checkered));
+    }
+
+    [Fact]
+    public void The_warm_up_button_leads_the_row_before_the_green()
+    {
+        foreach (var state in new[] { RaceState.Idle, RaceState.Staging, RaceState.Countdown })
+        {
+            var shown = RaceBar.ButtonsFor(state, FlagState.None, practice: false, warmingUp: false);
+            Assert.True(shown.HasFlag(RaceBarButtons.WarmUp), $"Warm-up at {state}");
+        }
+
+        // While it is open, so pressing it again can skip the rest.
+        Assert.True(RaceBar.ButtonsFor(RaceState.Finished, FlagState.WarmUp, false, warmingUp: true).HasFlag(RaceBarButtons.WarmUp));
+        Assert.Equal(RacePhase.WarmUp, RaceBar.PhaseFor(RaceState.Finished, FlagState.WarmUp, false, warmingUp: true));
+
+        // Not once the race is green, nor through practice.
+        Assert.False(RaceBar.ButtonsFor(RaceState.Racing, FlagState.Green, false, false).HasFlag(RaceBarButtons.WarmUp));
+        Assert.Equal(RaceBarButtons.None, RaceBar.ButtonsFor(RaceState.Idle, FlagState.None, practice: true, warmingUp: false));
+
+        // Leftmost on the row, before Stage.
+        Assert.Contains("_btnWarmUp, _btnStage, _btnCountdown", Source("RaceControlControl.Layout.cs"), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(90, false, 90)]
+    [InlineData(90, true, 90)]
+    [InlineData(0, false, 0)]
+    [InlineData(0, true, RaceControlControl.WarmUpWhenFormatHasNone)]
+    public void A_warm_up_asked_for_with_none_in_the_format_runs_two_minutes(int formatSeconds, bool wanted, int expected)
+    {
+        Assert.Equal(120, RaceControlControl.WarmUpWhenFormatHasNone);
+        Assert.Equal(expected, RaceControlControl.WarmUpSecondsFor(formatSeconds, wanted));
+    }
+
+    [Fact]
+    public void Never_past_the_longest_warm_up_a_format_allows()
+    {
+        Assert.Equal(RaceFormat.MaxWarmUpSeconds, RaceControlControl.WarmUpSecondsFor(RaceFormat.MaxWarmUpSeconds + 600, wanted: true));
+    }
+
+    [Fact]
+    public void Warm_up_first_is_off_by_default_and_kept_with_the_settings()
+    {
+        Assert.False(new AppSettings().RaceStartWithWarmUp);
+        Assert.Contains("nameof(AppSettings.RaceStartWithWarmUp)", Source("SettingsTable.cs"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_footer_has_Warm_up_first_beside_Start_races()
+    {
+        var layout = Source("RaceControlControl.Layout.cs");
+        var onAir = Source("RaceControlControl.OnAir.cs");
+
+        Assert.Contains("SimpleMode.Hide(_chkStartWithOnAir), SimpleMode.Hide(_swWarmUpFirst), _swAutoStart", layout, StringComparison.Ordinal);
+        Assert.Contains("new(\"Warm-up first:\", \"Off\", \"On\")", onAir, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_stage_at_the_end_of_a_warm_up_runs_on_into_the_countdown()
+    {
+        // Warm-up, staging, countdown - whatever the format's auto-advance.
+        var layout = Source("RaceControlControl.Layout.cs");
+
+        Assert.Contains("var afterWarmUp = _warmUpJustFinished;", layout, StringComparison.Ordinal);
+        Assert.Contains("if (_fmt.AutoAdvance || afterWarmUp)", layout, StringComparison.Ordinal);
+    }
+}

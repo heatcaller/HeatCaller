@@ -14,7 +14,7 @@ From top to bottom, the page has:
 - **The Session row.** Choose the round, the track and the session name.
 - **The Next Up bar.** Shows what's running now, what's next, and how the day is going.
 - **The Race Control card.** Holds one row of flag buttons, all the same width and centered across the card over the On Air bar under them. The lit flag button and the board show where the race is. Only the buttons that mean something at that moment are shown (see [The flag row](#the-flag-row)). The lit button shows the flag in effect. **Red**, **Checkered** and **Reset** have to be pressed and held for a second (see [Press and hold](#press-and-hold)); the line under the row says so, and shows the hold as it fills. The same line is the **On Air bar** while anything is going out (see [The On Air bar](#the-on-air-bar)).
-- **The Leaderboard card.** Takes up the rest of the page. Click a driver to open their corrections drawer under their row (see [The leaderboard](#the-leaderboard)). Along its foot are the format chip, the **Start races On Air** tick box, the **Auto start** switch (see [Auto start between races](#auto-start-between-races)), **Race Format** and **Columns**. **Start races On Air** and **Columns** are shown in Advanced mode only (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)).
+- **The Leaderboard card.** Takes up the rest of the page. Click a driver to open their corrections drawer under their row (see [The leaderboard](#the-leaderboard)). Along its foot are the format chip, the **Start races On Air** tick box, the **Warm-up first** switch (see [Warm-up](#warm-up)), the **Auto start** switch (see [Auto start between races](#auto-start-between-races)), **Race Format** and **Columns**. **Start races On Air**, **Warm-up first** and **Columns** are shown in Advanced mode only (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)).
 - **The clock column** on the right. It holds the race clock, then **Quick Race**, **Big Screen**, **Announcer Screen**, **Qualifying Projection**, **Pre-race check**, **Mission Control** and **Broadcast**, with the level meters under **Broadcast** (see [Level meters](#level-meters)).
 
 ## The flag row
@@ -23,7 +23,7 @@ The row changes with the race, so the buttons you need are the only ones there:
 
 | When | Buttons on the row |
 |---|---|
-| Before the green: from a cold start, through On Air, a warm-up, staging and the countdown | **Stage**, **Countdown**, **Green**, **Reset**. The row doesn't change until the race goes green. |
+| Before the green: from a cold start, through On Air, a warm-up, staging and the countdown | **Warm-up**, **Stage**, **Countdown**, **Green**, **Reset**. The row doesn't change until the race goes green. See [Warm-up](#warm-up). |
 | Racing | **Green**, **Yellow**, **Red**, **Checkered**, **Reset**, the same five under a yellow or a red. **Green** restarts the race after a caution. |
 | After the flag (finished) | **Skip**, **Hold Talk**, **Call Up**, **Edit Result**, **Reset**: the buttons for the talk between races (see [The flag row after the flag](#the-flag-row-after-the-flag)). **Edit Result** opens the race just run in **Race History** with **Edit Result** open, for a penalty, a missed lap or a DNF. The next race starts from **Start Next** on the Next Up bar. |
 | Practice | None: practice is run from the Practice page |
@@ -185,7 +185,13 @@ If the round's class runs tech, staging it (or pressing **Green** from idle) als
 
 A race format can give the cars some free laps before the race: set **Warm-up (s, 0 = none):** in the format. It's off (0) unless you set it.
 
-With a warm-up set, pressing **Stage** (or **Quick Race**) between races opens the warm-up first. The race clock shows **WARM-UP**, the announcer says the warm-up is open and how long it lasts, and laps aren't counted. On a warm-up longer than a minute, it calls "Thirty seconds left in warm-up." When the time runs out, the race is staged as usual. To cut it short, press **Stage** (or **Quick Race**) again: the rest of the warm-up is skipped and the race is staged straight away.
+With a warm-up set, pressing **Stage** (or **Quick Race**) between races opens the warm-up first. The race clock shows **WARM-UP**, the announcer says the warm-up is open and how long it lasts, and laps aren't counted. On a warm-up longer than a minute, it calls "Thirty seconds left in warm-up." When the time runs out, the race is staged and the countdown follows: warm-up, staging, countdown. To cut it short, press **Warm-up** or **Stage** (or **Quick Race**) again: the rest of the warm-up is skipped and the race is staged straight away.
+
+The warm-up is a flag of its own. While it's open the **Warm-up** button is lit, the flag shows as **Warm-up** in blue, and the phone pages show the warm-up flag. When it ends, the flag that was out before it comes back.
+
+**The Warm-up button.** The first button on the flag row before the green. It opens a warm-up whether or not the format has one: the format's length, or two minutes if it has none. It doesn't open one over a race that's staged, counting down or running; the log says why.
+
+**Warm-up first.** At the foot of the leaderboard (Advanced mode), beside **Start races**. Switched **On**, every start opens a warm-up first: **Start Next**, **Auto start**, the program's **Start**, <kbd>F1</kbd>, the phone, **Stage** and **Quick Race**. With **Start races On Air** on too, On Air's opening comes first, then the warm-up. It's **Off** by default, and a format with a warm-up still has one either way.
 
 **Reset** cancels a warm-up. A warm-up never opens during practice, or over a race that's staged, counting down or running.
 

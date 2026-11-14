@@ -95,6 +95,7 @@ public partial class RaceControlControl
 
         _barShown = shown;
 
+        ShowOnBar(_btnWarmUp, shown, RaceBarButtons.WarmUp);
         ShowOnBar(_btnStage, shown, RaceBarButtons.Stage);
         ShowOnBar(_btnCountdown, shown, RaceBarButtons.Countdown);
         ShowOnBar(_btnGreen, shown, RaceBarButtons.Green);

@@ -286,8 +286,8 @@ public sealed partial class AnnouncerControl : UserControl
         // nothing shifts as the clock counts. In faces the page makes itself,
         // at the text size in use - see MakeOwnFonts.
         _lblState.Wordings = Enum.GetValues<FlagState>()
-            .Select(flag => $"{flag.ToString().ToUpperInvariant()} FLAG")
-            .Concat(new[] { "COUNTDOWN", "STAGING", "FINISHED", "IDLE" })
+            .Select(FlagText.Shouted)
+            .Concat(new[] { "COUNTDOWN", "STAGING", "FINISHED", "IDLE", "WARM-UP" })
             .ToArray();
 
         // Minutes are not wrapped into hours (RefreshLive), so a practice
@@ -1138,9 +1138,11 @@ public sealed partial class AnnouncerControl : UserControl
             return;
         }
 
-        _lblState.Text = _race.State switch
+        // A warm-up first: it runs between races, and IDLE or FINISHED would
+        // hide that cars are on track (14 Nov 2026).
+        _lblState.Text = _race.IsWarmingUp ? "WARM-UP" : _race.State switch
         {
-            RaceState.Racing => $"{_race.Flag.ToString().ToUpperInvariant()} FLAG",
+            RaceState.Racing => FlagText.Shouted(_race.Flag),
             RaceState.Countdown => "COUNTDOWN",
             RaceState.Staging => "STAGING",
             RaceState.Finished => "FINISHED",
@@ -1151,6 +1153,7 @@ public sealed partial class AnnouncerControl : UserControl
             FlagState.Green => AppTheme.Success,
             FlagState.Yellow => AppTheme.Accent,
             FlagState.Red => AppTheme.Danger,
+            FlagState.WarmUp => FlagText.WarmUpColour,
             _ => AppTheme.TextMuted,
         };
 
