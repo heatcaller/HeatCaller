@@ -369,6 +369,10 @@ public sealed partial class CheckInControl : UserControl
         // Ctrl or Shift held, a click only picks - see Grid_CellClick.
         _grid.MultiSelect = true;
         _grid.ClickStarting += OnGridClickStarting;
+
+        // Right-click anywhere on the list: the menu for the drivers picked
+        // (13 Nov 2026) - see OnRowMenuRequested.
+        _grid.RowMenuRequested += OnRowMenuRequested;
         _grid.SelectionChanged += (_, _) => ShowInspectCaption();
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _grid.Columns.AddRange(
@@ -1324,22 +1328,83 @@ public sealed partial class CheckInControl : UserControl
             return;
         }
 
+        var column = _grid.Columns[e.ColumnIndex].Name;
+
         if (rows.Count > 1)
         {
-            ActOnMany(rows);
+            // Several picked: the columns with a window for many open it -
+            // one inspection for all the cars, or all of them on the Driver
+            // Paid slip. Anywhere else, the menu of what can be done to all
+            // of them (the right-click menu).
+            if (column is "tech" && _tech is not null)
+            {
+                UndoFirstClickTick();
+                Reselect(rows);
+                InspectManyRequested?.Invoke(DriversIn(rows));
+            }
+            else if (column is "paid" && TonightsFees() is { Charges: true })
+            {
+                UndoFirstClickTick();
+                Reselect(rows);
+                OpenDriverPaid();
+                AddToPaidSlip(DriversIn(rows));
+            }
+            else
+            {
+                ActOnMany(rows);
+            }
+
             return;
         }
 
-        // One row: as it always was - the Tech cell inspects, anywhere else
-        // does nothing.
-        if (_tech is null || e.ColumnIndex != _grid.Columns["tech"]?.Index)
+        if (_grid.Rows[e.RowIndex].Tag is not DriverProfile profile)
         {
             return;
         }
 
-        if (_grid.Rows[e.RowIndex].Tag is DriverProfile profile)
+        // One row (13 Nov 2026): the window for the column double-clicked.
+        // Class and Pack open their picker on a single click already, and the
+        // second click of the double-click shut it again - so it is opened
+        // once more, after that click has been dealt with. Papers' window is
+        // up from the first click, and the Checked In box has no window: its
+        // click is the tick.
+        var rowIndex = e.RowIndex;
+
+        switch (column)
         {
-            InspectRequested?.Invoke(profile);
+            case "driver":
+                if (DriverEditDialog.Edit(this, profile.Transponder, _raceClasses, _undo, _profiles))
+                {
+                    RefreshDriverList();
+                }
+
+                break;
+
+            case "class":
+                BeginInvoke(new Action(() => ReopenPicker(rowIndex, profile, PickClasses)));
+                break;
+
+            case "pack" when _batteries is not null:
+                BeginInvoke(new Action(() => ReopenPicker(rowIndex, profile, PickPack)));
+                break;
+
+            case "tech" when _tech is not null:
+                InspectRequested?.Invoke(profile);
+                break;
+
+            case "paid" when TonightsFees() is { Charges: true }:
+                OpenDriverPaid();
+                AddToPaidSlip(new[] { profile });
+                break;
+        }
+    }
+
+    /// <summary>Opens a cell's picker again, while the row is still the driver's.</summary>
+    private void ReopenPicker(int rowIndex, DriverProfile profile, Action<int> pick)
+    {
+        if (!IsDisposed && rowIndex < _grid.Rows.Count && ReferenceEquals(_grid.Rows[rowIndex].Tag, profile))
+        {
+            pick(rowIndex);
         }
     }
 
@@ -1425,26 +1490,98 @@ public sealed partial class CheckInControl : UserControl
     {
         UndoFirstClickTick();
         Reselect(rows);
+        ShowDriverMenu(DriversIn(rows), _grid.PointToClient(Cursor.Position));
+    }
 
-        var drivers = DriversIn(rows);
+    /// <summary>
+    /// A right-click on the list (13 Nov 2026): the row under the pointer is
+    /// picked - or, when it is one of several picked already, they all stay
+    /// picked; Ctrl adds it to them and Shift the run from the current row -
+    /// and the menu for the picked drivers opens at <paramref name="at"/>.
+    /// Below the last row, the menu is for whoever is picked.
+    /// </summary>
+    private void OnRowMenuRequested(int rowIndex, Point at, Keys modifiers) =>
+        ShowDriverMenu(PickForMenu(rowIndex, modifiers), at);
 
+    /// <summary>The picking a right-click on <paramref name="rowIndex"/> does, and the drivers its menu is for, in list order.</summary>
+    internal List<DriverProfile> PickForMenu(int rowIndex, Keys modifiers)
+    {
+        if (rowIndex >= 0 && rowIndex < _grid.Rows.Count)
+        {
+            var row = _grid.Rows[rowIndex];
+
+            if ((modifiers & Keys.Shift) != 0 && _grid.CurrentRow is { } anchor)
+            {
+                for (var i = Math.Min(anchor.Index, rowIndex); i <= Math.Max(anchor.Index, rowIndex); i++)
+                {
+                    _grid.Rows[i].Selected = true;
+                }
+            }
+            else if ((modifiers & Keys.Control) != 0)
+            {
+                row.Selected = true;
+            }
+            else if (!row.Selected)
+            {
+                // The Driver cell, not the Checked In box: a box made current
+                // goes into edit mode (see Grid_CellClick).
+                if (_grid.Columns["driver"] is { } driver)
+                {
+                    _grid.CurrentCell = row.Cells[driver.Index];
+                }
+
+                Reselect(new[] { rowIndex });
+            }
+        }
+
+        return SelectedDrivers();
+    }
+
+    /// <summary>
+    /// The menu of what can be done to the drivers picked - one or many -
+    /// at <paramref name="at"/> on the list: check in (or out, when they all
+    /// are), settle their entry money, and log an inspection.
+    /// </summary>
+    private void ShowDriverMenu(IReadOnlyList<DriverProfile> drivers, Point at)
+    {
         if (drivers.Count == 0)
         {
             return;
         }
 
         var menu = new ContextMenuStrip();
+        var one = drivers.Count == 1;
+        var who = one ? string.Empty : $" {Plural.Of(drivers.Count, "Driver")}";
 
-        var checkIn = new ToolStripMenuItem($"Check In {Plural.Of(drivers.Count, "Driver")}");
-        checkIn.Click += (_, _) => CheckInDrivers(drivers);
-        menu.Items.Add(checkIn);
+        if (drivers.All(p => _checkIns.IsCheckedIn(p.Transponder)))
+        {
+            var checkOut = new ToolStripMenuItem($"Check Out{who}");
+            checkOut.Click += (_, _) => CheckOutDrivers(drivers);
+            menu.Items.Add(checkOut);
+        }
+        else
+        {
+            var checkIn = new ToolStripMenuItem($"Check In{who}");
+            checkIn.Click += (_, _) => CheckInDrivers(drivers);
+            menu.Items.Add(checkIn);
+        }
 
         AddPaymentItems(menu, drivers);
 
         if (_tech is not null)
         {
-            var inspect = new ToolStripMenuItem($"Log Inspection for {Plural.Of(drivers.Count, "Driver")}...");
-            inspect.Click += (_, _) => InspectManyRequested?.Invoke(drivers);
+            var inspect = new ToolStripMenuItem(one ? "Log Inspection..." : $"Log Inspection for{who}...");
+            inspect.Click += (_, _) =>
+            {
+                if (one)
+                {
+                    InspectRequested?.Invoke(drivers[0]);
+                }
+                else
+                {
+                    InspectManyRequested?.Invoke(drivers);
+                }
+            };
             menu.Items.Add(inspect);
         }
 
@@ -1453,7 +1590,28 @@ public sealed partial class CheckInControl : UserControl
         // Let go once it has closed and its click has run.
         menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
 
-        menu.Show(_grid, _grid.PointToClient(Cursor.Position));
+        menu.Show(_grid, at);
+    }
+
+    /// <summary>Takes the drivers picked off tonight's list, from the right-click menu when they are all checked in.</summary>
+    internal void CheckOutDrivers(IReadOnlyList<DriverProfile> drivers)
+    {
+        // Not on a closed day - see CheckInStore.ClosedCurrentDay.
+        if (RefusedOnClosedDay())
+        {
+            return;
+        }
+
+        var transponders = drivers.Select(p => p.Transponder).ToList();
+
+        foreach (var transponder in transponders)
+        {
+            _checkIns.SetCheckedIn(transponder, false);
+        }
+
+        RaiseDeskChanges(transponders);
+        RefreshCheckInMarks();
+        SetScanStatus($"Checked out {Plural.Of(transponders.Count, "driver")}.", AppTheme.Success);
     }
 
     /// <summary>
@@ -1817,6 +1975,73 @@ internal sealed class RosterGrid : DataGridView
         }
 
         base.OnMouseDown(e);
+    }
+
+    /// <summary>
+    /// Raised on a right-click, with the row under the pointer (-1 for none),
+    /// where to open a menu, and the Ctrl or Shift held - or on the menu key
+    /// or Shift+F10, for the current row.
+    /// </summary>
+    public event Action<int, Point, Keys>? RowMenuRequested;
+
+    private const int WmContextMenu = 0x007B;
+    private const int WmRButtonDown = 0x0204;
+    private const int WmRButtonUp = 0x0205;
+    private const int WmRButtonDblClk = 0x0206;
+
+    /// <summary>The row the right button went down on, so the menu opens on its release - -2 while it is up.</summary>
+    private int _rightPressRow = -2;
+
+    /// <summary>
+    /// The right button never reaches the grid's own handling (13 Nov 2026):
+    /// a right-click there raised the cell's click on its release, which
+    /// ticked a Checked In box or opened a Pack picker under the menu. It
+    /// picks and asks for the menu instead - see RowMenuRequested.
+    /// </summary>
+    protected override void WndProc(ref Message m)
+    {
+        switch (m.Msg)
+        {
+            case WmRButtonDown:
+            case WmRButtonDblClk:
+                if (!Focused)
+                {
+                    Focus();
+                }
+
+                var down = PointFrom(m.LParam);
+                _rightPressRow = HitTest(down.X, down.Y).RowIndex;
+                return;
+
+            case WmRButtonUp:
+                if (_rightPressRow != -2)
+                {
+                    var row = _rightPressRow;
+                    _rightPressRow = -2;
+                    RowMenuRequested?.Invoke(row, PointFrom(m.LParam), ModifierKeys & (Keys.Control | Keys.Shift));
+                }
+
+                return;
+
+            case WmContextMenu when m.LParam == (IntPtr)(-1):
+                // From the keyboard: under the current row's cell.
+                if (CurrentCell is { } cell)
+                {
+                    var rect = GetCellDisplayRectangle(cell.ColumnIndex, cell.RowIndex, cutOverflow: true);
+                    RowMenuRequested?.Invoke(cell.RowIndex, new Point(rect.Left, rect.Bottom), Keys.None);
+                }
+
+                return;
+        }
+
+        base.WndProc(ref m);
+    }
+
+    /// <summary>The client point packed in a mouse message's LParam.</summary>
+    private static Point PointFrom(IntPtr lParam)
+    {
+        var value = unchecked((int)(long)lParam);
+        return new Point((short)(value & 0xFFFF), (short)((value >> 16) & 0xFFFF));
     }
 
     /// <summary>Takes the selection as it stands as the one before the click. OnMouseDown calls it; the tests call it to stand in for a press.</summary>

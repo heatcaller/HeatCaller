@@ -1793,62 +1793,8 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        var existing = _profiles.Get(transponder);
-
-        // The driver as on file before the form opens - the form may edit
-        // the record in place - so Undo can put every field back.
-        var before = existing is null ? null : System.Text.Json.JsonSerializer.Serialize(existing);
-
-        using var form = new ProfileForm(existing, _raceClasses, fixedTransponder: transponder, undo: _undo, profiles: _profiles);
-
-        if (form.ShowDialog(this) == DialogResult.OK)
+        if (DriverEditDialog.Edit(this, transponder, _raceClasses, _undo, _profiles))
         {
-            var profiles = _profiles;
-            var saved = form.Result;
-            var after = System.Text.Json.JsonSerializer.Serialize(saved);
-            var key = saved.Transponder;
-
-            if (before != after)
-            {
-                _undo.Capture(before is null ? $"Add driver {saved.DriverName}" : $"Edit driver {saved.DriverName}", () =>
-                {
-                    // Only while the driver is still as this edit left them -
-                    // otherwise a later edit would be thrown away with it.
-                    var current = profiles.Get(key);
-
-                    if (current is null || System.Text.Json.JsonSerializer.Serialize(current) != after)
-                    {
-                        throw new InvalidOperationException(
-                            $"{saved.DriverName} has been changed or removed since, and undoing this now would undo that too. Nothing was changed.");
-                    }
-
-                    if (before is null)
-                    {
-                        profiles.Delete(key);
-                    }
-                    else if (System.Text.Json.JsonSerializer.Deserialize<DriverProfile>(before) is { } restored)
-                    {
-                        // The alt transponder the old details had may be
-                        // somebody else's by now - one car, two owners.
-                        if (profiles.DescribeClash(restored, editing: restored.Transponder) is { } clash)
-                        {
-                            throw new InvalidOperationException($"the old details can't come back - {clash} Nothing was changed.");
-                        }
-
-                        profiles.Upsert(restored);
-
-                        // The form retires a replaced photo rather than
-                        // deleting it when it has an undo, so it can come back.
-                        if (!string.Equals(current.PhotoFileName, restored.PhotoFileName, StringComparison.OrdinalIgnoreCase))
-                        {
-                            DriverPhotos.Unretire(restored.PhotoFileName);
-                            DriverPhotos.Retire(current.PhotoFileName);
-                        }
-                    }
-                });
-            }
-
-            _profiles.Upsert(saved);
             RenderLeaderboard();
         }
     }
