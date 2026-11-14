@@ -190,6 +190,23 @@ describe("staying signed in, and Email me a link (item 17)", () => {
       await h.close();
     }
   });
+
+  it("is still offered the day after a night, once the check-in list has gone stale (bug hunt 18)", async () => {
+    let clock = Date.parse("2026-11-14T12:00:00.000Z");
+    const h = await start(undefined, undefined, () => new Date(clock));
+    try {
+      const doc = { enabled: true, emailLink: true, pinSha256: pinHash("acme-rc", "4321"), event: "Club Night", drivers: [] as unknown[] };
+      await call(h, "POST", `${API}/publish/checkin?seq=1`, { token: ACME_TOKEN, json: doc });
+      assert.match((await call(h, "GET", "/c/acme-rc/mynight")).text, /data-email-link="1"/, "offered on the night");
+
+      // Two days on: check-in is closed, listening, notes and the vote are off.
+      clock += 48 * 3600 * 1000;
+      assert.match((await call(h, "GET", "/c/acme-rc/mynight")).text, /data-email-link="1"/, "still offered between nights");
+      assert.equal((await call(h, "POST", `${API}/signin/email`, { json: { email: "sam@example.com" } })).status, 200);
+    } finally {
+      await h.close();
+    }
+  });
 });
 
 // ---------------------------------------------------------------- item 22
