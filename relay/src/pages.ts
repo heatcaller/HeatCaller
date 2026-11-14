@@ -3917,13 +3917,16 @@ function withLength(body, draw) {
 // read as midnight UTC, which anywhere west of London is the day before -
 // so a night's racing would file itself under yesterday's heading. Built
 // out of its three numbers it is the day the club actually raced, which
-// is the day the index means and the day a reader remembers.
+// is the day the index means and the day a reader remembers. It is noon,
+// not midnight: the labels are drawn in the club's time zone (CLOCK_JS),
+// and the phone's midnight is the evening before for a phone ahead of the
+// club - noon stays on the same day either side (bug hunt 18).
 function dayDate(iso) {
   const parts = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(String(iso ?? ''));
 
   if (parts === null) return null;
 
-  const d = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
+  const d = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]), 12);
 
   return isNaN(d) ? null : d;
 }
@@ -14118,11 +14121,11 @@ function raceFacts(r) {
 }
 
 // "2026-10-22" as the day it names, not midnight UTC (see dayDate on the
-// results page): "22 Oct".
+// results page): "22 Oct". Noon, so the club's time zone can't move it.
 function shortDay(iso) {
   const p = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(String(iso || ''));
   if (!p) return '';
-  const d = new Date(Number(p[1]), Number(p[2]) - 1, Number(p[3]));
+  const d = new Date(Number(p[1]), Number(p[2]) - 1, Number(p[3]), 12);
   return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
 }
 
