@@ -1,16 +1,30 @@
 namespace HeatCaller;
 
 /// <summary>
-/// Shows each driver's personal-best lap time per track, separate from the
-/// single all-time track record tracked elsewhere - this is "your own best
-/// ever here," which matters most for someone tracking their own progress
-/// over many sessions rather than chasing the single fastest lap anyone's
-/// ever set.
+/// Shows a driver's personal-best lap time per track, separate from the
+/// single all-time track record - "your own best ever here", which matters
+/// most for someone tracking their own progress over many sessions rather
+/// than chasing the single fastest lap anyone has ever set.
+///
+/// 13 Nov 2026, the Race Engineer rework (see RaceCoach): each PB now says
+/// how real it is. A headline names the one that is real pace and the one
+/// that is soft; the table puts a pill on each (Solid, In reach, One-off,
+/// Fresh, from RaceCoach.ReadPb), dots for the recent races that came near
+/// it, the gap to the track record in seconds and car lengths, and what it
+/// means in a sentence; and a "Try this" closes the page. The resets are
+/// where they were, under the table.
 /// </summary>
 public sealed class PersonalBestsControl : UserControl
 {
     /// <summary>The track layouts, for a layout's length - the car lengths beside each gap (RaceCoach). Null says no car lengths.</summary>
     public TrackLayoutStore? Layouts { get; set; }
+
+    /// <summary>
+    /// The driver profiles, for the record rule (rentals and excluded guests
+    /// hold no records - AchievementEvaluator.CanHoldTrackRecord). Null
+    /// leaves only ghosts out, the rule's own answer with no profiles.
+    /// </summary>
+    public ProfileStore? Profiles { get; set; }
 
     private readonly SessionHistoryStore _history;
     private readonly PersonalBestResetStore _resets;
@@ -18,6 +32,8 @@ public sealed class PersonalBestsControl : UserControl
     private readonly ComboBox _cmbDriverFilter = new();
     private readonly DataGridView _grid = new();
     private readonly Label _lblSummary = new();
+    private readonly Label _headline;
+    private readonly DrillNote _drill = new();
 
     public PersonalBestsControl(SessionHistoryStore history, PersonalBestResetStore resets, UndoService undo)
     {
@@ -33,6 +49,8 @@ public sealed class PersonalBestsControl : UserControl
         // the page was given, and a short window lost the reset buttons off
         // the bottom. A short window scrolls the page instead (FillPage).
         _textSize.Wear(this, () => AppTheme.BodyFont);
+
+        _headline = CoachPieces.Headline(_textSize);
 
         BuildLayout();
         RefreshAll();
@@ -50,6 +68,26 @@ public sealed class PersonalBestsControl : UserControl
     /// <summary>The picker and the summary beside it - held so a refilled list can re-measure the line.</summary>
     private FieldRow? _filterRow;
 
+    /// <summary>The headline sentence - for the tests.</summary>
+    internal string HeadlineText => _headline.Text;
+
+    /// <summary>The "Try this" advice, or empty - for the tests.</summary>
+    internal string DrillText => _drill.Visible ? _drill.Advice : string.Empty;
+
+    /// <summary>The table - for the tests.</summary>
+    internal DataGridView Grid => _grid;
+
+    /// <summary>Picks a driver, as the picker would - for the tests.</summary>
+    internal void SelectDriver(string driver)
+    {
+        var index = _cmbDriverFilter.Items.IndexOf(driver);
+
+        if (index >= 0)
+        {
+            _cmbDriverFilter.SelectedIndex = index;
+        }
+    }
+
     /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
     protected override void OnFontChanged(EventArgs e)
     {
@@ -65,24 +103,13 @@ public sealed class PersonalBestsControl : UserControl
     }
 
     /// <summary>
-    /// The intro, then one card: the driver picker with the count beside it,
-    /// the bests taking the height that is left, and the reset buttons with
-    /// what resetting does under them. On the layout pieces
-    /// (LayoutPieces.cs), so nothing is placed by hand.
-    ///
-    /// It used to be placed by hand over an 860x520 floor: the grid at a
-    /// fixed 340px, the buttons at y=446 and their hint squeezed beside them
-    /// into 394px.
+    /// The driver picker with the count beside it, the headline, then one
+    /// card: the bests taking the height that is left, and the reset buttons
+    /// with what resetting does under them; the "Try this" under the card.
+    /// On the layout pieces (LayoutPieces.cs), so nothing is placed by hand.
     /// </summary>
     private void BuildLayout()
     {
-        var lblIntro = new Label
-        {
-            Text = "Each driver's best lap on each track, across every saved session. The all-time track record is on the Track Layouts page.",
-            AutoSize = true,
-            ForeColor = AppTheme.TextMuted,
-        };
-
         _cmbDriverFilter.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbDriverFilter.SelectedIndexChanged += (_, _) => RefreshGrid();
 
@@ -98,6 +125,10 @@ public sealed class PersonalBestsControl : UserControl
         filterRow.AddLast(null, _lblSummary, () => _lblSummary.GetPreferredSize(Size.Empty).Width);
         _filterRow = filterRow;
 
+        // A track's name is text: an '&' in it is not a mnemonic.
+        _headline.UseMnemonic = false;
+        _drill.UseMnemonic = false;
+
         _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
@@ -106,14 +137,24 @@ public sealed class PersonalBestsControl : UserControl
         _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _grid.MultiSelect = false;
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+
+        // "What it means" wraps, and each row is as tall as it needs.
+        _grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
+
         _grid.Columns.AddRange(
-            new DataGridViewTextBoxColumn { Name = "driver", HeaderText = "Driver", FillWeight = 90 },
-            new DataGridViewTextBoxColumn { Name = "track", HeaderText = "Track", FillWeight = 90 },
-            new DataGridViewTextBoxColumn { Name = "best", HeaderText = "Best Lap", FillWeight = 60 },
-            new DataGridViewTextBoxColumn { Name = "car", HeaderText = "Car", FillWeight = 80 },
-            new DataGridViewTextBoxColumn { Name = "date", HeaderText = "Date Set", FillWeight = 70 },
-            new DataGridViewTextBoxColumn { Name = "since", HeaderText = "Counting Since", FillWeight = 80 }
+            // The driver is the picker's; the column stays, hidden, for the resets (SelectedRow).
+            new DataGridViewTextBoxColumn { Name = "driver", HeaderText = "Driver", Visible = false },
+            new DataGridViewTextBoxColumn { Name = "track", HeaderText = "Track", FillWeight = 80 },
+            new DataGridViewTextBoxColumn { Name = "best", HeaderText = "PB", FillWeight = 45 },
+            new DataGridViewTextBoxColumn { Name = "real", HeaderText = "How real is it?", FillWeight = 60 },
+            new DataGridViewTextBoxColumn { Name = "near", HeaderText = "Races near it (last 5)", FillWeight = 75 },
+            new DataGridViewTextBoxColumn { Name = "gap", HeaderText = "Gap to the record", FillWeight = 100 },
+            new DataGridViewTextBoxColumn { Name = "means", HeaderText = "What it means", FillWeight = 180 }
         );
+
+        _grid.Columns["means"]!.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+        _grid.Columns["gap"]!.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+        _grid.CellPainting += PaintReading;
 
         // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
         _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
@@ -139,15 +180,16 @@ public sealed class PersonalBestsControl : UserControl
 
         var bests = new Section("Personal bests");
 
-        bests.Add(filterRow);
         bests.AddFill(_grid, () => _grid.ColumnHeadersHeight + 3 * _grid.RowTemplate.Height);
         bests.Add(new ButtonBar().With(btnResetTrack, btnResetDriver, btnClearReset), gapBelow: UiLayout.HintGap);
         bests.Add(lblResetHint, gapBelow: 0);
 
         var page = new FillPage();
 
-        page.Add(lblIntro);
-        page.AddFill(bests, bests.LeastHeight, gapBelow: 0);
+        page.Add(filterRow, gapBelow: UiLayout.RowGap);
+        page.Add(_headline, gapBelow: UiLayout.RowGap);
+        page.AddFill(bests, bests.LeastHeight, gapBelow: UiLayout.RowGap);
+        page.Add(_drill, gapBelow: 0);
 
         Controls.Add(page);
     }
@@ -320,7 +362,6 @@ public sealed class PersonalBestsControl : UserControl
         var drivers = ComputeBests().Select(b => b.Driver).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(d => d).ToList();
 
         _cmbDriverFilter.Items.Clear();
-        _cmbDriverFilter.Items.Add("(all drivers)");
         foreach (var d in drivers)
         {
             _cmbDriverFilter.Items.Add(d);
@@ -331,37 +372,173 @@ public sealed class PersonalBestsControl : UserControl
         _driverWidth = null;
         _filterRow?.PerformLayout();
 
+        // One driver at a time: the headline and the "Try this" are said to
+        // them. The one picked before, when they are still on the list.
         var idx = previous is not null ? _cmbDriverFilter.Items.IndexOf(previous) : -1;
-        _cmbDriverFilter.SelectedIndex = idx >= 0 ? idx : 0;
+
+        if (_cmbDriverFilter.Items.Count == 0)
+        {
+            RefreshGrid();
+        }
+        else
+        {
+            _cmbDriverFilter.SelectedIndex = idx >= 0 ? idx : 0;
+        }
     }
+
+    /// <summary>What each row's reading is, by row - painted as a pill and dots (PaintReading).</summary>
+    private readonly Dictionary<int, RaceCoach.PbRead> _reads = new();
 
     private void RefreshGrid()
     {
-        var driverFilter = _cmbDriverFilter.SelectedIndex > 0 ? _cmbDriverFilter.SelectedItem as string : null;
-        var bests = ComputeBests()
-            .Where(b => driverFilter is null || string.Equals(b.Driver, driverFilter, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(b => b.Driver).ThenBy(b => b.Track)
-            .ToList();
+        var driver = _cmbDriverFilter.SelectedItem as string;
+        var everything = _history.All.Where(s => !s.IsNotScored()).ToList();
+
+        var bests = driver is null
+            ? new List<BestRecord>()
+            : ComputeBests()
+                .Where(b => string.Equals(b.Driver, driver, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(b => b.Track, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
 
         _grid.Rows.Clear();
+        _reads.Clear();
+
+        var lines = new List<RaceCoach.PbLine>();
+
         foreach (var b in bests)
         {
+            var cutoff = _resets.EffectiveCutoff(b.Driver, b.Track);
+
             // A row kept only so its reset can be cleared: no lap since the
-            // reset, so no best, car or date to show.
-            _grid.Rows.Add(
+            // reset, so nothing to read.
+            if (b.IsWaitingAfterReset)
+            {
+                _grid.Rows.Add(b.Driver, b.Track, "-", string.Empty, string.Empty, "-",
+                    cutoff is { } since
+                        ? $"No laps here since the reset on {since.ToLocalTime():d MMM}."
+                        : "No laps here since the reset.");
+                continue;
+            }
+
+            var races = RaceCoach.RacesAt(everything, b.Driver, b.Track, cutoff);
+            var read = RaceCoach.ReadPb(b.BestLapMs, b.SetAtUtc, races);
+            var means = read.Meaning + (cutoff is { } cut ? $" Counting since the reset on {cut.ToLocalTime():d MMM}." : string.Empty);
+
+            var row = _grid.Rows.Add(
                 b.Driver,
                 b.Track,
-                b.IsWaitingAfterReset ? "-" : $"{b.BestLapMs / 1000.0:0.000}s",
-                string.IsNullOrWhiteSpace(b.Car) ? "-" : b.Car,
-                b.IsWaitingAfterReset ? "-" : b.SetAtUtc.ToLocalTime().ToString("d"),
-                _resets.EffectiveCutoff(b.Driver, b.Track) is { } cut
-                    ? cut.ToLocalTime().ToString("d")
-                    : "all history");
+                PaceAnalysis.Time(b.BestLapMs),
+                read.Label,
+                $"{read.Near} of {RaceCoach.PbWindow}",
+                GapToRecord(everything, b),
+                means);
+
+            _reads[row] = read;
+            lines.Add(new RaceCoach.PbLine(b.Track, b.BestLapMs, b.SetAtUtc, read));
         }
+
+        _headline.Text = driver is null
+            ? "No personal bests yet. Race a lap on any track and they start here."
+            : RaceCoach.PbHeadline(lines);
+
+        _drill.Say(RaceCoach.PbDrill(lines));
 
         // Only real bests are counted - a row waiting for a lap after its
         // reset is not a personal best on record.
         var count = bests.Count(b => !b.IsWaitingAfterReset);
         _lblSummary.Text = $"{count} personal best{(count == 1 ? "" : "s")} on record";
     }
+
+    /// <summary>
+    /// How far a PB is off the track record, in seconds and, when the
+    /// layout has a length, car lengths: "+0.263s (7 car lengths)". The
+    /// record is the Overview's (RaceCoach.RecordLaps).
+    /// </summary>
+    private string GapToRecord(IReadOnlyList<SessionRecord> everything, BestRecord best)
+    {
+        var record = RaceCoach.RecordLaps(
+                everything.Where(s => string.Equals(s.TrackLayoutName.Trim(), best.Track.Trim(), StringComparison.OrdinalIgnoreCase)),
+                Profiles)
+            .FirstOrDefault();
+
+        if (record.Result is null)
+        {
+            return "-";
+        }
+
+        var gap = best.BestLapMs - record.Result.FastLapMs;
+
+        if (gap <= 0)
+        {
+            return "You hold the record";
+        }
+
+        var lengths = RaceCoach.SayLengths(gap, record.Result.FastLapMs, RaceCoach.TrackFeet(Layouts, best.Track));
+
+        return $"+{RaceCoach.Gap(gap)}" + (lengths is null ? string.Empty : $" ({lengths})");
+    }
+
+    /// <summary>
+    /// The reading drawn rather than written: "How real is it?" as a pill in
+    /// its colour, and "Races near it" as five dots, the near ones filled.
+    /// The cell's text stays for a screen reader and the tests.
+    /// </summary>
+    private void PaintReading(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.Graphics is null || !_reads.TryGetValue(e.RowIndex, out var read))
+        {
+            return;
+        }
+
+        var column = _grid.Columns[e.ColumnIndex].Name;
+
+        if (column != "real" && column != "near")
+        {
+            return;
+        }
+
+        e.PaintBackground(e.CellBounds, (e.State & DataGridViewElementStates.Selected) != 0);
+
+        var cell = Rectangle.Inflate(e.CellBounds, -UiLayout.AtDpi(4), 0);
+
+        if (column == "real")
+        {
+            var middle = new Rectangle(cell.Left, e.CellBounds.Top + (e.CellBounds.Height - (AppTheme.SmallFont.Height + UiLayout.AtDpi(14))) / 2,
+                cell.Width, AppTheme.SmallFont.Height + UiLayout.AtDpi(14));
+
+            RosterInk.DrawChip(e.Graphics, middle, read.Label, Tone(read.Reality), AppTheme.SmallFont, dot: false);
+        }
+        else
+        {
+            var side = UiLayout.AtTextSize(11);
+            var gap = UiLayout.AtTextSize(4);
+            var top = e.CellBounds.Top + (e.CellBounds.Height - side) / 2;
+            var smoothing = e.Graphics.SmoothingMode;
+
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            using var near = new SolidBrush(AppTheme.Success);
+            using var far = new SolidBrush(RosterInk.Blend(AppTheme.TextMuted, AppTheme.Surface, 0.75f));
+
+            for (var k = 0; k < RaceCoach.PbWindow; k++)
+            {
+                e.Graphics.FillEllipse(k < read.Near ? near : far, cell.Left + k * (side + gap), top, side, side);
+            }
+
+            e.Graphics.SmoothingMode = smoothing;
+        }
+
+        e.Paint(e.CellBounds, DataGridViewPaintParts.Border);
+        e.Handled = true;
+    }
+
+    /// <summary>A reading's colour: good for solid, warning for in reach, bad for a one-off, quiet for fresh.</summary>
+    private static Color Tone(RaceCoach.PbReality reality) => reality switch
+    {
+        RaceCoach.PbReality.Solid => AppTheme.Success,
+        RaceCoach.PbReality.InReach => AppTheme.WarningDark,
+        RaceCoach.PbReality.OneOff => AppTheme.Danger,
+        _ => AppTheme.TextMuted,
+    };
 }

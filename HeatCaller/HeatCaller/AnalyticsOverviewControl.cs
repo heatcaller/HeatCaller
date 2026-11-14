@@ -1,14 +1,16 @@
 namespace HeatCaller;
 
 /// <summary>
-/// The first tab of Race Analytics: the numbers somebody actually asks for
-/// out loud.
+/// The first tab of Race Analytics: what happened at the club lately, and
+/// the lap records.
 ///
-/// Every other tab on this page answers a question you already have - how do
-/// these two drivers compare, is this driver improving, what did that race
-/// look like lap by lap. This one answers the question nobody has to ask
-/// for, because it is the one on the wall of every club in the world: what
-/// is the lap record here, and who holds it.
+/// 13 Nov 2026, the Race Engineer rework (see RaceCoach): the tab opens with
+/// a headline about the club's month, then the news from the last race
+/// night - a record still standing, the PBs taken, who got quicker through
+/// a race, whose mistakes cost the most (RaceCoach.Overview) - and then the
+/// track records, which are still the numbers on the wall of every club in
+/// the world. It used to open on four counts, which said how much racing
+/// there had been and nothing about it.
 ///
 /// Everything is read from the saved session history, so it costs nothing to
 /// keep and it is right the moment a race finishes.
@@ -25,13 +27,13 @@ public sealed class AnalyticsOverviewControl : UserControl
     // which is the rule's own answer for an unknown transponder.
     private readonly ProfileStore? _profiles;
 
-    // The four figures, each a number over its caption on a tile of its
-    // own - the same tiles as Next Steps' day so far (StatTile).
-    private readonly StatTile _races = new();
-    private readonly StatTile _laps = new();
-    private readonly StatTile _drivers = new();
-    private readonly StatTile _best = new();
+    private readonly Label _headline;
+    private readonly Label _lblNight = new();
+    private readonly NewsFeed _feed = new();
+    private Section? _newsCard;
 
+    // The quickest lap anywhere and the club's totals, in a quiet line under
+    // the records: the old "at a glance" tiles, kept as a sentence.
     private readonly Label _lblBestWho = new();
     private readonly DataGridView _grid = new();
     private readonly Label _lblEmpty = new();
@@ -51,9 +53,20 @@ public sealed class AnalyticsOverviewControl : UserControl
         // and set once it stayed at the size it was built at. See TextSize.
         _textSize.Wear(this, () => AppTheme.BodyFont);
 
+        _headline = CoachPieces.Headline(_textSize);
+
         BuildLayout();
         RefreshAll();
     }
+
+    /// <summary>The headline sentence - for the tests.</summary>
+    internal string HeadlineText => _headline.Text;
+
+    /// <summary>The news on show - for the tests.</summary>
+    internal IReadOnlyList<RaceCoach.NewsItem> News => _feed.Items;
+
+    /// <summary>The track records table - for the tests.</summary>
+    internal DataGridView RecordsGrid => _grid;
 
     /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
     protected override void OnFontChanged(EventArgs e)
@@ -70,47 +83,29 @@ public sealed class AnalyticsOverviewControl : UserControl
     }
 
     /// <summary>
-    /// The four figures across the page as tiles, who set the best lap under
-    /// them, and the track records in a card taking the height that is left.
-    /// On the layout pieces (LayoutPieces.cs), so nothing is placed by hand.
-    ///
-    /// It used to be a header placed by hand - the figures 190px apart
-    /// whatever their size, in the 29pt face set once - over a list docked
-    /// to fill the rest.
+    /// The headline, the news card, and the track records in a card taking
+    /// the height that is left. On the layout pieces (LayoutPieces.cs), so
+    /// nothing is placed by hand.
     /// </summary>
     private void BuildLayout()
     {
-        // --- At a glance ---
-        var lblGlance = new Label
-        {
-            Text = AppTheme.Spaced("AT A GLANCE"),
-            AutoSize = true,
-            ForeColor = AppTheme.TextMuted,
-        };
-
-        _textSize.Wear(lblGlance, () => AppTheme.MicroFont);
-
-        var tiles = new[] { _races, _laps, _drivers, _best };
-        var captions = new[] { "Races run", "Laps counted", "Drivers seen", "Best lap ever" };
-
-        for (var i = 0; i < tiles.Length; i++)
-        {
-            var tile = tiles[i];
-
-            _textSize.Wear(tile.Value, () => AppTheme.TitleFont);
-            _textSize.Wear(tile.Caption, () => AppTheme.MicroFont);
-            tile.Set("-", captions[i]);
-        }
-
-        // Who set the best lap, where and when - under the tiles, which have
-        // room for a number and not for a sentence.
-        _lblBestWho.AutoSize = true;
-
         // A driver's or a layout's name is text: an '&' in it was dropped and
         // the letter after it underlined (10 Nov 2026, bug hunt 16).
-        _lblBestWho.UseMnemonic = false;
-        _lblBestWho.ForeColor = AppTheme.TextMuted;
-        _textSize.Wear(_lblBestWho, () => AppTheme.SmallFont);
+        _headline.UseMnemonic = false;
+
+        // --- From the last race night ---
+        _lblNight.AutoSize = true;
+        _lblNight.UseMnemonic = false;
+        _lblNight.ForeColor = AppTheme.TextMuted;
+        _textSize.Wear(_lblNight, () => AppTheme.SmallFont);
+
+        _textSize.Wear(_feed, () => AppTheme.BodyFont);
+
+        var news = new Section("From the last race night");
+
+        news.Add(_lblNight);
+        news.Add(_feed, gapBelow: 0);
+        _newsCard = news;
 
         // --- Track records ---
         _grid.ReadOnly = true;
@@ -122,18 +117,25 @@ public sealed class AnalyticsOverviewControl : UserControl
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
 
         _grid.Columns.AddRange(
-            new DataGridViewTextBoxColumn { Name = "layout", HeaderText = "Track layout", FillWeight = 130 },
-            new DataGridViewTextBoxColumn { Name = "record", HeaderText = "Lap record", FillWeight = 70 },
-            new DataGridViewTextBoxColumn { Name = "holder", HeaderText = "Held by", FillWeight = 120 },
-            new DataGridViewTextBoxColumn { Name = "set", HeaderText = "Set", FillWeight = 80 },
-            new DataGridViewTextBoxColumn { Name = "races", HeaderText = "Races here", FillWeight = 70 });
+            new DataGridViewTextBoxColumn { Name = "layout", HeaderText = "Track layout", FillWeight = 110 },
+            new DataGridViewTextBoxColumn { Name = "record", HeaderText = "Lap record", FillWeight = 60 },
+            new DataGridViewTextBoxColumn { Name = "holder", HeaderText = "Held by", FillWeight = 100 },
+            new DataGridViewTextBoxColumn { Name = "set", HeaderText = "Set", FillWeight = 65 },
+            new DataGridViewTextBoxColumn { Name = "next", HeaderText = "Next closest", FillWeight = 170 },
+            new DataGridViewTextBoxColumn { Name = "races", HeaderText = "Races here", FillWeight = 55 });
 
         // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
         _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
 
+        _lblBestWho.AutoSize = true;
+        _lblBestWho.UseMnemonic = false;
+        _lblBestWho.ForeColor = AppTheme.TextMuted;
+        _textSize.Wear(_lblBestWho, () => AppTheme.SmallFont);
+
         var records = new Section("Track records");
 
-        records.AddFill(_grid, () => _grid.ColumnHeadersHeight + 3 * _grid.RowTemplate.Height, gapBelow: 0);
+        records.AddFill(_grid, () => _grid.ColumnHeadersHeight + 3 * _grid.RowTemplate.Height, gapBelow: UiLayout.RowGap);
+        records.Add(_lblBestWho, gapBelow: 0);
 
         // Shown in place of the list when there is nothing in it - in the
         // list's own room, behind it, and centred there. An empty grid with
@@ -149,13 +151,10 @@ public sealed class AnalyticsOverviewControl : UserControl
         _grid.Parent!.Controls.Add(_lblEmpty);
 
         // --- The page ---
-        //
-        // The tiles on the page itself, not in a card: they are cards.
         var page = new FillPage();
 
-        page.Add(lblGlance, gapBelow: UiLayout.RowGap);
-        page.Add(new TileStrip(tiles), gapBelow: UiLayout.HintGap);
-        page.Add(_lblBestWho);
+        page.Add(_headline, gapBelow: UiLayout.RowGap);
+        page.Add(news);
         page.AddFill(records, records.LeastHeight, gapBelow: 0);
 
         Controls.Add(page);
@@ -171,47 +170,53 @@ public sealed class AnalyticsOverviewControl : UserControl
             .Where(s => !s.IsNotScored())
             .ToList();
 
-        var races = everything
-            .Where(s => s.SessionType == RaceSessionType.Race)
-            .ToList();
+        // --- The headline and the news ---
+        var club = RaceCoach.Overview(everything, _profiles, Layouts);
 
-        _races.Set(races.Count.ToString(), "Races run");
+        _headline.Text = club.Headline;
 
-        _laps.Set(everything
+        if (club.NightLocal is { } night)
+        {
+            var layouts = RaceCoach.LastNight(everything)
+                .Select(s => s.TrackLayoutName.Trim())
+                .Where(n => n.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            _lblNight.Text = layouts.Count == 0
+                ? night.ToString("dddd d MMMM")
+                : $"{night:dddd d MMMM}, on {string.Join(" and ", layouts)}";
+        }
+
+        _feed.Show(club.Items);
+
+        if (_newsCard is not null)
+        {
+            _newsCard.Visible = club.NightLocal is not null;
+        }
+
+        // --- The quickest lap anywhere, and the totals ---
+        var races = everything.Count(s => s.SessionType == RaceSessionType.Race);
+
+        var laps = everything
             .SelectMany(s => s.Results)
             .Where(r => !GhostService.IsGhost(r.Transponder))
-            .Sum(r => (long)r.Laps)
-            .ToString("N0"), "Laps counted");
+            .Sum(r => (long)r.Laps);
 
-        _drivers.Set(everything
-            .SelectMany(s => s.Results)
-            .Select(r => r.Transponder)
-            .Where(t => !string.IsNullOrWhiteSpace(t) && !GhostService.IsGhost(t))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Count()
-            .ToString(), "Drivers seen");
-
-        // --- The outright best, and who set it ---
         var best = RecordLaps(everything, _profiles).FirstOrDefault();
 
         if (best.Result is null)
         {
-            _best.Set("-", "Best lap ever");
             _lblBestWho.Text = string.Empty;
         }
         else
         {
-            _best.Set(Lap(best.Result.FastLapMs), "Best lap ever");
-
-            var who = string.IsNullOrWhiteSpace(best.Result.DriverName)
-                ? best.Result.Transponder
-                : best.Result.DriverName;
-
             var layout = string.IsNullOrWhiteSpace(best.Session.TrackLayoutName)
                 ? "an unnamed layout"
                 : best.Session.TrackLayoutName;
 
-            _lblBestWho.Text = $"Best lap set by {who} on {layout}, {best.Session.StartedAtUtc.ToLocalTime():d MMM yyyy}";
+            _lblBestWho.Text = $"Quickest lap anywhere: {Lap(best.Result.FastLapMs)} by {RaceCoach.WhoIs(best.Result)} on {layout}, "
+                + $"{best.Session.StartedAtUtc.ToLocalTime():d MMM yyyy}. {races:N0} race{(races == 1 ? "" : "s")} and {laps:N0} laps so far.";
         }
 
         FillRecords(everything);
@@ -225,18 +230,16 @@ public sealed class AnalyticsOverviewControl : UserControl
     /// alone, so this page names the same holder as the badge and the live
     /// record - a rental or an ExcludeFromRecords guest is never it. No
     /// SessionType filter: the evaluator's own BestEverOn has none either.
-    /// Used by both the "Best lap ever" tile and the table so they agree.
+    /// The rule itself is RaceCoach's (13 Nov 2026), so the news and the
+    /// Personal Bests tab's gap to the record use the same one.
     /// </summary>
     internal static IEnumerable<(SessionRecord Session, SessionResultEntry Result)> RecordLaps(
         IEnumerable<SessionRecord> sessions, ProfileStore? profiles) =>
-        sessions
-            .SelectMany(s => s.Results.Select(r => (Session: s, Result: r)))
-            .Where(x => x.Result.FastLapMs > 0 && AchievementEvaluator.CanHoldTrackRecord(x.Result.Transponder, profiles))
-            .OrderBy(x => x.Result.FastLapMs);
+        RaceCoach.RecordLaps(sessions, profiles);
 
     /// <summary>
-    /// One row per track layout: its record, who holds it, and how much
-    /// racing has happened there.
+    /// One row per track layout: its record, who holds it, who is next
+    /// closest and by how much, and how much racing has happened there.
     ///
     /// Grouped by layout name rather than by a layout id, because a session
     /// records the name it ran under - renaming a layout starts a new line
@@ -247,34 +250,40 @@ public sealed class AnalyticsOverviewControl : UserControl
     {
         _grid.Rows.Clear();
 
-        // Resolved to plain strings inside the grouping rather than
-        // carried out as a tuple that may be empty - a "best lap" that does
-        // not exist is a null the rest of this method would have to keep
-        // apologising for.
         var groups = sessions
             .Where(s => !string.IsNullOrWhiteSpace(s.TrackLayoutName))
             .GroupBy(s => s.TrackLayoutName, StringComparer.CurrentCultureIgnoreCase)
             .Select(group =>
             {
-                var best = RecordLaps(group, _profiles)
-                    .Take(1)
-                    .ToList();
+                var laps = RecordLaps(group, _profiles).ToList();
 
                 var record = "-";
                 var holder = "-";
                 var when = "-";
+                var next = "-";
 
-                if (best.Count == 1)
+                if (laps.Count > 0)
                 {
-                    var (session, result) = best[0];
+                    var (session, result) = laps[0];
 
                     record = Lap(result.FastLapMs);
-
-                    holder = string.IsNullOrWhiteSpace(result.DriverName)
-                        ? result.Transponder
-                        : result.DriverName;
-
+                    holder = RaceCoach.WhoIs(result);
                     when = session.StartedAtUtc.ToLocalTime().ToString("d MMM yyyy");
+
+                    // The quickest lap by anybody else: how close the field
+                    // is to the record, in car lengths when the layout has a
+                    // length (Track Layouts).
+                    var key = holder.ToUpperInvariant();
+                    var other = laps.FirstOrDefault(x => RaceCoach.WhoIs(x.Result).ToUpperInvariant() != key);
+
+                    if (other.Result is not null)
+                    {
+                        var gap = other.Result.FastLapMs - result.FastLapMs;
+                        var lengths = RaceCoach.SayLengths(gap, result.FastLapMs, RaceCoach.TrackFeet(Layouts, group.Key));
+
+                        next = $"{RaceCoach.WhoIs(other.Result)}, +{RaceCoach.Gap(gap)}"
+                            + (lengths is null ? string.Empty : $" ({lengths})");
+                    }
                 }
 
                 return new
@@ -283,6 +292,7 @@ public sealed class AnalyticsOverviewControl : UserControl
                     Record = record,
                     Holder = holder,
                     When = when,
+                    Next = next,
                     Races = group.Count(s => s.SessionType == RaceSessionType.Race),
                 };
             })
@@ -291,7 +301,7 @@ public sealed class AnalyticsOverviewControl : UserControl
 
         foreach (var group in groups)
         {
-            _grid.Rows.Add(group.Layout, group.Record, group.Holder, group.When, group.Races.ToString());
+            _grid.Rows.Add(group.Layout, group.Record, group.Holder, group.When, group.Next, group.Races.ToString());
         }
 
         var empty = _grid.Rows.Count == 0;
@@ -302,4 +312,189 @@ public sealed class AnalyticsOverviewControl : UserControl
 
     /// <summary>A lap time as people say it: seconds to three places.</summary>
     private static string Lap(long ms) => $"{ms / 1000.0:0.000}";
+}
+
+/// <summary>
+/// The Overview's news: each item a short coloured badge (REC, PB, an up
+/// arrow, "!") beside a title in the bold face and a line of figures under
+/// it, one under another with a rule between. Drawn rather than built from
+/// labels, so a feed of five is one control to measure; as tall as its
+/// items need at the width it is given, so it sits in a card like a hint.
+/// </summary>
+internal sealed class NewsFeed : Control
+{
+    private IReadOnlyList<RaceCoach.NewsItem> _items = Array.Empty<RaceCoach.NewsItem>();
+
+    private const TextFormatFlags Wrap =
+        TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix
+        | TextFormatFlags.NoPadding | TextFormatFlags.TextBoxControl;
+
+    private const TextFormatFlags Centred =
+        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
+        | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding;
+
+    /// <summary>What it says when the night had nothing worth telling.</summary>
+    public const string Quiet = "A quiet night: no records, PBs or standout races to report.";
+
+    public NewsFeed()
+    {
+        // Held while the window is being built - see LayoutFreeze.
+        LayoutFreeze.Adopt(this);
+
+        AutoSize = true;
+        Margin = Padding.Empty;
+        DoubleBuffered = true;
+        ResizeRedraw = true;
+        Tag = AppTheme.KeepBackColor;
+        AccessibleRole = AccessibleRole.List;
+        AccessibleName = "News from the last race night";
+    }
+
+    /// <summary>The items on show.</summary>
+    public IReadOnlyList<RaceCoach.NewsItem> Items => _items;
+
+    /// <summary>Shows these items, and asks to be measured again.</summary>
+    public void Show(IReadOnlyList<RaceCoach.NewsItem> items)
+    {
+        _items = items;
+
+        // Read aloud as the page reads: each title and its figures.
+        Text = items.Count == 0 ? Quiet : string.Join(Environment.NewLine, items.Select(i => $"{i.Title}. {i.Detail}"));
+
+        Changed();
+    }
+
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        Changed();
+    }
+
+    /// <summary>A new height, perhaps: the card it is in measures it again.</summary>
+    private void Changed()
+    {
+        Parent?.PerformLayout(this, nameof(Bounds));
+        Invalidate();
+    }
+
+    private static int Gap => UiLayout.AtTextSize(UiLayout.RowGap);
+
+    /// <summary>The badge's size: wide enough for "REC" in the micro face, as tall as a title line and a little.</summary>
+    private static Size BadgeSize()
+    {
+        var text = TextRenderer.MeasureText("REC", AppTheme.MicroFont, Size.Empty, Centred);
+        var height = AppTheme.BoldFont.Height + UiLayout.AtTextSize(8);
+
+        return new Size(Math.Max(height, text.Width + UiLayout.AtTextSize(14)), height);
+    }
+
+    /// <summary>Each item's room at <paramref name="width"/>: where its title and its figures go, and how tall it is.</summary>
+    private List<(Rectangle Title, Rectangle Detail, int Height)> Arrange(int width)
+    {
+        var badge = BadgeSize();
+        var left = badge.Width + UiLayout.AtTextSize(12);
+        var room = Math.Max(1, width - left);
+        var arranged = new List<(Rectangle, Rectangle, int)>();
+
+        foreach (var item in _items)
+        {
+            var title = TextRenderer.MeasureText(item.Title, AppTheme.BoldFont, new Size(room, 0), Wrap);
+            var detail = TextRenderer.MeasureText(item.Detail, AppTheme.SmallFont, new Size(room, 0), Wrap);
+            var titleBox = new Rectangle(left, 0, room, title.Height);
+            var detailBox = new Rectangle(left, title.Height + UiLayout.AtTextSize(3), room, detail.Height);
+
+            arranged.Add((titleBox, detailBox, Math.Max(badge.Height, detailBox.Bottom)));
+        }
+
+        return arranged;
+    }
+
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        var width = proposedSize.Width is > 1 and < int.MaxValue / 4 ? proposedSize.Width : Math.Max(Width, 400);
+
+        if (_items.Count == 0)
+        {
+            var quiet = TextRenderer.MeasureText(Quiet, AppTheme.BodyFont, new Size(width, 0), Wrap);
+            return new Size(width, quiet.Height);
+        }
+
+        var rows = Arrange(width);
+
+        return new Size(width, rows.Sum(r => r.Height) + Math.Max(0, rows.Count - 1) * (2 * Gap + 1));
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+
+        var g = e.Graphics;
+
+        if (_items.Count == 0)
+        {
+            TextRenderer.DrawText(g, Quiet, AppTheme.BodyFont, ClientRectangle, AppTheme.TextMuted, Wrap);
+            return;
+        }
+
+        var badge = BadgeSize();
+        var rows = Arrange(Width);
+        var top = 0;
+
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+        for (var i = 0; i < _items.Count; i++)
+        {
+            var item = _items[i];
+            var (title, detail, height) = rows[i];
+            var tone = Tone(item.Kind);
+
+            var box = new RectangleF(0, top, badge.Width, badge.Height);
+
+            using (var path = AppTheme.RoundedRect(box, UiLayout.AtDpi(6)))
+            using (var fill = new SolidBrush(RosterInk.Blend(tone, AppTheme.Surface, 0.84f)))
+            {
+                g.FillPath(fill, path);
+            }
+
+            // The words in the micro face; a lone mark (the arrow, the "!")
+            // in the bold one, where it is big enough to read - the micro
+            // face drew the arrow as a speck.
+            var face = item.Badge.Length > 1 ? AppTheme.MicroFont : AppTheme.BoldFont;
+
+            TextRenderer.DrawText(g, item.Badge, face, Rectangle.Round(box), tone, Centred);
+
+            title.Offset(0, top);
+            detail.Offset(0, top);
+
+            TextRenderer.DrawText(g, item.Title, AppTheme.BoldFont, title, AppTheme.TextDark, Wrap);
+            TextRenderer.DrawText(g, item.Detail, AppTheme.SmallFont, detail, AppTheme.TextMuted, Wrap);
+
+            top += height;
+
+            if (i < _items.Count - 1)
+            {
+                top += Gap;
+
+                using var rule = new Pen(AppTheme.Border);
+                g.DrawLine(rule, title.Left, top, Width, top);
+
+                top += Gap + 1;
+            }
+        }
+    }
+
+    protected override void OnPaintBackground(PaintEventArgs pevent)
+    {
+        using var behind = new SolidBrush(Parent?.BackColor ?? AppTheme.Surface);
+        pevent.Graphics.FillRectangle(behind, ClientRectangle);
+    }
+
+    /// <summary>The badge's colour: the accent for a record, the primary for a PB, good for quicker, warning for mistakes.</summary>
+    private static Color Tone(RaceCoach.NewsKind kind) => kind switch
+    {
+        RaceCoach.NewsKind.Record => AppTheme.Accent,
+        RaceCoach.NewsKind.PersonalBest => AppTheme.Primary,
+        RaceCoach.NewsKind.GotQuicker => AppTheme.Success,
+        _ => AppTheme.WarningDark,
+    };
 }
