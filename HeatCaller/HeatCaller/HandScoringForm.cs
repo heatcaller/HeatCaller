@@ -304,6 +304,7 @@ public sealed class HandScoringForm : Form
             }
         }
 
+        HandScoring.DropTapsNoLongerOnTheBoard(_taps, cars);
         _btnUndo.Enabled = _taps.Count > 0;
     }
 
@@ -403,6 +404,10 @@ public sealed class HandScoringForm : Form
 
     private void UndoLastTap()
     {
+        // Checked now, not just on the timer: a lap taken back elsewhere a
+        // moment ago is not this button's to take back again.
+        HandScoring.DropTapsNoLongerOnTheBoard(_taps, _cars());
+
         if (_taps.Count == 0)
         {
             return;

@@ -228,6 +228,27 @@ public static class HandScoring
     }
 
     /// <summary>
+    /// Drops taps from the grid's Undo list that are no longer on the board
+    /// (bug hunt 18): a car can't have more of the grid's taps to take back
+    /// than it has laps counted by hand. The app's own Undo, or a phone's -1,
+    /// takes a lap back without the grid hearing of it, and Undo last tap
+    /// then took a second, real lap off the car. The latest of a car's taps
+    /// go first, as those are the ones already taken back.
+    /// </summary>
+    public static void DropTapsNoLongerOnTheBoard(List<string> taps, IEnumerable<Car> cars)
+    {
+        foreach (var car in cars)
+        {
+            var count = taps.Count(t => string.Equals(t, car.Transponder, StringComparison.OrdinalIgnoreCase));
+
+            for (var extra = count - Math.Max(0, car.ByHand); extra > 0; extra--)
+            {
+                taps.RemoveAt(taps.FindLastIndex(t => string.Equals(t, car.Transponder, StringComparison.OrdinalIgnoreCase)));
+            }
+        }
+    }
+
+    /// <summary>
     /// The cars to show, in an order that NEVER changes as laps are added.
     ///
     /// Not the running order: a button that moves the moment it is tapped

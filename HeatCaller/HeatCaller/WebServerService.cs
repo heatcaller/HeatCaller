@@ -4935,9 +4935,15 @@ public sealed partial class WebServerService
         // an order that never changes, so a button never moves under a thumb.
         var handTaps = [];
         var handShownKey = '';
+        var handRace = null;
         function refreshHand(){
           return call('race.handCars', {}, null, READ_WAIT).then(function(d){
             var box = document.getElementById('handBox');
+            // Undo last tap only ever takes back a tap from this race while
+            // hand scoring is on: the last race's taps (or ones from before it
+            // was switched off) belong to other laps (bug hunt 18).
+            if (d.ok && d.data && (!d.data.racing || !d.data.on || d.data.raceGeneration !== handRace)) { handTaps = []; }
+            if (d.ok && d.data) { handRace = d.data.raceGeneration; }
             if (!d.ok || !d.data || !d.data.racing) { box.style.display = 'none'; return; }
             var data = d.data;
             box.style.display = 'block';
