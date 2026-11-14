@@ -82,7 +82,7 @@ When the internet drops mid-night, the **Next Up** bar says "Website offline - r
 
 It's probably hidden by Simple mode, which a new install starts in. Type it in the **Search pages...** box: if Simple mode hides it, an **Advanced mode settings** row appears under **IN ADVANCED MODE**. To see every setting, open **Backup & Restore** and click **Turn On Advanced Mode** on the **Settings mode** card. Hidden settings keep working either way. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
 
-If it's a whole page, such as **Championship** or **Rentals**, it may be kept out of the sidebar as not yet tested at a real event. A sidebar search still finds it. See [Reordering and hiding pages](../getting-started/tour.md#reordering-and-hiding-pages).
+If it's a whole page, it may be unticked in **Manage Navigation**. A sidebar search still finds it. See [Reordering and hiding pages](../getting-started/tour.md#reordering-and-hiding-pages).
 
 ### Do I have to add every driver before the first race?
 

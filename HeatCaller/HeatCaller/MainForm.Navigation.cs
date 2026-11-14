@@ -572,7 +572,10 @@ public partial class MainForm
 
         // Before anything is ordered: SectionOf, which the list asks for each
         // row's heading, reads the same flag, and the two have to agree.
-        NavTiers.HidingUntested = _settings.HideUntestedPages;
+        // Always off (14 Nov 2026): the "keep untested pages out of the
+        // sidebar" option is gone, so every page shows, whatever an older
+        // settings file says.
+        NavTiers.HidingUntested = false;
 
         var names = VisibleOrderedNavNames();
 
@@ -1627,7 +1630,7 @@ public partial class MainForm
         var defaultOrder = _navItems.Where(i => i.Name != "Connection").Select(i => i.Name).ToList();
 
         using var form = new TabVisibilityForm(
-            orderedToggleable, _settings.HiddenTabs, defaultOrder, _settings.RaceNightFocus, _settings.HideUntestedPages);
+            orderedToggleable, _settings.HiddenTabs, defaultOrder, _settings.RaceNightFocus);
         if (form.ShowDialog(this) != DialogResult.OK)
         {
             return;
@@ -1647,7 +1650,6 @@ public partial class MainForm
         var hiddenBefore = _settings.HiddenTabs.ToList();
         var orderBefore = _settings.NavOrder.ToList();
         var raceNightBefore = _settings.RaceNightFocus;
-        var hideUntestedBefore = _settings.HideUntestedPages;
 
         // The order is compared with the one the sidebar actually goes by,
         // not with the raw saved NavOrder: that can be empty (a club that
@@ -1657,15 +1659,13 @@ public partial class MainForm
         // in that case - it is the same arrangement, written out in full.
         if (!form.HiddenTabs.SetEquals(hiddenBefore)
             || !orderShownBefore.SequenceEqual(newOrder)
-            || form.RaceNightFocus != raceNightBefore
-            || form.HideUntested != hideUntestedBefore)
+            || form.RaceNightFocus != raceNightBefore)
         {
             _undo.Capture("Change the sidebar's pages", () =>
             {
                 _settings.HiddenTabs = hiddenBefore.ToList();
                 _settings.NavOrder = orderBefore.ToList();
                 _settings.RaceNightFocus = raceNightBefore;
-                _settings.HideUntestedPages = hideUntestedBefore;
                 _settings.Save();
 
                 // Recomputed, not remembered: the undo can be pressed much
@@ -1679,7 +1679,6 @@ public partial class MainForm
         _settings.HiddenTabs = form.HiddenTabs.ToList();
         _settings.NavOrder = newOrder;
         _settings.RaceNightFocus = form.RaceNightFocus;
-        _settings.HideUntestedPages = form.HideUntested;
         _settings.Save();
 
         _navRaceNight = RaceNightWanted;

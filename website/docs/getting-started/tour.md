@@ -32,7 +32,6 @@ You can reorder pages within a group, or hide them (see [Reordering and hiding p
 Not every page below may be in your sidebar:
 
 - **Venues** isn't shown in Simple mode, the mode a new install starts in. A sidebar search still finds it, under **IN ADVANCED MODE**. See [Simple and Advanced mode](simple-and-advanced-mode.md).
-- If you finished the first-run wizard with **Keep pages not yet tested at a real event out of the sidebar for now** ticked (it starts ticked for a new club), **Championship**, **Garage**, **Handicaps**, **Rentals** and **Venues** are kept out of the sidebar too. A search still finds them, under **NOT YET TESTED**. See [Reordering and hiding pages](#reordering-and-hiding-pages).
 
 ### Just the icons
 
@@ -124,7 +123,7 @@ Short keywords filed under a tab, such as `vs`, work the same way.
 
 If nothing matches, the full list stays in place, so the sidebar never goes blank. Clear the box to see every page again.
 
-A search also turns up pages that are kept out of the sidebar, at the foot of the list: the pages not yet tested at a real event, under **NOT YET TESTED**, and in Simple mode the **Venues** page, under **IN ADVANCED MODE**. In Simple mode, typing a setting that Simple mode hides, such as `ducking` or `split loop`, adds an **Advanced mode settings** row there too. Picking an **IN ADVANCED MODE** row offers to turn on Advanced mode.
+A search also turns up pages that are kept out of the sidebar, at the foot of the list: in Simple mode the **Venues** page, under **IN ADVANCED MODE**. In Simple mode, typing a setting that Simple mode hides, such as `ducking` or `split loop`, adds an **Advanced mode settings** row there too. Picking an **IN ADVANCED MODE** row offers to turn on Advanced mode.
 
 ## Reordering and hiding pages
 
@@ -140,7 +139,6 @@ You can put the pages you use most at the top, and hide the ones you never use.
     - Select a page and use **Move Up** or **Move Down** to change its position.
     - **Show All** ticks every page again.
     - **While a race day is open, bring Race Day, Race Control and Championship to the top** turns the **TONIGHT** group on or off. It's on by default.
-    - **Keep pages not yet tested at a real event out of the sidebar (Championship, Garage, Handicaps, Rentals, Venues) - a search still finds them** hides the pages that haven't yet been used at a real race night. A sidebar search still lists them, last, under **NOT YET TESTED**, and they show "(not yet tested at an event)" in this list. **Restore Defaults** leaves this tick alone. It's the same tick as the one on the first-run wizard's last step, which starts ticked for a new club: if you pressed **Finish** without unticking it, it's on. **Skip setup** leaves it off.
     - **Restore Defaults** puts the default order back, shows every page and turns the **TONIGHT** group back on.
 3. Click **OK**.
 
