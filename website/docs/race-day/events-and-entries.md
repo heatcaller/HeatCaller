@@ -93,13 +93,13 @@ Every step can be skipped, and **Skip setup** leaves the wizard at any point. A 
 
 Setup opens on **Templates** while no race day is open, and on **Tonight** once one is. A tab you pick yourself stays picked until a night is started or closed.
 
-![Race Day, Setup tab: Race Day 11 Nov 2026 picked under Which race day with New Race Day and Set Up Tonight, and About the day with the kind of night, venue, track, First race at, Out of the venue by, Entries close at and Breaks](../assets/images/race-day-setup.png)
-
-<!-- screenshot: the picture above is from before the Templates, Tonight and Club rules tabs (14 Nov 2026); retake it on Templates and on Tonight -->
+![Race Day, Setup, Tonight tab: Race Day 14 Nov 2026 picked under Which race day, and The night card with the name, kind of night, venue, track layout, championship, Next night on phones and notes](../assets/images/race-day-setup.png)
 
 There's no Save button. Every change saves itself as you make it, and a **Saved** note appears for a moment after the **Close Day**, **Delete Day** and **Save as Template...** buttons. Typing in a box is saved when you pause or move to another field, and a run of typing is one step for **Undo**.
 
 ### Templates
+
+![Race Day, Setup, Templates tab: the banner says Points round is set for tonight with its forecast, Start Tonight and Walk me through it, and cards for Like last time, Tuesday club night and Points round](../assets/images/race-day-setup-templates.png)
 
 A template is a night's settings kept under a name, such as "Tuesday club night" and "Points round": its kind of night, classes and running order, rounds, heat size, seeding, fees, times, breaks, between-race talk and check-in rule. Never its heats, check-ins or results.
 
@@ -171,6 +171,8 @@ The line under the picker shows what the selected day already holds, for example
 | **Between-race talk:** | How much the announcer says between races on this day: **The club's Between races settings**, or one of the presets (**Club night**, **Race day**, **Big event**, **Just the call-ups**) over them for this day only. See [Between races](../announcer/commentary.md#between-races). | From the last day of the same kind, or the club's Between races settings |
 
 ### Club rules
+
+![Race Day, Setup, Club rules tab: The heats, Marshals, Papers and End of the night cards](../assets/images/race-day-setup-club-rules.png)
 
 The **Club rules** tab has the settings that are the club's, for every night, not just tonight. A change saves straight away and holds for the next night too.
 

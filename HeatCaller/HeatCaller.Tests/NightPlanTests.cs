@@ -20,7 +20,7 @@ public sealed class NightPlanTests
         LinkedSessionId = run ? Guid.NewGuid().ToString("N") : null,
     };
 
-    private static RoundDefinition Main(string label, string className = "Stock", int tier = 0) => new()
+    private static RoundDefinition MainRound(string label, string className = "Stock", int tier = 0) => new()
     {
         RoundLabel = label,
         ClassName = className,
@@ -190,7 +190,7 @@ public sealed class NightPlanTests
     [Fact]
     public void More_than_one_main_still_to_run_offers_one_fewer()
     {
-        var rounds = new[] { Main("B-Main", tier: 1), Main("A-Main") };
+        var rounds = new[] { MainRound("B-Main", tier: 1), MainRound("A-Main") };
 
         var plan = Plan(rounds, outByLocal: LocalTimeOfDay(1));
 
@@ -229,7 +229,7 @@ public sealed class NightPlanTests
             Heat("Q1 Heat 1", run: true), Heat("Q1 Heat 2", run: true),
             Heat("Q2 Heat 1", run: true), Heat("Q2 Heat 2"),
             Heat("Q3 Heat 1"), Heat("Q3 Heat 2", className: "Mod"),
-            Main("A-Main"),
+            MainRound("A-Main"),
         };
 
         var stop = NightPlan.AfterThisRound(rounds, onTrackRoundId: null)!;
@@ -266,8 +266,8 @@ public sealed class NightPlanTests
     [Fact]
     public void Done_after_this_round_with_nothing_later_is_nothing()
     {
-        Assert.Null(NightPlan.AfterThisRound(new[] { Heat("Q3 Heat 1"), Main("A-Main") }, null));
-        Assert.Null(NightPlan.AfterThisRound(new[] { Main("A-Main") }, null));
+        Assert.Null(NightPlan.AfterThisRound(new[] { Heat("Q3 Heat 1"), MainRound("A-Main") }, null));
+        Assert.Null(NightPlan.AfterThisRound(new[] { MainRound("A-Main") }, null));
     }
 
     [Fact]
@@ -292,7 +292,7 @@ public sealed class NightPlanTests
         var appDefault = new RaceFormat { TimeLimitMinutes = 6, StagingSeconds = 0, CountdownSeconds = 0 };
 
         var heat = Heat("Q1 Heat 1");
-        var main = Main("A-Main");
+        var main = MainRound("A-Main");
         var overridden = Heat("Q1 Heat 2");
         overridden.FormatOverride = new RaceFormat { TimeLimitMinutes = 2, StagingSeconds = 0, CountdownSeconds = 0 };
 

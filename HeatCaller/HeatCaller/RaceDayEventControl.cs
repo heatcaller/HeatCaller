@@ -61,41 +61,20 @@ public sealed partial class RaceDayEventControl : UserControl
     /// the other one.
     /// </summary>
     private readonly TextBox _txtNotes = new();
-    private readonly ComboBox _cmbVenue = new();
-    private readonly ComboBox _cmbLayout = new();
-    private readonly ComboBox _cmbChampionship = new();
-    private readonly NumericUpDown _numQualRounds = new();
 
-    // --- How the programme gets built ---
-    //
-    // These three used to live on the Program tab, in a box called
-    // "Generate Qualifying Heats". They are not really about generating
-    // anything: they are the shape of the race day, the same as the venue
-    // and the round count sitting above them, and the Program tab is a
-    // better page for having nothing on it but the running order and the
-    // next thing to do.
-    private readonly CheckedListBox _lstClasses = new ThemedCheckedListBox();
-    private readonly NumericUpDown _numHeatSize = new();
+    /// <summary>
+    /// Every setting a night template keeps - the kind of night, venue,
+    /// times, classes, heats, fees, between-race talk - as one set of fields,
+    /// shared with the Edit Template window. See NightFields.
+    /// </summary>
+    private readonly NightFields _fields;
 
-    /// <summary>How the first round is seeded (RaceEvent.FirstRoundSeeding, 11 Nov 2026).</summary>
-    private readonly ComboBox _cmbFirstRound = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-
-    /// <summary>Small classes share a heat under this many drivers (RaceEvent.ShareHeatsUnder, 11 Nov 2026, Phase 4.1). 0 = off.</summary>
-    private readonly NumericUpDown _numShareUnder = new();
-
-    /// <summary>Races off between a driver's races (RaceEvent.RacesOffBetween, 12 Nov 2026, setup plan step 8). 0-3.</summary>
-    private readonly NumericUpDown _numRacesOff = new();
 
     /// <summary>The club's marshal rule (AppSettings.MarshalNoShowRule, setup plan step 8) and its seconds.</summary>
     private readonly ComboBox _cmbMarshalRule = new() { DropDownStyle = ComboBoxStyle.DropDownList };
 
     private readonly NumericUpDown _numMarshalSeconds = new();
 
-    /// <summary>The entry fee and the fee for each extra class (RaceEvent.EntryFee, ExtraClassFee - 11 Nov 2026).</summary>
-    private readonly NumericUpDown _numEntryFee = new() { DecimalPlaces = 2, Maximum = 1000, Increment = 1 };
-
-    private readonly NumericUpDown _numExtraFee = new() { DecimalPlaces = 2, Maximum = 1000, Increment = 1 };
-    private readonly CheckBox _chkCheckedInOnly = new ThemedCheckBox();
     private readonly CheckBox _chkAutoAdvance = new ThemedCheckBox();
 
     /// <summary>
@@ -122,10 +101,9 @@ public sealed partial class RaceDayEventControl : UserControl
 
     private readonly CheckBox _chkMemberships = new ThemedCheckBox();
 
-    private const string EntriesCloseCaption = "Entries close at:";
 
     /// <summary>The rest gap's row (setup plan step 8) - RaceEvent.RacesOffBetween.</summary>
-    internal const string RacesOffCaption = "Races off between a driver's races:";
+    internal const string RacesOffCaption = NightFields.RacesOffCaption;
 
     /// <summary>
     /// Under Championship:, on Tonight and in the template editor (14 Nov
@@ -134,35 +112,13 @@ public sealed partial class RaceDayEventControl : UserControl
     /// takes its races whatever is picked here (EventSpine.RuleAccepts), and
     /// the pick only enters the night into one counting picked race days.
     /// </summary>
-    internal const string ChampionshipHint =
-        "A championship that adds new races automatically scores its own class from every night, whatever is picked here - so one per class all count from the same night. "
-        + "Pick one only to enter this night into a championship that counts just the race days it's given.";
+    internal const string ChampionshipHint = NightFields.ChampionshipHint;
 
     /// <summary>The marshal rule's row (setup plan step 8) - AppSettings.MarshalNoShowRule.</summary>
     internal const string MarshalRuleCaption = "A marshal who doesn't turn up:";
 
-    /// <summary>
-    /// When entries close (RaceEvent.EntriesCloseLocalTime, 12 Nov 2026, setup
-    /// plan D1): the same tick-and-picker pair as the first race's time, for
-    /// the same reason.
-    /// </summary>
-    private readonly CheckBox _chkEntriesClose = new ThemedCheckBox();
-
-    private readonly TimePicker _dtpEntriesClose = new();
-
-    /// <summary>The night's planned breaks on one line (setup plan D5), and the button that changes them.</summary>
-    private readonly Label _lblBreaks = new();
-
-    private readonly Button _btnBreaks = new();
-
-    /// <summary>Tonight's class running order on one line (setup plan D7), and the button that changes it.</summary>
-    private readonly Label _lblClassOrder = new();
-
-    private readonly Button _btnClassOrder = new();
     private readonly ComboBox _cmbAutoAdvanceScope = new();
 
-    /// <summary>Between-race talk for this day: the club's Between races settings, or one of the card's presets over them (31 Oct 2026).</summary>
-    private readonly ComboBox _cmbGapPreset = new();
     private readonly Label _lblAutoAdvanceHint = new();
     private Label? _lblAutoAdvanceScope;
     private readonly AppSettings? _settings;
@@ -181,89 +137,6 @@ public sealed partial class RaceDayEventControl : UserControl
     /// <summary>The "Post the heats before the first race" tick, or the night's breaks, changed - so Next Steps should say it again.</summary>
     public event Action? NightSetupChanged;
 
-    /// <summary>
-    /// The caption on the qualifying-rounds spinner.
-    ///
-    /// Was "Qualifying rounds:", which is what the sport calls the number and
-    /// tells a first-time race director nothing about what they are setting.
-    /// The field still writes RaceEvent.QualifyingRounds and the rounds it
-    /// produces are still labelled Q1, Q2, Q3 - only the prompt changed. Held
-    /// as a constant because the label column below is measured from every
-    /// caption on the page, including this one, and a literal written twice
-    /// is a column that silently stops fitting.
-    /// </summary>
-    private const string HeatsPerDriverCaption = "Heats each driver gets:";
-
-    /// <summary>
-    /// The same row on a club night, where nothing is qualifying for
-    /// anything and a heat is just a race. Both captions are in the column
-    /// measurement, so switching between them never moves the fields.
-    /// </summary>
-    private const string RacesPerDriverCaption = "Races each driver gets:";
-
-    private const string ShapeCaption = "What kind of night:";
-
-    private const string FirstRaceCaption = "First race at:";
-
-    /// <summary>
-    /// When the first race goes out, and whether it has been set at all.
-    ///
-    /// Two controls because RaceEvent.FirstRaceLocalTime is nullable and a
-    /// time picker has no way to say "not set". A club that never puts a
-    /// time on the day should not have one invented for it, and the
-    /// timetable's Fill In the Times reads this as its starting point.
-    ///
-    /// The property had been on RaceEvent since race days were introduced,
-    /// with a comment describing a run sheet measuring drift against it -
-    /// and nothing anywhere read or wrote it. This is that UI.
-    /// </summary>
-    private readonly CheckBox _chkFirstRace = new ThemedCheckBox();
-
-    private readonly TimePicker _dtpFirstRace = new();
-
-    private const string OutByCaption = "Out of the venue by:";
-
-    /// <summary>
-    /// When the club has to be out of the venue (RaceEvent.OutByLocalTime),
-    /// and whether it has been set: the same pair as the first race's time,
-    /// for the same reason. The Next Steps card measures the night's
-    /// projected finish against it (11 Nov 2026, race-night build plan,
-    /// Phase 2).
-    /// </summary>
-    private readonly CheckBox _chkOutBy = new ThemedCheckBox();
-
-    private readonly TimePicker _dtpOutBy = new();
-
-    /// <summary>One entry in the shape picker. ToString is what the combo draws.</summary>
-    private sealed record ShapeChoice(RaceDayShape Shape, string Caption)
-    {
-        public override string ToString() => Caption;
-    }
-
-    /// <summary>What kind of night this day is - see <see cref="RaceDayShape"/>. The most consequential field on the page, so it sits near the top.</summary>
-    private readonly ComboBox _cmbShape = new();
-
-    /// <summary>The hint under the shape picker, worded from it - as tall as the longer wording, so the fields below never move as the box is used.</summary>
-    private readonly SteadyLabel _lblShapeHint = new() { Wordings = new[] { RaceDayShapeHint, ClubNightShapeHint } };
-
-    private const string RaceDayShapeHint =
-        "Qualifying heats, then finals built from them. Heats are built from drivers who have checked in.";
-
-    private const string ClubNightShapeHint =
-        "A flat list of races - no finals, no seeding, no bump-ups. Everyone in a racing class is in them.";
-
-    /// <summary>The rounds-per-driver caption, held because its wording comes from the shape.</summary>
-    private Label? _lblQualRounds;
-
-    /// <summary>The hint under the class tick list - also worded from the shape, and as tall as the longer wording.</summary>
-    private readonly SteadyLabel _lblClassHint = new() { Wordings = new[] { RaceDayClassHint, ClubNightClassHint } };
-
-    private const string RaceDayClassHint =
-        "Tick the classes running today. Next Steps builds all their heats in one press.";
-
-    private const string ClubNightClassHint =
-        "Tick the classes running today. Next Steps builds all their races in one press.";
-
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
@@ -272,7 +145,7 @@ public sealed partial class RaceDayEventControl : UserControl
     /// Pieces.PickerWidth. Forgotten whenever the lists are rebuilt (see
     /// RefitFields).
     /// </summary>
-    private (Font Font, int Count, int Width)? _eventWidth, _shapeWidth, _venueWidth, _layoutWidth, _championshipWidth, _scopeWidth, _gapPresetWidth, _firstRoundWidth, _marshalRuleWidth;
+    private (Font Font, int Count, int Width)? _eventWidth, _scopeWidth, _marshalRuleWidth;
 
     /// <summary>The widths the fields had at the normal text size, before any of them was measured - see SizeFields.</summary>
     private const int FieldWidth = 320;
@@ -365,6 +238,8 @@ public sealed partial class RaceDayEventControl : UserControl
         // The body face, worn rather than inherited: this page sits in a tab
         // whose row is drawn in the bold face, which it would otherwise take.
         _textSize.Wear(this, () => AppTheme.BodyFont);
+
+        _fields = new NightFields(_textSize);
 
         BuildLayout();
         RefreshAll();
@@ -473,35 +348,23 @@ public sealed partial class RaceDayEventControl : UserControl
         which.Add(_lblStatus, gapBelow: 0);
 
         // --- The night ---
+        //
+        // Every setting a template keeps is one set of fields, shared with
+        // the Edit Template window (NightFields, 14 Nov 2026) - a new night
+        // setting goes there and is on both. Tonight adds what is the race
+        // day's own: its name and notes, the phones' next night, starting the
+        // next race by itself, and the club's ticks on Club rules. Breaks...
+        // and Order... change the day here, with their own undo entries.
+        _fields.EditBreaks = EditBreaks;
+        _fields.EditClassOrder = EditClassOrder;
+
         var nightGrid = new FieldGrid();
 
         nightGrid.AddRow("Name:", _txtName);
 
-        // What kind of night: second, right under the name, because it
-        // decides more about what the rest of the app shows than every field
-        // below it put together. A day saved before this existed has no
-        // shape in its file and reads back as a race day, which is what it
-        // has always behaved as.
-        _cmbShape.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbShape.Items.Add(new ShapeChoice(RaceDayShape.RaceDay, "Race day - heats, then finals"));
-        _cmbShape.Items.Add(new ShapeChoice(RaceDayShape.ClubNight, "Club night - just races"));
-        _cmbShape.SelectedIndex = 0;
-
-        nightGrid.AddRow(ShapeCaption, _cmbShape);
-        nightGrid.AddHint(_lblShapeHint);
-
-        // Editable combos: the venue and layout lists are suggestions, not
-        // gatekeepers - a club night at a friend's garage should not need a
-        // venue profile made first.
-        _cmbVenue.DropDownStyle = ComboBoxStyle.DropDown;
-        nightGrid.AddRow("Venue:", _cmbVenue);
-
-        _cmbLayout.DropDownStyle = ComboBoxStyle.DropDown;
-        nightGrid.AddRow("Track layout:", _cmbLayout);
-
-        _cmbChampionship.DropDownStyle = ComboBoxStyle.DropDownList;
-        nightGrid.AddRow("Championship:", _cmbChampionship);
-        nightGrid.AddHint(ChampionshipHint);
+        // What kind of night: right under the name, because it decides more
+        // about what the rest of the app shows than every field below it.
+        _fields.AddNightRows(nightGrid);
 
         // Tell the drivers (12 Nov 2026, setup plan D13).
         nightGrid.AddRow("Next night on phones:", BuildNextNightRow());
@@ -519,68 +382,11 @@ public sealed partial class RaceDayEventControl : UserControl
         // --- Times ---
         var timesGrid = new FieldGrid();
 
-        // --- When it starts ---
-        //
-        // A tick and a picker on one row: the property is nullable, and a
-        // time picker cannot say "not set".
-        //
-        // TimePicker, not WinForms' DateTimePicker. That one wraps a native
-        // Windows control which ignores BackColor and ForeColor almost
-        // entirely, so its spinner came out in system grey against the dark
-        // theme - a pasted-on white block - and clipped its own text at any
-        // sensible width. TimePicker paints every pixel itself and is what
-        // the rest of the app already uses for a time of day. It sizes
-        // itself to its time in its font (AutoSize), and wears the body face
-        // it was built with at the text size in use.
-        _dtpFirstRace.AutoSize = true;
-        _dtpFirstRace.Value = TimeSpan.FromHours(10);
-        _textSize.Wear(_dtpFirstRace, () => AppTheme.BodyFont);
-
-        _chkFirstRace.Text = "Set";
-        _chkFirstRace.AutoSize = true;
-
-        _dtpOutBy.AutoSize = true;
-        _dtpOutBy.Value = TimeSpan.FromHours(22);
-        _textSize.Wear(_dtpOutBy, () => AppTheme.BodyFont);
-
-        _chkOutBy.Text = "Set";
-        _chkOutBy.AutoSize = true;
-
-        // Entries close (12 Nov 2026, setup plan D1), first: it comes first in
-        // the night. The Times card is new (14 Nov 2026), so nothing moves
-        // under anybody by putting it there.
-        _dtpEntriesClose.AutoSize = true;
-        _dtpEntriesClose.Value = TimeSpan.FromHours(18.5);
-        _textSize.Wear(_dtpEntriesClose, () => AppTheme.BodyFont);
-
-        _chkEntriesClose.Text = "Set";
-        _chkEntriesClose.AutoSize = true;
-
-        timesGrid.AddRow(EntriesCloseCaption, FieldGrid.Inline(_dtpEntriesClose, _chkEntriesClose));
-        timesGrid.AddHint("After this, a driver who checks in is a late entry. The announcer calls it ten minutes before and as it passes, and Next Steps counts down to it.");
-        timesGrid.AddRow(FirstRaceCaption, FieldGrid.Inline(_dtpFirstRace, _chkFirstRace));
-        timesGrid.AddRow(OutByCaption, FieldGrid.Inline(_dtpOutBy, _chkOutBy));
-
-        // The night's planned breaks (setup plan D5): a line saying what they
-        // are, and a window to change them.
-        _lblBreaks.AutoSize = true;
-        _lblBreaks.Margin = new Padding(0, 6, 8, 0);
-        _lblBreaks.Text = "None";
-        _btnBreaks.Text = "Breaks...";
-        _btnBreaks.AutoSize = true;
-        _btnBreaks.Click += (_, _) => EditBreaks();
-
-        timesGrid.AddRow("Breaks:", FieldGrid.Inline(_lblBreaks, _btnBreaks));
-        timesGrid.AddHint("Watering the track, dinner, track repairs. The finish time, every estimated start and the gap before the next race allow for them, and the announcer tells the room.");
+        _fields.AddTimesRows(timesGrid);
 
         var times = new Section("Times");
 
         times.Add(timesGrid, gapBelow: 0);
-
-        // --- What the program is built from ---
-        _numQualRounds.Minimum = 1;
-        _numQualRounds.Maximum = 10;
-        _numQualRounds.Value = 3;
 
         // Five cards now where there were two (14 Nov 2026): the heats, the
         // money, running the night - and the ticks that are the club's, for
@@ -599,40 +405,8 @@ public sealed partial class RaceDayEventControl : UserControl
         var papersGrid = new FieldGrid();
         var closingGrid = new FieldGrid();
 
-        _lblQualRounds = heatsGrid.AddRow(HeatsPerDriverCaption, _numQualRounds);
-
-        _lstClasses.CheckOnClick = true;
-        _lstClasses.BorderStyle = BorderStyle.None;
-        _lstClasses.IntegralHeight = false;
-        heatsGrid.AddRow("Classes racing:", _lstClasses);
-        heatsGrid.AddHint(_lblClassHint);
-
-        _numHeatSize.Minimum = 2;
-        _numHeatSize.Maximum = 20;
-        _numHeatSize.Value = 8;
-        heatsGrid.AddRow("Drivers per heat:", _numHeatSize);
-
-        foreach (var mode in Enum.GetValues<FirstRoundSeeding>())
-        {
-            _cmbFirstRound.Items.Add(FirstRound.Words(mode));
-        }
-
-        _cmbFirstRound.SelectedIndex = 0;
-        heatsGrid.AddRow("First round seeded:", _cmbFirstRound);
-
-        // Mixed-class heats (11 Nov 2026, Phase 4.1): 0 is off, which is
-        // every race day until somebody sets it.
-        _numShareUnder.Minimum = 0;
-        _numShareUnder.Maximum = 19;
-        _numShareUnder.Value = 0;
-        heatsGrid.AddRow("Share a heat under (drivers):", _numShareUnder);
-
-        // The rest gap (12 Nov 2026, setup plan step 8): 1, the one race off
-        // every build gave, unless a night says otherwise.
-        _numRacesOff.Minimum = 0;
-        _numRacesOff.Maximum = RestOrder.MostGap;
-        _numRacesOff.Value = RestOrder.DefaultGap;
-        heatsGrid.AddRow(RacesOffCaption, _numRacesOff);
+        _fields.AddHeatsRows(heatsGrid);
+        _fields.AddMoneyRows(moneyGrid);
 
         // The club's marshal rule (setup plan step 8). Every night, not just
         // this one, so it saves straight to the club's settings - as the
@@ -689,12 +463,7 @@ public sealed partial class RaceDayEventControl : UserControl
         marshalGrid.AddHint(lblMarshalHint);
         marshalGrid.AddHint("Log a no-show from Race Control's Someone's missing... - click the same line again to take it off.");
         ShowMarshalRule((MarshalNoShowRule)Math.Max(0, _cmbMarshalRule.SelectedIndex));
-        moneyGrid.AddRow("Entry fee:", _numEntryFee);
-        moneyGrid.AddRow("Each extra class:", _numExtraFee);
 
-        _chkCheckedInOnly.Text = "Only include drivers who have checked in";
-        _chkCheckedInOnly.AutoSize = true;
-        heatsGrid.AddField(_chkCheckedInOnly);
 
         // Rolling into the next race. It used to be a strip at the bottom
         // of the programme, among the buttons pressed every ten minutes -
@@ -720,32 +489,8 @@ public sealed partial class RaceDayEventControl : UserControl
         // the tick above stays.
         SimpleMode.HideRow(runGrid, _cmbAutoAdvanceScope);
 
-        // BETWEEN-RACE TALK FOR THE DAY (31 Oct 2026): a big event can run
-        // busier than club night without the club's own settings changing.
-        // Over the Between races card on the AI Commentary tab, for this day
-        // only.
-        _cmbGapPreset.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbGapPreset.Items.Add(new GapPresetChoice(string.Empty, "The club's Between races settings"));
 
-        foreach (var preset in GapPreset.All)
-        {
-            _cmbGapPreset.Items.Add(new GapPresetChoice(preset.Key, preset.Name));
-        }
-
-        _cmbGapPreset.SelectedIndex = 0;
-
-        // The class running order (12 Nov 2026, setup plan D7).
-        _lblClassOrder.AutoSize = true;
-        _lblClassOrder.Margin = new Padding(0, 6, 8, 0);
-        _lblClassOrder.Text = "As on the Classes page";
-        _btnClassOrder.Text = "Order...";
-        _btnClassOrder.AutoSize = true;
-        _btnClassOrder.Click += (_, _) => EditClassOrder();
-        heatsGrid.AddRow("Class running order:", FieldGrid.Inline(_lblClassOrder, _btnClassOrder));
-        heatsGrid.AddHint("Which class goes first in each round, and whether the order turns round each round. It decides who marshals for whom and when a class finishes. Used when the heats are built.");
-
-        runGrid.AddRow("Between-race talk:", _cmbGapPreset);
-        runGrid.AddHint("How much the announcer says between races tonight. A preset here is for this day only - the club's own settings are on the AI Commentary tab.");
+        _fields.AddRunRows(runGrid);
 
         // Building and posting the heats (setup plan B2, D2 and D6), in the
         // order they happen on a night: built, posted, then the late ones.
@@ -900,14 +645,9 @@ public sealed partial class RaceDayEventControl : UserControl
         // wordings of the rounds-per-driver caption, so neither the text
         // size nor the kind of night ever moves the fields sideways. Club
         // rules lines up on its own.
-        _textSize.Keep(() => FieldGrid.LineUp(new[] { dayGrid, nightGrid, timesGrid, heatsGrid, moneyGrid, runGrid }, HeatsPerDriverCaption, RacesPerDriverCaption));
+        _textSize.Keep(() => FieldGrid.LineUp(new[] { dayGrid, nightGrid, timesGrid, heatsGrid, moneyGrid, runGrid }, NightFields.HeatsPerDriverCaption, NightFields.RacesPerDriverCaption));
         _textSize.Keep(() => FieldGrid.LineUp(new[] { marshalGrid }, MarshalRuleCaption));
         _textSize.Keep(SizeFields);
-
-        // The two shape-worded captions and the two hints, filled once here
-        // so the page is never briefly blank in those spots - LoadFields
-        // does it again for whichever day is picked, and it is only wording.
-        ApplyShapeWording();
 
         WireAutoSave();
     }
@@ -929,23 +669,11 @@ public sealed partial class RaceDayEventControl : UserControl
 
         Fit(_cmbEvent, Math.Max(UiLayout.AtTextSize(EventPickerWidth), Pieces.PickerWidth(_cmbEvent, ref _eventWidth)));
         Fit(_txtName, wide);
-        Fit(_cmbShape, Math.Max(wide, Pieces.PickerWidth(_cmbShape, ref _shapeWidth)));
-        Fit(_cmbVenue, Math.Max(wide, Pieces.PickerWidth(_cmbVenue, ref _venueWidth)));
-        Fit(_cmbLayout, Math.Max(wide, Pieces.PickerWidth(_cmbLayout, ref _layoutWidth)));
-        Fit(_cmbChampionship, Math.Max(wide, Pieces.PickerWidth(_cmbChampionship, ref _championshipWidth)));
         Fit(_txtNotes, wide, Pieces.LineHeight(_txtNotes.Font) * 3 + UiLayout.HintGap * 2);
-        Fit(_numQualRounds, number);
-        Fit(_lstClasses, wide, _lstClasses.Font.Height * 5 + 12);
-        Fit(_numHeatSize, number);
-        Fit(_cmbFirstRound, Math.Max(UiLayout.AtTextSize(160), Pieces.PickerWidth(_cmbFirstRound, ref _firstRoundWidth)));
-        Fit(_numShareUnder, number);
-        Fit(_numRacesOff, number);
         Fit(_numMarshalSeconds, number);
         Fit(_cmbMarshalRule, Math.Max(UiLayout.AtTextSize(220), Pieces.PickerWidth(_cmbMarshalRule, ref _marshalRuleWidth)));
-        Fit(_numEntryFee, number);
-        Fit(_numExtraFee, number);
         Fit(_cmbAutoAdvanceScope, Math.Max(UiLayout.AtTextSize(ScopePickerWidth), Pieces.PickerWidth(_cmbAutoAdvanceScope, ref _scopeWidth)));
-        Fit(_cmbGapPreset, Math.Max(wide, Pieces.PickerWidth(_cmbGapPreset, ref _gapPresetWidth)));
+        _fields.SizeFields();
 
         // Only when it changed: a new size lays the grid out again.
         static void Fit(Control field, int width, int? height = null)
@@ -965,7 +693,8 @@ public sealed partial class RaceDayEventControl : UserControl
     /// </summary>
     private void RefitFields()
     {
-        _eventWidth = _shapeWidth = _venueWidth = _layoutWidth = _championshipWidth = _scopeWidth = null;
+        _eventWidth = _scopeWidth = null;
+        _fields.RefitFields();
         SizeFields();
     }
 
@@ -1003,60 +732,19 @@ public sealed partial class RaceDayEventControl : UserControl
 
         _txtName.TextChanged += (_, _) => EditStarted();
         _txtNotes.TextChanged += (_, _) => EditStarted();
-        _cmbVenue.TextChanged += (_, _) => EditStarted();
-        _cmbLayout.TextChanged += (_, _) => EditStarted();
-
         _txtName.Leave += (_, _) => CommitNow();
         _txtNotes.Leave += (_, _) => CommitNow();
-        _cmbVenue.Leave += (_, _) => CommitNow();
-        _cmbLayout.Leave += (_, _) => CommitNow();
 
-        _cmbChampionship.SelectedIndexChanged += (_, _) => CommitNow();
+        // The shared fields (NightFields) say what changed; this page saves
+        // it, as it always has. The venue and layout wait for a pause, like
+        // the name; everything else saves the moment it changes - the
+        // classes' tick posted to land after it is applied. Re-wording for
+        // the kind of night happens inside NightFields, even while loading;
+        // CommitNow is the one that knows to do nothing then.
+        _fields.Typed += EditStarted;
+        _fields.LeftTyping += CommitNow;
+        _fields.Changed += CommitNow;
 
-        // The wording first, then the save. Re-wording is free and has to
-        // happen even while LoadFields is filling the boxes - that is how
-        // picking a different day in the top combo gets the right captions -
-        // and CommitNow is the one that knows to do nothing then.
-        _cmbShape.SelectedIndexChanged += (_, _) =>
-        {
-            ApplyShapeWording();
-            CommitNow();
-        };
-
-        _numQualRounds.ValueChanged += (_, _) => CommitNow();
-
-        _chkFirstRace.CheckedChanged += (_, _) =>
-        {
-            // Greyed rather than hidden: a picker that vanishes makes the
-            // row jump, and the rows below it with it.
-            _dtpFirstRace.Enabled = _chkFirstRace.Checked && !(Selected?.IsLegacy ?? true);
-            CommitNow();
-        };
-
-        _dtpFirstRace.ValueChanged += CommitNow;
-
-        _chkOutBy.CheckedChanged += (_, _) =>
-        {
-            _dtpOutBy.Enabled = _chkOutBy.Checked && !(Selected?.IsLegacy ?? true);
-            CommitNow();
-        };
-
-        _dtpOutBy.ValueChanged += CommitNow;
-
-        _chkEntriesClose.CheckedChanged += (_, _) =>
-        {
-            _dtpEntriesClose.Enabled = _chkEntriesClose.Checked && !(Selected?.IsLegacy ?? true);
-            CommitNow();
-        };
-
-        _dtpEntriesClose.ValueChanged += CommitNow;
-        _numHeatSize.ValueChanged += (_, _) => CommitNow();
-        _cmbFirstRound.SelectedIndexChanged += (_, _) => CommitNow();
-        _numShareUnder.ValueChanged += (_, _) => CommitNow();
-        _numRacesOff.ValueChanged += (_, _) => CommitNow();
-        _numEntryFee.ValueChanged += (_, _) => CommitNow();
-        _numExtraFee.ValueChanged += (_, _) => CommitNow();
-        _chkCheckedInOnly.CheckedChanged += (_, _) => CommitNow();
         _chkAutoAdvance.CheckedChanged += (_, _) =>
         {
             // "Next race is:" only means something while the next race
@@ -1068,20 +756,6 @@ public sealed partial class RaceDayEventControl : UserControl
             CommitNow();
         };
         _cmbAutoAdvanceScope.SelectedIndexChanged += (_, _) => CommitNow();
-        _cmbGapPreset.SelectedIndexChanged += (_, _) => CommitNow();
-
-        _lstClasses.ItemCheck += (_, _) =>
-        {
-            // IsHandleCreated as well as the rest: BeginInvoke throws
-            // without one, and the list is filled before this control is
-            // ever shown.
-            if (_loading || IsDisposed || !IsHandleCreated)
-            {
-                return;
-            }
-
-            BeginInvoke(new Action(CommitNow));
-        };
 
         // A day being closed by the window closing still keeps what was
         // typed a moment before it.
@@ -1426,38 +1100,14 @@ public sealed partial class RaceDayEventControl : UserControl
 
             _cmbEvent.SelectedIndex = index >= 0 ? index : 0;
 
-            // The championship list follows the seasons that exist NOW.
-            _cmbChampionship.Items.Clear();
-            _cmbChampionship.Items.Add("(standalone - no championship)");
-
-            foreach (var season in _seasons.All)
-            {
-                _cmbChampionship.Items.Add(new SeasonChoice(season));
-            }
-
-            _cmbVenue.Items.Clear();
-
-            foreach (var venue in _venues.All)
-            {
-                _cmbVenue.Items.Add(venue.Name);
-            }
-
-            _cmbLayout.Items.Clear();
-
-            foreach (var layout in _layouts.All)
-            {
-                _cmbLayout.Items.Add(layout.Name);
-            }
-
-            // Rebuilt from the classes that exist NOW, so a class added or
-            // renamed on another page shows up here the next time the tab
-            // is opened rather than at the next launch.
-            _lstClasses.Items.Clear();
-
-            foreach (var raceClass in _raceClasses.All)
-            {
-                _lstClasses.Items.Add(raceClass.Name);
-            }
+            // The lists follow what exists NOW - the seasons, venues, layouts
+            // and classes - so a class added or renamed on another page shows
+            // up here the next time the tab is opened, not at the next launch.
+            _fields.FillLists(
+                _raceClasses.All.Select(c => c.Name),
+                _venues.All.Select(v => v.Name),
+                _layouts.All.Select(l => l.Name),
+                _seasons.All);
         }
         finally
         {
@@ -1477,10 +1127,6 @@ public sealed partial class RaceDayEventControl : UserControl
         ChooseTabForTonight();
     }
 
-    private sealed record SeasonChoice(Season Season)
-    {
-        public override string ToString() => Season.Name;
-    }
 
     /// <summary>One way of choosing the next race. Scope and class travel together - see RaceEvent.AutoAdvanceClassOr.</summary>
     private sealed record ScopeChoice(string Scope, string ClassName, string Label)
@@ -1488,27 +1134,6 @@ public sealed partial class RaceDayEventControl : UserControl
         public override string ToString() => Label;
     }
 
-    /// <summary>One entry in Between-race talk: a preset's key (empty for the club's own settings) and its name.</summary>
-    private sealed record GapPresetChoice(string Key, string Label)
-    {
-        public override string ToString() => Label;
-    }
-
-    /// <summary>Picks the day's preset in Between-race talk - the club's settings for one it does not know.</summary>
-    private void ShowGapPreset(string? key)
-    {
-        for (var i = 0; i < _cmbGapPreset.Items.Count; i++)
-        {
-            if (_cmbGapPreset.Items[i] is GapPresetChoice choice
-                && string.Equals(choice.Key, key ?? string.Empty, StringComparison.Ordinal))
-            {
-                _cmbGapPreset.SelectedIndex = i;
-                return;
-            }
-        }
-
-        _cmbGapPreset.SelectedIndex = 0;
-    }
 
     /// <summary>
     /// "Next race is:" open only while the next race starts by itself, on a
@@ -1589,86 +1214,21 @@ public sealed partial class RaceDayEventControl : UserControl
         RefreshStatus();
     }
 
-    /// <summary>The shape the picker is showing. Never null - the combo is a DropDownList with a selection from the moment it is built.</summary>
-    private RaceDayShape SelectedShape =>
-        _cmbShape.SelectedItem is ShapeChoice choice ? choice.Shape : RaceDayShape.RaceDay;
-
-    /// <summary>
-    /// Puts the captions and hints that depend on the day's shape in line
-    /// with the picker.
-    ///
-    /// Only wording: no control moves. Both variants of the caption are in
-    /// the caption column's measurement (FieldGrid.LineUp in BuildLayout),
-    /// so the column is the same width either way and nothing shifts as the
-    /// box is used; the two hints are as tall as their longer wording
-    /// (SteadyLabel) for the same reason.
-    /// </summary>
-    private void ApplyShapeWording()
-    {
-        var clubNight = SelectedShape == RaceDayShape.ClubNight;
-
-        if (_lblQualRounds is not null)
-        {
-            _lblQualRounds.Text = clubNight ? RacesPerDriverCaption : HeatsPerDriverCaption;
-        }
-
-        // The check-in rule is named here rather than left to the tick box
-        // below, because it is set FROM this choice when the day is started
-        // and somebody reading the two options needs to know that.
-        _lblShapeHint.Text = clubNight ? ClubNightShapeHint : RaceDayShapeHint;
-        _lblClassHint.Text = clubNight ? ClubNightClassHint : RaceDayClassHint;
-    }
 
     private void LoadFields(RaceEvent raceEvent)
     {
-        // Before the fields it words: LoadFields runs with _loading set, so
-        // the SelectedIndexChanged below writes nothing, and this leaves the
-        // captions right for the day just picked.
-        for (var i = 0; i < _cmbShape.Items.Count; i++)
-        {
-            if (_cmbShape.Items[i] is ShapeChoice choice && choice.Shape == raceEvent.Shape)
-            {
-                _cmbShape.SelectedIndex = i;
-                break;
-            }
-        }
-
-        ApplyShapeWording();
+        // Everything a template keeps, from the shared fields (NightFields).
+        // Zero heat size means "whatever was used last" - the number the
+        // program builds with (RaceEventStore.HeatSizeFor), so that is what
+        // the box shows; not written here, since this runs with _loading set.
+        // It is saved onto the day with the next change to any of the day's
+        // fields - the same number, so nothing moves.
+        _fields.Load(raceEvent, _events.HeatSizeFor(raceEvent));
 
         _txtName.Text = raceEvent.Name;
         _txtNotes.Text = raceEvent.Notes;
-        _cmbVenue.Text = raceEvent.VenueName;
-        _cmbLayout.Text = raceEvent.TrackLayoutName;
-        _numQualRounds.Value = Math.Clamp(raceEvent.QualifyingRounds, 1, 10);
-
-        // Ten o'clock shown, not written, when the day has no time on it -
-        // the same idea as the heat size below. It becomes real only when
-        // the tick goes on.
-        _chkFirstRace.Checked = raceEvent.FirstRaceLocalTime is not null;
-        _dtpFirstRace.Value = raceEvent.FirstRaceLocalTime ?? TimeSpan.FromHours(10);
-        _chkOutBy.Checked = raceEvent.OutByLocalTime is not null;
-        _dtpOutBy.Value = raceEvent.OutByLocalTime ?? TimeSpan.FromHours(22);
-        _chkEntriesClose.Checked = raceEvent.EntriesCloseLocalTime is not null;
-        _dtpEntriesClose.Value = raceEvent.EntriesCloseLocalTime ?? TimeSpan.FromHours(18.5);
-        _lblBreaks.Text = NightBreaks.Summary(raceEvent.Breaks, raceEvent.IsClubNight);
-        _lblClassOrder.Text = ClassRunningOrder.Summary(ClassesTonight(raceEvent), raceEvent.ClassRunningOrder, raceEvent.RotateClassOrder);
         ShowNextNight();
         ShowTemplateButtons();
-
-        // Zero means "whatever was used last" - the number the program builds
-        // with (RaceEventStore.HeatSizeFor), so that is what the box shows. It
-        // showed 8 while the program built with a remembered 6, until the box
-        // was changed (docs check, 30 Sep). Not written here: this runs with
-        // _loading set. It is saved onto the day with the next change to any
-        // of the day's fields - the same number, so nothing moves.
-        _numHeatSize.Value = _events.HeatSizeFor(raceEvent);
-        _cmbFirstRound.SelectedIndex = Math.Clamp((int)raceEvent.FirstRoundSeeding, 0, _cmbFirstRound.Items.Count - 1);
-        _numShareUnder.Value = Math.Clamp(raceEvent.ShareHeatsUnder, (int)_numShareUnder.Minimum, (int)_numShareUnder.Maximum);
-        _numRacesOff.Value = Math.Clamp(raceEvent.RacesOffBetween, (int)_numRacesOff.Minimum, (int)_numRacesOff.Maximum);
-        _numEntryFee.Value = Math.Clamp(raceEvent.EntryFee, _numEntryFee.Minimum, _numEntryFee.Maximum);
-        _numExtraFee.Value = Math.Clamp(raceEvent.ExtraClassFee, _numExtraFee.Minimum, _numExtraFee.Maximum);
-        _chkCheckedInOnly.Checked = raceEvent.CheckedInDriversOnly;
-        ShowGapPreset(raceEvent.BetweenRacesPreset);
 
         // The club-wide setting is the answer for a day that never said -
         // which is every day written before this moved here. Shown, not
@@ -1684,56 +1244,13 @@ public sealed partial class RaceDayEventControl : UserControl
         _scopeWidth = null;
         SizeFields();
 
-        for (var i = 0; i < _lstClasses.Items.Count; i++)
-        {
-            var name = _lstClasses.Items[i] as string ?? string.Empty;
-
-            _lstClasses.SetItemChecked(i,
-                raceEvent.ClassNames.Contains(name, StringComparer.OrdinalIgnoreCase));
-        }
-
-        var championshipIndex = 0;
-
-        for (var i = 1; i < _cmbChampionship.Items.Count; i++)
-        {
-            if (_cmbChampionship.Items[i] is SeasonChoice choice
-                && string.Equals(choice.Season.Id, raceEvent.ChampionshipId, StringComparison.Ordinal))
-            {
-                championshipIndex = i;
-                break;
-            }
-        }
-
-        _cmbChampionship.SelectedIndex = championshipIndex;
-
         // The legacy event is a filing cabinet, not a race day - it can be
         // looked at and pointed at, never reshaped.
         var editable = !raceEvent.IsLegacy;
 
+        _fields.SetEditable(editable);
         _txtName.Enabled = editable;
-        _cmbShape.Enabled = editable;
-        _chkFirstRace.Enabled = editable;
-        _dtpFirstRace.Enabled = editable && _chkFirstRace.Checked;
-        _chkOutBy.Enabled = editable;
-        _dtpOutBy.Enabled = editable && _chkOutBy.Checked;
-        _chkEntriesClose.Enabled = editable;
-        _dtpEntriesClose.Enabled = editable && _chkEntriesClose.Checked;
-        _btnBreaks.Enabled = editable;
-        _btnClassOrder.Enabled = editable;
         _txtNotes.Enabled = editable;
-        _cmbVenue.Enabled = editable;
-        _cmbLayout.Enabled = editable;
-        _cmbChampionship.Enabled = editable;
-        _numQualRounds.Enabled = editable;
-        _lstClasses.Enabled = editable;
-        _numHeatSize.Enabled = editable;
-        _cmbFirstRound.Enabled = editable;
-        _numShareUnder.Enabled = editable;
-        _numRacesOff.Enabled = editable;
-        _numEntryFee.Enabled = editable;
-        _numExtraFee.Enabled = editable;
-        _chkCheckedInOnly.Enabled = editable;
-        _cmbGapPreset.Enabled = editable;
         _chkAutoAdvance.Enabled = editable;
         FollowAutoAdvance(editable);
         _btnCloseDay.Enabled = editable;
@@ -2035,28 +1552,9 @@ public sealed partial class RaceDayEventControl : UserControl
 
         raceEvent.Name = _txtName.Text.Trim();
         raceEvent.Notes = _txtNotes.Text.Trim();
-        raceEvent.VenueName = _cmbVenue.Text.Trim();
-        raceEvent.TrackLayoutName = _cmbLayout.Text.Trim();
-        raceEvent.Shape = SelectedShape;
-        raceEvent.QualifyingRounds = (int)_numQualRounds.Value;
 
-        raceEvent.FirstRaceLocalTime = _chkFirstRace.Checked ? _dtpFirstRace.Value : null;
-        raceEvent.OutByLocalTime = _chkOutBy.Checked ? _dtpOutBy.Value : null;
-        raceEvent.EntriesCloseLocalTime = _chkEntriesClose.Checked ? _dtpEntriesClose.Value : null;
-        raceEvent.DriversPerHeat = (int)_numHeatSize.Value;
-        raceEvent.FirstRoundSeeding = (FirstRoundSeeding)Math.Max(0, _cmbFirstRound.SelectedIndex);
-        raceEvent.ShareHeatsUnder = (int)_numShareUnder.Value;
-        raceEvent.RacesOffBetween = (int)_numRacesOff.Value;
-        raceEvent.EntryFee = _numEntryFee.Value;
-        raceEvent.ExtraClassFee = _numExtraFee.Value;
-
-        // Deliberately NOT re-derived from the shape here. It is set from the
-        // shape once, when the day is started (EventSpine.StartEvent); after
-        // that it is the director's to set, and a club night that does run a
-        // sign-on desk must be able to say so without the next keystroke
-        // undoing it.
-        raceEvent.CheckedInDriversOnly = _chkCheckedInOnly.Checked;
-        raceEvent.BetweenRacesPreset = _cmbGapPreset.SelectedItem is GapPresetChoice gap ? gap.Key : string.Empty;
+        // Everything a template keeps - see NightFields.WriteTo.
+        _fields.WriteTo(raceEvent);
 
         // Written onto the DAY, which is what takes it out of the club-wide
         // setting it used to be. Once written it is never null again for
@@ -2069,15 +1567,6 @@ public sealed partial class RaceDayEventControl : UserControl
             raceEvent.AutoAdvanceScope = scope.Scope;
             raceEvent.AutoAdvanceClassName = scope.ClassName;
         }
-
-        raceEvent.ClassNames = _lstClasses.CheckedItems
-            .Cast<object>()
-            .Select(item => item as string ?? string.Empty)
-            .Where(name => name.Length > 0)
-            .ToList();
-        raceEvent.ChampionshipId = _cmbChampionship.SelectedItem is SeasonChoice choice
-            ? choice.Season.Id
-            : string.Empty;
 
         return System.Text.Json.JsonSerializer.Serialize(raceEvent) != before;
     }

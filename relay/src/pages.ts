@@ -901,6 +901,8 @@ html.light .follow, html.light .toast { box-shadow: 0 8px 28px rgba(17, 21, 28, 
    class is f-checkered; only f-chequered had a rule and the finish bar stayed grey. */
 .flagbar.f-checkered, .flagbar.f-chequered { border-left-color: var(--accent); --flag: var(--accent); }
 html.light .flagbar.f-white { --flag: #8A90A0; }
+/* The warm-up flag (14 Nov 2026): the app's WarmUp, in the laptop's warm-up blue. */
+.flagbar.f-warmup { border-left-color: #4F8EF7; --flag: #4F8EF7; }
 .flagbar .lp-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
 .flagbar .lp-id { min-width: 0; }
 .flagbar .kick { display: flex; align-items: center; gap: 8px; color: var(--flag); font-size: 0.75rem; font-weight: 800;
@@ -6348,6 +6350,7 @@ let boardHtml = '';
 const LB_FLAG_WORDS = {
   green: 'Green flag', yellow: 'Caution', red: 'Red flag \\u00B7 stopped',
   white: 'White flag \\u00B7 last lap', checkered: 'Chequered flag', chequered: 'Chequered flag',
+  warmup: 'Warm-up \\u00B7 not counted',
 };
 
 // The leader's crossings, the start lap included (see posChart's lapsOf).
@@ -6424,13 +6427,16 @@ function drawBar(state, over, at, rows, mode) {
       + '<div class="lp-foot"><span>Lost touch with the track at ' + esc(whenSaid(at)) + '. The timing may be offline.</span></div>';
     return;
   }
+  // The warm-up flag (14 Nov 2026) runs between races - after one, the
+  // laptop still says Finished - and it is the news, not the race before.
+  if (String(state.flag || '').toLowerCase() === 'warmup') over = false;
   const flag = over ? 'checkered' : String(state.flag || 'None').toLowerCase();
   const running = String(state.state || 'Idle');
   bar.className = 'flagbar f-' + esc(flag) + (over ? ' over' : '');
   // Before the green there is no flag: the stage is named instead.
   const kick = over ? 'Chequered flag'
     : LB_FLAG_WORDS[flag] || (running === 'Staging' ? 'Get ready' : running === 'Countdown' ? 'Start sequence' : 'Race control');
-  const said = over ? 'Race over' : running === 'Idle' ? 'Not racing' : running;
+  const said = over ? 'Race over' : flag === 'warmup' ? 'Free laps' : running === 'Idle' ? 'Not racing' : running;
 
   const list = Array.isArray(rows) ? rows : [];
   const lead = list[0] && typeof list[0] === 'object' ? list[0] : null;

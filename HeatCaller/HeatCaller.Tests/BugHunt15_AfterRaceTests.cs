@@ -33,7 +33,7 @@ public sealed class BugHunt15_AfterRaceTests : IDisposable
         Laps = laps,
         ElapsedMs = 300_000 + (position * 450),
         FastLapMs = 24_000 + (position * 200),
-        Outcome = outcome,
+        Outcome = outcome ?? string.Empty,
     };
 
     private static SessionRecord Race(params SessionResultEntry[] rows)

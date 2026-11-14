@@ -190,7 +190,7 @@ public sealed partial class RaceControlControl
         // shown - see RaceControlControl.Morph. Under it, the hold strip,
         // which is always there so nothing moves when a hold starts.
         var flagBar = new ButtonBar(tight: true, sameWidth: true).With(
-            _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered,
+            _btnWarmUp, _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered,
             _btnBarSkip, _btnBarHoldTalk, _btnBarCallUp, _btnBarEditResult, _btnReset, _btnBarDesk);
 
         // After the flag (25 Oct 2026): Edit Result goes to Race History.
@@ -242,13 +242,15 @@ public sealed partial class RaceControlControl
         // the Columns button are Advanced - see SimpleMode.
         // Auto start (11 Nov 2026) shows in Simple mode too: it decides
         // whether races start themselves, which a volunteer has to see.
-        var footer = new ButtonBar().With(SimpleMode.Hide(_chkStartWithOnAir), _swAutoStart, _btnFormat, SimpleMode.Hide(btnColumns));
+        // Warm-up first (14 Nov 2026) beside Start races: both say how a race
+        // starts, and both are Advanced.
+        var footer = new ButtonBar().With(SimpleMode.Hide(_chkStartWithOnAir), SimpleMode.Hide(_swWarmUpFirst), _swAutoStart, _btnFormat, SimpleMode.Hide(btnColumns));
 
         // The switches are shorter than the buttons beside them; the bar lines
         // everything up along the top, so they are brought down to their middle.
         footer.Layout += (_, _) =>
         {
-            foreach (var control in new Control[] { _chkStartWithOnAir, _swAutoStart })
+            foreach (var control in new Control[] { _chkStartWithOnAir, _swWarmUpFirst, _swAutoStart })
             {
                 var drop = Math.Max(0, (_btnFormat.Height - control.Height) / 2);
                 var margin = control.Margin;
@@ -723,6 +725,10 @@ public sealed partial class RaceControlControl
     /// </summary>
     private void BuildStageButton()
     {
+        // Warm-up (14 Nov 2026), left of Stage - see PressWarmUp.
+        _btnWarmUp.Text = "Warm-up";
+        _btnWarmUp.Click += (_, _) => PressWarmUp();
+
         _btnStage.Text = "Stage";
         _actStage = (confirmedOverRunningRace, restoreHostOnUndo) =>
         {
@@ -754,6 +760,12 @@ public sealed partial class RaceControlControl
             {
                 return;
             }
+
+            // This Stage is the end of a warm-up (14 Nov 2026): the start
+            // runs on into the countdown whatever the format's auto-advance
+            // says - warm-up, staging, countdown. Read now, before anything
+            // below could clear it.
+            var afterWarmUp = _warmUpJustFinished;
 
             // The state Stage was pressed in, read before ending a demo can
             // move it - see RaceKindAfterStage below.
@@ -828,7 +840,7 @@ public sealed partial class RaceControlControl
             // queued ahead of it - has finished speaking. Driven by the
             // audio rather than a timer, so the sequence always follows the
             // announcements instead of talking over them or leaving dead air.
-            if (_fmt.AutoAdvance)
+            if (_fmt.AutoAdvance || afterWarmUp)
             {
                 ChainAfterAudio(RaceState.Staging, () => _actCountdown?.Invoke(false), null, _fmt.StagingSeconds);
             }
@@ -1533,6 +1545,9 @@ public sealed partial class RaceControlControl
         // F1 is the START key now, not this button's (17 Oct 2026): through
         // On Air when Start races On Air is ticked. This button stages
         // straight away, as it always has. See TriggerStart.
+        shortcutTips.SetToolTip(_btnWarmUp,
+            "The warm-up flag: free laps, not counted, for the format's warm-up (two minutes if it has none), "
+            + "then Stage and the countdown. Press again during it to skip the rest and stage now.");
         shortcutTips.SetToolTip(_btnStage,
             "Stages the race now, without On Air. F1 is the normal start: through On Air when "
             + "Start races On Air is ticked (" + OnAirSkipNote + ").");
@@ -1596,7 +1611,7 @@ public sealed partial class RaceControlControl
         // re-start a race that is already running - and the focus ring it
         // draws over a flag colour looks like a fault besides.
         AppTheme.ReleaseFocusAfterClick(
-            _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered,
+            _btnWarmUp, _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered,
             _btnBarSkip, _btnBarHoldTalk, _btnBarCallUp, _btnBarEditResult, _btnReset, _btnBarDesk);
 
         // The chip wraps to the card's width - the value can run long - and
