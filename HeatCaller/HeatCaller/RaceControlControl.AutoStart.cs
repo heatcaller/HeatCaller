@@ -538,15 +538,31 @@ public sealed partial class RaceControlControl
     /// <summary>What the Next Up bar adds after the next race: "starts in 1:42". Empty with Auto start not counting.</summary>
     private string AutoStartWords(DateTime now) =>
         AutoStartOn && _autoStart.IsOpen
-            ? AutoStartClock.Words(_autoStartState, _autoStart.Remaining(now, Gap.PushedBackMinutes), _autoStart.NotSeen, _autoStart.Resting,
+            ? AutoStartClock.Words(_autoStartState, ToTheGreen(_autoStart.Remaining(now, Gap.PushedBackMinutes)), _autoStart.NotSeen, _autoStart.Resting,
                 _autoStart.StartsAtUtc(now, Gap.PushedBackMinutes))
             : string.Empty;
 
     /// <summary>What the Big Screen's countdown band shows between races: "NEXT RACE IN 1:42", "NEXT RACE AT 20:40". Empty with Auto start not counting.</summary>
     private string AutoStartBand(DateTime now) =>
         AutoStartOn && _autoStart.IsOpen
-            ? AutoStartClock.Band(_autoStartState, _autoStart.Remaining(now, Gap.PushedBackMinutes), _autoStart.StartsAtUtc(now, Gap.PushedBackMinutes))
+            ? AutoStartClock.Band(_autoStartState, ToTheGreen(_autoStart.Remaining(now, Gap.PushedBackMinutes)), _autoStart.StartsAtUtc(now, Gap.PushedBackMinutes))
             : string.Empty;
+
+    /// <summary>
+    /// The gap's clock, carried on to the green (14 Nov 2026): Auto start's
+    /// clock runs out when it starts the race, and a race that opens with a
+    /// warm-up gets its green that much later. Only while the gap is
+    /// counting - a race waiting for the time drivers were given keeps that
+    /// time ("NEXT RACE AT 20:40"), which is when its warm-up opens.
+    /// </summary>
+    private TimeSpan? ToTheGreen(TimeSpan? remaining) =>
+        _autoStartState == AutoStartState.Counting && remaining is { } left ? left + WarmUpAhead() : remaining;
+
+    /// <summary>The warm-up the next race will open with when it starts - none when it won't open one.</summary>
+    private TimeSpan WarmUpAhead() =>
+        _race.IsPracticeMode
+            ? TimeSpan.Zero
+            : TimeSpan.FromSeconds(Math.Max(0, WarmUpSecondsFor(EffectiveFormat(out _).WarmUpSeconds, StartWithWarmUp)));
 
     /// <summary>
     /// Each round's estimated start, "about 20:42" (NightPlan.AboutOf, the
