@@ -105,6 +105,37 @@ internal static class DialogFit
 
         Fittings.AddOrUpdate(dialog, new Fitting(page, width, height, body, widthMeasured));
         dialog.Load += (_, _) => Fit(dialog);
+        RevealWhenPainted(dialog);
+    }
+
+    /// <summary>
+    /// The dialog opens see-through and is made visible once it has painted,
+    /// as the main window is (MainForm, Opacity) - so its first frame on
+    /// screen is never the blank white Windows shows before a window's
+    /// first paint (14 Nov 2026, Asher: "when it opens it flashes white").
+    ///
+    /// After Shown's own handlers (posted), so whatever a dialog does as it
+    /// comes up is in that first painting too. A dialog that sets its own
+    /// opacity is left alone.
+    /// </summary>
+    internal static void RevealWhenPainted(Form dialog)
+    {
+        if (dialog.Opacity < 1d)
+        {
+            return;
+        }
+
+        dialog.Opacity = 0d;
+        dialog.Shown += (_, _) => dialog.BeginInvoke(() =>
+        {
+            if (dialog.IsDisposed)
+            {
+                return;
+            }
+
+            dialog.Refresh();
+            dialog.Opacity = 1d;
+        });
     }
 
     /// <summary>

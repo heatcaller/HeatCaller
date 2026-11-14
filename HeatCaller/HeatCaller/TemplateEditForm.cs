@@ -81,186 +81,208 @@ internal sealed class TemplateEditForm : Form
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterParent;
 
-        // --- The night ---
-        _txtName.Text = template.Name;
-        _cmbShape.Items.Add("Race day - heats, then finals");
-        _cmbShape.Items.Add("Club night - just races");
-        _cmbShape.SelectedIndex = template.Shape == RaceDayShape.ClubNight ? 1 : 0;
+        // Built with its layout held, and laid out once when it is sized -
+        // see LayoutFreeze.HoldWhileBuilding, and the Setup Sheet, which does
+        // the same. Built live, five cards of fields laid themselves out
+        // again for every field added and every face the theme pass
+        // changed: 1.4 to 3 seconds to open (14 Nov 2026).
+        PageStack body;
+        FillPage page;
 
-        foreach (var venue in venues)
+        using (LayoutFreeze.HoldWhileBuilding())
         {
-            _cmbVenue.Items.Add(venue);
+            // --- The night ---
+            _txtName.Text = template.Name;
+            _cmbShape.Items.Add("Race day - heats, then finals");
+            _cmbShape.Items.Add("Club night - just races");
+            _cmbShape.SelectedIndex = template.Shape == RaceDayShape.ClubNight ? 1 : 0;
+
+            foreach (var venue in venues)
+            {
+                _cmbVenue.Items.Add(venue);
+            }
+
+            foreach (var layout in layouts)
+            {
+                _cmbLayout.Items.Add(layout);
+            }
+
+            _cmbVenue.Text = template.VenueName;
+            _cmbLayout.Text = template.TrackLayoutName;
+
+            _cmbChampionship.Items.Add(new Choice(string.Empty, "(standalone - no championship)"));
+
+            foreach (var season in seasons)
+            {
+                _cmbChampionship.Items.Add(new Choice(season.Id, season.Name));
+            }
+
+            _cmbChampionship.SelectedIndex = Math.Max(0, _cmbChampionship.Items.Cast<Choice>().ToList().FindIndex(c => c.Key == (template.ChampionshipId ?? string.Empty)));
+
+            var nightGrid = new FieldGrid();
+            nightGrid.AddRow("Name:", _txtName);
+            nightGrid.AddRow("What kind of night:", _cmbShape);
+            nightGrid.AddRow("Venue:", _cmbVenue);
+            nightGrid.AddRow("Track layout:", _cmbLayout);
+            nightGrid.AddRow("Championship:", _cmbChampionship);
+            nightGrid.AddHint(RaceDayEventControl.ChampionshipHint);
+
+            // --- Times ---
+            Time(_dtpEntriesClose, _chkEntriesClose, template.EntriesCloseLocalTime, TimeSpan.FromHours(18.5));
+            Time(_dtpFirstRace, _chkFirstRace, template.FirstRaceLocalTime, TimeSpan.FromHours(10));
+            Time(_dtpOutBy, _chkOutBy, template.OutByLocalTime, TimeSpan.FromHours(22));
+
+            var btnBreaks = new Button { Text = "Breaks...", AutoSize = true };
+            btnBreaks.Click += (_, _) => EditBreaks();
+            ShowBreaks();
+
+            var timesGrid = new FieldGrid();
+            timesGrid.AddRow("Entries close at:", FieldGrid.Inline(_dtpEntriesClose, _chkEntriesClose));
+            timesGrid.AddRow("First race at:", FieldGrid.Inline(_dtpFirstRace, _chkFirstRace));
+            timesGrid.AddRow("Out of the venue by:", FieldGrid.Inline(_dtpOutBy, _chkOutBy));
+            timesGrid.AddRow("Breaks:", FieldGrid.Inline(_lblBreaks, btnBreaks));
+
+            // --- Heats ---
+            foreach (var name in classes)
+            {
+                _lstClasses.Items.Add(name, template.ClassNames.Contains(name, StringComparer.OrdinalIgnoreCase));
+            }
+
+            // A class the template names that the club no longer has stays
+            // listed, ticked, so saving doesn't drop it without saying.
+            foreach (var name in template.ClassNames.Where(n => !classes.Contains(n, StringComparer.OrdinalIgnoreCase)))
+            {
+                _lstClasses.Items.Add(name, true);
+            }
+
+            _numRounds.Value = Math.Clamp(template.QualifyingRounds > 0 ? template.QualifyingRounds : 3, 1, 10);
+            _numHeatSize.Value = Math.Clamp(template.DriversPerHeat > 0 ? template.DriversPerHeat : 8, 2, 20);
+
+            foreach (var mode in Enum.GetValues<FirstRoundSeeding>())
+            {
+                _cmbFirstRound.Items.Add(FirstRound.Words(mode));
+            }
+
+            _cmbFirstRound.SelectedIndex = Math.Clamp((int)template.FirstRoundSeeding, 0, _cmbFirstRound.Items.Count - 1);
+            _numShareUnder.Value = Math.Clamp(template.ShareHeatsUnder, 0, 19);
+            _numRacesOff.Value = Math.Clamp(template.RacesOffBetween, 0, RestOrder.MostGap);
+            _chkCheckedInOnly.Checked = template.CheckedInDriversOnly;
+
+            var heatsGrid = new FieldGrid();
+            var lblRounds = heatsGrid.AddRow("Heats each driver gets:", _numRounds);
+            heatsGrid.AddRow("Classes racing:", _lstClasses);
+            heatsGrid.AddRow("Drivers per heat:", _numHeatSize);
+            heatsGrid.AddRow("First round seeded:", _cmbFirstRound);
+            heatsGrid.AddRow("Share a heat under (drivers):", _numShareUnder);
+            heatsGrid.AddRow(RaceDayEventControl.RacesOffCaption, _numRacesOff);
+            heatsGrid.AddField(_chkCheckedInOnly);
+            heatsGrid.AddHint("The running order is kept from the night the template was saved from; change it on Tonight once a night is started.");
+
+            // --- Money ---
+            _numEntryFee.Value = Math.Clamp(template.EntryFee, 0, 10000);
+            _numExtraFee.Value = Math.Clamp(template.ExtraClassFee, 0, 10000);
+
+            var moneyGrid = new FieldGrid();
+            moneyGrid.AddRow("Entry fee:", _numEntryFee);
+            moneyGrid.AddRow("Each extra class:", _numExtraFee);
+
+            // --- Running the night ---
+            _cmbGapPreset.Items.Add(new Choice(string.Empty, "The club's Between races settings"));
+
+            foreach (var preset in GapPreset.All)
+            {
+                _cmbGapPreset.Items.Add(new Choice(preset.Key, preset.Name));
+            }
+
+            _cmbGapPreset.SelectedIndex = Math.Max(0, _cmbGapPreset.Items.Cast<Choice>().ToList().FindIndex(c => c.Key == (template.BetweenRacesPreset ?? string.Empty)));
+
+            var runGrid = new FieldGrid();
+            runGrid.AddRow("Between-race talk:", _cmbGapPreset);
+
+            body = new PageStack();
+            body.Add(Card("The night", nightGrid));
+            body.Add(Card("Times", timesGrid));
+            body.Add(Card("Heats", heatsGrid));
+            body.Add(Card("Money", moneyGrid));
+            body.Add(Card("Running the night", runGrid), gapBelow: 0);
+
+            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
+            var btnSave = new Button { Text = "Save", AutoSize = true };
+            btnSave.Click += (_, _) => Save();
+
+            _lblForecast.ForeColor = AppTheme.TextMuted;
+            _lblProblem.ForeColor = AppTheme.Danger;
+
+            page = new FillPage();
+            page.AddFill(body, 200, gapBelow: UiLayout.RowGap);
+            page.Add(_lblForecast, stretch: true, gapBelow: UiLayout.HintGap);
+            page.Add(_lblProblem, stretch: true, gapBelow: UiLayout.HintGap);
+            page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
+
+            Controls.Add(page);
+            AcceptButton = btnSave;
+            CancelButton = btnCancel;
+
+            AppTheme.ApplyRecursively(this);
+            AppTheme.StyleButton(btnSave, AppTheme.ButtonKind.Primary);
+
+            FieldGrid.LineUp(new[] { nightGrid, timesGrid, heatsGrid, moneyGrid, runGrid }, RaceDayEventControl.RacesOffCaption);
+
+            var wide = UiLayout.AtTextSize(300);
+            _txtName.Width = wide;
+
+            // Each drop-down as wide as its longest choice, never narrower than
+            // the name box - measured, as Tonight's are (Pieces.PickerWidth).
+            foreach (var combo in new[] { _cmbShape, _cmbVenue, _cmbLayout, _cmbChampionship, _cmbFirstRound, _cmbGapPreset })
+            {
+                (Font Font, int Count, int Width)? measured = null;
+                combo.Width = Math.Max(wide, Pieces.PickerWidth(combo, ref measured));
+            }
+
+            _lstClasses.Size = new Size(wide, _lstClasses.Font.Height * 6 + 12);
+
+            foreach (var number in new Control[] { _numRounds, _numHeatSize, _numShareUnder, _numRacesOff, _numEntryFee, _numExtraFee })
+            {
+                number.Width = UiLayout.AtTextSize(90);
+            }
+
+            // The rounds caption follows the kind of night, as Tonight's does.
+            void Worded() => lblRounds.Text = _cmbShape.SelectedIndex == 1 ? "Races each driver gets:" : "Heats each driver gets:";
+            _cmbShape.SelectedIndexChanged += (_, _) => { Worded(); ShowForecast(); };
+            Worded();
+
+            // The forecast follows every change that moves it.
+            _lstClasses.ItemCheck += (_, _) => BeginInvoke(ShowForecast);
+            foreach (var number in new[] { _numRounds, _numHeatSize })
+            {
+                number.ValueChanged += (_, _) => ShowForecast();
+            }
+
+            foreach (var picker in new[] { _dtpFirstRace, _dtpOutBy })
+            {
+                picker.ValueChanged += ShowForecast;
+            }
+
+            foreach (var tick in new[] { _chkFirstRace, _chkOutBy, _chkEntriesClose })
+            {
+                tick.CheckedChanged += (_, _) => { FollowTicks(); ShowForecast(); };
+            }
+
+            FollowTicks();
+            ShowForecast();
         }
-
-        foreach (var layout in layouts)
-        {
-            _cmbLayout.Items.Add(layout);
-        }
-
-        _cmbVenue.Text = template.VenueName;
-        _cmbLayout.Text = template.TrackLayoutName;
-
-        _cmbChampionship.Items.Add(new Choice(string.Empty, "(standalone - no championship)"));
-
-        foreach (var season in seasons)
-        {
-            _cmbChampionship.Items.Add(new Choice(season.Id, season.Name));
-        }
-
-        _cmbChampionship.SelectedIndex = Math.Max(0, _cmbChampionship.Items.Cast<Choice>().ToList().FindIndex(c => c.Key == (template.ChampionshipId ?? string.Empty)));
-
-        var nightGrid = new FieldGrid();
-        nightGrid.AddRow("Name:", _txtName);
-        nightGrid.AddRow("What kind of night:", _cmbShape);
-        nightGrid.AddRow("Venue:", _cmbVenue);
-        nightGrid.AddRow("Track layout:", _cmbLayout);
-        nightGrid.AddRow("Championship:", _cmbChampionship);
-
-        // --- Times ---
-        Time(_dtpEntriesClose, _chkEntriesClose, template.EntriesCloseLocalTime, TimeSpan.FromHours(18.5));
-        Time(_dtpFirstRace, _chkFirstRace, template.FirstRaceLocalTime, TimeSpan.FromHours(10));
-        Time(_dtpOutBy, _chkOutBy, template.OutByLocalTime, TimeSpan.FromHours(22));
-
-        var btnBreaks = new Button { Text = "Breaks...", AutoSize = true };
-        btnBreaks.Click += (_, _) => EditBreaks();
-        ShowBreaks();
-
-        var timesGrid = new FieldGrid();
-        timesGrid.AddRow("Entries close at:", FieldGrid.Inline(_dtpEntriesClose, _chkEntriesClose));
-        timesGrid.AddRow("First race at:", FieldGrid.Inline(_dtpFirstRace, _chkFirstRace));
-        timesGrid.AddRow("Out of the venue by:", FieldGrid.Inline(_dtpOutBy, _chkOutBy));
-        timesGrid.AddRow("Breaks:", FieldGrid.Inline(_lblBreaks, btnBreaks));
-
-        // --- Heats ---
-        foreach (var name in classes)
-        {
-            _lstClasses.Items.Add(name, template.ClassNames.Contains(name, StringComparer.OrdinalIgnoreCase));
-        }
-
-        // A class the template names that the club no longer has stays
-        // listed, ticked, so saving doesn't drop it without saying.
-        foreach (var name in template.ClassNames.Where(n => !classes.Contains(n, StringComparer.OrdinalIgnoreCase)))
-        {
-            _lstClasses.Items.Add(name, true);
-        }
-
-        _numRounds.Value = Math.Clamp(template.QualifyingRounds > 0 ? template.QualifyingRounds : 3, 1, 10);
-        _numHeatSize.Value = Math.Clamp(template.DriversPerHeat > 0 ? template.DriversPerHeat : 8, 2, 20);
-
-        foreach (var mode in Enum.GetValues<FirstRoundSeeding>())
-        {
-            _cmbFirstRound.Items.Add(FirstRound.Words(mode));
-        }
-
-        _cmbFirstRound.SelectedIndex = Math.Clamp((int)template.FirstRoundSeeding, 0, _cmbFirstRound.Items.Count - 1);
-        _numShareUnder.Value = Math.Clamp(template.ShareHeatsUnder, 0, 19);
-        _numRacesOff.Value = Math.Clamp(template.RacesOffBetween, 0, RestOrder.MostGap);
-        _chkCheckedInOnly.Checked = template.CheckedInDriversOnly;
-
-        var heatsGrid = new FieldGrid();
-        var lblRounds = heatsGrid.AddRow("Heats each driver gets:", _numRounds);
-        heatsGrid.AddRow("Classes racing:", _lstClasses);
-        heatsGrid.AddRow("Drivers per heat:", _numHeatSize);
-        heatsGrid.AddRow("First round seeded:", _cmbFirstRound);
-        heatsGrid.AddRow("Share a heat under (drivers):", _numShareUnder);
-        heatsGrid.AddRow(RaceDayEventControl.RacesOffCaption, _numRacesOff);
-        heatsGrid.AddField(_chkCheckedInOnly);
-        heatsGrid.AddHint("The running order is kept from the night the template was saved from; change it on Tonight once a night is started.");
-
-        // --- Money ---
-        _numEntryFee.Value = Math.Clamp(template.EntryFee, 0, 10000);
-        _numExtraFee.Value = Math.Clamp(template.ExtraClassFee, 0, 10000);
-
-        var moneyGrid = new FieldGrid();
-        moneyGrid.AddRow("Entry fee:", _numEntryFee);
-        moneyGrid.AddRow("Each extra class:", _numExtraFee);
-
-        // --- Running the night ---
-        _cmbGapPreset.Items.Add(new Choice(string.Empty, "The club's Between races settings"));
-
-        foreach (var preset in GapPreset.All)
-        {
-            _cmbGapPreset.Items.Add(new Choice(preset.Key, preset.Name));
-        }
-
-        _cmbGapPreset.SelectedIndex = Math.Max(0, _cmbGapPreset.Items.Cast<Choice>().ToList().FindIndex(c => c.Key == (template.BetweenRacesPreset ?? string.Empty)));
-
-        var runGrid = new FieldGrid();
-        runGrid.AddRow("Between-race talk:", _cmbGapPreset);
-
-        var body = new PageStack();
-        body.Add(Card("The night", nightGrid));
-        body.Add(Card("Times", timesGrid));
-        body.Add(Card("Heats", heatsGrid));
-        body.Add(Card("Money", moneyGrid));
-        body.Add(Card("Running the night", runGrid), gapBelow: 0);
-
-        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
-        var btnSave = new Button { Text = "Save", AutoSize = true };
-        btnSave.Click += (_, _) => Save();
-
-        _lblForecast.ForeColor = AppTheme.TextMuted;
-        _lblProblem.ForeColor = AppTheme.Danger;
-
-        var page = new FillPage();
-        page.AddFill(body, 200, gapBelow: UiLayout.RowGap);
-        page.Add(_lblForecast, stretch: true, gapBelow: UiLayout.HintGap);
-        page.Add(_lblProblem, stretch: true, gapBelow: UiLayout.HintGap);
-        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
-
-        Controls.Add(page);
-        AcceptButton = btnSave;
-        CancelButton = btnCancel;
-
-        AppTheme.ApplyRecursively(this);
-        AppTheme.StyleButton(btnSave, AppTheme.ButtonKind.Primary);
-
-        FieldGrid.LineUp(new[] { nightGrid, timesGrid, heatsGrid, moneyGrid, runGrid }, RaceDayEventControl.RacesOffCaption);
-
-        var wide = UiLayout.AtTextSize(300);
-        _txtName.Width = wide;
-
-        // Each drop-down as wide as its longest choice, never narrower than
-        // the name box - measured, as Tonight's are (Pieces.PickerWidth).
-        foreach (var combo in new[] { _cmbShape, _cmbVenue, _cmbLayout, _cmbChampionship, _cmbFirstRound, _cmbGapPreset })
-        {
-            (Font Font, int Count, int Width)? measured = null;
-            combo.Width = Math.Max(wide, Pieces.PickerWidth(combo, ref measured));
-        }
-
-        _lstClasses.Size = new Size(wide, _lstClasses.Font.Height * 6 + 12);
-
-        foreach (var number in new Control[] { _numRounds, _numHeatSize, _numShareUnder, _numRacesOff, _numEntryFee, _numExtraFee })
-        {
-            number.Width = UiLayout.AtTextSize(90);
-        }
-
-        // The rounds caption follows the kind of night, as Tonight's does.
-        void Worded() => lblRounds.Text = _cmbShape.SelectedIndex == 1 ? "Races each driver gets:" : "Heats each driver gets:";
-        _cmbShape.SelectedIndexChanged += (_, _) => { Worded(); ShowForecast(); };
-        Worded();
-
-        // The forecast follows every change that moves it.
-        _lstClasses.ItemCheck += (_, _) => BeginInvoke(ShowForecast);
-        foreach (var number in new[] { _numRounds, _numHeatSize })
-        {
-            number.ValueChanged += (_, _) => ShowForecast();
-        }
-
-        foreach (var picker in new[] { _dtpFirstRace, _dtpOutBy })
-        {
-            picker.ValueChanged += ShowForecast;
-        }
-
-        foreach (var tick in new[] { _chkFirstRace, _chkOutBy, _chkEntriesClose })
-        {
-            tick.CheckedChanged += (_, _) => { FollowTicks(); ShowForecast(); };
-        }
-
-        FollowTicks();
-        ShowForecast();
 
         DialogFit.Keep(this, page, width: 760, height: 720, body: body);
+
+        // Held until DialogFit has sized the window, then laid out once at
+        // that size, children first - as the Setup Sheet is.
+        LayoutFreeze.Freeze(page);
+
+        // Opened with the name not highlighted: it selects all as it takes
+        // the focus. On Shown - after the focus has gone to it - and before
+        // DialogFit makes the window visible, so it is never seen that way.
+        // (Venue and Track layout: AppTheme.StyleComboBox.)
+        Shown += (_, _) => _txtName.Select(_txtName.TextLength, 0);
     }
 
     private static Section Card(string caption, FieldGrid grid)

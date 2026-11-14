@@ -170,7 +170,11 @@ internal sealed class LayoutList : ListBox
         var width = Math.Max(1, row.Right - x - pad);
         var textHeight = AppTheme.BoldFont.Height + AppTheme.SmallFont.Height + UiLayout.AtDpi(2);
         var y = row.Y + (row.Height - textHeight) / 2;
-        const TextFormatFlags line = TextFormatFlags.Left | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis;
+        // The off-screen buffer moves its drawing by the row's top-left;
+        // TextRenderer ignores that unless told, and every row but the first
+        // drew its text off the buffer - blank (14 Nov 2026).
+        const TextFormatFlags keep = TextFormatFlags.PreserveGraphicsTranslateTransform | TextFormatFlags.PreserveGraphicsClipping;
+        const TextFormatFlags line = TextFormatFlags.Left | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis | keep;
 
         var tonightWidth = 0;
 
@@ -188,7 +192,7 @@ internal sealed class LayoutList : ListBox
             }
 
             TextRenderer.DrawText(g, tonight, AppTheme.MicroFont, Rectangle.Round(chip), AppTheme.Success,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | keep);
         }
 
         TextRenderer.DrawText(g, entry.Name, AppTheme.BoldFont,

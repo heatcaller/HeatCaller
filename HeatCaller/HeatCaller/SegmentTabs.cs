@@ -65,13 +65,14 @@ internal sealed class SegmentTabs : Control
 
     private void SyncAccessible() => AccessibleName = _items[_selected];
 
-    private int SegmentPad => UiLayout.AtDpi(16);
+    private int SegmentPad => UiLayout.AtDpi(14);
     private int VerticalPad => UiLayout.AtDpi(6);
 
     private Size Measure(string text) =>
         TextRenderer.MeasureText(text, Font, Size.Empty, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
 
-    private int SegmentWidth(int index) => Measure(_items[index]).Width + SegmentPad * 2;
+    /// <summary>Every segment as wide as the widest caption, as SegmentedSwitch's two are.</summary>
+    private int SegmentWidth(int index) => _items.Max(item => Measure(item).Width) + SegmentPad * 2;
 
     public override Size GetPreferredSize(Size proposedSize)
     {
@@ -154,28 +155,17 @@ internal sealed class SegmentTabs : Control
                 var clip = g.Clip;
                 g.SetClip(path, CombineMode.Intersect);
 
+                // Who's Racing's Roster / Desk mode look (14 Nov 2026, Asher):
+                // the chosen segment in the quiet secondary fill, not pink.
                 if (Enabled && _hot >= 0 && _hot != _selected)
                 {
-                    using var hover = new SolidBrush(AppTheme.SecondaryButtonHover);
+                    using var hover = new SolidBrush(RosterInk.Blend(AppTheme.SecondaryButtonHover, AppTheme.Surface, 0.5f));
                     g.FillRectangle(hover, Segment(_hot));
                 }
 
-                using (var fill = new SolidBrush(Enabled ? AppTheme.Primary : AppTheme.Border))
+                using (var fill = new SolidBrush(Enabled ? AppTheme.SecondaryButton : AppTheme.Border))
                 {
                     g.FillRectangle(fill, Segment(_selected));
-                }
-
-                // A hairline between segments that aren't chosen.
-                using (var divider = new Pen(AppTheme.Border, line))
-                {
-                    for (var i = 1; i < _items.Length; i++)
-                    {
-                        if (i != _selected && i - 1 != _selected)
-                        {
-                            var x = Segment(i).X + 0.5f;
-                            g.DrawLine(divider, x, Height * 0.25f, x, Height * 0.75f);
-                        }
-                    }
                 }
 
                 g.Clip = clip;
@@ -187,7 +177,7 @@ internal sealed class SegmentTabs : Control
 
             for (var i = 0; i < _items.Length; i++)
             {
-                var colour = i == _selected ? AppTheme.OnPrimary : Enabled ? AppTheme.TextDark : AppTheme.TextMuted;
+                var colour = i == _selected && Enabled ? AppTheme.TextDark : AppTheme.TextMuted;
 
                 TextRenderer.DrawText(g, _items[i], Font, Segment(i), colour,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);

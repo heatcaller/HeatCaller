@@ -355,7 +355,7 @@ public sealed partial class RaceDayEventControl
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Delete...", null, (_, _) => DeleteTemplate(template));
         menu.Closed += (_, _) => BeginInvoke(menu.Dispose);
-        AppTheme.ApplyRecursively(menu);
+        AppTheme.StyleContextMenu(menu);
         return menu;
     }
 
@@ -376,7 +376,7 @@ public sealed partial class RaceDayEventControl
         }
 
         menu.Closed += (_, _) => BeginInvoke(menu.Dispose);
-        AppTheme.ApplyRecursively(menu);
+        AppTheme.StyleContextMenu(menu);
         menu.Show(_btnPastNights, new Point(0, _btnPastNights.Height));
     }
 
