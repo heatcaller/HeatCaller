@@ -55,6 +55,9 @@ public sealed class AnnouncerForm : Form
 
     public AnnouncerForm(AnnouncerControl announcer)
     {
+        // Seen only once painted - see DialogFit.RevealWhenPainted.
+        DialogFit.RevealWhenPainted(this);
+
         _announcer = announcer;
 
         Text = "Announcer";

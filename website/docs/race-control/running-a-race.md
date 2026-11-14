@@ -44,7 +44,7 @@ Once a race is finished, the row is for the gap before the next one: what the an
 | **Edit Result** | Opens the race just run in **Race History** with **Edit Result** open. | |
 | **Reset** | Press and hold, as always. Takes the row back to the set before the green. | <kbd>F7</kbd> |
 
-**Desk** is the one button that follows the desk rather than the race. It's cyan, at the end of the row, and only there while drivers' requests from their phones are waiting, with a red badge saying how many. Click it to open **Driver Requests** and approve or decline them. When the last one is answered it goes, and the other buttons close up again. With a full row on a narrow window it goes on a line of its own and the card grows to hold it.
+**Requests** is the one button that follows the desk rather than the race. It's cyan, at the end of the row, and only there while drivers' requests from their phones are waiting, with a red badge saying how many. Click it to open **Driver Requests** and approve or decline them. When the last one is answered it goes, and the other buttons close up again. With a full row on a narrow window it goes on a line of its own and the card grows to hold it.
 
 **Next Heat** and **Results** used to be on this row. **Next Heat** did what **Start Next** on the Next Up bar does, and **Results** opened the same race as **Edit Result**, so both went on 31 Oct 2026 to make room. What the gap says, and how often, is set on the **Between races** card (see [Between races](../announcer/commentary.md#between-races)). To keep the old row (**Edit Result** and **Reset**, with **Stage** when nothing is next in the program), untick **Show Skip, Hold Talk and Call Up on the flag row after the flag** on that card. The keys work either way.
 

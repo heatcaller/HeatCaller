@@ -53,6 +53,9 @@ public sealed class HandScoringForm : Form
         Func<IReadOnlyList<HandScoring.Addable>>? addable = null,
         Func<string, string?>? add = null)
     {
+        // Seen only once painted - see DialogFit.RevealWhenPainted.
+        DialogFit.RevealWhenPainted(this);
+
         _cars = cars;
         _lap = lap;
         _isOn = isOn;

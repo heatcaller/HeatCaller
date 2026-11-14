@@ -504,7 +504,11 @@ public sealed class SeasonsControl : UserControl
         var x = card.X + pad;
         var width = Math.Max(1, card.Width - pad * 2);
         var y = card.Y + UiLayout.AtDpi(9);
-        const TextFormatFlags line = TextFormatFlags.Left | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis;
+        // The off-screen buffer moves its drawing by the card's top-left;
+        // TextRenderer ignores that unless told, and every card but the first
+        // drew its text off the buffer - blank (14 Nov 2026).
+        const TextFormatFlags line = TextFormatFlags.Left | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis
+            | TextFormatFlags.PreserveGraphicsTranslateTransform | TextFormatFlags.PreserveGraphicsClipping;
 
         TextRenderer.DrawText(g, item.Season.Name, AppTheme.BoldFont, new Rectangle(x, y, width, AppTheme.BoldFont.Height),
             item.Finished && !selected ? AppTheme.TextMuted : AppTheme.TextDark, line);

@@ -127,6 +127,17 @@ public sealed partial class RaceDayEventControl : UserControl
     /// <summary>The rest gap's row (setup plan step 8) - RaceEvent.RacesOffBetween.</summary>
     internal const string RacesOffCaption = "Races off between a driver's races:";
 
+    /// <summary>
+    /// Under Championship:, on Tonight and in the template editor (14 Nov
+    /// 2026, Asher). A club with a championship per class read the one pick
+    /// as where the night's points went; a championship's own class rule
+    /// takes its races whatever is picked here (EventSpine.RuleAccepts), and
+    /// the pick only enters the night into one counting picked race days.
+    /// </summary>
+    internal const string ChampionshipHint =
+        "A championship that adds new races automatically scores its own class from every night, whatever is picked here - so one per class all count from the same night. "
+        + "Pick one only to enter this night into a championship that counts just the race days it's given.";
+
     /// <summary>The marshal rule's row (setup plan step 8) - AppSettings.MarshalNoShowRule.</summary>
     internal const string MarshalRuleCaption = "A marshal who doesn't turn up:";
 
@@ -490,6 +501,7 @@ public sealed partial class RaceDayEventControl : UserControl
 
         _cmbChampionship.DropDownStyle = ComboBoxStyle.DropDownList;
         nightGrid.AddRow("Championship:", _cmbChampionship);
+        nightGrid.AddHint(ChampionshipHint);
 
         // Tell the drivers (12 Nov 2026, setup plan D13).
         nightGrid.AddRow("Next night on phones:", BuildNextNightRow());

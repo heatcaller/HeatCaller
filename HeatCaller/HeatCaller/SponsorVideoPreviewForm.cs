@@ -31,6 +31,9 @@ internal sealed class SponsorVideoPreviewForm : Form
 
     internal SponsorVideoPreviewForm(string path)
     {
+        // Seen only once painted - see DialogFit.RevealWhenPainted.
+        DialogFit.RevealWhenPainted(this);
+
         _path = path;
 
         Text = "Preview - " + Path.GetFileName(path);

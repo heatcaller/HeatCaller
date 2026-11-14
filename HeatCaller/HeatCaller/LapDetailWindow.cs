@@ -101,6 +101,9 @@ public sealed class LapDetailWindow : Form
     public LapDetailWindow(string transponder, string driverName, string subtitle, int streakThreshold, int slot, int rows,
         Func<Keys, bool>? raceKey = null)
     {
+        // Seen only once painted - see DialogFit.RevealWhenPainted.
+        DialogFit.RevealWhenPainted(this);
+
         Transponder = transponder;
         Slot = slot;
         _raceKey = raceKey;

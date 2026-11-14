@@ -144,7 +144,7 @@ public sealed class DeskButtonTests
                 new Button { Text = "Reset" },
             };
 
-            var desk = new FlagButton { Text = "Desk", FlagColour = RaceControlControl.DeskCyan, Lit = true, Visible = false };
+            var desk = new FlagButton { Text = "Requests", FlagColour = RaceControlControl.DeskCyan, Lit = true, Visible = false };
             var bar = new ButtonBar(tight: true, sameWidth: true).With(racing.Append(desk).ToArray());
             var row = new FlagRow(bar, "Race Control", new HoldStrip());
 

@@ -31,12 +31,13 @@ public partial class RaceControlControl
     /// <summary>Desk: opens Driver Requests. Only on the row while requests are waiting - see SetDeskWaiting.</summary>
     private readonly FlagButton _btnBarDesk = new()
     {
-        Text = "Desk",
+        // "Requests" since 14 Nov 2026 (Asher) - it was "Desk".
+        Text = "Requests",
         FlagColour = DeskCyan,
         FlagText = Color.FromArgb(8, 28, 36),
         Lit = true,
         Visible = false,
-        AccessibleName = "Desk",
+        AccessibleName = "Requests",
     };
 
     /// <summary>How many requests the badge shows - 0 while the button is off the row.</summary>
