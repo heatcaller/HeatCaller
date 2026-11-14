@@ -150,8 +150,13 @@ public static partial class RaceCoach
     /// mistakes, whatever the spread says. A single crash lap lifts the
     /// spread just enough to read "solid and even", which was the wrong
     /// thing to tell the driver who crashed.
+    ///
+    /// A lap is named by the number the charts and the leaderboard give it,
+    /// which count the start pass as lap 1: <paramref name="lapNumbers"/>
+    /// (RaceCoach.LapNumbers) when the caller has the entry, otherwise the
+    /// usual case of the first counted lap being lap 2.
     /// </summary>
-    public static string Headline(PaceAnalysis.Row row, IReadOnlyList<long> laps)
+    public static string Headline(PaceAnalysis.Row row, IReadOnlyList<long> laps, IReadOnlyList<int>? lapNumbers = null)
     {
         if (row.Thin || laps.Count == 0)
         {
@@ -166,7 +171,7 @@ public static partial class RaceCoach
             var share = Share(cost / (double)row.PotentialGainMs);
 
             return mistakes.Count == 1
-                ? $"Fast, but one mistake (lap {mistakes[0] + 1}) cost {share} of the time lost."
+                ? $"Fast, but one mistake (lap {(lapNumbers is { } numbers && mistakes[0] < numbers.Count ? numbers[mistakes[0]] : mistakes[0] + 2)}) cost {share} of the time lost."
                 : $"Quick laps, but {mistakes.Count} mistakes cost {share} of the time lost.";
         }
 

@@ -93,7 +93,7 @@ public sealed class RaceCoachTests
         var (row, laps) = Race(14.62, 14.31, 14.22, 14.18, 14.15, 14.13, 14.105, 14.19, 15.84, 14.21,
             14.17, 14.26, 14.24, 14.31, 14.29, 14.38, 14.35, 14.42, 14.47, 14.51);
 
-        Assert.Equal("Fast, but one mistake (lap 9) cost a third of the time lost.", RaceCoach.Headline(row, laps));
+        Assert.Equal("Fast, but one mistake (lap 10) cost a third of the time lost.", RaceCoach.Headline(row, laps));
 
         // Lap 9 came two laps after the best: settle after a quick one.
         Assert.StartsWith("A mistake came right after one of your quickest laps.", RaceCoach.Drill(row, laps));
