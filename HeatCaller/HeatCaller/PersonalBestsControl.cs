@@ -9,6 +9,9 @@ namespace HeatCaller;
 /// </summary>
 public sealed class PersonalBestsControl : UserControl
 {
+    /// <summary>The track layouts, for a layout's length - the car lengths beside each gap (RaceCoach). Null says no car lengths.</summary>
+    public TrackLayoutStore? Layouts { get; set; }
+
     private readonly SessionHistoryStore _history;
     private readonly PersonalBestResetStore _resets;
     private readonly UndoService _undo;

@@ -15,6 +15,9 @@ namespace HeatCaller;
 /// </summary>
 public sealed class AnalyticsOverviewControl : UserControl
 {
+    /// <summary>The track layouts, for a layout's length - the car lengths beside each gap (RaceCoach). Null says no car lengths.</summary>
+    public TrackLayoutStore? Layouts { get; set; }
+
     private readonly SessionHistoryStore _history;
 
     // 17 Oct 2026, Bug Hunt 8, A30-2: for the shared record rule (rentals

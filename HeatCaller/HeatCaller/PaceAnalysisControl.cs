@@ -17,6 +17,9 @@ namespace HeatCaller;
 /// </summary>
 public sealed class PaceAnalysisControl : UserControl
 {
+    /// <summary>The track layouts, for a layout's length - the car lengths beside each gap (RaceCoach). Null says no car lengths.</summary>
+    public TrackLayoutStore? Layouts { get; set; }
+
     /// <summary>One race in the picker, rendered the way it reads in a list.</summary>
     private sealed record Choice(SessionRecord Session)
     {

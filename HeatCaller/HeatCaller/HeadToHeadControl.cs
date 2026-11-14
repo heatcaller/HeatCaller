@@ -8,6 +8,12 @@ namespace HeatCaller;
 /// </summary>
 public sealed class HeadToHeadControl : UserControl
 {
+    /// <summary>The track layouts, for a layout's length - the car lengths beside each gap (RaceCoach). Null says no car lengths.</summary>
+    public TrackLayoutStore? Layouts { get; set; }
+
+    /// <summary>The profiles, so drivers the club has hidden stay out of the who-beats-whom grid. Null hides nobody.</summary>
+    public ProfileStore? Profiles { get; set; }
+
     private readonly SessionHistoryStore _history;
 
     private readonly ComboBox _cmbDriverA = new();

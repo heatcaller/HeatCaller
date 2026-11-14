@@ -1,0 +1,512 @@
+<title>Race Analytics Rework</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a design review board. Option picker on top, then one live app mock-up with its six tabs, notes beside it. */
+:root {
+  --bg: #EEF1F6; --panel: #FFFFFF; --ink: #121826; --muted: #5B6478; --line: #D7DCE6; --soft: #F4F6FA;
+  --accent: #2E5BDB; --accent-soft: #E3EAFC; --you: #E2560B; --you-soft: #FDE9DD;
+  --good: #128A4A; --good-soft: #DDF3E6; --warn: #B87600; --warn-soft: #FBF0D6; --bad: #C93434; --bad-soft: #FADEDE;
+  --app-bg: #F7F8FB; --app-side: #161B29; --app-side-ink: #C9CEDC; --app-side-on: #2E5BDB;
+  --f-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", Consolas, ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0D111A; --panel: #151B27; --ink: #E7EAF2; --muted: #9AA3B8; --line: #2A3243; --soft: #1B2231;
+  --accent: #7A9BFF; --accent-soft: #1F2A4A; --you: #FF8A47; --you-soft: #3A2316;
+  --good: #3FCB7E; --good-soft: #15301F; --warn: #F0B341; --warn-soft: #33290F; --bad: #FF6B6B; --bad-soft: #3A1A1A;
+  --app-bg: #111620; --app-side: #0A0D14; --app-side-ink: #A9B0C2; --app-side-on: #4F74E8; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0D111A; --panel: #151B27; --ink: #E7EAF2; --muted: #9AA3B8; --line: #2A3243; --soft: #1B2231;
+  --accent: #7A9BFF; --accent-soft: #1F2A4A; --you: #FF8A47; --you-soft: #3A2316;
+  --good: #3FCB7E; --good-soft: #15301F; --warn: #F0B341; --warn-soft: #33290F; --bad: #FF6B6B; --bad-soft: #3A1A1A;
+  --app-bg: #111620; --app-side: #0A0D14; --app-side-ink: #A9B0C2; --app-side-on: #4F74E8; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-body); }
+.wrap { max-width: 1320px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 22px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; }
+h1 { font-size: 30px; letter-spacing: -0.01em; }
+.lede { color: var(--muted); max-width: 78ch; margin: 6px 0 0; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font: 600 11px/1 var(--f-body); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+
+/* Option picker */
+.picker { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.opt { text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; color: var(--ink); cursor: pointer; font: inherit; display: grid; gap: 6px; align-content: start; }
+.opt:hover { border-color: var(--accent); }
+.opt:focus-visible, .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.opt[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; background: var(--accent-soft); }
+.opt .letter { font: 700 13px var(--f-display); color: var(--accent); }
+.opt .name { font: 600 17px var(--f-display); }
+.opt .hook { color: var(--muted); font-size: 13px; }
+
+.idea { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+.idea h2 { font-size: 22px; }
+.idea p { margin: 6px 0 0; max-width: 70ch; }
+.idea ul { margin: 0; padding-left: 18px; color: var(--muted); }
+.idea li { margin: 3px 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip { font-size: 12px; padding: 3px 9px; border-radius: 99px; background: var(--soft); border: 1px solid var(--line); color: var(--muted); }
+.chip.new { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+
+/* Board: mock + notes */
+.board { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+.scroller { overflow-x: auto; border-radius: 12px; }
+.win { min-width: 900px; background: var(--app-bg); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px -18px rgba(10,20,40,.45); }
+.titlebar { height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--app-side); color: var(--app-side-ink); font-size: 12px; }
+.titlebar i { width: 10px; height: 10px; border-radius: 50%; background: #3A4256; display: inline-block; }
+.app { display: grid; grid-template-columns: 148px minmax(0, 1fr); min-height: 640px; }
+.side { background: var(--app-side); color: var(--app-side-ink); padding: 12px 8px; display: grid; gap: 2px; align-content: start; font-size: 12.5px; }
+.side span { padding: 7px 10px; border-radius: 6px; }
+.side span.on { background: var(--app-side-on); color: #fff; font-weight: 600; }
+.main { padding: 12px 16px 18px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); }
+.tab { font: 600 13px var(--f-body); background: none; border: 0; padding: 8px 12px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab[aria-selected="true"] { color: var(--accent); border-color: var(--accent); }
+.tab small { font-weight: 500; opacity: .7; }
+
+.notes { display: grid; gap: 12px; }
+.note { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.note h3 { font-size: 15px; margin-bottom: 6px; }
+.note ul { margin: 0; padding-left: 18px; }
+.note li { margin: 4px 0; }
+.note .was { color: var(--muted); font-size: 13px; }
+
+/* App-side widgets */
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.card h4 { margin: 0 0 8px; font: 600 13px var(--f-body); color: var(--ink); display: flex; justify-content: space-between; gap: 8px; }
+.card h4 em { font-style: normal; font-weight: 500; color: var(--muted); }
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.side-l { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 12px; }
+.side-r { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 12px; }
+.ctl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.sel { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 6px; padding: 4px 10px; font-size: 12.5px; }
+.sel::after { content: " ▾"; color: var(--muted); }
+.btn { border: 1px solid var(--line); background: var(--soft); border-radius: 6px; padding: 4px 10px; font-size: 12.5px; color: var(--ink); }
+.big { font: 700 30px/1.05 var(--f-display); font-variant-numeric: tabular-nums; }
+.mid { font: 600 20px/1.1 var(--f-display); font-variant-numeric: tabular-nums; }
+.cap { color: var(--muted); font-size: 12px; }
+.say { font: 500 15.5px/1.45 var(--f-display); }
+.you { color: var(--you); }
+.goodt { color: var(--good); } .badt { color: var(--bad); } .warnt { color: var(--warn); }
+.pill { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+.pill.g { background: var(--good-soft); color: var(--good); } .pill.w { background: var(--warn-soft); color: var(--warn); } .pill.b { background: var(--bad-soft); color: var(--bad); } .pill.a { background: var(--accent-soft); color: var(--accent); } .pill.y { background: var(--you-soft); color: var(--you); }
+table.t { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.t th { text-align: left; font-weight: 600; color: var(--muted); padding: 5px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.t td { padding: 6px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; vertical-align: middle; }
+table.t tr.me td { background: var(--you-soft); }
+.drill { border-left: 3px solid var(--good); background: var(--good-soft); border-radius: 0 8px 8px 0; padding: 10px 12px; }
+.drill b { color: var(--good); }
+.callout { background: var(--accent-soft); border-radius: 8px; padding: 10px 12px; }
+svg { display: block; max-width: 100%; height: auto; }
+svg text { font-family: var(--f-body); font-size: 11px; fill: var(--muted); }
+svg .ink { fill: var(--ink); } svg .strong { font-weight: 600; fill: var(--ink); }
+svg .gl { stroke: var(--line); stroke-width: 1; }
+.dots { display: flex; gap: 4px; }
+.dots i { width: 22px; height: 22px; border-radius: 5px; display: grid; place-items: center; font: 600 11px var(--f-body); font-style: normal; }
+.feed { display: grid; gap: 8px; }
+.feed .item { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: start; }
+.feed .ic { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; font: 700 12px var(--f-display); }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+
+.compare { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: grid; gap: 12px; }
+.compare .tw { overflow-x: auto; }
+.compare table { min-width: 720px; }
+.rec { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; max-width: 80ch; }
+
+@media (max-width: 1080px) { .board { grid-template-columns: minmax(0, 1fr); } .idea { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) { .picker { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (max-width: 440px) { .picker { grid-template-columns: minmax(0, 1fr); } h1 { font-size: 24px; } }
+@media (prefers-reduced-motion: no-preference) { .main > * { animation: rise .25s ease-out both; } @keyframes rise { from { transform: translateY(4px); opacity: .6; } to { transform: none; opacity: 1; } } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">HeatCaller · Race Analytics · four directions</div>
+    <h1>Race Analytics, reworked for the driver</h1>
+    <p class="lede">Today the page has six tabs that each show a table or chart of raw times: Overview (records), Personal Bests, Lap Times, Head to Head (19 stat rows), Trends and Pace (11 columns). Each option below keeps all six and changes what the numbers are <em>for</em>. Every mock-up uses the same sample club night, so you can compare like with like. Sam Okafor is “you” throughout.</p>
+  </header>
+
+  <nav class="picker" id="picker" aria-label="Design options"></nav>
+  <section class="idea" id="idea"></section>
+  <section class="board">
+    <div class="scroller"><div class="win" id="win"></div></div>
+    <aside class="notes" id="notes"></aside>
+  </section>
+  <section class="compare" id="compare"></section>
+</div>
+
+<script>
+// ---------- Sample data (one club night, Club Infield, A-Main Fri 7 Nov 2026) ----------
+const ME = 'Sam Okafor';
+const COL = { 'Priya Shah':'#3B82F6', 'Sam Okafor':'var(--you)', 'Leo Martins':'#10B981', 'Dana Kowalski':'#8B5CF6', 'Theo Park':'#8C96A8', 'Maya Ruiz':'#EC4899' };
+const CAR_M = 0.48; // a 1/10 car, nose to tail
+const TRACKS = [
+  { n:'Club Infield', len:182, rec:13.842, by:'Priya Shah', set:'12 Oct 2026', races:41 },
+  { n:'Outer Loop',   len:236, rec:17.205, by:'Leo Martins', set:'3 Sep 2026',  races:18 },
+  { n:'Figure 8',     len:150, rec:11.930, by:'Priya Shah', set:'24 Oct 2026', races:23 },
+  { n:'Winter Tight', len:160, rec:12.611, by:'Sam Okafor', set:'1 Nov 2026',  races:9 },
+];
+const PB = {
+  'Priya Shah':   [13.842, 17.390, 11.930, 12.702],
+  'Sam Okafor':   [14.105, 17.512, 12.244, 12.611],
+  'Maya Ruiz':    [14.311, null,   12.205, 12.795],
+  'Leo Martins':  [14.236, 17.205, 12.118, null],
+  'Dana Kowalski':[14.488, 17.960, 12.401, 12.880],
+  'Theo Park':    [14.902, 18.215, 12.770, 13.144],
+};
+const RACE = {
+  'Priya Shah':   [14.02,13.95,13.91,13.88,13.90,13.93,13.89,13.97,13.92,13.94,13.96,13.91,13.99,14.01,13.95,14.03,13.98,14.05,14.02,14.08],
+  'Sam Okafor':   [14.62,14.31,14.22,14.18,14.15,14.13,14.105,14.19,15.84,14.21,14.17,14.26,14.24,14.31,14.29,14.38,14.35,14.42,14.47,14.51],
+  'Leo Martins':  [14.48,14.30,14.24,14.95,14.22,14.61,14.28,14.33,15.20,14.26,14.29,14.70,14.25,14.31,14.88,14.27,14.35,14.30,14.62,14.33],
+  'Dana Kowalski':[14.95,14.82,14.77,14.70,14.66,14.69,14.61,14.58,14.60,14.55,14.57,14.52,14.54,14.50,14.53,14.49,14.51,14.48,14.50,14.47],
+  'Theo Park':    [15.10,15.02,14.98,15.05,15.12,14.99,15.40,15.08,15.15,15.03,15.20,15.11,15.09,15.25,15.13,15.18,15.06,15.22,15.30],
+};
+// Sam's best lap per session on Club Infield, and the club's spread that night
+const TREND = [
+  { d:'15 Aug', me:14.88, p10:14.20, med:14.92, p90:15.60 },
+  { d:'22 Aug', me:14.71, p10:14.15, med:14.90, p90:15.55 },
+  { d:'29 Aug', me:14.75, p10:14.18, med:14.86, p90:15.52 },
+  { d:'5 Sep',  me:14.52, p10:14.10, med:14.84, p90:15.49 },
+  { d:'12 Sep', me:14.49, p10:14.08, med:14.83, p90:15.50 },
+  { d:'19 Sep', me:14.55, p10:14.05, med:14.80, p90:15.41 },
+  { d:'26 Sep', me:14.38, p10:14.02, med:14.78, p90:15.38 },
+  { d:'3 Oct',  me:14.31, p10:13.98, med:14.77, p90:15.36, note:'New tyres' },
+  { d:'10 Oct', me:14.29, p10:13.95, med:14.74, p90:15.33 },
+  { d:'17 Oct', me:14.22, p10:13.93, med:14.73, p90:15.30 },
+  { d:'24 Oct', me:14.18, p10:13.92, med:14.71, p90:15.31, note:'Gearing 21T' },
+  { d:'7 Nov',  me:14.105,p10:13.90, med:14.70, p90:15.28 },
+];
+// Sam vs Leo, the 14 races they shared (positions, best laps)
+const H2H = [
+  [4,2,14.62,14.41],[3,2,14.60,14.38],[1,3,14.55,14.47],[2,5,14.51,14.35],[4,1,14.49,14.30],[2,3,14.44,14.40],[1,2,14.40,14.33],
+  [3,1,14.36,14.29],[2,6,14.33,14.31],[1,4,14.30,14.27],[2,1,14.25,14.24],[1,3,14.22,14.26],[2,4,14.18,14.25],[2,3,14.105,14.22]
+].map(([a,b,ba,bb],i)=>({ i, a, b, ba, bb }));
+// Field: row driver's wins over column driver in shared races (of shared)
+const FIELD = ['Priya Shah','Sam Okafor','Maya Ruiz','Leo Martins','Dana Kowalski','Theo Park'];
+const MATRIX = {
+  'Priya Shah':   [null,[11,14],[9,10],[12,15],[13,14],[16,16]],
+  'Sam Okafor':   [[3,14],null,[7,12],[9,14],[11,13],[14,15]],
+  'Maya Ruiz':    [[1,10],[5,12],null,[6,11],[8,10],[9,10]],
+  'Leo Martins':  [[3,15],[5,14],[5,11],null,[10,15],[14,16]],
+  'Dana Kowalski':[[1,14],[2,13],[2,10],[5,15],null,[10,14]],
+  'Theo Park':    [[0,16],[1,15],[1,10],[2,16],[4,14],null],
+};
+
+// ---------- Pace maths (mirrors PaceAnalysis.cs) ----------
+const avg = a => a.reduce((s,x)=>s+x,0)/a.length;
+function pace(laps) {
+  const best = Math.min(...laps), mean = avg(laps);
+  let run = Infinity; for (let i=0;i+3<=laps.length;i++) run = Math.min(run, avg(laps.slice(i,i+3)));
+  const any3 = avg([...laps].sort((a,b)=>a-b).slice(0,3));
+  const sd = Math.sqrt(avg(laps.map(x=>(x-mean)**2)));
+  const third = Math.floor(laps.length/3);
+  const fade = avg(laps.slice(-third)) - avg(laps.slice(0,third));
+  const gain = laps.reduce((s,x)=>s+(x-best),0);
+  const cons = sd/mean*100;
+  const bestIdx = laps.indexOf(best);
+  const mistakes = laps.map((x,i)=>({i,x})).filter(o=>o.x > best*1.04);
+  const misShare = mistakes.reduce((t,m)=>t+m.x-best,0)/gain;
+  // The mock's sharper rules (Option C extends PaceAnalysis.Verdict this way)
+  const verdict = mistakes.length && misShare>=.3 ? (mistakes.length===1 ? 'Fast, but one mistake cost a third of the time lost.' : 'Quick laps, but '+mistakes.length+' mistakes cost half the time lost.')
+    : cons<=1.0 && gain/laps.length<.1 ? 'Running at their own limit lap after lap.'
+    : fade<=-.15 ? 'Got quicker as it went on.'
+    : fade>=.12 ? 'Started better than they finished.'
+    : cons>=1.8 ? 'Some scrappy laps in among the good ones.' : 'Solid and even, with a little left on the table.';
+  const total = laps.reduce((s,x)=>s+x,0);
+  return { best, run, any3, mean, sd, cons, fade, gain, verdict, bestIdx, mistakes, total, laps:laps.length };
+}
+const P = Object.fromEntries(Object.entries(RACE).map(([n,l])=>[n,pace(l)]));
+const finish = Object.keys(RACE).sort((a,b)=> (RACE[b].length - RACE[a].length) || (P[a].total - P[b].total));
+const me = P[ME];
+const f3 = x => x.toFixed(3), f2 = x => x.toFixed(2), f1 = x => x.toFixed(1);
+const sg = x => (x>=0?'+':'−') + Math.abs(x).toFixed(3);
+const lengths = (gapS, lapS, lenM) => gapS/lapS*lenM/CAR_M;
+const ini = n => n.split(' ').map(w=>w[0]).join('');
+
+// ---------- SVG helpers ----------
+function scale(d0,d1,r0,r1){ return v => r0 + (v-d0)/(d1-d0)*(r1-r0); }
+function line(o) {
+  const W=o.w||640, H=o.h||240, pl=o.pl??46, pr=o.pr??16, pt=o.pt??14, pb=o.pb??26;
+  const n = o.n, X = scale(0, n-1, pl, W-pr), Y = scale(o.y0, o.y1, H-pb, pt);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${o.label||'chart'}">`;
+  for (const t of o.ticks) s += `<line class="gl" x1="${pl}" x2="${W-pr}" y1="${Y(t)}" y2="${Y(t)}"/><text x="${pl-6}" y="${Y(t)+4}" text-anchor="end">${o.fmt?o.fmt(t):t}</text>`;
+  (o.xl||[]).forEach((t,i)=>{ if (t!=null) s += `<text x="${X(i)}" y="${H-8}" text-anchor="middle">${t}</text>`; });
+  for (const b of (o.bands||[])) {
+    const up = b.hi.map((v,i)=>`${X(i)},${Y(v)}`).join(' '), dn = b.lo.map((v,i)=>`${X(i)},${Y(v)}`).reverse().join(' ');
+    s += `<polygon points="${up} ${dn}" style="fill:${b.c};opacity:${b.o??.14}"/>`;
+  }
+  for (const h of (o.hl||[])) s += `<line x1="${pl}" x2="${W-pr}" y1="${Y(h.y)}" y2="${Y(h.y)}" style="stroke:${h.c};stroke-dasharray:4 4;stroke-width:1.2"/><text x="${W-pr}" y="${Y(h.y)-5}" text-anchor="end" style="fill:${h.c};font-weight:600">${h.t}</text>`;
+  for (const se of o.series) {
+    const pts = se.v.map((v,i)=> v==null?null:[X(i),Y(v)]).filter(Boolean);
+    if (se.area) s += `<polygon points="${pts.map(p=>p.join(',')).join(' ')} ${pts[pts.length-1][0]},${H-pb} ${pts[0][0]},${H-pb}" style="fill:${se.c};opacity:.10"/>`;
+    s += `<polyline points="${pts.map(p=>p.join(',')).join(' ')}" style="fill:none;stroke:${se.c};stroke-width:${se.w||2};${se.dash?'stroke-dasharray:'+se.dash+';':''}stroke-linejoin:round;stroke-linecap:round;opacity:${se.o??1}"/>`;
+    if (se.dots) pts.forEach(p=> s += `<circle cx="${p[0]}" cy="${p[1]}" r="${se.r||2.8}" style="fill:${se.c};stroke:var(--panel);stroke-width:1.2"/>`);
+    if (se.end) { const p = pts[pts.length-1]; s += `<circle cx="${p[0]}" cy="${p[1]}" r="4.5" style="fill:${se.c};stroke:var(--panel);stroke-width:2"/>`; }
+  }
+  for (const m of (o.marks||[])) {
+    const x = X(m.i), y = Y(m.y), dy = m.dy ?? -14, anc = m.a || 'middle';
+    s += `<circle cx="${x}" cy="${y}" r="5" style="fill:none;stroke:${m.c};stroke-width:2"/><text x="${x+(m.dx||0)}" y="${y+dy}" text-anchor="${anc}" style="fill:${m.c};font-weight:600">${m.t}</text>`;
+  }
+  return s + '</svg>';
+}
+function bars(o) { // vertical bars, values >= 0
+  const W=o.w||640, H=o.h||200, pl=o.pl??40, pr=10, pt=16, pb=24, n=o.v.length;
+  const bw = (W-pl-pr)/n, Y = scale(0,o.max,H-pb,pt);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${o.label}">`;
+  for (const t of o.ticks) s += `<line class="gl" x1="${pl}" x2="${W-pr}" y1="${Y(t)}" y2="${Y(t)}"/><text x="${pl-6}" y="${Y(t)+4}" text-anchor="end">${o.fmt?o.fmt(t):t}</text>`;
+  o.v.forEach((v,i)=>{ const x = pl+i*bw+bw*.15, h = Y(0)-Y(Math.min(v,o.max)); const c = o.color(v,i);
+    s += `<rect x="${x}" y="${Y(Math.min(v,o.max))}" width="${bw*.7}" height="${Math.max(h,1)}" rx="2" style="fill:${c}"/>`;
+    if (v>o.max) s += `<text x="${x+bw*.35}" y="${pt-4}" text-anchor="middle" style="fill:${c};font-weight:600">${o.fmt(v)}</text>`;
+    if (o.xl && o.xl[i]!=null) s += `<text x="${x+bw*.35}" y="${H-8}" text-anchor="middle">${o.xl[i]}</text>`; });
+  return s + '</svg>';
+}
+function carIcon(x, y, c, label) {
+  return `<g transform="translate(${x},${y})"><rect x="-22" y="-7" width="22" height="14" rx="4" style="fill:${c}"/><rect x="-18" y="-10" width="5" height="20" rx="2" style="fill:${c};opacity:.55"/><rect x="-8" y="-10" width="5" height="20" rx="2" style="fill:${c};opacity:.55"/>${label?`<text x="-11" y="4" text-anchor="middle" style="fill:#fff;font-weight:700;font-size:9px">${label}</text>`:''}</g>`;
+}
+
+// ---------- Mock-up window ----------
+const TABS = [['overview','Overview'],['pbs','Personal Bests'],['laps','Lap Times'],['h2h','Head to Head'],['trends','Trends'],['pace','Pace']];
+const NAV = ['Next Steps','Race Control','Who’s Racing','Championship','Race Analytics','Garage','Track Layouts','Sounds','Settings'];
+let state = { opt:'A', tab:'overview' };
+
+// ================= OPTION A: Car lengths =================
+const A = {
+  name:'Measured in Car Lengths', hook:'Translate every time into distance on track, so 0.263 s becomes “7 car lengths”.',
+  idea:'A driver cannot feel a tenth of a second. They can feel a car length. Option A keeps the times but always says them a second way: how far down the straight you would be. Every gap becomes a picture of cars on a line, and every race loss becomes a stack of seconds you can point at.',
+  how:['Each layout gets one new field: lap length in metres (Track Layouts).','Gap in metres = gap ÷ lap time × lap length; ÷ 0.48 m for car lengths.','Times stay on screen; the distance is the headline, the time the footnote.'],
+  chips:['Session history (existing)','Lap-by-lap times (existing)','Lap length per layout (new)'],
+  tabs:{
+    overview:{ was:'Four count tiles and a records table.', learns:['Where every regular stands against the record, as a picture of a finish line.','That the field on Club Infield is nearly 30 car lengths deep, and Sam is 7 back.'], body(){
+      const t=TRACKS[0], W=700, X=scale(0,32,W-40,60);
+      const rows = Object.entries(PB).filter(([,v])=>v[0]).sort((a,b)=>a[1][0]-b[1][0]);
+      let svg = `<svg viewBox="0 0 ${W} ${rows.length*34+44}" role="img" aria-label="finish line strip">`;
+      for (let L=0; L<=30; L+=5) svg += `<line class="gl" x1="${X(L)}" x2="${X(L)}" y1="14" y2="${rows.length*34+16}"/><text x="${X(L)}" y="${rows.length*34+34}" text-anchor="middle">${L===0?'line':L+' lengths'}</text>`;
+      svg += `<rect x="${X(0)}" y="10" width="6" height="${rows.length*34+8}" style="fill:var(--ink)"/>`;
+      rows.forEach(([n,v],i)=>{ const L=lengths(v[0]-t.rec,t.rec,t.len), y=30+i*34;
+        svg += `<text x="10" y="${y+4}" class="${n===ME?'strong':''}">${n.split(' ')[0]}</text>` + carIcon(X(L)+2,y,COL[n],ini(n)) + `<text x="${X(L)-30}" y="${y+4}" text-anchor="end">${L<.5?'record':f1(L)+' lengths · '+sg(v[0]-t.rec)+'s'}</text>`; });
+      svg += '</svg>';
+      return `<div class="ctl">Track <span class="sel">Club Infield</span> <span class="cap">182 m lap · 1 car length ≈ 0.036 s here</span></div>
+      <div class="card"><h4>If everyone ran their best lap at once <em>where each car is when the record crosses the line</em></h4>${svg}</div>
+      <div class="grid4">${TRACKS.map((tr,i)=>{ const best = Object.values(PB).map(v=>v[i]).filter(Boolean).sort((a,b)=>a-b); const depth=lengths(best[best.length-1]-best[0],tr.rec,tr.len); const mine = PB[ME][i];
+        return `<div class="card"><div class="cap">${tr.n}</div><div class="mid mono">${f3(tr.rec)}</div><div class="cap">${tr.by} · ${tr.set}</div><div style="margin-top:6px"><span class="pill a">field ${Math.round(depth)} lengths deep</span></div><div class="cap" style="margin-top:6px">You: ${mine===tr.rec?'<b class="you">record holder</b>':'<b class="you">'+f1(lengths(mine-tr.rec,tr.rec,tr.len))+' lengths</b> off'}</div></div>`; }).join('')}</div>`; } },
+    pbs:{ was:'Grid of driver × track best laps, with reset buttons.', learns:['A PB is shown as a car placed behind the record, not a number to subtract.','Reset still lives here, under the More menu for the selected card.'], body(){
+      return `<div class="ctl">Driver <span class="sel">Sam Okafor</span> <span class="btn">More ▾</span></div><div class="grid2">${TRACKS.map((t,i)=>{ const v=PB[ME][i]; const L=lengths(v-t.rec,t.rec,t.len); const W=320, X=scale(0,12,W-20,30);
+        let s=`<svg viewBox="0 0 ${W} 70"><rect x="${X(0)}" y="8" width="5" height="46" style="fill:var(--ink)"/>`;
+        for (let k=1;k<=12;k++) s+=`<rect x="${X(k)-1}" y="52" width="2" height="${k%5===0?8:4}" style="fill:var(--line)"/>`;
+        s+= carIcon(X(0)+2,22,COL[t.by],ini(t.by)) + carIcon(X(Math.min(L,12))+2,42,COL[ME],'SO') + `<text x="${X(12)}" y="68">12</text><text x="${X(0)}" y="68" text-anchor="middle">0</text></svg>`;
+        return `<div class="card"><h4>${t.n} <em>PB set ${['7 Nov','3 Sep','31 Oct','1 Nov'][i]}</em></h4><div class="row"><div class="big mono">${f3(v)}</div><div>${L<.01?'<span class="pill y">You hold the record</span>':`<div class="mid you">${f1(L)} car lengths</div><div class="cap">behind ${t.by.split(' ')[0]}’s record (${sg(v-t.rec)} s a lap)</div>`}</div></div>${s}</div>`; }).join('')}</div>`; } },
+    laps:{ was:'Line chart of lap times, ticked drivers, a consistency table.', learns:['Each lap is how far behind a ghost of your own best lap you fell.','The crash on lap 9 cost 47 car lengths, about an eighth of a lap.'], body(){
+      const t=TRACKS[0], laps=RACE[ME]; const v=laps.map(x=>lengths(x-me.best,me.best,t.len));
+      const total = v.reduce((a,b)=>a+b,0);
+      return `<div class="ctl">Race <span class="sel">A-Main · Fri 7 Nov · Club Infield</span> Driver <span class="sel">Sam Okafor</span> Ghost <span class="sel">My best lap (14.105)</span></div>
+      <div class="side-r"><div class="card"><h4>Lengths lost to your own best lap, lap by lap <em>0 = you matched the ghost</em></h4>${bars({w:620,h:230,v,max:16,ticks:[0,4,8,12,16],fmt:x=>Math.round(x),xl:v.map((_,i)=>i+1),label:'lengths lost per lap',color:(x)=> x<2?'var(--good)':x<8?'var(--warn)':'var(--bad)'})}
+        <div class="legend"><span><i style="background:var(--good)"></i>under 2 lengths</span><span><i style="background:var(--warn)"></i>2–8</span><span><i style="background:var(--bad)"></i>a mistake</span></div></div>
+        <div class="card"><h4>The ghost race</h4><div class="cap">After ${laps.length} laps your best-lap ghost finished</div><div class="big you">${Math.round(total)} lengths</div><div class="cap">ahead of you: ${f2(me.gain)} s, or ${Math.round(me.gain/me.best*100)}% of a lap.</div>
+        <hr style="border:0;border-top:1px solid var(--line);margin:12px 0"><div class="cap">Biggest single loss</div><div class="mid badt">Lap 9 · ${Math.round(v[8])} lengths</div><div class="cap">Without it you’d have been ${Math.round(total-v[8])} lengths behind the ghost.</div></div></div>`; } },
+    h2h:{ was:'19 stat rows comparing two drivers’ careers.', learns:['The pace gap as a picture: Sam and Leo side by side down the straight.','How much one lap’s gap adds up to over a 5-minute race.'], body(){
+      const t=TRACKS[0], gap=PB['Leo Martins'][0]-PB[ME][0], L=lengths(gap,PB[ME][0],t.len), perRace = gap*21, W=640;
+      let s=`<svg viewBox="0 0 ${W} 110"><rect x="40" y="18" width="${W-60}" height="70" rx="8" style="fill:var(--soft)"/><line x1="40" x2="${W-20}" y1="53" y2="53" style="stroke:var(--line);stroke-dasharray:8 8"/>`;
+      const front=W-60, px=26; s+= carIcon(front,35,COL[ME],'SO') + carIcon(front-L*px,71,COL['Leo Martins'],'LM');
+      s+= `<line x1="${front-L*px}" x2="${front}" y1="100" y2="100" style="stroke:var(--you);stroke-width:2"/><text x="${front-L*px/2-11}" y="96" text-anchor="middle" style="fill:var(--you);font-weight:600">${f1(L)} lengths</text><text x="${W-30}" y="14" text-anchor="end">where each car is after one lap at its best →</text></svg>`;
+      return `<div class="ctl">Driver A <span class="sel">Sam Okafor</span> vs <span class="sel">Leo Martins</span> Track <span class="sel">Club Infield</span></div>
+      <div class="card"><h4>One lap, at each driver’s best <em>${f3(PB[ME][0])} vs ${f3(PB['Leo Martins'][0])}</em></h4>${s}
+      <div class="grid3"><div><div class="cap">Per lap</div><div class="mid you">${f1(L)} lengths</div><div class="cap">${f3(gap)} s</div></div><div><div class="cap">Over a 5-minute race (21 laps)</div><div class="mid you">${Math.round(L*21)} lengths</div><div class="cap">${f2(perRace)} s · about ${Math.round(perRace/PB[ME][0]*182)} m</div></div><div><div class="cap">Sam would lap Leo after</div><div class="mid">${Math.round(PB[ME][0]/gap)} laps</div><div class="cap">if both ran their bests every lap</div></div></div></div>
+      <div class="card"><h4>Shared races <em>14 · Sam 9, Leo 5</em></h4><div class="dots">${H2H.map(r=>`<i style="background:${r.a<r.b?'var(--you-soft)':'var(--soft)'};color:${r.a<r.b?'var(--you)':'var(--muted)'}">${r.a<r.b?'S':'L'}</i>`).join('')}</div><div class="cap" style="margin-top:6px">Oldest left, newest right. Sam has finished ahead in 5 of the last 6.</div></div>`; } },
+    trends:{ was:'Best lap per session over time, one driver, one track.', learns:['Progress counted in lengths taken off the gap to the record.','Milestones to aim at: “within 5 lengths” is the next line.'], body(){
+      const t=TRACKS[0]; const v=TREND.map(r=>lengths(r.me-t.rec,t.rec,t.len));
+      return `<div class="ctl">Driver <span class="sel">Sam Okafor</span> Track <span class="sel">Club Infield</span></div>
+      <div class="side-r"><div class="card"><h4>Car lengths behind the track record <em>lower is closer</em></h4>${line({w:620,h:250,n:v.length,y0:0,y1:30,ticks:[0,5,10,15,20,25,30],series:[{v,c:'var(--you)',w:2.5,dots:1,area:1,end:1}],xl:TREND.map((r,i)=>i%2?null:r.d),hl:[{y:5,t:'next milestone: within 5 lengths',c:'var(--good)'},{y:10,t:'within 10',c:'var(--muted)'}],marks:[{i:11,y:v[11],t:f1(v[11])+' lengths',c:'var(--you)',dy:-12,a:'end'}],label:'gap to record in car lengths'})}</div>
+      <div class="card"><h4>Since 15 Aug</h4><div class="big you">−${Math.round(v[0]-v[11])}</div><div class="cap">car lengths found (${f3(TREND[0].me-TREND[11].me)} s a lap)</div><hr style="border:0;border-top:1px solid var(--line);margin:12px 0"><div class="cap">At this rate you reach</div><div class="mid">5 lengths in ~2 race nights</div><div class="cap">Trend of the last 6 sessions: about 2 lengths a week.</div></div></div>`; } },
+    pace:{ was:'An 11-column table with a one-line verdict per driver.', learns:['Your race time pulled apart into the pieces that cost it.','A mistake, drift and fade each get a size you can compare.'], body(){
+      const laps=RACE[ME], best=me.best; const ideal=best*laps.length;
+      const med = a => { const b=[...a].sort((x,y)=>x-y); return b[Math.floor(b.length/2)]; };
+      const isMis = i => me.mistakes.some(m=>m.i===i); const typ = med(laps);
+      const mistakeLoss = me.mistakes.reduce((s,m)=>s+(m.x-typ),0);
+      const thirds = Math.floor(laps.length/3); const early = med(laps.slice(0,laps.length-thirds).filter((x,i)=>!isMis(i)));
+      const fadeLoss = laps.slice(-thirds).reduce((s,x)=>s+Math.max(0,x-early),0);
+      const drift = me.gain - mistakeLoss - fadeLoss;
+      const parts=[['If every lap were your best',ideal,'var(--muted)',0],['Steady drift (small errors every lap)',drift,'var(--warn)',ideal],['The big mistake (lap 9)',mistakeLoss,'var(--bad)',ideal+drift],['Fade in the last third',fadeLoss,'#8B5CF6',ideal+drift+mistakeLoss]];
+      const W=640, X=scale(ideal-.5, me.total+.3, 230, W-80);
+      let s=`<svg viewBox="0 0 ${W} ${parts.length*40+50}">`;
+      parts.forEach(([lab,v,c,start],i)=>{ const y=14+i*40; const x0 = i===0?230:X(start), x1 = i===0?X(ideal):X(start+v);
+        s+=`<text x="0" y="${y+16}" class="${i?'':'strong'}">${lab}</text><rect x="${x0}" y="${y}" width="${Math.max(x1-x0,2)}" height="24" rx="3" style="fill:${c};opacity:${i?1:.35}"/><text x="${x1+6}" y="${y+16}" class="strong">${i?'+'+f2(v)+'s':f2(v)+'s'}</text>${i?`<text x="${x1+56}" y="${y+16}">${Math.round(lengths(v,best,182))} lengths</text>`:''}`; });
+      const yT=14+parts.length*40; s+=`<line x1="${X(me.total)}" x2="${X(me.total)}" y1="6" y2="${yT}" style="stroke:var(--ink);stroke-dasharray:3 3"/><text x="${X(me.total)}" y="${yT+16}" text-anchor="middle" class="strong">Your race: ${f2(me.total)}s</text></svg>`;
+      return `<div class="ctl">Race <span class="sel">A-Main · Fri 7 Nov · Club Infield</span> Driver <span class="sel">Sam Okafor</span> <span class="cap">P${finish.indexOf(ME)+1} of ${finish.length}</span></div>
+      <div class="card"><h4>Where your ${f2(me.gain)} seconds went <em>${Math.round(lengths(me.gain,best,182))} car lengths</em></h4>${s}</div>
+      <div class="card"><h4>Everyone in this race <em>left on the table, in lengths</em></h4><table class="t"><tr><th>Fin</th><th>Driver</th><th>Best</th><th>Best 3 in a row</th><th>Left on table</th><th></th></tr>${finish.map((n,i)=>{ const p=P[n], L=lengths(p.gain,p.best,182);
+        return `<tr class="${n===ME?'me':''}"><td>P${i+1}</td><td>${n}</td><td class="mono">${f3(p.best)}</td><td class="mono">${f3(p.run)}</td><td class="mono">${f2(p.gain)}s · ${Math.round(L)} lengths</td><td style="width:34%"><div style="height:8px;border-radius:4px;background:${COL[n]};width:${Math.min(100,L/1.6)}%"></div></td></tr>`; }).join('')}</table></div>`; } },
+  }
+};
+
+// ================= OPTION B: Driver card =================
+const B = {
+  name:'My Driver Card', hook:'Pick yourself once; every tab becomes about you, against your own history.',
+  idea:'Today each tab starts with a blank picker and treats every driver the same. Option B pins one driver to the whole page, like a profile you carry between tabs. Numbers are compared with that driver’s own normal first, because “better than my usual” is the comparison a club racer acts on.',
+  how:['A “Viewing” strip above the tabs: who, their class and car (from the Garage).','Each stat shows your figure and your usual (last 10 races) side by side.','Garage setup changes appear as pins on the Trends chart.'],
+  chips:['Session history (existing)','Profiles and classes (existing)','Garage setup log (existing, newly linked)'],
+  strip(){ return `<div class="card" style="display:flex;gap:14px;align-items:center;padding:10px 14px"><div style="width:42px;height:42px;border-radius:50%;background:var(--you);color:#fff;display:grid;place-items:center;font:700 15px var(--f-display)">SO</div><div style="flex:1;min-width:0"><div style="font:600 16px var(--f-display)">Sam Okafor <span class="sel" style="font:500 12px var(--f-body);margin-left:6px">change</span></div><div class="cap">Modified 2WD · Associated B7 · 21T pinion · 38 races since Aug</div></div><div class="dots" title="last 10 finishes">${[2,1,2,3,1,2,4,2,1,2].map(p=>`<i style="background:${p===1?'var(--you)':p<=3?'var(--you-soft)':'var(--soft)'};color:${p===1?'#fff':p<=3?'var(--you)':'var(--muted)'}">P${p}</i>`).join('')}</div></div>`; },
+  tabs:{
+    overview:{ was:'Club-wide counts and records.', learns:['Your season at a glance: rank on every track, wins, and the next milestone.','The club records stay, one card down, with your gap in each row.'], body(){
+      return B.strip()+`<div class="grid4">${[['2nd','Club Infield rank','of 6 regulars'],['4','Wins since Aug','2 in the last 5 races'],['1','Track record','Winter Tight, 1 Nov'],['0.105s','To your next milestone','a 13.9 on Club Infield']].map(([v,c,s],i)=>`<div class="card"><div class="cap">${c}</div><div class="big ${i===3?'you':''}">${v}</div><div class="cap">${s}</div></div>`).join('')}</div>
+      <div class="card"><h4>Track records <em>and where you stand</em></h4><table class="t"><tr><th>Track</th><th>Record</th><th>Held by</th><th>Your best</th><th>Your rank</th><th>Gap</th></tr>${TRACKS.map((t,i)=>{ const mine=PB[ME][i]; const rank=Object.values(PB).map(v=>v[i]).filter(Boolean).sort((a,b)=>a-b).indexOf(mine)+1; return `<tr><td>${t.n}</td><td class="mono">${f3(t.rec)}</td><td>${t.by}</td><td class="mono you">${f3(mine)}</td><td>${rank===1?'<span class="pill y">1st</span>':rank+(rank===2?'nd':rank===3?'rd':'th')}</td><td class="mono">${mine===t.rec?'—':sg(mine-t.rec)}</td></tr>`; }).join('')}</table></div>`; } },
+    pbs:{ was:'Flat table of every driver’s bests.', learns:['A shelf of your PBs, each with its story: when, which race, which lap.','How each PB has moved over the season, in a sparkline.'], body(){
+      const hist=[[14.88,14.52,14.38,14.22,14.105],[17.80,17.512,17.512,17.512,17.512],[12.61,12.44,12.31,12.244,12.244],[13.10,12.85,12.70,12.611,12.611]];
+      return B.strip()+`<div class="grid2">${TRACKS.map((t,i)=>{ const v=PB[ME][i]; const h=hist[i]; const fresh = h[3]!==h[4];
+        return `<div class="card"><h4>${t.n} ${fresh?'<span class="pill g">new this week</span>':v===t.rec?'<span class="pill y">track record</span>':'<span class="pill a">'+['','set 3 Sep','set 31 Oct',''][i]+'</span>'}</h4><div class="row" style="justify-content:space-between"><div><div class="big mono">${f3(v)}</div><div class="cap">${['A-Main 7 Nov · lap 7 of 20','Heat 2, 3 Sep · lap 4 of 16','A-Main 31 Oct · lap 12 of 24','A-Main 1 Nov · lap 9 of 22'][i]}</div></div><div style="width:150px">${line({w:150,h:56,pl:4,pr:6,pt:6,pb:6,n:5,y0:Math.min(...h)-.05,y1:Math.max(...h)+.05,ticks:[],series:[{v:h.map(x=>Math.min(...h)+Math.max(...h)-x),c:'var(--you)',w:2,end:1}],label:'PB progression'})}</div></div><div class="cap" style="margin-top:4px">${v===t.rec?'Nobody has gone quicker here.':'Rank '+(Object.values(PB).map(x=>x[i]).filter(Boolean).sort((a,b)=>a-b).indexOf(v)+1)+' at the club · '+sg(v-t.rec)+' s to the record'}</div></div>`; }).join('')}</div>`; } },
+    laps:{ was:'Lap chart with no driver focus.', learns:['Every lap as a coloured cell against your usual pace, so the race reads at a glance.','A rival can be laid over the chart faintly for comparison.'], body(){
+      const laps=RACE[ME]; const usual=14.30;
+      const cells = laps.map((x,i)=>{ const d=x-usual; const c = i===me.bestIdx?'var(--you)':d<-.08?'var(--good)':d<.08?'var(--good-soft)':d<.4?'var(--warn-soft)':'var(--bad)'; const ink = (i===me.bestIdx||d>=.4||d<-.08)?'#fff':'var(--ink)'; return `<div style="background:${c};color:${ink};border-radius:5px;padding:6px 0;text-align:center"><div style="font-size:10px;opacity:.8">L${i+1}</div><div class="mono" style="font-size:11.5px;font-weight:600">${f2(x)}</div></div>`; }).join('');
+      return B.strip()+`<div class="ctl">Race <span class="sel">A-Main · Fri 7 Nov · Club Infield</span> Compare with <span class="sel">Priya Shah (P1)</span></div>
+      <div class="card"><h4>Your laps against your usual race pace (${f2(usual)}) <em>green = quicker than usual</em></h4><div style="display:grid;grid-template-columns:repeat(20,minmax(0,1fr));gap:3px">${cells}</div></div>
+      <div class="card"><h4>Lap times <em>you, with Priya behind</em></h4>${line({w:780,h:220,n:20,y0:13.8,y1:15.0,ticks:[13.8,14.1,14.4,14.7,15.0],fmt:f2,series:[{v:RACE['Priya Shah'],c:COL['Priya Shah'],w:1.5,o:.45},{v:laps.map(x=>Math.min(x,15)),c:'var(--you)',w:2.5,dots:1}],hl:[{y:usual,t:'your usual '+f2(usual),c:'var(--muted)'}],xl:laps.map((_,i)=>(i+1)%2?null:i+1),label:'lap times'})}<div class="legend"><span><i style="background:var(--you)"></i>Sam</span><span><i style="background:${COL['Priya Shah']};opacity:.5"></i>Priya</span><span>Lap 9 (15.84) is off the top of the chart</span></div></div>`; } },
+    h2h:{ was:'Pick two drivers, read 19 rows.', learns:['Your rivals found for you: the people you actually race, ranked by how close it is.','One deciding stat per rival instead of nineteen.'], body(){
+      const rivals=[['Leo Martins',9,5,'You win on consistency; he is quicker over one lap.'],['Maya Ruiz',7,5,'Dead even on pace; she qualifies better.'],['Priya Shah',3,11,'She is 0.26 s a lap quicker. The gap halved since September.'],['Dana Kowalski',11,2,'You have the pace; she is closing 0.04 s a week.']];
+      return B.strip()+`<div class="card"><h4>Your rivals <em>drivers you have shared 10+ races with, closest first</em></h4><div style="display:grid;gap:14px">${rivals.map(([n,w,l,why])=>{ const pct=w/(w+l)*100; return `<div style="display:grid;grid-template-columns:130px minmax(0,1fr) 70px;gap:12px;align-items:center"><div><b>${n}</b><div class="cap">${w+l} shared races</div></div><div><div style="display:flex;height:14px;border-radius:7px;overflow:hidden"><div style="width:${pct}%;background:var(--you)"></div><div style="flex:1;background:${COL[n]}"></div></div><div class="cap" style="margin-top:4px">${why}</div></div><div class="mid" style="text-align:right">${w}–${l}</div></div>`; }).join('')}</div></div>
+      <div class="card"><h4>Open a rival <em>Leo Martins</em></h4><div class="grid4">${[['Finishes ahead','9 of 14','you'],['Quicker best lap','11 of 14','him'],['Tidier race','11 of 14','you'],['Last 5','4–1','you']].map(([a,b,c])=>`<div><div class="cap">${a}</div><div class="mid">${b}</div><span class="pill ${c==='you'?'y':'a'}">${c==='you'?'you':'Leo'}</span></div>`).join('')}</div></div>`; } },
+    trends:{ was:'One line, no context for why it moved.', learns:['What changed when the line moved: Garage setup changes are pinned on the chart.','Which change paid off, in tenths.'], body(){
+      const v=TREND.map(r=>r.me);
+      return B.strip()+`<div class="side-r"><div class="card"><h4>Your best lap per race, Club Infield <em>pins from your Garage log</em></h4>${line({w:620,h:260,n:v.length,y0:14.0,y1:14.95,ticks:[14.0,14.2,14.4,14.6,14.8],fmt:f1,series:[{v,c:'var(--you)',w:2.5,dots:1,end:1}],xl:TREND.map((r,i)=>i%2?null:r.d),marks:[{i:7,y:v[7],t:'New tyres',c:'#8B5CF6',dy:22},{i:10,y:v[10],t:'Gearing 21T',c:'#8B5CF6',dy:22}],label:'trend'})}</div>
+      <div class="card"><h4>What paid off</h4><div style="display:grid;gap:10px"><div><div class="cap">New tyres · 3 Oct</div><div class="mid goodt">−0.09 s</div><div class="cap">avg of 3 races after vs 3 before</div></div><div><div class="cap">Gearing 21T · 24 Oct</div><div class="mid goodt">−0.12 s</div><div class="cap">2 races after, early read</div></div><div><div class="cap">Seat time alone</div><div class="mid">−0.04 s / week</div><div class="cap">the slope between changes</div></div></div></div></div>`; } },
+    pace:{ was:'Everyone in one 11-column table.', learns:['This race against your own usual, metric by metric, with an arrow for better or worse.','The full field table is one click away.'], body(){
+      const rows=[['Best lap',f3(me.best),'14.210','better'],['Best 3 in a row',f3(me.run),'14.290','better'],['Average lap',f3(me.mean),'14.380','better'],['Consistency',f1(me.cons)+'%','2.1%','worse'],['Fade (last third vs first)',sg(me.fade)+'s','+0.12s','worse'],['Left on table',f2(me.gain)+'s','4.9s','worse']];
+      return B.strip()+`<div class="ctl">Race <span class="sel">A-Main · Fri 7 Nov · Club Infield</span> <span class="cap">P${finish.indexOf(ME)+1} of ${finish.length}</span> <span class="btn">Show the whole field</span></div>
+      <div class="card"><h4>This race against your usual <em>your average over the last 10 races</em></h4><table class="t"><tr><th>Measure</th><th>This race</th><th>Your usual</th><th></th></tr>${rows.map(([a,b,c,d])=>`<tr><td>${a}</td><td class="mono"><b>${b}</b></td><td class="mono">${c}</td><td><span class="pill ${d==='better'?'g':'b'}">${d==='better'?'▲ better':'▼ worse'}</span></td></tr>`).join('')}</table></div>
+      <div class="callout"><b>Fastest you’ve been here, untidiest you’ve been in a month.</b> The speed is new; the lap 9 crash and the late fade cost more than the speed found.</div>`; } },
+  }
+};
+
+// ================= OPTION C: Race engineer =================
+const C = {
+  name:'The Race Engineer', hook:'Every tab opens with a sentence, then the evidence, then one thing to try next heat.',
+  idea:'The Pace tab already writes a verdict per driver. Option C makes that the shape of the whole page: each tab leads with what the numbers mean in plain words, shows the one chart that proves it, and ends with something to do. The numbers move to supporting roles, with zones (tidy, normal, scrappy) so a figure reads as good or bad without knowing the scale.',
+  how:['Headlines are rules over existing figures, like PaceAnalysis.Verdict today.','Thresholds already in the code: 1.5% and 4% consistency, 1.5 s left on the table.','Each “Try this” is chosen from a short list keyed to the verdict.'],
+  chips:['Session history (existing)','PaceAnalysis rules (existing, extended)','Drill text (new, ~12 lines)'],
+  tabs:{
+    overview:{ was:'Counts and a records table.', learns:['What happened at the club lately, written as news.','Records are still there, but the story comes first.'], body(){
+      const news=[['REC','var(--accent)','var(--accent-soft)','Priya Shah’s Club Infield record has stood 4 weeks','13.842 on 12 Oct. Closest since: Priya 13.88 on 7 Nov, then Sam 14.105.'],['PB','var(--you)','var(--you-soft)','Sam Okafor took 0.075 s off his Club Infield best','14.105 in the A-Main on 7 Nov, his fifth PB here since August.'],['↑','var(--good)','var(--good-soft)','Dana Kowalski got quicker every lap of the A-Main','Last third 0.27 s a lap faster than the first. Tidiest race of her season (0.8% spread).'],['!','var(--warn)','var(--warn-soft)','Leo Martins: fast laps, six mistakes','His best laps nearly matched Sam’s. Six laps over 14.6 cost him 3.6 s.']];
+      return `<div class="say">The club got quicker this month: the median best lap on Club Infield is down 0.08 s since October.</div>
+      <div class="side-r"><div class="card"><h4>From the last race night <em>Fri 7 Nov</em></h4><div class="feed">${news.map(([ic,c,bg,h,b])=>`<div class="item"><div class="ic" style="background:${bg};color:${c}">${ic}</div><div><b>${h}</b><div class="cap">${b}</div></div></div>`).join('')}</div></div>
+      <div class="card"><h4>Track records</h4>${TRACKS.map(t=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><div>${t.n}<div class="cap">${t.by}</div></div><div class="mono" style="text-align:right">${f3(t.rec)}<div class="cap">${t.set}</div></div></div>`).join('')}</div></div>`; } },
+    pbs:{ was:'Best lap per driver per track.', learns:['Whether each PB is real pace or a one-off, from how often you have come close since.','Which track has the easiest time to find.'], body(){
+      const rows=[[0,'Solid','g','Within 0.10 s of it in 4 of your last 5 races. This is your real pace.',4],[1,'One-off','b','Never within 0.30 s since 3 Sep. Treat 17.85 as your real pace here.',0],[2,'Solid','g','Within 0.10 s twice in 3 races.',2],[3,'Fresh','a','Only 2 races here; too early to say.',1]];
+      return `<div class="ctl">Driver <span class="sel">Sam Okafor</span></div><div class="say">Your Club Infield PB is the real thing. Your Outer Loop PB is a one-off you haven’t been near since September, so that is where the easiest time is.</div>
+      <div class="card"><table class="t"><tr><th>Track</th><th>PB</th><th>How real is it?</th><th>Races near it (last 5)</th><th>What it means</th></tr>${rows.map(([i,tag,c,txt,n])=>`<tr><td>${TRACKS[i].n}</td><td class="mono"><b>${f3(PB[ME][i])}</b></td><td><span class="pill ${c}">${tag}</span></td><td><div class="dots">${[0,1,2,3,4].map(k=>`<i style="width:14px;height:14px;background:${k<n?'var(--good)':'var(--soft)'}"></i>`).join('')}</div></td><td class="cap" style="color:var(--ink)">${txt}</td></tr>`).join('')}</table></div>
+      <div class="drill"><b>Try this:</b> next Outer Loop night, aim for 17.70 every lap in practice rather than chasing the 17.51. A repeatable 17.70 beats one 17.51.</div>`; } },
+    laps:{ was:'Chart and a stats table, no reading of it.', learns:['The chart annotates itself: best lap, mistake, where the fade starts.','Three findings written beside it.'], body(){
+      const laps=RACE[ME];
+      return `<div class="ctl">Race <span class="sel">A-Main · Fri 7 Nov · Club Infield</span> Driver <span class="sel">Sam Okafor</span></div><div class="say">Quick through the middle, one big mistake, then you faded by about a tenth a lap.</div>
+      <div class="side-r"><div class="card">${line({w:620,h:270,n:20,y0:13.9,y1:16.0,ticks:[14.0,14.5,15.0,15.5,16.0],fmt:f1,series:[{v:laps,c:'var(--you)',w:2.5,dots:1}],bands:[{lo:Array(20).fill(me.best),hi:Array(20).fill(me.best*1.015),c:'var(--good)',o:.16}],marks:[{i:6,y:laps[6],t:'Best · 14.105',c:'var(--good)',dy:22},{i:8,y:laps[8],t:'Crash · +1.74 s',c:'var(--bad)'},{i:15,y:laps[15],t:'Fade starts',c:'var(--warn)',dy:-16}],xl:laps.map((_,i)=>(i+1)%2?null:i+1),label:'annotated lap chart'})}<div class="legend"><span><i style="background:var(--good);opacity:.4;height:8px"></i>within 1.5% of your best: driving at your limit</span></div></div>
+      <div class="card"><h4>Three things in this race</h4><ol style="margin:0;padding-left:18px;display:grid;gap:8px"><li><b>Laps 3–8 were your best run ever here</b><div class="cap">Best three in a row: ${f3(me.run)}.</div></li><li><b>Lap 9 alone cost ${f2(RACE[ME][8]-me.best)} s</b><div class="cap">Nearly as much as laps 12–20 lost between them (${f2(RACE[ME].slice(11).reduce((s,x)=>s+x-me.best,0))} s).</div></li><li><b>Last six laps averaged ${f2(avg(laps.slice(-6)))}</b><div class="cap">Battery or tyres. Check the pack’s age in the Garage.</div></li></ol></div></div>
+      <div class="drill"><b>Try this:</b> the crash came right after your three quickest laps. Next heat, when you set a best, back off 1% for one lap to reset.</div>`; } },
+    h2h:{ was:'19 equal-weight stat rows.', learns:['The matchup in one sentence: who wins, and why.','Each shared race as a dumbbell: who had the pace vs who got the result.'], body(){
+      const W=620, Y=scale(14.0,14.7,180,20), X=scale(0,13,40,W-20);
+      let s=`<svg viewBox="0 0 ${W} 210">`; [14.1,14.3,14.5,14.7].forEach(t=>s+=`<line class="gl" x1="40" x2="${W-20}" y1="${Y(t)}" y2="${Y(t)}"/><text x="34" y="${Y(t)+4}" text-anchor="end">${f1(t)}</text>`);
+      H2H.forEach(r=>{ const x=X(r.i); s+=`<line x1="${x}" x2="${x}" y1="${Y(r.ba)}" y2="${Y(r.bb)}" style="stroke:var(--line);stroke-width:3"/><circle cx="${x}" cy="${Y(r.ba)}" r="5" style="fill:var(--you)"/><circle cx="${x}" cy="${Y(r.bb)}" r="5" style="fill:${COL['Leo Martins']}"/><text x="${x}" y="200" text-anchor="middle" style="fill:${r.a<r.b?'var(--you)':COL['Leo Martins']};font-weight:700">${r.a<r.b?'S':'L'}</text>`; });
+      s+='</svg>';
+      return `<div class="ctl">Driver A <span class="sel">Sam Okafor</span> vs <span class="sel">Leo Martins</span></div><div class="say">Leo has had the quicker lap in 11 of your 14 races. You finished ahead in 9 of them, because his races have more mistakes in them.</div>
+      <div class="card"><h4>Best lap each race (dots) and who finished ahead (letter) <em>lower dot = quicker lap</em></h4>${s}<div class="legend"><span><i style="background:var(--you)"></i>Sam</span><span><i style="background:${COL['Leo Martins']}"></i>Leo</span><span>The letter under each pair shows who finished ahead.</span></div></div>
+      <div class="grid3"><div class="card"><div class="cap">Deciding factor</div><div class="mid">Clean laps</div><div class="cap">Leo averages 3.2 laps over 4% off his best per race; you average 1.1.</div></div><div class="card"><div class="cap">Trend</div><div class="mid goodt">Pace gap closing</div><div class="cap">Leo’s one-lap edge went from 0.21 s to under 0.05 s, and you now lead it.</div></div><div class="card"><div class="cap">Everything else</div><div class="mid">16 more stats</div><div class="cap"><span class="btn">Show all</span> the full table stays one click away.</div></div></div>`; } },
+    trends:{ was:'Points over time and a summary line.', learns:['A fitted line that says if you are still improving and how fast.','A plateau warning before the driver feels it.'], body(){
+      const v=TREND.map(r=>r.me); const fit=v.map((_,i)=>14.86-0.14*Math.log(1+i*1.8));
+      return `<div class="ctl">Driver <span class="sel">Sam Okafor</span> Track <span class="sel">Club Infield</span></div><div class="say">Still improving, but slower: 0.11 s a week in August, 0.03 s a week now. The next tenth will come from setup more than from laps.</div>
+      <div class="side-r"><div class="card">${line({w:620,h:260,n:v.length,y0:14.0,y1:14.95,ticks:[14.0,14.2,14.4,14.6,14.8],fmt:f1,series:[{v:fit,c:'var(--muted)',w:2,dash:'5 5'},{v,c:'var(--you)',w:2.5,dots:1,end:1}],xl:TREND.map((r,i)=>i%2?null:r.d),marks:[{i:3,y:v[3],t:'steep: −0.11 s/wk',c:'var(--good)',dy:-14},{i:10,y:v[10],t:'flattening: −0.03 s/wk',c:'var(--warn)',dy:-18,a:'end'}],label:'trend with fitted curve'})}<div class="legend"><span><i style="background:var(--you)"></i>best lap each race</span><span><i style="background:var(--muted)"></i>the curve it is following</span></div></div>
+      <div class="card"><h4>Where you are on the curve</h4><div style="display:grid;gap:10px"><div><span class="pill g">Learning</span> <span class="cap">Aug–Sep, big drops each week</span></div><div><span class="pill w">Refining</span> <b>← you are here</b><div class="cap">Gains under 0.05 s a week</div></div><div><span class="pill a">Plateau</span> <span class="cap">Three races with no PB, under 0.02 s/wk</span></div></div></div></div>
+      <div class="drill"><b>Try this:</b> your two Garage changes each gave about a tenth. Try one setup change per race night and let the trend tell you which ones work.</div>`; } },
+    pace:{ was:'11 columns of numbers the driver must interpret.', learns:['Each measure on a gauge with zones, so 2.6% reads as “normal, could be tighter”.','A verdict for the race and one drill.'], body(){
+      const gauge=(lab,val,txt,max,zones,fmt)=>{ const W=250, X=scale(0,max,10,W-10); let s=`<svg viewBox="0 0 ${W} 54">`; let prev=0; zones.forEach(([to,c,l])=>{ s+=`<rect x="${X(prev)}" y="16" width="${X(to)-X(prev)}" height="10" style="fill:${c};opacity:.35"/><text x="${(X(prev)+X(to))/2}" y="44" text-anchor="middle">${l}</text>`; prev=to; }); s+=`<polygon points="${X(Math.min(val,max))-6},4 ${X(Math.min(val,max))+6},4 ${X(Math.min(val,max))},14" style="fill:var(--ink)"/><rect x="${X(Math.min(val,max))-1.5}" y="12" width="3" height="18" style="fill:var(--ink)"/></svg>`; return `<div class="card"><div class="row" style="justify-content:space-between"><div class="cap">${lab}</div><div class="mid mono">${fmt(val)}</div></div>${s}<div class="cap" style="color:var(--ink)">${txt}</div></div>`; };
+      return `<div class="ctl">Race <span class="sel">A-Main · Fri 7 Nov · Club Infield</span> Driver <span class="sel">Sam Okafor</span> <span class="cap">P${finish.indexOf(ME)+1} of ${finish.length}</span></div><div class="say">${me.verdict} P2 was never in danger, but the crash and the fade let Priya’s lead grow to ${f1(P[ME].total-P['Priya Shah'].total)} s.</div>
+      <div class="grid3">${gauge('Consistency (spread of lap times)',me.cons,'Normal. One crash lap pushed it up; without lap 9 it’s '+f1(pace(RACE[ME].filter((_,i)=>i!==8)).cons)+'%.',6,[[1.5,'var(--good)','at your limit'],[4,'var(--warn)','normal'],[6,'var(--bad)','scrappy']],x=>f1(x)+'%')}
+      ${gauge('Left on the table',me.gain,'Over the 1.5 s line where tidying up beats finding speed.',8,[[1.5,'var(--good)','tidy'],[4,'var(--warn)','some to find'],[8,'var(--bad)','lots']],x=>f1(x)+'s')}
+      ${gauge('Fade (last third vs first)',me.fade,'About a tenth a lap slower in the last third. Check the pack.',1,[[.1,'var(--good)','held pace'],[.4,'var(--warn)','slowed'],[1,'var(--bad)','faded']],x=>sg(x)+'s')}</div>
+      <div class="card"><h4>Everyone’s verdict <em>sorted by the pace they could hold</em></h4><table class="t"><tr><th>Fin</th><th>Driver</th><th>Best 3 in a row</th><th>Read</th></tr>${[...finish].sort((a,b)=>P[a].run-P[b].run).map(n=>`<tr class="${n===ME?'me':''}"><td>P${finish.indexOf(n)+1}</td><td>${n}</td><td class="mono">${f3(P[n].run)}</td><td>${P[n].verdict}</td></tr>`).join('')}</table></div>
+      <div class="drill"><b>Try this next heat:</b> drive laps 1–3 at 99%. Your opener (14.62) was your second-slowest lap, and a calm start leaves margin for the end.</div>`; } },
+  }
+};
+
+// ================= OPTION D: The field =================
+const D = {
+  name:'You in the Field', hook:'Never one driver alone: always every driver, with you highlighted, so position explains the number.',
+  idea:'A time only means something next to other times. Option D puts every number in the context of the whole club: ladders, matrices and a quadrant map. The driver finds themselves by colour and reads their standing from where they sit, then clicks any dot to drill in.',
+  how:['Every chart shows the whole field in grey and “you” in orange.','Percentiles instead of raw ranks where fields differ in size.','Click any driver on any chart to make them “you” for the page.'],
+  chips:['Session history (existing)','Shared-race pairs (existing in Head to Head)','Field percentiles (new, computed)'],
+  tabs:{
+    overview:{ was:'Counts and a records table.', learns:['Every track as a ladder of the club’s best laps, record at the top.','Where the pack is tight and where it is spread out.'], body(){
+      const W=220, H=230;
+      const cols = TRACKS.map((t,i)=>{ const vals=Object.entries(PB).filter(([,v])=>v[i]).map(([n,v])=>[n,v[i]]).sort((a,b)=>a[1]-b[1]); const lo=t.rec, hi=lo*1.085, Y=scale(lo,hi,24,H-20);
+        let s=`<svg viewBox="0 0 ${W} ${H}"><line x1="60" x2="60" y1="20" y2="${H-16}" style="stroke:var(--line);stroke-width:6;stroke-linecap:round"/>`;
+        [0,2,4,6,8].forEach(p=>{ const y=Y(lo*(1+p/100)); s+=`<text x="44" y="${y+4}" text-anchor="end">${p?'+'+p+'%':'rec'}</text>`; });
+        vals.forEach(([n,v],k)=>{ const y=Y(v), me=n===ME; s+=`<circle cx="60" cy="${y}" r="${me?7:5}" style="fill:${me?'var(--you)':'var(--muted)'};opacity:${me?1:.55}"/><text x="${me?74:72}" y="${y+4}" class="${me?'strong':''}" style="${me?'fill:var(--you)':''}">${me?n.split(' ')[0]+' · '+f3(v):k===0?n.split(' ')[0]+' · '+f3(v):n.split(' ')[0]}</text>`; });
+        const rk = vals.findIndex(x=>x[0]===ME)+1;
+        return `<div class="card"><h4>${t.n} <em>${t.races} races</em></h4>${s}<div class="cap">You: <b class="you">${rk===1?'1st':rk===2?'2nd':rk===3?'3rd':rk+'th'}</b> of ${vals.length} regulars</div></div>`; }).join('');
+      return `<div class="ctl">Show <span class="sel">Club regulars (5+ races)</span> Class <span class="sel">Modified 2WD</span></div><div class="grid4">${cols}</div><div class="cap">Each ladder runs from the track record down to 8.5% slower. A tight cluster means close racing.</div>`; } },
+    pbs:{ was:'A long list of driver × track bests.', learns:['A heatmap of the whole club: rows are drivers, columns are tracks, colour is % off the record.','Your strong and weak tracks stand out without reading a number.'], body(){
+      const cell=p=> p==null?'var(--soft)': p<.5?'#127A47':p<1.5?'#2FA866':p<3?'#9BD3A8':p<5?'#F2D27A':'#E89A7A';
+      const ink=p=> p==null?'var(--muted)': p<1.5?'#fff':'#1A1A1A';
+      return `<div class="ctl">Colour by <span class="sel">% off the track record</span> Sort by <span class="sel">Average across tracks</span></div>
+      <div class="card"><table class="t" style="font-size:12.5px"><tr><th>Driver</th>${TRACKS.map(t=>`<th style="text-align:center">${t.n}</th>`).join('')}<th style="text-align:center">Average</th></tr>${Object.entries(PB).map(([n,v])=>{ const ps=v.map((x,i)=>x==null?null:(x/TRACKS[i].rec-1)*100); const a=avg(ps.filter(x=>x!=null)); return `<tr class="${n===ME?'me':''}"><td><b>${n}</b></td>${ps.map((p,i)=>`<td style="text-align:center;padding:3px"><div style="background:${cell(p)};color:${ink(p)};border-radius:5px;padding:7px 4px"><div class="mono" style="font-weight:600">${v[i]==null?'—':f3(v[i])}</div><div style="font-size:10.5px;opacity:.85">${p==null?'never raced':p<.01?'record':'+'+f1(p)+'%'}</div></div></td>`).join('')}<td style="text-align:center" class="mono">+${f1(a)}%</td></tr>`; }).join('')}</table>
+      <div class="legend" style="margin-top:8px">${[['record','#127A47'],['under 1.5%','#2FA866'],['1.5–3%','#9BD3A8'],['3–5%','#F2D27A'],['over 5%','#E89A7A']].map(([l,c])=>`<span><i style="background:${c};height:10px;width:16px"></i>${l}</span>`).join('')}</div></div>
+      <div class="callout"><b>Sam reads it as:</b> “Winter Tight is mine. Outer Loop is my weakest, 1.8% off, where Priya is only 1.1%.”</div>`; } },
+    laps:{ was:'Lap times of ticked drivers.', learns:['A race trace: gap to the leader at every lap, so the race reads like it unfolded.','Who gained and lost where, with you in orange.'], body(){
+      const names=Object.keys(RACE); const leaderCum=[]; let c=0; RACE['Priya Shah'].forEach(x=>{c+=x;leaderCum.push(c);});
+      const series=names.map(n=>{ let s=0; const v=RACE[n].map((x,i)=>{ s+=x; return s-leaderCum[i]; }); return { v, c:COL[n], w:n===ME?3:1.6, o:n===ME?1:.6, end:1 }; });
+      return `<div class="ctl">Race <span class="sel">A-Main · Fri 7 Nov · Club Infield</span> Show <span class="sel">Gap to leader</span> <span class="btn">Lap times</span></div>
+      <div class="card"><h4>Seconds behind Priya at the end of each lap <em>flat line = matching the leader’s pace</em></h4>${line({w:800,h:300,n:20,y0:0,y1:24,ticks:[0,4,8,12,16,20,24],fmt:x=>x+'s',series,xl:Array.from({length:20},(_,i)=>(i+1)%2?null:'L'+(i+1)),marks:[{i:8,y:series[1].v[8],t:'Sam crashes',c:'var(--you)',dy:-14}],label:'race trace'})}
+      <div class="legend">${names.map(n=>`<span><i style="background:${COL[n]}"></i>${n} · P${finish.indexOf(n)+1}</span>`).join('')}</div></div>`; } },
+    h2h:{ was:'Two pickers, 19 rows.', learns:['Who beats whom across the whole club, in one grid.','Click a cell to open that pair’s full head to head.'], body(){
+      return `<div class="ctl">Count <span class="sel">Finishing ahead in shared races</span> Since <span class="sel">1 Aug 2026</span></div>
+      <div class="side-r"><div class="card"><h4>Row beat column <em>wins of shared races</em></h4><table class="t"><tr><th></th>${FIELD.map(n=>`<th style="text-align:center">${n.split(' ')[0]}</th>`).join('')}</tr>${FIELD.map(r=>`<tr class="${r===ME?'me':''}"><td><b>${r.split(' ')[0]}</b></td>${MATRIX[r].map((c,j)=>{ if(!c) return '<td style="background:var(--soft)"></td>'; const p=c[0]/c[1]; const bg=p>=.6?'var(--good-soft)':p<=.4?'var(--bad-soft)':'var(--warn-soft)'; const fg=p>=.6?'var(--good)':p<=.4?'var(--bad)':'var(--warn)'; const sel = r===ME && FIELD[j]==='Leo Martins'; return `<td style="text-align:center;background:${bg};color:${fg};font-weight:600;${sel?'outline:2px solid var(--you);outline-offset:-2px':''}">${c[0]}–${c[1]-c[0]}</td>`; }).join('')}</tr>`).join('')}</table></div>
+      <div class="card"><h4>Sam vs Leo <em>opened from the grid</em></h4><div class="big">9–5</div><div class="cap">14 shared races</div><div style="display:grid;gap:8px;margin-top:10px">${[['Quicker best lap','Leo 11–3'],['Finished ahead','Sam 9–5'],['Fastest lap of race','Leo 5–3'],['Last 5','Sam 4–1']].map(([a,b])=>`<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:6px"><span class="cap">${a}</span><b>${b}</b></div>`).join('')}</div><div class="cap" style="margin-top:8px">The other 15 rows sit under “Show all”.</div></div></div>`; } },
+    trends:{ was:'One driver’s line on an empty chart.', learns:['Your line against the club: the median and the 10th–90th percentile band.','Whether you are improving faster than everyone else, or the track got quicker.'], body(){
+      const v=TREND.map(r=>r.me);
+      return `<div class="ctl">Driver <span class="sel">Sam Okafor</span> Track <span class="sel">Club Infield</span> Against <span class="sel">Everyone who raced that night</span></div>
+      <div class="side-r"><div class="card"><h4>Best lap each race, against the club <em>lower is quicker</em></h4>${line({w:620,h:280,n:v.length,y0:13.8,y1:15.7,ticks:[13.8,14.2,14.6,15.0,15.4],fmt:f1,bands:[{lo:TREND.map(r=>r.p10),hi:TREND.map(r=>r.p90),c:'var(--accent)',o:.13}],series:[{v:TREND.map(r=>r.med),c:'var(--accent)',w:1.6,dash:'5 4'},{v,c:'var(--you)',w:2.8,dots:1,end:1}],xl:TREND.map((r,i)=>i%2?null:r.d),hl:[{y:13.842,t:'record 13.842',c:'var(--muted)'}],label:'trend vs field'})}<div class="legend"><span><i style="background:var(--you)"></i>Sam</span><span><i style="background:var(--accent)"></i>club median</span><span><i style="background:var(--accent);opacity:.25;height:10px"></i>middle 80% of the club</span></div></div>
+      <div class="card"><h4>Since 15 Aug</h4><div style="display:grid;gap:10px"><div><div class="cap">You improved</div><div class="mid you">−0.775 s</div></div><div><div class="cap">The club median improved</div><div class="mid">−0.22 s</div></div><div><div class="cap">So the real gain is</div><div class="mid goodt">−0.555 s</div><div class="cap">From the 50th percentile to the 88th.</div></div></div></div></div>`; } },
+    pace:{ was:'A table of everyone’s pace numbers.', learns:['Every driver on a speed vs tidiness map, with four named zones.','The arrow shows where Sam was in his last 5 races: getting quicker, not yet tidier.'], body(){
+      const W=560,H=330, X=scale(13.85,14.75,60,W-20), Y=scale(0,4,H-40,20);
+      let s=`<svg viewBox="0 0 ${W} ${H}"><rect x="60" y="20" width="${X(14.3)-60}" height="${Y(2)-20}" style="fill:var(--warn-soft)"/><rect x="60" y="${Y(2)}" width="${X(14.3)-60}" height="${H-40-Y(2)}" style="fill:var(--good-soft)"/><rect x="${X(14.3)}" y="20" width="${W-20-X(14.3)}" height="${Y(2)-20}" style="fill:var(--bad-soft)"/><rect x="${X(14.3)}" y="${Y(2)}" width="${W-20-X(14.3)}" height="${H-40-Y(2)}" style="fill:var(--accent-soft)"/>`;
+      s+=`<text x="68" y="36" class="strong">Fast but wild</text><text x="68" y="${H-48}" class="strong">Fast and tidy</text><text x="${W-26}" y="36" text-anchor="end" class="strong">Still learning</text><text x="${W-26}" y="${H-48}" text-anchor="end" class="strong">Steady</text>`;
+      [13.9,14.1,14.3,14.5,14.7].forEach(t=>s+=`<text x="${X(t)}" y="${H-22}" text-anchor="middle">${f1(t)}</text>`);[0,1,2,3,4].forEach(t=>s+=`<text x="52" y="${Y(t)+4}" text-anchor="end">${t}%</text>`);
+      s+=`<text x="${(60+W-20)/2}" y="${H-4}" text-anchor="middle">best 3 laps in a row (s) → slower</text><text x="14" y="${H/2}" transform="rotate(-90 14 ${H/2})" text-anchor="middle">spread of lap times ↑ scrappier</text>`;
+      const prev=[[14.42,3.4],[14.38,3.1],[14.33,2.9],[14.29,3.0]]; s+=`<polyline points="${prev.map(([a,b])=>X(a)+','+Y(b)).join(' ')} ${X(me.run)},${Y(me.cons)}" style="fill:none;stroke:var(--you);stroke-width:1.5;stroke-dasharray:3 3;opacity:.7"/>`; prev.forEach(([a,b])=>s+=`<circle cx="${X(a)}" cy="${Y(b)}" r="3" style="fill:var(--you);opacity:.45"/>`);
+      Object.entries(P).forEach(([n,p])=>{ const m=n===ME, rx=Math.min(p.run,14.6); s+=`<circle cx="${X(rx)}" cy="${Y(Math.min(p.cons,4))}" r="${m?9:7}" style="fill:${COL[n]};stroke:var(--panel);stroke-width:2"/><text x="${X(rx)+12}" y="${Y(Math.min(p.cons,4))+4}" class="strong">${n.split(' ')[0]}${p.run>14.6?' →':''} · ${f1(p.cons)}%</text>`; });
+      s+='</svg>';
+      return `<div class="ctl">Race <span class="sel">A-Main · Fri 7 Nov · Club Infield</span> <span class="btn">Table view</span></div>
+      <div class="side-r"><div class="card"><h4>Speed against tidiness <em>everyone in this race</em></h4>${s}</div>
+      <div class="card"><h4>Reading the map</h4><div style="display:grid;gap:8px" class="cap"><div><span class="pill g">Fast and tidy</span> where race winners live. Priya, every week.</div><div><span class="pill w">Fast but wild</span> the speed is there; the next step is fewer mistakes.</div><div><span class="pill a">Steady</span> clean but slow; look for speed in setup and lines.</div><div><span class="pill b">Still learning</span> both to come; seat time helps most.</div><div style="color:var(--ink)"><b class="you">Sam’s dotted trail</b> is his last five races: moving left (faster) each week, not yet down (tidier).</div></div></div></div>`; } },
+  }
+};
+const OPTS = { A, B, C, D };
+try { const sv = JSON.parse(localStorage.getItem('ra-rework')||'null'); if (sv && OPTS[sv.opt] && OPTS[sv.opt].tabs[sv.tab]) state = sv; } catch(e) {}
+
+// ---------- Render ----------
+function render() {
+  const o = OPTS[state.opt], t = o.tabs[state.tab];
+  document.getElementById('picker').innerHTML = Object.entries(OPTS).map(([k,v])=>`<button class="opt" id="opt-${k}" data-opt="${k}" aria-pressed="${k===state.opt}"><span class="letter">Option ${k}</span><span class="name">${v.name}</span><span class="hook">${v.hook}</span></button>`).join('');
+  document.getElementById('idea').innerHTML = `<div><div class="eyebrow">Option ${state.opt} · the idea</div><h2>${o.name}</h2><p>${o.idea}</p><div class="chips">${o.chips.map(c=>`<span class="chip ${/new/i.test(c)?'new':''}">${c}</span>`).join('')}</div></div><div><div class="eyebrow" style="margin-bottom:6px">How it works</div><ul>${o.how.map(h=>`<li>${h}</li>`).join('')}</ul></div>`;
+  document.getElementById('win').innerHTML = `<div class="titlebar"><i></i><i></i><i></i><span style="margin-left:6px">HeatCaller · Race Analytics · mock-up, sample data</span></div><div class="app"><nav class="side">${NAV.map(n=>`<span class="${n==='Race Analytics'?'on':''}">${n}</span>`).join('')}</nav><div class="main"><div class="tabs" role="tablist">${TABS.map(([k,l])=>`<button class="tab" role="tab" id="tab-${k}" data-tab="${k}" aria-selected="${k===state.tab}">${l}</button>`).join('')}</div>${t.body()}</div></div>`;
+  document.getElementById('notes').innerHTML = `<div class="note"><div class="eyebrow">${TABS.find(x=>x[0]===state.tab)[1]} tab</div><h3>What the driver learns</h3><ul>${t.learns.map(l=>`<li>${l}</li>`).join('')}</ul></div><div class="note"><h3>Today</h3><div class="was">${t.was}</div></div><div class="note"><h3>Step through</h3><div class="was">Click the tabs inside the window. Each option keeps the same six tabs and the same sample race.</div></div>`;
+  try { localStorage.setItem('ra-rework', JSON.stringify(state)); } catch(e) {}
+}
+document.addEventListener('click', e => {
+  const opt = e.target.closest('[data-opt]'); if (opt) { state.opt = opt.dataset.opt; render(); return; }
+  const tab = e.target.closest('[data-tab]'); if (tab) { state.tab = tab.dataset.tab; render(); }
+});
+document.getElementById('compare').innerHTML = `<div class="eyebrow">Side by side</div><h2>How the four compare</h2>
+<div class="tw"><table class="t"><tr><th></th><th>A · Car Lengths</th><th>B · Driver Card</th><th>C · Race Engineer</th><th>D · You in the Field</th></tr>
+<tr><td><b>Answers</b></td><td>How big is this gap, really?</td><td>Am I better than my usual?</td><td>What should I do next heat?</td><td>Where do I stand at this club?</td></tr>
+<tr><td><b>Best for</b></td><td>Newer drivers, the announcer</td><td>Regulars tracking a season</td><td>Drivers who want to improve</td><td>Competitive regulars</td></tr>
+<tr><td><b>New data</b></td><td>Lap length per layout</td><td>None (links Garage log)</td><td>About 12 lines of drill text</td><td>None</td></tr>
+<tr><td><b>New drawing</b></td><td>Car strips, loss bars, waterfall</td><td>Lap cells, rival bars, pinned trend</td><td>Annotated charts, zone gauges</td><td>Ladders, heatmap, race trace, quadrant</td></tr>
+<tr><td><b>Risk</b></td><td>Lap length must be entered right</td><td>Less useful to a race director</td><td>Wrong advice erodes trust</td><td>Busy for a club of 6 drivers</td></tr>
+<tr><td><b>Build size</b></td><td>Medium</td><td>Medium</td><td>Medium to large</td><td>Large</td></tr></table></div>
+<div class="rec"><b>My pick: C, with A’s car lengths as a second unit.</b> The Pace tab’s verdict is already the best thing on the page, and C spreads that voice to every tab. Adding “7 car lengths” beside each gap costs one field per layout and makes the sentences land. B’s Garage pins on Trends are worth taking too, whichever option wins.</div>`;
+render();
+</script>
