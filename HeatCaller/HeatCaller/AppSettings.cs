@@ -2041,6 +2041,10 @@ public sealed class AppSettings
     /// championship does not lose the page from under it on an update. A new
     /// club is asked on the last step of the first-run wizard, ticked there
     /// by default; anyone can change it in Manage Navigation.
+    ///
+    /// RETIRED (14 Nov 2026): the ticks in the wizard and Manage Navigation
+    /// are gone and the sidebar no longer reads this - every page shows.
+    /// Kept so older settings files load and round-trip unchanged.
     /// </summary>
     public bool HideUntestedPages { get; set; }
 
