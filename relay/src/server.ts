@@ -78,7 +78,7 @@ import type { UsageLog } from "./usagelog.js";
 import { BROADCAST_TTL_SECONDS, myNightUrl, PUSH_CHANNEL, pushKindsFrom, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
 import { PAGES_BUILD } from "./pagebuild.js";
 import { nextNightIcs } from "./ics.js";
-import { liveVideo, raceVideo, streamFrom, VideoCheck, type OEmbedAsk, type RaceVideo, type Stream } from "./video.js";
+import { hiddenAfter, liveVideo, mergedStreamBody, raceVideo, STREAM_MAX_PIECES, STREAM_NIGHTS_KEPT, streamFrom, streamNightId, VideoCheck, type OEmbedAsk, type RaceVideo, type Stream } from "./video.js";
 import { SIGNIN_MAIL, SIGNIN_MAIL_MAX, SIGNIN_MAIL_MAX_BODY, SIGNIN_MAIL_PER_HOUR, signinEmailFrom, signinItemsFrom } from "./signinmail.js";
 import { addCounts, countableEvents, PAGE_COUNTS, PAGE_COUNTS_DAYS, PAGE_COUNTS_MAX_BODY, PAGE_COUNTS_PER_ADDRESS, totalsOver } from "./pagecounts.js";
 
@@ -302,6 +302,12 @@ const NIGHTS_OPEN_DOC = "nightsopen";
 
 /** The channel one driver's night lives in - see CHANNELS.nights. */
 const NIGHTS_CHANNEL = "nights";
+/** Race video: each night's stream document, kept past the night (video.ts mergedStreamBody). Private: never served. */
+const STREAM_NIGHTS_CHANNEL = "streamnights";
+/** Race video: the races a club has hidden, remembered past the night (video.ts hiddenAfter). Private. */
+const STREAM_HIDDEN_CHANNEL = "streamhidden";
+/** Race video: what the relay's checks with YouTube learnt (video.ts VideoCheck). Private. */
+const VIDEO_CHECK_CHANNEL = "videocheck";
 
 /**
  * Car photos read at once, across every club - each up to
@@ -1511,7 +1517,17 @@ export class Relay {
     // 22 Oct 2026, driver experience: clips and drivers' asks. See the fields.
     this.clips = options.clips;
     this.push = options.push;
-    this.videoCheck = options.videoCheck === undefined ? undefined : new VideoCheck(options.videoCheck, this.now);
+    // What the checks learnt is kept in the club's private "videocheck"
+    // snapshot, so a restart neither forgets a dead video nor asks again.
+    this.videoCheck = options.videoCheck === undefined ? undefined : new VideoCheck(options.videoCheck, this.now, {
+      load: async (club) => {
+        const kept = (await this.store.getSnapshot(club, VIDEO_CHECK_CHANNEL))?.body;
+        return isPlainObject(kept) && Array.isArray(kept["checks"]) ? (kept["checks"] as { id: string; firstMs: number; lastMs: number; dead?: boolean }[]) : undefined;
+      },
+      save: async (club, checks) => {
+        await this.store.putSnapshot(club, VIDEO_CHECK_CHANNEL, { seq: this.now().getTime(), publishedAt: this.now().toISOString(), body: { checks } });
+      },
+    });
     this.clipReads = new Limiter(900, 60 * 1000, () => this.now().getTime());
     this.clipUploads = new Limiter(120, 60 * 1000, () => this.now().getTime());
     this.askTraffic = new Limiter(300, 10 * 60 * 1000, () => this.now().getTime());
@@ -3230,6 +3246,12 @@ export class Relay {
 
         if (spec.name === "site") {
           this.forgetSite(club);
+        }
+
+        // Race video: every night's copy kept, and hidden races remembered,
+        // so a race keeps its video after the laptop has moved on.
+        if (spec.name === "stream" && !unreadable) {
+          await this.keepStreamNight(club, existing?.body, body, doc);
         }
 
         // Race video (V7): a new video is checked with YouTube the night it
@@ -7720,6 +7742,25 @@ export class Relay {
   }
 
   /**
+   * Whether this driver may report a race video, or ask to hide it (race
+   * video V5, V6; look-back 14 Nov 2026). WHY ITS OWN GATE: the club's links
+   * usually go up after the racing, often the next day, when the check-in
+   * list askGateOf wants is closed. This wants nights open, asks open, and
+   * the race on the driver's own night. Reads nothing that needs a pass, so
+   * it is safe inside the club's lock too.
+   */
+  private async videoAskGateOf(club: string, id: string, race: unknown): Promise<boolean> {
+    if (!DRIVER_ID.test(id) || typeof race !== "string" || !/^[0-9a-f]{32}$/.test(race)
+      || !(await this.nightsOpenFor(club)) || !(await this.driverAsksOpenFor(club))) {
+      return false;
+    }
+
+    const night = (await this.store.getItem(club, NIGHTS_CHANNEL, id).catch(() => undefined))?.body;
+    const races = isPlainObject(night) && Array.isArray(night["races"]) ? (night["races"] as unknown[]) : [];
+    return races.some((r) => isPlainObject(r) && r["sid"] === race);
+  }
+
+  /**
    * A driver asking the desk for something, with their badge code - see
    * driverasks.ts. Held until the laptop collects it; never acted on here.
    */
@@ -7753,7 +7794,12 @@ export class Relay {
     // "I'm coming" has a gate of its own, with no check-in - see comingGateOf.
     const comingOnly = checkin === undefined && body["kind"] === "coming" && await this.comingGateOf(club, id);
 
-    if (checkin === undefined && !comingOnly) {
+    // A race video report has a gate of its own too - see videoAskGateOf.
+    const videoRace = isPlainObject(body["f"]) ? (body["f"] as Record<string, unknown>)["race"] : undefined;
+    const videoOnly = checkin === undefined && !comingOnly && (body["kind"] === "videooff" || body["kind"] === "videohide")
+      && await this.videoAskGateOf(club, id, typeof videoRace === "string" ? videoRace.trim().toLowerCase() : videoRace);
+
+    if (checkin === undefined && !comingOnly && !videoOnly) {
       sendJson(response, 404, { ok: false, error: "Not found" });
       return;
     }
@@ -7826,7 +7872,8 @@ export class Relay {
       // Read again inside the lock, as sendClubNote does: the club may have
       // closed asks or nights, or taken them off the list, while this
       // waited for it - and closing deletes what is held under this lock.
-      if (!(await this.askGateInLock(club, id)) && !(comingOnly && await this.comingGateOf(club, id))) {
+      if (!(await this.askGateInLock(club, id)) && !(comingOnly && await this.comingGateOf(club, id))
+        && !(videoOnly && await this.videoAskGateOf(club, id, typeof videoRace === "string" ? videoRace.trim().toLowerCase() : videoRace))) {
         return "closed" as const;
       }
 
@@ -9100,15 +9147,67 @@ export class Relay {
   }
 
   /**
-   * The club's stream document, read and checked (video.ts), or undefined.
-   * Each read also starts any check that is due (V7) - not waited for, so
-   * a video found dead drops out from the next read on.
+   * Every night's stream as one (video.ts mergedStreamBody), read and
+   * checked, or undefined. Kept a minute, and forgotten when the laptop
+   * sends a new one. Each read also starts any check that is due (V7) - not
+   * waited for, so a video found dead drops out from the next read on.
    */
   private async streamOf(club: string): Promise<Stream | undefined> {
-    const doc = await this.store.getSnapshot(club, "stream").catch(() => undefined);
-    const stream = streamFrom(doc?.body, this.videoCheck?.dead(club));
+    let merged = this.mergedStreams.get(club);
+
+    if (merged === undefined || this.now().getTime() - merged.at > 60_000) {
+      const latest = await this.store.getSnapshot(club, "stream").catch(() => undefined);
+      const nights = latest === undefined ? [] : await this.store.listItems(club, STREAM_NIGHTS_CHANNEL).catch(() => []);
+      const hidden = await this.store.getSnapshot(club, STREAM_HIDDEN_CHANNEL).catch(() => undefined);
+      const hid = isPlainObject(hidden?.body) && Array.isArray((hidden.body as Record<string, unknown>)["hidden"])
+        ? ((hidden.body as Record<string, unknown>)["hidden"] as unknown[]).filter((s): s is string => typeof s === "string")
+        : [];
+      merged = { at: this.now().getTime(), body: mergedStreamBody(latest?.body, nights.map((n) => n.doc.body), hid) };
+      this.mergedStreams.set(club, merged);
+    }
+
+    await this.videoCheck?.ready(club);
+    const stream = streamFrom(merged.body, this.videoCheck?.dead(club), STREAM_MAX_PIECES * (STREAM_NIGHTS_KEPT + 1));
     if (stream !== undefined && this.videoCheck !== undefined) void this.videoCheck.saw(club, stream.pieces.map((p) => p.videoId));
     return stream;
+  }
+
+  /** Tonight's stream alone, as the laptop last sent it - for what is live now. */
+  private async latestStreamOf(club: string): Promise<Stream | undefined> {
+    const doc = await this.store.getSnapshot(club, "stream").catch(() => undefined);
+    await this.videoCheck?.ready(club);
+    return streamFrom(doc?.body, this.videoCheck?.dead(club));
+  }
+
+  /** streamOf's copy, per club. */
+  private readonly mergedStreams = new Map<string, { at: number; body: Record<string, unknown> | undefined }>();
+
+  /**
+   * After the laptop sends its stream document (inside the publish lock):
+   * keep that night's copy, prune the oldest past STREAM_NIGHTS_KEPT, and
+   * remember which races are hidden past the night.
+   */
+  private async keepStreamNight(club: string, before: unknown, after: unknown, doc: StoredDocument): Promise<void> {
+    const night = streamNightId(after);
+
+    if (night !== undefined) {
+      await this.store.putItem(club, STREAM_NIGHTS_CHANNEL, night, doc);
+      const kept = await this.store.listItems(club, STREAM_NIGHTS_CHANNEL);
+      const oldest = kept.map((k) => k.id).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
+      for (const id of oldest.slice(0, Math.max(0, oldest.length - STREAM_NIGHTS_KEPT))) await this.store.deleteItem(club, STREAM_NIGHTS_CHANNEL, id);
+    }
+
+    const was = await this.store.getSnapshot(club, STREAM_HIDDEN_CHANNEL).catch(() => undefined);
+    const remembered = isPlainObject(was?.body) && Array.isArray((was.body as Record<string, unknown>)["hidden"])
+      ? ((was.body as Record<string, unknown>)["hidden"] as unknown[]).filter((s): s is string => typeof s === "string")
+      : [];
+    const hidden = hiddenAfter(remembered, before, after);
+
+    if (hidden.join() !== remembered.join()) {
+      await this.store.putSnapshot(club, STREAM_HIDDEN_CHANNEL, { seq: doc.seq, publishedAt: doc.publishedAt, body: { hidden } });
+    }
+
+    this.mergedStreams.delete(club);
   }
 
   /**
@@ -9118,7 +9217,7 @@ export class Relay {
    */
   private async videoAlerts(club: string, push: PushService): Promise<void> {
     try {
-      const stream = await this.streamOf(club);
+      const stream = await this.latestStreamOf(club);
       const linked = stream === undefined || !stream.on ? [] : stream.pieces.filter((p) => p.videoId !== "" && !p.hidden);
       if (stream === undefined || linked.length === 0) return;
       const night = String(Math.min(...linked.map((p) => p.startMs)));
@@ -9226,7 +9325,8 @@ export class Relay {
     // that one simply has no button.
     const missed: string[] = [];
     const linked = stream === undefined || !stream.on ? [] : stream.pieces.filter((p) => p.videoId !== "");
-    const firstMs = linked.length > 0 ? Math.min(...linked.map((p) => p.startMs)) : NaN;
+    // A night that was streamed: a linked piece within 12 hours of the race.
+    const streamedNear = (green: number) => linked.some((p) => Math.abs(green - p.startMs) < 12 * 60 * 60 * 1000);
 
     for (const r of races.slice(0, 60)) {
       if (!isPlainObject(r) || typeof r["sid"] !== "string") continue;
@@ -9237,7 +9337,7 @@ export class Relay {
       const video = raceVideo(stream, { sid, startedUtc: rb["startedUtc"], endedUtc: rb["endedUtc"] }, false, r);
       const green = typeof rb["startedUtc"] === "string" ? Date.parse(rb["startedUtc"]) : NaN;
       if (video !== undefined) videos[sid] = video;
-      else if (stream !== undefined && !stream.hidden.has(sid) && green >= firstMs - 12 * 60 * 60 * 1000 && green < this.now().getTime()
+      else if (stream !== undefined && !stream.hidden.has(sid) && streamedNear(green) && green < this.now().getTime()
         && !stream.pieces.some((p) => green >= p.startMs && (p.endMs === undefined || green <= p.endMs))) missed.push(sid);
     }
 
@@ -9247,13 +9347,45 @@ export class Relay {
   /**
    * The stream on now: {live: "<video id>"} while a piece is open and the
    * laptop's race state is under two minutes old, else {live: null} - never
-   * "live" when it isn't.
+   * "live" when it isn't. lowLatency says how far behind the video runs.
+   * While nothing is live, last is tonight's latest race with video on public
+   * results ({title, video}) or null - for "Watch the last race" (V4).
    */
   private async videoLive(response: ServerResponse, club: string): Promise<void> {
-    const stream = await this.streamOf(club);
+    const stream = await this.latestStreamOf(club);
     const state = await this.store.getSnapshot(club, "state").catch(() => undefined);
     const fresh = state !== undefined && this.now().getTime() - Date.parse(state.publishedAt) < 120_000;
-    sendJson(response, 200, { ok: true, live: fresh ? liveVideo(stream) ?? null : null });
+    const live = fresh ? liveVideo(stream) ?? null : null;
+    const last = live === null && stream !== undefined ? await this.lastRaceVideo(club, stream) : null;
+    sendJson(response, 200, { ok: true, live, lowLatency: stream?.lowLatency === true, last });
+  }
+
+  /** lastRaceVideo's answer, per club, for a minute. */
+  private readonly lastRaceVideos = new Map<string, { at: number; last: { title: string; video: RaceVideo } | null }>();
+
+  /** Tonight's latest race with public video, from the results (read at most once a minute a club). */
+  private async lastRaceVideo(club: string, stream: Stream): Promise<{ title: string; video: RaceVideo } | null> {
+    const kept = this.lastRaceVideos.get(club);
+    if (kept !== undefined && this.now().getTime() - kept.at < 60_000) return kept.last;
+
+    let last: { title: string; video: RaceVideo; at: number } | null = null;
+    const first = stream.pieces.length > 0 ? Math.min(...stream.pieces.map((p) => p.startMs)) : NaN;
+
+    if (Number.isFinite(first)) {
+      for (const item of await this.store.listItems(club, "results").catch(() => [])) {
+        const rb = isPlainObject(item.doc.body) ? (item.doc.body as Record<string, unknown>) : undefined;
+        const green = rb && typeof rb["startedUtc"] === "string" ? Date.parse(rb["startedUtc"]) : NaN;
+        if (rb === undefined || !(green >= first) || (last !== null && green <= last.at)) continue;
+        const video = raceVideo(stream, { sid: item.id, startedUtc: rb["startedUtc"], endedUtc: rb["endedUtc"] }, true);
+        if (video === undefined) continue;
+        const title = [rb["label"], rb["type"]].find((s): s is string => typeof s === "string" && s.trim() !== "")?.trim().slice(0, 60) ?? "The last race";
+        last = { title, video, at: green };
+      }
+    }
+
+    const answer = last === null ? null : { title: last.title, video: last.video };
+    this.lastRaceVideos.set(club, { at: this.now().getTime(), last: answer });
+    return answer;
   }
 
   /**

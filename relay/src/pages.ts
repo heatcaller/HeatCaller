@@ -8403,6 +8403,8 @@ const LIVE_VIDEO_JS = `
   let shown = null;
   let small = false;
   let gone = false;
+  let lowLatency = false;
+  let lastRace = null;
 
   function kept() {
     try {
@@ -8454,7 +8456,7 @@ const LIVE_VIDEO_JS = `
     box.appendChild(f);
     dock.appendChild(box);
     dock.appendChild(controls());
-    const notes = ['The video runs about 20 s behind the timing.'];
+    const notes = [lowLatency ? 'The video runs a few seconds behind the timing.' : 'The video runs about 20 s behind the timing.'];
     if (typeof window.hcStopListen === 'function' && typeof window.hcListening === 'function' && window.hcListening() === true) {
       window.hcStopListen();
       notes.push('Listen is off while you watch.');
@@ -8476,6 +8478,10 @@ const LIVE_VIDEO_JS = `
     dock.textContent = '';
     const box = hcVel('div', 'hcvplayer');
     box.appendChild(hcVel('p', 'note', 'The stream has stopped.'));
+    if (lastRace) {
+      const watchLast = lastRace;
+      box.appendChild(hcVideoButton('Watch the last race', 'Watch the last race, ' + watchLast.title + ', video from YouTube', () => hcVideoSheet(watchLast.video, { title: watchLast.title, where: 'live' })));
+    }
     const res = hcVel('a', 'page', 'See the results');
     res.href = '/c/' + encodeURIComponent(CLUB) + '/results';
     box.appendChild(res);
@@ -8497,9 +8503,12 @@ const LIVE_VIDEO_JS = `
       const answer = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/video/live', { cache: 'no-store' });
       const body = answer.ok ? await answer.json() : null;
       id = body && typeof body.live === 'string' && /^[A-Za-z0-9_-]{11}$/.test(body.live) ? body.live : null;
+      lowLatency = !!(body && body.lowLatency === true);
+      lastRace = body && body.last && typeof body.last === 'object' && hcVideoOk(body.last.video) ? body.last : null;
     } catch (e) { id = liveId; /* no signal: as it was */ }
     liveId = id;
-    if (shown && !gone && !liveId) stopped();
+    // Drawn again while stopped, so Watch the last race appears once the relay knows it.
+    if (shown && !liveId) stopped();
     else if (shown && gone && liveId) open(liveId, false);
     else if (shown && liveId && liveId !== shown) open(liveId, false);
     else if (!shown && liveId) {
@@ -13049,7 +13058,20 @@ const ALERT_KIND_WORDS = [['race', 'My races (next, staged, 5 minutes)'], ['mars
 function alertKinds() {
   try {
     const kept = JSON.parse(localStorage.getItem(ALERT_KINDS_KEY) || 'null');
-    if (Array.isArray(kept)) return kept.filter((k) => ALERT_KIND_WORDS.some((w) => w[0] === k));
+    if (Array.isArray(kept)) {
+      // A kind added since the phone chose (race video, 14 Nov 2026) starts
+      // on, as it does for a phone that never chose - once, so turning it
+      // off afterwards sticks. hc-alert-kinds-seen lists the kinds offered.
+      const SEEN_KEY = 'hc-alert-kinds-seen:' + CLUB;
+      const seen = JSON.parse(localStorage.getItem(SEEN_KEY) || '["race","marshal","result","news"]');
+      const fresh = ALERT_KIND_WORDS.map((w) => w[0]).filter((k) => Array.isArray(seen) && seen.indexOf(k) < 0);
+      if (fresh.length > 0) {
+        fresh.forEach((k) => { if (kept.indexOf(k) < 0) kept.push(k); });
+        localStorage.setItem(ALERT_KINDS_KEY, JSON.stringify(kept));
+        localStorage.setItem(SEEN_KEY, JSON.stringify(ALERT_KIND_WORDS.map((w) => w[0])));
+      }
+      return kept.filter((k) => ALERT_KIND_WORDS.some((w) => w[0] === k));
+    }
   } catch (e) { /* all on */ }
   return ALERT_KIND_WORDS.map((w) => w[0]);
 }
@@ -13066,7 +13088,10 @@ function alertKindsBox() {
     tick.addEventListener('change', () => {
       const now = alertKinds().filter((k) => k !== key);
       if (tick.checked) now.push(key);
-      try { localStorage.setItem(ALERT_KINDS_KEY, JSON.stringify(now)); } catch (e) { /* this visit only */ }
+      try {
+        localStorage.setItem(ALERT_KINDS_KEY, JSON.stringify(now));
+        localStorage.setItem('hc-alert-kinds-seen:' + CLUB, JSON.stringify(ALERT_KIND_WORDS.map((w) => w[0])));
+      } catch (e) { /* this visit only */ }
       // Told again with the new choice; the subscription itself is the same.
       void pushResume();
     });
@@ -16619,8 +16644,11 @@ const NIGHT_PASS_KEY = 'hg-night-pass-' + CLUB;
 // 2026, driver phone plan item 8): the PIN box, for them.
 const ADDING = /[?&]add=1(&|$)/.test(location.search);
 const REMEMBERED = ADDING ? '' : meCode();
+// The race a "videos are up" alert named (?race=<sid>) goes along, so the
+// night opens at it (race video V2; look-back, 14 Nov 2026).
+const RACE_ASKED = (/[?&]race=([0-9a-f]{32})(&|$)/.exec(location.search) || [])[1] || '';
 if (REMEMBERED) {
-  const there = '/c/' + encodeURIComponent(CLUB) + '/night#d=' + REMEMBERED;
+  const there = '/c/' + encodeURIComponent(CLUB) + '/night' + (RACE_ASKED ? '?race=' + RACE_ASKED : '') + '#d=' + REMEMBERED;
   try { location.replace(there); } catch (e) { location.href = there; }
 }
 
@@ -16775,7 +16803,7 @@ function draw(message) {
       // racing should never put you in the heats. Check-in is its own
       // button on the night, which asks "Are you at the track?" first.
       said.textContent = 'Signed in. Opening your page\u2026';
-      go('/c/' + encodeURIComponent(CLUB) + '/night#d=' + code);
+      go('/c/' + encodeURIComponent(CLUB) + '/night' + (RACE_ASKED ? '?race=' + RACE_ASKED : '') + '#d=' + code);
       return;
     }
 

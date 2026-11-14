@@ -2418,6 +2418,13 @@ public sealed class AppSettings
     public int VideoLeadInSeconds { get; set; } = 10;
 
     /// <summary>
+    /// The club streams with YouTube's Ultra-low latency (V4): Live's docked
+    /// player then says the video runs "a few seconds" behind the timing,
+    /// not about 20. Off: YouTube's normal latency.
+    /// </summary>
+    public bool VideoUltraLowLatency { get; set; }
+
+    /// <summary>
     /// Show race video on the club's public results too (Asher, 14 Nov 2026:
     /// "public"), not only on each driver's own night. Juniors' races stay on
     /// their own night whatever this says.

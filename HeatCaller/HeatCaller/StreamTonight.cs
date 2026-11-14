@@ -261,6 +261,7 @@ public sealed class StreamTonight
                 on = settings.VideoEnabled,
                 publicResults = settings.VideoOnPublicResults,
                 leadIn = Math.Clamp(settings.VideoLeadInSeconds, 0, 30),
+                lowLatency = settings.VideoUltraLowLatency,
                 pieces = _saved.Pieces.Select(p => new
                 {
                     videoId = p.VideoId,

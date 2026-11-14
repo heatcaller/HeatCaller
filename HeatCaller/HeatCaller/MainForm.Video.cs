@@ -40,6 +40,26 @@ public sealed partial class MainForm
         return stream.Document(_settings, JuniorRacesToday());
     }
 
+    /// <summary>
+    /// For the closing checklist (look-back, 14 Nov 2026): tonight's stream
+    /// pieces still without a YouTube link, and links YouTube refused. Null
+    /// when race video is off or nothing was streamed.
+    /// </summary>
+    private NightClose.VideoLeft? VideoLeftTonight()
+    {
+        var pieces = _streamTonight?.Pieces ?? Array.Empty<StreamTonight.Piece>();
+
+        if (!_settings.VideoEnabled || pieces.Count == 0)
+        {
+            return null;
+        }
+
+        var dead = _relayPublisher.DeadVideos;
+        return new NightClose.VideoLeft(
+            pieces.Count(p => !p.Hidden && p.VideoId.Length == 0),
+            pieces.Count(p => !p.Hidden && p.VideoId.Length > 0 && dead.Contains(p.VideoId)));
+    }
+
     /// <summary>Tonight's races (the last 20 hours), newest first, for the Race video card's "Hide races..." (V6).</summary>
     private IReadOnlyList<(string Id, string Label)> VideoRacesTonight()
     {

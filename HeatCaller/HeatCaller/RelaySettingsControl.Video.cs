@@ -13,6 +13,7 @@ public sealed partial class RelaySettingsControl
 {
     private readonly CheckBox _chkVideo = new ThemedCheckBox();
     private readonly CheckBox _chkVideoPublic = new ThemedCheckBox();
+    private readonly CheckBox _chkVideoLowLatency = new ThemedCheckBox();
     private readonly TextBox _txtObsHost = new();
     private readonly NumericUpDown _numObsPort = new();
     private readonly TextBox _txtObsPassword = new();
@@ -30,6 +31,10 @@ public sealed partial class RelaySettingsControl
         _chkVideoPublic.Text = "Show it on the public results too (juniors' races stay on their own night)";
         _chkVideoPublic.AutoSize = true;
         _chkVideoPublic.CheckedChanged += (_, _) => { if (!_loading) { _settings.VideoOnPublicResults = _chkVideoPublic.Checked; _settings.Save(); } };
+
+        _chkVideoLowLatency.Text = "We stream with YouTube's Ultra-low latency (Live tells phones the video is a few seconds behind, not about 20)";
+        _chkVideoLowLatency.AutoSize = true;
+        _chkVideoLowLatency.CheckedChanged += (_, _) => { if (!_loading) { _settings.VideoUltraLowLatency = _chkVideoLowLatency.Checked; _settings.Save(); } };
 
         _txtObsHost.PlaceholderText = "the streaming PC's address, e.g. 192.168.1.40";
         _txtObsHost.TextChanged += (_, _) => { if (!_loading) _settings.VideoObsHost = _txtObsHost.Text.Trim(); };
@@ -71,6 +76,7 @@ public sealed partial class RelaySettingsControl
         var card = new Section("Race video (YouTube)");
         card.Add(_chkVideo, stretch: false);
         card.Add(_chkVideoPublic, stretch: false);
+        card.Add(_chkVideoLowLatency, stretch: false);
         card.Add(grid, gapBelow: UiLayout.HintGap);
         card.Add(hint);
         card.Add(_lblObsState, gapBelow: UiLayout.HintGap);
@@ -107,6 +113,7 @@ public sealed partial class RelaySettingsControl
     {
         _chkVideo.Checked = _settings.VideoEnabled;
         _chkVideoPublic.Checked = _settings.VideoOnPublicResults;
+        _chkVideoLowLatency.Checked = _settings.VideoUltraLowLatency;
         _txtObsHost.Text = _settings.VideoObsHost;
         _numObsPort.Value = Math.Clamp(_settings.VideoObsPort, 1, 65535);
         _txtObsPassword.Text = _settings.VideoObsPassword;

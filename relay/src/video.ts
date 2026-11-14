@@ -44,6 +44,8 @@ export interface Stream {
   readonly on: boolean;
   readonly publicResults: boolean;
   readonly leadIn: number;
+  /** The club streams with YouTube's Ultra-low latency (V4): the video is a few seconds behind, not about 20. */
+  readonly lowLatency: boolean;
   readonly pieces: readonly StreamPiece[];
   readonly hidden: ReadonlySet<string>;
   readonly juniors: ReadonlySet<string>;
@@ -66,12 +68,12 @@ const ms = (v: unknown) => (typeof v === "string" ? Date.parse(v) : NaN);
 const sids = (v: unknown) => new Set(Array.isArray(v) ? v.filter((s): s is string => typeof s === "string" && SID.test(s)) : []);
 
 /** The laptop's stream document, checked; undefined when there is none worth reading. */
-export function streamFrom(body: unknown, dead: ReadonlySet<string> = new Set()): Stream | undefined {
+export function streamFrom(body: unknown, dead: ReadonlySet<string> = new Set(), maxPieces: number = STREAM_MAX_PIECES): Stream | undefined {
   if (typeof body !== "object" || body === null) return undefined;
   const b = body as Record<string, unknown>;
   const pieces: StreamPiece[] = [];
 
-  for (const raw of Array.isArray(b["pieces"]) ? b["pieces"].slice(0, STREAM_MAX_PIECES) : []) {
+  for (const raw of Array.isArray(b["pieces"]) ? b["pieces"].slice(0, maxPieces) : []) {
     if (typeof raw !== "object" || raw === null) continue;
     const p = raw as Record<string, unknown>;
     const startMs = ms(p["startedUtc"]);
@@ -85,6 +87,7 @@ export function streamFrom(body: unknown, dead: ReadonlySet<string> = new Set())
     on: b["on"] === true,
     publicResults: b["publicResults"] !== false,
     leadIn: Math.max(0, Math.min(30, num(b["leadIn"], 10))),
+    lowLatency: b["lowLatency"] === true,
     pieces,
     hidden: sids(b["hidden"]),
     juniors: sids(b["juniors"]),
@@ -178,7 +181,32 @@ const VIDEO_CHECK_MAX = 200;
 export class VideoCheck {
   private readonly seen = new Map<string, Map<string, { firstMs: number; lastMs: number; dead: boolean; asking: boolean }>>();
 
-  constructor(private readonly ask: OEmbedAsk, private readonly now: () => Date) {}
+  /** Clubs whose checks have been read back from the keep (see VideoCheckKeep). */
+  private readonly loaded = new Map<string, Promise<void>>();
+
+  constructor(private readonly ask: OEmbedAsk, private readonly now: () => Date, private readonly keep?: VideoCheckKeep) {}
+
+  /**
+   * Reads the club's checks back once after a restart (look-back, 14 Nov
+   * 2026), so a deploy mid-night neither forgets a dead video nor asks
+   * YouTube about every video again. Call before dead().
+   */
+  ready(club: string): Promise<void> {
+    let p = this.loaded.get(club);
+    if (p === undefined) {
+      p = (async () => {
+        const kept = this.keep === undefined ? undefined : await this.keep.load(club).catch(() => undefined);
+        if (kept === undefined || this.seen.has(club)) return;
+        const mine = new Map<string, { firstMs: number; lastMs: number; dead: boolean; asking: boolean }>();
+        for (const k of kept.slice(0, VIDEO_CHECK_MAX)) {
+          if (YOUTUBE_ID.test(k.id) && Number.isFinite(k.firstMs) && Number.isFinite(k.lastMs)) mine.set(k.id, { firstMs: k.firstMs, lastMs: k.lastMs, dead: k.dead === true, asking: false });
+        }
+        this.seen.set(club, mine);
+      })();
+      this.loaded.set(club, p);
+    }
+    return p;
+  }
 
   /** The club's dead videos now. */
   dead(club: string): ReadonlySet<string> {
@@ -188,6 +216,7 @@ export class VideoCheck {
 
   /** Asks about any of these videos that is new, or due its daily check. Resolves when those asks are done. */
   async saw(club: string, ids: readonly string[]): Promise<void> {
+    await this.ready(club);
     let mine = this.seen.get(club);
     if (mine === undefined) {
       mine = new Map();
@@ -218,5 +247,85 @@ export class VideoCheck {
       if (status === 200) v.dead = false;
       else if (status === 401 || status === 403 || status === 404) v.dead = true;
     }));
+
+    if (due.length > 0 && this.keep !== undefined) {
+      await this.keep.save(club, [...mine].map(([id, v]) => ({ id, firstMs: v.firstMs, lastMs: v.lastMs, dead: v.dead }))).catch(() => {});
+    }
   }
+}
+
+/** Where VideoCheck keeps what it learnt, per club, across restarts. */
+export interface VideoCheckKeep {
+  load(club: string): Promise<{ id: string; firstMs: number; lastMs: number; dead?: boolean }[] | undefined>;
+  save(club: string, checks: { id: string; firstMs: number; lastMs: number; dead: boolean }[]): Promise<void>;
+}
+
+/** Nights of stream the relay keeps for a club: about eighteen months of weekly racing (VL7). */
+export const STREAM_NIGHTS_KEPT = 120;
+
+/** The races a club has hidden, remembered past the night (a sid -> true map), at most this many. */
+export const STREAM_HIDDEN_KEPT = 3000;
+
+/**
+ * The name a night's stream is kept under: its first piece's start, so the
+ * laptop's later sends of the same night write over it. Undefined for a
+ * document with no piece, which names no night.
+ */
+export function streamNightId(body: unknown): string | undefined {
+  const pieces = typeof body === "object" && body !== null && Array.isArray((body as Record<string, unknown>)["pieces"])
+    ? ((body as Record<string, unknown>)["pieces"] as unknown[])
+    : [];
+  const starts = pieces.map((p) => (typeof p === "object" && p !== null ? Date.parse(String((p as Record<string, unknown>)["startedUtc"])) : NaN)).filter(Number.isFinite);
+  return starts.length === 0 ? undefined : `n${Math.min(...starts)}`;
+}
+
+/**
+ * EVERY NIGHT'S VIDEO, NOT ONLY TONIGHT'S (look-back, 14 Nov 2026). The laptop
+ * forgets a night 20 hours on, and sends only tonight's stream; the relay keeps
+ * each night it was sent. One stream to work races out of: the club's switches
+ * and lead-in from the latest document, every night's pieces (the latest
+ * night's own copy first), and every night's juniors. Hidden races are the
+ * latest document's plus those the relay remembers (hidden).
+ */
+export function mergedStreamBody(latest: unknown, nights: readonly unknown[], hidden: readonly string[]): Record<string, unknown> | undefined {
+  if (typeof latest !== "object" || latest === null) return undefined;
+  const top = latest as Record<string, unknown>;
+  const seen = new Set<number>();
+  const pieces: unknown[] = [];
+  const juniors = new Set<string>();
+  const hid = new Set<string>(hidden);
+
+  for (const doc of [latest, ...nights]) {
+    if (typeof doc !== "object" || doc === null) continue;
+    const d = doc as Record<string, unknown>;
+    for (const p of Array.isArray(d["pieces"]) ? d["pieces"].slice(0, STREAM_MAX_PIECES) : []) {
+      const at = typeof p === "object" && p !== null ? Date.parse(String((p as Record<string, unknown>)["startedUtc"])) : NaN;
+      if (!Number.isFinite(at) || seen.has(at)) continue;
+      seen.add(at);
+      pieces.push(p);
+    }
+    for (const s of Array.isArray(d["juniors"]) ? d["juniors"] : []) if (typeof s === "string") juniors.add(s);
+  }
+
+  for (const s of Array.isArray(top["hidden"]) ? top["hidden"] : []) if (typeof s === "string") hid.add(s);
+  return { ...top, pieces, juniors: [...juniors], hidden: [...hid] };
+}
+
+/**
+ * The races hidden past the night: what was remembered, plus every race the
+ * latest document hides, less any the laptop has just shown again (hidden in
+ * the document before, and not now).
+ */
+export function hiddenAfter(remembered: readonly string[], before: unknown, after: unknown): string[] {
+  const list = (doc: unknown) => (typeof doc === "object" && doc !== null && Array.isArray((doc as Record<string, unknown>)["hidden"])
+    ? ((doc as Record<string, unknown>)["hidden"] as unknown[]).filter((s): s is string => typeof s === "string" && SID.test(s))
+    : []);
+  const now = new Set(list(after));
+  // Only within one night: the laptop starts each night with no hidden
+  // races, which is not the club showing last night's again.
+  const sameNight = streamNightId(before) !== undefined && streamNightId(before) === streamNightId(after);
+  const shownAgain = sameNight ? list(before).filter((s) => !now.has(s)) : [];
+  const out = new Set(remembered.filter((s) => !shownAgain.includes(s)));
+  for (const s of now) out.add(s);
+  return [...out].slice(-STREAM_HIDDEN_KEPT);
 }

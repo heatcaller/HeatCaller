@@ -809,13 +809,27 @@ export class PushService {
    */
   async afterVideos(club: string, night: string, messageFor: (id: string) => Promise<PushMessage | undefined>): Promise<void> {
     try {
+      // Who has had it tonight, kept in the club's private "videoalerts"
+      // snapshot too (look-back, 14 Nov 2026): a relay restarted mid-night
+      // must not send it to everybody again.
+      const kept = (await this.store.getSnapshot(club, "videoalerts").catch(() => undefined))?.body;
+      const sent = new Set(isObject(kept) && kept["night"] === night && Array.isArray(kept["sent"]) ? (kept["sent"] as unknown[]).filter((s): s is string => typeof s === "string") : []);
+      let added = false;
+
       for (const id of await this.signedUp(club)) {
         const key = `${club}|${id}`;
-        if (this.videoSent.get(key) === night) continue;
+        if (this.videoSent.get(key) === night || sent.has(id)) continue;
         const message = await messageFor(id);
         if (message === undefined) continue;
         this.videoSent.set(key, night);
+        sent.add(id);
+        added = true;
         await this.send(club, id, message, BROADCAST_TTL_SECONDS);
+      }
+
+      if (added) {
+        const at = this.now();
+        await this.store.putSnapshot(club, "videoalerts", { seq: at.getTime(), publishedAt: at.toISOString(), body: { night, sent: [...sent].slice(-PUSH_SUBS_PER_CLUB) } });
       }
     } catch (e) {
       this.log(`[push] "${club}": could not send the race video alerts: ${String(e)}`);

@@ -73,6 +73,7 @@ export const PAGE_COUNT_EVENTS: readonly string[] = [
   "video_race_opened_results",
   "video_race_opened_alert",
   "video_race_opened_home",
+  "video_race_opened_live",
   "video_lap_jump",
   "video_youtube_app",
   "video_off_reported",

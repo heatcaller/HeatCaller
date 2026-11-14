@@ -254,6 +254,7 @@ internal sealed class CloseNightForm : Form
         CloseNightKind.NightEmails => "Club Website",
         CloseNightKind.Backup => "Back Up Now",
         CloseNightKind.CloseDay => "Setup",
+        CloseNightKind.Video => "Club Website",
 
         // Ready to race (setup plan B3).
         CloseNightKind.Decoder => "Connection",

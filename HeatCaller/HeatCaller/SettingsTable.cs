@@ -350,6 +350,7 @@ internal static class SettingsTable
             nameof(AppSettings.VideoObsHost),
             nameof(AppSettings.VideoObsPort),
             nameof(AppSettings.VideoLeadInSeconds),
+            nameof(AppSettings.VideoUltraLowLatency),
             nameof(AppSettings.VideoOnPublicResults),
             nameof(AppSettings.RelayNewcomerWhere),
             nameof(AppSettings.RelayNewcomerWhen),

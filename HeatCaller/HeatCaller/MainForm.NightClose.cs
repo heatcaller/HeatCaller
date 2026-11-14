@@ -48,7 +48,8 @@ public partial class MainForm
             notOnline,
             _settings.LastAutoBackupUtc,
             day is { IsLegacy: false, IsOpen: true },
-            OwingTonight(daySessions, day));
+            OwingTonight(daySessions, day),
+            VideoLeftTonight());
     }
 
     /// <summary>
@@ -183,6 +184,7 @@ public partial class MainForm
 
             case CloseNightKind.Website:
             case CloseNightKind.NightEmails:
+            case CloseNightKind.Video:
                 GoToPage("Club Website");
                 break;
 
