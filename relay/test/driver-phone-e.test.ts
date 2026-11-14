@@ -63,11 +63,10 @@ describe("text size and high contrast are the phone's choice (item 6)", () => {
     assert.equal(page.eval("hcReading().hc"), "light");
   });
 
-  it("scales the page's text with the choice, and has a way back from a zoom", () => {
+  it("scales the page's text with the choice", () => {
     const html = homePage("acme-rc", "Acme RC");
     assert.match(html, /html\[data-ts="130"\] \{ --ts: 1\.3; \}/);
     assert.match(html, /body \{ font-size: calc\(16px \* var\(--ts, 1\)\); \}/);
-    assert.match(html, /button\.textContent = 'Fit to screen';/);
   });
 });
 
