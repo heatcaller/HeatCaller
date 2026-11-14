@@ -237,7 +237,7 @@ Also on the list:
 
 The buttons under the list, against the right-hand edge:
 
-- **Add Driver** opens the **Add a driver** window for someone who isn't on file yet: **Name**, **Transponder** and **Class**. Click **Add Driver** and they're saved with the drivers on file and checked in straight away.
+- **Add Driver** opens the **Add a driver** window for someone who isn't on file yet: **Name**, **Transponder** and **Classes**, a tick box for each class, so you can tick every class they race. The class picked on the chips is ticked to start with, and stays their main class while it's ticked; otherwise the first ticked is. Click **Add Driver** and they're saved with the drivers on file and checked in straight away.
 - **Import Entries** brings in tonight's entry list from a CSV file or a table you copied, such as an RCSignup export or a LiveRC entry list. See [Import entries](#import-entries).
 - **Online Sign-ups** opens the drivers who have signed up online, waiting to be approved. The button shows how many are waiting, for example **Online Sign-ups (3)**. See [Driver sign-up](../online/sign-up.md).
 - **Driver Requests** opens the changes drivers have asked for from their phones, and their result queries, waiting for the desk. The button shows how many are waiting, for example **Driver Requests (2)**. It's only there while the club takes requests, or while some are still waiting. See [Driver requests](../online/driver-requests.md).

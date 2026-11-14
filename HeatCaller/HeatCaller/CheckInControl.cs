@@ -834,12 +834,7 @@ public sealed partial class CheckInControl : UserControl
 
         // TryAdd, not Upsert: a create, refused rather than saved over
         // anybody - the backstop if the window's check let a clash by.
-        if (!_profiles.TryAdd(new DriverProfile
-            {
-                Transponder = form.Transponder,
-                DriverName = form.DriverName,
-                ClassName = form.ClassName,
-            }, out var refusal))
+        if (!_profiles.TryAdd(QuickDriverForm.NewProfile(form), out var refusal))
         {
             AppDialog.Show(this, refusal, "Transponder already in use", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
