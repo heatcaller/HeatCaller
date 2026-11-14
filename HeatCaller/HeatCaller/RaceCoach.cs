@@ -88,7 +88,8 @@ public static partial class RaceCoach
 
     /// <summary>
     /// Where in <paramref name="laps"/> the mistakes are: laps more than
-    /// <see cref="MistakeShare"/> off the quickest of them. Zero-based.
+    /// <see cref="MistakeShare"/> off the quickest of them that also stand
+    /// out from the laps either side. Zero-based.
     /// </summary>
     public static List<int> MistakeLaps(IReadOnlyList<long> laps)
     {
@@ -104,7 +105,21 @@ public static partial class RaceCoach
 
         for (var i = 0; i < laps.Count; i++)
         {
-            if (laps[i] > limit)
+            if (laps[i] <= limit)
+            {
+                continue;
+            }
+
+            // And it has to stand out from the laps around it: 2% over the
+            // middle of the five centred on it. Without this a driver who
+            // warmed up slowly had every opening lap called a mistake - they
+            // are off the best, but each is about the one before it. Five
+            // laps rather than the two neighbours so that a crash that
+            // spills into a second lap is two mistakes, not none.
+            var around = laps.Skip(Math.Max(0, i - 2)).Take(Math.Min(i, 2) + 3).OrderBy(l => l).ToList();
+            var middle = around[around.Count / 2];
+
+            if (laps[i] > middle + middle / 50)
             {
                 found.Add(i);
             }
