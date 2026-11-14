@@ -91,6 +91,80 @@ public sealed class ChampionshipHubTests : IDisposable
     }
 
     [Fact]
+    public void A_season_counting_three_races_a_night_is_three_rounds_in_after_three_nights_not_finished()
+    {
+        // Every class counts (no class named): three mains a night, three nights,
+        // eight planned. Nine races, but three rounds.
+        var events = RaceEventStore.Load();
+        var races = new List<SessionRecord>();
+        var start = new DateTime(2026, 9, 4, 19, 0, 0, DateTimeKind.Utc);
+
+        for (var night = 0; night < 3; night++)
+        {
+            var day = new RaceEvent { Name = $"Round {night + 1}" };
+
+            foreach (var cls in new[] { "Stock", "Mod", "Truck" })
+            {
+                var round = new RoundDefinition { ClassName = cls, Kind = RoundKind.Main, RoundLabel = "A-Main" };
+                day.RoundIds.Add(round.Id);
+                races.Add(new SessionRecord
+                {
+                    SessionType = RaceSessionType.Race,
+                    RoundId = round.Id,
+                    StartedAtUtc = start.AddDays(14 * night),
+                    Results = new List<SessionResultEntry>
+                    {
+                        new() { Position = 1, DriverName = cls + " Al", Transponder = cls + "1", Laps = 20 },
+                    },
+                });
+            }
+
+            events.Upsert(day);
+        }
+
+        var season = new Season { Name = "Winter Series", PlannedRounds = 8 };
+
+        var (line, progress, finished, rounds) = SeasonsControl.ProgressOf(season, races, events);
+
+        Assert.False(finished);
+        Assert.Equal(3, rounds);
+        Assert.Equal(3 / 8.0, progress);
+        Assert.Contains("round 3 of 8", line);
+    }
+
+    [Fact]
+    public void A_season_that_ends_level_at_the_top_shows_both_level_in_first_not_one_leading()
+    {
+        var (season, races, events) = Season(2,
+            new[] { "Al", "Annie", "Cy" },
+            new[] { "Annie", "Al", "Cy" });
+
+        var (race, why) = CommentaryReaders.TitleRaceFor(season, races, events, null);
+        Assert.True(race is not null, why);
+        Assert.Equal(0, race!.RoundsLeft);
+
+        var rows = SeasonsControl.TitleRaceRows(race);
+
+        Assert.Equal(new[] { TitleRaceView.State.Level, TitleRaceView.State.Level, TitleRaceView.State.OutOfReach },
+            rows.Select(r => r.State));
+        Assert.Equal(new[] { 1, 1, 3 }, rows.Select(r => r.Place));
+        Assert.DoesNotContain(rows, r => r.State is TitleRaceView.State.StillIn or TitleRaceView.State.Leading);
+    }
+
+    [Fact]
+    public void A_season_that_ends_with_one_clear_at_the_top_names_a_champion()
+    {
+        var (season, races, events) = Season(2,
+            new[] { "Al", "Annie" },
+            new[] { "Al", "Annie" });
+
+        var (race, _) = CommentaryReaders.TitleRaceFor(season, races, events, null);
+        var rows = SeasonsControl.TitleRaceRows(race!);
+
+        Assert.Equal(new[] { TitleRaceView.State.Champion, TitleRaceView.State.OutOfReach }, rows.Select(r => r.State));
+    }
+
+    [Fact]
     public void With_no_season_length_it_says_what_to_set_rather_than_guessing()
     {
         var (season, races, events) = Season(0,

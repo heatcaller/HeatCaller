@@ -11,7 +11,8 @@ namespace HeatCaller;
 /// </summary>
 internal sealed class TitleRaceView : Control
 {
-    public enum State { Leading, StillIn, OutOfReach, Champion }
+    /// <summary>Level: the season is over with more than one driver level on points at the top.</summary>
+    public enum State { Leading, StillIn, OutOfReach, Champion, Level }
 
     public sealed record Row(int Place, string Driver, int Points, int Gap, State State);
 
@@ -79,6 +80,7 @@ internal sealed class TitleRaceView : Control
         State.Leading => "Leading",
         State.StillIn => "Still in it",
         State.Champion => "Champion",
+        State.Level => "Level at the top",
         _ => "Out of reach",
     };
 
@@ -87,6 +89,7 @@ internal sealed class TitleRaceView : Control
         State.Leading => AppTheme.Success,
         State.StillIn => AppTheme.Warning,
         State.Champion => AppTheme.Warning,
+        State.Level => AppTheme.Warning,
         _ => AppTheme.TextMuted,
     };
 
