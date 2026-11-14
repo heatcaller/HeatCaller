@@ -99,6 +99,7 @@ public sealed partial class RaceDayEventControl
         if (_events.Active is { IsLegacy: false } day)
         {
             NightTemplates.ApplyTo(template, day);
+            day.TemplateName = template.Name.Trim();
             _events.Upsert(day);
         }
 
