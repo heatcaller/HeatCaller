@@ -1315,6 +1315,26 @@ Driver phone plan items 4 and 18 (mockup: `mockups/live-phone-board.html`).
   history, so Android's Back walks back through the tabs to Home and only
   then leaves.
 
+### Install, alerts by kind, other apps' browsers (14 Nov 2026)
+
+Driver phone plan items 7, 9 and 16.
+
+- **Onto the Home Screen.** From a phone's second visit, one card: the
+  browser's own prompt on Android, the three steps in Safari on an iPhone
+  (where alerts only work from the Home Screen). Never on the first visit,
+  once installed, in another app's browser, or while a race is on. "Not now"
+  is 14 days, "Don't ask again" for good.
+- **Alerts by kind.** `push/subscribe` may carry `kinds`, any of `race`,
+  `marshal`, `result` and `news`; none said is all of them. The relay sends
+  each phone only what it chose (switches under Alerts on the night page).
+  A result alert opens that race's result (`/c/:club/results/<sid>`); an
+  alert with no page of its own opens the club's Home, not the relay's.
+  Every alert's address gets `?from=alert-<kind>`, which the page counts
+  and takes off again.
+- **Another app's browser.** Inside Facebook's, Instagram's or another
+  app's browser (where storage can be wiped and alerts can't work), Me and
+  the Alerts card say so, with the way out and "Copy link".
+
 ### Who you are on Me (14 Nov 2026)
 
 Driver phone plan items 2, 8, 17 and 22.

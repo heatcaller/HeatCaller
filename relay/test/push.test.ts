@@ -243,7 +243,7 @@ describe("push: through the relay", () => {
     // Apple refuses a Topic header with BadWebPushTopic (7 Nov 2026).
     assert.equal("Topic" in sent[0]!.headers, false);
     const message = JSON.parse(decrypt(sent[0]!.body, p)) as Record<string, string>;
-    assert.deepEqual(message, { title: "Your race is next", body: "Q2 Heat 1 (Stock) · grid slot 3", tag: "hc-race", url: "/c/acme-rc/mynight" });
+    assert.deepEqual(message, { title: "Your race is next", body: "Q2 Heat 1 (Stock) · grid slot 3", tag: "hc-race", url: "/c/acme-rc/mynight?from=alert-race" });
     assert.doesNotMatch(JSON.stringify(message), new RegExp(BILL), "never the badge code");
 
     // The same again is nothing new.

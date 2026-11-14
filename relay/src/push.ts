@@ -88,6 +88,29 @@ export interface PushSub {
    * 2026, driver phone plan item 8). A first name, never the badge code.
    */
   readonly label?: string;
+  /**
+   * Which kinds of alert this phone wants (14 Nov 2026, driver phone plan
+   * item 9): any of "race", "marshal", "result", "news". Undefined is
+   * all of them, as every phone signed up before this had.
+   */
+  readonly kinds?: readonly string[];
+}
+
+/** The kinds of alert a phone can switch on and off (see PushSub.kinds). */
+export const ALERT_KINDS: readonly string[] = ["race", "marshal", "result", "news"];
+
+/** Which kind an alert is, by its tag. */
+export function alertKindOf(tag: string): string {
+  if (tag === "hc-race" || tag === "hc-soon") return "race";
+  if (tag.startsWith("hc-marshal")) return "marshal";
+  if (tag === "hc-result") return "result";
+  return "news";
+}
+
+/** A phone's choice of kinds, checked: known kinds only, each once; undefined when it sent none. */
+export function pushKindsFrom(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return [...new Set(value.filter((k): k is string => typeof k === "string" && ALERT_KINDS.includes(k)))];
 }
 
 /** A phone's label for a driver's alerts (see PushSub.label): a short name, or "". */
@@ -439,7 +462,9 @@ export function nightAlerts(before: unknown, after: unknown, url: string): PushM
     title: "Your result is in" + run,
     body: [[label, out || placed].filter((s) => s !== "").join(" - "), ...leaderboardLines(race)].join("\n"),
     tag: "hc-result",
-    url,
+    // The race's own result (14 Nov 2026, driver phone plan item 9), not
+    // just Me: a tap lands on the thing the alert was about.
+    url: typeof race["sid"] === "string" && /^[0-9a-f]{32}$/.test(race["sid"]) ? url.replace(/\/mynight$/, `/results/${race["sid"]}`) : url,
   }];
 }
 
@@ -623,7 +648,8 @@ export class PushService {
     });
     const list = doc && isObject(doc.body) && Array.isArray(doc.body["subs"]) ? doc.body["subs"] : [];
     return list.filter((s): s is PushSub => isObject(s) && typeof s["endpoint"] === "string" && typeof s["p256dh"] === "string" && typeof s["auth"] === "string")
-      .map((s) => (s.label === undefined || pushLabelFrom(s.label) === s.label ? s : { ...s, label: undefined })) as PushSub[];
+      .map((s) => (s.label === undefined || pushLabelFrom(s.label) === s.label ? s : { ...s, label: undefined }))
+      .map((s) => (s.kinds === undefined ? s : { ...s, kinds: pushKindsFrom(s.kinds) })) as PushSub[];
   }
 
   private async keep(club: string, id: string, subs: readonly PushSub[]): Promise<void> {
@@ -818,11 +844,20 @@ export class PushService {
     const ttl = Number.isFinite(ttlSeconds)
       ? Math.min(Math.max(Math.floor(ttlSeconds), 0), PUSH_TTL_MAX_SECONDS)
       : PUSH_TTL_SECONDS;
-    const subs = await this.subsOf(club, id);
+    // Only the phones that want this kind (14 Nov 2026, item 9).
+    const kind = alertKindOf(message.tag);
+    const subs = (await this.subsOf(club, id)).filter((s) => s.kinds === undefined || s.kinds.includes(kind));
 
     if (subs.length === 0) {
       return { tried: 0, sent: 0 };
     }
+
+    // Where a tap goes, saying which kind of alert it came from so the page
+    // can count it (pagecounts.ts) - and the club's Home, not the relay's
+    // own front page, for an alert that names no page of its own.
+    const base = typeof message.url === "string" && message.url.startsWith("/") ? message.url : `/c/${encodeURIComponent(club)}/`;
+    const from = message.tag === "hc-soon" ? "soon" : kind === "news" ? "nextnight" : kind;
+    message = { ...message, url: `${base}${base.includes("?") ? "&" : "?"}from=alert-${from}` };
 
     const keys = await this.vapid();
     const payload = Buffer.from(JSON.stringify(message));

@@ -75,7 +75,7 @@ import { LapVoiceLibrary } from "./lapvoice.js";
 import { STREAM_FORMAT, VOICE_PLAN_OFF, type MeterUsage, type VoicePlan, type VoiceService } from "./voice.js";
 import { isMeterName, type TopUpRequests } from "./topuprequests.js";
 import type { UsageLog } from "./usagelog.js";
-import { BROADCAST_TTL_SECONDS, myNightUrl, PUSH_CHANNEL, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
+import { BROADCAST_TTL_SECONDS, myNightUrl, PUSH_CHANNEL, pushKindsFrom, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
 import { PAGES_BUILD } from "./pagebuild.js";
 import { SIGNIN_MAIL, SIGNIN_MAIL_MAX, SIGNIN_MAIL_MAX_BODY, SIGNIN_MAIL_PER_HOUR, signinEmailFrom, signinItemsFrom } from "./signinmail.js";
 import { addCounts, countableEvents, PAGE_COUNTS, PAGE_COUNTS_DAYS, PAGE_COUNTS_MAX_BODY, PAGE_COUNTS_PER_ADDRESS, totalsOver } from "./pagecounts.js";
@@ -7061,7 +7061,10 @@ export class Relay {
     // driver phone plan item 8): their first name before each title.
     const parsed = pushSubFrom(body["sub"], this.now().toISOString());
     const label = pushLabelFrom(body["label"]);
-    const sub = parsed === undefined || label === "" ? parsed : { ...parsed, label };
+    // And the kinds of alert it wants (item 9), when it said.
+    const kinds = pushKindsFrom(body["kinds"]);
+    const labelled = parsed === undefined || label === "" ? parsed : { ...parsed, label };
+    const sub = labelled === undefined || kinds === undefined ? labelled : { ...labelled, kinds };
 
     if (sub === undefined) {
       sendJson(response, 400, { ok: false, error: "This phone's alerts could not be set up." });

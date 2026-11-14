@@ -62,7 +62,7 @@ describe("relay navigation, round 2: the night page remembers the driver", () =>
     // drivers on this phone - their codes and the names their nights gave -
     // and a marker that a driver was signed in. Still never a PIN or a pass.
     const kept = new Map(page.store.entries());
-    assert.deepEqual([...kept.keys()].sort(), [ME, "hg-me-list-acme-rc", "hg-me-was-acme-rc"].sort());
+    assert.deepEqual([...kept.keys()].sort(), [ME, "hg-me-list-acme-rc", "hg-me-was-acme-rc", "hg-visits-acme-rc"].sort());
     assert.equal(kept.get(ME), CODE);
     assert.equal(kept.get("hg-me-was-acme-rc"), "1");
     const list = JSON.parse(String(kept.get("hg-me-list-acme-rc"))) as { c: string; n: string }[];

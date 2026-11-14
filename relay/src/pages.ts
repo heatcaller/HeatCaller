@@ -1474,6 +1474,15 @@ body.has-you #follow { display: none; }
 .you .ys b.best { color: var(--accent); }
 .you .ys span { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .you .yx { margin-top: 8px; font-size: 0.85rem; color: var(--muted); }
+/* ONTO THE HOME SCREEN (item 7), INSIDE ANOTHER APP'S BROWSER (item 16),
+   and WHICH ALERTS (item 9). */
+.hcinst { margin: 0 0 14px; }
+.hcinst-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.hcinst-acts .go { min-height: 44px; padding: 0 18px; }
+.hcinapp { margin: 10px 0; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--warn); background: var(--surface); }
+.hcinapp .linkish { min-height: 36px; }
+.akinds { display: grid; gap: 4px; margin-top: 8px; }
+.akinds .chk { min-height: 40px; display: flex; align-items: center; gap: 10px; }
 /* RACING TONIGHT? on Home (item 22), and Me's email link (item 17). */
 .rtw-steps { margin: 8px 0 0; padding-left: 22px; }
 .rtw-steps li { margin: 10px 0; }
@@ -1889,6 +1898,148 @@ function hcOfferReload() {
   });
   document.body.appendChild(b);
 }
+
+// INSIDE ANOTHER APP'S BROWSER (14 Nov 2026, driver phone plan item 16).
+// Clubs share their links on Facebook, and tapping one opens these pages
+// inside that app's own browser, where storage can be wiped on close, and
+// alerts and Add to Home Screen don't work. Which app, or '' for a real
+// browser. Help is shown only where it matters (signing in, alerts,
+// installing), never just for looking.
+function inAppBrowser() {
+  const ua = (typeof navigator === 'object' && navigator.userAgent) || '';
+  if (/FBAN|FBAV|FB_IAB|Messenger/i.test(ua)) return 'facebook';
+  if (/Instagram/i.test(ua)) return 'instagram';
+  if (/\\bLine\\/|TikTok|musical_ly|Snapchat|Twitter for/i.test(ua)) return 'other';
+  if (/Android/.test(ua) && /; wv\\)/.test(ua)) return 'other';
+  return '';
+}
+function inAppHelp() {
+  const app = inAppBrowser();
+  if (app === '') return null;
+  hcCount('inapp_card_shown_' + app);
+  const box = document.createElement('div');
+  box.className = 'note hcinapp';
+  const name = app === 'facebook' ? 'Facebook\\u2019s' : app === 'instagram' ? 'Instagram\\u2019s' : 'this app\\u2019s';
+  const how = app === 'facebook' ? 'Tap \\u2022\\u2022\\u2022 and choose Open in browser.' : app === 'instagram' ? 'Tap \\u2022\\u2022\\u2022 and choose Open in external browser.' : 'Use the menu to open this page in your browser.';
+  box.innerHTML = '<b>You\\u2019re in ' + name + ' browser.</b> To stay signed in and get race alerts, open this page in Safari or Chrome. ' + how + ' ';
+  const copy = document.createElement('button');
+  copy.type = 'button';
+  copy.className = 'linkish';
+  copy.textContent = 'Copy link';
+  copy.addEventListener('click', () => {
+    try { navigator.clipboard.writeText(location.href).then(() => toast('Link copied - paste it into your browser.')); } catch (e) { toast(location.href); }
+  });
+  box.appendChild(copy);
+  return box;
+}
+
+// AN ALERT TAPPED (14 Nov 2026, item 9): the relay adds ?from=alert-<kind>
+// to where an alert goes, so it can be counted (item 20) - then taken off
+// the address, which stays as the page's own.
+(function () {
+  try {
+    const m = /[?&]from=alert-([a-z]{3,12})(&|$)/.exec(location.search);
+    if (!m) return;
+    hcCount('alert_opened_' + m[1]);
+    const rest = location.search.replace(/[?&]from=alert-[a-z]{3,12}/, '').replace(/^&/, '?');
+    history.replaceState(history.state, '', location.pathname + (rest === '?' ? '' : rest) + location.hash);
+  } catch (e) { /* counted or not, the page is the same */ }
+})();
+
+// ONTO THE HOME SCREEN (14 Nov 2026, driver phone plan item 7). On an
+// iPhone alerts only work from the club's page on the Home Screen, and
+// that was only said inside the alerts text. Now one card, at a good
+// moment: on a phone's second visit or later, never on the first, never
+// while a race is on (hcBusy), never once installed, and never inside
+// another app's browser (which can't install - see inAppBrowser). Android
+// gets the browser's own prompt behind the button; an iPhone in Safari
+// gets the three steps. "Not now" hides it for 14 days, "Don't ask again"
+// for good.
+const HC_INSTALL_KEY = 'hg-install-' + CLUB;
+const HC_VISITS_KEY = 'hg-visits-' + CLUB;
+let hcInstallPrompt = null;
+try {
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); hcInstallPrompt = e; hcInstallCard(); });
+} catch (e) { /* no window events here */ }
+function hcInstalled() {
+  try {
+    const m = (q) => typeof window.matchMedia === 'function' && window.matchMedia(q).matches;
+    return m('(display-mode: standalone)') || m('(display-mode: fullscreen)') || navigator.standalone === true || SHELL || FRAMED;
+  } catch (e) { return false; }
+}
+function hcIPhoneSafari() {
+  const ua = (typeof navigator === 'object' && navigator.userAgent) || '';
+  return /iPhone|iPad|iPod/.test(ua) && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua) && inAppBrowser() === '';
+}
+function hcInstallCard() {
+  try {
+    if (hcInstalled() || inAppBrowser() !== '' || document.getElementById('hcinst')) return;
+    const said = localStorage.getItem(HC_INSTALL_KEY) || '';
+    if (said === 'never' || (Number(said) > Date.now())) return;
+    if (Number(localStorage.getItem(HC_VISITS_KEY) || '0') < 2) return;
+    if (typeof window.hcBusy === 'function' && window.hcBusy() === true) return;
+    const android = hcInstallPrompt !== null;
+    if (!android && !hcIPhoneSafari()) return;
+    hcCount('install_card_shown');
+    const card = document.createElement('section');
+    card.id = 'hcinst';
+    card.className = 'lc hcinst';
+    card.innerHTML = '<h3>Add ' + esc(CLUB_NAME || 'the club') + ' to your Home Screen</h3>'
+      + (android
+        ? '<p class="note">Race alerts with the page closed, and a quicker app that opens with no signal.</p>'
+        : '<p class="note">On an iPhone, race alerts only work from the Home Screen. It takes three taps:</p>'
+          + '<ol class="rtw-steps"><li>Tap <b>Share</b> (the square with an arrow) at the bottom of Safari.</li>'
+          + '<li>Choose <b>Add to Home Screen</b>.</li><li>Open it from your Home Screen and turn on alerts.</li></ol>');
+    const row = document.createElement('div');
+    row.className = 'hcinst-acts';
+    const later = (forever) => {
+      try { localStorage.setItem(HC_INSTALL_KEY, forever ? 'never' : String(Date.now() + 14 * 24 * 3600 * 1000)); } catch (e) { /* asked again */ }
+      hcCount('install_dismissed');
+      card.remove();
+    };
+    if (android) {
+      const go = document.createElement('button');
+      go.type = 'button';
+      go.className = 'go';
+      go.textContent = 'Add to Home Screen';
+      go.addEventListener('click', async () => {
+        const p = hcInstallPrompt;
+        hcInstallPrompt = null;
+        if (!p) { card.remove(); return; }
+        try {
+          p.prompt();
+          const choice = await p.userChoice;
+          if (choice && choice.outcome === 'accepted') hcCount('install_accepted');
+        } catch (e) { /* the browser said no */ }
+        card.remove();
+      });
+      row.appendChild(go);
+    }
+    const not = document.createElement('button');
+    not.type = 'button';
+    not.className = 'go quiet';
+    not.textContent = 'Not now';
+    not.addEventListener('click', () => later(false));
+    const never = document.createElement('button');
+    never.type = 'button';
+    never.className = 'linkish';
+    never.textContent = 'Don\\u2019t ask again';
+    never.addEventListener('click', () => later(true));
+    row.appendChild(not);
+    row.appendChild(never);
+    card.appendChild(row);
+    const header = document.querySelector('.wrap > header');
+    if (header && header.parentNode) header.parentNode.insertBefore(card, header.nextSibling);
+  } catch (e) { /* no card */ }
+}
+(function () {
+  try {
+    if (FRAMED || SHELL) return;
+    const n = Math.min(99, Number(localStorage.getItem(HC_VISITS_KEY) || '0') + 1);
+    localStorage.setItem(HC_VISITS_KEY, String(n));
+  } catch (e) { /* not counted */ }
+  setTimeout(hcInstallCard, 1500);
+})();
 
 // THE CLUB'S PAGES ON THIS PHONE (14 Nov 2026, driver phone plan item 1):
 // the service worker that keeps them for when there is no signal - the same
@@ -12201,7 +12352,7 @@ function pushOn() {
         if (!alertsOn) { try { await sub.unsubscribe(); } catch (e) { /* gone already */ } }
         return;
       }
-      const a = await post('/push/subscribe', { id: CODE, sub: sub.toJSON(), label: pushLabel() });
+      const a = await post('/push/subscribe', { id: CODE, sub: sub.toJSON(), label: pushLabel(), kinds: alertKinds() });
       if (run !== pushRun) return;
       pushState = a.status === 200 ? 'on' : 'failed';
     } catch (e) {
@@ -12238,12 +12389,48 @@ async function pushResume() {
     const reg = await navigator.serviceWorker.getRegistration(workerUrl());
     const sub = reg ? await reg.pushManager.getSubscription() : null;
     if (!sub) { pushState = ''; return; }
-    const a = await post('/push/subscribe', { id: CODE, sub: sub.toJSON(), label: pushLabel() });
+    const a = await post('/push/subscribe', { id: CODE, sub: sub.toJSON(), label: pushLabel(), kinds: alertKinds() });
     pushState = a.status === 200 ? 'on' : 'failed';
   } catch (e) {
     pushState = 'failed';
   }
   drawLive();
+}
+
+// WHICH ALERTS (14 Nov 2026, driver phone plan item 9): my races, marshal
+// duty, my results and club news, each on or off for this phone. Sent with
+// the sign-up; the relay sends only what is on. All on until changed.
+const ALERT_KINDS_KEY = 'hc-alert-kinds:' + CLUB;
+const ALERT_KIND_WORDS = [['race', 'My races (next, staged, 5 minutes)'], ['marshal', 'Marshal duty'], ['result', 'My results'], ['news', 'Club news (a night called off)']];
+function alertKinds() {
+  try {
+    const kept = JSON.parse(localStorage.getItem(ALERT_KINDS_KEY) || 'null');
+    if (Array.isArray(kept)) return kept.filter((k) => ALERT_KIND_WORDS.some((w) => w[0] === k));
+  } catch (e) { /* all on */ }
+  return ALERT_KIND_WORDS.map((w) => w[0]);
+}
+function alertKindsBox() {
+  const box = el('div', 'akinds');
+  box.setAttribute('role', 'group');
+  box.setAttribute('aria-label', 'Which alerts');
+  const on = alertKinds();
+  for (const [key, words] of ALERT_KIND_WORDS) {
+    const label = el('label', 'chk');
+    const tick = document.createElement('input');
+    tick.type = 'checkbox';
+    tick.checked = on.indexOf(key) >= 0;
+    tick.addEventListener('change', () => {
+      const now = alertKinds().filter((k) => k !== key);
+      if (tick.checked) now.push(key);
+      try { localStorage.setItem(ALERT_KINDS_KEY, JSON.stringify(now)); } catch (e) { /* this visit only */ }
+      // Told again with the new choice; the subscription itself is the same.
+      void pushResume();
+    });
+    label.appendChild(tick);
+    label.appendChild(el('span', '', words));
+    box.appendChild(label);
+  }
+  return box;
 }
 
 // What the card says under the switch.
@@ -13094,6 +13281,10 @@ function liveCard() {
   if (live) {
     card.appendChild(tapButton(alertsOn ? 'Alerts on - tap to turn off' : 'Turn on alerts', 'go quiet' + (alertsOn ? ' on' : ''), toggleAlerts));
     card.appendChild(el('div', 'when', alertsWords()));
+    // Inside Facebook's (or another app's) browser alerts can't work: say so (item 16).
+    const stuck = typeof inAppHelp === 'function' ? inAppHelp() : null;
+    if (stuck) card.appendChild(stuck);
+    if (alertsOn && pushState === 'on') card.appendChild(alertKindsBox());
 
     const m = live.marshal;
 
@@ -15806,6 +15997,10 @@ function emailLinkBox() {
 function draw(message) {
   box.textContent = '';
   const part = el('div', 'su');
+  // Inside Facebook's (or another app's) browser this phone may not keep a
+  // sign-in at all (item 16): say so first, with the way out.
+  const stuck = typeof inAppHelp === 'function' ? inAppHelp() : null;
+  if (stuck) part.appendChild(stuck);
   // A phone that forgot its driver by itself (item 17): say so, and how back.
   if (!ADDING && typeof meForgotten === 'function' && meForgotten()) {
     if (typeof hcCount === 'function') hcCount('storage_forgot');
