@@ -129,7 +129,7 @@ What to know:
 
 When a transponder stops being read and you add laps with **+1 Lap** (or the keyboard shortcut) during the race, or with **Edit Result** afterwards, the result remembers how many laps were counted by hand. Scoring doesn't change; the count is there so a result built partly by hand can be trusted and questioned.
 
-The lap count shows with a star, for example **12\***, wherever results are shown: the leaderboard, Race History, the Event Report, printed results, the **Live Results** page on the club's Wi-Fi and the live board on the club's online pages, each with the line "\* includes laps counted by hand". In Race History, hover over the count to see how many. On Race Control, the driver's lap strip ends "+2 by hand", and the optional **By Hand** column (see [Columns](running-a-race.md#columns)) shows the count. Taking a lap off removes a hand-counted one first.
+The lap count shows with a star, for example **12\***, wherever results are shown: the leaderboard, Race History, the Event Report, printed results, the OBS overlay on the club's Wi-Fi and the live board on the club's online pages, each with the line "\* includes laps counted by hand". In Race History, hover over the count to see how many. On Race Control, the driver's lap strip ends "+2 by hand", and the optional **By Hand** column (see [Columns](running-a-race.md#columns)) shows the count. Taking a lap off removes a hand-counted one first.
 
 The club's website (the relay) doesn't show the mark yet: its live board and results show the plain lap count.
 
@@ -186,22 +186,22 @@ When a class uses handicaps, the results show a **Handicap pos** column, and the
 
 ## Championship
 
-The **Championship** page has two tabs, **Standings** and **Calendar**. The **Standings** tab is where you build a championship (a season) and see its table. It's laid out in three columns: your championships, the scoring setup, and the standings. See [Championship → Calendar](../race-day/events-and-entries.md#championship-calendar) for the **Calendar** tab.
+The **Championship** page has two tabs, **Standings** and **Calendar**. The **Standings** tab is where you build a championship (a season) and see its table. Your championships are cards down the left, each with its class, how far through the season it is ("Stock · round 7 of 8", with a bar) and who leads, or who won once it's over. Pick one and it fills the rest of the page: its name, its rules in a line ("mains only · best 6 count · new races added automatically"), **More** (**Rename** and **Delete Championship**), and four views to switch between: **Standings**, **Races**, **Points & Rules** and **Carried In**. Each says how many it holds. See [Championship → Calendar](../race-day/events-and-entries.md#championship-calendar) for the **Calendar** tab.
 
 ![Championship → Standings with the Fall Series 2026 - Stock championship selected: the points scheme (25, 20, 16, 13, 11 down the places), the races counted with seven Stock A-Mains ticked and one heat left out, and the standings table of seven drivers with points, wins, podiums, races and DNFs, under "best 6 rounds count"](../assets/images/championship-standings.png)
 
 ### Create a championship
 
-1. Under **Championships**, press **New** and enter a **Season name:**.
-2. Press **Scoring Rules** and set what counts (see below). **Scoring Rules** is only shown in Advanced mode (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)); in Simple mode a new championship counts the mains of every class on every race day.
-3. Check the points table under **Points scheme**. The default is 10-9-8-...-1 for positions 1 to 10, and positions below 10 score nothing. Type in the **Points** column to change what a place scores. A value has to be a whole number of 0 or more: a negative one is refused with "Points can't be below 0 - a place scores 0 at the least. Fix it, or press Esc to put back what was there.", so racing a round can only ever add to a driver's total. (A negative value in a file from an older version scores 0.) **Reset to Default** puts the default table back.
-4. Check the races ticked under **Races counted**.
+1. Under **Championships**, press **+ New Championship** and enter a **Season name:**.
+2. On **Points & Rules**, press **Edit Scoring Rules** and set what counts (see below). The rules in force are listed beside the points, a line each. **Edit Scoring Rules** is only shown in Advanced mode (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)); in Simple mode a new championship counts the mains of every class on every race day.
+3. Check the points table under **Points scheme**, on **Points & Rules**. The default is 10-9-8-...-1 for positions 1 to 10, and positions below 10 score nothing. Type in the **Points** column to change what a place scores. A value has to be a whole number of 0 or more: a negative one is refused with "Points can't be below 0 - a place scores 0 at the least. Fix it, or press Esc to put back what was there.", so racing a round can only ever add to a driver's total. (A negative value in a file from an older version scores 0.) **Use the Default Points** puts the default table back, and **Undo** puts your own back.
+4. Check the races ticked on **Races**.
 
-**Rename** and **Delete** work on the selected championship. Deleting a championship doesn't delete any races, and you can undo it.
+**More → Rename** and **More → Delete Championship** work on the championship picked. Deleting a championship doesn't delete any races, and you can undo it.
 
 ### Scoring rules
 
-**Scoring Rules** opens the rules for the selected championship:
+**Edit Scoring Rules** opens the rules for the championship picked:
 
 | Setting | What it does | Default for a new championship |
 |---|---|---|
@@ -210,7 +210,7 @@ The **Championship** page has two tabs, **Standings** and **Calendar**. The **St
 | **Only count mains - leave qualifying heats out** | Leaves qualifying heats out. | On |
 | **Count every race day** | Untick it to choose which race days count, by ticking them in the list of race days. A race day whose **Championship:** on **Race Day → Setup** names this championship counts either way, and is marked ✓ in the list. | On |
 | **Count each driver's best:** | "Best N rounds": only each driver's N highest-scoring rounds count. **0** counts every round. | 0 |
-| **Rounds in the season:** | How many rounds the championship is *scheduled* to run. **Only the announcer uses this** — it changes no points and no standings. It's the one figure that lets it talk about what's still possible: "nobody can catch him now", "three rounds left and these two are level", "a win today and it's his". **0** means you haven't said, and then the announcer says nothing about any of that rather than guessing. | 0 |
+| **Rounds in the season:** | How many rounds the championship is *scheduled* to run. It changes no points and no standings. It's the one figure that lets the announcer, and the **Can they still win?** card, say what's still possible: "nobody can catch him now", "three rounds left and these two are level", "a win today and it's his". **0** means you haven't said, and then the announcer says nothing about any of that rather than guessing. | 0 |
 | **Announcer's note:** | One sentence about the season in your own words, up to 60 characters, for example "two rounds left and four points covering the top three". **Only the announcer uses this.** It's read out as typed at the Tonight Open and in the sign-off numbers, on a night with a race this championship counts. Leave it empty to say nothing. See [The top and tail of the night](../announcer/commentary.md#the-top-and-tail-of-the-night). | Empty |
 
 The rules read each race's round to find its class and whether it was a main. A freeform race with no round can't match a class or mains-only rule, but you can still tick it by hand.
@@ -222,7 +222,7 @@ Championships created before the rules existed stay hand-picked until you turn t
 
 ### Ticking races in and out
 
-The list under **Races counted** shows every saved race with its date, time, name and track, marked with its class and kind (or "(freeform)"). A tick means the race counts.
+The list on **Races** shows every saved race with its date, time, name and track, marked with its class and kind (or "(freeform)"). A tick means the race counts.
 
 - Untick a race the rule included (a rained-off round, say) to force it out. It stays out even if the rule would include it later.
 - Tick a race the rule doesn't include to force it in.
@@ -243,10 +243,20 @@ Only sessions recorded as "Race" appear here. Practice sessions, demo races and 
 !!! note
     Championship points use the raw finishing order. Handicaps don't change them.
 
-The **Standings** table shows **Rank**, **Driver**, **Points**, **Carried In**, **Wins**, **Podiums**, **Races**, **DNF** and **Best Finish**. **Carried In** shows only when somebody has points carried in (see below). The line under it summarizes the rules in force, for example "12 drivers, 6 races · Stock, mains only · best 5 rounds count" ("hand-picked" when races aren't added automatically). It adds "· 2 forced out" when you've unticked races the rules included, and ends "· 8 drivers carrying points in" when some are.
+The **Standings** table shows **Rank**, **Driver**, **Points**, **Gap** (points behind the leader), **Carried In**, **Wins**, **Podiums**, **Races**, **DNF** and **Best Finish**. **Carried In** shows only when somebody has points carried in (see below). The line under it summarizes the rules in force, for example "12 drivers, 6 races · Stock, mains only · best 5 rounds count" ("hand-picked" when races aren't added automatically). It adds "· 2 forced out" when you've unticked races the rules included, and ends "· 8 drivers carrying points in" when some are.
 
 Drivers are matched by the name saved with each result, so keep driver names consistent through a season.
 
+### Can they still win?
+
+Beside the standings, **Can they still win?** says, for the season as it stands, who can still win the championship:
+
+- A line on top: "2 rounds left, up to 10 points each. 3 drivers can still win it.", "1 round left, and nobody can catch Billy Bob now.", or once the season is over, "The season is over. Billy Bob is champion."
+- A row for each driver with their place, their gap to the leader, and **Leading**, **Still in it** or **Out of reach** (**Champion** once it's over). Everyone who can still win is listed, then the first three out of reach, then "and 6 more out of reach".
+
+It works it out the way the announcer does before a race (see [what the championship still has riding on it](../announcer/commentary.md#what-the-championship-still-has-riding-on-it)): each driver's best case, taking the place that pays most in every round left, against the leader scoring nothing in any of them, with **Count each driver's best** applied. A driver who can draw level is still in it. So the card and the announcer always agree, and a driver close on points can be out of reach when their best rounds are already full and a win would only replace their worst.
+
+It needs **Rounds in the season** set in the scoring rules, and says so when it isn't. It also says why when it can't be worked out: races that aren't one per race day, a points table where nothing scores or a place takes points away, or a table too big.
 If a race counts toward a championship and the recap is on, the end-of-race recap includes how the championship table moved. See [Commentary](../announcer/commentary.md).
 
 ### Points carried in
@@ -256,7 +266,7 @@ A club that switches to HeatCaller part way through a season can bring its stand
 There are two ways to carry points in:
 
 - **Import them with the drivers.** Import the old software's standings with **Import from CSV** on **Driver Hub**, with the points column set to **Points so far**. See [Import drivers from a spreadsheet](../race-day/drivers-and-classes.md#import-drivers-from-a-spreadsheet).
-- **Type them in.** Select the championship and click **Points Carried In**, under the standings. Type a driver and their points on each row, then click **Save**. Use each name exactly as the standings show it, since that's how the points are matched to the driver's results; the list offers the names the table already knows as you type. Delete a row, or clear its points, to carry nothing in for that driver, and **Clear All** empties the list.
+- **Type them in.** Pick the championship, open **Carried In** (it lists who carries what) and click **Edit Points Carried In**. Type a driver and their points on each row, then click **Save**. Use each name exactly as the standings show it, since that's how the points are matched to the driver's results; the list offers the names the table already knows as you type. Delete a row, or clear its points, to carry nothing in for that driver, and **Clear All** empties the list.
 
 Either way, the sidebar **Undo** button puts the points back as they were.
 

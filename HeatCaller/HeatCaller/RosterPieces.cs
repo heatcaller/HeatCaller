@@ -87,7 +87,7 @@ internal sealed class ChipRow : Control
 
     private int ChipWidth(Chip chip)
     {
-        var width = TextRenderer.MeasureText(chip.Text, Font, Size.Empty, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine).Width;
+        var width = TextRenderer.MeasureText(chip.Text, Font, Size.Empty, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix).Width;
 
         if (chip.Count is { } count)
         {
@@ -168,11 +168,12 @@ internal sealed class ChipRow : Control
                 g.DrawPath(pen, path);
             }
 
-            var textWidth = TextRenderer.MeasureText(chip.Text, Font, Size.Empty, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine).Width;
+            var textWidth = TextRenderer.MeasureText(chip.Text, Font, Size.Empty, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix).Width;
             var textBox = new Rectangle(box.X + PadX, box.Y, textWidth + 2, box.Height);
 
+            // NoPrefix: an & in a chip is an & ("Points & Rules"), not a shortcut key.
             TextRenderer.DrawText(g, chip.Text, Font, textBox, ink,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
 
             if (chip.Count is { } count)
             {
