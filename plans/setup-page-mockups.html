@@ -1,0 +1,664 @@
+<title>Setup Page Rethink</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: a design review sheet. Narrow reading column for the argument, wide scrollable "app windows" for each mockup, notes beside each. */
+:root{
+  --bg:#f3f4f7; --fg:#171b26; --muted:#5b6274; --line:#d9dce5; --paper:#ffffff;
+  --accent:#d9480f; --accent-soft:#fde8dc;
+  /* the app inside the mockups */
+  --a-bg:#eef0f5; --a-surface:#ffffff; --a-side:#161a26; --a-side-fg:#e7e9f0; --a-side-mut:#8890a6;
+  --a-fg:#1b2030; --a-mut:#687087; --a-line:#dde0e8; --a-pri:#2459d6; --a-pri-fg:#ffffff; --a-pri-tint:#e6edfc;
+  --a-good:#13894f; --a-good-tint:#def3e8; --a-warn:#b7700a; --a-warn-tint:#fbefd9; --a-bad:#c2341f; --a-bad-tint:#fbe3df;
+  --a-chip:#f0f2f7; --a-row:#f7f8fb;
+  --c1:#2459d6; --c2:#13894f; --c3:#8a3ad1; --c4:#c26a0a;
+  --f-display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-app:"Segoe UI","Inter",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12141b; --fg:#e8eaf0; --muted:#9aa1b4; --line:#2b2f3b; --paper:#1a1d26;
+  --accent:#ff7a45; --accent-soft:#3a2219;
+  --a-bg:#1c202b; --a-surface:#242936; --a-side:#0f1118; --a-fg:#e6e8ef; --a-mut:#99a0b3; --a-line:#343a49;
+  --a-pri:#5b8cff; --a-pri-fg:#0d1220; --a-pri-tint:#25335a; --a-good:#45c98a; --a-good-tint:#173a2a; --a-warn:#f0b04a; --a-warn-tint:#3d2f15;
+  --a-bad:#ff7d6b; --a-bad-tint:#45211c; --a-chip:#2e3443; --a-row:#2a2f3c;
+  --c1:#5b8cff; --c2:#45c98a; --c3:#b67cf0; --c4:#f0a04a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12141b; --fg:#e8eaf0; --muted:#9aa1b4; --line:#2b2f3b; --paper:#1a1d26;
+  --accent:#ff7a45; --accent-soft:#3a2219;
+  --a-bg:#1c202b; --a-surface:#242936; --a-side:#0f1118; --a-fg:#e6e8ef; --a-mut:#99a0b3; --a-line:#343a49;
+  --a-pri:#5b8cff; --a-pri-fg:#0d1220; --a-pri-tint:#25335a; --a-good:#45c98a; --a-good-tint:#173a2a; --a-warn:#f0b04a; --a-warn-tint:#3d2f15;
+  --a-bad:#ff7d6b; --a-bad-tint:#45211c; --a-chip:#2e3443; --a-row:#2a2f3c;
+  --c1:#5b8cff; --c2:#45c98a; --c3:#b67cf0; --c4:#f0a04a; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--f-body);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:40px 80px}
+.wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:56px}
+.prose{max-width:720px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.1}
+h1{font-size:44px;font-weight:700;letter-spacing:-.01em}
+h2{font-size:30px;font-weight:700}
+h3{font-size:19px;font-weight:600}
+p{margin:0}
+.eyebrow{font:600 12px/1 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.lede{font-size:17px;color:var(--muted);margin-top:14px}
+.stack{display:flex;flex-direction:column;gap:14px}
+.flag{display:inline-block;font:600 11px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase;padding:5px 8px;border-radius:4px;background:var(--accent-soft);color:var(--accent)}
+
+/* diagnosis */
+.diag{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.diag>div{background:var(--paper);padding:18px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.diag b{font:700 34px/1 var(--f-display);font-variant-numeric:tabular-nums}
+.diag span{color:var(--muted);font-size:14px}
+@media (max-width:760px){.diag{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.principles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.principles div{border-top:2px solid var(--fg);padding-top:10px;display:flex;flex-direction:column;gap:6px}
+.principles p{color:var(--muted);font-size:14px}
+@media (max-width:760px){.principles{grid-template-columns:1fr}}
+
+/* mockup section */
+.mock{display:flex;flex-direction:column;gap:18px}
+.mock-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 18px}
+.mock-head .letter{font:700 56px/0.8 var(--f-display);color:var(--accent)}
+.mock-head p{color:var(--muted);max-width:640px;flex-basis:100%}
+.scroller{overflow-x:auto;border-radius:12px;box-shadow:0 1px 0 var(--line),0 14px 40px -18px rgba(10,14,30,.35)}
+.notes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 32px}
+.notes li{font-size:14px;color:var(--fg)}
+.notes ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.notes li{display:grid;grid-template-columns:26px 1fr;gap:8px;align-items:start}
+.notes li i{font-style:normal}
+.tradeoff{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.tradeoff div{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:14px 16px;font-size:14px}
+.tradeoff h4{margin:0 0 6px;font:600 12px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.tradeoff ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+@media (max-width:760px){.notes,.tradeoff{grid-template-columns:1fr}}
+.pin{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;font:700 11px/1 var(--f-body);flex:none}
+.win .pin{position:absolute;z-index:3;box-shadow:0 0 0 3px var(--a-surface)}
+
+/* ---------- the app window ---------- */
+.win{min-width:1080px;background:var(--a-bg);color:var(--a-fg);font:13px/1.4 var(--f-app);border:1px solid var(--a-line);border-radius:12px;overflow:hidden}
+.titlebar{height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:var(--a-side);color:var(--a-side-mut);font-size:12px}
+.titlebar .dots{display:flex;gap:14px;letter-spacing:.2em}
+.app{display:grid;grid-template-columns:184px 1fr;min-height:620px}
+.side{background:var(--a-side);color:var(--a-side-fg);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.side .brand{font:700 17px/1 var(--f-display);letter-spacing:.02em;padding:4px 10px 14px;color:#fff}
+.side a{display:block;padding:8px 10px;border-radius:6px;color:var(--a-side-mut);text-decoration:none}
+.side a.on{background:#262c3d;color:#fff;font-weight:600}
+.side .spacer{flex:1}
+.side .live{margin:8px 4px 0;padding:10px;border-radius:8px;background:#1f2433;color:var(--a-side-mut);font-size:12px;line-height:1.5}
+.side .live b{color:#fff;display:block}
+.content{padding:0 22px 22px;display:flex;flex-direction:column;gap:14px;position:relative;min-width:0}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--a-line);padding-top:12px}
+.tabs span{padding:9px 14px;color:var(--a-mut);font-weight:600;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs span.on{color:var(--a-fg);border-color:var(--a-pri)}
+.seg{display:inline-flex;background:var(--a-chip);border-radius:8px;padding:3px;gap:2px}
+.seg span{padding:6px 14px;border-radius:6px;color:var(--a-mut);font-weight:600}
+.seg span.on{background:var(--a-surface);color:var(--a-fg);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.seg span small{font-weight:500;color:var(--a-mut);margin-left:6px}
+.card{background:var(--a-surface);border:1px solid var(--a-line);border-radius:10px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:6px;border:1px solid var(--a-line);background:var(--a-surface);color:var(--a-fg);font-weight:600;white-space:nowrap}
+.btn.pri{background:var(--a-pri);border-color:var(--a-pri);color:var(--a-pri-fg)}
+.btn.big{padding:11px 22px;font-size:15px}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--a-pri)}
+.btn.sm{padding:4px 10px;font-size:12px}
+.btn.danger{color:var(--a-bad)}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.02em}
+.p-race{background:var(--a-pri-tint);color:var(--a-pri)}
+.p-club{background:var(--a-good-tint);color:var(--a-good)}
+.p-warn{background:var(--a-warn-tint);color:var(--a-warn)}
+.p-bad{background:var(--a-bad-tint);color:var(--a-bad)}
+.p-mut{background:var(--a-chip);color:var(--a-mut)}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{background:var(--a-chip);border-radius:4px;padding:2px 7px;font-size:12px;color:var(--a-fg)}
+.mut{color:var(--a-mut)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:12px}
+.kv dt{color:var(--a-mut)} .kv dd{margin:0;font-variant-numeric:tabular-nums}
+.row{display:flex;align-items:center;gap:10px}
+.between{justify-content:space-between}
+.grow{flex:1;min-width:0}
+.num{font-variant-numeric:tabular-nums}
+.field{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--a-line);border-radius:6px;padding:5px 9px;background:var(--a-surface);font-variant-numeric:tabular-nums;min-width:56px}
+.field.wide{min-width:220px;justify-content:space-between}
+.caret::after{content:"▾";color:var(--a-mut);font-size:10px;margin-left:6px}
+.tick{display:inline-flex;align-items:center;gap:7px}
+.tick::before{content:"";width:14px;height:14px;border-radius:3px;border:1.5px solid var(--a-mut);flex:none}
+.tick.on::before{background:var(--a-pri);border-color:var(--a-pri);box-shadow:inset 0 0 0 2px var(--a-surface)}
+
+/* A — shelf */
+.a-banner{display:flex;align-items:center;gap:16px;padding:14px 16px;border-radius:10px;background:var(--a-pri-tint);border:1px solid var(--a-pri)}
+.a-banner .when{font:700 22px/1 var(--f-display);color:var(--a-pri);text-align:center;min-width:64px}
+.a-banner .when small{display:block;font:600 11px/1.4 var(--f-app);letter-spacing:.06em;text-transform:uppercase}
+.a-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.tcard{padding:14px;display:flex;flex-direction:column;gap:10px;position:relative}
+.tcard.tonight{border:2px solid var(--a-pri);padding:13px}
+.tcard h5{margin:0;font:600 16px/1.2 var(--f-app)}
+.tcard .foot{display:flex;gap:6px;margin-top:auto;padding-top:4px;border-top:1px solid var(--a-line);padding-top:10px}
+.tcard.dash{border-style:dashed;background:transparent;justify-content:center;align-items:flex-start}
+.swatch{width:10px;height:10px;border-radius:3px;display:inline-block;flex:none}
+
+/* B — library + inspector */
+.b-split{display:grid;grid-template-columns:250px 1fr;gap:14px;align-items:start}
+.lib{padding:8px;display:flex;flex-direction:column;gap:2px}
+.lib h6{margin:10px 8px 4px;font:700 11px/1 var(--f-app);letter-spacing:.08em;text-transform:uppercase;color:var(--a-mut)}
+.lib .it{display:flex;align-items:center;gap:8px;padding:8px;border-radius:6px}
+.lib .it.on{background:var(--a-pri-tint)}
+.lib .it .t{flex:1;min-width:0}
+.lib .it .t b{display:block;font-weight:600}
+.lib .it .t span{font-size:11px;color:var(--a-mut)}
+.insp{display:flex;flex-direction:column;overflow:hidden}
+.insp-head{padding:14px 16px;border-bottom:1px solid var(--a-line);display:flex;align-items:flex-start;gap:12px}
+.insp-head h5{margin:0;font:600 20px/1.2 var(--f-app)}
+.groups{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.grp{padding:12px 16px;border-bottom:1px solid var(--a-line);display:flex;flex-direction:column;gap:8px}
+.grp:nth-child(odd){border-right:1px solid var(--a-line)}
+.grp h6{margin:0;font:700 11px/1 var(--f-app);letter-spacing:.08em;text-transform:uppercase;color:var(--a-mut);display:flex;justify-content:space-between}
+.frow{display:grid;grid-template-columns:128px 1fr;align-items:center;gap:8px}
+.frow>span:first-child{color:var(--a-mut)}
+.order{display:flex;flex-direction:column;gap:3px}
+.order div{display:flex;align-items:center;gap:8px;padding:4px 8px;background:var(--a-row);border-radius:4px}
+.order div::before{content:"⋮⋮";color:var(--a-mut);font-size:10px;letter-spacing:-2px}
+.forecast{display:flex;align-items:center;gap:16px;padding:12px 16px;background:var(--a-row)}
+.forecast .stat b{display:block;font:700 18px/1 var(--f-display);font-variant-numeric:tabular-nums}
+.forecast .stat span{font-size:11px;color:var(--a-mut)}
+.bar{height:8px;border-radius:4px;background:var(--a-chip);position:relative;overflow:hidden;width:160px}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--a-good)}
+
+/* C — tonight hero */
+.c-hero{padding:22px 24px;display:grid;grid-template-columns:1fr 280px;gap:24px;position:relative}
+.c-date{font:700 15px/1 var(--f-app);color:var(--a-mut);letter-spacing:.04em;text-transform:uppercase}
+.c-title{font:700 38px/1.05 var(--f-display);margin:6px 0 10px}
+.c-steps{display:flex;flex-direction:column;gap:0;border-left:1px solid var(--a-line);padding-left:20px}
+.c-step{display:grid;grid-template-columns:22px 1fr;gap:10px;padding:8px 0}
+.c-step .n{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--a-line);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--a-mut)}
+.c-step.done .n{background:var(--a-good);border-color:var(--a-good);color:#fff}
+.c-step.now .n{border-color:var(--a-pri);color:var(--a-pri)}
+.c-alt{display:flex;gap:8px;flex-wrap:wrap}
+.c-alt .opt{padding:8px 12px;border:1px solid var(--a-line);border-radius:8px;background:var(--a-surface);display:flex;flex-direction:column;gap:2px;min-width:150px}
+.c-alt .opt.on{border:2px solid var(--a-pri);padding:7px 11px}
+.c-alt .opt span{font-size:11px;color:var(--a-mut)}
+.sentence{font-size:17px;line-height:2.05;max-width:820px}
+.sentence u{text-decoration:none;border-bottom:2px dotted var(--a-pri);color:var(--a-pri);font-weight:600;padding:0 1px;cursor:pointer}
+.sentence u.warn{border-color:var(--a-warn);color:var(--a-warn)}
+.c-after{display:grid;grid-template-columns:1fr 260px;gap:14px}
+.c-rules{padding:14px;display:flex;flex-direction:column;gap:8px;font-size:12px}
+
+/* D — week planner */
+.d-split{display:grid;grid-template-columns:1fr 290px;gap:14px;align-items:start}
+.week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--a-line);border-radius:10px;overflow:hidden;background:var(--a-line);gap:1px}
+.week .dh{background:var(--a-row);padding:6px 8px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--a-mut)}
+.week .d{background:var(--a-surface);min-height:96px;padding:6px;display:flex;flex-direction:column;gap:4px}
+.week .d .dn{font-size:12px;color:var(--a-mut);font-variant-numeric:tabular-nums}
+.week .d.past{background:var(--a-row)}
+.week .d.today{box-shadow:inset 0 0 0 2px var(--a-pri)}
+.week .d.today .dn{color:var(--a-pri);font-weight:700}
+.blk{border-radius:5px;padding:4px 6px;font-size:11px;line-height:1.3;border-left:3px solid;background:var(--a-chip)}
+.blk b{display:block;font-size:12px}
+.blk.t1{border-color:var(--c2)} .blk.t2{border-color:var(--c1)} .blk.t3{border-color:var(--c3)} .blk.t4{border-color:var(--c4)}
+.blk.off{opacity:.6;text-decoration:line-through}
+.blk.ran{background:transparent;border-left-style:dotted}
+.palette{padding:12px;display:flex;flex-direction:column;gap:8px}
+.palette .pt{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--a-line);border-radius:6px;cursor:grab}
+.palette .pt::after{content:"⋮⋮";margin-left:auto;color:var(--a-mut);font-size:10px;letter-spacing:-2px}
+.tonightpanel{padding:14px;display:flex;flex-direction:column;gap:10px;border:2px solid var(--a-pri)}
+
+/* comparison */
+.cmp{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--paper)}
+.cmp table{width:100%;border-collapse:collapse;min-width:720px;font-size:14px}
+.cmp th,.cmp td{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+.cmp thead th{font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.cmp tbody th{font-family:var(--f-display);font-size:17px;font-weight:600;white-space:nowrap}
+.cmp tr:last-child td,.cmp tr:last-child th{border-bottom:0}
+.cmp .rec{background:var(--accent-soft)}
+.dots5{letter-spacing:2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.moves{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--paper)}
+.moves table{width:100%;border-collapse:collapse;min-width:680px;font-size:13.5px}
+.moves th,.moves td{padding:9px 14px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.moves thead th{font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.moves td:first-child{font-weight:600;white-space:nowrap}
+.moves tr:last-child td{border-bottom:0}
+code{font-size:.9em;background:var(--line);padding:1px 5px;border-radius:4px}
+</style>
+
+<div class="wrap">
+
+<header class="prose stack">
+  <span class="eyebrow">Race Day › Setup · design review · 14 Nov 2026</span>
+  <h1>Setup, rebuilt around templates</h1>
+  <p class="lede">Four directions for the Setup page. All four take New Race Day off the page and make picking a template the way a night starts. Each one shows the page on a Saturday morning, before anything has been started.</p>
+</header>
+
+<section class="stack">
+  <div class="prose stack">
+    <h2>What's wrong with the page now</h2>
+    <p>Setup is one long scroll with three cards: <em>Which race day</em>, <em>About the day</em> and <em>Building the program</em>. Starting a night happens in four places: <b>New Race Day</b>, <b>Set Up Tonight…</b>, the Start Tonight window, and a templates row with five buttons, which sits halfway down the page between "Next night on phones" and Notes. The Start Tonight window is already a template picker (Like last time, each template, Something different), but you only see it after pressing a button.</p>
+  </div>
+  <div class="diag">
+    <div><b>4</b><span>ways onto the same Start Tonight window from this page</span></div>
+    <div><b>32</b><span>rows and ticks in one scroll, with nothing collapsed</span></div>
+    <div><b>7</b><span>of them say "For every night, not just this one" and save to club settings</span></div>
+    <div><b>5</b><span>buttons in the Templates row: Start, When…, Save This Day As…, Delete, plus the picker</span></div>
+  </div>
+  <div class="principles">
+    <div><h3>Start from a template</h3><p>Picking a template is how a night starts. "Like last time" and "Something different" are listed as templates too, so all the options sit in one place.</p></div>
+    <div><h3>Keep tonight and the club apart</h3><p>The seven club-wide ticks move out of tonight's sheet. Changing them shouldn't feel like editing one night.</p></div>
+    <div><h3>Edit templates directly</h3><p>Today a template can only be made by saving a day. <code>NightTemplate</code> has the same fields as a day, so the day editor can edit a template too.</p></div>
+  </div>
+</section>
+
+<!-- ===================== A ===================== -->
+<section class="mock" id="a">
+  <div class="mock-head">
+    <span class="letter">A</span>
+    <h2>Template Shelf</h2>
+    <span class="flag">Recommended</span>
+    <p>Setup gets three tabs of its own: <b>Templates</b>, <b>Tonight</b> and <b>Club rules</b>. Templates is where the page opens when no night is running. Each template is a card you can read at a glance, and tonight's template sits above the rest with a Start button.</p>
+  </div>
+  <div class="scroller"><div class="win">
+    <div class="titlebar"><span>HeatCaller — No race day open</span><span class="dots">— ▢ ✕</span></div>
+    <div class="app">
+      <aside class="side"><div class="brand">HEATCALLER</div><a class="on">Race Day</a><a>Race Control</a><a>Championship</a><a>Drivers</a><a>Race Analytics</a><a>AI Commentary</a><a>Settings</a><div class="spacer"></div><div class="live"><b>No night open</b>Last: Tuesday club night, 11 Nov · closed</div></aside>
+      <main class="content">
+        <div class="tabs"><span>Next Steps</span><span class="on">Setup</span><span>Who's Racing</span></div>
+        <div class="row between">
+          <div class="seg"><span class="on">Templates <small>4</small></span><span>Tonight</span><span>Club rules</span></div>
+          <span class="pin" style="position:static">1</span>
+          <div class="grow"></div>
+          <span class="btn">Past nights ▾</span>
+          <span class="btn">+ New template</span>
+        </div>
+
+        <div class="a-banner" style="position:relative">
+          <span class="pin" style="top:-9px;left:-9px">2</span>
+          <div class="when">14<small>Sat Nov</small></div>
+          <div class="grow">
+            <div style="font-weight:700;font-size:15px">Points round is set for tonight</div>
+            <div class="mut">5 classes · 3 heats each · entries close 09:30 · first race 10:00 · out by 17:00</div>
+          </div>
+          <span class="btn ghost">Walk me through it…</span>
+          <span class="btn pri big">Start tonight ▸</span>
+        </div>
+
+        <div class="a-grid">
+          <div class="card tcard tonight">
+            <span class="pin" style="top:-9px;right:-9px">3</span>
+            <div class="row between"><span class="pill p-race">RACE DAY</span><span class="pill p-mut">2nd &amp; 4th Sat</span></div>
+            <h5>Points round</h5>
+            <div class="chips"><span class="chip">2WD Buggy</span><span class="chip">4WD Buggy</span><span class="chip">Stock Truck</span><span class="chip">Short Course</span><span class="chip">Juniors</span></div>
+            <dl class="kv"><dt>Heats</dt><dd>3 each · 8 per heat · seeded by pace</dd><dt>Times</dt><dd>09:30 close · 10:00 first · 17:00 out</dd><dt>Breaks</dt><dd>Lunch 12:30 (30 min)</dd><dt>Fees</dt><dd>$25 · $10 each extra class</dd></dl>
+            <div class="foot"><span class="btn pri sm">Start tonight</span><span class="btn sm">Edit</span><span class="btn sm">⋯</span></div>
+          </div>
+          <div class="card tcard">
+            <div class="row between"><span class="pill p-club">CLUB NIGHT</span><span class="pill p-mut">Every Tue</span></div>
+            <h5>Tuesday club night</h5>
+            <div class="chips"><span class="chip">2WD Buggy</span><span class="chip">Stock Truck</span><span class="chip">Mini-Z</span></div>
+            <dl class="kv"><dt>Races</dt><dd>4 each · 10 per race</dd><dt>Times</dt><dd>18:45 close · 19:00 first · 22:00 out</dd><dt>Breaks</dt><dd>None</dd><dt>Fees</dt><dd>$10 · $5 each extra class</dd></dl>
+            <div class="foot"><span class="btn sm">Start tonight</span><span class="btn sm">Edit</span><span class="btn sm">⋯</span></div>
+          </div>
+          <div class="card tcard">
+            <span class="pin" style="top:-9px;right:-9px">4</span>
+            <div class="row between"><span class="pill p-mut">LIKE LAST TIME</span><span class="pill p-mut">Tue 11 Nov</span></div>
+            <h5>Tuesday club night, 11 Nov</h5>
+            <div class="chips"><span class="chip">2WD Buggy</span><span class="chip">Stock Truck</span><span class="chip">Mini-Z</span><span class="chip">4WD Buggy</span></div>
+            <dl class="kv"><dt>Ran</dt><dd>31 drivers · 22 races · done 21:48</dd><dt>Differs</dt><dd>4WD Buggy added on the night</dd></dl>
+            <div class="foot"><span class="btn sm">Start tonight</span><span class="btn sm">Save as template</span></div>
+          </div>
+          <div class="card tcard">
+            <div class="row between"><span class="pill p-race">RACE DAY</span><span class="pill p-warn">No nights set</span></div>
+            <h5>Juniors morning</h5>
+            <div class="chips"><span class="chip">Juniors</span><span class="chip">Mini-Z</span></div>
+            <dl class="kv"><dt>Heats</dt><dd>2 each · 6 per heat · random</dd><dt>Times</dt><dd>09:00 first · 12:00 out</dd><dt>Fees</dt><dd>$5</dd></dl>
+            <div class="foot"><span class="btn sm">Start tonight</span><span class="btn sm">Edit</span><span class="btn sm">⋯</span></div>
+          </div>
+          <div class="card tcard">
+            <div class="row between"><span class="pill p-race">RACE DAY</span><span class="pill p-mut">Sat 13 Dec</span></div>
+            <h5>Summer series final</h5>
+            <div class="chips"><span class="chip">2WD Buggy</span><span class="chip">4WD Buggy</span><span class="chip">Short Course</span></div>
+            <dl class="kv"><dt>Heats</dt><dd>4 each · 8 per heat · by points</dd><dt>Times</dt><dd>09:00 close · 09:30 first · 18:00 out</dd><dt>Fees</dt><dd>$35 · $15 each extra class</dd></dl>
+            <div class="foot"><span class="btn sm">Start tonight</span><span class="btn sm">Edit</span><span class="btn sm">⋯</span></div>
+          </div>
+          <div class="card tcard dash">
+            <span class="pin" style="top:-9px;right:-9px">5</span>
+            <h5>Something different…</h5>
+            <p class="mut">Pick the kind of night and the classes. Everything else comes from your last race day.</p>
+            <span class="btn sm">Start a blank night</span>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div></div>
+  <div class="notes">
+    <ol>
+      <li><span class="pin">1</span><span><b>Three tabs instead of one scroll.</b> <i>Templates</i> is the start. <i>Tonight</i> is the day sheet that exists now, trimmed to this night's fields and grouped. <i>Club rules</i> holds the seven "every night" ticks. Once a night is open, Setup opens on Tonight.</span></li>
+      <li><span class="pin">2</span><span><b>Tonight's template comes first.</b> This is <code>NightTemplates.ForDay</code>, which Next Steps already uses. The big button starts the night with no extra window. <i>Walk me through it…</i> is the Set Up Tonight wizard, kept as a secondary option.</span></li>
+    </ol>
+    <ol start="3">
+      <li><span class="pin">3</span><span><b>Each card shows everything that template does</b>: classes, heats, times, breaks, fees and which nights it's for. You no longer need a drop-down to read a template. The ⋯ menu holds <i>When…</i>, Duplicate, Rename and Delete.</span></li>
+      <li><span class="pin">4</span><span><b>"Like last time" is a card too.</b> It shows how the last night actually went and how it differed from its template, so <i>Save as template</i> makes sense right there.</span></li>
+      <li><span class="pin">5</span><span><b>Something different</b> replaces the two questions in the Start Tonight window. It's the only card a club sees on its first night.</span></li>
+    </ol>
+  </div>
+  <div class="tradeoff">
+    <div><h4>Gets right</h4><ul><li>Starting a night takes one press, on the page you're already on.</li><li>You can compare templates without opening each one.</li><li>Club-wide rules stop looking like tonight's settings.</li><li>Cards reflow to two columns at large text sizes or 1280×720.</li></ul></div>
+    <div><h4>Costs</h4><ul><li>One more level of tabs inside Race Day › Setup.</li><li>The Tonight tab still needs its own redesign, though grouping is most of it.</li><li>A club with eight or more templates needs a search or a "pinned" row.</li></ul></div>
+  </div>
+</section>
+
+<!-- ===================== B ===================== -->
+<section class="mock" id="b">
+  <div class="mock-head">
+    <span class="letter">B</span>
+    <h2>Library &amp; Inspector</h2>
+    <p>A list on the left holds tonight, your templates and recent nights. On the right, one editor works for whichever you pick. Templates are edited the same way a night is, and a forecast at the bottom shows whether the night fits before you start it.</p>
+  </div>
+  <div class="scroller"><div class="win">
+    <div class="titlebar"><span>HeatCaller — No race day open</span><span class="dots">— ▢ ✕</span></div>
+    <div class="app">
+      <aside class="side"><div class="brand">HEATCALLER</div><a class="on">Race Day</a><a>Race Control</a><a>Championship</a><a>Drivers</a><a>Race Analytics</a><a>AI Commentary</a><a>Settings</a><div class="spacer"></div><div class="live"><b>No night open</b>Last: Tuesday club night, 11 Nov · closed</div></aside>
+      <main class="content">
+        <div class="tabs"><span>Next Steps</span><span class="on">Setup</span><span>Who's Racing</span></div>
+        <div class="b-split">
+          <div class="card lib" style="position:relative">
+            <span class="pin" style="top:-9px;left:-9px">1</span>
+            <h6>Tonight</h6>
+            <div class="it"><span class="swatch" style="background:var(--a-chip);border:1px dashed var(--a-mut)"></span><div class="t"><b>Nothing open</b><span>Pick a template and start it</span></div></div>
+            <h6>Templates</h6>
+            <div class="it on"><span class="swatch" style="background:var(--c1)"></span><div class="t"><b>Points round</b><span>Race day · 2nd &amp; 4th Sat · tonight</span></div></div>
+            <div class="it"><span class="swatch" style="background:var(--c2)"></span><div class="t"><b>Tuesday club night</b><span>Club night · every Tue</span></div></div>
+            <div class="it"><span class="swatch" style="background:var(--c3)"></span><div class="t"><b>Juniors morning</b><span>Race day · no nights set</span></div></div>
+            <div class="it"><span class="swatch" style="background:var(--c4)"></span><div class="t"><b>Summer series final</b><span>Race day · Sat 13 Dec</span></div></div>
+            <div class="it mut">+ New template</div>
+            <h6>Recent nights</h6>
+            <div class="it"><span class="swatch" style="background:var(--c2);opacity:.5"></span><div class="t"><b>Tuesday club night</b><span>Tue 11 Nov · 31 drivers · closed</span></div></div>
+            <div class="it"><span class="swatch" style="background:var(--c1);opacity:.5"></span><div class="t"><b>Points round</b><span>Sat 8 Nov · 44 drivers · closed</span></div></div>
+            <div class="it"><span class="swatch" style="background:var(--c2);opacity:.5"></span><div class="t"><b>Tuesday club night</b><span>Tue 4 Nov · 27 drivers · closed</span></div></div>
+            <div class="it mut">All nights in Calendar ›</div>
+          </div>
+
+          <div class="card insp" style="position:relative">
+            <div class="insp-head">
+              <div class="grow">
+                <div class="row" style="gap:8px"><span class="pill p-race">TEMPLATE</span><span class="mut">Used 6 times · last on Sat 8 Nov</span></div>
+                <h5 style="margin-top:6px">Points round</h5>
+                <div class="row" style="margin-top:6px;gap:6px;position:relative"><span class="mut">Nights:</span><span class="chip">2nd Sat</span><span class="chip">4th Sat</span><span class="chip">+ date</span><span class="pin" style="position:static;margin-left:6px">2</span></div>
+              </div>
+              <span class="btn sm">Duplicate</span><span class="btn sm danger">Delete</span>
+            </div>
+            <div class="groups">
+              <div class="grp">
+                <h6>The night</h6>
+                <div class="frow"><span>Kind of night</span><span class="seg" style="justify-self:start"><span class="on">Race day</span><span>Club night</span></span></div>
+                <div class="frow"><span>Venue</span><span class="field wide caret">Riverside Raceway</span></div>
+                <div class="frow"><span>Track layout</span><span class="field wide caret">Outdoor clay — long</span></div>
+                <div class="frow"><span>Championship</span><span class="field wide caret">2026 Club Points</span></div>
+              </div>
+              <div class="grp" style="position:relative">
+                <span class="pin" style="top:8px;right:10px">3</span>
+                <h6>Classes, in running order <span class="tick on" style="text-transform:none;letter-spacing:0;font-weight:500">Turn round each round</span></h6>
+                <div class="order"><div>2WD Buggy</div><div>Stock Truck</div><div>4WD Buggy</div><div>Short Course</div><div>Juniors</div></div>
+                <span class="btn ghost sm" style="align-self:start">+ Add class</span>
+              </div>
+              <div class="grp">
+                <h6>Heats</h6>
+                <div class="frow"><span>Heats each driver</span><span class="field">3</span></div>
+                <div class="frow"><span>Drivers per heat</span><span class="field">8</span></div>
+                <div class="frow"><span>First round seeded</span><span class="field wide caret">By pace</span></div>
+                <div class="frow"><span>Share a heat under</span><span class="field">4</span></div>
+                <div class="frow"><span>Races off between</span><span class="field">1</span></div>
+              </div>
+              <div class="grp">
+                <h6>Times &amp; money</h6>
+                <div class="frow"><span>Entries close</span><span class="field">09:30</span></div>
+                <div class="frow"><span>First race</span><span class="field">10:00</span></div>
+                <div class="frow"><span>Out of the venue by</span><span class="field">17:00</span></div>
+                <div class="frow"><span>Breaks</span><span class="chips"><span class="chip">Lunch 12:30 · 30 min</span><span class="chip">+</span></span></div>
+                <div class="frow"><span>Entry · extra class</span><span class="row"><span class="field">$25</span><span class="field">$10</span></span></div>
+              </div>
+            </div>
+            <div class="forecast" style="position:relative">
+              <span class="pin" style="top:-10px;left:12px">4</span>
+              <div class="stat"><b>~42</b><span>drivers (avg of last 6)</span></div>
+              <div class="stat"><b>18</b><span>heats + 10 finals</span></div>
+              <div class="stat"><b>16:20</b><span>projected finish</span></div>
+              <div class="grow"><div class="bar" style="width:100%"><i style="width:88%"></i></div><span class="mut" style="font-size:11px">40 min to spare before 17:00</span></div>
+              <span class="btn pri big">Start tonight from Points round ▸</span>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div></div>
+  <div class="notes">
+    <ol>
+      <li><span class="pin">1</span><span><b>One list for tonight, templates and past nights.</b> It replaces the "Working on:" picker. Picking a past night opens it read-only, with <i>Reopen</i> and <i>Save as template</i>. Older nights are in Championship › Calendar.</span></li>
+      <li><span class="pin">2</span><span><b>Nights as chips.</b> The <i>When…</i> dialog becomes chips next to the name: "2nd Sat", "every Tue", or a date.</span></li>
+    </ol>
+    <ol start="3">
+      <li><span class="pin">3</span><span><b>The class order is the class list.</b> Ticking classes and the separate <i>Order…</i> dialog become one list you drag to reorder, with the rotate tick next to it.</span></li>
+      <li><span class="pin">4</span><span><b>Forecast before you start.</b> It uses the average turnout from the last nights on this template and the timetable's estimates to show whether the night fits before the venue's out-by time. Start lives here.</span></li>
+    </ol>
+  </div>
+  <div class="tradeoff">
+    <div><h4>Gets right</h4><ul><li>Templates become something you manage, not a by-product of a day.</li><li>One editor for days and templates means less code to keep in step.</li><li>The forecast catches an overfull night before anyone checks in.</li></ul></div>
+    <div><h4>Costs</h4><ul><li>Two columns get tight at 1280×720 with large text, so the list needs to collapse to a drop-down.</li><li>Editing a template and editing tonight look alike, so the TEMPLATE / TONIGHT label has to be clear.</li><li>Club-wide ticks still need somewhere to live, such as a "Club rules" entry at the bottom of the list.</li></ul></div>
+  </div>
+</section>
+
+<!-- ===================== C ===================== -->
+<section class="mock" id="c">
+  <div class="mock-head">
+    <span class="letter">C</span>
+    <h2>Tonight, One Press</h2>
+    <p>The page changes with the night. Before a night starts, it's one large card with tonight's template already chosen and the others in a row underneath. Once the night starts, the page turns into a short paragraph about the night, and each underlined value can be clicked to change it. The Set Up Tonight wizard goes away, and the card does its job instead.</p>
+  </div>
+  <div class="scroller"><div class="win">
+    <div class="titlebar"><span>HeatCaller — No race day open</span><span class="dots">— ▢ ✕</span></div>
+    <div class="app">
+      <aside class="side"><div class="brand">HEATCALLER</div><a class="on">Race Day</a><a>Race Control</a><a>Championship</a><a>Drivers</a><a>Race Analytics</a><a>AI Commentary</a><a>Settings</a><div class="spacer"></div><div class="live"><b>No night open</b>Last: Tuesday club night, 11 Nov · closed</div></aside>
+      <main class="content">
+        <div class="tabs"><span>Next Steps</span><span class="on">Setup</span><span>Who's Racing</span></div>
+        <div class="card c-hero">
+          <span class="pin" style="top:-9px;left:-9px">1</span>
+          <div class="stack" style="gap:14px">
+            <div>
+              <div class="c-date">Saturday 14 November · no night open</div>
+              <div class="c-title">Points round</div>
+              <div class="mut" style="font-size:14px;max-width:560px">Race day at Riverside Raceway: 2WD Buggy, Stock Truck, 4WD Buggy, Short Course and Juniors. 3 heats each, then finals. Entries close 09:30, first race 10:00, out by 17:00.</div>
+            </div>
+            <div class="row"><span class="btn pri big">Start tonight ▸</span><span class="btn">Change something first…</span><span class="mut" style="font-size:12px">Ctrl+Z takes it back</span></div>
+            <div style="position:relative">
+              <span class="pin" style="top:-4px;left:-28px">2</span>
+              <div class="mut" style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">Or start from</div>
+              <div class="c-alt">
+                <div class="opt on"><b>Points round</b><span>Set for 2nd &amp; 4th Sat</span></div>
+                <div class="opt"><b>Like last time</b><span>Tue club night, 11 Nov</span></div>
+                <div class="opt"><b>Tuesday club night</b><span>Every Tue</span></div>
+                <div class="opt"><b>Juniors morning</b><span>No nights set</span></div>
+                <div class="opt"><b>Something different…</b><span>Two questions</span></div>
+                <div class="opt" style="border-style:dashed;justify-content:center"><b class="mut">Manage templates ›</b></div>
+              </div>
+            </div>
+          </div>
+          <div class="c-steps" style="position:relative">
+            <span class="pin" style="top:-9px;right:-9px">3</span>
+            <div class="mut" style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding-bottom:4px">Before the first race</div>
+            <div class="c-step now"><span class="n">1</span><div><b>Start tonight</b><div class="mut">From a template</div></div></div>
+            <div class="c-step"><span class="n">2</span><div><b>Check drivers in</b><div class="mut">Who's Racing · 0 so far</div></div></div>
+            <div class="c-step"><span class="n">3</span><div><b>Build the heats</b><div class="mut">Automatic at 09:30</div></div></div>
+            <div class="c-step"><span class="n">4</span><div><b>Post the heats</b><div class="mut">Prints sheets, tells the room</div></div></div>
+            <div class="c-step"><span class="n">5</span><div><b>First race</b><div class="mut">10:00</div></div></div>
+          </div>
+        </div>
+
+        <div class="mut" style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-top:6px">The same page once the night is started</div>
+        <div class="c-after">
+          <div class="card" style="padding:18px 20px;position:relative">
+            <span class="pin" style="top:-9px;left:-9px">4</span>
+            <div class="row between"><div class="row"><span class="pill p-good p-club" style="background:var(--a-good-tint);color:var(--a-good)">OPEN</span><b style="font-size:15px">Points round · Sat 14 Nov</b></div><span class="mut">Saved</span></div>
+            <p class="sentence">A <u>race day</u> at <u>Riverside Raceway</u> on the <u>long clay layout</u>, counting for <u>2026 Club Points</u>. Racing <u>5 classes</u> in the order <u>2WD → Stock → 4WD → SC → Juniors</u>, turned round each round. Every driver gets <u>3 heats</u> of up to <u>8</u>, first round <u>seeded by pace</u>. Entries close at <u>09:30</u>, the first race goes at <u>10:00</u>, with <u>lunch at 12:30</u>, and we're out by <u class="warn">17:00 (16:50 projected)</u>. It's <u>$25</u>, plus <u>$10</u> for each extra class.</p>
+            <div class="row" style="margin-top:6px"><span class="btn sm">Fine-tune every setting…</span><span class="btn sm">Save as template</span><span class="grow"></span><span class="btn sm">Close day</span><span class="btn sm danger">Delete…</span></div>
+          </div>
+          <div class="card c-rules" style="position:relative">
+            <span class="pin" style="top:-9px;right:-9px">5</span>
+            <b>Club rules <span class="mut" style="font-weight:400">· every night</span></b>
+            <span class="tick on">Post heats before the first race</span>
+            <span class="tick on">Build heats when entries close</span>
+            <span class="tick">Add late check-ins without asking</span>
+            <span class="tick on">Close with a checklist</span>
+            <span class="tick">Ask for waivers</span>
+            <span class="mut">Marshal no-show: loses best qualifier</span>
+            <span class="btn ghost sm" style="align-self:start;padding-left:0">Edit club rules ›</span>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div></div>
+  <div class="notes">
+    <ol>
+      <li><span class="pin">1</span><span><b>One choice with a sensible default.</b> On a night with a template set, the page opens with everything ready, so starting is one press. <i>Change something first…</i> opens the full editor before the night starts.</span></li>
+      <li><span class="pin">2</span><span><b>The other templates are a row of options</b>, the same choices the Start Tonight window offers now, shown on the page. Picking one rewrites the card above.</span></li>
+      <li><span class="pin">3</span><span><b>The wizard's job, shown on the page.</b> Set Up Tonight used to walk you through these steps. Now they're a list of what comes next, and each step links to the tab where you do it.</span></li>
+    </ol>
+    <ol start="4">
+      <li><span class="pin">4</span><span><b>Tonight as a paragraph.</b> Each underlined value opens a small editor in place. A value with a problem is shown in amber, like the out-by time here. The full grid is still under <i>Fine-tune every setting…</i> for the rare fields.</span></li>
+      <li><span class="pin">5</span><span><b>Club rules as a side card</b>, showing what they are. Editing them goes to Settings, where club-wide things belong.</span></li>
+    </ol>
+  </div>
+  <div class="tradeoff">
+    <div><h4>Gets right</h4><ul><li>The fastest start of the four for a club with a regular schedule.</li><li>The paragraph is easy to check over a cup of coffee before the gates open.</li><li>Removes the Set Up Tonight wizard and its rail, footer and layout audit.</li></ul></div>
+    <div><h4>Costs</h4><ul><li>The paragraph format is new to the app and has to work at every text size and wrap cleanly.</li><li>Rare fields (share-under, races off, between-race talk) end up one click further away.</li><li>Managing templates needs its own screen, behind "Manage templates ›".</li></ul></div>
+  </div>
+</section>
+
+<!-- ===================== D ===================== -->
+<section class="mock" id="d">
+  <div class="mock-head">
+    <span class="letter">D</span>
+    <h2>Week Planner</h2>
+    <p>Templates go on a calendar. The Templates tab shows the next few weeks with each template on the nights it runs. You drag a template onto a date to plan it, and tonight's square opens a Start panel. The <i>When…</i> dialog goes away, and "Next night on phones" comes straight from this calendar.</p>
+  </div>
+  <div class="scroller"><div class="win">
+    <div class="titlebar"><span>HeatCaller — No race day open</span><span class="dots">— ▢ ✕</span></div>
+    <div class="app">
+      <aside class="side"><div class="brand">HEATCALLER</div><a class="on">Race Day</a><a>Race Control</a><a>Championship</a><a>Drivers</a><a>Race Analytics</a><a>AI Commentary</a><a>Settings</a><div class="spacer"></div><div class="live"><b>No night open</b>Last: Tuesday club night, 11 Nov · closed</div></aside>
+      <main class="content">
+        <div class="tabs"><span>Next Steps</span><span class="on">Setup</span><span>Who's Racing</span></div>
+        <div class="row between">
+          <div class="seg"><span class="on">Templates</span><span>Tonight</span><span>Club rules</span></div>
+          <div class="row"><span class="btn sm">‹</span><b>9 – 29 November</b><span class="btn sm">›</span></div>
+        </div>
+        <div class="d-split">
+          <div style="position:relative">
+            <span class="pin" style="top:-9px;left:-9px">1</span>
+            <div class="week">
+              <div class="dh">Mon</div><div class="dh">Tue</div><div class="dh">Wed</div><div class="dh">Thu</div><div class="dh">Fri</div><div class="dh">Sat</div><div class="dh">Sun</div>
+              <div class="d past"><span class="dn">9</span></div>
+              <div class="d past"><span class="dn">10</span></div>
+              <div class="d past"><span class="dn">11</span><div class="blk t1 ran"><b>Tue club night</b>Ran · 31 drivers</div></div>
+              <div class="d past"><span class="dn">12</span></div>
+              <div class="d past"><span class="dn">13</span></div>
+              <div class="d today"><span class="dn">14 · Today</span><div class="blk t2"><b>Points round</b>10:00 – 17:00</div></div>
+              <div class="d"><span class="dn">15</span></div>
+              <div class="d"><span class="dn">16</span></div>
+              <div class="d"><span class="dn">17</span><div class="blk t1"><b>Tue club night</b>19:00 – 22:00 · 14 coming</div></div>
+              <div class="d"><span class="dn">18</span></div>
+              <div class="d"><span class="dn">19</span></div>
+              <div class="d"><span class="dn">20</span></div>
+              <div class="d"><span class="dn">21</span></div>
+              <div class="d" style="position:relative"><span class="dn">22</span><div class="blk t3" style="outline:2px dashed var(--c3);outline-offset:1px"><b>Juniors morning</b>Dropped here · one-off</div><span class="pin" style="top:-9px;right:-9px">2</span></div>
+              <div class="d"><span class="dn">23</span></div>
+              <div class="d" style="position:relative"><span class="dn">24</span><div class="blk t1 off"><b>Tue club night</b>Called off</div><span class="mut" style="font-size:11px">Track repairs</span><span class="pin" style="top:-9px;right:-9px">3</span></div>
+              <div class="d"><span class="dn">25</span></div>
+              <div class="d"><span class="dn">26</span></div>
+              <div class="d"><span class="dn">27</span></div>
+              <div class="d"><span class="dn">28</span><div class="blk t2"><b>Points round</b>10:00 – 17:00</div></div>
+              <div class="d"><span class="dn">29</span></div>
+            </div>
+            <div class="row mut" style="font-size:12px;margin-top:8px;gap:16px"><span>Drag a template onto a day for a one-off. Right-click a night to call it off; phones and regulars are told.</span></div>
+          </div>
+          <div class="stack" style="gap:12px">
+            <div class="card tonightpanel" style="position:relative">
+              <span class="pin" style="top:-9px;right:-9px">4</span>
+              <div class="row between"><span class="pill p-race">TONIGHT</span><span class="mut">Sat 14 Nov</span></div>
+              <b style="font-size:17px">Points round</b>
+              <div class="chips"><span class="chip">2WD</span><span class="chip">Stock</span><span class="chip">4WD</span><span class="chip">SC</span><span class="chip">Juniors</span></div>
+              <dl class="kv"><dt>Coming</dt><dd>29 said yes on phones</dd><dt>Times</dt><dd>09:30 · 10:00 · 17:00</dd></dl>
+              <span class="btn pri" style="justify-content:center">Start tonight ▸</span>
+              <span class="btn ghost sm" style="justify-content:center">Start something else instead…</span>
+            </div>
+            <div class="card palette" style="position:relative">
+              <span class="pin" style="top:-9px;right:-9px">5</span>
+              <div class="row between"><b>Templates</b><span class="btn ghost sm">+ New</span></div>
+              <div class="pt"><span class="swatch" style="background:var(--c1)"></span><div><b>Points round</b><div class="mut" style="font-size:11px">2nd &amp; 4th Sat</div></div></div>
+              <div class="pt"><span class="swatch" style="background:var(--c2)"></span><div><b>Tuesday club night</b><div class="mut" style="font-size:11px">Every Tue</div></div></div>
+              <div class="pt"><span class="swatch" style="background:var(--c3)"></span><div><b>Juniors morning</b><div class="mut" style="font-size:11px">One-offs only</div></div></div>
+              <div class="pt"><span class="swatch" style="background:var(--c4)"></span><div><b>Summer series final</b><div class="mut" style="font-size:11px">Sat 13 Dec</div></div></div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div></div>
+  <div class="notes">
+    <ol>
+      <li><span class="pin">1</span><span><b>Three weeks at a glance.</b> Past nights show what happened, and future nights show the template and how many drivers said yes on their phones. The week is the unit because club nights repeat weekly.</span></li>
+      <li><span class="pin">2</span><span><b>Drag to plan.</b> Dropping a template on a day adds that date to the template, so a date still wins over a weekday, the same rule <i>When…</i> uses now.</span></li>
+      <li><span class="pin">3</span><span><b>Call It Off on the calendar.</b> The phone-page action becomes a right-click on the night, with the reason shown in the square.</span></li>
+    </ol>
+    <ol start="4">
+      <li><span class="pin">4</span><span><b>The Start panel follows the selected day.</b> Click any future night to preview it. Only today's square has a Start button.</span></li>
+      <li><span class="pin">5</span><span><b>Template palette.</b> Double-click to edit a template in a side panel, the same editor as Tonight.</span></li>
+    </ol>
+  </div>
+  <div class="tradeoff">
+    <div><h4>Gets right</h4><ul><li>Planning, phone announcements and starting the night all use one picture.</li><li>Shows clashes and gaps in the season straight away.</li><li>The best fit for clubs that run several kinds of night.</li></ul></div>
+    <div><h4>Costs</h4><ul><li>Overlaps the Calendar tab that just shipped (#189), so you'd have two calendars or need to merge them.</li><li>The most work of the four: drag and drop, a month grid in WinForms, and every text size.</li><li>Too much for a club that only ever runs one night a week.</li></ul></div>
+  </div>
+</section>
+
+<!-- ===================== compare ===================== -->
+<section class="stack">
+  <div class="prose stack">
+    <h2>Side by side</h2>
+    <p>The dots are my rough estimate, five being best (or, for build effort, the least work).</p>
+  </div>
+  <div class="cmp"><table>
+    <thead><tr><th></th><th>Presses to start a planned night</th><th>Template management</th><th>Fits 1280×720 at large text</th><th>Build effort</th><th>Set Up Tonight</th></tr></thead>
+    <tbody>
+      <tr class="rec"><th>A · Template Shelf</th><td>1 <span class="mut">(banner)</span></td><td class="dots5">●●●●○</td><td class="dots5">●●●●○</td><td class="dots5">●●●●○</td><td>Kept, as a secondary option</td></tr>
+      <tr><th>B · Library &amp; Inspector</th><td>1 <span class="mut">(after reviewing)</span></td><td class="dots5">●●●●●</td><td class="dots5">●●○○○</td><td class="dots5">●●○○○</td><td>Dropped; the editor replaces it</td></tr>
+      <tr><th>C · Tonight, One Press</th><td>1 <span class="mut">(page opens on it)</span></td><td class="dots5">●●○○○</td><td class="dots5">●●●○○</td><td class="dots5">●●●○○</td><td>Dropped; the step list replaces it</td></tr>
+      <tr><th>D · Week Planner</th><td>1 <span class="mut">(today's square)</span></td><td class="dots5">●●●●○</td><td class="dots5">●●○○○</td><td class="dots5">●○○○○</td><td>Kept, from the panel</td></tr>
+    </tbody>
+  </table></div>
+  <div class="prose stack">
+    <h3>My recommendation</h3>
+    <p>Build <b>A</b> and borrow two things from <b>B</b>: the forecast line goes in the tonight banner ("16:20 projected, 40 min to spare"), and <i>Edit</i> on a card opens the same grouped editor that the Tonight tab uses. That gives a one-press start, templates you can read at a glance, and club-wide rules on their own tab, without a new layout that has to survive 1280×720. C's step list could later become Next Steps' empty state, and D's planner could be added to the existing Calendar tab instead of Setup.</p>
+  </div>
+</section>
+
+<section class="stack">
+  <div class="prose stack">
+    <h2>Where today's fields go in A</h2>
+    <p>Every row on the current page, mapped to its new place. Nothing is removed. Two dialogs are replaced by controls on the page.</p>
+  </div>
+  <div class="moves"><table>
+    <thead><tr><th>Today</th><th>In direction A</th></tr></thead>
+    <tbody>
+      <tr><td>Working on: picker</td><td>Gone from Setup. Tonight is the open night, and past nights are under <i>Past nights ▾</i> and in the Calendar.</td></tr>
+      <tr><td>New Race Day</td><td>Each card's <i>Start tonight</i>, the banner, and the <i>Something different…</i> card.</td></tr>
+      <tr><td>Set Up Tonight…</td><td><i>Walk me through it…</i> on the banner.</td></tr>
+      <tr><td>Templates row (5 controls)</td><td>The cards. <i>When…</i>, Duplicate and Delete go in the ⋯ menu. <i>Save This Day As…</i> moves to the Tonight tab and the "Like last time" card.</td></tr>
+      <tr><td>Name, kind, venue, layout, championship, notes</td><td>Tonight › The night</td></tr>
+      <tr><td>Entries close, first race, out by, breaks</td><td>Tonight › Times</td></tr>
+      <tr><td>Classes, running order, heats each, per heat, seeding, share under, races off</td><td>Tonight › Heats. The class list and running order become one list you drag to reorder.</td></tr>
+      <tr><td>Entry fee, each extra class</td><td>Tonight › Money</td></tr>
+      <tr><td>Start the next race automatically, next race is, between-race talk, checked-in only</td><td>Tonight › Running the night</td></tr>
+      <tr><td>Next night on phones</td><td>Tonight, plus a line on each card ("Announced on phones · 29 coming")</td></tr>
+      <tr><td>Marshal rule, post heats, build at close, late check-ins, waivers, memberships, close checklist</td><td>Club rules tab</td></tr>
+      <tr><td>Close Day, Delete Day…</td><td>The footer of the Tonight tab, as now.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+</div>

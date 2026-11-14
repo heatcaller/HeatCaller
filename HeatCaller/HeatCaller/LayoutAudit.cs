@@ -24,6 +24,20 @@ namespace HeatCaller;
 /// doctor guessed and this can measure - a label's text wrapping inside its
 /// own box - it measures.
 /// </summary>
+/// <summary>
+/// A control that shows one of several pages of its own, switched by
+/// something other than a TabControl - so the layout audit can open each of
+/// them in turn (14 Nov 2026, Setup's three pages).
+/// </summary>
+internal interface IPagedControl
+{
+    /// <summary>The pages' names, as the audit's findings say where they are.</summary>
+    IReadOnlyList<string> PageNames { get; }
+
+    /// <summary>The page on show.</summary>
+    int ShownPage { get; set; }
+}
+
 internal static class LayoutAudit
 {
     /// <summary>Between a page's name and a tab's in a finding - the same mark the old repair pass's log lines used.</summary>
@@ -160,6 +174,9 @@ internal static class LayoutAudit
 
         // How to start tonight, and what kind of night it is and which classes are racing (NewRaceDayForm - the Start Tonight window).
         "Start Tonight",
+
+        // A night template's fields, edited from its card on Setup's Templates tab (TemplateEditForm).
+        "Edit Template",
 
         // Who is in a round and in what order (RoundRosterForm).
         "Drivers in Round",
@@ -590,9 +607,48 @@ internal static class LayoutAudit
             {
                 WalkTabs(tabs, where, findings, settle, eachView);
             }
+            else if (kid is IPagedControl paged)
+            {
+                WalkPages(kid, paged, where, findings, settle, eachView);
+            }
             else if (LooksInside(kid))
             {
                 Walk(kid, where, isPage: false, findings, settle, eachView);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A control that switches between pages of its own without a TabControl
+    /// (Setup's Templates / Tonight / Club rules, 14 Nov 2026): each page in
+    /// turn, by its name, as a tab's would be - then back to the one showing.
+    /// </summary>
+    private static void WalkPages(Control control, IPagedControl paged, string where, List<Finding> findings, Action? settle, Action<string>? eachView)
+    {
+        var showing = paged.ShownPage;
+
+        try
+        {
+            for (var i = 0; i < paged.PageNames.Count; i++)
+            {
+                if (paged.ShownPage != i)
+                {
+                    paged.ShownPage = i;
+                    settle?.Invoke();
+                }
+
+                var here = where + Separator + paged.PageNames[i];
+
+                eachView?.Invoke(here);
+                Walk(control, here, isPage: false, findings, settle, eachView);
+            }
+        }
+        finally
+        {
+            if (!control.IsDisposed && paged.ShownPage != showing)
+            {
+                paged.ShownPage = showing;
+                settle?.Invoke();
             }
         }
     }

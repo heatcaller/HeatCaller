@@ -1,81 +1,400 @@
 namespace HeatCaller;
 
 /// <summary>
-/// Night templates on the Setup tab (12 Nov 2026, setup plan B4): pick one
-/// and Start Tonight starts a race day from it; Save As keeps the day on show
-/// as a template. See NightTemplates.
+/// Setup's Templates tab (14 Nov 2026, direction A of the Setup rethink):
+/// where a night starts. Tonight's choice on a banner at the top, with its
+/// forecast and one Start button; under it a card for every way to start -
+/// like last time, each template, something different - saying what it
+/// starts. It replaces New Race Day beside the day picker and the templates
+/// row half-way down the old page.
+///
+/// Starting from here is the one path every door uses (StartTonightAs, one
+/// undo entry). While a night is open with something in it, nothing here
+/// starts another: the banner says so and points to Close Day (Asher, 14 Nov
+/// 2026 - a safeguard, so a second night is never started over a running one
+/// by a stray click).
 /// </summary>
 public sealed partial class RaceDayEventControl
 {
-    private readonly ComboBox _cmbTemplates = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
-    private readonly Button _btnStartFromTemplate = new() { Text = "Start Tonight From It", AutoSize = true };
-    private readonly Button _btnSaveTemplate = new() { Text = "Save This Day As...", AutoSize = true };
-    private readonly Button _btnDeleteTemplate = new() { Text = "Delete", AutoSize = true };
-    private readonly Button _btnTemplateDays = new() { Text = "When...", AutoSize = true };
+    private readonly Button _btnSaveTemplate = new() { AutoSize = true };
 
-    private sealed record TemplateChoice(NightTemplate Template)
+    private readonly Section _banner = new("Tonight");
+    private readonly Label _bannerDate = new() { AutoSize = true, UseMnemonic = false };
+    private readonly Label _bannerTitle = new() { AutoSize = true, UseMnemonic = false };
+    private readonly Label _bannerDetail = new() { AutoSize = true, UseMnemonic = false };
+    private readonly Label _bannerForecast = new() { AutoSize = true, UseMnemonic = false };
+    private readonly Button _btnBannerStart = new() { Text = "Start Tonight", AutoSize = true };
+    private readonly Button _btnGoToCloseDay = new() { Text = "Go to Close Day", AutoSize = true };
+    private readonly CardGrid _cards = new();
+    private readonly Button _btnNewTemplate = new() { Text = "New Template...", AutoSize = true };
+    private readonly Button _btnPastNights = new() { Text = "Past Nights...", AutoSize = true };
+
+    /// <summary>What the banner's Start does - tonight's choice.</summary>
+    private StartTonightOption? _bannerChoice;
+
+    /// <summary>
+    /// Tonight's pre-entries from the phones (MainForm.ComingTonightList), for
+    /// the forecast - the best guess at turnout there is. Null leaves them out.
+    /// </summary>
+    public Func<IReadOnlyList<PreEntry>>? ComingTonight { get; set; }
+
+    /// <summary>Raised after a night is started from this tab, so the host can bring the other pages up to date.</summary>
+    public event Action? NightStarted;
+
+    private void BuildTemplatesPage()
     {
-        public override string ToString() => NightTemplates.Describe(Template);
-    }
-
-    private Control BuildTemplatesRow()
-    {
-        _btnStartFromTemplate.Click += (_, _) => StartFromTemplate();
-        _btnSaveTemplate.Click += (_, _) => SaveAsTemplate();
-        _btnDeleteTemplate.Click += (_, _) => DeleteTemplate();
-        _cmbTemplates.SelectedIndexChanged += (_, _) => ShowTemplateButtons();
-
-        ShowTemplates();
-        _btnTemplateDays.Click += (_, _) => EditTemplateDays();
-
-        return FieldGrid.Inline(_cmbTemplates, _btnStartFromTemplate, _btnTemplateDays, _btnSaveTemplate, _btnDeleteTemplate);
-    }
-
-    private NightTemplate? PickedTemplate => (_cmbTemplates.SelectedItem as TemplateChoice)?.Template;
-
-    private void ShowTemplates(string? select = null)
-    {
-        _cmbTemplates.Items.Clear();
-
-        foreach (var template in _settings?.NightTemplates ?? new List<NightTemplate>())
+        var intro = new Label
         {
-            _cmbTemplates.Items.Add(new TemplateChoice(template));
+            Text = "Start tonight from one of the club's nights. A template keeps a night's classes, heats, times, breaks and fees - each card says what it starts.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
 
-            if (select is not null && string.Equals(template.Name, select, StringComparison.OrdinalIgnoreCase))
+        _btnNewTemplate.Click += (_, _) => NewTemplate();
+        _btnPastNights.Click += (_, _) => ShowPastNights();
+        _btnBannerStart.Click += (_, _) =>
+        {
+            if (_bannerChoice is { } choice)
             {
-                _cmbTemplates.SelectedIndex = _cmbTemplates.Items.Count - 1;
+                StartFromShelf(choice);
             }
-        }
-
-        if (_cmbTemplates.SelectedIndex < 0 && _cmbTemplates.Items.Count > 0)
+        };
+        _btnGoToCloseDay.Click += (_, _) =>
         {
-            _cmbTemplates.SelectedIndex = 0;
-        }
+            ShowTab(TonightTab);
+            _tonightPage.ScrollControlIntoView(_btnCloseDay);
+            _btnCloseDay.Focus();
+        };
 
-        ShowTemplateButtons();
-    }
+        AppTheme.StyleButton(_btnBannerStart, AppTheme.ButtonKind.Primary);
 
-    private void ShowTemplateButtons()
-    {
-        var picked = PickedTemplate is not null;
-        _cmbTemplates.Enabled = _cmbTemplates.Items.Count > 0;
-        _btnStartFromTemplate.Enabled = picked;
-        _btnDeleteTemplate.Enabled = picked;
-        _btnTemplateDays.Enabled = picked;
-        _btnSaveTemplate.Enabled = _settings is not null && Selected is { IsLegacy: false };
+        _textSize.Wear(_bannerTitle, () => AppTheme.HeadingFont);
+        _bannerDate.ForeColor = AppTheme.TextMuted;
+        _bannerDetail.ForeColor = AppTheme.TextMuted;
+
+        _banner.Add(_bannerDate, gapBelow: UiLayout.HintGap);
+        _banner.Add(_bannerTitle, gapBelow: UiLayout.HintGap);
+        _banner.Add(_bannerDetail, gapBelow: UiLayout.HintGap);
+        _banner.Add(_bannerForecast, gapBelow: UiLayout.RowGap);
+        _banner.Add(new ButtonBar().With(_btnBannerStart, _btnWizard, _btnGoToCloseDay), gapBelow: 0);
+
+        _templatesPage.Add(intro, gapBelow: UiLayout.RowGap);
+        _templatesPage.Add(new ButtonBar().With(_btnNewTemplate, _btnPastNights), gapBelow: UiLayout.RowGap);
+        _templatesPage.Add(_banner);
+        _templatesPage.Add(_cards, gapBelow: 0);
+
+        // The cards are built in the fonts of the text size in use, so a new
+        // size builds them again.
+        _textSize.Keep(RefreshShelf);
     }
 
     /// <summary>
-    /// Start Tonight From It: the Start Tonight window, opened on the picked
-    /// template (12 Nov 2026, setup plan step 8) - one way to start a night.
+    /// The night open now with something in it - classes ticked, or rounds -
+    /// which nothing on this tab starts a night over. Null when none is. An
+    /// open day with nothing in it at all (older installs opened one by
+    /// themselves) is taken over by the next start, as it always was.
     /// </summary>
-    private void StartFromTemplate()
+    private RaceEvent? OpenNight() =>
+        _events.Active is { IsLegacy: false, IsOpen: true } open && !(open.RoundIds.Count == 0 && open.ClassNames.Count == 0)
+            ? open
+            : null;
+
+    /// <summary>The banner and the cards, from the templates and race days as they are now.</summary>
+    private void RefreshShelf()
     {
-        if (PickedTemplate is { } template)
+        if (IsDisposed)
         {
-            StartTonightWindow(StartTonightKind.Template, template.Name);
+            return;
         }
+
+        var previous = LastRealDay();
+        var templates = _settings?.NightTemplates ?? new List<NightTemplate>();
+        var options = StartTonight.Options(previous, templates);
+        var tonights = NightTemplates.ForDay(templates, DateTime.Today);
+        var picked = options[Math.Clamp(StartTonight.Preselect(options, tonights), 0, options.Count - 1)];
+        var open = OpenNight();
+
+        _bannerDate.Text = DateTime.Today.ToString("dddd d MMMM");
+
+        if (open is not null)
+        {
+            _bannerChoice = null;
+            _bannerTitle.Text = $"{open.DisplayName} is open";
+            _bannerDetail.Text = TemplateCardText.OpenNightWords;
+            _bannerForecast.Visible = false;
+            _btnBannerStart.Visible = false;
+            _btnGoToCloseDay.Visible = true;
+        }
+        else
+        {
+            _bannerChoice = picked;
+            _bannerTitle.Text = TemplateCardText.BannerTitle(picked, tonights);
+            _bannerDetail.Text = string.Join("  ·  ", Lines(picked).Where(l => l.Length > 0).Take(3));
+            _btnBannerStart.Text = picked.Kind == StartTonightKind.Different ? "Choose..." : "Start Tonight";
+            _btnBannerStart.Visible = true;
+            _btnGoToCloseDay.Visible = false;
+            ShowForecast(_bannerForecast, picked, tonight: true);
+        }
+
+        _cards.SuspendLayout();
+
+        try
+        {
+            _cards.Clear();
+
+            foreach (var option in options)
+            {
+                var isTonight = option.Kind == StartTonightKind.Template && ReferenceEquals(option.Template, tonights);
+                _cards.Controls.Add(Card(option, isTonight, blocked: open is not null));
+            }
+        }
+        finally
+        {
+            _cards.ResumeLayout(true);
+        }
+
+        _templatesPage.PerformLayout();
     }
+
+    /// <summary>The banner's heading as it stands - for the tests.</summary>
+    internal string BannerTitle => _bannerTitle.Text;
+
+    /// <summary>Whether the banner offers Start - for the tests.</summary>
+    internal bool BannerOffersStart => _btnBannerStart.Visible;
+
+    /// <summary>The cards' captions and whether each one's Start is on, in order - for the tests.</summary>
+    internal IReadOnlyList<(string Caption, bool CanStart)> ShelfCards =>
+        _cards.Controls.OfType<Section>()
+            .Select(card => (
+                card.Controls.OfType<Label>().FirstOrDefault()?.AccessibleName ?? string.Empty,
+                card.Controls.OfType<ButtonBar>().SelectMany(bar => bar.Controls.OfType<Button>()).FirstOrDefault()?.Enabled == true))
+            .ToList();
+
+    /// <summary>What a card says about a choice, line by line.</summary>
+    private IReadOnlyList<string> Lines(StartTonightOption option) => option switch
+    {
+        { Kind: StartTonightKind.Template, Template: { } t } => TemplateCardText.Lines(
+            t.Shape == RaceDayShape.ClubNight, t.ClassNames, Rounds(t.QualifyingRounds), HeatSize(t.DriversPerHeat), t.FirstRoundSeeding,
+            t.EntriesCloseLocalTime, t.FirstRaceLocalTime, t.OutByLocalTime, t.Breaks, t.EntryFee, t.ExtraClassFee),
+        { Kind: StartTonightKind.LikeLast, LastDay: { } d } => TemplateCardText.Lines(
+            d.IsClubNight, d.ClassNames, Rounds(d.QualifyingRounds), _events.HeatSizeFor(d), d.FirstRoundSeeding,
+            d.EntriesCloseLocalTime, d.FirstRaceLocalTime, d.OutByLocalTime, d.Breaks, d.EntryFee, d.ExtraClassFee),
+        _ => new[] { option.Detail },
+    };
+
+    private static int Rounds(int rounds) => rounds > 0 ? rounds : 3;
+
+    private int HeatSize(int perHeat) => perHeat > 0 ? perHeat : _events.HeatSizeFor(LastRealDay());
+
+    /// <summary>One card: what kind of night and when, its name, what it starts, what it would come to, and its buttons.</summary>
+    private Section Card(StartTonightOption option, bool isTonight, bool blocked)
+    {
+        var card = new Section(TemplateCardText.Caption(option, isTonight));
+
+        var title = new Label
+        {
+            Text = option.Kind switch
+            {
+                StartTonightKind.LikeLast => option.LastDay?.DisplayName ?? option.Caption,
+                StartTonightKind.Different => "Something different...",
+                _ => option.Caption,
+            },
+            AutoSize = true,
+            UseMnemonic = false,
+            Font = AppTheme.BoldFont,
+        };
+
+        card.Add(title, gapBelow: UiLayout.HintGap);
+
+        var lines = Lines(option).Where(l => l.Length > 0).ToList();
+
+        if (option is { Kind: StartTonightKind.LikeLast, LastDay: { } last })
+        {
+            lines.Add(TemplateCardText.RanLine(
+                _checkIns.CheckedInAt(last.Id).Count,
+                last.RoundIds.Count(id => _rounds.Get(id)?.IsRecorded == true)));
+        }
+
+        card.Add(new Label { Text = string.Join(Environment.NewLine, lines), AutoSize = true, UseMnemonic = false, ForeColor = AppTheme.TextMuted },
+            gapBelow: UiLayout.HintGap);
+
+        if (option.Kind != StartTonightKind.Different)
+        {
+            var forecast = new Label { AutoSize = true, UseMnemonic = false, Font = AppTheme.SmallFont };
+            ShowForecast(forecast, option, isTonight);
+            card.Add(forecast, gapBelow: UiLayout.RowGap);
+        }
+
+        var start = new Button { Text = option.Kind == StartTonightKind.Different ? "Choose..." : "Start Tonight", AutoSize = true, Enabled = !blocked };
+        start.Click += (_, _) => StartFromShelf(option);
+
+        var buttons = new ButtonBar().With(start);
+
+        switch (option)
+        {
+            case { Kind: StartTonightKind.Template, Template: { } template }:
+                var edit = new Button { Text = "Edit...", AutoSize = true, Enabled = _settings is not null };
+                edit.Click += (_, _) => EditTemplate(template);
+
+                var more = new Button { Text = "More...", AutoSize = true, Enabled = _settings is not null };
+                more.Click += (_, _) => TemplateMenu(template).Show(more, new Point(0, more.Height));
+
+                buttons.With(edit, more);
+                break;
+
+            case { Kind: StartTonightKind.LikeLast, LastDay: { } day }:
+                var save = new Button { Text = "Save as Template...", AutoSize = true, Enabled = _settings is not null };
+                save.Click += (_, _) => SaveAsTemplate(day);
+                buttons.With(save);
+                break;
+        }
+
+        card.Add(buttons, gapBelow: 0);
+
+        AppTheme.ApplyRecursively(card);
+
+        if (isTonight && !blocked)
+        {
+            AppTheme.StyleButton(start, AppTheme.ButtonKind.Primary);
+        }
+
+        return card;
+    }
+
+    /// <summary>A forecast line for a choice, or the label hidden when there's nothing to go by.</summary>
+    private void ShowForecast(Label label, StartTonightOption option, bool tonight)
+    {
+        var said = Forecast(option, tonight);
+
+        label.Visible = said is not null;
+        label.Text = said?.Line ?? string.Empty;
+        label.ForeColor = said is { Late: true } ? AppTheme.Warning : AppTheme.TextMuted;
+    }
+
+    /// <summary>What starting a choice tonight would come to - see TemplateForecast. Null when there's nothing to go by.</summary>
+    private (string Line, bool Late)? Forecast(StartTonightOption option, bool tonight) => option switch
+    {
+        { Kind: StartTonightKind.Template, Template: { } t } => Forecast(t, tonight),
+        { Kind: StartTonightKind.LikeLast, LastDay: { } d } => Forecast(NightTemplates.From(d, d.TemplateName ?? string.Empty), tonight),
+        _ => null,
+    };
+
+    /// <summary>What a night from <paramref name="template"/> would come to. Its name finds the nights like it.</summary>
+    private (string Line, bool Late)? Forecast(NightTemplate template, bool tonight)
+    {
+        var turnout = TemplateForecast.Turnout(
+            template.Name,
+            template.ClassNames,
+            _events.Real,
+            day => day.RoundIds.Select(id => _rounds.Get(id)).OfType<RoundDefinition>(),
+            tonight ? ComingTonight?.Invoke() : null);
+
+        if (turnout is null)
+        {
+            return null;
+        }
+
+        var appDefault = _settings is null ? new RaceFormat() : RaceFormat.FromSettings(_settings);
+
+        RaceClass? ClassNamed(string name) =>
+            _raceClasses.All.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+
+        var forecast = TemplateForecast.For(
+            template.Shape == RaceDayShape.ClubNight,
+            turnout.PerClass,
+            Rounds(template.QualifyingRounds),
+            HeatSize(template.DriversPerHeat),
+            name => NightPlan.LengthOf(ClassNamed(name)?.QualifierFormat ?? ClassNamed(name)?.Format ?? appDefault),
+            name => NightPlan.LengthOf(ClassNamed(name)?.Format ?? appDefault),
+            template.Breaks,
+            template.FirstRaceLocalTime,
+            template.OutByLocalTime);
+
+        return forecast is null ? null : (TemplateForecast.Line(forecast, turnout.Source), TemplateForecast.RunsLate(forecast));
+    }
+
+    /// <summary>
+    /// Starts tonight the way a card or the banner says - refused while a
+    /// night is open with something in it (see the class summary).
+    /// </summary>
+    private void StartFromShelf(StartTonightOption option)
+    {
+        FlushPendingEdits();
+
+        if (OpenNight() is { } open)
+        {
+            AppDialog.Show(this, TemplateCardText.RefusedWords(open.DisplayName), "Start tonight", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            RefreshShelf();
+            return;
+        }
+
+        if (option.Kind == StartTonightKind.Different)
+        {
+            // The two questions still need asking, so the window opens for them.
+            if (!StartTonightWindow(StartTonightKind.Different, null))
+            {
+                return;
+            }
+        }
+        else
+        {
+            var previous = LastRealDay();
+            StartTonightAs(option, previous?.Shape ?? RaceDayShape.RaceDay, previous?.ClassNames ?? new List<string>());
+        }
+
+        RefreshAll();
+        NightStarted?.Invoke();
+    }
+
+    /// <summary>When..., Duplicate and Delete, for a template's card.</summary>
+    private ContextMenuStrip TemplateMenu(NightTemplate template)
+    {
+        var menu = new ContextMenuStrip();
+        menu.Items.Add("When...", null, (_, _) => EditTemplateDays(template));
+        menu.Items.Add("Duplicate", null, (_, _) => DuplicateTemplate(template));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Delete...", null, (_, _) => DeleteTemplate(template));
+        menu.Closed += (_, _) => BeginInvoke(menu.Dispose);
+        AppTheme.ApplyRecursively(menu);
+        return menu;
+    }
+
+    /// <summary>The last few race days, newest first: picking one shows it on Tonight (and makes it current, as the day picker always has).</summary>
+    private void ShowPastNights()
+    {
+        var menu = new ContextMenuStrip();
+
+        foreach (var day in _events.Real.OrderByDescending(d => d.StartedUtc).Take(10))
+        {
+            var state = day.IsOpen ? "open" : "closed";
+            menu.Items.Add($"{day.DisplayName}  ({day.StartedUtc.ToLocalTime():ddd d MMM}, {state})", null, (_, _) => ShowDay(day.Id));
+        }
+
+        if (menu.Items.Count == 0)
+        {
+            menu.Items.Add(new ToolStripMenuItem("No race days yet") { Enabled = false });
+        }
+
+        menu.Closed += (_, _) => BeginInvoke(menu.Dispose);
+        AppTheme.ApplyRecursively(menu);
+        menu.Show(_btnPastNights, new Point(0, _btnPastNights.Height));
+    }
+
+    /// <summary>Picks a day in Tonight's day picker - which switches to it, with its undo entry - and shows Tonight.</summary>
+    private void ShowDay(string id)
+    {
+        var index = _cmbEvent.Items.Cast<Choice>().ToList().FindIndex(c => string.Equals(c.Event.Id, id, StringComparison.Ordinal));
+
+        if (index >= 0)
+        {
+            _cmbEvent.SelectedIndex = index;
+        }
+
+        ShowTab(TonightTab);
+    }
+
+    private void ShowTemplateButtons() =>
+        _btnSaveTemplate.Enabled = _settings is not null && Selected is { IsLegacy: false };
 
     /// <summary>
     /// Next Steps' "Start tonight's ..." (setup plan step 7): the Start Tonight
@@ -88,9 +407,8 @@ public sealed partial class RaceDayEventControl
 
     /// <summary>
     /// Starts a race day from a template: New Race Day's own path, then the
-    /// template's settings over it. Only from the Start Tonight window
-    /// (StartTonightAs), which says when a day is open already - it used to
-    /// be asked here, in a second window.
+    /// template's settings over it, and the template's name kept on the day
+    /// for the forecast's "nights like it".
     /// </summary>
     private void StartFromTemplate(NightTemplate template)
     {
@@ -99,6 +417,7 @@ public sealed partial class RaceDayEventControl
         if (_events.Active is { IsLegacy: false } day)
         {
             NightTemplates.ApplyTo(template, day);
+            day.TemplateName = template.Name.Trim();
             _events.Upsert(day);
         }
 
@@ -106,14 +425,24 @@ public sealed partial class RaceDayEventControl
         NightSetupChanged?.Invoke();
     }
 
+    /// <summary>Tonight's Save as Template...: the day on show.</summary>
     private void SaveAsTemplate()
     {
-        if (_settings is null || Selected is not { IsLegacy: false } day)
+        if (Selected is { IsLegacy: false } day)
+        {
+            FlushPendingEdits();
+            SaveAsTemplate(day);
+        }
+    }
+
+    private void SaveAsTemplate(RaceEvent day)
+    {
+        if (_settings is null || day.IsLegacy)
         {
             return;
         }
 
-        var name = AskForName(PickedTemplate?.Name ?? (day.IsClubNight ? "Club night" : "Race day"));
+        var name = AskForName(day.TemplateName ?? (day.IsClubNight ? "Club night" : "Race day"));
 
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -131,12 +460,89 @@ public sealed partial class RaceDayEventControl
 
         _settings.NightTemplates = NightTemplates.Saved(_settings.NightTemplates, fresh);
         _settings.Save();
-        ShowTemplates(name);
+        RefreshShelf();
+        NightSetupChanged?.Invoke();
     }
 
-    private void DeleteTemplate()
+    /// <summary>New Template...: the editor, starting from the last race day's settings (or the defaults on a club's first).</summary>
+    private void NewTemplate()
     {
-        if (_settings is null || PickedTemplate is not { } template
+        if (_settings is null)
+        {
+            return;
+        }
+
+        var start = LastRealDay() is { } last ? NightTemplates.From(last, string.Empty) : new NightTemplate();
+        start.Weekdays = new List<DayOfWeek>();
+        start.Dates = new List<DateTime>();
+
+        if (OpenEditor(start, isNew: true) is { } made)
+        {
+            _settings.NightTemplates = NightTemplates.Saved(_settings.NightTemplates, made);
+            _settings.Save();
+            RefreshShelf();
+            NightSetupChanged?.Invoke();
+        }
+    }
+
+    /// <summary>Edit...: the template's fields, saved over it - under its new name, when it was renamed.</summary>
+    private void EditTemplate(NightTemplate template)
+    {
+        if (_settings is null || OpenEditor(template, isNew: false) is not { } edited)
+        {
+            return;
+        }
+
+        _settings.NightTemplates = NightTemplates.Saved(
+            _settings.NightTemplates.Where(t => !ReferenceEquals(t, template)),
+            edited);
+        _settings.Save();
+        RefreshShelf();
+        NightSetupChanged?.Invoke();
+    }
+
+    private NightTemplate? OpenEditor(NightTemplate template, bool isNew)
+    {
+        var others = (_settings?.NightTemplates ?? new List<NightTemplate>())
+            .Where(t => !ReferenceEquals(t, template))
+            .Select(t => t.Name)
+            .ToList();
+
+        using var form = new TemplateEditForm(
+            template,
+            isNew,
+            others,
+            _raceClasses.All.Select(c => c.Name).ToList(),
+            _venues.All.Select(v => v.Name),
+            _layouts.All.Select(l => l.Name),
+            _seasons.All,
+            edited => Forecast(edited, tonight: ReferenceEquals(NightTemplates.ForDay(_settings?.NightTemplates, DateTime.Today), template)));
+
+        return form.ShowDialog(this) == DialogResult.OK ? form.Result : null;
+    }
+
+    private void DuplicateTemplate(NightTemplate template)
+    {
+        if (_settings is null)
+        {
+            return;
+        }
+
+        var copy = System.Text.Json.JsonSerializer.Deserialize<NightTemplate>(System.Text.Json.JsonSerializer.Serialize(template))!;
+        copy.Name = TemplateCardText.CopyName(template.Name, _settings.NightTemplates.Select(t => t.Name));
+
+        // A copy is for a different night, so it isn't set for any yet.
+        copy.Weekdays = new List<DayOfWeek>();
+        copy.Dates = new List<DateTime>();
+
+        _settings.NightTemplates = NightTemplates.Saved(_settings.NightTemplates, copy);
+        _settings.Save();
+        RefreshShelf();
+    }
+
+    private void DeleteTemplate(NightTemplate template)
+    {
+        if (_settings is null
             || AppDialog.Show(this, $"Delete the template \"{template.Name}\"? Race days started from it aren't changed.", "Delete template",
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
         {
@@ -145,7 +551,8 @@ public sealed partial class RaceDayEventControl
 
         _settings.NightTemplates = _settings.NightTemplates.Where(t => !ReferenceEquals(t, template)).ToList();
         _settings.Save();
-        ShowTemplates();
+        RefreshShelf();
+        NightSetupChanged?.Invoke();
     }
 
     /// <summary>A small window asking for the template's name. Null when cancelled.</summary>
@@ -190,9 +597,9 @@ public sealed partial class RaceDayEventControl
 /// <summary>Which nights a template is (12 Nov 2026, setup plan step 7): days of the week, and particular dates.</summary>
 public sealed partial class RaceDayEventControl
 {
-    private void EditTemplateDays()
+    private void EditTemplateDays(NightTemplate template)
     {
-        if (_settings is null || PickedTemplate is not { } template)
+        if (_settings is null)
         {
             return;
         }
@@ -207,10 +614,144 @@ public sealed partial class RaceDayEventControl
         template.Weekdays = form.Weekdays.ToList();
         template.Dates = form.Dates.ToList();
         _settings.Save();
-        ShowTemplates(template.Name);
+        RefreshShelf();
         NightSetupChanged?.Invoke();
     }
 }
+
+/// <summary>What the Templates tab's banner and cards say. Pure.</summary>
+public static class TemplateCardText
+{
+    /// <summary>The banner's words while a night is open.</summary>
+    public const string OpenNightWords =
+        "Close it on the Tonight tab before starting another night. Started by mistake? Ctrl+Z takes it back while nothing has been done with it.";
+
+    /// <summary>What a Start pressed while a night is open says.</summary>
+    public static string RefusedWords(string openNight) =>
+        $"\"{openNight}\" is still open, so another night can't start over it. Close it first: Go to Close Day on this tab, or Close Day at the bottom of Tonight.";
+
+    /// <summary>The banner's heading for tonight's choice.</summary>
+    public static string BannerTitle(StartTonightOption choice, NightTemplate? tonights) => choice switch
+    {
+        { Kind: StartTonightKind.Template, Template: { } t } when ReferenceEquals(t, tonights) => $"{t.Name.Trim()} is set for tonight",
+        { Kind: StartTonightKind.Template } => choice.Caption,
+        { Kind: StartTonightKind.LikeLast } => $"Like last time - {choice.LastDay?.DisplayName}",
+        _ => "Your first night: pick the kind of night and the classes",
+    };
+
+    /// <summary>A card's caption: the kind of night and when it's on - "TONIGHT · RACE DAY · SATURDAYS".</summary>
+    public static string Caption(StartTonightOption option, bool tonight)
+    {
+        var parts = new List<string>();
+
+        if (tonight)
+        {
+            parts.Add("Tonight");
+        }
+
+        switch (option)
+        {
+            case { Kind: StartTonightKind.Template, Template: { } t }:
+                parts.Add(t.Shape == RaceDayShape.ClubNight ? "Club night" : "Race day");
+                parts.Add(NightTemplates.WhenWords(t) is { Length: > 0 } when ? when : "No nights set");
+                break;
+
+            case { Kind: StartTonightKind.LikeLast, LastDay: { } d }:
+                parts.Add("Like last time");
+                parts.Add(d.StartedUtc.ToLocalTime().ToString("ddd d MMM"));
+                break;
+
+            default:
+                parts.Add("Something different");
+                break;
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    /// <summary>
+    /// What a night would start, a line each: the classes; heats (or races),
+    /// heat size and seeding; the times set; the breaks; the fees. A line
+    /// with nothing to say is left out.
+    /// </summary>
+    public static IReadOnlyList<string> Lines(
+        bool clubNight,
+        IReadOnlyList<string> classes,
+        int rounds,
+        int perHeat,
+        FirstRoundSeeding seeding,
+        TimeSpan? entriesClose,
+        TimeSpan? firstRace,
+        TimeSpan? outBy,
+        IReadOnlyList<PlannedBreak>? breaks,
+        decimal entryFee,
+        decimal extraFee)
+    {
+        var lines = new List<string>
+        {
+            classes.Count == 0 ? "No classes ticked" : string.Join(", ", classes),
+            clubNight
+                ? $"{Plural.Of(rounds, "race")} each, up to {perHeat} a race"
+                : $"{Plural.Of(rounds, "heat")} each, up to {perHeat} a heat, first round {FirstRound.Words(seeding).ToLowerInvariant()}",
+        };
+
+        var times = new List<string>();
+
+        if (entriesClose is { } close)
+        {
+            times.Add($"entries close {AppTime.TimeOfDay(close)}");
+        }
+
+        if (firstRace is { } first)
+        {
+            times.Add($"first race {AppTime.TimeOfDay(first)}");
+        }
+
+        if (outBy is { } by)
+        {
+            times.Add($"out by {AppTime.TimeOfDay(by)}");
+        }
+
+        if (times.Count > 0)
+        {
+            var said = string.Join(" · ", times);
+            lines.Add(char.ToUpperInvariant(said[0]) + said[1..]);
+        }
+
+        if (breaks is { Count: > 0 })
+        {
+            lines.Add(NightBreaks.Summary(breaks, clubNight));
+        }
+
+        if (entryFee > 0 || extraFee > 0)
+        {
+            lines.Add(extraFee > 0
+                ? $"{DeskMoney.Money(entryFee)} entry, {DeskMoney.Money(extraFee)} each extra class"
+                : $"{DeskMoney.Money(entryFee)} entry");
+        }
+
+        return lines;
+    }
+
+    /// <summary>How the last night went, for its card: "Ran: 31 checked in · 22 races".</summary>
+    public static string RanLine(int checkedIn, int racesRun) =>
+        $"Ran: {checkedIn} checked in · {Plural.Of(racesRun, "race")}";
+
+    /// <summary>A name for a template's copy no other template has: "Points round (copy)", then "(copy 2)".</summary>
+    public static string CopyName(string name, IEnumerable<string> taken)
+    {
+        var names = new HashSet<string>(taken.Select(t => t.Trim()), StringComparer.OrdinalIgnoreCase);
+        var candidate = $"{name.Trim()} (copy)";
+
+        for (var n = 2; names.Contains(candidate); n++)
+        {
+            candidate = $"{name.Trim()} (copy {n})";
+        }
+
+        return candidate;
+    }
+}
+
 
 /// <summary>A template's nights: a tick per day of the week, and a list of dates.</summary>
 internal sealed class TemplateDaysForm : Form

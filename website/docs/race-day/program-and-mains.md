@@ -8,7 +8,7 @@ Almost all of it happens on **Race Day → Next Steps**, which says what to do n
 
 The program is built from the current race day, so set that up first on **Race Day → Setup** (see [Events, entries and check-in](events-and-entries.md#race-day-setup)), or let **Set Up Tonight** walk you through it:
 
-- Start a race day with **New Race Day**.
+- Start a race day on the **Templates** tab of **Setup**.
 - Check the classes running today under **Classes racing:**. If none are ticked, the program is built for the classes already on today's program, or, if nothing is scheduled yet, for every class that has drivers in it.
 - Set **Heats each driver gets:** and **Drivers per heat:**.
 - Decide whether **Only include drivers who have checked in** should be ticked (it starts ticked on a race day, unticked on a club night).

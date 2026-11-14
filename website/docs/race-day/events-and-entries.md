@@ -29,15 +29,17 @@ A club's first day of each kind sets **Only include drivers who have checked in*
 
 ## Start a race day
 
-There's one way in: the **Start Tonight** window. Every button that starts a race day opens it:
+The place to start a night is the **Templates** tab on **Race Day → Setup** (see [Templates](#templates)). It shows tonight's choice on a banner at the top with a forecast of how the night will go, and a card for every other way to start: like last time, each of your night templates, and **Something different...**. Press **Start Tonight** on the banner or on a card.
 
-- **New Race Day** on **Race Day → Setup**, and **New Race Day** on **Championship → Calendar** (which stays on the Calendar afterwards).
-- **Start Tonight...** on **Next Steps** and on the **Who's Racing** banner, when no race day is open.
-- **Start tonight like last time...** and **Start tonight's** *template*... on **Next Steps**, which open the window with that choice already picked, so it's one more press of **Start Tonight**.
-- **Start Tonight From It** beside **Templates:** on **Setup**, which opens it on the picked template.
-- **Set Up Tonight**, when no race day is open: the window first, then the wizard for the rest of the evening. See [The Set Up Tonight wizard](#the-set-up-tonight-wizard).
+The other ways in:
+
+- **Start Tonight...** on **Next Steps** and on the **Who's Racing** banner, when no race day is open, take you to the **Templates** tab. (In the desk view, which keeps to **Who's Racing**, they open the [Start Tonight window](#the-start-tonight-window) instead.)
+- **Start tonight like last time...** and **Start tonight's** *template*... on **Next Steps**, and **New Race Day** on **Championship → Calendar** (which stays on the Calendar afterwards), open the **Start Tonight** window with that choice already picked, so it's one more press of **Start Tonight**.
+- **Walk me through it...** on the **Templates** banner (the **Set Up Tonight** wizard), when no race day is open: the window first, then the wizard for the rest of the evening. See [The Set Up Tonight wizard](#the-set-up-tonight-wizard).
 
 Every one of them starts tonight's day, dated now. The Calendar doesn't file a day for another date.
+
+While a race day is open with classes or rounds in it, the **Templates** tab doesn't start another one: its **Start Tonight** buttons are grayed out and the banner says the night is open, with **Go to Close Day**. Close tonight's day first, or press **Undo** if it was started by mistake.
 
 A new install doesn't have a race day until you start one. (Installs from before 12 Nov 2026 may have an empty one HeatCaller opened by itself on its first start; it's left as it is, and **Set Up Tonight** uses it rather than starting another.)
 
@@ -48,7 +50,7 @@ At the top, choose how to start tonight:
 | Choice | What it starts |
 |---|---|
 | **Like last time (*day*)**, for example **Like last time (Tue 4 Nov)** | A day like your last race day: its kind of night and its classes, and everything else a new day carries forward (below). Offered once there's a last race day with classes. |
-| Each night template, by name | A day from that template: its kind of night, classes, running order, rounds, heat size, seeding, fees, times, breaks and between-race talk. See **Templates:** under [About the day](#about-the-day). |
+| Each night template, by name | A day from that template: its kind of night, classes, running order, rounds, heat size, seeding, fees, times, breaks and between-race talk. See [Templates](#templates). |
 | **Something different...** | The two questions below. |
 
 It opens on tonight's template if one is set for today, otherwise on **Like last time**, otherwise on **Something different...**. On a club's first night **Something different...** is the only choice, so the window is just the two questions:
@@ -66,7 +68,7 @@ Under **Something different...**, on a club's first race day every class starts 
 
 ### The Set Up Tonight wizard
 
-**Set Up Tonight** on **Race Day → Setup** opens a window that walks through everything a race night needs, in order. You can also open it with <kbd>Shift</kbd>+<kbd>S</kbd>. HeatCaller also offers it once ("Would you like a hand setting up a race night?"), straight after the first-run wizard or on a start with no race day under way: no race day open, or only one with no classes picked and no rounds, such as the one older installs opened by themselves. The wizard then sets up that day rather than starting another. With no race day open at all, **Set Up Tonight** opens the [Start Tonight window](#the-start-tonight-window) first; once tonight is started there, the wizard opens at the first step still to do. Cancel the window and the wizard doesn't open.
+**Walk me through it...** on the **Templates** banner on **Race Day → Setup** opens the **Set Up Tonight** window, which walks through everything a race night needs, in order. You can also open it with <kbd>Shift</kbd>+<kbd>S</kbd>. HeatCaller also offers it once ("Would you like a hand setting up a race night?"), straight after the first-run wizard or on a start with no race day under way: no race day open, or only one with no classes picked and no rounds, such as the one older installs opened by themselves. The wizard then sets up that day rather than starting another. With no race day open at all, **Set Up Tonight** opens the [Start Tonight window](#the-start-tonight-window) first; once tonight is started there, the wizard opens at the first step still to do. Cancel the window and the wizard doesn't open.
 
 The steps are listed down the left: **Tonight**, **The day**, **Classes**, **Drivers**, **Program** and **All set**.
 
@@ -83,26 +85,56 @@ Every step can be skipped, and **Skip setup** leaves the wizard at any point. A 
 
 ## Race Day → Setup
 
-**Setup** is the race day itself: which day the app is working on, what the day is, and how its program gets built.
+**Setup** is the race day itself. It has three tabs of its own along the top:
+
+- **Templates**: where a night starts. See [Templates](#templates).
+- **Tonight**: the race day's own settings: which day, the night, its times, the heats, the money and how the night runs.
+- **Club rules**: the settings that are the club's, for every night. See [Club rules](#club-rules).
+
+Setup opens on **Templates** while no race day is open, and on **Tonight** once one is. A tab you pick yourself stays picked until a night is started or closed.
 
 ![Race Day, Setup tab: Race Day 11 Nov 2026 picked under Which race day with New Race Day and Set Up Tonight, and About the day with the kind of night, venue, track, First race at, Out of the venue by, Entries close at and Breaks](../assets/images/race-day-setup.png)
 
-There's no Save button. Every change saves itself as you make it, and a **Saved** note appears for a moment after the **Close Day** and **Delete Day** buttons. Typing in a box is saved when you pause or move to another field, and a run of typing is one step for **Undo**.
+<!-- screenshot: the picture above is from before the Templates, Tonight and Club rules tabs (14 Nov 2026); retake it on Templates and on Tonight -->
+
+There's no Save button. Every change saves itself as you make it, and a **Saved** note appears for a moment after the **Close Day**, **Delete Day** and **Save as Template...** buttons. Typing in a box is saved when you pause or move to another field, and a run of typing is one step for **Undo**.
+
+### Templates
+
+A template is a night's settings kept under a name, such as "Tuesday club night" and "Points round": its kind of night, classes and running order, rounds, heat size, seeding, fees, times, breaks, between-race talk and check-in rule. Never its heats, check-ins or results.
+
+**The banner** at the top is tonight's choice: the template set for today if there is one ("Points round is set for tonight"), otherwise **Like last time**, otherwise (on a club's first night) **Something different...**. It says what the night starts and, when there's something to go by, a forecast, for example "~42 drivers (from the last 6 nights like it) · 18 heats + 10 finals · finishes about 16:20, 40 min to spare". The forecast counts drivers from the phones' **I'm coming** for tonight first, then the average of the last six nights started from the same template, then the last night that ran those classes. It turns amber when the night would run past **Out of the venue by:**. **Start Tonight** starts the night, with **Undo**. **Walk me through it...** opens the [Set Up Tonight wizard](#the-set-up-tonight-wizard).
+
+**The cards** under it are every way to start, each saying what it starts and its forecast:
+
+| Card | Buttons |
+|---|---|
+| A template, with its kind of night and the nights it's for ("Race day · Saturdays") | **Start Tonight**; **Edit...** opens the template's fields, the same cards as **Tonight** with the forecast at the bottom, and saves over it; **More...** has **When...** (the days of the week and particular dates it's for; a date wins over a weekday), **Duplicate** and **Delete...** (which changes no race day). |
+| **Like last time**, with how the last night went ("Ran: 31 checked in · 22 races") | **Start Tonight**; **Save as Template...** keeps that night as a template. A template of the same name is replaced, keeping its nights. |
+| **Something different...** | **Choose...** opens the [Start Tonight window](#the-start-tonight-window) on its two questions. |
+
+**New Template...** at the top makes a template from scratch, starting from your last race day's settings. **Past Nights...** lists the last ten race days; picking one makes it current and shows it on **Tonight**.
+
+On one of a template's nights, with no race day open, the card on **Next Steps** also offers **Start tonight's Tuesday club night...**.
+
+While a race day is open with classes or rounds in it, nothing on this tab starts another: the banner says it's open, with **Go to Close Day**, and the cards' **Start Tonight** buttons are grayed out.
 
 ### Which race day
 
 | Field | What it does |
 |---|---|
-| **Working on:** | The race day the whole page is about. Real race days are listed newest first, with their date and whether they're open or closed; the legacy event is always last. **Picking a day here makes it the current race day**, so check-in, scrutineering, the heats and the timetable all follow it. **Undo** switches back. |
+| **Race day:** | The race day **Tonight** is about. Real race days are listed newest first, with their date and whether they're open or closed; the legacy event is always last. **Picking a day here makes it the current race day**, so check-in, scrutineering, the heats and the timetable all follow it. **Undo** switches back. |
 
-Beside the picker are **New Race Day** and **Set Up Tonight** (see [Start a race day](#start-a-race-day)).
+To start a new race day, use the [Templates](#templates) tab.
 
 The line under the picker shows what the selected day already holds, for example: "CURRENT - the whole page is about this race day.  14 checked in · 2 classes racing · 12 rounds in the program, 4 recorded · 12 timetable lines".
 
 !!! tip
-    Scrolling the page with the mouse wheel never changes **Working on:**. The box only changes when you click it and pick a day.
+    Scrolling the page with the mouse wheel never changes **Race day:**. The box only changes when you click it and pick a day.
 
-### About the day
+### The night and its times { #about-the-day }
+
+**Tonight**'s **The night** card has the name, kind of night, venue, layout, championship, **Next night on phones:** and notes; its **Times** card has entries close, the first race, out by and the breaks.
 
 | Field | What it does | Default |
 |---|---|---|
@@ -115,11 +147,12 @@ The line under the picker shows what the selected day already holds, for example
 | **Out of the venue by:** | When the club has to be out of the building. Tick **Set** to give the day one. The next-step card on **Next Steps** then says whether tonight finishes in time, and what would help if it won't. See [When the night finishes](program-and-mains.md#when-the-night-finishes). A new race day takes the time from the last day at the same venue. | From the last day at the venue, or not set |
 | **Entries close at:** | When entries close. Tick **Set** to give the day one. Ten minutes before, the announcer says "Entries close in 10 minutes", and as it passes, "Entries are now closed" (only before the first race has run). Until the heats are built, **Next Steps** counts down to it. After it, **Who's Racing** says that anyone checked in now is a late entry. They go into the heats still to run without moving anyone else, and once the heats are posted **Next Steps** asks first (see [Checked in late](program-and-mains.md#checked-in-late)). Nobody is stopped from checking in. A new race day takes the time from the last day at the same venue. | From the last day at the venue, or not set |
 | **Next night on phones:** | What the phones' Home page says about the next race night. **Announce...** sets it: the night, what it's called, the venue, the classes on, the first race and when entries close, and whether drivers can say they're coming from their phones. It starts from the last race day a week on. **Publish** puts it on the phones, and **Take Down** takes it off. **Call It Off...** marks it as off with your message, and can email every regular with an address (drivers who raced in the last 8 weeks, or said they're coming) through the club's mailbox. It can also send a push to every phone signed up for the club's alerts (signed up since the drivers' night pages were last opened - closing them lets the sign-ups go). See [Who said they're coming](#who-said-theyre-coming). Needs the club website switched on, and the relay updated. | Not announced |
-| **Templates:** | Night templates, for a club that runs more than one kind of night, such as "Tuesday club night" and "Points round". **Save This Day As...** keeps the day on show as a template: its kind of night, classes and running order, rounds, heat size, seeding, fees, times, breaks, between-race talk and check-in rule. Never its heats, check-ins or results, and a template of the same name is replaced. Pick one and **Start Tonight From It** opens the [Start Tonight window](#the-start-tonight-window) on it; **Start Tonight** there starts a race day with all of it, with **Undo**. **When...** sets the nights a template is for: days of the week ("Tuesdays") and particular dates (a monthly points round); a date wins over a weekday. On one of those nights, with no race day open, the card on **Next Steps** offers **Start tonight's Tuesday club night...**. **Delete** takes a template away and changes no race day. | None |
 | **Breaks:** | Breaks planned into the night, such as watering the track after Q2. **Breaks...** changes them. The finish time, the estimated starts and Auto start all allow for them. See [Planned breaks](program-and-mains.md#planned-breaks). A new race day takes them from the last day at the same venue. | From the last day at the venue, or none |
 | **Notes:** | Free text about the day. The same notes show on **Championship → Calendar**. | Empty |
 
-### Building the program
+### Heats, money and running the night { #building-the-program }
+
+**Tonight**'s **Heats**, **Money** and **Running the night** cards.
 
 | Field | What it does | Default |
 |---|---|---|
@@ -129,7 +162,6 @@ The line under the picker shows what the selected day already holds, for example
 | **First round seeded:** | How the first qualifying round is split into heats: **By recent pace** (similar pace together, from each driver's best lap in the class over the last 60 days), **Alphabetical** (dealt in turn, as before 11 Nov 2026), **Random** (the same random for the same race day, so a rebuild gives the same heats), **Heads-up (HRQF, from practice)**, or **By race number** (dealt in turn in race-number order, the BRCA way; drivers with no number go after, alphabetically). See [Build the qualifying program](program-and-mains.md#build-the-qualifying-program). | From the last day of the same kind, or By recent pace |
 | **Share a heat under (drivers):** | A class with fewer drivers than this shares a heat with another small class when you build, and each class is still scored on its own (0 to 19, 0 for never). See [Mixed-class heats](program-and-mains.md#mixed-class-heats). | From the last day of the same kind, or 0 |
 | **Races off between a driver's races:** | How many races must run between two of one driver's races (0 to 3). The build orders the heats to keep it, [Auto start](../race-control/running-a-race.md#auto-start-between-races) rests a driver who raced closer than that, and **Move Drivers Between Heats** or a drag of the running order asks before saving a change that breaks it. 0 lets drivers race back to back. See [Build the qualifying program](program-and-mains.md#build-the-qualifying-program). | From the last day of the same kind, or 1 |
-| **A marshal who doesn't turn up:** | Your club's marshal rule, applied when a no-show is logged with **Someone's missing...** on Race Control: **Nothing**, **Loses their best qualifying result** (their best counted qualifier tonight in their class), or **Time penalty in their next race** with the seconds beside it (1 to 120). The club's setting, for every night. See [Marshals in place](program-and-mains.md#marshals-in-place). | Loses their best qualifying result; 10 seconds |
 | **Entry fee:** | What a driver pays for their first class tonight, for [Money at the desk](#money-at-the-desk). A class with its own fee (on the class, under **Fees**) charges that instead. Leave it at 0 if the club doesn't track money in HeatCaller; with no class fees either, nothing about money is shown then. | The last race day's, or 0 |
 | **Each extra class:** | What a driver pays for each class after their first tonight (often less). | The last race day's, or 0 |
 | **Only include drivers who have checked in** | When ticked, building the program only uses drivers checked in on **Who's Racing**. When unticked, it uses every driver in the class. | From the last day of the same kind; on a club's first day of each kind, on for a race day and off for a club night |
@@ -137,6 +169,14 @@ The line under the picker shows what the selected day already holds, for example
 | **Next race is:** | Which round that is: **the class that was racing**, **any class, in program order**, or **only "*class*"**. Grayed out while **Start the next race automatically** is unticked. Only shown in Advanced mode (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)); in Simple mode the day keeps whatever it's set to. | the class that was racing |
 | **Class running order:** | Which class goes first in each round. **Order...** lists tonight's classes with **Move Up** and **Move Down**, and **Turn the order round each round** makes Q2 start with the second class, Q3 with the third, and so on. It decides who marshals for whom and when each class finishes, so juniors first has them done early. Used the next time the heats are built. See [Build the qualifying program](program-and-mains.md#build-the-qualifying-program). | From the last day of the same kind, or as on the **Classes** page |
 | **Between-race talk:** | How much the announcer says between races on this day: **The club's Between races settings**, or one of the presets (**Club night**, **Race day**, **Big event**, **Just the call-ups**) over them for this day only. See [Between races](../announcer/commentary.md#between-races). | From the last day of the same kind, or the club's Between races settings |
+
+### Club rules
+
+The **Club rules** tab has the settings that are the club's, for every night, not just tonight. A change saves straight away and holds for the next night too.
+
+| Field | What it does | Default |
+|---|---|---|
+| **A marshal who doesn't turn up:** | Your club's marshal rule, applied when a no-show is logged with **Someone's missing...** on Race Control: **Nothing**, **Loses their best qualifying result** (their best counted qualifier tonight in their class), or **Time penalty in their next race** with the seconds beside it (1 to 120). The club's setting, for every night. See [Marshals in place](program-and-mains.md#marshals-in-place). | Loses their best qualifying result; 10 seconds |
 | **Post the heats before the first race** | Once the heats are built, **Next Steps** offers **Post the heats...** before the first race: it prints the heat sheets and the marshal list, tells the room, and lists any car the loop hasn't heard tonight. After that, moving drivers between heats asks first. This is the club's setting, for every night. See [Post the heats](program-and-mains.md#post-the-heats). | On |
 | **Build the heats when entries close** | With **Entries close at:** set, the heats build themselves as it passes (if they haven't been built yet), and **Next Steps** moves on to posting them. **Undo** takes the build back. The club's setting. | On |
 | **Add late check-ins to posted heats without asking** | A driver who checks in after the heats are built goes into them by **Add a Late Entry**'s rule, which moves nobody else. Before posting that always happens by itself; after posting, **Next Steps** asks first unless this is ticked. See [Checked in late](program-and-mains.md#checked-in-late). The club's setting. | Off |
@@ -545,4 +585,4 @@ The line above the list names the current race day ("Current: *name*"), adds "(c
 All of these can be undone with **Undo**. An undo only reverses that one action, and a deleted day comes back one day at a time. If an undo changes which race day is current, check-in, scrutineering and the timetable switch with it.
 
 !!! tip
-    Picking a day in the **Working on:** box on **Race Day → Setup** switches to it too. Use whichever page you happen to be on.
+    Picking a day in the **Race day:** box on **Race Day → Setup → Tonight** switches to it too. Use whichever page you happen to be on.

@@ -4,6 +4,15 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Setup starts from templates (14 November).** **Race Day → Setup** has three tabs: **Templates**, **Tonight** and **Club rules**.
+    - **Templates** is where a night starts: tonight's choice on a banner with one **Start Tonight**, and a card for every template, **Like last time** and **Something different...**, each saying what it starts. **New Race Day** and the **Templates:** row are gone; **Set Up Tonight** is **Walk me through it...** on the banner.
+    - **A forecast** on the banner and every card: about how many drivers, how many heats and finals, and when the night finishes against **Out of the venue by:**, from the phones' **I'm coming**, the last nights from the same template, or the last night.
+    - **Edit a template where it's kept.** **Edit...** on a card changes it directly; **More...** has **When...**, **Duplicate** and **Delete...**; **New Template...** makes one from scratch.
+    - **No second night over an open one.** While tonight's day is open with something in it, nothing on **Templates** starts another; the banner points to **Close Day**.
+    - **Tonight** is the day's own settings in five cards (**The night**, **Times**, **Heats**, **Money**, **Running the night**), and **Club rules** holds the seven settings that are the club's, for every night.
+    - **Start Tonight...** on **Next Steps** and the **Who's Racing** banner go to the **Templates** tab.
+
+    See [Race Day → Setup](race-day/events-and-entries.md#race-day-setup). Update HeatCaller on the race PC; nothing changes on the relay.
 - **Championship reworked, with "Can they still win?" (13 November).**
     - **A card per championship** down the left: its class, how far through the season it is, and who leads (or won).
     - **The one picked fills the page,** with its rules in a line under its name and four views to switch between: **Standings**, **Races**, **Points & Rules** and **Carried In**. The table people come to read no longer shares the page with the setup.

@@ -90,6 +90,14 @@ public sealed class RaceEvent
     /// <summary>Shorthand for the test made all over the UI. A day is the full shape unless it says otherwise.</summary>
     public bool IsClubNight => Shape == RaceDayShape.ClubNight;
 
+    /// <summary>
+    /// The night template this day was started from, or null (14 Nov 2026,
+    /// Setup's Templates tab). Set once, when the day is started; the
+    /// forecast on a template's card averages the nights that name it. A day
+    /// saved before this existed reads back as null.
+    /// </summary>
+    public string? TemplateName { get; set; }
+
     /// <summary>How many qualifying rounds are planned per class. What the run sheet counts down.</summary>
     public int QualifyingRounds { get; set; } = 3;
 

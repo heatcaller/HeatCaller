@@ -45,8 +45,8 @@ These are the RC racing terms and HeatCaller terms used in the app and in these 
 
 | Term | Meaning |
 |---|---|
-| **Race day (event)** | One meeting. Check-ins, tech, the program and the timetable are all filed against the current race day. You start one on **Race Day → Setup** with **New Race Day** or **Set Up Tonight**. **Close Day** stops new rounds joining it. Its results stay readable forever. See [Events, entries and check-in](../race-day/events-and-entries.md). |
-| **Start Tonight** | The window that starts a race night, from **New Race Day**, **Set Up Tonight** or <kbd>Shift</kbd>+<kbd>S</kbd> when no race day is open. It can start tonight like the last race day, from a night template, or from scratch. See [The Start Tonight window](../race-day/events-and-entries.md#the-start-tonight-window). |
+| **Race day (event)** | One meeting. Check-ins, tech, the program and the timetable are all filed against the current race day. You start one on the **Templates** tab of **Race Day → Setup**. **Close Day** stops new rounds joining it. Its results stay readable forever. See [Events, entries and check-in](../race-day/events-and-entries.md). |
+| **Start Tonight** | The window that starts a race night from a choice made elsewhere: **Something different...** on Setup's **Templates** tab, Next Steps' **Start tonight like last time...**, the Calendar's **New Race Day**, **Set Up Tonight** or <kbd>Shift</kbd>+<kbd>S</kbd> when no race day is open. It can start tonight like the last race day, from a night template, or from scratch. See [The Start Tonight window](../race-day/events-and-entries.md#the-start-tonight-window). |
 | **Club night** | A race day set to **Club night - just races** in **What kind of night:**: a flat list of races with no finals, seeding or bump-ups. The other kind is **Race day - heats, then finals**. |
 | **Legacy event** | Holds everything recorded before HeatCaller tracked race days. It's read-only. |
 | **Class** | The rulebook a group of drivers races under: how qualifying is scored, how many heats count, main size, bump-ups, race format and tech checklist. Every driver has a class. |
