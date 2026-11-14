@@ -235,8 +235,24 @@ public sealed class WarmUpFlagTests : IDisposable
 
         Assert.Contains("AutoStartClock.Band(_autoStartState, ToTheGreen(", autoStart, StringComparison.Ordinal);
         Assert.Contains("AutoStartClock.Words(_autoStartState, ToTheGreen(", autoStart, StringComparison.Ordinal);
-        Assert.Contains("_autoStartState == AutoStartState.Counting && remaining is { } left ? left + WarmUpAhead() : remaining", autoStart, StringComparison.Ordinal);
-        Assert.Contains("WarmUpSecondsFor(EffectiveFormat(out _).WarmUpSeconds, StartWithWarmUp)", autoStart, StringComparison.Ordinal);
-        Assert.Contains("_autoStartState == AutoStartState.Counting ? at + WarmUpAhead()", Source("RaceControlControl.Marshals.cs"), StringComparison.Ordinal);
+        Assert.Contains("_autoStartState == AutoStartState.Counting && remaining is { } left ? left + StartToGreen() : remaining", autoStart, StringComparison.Ordinal);
+        Assert.Contains("WarmUpSecondsFor(format.WarmUpSeconds, StartWithWarmUp), format.AutoAdvance, format.StagingSeconds, format.CountdownSeconds", autoStart, StringComparison.Ordinal);
+        Assert.Contains("_autoStartState == AutoStartState.Counting ? at + StartToGreen()", Source("RaceControlControl.Marshals.cs"), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    // Auto-advance: warm-up, staging and countdown all run by themselves.
+    [InlineData(120, true, 15, 5, 140)]
+    [InlineData(0, true, 15, 5, 20)]
+    // No auto-advance: a warm-up still stages and counts down by itself,
+    // but the green waits for its button - so the clock stops at the countdown.
+    [InlineData(120, false, 15, 5, 135)]
+    // No auto-advance, no warm-up: Start only stages; the rest is by hand.
+    [InlineData(0, false, 15, 5, 0)]
+    // Negative lengths from an old or hand-edited format count as none.
+    [InlineData(-5, true, -1, -1, 0)]
+    public void The_count_to_the_green_takes_in_only_the_steps_that_come_by_themselves(int warmUp, bool autoAdvance, int staging, int countdown, int expected)
+    {
+        Assert.Equal(TimeSpan.FromSeconds(expected), RaceControlControl.LeadToTheGreen(warmUp, autoAdvance, staging, countdown));
     }
 }
