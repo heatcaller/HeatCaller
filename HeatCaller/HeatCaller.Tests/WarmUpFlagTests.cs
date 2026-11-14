@@ -240,6 +240,50 @@ public sealed class WarmUpFlagTests : IDisposable
         Assert.Contains("_autoStartState == AutoStartState.Counting ? at + StartToGreen()", Source("RaceControlControl.Marshals.cs"), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void The_count_to_the_green_takes_the_next_races_format_not_the_race_just_run()
+    {
+        // Between races the Round box still holds the race just run; the
+        // count to the green is for the race Auto start is counting down.
+        var autoStart = Source("RaceControlControl.AutoStart.cs");
+        var body = autoStart[autoStart.IndexOf("private TimeSpan StartToGreen()", StringComparison.Ordinal)..];
+        body = body[..body.IndexOf("internal static TimeSpan LeadToTheGreen", StringComparison.Ordinal)];
+
+        Assert.Contains("var next = NextRound();", body, StringComparison.Ordinal);
+        Assert.Contains("FormatFor(next, ClassFor(next),", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("EffectiveFormat(", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_heat_and_the_main_after_it_resolve_their_own_formats()
+    {
+        // A Stock heat with no warm-up just ran; the A-Main next has a
+        // three-minute warm-up. Each round resolves its own format.
+        var stock = new RaceClass
+        {
+            Name = "Stock",
+            QualifierFormat = new RaceFormat { WarmUpSeconds = 0, AutoAdvance = false },
+            Format = new RaceFormat { WarmUpSeconds = 180, AutoAdvance = true },
+        };
+        var heat = new RoundDefinition { ClassName = "Stock", RoundLabel = "Heat 1", Kind = RoundKind.Qualifier };
+        var main = new RoundDefinition { ClassName = "Stock", RoundLabel = "A-Main", Kind = RoundKind.Main };
+        var appDefault = new RaceFormat { WarmUpSeconds = 60 };
+
+        Assert.Same(stock.QualifierFormat, RaceControlControl.FormatFor(heat, stock, () => appDefault, out var heatSource));
+        Assert.Equal("Stock qualifiers", heatSource);
+        Assert.Same(stock.Format, RaceControlControl.FormatFor(main, stock, () => appDefault, out var mainSource));
+        Assert.Equal("Stock class", mainSource);
+
+        var overridden = new RaceFormat { WarmUpSeconds = 30 };
+        var heat2 = new RoundDefinition { ClassName = "Stock", RoundLabel = "Heat 2", Kind = RoundKind.Qualifier, FormatOverride = overridden };
+        Assert.Same(overridden, RaceControlControl.FormatFor(heat2, stock, () => appDefault, out var overrideSource));
+        Assert.Equal("Heat 2 override", overrideSource);
+
+        Assert.Same(appDefault, RaceControlControl.FormatFor(main, null, () => appDefault, out var defaultSource));
+        Assert.Equal("app default", defaultSource);
+        Assert.Same(appDefault, RaceControlControl.FormatFor(null, null, () => appDefault, out _));
+    }
+
     [Theory]
     // Auto-advance: warm-up, staging and countdown all run by themselves.
     [InlineData(120, true, 15, 5, 140)]

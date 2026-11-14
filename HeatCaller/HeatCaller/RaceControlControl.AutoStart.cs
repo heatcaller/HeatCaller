@@ -566,7 +566,11 @@ public sealed partial class RaceControlControl
             return TimeSpan.Zero;
         }
 
-        var format = EffectiveFormat(out _);
+        // The race being counted down, not the Round box's: between races
+        // the Round box still holds the race just run (it moves on only when
+        // the next one starts), and the two can run different formats.
+        var next = NextRound();
+        var format = FormatFor(next, ClassFor(next), () => RaceFormat.FromSettings(_settings), out _);
 
         return LeadToTheGreen(
             WarmUpSecondsFor(format.WarmUpSeconds, StartWithWarmUp), format.AutoAdvance, format.StagingSeconds, format.CountdownSeconds);
