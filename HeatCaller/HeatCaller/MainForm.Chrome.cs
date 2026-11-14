@@ -268,6 +268,18 @@ public partial class MainForm
     {
         _navIconsOnly = iconsOnly;
 
+        // Painting is held off for the whole change and the window drawn once
+        // at the end, so the sidebar goes from one width to the other in a
+        // single frame - without it the sidebar, the header, the footer and
+        // the page beside them each repainted at their own step, and the
+        // narrowing flickered through a half-laid-out sidebar on the way.
+        var frozen = IsHandleCreated && Visible;
+
+        if (frozen)
+        {
+            SendMessage(Handle, WM_SETREDRAW, IntPtr.Zero, IntPtr.Zero);
+        }
+
         SuspendLayout();
 
         try
@@ -305,12 +317,19 @@ public partial class MainForm
         finally
         {
             ResumeLayout(true);
-        }
 
-        // The chevron points the way the next press goes, and its tooltip
-        // says so in words, so both are set again here.
-        SetUpCollapseButton();
-        btnCollapseNav.Invalidate();
+            // The chevron points the way the next press goes, and its tooltip
+            // says so in words, so both are set again here - before painting
+            // comes back, so it is drawn the new way round in the same frame.
+            SetUpCollapseButton();
+            btnCollapseNav.Invalidate();
+
+            if (frozen)
+            {
+                SendMessage(Handle, WM_SETREDRAW, new IntPtr(1), IntPtr.Zero);
+                RedrawWindow(Handle, IntPtr.Zero, IntPtr.Zero, RdwInvalidate | RdwErase | RdwAllChildren | RdwUpdateNow | RdwFrame);
+            }
+        }
 
         if (!save)
         {
@@ -325,6 +344,19 @@ public partial class MainForm
 
         OnClientRawMessage($"{AppTime.LogStampNow()}  [view] Sidebar {(iconsOnly ? "narrowed to its icons" : "showing the page names")} (Ctrl+B).");
     }
+
+    private const int WM_SETREDRAW = 0x000B;
+    private const uint RdwInvalidate = 0x0001;
+    private const uint RdwErase = 0x0004;
+    private const uint RdwFrame = 0x0400;
+    private const uint RdwAllChildren = 0x0080;
+    private const uint RdwUpdateNow = 0x0100;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool RedrawWindow(IntPtr hWnd, IntPtr lprcUpdate, IntPtr hrgnUpdate, uint flags);
 
     /// <summary>Ctrl+B, and the chevron at the top of the sidebar.</summary>
     private void ToggleNavIconsOnly() => SetNavIconsOnly(!_navIconsOnly);

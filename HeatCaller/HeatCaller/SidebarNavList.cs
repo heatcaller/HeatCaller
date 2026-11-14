@@ -515,6 +515,18 @@ public sealed class SidebarNavList : Panel, IMessageFilter
             return;
         }
 
+        // The rail gets no bar. Its footer is a column rather than a row, so
+        // the list loses height on the way in and usually overflows by a
+        // row or less - which put a tall bar up the rail's right edge, hard
+        // against the icons, the moment the sidebar was narrowed (14 Nov
+        // 2026). A soft fade at whichever end has more pages beyond it is
+        // the cue there instead.
+        if (_iconsOnly)
+        {
+            DrawRailEdgeFades(g);
+            return;
+        }
+
         // A scrollbar: it follows the screen, not the text size, as the
         // sidebar's width does.
         var trackWidth = UiLayout.AtDpi(4);
@@ -536,6 +548,36 @@ public sealed class SidebarNavList : Panel, IMessageFilter
         var thumbColor = AppTheme.CurrentMode == AppTheme.Mode.Synthwave ? AppTheme.SynthCyan : AppTheme.SidebarSelected;
         using var thumbBrush = new SolidBrush(Color.FromArgb(150, thumbColor));
         g.FillRectangle(thumbBrush, x, thumbY, trackWidth, thumbHeight);
+    }
+
+    /// <summary>
+    /// The rail's overflow cue: the sidebar's own colour fading in over the
+    /// last few pixels at the top when there are pages above, and at the
+    /// bottom when there are pages below.
+    /// </summary>
+    private void DrawRailEdgeFades(Graphics g)
+    {
+        var fade = Math.Min(UiLayout.AtTextSize(28), Height / 3);
+        if (fade <= 1)
+        {
+            return;
+        }
+
+        if (_scrollOffset > 0)
+        {
+            var top = new Rectangle(0, 0, Width, fade);
+            using var brush = new System.Drawing.Drawing2D.LinearGradientBrush(
+                new Rectangle(0, -1, Width, fade + 2), AppTheme.SidebarBackground, Color.FromArgb(0, AppTheme.SidebarBackground), 90f);
+            g.FillRectangle(brush, top);
+        }
+
+        if (_scrollOffset < MaxScrollOffset)
+        {
+            var bottom = new Rectangle(0, Height - fade, Width, fade);
+            using var brush = new System.Drawing.Drawing2D.LinearGradientBrush(
+                new Rectangle(0, Height - fade - 1, Width, fade + 2), Color.FromArgb(0, AppTheme.SidebarBackground), AppTheme.SidebarBackground, 90f);
+            g.FillRectangle(brush, bottom);
+        }
     }
 
 
