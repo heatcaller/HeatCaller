@@ -87,7 +87,7 @@ internal static class RaceLines
         }
 
         var lines = new List<string>();
-        var className = (classOf(race) ?? string.Empty).Trim();
+        var className = ClassIn(race, row, classOf);
 
         if (BestFinishLine(who, race, row, className, tonight, history, classOf) is { } finish)
         {
@@ -183,10 +183,10 @@ internal static class RaceLines
         var start = RelayResultsIndex.EffectiveStart(race);
         var first = tonight
             .Where(s => s is not null && Counts(s) && s.Id != race.Id && RelayResultsIndex.EffectiveStart(s) < start)
-            .Where(s => SameText(classOf(s), className) && SameText(s.TrackLayoutName, race.TrackLayoutName))
+            .Where(s => SameText(s.TrackLayoutName, race.TrackLayoutName))
             .OrderBy(RelayResultsIndex.EffectiveStart)
             .Select(s => (Session: s, Row: RowOf(s, who)))
-            .FirstOrDefault(x => x.Row is { FastLapMs: > 0 });
+            .FirstOrDefault(x => x.Row is { FastLapMs: > 0 } r && SameText(ClassIn(x.Session, r, classOf), className));
 
         if (first.Row is null)
         {
@@ -227,8 +227,11 @@ internal static class RaceLines
             return null;
         }
 
+        // The year by the club's own calendar, not UTC's (bug hunt 18): a
+        // race on the evening of 31 Dec in the US is already 1 Jan in UTC,
+        // and one on the morning of 1 Jan in Australia is still 31 Dec.
         var start = RelayResultsIndex.EffectiveStart(race);
-        var year = start.Year;
+        var year = LocalYear(start);
         var seen = new HashSet<string>(StringComparer.Ordinal) { race.Id ?? string.Empty };
         var earlier = new List<int>();
 
@@ -241,23 +244,25 @@ internal static class RaceLines
 
             var at = RelayResultsIndex.EffectiveStart(s);
 
-            if (at >= start || at.Year != year || !SameText(classOf(s), className))
+            if (at >= start || LocalYear(at) != year)
             {
                 continue;
             }
 
-            if (RowOf(s, who) is { Position: > 0 } theirs)
+            if (RowOf(s, who) is { Position: > 0 } theirs && SameText(ClassIn(s, theirs, classOf), className))
             {
-                earlier.Add(theirs.Position);
+                earlier.Add(PlaceIn(s, theirs));
             }
         }
 
-        if (earlier.Count < YearRaces || row.Position >= earlier.Min())
+        var place = PlaceIn(race, row);
+
+        if (earlier.Count < YearRaces || place >= earlier.Min())
         {
             return null;
         }
 
-        return row.Position == 1
+        return place == 1
             ? $"First {className} win this year"
             : $"Best {className} finish this year";
     }
@@ -278,6 +283,39 @@ internal static class RaceLines
 
     private static SessionResultEntry? RowOf(SessionRecord s, string who) =>
         s.Results?.FirstOrDefault(r => r is not null && string.Equals(r.Transponder?.Trim(), who, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The class they raced in (bug hunt 18): the class stamped on their row
+    /// in a shared (mixed-class) heat, or else the race's own. A Mod driver
+    /// folded into a Stock heat raced Mod, and the round's class - the
+    /// heat's main one - filed the race as Stock for them.
+    /// </summary>
+    private static string ClassIn(SessionRecord s, SessionResultEntry row, Func<SessionRecord, string> classOf) =>
+        !string.IsNullOrWhiteSpace(row.ClassName) ? row.ClassName.Trim() : (classOf(s) ?? string.Empty).Trim();
+
+    /// <summary>
+    /// Their place in their class: in a shared heat the place among their
+    /// own class's cars (MixedHeats.ClassPlacesOf), so a Mod driver 4th
+    /// overall but first of the Mods is 1st; anywhere else the overall
+    /// position.
+    /// </summary>
+    private static int PlaceIn(SessionRecord s, SessionResultEntry row)
+    {
+        var rows = s.Results.Where(r => r is not null).ToList();
+
+        if (!rows.Any(r => !string.IsNullOrWhiteSpace(r.ClassName)))
+        {
+            return row.Position;
+        }
+
+        return MixedHeats.ClassPlacesOf(rows, null).TryGetValue(row, out var p) && p.Place is int place and > 0
+            ? place
+            : row.Position;
+    }
+
+    /// <summary>The calendar year at the club: a filed UTC time read in local time.</summary>
+    private static int LocalYear(DateTime at) =>
+        at == DateTime.MinValue ? at.Year : DateTime.SpecifyKind(at, DateTimeKind.Utc).ToLocalTime().Year;
 
     private static bool IsOut(SessionResultEntry row)
     {
