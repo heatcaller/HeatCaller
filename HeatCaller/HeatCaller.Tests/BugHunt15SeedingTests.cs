@@ -57,7 +57,7 @@ public sealed class BugHunt15SeedingTests : IDisposable
         var done = program.SeedMainsFor(Stock, string.Empty);
         Assert.True(done.Ok, done.Title + ": " + done.Message);
 
-        var main = Assert.Single(_rounds.ForClass(Stock).Where(r => r.Kind == RoundKind.Main));
+        var main = Assert.Single(_rounds.ForClass(Stock), r => r.Kind == RoundKind.Main);
         Assert.DoesNotContain("D3", main.AssignedTransponders);
         Assert.Equal(drivers.Where(t => t != "D3").OrderBy(t => t), main.AssignedTransponders.OrderBy(t => t));
     });
