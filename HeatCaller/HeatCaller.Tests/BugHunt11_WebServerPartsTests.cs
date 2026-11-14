@@ -61,45 +61,4 @@ public sealed class BugHunt11_WebServerPartsTests : IDisposable
 
         Assert.True(history.Delete(race.Id));
     }
-
-    [Fact]
-    public void A_deleted_race_rebuilds_the_penalty_lines_and_the_coach_cards()
-    {
-        var wiring = Between(SourceOf("MainForm.WiFiExtras.cs"), "partial void WireWiFiExtras()", "partial void RaceFiledWiFiExtras");
-        var handler = Between(wiring, "_sessionHistory.SessionDeleted +=", "};");
-
-        Assert.Contains("PublishPenaltiesToWiFi();", handler);
-        Assert.Contains("PublishCoachCards();", handler);
-    }
-
-    private static string Between(string source, string start, string end)
-    {
-        var from = source.IndexOf(start, StringComparison.Ordinal);
-        Assert.True(from >= 0, $"\"{start}\" is not in the source.");
-
-        var to = source.IndexOf(end, from + start.Length, StringComparison.Ordinal);
-        Assert.True(to > from, $"\"{end}\" does not follow \"{start}\".");
-
-        return source[from..to];
-    }
-
-    /// <summary>The same walk up from the test folder BugHunt8FETests uses.</summary>
-    private static string SourceOf(string fileName)
-    {
-        var folder = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (folder is not null)
-        {
-            var candidate = Path.Combine(folder.FullName, "HeatCaller", "HeatCaller", fileName);
-
-            if (File.Exists(candidate))
-            {
-                return File.ReadAllText(candidate);
-            }
-
-            folder = folder.Parent;
-        }
-
-        throw new FileNotFoundException(fileName);
-    }
 }

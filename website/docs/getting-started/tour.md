@@ -78,7 +78,7 @@ How you leave it is remembered, so a club that prefers the rail gets it at every
 | **Handicaps** | Time or lap credits to even out a mixed-ability grid. See [Practice, ghosts and demo](../race-control/practice-and-ghosts.md). |
 | **Venues** | Save a track's connection settings, layout, soundscape and race defaults, and apply them all in one click. In the sidebar in Advanced mode only. See [Venues](../race-day/drivers-and-classes.md#venues). |
 | **Sponsors** | Sponsor slides that rotate on the Big Screen. See [Big Screen](../screens/big-screen.md). |
-| **Local Screens** | The Wi-Fi web server for phones: live results, phone remote, self check-in and OBS overlay. See [Local Screens](../screens/phone-and-web.md). |
+| **Local Screens** | The Wi-Fi web server for phones: phone remote, self check-in, race-day manager and OBS overlay. See [Local Screens](../screens/phone-and-web.md). |
 | **Club Website** | Publishing to your club's online relay, online check-in, racer PINs and email, on its **Website** tab. Its **Recording** tab has the race recordings, the drivers' clips and highlight videos (it was on **Sounds** until 26 October 2026). See [Online setup](../online/setup.md) and [Race recordings](../announcer/sounds-and-music.md#race-recordings). |
 
 Some pages have tabs along the top. Race Day, Championship, Race Analytics, Voice, Sounds and Club Website all do. The tabs refresh when you open them, so they always show the latest data. In Simple mode a few tabs are hidden: **Race Calls** on **Voice**, **Imaging**, **Effects**, **Ambience** and **Lap Beeps** on **Sounds**, and **Recording** on **Club Website**. They keep working; see [What Simple mode hides](simple-and-advanced-mode.md#what-simple-mode-hides).

@@ -181,9 +181,9 @@ For how a club decides what to publish, see [What the online relay is](../online
 
 ## The laptop's Wi-Fi server
 
-The **Local Screens** server lets phones on the venue Wi-Fi see live results, check drivers in, and, with the remote, throw flags. It has these protections:
+The **Local Screens** server lets phones on the venue Wi-Fi check drivers in and, with the remote, throw flags. It has these protections:
 
-- **The remote needs a PIN.** Without a **Remote PIN** of four or more digits, the remote refuses every command. The server still starts, so live results and check-in work, and it warns you.
+- **The remote needs a PIN.** Without a **Remote PIN** of four or more digits, the remote refuses every command. The server still starts, so check-in works, and it warns you.
 - **The check-in PIN is separate.** **Check-in PIN (optional)** protects the phone check-in page. It's kept separate so the PIN on the wall for drivers can't throw a red flag. HeatCaller warns you if both PINs are the same. With no check-in PIN, the check-in page is open to anyone on the Wi-Fi.
 - **The manager PIN is separate again.** **Manager PIN**, set on the same page, guards the race-day manager - entries, the program and saved results. Blank, or shorter than six digits, and the manager refuses every request instead of opening up, unlike a blank check-in PIN. If the club also turns on **Let the race-day manager be reached through the relay** on the **Club Website** page, the same PIN guards it there too, with its own separate limits - see [Race-day manager PIN](#race-day-manager-pin).
 - **Wrong PINs are limited.** Ten wrong PINs from one device in five minutes locks that device out for a while (`Too many wrong PINs. Wait a few minutes.`). Each device is counted by its full address, IPv6 included. The remote, the check-in page and the manager count separately, so a driver fumbling the check-in PIN can't lock you out of the remote or the manager.
@@ -219,7 +219,6 @@ Pictures are sized from their header before they're ever opened, so a picture to
 
 - **Every "choose a picture" button** (the club logo, driver photos, sponsor slides, track photos, the Track Designer's traced photo and chassis diagrams) turns away a file over 50 MB, a picture over 20000 pixels across or down or over 40 million pixels in all, and anything that isn't a PNG, JPEG, GIF or BMP picture. A driver photo or the club logo, which is shrunk as it comes in and never kept as picked, may have up to 64 million pixels.
 - **Pictures already stored** that are over the limits, for example planted in a backup, are left unopened, and nothing is deleted: a sponsor slide is skipped on the Big Screen and its preview stays blank, a track photo isn't shown, a chassis sheet shows the built-in outline, the Track Designer opens without its traced photo and says why, and a driver gets the initials disc. A logo file HeatCaller didn't make is ignored.
-- **The Wi-Fi pages** only serve sponsor images that pass the same check, and label each one by what the picture really is, not by its file extension.
 
 ### Addresses in a restored backup
 

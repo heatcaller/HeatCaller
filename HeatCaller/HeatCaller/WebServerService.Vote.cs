@@ -108,7 +108,7 @@ public sealed partial class WebServerService
     /// EACH DRIVER UNDER THE ROSTER'S OPAQUE ID, not their transponder.
     /// This route needs no PIN, and a transponder beside a full name is the
     /// mapping /api/state stopped handing out on 9 Oct - see RosterView and
-    /// AddFollowing. HandleRoomVote maps the id back.
+    /// AddIdsAndGrid. HandleRoomVote maps the id back.
     ///
     /// AND THIS PHONE'S OWN PICK, from the store. A new vote starts with
     /// nobody's pick in it, and a page left open from the race before

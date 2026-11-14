@@ -175,7 +175,7 @@ The Big Screen and the Wi-Fi pages have captions of their own, in the room; see 
 
 ### Lap times in my ear
 
-The **Live** page can read out the laps of the driver you follow, in your phone's own voice, the way the coach page and the live results do on the club's Wi-Fi. It works on any connection, at the track or away from it.
+The **Live** page can read out the laps of the driver you follow, in your phone's own voice. It works on any connection, at the track or away from it.
 
 - Tap a driver's name on the board to follow them (see [Following a driver](#following-a-driver)). A **Lap times in my ear: off** button appears under the captions.
 - Tap it and it changes to "on". The phone says "Lap times on", then after each new lap of that driver: "Lap 7, 9.42, best lap, P2, 0.4 seconds behind". The gap is to the car ahead. HeatCaller from 29 October 2026 sends it with every row of the board. With an older version it's read from the board's **Interval** column (or **Gap to P1** for the car in second), so it's only said when the club shows one of them.
@@ -236,7 +236,7 @@ A shared session's link opens the **Results** page on that session. In a chat ap
 
 On the **Results** page, a driver who had time added or a warning in a session has a small chip beside their time, for example "+5s", "1 warning" or "+10s · 2 warnings". Hold a finger or the mouse on it for "Time added or warnings from race control".
 
-The chip has numbers only, never the reason. Race control's reasons ("Blocking", "jump start") are written about a named person, who may be a child, so they only appear on that driver's own night page (see [Race cards](#race-cards)) and on the Wi-Fi follow view in the room. Results published by an older version of HeatCaller have no chip.
+The chip has numbers only, never the reason. Race control's reasons ("Blocking", "jump start") are written about a named person, who may be a child, so they only appear on that driver's own night page (see [Race cards](#race-cards)). Results published by an older version of HeatCaller have no chip.
 
 ### Podium videos
 

@@ -370,7 +370,7 @@ public partial class MainForm
 
         // Tonight's report card for a driver - a right-click on the roster
         // (22 Oct 2026). See MainForm.Coach.
-        driverProfiles.ReportCardFor = transponder => CoachReportFor(transponder, publicNames: false, includeSetup: true);
+        driverProfiles.ReportCardFor = transponder => CoachReportFor(transponder, publicNames: false);
         pageDriverProfiles.Controls.Add(driverProfiles);
         _navRefreshHooks["Driver Hub"] = driverProfiles.RefreshAll;
         _driverHubSetupsRefresh = driverProfiles.RefreshSetups;
@@ -1310,7 +1310,7 @@ public partial class MainForm
         // line is worked out (CoachSetupChange asks about the race day of the
         // night shown), so past nights keep their setup line here.
         raceHistory.ReportCardFor = (transponder, night) =>
-            CoachReportFor(transponder, publicNames: false, includeSetup: true, night: night);
+            CoachReportFor(transponder, publicNames: false, night: night);
     }
 
     /// <summary>

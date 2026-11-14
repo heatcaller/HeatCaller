@@ -2269,26 +2269,10 @@ public partial class MainForm
     /// </summary>
     private void PublishDriverNightsFor(SessionRecord session)
     {
-        // 22 Oct 2026: and the phone coach page's report cards, which a
-        // filed race or practice changes too - see PublishCoachCards. Not
-        // behind the relay switch below: the coach page is on the club's
-        // own Wi-Fi.
-        PublishCoachCards();
-
-        // 22 Oct 2026 (driver experience): the Wi-Fi pages' penalty lines
-        // and the phone's live entry - see the hooks in MainForm.cs. Demo
-        // races reach them too; each decides for itself. Caught one by one,
-        // because nothing here may throw into the filing path (see
-        // PublishNightsFor), and one failing must not stop the other.
-        try
-        {
-            RaceFiledWiFiExtras(session);
-        }
-        catch (Exception ex)
-        {
-            OnClientRawMessage($"[wifi] Could not update the phone pages for that race: {ex.Message}");
-        }
-
+        // 22 Oct 2026 (driver experience): the phone's live entry - see the
+        // hook in MainForm.cs. Demo races reach it too; it decides for itself.
+        // Caught, because nothing here may throw into the filing path (see
+        // PublishNightsFor).
         try
         {
             RaceFiledDriverLive(session);

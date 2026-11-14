@@ -64,7 +64,7 @@ public sealed class BugHunt5WebPrivacyTests : IDisposable
     }
 
     [Fact]
-    public void Everyone_who_can_be_followed_is_named_without_their_transponder()
+    public void Everyone_on_the_people_list_is_named_without_their_transponder()
     {
         var document = Board().AsObject();
         var people = AsArray(document, "people");
@@ -78,7 +78,7 @@ public sealed class BugHunt5WebPrivacyTests : IDisposable
     }
 
     [Fact]
-    public void The_board_the_map_and_the_follow_list_all_call_one_driver_by_the_same_id()
+    public void The_board_the_cards_and_the_people_list_all_call_one_driver_by_the_same_id()
     {
         var document = Board().AsObject();
 
@@ -89,14 +89,13 @@ public sealed class BugHunt5WebPrivacyTests : IDisposable
 
         Assert.NotEqual(Transponder, id);
 
-        // The page picks its dot out of the map by the id on the row, and its
-        // card out of "cards" the same way. An id changed in one place and not
-        // the others is a board whose rows and dots stop matching up mid-race,
-        // which is worse than the leak it was fixing.
-        Assert.Contains(id, AsArray(document, "map", "cars").Select(c => c!["id"]!.GetValue<string>()));
+        // The broadcast graphics pick a car's laps out of "cards" by the id
+        // on the row. An id changed in one place and not the others is a
+        // tower whose rows stop matching up mid-race, which is worse than
+        // the leak it was fixing.
         Assert.NotNull(document["cards"]![id]);
 
-        // And it is the name, not the id, that the follow list shows.
+        // And it is the name, not the id, that the people list carries.
         var person = AsArray(document, "people").Single(p => p!["id"]!.GetValue<string>() == id)!;
         Assert.Equal(DriverName, person["name"]!.GetValue<string>());
     }
@@ -167,17 +166,18 @@ public sealed class BugHunt5WebPrivacyTests : IDisposable
 
     // --- Helpers ----------------------------------------------------------------------------
 
-    /// <summary>The LAN copy of the live state, with the follow view and the map in it.</summary>
+    /// <summary>The LAN copy of the live state, with the ids, the grid and the names in it.</summary>
     private JsonNode Board()
     {
         var document = JsonNode.Parse(Server().BuildStateJson())!;
 
-        // AddFollowing and AddTrackMap are each wrapped in a catch that
-        // serves the board without them, so a throw in either shows up here
-        // as a missing section rather than as a failure. Said plainly, so the
-        // next reader is not left looking at the assertions below.
-        Assert.True(document["people"] is JsonArray, "No follow list in the document - AddFollowing threw.");
-        Assert.True(document["map"] is JsonObject, "No track map in the document - AddTrackMap threw.");
+        // AddIdsAndGrid is wrapped in a catch that serves the board without
+        // it, so a throw in it shows up here as a missing section rather than
+        // as a failure. Said plainly, so the next reader is not left looking
+        // at the assertions below. (The Wi-Fi copy has no track map since
+        // Live Results went, 13 Nov 2026 - only the relay's does.)
+        Assert.True(document["people"] is JsonArray, "No people list in the document - AddIdsAndGrid threw.");
+        Assert.Null(document["map"]);
 
         return document;
     }

@@ -248,21 +248,6 @@ public sealed class BugHunt4WebTests : IDisposable
         Assert.Contains("Nothing to change", root.GetProperty("error").GetString());
     }
 
-    // --- web-5: a sponsor slide the live results page can't show ---------------------------
-
-    [Fact]
-    public void Live_results_shows_a_sponsor_slide_only_once_it_has_loaded()
-    {
-        var page = Pages().BuildLiveResultsPage();
-
-        // The overlay used to go up as the slide was asked for, and stayed up
-        // over the standings, blank, when the laptop answered 404.
-        Assert.DoesNotContain("'flex'", FunctionBody(page, "function rotateSponsors("));
-
-        Assert.Contains("sponsorImg.onload", page);
-        Assert.Contains("sponsorImg.onerror", page);
-    }
-
     // --- signup-2: a PIN that is already a racer's own -------------------------------------
 
     [Fact]

@@ -277,10 +277,10 @@ Each leaderboard in HeatCaller keeps its own choice of columns, because what's u
 | Race Control | **Columns** on the **Race Control** page | Pos, Driver, Car, Laps, Best Lap, Gap to P1, Streak |
 | Practice | **Choose Columns** on the **Practice** page | Driver, Laps, Last Lap, vs Best, Best Lap, Rolling Avg, Std Dev, Streak, Best Streak, Streak Pace, Trend, PBs |
 | Big Screen | **Choose Big Screen Columns** on the **Local Screens** page | Pos, Driver, Laps, Best Lap, Gap to P1 |
-| Live Results web page | **Choose Web Columns** on the **Local Screens** page | Pos, Driver, Laps, Last Lap, Best Lap, Gap to P1, Trend |
-| The live board on the club's website | **Choose Live Board Columns** on the **What gets published** card of the **Club Website** page | The Live Results web page's columns |
+| OBS overlay on the Wi-Fi | **Choose Web Columns** on the **Local Screens** page | Pos, Driver, Laps, Last Lap, Best Lap, Gap to P1, Trend |
+| The live board on the club's website | **Choose Live Board Columns** on the **What gets published** card of the **Club Website** page | The OBS overlay's columns |
 
-The club's website follows the Live Results web page's columns until you pick its own. **Transponder** isn't offered for it, and is never shown online. The line under the button says which columns it shows. A pick that comes out the same as the Live Results page's (which is what **Restore Defaults** gives) goes back to following that page.
+The club's website follows the OBS overlay's columns until you pick its own. **Transponder** isn't offered for it, and is never shown online. The line under the button says which columns it shows. A pick that comes out the same as the overlay's (which is what **Restore Defaults** gives) goes back to following the overlay.
 
 To change the columns:
 
@@ -373,13 +373,11 @@ These are on the **Video sound** card. In Simple mode the card is hidden, along 
 
 The announcer still speaks over a video — a race call always wins. The music fades rather than cuts, over about a tenth of a second down and half a second back.
 
-On the live results page over the Wi-Fi, sponsor videos always play **muted**, whatever the setting above. Every phone browser refuses to start sound on a page nobody has tapped, so a muted video that plays beats an unmuted one that doesn't — and there's no sound coming out of the phones to be silenced.
-
 If a video is 5 minutes long or stalls part way, the Big Screen takes the leaderboard back after 5 minutes regardless.
 
 Each picture is checked before it's added. A file over 50 MB, a picture over 20000 pixels across or down or over 40 million pixels in all, and anything that isn't a PNG, JPEG, GIF or BMP picture are turned away. A slide is kept just as it's picked, so a phone's 48 or 50 megapixel full-resolution photo is too big: save a smaller copy and add that. If some of the files you picked can't be added, a **Some files failed** message says so, for example "Couldn't add 2 files you selected.", and lists each file with its reason (the first three, if there are more).
 
-Images are scaled to fit the leaderboard area without stretching. Only the leaderboard area is replaced: the banner, clock, countdown and ON DECK bar stay on screen. An animated GIF shows its first frame. A missing or unreadable image is skipped, and so is a slide over the size limits, for example one added by an older version or brought in with a backup: the Big Screen stays on the leaderboard for that turn, and its preview on the **Sponsors** page stays blank. Nothing is deleted. The live results page on the Wi-Fi only shows slides that pass the same check. It goes by what each picture really is, not its file extension, so a PNG saved as `.jpg` still shows there.
+Images are scaled to fit the leaderboard area without stretching. Only the leaderboard area is replaced: the banner, clock, countdown and ON DECK bar stay on screen. An animated GIF shows its first frame. A missing or unreadable image is skipped, and so is a slide over the size limits, for example one added by an older version or brought in with a backup: the Big Screen stays on the leaderboard for that turn, and its preview on the **Sponsors** page stays blank. Nothing is deleted.
 
 ![The Sponsors page with three slides listed and the first, a Corner Hobbies picture, in the preview, the Add Image, Add Video, Remove and Move buttons under it, and the Rotation timing card below: the leaderboard shows for 10 seconds, each slide for 8, and the leaderboard is never interrupted while a race is running](../assets/images/sponsors.png)
 

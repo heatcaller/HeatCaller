@@ -365,46 +365,6 @@ public sealed class SponsorVideoTests : IDisposable
         music.SetAdBreakMuted(false);
     }
 
-    // --- Range requests -------------------------------------------------------------------
-
-    [Theory]
-    // No range, or one this doesn't handle: the whole file.
-    [InlineData(null, 1000, false, 0, 999)]
-    [InlineData("", 1000, false, 0, 999)]
-    [InlineData("items=0-99", 1000, false, 0, 999)]
-    [InlineData("bytes=0-99,200-299", 1000, false, 0, 999)]
-    [InlineData("bytes=abc-def", 1000, false, 0, 999)]
-    // An ordinary range.
-    [InlineData("bytes=0-99", 1000, true, 0, 99)]
-    [InlineData("bytes=100-199", 1000, true, 100, 199)]
-    // Open-ended: from there to the end.
-    [InlineData("bytes=500-", 1000, true, 500, 999)]
-    // The last N bytes, which is how a player reads an MP4's index when it
-    // is at the end of the file - getting this backwards would mean a video
-    // that never starts.
-    [InlineData("bytes=-200", 1000, true, 800, 999)]
-    [InlineData("bytes=-5000", 1000, true, 0, 999)]
-    // Past the end is clamped, as HTTP asks.
-    [InlineData("bytes=900-5000", 1000, true, 900, 999)]
-    // Nonsense that must not come back as a satisfied range.
-    [InlineData("bytes=1000-1099", 1000, false, 0, 999)]
-    [InlineData("bytes=500-400", 1000, false, 0, 999)]
-    public void A_range_header_is_read_the_way_a_browser_means_it(
-        string? header, long length, bool satisfied, long from, long to)
-    {
-        Assert.Equal(satisfied, WebServerService.TryReadRange(header, length, out var gotFrom, out var gotTo));
-        Assert.Equal(from, gotFrom);
-        Assert.Equal(to, gotTo);
-    }
-
-    [Fact]
-    public void A_range_against_an_empty_file_is_never_satisfied()
-    {
-        Assert.False(WebServerService.TryReadRange("bytes=0-99", 0, out var from, out var to));
-        Assert.Equal(0, from);
-        Assert.Equal(-1, to);
-    }
-
     // --- The native folder ----------------------------------------------------------------
 
     [Fact]

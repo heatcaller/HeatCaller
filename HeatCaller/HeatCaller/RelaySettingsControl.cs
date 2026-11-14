@@ -771,7 +771,7 @@ public sealed class RelaySettingsControl : UserControl
             var labels = RelayColumns.Resolve(_settings.WebKpis, _settings.RelayKpis, forRelay: true)
                 .Select(k => k.Label);
             var whose = _settings.RelayKpis.Count == 0
-                ? "The same columns as the Live Results page"
+                ? "The same columns as the OBS overlay"
                 : "Its own columns";
 
             hint.Text = $"The live race on the club's website. {whose}: {string.Join(", ", labels)}. "

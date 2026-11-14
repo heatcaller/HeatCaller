@@ -38,7 +38,6 @@ public sealed class BugHunt10_IntegrationCTests : IDisposable
         Assert.Equal(6, sighting!.LastHits);
         Assert.True(sighting.LastSignalKnown);
         Assert.False(sighting.LastPassWeak);
-        Assert.Equal("good", MainForm.SignalWord(sighting));
 
         // The readiness check and Mission Control still see the window.
         Assert.True(sighting.Weak);
@@ -51,11 +50,11 @@ public sealed class BugHunt10_IntegrationCTests : IDisposable
 
         watch.Record(Pass("T2", 8, 100));
         watch.Record(Pass("T2", 1, 10));
-        Assert.Equal("weak", MainForm.SignalWord(watch.Of("T2")!));
+        Assert.True(watch.Of("T2")!.LastPassWeak);
 
         // A pass with no signal reading (an I-Lap) is unknown, not weak.
         watch.Record(Pass("T2", 0, 0));
-        Assert.Equal("unknown", MainForm.SignalWord(watch.Of("T2")!));
+        Assert.False(watch.Of("T2")!.LastSignalKnown);
     }
 
     // ------------------------------------------------------------------

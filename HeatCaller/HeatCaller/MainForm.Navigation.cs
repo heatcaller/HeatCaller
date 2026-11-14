@@ -198,9 +198,8 @@ public partial class MainForm
         ["Sponsors"] = new[] { "logo", "advert", "slide", "rotation" },
         ["Local Screens"] = new[]
         {
-            "remote", "obs", "overlay", "stream", "server", "url", "browser", "live results",
+            "remote", "obs", "overlay", "stream", "server", "url", "browser",
             "phone", "phones", "web", "wifi", "wi-fi", "local", "network", "screen", "screens",
-            "coach", "coach page", "driver coach", "say my lap time", "lap times in my ear",
         },
         // Absorbs the terms from the former Announcer and Commentary nav
         // items - those are tabs here now, and searching for them must
