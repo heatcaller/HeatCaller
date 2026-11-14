@@ -36,7 +36,7 @@ public sealed class RaceAnalyticsPaceTests : IDisposable
         pace.RefreshAll();
         pace.PickDriver("Sam Okafor");
 
-        Assert.Contains("mistake (lap 9)", pace.Headline);
+        Assert.Contains("mistake (lap 10)", pace.Headline); // the chart and leaderboard number: the start pass is lap 1
         Assert.Contains("P3 of 5", pace.Headline);
         Assert.Contains("behind Priya Shah", pace.Headline);
 

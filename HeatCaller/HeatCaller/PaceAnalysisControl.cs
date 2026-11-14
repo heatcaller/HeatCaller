@@ -422,8 +422,8 @@ public sealed class PaceAnalysisControl : UserControl
         var result = ResultClause(session, entry);
 
         _headline.Text = string.IsNullOrEmpty(result)
-            ? RaceCoach.Headline(row, laps)
-            : $"{RaceCoach.Headline(row, laps)} {result}";
+            ? RaceCoach.Headline(row, laps, RaceCoach.LapNumbers(entry))
+            : $"{RaceCoach.Headline(row, laps, RaceCoach.LapNumbers(entry))} {result}";
 
         if (row.Thin)
         {
@@ -699,7 +699,7 @@ public sealed class PaceAnalysisControl : UserControl
                 row.Position == 0 ? "-" : $"P{row.Position}",
                 NameOf(row),
                 PaceAnalysis.Time(row.BestConsecutiveAverageMs),
-                RaceCoach.Headline(row, RaceCoach.Laps(entry)));
+                RaceCoach.Headline(row, RaceCoach.Laps(entry), RaceCoach.LapNumbers(entry)));
 
             _verdicts.Rows[index].Tag = entry;
 
