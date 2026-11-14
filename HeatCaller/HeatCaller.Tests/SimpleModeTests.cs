@@ -423,6 +423,7 @@ public sealed class SimpleModeTests : IDisposable
         "AnalyticsOverviewControl.cs|Track records", "PersonalBestsControl.cs|Personal bests", "LapChartControl.cs|Drivers",
         "LapChartControl.cs|Lap times", "LapChartControl.cs|Consistency", "HeadToHeadControl.cs|Matchup",
         "HeadToHeadControl.cs|Career comparison (shared sessions only)", "HeadToHeadControl.cs|Session by session",
+        "HeadToHeadControl.cs|Who beats whom",
         "TrendChartControl.cs|Trend", "RaceHistoryControl.cs|Sessions", "RaceHistoryControl.cs|Results",
         "RaceControlControl.Layout.cs|Leaderboard", "MainForm.Designer.cs|Session",
         "PracticeModeControl.cs|Setup", "PracticeModeControl.cs|This session", "PracticeModeControl.cs|Ghost cars",
