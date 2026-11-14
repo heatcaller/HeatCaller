@@ -1495,6 +1495,25 @@ public sealed partial class CheckInControl : UserControl
 
         AddPaymentItems(menu, drivers);
 
+        // Papers (14 Nov 2026): one driver's papers window, or one for all of
+        // them to mark their waivers and memberships in order at once.
+        if (ChecksPapers)
+        {
+            var papers = new ToolStripMenuItem(one ? "Papers..." : $"Papers for{who}...");
+            papers.Click += (_, _) =>
+            {
+                if (one)
+                {
+                    EditPapersFor(drivers[0]);
+                }
+                else
+                {
+                    EditPapersForMany(drivers);
+                }
+            };
+            menu.Items.Add(papers);
+        }
+
         if (_tech is not null)
         {
             var inspect = new ToolStripMenuItem(one ? "Log Inspection..." : $"Log Inspection for{who}...");

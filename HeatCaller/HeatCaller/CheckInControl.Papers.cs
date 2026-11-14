@@ -88,6 +88,57 @@ public sealed partial class CheckInControl
 
         RefreshDriverList();
     }
+
+    /// <summary>
+    /// The papers window for several drivers picked on the list (14 Nov 2026):
+    /// marks their waivers signed and/or memberships good until a date, all at
+    /// once. Only what's ticked is written; the rest of each driver's papers
+    /// (membership number, guardian) stays as it was.
+    /// </summary>
+    private void EditPapersForMany(IReadOnlyList<DriverProfile> drivers)
+    {
+        if (!ChecksPapers || drivers.Count == 0)
+        {
+            return;
+        }
+
+        using var form = new PapersForm(drivers.Count, _settings.AskForWaivers, _settings.CheckMemberships);
+
+        if (form.ShowDialog(this) != DialogResult.OK || !form.ChangesAnything)
+        {
+            return;
+        }
+
+        var before = new List<(string Transponder, DateTime? Waiver, DateTime? Expires)>();
+
+        foreach (var profile in drivers)
+        {
+            before.Add((profile.Transponder, profile.WaiverSignedOn, profile.MembershipExpires));
+            form.WriteToMany(profile);
+            _profiles.Upsert(profile);
+        }
+
+        _undo.Capture($"Papers for {Plural.Of(drivers.Count, "driver")}", () =>
+        {
+            foreach (var (transponder, waiver, expires) in before)
+            {
+                if (_profiles.Get(transponder) is { } current)
+                {
+                    current.WaiverSignedOn = waiver;
+                    current.MembershipExpires = expires;
+                    _profiles.Upsert(current);
+                }
+            }
+
+            if (!IsDisposed)
+            {
+                RefreshDriverList();
+            }
+        });
+
+        RefreshDriverList();
+        SetScanStatus($"Papers recorded for {Plural.Of(drivers.Count, "driver")}.", AppTheme.Success);
+    }
 }
 
 /// <summary>One driver's papers: the waiver (signed tonight, or on a date) and the membership.</summary>
@@ -169,6 +220,92 @@ internal sealed class PapersForm : Form
 
         AppTheme.ApplyRecursively(this);
         DialogFit.Keep(this, page, width: 500, height: 360);
+    }
+
+    /// <summary>
+    /// The papers window for several drivers at once: just the waiver date and
+    /// the membership's expiry, each written to all of them only when ticked.
+    /// The waiver starts ticked for today - marking them signed is what it's for.
+    /// </summary>
+    public PapersForm(int count, bool waivers, bool memberships)
+    {
+        Text = $"Papers for {Plural.Of(count, "Driver")}";
+        Font = AppTheme.BodyFont;
+        BackColor = AppTheme.Background;
+        ShowInTaskbar = false;
+        StartPosition = FormStartPosition.CenterParent;
+
+        var lblHow = new Label
+        {
+            Text = $"What's ticked is recorded for all {count} drivers; anything left unticked stays as it is for each of them. Recorded by hand, for the club's own records.",
+            AutoSize = true,
+            MaximumSize = new Size(440, 0),
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _chkWaiver.Text = "Waiver signed on";
+        _chkWaiver.AutoSize = true;
+        _chkWaiver.Checked = waivers;
+        _dtpWaiver.Value = DateTime.Today;
+        _dtpWaiver.Enabled = _chkWaiver.Checked;
+        _chkWaiver.CheckedChanged += (_, _) => _dtpWaiver.Enabled = _chkWaiver.Checked;
+
+        _chkExpires.Text = "Runs out on";
+        _chkExpires.AutoSize = true;
+        _chkExpires.Checked = !waivers && memberships;
+        _dtpExpires.Value = DateTime.Today.AddYears(1);
+        _dtpExpires.Enabled = _chkExpires.Checked;
+        _chkExpires.CheckedChanged += (_, _) => _dtpExpires.Enabled = _chkExpires.Checked;
+
+        _waiverShown = waivers;
+        _membershipShown = memberships;
+
+        var grid = new FieldGrid();
+
+        if (waivers)
+        {
+            grid.AddRow("Waiver:", FieldGrid.Inline(_chkWaiver, _dtpWaiver));
+        }
+
+        if (memberships)
+        {
+            grid.AddRow("Membership:", FieldGrid.Inline(_chkExpires, _dtpExpires));
+        }
+
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
+        var btnSave = new Button { Text = "Save", DialogResult = DialogResult.OK, AutoSize = true };
+
+        var page = new FillPage();
+        page.Add(lblHow, stretch: false, gapBelow: UiLayout.RowGap);
+        page.Add(grid, stretch: false, gapBelow: UiLayout.RowGap);
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
+
+        Controls.Add(page);
+        AcceptButton = btnSave;
+        CancelButton = btnCancel;
+
+        AppTheme.ApplyRecursively(this);
+        DialogFit.Keep(this, page, width: 500, height: 260);
+    }
+
+    private readonly bool _waiverShown;
+    private readonly bool _membershipShown;
+
+    /// <summary>Whether the several-driver window has anything ticked to write.</summary>
+    public bool ChangesAnything => (_waiverShown && _chkWaiver.Checked) || (_membershipShown && _chkExpires.Checked);
+
+    /// <summary>Puts what's ticked in the several-driver window onto one of the drivers.</summary>
+    public void WriteToMany(DriverProfile profile)
+    {
+        if (_waiverShown && _chkWaiver.Checked)
+        {
+            profile.WaiverSignedOn = _dtpWaiver.Value.Date;
+        }
+
+        if (_membershipShown && _chkExpires.Checked)
+        {
+            profile.MembershipExpires = _dtpExpires.Value.Date;
+        }
     }
 
     /// <summary>Puts what the window holds onto the profile.</summary>
