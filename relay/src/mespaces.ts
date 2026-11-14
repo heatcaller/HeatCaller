@@ -781,7 +781,13 @@ function meReplyWords(a) {
   // laptop's said carries the post and the race.
   if (a.kind === 'post') return no ? "Race Control couldn't put you in" : "You're at your post";
   if (a.kind === 'swap') return no ? "Couldn't ask them" : 'Asked - waiting for them';
-  if (a.kind === 'cover') return no ? 'No marshal swap' : 'Marshal swap done';
+  if (a.kind === 'cover') {
+    if (no) return 'No marshal swap';
+    // A no to covering is OK'd by the laptop too, so it comes back approved:
+    // its said ("OK - you're not covering Turn 3...", ApplyCover) tells it.
+    if (/^OK - you're not covering\b/.test(typeof a.said === 'string' ? a.said.trim() : '')) return 'You said no';
+    return 'Marshal swap done';
+  }
   if (a.kind === 'details') return no ? 'Your details stay as they were' : a.state === 'noted' ? 'The desk has your details' : 'Your details are changed';
   return no ? 'Your result stands' : a.state === 'noted' ? 'The desk has your query' : 'The desk agreed with your query';
 }
