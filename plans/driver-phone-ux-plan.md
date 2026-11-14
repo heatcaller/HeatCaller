@@ -725,6 +725,18 @@ There will be more to find in those.
 
 **Size:** about half a day per walk-through.
 
+**First walk-through done (14 Nov 2026).** It was run on a local relay with a copy of the 8 Nov backup, at 375 px, with a fake running race published. What it found, and where each one goes:
+
+| Found | Where it's fixed |
+|---|---|
+| The night page says **Tonight** with a big **"You have arrived – Check in"** for a night 8 days old, and the car says "Racing tonight". Schedule says **"TODAY · Race Day 7 Nov"** on 14 Nov. | **Item 3**, widened: one `isTonight()` check (the event's own start, in the club's day) for Live, Schedule, the night page and the check-in button. |
+| The night header says the date twice: "Race Day 6 Nov 2026 · Friday 6 November 2026". | **Item 14**: show the day once when the night's name already has it. |
+| Search boxes and pickers at **14.4 px** on Schedule, Results and Standings (`cls`, `find`, `year`, `season`, `driver`). | **Item 6**, step 2. |
+| **Achievements is 739 KB** of HTML; other tabs are 136–266 KB. | **Item 1**, step 6. |
+| The night page's "Updated" time has seconds (01:26:07 PM); every other page doesn't. | **Item 15**: one time helper everywhere. |
+| During a race: GAP and TREND scroll off the board, and the followed driver's row is only a thin accent bar. | **Item 4**, as planned. |
+| The "Following Annie Wayout" toast sits over the content near the tab bar. | **Item 4**: the you-card replaces the need for it on Live. |
+
 ---
 
 ## Build order
