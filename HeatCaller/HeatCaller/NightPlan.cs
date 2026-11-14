@@ -620,7 +620,10 @@ public static class NightPlan
             return null;
         }
 
-        var mains = plan.Slots.Where(s => s.Kind == RoundKind.Main && (s.Round is null || !s.Round.IsRecorded)).ToList();
+        // Only mains not built yet: the cut lands when a class's finals are
+        // seeded, so a class whose mains are already on the program keeps
+        // them as they are and mustn't count towards what the cut saves.
+        var mains = plan.Slots.Where(s => s.Kind == RoundKind.Main && s.Round is null).ToList();
 
         if (mains.Count == 0)
         {
