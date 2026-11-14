@@ -486,8 +486,11 @@ internal sealed class NightFields
         Fit(FirstRound, Math.Max(UiLayout.AtTextSize(160), Pieces.PickerWidth(FirstRound, ref _firstRoundWidth)));
         Fit(ShareUnder, number);
         Fit(RacesOff, number);
-        Fit(EntryFee, number);
-        Fit(ExtraFee, number);
+        // Money boxes as wide as the most they hold ("1000.00") plus the
+        // spinner's buttons - 70 clipped "25.00" (layout sweep, 14 Nov 2026).
+        var money = TextRenderer.MeasureText("0000.00", EntryFee.Font).Width + SystemInformation.VerticalScrollBarWidth + UiLayout.AtDpi(12);
+        Fit(EntryFee, Math.Max(number, money));
+        Fit(ExtraFee, Math.Max(number, money));
         Fit(GapPreset, Math.Max(wide, Pieces.PickerWidth(GapPreset, ref _gapPresetWidth)));
 
         // Only when it changed: a new size lays the grid out again.
