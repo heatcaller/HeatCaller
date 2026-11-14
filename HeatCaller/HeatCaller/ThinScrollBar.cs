@@ -220,6 +220,14 @@ internal sealed class ThinScrollBar : Control
         }
     }
 
+    /// <summary>
+    /// Brings every bar up to date now, rather than on the next tick - for a
+    /// change made with painting held off (NoRedraw), so the bars are over
+    /// the native ones before anything is drawn. Left to the timer, the
+    /// native bar showed in the system colours for up to 150ms first.
+    /// </summary>
+    internal static void SyncNow() => SyncAll();
+
     private static void SyncAll()
     {
         for (var i = Live.Count - 1; i >= 0; i--)
