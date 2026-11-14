@@ -105,6 +105,15 @@ public sealed partial class RaceDayEventControl : UserControl
     /// <summary>The rest gap's row (setup plan step 8) - RaceEvent.RacesOffBetween.</summary>
     internal const string RacesOffCaption = NightFields.RacesOffCaption;
 
+    /// <summary>
+    /// Under Championship:, on Tonight and in the template editor (14 Nov
+    /// 2026, Asher). A club with a championship per class read the one pick
+    /// as where the night's points went; a championship's own class rule
+    /// takes its races whatever is picked here (EventSpine.RuleAccepts), and
+    /// the pick only enters the night into one counting picked race days.
+    /// </summary>
+    internal const string ChampionshipHint = NightFields.ChampionshipHint;
+
     /// <summary>The marshal rule's row (setup plan step 8) - AppSettings.MarshalNoShowRule.</summary>
     internal const string MarshalRuleCaption = "A marshal who doesn't turn up:";
 

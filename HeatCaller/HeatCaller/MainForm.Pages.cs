@@ -756,8 +756,10 @@ public partial class MainForm
 
         var tabRaceDay = new TabControl { Dock = DockStyle.Fill };
         tabRaceDay.TabPages.Add(subPageToday);
-        tabRaceDay.TabPages.Add(subPageEvent);
         tabRaceDay.TabPages.Add(subPageEntries);
+
+        // Setup after Who's Racing since 14 Nov 2026 (Asher).
+        tabRaceDay.TabPages.Add(subPageEvent);
         AppTheme.StyleTabControl(tabRaceDay);
 
         // The desk view keeps to Who's Racing (12 Nov 2026, setup plan D8).

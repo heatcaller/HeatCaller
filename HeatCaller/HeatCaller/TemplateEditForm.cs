@@ -60,76 +60,97 @@ internal sealed class TemplateEditForm : Form
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterParent;
 
-        _textSize.Wear(this, () => AppTheme.BodyFont);
-        _fields = new NightFields(_textSize);
+        // Built with its layout held, and laid out once when it is sized
+        // (14 Nov 2026) - see LayoutFreeze.HoldWhileBuilding, and the Setup
+        // Sheet, which does the same. Built live, five cards of fields laid
+        // themselves out again for every field added and every face the
+        // theme pass changed: 1.4 to 3 seconds to open.
+        PageStack body;
+        FillPage page;
 
-        // The template, as a day. A template that never set its rounds or heat
-        // size keeps the day's defaults - 3, and 8 shown.
-        NightTemplates.ApplyTo(template, _scratch);
-        _fields.FillLists(classes, venues, layouts, seasons);
-        _fields.Load(_scratch, template.DriversPerHeat > 0 ? template.DriversPerHeat : 8);
-
-        _fields.EditBreaks = EditBreaks;
-        _fields.EditClassOrder = EditClassOrder;
-        _fields.Changed += ShowForecast;
-
-        _txtName.Text = template.Name;
-
-        var nightGrid = new FieldGrid();
-        nightGrid.AddRow("Name:", _txtName);
-        _fields.AddNightRows(nightGrid);
-
-        var timesGrid = new FieldGrid();
-        _fields.AddTimesRows(timesGrid);
-
-        var heatsGrid = new FieldGrid();
-        _fields.AddHeatsRows(heatsGrid);
-
-        var moneyGrid = new FieldGrid();
-        _fields.AddMoneyRows(moneyGrid);
-
-        var runGrid = new FieldGrid();
-        _fields.AddRunRows(runGrid);
-
-        var body = new PageStack();
-        body.Add(Card("The night", nightGrid));
-        body.Add(Card("Times", timesGrid));
-        body.Add(Card("Heats", heatsGrid));
-        body.Add(Card("Money", moneyGrid));
-        body.Add(Card("Running the night", runGrid), gapBelow: 0);
-
-        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
-        var btnSave = new Button { Text = "Save", AutoSize = true };
-        btnSave.Click += (_, _) => Save();
-
-        _lblForecast.ForeColor = AppTheme.TextMuted;
-        _lblProblem.ForeColor = AppTheme.Danger;
-
-        var page = new FillPage();
-        page.AddFill(body, 200, gapBelow: UiLayout.RowGap);
-        page.Add(_lblForecast, stretch: true, gapBelow: UiLayout.HintGap);
-        page.Add(_lblProblem, stretch: true, gapBelow: UiLayout.HintGap);
-        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
-
-        Controls.Add(page);
-        AcceptButton = btnSave;
-        CancelButton = btnCancel;
-
-        AppTheme.ApplyRecursively(this);
-        AppTheme.StyleButton(btnSave, AppTheme.ButtonKind.Primary);
-
-        // Measured once everything wears the window's face, as on Tonight.
-        _textSize.Keep(() => FieldGrid.LineUp(new[] { nightGrid, timesGrid, heatsGrid, moneyGrid, runGrid },
-            NightFields.HeatsPerDriverCaption, NightFields.RacesPerDriverCaption));
-        _textSize.Keep(() =>
+        using (LayoutFreeze.HoldWhileBuilding())
         {
-            _txtName.Width = UiLayout.AtTextSize(320);
-            _fields.SizeFields();
-        });
+            _textSize.Wear(this, () => AppTheme.BodyFont);
+            _fields = new NightFields(_textSize);
 
-        ShowForecast();
+            // The template, as a day. A template that never set its rounds or heat
+            // size keeps the day's defaults - 3, and 8 shown.
+            NightTemplates.ApplyTo(template, _scratch);
+            _fields.FillLists(classes, venues, layouts, seasons);
+            _fields.Load(_scratch, template.DriversPerHeat > 0 ? template.DriversPerHeat : 8);
+
+            _fields.EditBreaks = EditBreaks;
+            _fields.EditClassOrder = EditClassOrder;
+            _fields.Changed += ShowForecast;
+
+            _txtName.Text = template.Name;
+
+            var nightGrid = new FieldGrid();
+            nightGrid.AddRow("Name:", _txtName);
+            _fields.AddNightRows(nightGrid);
+
+            var timesGrid = new FieldGrid();
+            _fields.AddTimesRows(timesGrid);
+
+            var heatsGrid = new FieldGrid();
+            _fields.AddHeatsRows(heatsGrid);
+
+            var moneyGrid = new FieldGrid();
+            _fields.AddMoneyRows(moneyGrid);
+
+            var runGrid = new FieldGrid();
+            _fields.AddRunRows(runGrid);
+
+            body = new PageStack();
+            body.Add(Card("The night", nightGrid));
+            body.Add(Card("Times", timesGrid));
+            body.Add(Card("Heats", heatsGrid));
+            body.Add(Card("Money", moneyGrid));
+            body.Add(Card("Running the night", runGrid), gapBelow: 0);
+
+            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
+            var btnSave = new Button { Text = "Save", AutoSize = true };
+            btnSave.Click += (_, _) => Save();
+
+            _lblForecast.ForeColor = AppTheme.TextMuted;
+            _lblProblem.ForeColor = AppTheme.Danger;
+
+            page = new FillPage();
+            page.AddFill(body, 200, gapBelow: UiLayout.RowGap);
+            page.Add(_lblForecast, stretch: true, gapBelow: UiLayout.HintGap);
+            page.Add(_lblProblem, stretch: true, gapBelow: UiLayout.HintGap);
+            page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
+
+            Controls.Add(page);
+            AcceptButton = btnSave;
+            CancelButton = btnCancel;
+
+            AppTheme.ApplyRecursively(this);
+            AppTheme.StyleButton(btnSave, AppTheme.ButtonKind.Primary);
+
+            // Measured once everything wears the window's face, as on Tonight.
+            _textSize.Keep(() => FieldGrid.LineUp(new[] { nightGrid, timesGrid, heatsGrid, moneyGrid, runGrid },
+                NightFields.HeatsPerDriverCaption, NightFields.RacesPerDriverCaption));
+            _textSize.Keep(() =>
+            {
+                _txtName.Width = UiLayout.AtTextSize(320);
+                _fields.SizeFields();
+            });
+
+            ShowForecast();
+        }
 
         DialogFit.Keep(this, page, width: 760, height: 720, body: body);
+
+        // Held until DialogFit has sized the window, then laid out once at
+        // that size, children first - as the Setup Sheet is.
+        LayoutFreeze.Freeze(page);
+
+        // Opened with the name not highlighted: it selects all as it takes
+        // the focus. On Shown - after the focus has gone to it - and before
+        // DialogFit makes the window visible, so it is never seen that way.
+        // (Venue and Track layout: AppTheme.StyleComboBox.)
+        Shown += (_, _) => _txtName.Select(_txtName.TextLength, 0);
     }
 
     private static Section Card(string caption, FieldGrid grid)

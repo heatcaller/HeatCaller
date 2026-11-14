@@ -33,6 +33,17 @@ internal sealed class NightFields
     public const string RacesPerDriverCaption = "Races each driver gets:";
 
     public const string ShapeCaption = "What kind of night:";
+
+    /// <summary>
+    /// Under Championship: (14 Nov 2026, Asher). A club with a championship
+    /// per class read the one pick as where the night's points went; a
+    /// championship's own class rule takes its races whatever is picked here
+    /// (EventSpine.RuleAccepts), and the pick only enters the night into one
+    /// counting picked race days.
+    /// </summary>
+    public const string ChampionshipHint =
+        "A championship that adds new races automatically scores its own class from every night, whatever is picked here - so one per class all count from the same night. "
+        + "Pick one only to enter this night into a championship that counts just the race days it's given.";
     public const string FirstRaceCaption = "First race at:";
     public const string OutByCaption = "Out of the venue by:";
     public const string EntriesCloseCaption = "Entries close at:";
@@ -218,6 +229,7 @@ internal sealed class NightFields
         grid.AddRow("Venue:", Venue);
         grid.AddRow("Track layout:", Layout);
         grid.AddRow("Championship:", Championship);
+        grid.AddHint(ChampionshipHint);
     }
 
     /// <summary>The times card: entries close (first, as in the night), the first race, out by, and the breaks.</summary>

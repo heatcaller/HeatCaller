@@ -1528,6 +1528,17 @@ public static class AppTheme
             comboBox.DrawItem += ComboBoxDrawItem;
         }
 
+        else
+        {
+            // A typed-in drop-down selects all its text whenever Windows
+            // resizes it, so every layout left Venue and Track layout
+            // highlighted on Tonight and in the template editor (14 Nov
+            // 2026, Asher). Cleared again after each resize - unless
+            // someone is typing in it.
+            comboBox.SizeChanged -= ClearSelectionAfterResize;
+            comboBox.SizeChanged += ClearSelectionAfterResize;
+        }
+
         Stepped(comboBox.IsHandleCreated ? "draw mode (had a handle)" : "draw mode");
 
         // The closed-field skin now covers editable combos too. It was once
@@ -1541,6 +1552,24 @@ public static class AppTheme
 
         EnableDoubleBuffering(comboBox);
         Stepped("buffering");
+    }
+
+    /// <summary>See StyleComboBox: posted, as Windows selects the text after the resize is reported.</summary>
+    private static void ClearSelectionAfterResize(object? sender, EventArgs e)
+    {
+        if (sender is not ComboBox { IsHandleCreated: true, Focused: false } combo
+            || combo.DropDownStyle == ComboBoxStyle.DropDownList)
+        {
+            return;
+        }
+
+        combo.BeginInvoke(() =>
+        {
+            if (!combo.IsDisposed && !combo.Focused && combo.SelectionLength > 0)
+            {
+                combo.SelectionLength = 0;
+            }
+        });
     }
 
     private static void ComboBoxDrawItem(object? sender, DrawItemEventArgs e)

@@ -202,7 +202,7 @@ When the laptop doesn't have the race the query is about, **Noted** says "This l
 
 ### More time and skip my race at the desk
 
-Select the request and click **Approve**, then **Yes**. The **Desk** button on Race Control lights up for these, as for every request.
+Select the request and click **Approve**, then **Yes**. The **Requests** button on Race Control lights up for these, as for every request.
 
 - **More time:** when the driver's race is the next one out, it goes back 5 minutes, and with [Auto start](../race-control/running-a-race.md#auto-start-between-races) on, its count moves with it. Every "about" time after it moves too: the program, the phones' **Schedule** page and the Big Screen's **UP NEXT**. Two approvals put it back 10 minutes. The phone shows "Q2 Heat 3 goes back 5 minutes for you." When their race isn't next yet, the 5 minutes are kept for it and the phone says "Q3 Heat 2 will go back 5 minutes for you when it's next." The moment that race becomes the next one out, it goes back 5 minutes by itself, and the console says so. Two approvals for the same race add up. What's kept goes if the race runs or is deleted first, or the driver comes out of it. There's no **Undo** for a push-back.
 - **Schedule and timetable:** the push-back shows wherever the night's times do, in the running order Race Control will use even when the desk runs a race out of program order. The [Day Schedule](../race-day/program-and-mains.md#reading-the-sheet) shows the lines still to come as "expected 20:47 · 7 min late"; the times typed on it aren't changed.
