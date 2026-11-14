@@ -143,6 +143,31 @@ public sealed class RaceAnalyticsTrendsTests : IDisposable
         return true;
     }, TimeSpan.FromMinutes(1), () => "building the Trends page");
 
+    /// <summary>
+    /// Bug hunt 18: the record line kept its own rule and dropped only
+    /// ghosts, so a rental or an excluded guest with the quickest lap was
+    /// named holder here while the Records page named the club driver.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void A_rental_or_excluded_guest_is_not_named_the_record_holder(bool rental, bool excluded) => StaThread.Run(() =>
+    {
+        var profiles = ProfileStore.Load();
+        profiles.Upsert(new DriverProfile { Transponder = "1003", DriverName = "Priya Shah", IsRental = rental, ExcludeFromRecords = excluded });
+
+        var history = RaceAnalyticsSamples.History();
+        using var trend = new TrendChartControl(history, new AppSettings()) { Profiles = profiles };
+
+        trend.Pick("Sam Okafor", "Club Infield");
+
+        var expected = RaceCoach.RecordLaps(history.All.Where(s => s.TrackLayoutName == "Club Infield"), profiles).First().Result;
+
+        Assert.DoesNotContain("Priya Shah", trend.RecordLine);
+        Assert.Contains($"Track record {PaceAnalysis.Time(expected.FastLapMs)} by {expected.DriverName}", trend.RecordLine);
+        return true;
+    }, TimeSpan.FromMinutes(1), () => "building the Trends page");
+
     [Fact]
     public void All_tracks_is_not_read_as_a_trend() => StaThread.Run(() =>
     {

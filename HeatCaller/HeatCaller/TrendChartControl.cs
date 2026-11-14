@@ -23,6 +23,9 @@ public sealed class TrendChartControl : UserControl
     /// <summary>The track layouts, for a layout's length - the car lengths beside each gap (RaceCoach). Null says no car lengths.</summary>
     public TrackLayoutStore? Layouts { get; set; }
 
+    /// <summary>The driver profiles, so the track record leaves out rentals and excluded guests as the Records page does (RaceCoach.RecordLaps). Null leaves out ghosts only.</summary>
+    public ProfileStore? Profiles { get; set; }
+
     private readonly SessionHistoryStore _history;
     private readonly AppSettings _settings;
 
@@ -483,15 +486,16 @@ public sealed class TrendChartControl : UserControl
     /// driver can picture where a tenth means nothing.
     ///
     /// The record is the quickest lap any real driver has set there in a
-    /// scored session, practice included, as the points are.
+    /// scored session, practice included, as the points are. "Real" is
+    /// RaceCoach.RecordLaps' rule - no ghosts, rentals or excluded guests -
+    /// so this names the same holder as the Records page and the badge.
     /// </summary>
     private string RecordGap(string track, long driverBest)
     {
-        var holder = _history.All
-            .Where(s => !s.IsNotScored() && string.Equals(s.TrackLayoutName, track, StringComparison.OrdinalIgnoreCase))
-            .SelectMany(s => s.Results)
-            .Where(r => r.FastLapMs > 0 && !GhostService.IsGhost(r.Transponder))
-            .OrderBy(r => r.FastLapMs)
+        var holder = RaceCoach.RecordLaps(
+                _history.All.Where(s => !s.IsNotScored() && string.Equals(s.TrackLayoutName, track, StringComparison.OrdinalIgnoreCase)),
+                Profiles)
+            .Select(x => x.Result)
             .FirstOrDefault();
 
         if (holder is null)
