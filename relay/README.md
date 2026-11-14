@@ -1430,6 +1430,34 @@ address is a driver's: it queues it (30 minutes at most, 50 at once, three
 an hour per address and per connection), and the laptop emails the one
 driver with that address their own night's link.
 
+### Race video (public, badge id; the stream document needs a token)
+
+```
+POST /api/v1/c/:club/publish/stream   token; private snapshot, never served
+GET  /api/v1/c/:club/video/race/:sid?n=<name>   -> {video: {id, t, end, laps?, best?}} or 404
+POST /api/v1/c/:club/video/night  {id}           -> {videos: {sid: video}, missed: [sid]}
+GET  /api/v1/c/:club/video/live                  -> {live: "<YouTube id>" | null}
+GET  /api/v1/c/:club/video/check  token          -> {dead: [YouTube id]}
+```
+
+The club streams to its own YouTube channel; the relay stores no video
+(plans/race-video-access-plan.md). The laptop sends one private `stream`
+document: tonight's pieces (start, stop, YouTube id, nudge, hidden), the
+lead-in, whether video shows on public results, and the races hidden or
+with a junior in them. From that and a race's own result the relay works
+out the race's moment (`src/video.ts`): `t` is the green flag less the
+lead-in, `end` the end plus 10 s, and with `?n=` one driver's laps. A
+404 covers a hidden race, a junior's on public results, a club showing
+video on own nights only, a race outside a piece, and a video YouTube's
+oEmbed says is private, removed or not embeddable (checked the night it
+arrives, then daily for a week). `video/live` is live only while a piece
+is open and the laptop's state is under two minutes old.
+
+Pages embed `www.youtube-nocookie.com` (the only outside `frame-src`) in a
+sheet or, on Live, docked at the top. Drivers' "video starts in the wrong
+place" and "hide this video" are driver asks (`videooff`, `videohide`).
+"Videos from tonight are up" is a push alert of kind `video`, once a night.
+
 ### Page counts (public; reading them needs a token)
 
 ```

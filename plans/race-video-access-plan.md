@@ -1,6 +1,21 @@
 # Race video on the driver's phone: the plan
 
-*14 November 2026. A plan only; nothing is built. Video streaming as a whole is on hold (10 Nov 2026). This covers one part of it: how a driver gets from the club's relay pages to their race on YouTube.*
+*14 November 2026. Off hold the same day ("start the video build") and built on branch `claude/race-video`. This covers one part of video streaming: how a driver gets from the club's relay pages to their race on YouTube.*
+
+## Status (14 Nov 2026)
+
+| Part | State |
+|---|---|
+| Phase 0 | Built: StreamTonight (pieces, links, nudge, hide), the OBS WebSocket link, the Race video card on the Relay tab, the private `stream` document. |
+| V1 | Built: `video.ts` works out each race's `{id, t, end, laps, best}`; `GET video/race/:sid`, `POST video/night`, `GET video/live`. |
+| V2 | Built: Home's "Live on YouTube now", Results' "Watch this race" and "Watch their best lap", the night's "Watch my race" and "Jump to my best lap", the `video` alert kind ("Videos from tonight are up", once a night). |
+| V3 | Built: the player sheet (privacy-enhanced embed, lap list seeking by postMessage, Open in YouTube, Back closes it), `frame-src` for youtube-nocookie only, `allow` on the shell frames. |
+| V4 | Built: the docked live player on Live (shrink, close, remembered for the night, delay note, Listen off, "The stream has stopped"). |
+| V5 | Built: ±1/±5/±30 s nudges per piece, the lead-in setting, the driver's "opens too early / too late" report through the desk. |
+| V6 | Built: public or own-night-only, juniors on their own night, hide a race or a piece on the laptop, the driver's "ask the club to hide this video". |
+| V7 | Built: "This race wasn't on the stream", the relay's oEmbed check (the night it arrives, then daily for a week), the laptop's "YouTube won't play this video" line, "Needs signal". |
+| V8, V9 | Built: data-saver second tap, in-app browser note, picture-in-picture allowed, spoken labels; the `video_*` counters. |
+| Not done | VL3's "Re-run: video shows the run that counted" line; "Watch the last race" when the live stream stops (it links to Results instead); the laptop telling the relay it uses Ultra-low latency (the note always says about 20 s). Not yet tried on a real iPhone and Android phone with a real stream. |
 
 ## Where this sits
 
