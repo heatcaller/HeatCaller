@@ -2898,6 +2898,10 @@ public sealed partial class WebServerService
 
             if (relayNode["standings"] is System.Text.Json.Nodes.JsonArray rows)
             {
+                // Each car's own clock zero, for "lapping" - see LeaderBehind.Approach.
+                var startType = _race.StartType;
+                var staggerClock = _race.StaggerClockMode;
+
                 for (var i = 0; i < ordered.Count && i < rows.Count; i++)
                 {
                     if (rows[i] is not System.Text.Json.Nodes.JsonObject row)
@@ -2930,7 +2934,7 @@ public sealed partial class WebServerService
                     // can say "Leader behind" once. See LeaderBehind. Only
                     // when it is so; never on the leader. Against the first
                     // real car, never a ghost - see LeaderBehind.Approach.
-                    if (i > 0 && LeaderBehind.Approach(car, ordered) is { } lapping)
+                    if (i > 0 && LeaderBehind.Approach(car, ordered, startType, staggerClock) is { } lapping)
                     {
                         row["lapping"] = lapping;
                     }
