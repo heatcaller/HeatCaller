@@ -913,7 +913,7 @@ public sealed class AppSettings
     /// <summary>How long a gap has to be to count as a long break, in minutes.</summary>
     public int BetweenRacesLongBreakMinutes { get; set; } = 10;
 
-    /// <summary>The countdown calls its marks by itself from the run sheet. Mirrored on the Timetable's Reminder countdown card.</summary>
+    /// <summary>The countdown calls its marks by itself from the run sheet. Set on AI Commentary → Between races.</summary>
     public bool BetweenRacesAutoCountdown { get; set; }
 
     /// <summary>Which marks the automatic countdown calls, minutes, comma separated - any of 10, 5, 2 and 1.</summary>

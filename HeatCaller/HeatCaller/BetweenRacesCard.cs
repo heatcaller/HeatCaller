@@ -217,9 +217,11 @@ internal sealed class BetweenRacesCard
         what.AddHint("Sponsor reads are switched on or off on the Sponsors page. These boxes only shape the gap - "
                      + "what plays during races is set above.");
 
-        // Not Tick: this one is shared with the Timetable's Reminder countdown
-        // card, so it is saved and heard through AutoCountdownTick rather than
-        // with the rest of the card (10 Nov 2026, bug hunt 16).
+        // Not Tick: saved and heard through AutoCountdownTick rather than
+        // with the rest of the card (10 Nov 2026, bug hunt 16), so every card
+        // built over these settings shows the same tick. The Timetable had a
+        // tick of its own here too, taken out with its Reminder countdown
+        // card (13 Nov 2026).
         _chkAutoCountdown.Text = "Start the countdown by itself from the run sheet, at";
         _chkAutoCountdown.AutoSize = true;
         _chkAutoCountdown.CheckedChanged += (_, _) =>
@@ -244,7 +246,7 @@ internal sealed class BetweenRacesCard
         Tick(_chkTimesUp, "time's up");
         marks.Add(_chkTimesUp);
         what.AddField(FieldGrid.Inline(marks.ToArray()));
-        what.AddHint("Needs a time against the next race on Race Day → Timetable. Also on the Timetable's Reminder countdown card.");
+        what.AddHint("Needs a time against the next race on Race Day → Timetable.");
         card.Add(what, gapBelow: UiLayout.SectionGap);
 
         // --- Custom lines
@@ -424,7 +426,7 @@ internal sealed class BetweenRacesCard
         }
     }
 
-    /// <summary>The automatic countdown was ticked or unticked, here or on the Timetable: shown here too, saving nothing.</summary>
+    /// <summary>The automatic countdown was ticked or unticked, here or on another card over these settings: shown here too, saving nothing.</summary>
     private void AutoCountdownTicked(AppSettings settings)
     {
         if (!ReferenceEquals(settings, _settings))

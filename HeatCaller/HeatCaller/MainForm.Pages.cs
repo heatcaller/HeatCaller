@@ -531,7 +531,7 @@ public partial class MainForm
         // thrown away - the same fault the scrutineering log was fixed for.
         // It is parented into the drawer's window on the way in and taken
         // back out in FormClosed, or that window would dispose it.
-        var daySchedule = new DayScheduleControl(_daySchedule, _raceClasses, _announcer, _undo, _rounds, _raceEvents) { Dock = DockStyle.Fill, Settings = _settings };
+        var daySchedule = new DayScheduleControl(_daySchedule, _raceClasses, _undo, _rounds, _raceEvents) { Dock = DockStyle.Fill };
         _daySchedulePage = daySchedule;
 
         // The lines still to come are expected later when the next race is

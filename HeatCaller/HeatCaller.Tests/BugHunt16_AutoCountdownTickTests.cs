@@ -5,12 +5,14 @@ namespace HeatCaller.Tests;
 /// <summary>
 /// 10 Nov 2026, Bug Hunt 16.
 ///
-/// "Start the countdown by itself from the run sheet" has a tick on the
-/// Between races card and another on the Timetable's Reminder countdown card,
-/// over the one setting. Each read the setting once, when it was built. A tick
-/// on the Timetable was then saved back over by the card's next unrelated
-/// edit (the card saves every field from its own, stale, tick), and the run
-/// sheet's countdown calls stopped with nothing on screen to say so.
+/// "Start the countdown by itself from the run sheet" is one setting that
+/// more than one control can show. Each used to read it once, when it was
+/// built, and a card's next unrelated edit saved its stale tick back over it,
+/// so the run sheet's countdown calls stopped with nothing on screen to say so.
+///
+/// The Timetable's Reminder countdown card had the second tick until 13 Nov
+/// 2026; these now drive the setting through AutoCountdownTick directly, the
+/// way any other control showing it would.
 /// </summary>
 public sealed class BugHunt16_AutoCountdownTickTests : IDisposable
 {
@@ -35,30 +37,16 @@ public sealed class BugHunt16_AutoCountdownTickTests : IDisposable
     private static CheckBox Box(Control root, string startsWith) =>
         All(root).OfType<CheckBox>().Single(b => b.Text.StartsWith(startsWith, StringComparison.Ordinal));
 
-    private static DayScheduleControl Timetable(AppSettings settings)
-    {
-        var timetable = new DayScheduleControl(
-            DayScheduleStore.Load(),
-            RaceClassStore.Load(),
-            new AnnouncementService(ProfileStore.Load(), VoiceSettingsStore.Load(), SoundEffectsStore.Load()),
-            new UndoService(),
-            RoundDefinitionStore.Load(),
-            RaceEventStore.Load());
-        timetable.Settings = settings;
-        return timetable;
-    }
-
     [Fact]
-    public void A_tick_on_the_timetable_survives_an_edit_on_the_between_races_card()
+    public void A_tick_from_elsewhere_survives_an_edit_on_the_between_races_card()
     {
         var seen = StaThread.Run(() =>
         {
             var settings = new AppSettings();
             var (card, _) = BetweenRacesCard.Build(settings, new TextSize(), null, null, null, null);
             using var cardOwner = card;
-            using var timetable = Timetable(settings);
 
-            Box(timetable, "Count down by itself").Checked = true;
+            AutoCountdownTick.Set(settings, true);
             var cardFollowed = Box(card, "Start the countdown by itself").Checked;
 
             // Something else on the card, which saves the whole card.
@@ -66,30 +54,31 @@ public sealed class BugHunt16_AutoCountdownTickTests : IDisposable
             callUps.Checked = !callUps.Checked;
 
             return (cardFollowed, settings.BetweenRacesAutoCountdown);
-        }, TimeSpan.FromSeconds(60), () => "building the Between races card and the Timetable");
+        }, TimeSpan.FromSeconds(60), () => "building the Between races card");
 
         Assert.True(seen.cardFollowed);
         Assert.True(seen.BetweenRacesAutoCountdown);
     }
 
     [Fact]
-    public void A_tick_on_the_card_shows_on_the_timetable()
+    public void Two_cards_over_one_setting_show_the_same_tick()
     {
         var seen = StaThread.Run(() =>
         {
             var settings = new AppSettings();
-            var (card, _) = BetweenRacesCard.Build(settings, new TextSize(), null, null, null, null);
-            using var cardOwner = card;
-            using var timetable = Timetable(settings);
+            var (first, _) = BetweenRacesCard.Build(settings, new TextSize(), null, null, null, null);
+            using var firstOwner = first;
+            var (second, _) = BetweenRacesCard.Build(settings, new TextSize(), null, null, null, null);
+            using var secondOwner = second;
 
-            Box(card, "Start the countdown by itself").Checked = true;
-            var on = (Box(timetable, "Count down by itself").Checked, settings.BetweenRacesAutoCountdown);
+            Box(first, "Start the countdown by itself").Checked = true;
+            var on = (Box(second, "Start the countdown by itself").Checked, settings.BetweenRacesAutoCountdown);
 
-            Box(card, "Start the countdown by itself").Checked = false;
-            var off = (Box(timetable, "Count down by itself").Checked, settings.BetweenRacesAutoCountdown);
+            Box(first, "Start the countdown by itself").Checked = false;
+            var off = (Box(second, "Start the countdown by itself").Checked, settings.BetweenRacesAutoCountdown);
 
             return (on, off);
-        }, TimeSpan.FromSeconds(60), () => "building the Between races card and the Timetable");
+        }, TimeSpan.FromSeconds(60), () => "building two Between races cards");
 
         Assert.Equal((true, true), seen.on);
         Assert.Equal((false, false), seen.off);
@@ -109,5 +98,53 @@ public sealed class BugHunt16_AutoCountdownTickTests : IDisposable
         }, TimeSpan.FromSeconds(60), () => "building the Between races card");
 
         Assert.False(seen);
+    }
+
+    /// <summary>
+    /// 13 Nov 2026: with the Timetable's tick gone, Simple mode has its own on
+    /// AI Commentary's Countdown card - the same setting as Between races, and
+    /// not grayed when commentary is off, since the countdown needs none.
+    /// </summary>
+    [Fact]
+    public void The_simple_countdown_tick_and_the_between_races_tick_agree()
+    {
+        var seen = StaThread.Run(() =>
+        {
+            var settings = new AppSettings { CommentaryEnabled = false };
+            using var page = new CommentaryControl(settings, new CommentaryService(ProfileStore.Load(), settings));
+
+            var simple = Box(page, "Count down to each race by itself");
+            var advanced = Box(page, "Start the countdown by itself");
+
+            simple.Checked = true;
+            var on = (advanced.Checked, settings.BetweenRacesAutoCountdown, simple.Enabled);
+
+            advanced.Checked = false;
+            var off = (simple.Checked, settings.BetweenRacesAutoCountdown);
+
+            return (on, off);
+        }, TimeSpan.FromSeconds(60), () => "building the AI Commentary page");
+
+        Assert.Equal((true, true, true), seen.on);
+        Assert.Equal((false, false), seen.off);
+    }
+
+    /// <summary>13 Nov 2026: the Timetable has no countdown of its own any more - no Start, no tick.</summary>
+    [Fact]
+    public void The_timetable_has_no_reminder_countdown()
+    {
+        var folder = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (folder is not null && !File.Exists(Path.Combine(folder.FullName, "check.cmd")))
+        {
+            folder = folder.Parent;
+        }
+
+        Assert.NotNull(folder);
+        var page = File.ReadAllText(Path.Combine(folder!.FullName, "HeatCaller", "HeatCaller", "DayScheduleControl.cs"));
+
+        Assert.DoesNotContain("new Section(\"Reminder countdown\")", page);
+        Assert.DoesNotContain("SpeakReminder", page);
+        Assert.DoesNotContain("AutoCountdownTick", page);
     }
 }

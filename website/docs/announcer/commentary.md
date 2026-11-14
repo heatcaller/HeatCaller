@@ -632,7 +632,7 @@ A race day can use a different preset for that day only: **Between-race talk:** 
 
 **The console says why a call-up didn't go**, once a gap per reason, on a line starting `[gap]`: "Call-up for Heat 3 held - inside the quiet before the call".
 
-**Start the countdown by itself from the run sheet, at** _5 min, 1 min_ calls the countdown without anyone pressing **Start** on the Timetable, from the time against the next race on **Race Day → Timetable**. Pick any of 10, 5, 2 and 1 minutes, and **time's up**. The same tick is on the Timetable's **Reminder countdown** card. Off until you tick it.
+**Start the countdown by itself from the run sheet, at** _5 min, 1 min_ calls the countdown by itself, from the time against the next race on **Race Day → Timetable**. Pick any of 10, 5, 2 and 1 minutes, and **time's up**. In Simple mode the same setting is **Count down to each race by itself, from the Timetable** on the **Countdown** card, which uses the minute marks picked here. (The Timetable's **Reminder countdown** card was taken out on 13 Nov 2026.) Off until you tick it.
 
 #### Your own lines
 

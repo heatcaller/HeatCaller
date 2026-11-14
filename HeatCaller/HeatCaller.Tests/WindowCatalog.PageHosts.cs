@@ -291,13 +291,9 @@ internal static partial class WindowCatalog
                 var sheet = DayScheduleStore.Load();
                 sheet.CurrentEventId = day;
 
-                // The announcer MainForm makes. It speaks here only when the
-                // page's countdown is started, which nothing does, and its
-                // queues wait for lines that never come.
                 var timetable = new DayScheduleControl(
                     sheet,
                     RaceClassStore.Load(),
-                    new AnnouncementService(ProfileStore.Load(), VoiceSettingsStore.Load(), SoundEffectsStore.Load()),
                     new UndoService(),
                     RoundDefinitionStore.Load(),
                     RaceEventStore.Load());

@@ -1176,6 +1176,7 @@ public sealed class CommentaryControl : UserControl
         // six section switches and the talking points tick, in place of
         // every card below - see BuildSectionsCard and CommentarySections.
         page.Add(SimpleMode.ShowInSimpleOnly(BuildSectionsCard(Hint, Check)));
+        page.Add(SimpleMode.ShowInSimpleOnly(BuildCountdownCard(Hint)));
 
         // Who writes it first (1 Nov 2026, asked for by Asher: "move who
         // writes it card to the top"), then How it's written, whose wording
@@ -1547,6 +1548,51 @@ public sealed class CommentaryControl : UserControl
                 ShowSections();
             }
         };
+
+        return card;
+    }
+
+    /// <summary>
+    /// The run sheet's countdown in Simple mode (13 Nov 2026). Its only other
+    /// tick, on the Timetable's Reminder countdown card, was taken out, and the
+    /// Between races card that has it is Advanced only - so without this a
+    /// Simple club could not switch it on. The same setting as the card's
+    /// "Start the countdown by itself from the run sheet", written and heard
+    /// through AutoCountdownTick so the two always agree. Not grayed with the
+    /// master switch: the countdown is written by HeatCaller and needs no
+    /// commentary. Which marks it calls stays on the Between races card.
+    /// </summary>
+    private Section BuildCountdownCard(Func<string, Label> hint)
+    {
+        var card = new Section("Countdown");
+
+        var box = new ThemedCheckBox
+        {
+            Text = "Count down to each race by itself, from the Timetable",
+            AutoSize = true,
+            Checked = _settings.BetweenRacesAutoCountdown,
+        };
+
+        box.CheckedChanged += (_, _) => AutoCountdownTick.Set(_settings, box.Checked);
+
+        void Ticked(AppSettings settings)
+        {
+            if (ReferenceEquals(settings, _settings) && !box.IsDisposed)
+            {
+                // Its CheckedChanged finds the setting already says so and saves nothing.
+                box.Checked = settings.BetweenRacesAutoCountdown;
+            }
+        }
+
+        AutoCountdownTick.Changed += Ticked;
+
+        // A static event would keep this page alive (10 Nov 2026, bug hunt 16).
+        box.Disposed += (_, _) => AutoCountdownTick.Changed -= Ticked;
+
+        card.Add(box, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(hint("The announcer calls the minutes left before each race, from the time against it on Race Day → Timetable - "
+                      + "at 5 and 1 minutes unless changed in Advanced mode, on Between races. Works with commentary off."),
+            gapBelow: 0);
 
         return card;
     }

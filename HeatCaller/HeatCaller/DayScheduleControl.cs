@@ -31,69 +31,12 @@ public sealed class DayScheduleControl : UserControl
 {
     private readonly DayScheduleStore _schedule;
     private readonly RaceClassStore _raceClasses;
-    private readonly AnnouncementService _announcer;
     private readonly UndoService _undo;
     private readonly RoundDefinitionStore _rounds;
     private readonly RaceEventStore _events;
 
     private readonly DataGridView _grid = new();
     private readonly Label _lblNextUp = new();
-    private readonly Label _lblCountdown = new();
-    private readonly NumericUpDown _numMinutes = new();
-    private readonly Button _btnStartCountdown = new();
-    private readonly Button _btnStopCountdown = new();
-
-    /// <summary>
-    /// The Between races card's "Start the countdown by itself from the run sheet"
-    /// (31 Oct 2026), here too, beside the countdown it does for you.
-    /// Hidden until the host hands over the settings.
-    /// </summary>
-    private readonly CheckBox _chkAutoCountdown = new ThemedCheckBox
-    {
-        Text = "Count down by itself from the run sheet",
-        AutoSize = true,
-        Visible = false,
-    };
-
-    private AppSettings? _settings;
-
-    /// <summary>
-    /// The settings the automatic countdown tick reads and writes - the same
-    /// one as Between races on the AI Commentary tab.
-    /// </summary>
-    internal AppSettings? Settings
-    {
-        get => _settings;
-        set
-        {
-            _settings = value;
-            _chkAutoCountdown.Visible = value is not null;
-            _chkAutoCountdown.Checked = value?.BetweenRacesAutoCountdown ?? false;
-        }
-    }
-
-    /// <summary>Opens the one list of what can be done to this sheet. See BuildLineMenu.</summary>
-    private readonly Button _btnMore = new();
-
-    /// <summary>Shared by the More button and the grid's right-click, so the two can never offer different things.</summary>
-    private ContextMenuStrip? _lineMenu;
-
-    private readonly System.Windows.Forms.Timer _countdownTimer = new() { Interval = 1000 };
-    /// <summary>
-    /// When the countdown runs out, by the clock. Null when none is running.
-    ///
-    /// A WALL-CLOCK deadline rather than a tally of ticks. It used to be an
-    /// int decremented once per Tick on a 1000ms WinForms timer, and that
-    /// timer runs on the message pump: it drops ticks whenever the UI thread
-    /// is busy, a modal dialog is open, or the machine sleeps - all of which
-    /// happen during a race night, which is the only time this is used. A
-    /// ten-minute countdown quietly became eleven, and the "5 minutes to..."
-    /// call went out when there were three left.
-    /// </summary>
-    private DateTime? _countdownEndsUtc;
-    private string _countdownLabel = string.Empty;
-    private bool _announced5Min;
-    private bool _announced1Min;
 
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
@@ -101,22 +44,11 @@ public sealed class DayScheduleControl : UserControl
     /// <summary>The page the rest is laid out on - see LeastHeight.</summary>
     private readonly FillPage _page = new();
 
-    /// <summary>The countdown's card, and the two rows in it the card's width is measured from - see ReminderWidth.</summary>
-    private Section? _reminderCard;
-    private FlowLayoutPanel? _minutesRow;
-    private ButtonBar? _countdownButtons;
+    /// <summary>Opens the one list of what can be done to this sheet. See BuildLineMenu.</summary>
+    private readonly Button _btnMore = new();
 
-    /// <summary>The countdown's figure, a face this page makes itself at the text size in use - see FitCountdown.</summary>
-    private Font? _countdownFont;
-
-    /// <summary>The countdown's figure at the normal text size, in points - the size it always was.</summary>
-    private const float CountdownPoints = 16F;
-
-    /// <summary>The longest the countdown's figure comes to: two hours, the most it can be set to.</summary>
-    private const string CountdownWidest = "120:00";
-
-    /// <summary>The countdown's column at the normal text size - the narrowest its group box ever was.</summary>
-    private const int ReminderLeastWidth = 240;
+    /// <summary>Shared by the More button and the grid's right-click, so the two can never offer different things.</summary>
+    private ContextMenuStrip? _lineMenu;
 
     /// <summary>
     /// The fewest lines the sheet shows under its headings before the page
@@ -139,14 +71,12 @@ public sealed class DayScheduleControl : UserControl
     public DayScheduleControl(
         DayScheduleStore schedule,
         RaceClassStore raceClasses,
-        AnnouncementService announcer,
         UndoService undo,
         RoundDefinitionStore rounds,
         RaceEventStore events)
     {
         _schedule = schedule;
         _raceClasses = raceClasses;
-        _announcer = announcer;
         _undo = undo;
         _rounds = rounds;
         _events = events;
@@ -164,8 +94,6 @@ public sealed class DayScheduleControl : UserControl
 
         BuildLayout();
         RefreshAll();
-
-        _countdownTimer.Tick += CountdownTimer_Tick;
     }
 
     /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
@@ -190,7 +118,7 @@ public sealed class DayScheduleControl : UserControl
     /// it always told on the way in: a window whose font is already the new
     /// size when the page is put in it changes no font the page sees, since
     /// the page wears a face of its own. So it catches up here, each time it
-    /// moves: its faces, its field and figure sizes and its grid's headings
+    /// moves: its faces and its grid's headings
     /// at the text size in use now - and, as it lays out in the new window,
     /// everything measured from them.
     ///
@@ -209,17 +137,18 @@ public sealed class DayScheduleControl : UserControl
     /// <summary>
     /// The intro and the Up Next line across the top, then the sheet: the
     /// grid in a card, taking the height that is left, with Add Entry and
-    /// More under it - and beside it, down the right-hand side, the reminder
-    /// countdown in a card of its own, as wide as its widest row. On the
-    /// layout pieces (LayoutPieces.cs), so nothing is placed by hand, and a
-    /// window too short for all of it scrolls the page rather than cutting
-    /// off the buttons under the grid.
+    /// More under it. On the layout pieces (LayoutPieces.cs), so nothing is
+    /// placed by hand, and a window too short for all of it scrolls the page
+    /// rather than cutting off the buttons under the grid.
     ///
     /// It used to be placed in pixels: the intro capped at 860px, the grid
-    /// and the countdown's group box placed on every resize over a 900x560
-    /// floor the page kept however small its window, the two buttons pinned
-    /// to its bottom edge - and the countdown's 16pt figure made once, at
-    /// the normal text size, whatever the text size was.
+    /// placed on every resize over a 900x560 floor the page kept however
+    /// small its window, the two buttons pinned to its bottom edge.
+    ///
+    /// The Reminder countdown card that sat beside the sheet was taken out
+    /// (13 Nov 2026): a second, manual countdown that knew nothing of the
+    /// Between races one could call "5 minutes" twice for the same race.
+    /// The run sheet's countdown is set on AI Commentary → Between races.
     /// </summary>
     private void BuildLayout()
     {
@@ -232,8 +161,8 @@ public sealed class DayScheduleControl : UserControl
             ForeColor = AppTheme.TextMuted,
         };
 
-        // The line the countdown's hint points at ("Up Next" above). It
-        // wraps to the page when a class's name runs long.
+        // What is up next on the sheet. It wraps to the page when a class's
+        // name runs long.
         _lblNextUp.AutoSize = true;
         _textSize.Wear(_lblNextUp, () => AppTheme.BoldFont);
 
@@ -321,91 +250,20 @@ public sealed class DayScheduleControl : UserControl
         sheet.AddFill(_grid, LeastGridHeight);
         sheet.Add(new ButtonBar().With(btnAdd, _btnMore), gapBelow: 0);
 
-        // --- The reminder countdown ---
-        var lblFor = _textSize.Wear(
-            new Label
-            {
-                Text = "Announces to \"Up Next\" above at 5 minutes, 1 minute, and when time's up.",
-                AutoSize = true,
-                ForeColor = AppTheme.TextMuted,
-            },
-            () => AppTheme.SmallFont);
-
-        var lblMinutes = new Label { Text = "Minutes until start:", AutoSize = true };
-
-        _numMinutes.Minimum = 1;
-        _numMinutes.Maximum = 120;
-        _numMinutes.Value = 10;
-
-        _btnStartCountdown.Text = "Start";
-        _btnStopCountdown.Text = "Stop";
-        _btnStopCountdown.Enabled = false;
-        _btnStartCountdown.Click += (_, _) => StartCountdown();
-        _btnStopCountdown.Click += (_, _) => StopCountdown(announceNow: false);
-
-        // Sized by the page, not by itself - see FitCountdown.
-        _lblCountdown.Text = string.Empty;
-        _lblCountdown.AutoSize = false;
-        _lblCountdown.ForeColor = AppTheme.Accent;
-        _textSize.Keep(FitCountdown);
-
-        // The minutes beside their caption, the box going under it only if
-        // the column were ever too narrow for both - it is made wide enough
-        // (ReminderWidth).
-        var minutesRow = FieldGrid.Inline(lblMinutes, _numMinutes);
-        var countdownButtons = new ButtonBar().With(_btnStartCountdown, _btnStopCountdown);
-
-        var reminder = new Section("Reminder countdown");
-
-        // With it ticked, Race Control says the marks itself between races,
-        // from the next race's time on this sheet - see Between races.
-        // Written and heard through AutoCountdownTick, so the Between races
-        // card's own tick follows this one and this one follows it (10 Nov
-        // 2026, bug hunt 16).
-        _chkAutoCountdown.CheckedChanged += (_, _) =>
-        {
-            if (_settings is not null)
-            {
-                AutoCountdownTick.Set(_settings, _chkAutoCountdown.Checked);
-            }
-        };
-        AutoCountdownTick.Changed += AutoCountdownTicked;
-
-        reminder.Add(lblFor);
-        reminder.Add(minutesRow);
-        reminder.Add(countdownButtons);
-        reminder.Add(_chkAutoCountdown);
-        reminder.Add(_lblCountdown, gapBelow: 0);
-
-        _reminderCard = reminder;
-        _minutesRow = minutesRow;
-        _countdownButtons = countdownButtons;
-
         // --- The page ---
         //
-        // The countdown beside the sheet, as tall as it needs to be at the
-        // top of its column; the sheet takes the rest of the width and all
-        // of the height.
-        var band = new Beside(ReminderWidth);
-
-        band.AddFill(sheet, sheet.LeastHeight);
-        band.AddSideCard(reminder, gapBelow: 0);
-
+        // The sheet takes all of the width and the height that is left.
         _page.Add(lblIntro);
         _page.Add(_lblNextUp, gapBelow: UiLayout.RowGap);
-        _page.AddFill(band, band.LeastHeight, gapBelow: 0);
+        _page.AddFill(sheet, sheet.LeastHeight, gapBelow: 0);
 
         Controls.Add(_page);
-
-        // Once the fields are on the page and wear its face - what they are
-        // measured in.
-        _textSize.Keep(SizeFields);
     }
 
     /// <summary>
     /// The least the page can do with at <paramref name="width"/> - its
-    /// intro, the Up Next line, and the taller of the countdown's card and
-    /// the sheet's (the grid's headings and four lines, and its buttons) -
+    /// intro, the Up Next line, and the sheet (the grid's headings and four
+    /// lines, and its buttons) -
     /// for the window it is shown in, which gives the page the height it
     /// has (PageWindow.Timetable).
     /// </summary>
@@ -414,80 +272,6 @@ public sealed class DayScheduleControl : UserControl
     /// <summary>The least the grid can do with: its headings and a few lines. Below that the page scrolls instead - see FillPage.</summary>
     private int LeastGridHeight() =>
         _grid.ColumnHeadersHeight + GridLeastRows * _grid.RowTemplate.Height + 2;
-
-    /// <summary>
-    /// The countdown's column: the width its group box was at the normal
-    /// text size, at the size in use - and never narrower than its caption,
-    /// the minutes beside their caption, or Start and Stop on one line need.
-    /// </summary>
-    private int ReminderWidth() =>
-        Math.Max(
-            UiLayout.AtTextSize(ReminderLeastWidth),
-            Math.Max(
-                _reminderCard?.CaptionWidth ?? 0,
-                Math.Max(
-                    Math.Max(_minutesRow?.GetPreferredSize(Size.Empty).Width ?? 0, _countdownButtons?.OneLineWidth ?? 0),
-                    _settings is null ? 0 : _chkAutoCountdown.GetPreferredSize(Size.Empty).Width))
-            + Section.Inset.Horizontal);
-
-    /// <summary>
-    /// The minutes box: wide enough for the most minutes it takes and its
-    /// arrows, and never narrower than a number box at the normal text size,
-    /// at this size. Run again when the text size changes (TextSize.Keep).
-    /// </summary>
-    private void SizeFields()
-    {
-        var digits = ((int)_numMinutes.Maximum).ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
-
-        var width = Math.Max(
-            UiLayout.AtTextSize(UiLayout.NumericWidth),
-            TextRenderer.MeasureText(new string('0', digits), _numMinutes.Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
-
-        // Only when it changed: a new width lays the row out again.
-        if (_numMinutes.Width != width)
-        {
-            _numMinutes.Width = width;
-        }
-    }
-
-    /// <summary>
-    /// The countdown's figure: the 16pt bold it always was, at the text
-    /// size in use - a face this page makes itself, so it is made again when
-    /// the text size changes and the old one let go - and one line of it
-    /// kept whatever it says, so nothing moves as the countdown starts,
-    /// ticks and stops.
-    ///
-    /// Kept by the page rather than sized by the label. A label that sizes
-    /// itself asks what it is in to lay out again every time it is
-    /// rewritten, which here is every second the countdown runs; one given
-    /// its height is only repainted.
-    /// </summary>
-    private void FitCountdown()
-    {
-        var points = CountdownPoints * AppTheme.FontScale;
-
-        if (_countdownFont is null || Math.Abs(_countdownFont.SizeInPoints - points) >= 0.01F)
-        {
-            var old = _countdownFont;
-
-            _countdownFont = new Font(AppTheme.BoldFont.FontFamily, points, FontStyle.Bold);
-            _lblCountdown.Font = _countdownFont;
-            old?.Dispose();
-        }
-
-        // A line of the figure as the label draws it (Pieces.LineHeight), or
-        // as the figure measures, whichever is taller.
-        var line = Math.Max(
-            Pieces.LineHeight(_lblCountdown.Font),
-            TextRenderer.MeasureText(CountdownWidest, _lblCountdown.Font, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height);
-
-        var height = line + _lblCountdown.Padding.Vertical;
-
-        if (_lblCountdown.Height != height)
-        {
-            _lblCountdown.Height = height;
-        }
-    }
 
     /// <summary>Call whenever this page becomes visible - the program and check-ins change elsewhere while it's not active.</summary>
     public void RefreshAll()
@@ -1378,148 +1162,4 @@ public sealed class DayScheduleControl : UserControl
             RefreshAll();
         }
     }
-
-    private void StartCountdown()
-    {
-        var nextUp = _schedule.NextUp;
-        if (nextUp is null)
-        {
-            AppDialog.Show(this, "Add a schedule entry first, or mark one not-yet-complete - there's nothing to count down to.",
-                "Nothing to count down to", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
-        }
-
-        _countdownLabel = string.IsNullOrWhiteSpace(nextUp.ClassName) && string.IsNullOrWhiteSpace(nextUp.Description)
-            ? "the next event"
-            : string.Join(" ", new[] { nextUp.ClassName, nextUp.Description }.Where(s => !string.IsNullOrWhiteSpace(s)));
-
-        _countdownEndsUtc = DateTime.UtcNow.AddMinutes((double)_numMinutes.Value);
-
-        var remaining = RemainingSeconds();
-
-        // A call already inside the countdown is not made at all. Started at
-        // three minutes, "5 minutes to..." on the very first tick is simply
-        // wrong; started at exactly five, it would say what the person who
-        // pressed Start has just set.
-        _announced5Min = remaining <= 300;
-        _announced1Min = remaining <= 60;
-
-        _numMinutes.Enabled = false;
-        _btnStartCountdown.Enabled = false;
-        _btnStopCountdown.Enabled = true;
-
-        UpdateCountdownLabel();
-        _countdownTimer.Start();
-    }
-
-    private void StopCountdown(bool announceNow)
-    {
-        _countdownTimer.Stop();
-        _countdownEndsUtc = null;
-        _numMinutes.Enabled = true;
-        _btnStartCountdown.Enabled = true;
-        _btnStopCountdown.Enabled = false;
-        _lblCountdown.Text = string.Empty;
-
-        if (announceNow)
-        {
-            _announcer.SpeakReminder($"Time's up for {_countdownLabel}!");
-        }
-    }
-
-    private void CountdownTimer_Tick(object? sender, EventArgs e)
-    {
-        var remaining = RemainingSeconds();
-
-        if (remaining <= 0)
-        {
-            StopCountdown(announceNow: true);
-            return;
-        }
-
-        // Two separate checks rather than if/else: each call stands on its
-        // own. The five-minute one only while there are more than 60
-        // seconds left, so the two can never be spoken back to back.
-        //
-        // Both are latched, so a tick the message pump swallowed - or a
-        // laptop lid closed for a minute - still gets the call made on the
-        // next one rather than skipping it. A gap that steps clean past a
-        // mark makes that call late; a gap that steps past the end of the
-        // countdown makes none of them and goes straight to "time's up",
-        // which is the honest answer when the minute it was warning about
-        // has already gone.
-        if (remaining <= 300 && remaining > 60 && !_announced5Min)
-        {
-            _announced5Min = true;
-            _announcer.SpeakReminder($"5 minutes to {_countdownLabel}.");
-        }
-
-        if (remaining <= 60 && !_announced1Min)
-        {
-            _announced1Min = true;
-            _announcer.SpeakReminder($"1 minute to {_countdownLabel}.");
-        }
-
-        UpdateCountdownLabel();
-    }
-
-    /// <summary>What is left, by the clock. Zero when nothing is running or the deadline has gone.</summary>
-    private int RemainingSeconds()
-    {
-        if (_countdownEndsUtc is not { } ends)
-        {
-            return 0;
-        }
-
-        var left = (ends - DateTime.UtcNow).TotalSeconds;
-
-        // Rounded UP, so a countdown started at ten minutes reads 10:00
-        // rather than 09:59 on its first draw.
-        return left <= 0 ? 0 : (int)Math.Ceiling(left);
-    }
-
-    private void UpdateCountdownLabel()
-    {
-        var span = TimeSpan.FromSeconds(RemainingSeconds());
-        _lblCountdown.Text = $"{(int)span.TotalMinutes:00}:{span.Seconds:00}";
-    }
-
-    /// <summary>The automatic countdown was ticked or unticked, here or on the Between races card: shown here too.</summary>
-    private void AutoCountdownTicked(AppSettings settings)
-    {
-        if (!ReferenceEquals(settings, _settings) || IsDisposed)
-        {
-            return;
-        }
-
-        // Its CheckedChanged finds the setting already says so and saves nothing.
-        _chkAutoCountdown.Checked = settings.BetweenRacesAutoCountdown;
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            // A static event would keep this control alive (10 Nov 2026, bug hunt 16).
-            AutoCountdownTick.Changed -= AutoCountdownTicked;
-
-            // A WinForms timer holds a reference to this control through
-            // its Tick handler. Left undisposed it keeps the control alive
-            // and can fire against a disposed one, which throws from a
-            // place with no useful stack.
-            _countdownTimer.Stop();
-            _countdownTimer.Tick -= CountdownTimer_Tick;
-            _countdownTimer.Dispose();
-        }
-
-        base.Dispose(disposing);
-
-        // After the figure that wears it is gone - see FitCountdown.
-        if (disposing)
-        {
-            _countdownFont?.Dispose();
-            _countdownFont = null;
-        }
-    }
-
 }
