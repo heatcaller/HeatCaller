@@ -191,7 +191,9 @@ describe("the Live flag card for the driver this phone follows", () => {
     p.store.set("hg-follow-acme-rc", "Asher K.");
     p.run(script);
     await p.settle();
-    const me = () => /<div class="lp-me">([\s\S]*?)<\/div>/.exec(p.get("bar").innerHTML)?.[1] ?? "";
+    // On the driver's own card above the board since 14 Nov 2026 (driver
+    // phone plan item 4), no longer on the flag card.
+    const me = () => /<div class="yx">([\s\S]*?)<\/div>/.exec(p.get("you").innerHTML)?.[1] ?? "";
 
     assert.match(me(), /<b>Asher K\.<\/b> P2/);
     assert.match(me(), /1\.20s behind Sam P\./);

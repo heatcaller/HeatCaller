@@ -1296,6 +1296,25 @@ Driver phone plan items 1, 3, 14 and 21 (`plans/driver-phone-ux-plan.md`).
 - **Plain words.** Driver pages never say "relay" or "laptop"
   (`test/driver-phone-a.test.ts` checks every driver page).
 
+### Live on a phone, and Back (14 Nov 2026)
+
+Driver phone plan items 4 and 18 (mockup: `mockups/live-phone-board.html`).
+
+- **Four columns on a phone.** Under 480 px the board keeps position,
+  driver, the club's own gap column and last lap, read from the club's
+  headings. A tap on a row opens the rest of it in place; "All columns"
+  brings back the whole table. The driver's own row sticks to the edge it is
+  scrolling off (below the status bar, above the tab bar).
+- **Your card.** Above the board, for the followed driver, or with nobody
+  followed the one signed in on Me: a big position, the gap to the car ahead
+  and behind with names (worked out from Gap to P1 when the board has no gap
+  to the car ahead), last, best, laps and trend, and the line that used to
+  sit on the flag card (closing, losing, what they need a lap). "You" for
+  the driver signed in, "Following" for anybody else.
+- **Back.** In the home-screen app each tab is a step in the phone's
+  history, so Android's Back walks back through the tabs to Home and only
+  then leaves.
+
 ### Who you are on Me (14 Nov 2026)
 
 Driver phone plan items 2, 8, 17 and 22.

@@ -1425,6 +1425,55 @@ html.hcoffline .wrap > :not(header):not(.hcoff):not(footer) { opacity: 0.55; fil
 details.lastrace > summary { display: flex; align-items: center; min-height: 48px; padding: 0 16px; cursor: pointer;
   font-weight: 700; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
 details.lastrace[open] > summary { margin-bottom: 10px; }
+/* A BOARD MADE FOR A PHONE (item 4): four columns under 480 px, the rest a
+   tap away, the driver's own row stuck to the edge it scrolls off. */
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ballc { margin: 6px 2px 0; }
+.ballc .linkish { min-height: 44px; }
+#board tr[data-row] { cursor: pointer; }
+#board tr.me td { background: var(--tonal); }
+#board tr.me td:first-child { box-shadow: inset 4px 0 0 var(--primary); }
+#board tr.bmore td { padding: 4px 10px 12px 40px; background: var(--bg); }
+#board .bm { display: flex; flex-wrap: wrap; gap: 6px; }
+#board .bm span { display: flex; flex-direction: column; min-width: 72px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+#board .bm b { font-variant-numeric: tabular-nums; }
+#board .bm i { font-style: normal; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+@media (min-width: 481px) { .ballc, #board tr.bmore { display: none; } #board tr[data-row] { cursor: default; } }
+@media (max-width: 480px) {
+  #board .card:not(.all) th:not(.k), #board .card:not(.all) td:not(.k):not(.bmc) { display: none; }
+  #board .card:not(.all) { overflow: visible; }
+  #board .card:not(.all) table { width: 100%; min-width: 0; }
+  #board .card:not(.all) tr.me td { position: sticky; top: var(--sa-t); bottom: calc(68px + var(--sa-b)); z-index: 2; }
+}
+/* YOUR CARD ON LIVE (item 4). The Following chip is the card's job on Live. */
+body.has-you #follow { display: none; }
+.you { margin: 0 0 12px; padding: 12px 14px; border-radius: 16px; background: var(--tonal); border: 1px solid var(--primary); }
+.you[hidden] { display: none; }
+.you .yw { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--on-tonal); }
+.you .yw b { color: var(--text); font-size: 1rem; }
+.you .chip { margin: 0; padding: 2px 9px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; background: var(--primary); color: var(--on-primary); border-color: transparent; }
+.you .chip.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+.you .ym { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; align-items: center; margin-top: 6px; }
+.you .yp { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed; font-weight: 800;
+  font-size: 3.6rem; line-height: 0.9; font-variant-numeric: tabular-nums; }
+.you .yp small { display: block; margin-top: 6px; font: 700 0.7rem/1.2 system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.you .ygs { display: grid; gap: 6px; min-width: 0; }
+.you .yg { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: baseline; gap: 6px; }
+.you .yg .ar { color: var(--muted); }
+.you .yg .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9rem; }
+.you .yg .t { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-weight: 800; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.you .yg .t em { margin-left: 3px; font: 600 0.66rem system-ui, sans-serif; font-style: normal; color: var(--muted); }
+.you .yg.ahead .t { color: var(--warn); }
+.you .yg.behind .t { color: var(--good); }
+.you .yl { position: relative; height: 16px; margin: 10px 4px 2px; }
+.you .yl::before { content: ""; position: absolute; left: 0; right: 0; top: 7px; height: 2px; border-radius: 2px; background: var(--border); }
+.you .ydot { position: absolute; top: 3px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: var(--muted); }
+.you .ydot.me { top: 1px; width: 14px; height: 14px; margin-left: -7px; background: var(--primary); }
+.you .ys { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); text-align: center; }
+.you .ys b { display: block; font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-weight: 800; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.you .ys b.best { color: var(--accent); }
+.you .ys span { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.you .yx { margin-top: 8px; font-size: 0.85rem; color: var(--muted); }
 /* RACING TONIGHT? on Home (item 22), and Me's email link (item 17). */
 .rtw-steps { margin: 8px 0 0; padding-left: 22px; }
 .rtw-steps li { margin: 10px 0; }
@@ -2394,6 +2443,18 @@ function hcGo(path) {
   hcComing = hcFrameFor(path);
 }
 window.hcGo = hcGo;
+// BACK THROUGH THE TABS (14 Nov 2026, driver phone plan item 18): the bar's
+// page shows whichever page its history now says - a kept page playing out
+// of sight comes back as it was (hcGo), the Live page holding the bar takes
+// it back (hcUnhold). Home with nothing behind it leaves the app.
+try {
+  addEventListener('popstate', () => {
+    if (!SHELL && !hcHeld) return;
+    const path = location.pathname + location.search + location.hash;
+    if (hcHeld && hcPathOf(path) === hcPathOf(hcHeldPath)) { hcUnhold(); return; }
+    if (hcInside(path)) { if (typeof hcCount === 'function') hcCount('back_used'); hcGo(path); }
+  });
+} catch (e) { /* no window events here */ }
 function hcTop() {
   try {
     const doc = hcShown ? hcShown.contentDocument : document;
@@ -2519,7 +2580,16 @@ function hcHushListen() {
       const waiting = ahead && page === aheadFor ? ahead : null;
       ahead = null;
       let sent = false;
-      const send = () => { if (!sent) { sent = true; hcGo(u.pathname + u.search + u.hash); } };
+      // A step in the phone's history for each tab (14 Nov 2026, driver
+      // phone plan item 18): the frames never made one, so Android's Back
+      // left the app from any tab. Back now walks the tabs, to Home and out.
+      const send = () => {
+        if (sent) return;
+        sent = true;
+        const to = u.pathname + u.search + u.hash;
+        try { history.pushState({ hc: 1 }, '', to); } catch (e2) { /* Back leaves, as before */ }
+        hcGo(to);
+      };
       if (waiting) { waiting.then(send, send); setTimeout(send, 300); } else send();
       return;
     }
@@ -5915,7 +5985,7 @@ const WORDY = /driver|car|name|class|team|status/i;
 // draws as an empty row rather than throwing, which used to blank the whole
 // board until the next good frame. A cell that is not an object is drawn
 // as empty for the same reason.
-function cells(row, columns) {
+function cells(row, columns, roles) {
   const list = row && Array.isArray(row.cells) ? row.cells : [];
   return list.map((raw, i) => {
     const cell = raw && typeof raw === 'object' ? raw : {};
@@ -5923,7 +5993,9 @@ function cells(row, columns) {
     const align = i === 0 || WORDY.test(label) ? '' : ' n';
     const tone = cell.emphasis && cell.emphasis !== 'none' ? ' e-' + esc(cell.emphasis) : '';
     const text = /driver|name/i.test(label) ? nm(cell.text) : esc(cell.text);
-    return '<td class="' + (i === 0 ? 'pos' : '') + align + tone + '">' + text + '</td>';
+    // k: one of the four a phone keeps (see A BOARD MADE FOR A PHONE).
+    const keep = roles && typeof boardKeeps === 'function' && boardKeeps(roles, i) ? ' k' : '';
+    return '<td class="' + (i === 0 ? 'pos' : '') + align + tone + keep + '">' + text + '</td>';
   }).join('');
 }
 
@@ -6073,7 +6145,8 @@ function drawBar(state, over, at, rows, mode) {
   bar.innerHTML = '<div class="lp-top"><span class="lp-id"><span class="kick"><i></i>' + esc(kick) + '</span>'
     + '<span class="state">' + esc(said) + '</span></span>' + right + '</div>'
     + (total > 0 ? lbBar(done, total, over) : lbTimeBar(secsLeft, raceSecs))
-    + (over ? '' : lbFollow(state, list, left))
+    // The followed driver's line lives on their card under this since 14 Nov
+    // 2026 (see YOUR CARD ON LIVE).
     + (info || next ? '<div class="lp-foot"><span>' + info + '</span>' + next + '</div>' : '');
 }
 
@@ -6537,14 +6610,63 @@ const liveMap = (function () {
   return { take: take, hide: hide };
 })();
 
+// A BOARD MADE FOR A PHONE (14 Nov 2026, driver phone plan item 4; mockup
+// relay/mockups/live-phone-board.html). At 375 px the club's seven columns
+// were 479 px in a 342 px box, and GAP and TREND - what a driver in the pits
+// wants most - were off the edge. On a phone (under 480 px) the board keeps
+// four: POS, DRIVER, the club's own gap column and LAST. A tap on a row
+// opens the rest of it in place; "All columns" brings back the full table;
+// the driver's own row sticks to the edge of the screen it is scrolling off.
+// Which column is which is read from the club's own headings.
+function boardRoles(columns) {
+  const at = (re) => columns.findIndex((c) => re.test(String(c)));
+  return {
+    driver: at(/driver|name/i),
+    gap: at(/^(gap|interval|behind)/i),
+    last: at(/last/i),
+    best: at(/best/i),
+    laps: at(/^laps?$/i),
+    trend: at(/trend/i),
+  };
+}
+function boardKeeps(roles, i) {
+  return i === 0 || i === roles.driver || i === roles.gap || i === roles.last;
+}
+function rowName(row, roles) {
+  if (row && typeof row.name === 'string' && row.name !== '') return row.name;
+  const c = row && Array.isArray(row.cells) && roles.driver >= 0 ? row.cells[roles.driver] : null;
+  return c && typeof c === 'object' ? String(c.text || '') : '';
+}
+function cellText(row, i) {
+  const c = row && Array.isArray(row.cells) && i >= 0 ? row.cells[i] : null;
+  return c && typeof c === 'object' ? String(c.text || '') : '';
+}
+// The row a tap opened (by driver), and whether every column is on show.
+let boardOpen = '';
+let boardAll = false;
+let boardState = null;
+
 function drawBoard(state) {
+  boardState = state;
   const columns = Array.isArray(state.columns) ? state.columns : [];
   const rows = Array.isArray(state.standings) ? state.standings : [];
-  const html = '<div class="card"><table><thead><tr>' +
-    columns.map((c, i) => '<th class="' + (i === 0 ? 'pos' : '') + (i === 0 || WORDY.test(c) ? '' : ' n') + '">' + esc(c) + '</th>').join('') +
+  const roles = boardRoles(columns);
+  const mine = typeof youName === 'function' ? youName() : '';
+  const hiding = columns.some((c, i) => !boardKeeps(roles, i));
+  const more = (r) => '<tr class="bmore"><td class="bmc" colspan="' + columns.length + '"><div class="bm">'
+    + columns.map((c, i) => boardKeeps(roles, i) ? '' : '<span><b>' + esc(cellText(r, i) || '-') + '</b><i>' + esc(c) + '</i></span>').join('')
+    + '</div></td></tr>';
+  const html = '<div class="card' + (boardAll ? ' all' : '') + '"><table><thead><tr>' +
+    columns.map((c, i) => '<th class="' + (i === 0 ? 'pos' : '') + (i === 0 || WORDY.test(c) ? '' : ' n') + (boardKeeps(roles, i) ? ' k' : '') + '">' + esc(c) + '</th>').join('') +
     '</tr></thead><tbody>' +
-    rows.map((r) => '<tr>' + cells(r, columns) + '</tr>').join('') +
+    rows.map((r) => {
+      const name = rowName(r, roles);
+      const open = name !== '' && name === boardOpen;
+      return '<tr data-row="' + esc(name) + '"' + (name !== '' && name === mine ? ' class="me"' : '') + (hiding ? ' aria-expanded="' + open + '"' : '') + '>'
+        + cells(r, columns, roles) + '</tr>' + (open && hiding ? more(r) : '');
+    }).join('') +
     '</tbody></table></div>' +
+    (hiding ? '<p class="ballc"><button type="button" class="linkish" data-all>' + (boardAll ? 'Fewer columns' : 'All columns') + '</button></p>' : '') +
     // WHAT THE * MEANS (7 Nov 2026, known issues): the laptop marks a lap
     // count that includes laps race control counted by hand ("12*"), and
     // says so with handCounted, so the board carries the same legend the
@@ -6564,6 +6686,132 @@ function drawBoard(state) {
   boardHtml = html;
   const card = left && board.querySelector ? board.querySelector('.card') : null;
   if (card) card.scrollLeft = left;
+}
+
+// YOUR CARD ON LIVE (14 Nov 2026, driver phone plan item 4). Above the
+// board, for the driver this phone follows - or, with nobody followed, the
+// driver signed in on Me: a big position, the gap to the car ahead and the
+// car behind with their names, a line spacing the three by their gaps, and
+// last, best, laps and trend. The flag card's one line about the followed
+// driver (closing, losing, what they need a lap) moved in here. "You" when
+// it is the driver signed in on this phone; "Following" for anybody else,
+// so being a driver and following one never look the same (item 2).
+const you = document.getElementById('you');
+let youSaid = '';
+let youSaidAt = 0;
+
+function youSignedIn() {
+  try {
+    const code = meCode();
+    const d = code ? meDrivers().find((x) => x.c === code) : null;
+    return d && d.n ? d.n : '';
+  } catch (e) { return ''; }
+}
+function youName() {
+  return memory || youSignedIn();
+}
+function youHide() {
+  if (!you) return;
+  try { document.body.classList.remove('has-you'); } catch (e) { /* no page */ }
+  you.hidden = true;
+  you.innerHTML = '';
+}
+// The gap from this car to the one ahead (or the next car to this one):
+// the board's own figure when it has one (row.ahead, an Interval column),
+// else worked out from the two cars' Gap to P1 - a club showing Gap to P1
+// still gets both gaps on the card. Laps (+1L) stay laps.
+function youGap(state, row, pos, aheadRow) {
+  const text = lbGapText(state, row, pos);
+  const secs = lbGapSecs(text);
+  if (text !== '' && (secs !== null || /L/i.test(text))) return { text: text, secs: secs };
+  const columns = Array.isArray(state.columns) ? state.columns : [];
+  const at = columns.findIndex((c) => /^gap/i.test(String(c)));
+  if (at < 0 || !aheadRow) return { text: text, secs: secs };
+  const mine = cellText(row, at);
+  const theirs = cellText(aheadRow, at);
+  if (/L/i.test(mine) && !/L/i.test(theirs)) return { text: mine, secs: null };
+  const m = lbGapSecs(mine);
+  const t = pos === 2 ? 0 : lbGapSecs(theirs);
+  if (m === null || t === null) return { text: text, secs: secs };
+  const d = Math.max(0, m - t);
+  return { text: '+' + d.toFixed(2), secs: d };
+}
+function drawYou(state, rows, stale) {
+  if (!you) return;
+  const who = youName();
+  const columns = Array.isArray(state.columns) ? state.columns : [];
+  const roles = boardRoles(columns);
+  const mine = who ? rows.filter((r) => rowName(r, roles) === who) : [];
+  if (mine.length !== 1) { youHide(); return; }
+  const row = mine[0];
+  const pos = rows.indexOf(row) + 1;
+  const ahead = pos > 1 ? rows[pos - 2] : null;
+  const behind = rows[pos] || null;
+  const gA = ahead ? youGap(state, row, pos, ahead) : null;
+  const gB = behind ? youGap(state, behind, pos + 1, row) : null;
+  const isYou = who === youSignedIn() && who !== '';
+  const gapWords = (g, tail) => !g ? '' : g.secs !== null ? g.secs.toFixed(2) + '<em>' + tail + '</em>' : esc(g.text.replace(/^\\+/, ''));
+  const line = (name, g, cls, arrow, tail, none) => '<div class="yg ' + cls + '"><span class="ar" aria-hidden="true">' + arrow + '</span>'
+    + '<span class="n">' + (name ? esc(name) : none) + '</span><span class="t">' + (g ? gapWords(g, tail) : esc(cls === 'ahead' ? 'Leading' : 'Last on road')) + '</span></div>';
+  // The three dots spaced by their gaps, on a scale of the bigger gap.
+  const a = gA && gA.secs !== null ? gA.secs : null;
+  const b = gB && gB.secs !== null ? gB.secs : null;
+  const scale = Math.max(a || 0, b || 0) * 1.2 || 1;
+  const mid = !ahead ? 12 : !behind ? 88 : 50;
+  const half = !ahead || !behind ? 76 : 44;
+  let dots = '<span class="ydot me" style="left:' + mid + '%"></span>';
+  if (ahead) { const x = mid - half * Math.min(1, a === null ? 1 : a / scale); dots += '<span class="ydot" style="left:' + x.toFixed(1) + '%"></span>'; }
+  if (behind) { const x = mid + half * Math.min(1, b === null ? 1 : b / scale); dots += '<span class="ydot" style="left:' + x.toFixed(1) + '%"></span>'; }
+  const stat = (i, label, cls) => '<div><b class="' + (cls || '') + '">' + esc(cellText(row, i) || '-') + '</b><span>' + label + '</span></div>';
+  const left = lbToGo(state.countdown);
+  const extra = state.state === 'Finished' ? '' : lbFollow(state, rows, left);
+  you.className = 'you' + (stale ? ' stale' : '');
+  you.innerHTML = '<div class="yw"><span class="chip' + (isYou ? '' : ' ghost') + '">' + (isYou ? 'You' : '\\u2606 Following') + '</span> <b>' + esc(who) + '</b></div>'
+    + '<div class="ym"><div class="yp">P' + pos + '<small>of ' + rows.length + '</small></div><div class="ygs">'
+    + line(ahead ? rowName(ahead, roles) : '', gA, 'ahead', '\\u25B2', 'to catch', 'Nobody ahead')
+    + line(behind ? rowName(behind, roles) : '', gB, 'behind', '\\u25BC', 'clear', 'Nobody behind')
+    + '</div></div>'
+    + '<div class="yl" aria-hidden="true">' + dots + '</div>'
+    + '<div class="ys">' + stat(roles.last, 'Last') + stat(roles.best, 'Best', 'best') + stat(roles.laps, 'Laps') + stat(roles.trend, 'Trend') + '</div>'
+    + (extra ? '<div class="yx">' + extra.replace(/^<div class="lp-me">|<\\/div>$/g, '') + '</div>' : '')
+    + '<p class="sr" aria-live="polite">' + esc(youSaid) + '</p>';
+  you.hidden = false;
+  // The Following chip says the same thing over the board: not while the card shows.
+  try { document.body.classList.add('has-you'); } catch (e) { /* no page */ }
+  // Said to a screen reader on a change, at most every ten seconds.
+  const words = (isYou ? 'You\\u2019re ' : who + ' is ') + ordinalWord(pos)
+    + (gA && gA.secs !== null && ahead ? ', ' + gA.secs.toFixed(2) + ' behind ' + rowName(ahead, roles) : pos === 1 ? ', leading' : '') + '.';
+  if (words !== youSaid && Date.now() - youSaidAt > 10000) {
+    youSaid = words;
+    youSaidAt = Date.now();
+    const sr = you.querySelector ? you.querySelector('.sr') : null;
+    if (sr) sr.textContent = words;
+  }
+}
+function ordinalWord(n) {
+  const words = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+  return words[n - 1] || ('P' + n);
+}
+
+// A tap on a row opens the rest of it (a name tapped follows, as everywhere);
+// All columns shows the club's whole table.
+if (board && typeof board.addEventListener === 'function') {
+  board.addEventListener('click', (e) => {
+    const t = e.target;
+    if (!t || typeof t.closest !== 'function' || t.closest('.nm')) return;
+    if (t.closest('[data-all]')) {
+      boardAll = !boardAll;
+      boardHtml = '';
+      if (boardState) drawBoard(boardState);
+      return;
+    }
+    const tr = t.closest('tr[data-row]');
+    if (!tr) return;
+    const name = tr.getAttribute('data-row') || '';
+    boardOpen = boardOpen === name ? '' : name;
+    boardHtml = '';
+    if (boardState) drawBoard(boardState);
+  });
 }
 
 // How long this page has been watching without a break, for settling Who
@@ -6621,6 +6869,7 @@ function render(state, seen, at, empty, copy) {
   if (board.classList) board.classList.toggle('stale', false);
 
   if (rows.length > 0 && running === 'Finished' && age >= LB_KEEP_MS) {
+    youHide();
     drawFolded(state, at);
     return;
   }
@@ -6630,9 +6879,11 @@ function render(state, seen, at, empty, copy) {
     liveMap.hide();
     if (rows.length > 0) {
       drawBoard(state);
+      drawYou(state, rows, true);
       if (board.classList) board.classList.toggle('stale', true);
       posChart.draw(rows);
     } else {
+      youHide();
       board.innerHTML = '<p class="note">No update from the track since ' + esc(whenSaid(at)) + '.</p>';
       boardHtml = '';
       posChart.hide();
@@ -6655,6 +6906,7 @@ function render(state, seen, at, empty, copy) {
         ? 'Green flag. The board fills as the cars cross the line.'
         : 'The cars are lining up. The board fills once the race is under way.') + '</p>';
       boardHtml = '';
+      youHide();
       posChart.hide();
       // The track with nobody on it yet, once the green has gone.
       if (running === 'Racing') liveMap.take(state.map, [], posChart.colourOf); else liveMap.hide();
@@ -6667,9 +6919,11 @@ function render(state, seen, at, empty, copy) {
     drawBar(state, !!kept, kept ? kept.at : 0, kept && Array.isArray(kept.state.standings) ? kept.state.standings : []);
     if (kept) {
       drawBoard(kept.state);
+      drawYou(kept.state, Array.isArray(kept.state.standings) ? kept.state.standings : [], false);
       posChart.draw(Array.isArray(kept.state.standings) ? kept.state.standings : []);
       return;
     }
+    youHide();
     board.innerHTML = '<p class="note">' + (empty || 'Nobody is on track. The board fills as soon as a session starts.') + '</p>';
     boardHtml = '';
     posChart.hide();
@@ -6683,6 +6937,7 @@ function render(state, seen, at, empty, copy) {
   keepRace(state, at || Date.now());
   posChart.take(rows);
   drawBoard(state);
+  drawYou(state, rows, false);
   posChart.draw(rows);
   if (over) liveMap.hide(); else liveMap.take(state.map, rows, posChart.colourOf);
 }
@@ -7520,6 +7775,8 @@ export function livePage(club: string, clubName: string, context: PageContext = 
     // second set under Message the announcer said the same thing twice.
     // Without Listen it stays, as the only way to read them.
     body: '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
+      // Your card (driver phone plan item 4), filled by LIVE_JS.
+      + '<section id="you" class="you" aria-label="Your race" hidden></section>'
       + '<div id="board"></div>'
       + '<div id="livemap" class="card livepos" hidden><h3>Track map</h3><div id="lmapbody"></div></div>'
       + '<div id="livepos" class="card livepos" hidden><h3>Position by lap</h3><div id="lposbody"></div></div>'
