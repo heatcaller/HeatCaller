@@ -44,7 +44,7 @@ public sealed class RaceAnalyticsPaceTests : IDisposable
 
         Assert.Equal("Consistency", consistency.Caption);
         Assert.NotNull(consistency.Value);
-        Assert.Contains("Lap 9 pushed it up", consistency.Reading);
+        Assert.Contains("Lap 10 pushed it up", consistency.Reading); // the same lap the headline names
 
         // The layout has a length, so a typical lap's loss is in car lengths.
         Assert.Contains("car length", table.Reading);

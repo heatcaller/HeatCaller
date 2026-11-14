@@ -435,7 +435,7 @@ public sealed class PaceAnalysisControl : UserControl
         }
         else
         {
-            _consistency.Show(row.ConsistencyPercent, $"{row.ConsistencyPercent:0.0}%", ConsistencyReading(row, laps));
+            _consistency.Show(row.ConsistencyPercent, $"{row.ConsistencyPercent:0.0}%", ConsistencyReading(row, laps, RaceCoach.LapNumbers(entry)));
             _table.Show(row.PotentialGainMs / 1000.0, $"{row.PotentialGainMs / 1000.0:0.0}s", TableReading(row, trackCars));
             _fade.Show(
                 row.FadeMs == 0 ? null : Math.Max(0, row.FadeMs / 1000.0),
@@ -490,9 +490,10 @@ public sealed class PaceAnalysisControl : UserControl
     /// <summary>
     /// What a driver's consistency means. When mistakes pushed it up, says
     /// what it would have been without them: the crash lap is one thing to
-    /// fix, the drift of the rest is another.
+    /// fix, the drift of the rest is another. The lap is named by the
+    /// chart's number (lapNumbers), as the headline names it.
     /// </summary>
-    internal static string ConsistencyReading(PaceAnalysis.Row row, IReadOnlyList<long> laps)
+    internal static string ConsistencyReading(PaceAnalysis.Row row, IReadOnlyList<long> laps, IReadOnlyList<int>? lapNumbers = null)
     {
         var mistakes = RaceCoach.MistakeLaps(laps);
         var clean = laps.Where((_, i) => !mistakes.Contains(i)).ToList();
@@ -505,7 +506,7 @@ public sealed class PaceAnalysisControl : UserControl
         if (without is double rest)
         {
             var which = mistakes.Count == 1
-                ? $"Lap {mistakes[0] + 1} pushed it up"
+                ? $"Lap {(lapNumbers is { } numbers && mistakes[0] < numbers.Count ? numbers[mistakes[0]] : mistakes[0] + 2)} pushed it up"
                 : $"{mistakes.Count} mistake laps pushed it up";
 
             return $"{lead} {which}. Without {(mistakes.Count == 1 ? "it" : "them")} it's {rest:0.0}%.";
