@@ -533,56 +533,123 @@ public sealed class TrackLayoutEditForm : Form
 }
 
 /// <summary>
-/// Lists saved track layouts with add/edit/delete, and shows the one
-/// selected beside the list.
+/// The club's track layouts (13 Nov 2026, the rework Asher picked from four
+/// mock-ups - B, "Plan Stage", with D's "racing on tonight"): a thin list of
+/// layouts down the left, each with a picture of its plan, and the one picked
+/// filling the rest of the page - its plan as large as the card allows, the
+/// commands for it on the bar above the plan, and what is known about it in
+/// a strip of facts under the plan.
 ///
-/// On the layout pieces (LayoutPieces.cs): two cards side by side, the
-/// list with its buttons under it, and the selected track - its name and
-/// its picture, as big as the card. It used to be a 400px list and a 240px
-/// preview box placed by hand over a 680x360 floor, the buttons at a fixed
-/// y, all in faces handed out once - so a short window cut the buttons off
-/// and a larger text size ran the name into the picture.
+/// The layout the open race day races on wears "Racing on tonight", and any
+/// other can be made tonight's with Use Tonight - which sets the race day's
+/// track, the one Race Control's Track box follows.
+///
+/// It used to be a table of four columns, mostly "(none yet)" and "-", with
+/// Delete and Reset Record as loud as Add beside Edit, and the plan alone in
+/// a tall card of its own. Reset Record and Delete are under More now.
 /// </summary>
 public sealed class TrackLayoutManagerControl : UserControl
 {
     private readonly TrackLayoutStore _store;
-    private readonly ListView _list = new();
+    private readonly LayoutList _list = new();
     private readonly Label _lblPreviewName = new();
+    private readonly Label _lblTonight = new();
     private readonly PictureBox _picPreview = new();
     private readonly Label _lblPreviewEmpty = new();
+    private readonly Button _btnDrawPlan = new() { Text = "Draw It in Track Designer..." };
+    private readonly Button _btnDesign = new() { Text = "Open in Track Designer..." };
+    private readonly Button _btnUseTonight = new() { Text = "Use Tonight" };
+    private readonly Button _btnEdit = new() { Text = "Edit Details..." };
+    private readonly Button _btnMore = new() { Text = "More ▾" };
+
+    /// <summary>The commands for the layout picked, on the bar above the plan - hidden, bar and all, with nothing picked.</summary>
+    private readonly ButtonBar _commands = new(alignRight: true);
+    private readonly ReadinessStrip _facts = new();
+    private readonly Label _lblMore = new();
     private readonly AppSettings _settings;
     private readonly UndoService _undo;
+
+    /// <summary>The race days, for which layout is tonight's (Use Tonight). Null in a host without them.</summary>
+    private readonly RaceEventStore? _events;
 
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
-    /// <summary>The selected track's card at the normal text size - about two fifths of the page, between these.</summary>
-    private const int PreviewLeastWidth = 260;
-    private const int PreviewMostWidth = 480;
+    /// <summary>The list's column at the normal text size.</summary>
+    private const int ListWidth = 290;
 
     /// <summary>The least the picture gets at the normal text size - below that the page scrolls.</summary>
-    private const int PictureLeastHeight = 160;
+    private const int PictureLeastHeight = 200;
 
     /// <summary>The club's saved races, for the designer's lap time (Track Designer overhaul, Phase 6). Null in a host without them.</summary>
     private readonly SessionHistoryStore? _sessions;
 
-    public TrackLayoutManagerControl(TrackLayoutStore store, AppSettings settings, UndoService undo, SessionHistoryStore? sessions = null)
+    public TrackLayoutManagerControl(TrackLayoutStore store, AppSettings settings, UndoService undo, SessionHistoryStore? sessions = null,
+        RaceEventStore? events = null)
     {
         _sessions = sessions;
         _store = store;
         _undo = undo;
         _settings = settings;
+        _events = events;
 
         Dock = DockStyle.Fill;
 
         // The body face, worn rather than set once, so it follows the text
-        // size - see TextSize. No MinimumSize: the 680x360 floor was honoured
-        // over the size the page was given. A short window scrolls the page
-        // instead (FillPage).
+        // size - see TextSize. A short window scrolls the page (FillPage).
         _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshList();
+
+        // Tonight's track can change on Setup, or a day be started, while
+        // this page is up.
+        if (_events is not null)
+        {
+            _events.CurrentChanged += OnDayChanged;
+            _events.CurrentEdited += OnDayChanged;
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            if (_events is not null)
+            {
+                _events.CurrentChanged -= OnDayChanged;
+                _events.CurrentEdited -= OnDayChanged;
+            }
+
+            _picPreview.Image?.Dispose();
+            _list.ClearPictures();
+        }
+
+        base.Dispose(disposing);
+    }
+
+    /// <summary>The race day changed: which layout is tonight's may have. Posted - the store says nothing about its thread.</summary>
+    private void OnDayChanged(object? sender, EventArgs e)
+    {
+        if (IsDisposed || !IsHandleCreated)
+        {
+            return;
+        }
+
+        try
+        {
+            BeginInvoke(new Action(() =>
+            {
+                if (!IsDisposed)
+                {
+                    RefreshList();
+                }
+            }));
+        }
+        catch (InvalidOperationException)
+        {
+            // The window went between the check and the post.
+        }
     }
 
     /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
@@ -599,59 +666,85 @@ public sealed class TrackLayoutManagerControl : UserControl
         _textSize.Apply();
     }
 
+    /// <summary>The open race day - tonight - or null when none is open.</summary>
+    private RaceEvent? Tonight => _events?.Active is { IsLegacy: false, IsOpen: true } day ? day : null;
+
+    /// <summary>Whether a layout is the one the open race day races on.</summary>
+    private bool IsTonights(TrackLayout track) =>
+        Tonight is { } day && string.Equals(day.TrackLayoutName?.Trim(), track.Name.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The layout picked in the list, by id, or null.</summary>
+    private string? SelectedId => _list.SelectedItem is LayoutList.Entry entry ? entry.Id : null;
+
+    /// <summary>For the tests: the layouts listed, the one picked, and what its stage says.</summary>
+    internal (IReadOnlyList<string> Listed, string? Picked, string Tonight, IReadOnlyList<ReadinessStrip.Tile> Facts) Shows =>
+        (_list.Items.Cast<LayoutList.Entry>().Select(e => e.Name).ToList(),
+         SelectedId is { } id ? _store.Get(id)?.Name : null,
+         _lblTonight.Visible ? _lblTonight.Text : string.Empty,
+         _facts.Tiles);
+
     private void BuildLayout()
     {
         // --- The layouts ---
-        _list.View = View.Details;
-        _list.FullRowSelect = true;
-
-        // Who holds each sector record shows on hover - see RefreshList.
-        _list.ShowItemToolTips = true;
-        _list.MultiSelect = false;
-        _list.GridLines = true;
-        _list.Columns.Add("Name");
-        _list.Columns.Add("Record");
-        _list.Columns.Add("Attachment");
-        _list.Columns.Add("Plan");
-        _list.DoubleClick += (_, _) => EditSelected();
         _list.SelectedIndexChanged += (_, _) =>
         {
             RefreshPreview();
-            if (_list.SelectedItems.Count > 0)
+
+            if (SelectedId is { } id && _store.Get(id) is { } track)
             {
-                _settings.LastViewedTrackLayoutName = _list.SelectedItems[0].Text;
+                _settings.LastViewedTrackLayoutName = track.Name;
                 _settings.Save();
             }
         };
+        _list.DoubleClick += (_, _) => EditSelected();
+        _textSize.Keep(_list.Remeasure);
 
-        // The name takes what the others leave - see Pieces.FitListColumns.
-        Pieces.FitListColumns(_list, 0, 140, 130, 110, 110);
-
-        var btnAdd = new Button { Text = "Add..." };
-        btnAdd.Click += (_, _) => AddNew();
-
-        var btnEdit = new Button { Text = "Edit..." };
-        btnEdit.Click += (_, _) => EditSelected();
-
-        var btnDelete = new Button { Text = "Delete" };
-        btnDelete.Click += (_, _) => DeleteSelected();
-
-        var btnResetRecord = new Button { Text = "Reset Record" };
-        btnResetRecord.Click += (_, _) => ResetSelectedRecord();
-
-        var btnDesign = new Button { Text = "Track Designer..." };
-        btnDesign.Click += (_, _) => DesignSelected();
+        // New Layout: a menu, because most layouts start in the designer and
+        // some are only a name and a photo.
+        var btnNew = new Button { Text = "+ New Layout" };
+        var newMenu = new ContextMenuStrip();
+        var draw = new ToolStripMenuItem("Draw It in Track Designer...");
+        draw.Click += (_, _) => DesignNew();
+        var named = new ToolStripMenuItem("Name and Photo Only...");
+        named.Click += (_, _) => AddNew();
+        newMenu.Items.Add(draw);
+        newMenu.Items.Add(named);
+        AppTheme.StyleContextMenu(newMenu);
+        btnNew.Click += (_, _) => newMenu.Show(btnNew, new Point(0, btnNew.Height));
+        AppTheme.StyleButton(btnNew, AppTheme.ButtonKind.Primary);
 
         var layouts = new Section("Track layouts");
 
-        layouts.AddFill(_list, () => _list.Font.Height * 2 + 4 * (_list.Font.Height + 6));
-        layouts.Add(new ButtonBar().With(btnAdd, btnEdit, btnDelete, btnResetRecord, btnDesign), gapBelow: 0);
+        layouts.Add(new ButtonBar().With(btnNew));
+        layouts.AddFill(_list, () => 3 * _list.ItemHeight, gapBelow: 0);
 
         // --- The selected track ---
         _lblPreviewName.AutoSize = true;
-        _textSize.Wear(_lblPreviewName, () => AppTheme.HeadingFont);
+        _lblPreviewName.Padding = new Padding(0, UiLayout.AtDpi(2), UiLayout.AtDpi(8), 0);
+        _textSize.Wear(_lblPreviewName, () => AppTheme.TitleFont);
 
-        _picPreview.BorderStyle = BorderStyle.FixedSingle;
+        // "Racing on tonight · Friday Club Night" - D's tag, beside the name.
+        _lblTonight.AutoSize = true;
+        _lblTonight.ForeColor = AppTheme.Success;
+        _lblTonight.Padding = new Padding(0, UiLayout.AtDpi(11), 0, 0);
+        _lblTonight.Visible = false;
+        _textSize.Wear(_lblTonight, () => AppTheme.MicroFont);
+
+        _btnDesign.Click += (_, _) => DesignSelected();
+        _btnDrawPlan.Click += (_, _) => DesignSelected();
+        _btnUseTonight.Click += (_, _) => UseTonight();
+        _btnEdit.Click += (_, _) => EditSelected();
+        _btnMore.Click += (_, _) => ShowMoreMenu();
+        AppTheme.StyleButton(_btnDesign, AppTheme.ButtonKind.Primary);
+        AppTheme.StyleButton(_btnDrawPlan, AppTheme.ButtonKind.Primary);
+
+        // The name on the left, the commands for it on the right, the
+        // designer furthest right.
+        var title = new ButtonBar().With(_lblPreviewName, _lblTonight);
+        var commands = _commands;
+        commands.With(_btnDesign, _btnUseTonight, _btnEdit, _btnMore);
+
+        _picPreview.BorderStyle = BorderStyle.None;
         _picPreview.SizeMode = PictureBoxSizeMode.Zoom;
         _picPreview.BackColor = AppTheme.Surface;
         _picPreview.Visible = false;
@@ -659,23 +752,44 @@ public sealed class TrackLayoutManagerControl : UserControl
         // Shown when there is no picture, over the room the picture keeps -
         // which stays, so the card does not change shape as the selection
         // does.
-        _lblPreviewEmpty.Text = "Select a track layout to see it here.";
+        _lblPreviewEmpty.Text = "Pick a track layout to see it here.";
         _lblPreviewEmpty.AutoSize = true;
         _lblPreviewEmpty.ForeColor = AppTheme.TextMuted;
+        _btnDrawPlan.Visible = false;
+
+        // What the facts strip cannot fit: the posts' names, the sector
+        // records and the notes, in a line or two under it.
+        _lblMore.AutoSize = true;
+        _lblMore.ForeColor = AppTheme.TextMuted;
+        _textSize.Wear(_lblMore, () => AppTheme.SmallFont);
+
+        _textSize.Keep(_facts.Remeasure);
+        _facts.TileClicked += key =>
+        {
+            if (key == "pieces")
+            {
+                DesignSelected();
+            }
+            else if (key != "record")
+            {
+                EditSelected();
+            }
+        };
 
         var preview = new Section("Selected track");
 
-        preview.Add(_lblPreviewName);
-        preview.Add(_lblPreviewEmpty);
-        preview.AddFill(_picPreview, () => UiLayout.AtTextSize(PictureLeastHeight), gapBelow: 0);
+        preview.Add(new SplitBar(title, commands));
+        preview.Add(_lblPreviewEmpty, gapBelow: UiLayout.HintGap);
+        preview.Add(new ButtonBar().With(_btnDrawPlan));
+        preview.AddFill(_picPreview, () => UiLayout.AtTextSize(PictureLeastHeight));
+        preview.Add(_facts, gapBelow: UiLayout.HintGap);
+        preview.Add(_lblMore, gapBelow: 0);
 
         // --- The page ---
-        Beside? band = null;
+        var band = new Beside(() => UiLayout.AtTextSize(ListWidth)) { SideOnLeft = true };
 
-        band = new Beside(() => PreviewWidth(band?.Width ?? 0));
-
-        band.AddFill(layouts, layouts.LeastHeight);
-        band.AddSideFill(preview, preview.LeastHeight, gapBelow: 0);
+        band.AddFill(preview, preview.LeastHeight);
+        band.AddSideFill(layouts, layouts.LeastHeight, gapBelow: 0);
 
         var page = new FillPage();
 
@@ -684,89 +798,116 @@ public sealed class TrackLayoutManagerControl : UserControl
         Controls.Add(page);
     }
 
-    /// <summary>The selected track's card: about two fifths of the page, between 260px and 480px at the normal text size, at the size in use.</summary>
-    private static int PreviewWidth(int page) =>
-        Math.Clamp((int)(page * 0.4f), UiLayout.AtTextSize(PreviewLeastWidth), UiLayout.AtTextSize(PreviewMostWidth));
-
     /// <summary>Called when this page becomes visible - layouts can gain records from Race Control while it's inactive.</summary>
     public void RefreshAll() => RefreshList();
 
     private void RefreshList()
     {
-        var previouslySelectedId = _list.SelectedItems.Count > 0 ? (string)_list.SelectedItems[0].Tag! : null;
+        var previouslySelectedId = SelectedId;
+        var entries = new List<LayoutList.Entry>();
 
-        _list.Items.Clear();
         foreach (var t in _store.All)
         {
-            var item = new ListViewItem(t.Name) { Tag = t.Id };
-            // The sector records after the lap record, for the way the lap is
-            // cut now - hover for who holds each.
-            var sectorRecords = t.HasSectorRecords()
-                ? t.CurrentSectorRecords().Where(r => r is not null).Select(r => r!).ToList()
-                : new List<SectorRecord>();
+            var bits = new List<string>();
 
-            var sectors = sectorRecords.Count == 0
-                ? string.Empty
-                : "  ·  " + string.Join(", ", sectorRecords.Select(r => $"S{r.Sector} {Sectors.Format(r.Ms)}"));
-
-            item.SubItems.Add(t.RecordLapMs > 0
-                ? $"{t.RecordLapMs / 1000.0:0.000}s - {t.RecordHolderName}{sectors}"
-                : sectorRecords.Count > 0 ? "(none yet)" + sectors : "(none yet)");
-
-            if (sectorRecords.Count > 0)
+            if (t.Design is { IsEmpty: false } design)
             {
-                item.ToolTipText = string.Join(Environment.NewLine,
-                    sectorRecords.Select(r => $"Sector {r.Sector} record: {Sectors.Format(r.Ms)} by {r.Holder}{(r.SetUtc is { } set ? $", {set.ToLocalTime():d MMM yyyy}" : string.Empty)}"));
+                bits.Add($"{design.Tiles.Count} tiles");
             }
-            item.SubItems.Add(string.IsNullOrWhiteSpace(t.AttachmentFileName) ? "-" : t.AttachmentFileName);
-
-            item.SubItems.Add(t.Design is { IsEmpty: false } design
-                ? $"{design.Tiles.Count} tiles"
-                : "-");
-
-            _list.Items.Add(item);
-
-            var shouldSelect = previouslySelectedId is not null
-                ? t.Id == previouslySelectedId
-                : t.Name == _settings.LastViewedTrackLayoutName;
-            if (shouldSelect)
+            else
             {
-                item.Selected = true;
+                bits.Add("No plan");
             }
+
+            bits.Add(t.RecordLapMs > 0 ? $"{t.RecordLapMs / 1000.0:0.000}s" : "no record yet");
+
+            entries.Add(new LayoutList.Entry(t.Id, t.Name, string.Join(" · ", bits), IsTonights(t), t));
+        }
+
+        _list.SetEntries(entries);
+
+        // The layout picked before; else the one looked at last time; else
+        // tonight's; else the first.
+        var pick = entries.FindIndex(e => e.Id == previouslySelectedId);
+
+        if (pick < 0)
+        {
+            pick = entries.FindIndex(e => string.Equals(e.Name, _settings.LastViewedTrackLayoutName, StringComparison.Ordinal));
+        }
+
+        if (pick < 0)
+        {
+            pick = entries.FindIndex(e => e.Tonight);
+        }
+
+        if (pick < 0 && entries.Count > 0)
+        {
+            pick = 0;
+        }
+
+        if (_list.SelectedIndex != pick)
+        {
+            _list.SelectedIndex = pick;
         }
 
         RefreshPreview();
     }
 
-    /// <summary>Shows the selected track's name and photo (if it has one) in the side panel - updates live as the selection changes, no double-click needed.</summary>
+    /// <summary>
+    /// The stage for the layout picked: its name and whether it is tonight's,
+    /// its picture, and its facts - updated live as the selection changes.
+    /// </summary>
     private void RefreshPreview()
     {
         _picPreview.Image?.Dispose();
         _picPreview.Image = null;
 
-        if (_list.SelectedItems.Count == 0)
+        var track = SelectedId is { } id ? _store.Get(id) : null;
+
+        foreach (var command in new Control[] { _btnDesign, _btnEdit, _btnMore })
         {
-            _lblPreviewName.Text = string.Empty;
-            _picPreview.Visible = false;
-            _lblPreviewEmpty.Visible = true;
-            return;
+            command.Visible = track is not null;
         }
 
-        var id = (string)_list.SelectedItems[0].Tag!;
-        var track = _store.Get(id);
+        _commands.Visible = track is not null;
+
         if (track is null)
         {
+            _lblPreviewName.Text = _store.All.Count == 0 ? "No layouts yet" : string.Empty;
+            _lblTonight.Visible = false;
+            _btnUseTonight.Visible = false;
+            _picPreview.Visible = false;
+            _btnDrawPlan.Visible = _store.All.Count == 0;
+            _btnDrawPlan.Text = "Draw One in Track Designer...";
+            _lblPreviewEmpty.Text = _store.All.Count == 0
+                ? "Draw your first layout tile by tile, or start from one of the built-in RCP layouts."
+                : "Pick a track layout to see it here.";
+            _lblPreviewEmpty.Visible = true;
+            _facts.SetTiles(Array.Empty<ReadinessStrip.Tile>());
+            _facts.Visible = false;
+            _lblMore.Text = string.Empty;
             return;
         }
 
         _lblPreviewName.Text = track.Name;
+
+        // Tonight's, or a button to make it so - only with a race day open.
+        var tonight = Tonight;
+        var isTonights = IsTonights(track);
+
+        _lblTonight.Text = AppTheme.Spaced("● RACING TONIGHT");
+        _lblTonight.Visible = isTonights;
+        _btnUseTonight.Visible = tonight is not null && !isTonights;
+
+        var hasPlan = track.Design is { IsEmpty: false };
+        _btnDesign.Text = hasPlan ? "Open in Track Designer..." : "Draw in Track Designer...";
 
         // Whichever picture this track is set to show - the drawn plan or an
         // uploaded photo - with a fallback to the other when there is only
         // one of them.
         var image = TrackImagery.MainPicture(
             track,
-            new Size(Math.Max(120, _picPreview.Width * 2), Math.Max(120, _picPreview.Height * 2)),
+            new Size(Math.Max(240, _picPreview.Width * 2), Math.Max(160, _picPreview.Height * 2)),
             AppTheme.Surface);
 
         if (image is not null)
@@ -774,14 +915,185 @@ public sealed class TrackLayoutManagerControl : UserControl
             _picPreview.Image = image;
             _picPreview.Visible = true;
             _lblPreviewEmpty.Visible = false;
+            _btnDrawPlan.Visible = false;
         }
         else
         {
             _picPreview.Visible = false;
             _lblPreviewEmpty.Text = string.IsNullOrWhiteSpace(track.AttachmentFileName)
-                ? "No photo or plan yet - attach one, or draw the layout in the Track Designer."
+                ? "No plan or photo yet. Draw the layout tile by tile, or attach a photo in Edit Details."
                 : $"Attachment \"{track.AttachmentFileName}\" isn't an image that can be previewed here.";
             _lblPreviewEmpty.Visible = true;
+            // The bar above already says "Draw in Track Designer".
+            _btnDrawPlan.Visible = false;
+        }
+
+        _facts.SetTiles(FactsFor(track));
+        _facts.Visible = true;
+        _lblMore.Text = MoreAbout(track);
+    }
+
+    /// <summary>The strip under the plan: the lap record, the average lap, the length, the marshal posts and the pieces.</summary>
+    internal List<ReadinessStrip.Tile> FactsFor(TrackLayout track)
+    {
+        var tiles = new List<ReadinessStrip.Tile>
+        {
+            track.RecordLapMs > 0
+                ? new("record", "Lap record", $"{track.RecordLapMs / 1000.0:0.000}s",
+                    string.Join(" · ", new[] { track.RecordHolderName, track.RecordSetUtc?.ToLocalTime().ToString("d MMM") }
+                        .Where(s => !string.IsNullOrWhiteSpace(s))),
+                    null, AppTheme.Warning, Stands: true)
+                : new("record", "Lap record", "None yet", string.Empty, null, AppTheme.Warning),
+
+            new("lap", "Average lap", track.AverageLapSeconds is { } lap ? $"{lap:0.0}s" : "—",
+                track.AverageLapSeconds is null ? "not set" : string.Empty, null, AppTheme.Accent),
+
+            new("length", "Length", track.TrackLengthFeet is { } feet ? $"{feet:0} ft" : "—",
+                track.TrackLengthFeet is null ? "not set" : string.Empty, null, AppTheme.Accent),
+
+            new("posts", "Marshal posts", track.MarshalPostCount > 0 ? track.MarshalPostCount.ToString() : "None",
+                track.MarshalPostCount > 0 ? string.Empty : "not tracked", null, AppTheme.Accent),
+        };
+
+        if (track.Design is { IsEmpty: false } design)
+        {
+            var bounds = design.BoundsInTiles(includeRoute: false);
+            var size = bounds.Width > 0 ? $"{Math.Ceiling(bounds.Width):0} × {Math.Ceiling(bounds.Height):0}" : string.Empty;
+            var shortfall = PiecesShort(design);
+
+            tiles.Add(new("pieces", "Pieces", $"{design.Tiles.Count} tiles",
+                shortfall ?? size, null, shortfall is null ? AppTheme.Accent : AppTheme.Warning, Stands: shortfall is not null));
+        }
+        else
+        {
+            tiles.Add(new("pieces", "Pieces", "No plan", string.Empty, null, AppTheme.Accent));
+        }
+
+        return tiles;
+    }
+
+    /// <summary>"2 rail tiles short" - what the plan needs that the club doesn't own - or null when it owns enough, or hasn't said what it owns.</summary>
+    private string? PiecesShort(RcpTrackDesign design)
+    {
+        try
+        {
+            var lines = _settings.TrackStock?.Check(RcpPlan.Count(design), design.TileSizeMm) ?? Array.Empty<RcpStockLine>();
+            var shortLines = lines.Where(line => line.Known && line.Short).ToList();
+
+            return shortLines.Count switch
+            {
+                0 => null,
+                1 => $"{-shortLines[0].Left} {shortLines[0].Part.ToLowerInvariant()} short",
+                _ => $"{shortLines.Count} kinds of piece short",
+            };
+        }
+        catch (Exception)
+        {
+            // A stock list the check can't read says nothing, rather than
+            // taking the page down.
+            return null;
+        }
+    }
+
+    /// <summary>The marshal posts by name, the sector records and the notes - a line each, when there are any.</summary>
+    private static string MoreAbout(TrackLayout track)
+    {
+        var lines = new List<string>();
+
+        if (track.MarshalPostCount > 0)
+        {
+            lines.Add("Marshal posts: " + string.Join(" · ",
+                Enumerable.Range(0, track.MarshalPostCount).Select(i => $"{i + 1} {track.PostName(i)}")));
+        }
+
+        if (track.HasSectorRecords())
+        {
+            var records = track.CurrentSectorRecords().Where(r => r is not null).Select(r => r!).ToList();
+
+            if (records.Count > 0)
+            {
+                lines.Add("Sector records: " + string.Join(" · ",
+                    records.Select(r => $"S{r.Sector} {Sectors.Format(r.Ms)} {r.Holder}".Trim())));
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(track.Notes))
+        {
+            lines.Add("Notes: " + track.Notes.Trim().ReplaceLineEndings(" "));
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    /// <summary>The More menu: the two commands that take something away, each asking first.</summary>
+    private void ShowMoreMenu()
+    {
+        if (SelectedId is not { } id || _store.Get(id) is not { } track)
+        {
+            return;
+        }
+
+        var menu = new ContextMenuStrip();
+
+        var reset = new ToolStripMenuItem("Reset Record...")
+        {
+            Enabled = track.RecordLapMs > 0 || track.HasSectorRecords(),
+            ForeColor = AppTheme.Danger,
+        };
+        reset.Click += (_, _) => ResetSelectedRecord();
+
+        var delete = new ToolStripMenuItem("Delete Layout...") { ForeColor = AppTheme.Danger };
+        delete.Click += (_, _) => DeleteSelected();
+
+        menu.Items.Add(reset);
+        menu.Items.Add(delete);
+
+        AppTheme.StyleContextMenu(menu);
+        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
+        menu.Show(_btnMore, new Point(_btnMore.Width - menu.PreferredSize.Width, _btnMore.Height));
+    }
+
+    /// <summary>
+    /// Makes the layout picked tonight's: the open race day's track, which
+    /// Race Control's Track box follows (RaceEventStore.CurrentEdited), and
+    /// which records, pace and marshal posts are filed under. One undo puts
+    /// the day's track back.
+    /// </summary>
+    internal void UseTonight()
+    {
+        if (_events is null || Tonight is not { } day || SelectedId is not { } id || _store.Get(id) is not { } track)
+        {
+            return;
+        }
+
+        var before = day.TrackLayoutName;
+        var dayId = day.Id;
+        var events = _events;
+
+        _undo.Capture($"Race on '{track.Name}' tonight", () =>
+        {
+            if (events.Get(dayId) is { } target)
+            {
+                target.TrackLayoutName = before;
+                events.Upsert(target);
+            }
+        });
+
+        day.TrackLayoutName = track.Name;
+        _events.Upsert(day);
+        RefreshList();
+    }
+
+    /// <summary>The designer on a blank floor, for a new layout - New Layout's first choice.</summary>
+    private void DesignNew()
+    {
+        _list.SelectedIndex = -1;
+        DesignSelected();
+
+        // Cancelled: the stage goes back to a layout.
+        if (_list.SelectedIndex < 0)
+        {
+            RefreshList();
         }
     }
 
@@ -807,12 +1119,11 @@ public sealed class TrackLayoutManagerControl : UserControl
 
     private void EditSelected()
     {
-        if (_list.SelectedItems.Count == 0)
+        if (SelectedId is not { } id)
         {
             return;
         }
 
-        var id = (string)_list.SelectedItems[0].Tag!;
         var existing = _store.Get(id);
         if (existing is null)
         {
@@ -895,9 +1206,7 @@ public sealed class TrackLayoutManagerControl : UserControl
         // starting from a blank floor is how most layouts begin, and having
         // to create an empty track first just to draw one is a step for the
         // sake of it.
-        var existing = _list.SelectedItems.Count > 0
-            ? _store.Get((string)_list.SelectedItems[0].Tag!)
-            : null;
+        var existing = SelectedId is { } selected ? _store.Get(selected) : null;
 
         // The designer's Save only checks that a name was typed; whether
         // another layout already has it is checked here, where the store is.
@@ -1041,13 +1350,12 @@ public sealed class TrackLayoutManagerControl : UserControl
 
     private void DeleteSelected()
     {
-        if (_list.SelectedItems.Count == 0)
+        if (SelectedId is not { } id || _store.Get(id) is not { } shown)
         {
             return;
         }
 
-        var id = (string)_list.SelectedItems[0].Tag!;
-        var name = _list.SelectedItems[0].Text;
+        var name = shown.Name;
         var confirm = AppDialog.Show(this, $"Delete track layout '{name}'?", "Delete track layout", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
         if (confirm == DialogResult.Yes)
         {
@@ -1087,12 +1395,11 @@ public sealed class TrackLayoutManagerControl : UserControl
 
     private void ResetSelectedRecord()
     {
-        if (_list.SelectedItems.Count == 0)
+        if (SelectedId is not { } id)
         {
             return;
         }
 
-        var id = (string)_list.SelectedItems[0].Tag!;
         var track = _store.Get(id);
         var hasSectorRecords = track?.HasSectorRecords() == true;
 

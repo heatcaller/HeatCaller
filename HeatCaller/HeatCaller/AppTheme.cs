@@ -984,6 +984,19 @@ public static class AppTheme
             button.Text = caption;
         }
 
+        // A kind given by name is kept (13 Nov 2026): the theme pass styles
+        // every button again with Auto (ApplyRecursively), and guessing from
+        // the caption again undid the page's choice - "+ New Layout" lost its
+        // pink, and Who's Racing's Import Entries got it back.
+        if (kind != ButtonKind.Auto)
+        {
+            ChosenKinds.AddOrUpdate(button, new System.Runtime.CompilerServices.StrongBox<ButtonKind>(kind));
+        }
+        else if (ChosenKinds.TryGetValue(button, out var chosen))
+        {
+            kind = chosen.Value;
+        }
+
         var resolved = kind == ButtonKind.Auto ? InferKind(button.Text) : kind;
 
         button.FlatStyle = FlatStyle.Flat;
@@ -1177,6 +1190,9 @@ public static class AppTheme
 
     /// <summary>The EnabledChanged handler StyleButton last gave each button, so a restyle replaces it rather than adding another. Weak, so a disposed button takes its entry with it.</summary>
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Button, EventHandler> EnabledStyleHandlers = new();
+
+    /// <summary>The kind each button was given by name, which a later Auto pass keeps - see StyleButton.</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Button, System.Runtime.CompilerServices.StrongBox<ButtonKind>> ChosenKinds = new();
 
     private static ButtonKind InferKind(string text)
     {
