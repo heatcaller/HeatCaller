@@ -31,8 +31,8 @@ public sealed class RaceClockPanel : Control
         TabStop = false;
     }
 
-    /// <summary>The warm-up's own colour - Stage-button blue, since Stage is what it leads into.</summary>
-    private static readonly Color WarmUpColor = Color.FromArgb(79, 142, 247);
+    /// <summary>The warm-up's own colour - the warm-up flag's blue (FlagText.WarmUpColour), as the Warm-up button wears.</summary>
+    private static readonly Color WarmUpColor = FlagText.WarmUpColour;
 
     /// <summary>Colour for the current flag, used for the ring and the glow.</summary>
     private Color FlagColor => _race.IsWarmingUp ? WarmUpColor : _race.Flag switch
@@ -329,7 +329,7 @@ public sealed class RaceClockPanel : Control
     {
         var label = _race.IsWarmingUp ? "WARM-UP"
             : _race.State == RaceState.Racing
-            ? $"{_race.Flag.ToString().ToUpperInvariant()} FLAG"
+            ? FlagText.Shouted(_race.Flag)
             : _race.State.ToString().ToUpperInvariant();
 
         // Sized to the text rather than spanning the panel: a full-width

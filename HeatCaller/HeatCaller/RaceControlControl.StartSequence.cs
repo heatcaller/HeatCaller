@@ -783,7 +783,13 @@ public sealed partial class RaceControlControl
     /// counting down or running.
     /// </summary>
     /// <param name="forQuickRace">True when Quick Race is opening it - see _warmUpOpenedByQuickRace.</param>
-    private bool TryBeginWarmUp(Action then, bool forQuickRace = false)
+    /// <param name="force">
+    /// True for the Warm-up button (14 Nov 2026): a warm-up even when the
+    /// format has none, for <see cref="WarmUpWhenFormatHasNone"/>. The footer's
+    /// "Warm-up first" switch does the same for every start - see
+    /// <see cref="StartWithWarmUp"/>.
+    /// </param>
+    private bool TryBeginWarmUp(Action then, bool forQuickRace = false, bool force = false)
     {
         // Threaded, a warm-up is a race start too (24 Oct 2026, timing
         // layer, P7) - see RefuseIfPracticeRunningForRaceStart.
@@ -794,7 +800,7 @@ public sealed partial class RaceControlControl
             return false;
         }
 
-        var seconds = Math.Clamp(EffectiveFormat(out _).WarmUpSeconds, 0, RaceFormat.MaxWarmUpSeconds);
+        var seconds = WarmUpSecondsFor(EffectiveFormat(out _).WarmUpSeconds, force || StartWithWarmUp);
         if (seconds <= 0)
         {
             return false;
@@ -818,7 +824,7 @@ public sealed partial class RaceControlControl
 
         var described = RaceFormat.DescribeWarmUp(seconds);
         _announcer.SpeakReminder($"Warm-up is open. {SpokenWarmUpLength(seconds)} of free laps before the race.");
-        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] Warm-up open - {described}. Laps are not counted. Press Stage again to skip the rest.");
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] Warm-up open - {described}. Laps are not counted. Press Warm-up or Stage again to skip the rest.");
 
         _lblRaceState.Text = "Warm-up";
         UpdateClockDisplay(force: true);
@@ -928,6 +934,63 @@ public sealed partial class RaceControlControl
         _warmUpCts = null;
         _afterWarmUp = null;
         _race.EndWarmUp("Warm-up canceled.");
+    }
+
+    /// <summary>
+    /// How long a warm-up runs when the format has none but one was asked for
+    /// anyway - the Warm-up button, or the "Warm-up first" switch (14 Nov
+    /// 2026): two minutes, the length most clubs give.
+    /// </summary>
+    internal const int WarmUpWhenFormatHasNone = 120;
+
+    /// <summary>
+    /// The warm-up to run, in seconds: the format's own, else
+    /// <see cref="WarmUpWhenFormatHasNone"/> when one is wanted regardless,
+    /// else none (0). Never past RaceFormat.MaxWarmUpSeconds.
+    /// </summary>
+    internal static int WarmUpSecondsFor(int formatSeconds, bool wanted)
+    {
+        var seconds = Math.Clamp(formatSeconds, 0, RaceFormat.MaxWarmUpSeconds);
+        return seconds > 0 ? seconds : wanted ? WarmUpWhenFormatHasNone : 0;
+    }
+
+    /// <summary>
+    /// The Warm-up button (14 Nov 2026): opens the warm-up flag - timed free
+    /// laps, then Stage, then the countdown. While the warm-up is open it
+    /// skips the rest and stages, as Stage does. Only between races; over a
+    /// staged or running race it says so and does nothing.
+    /// </summary>
+    private void PressWarmUp()
+    {
+        if (RefuseIfPracticeRunningForRaceStart("open a warm-up"))
+        {
+            return;
+        }
+
+        // Lit: the rest of the warm-up skipped, and on to Stage.
+        if (SkipWarmUpIfRunning())
+        {
+            return;
+        }
+
+        if (OnAirRunning)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] Warm-up: On Air is opening the race already - "
+                + "it stages when it is done. Tick Warm-up first at the foot of the board to warm up before every race.");
+            return;
+        }
+
+        if (_race.State is not (RaceState.Idle or RaceState.Finished))
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] Warm-up: a race is already {_race.State.ToString().ToLowerInvariant()} - "
+                + "a warm-up is only between races. Reset first to warm up.");
+            return;
+        }
+
+        if (!TryBeginWarmUp(() => _actStage?.Invoke(false, null), force: true))
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] Warm-up: could not open one now.");
+        }
     }
 
     /// <summary>The warm-up length as the announcer should say it.</summary>

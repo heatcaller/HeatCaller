@@ -34,7 +34,7 @@ If any setting you're about to hide has been changed from how HeatCaller ships, 
 | Where | Hidden in Simple mode |
 |---|---|
 | Sidebar | The **Venues** page. **Manage Navigation** shows in both modes, so you can reorder or hide pages in Simple mode too |
-| **Race Control** | **Start races On Air** and **Columns**. In **Race Format**, only the lap limit, time limit and start type show |
+| **Race Control** | **Start races On Air**, **Warm-up first** and **Columns**. In **Race Format**, only the lap limit, time limit and start type show |
 | **Race Day → Setup** | Which race **Start the next race automatically** reaches for. The tick itself stays |
 | **Championship** | **Scoring Rules** |
 | **Classes** | **Tech Checklist**, **Qualifier Format** and **Warnings** in the class editor |

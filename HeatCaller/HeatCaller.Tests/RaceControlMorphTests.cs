@@ -46,10 +46,11 @@ public sealed class RaceControlMorphTests
         // 26 Oct 2026: "from cold start the following buttons show, on air,
         // stage, countdown, green and reset" - On Air's button then went
         // again the same evening ("remove the on air flag like button").
+        // 14 Nov 2026: the warm-up flag first - warm-up, stage, countdown.
         var shown = RaceBar.ButtonsFor(RaceState.Idle, FlagState.None, practice: false, warmingUp: false);
 
         Assert.Equal(
-            RaceBarButtons.Stage | RaceBarButtons.Countdown | RaceBarButtons.Green | RaceBarButtons.Reset,
+            RaceBarButtons.WarmUp | RaceBarButtons.Stage | RaceBarButtons.Countdown | RaceBarButtons.Green | RaceBarButtons.Reset,
             shown);
     }
 
@@ -177,9 +178,11 @@ public sealed class RaceControlMorphTests
         // 26 Oct 2026: "they all remain up until green gets pressed or is
         // moved on to naturally" - through On Air, a warm-up, staging and
         // the countdown the row is the cold start's five.
+        // Warm-up joined it on 14 Nov 2026, leftmost, and stays on with the
+        // rest until the green.
         Assert.Equal(RaceBar.BeforeTheGreen, RaceBar.ButtonsFor(state, FlagState.None, practice: false, warmingUp: warmingUp));
         Assert.Equal(
-            RaceBarButtons.Stage | RaceBarButtons.Countdown | RaceBarButtons.Green | RaceBarButtons.Reset,
+            RaceBarButtons.WarmUp | RaceBarButtons.Stage | RaceBarButtons.Countdown | RaceBarButtons.Green | RaceBarButtons.Reset,
             RaceBar.BeforeTheGreen);
     }
 

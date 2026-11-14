@@ -496,6 +496,9 @@ public sealed partial class RaceControlControl : UserControl
     // The flag row paints itself - see FlagButton. Each shows its own
     // colour under the mouse and while it is in effect, and the ordinary
     // button colour otherwise.
+    // Warm-up (14 Nov 2026) in the warm-up's own blue - the clock's ring
+    // during a warm-up (RaceClockPanel.WarmUpColor) - lighter than Stage's.
+    private readonly FlagButton _btnWarmUp = new() { FlagColour = HeatCaller.FlagText.WarmUpColour, FlagText = Color.White };
     private readonly FlagButton _btnStage = new() { FlagColour = Color.FromArgb(47, 111, 237), FlagText = Color.White };
     private readonly FlagButton _btnCountdown = new() { FlagColour = Color.FromArgb(242, 120, 32), FlagText = Color.FromArgb(20, 20, 20) };
     private readonly FlagButton _btnGreen = new() { FlagColour = Color.FromArgb(31, 157, 85), FlagText = Color.White };

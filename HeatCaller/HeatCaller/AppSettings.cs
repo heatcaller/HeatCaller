@@ -653,6 +653,14 @@ public sealed class AppSettings
     public bool RaceStartWithOnAir { get; set; } = true;
 
     /// <summary>
+    /// Race Control's "Warm-up first" switch (14 Nov 2026): every start opens
+    /// the warm-up flag first - free laps, then Stage, then the countdown -
+    /// for the format's warm-up, or two minutes when it has none. Off by
+    /// default: a format with a warm-up still runs it either way.
+    /// </summary>
+    public bool RaceStartWithWarmUp { get; set; }
+
+    /// <summary>
     /// Race Control's "Auto start" switch (11 Nov 2026, race-night build plan,
     /// Phase 1): after each race, count down the gap and start the next race
     /// by itself. On by default, as decided. See AutoStartClock.

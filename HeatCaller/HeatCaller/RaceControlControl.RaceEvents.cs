@@ -539,7 +539,7 @@ public sealed partial class RaceControlControl
         // lap - by MainForm's journal recorder now, whose handler runs ahead
         // of this one (23 Oct 2026, timing layer, P2). See MainForm.RaceJournal.
 
-        _lblFlag.Text = flag.ToString();
+        _lblFlag.Text = FlagText.Name(flag);
         // Bright variants, not the dark ones these used to be: this label
         // sits on the page background, which is near-black in Dark and
         // Synthwave modes - Color.Black for Checkered and the system text
@@ -550,6 +550,7 @@ public sealed partial class RaceControlControl
             FlagState.Yellow => Color.FromArgb(255, 209, 71),
             FlagState.Red => Color.FromArgb(255, 92, 92),
             FlagState.Checkered => AppTheme.TextDark,
+            FlagState.WarmUp => FlagText.WarmUpColour,
             _ => AppTheme.TextMuted,
         };
 
@@ -612,8 +613,10 @@ public sealed partial class RaceControlControl
     {
         var state = _race.State;
 
-        // Lit through the warm-up too: pressing it again is how to skip it.
-        _btnStage.Lit = state == RaceState.Staging || _race.IsWarmingUp;
+        // The warm-up flag is lit while the warm-up is open (14 Nov 2026) -
+        // pressing it again, or Stage, skips the rest and stages.
+        _btnWarmUp.Lit = _race.IsWarmingUp;
+        _btnStage.Lit = state == RaceState.Staging;
         _btnCountdown.Lit = state == RaceState.Countdown;
         _btnGreen.Lit = flag == FlagState.Green;
         _btnYellow.Lit = flag == FlagState.Yellow;

@@ -94,6 +94,34 @@ public sealed partial class RaceControlControl
         }
     }
 
+    /// <summary>"Warm-up first: Off | On" (14 Nov 2026), beside Start races at the foot of the board - see <see cref="StartWithWarmUp"/>.</summary>
+    private readonly SegmentedSwitch _swWarmUpFirst = new("Warm-up first:", "Off", "On");
+
+    /// <summary>
+    /// Whether every start opens the warm-up flag first (14 Nov 2026): Start
+    /// Next, Auto start, the program's Start, F1, the phone, Stage and Quick
+    /// Race - then Stage, then the countdown. Through On Air too: On Air's
+    /// opening, then the warm-up. Remembered between launches -
+    /// AppSettings.RaceStartWithWarmUp.
+    /// </summary>
+    internal bool StartWithWarmUp
+    {
+        get => _settings.RaceStartWithWarmUp;
+        set
+        {
+            if (_settings.RaceStartWithWarmUp != value)
+            {
+                _settings.RaceStartWithWarmUp = value;
+                _settings.Save();
+            }
+
+            if (_swWarmUpFirst.On != value)
+            {
+                _swWarmUpFirst.On = value;
+            }
+        }
+    }
+
     /// <summary>What On Air calls itself while it holds the broadcast floor - see ShowFloor.</summary>
     private const string OnAirHoldsTheFloor = "On Air opening the next race";
 
@@ -187,6 +215,13 @@ public sealed partial class RaceControlControl
             "On Air: Start Next, the program's Start, F1, the phone and the day schedule all go through On Air first: "
             + "the soundscape's jingle or sweeper, the opening, a bumper, then Stage. 0 starts it by hand; while it runs, "
             + "hold 0 for a second to skip to Stage. Stage: they stage straight away. The Stage button always stages straight away.");
+
+        _swWarmUpFirst.On = _settings.RaceStartWithWarmUp;
+        _swWarmUpFirst.OnChanged += (_, _) => StartWithWarmUp = _swWarmUpFirst.On;
+        tip.SetToolTip(_swWarmUpFirst,
+            "On: every race starts with the warm-up flag - free laps, not counted, for the format's warm-up "
+            + "(two minutes if it has none) - then Stage and the countdown. On Air, when it is on, goes first. "
+            + "Off: only a format with a warm-up has one. Press Warm-up or Stage during it to skip the rest.");
 
         // The strip's bar and countdown while the opening is got ready.
         _onAirProgressTimer.Interval = 150;
