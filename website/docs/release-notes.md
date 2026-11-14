@@ -4,6 +4,14 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Championship reworked, with "Can they still win?" (13 November).**
+    - **A card per championship** down the left: its class, how far through the season it is, and who leads (or won).
+    - **The one picked fills the page,** with its rules in a line under its name and four views to switch between: **Standings**, **Races**, **Points & Rules** and **Carried In**. The table people come to read no longer shares the page with the setup.
+    - **Can they still win?** beside the standings: who is leading, still in it, or out of reach, with the rounds left. It uses the announcer's own proof, drop rule and all, so the two always agree. It needs **Rounds in the season** set.
+    - **A Gap column** in the standings: points behind the leader.
+    - **Quieter buttons.** **Reset to Default** is now **Use the Default Points**, not red. **Rename** and **Delete** are under **More**. The rules in force are listed on **Points & Rules**.
+
+    See [Championship](race-control/results-and-championships.md#championship).
 - **Track Layouts reworked (13 November).** The page is built round the plan now.
     - **A list with pictures.** Each layout shows its plan (or photo), its tile count and its record, with **Tonight** on the one tonight's race day races on.
     - **The plan as large as the page allows,** with the layout's commands on the bar above it: **Open in Track Designer**, **Use Tonight**, **Edit Details** and **More**. **Reset Record** and **Delete** are under **More**, no longer two red buttons beside **Edit**.
