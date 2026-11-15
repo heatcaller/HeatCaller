@@ -755,6 +755,11 @@ public sealed partial class AnnouncementService
                 }
 
                 StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - {notNow} (rendered in {Seconds(rendering.ElapsedMilliseconds)}).");
+
+                // Untrue now, as a stale line is (bug hunt 20): a fast lap
+                // someone has since beaten stayed on the Big Screen, and in
+                // the feed as said.
+                WithdrawAnnouncementText(_dequeuedFreshness.Value.Shown);
                 return;
             }
 

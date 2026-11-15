@@ -282,6 +282,12 @@ public sealed partial class AnnouncementService
                     {
                         // The line goes out as it would have.
                     }
+
+                    // Untrue now, as a stale line is (bug hunt 20).
+                    if (drop is not null)
+                    {
+                        WithdrawAnnouncementText(_dequeuedFreshness.Value.Shown);
+                    }
                 }
 
                 if (drop is null && honourMute && Muted)

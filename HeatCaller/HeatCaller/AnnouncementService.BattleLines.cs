@@ -235,12 +235,60 @@ public sealed partial class AnnouncementService
     /// The words of the pass call: who got through, and into which place.
     /// <paramref name="place"/> is where the chaser now runs.
     /// </summary>
-    internal static string BattlePassWords(string driver, int place) =>
-        place <= 1
+    /// <param name="className">
+    /// In a heat classes share, the chaser's class, with <paramref name="place"/>
+    /// its place in that class (bug hunt 20): "takes the lead in Stock", "up
+    /// into second in Stock" - as the position report and its correction say it.
+    /// </param>
+    internal static string BattlePassWords(string driver, int place, string? className = null) =>
+        InClass(place <= 1
             ? BattlePassForTheLead.Replace("{driver}", driver, StringComparison.Ordinal)
             : BattlePassForAPlace
                 .Replace("{driver}", driver, StringComparison.Ordinal)
-                .Replace("{place}", LeadTracker.SpokenOrdinal(place), StringComparison.Ordinal);
+                .Replace("{place}", LeadTracker.SpokenOrdinal(place), StringComparison.Ordinal), place, className);
+
+    /// <summary>A pass call's place said as a place in <paramref name="className"/>, when there is one - see BattlePassWords.</summary>
+    private static string InClass(string words, int place, string? className) =>
+        string.IsNullOrWhiteSpace(className)
+            ? words
+            : words
+                .Replace("takes the lead!", $"takes the lead in {className}!", StringComparison.Ordinal)
+                .Replace($"into {LeadTracker.SpokenOrdinal(place)}!", $"into {LeadTracker.SpokenOrdinal(place)} in {className}!", StringComparison.Ordinal);
+
+    /// <summary>
+    /// A car's class and its place in it, in a heat classes share - null in a
+    /// one-class race, or for a car the class map does not know (a ghost).
+    /// </summary>
+    /// <param name="ordered">The field in board order.</param>
+    private (string Class, int Place)? ClassPlaceOf(IReadOnlyList<RaceStanding> ordered, string transponder)
+    {
+        if (SharedHeatClasses?.Invoke() is not { Count: > 0 } classOf)
+        {
+            return null;
+        }
+
+        var order = ordered.Select(standing => standing.Transponder).ToList();
+        var at = order.FindIndex(t => string.Equals(t, transponder, StringComparison.OrdinalIgnoreCase));
+
+        if (at < 0)
+        {
+            return null;
+        }
+
+        var place = ClassPlaces(order, classOf)[at];
+
+        return place.Class.Length == 0 ? null : place;
+    }
+
+    /// <summary>
+    /// True in a heat classes share when the two cars are known to run in
+    /// different classes - not racing each other (bug hunt 20).
+    /// </summary>
+    private bool InDifferentClasses(string a, string b) =>
+        SharedHeatClasses?.Invoke() is { Count: > 0 } classOf
+        && classOf.TryGetValue(a.Trim(), out var classA) && !string.IsNullOrWhiteSpace(classA)
+        && classOf.TryGetValue(b.Trim(), out var classB) && !string.IsNullOrWhiteSpace(classB)
+        && !string.Equals(classA, classB, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The standing for a car, or null - for HasPassed off the timing thread, where _standings may be mid-write.</summary>
     private RaceStanding? StandingOrNull(string transponder)
@@ -393,14 +441,25 @@ public sealed partial class AnnouncementService
             $"[voice] Battle line {(wasSpeaking ? "cut off mid-sentence" : "dropped before it spoke")} - "
             + $"{driver} got past {DisplayNameFor(cut.Pair.AheadId)}.");
 
-        if (Muted || _postRaceQuiet)
+        // A heat classes share (bug hunt 20): two cars of different classes
+        // are not racing each other, so no pass is called - the lead change
+        // call, if it was for the lead, still goes as it would.
+        if (Muted || _postRaceQuiet || InDifferentClasses(cut.Pair.AheadId, cut.Pair.BehindId))
         {
             return false;
         }
 
-        QueueBattlePass(cut.Pair.BehindId, BattlePassWords(driver, place), place, LapSeenAt(cut.Pair.BehindId) + LapCallSayWithinMs);
+        // And the place is the chaser's place in its class, as the position
+        // report says it - not its place in the whole heat.
+        var overall = place;
+        var inClass = ClassPlaceOf(ordered, cut.Pair.BehindId);
+        place = inClass?.Place ?? place;
 
-        return place <= 1;
+        QueueBattlePass(cut.Pair.BehindId, BattlePassWords(driver, place, inClass?.Class), place, LapSeenAt(cut.Pair.BehindId) + LapCallSayWithinMs);
+
+        // The lead change call is for the lead overall, so it is that the
+        // pass call stands in for.
+        return overall <= 1;
     }
 
     /// <summary>
@@ -460,12 +519,13 @@ public sealed partial class AnnouncementService
     /// spice"). As excited as the pass call, but it says it was a ruling: on
     /// track nobody passed anybody, and the room saw that.
     /// </summary>
-    internal static string RulingPassWords(string driver, int place) =>
-        place <= 1
+    /// <param name="className">In a heat classes share, the driver's class - see BattlePassWords.</param>
+    internal static string RulingPassWords(string driver, int place, string? className = null) =>
+        InClass(place <= 1
             ? RulingPassForTheLead.Replace("{driver}", driver, StringComparison.Ordinal)
             : RulingPassForAPlace
                 .Replace("{driver}", driver, StringComparison.Ordinal)
-                .Replace("{place}", LeadTracker.SpokenOrdinal(place), StringComparison.Ordinal);
+                .Replace("{place}", LeadTracker.SpokenOrdinal(place), StringComparison.Ordinal), place, className);
 
     /// <summary>
     /// CallTheBattlePass for a correction by hand: the board has put a pair
@@ -536,7 +596,9 @@ public sealed partial class AnnouncementService
 
             // And the call for it, with its spice (8 Nov 2026) - worded as the
             // ruling it was. See RulingPassWords.
-            if (!Muted && !_postRaceQuiet)
+            // Not between two classes of a shared heat, and worded by class
+            // place - as CallTheBattlePass (bug hunt 20).
+            if (!Muted && !_postRaceQuiet && !InDifferentClasses(cut.Pair.AheadId, cut.Pair.BehindId))
             {
                 var ordered = _standings.Values
                     .Where(standing => !MutedGhost(standing.Transponder))
@@ -545,6 +607,8 @@ public sealed partial class AnnouncementService
                     .ToList();
 
                 var place = 1 + ordered.FindIndex(standing => standing.Transponder == cut.Pair.BehindId);
+                var inClass = ClassPlaceOf(ordered, cut.Pair.BehindId);
+                var called = inClass?.Place ?? (place < 1 ? cut.Pair.Position : place);
 
                 // Timed from the ruling, not from the chaser's last crossing
                 // (10 Nov 2026, bug hunt 16): a correction by hand is not a
@@ -552,8 +616,8 @@ public sealed partial class AnnouncementService
                 // and the call was dropped unheard as out of date.
                 QueueBattlePass(
                     cut.Pair.BehindId,
-                    RulingPassWords(driver, place < 1 ? cut.Pair.Position : place),
-                    place < 1 ? cut.Pair.Position : place,
+                    RulingPassWords(driver, called, inClass?.Class),
+                    called,
                     TimingClock.NowMs + LapCallSayWithinMs);
             }
         }

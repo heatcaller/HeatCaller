@@ -1574,6 +1574,15 @@ public partial class MainForm : Form
         // practice, so it can never go stale.
         _announcer.QualifyingModeProvider = () => _race.StartType == RaceStartType.Qualifier;
 
+        // A class scored on handicap, with a credit to apply, names no winner
+        // at the flag (bug hunt 20): the recap says who won on handicap. As
+        // the recap has it, a pursuit start spent the credits on track.
+        _announcer.ScoredOnHandicap = transponders =>
+            _race.StartType != RaceStartType.StaggeredHandicap
+            && _activeRound is { } round
+            && _handicaps.ModeFor(round.ClassName) != HandicapMode.None
+            && transponders.Any(t => _handicaps.Get(t) is { HasAny: true });
+
         // THE BROADCAST FEATURES (18 Oct 2026). The sponsors who present a
         // moment ("the fastest lap, presented by"), read fresh each time so
         // a sponsor sold mid-evening counts from their next moment; the
