@@ -50,6 +50,14 @@ export const PAGE_COUNT_EVENTS: readonly string[] = [
   "contrast_high",
   "text_size_115",
   "text_size_130",
+  // Driver themes (15 Nov 2026): which look a phone picked; team colours count as one.
+  "theme_club",
+  "theme_night",
+  "theme_daylight",
+  "theme_pitlane",
+  "theme_paddock",
+  "theme_carbon",
+  "theme_team",
   // Item 17: a phone that forgot its driver.
   "storage_forgot",
   // Item 18: the back button.

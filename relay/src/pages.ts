@@ -155,6 +155,86 @@ label:has(> input[type=checkbox]:disabled) > input[type=checkbox] { cursor: defa
 @media (prefers-reduced-motion: reduce) { label:has(> input[type=checkbox]) { transition: none; } }
 `;
 
+/**
+ * DRIVER THEMES (15 Nov 2026, Asher: "plan the ability for the driver to
+ * theme the relay. add a button on the bottom of the screens next to the
+ * high contrast", then "theme doesn't follow"). A driver picks a look for
+ * the club's pages on their own phone - kept on that phone like text size
+ * and High contrast, never following them to another one. "Club" is the
+ * club's own colours and is what every phone starts with.
+ *
+ * Each theme is a class on <html> (th-<id>) setting the same colour names
+ * the club's look sets on :root, so nothing is redrawn. Written after the
+ * club's own light/dark rules and before High contrast's, so High contrast
+ * still wins for a driver who needs it. Every pair a page reads as text is
+ * checked at 4.5:1 or more by test/driver-themes.test.ts.
+ */
+export interface DriverTheme {
+  readonly id: string;
+  readonly name: string;
+  readonly light: boolean;
+  readonly vars: Readonly<Record<string, string>>;
+}
+
+export const DRIVER_THEMES: readonly DriverTheme[] = [
+  {
+    id: "night", name: "Night", light: false,
+    vars: { "--bg": "#12141C", "--surface": "#1B1F2A", "--row-alt": "#171A24", "--text": "#E8EAF0", "--muted": "#A3A9B8",
+      "--border": "#2C3242", "--primary": "#7C9CFF", "--on-primary": "#0B0E16", "--accent": "#5ED6C8",
+      "--good": "#4CD38A", "--bad": "#FF7A85", "--warn": "#F2C14E" },
+  },
+  {
+    id: "daylight", name: "Daylight", light: true,
+    vars: { "--bg": "#F7F7F4", "--surface": "#FFFFFF", "--row-alt": "#F0F0EC", "--text": "#15171C", "--muted": "#4F5560",
+      "--border": "#CDD0D6", "--primary": "#B0124F", "--on-primary": "#FFFFFF", "--accent": "#00695C",
+      "--good": "#1B7339", "--bad": "#B3261E", "--warn": "#7F5300" },
+  },
+  {
+    id: "pitlane", name: "Pit Lane", light: false,
+    vars: { "--bg": "#17181A", "--surface": "#222326", "--row-alt": "#1C1D20", "--text": "#F2F2F2", "--muted": "#ABABB0",
+      "--border": "#393B40", "--primary": "#FF7A1A", "--on-primary": "#000000", "--accent": "#FFC14D",
+      "--good": "#4CD38A", "--bad": "#FF6B6B", "--warn": "#FFC14D" },
+  },
+  {
+    id: "paddock", name: "Paddock", light: false,
+    vars: { "--bg": "#0F1A14", "--surface": "#16261D", "--row-alt": "#132119", "--text": "#EEF3EC", "--muted": "#A6B8AA",
+      "--border": "#2A4636", "--primary": "#E0B341", "--on-primary": "#000000", "--accent": "#7FD3A0",
+      "--good": "#7FD3A0", "--bad": "#FF8078", "--warn": "#E0B341" },
+  },
+  {
+    id: "carbon", name: "Carbon", light: false,
+    vars: { "--bg": "#000000", "--surface": "#111111", "--row-alt": "#0A0A0A", "--text": "#FFFFFF", "--muted": "#B3B3B3",
+      "--border": "#3A3A3A", "--primary": "#FFFFFF", "--on-primary": "#000000", "--accent": "#FF5A5A",
+      "--good": "#5CE08A", "--bad": "#FF5A5A", "--warn": "#FFD15C" },
+  },
+];
+
+/**
+ * Team colour: Night with the driver's own colour as the primary. Every one
+ * is bright enough to read on Night's background and to take black text.
+ */
+export const TEAM_SWATCHES: readonly { readonly id: string; readonly name: string; readonly hex: string }[] = [
+  { id: "red", name: "Red", hex: "#FF5A5A" },
+  { id: "orange", name: "Orange", hex: "#FF8A3D" },
+  { id: "yellow", name: "Yellow", hex: "#FFD23F" },
+  { id: "green", name: "Green", hex: "#4CD38A" },
+  { id: "teal", name: "Teal", hex: "#2ED3C6" },
+  { id: "blue", name: "Blue", hex: "#5AA9FF" },
+  { id: "purple", name: "Purple", hex: "#B28CFF" },
+  { id: "pink", name: "Pink", hex: "#FF6EC7" },
+];
+
+const DRIVER_THEME_CSS = DRIVER_THEMES
+  .map((t) => `html.th-${t.id} { ${Object.entries(t.vars).map(([k, v]) => `${k}: ${v};`).join(" ")} }`)
+  .concat(TEAM_SWATCHES.map((s) => `html.th-night.tc-${s.id} { --primary: ${s.hex}; --on-primary: #000000; --accent: ${s.hex}; }`))
+  .join("\n");
+
+/** What the theme picker draws from, handed to the page as data. */
+const DRIVER_THEME_LIST = JSON.stringify({
+  themes: DRIVER_THEMES.map((t) => ({ id: t.id, name: t.name, light: t.light, bg: t.vars["--bg"], fg: t.vars["--text"], primary: t.vars["--primary"] })),
+  team: TEAM_SWATCHES,
+});
+
 const STYLE = `
 .pinask{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.65)}
 .pinask-card{width:100%;max-width:360px;background:var(--surface);color:var(--text);border-radius:14px;padding:18px}
@@ -1520,6 +1600,8 @@ html { font-size: calc(100% * var(--ts, 1)); }
 body { font-size: calc(16px * var(--ts, 1)); }
 html[data-ts="115"] { --ts: 1.15; }
 html[data-ts="130"] { --ts: 1.3; }
+/* Driver themes (15 Nov 2026): after the club's own rules, before High contrast's. */
+${DRIVER_THEME_CSS}
 html.hc { --bg: #000000; --surface: #000000; --row-alt: #000000; --text: #FFFFFF; --muted: #E6E6E6; --border: #FFFFFF;
   --primary: #FF66C4; --on-primary: #000000; --accent: #5CF0FF; --good: #5CFF9E; --bad: #FF8095; --warn: #FFD15C;
   --tonal: #000000; --on-tonal: #FFFFFF; --ring: #FFFFFF; }
@@ -1534,6 +1616,24 @@ html.hc .stale, html.hc.hcoffline .wrap > :not(header):not(.hcoff):not(footer) {
 .hcread button { min-height: 44px; min-width: 44px; padding: 0 12px; font: inherit; font-weight: 700; color: var(--text);
   background: transparent; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; }
 .hcread button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); border-color: transparent; }
+/* The Look sheet (driver themes, 15 Nov 2026). */
+.hcthemes { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(0, 0, 0, 0.6); padding: 0 0 var(--sa-b); }
+.hcthemes .sheet { width: 100%; max-width: 520px; max-height: 88vh; overflow-y: auto; background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: 18px 18px 0 0; padding: 18px 16px 20px; }
+.hcthemes h2 { margin: 0 0 4px; font-size: 1.25rem; }
+.hcthemes h3 { margin: 16px 0 8px; font-size: 1rem; }
+.hcthemes .note { margin: 0 0 12px; color: var(--muted); font-size: 0.9rem; }
+.hcthemes .thgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.hcthemes .thgrid.team { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+.hcthemes .thpick { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 10px; font: inherit; font-weight: 600;
+  text-align: left; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 12px; cursor: pointer; }
+.hcthemes .thpick[aria-pressed="true"] { border: 2px solid var(--primary); }
+.hcthemes .thpick[aria-pressed="true"]::after { content: "\\2713"; margin-left: auto; color: var(--primary); font-weight: 800; }
+.hcthemes .sw { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px;
+  border-radius: 10px; border: 1px solid var(--border); font-weight: 800; font-size: 0.85rem; }
+.hcthemes .sw .dot { position: absolute; right: -3px; bottom: -3px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--surface); }
+.hcthemes .go { width: 100%; margin-top: 16px; }
 /* A BOARD MADE FOR A PHONE (item 4): four columns under 480 px, the rest a
    tap away, the driver's own row stuck to the edge it scrolls off. */
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -2312,6 +2412,144 @@ function hcReading() {
   }
   return { ts: ['100', '115', '130'].indexOf(ts) >= 0 ? ts : '100', hc: hc };
 }
+// DRIVER THEMES (15 Nov 2026, Asher: "the ability for the driver to theme
+// the relay", "theme doesn't follow"): per phone, in hg-theme as "night",
+// "daylight"... or "night:<team colour>"; empty or unknown is the club's own
+// colours. Put on <html> by hcApplyReading as the page's script starts, as
+// High contrast is, and again after a change here or in any other page this
+// phone has open.
+const HC_TH_KEY = 'hg-theme';
+const HC_THEMES = ${DRIVER_THEME_LIST};
+function hcThemesOn() { return !document.documentElement.hasAttribute('data-nothemes'); }
+// The club's own light or dark, as the page was drawn - read before anything here changes it.
+let HC_CLUB_LIGHT = false;
+try { HC_CLUB_LIGHT = document.documentElement.classList.contains('light'); } catch (e) { /* dark */ }
+function hcTheme() {
+  let t = '';
+  try { t = localStorage.getItem(HC_TH_KEY) || ''; } catch (e) { /* the club's */ }
+  const m = /^([a-z]+)(?::([a-z]+))?$/.exec(t);
+  if (!m || !HC_THEMES.themes.some((x) => x.id === m[1])) return { id: '', team: '' };
+  const team = m[1] === 'night' && m[2] && HC_THEMES.team.some((s) => s.id === m[2]) ? m[2] : '';
+  return { id: m[1], team: team };
+}
+function hcApplyTheme(hc) {
+  const d = document.documentElement;
+  const t = hcThemesOn() ? hcTheme() : { id: '', team: '' };
+  for (const x of HC_THEMES.themes) d.classList.toggle('th-' + x.id, x.id === t.id);
+  for (const s of HC_THEMES.team) d.classList.toggle('tc-' + s.id, s.id === t.team);
+  const th = HC_THEMES.themes.find((x) => x.id === t.id) || null;
+  const club = HC_CLUB_LIGHT;
+  // High contrast keeps the club's own light or dark: it has a light version of its own.
+  const light = th && !hc ? th.light : club;
+  d.classList.toggle('light', light);
+  d.classList.toggle('dark', !light);
+  const tc = document.querySelector('meta[name="theme-color"]');
+  if (tc) {
+    if (!tc.hasAttribute('data-club')) tc.setAttribute('data-club', tc.getAttribute('content') || '');
+    tc.setAttribute('content', th && !hc ? th.bg : tc.getAttribute('data-club'));
+  }
+  const cs = document.querySelector('meta[name="color-scheme"]');
+  if (cs) cs.setAttribute('content', light ? 'light' : 'dark');
+  const lb = document.querySelector('#hcread [data-look]');
+  if (lb) {
+    const team = t.team ? HC_THEMES.team.find((s) => s.id === t.team) : null;
+    lb.setAttribute('aria-pressed', String(!!th));
+    lb.textContent = th ? 'Look: ' + (team ? team.name : th.name) : 'Look';
+  }
+}
+function hcCloseThemes() {
+  const s = document.getElementById('hcthemes');
+  if (s) s.remove();
+  const lb = document.querySelector('#hcread [data-look]');
+  if (lb) lb.focus();
+}
+function hcOpenThemes() {
+  const old = document.getElementById('hcthemes');
+  if (old) old.remove();
+  const cur = hcTheme();
+  const wrap = document.createElement('div');
+  wrap.id = 'hcthemes';
+  wrap.className = 'hcthemes';
+  wrap.setAttribute('role', 'dialog');
+  wrap.setAttribute('aria-modal', 'true');
+  wrap.setAttribute('aria-labelledby', 'hcthemes-h');
+  const sheet = document.createElement('div');
+  sheet.className = 'sheet';
+  const h = document.createElement('h2');
+  h.id = 'hcthemes-h';
+  h.textContent = 'Look';
+  const note = document.createElement('p');
+  note.className = 'note';
+  note.textContent = 'Just on this phone. High contrast still wins when it is on.';
+  sheet.appendChild(h);
+  sheet.appendChild(note);
+  const pick = (id, team, name, bg, fg, primary, grid) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'thpick';
+    b.setAttribute('data-th', team ? id + ':' + team : id);
+    b.setAttribute('aria-pressed', String(cur.id === id && cur.team === team));
+    const sw = document.createElement('span');
+    sw.className = 'sw';
+    sw.setAttribute('aria-hidden', 'true');
+    sw.style.background = bg;
+    sw.style.color = fg;
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.background = primary;
+    sw.appendChild(dot);
+    sw.appendChild(document.createTextNode('Aa'));
+    const words = document.createElement('span');
+    words.textContent = name;
+    b.appendChild(sw);
+    b.appendChild(words);
+    b.addEventListener('click', () => {
+      try {
+        if (id === '') localStorage.removeItem(HC_TH_KEY);
+        else localStorage.setItem(HC_TH_KEY, team ? id + ':' + team : id);
+      } catch (e) { /* this page only */ }
+      hcCount('theme_' + (team ? 'team' : id || 'club'));
+      hcApplyReading();
+      sheet.querySelectorAll('.thpick').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    });
+    grid.appendChild(b);
+  };
+  const grid = document.createElement('div');
+  grid.className = 'thgrid';
+  sheet.appendChild(grid);
+  const tc = document.querySelector('meta[name="theme-color"]');
+  const clubBg = tc ? tc.getAttribute('data-club') || tc.getAttribute('content') || '#0F0722' : '#0F0722';
+  const clubLight = HC_CLUB_LIGHT;
+  pick('', '', 'Club colours', clubBg, clubLight ? '#000000' : '#FFFFFF', '#FF2E9A', grid);
+  for (const x of HC_THEMES.themes) pick(x.id, '', x.name, x.bg, x.fg, x.primary, grid);
+  const h3 = document.createElement('h3');
+  h3.textContent = 'Team colour';
+  sheet.appendChild(h3);
+  const night = HC_THEMES.themes.find((x) => x.id === 'night');
+  const teams = document.createElement('div');
+  teams.className = 'thgrid team';
+  sheet.appendChild(teams);
+  for (const s of HC_THEMES.team) pick('night', s.id, s.name, night.bg, night.fg, s.hex, teams);
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'go';
+  close.textContent = 'Done';
+  close.addEventListener('click', hcCloseThemes);
+  sheet.appendChild(close);
+  wrap.appendChild(sheet);
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) hcCloseThemes(); });
+  wrap.addEventListener('keydown', (e) => { if (e.key === 'Escape') hcCloseThemes(); });
+  document.body.appendChild(wrap);
+  const on = sheet.querySelector('.thpick[aria-pressed="true"]') || sheet.querySelector('.thpick');
+  if (on) on.focus();
+}
+// Another page this phone has open (a frame under the one bar, another tab)
+// changed the theme or the reading: follow it.
+try {
+  window.addEventListener('storage', (e) => {
+    if (!e.key || e.key === HC_TH_KEY || e.key === 'hg-contrast' || e.key === 'hg-textsize') hcApplyReading();
+  });
+} catch (e) { /* this page only */ }
 function hcApplyReading() {
   try {
     const r = hcReading();
@@ -2319,6 +2557,8 @@ function hcApplyReading() {
     if (r.ts === '100') d.removeAttribute('data-ts'); else d.setAttribute('data-ts', r.ts);
     d.classList.toggle('hc', r.hc === 'high' || r.hc === 'light');
     d.classList.toggle('hcl', r.hc === 'light');
+    // The driver's theme on its own, so nothing in it can stop text size or contrast.
+    try { hcApplyTheme(r.hc === 'high' || r.hc === 'light'); } catch (e) { /* the club's look */ }
     const box = document.getElementById('hcread');
     if (!box) return;
     box.querySelectorAll('[data-ts]').forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-ts') === r.ts)));
@@ -2333,6 +2573,7 @@ try {
   document.addEventListener('click', (e) => {
     const t = e.target && typeof e.target.closest === 'function' ? e.target.closest('#hcread button') : null;
     if (!t) return;
+    if (t.hasAttribute('data-look')) { hcOpenThemes(); return; }
     const r = hcReading();
     try {
       if (t.hasAttribute('data-ts')) {
@@ -3716,7 +3957,7 @@ export function shell(page: Shell, context: PageContext): string {
   const links = anchors === "" ? "" : `<span class="links">${anchors}</span>`;
 
   return `<!doctype html>
-<html lang="en" class="${look.light ? "light" : "dark"}${sunset ? " synthwave" : ""}"${clockAttr(look.clock24)}${tzAttr(look.timeZone)}>
+<html lang="en" class="${look.light ? "light" : "dark"}${sunset ? " synthwave" : ""}"${clockAttr(look.clock24)}${tzAttr(look.timeZone)}${look.driverThemes ? "" : " data-nothemes"}>
 <head>
 <meta charset="utf-8">
 ${NO_ZOOM_HEAD}
@@ -3751,7 +3992,7 @@ ${overrides}${sunset ? HC_SUNSET_STYLE : ""}
     ${subTab("badges", "Achievements")}
   </nav>` : ""}
   ${page.body}
-  <footer><span id="stamp">&nbsp;</span>${links}<span class="tip">Tap any driver's name to follow them on every page.</span><span class="hcread" id="hcread" role="group" aria-label="Reading"><span>Text</span><button type="button" data-ts="100" aria-label="Text size normal">A</button><button type="button" data-ts="115" aria-label="Text size larger">A+</button><button type="button" data-ts="130" aria-label="Text size largest">A++</button><button type="button" data-hc="1">High contrast</button></span><a class="hcmark" href="https://heatcaller.com" aria-label="What's HeatCaller?" data-hc-about>${HC_SUN}${HC_WORD}</a></footer>
+  <footer><span id="stamp">&nbsp;</span>${links}<span class="tip">Tap any driver's name to follow them on every page.</span><span class="hcread" id="hcread" role="group" aria-label="Reading"><span>Text</span><button type="button" data-ts="100" aria-label="Text size normal">A</button><button type="button" data-ts="115" aria-label="Text size larger">A+</button><button type="button" data-ts="130" aria-label="Text size largest">A++</button><button type="button" data-hc="1">High contrast</button>${look.driverThemes ? '<button type="button" data-look="1" aria-haspopup="dialog">Look</button>' : ""}</span><a class="hcmark" href="https://heatcaller.com" aria-label="What's HeatCaller?" data-hc-about>${HC_SUN}${HC_WORD}</a></footer>
 </div>
 ${aboutSheet(name)}
 <div id="follow" class="follow" hidden></div>
@@ -19078,7 +19319,7 @@ export function appShellPage(club: string, clubName: string, context: PageContex
     : `<style>:root{${variables.map(([k, v]) => `${k}:${v}`).join(";")}}</style>`;
 
   return `<!doctype html>
-<html lang="en" class="hcshell ${look.light ? "light" : "dark"}"${clockAttr(look.clock24)}${tzAttr(look.timeZone)}>
+<html lang="en" class="hcshell ${look.light ? "light" : "dark"}"${clockAttr(look.clock24)}${tzAttr(look.timeZone)}${look.driverThemes ? "" : " data-nothemes"}>
 <head>
 <meta charset="utf-8">
 ${NO_ZOOM_HEAD}

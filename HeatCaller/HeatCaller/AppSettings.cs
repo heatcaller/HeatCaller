@@ -2487,6 +2487,14 @@ public sealed class AppSettings
     /// </summary>
     public string RelayShortName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Drivers may pick their own look for the club's pages on their phones
+    /// (15 Nov 2026, driver themes; Asher: "club driver can change the look
+    /// should be on by default"). Only ever on that phone; off hides the
+    /// Look button and every phone shows the club's own colours.
+    /// </summary>
+    public bool RelayDriverThemes { get; set; } = true;
+
     // --- Race video on YouTube (14 Nov 2026, race video plan) ---------
     //
     // The club streams from a second PC with OBS to its own YouTube

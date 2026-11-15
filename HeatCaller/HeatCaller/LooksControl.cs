@@ -81,6 +81,7 @@ public sealed class LooksControl : UserControl
     private readonly CheckBox _chkLogoOnScreens = new ThemedCheckBox();
     private readonly CheckBox _chkAnimate = new ThemedCheckBox();
     private readonly CheckBox _chk24Hour = new ThemedCheckBox();
+    private readonly CheckBox _chkDriverThemes = new ThemedCheckBox();
     private readonly Label _lblStatus = new();
 
     private Image? _logoImage;
@@ -530,12 +531,33 @@ public sealed class LooksControl : UserControl
             _lblStatus.Text = "Time format changed. Lists and pickers already open will update as they refresh.";
         };
 
+        // Driver themes (15 Nov 2026, Asher: "club driver can change the look
+        // should be on by default"): a Look button by High contrast on every
+        // club page, each driver's pick kept on their own phone.
+        _chkDriverThemes.Text = "Let drivers change the look of the club's pages on their own phones";
+        _chkDriverThemes.AutoSize = true;
+        _chkDriverThemes.CheckedChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            _settings.RelayDriverThemes = _chkDriverThemes.Checked;
+            _settings.Save();
+
+            _lblStatus.Text = _chkDriverThemes.Checked
+                ? "Drivers can pick a look with the Look button at the foot of every club page."
+                : "Every phone shows the club's own look. The Look button is gone from the club's pages.";
+        };
+
         var card = new Section("Appearance");
 
         // The animated header is Advanced (1 Nov 2026, Simple mode); 24-hour time is not.
         card.Add(SimpleMode.Hide(_chkAnimate), stretch: false, gapBelow: UiLayout.HintGap);
         card.Add(SimpleMode.Hide(lblAnimateHint));
-        card.Add(_chk24Hour, stretch: false, gapBelow: 0);
+        card.Add(_chk24Hour, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(_chkDriverThemes, stretch: false, gapBelow: 0);
 
         return card;
     }
@@ -600,6 +622,7 @@ public sealed class LooksControl : UserControl
             _chkLogoOnScreens.Checked = _settings.ShowLogoOnScreens;
             _chkAnimate.Checked = _settings.AnimateHeader;
             _chk24Hour.Checked = _settings.Use24HourTime;
+            _chkDriverThemes.Checked = _settings.RelayDriverThemes;
 
             LoadLogoPreview();
         }

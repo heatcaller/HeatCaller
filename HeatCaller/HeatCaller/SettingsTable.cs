@@ -353,6 +353,7 @@ internal static class SettingsTable
             nameof(AppSettings.RelayTagline),
             nameof(AppSettings.RelayClubAlias),
             nameof(AppSettings.RelayShortName),
+            nameof(AppSettings.RelayDriverThemes),
             nameof(AppSettings.VideoEnabled),
             nameof(AppSettings.VideoObsHost),
             nameof(AppSettings.JuniorNamesOnStream),
