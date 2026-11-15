@@ -253,7 +253,27 @@ internal static class AppUpdates
     /// is practising thinks they are still in the copy.
     /// </remarks>
     internal static bool Available(AppSettings settings) =>
-        settings.UpdateChecksOn && !AppPaths.IsRehearsal && Manager() is not null;
+        settings.UpdateChecksOn && CanUpdateItself;
+
+    /// <summary>
+    /// Whether this copy can update itself when somebody asks it to - an
+    /// installed build, not a rehearsal - whether or not the automatic
+    /// checks are on. What the Check for Updates button on Backup and
+    /// Restore needs: a club that turned the quiet checks off can still look
+    /// when it chooses to.
+    /// </summary>
+    internal static bool CanUpdateItself => CannotUpdateBecause is null;
+
+    /// <summary>
+    /// Why this copy cannot update itself, in words for the Updates card, or
+    /// null when it can.
+    /// </summary>
+    internal static string? CannotUpdateBecause =>
+        AppPaths.IsRehearsal
+            ? "Updates are off in a rehearsal - close it and check from the real app."
+            : Manager() is null
+                ? "This copy wasn't installed with the HeatCaller installer, so it can't update itself."
+                : null;
 
     /// <summary>
     /// The switches the new version is restarted with. Only --dpi-aware is
@@ -368,11 +388,48 @@ internal static class AppUpdates
             return;
         }
 
+        await RunCheckAsync(settings, askedFor: false).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The Check for Updates button on Backup and Restore: the same check,
+    /// download and question as the quiet one, but somebody asked - so it
+    /// says what it found, "you're up to date" and "couldn't reach the
+    /// server" included, and it asks again about a version answered "Not
+    /// now" earlier this run. Runs whether or not the automatic checks are
+    /// on. Hands back one line for the card; never throws.
+    ///
+    /// The rules that matter do not change for being asked: nothing is
+    /// installed mid-meeting, and nothing without a backup first.
+    /// </summary>
+    internal static async Task<string> CheckNowAsync(AppSettings settings)
+    {
+        if (CannotUpdateBecause is { } why)
+        {
+            return why;
+        }
+
+        try
+        {
+            return await RunCheckAsync(settings, askedFor: true).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            return $"The check didn't finish ({ex.GetType().Name}). Try again in a minute.";
+        }
+    }
+
+    /// <summary>
+    /// The check itself, for both. Hands back what happened in words for the
+    /// card; the quiet check throws the words away.
+    /// </summary>
+    private static async Task<string> RunCheckAsync(AppSettings settings, bool askedFor)
+    {
         lock (Gate)
         {
             if (_busy)
             {
-                return;
+                return "A check is already running - give it a moment and try again.";
             }
 
             _busy = true;
@@ -382,7 +439,7 @@ internal static class AppUpdates
         {
             if (Manager() is not { } manager)
             {
-                return;
+                return CannotUpdateBecause ?? "This copy can't update itself.";
             }
 
             UpdateInfo? update;
@@ -394,29 +451,29 @@ internal static class AppUpdates
             catch (Exception)
             {
                 // No internet, GitHub unreachable, rate limited, the feed not
-                // published yet. All of it silent, by design: an update check
-                // is not something a club asked for, so it may not interrupt
-                // them to fail.
-                return;
+                // published yet. Silent in the quiet check, by design: an
+                // update check is not something a club asked for, so it may
+                // not interrupt them to fail. Only the button says so.
+                return "Couldn't reach the update server - check this PC is online and try again.";
             }
 
-            if (update is null)
+            var newVersion = update?.TargetFullRelease.Version?.ToString() ?? string.Empty;
+
+            if (update is null || newVersion.Length == 0)
             {
-                return;
+                return $"You're up to date - {AppVersion.Number} is the newest version.";
             }
 
-            var newVersion = update.TargetFullRelease.Version?.ToString() ?? string.Empty;
-
-            if (newVersion.Length == 0)
+            if (string.Equals(newVersion, settings.UpdateWaitingForNextStart, StringComparison.OrdinalIgnoreCase))
             {
-                return;
+                // Already answered "After tonight". Nothing to ask again.
+                return $"{newVersion} is downloaded and will install the next time HeatCaller is opened.";
             }
 
-            if (string.Equals(newVersion, _declinedThisRun, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(newVersion, settings.UpdateWaitingForNextStart, StringComparison.OrdinalIgnoreCase))
+            if (!askedFor && string.Equals(newVersion, _declinedThisRun, StringComparison.OrdinalIgnoreCase))
             {
-                // Already answered. Nothing to say again.
-                return;
+                // Already answered "Not now". Only the button asks again.
+                return string.Empty;
             }
 
             Say($"HeatCaller {newVersion} is available. Downloading it in the background.");
@@ -428,12 +485,12 @@ internal static class AppUpdates
             catch (Exception ex)
             {
                 Say($"The download of {newVersion} didn't finish ({ex.GetType().Name}) - it will be tried again later.");
-                return;
+                return $"{newVersion} is out, but the download didn't finish. Try again in a minute.";
             }
 
             Say($"{newVersion} is downloaded and ready.");
 
-            Offer(manager, update, newVersion);
+            return Offer(manager, update, newVersion);
         }
         finally
         {
@@ -449,19 +506,19 @@ internal static class AppUpdates
     /// downloaded update sits there, and the question comes the next time
     /// this is called and the app is idle.
     /// </summary>
-    private static void Offer(UpdateManager manager, UpdateInfo update, string newVersion)
+    private static string Offer(UpdateManager manager, UpdateInfo update, string newVersion)
     {
         if (NothingInProgressNow is not { } idle || Ask is not { } ask || HoldForNextStart is not { } hold)
         {
             // No host wired up. The update stays downloaded; nothing is
             // applied without somebody being asked.
-            return;
+            return $"{newVersion} is downloaded - restart HeatCaller to be asked about it.";
         }
 
         if (!idle())
         {
             Say($"{newVersion} is ready and waiting - it won't be offered while a race day is open or a race is on.");
-            return;
+            return $"{newVersion} is downloaded. It will be offered once no race day is open and no race is on.";
         }
 
         var answer = ask(newVersion, AppVersion.Number);
@@ -473,7 +530,7 @@ internal static class AppUpdates
 
                 if (!TryBackUp())
                 {
-                    return;
+                    return "The backup before updating failed, so nothing was installed. The console says why.";
                 }
 
                 // Checked again, right at the end: the question was on screen
@@ -482,7 +539,7 @@ internal static class AppUpdates
                 if (!idle())
                 {
                     Say("Something started while that was on screen - not installing now. It will be offered again.");
-                    return;
+                    return "Something started while that was on screen - not installing now.";
                 }
 
                 try
@@ -529,7 +586,9 @@ internal static class AppUpdates
                     Say($"The update couldn't be installed ({ex.GetType().Name}: {ex.Message}) - nothing was changed.");
                 }
 
-                return;
+                // Only reached when it was NOT installed - a good install
+                // ends this process from inside Velopack.
+                return "The update wasn't installed. The console says why.";
 
             case Answer.AfterTonight:
                 // Not set and saved here: this is a background thread. See
@@ -538,16 +597,16 @@ internal static class AppUpdates
                 {
                     _declinedThisRun = newVersion;
                     Say($"{newVersion} couldn't be held for the next start (the settings weren't saved) - it will be offered again next time HeatCaller starts.");
-                    return;
+                    return $"{newVersion} couldn't be held for the next start - the settings weren't saved.";
                 }
 
                 Say($"{newVersion} will be installed the next time HeatCaller is opened. Nothing happens before then.");
-                return;
+                return $"{newVersion} will install the next time HeatCaller is opened.";
 
             default:
                 _declinedThisRun = newVersion;
                 Say($"{newVersion} was left for now. It will be offered again next time HeatCaller starts.");
-                return;
+                return $"{newVersion} was left for now. Check again whenever you're ready.";
         }
     }
 

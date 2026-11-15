@@ -216,6 +216,7 @@ public sealed partial class BackupRestoreControl : UserControl
         page.Add(BuildStandbyCard());
         page.Add(BuildModeCard());
         page.Add(BuildSupportCard());
+        page.Add(BuildUpdatesCard());
 
         // The list stays the last card on the page: it grows and shrinks
         // with the backups it holds (SizeList), and nothing sits below it
@@ -391,6 +392,97 @@ public sealed partial class BackupRestoreControl : UserControl
         card.Add(new ButtonBar().With(btnSupport, btnAbout, btnTerms));
         card.Add(lblHint);
         card.Add(FieldGrid.Inline(lnkEmail, btnCopyEmail), gapBelow: 0);
+
+        return card;
+    }
+
+    /// <summary>
+    /// UPDATES (15 Nov 2026): the version this PC is on, Check for Updates,
+    /// what the last check found, and the switch for the quiet checks
+    /// (AppSettings.UpdateChecksOn, which had no switch on screen before).
+    /// The checking, downloading and asking are AppUpdates' - the same
+    /// question, the same never-mid-meeting rule and the same backup first
+    /// as the quiet check; the button only makes it happen now and say what
+    /// it found.
+    /// </summary>
+    private Section BuildUpdatesCard()
+    {
+        var lblVersion = new Label
+        {
+            Text = $"This PC is on HeatCaller {AppVersion.Number}.",
+            AutoSize = true,
+        };
+
+        var btnCheck = new Button { Text = "Check for Updates" };
+
+        var lblResult = new Label
+        {
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _textSize.Wear(lblResult, () => AppTheme.SmallFont);
+
+        btnCheck.Click += async (_, _) =>
+        {
+            btnCheck.Enabled = false;
+            lblResult.Text = "Checking...";
+
+            string result;
+
+            try
+            {
+                result = await AppUpdates.CheckNowAsync(_settings);
+            }
+            catch (Exception ex)
+            {
+                result = $"The check didn't finish ({ex.GetType().Name}). Try again in a minute.";
+            }
+
+            // The page can have gone while the check was out - closing, or a
+            // restore restarting the app.
+            if (IsDisposed || btnCheck.IsDisposed)
+            {
+                return;
+            }
+
+            lblResult.Text = result;
+            btnCheck.Enabled = true;
+        };
+
+        var chkAuto = new ThemedCheckBox
+        {
+            Text = "Look for updates by itself every few hours",
+            AutoSize = true,
+            Checked = _settings.UpdateChecksOn,
+        };
+
+        chkAuto.CheckedChanged += (_, _) =>
+        {
+            if (_settings.UpdateChecksOn != chkAuto.Checked)
+            {
+                _settings.UpdateChecksOn = chkAuto.Checked;
+                _settings.Save();
+            }
+        };
+
+        var lblHint = new Label
+        {
+            Text = "An update is only ever offered when no race day is open and no race is on, a backup is taken first, "
+                   + "and \"After tonight\" installs it the next time HeatCaller is opened.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _textSize.Wear(lblHint, () => AppTheme.SmallFont);
+
+        var card = new Section("Updates");
+
+        card.Add(lblVersion, gapBelow: UiLayout.LabelGap);
+        card.Add(new ButtonBar().With(btnCheck));
+        card.Add(lblResult, gapBelow: UiLayout.RowGap);
+        card.Add(chkAuto, stretch: false, gapBelow: 0);
+        card.Add(lblHint, gapBelow: 0);
 
         return card;
     }
