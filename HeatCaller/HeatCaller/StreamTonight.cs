@@ -15,7 +15,7 @@ namespace HeatCaller;
 ///
 /// A stream that drops and restarts is two pieces; each gets its own link,
 /// matched in order. Kept in stream-tonight.json, so a restart mid-night
-/// loses nothing, and pieces from an earlier day are let go when it loads.
+/// loses nothing, and pieces from an earlier day are let go, at load or later.
 ///
 /// Thread-safe: OBS's events arrive on the link's own thread, the desk edits
 /// on the UI thread, and the publisher reads on its own.
@@ -61,14 +61,63 @@ public sealed class StreamTonight
             }
         }
 
-        // Only tonight's: pieces that started more than 20 hours ago are
-        // another night's, and so are their hidden races.
-        var cutoff = (nowUtc ?? DateTime.UtcNow).AddHours(-20);
+        LetGoOfEarlierNight(nowUtc ?? DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// Only tonight's: when every piece started more than 20 hours ago they
+    /// are another night's, and so are their hidden races. At load, and while
+    /// the app runs (bug hunt 19, #10 and #32: a laptop left on overnight, or
+    /// a two-day meeting), so last night's pieces never fill tonight's cap or
+    /// tonight's closing checklist. The relay keeps last night's own copy.
+    /// </summary>
+    public void ForgetEarlierNight(DateTime nowUtc)
+    {
+        bool letGo;
+
+        lock (_gate)
+        {
+            letGo = LetGoOfEarlierNight(nowUtc);
+
+            if (letGo)
+            {
+                Save();
+            }
+        }
+
+        if (letGo)
+        {
+            Changed?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Where tonight's junior races are looked for from: 20 hours back, or
+    /// the first piece still held when that is earlier, so a junior's race
+    /// stays named in the document for as long as its piece does (#10).
+    /// </summary>
+    public DateTime JuniorsSinceUtc(DateTime nowUtc)
+    {
+        var since = nowUtc.AddHours(-20);
+
+        lock (_gate)
+        {
+            var first = _saved.Pieces.Count > 0 ? _saved.Pieces.Min(p => p.StartedUtc) : since;
+            return first < since ? first : since;
+        }
+    }
+
+    private bool LetGoOfEarlierNight(DateTime nowUtc)
+    {
+        var cutoff = nowUtc.AddHours(-20);
 
         if (_saved.Pieces.Count > 0 && _saved.Pieces.All(p => p.StartedUtc < cutoff))
         {
             _saved = new Saved();
+            return true;
         }
+
+        return false;
     }
 
     /// <summary>The default file, beside settings.json.</summary>
@@ -95,6 +144,9 @@ public sealed class StreamTonight
     {
         lock (_gate)
         {
+            // A new night's stream never waits behind last night's pieces.
+            LetGoOfEarlierNight(atUtc);
+
             if (_saved.Pieces.Count > 0 && _saved.Pieces[^1].EndedUtc is null)
             {
                 return;
@@ -129,6 +181,39 @@ public sealed class StreamTonight
         Changed?.Invoke();
     }
 
+    /// <summary>
+    /// What OBS says when the link (re)connects, from GetStreamStatus (bug
+    /// hunt 19, #6): a stop or a restart while the link was down sent no
+    /// event. Not streaming: the open piece ends now, the best this laptop
+    /// knows. Streaming since well after the open piece began: the stream
+    /// dropped and restarted, so that piece ends and a new one starts then.
+    /// Otherwise a stream already live counts from now, as before.
+    /// </summary>
+    public void ObsSays(bool streaming, DateTime? liveSinceUtc, DateTime nowUtc)
+    {
+        if (!streaming)
+        {
+            Stopped(nowUtc);
+            return;
+        }
+
+        DateTime? openSince;
+
+        lock (_gate)
+        {
+            openSince = _saved.Pieces.Count > 0 && _saved.Pieces[^1].EndedUtc is null ? _saved.Pieces[^1].StartedUtc : null;
+        }
+
+        if (openSince is { } open && liveSinceUtc is { } since && since > open.AddSeconds(30) && since <= nowUtc)
+        {
+            Stopped(since);
+            Started(since);
+            return;
+        }
+
+        Started(nowUtc);
+    }
+
     /// <summary>A YouTube link (or bare id) for piece <paramref name="index"/>. False when it isn't one.</summary>
     public bool SetLink(int index, string link)
     {
@@ -144,6 +229,13 @@ public sealed class StreamTonight
             if (index < 0 || index >= _saved.Pieces.Count)
             {
                 return false;
+            }
+
+            // Unchanged (the box left without an edit): nothing to save, and
+            // no redraw to swallow the click that moved the focus (#49).
+            if (_saved.Pieces[index].VideoId == (id ?? string.Empty))
+            {
+                return true;
             }
 
             _saved.Pieces[index].VideoId = id ?? string.Empty;

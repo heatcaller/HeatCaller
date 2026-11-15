@@ -37,6 +37,7 @@ public sealed partial class MainForm
     private string StreamDocument()
     {
         var stream = _streamTonight ?? new StreamTonight();
+        stream.ForgetEarlierNight(DateTime.UtcNow);
         return stream.Document(_settings, JuniorRacesToday());
     }
 
@@ -47,6 +48,7 @@ public sealed partial class MainForm
     /// </summary>
     private NightClose.VideoLeft? VideoLeftTonight()
     {
+        _streamTonight?.ForgetEarlierNight(DateTime.UtcNow);
         var pieces = _streamTonight?.Pieces ?? Array.Empty<StreamTonight.Piece>();
 
         if (!_settings.VideoEnabled || pieces.Count == 0)
@@ -79,7 +81,9 @@ public sealed partial class MainForm
     /// </summary>
     private IEnumerable<string> JuniorRacesToday()
     {
-        var since = DateTime.UtcNow.AddHours(-20);
+        // As far back as the pieces held (bug hunt 19, #10): a junior race
+        // that dropped out here would be dropped from the night's copy too.
+        var since = _streamTonight?.JuniorsSinceUtc(DateTime.UtcNow) ?? DateTime.UtcNow.AddHours(-20);
 
         foreach (var session in _sessionHistory.SavedView().Saved.Where(s => s.StartedAtUtc >= since))
         {
