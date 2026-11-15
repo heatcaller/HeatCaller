@@ -371,6 +371,100 @@ public sealed class CommentaryService
     }
 
     /// <summary>
+    /// Hands a note back when the segment it was offered to did not say it,
+    /// so the next that asks may have it. Only when this segment holds it.
+    /// </summary>
+    internal void ReleaseNote(string transponder, CrewNote note, string segment, DateTime? nowLocal = null)
+    {
+        var night = TonightAtTheTrack.NightOf(nowLocal ?? DateTime.Now);
+        var key = $"{night:yyyy-MM-dd}|{transponder.Trim()}|{note}";
+
+        lock (_notesGate)
+        {
+            if (_notesOffered.TryGetValue(key, out var had) && string.Equals(had, segment, StringComparison.Ordinal))
+            {
+                _notesOffered.Remove(key);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The one goal a race intro is offered (15 Nov 2026, bug hunt 21): the
+    /// first driver on the grid whose goal nothing else has had tonight, with
+    /// their fact line. Nobody and empty when none is free. The rule the
+    /// intro is given is "one at most", so offering more only used them up.
+    /// </summary>
+    internal (string? Transponder, string Lines) IntroGoal(IEnumerable<string> onTrack, string segment, DateTime? nowLocal = null)
+    {
+        foreach (var transponder in onTrack)
+        {
+            var lines = CrewNoteLines(transponder, PromptName(transponder), CrewNote.Goal, segment, nowLocal);
+
+            if (lines.Length > 0)
+            {
+                return (transponder, lines);
+            }
+        }
+
+        return (null, string.Empty);
+    }
+
+    /// <summary>Words too common to show that a goal was said.</summary>
+    private static readonly HashSet<string> GoalFillerWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "about", "after", "again", "been", "from", "going", "have", "into", "just", "like", "make", "more",
+        "night", "race", "really", "some", "than", "that", "their", "them", "they", "this", "tonight",
+        "want", "what", "when", "will", "with", "would", "your",
+    };
+
+    /// <summary>
+    /// Whether <paramref name="line"/> says <paramref name="driver"/>'s goal
+    /// (15 Nov 2026, bug hunt 21): it names them (any word of the name) and
+    /// carries the goal's own words - two of them where the goal has two or
+    /// more, one otherwise; a word may be bent ("consistent", "consistently").
+    /// Never sure with nothing to go on, so a goal of only common words
+    /// counts as said - kept, as before - rather than said twice.
+    /// </summary>
+    internal static bool GoalSaid(string? line, string driver, string goal)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return false;
+        }
+
+        static List<string> Words(string? text) => Regex.Matches((text ?? string.Empty).ToLowerInvariant(), @"[\p{L}\p{N}]+")
+            .Select(m => m.Value)
+            .ToList();
+
+        var said = Words(line);
+        var nameWords = Words(driver).Where(w => w.Length >= 3).ToHashSet();
+
+        if (nameWords.Count > 0 && !said.Any(nameWords.Contains))
+        {
+            return false;
+        }
+
+        var goalWords = Words(goal)
+            // Not figures: "top 3" is said "top three".
+            .Where(w => w.Length >= 4 && !w.Any(char.IsDigit) && !GoalFillerWords.Contains(w) && !nameWords.Contains(w))
+            .Distinct()
+            .ToList();
+
+        if (goalWords.Count == 0)
+        {
+            return true;
+        }
+
+        var found = goalWords.Count(w =>
+        {
+            var stem = w.Length > 5 ? w[..(w.Length - 2)] : w;
+            return said.Any(s => s.StartsWith(stem, StringComparison.Ordinal));
+        });
+
+        return found >= Math.Min(2, goalWords.Count);
+    }
+
+    /// <summary>
     /// What the intro or the recap is told about a driver's own words: as
     /// something they said, one at most, never as a result. Empty with none.
     /// </summary>
@@ -1731,10 +1825,17 @@ public sealed class CommentaryService
         // For the same drivers named above, and no others.
         var details = DriverDetailLinesFor(onTrack);
 
-        // THEIR GOALS FOR TONIGHT (15 Nov 2026, driver crew): for the drivers
-        // named, each goal once a night - whichever of this intro and their
-        // principal's interview asks first. See CrewNoteLines.
-        var introNotes = string.Concat(onTrack.Select(t => CrewNoteLines(t, PromptName(t), CrewNote.Goal, "intro:" + round.Id)));
+        // THEIR GOALS FOR TONIGHT (15 Nov 2026, driver crew): each goal once a
+        // night - whichever of this intro and their principal's interview
+        // asks first. See CrewNoteLines.
+        //
+        // ONE GOAL PER INTRO (15 Nov 2026, bug hunt 21): every driver's went
+        // in under a "one at most" rule, so seven of eight were used up
+        // unsaid and no later intro or principal could have them. Now the
+        // first driver on the grid with a goal still free, and it is handed
+        // back below when the line written does not say it.
+        var introSegment = "intro:" + round.Id;
+        var (introGoalDriver, introNotes) = IntroGoal(onTrack, introSegment);
         WeighNotes($"intro for {Field(round.RoundLabel)}", introNotes);
 
         // Heat or main, in words (27 Sep 2026). The label often says it
@@ -2175,15 +2276,30 @@ public sealed class CommentaryService
         // stands in for a roll call. A sentence with a figure the facts cannot
         // back is cut and the rest said (repair); only an intro too broken for
         // that is refused - then it is no intro, as one that never came back.
-        var answer = await FiguresCheckedAsync(
-            Ask(Client,
-                BuildSystemPrompt(), facts, maxTokens: MaxTokensForWordLimit(), temperature: Variety, ct: ct,
-                timeout: BetweenRacesTimeout),
-            // And the size of the field, which the facts list by name but
-            // never count - "six drivers on the grid" is true and was not in
-            // them. See ImpliedCounts. The whole field, not the eight named.
-            CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose) + "\n" + ImpliedCounts(fieldSize),
-            "round intro", repair: true);
+        string? answer;
+
+        try
+        {
+            answer = await FiguresCheckedAsync(
+                Ask(Client,
+                    BuildSystemPrompt(), facts, maxTokens: MaxTokensForWordLimit(), temperature: Variety, ct: ct,
+                    timeout: BetweenRacesTimeout),
+                // And the size of the field, which the facts list by name but
+                // never count - "six drivers on the grid" is true and was not in
+                // them. See ImpliedCounts. The whole field, not the eight named.
+                CommentaryNumberCheck.FactsIn(facts, FactsOpen, FactsClose) + "\n" + ImpliedCounts(fieldSize),
+                "round intro", repair: true);
+        }
+        catch
+        {
+            // Never written, so never said - see IntroGoal.
+            if (introGoalDriver is not null)
+            {
+                ReleaseNote(introGoalDriver, CrewNote.Goal, introSegment);
+            }
+
+            throw;
+        }
 
         if (!string.IsNullOrWhiteSpace(answer))
         {
@@ -2239,6 +2355,15 @@ public sealed class CommentaryService
             {
                 log?.Invoke("Round intro " + string.Join("; ", notes) + ".");
             }
+        }
+
+        // The goal stays this intro's only when the line as it now stands
+        // says it (15 Nov 2026, bug hunt 21) - otherwise a later intro, or
+        // the driver's principal, may still have it.
+        if (introGoalDriver is not null
+            && !GoalSaid(answer, PromptName(introGoalDriver), DriverCrew.GoalTonight(_profiles.Get(introGoalDriver), DateTime.Now)))
+        {
+            ReleaseNote(introGoalDriver, CrewNote.Goal, introSegment);
         }
 
         if (!remember)
