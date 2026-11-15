@@ -216,7 +216,7 @@ public sealed class BugHunt14_ChampCastTests : IDisposable
             "private async Task ReplayTheMomentAsync()", "private bool StopTheReplay()"));
 
         var cleanUp = replay[replay.LastIndexOf("finally", StringComparison.Ordinal)..];
-        var check = cleanUp.IndexOf("if (!finished)", StringComparison.Ordinal);
+        var check = cleanUp.IndexOf("if (RestartsAfterReplay(finished, buffer.SinceLastAudio))", StringComparison.Ordinal);
         var restart = cleanUp.IndexOf("buffer.Restart();", StringComparison.Ordinal);
 
         Assert.True(check > 0 && restart > check,

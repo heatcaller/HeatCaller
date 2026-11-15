@@ -1015,7 +1015,15 @@ public sealed partial class RaceControlControl
 
                 if (mode != HandicapMode.None)
                 {
-                    raceHandicap = new RaceHandicap(mode, HandicapCalculator.Apply(record.Results, handicaps, mode));
+                    // Over the class's own drivers only, as the grid history
+                    // above (bug hunt 20): in a shared heat the other class
+                    // is not scored on this handicap, and ranking it in
+                    // named its uncredited driver the winner on handicap.
+                    var classRows = record.Results
+                        .Where(r => MixedHeats.Counts(round, round.ClassName, r.Transponder, r.ClassName, _profiles))
+                        .ToList();
+
+                    raceHandicap = new RaceHandicap(mode, HandicapCalculator.Apply(classRows, handicaps, mode));
 
                     StatusMessage?.Invoke(
                         $"{AppTime.LogStampNow()}  [commentary] {round.ClassName} is scored on handicap - the recap says who won on it.");

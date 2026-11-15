@@ -408,18 +408,24 @@ public sealed class AutoStartClock
     /// <summary>
     /// Drivers in the next race who raced the race just run, for the rest
     /// guard - by transponder, case-blind. Empty when either is unknown.
+    /// <paramref name="mainOf"/> (ProfileStore.PrimaryForAlternate) matches
+    /// a driver seated on their second car's transponder in one of the two
+    /// races (bug hunt 20) - the two-class driver swapping cars is the one
+    /// the rest is for. Returns the ids as the next race's grid has them.
     /// </summary>
-    public static List<string> BackToBack(IEnumerable<string>? justRan, IEnumerable<string>? next)
+    public static List<string> BackToBack(IEnumerable<string>? justRan, IEnumerable<string>? next, Func<string, string?>? mainOf = null)
     {
         if (justRan is null || next is null)
         {
             return new List<string>();
         }
 
-        var ran = justRan.Where(t => !string.IsNullOrWhiteSpace(t)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        string Driver(string t) => mainOf?.Invoke(t.Trim()) ?? t.Trim();
+
+        var ran = justRan.Where(t => !string.IsNullOrWhiteSpace(t)).Select(Driver).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         return next
-            .Where(t => !string.IsNullOrWhiteSpace(t) && ran.Contains(t))
+            .Where(t => !string.IsNullOrWhiteSpace(t) && ran.Contains(Driver(t)))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
     }

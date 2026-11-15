@@ -132,7 +132,12 @@ public sealed partial class RaceControlControl
         var active = _activeRound?.Invoke();
         var onTrack = string.Equals(active?.Id, roundId, StringComparison.Ordinal)
                       && _race.State is not (RaceState.Idle or RaceState.Finished);
-        var isNext = string.Equals(NextRound()?.Id, roundId, StringComparison.Ordinal);
+        var isNext = IsNextToStart(
+            roundId,
+            active?.Id,
+            active is { IsRecorded: false }
+                && ActiveRoundStillToRun(_race.State, _race.IsDemoMode, _race.IsPracticeMode, HasUnfiledRaces),
+            NextRound()?.Id);
         var counting = _autoStart.IsOpen && string.Equals(_autoStart.RoundId, roundId, StringComparison.Ordinal);
 
         return MarshalSwapNotices.Lateness(
@@ -142,6 +147,19 @@ public sealed partial class RaceControlControl
             marshalsBeingChecked: _marshalsBanner.Visible && string.Equals(_marshalsRound?.Id, roundId, StringComparison.Ordinal),
             untilStart: counting ? _autoStart.Remaining(nowUtc, Gap.PushedBackMinutes) : null);
     }
+
+    /// <summary>
+    /// Whether <paramref name="roundId"/> is the next race to start. The
+    /// round in the Round box counts while it is still to run - in its
+    /// warm-up, while On Air opens it, picked before the first race (bug
+    /// hunt 20): NextRound passes it over, so a swap then was filed as an
+    /// early routine one minutes before the green. Otherwise the race after
+    /// it (<paramref name="nextId"/>).
+    /// </summary>
+    internal static bool IsNextToStart(string roundId, string? activeId, bool activeStillToRun, string? nextId) =>
+        activeStillToRun && activeId is not null
+            ? string.Equals(activeId, roundId, StringComparison.Ordinal)
+            : string.Equals(nextId, roundId, StringComparison.Ordinal);
 
     /// <summary>Who a marshal on a round is covering for, by the name the announcer uses - null when it's their own post.</summary>
     private string? CoveringFor(RoundDefinition round, string transponder)

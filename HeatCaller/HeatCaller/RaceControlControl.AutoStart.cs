@@ -380,7 +380,7 @@ public sealed partial class RaceControlControl
 
         var lastRound = _activeRound?.Invoke();
         var justRan = RecentlyRan(next, lastRound);
-        var resting = AutoStartClock.BackToBack(justRan, next.AssignedTransponders).Select(SpokenNameOf).ToList();
+        var resting = AutoStartClock.BackToBack(justRan, next.AssignedTransponders, _profiles.PrimaryForAlternate).Select(SpokenNameOf).ToList();
 
         // A break planned between the race just run and this one (12 Nov
         // 2026, setup plan D5) is added to the gap: "water the track after
