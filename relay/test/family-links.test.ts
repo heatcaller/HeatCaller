@@ -126,7 +126,7 @@ describe("the family page", () => {
 
   it("puts a Family links card on the driver's own night", () => {
     const html = nightPage("acme-rc", "Acme RC");
-    assert.match(html, /<section class="card famlinks" id="famlinks" hidden><\/section>/);
+    assert.match(html, /<section class="card famlinks" id="famlinks" data-sp="tonight" hidden><\/section>/);
     assert.match(html, /post\('\/family\/manage', \{ id: CODE, action: 'make', label: label\.value \}\)/);
   });
 });
