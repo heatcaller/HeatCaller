@@ -267,7 +267,10 @@ public static class RcpPieces
         {
             var seam = (wall.Col, wall.Row, wall.Vertical);
 
-            if (laid.Contains(seam))
+            // A divider with a finish or arched tile on one side still needs
+            // the other lane's rail (bug hunt 20), so only a single rail is
+            // done here; the Double branch skips just the side that has it.
+            if (laid.Contains(seam) && !wall.Double)
             {
                 continue;
             }
@@ -281,6 +284,12 @@ public static class RcpPieces
             {
                 foreach (var (col, row, edge) in new[] { (aCol, aRow, aEdge), (bCol, bRow, bEdge) })
                 {
+                    // This lane's rail is already the finish or arched tile's own.
+                    if (tiles.TryGetValue((col, row), out var own) && HasStraight(own.Piece) && own.Facing == edge)
+                    {
+                        continue;
+                    }
+
                     if (Free(col, row) is { } tile)
                     {
                         Bolt(tile, edge);

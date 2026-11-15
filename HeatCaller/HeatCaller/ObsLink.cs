@@ -239,7 +239,7 @@ public sealed class ObsLink : IDisposable
         State = "connected";
         _log?.Invoke("[video] OBS link connected.");
 
-        // A stream already live when HeatCaller started counts from now.
+        // A stream already live when HeatCaller started counts from when OBS went live.
         await SendAsync(socket, new { op = 6, d = new { requestType = "GetStreamStatus", requestId = "hc-status" } }, token);
 
         while (!token.IsCancellationRequested && socket.State == WebSocketState.Open)
