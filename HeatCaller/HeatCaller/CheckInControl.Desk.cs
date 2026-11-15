@@ -160,6 +160,9 @@ public sealed partial class CheckInControl
         }
         else
         {
+            // Drawn while the desk was showing, the roster judged tech
+            // without its class chip (JudgesTechFor): drawn again with it.
+            RefreshDriverList();
             _txtScan.Focus();
         }
     }
@@ -369,7 +372,7 @@ public sealed partial class CheckInControl
                 }
                 else
                 {
-                    Row(Gate.Open, $"Owes {DeskMoney.Money(fee)}",
+                    Row(Gate.Open, DeskMoney.Words(payment, fee),
                         ("Paid Cash", () => Settle(night.Day, one, PaidHow.Cash, string.Empty), true),
                         ("Paid Card", () => Settle(night.Day, one, PaidHow.Card, string.Empty), false));
                 }

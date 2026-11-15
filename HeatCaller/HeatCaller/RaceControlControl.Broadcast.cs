@@ -216,6 +216,17 @@ public sealed partial class RaceControlControl
     /// <summary>Least race audio worth replaying - less is a click, not a moment.</summary>
     internal const double LeastMomentSeconds = 3;
 
+    /// <summary>
+    /// Whether the held audio starts again once a replay ends: only when the
+    /// race was still recording at the press AND still is now. A replay that
+    /// ran on past the end of the recording (bug hunt 20) must leave the end
+    /// of the race to be replayed - nothing new comes in after it, so a
+    /// restart there emptied the buffer for good. Fed once a device callback,
+    /// so a second's quiet means the recording has stopped.
+    /// </summary>
+    internal static bool RestartsAfterReplay(bool finishedAtPress, TimeSpan sinceLastAudio) =>
+        !finishedAtPress && sinceLastAudio < TimeSpan.FromSeconds(1);
+
     /// <summary>The replay on air now, so Skip can ride it down. Null when none is.</summary>
     private CancellationTokenSource? _replayCut;
 
@@ -404,7 +415,7 @@ public sealed partial class RaceControlControl
             // buffer is built never to do). Only while it is being fed:
             // after the race nothing new comes in, and replaying the end
             // of the race twice has to keep working.
-            if (!finished)
+            if (RestartsAfterReplay(finished, buffer.SinceLastAudio))
             {
                 buffer.Restart();
             }

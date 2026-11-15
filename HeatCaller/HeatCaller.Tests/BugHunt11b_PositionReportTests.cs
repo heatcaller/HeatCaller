@@ -102,7 +102,7 @@ public sealed class BugHunt11b_PositionReportTests : IDisposable
                 while (Volatile.Read(ref stop) == 0)
                 {
                     var announcer = Volatile.Read(ref current);
-                    RunningOrderNow.Invoke(announcer, [10]);
+                    RunningOrderNow.Invoke(announcer, [10, false]);
                     reads++;
                 }
             }

@@ -89,6 +89,7 @@ describe("Back walks the tabs in the home-screen app (item 18)", () => {
   it("adds a history step for each tab, and shows that page again on Back", () => {
     const shell = appShellPage("acme-rc", "Acme RC");
     assert.match(shell, /history\.pushState\(\{ hc: 1 \}, '', to\);\s*\}\s*catch \(e2\) \{[^}]*\}\s*hcGo\(to\);/);
-    assert.match(shell, /addEventListener\('popstate', \(\) => \{\s*if \(!SHELL && !hcHeld\) return;/);
+    // Bug hunt 20 #4: a Live page that let go of the bar takes it again on Back.
+    assert.match(shell, /addEventListener\('popstate', \(\) => \{\s*const path = [^;]*;[\s\S]*?if \(!SHELL && !hcHeld\) \{\s*if \(hcHeldOnce === ''[^)]*\)[^;]*return;\s*hcHold\(hcHeldOnce\);/);
   });
 });

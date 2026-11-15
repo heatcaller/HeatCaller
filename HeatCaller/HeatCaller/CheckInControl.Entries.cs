@@ -112,7 +112,9 @@ public sealed partial class CheckInControl
 
         if (newCheckIns.Count > 0)
         {
-            _checkIns.CheckInAll(newCheckIns);
+            // Paperwork, often hours before anyone comes - not doors open
+            // (bug hunt 20, see CheckInStore.CheckInAll).
+            _checkIns.CheckInAll(newCheckIns, opensDoors: false);
             RaiseDeskChanges(newCheckIns);
         }
 

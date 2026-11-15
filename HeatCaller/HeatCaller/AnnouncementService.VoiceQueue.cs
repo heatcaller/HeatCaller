@@ -71,6 +71,17 @@ public sealed partial class AnnouncementService
         return (ms / 1000.0).ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) + "s";
     }
 
+    /// <summary>
+    /// True when the line already says what the auto tail would add - a
+    /// club's "{driver} is {backinfront}!" followed by "Back in front for
+    /// the second time." would say the same words twice (bug hunt 20).
+    /// </summary>
+    internal static bool TailRepeatsLine(string text, string tail)
+    {
+        var words = tail.Trim().TrimEnd('.', '!', '?').Trim();
+        return words.Length > 0 && text.Contains(words, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <param name="suffix">
     /// Appended to the finished line, for context the template itself can't
     /// carry - currently the runner-up's streak.
@@ -348,7 +359,8 @@ public sealed partial class AnnouncementService
         }
 
         if (autoTail is { } tail && tail.Tail.Length > 0
-            && !chosenTemplate.Contains(tail.Placeholder, StringComparison.OrdinalIgnoreCase))
+            && !chosenTemplate.Contains(tail.Placeholder, StringComparison.OrdinalIgnoreCase)
+            && !TailRepeatsLine(text, tail.Tail))
         {
             text = (text + tail.Tail).Trim();
             displayText = (displayText + tail.Tail).Trim();
@@ -755,6 +767,11 @@ public sealed partial class AnnouncementService
                 }
 
                 StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - {notNow} (rendered in {Seconds(rendering.ElapsedMilliseconds)}).");
+
+                // Untrue now, as a stale line is (bug hunt 20): a fast lap
+                // someone has since beaten stayed on the Big Screen, and in
+                // the feed as said.
+                WithdrawAnnouncementText(_dequeuedFreshness.Value.Shown);
                 return;
             }
 

@@ -197,7 +197,9 @@ function roomFor(mine: Map<string, { firstMs: number; dead: boolean; asking: boo
  * 401 (embedding turned off), 403 and 404 (private, removed) make it dead:
  * no race shows it. A 200 brings it back - a video still processing after
  * the stream, or made public again. YouTube not answering changes nothing.
- * Kept in memory: a relay restart checks again, which costs one ask a video.
+ * A dead video goes on being asked about once a day after its week (bug
+ * hunt 20), so one the club makes public later still comes back. Kept in
+ * the club's "videocheck" snapshot across restarts (see VideoCheckKeep).
  */
 export class VideoCheck {
   private readonly seen = new Map<string, Map<string, { firstMs: number; lastMs: number; dead: boolean; asking: boolean }>>();
@@ -216,7 +218,15 @@ export class VideoCheck {
     let p = this.loaded.get(club);
     if (p === undefined) {
       p = (async () => {
-        const kept = this.keep === undefined ? undefined : await this.keep.load(club).catch(() => undefined);
+        let kept: Awaited<ReturnType<VideoCheckKeep["load"]>>;
+        try {
+          kept = this.keep === undefined ? undefined : await this.keep.load(club);
+        } catch {
+          // Not read (bug hunt 20): read again next time, and saw() saves
+          // nothing meanwhile, so the kept checks are not written over.
+          this.loaded.delete(club);
+          return;
+        }
         if (kept === undefined || this.seen.has(club)) return;
         const mine = new Map<string, { firstMs: number; lastMs: number; dead: boolean; asking: boolean }>();
         for (const k of kept.slice(0, VIDEO_CHECK_MAX)) {
@@ -238,6 +248,7 @@ export class VideoCheck {
   /** Asks about any of these videos that is new, or due its daily check. Resolves when those asks are done. */
   async saw(club: string, ids: readonly string[]): Promise<void> {
     await this.ready(club);
+    if (!this.loaded.has(club) && !this.seen.has(club)) return;
     let mine = this.seen.get(club);
     if (mine === undefined) {
       mine = new Map();
@@ -253,7 +264,7 @@ export class VideoCheck {
         if (mine.size >= VIDEO_CHECK_MAX && !roomFor(mine, now)) continue;
         mine.set(id, { firstMs: now, lastMs: now, dead: false, asking: true });
         due.push(id);
-      } else if (!known.asking && now - known.lastMs >= DAY_MS && now - known.firstMs < VIDEO_CHECK_FOR_MS) {
+      } else if (!known.asking && now - known.lastMs >= DAY_MS && (known.dead || now - known.firstMs < VIDEO_CHECK_FOR_MS)) {
         known.lastMs = now;
         known.asking = true;
         due.push(id);

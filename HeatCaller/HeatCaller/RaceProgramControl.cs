@@ -1196,6 +1196,52 @@ public sealed partial class RaceProgramControl : UserControl
         return round => about(round.Id);
     }
 
+    /// <summary>
+    /// Each class on the day that qualifies but has no mains yet, with how
+    /// many drivers it has, in the order the classes first appear. A heat a
+    /// class SHARES (MixedHeats) counts for every class in it, and only its
+    /// own drivers count for each (bug hunt 20): SeedMains builds Stock's
+    /// mains and Mod's apart, so grouping on ClassName alone left the
+    /// folded-in class's finals out of the night's finish.
+    /// </summary>
+    internal static List<(string ClassName, int Drivers)> ClassesAwaitingMains(IReadOnlyList<RoundDefinition> day, ProfileStore? profiles)
+    {
+        var classNames = new List<string>();
+
+        foreach (var name in day.SelectMany(MixedHeats.ClassesOf))
+        {
+            if (!classNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+            {
+                classNames.Add(name);
+            }
+        }
+
+        var awaiting = new List<(string, int)>();
+
+        foreach (var className in classNames)
+        {
+            var group = day.Where(r => MixedHeats.RunsClass(r, className)).ToList();
+
+            if (!group.Any(r => r.Kind == RoundKind.Qualifier) || group.Any(r => r.Kind == RoundKind.Main))
+            {
+                continue;
+            }
+
+            var drivers = group
+                .Where(r => r.Kind == RoundKind.Qualifier)
+                .SelectMany(r => MixedHeats.DriversOfClass(r, className, profiles))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+
+            if (drivers > 0)
+            {
+                awaiting.Add((className, drivers));
+            }
+        }
+
+        return awaiting;
+    }
+
     /// <param name="keepPromises">
     /// Hold each race to its promised time, as Auto start will (12 Nov 2026,
     /// setup plan step 8 - StartPromise). False when the promises are being
@@ -1222,26 +1268,10 @@ public sealed partial class RaceProgramControl : UserControl
 
             if (!DayIsClubNight)
             {
-                foreach (var group in day.GroupBy(r => r.ClassName, StringComparer.OrdinalIgnoreCase))
+                foreach (var (className, drivers) in ClassesAwaitingMains(day, _profiles))
                 {
-                    if (!group.Any(r => r.Kind == RoundKind.Qualifier) || group.Any(r => r.Kind == RoundKind.Main))
-                    {
-                        continue;
-                    }
-
-                    var drivers = group
-                        .Where(r => r.Kind == RoundKind.Qualifier)
-                        .SelectMany(r => r.AssignedTransponders)
-                        .Distinct(StringComparer.OrdinalIgnoreCase)
-                        .Count();
-
-                    if (drivers == 0)
-                    {
-                        continue;
-                    }
-
                     var mains = (int)Math.Ceiling(drivers / (double)Math.Max(2, HeatSize()));
-                    var format = ClassNamed(group.Key)?.Format ?? appDefault;
+                    var format = ClassNamed(className)?.Format ?? appDefault;
 
                     // Tonight's finals cut (12 Nov 2026, setup plan step 8),
                     // chosen in "We're Done After This Round...".
@@ -1251,7 +1281,7 @@ public sealed partial class RaceProgramControl : UserControl
                     }
 
                     var length = NightPlan.LengthOf(NightPlan.Shortened(format, raceDay.FinalsMinutesShorter) ?? format);
-                    unbuilt.Add(new NightPlan.UnbuiltMains(group.Key, mains, length, format));
+                    unbuilt.Add(new NightPlan.UnbuiltMains(className, mains, length, format));
                 }
             }
 
@@ -1277,7 +1307,8 @@ public sealed partial class RaceProgramControl : UserControl
                 raceDay.FirstRaceLocalTime,
                 raceDay.Breaks,
                 keepPromises && _settings.AutoStartNeverEarly && _settings.AutoStartBetweenRaces,
-                nextStart);
+                nextStart,
+                HeatSize());
         }
         catch (Exception ex)
         {

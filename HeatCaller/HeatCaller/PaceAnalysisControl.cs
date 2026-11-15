@@ -325,7 +325,7 @@ public sealed class PaceAnalysisControl : UserControl
         // carry them, and a ghost's pace is generated, not driven.
         _rows = session.Results
             .OrderBy(r => r.Position == 0 ? int.MaxValue : r.Position)
-            .Select(entry => (Row: PaceAnalysis.For(entry), Entry: entry))
+            .Select(entry => (Row: PaceAnalysis.For(entry) with { Position = RealPlace(session, entry) }, Entry: entry))
             .Where(x => x.Row.CountedLaps > 0 && !GhostService.IsGhost(x.Row.Transponder))
             .ToList();
 
@@ -570,6 +570,26 @@ public sealed class PaceAnalysisControl : UserControl
     /// (MixedHeats.ScoringFields): "Won Stock." rather than "P3 of 3, 1 lap
     /// down on" a Mod driver.
     /// </summary>
+    /// <summary>
+    /// A driver's place among the real cars: the saved position less the
+    /// ghosts ahead of them, 0 for no place.
+    /// </summary>
+    /// <remarks>
+    /// WHY (15 Nov 2026, bug hunt 20): the headline counted only real cars
+    /// (bug hunt 19), but the verdict table and the grid printed the saved
+    /// position, so on an older session with a ghost in P1 the headline
+    /// said "Won it" and the same driver's row said P2.
+    /// </remarks>
+    internal static int RealPlace(SessionRecord session, SessionResultEntry entry)
+    {
+        if (entry.Position <= 0)
+        {
+            return 0;
+        }
+
+        return 1 + session.Results.Count(r => r.Position > 0 && r.Position < entry.Position && !GhostService.IsGhost(r.Transponder));
+    }
+
     internal static string ResultClause(SessionRecord session, SessionResultEntry entry)
     {
         if (session.SessionType == RaceSessionType.Practice || entry.Position <= 0)

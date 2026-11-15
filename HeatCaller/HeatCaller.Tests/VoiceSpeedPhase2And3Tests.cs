@@ -258,6 +258,20 @@ public sealed class VoiceSpeedPhase2And3Tests
     }
 
     [Fact]
+    public void A_saved_demo_or_imported_lap_is_not_the_best_here_to_beat()
+    {
+        var demo = Race("Home Track", ("frank", 12_800));
+        demo.IsDemo = true;
+        var imported = Race("Home Track", ("frank", 12_700));
+        imported.ImportedFrom = "another results page";
+
+        var history = new[] { Race("Home Track", ("frank", 13_200)), demo, imported };
+
+        Assert.Equal(13_200, BestEverHere.PreviousBest(history, "Home Track", "frank"));
+        Assert.Null(BestEverHere.PreviousBest(new[] { demo, imported }, "Home Track", "frank"));
+    }
+
+    [Fact]
     public void A_driver_new_to_the_layout_has_no_best_to_beat()
     {
         var history = new[] { Race("Away Track", ("dee", 6_000)) };

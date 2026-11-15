@@ -101,10 +101,19 @@ public static class DeskMoney
     /// Whether tonight charges anything at all (12 Nov 2026, setup plan step
     /// 8): the day has an entry fee, or one of its classes has its own. What
     /// shows the Paid column, the Driver Paid button and the report's money.
+    ///
+    /// With no classes ticked every class runs, and each driver pays for
+    /// their main class (CheckInControl.FeeFor) - so any of the club's
+    /// classes with its own fee counts (bug hunt 20). Only checked was the
+    /// ticked list, which is empty then, so a club pricing only its classes
+    /// tracked no money that night though each driver's fee came out at $20.
     /// </summary>
-    public static bool Charges(RaceEvent? day, Func<string, RaceClass?> classNamed) =>
+    public static bool Charges(RaceEvent? day, Func<string, RaceClass?> classNamed, IEnumerable<RaceClass>? clubClasses = null) =>
         day is { IsLegacy: false } real
-        && (real.EntryFee > 0 || (real.ClassNames ?? new List<string>()).Any(name => classNamed(name)?.EntryFee is > 0));
+        && (real.EntryFee > 0
+            || (real.ClassNames is { Count: > 0 } ticked
+                ? ticked.Any(name => classNamed(name)?.EntryFee is > 0)
+                : (clubClasses ?? Enumerable.Empty<RaceClass>()).Any(c => c.EntryFee is > 0)));
 
     /// <summary>
     /// A class's own fees in a few words, for the Classes page - "$5.00",
@@ -182,6 +191,12 @@ public static class DeskMoney
 
         foreach (var (name, fee, payment) in drivers)
         {
+            // Paid for less than the fee is now - a class ticked since: the rest is owed.
+            if (payment?.How is PaidHow.Cash or PaidHow.Card && StillOwed(payment, fee) is > 0 and var more)
+            {
+                owing.Add((name, more));
+            }
+
             switch (payment?.How ?? PaidHow.Owing)
             {
                 case PaidHow.Cash:
@@ -224,14 +239,28 @@ public static class DeskMoney
             return null;
         }
 
-        var paid = (payment?.How ?? PaidHow.Owing) != PaidHow.Owing;
+        var owed = StillOwed(payment, fee);
 
         var money = Money(fee);
 
-        return paid
+        return owed <= 0
             ? new PhoneMoney(money, true, "Paid ✓")
-            : new PhoneMoney(money, false, $"Entry: {money} - pay at the desk");
+            : new PhoneMoney(money, false, $"Entry: {Money(owed)} - pay at the desk");
     }
+
+    /// <summary>
+    /// What a driver still owes tonight against their fee now: all of it when
+    /// they haven't paid, nothing when comped, and when paid by cash or card
+    /// whatever the fee has gone up by since (bug hunt 20) - a second class
+    /// ticked after paying for one left its extra-class fee uncollected, the
+    /// driver showing as paid and ready.
+    /// </summary>
+    public static decimal StillOwed(EntryPayment? payment, decimal fee) => (payment?.How ?? PaidHow.Owing) switch
+    {
+        PaidHow.Comp => 0,
+        PaidHow.Cash or PaidHow.Card => Math.Max(0, fee - payment!.Amount),
+        _ => Math.Max(0, fee),
+    };
 
     /// <summary>Money as the club writes it, in this PC's currency format: "$15.00".</summary>
     public static string Money(decimal amount) => amount.ToString("C", CultureInfo.CurrentCulture);
@@ -239,6 +268,8 @@ public static class DeskMoney
     /// <summary>The Paid column: "Cash $15.00", "Card $25.00", "Comp - Marshal", "Owes $15.00", or "" with nothing owed.</summary>
     public static string Words(EntryPayment? payment, decimal fee) => (payment?.How ?? PaidHow.Owing) switch
     {
+        PaidHow.Cash or PaidHow.Card when StillOwed(payment, fee) is > 0 and var more =>
+            $"Owes {Money(more)} more ({payment!.How} {Money(payment.Amount)} paid)",
         PaidHow.Cash => $"Cash {Money(payment!.Amount)}",
         PaidHow.Card => $"Card {Money(payment!.Amount)}",
         PaidHow.Comp => payment!.Note.Length > 0 ? $"Comp - {payment.Note}" : "Comp",
@@ -336,6 +367,10 @@ public sealed class EntryPaymentStore
     /// <summary>How this driver settled on this race day, or null for not at all.</summary>
     public EntryPayment? Get(string eventId, string transponder) =>
         _byEvent.TryGetValue(eventId, out var day) && day.TryGetValue(transponder, out var payment) ? payment : null;
+
+    /// <summary>The transponders with a payment on file for this race day, whether or not they ever ran.</summary>
+    public IReadOnlyList<string> TranspondersFor(string eventId) =>
+        _byEvent.TryGetValue(eventId, out var day) ? day.Keys.ToList() : new List<string>();
 
     /// <summary>Records how a driver settled; null clears it back to owing.</summary>
     public void Set(string eventId, string transponder, EntryPayment? payment)

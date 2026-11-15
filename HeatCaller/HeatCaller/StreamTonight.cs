@@ -187,7 +187,8 @@ public sealed class StreamTonight
     /// event. Not streaming: the open piece ends now, the best this laptop
     /// knows. Streaming since well after the open piece began: the stream
     /// dropped and restarted, so that piece ends and a new one starts then.
-    /// Otherwise a stream already live counts from now, as before.
+    /// No piece open: the new one starts when OBS went live (bug hunt 20),
+    /// or from now when OBS doesn't say or says a time that can't be right.
     /// </summary>
     public void ObsSays(bool streaming, DateTime? liveSinceUtc, DateTime nowUtc)
     {
@@ -198,16 +199,27 @@ public sealed class StreamTonight
         }
 
         DateTime? openSince;
+        DateTime? lastEnded;
 
         lock (_gate)
         {
             openSince = _saved.Pieces.Count > 0 && _saved.Pieces[^1].EndedUtc is null ? _saved.Pieces[^1].StartedUtc : null;
+            lastEnded = _saved.Pieces.Count > 0 ? _saved.Pieces[^1].EndedUtc : null;
         }
 
         if (openSince is { } open && liveSinceUtc is { } since && since > open.AddSeconds(30) && since <= nowUtc)
         {
             Stopped(since);
             Started(since);
+            return;
+        }
+
+        // No piece open (bug hunt 20): the video began when OBS went live,
+        // not when the link came up, or every race's link opens early by the
+        // gap. Never before the last piece ended, and never in the future.
+        if (openSince is null && liveSinceUtc is { } live && live <= nowUtc && (lastEnded is null || live >= lastEnded))
+        {
+            Started(live);
             return;
         }
 
@@ -367,6 +379,17 @@ public sealed class StreamTonight
             });
         }
     }
+
+    /// <summary>
+    /// Whether a race goes on the junior list: a driver whose profile is
+    /// marked junior, or anyone on a club rental (bug hunt 20). A rental is
+    /// lent by name only, so its result finds the shared rental profile (or
+    /// none) and nothing says whether the renter is a child - a junior
+    /// trying the club out must not end up on public video, so a rental race
+    /// is kept off it too.
+    /// </summary>
+    public static bool HasJuniorOrRental(IEnumerable<string> transponders, Func<string, DriverProfile?> profileOf, Func<string, bool> isRental) =>
+        transponders.Any(t => isRental(t) || profileOf(t) is { IsJunior: true } or { IsRental: true });
 
     private static Piece Copy(Piece p) => new()
     {

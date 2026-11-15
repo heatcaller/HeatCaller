@@ -409,9 +409,24 @@ public sealed class SessionHandicap
     /// <summary>Only the drivers with a credit; anybody not listed had none.</summary>
     public List<SessionHandicapCredit> Credits { get; set; } = new();
 
+    /// <summary>
+    /// The other classes of a shared (mixed-class) heat, each with its mode
+    /// as it was filed. WHY (15 Nov 2026, bug hunt 20): only the host class
+    /// was kept, so the guest class's table was always scored on today's
+    /// credits. Empty for a heat of one class, and on races saved before.
+    /// </summary>
+    public List<SessionHandicapClass> SharedClasses { get; set; } = new();
+
     /// <summary>The credit kept for this transponder, or null when it had none.</summary>
     public SessionHandicapCredit? For(string transponder) =>
         Credits.FirstOrDefault(c => string.Equals(c.Transponder, transponder, StringComparison.OrdinalIgnoreCase));
+}
+
+/// <summary>A class sharing a heat, with its handicap mode when the race was filed. See <see cref="SessionHandicap.SharedClasses"/>.</summary>
+public sealed class SessionHandicapClass
+{
+    public string ClassName { get; set; } = string.Empty;
+    public HandicapMode Mode { get; set; }
 }
 
 /// <summary>One driver's credit as it stood when the race was filed. See <see cref="SessionHandicap"/>.</summary>

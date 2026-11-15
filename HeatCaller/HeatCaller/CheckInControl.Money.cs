@@ -15,7 +15,7 @@ public sealed partial class CheckInControl
     /// DeskMoney.Charges.
     /// </summary>
     private (RaceEvent Day, bool Charges)? TonightsFees() =>
-        _events?.Active is { IsLegacy: false } day ? (day, DeskMoney.Charges(day, ClassNamed)) : null;
+        _events?.Active is { IsLegacy: false } day ? (day, DeskMoney.Charges(day, ClassNamed, _raceClasses.All)) : null;
 
     /// <summary>A class by name from the club's classes, for its fees.</summary>
     private RaceClass? ClassNamed(string name) => DeskMoney.ClassLookup(_raceClasses.All)(name);
@@ -55,8 +55,9 @@ public sealed partial class CheckInControl
     /// night priced by its classes the phone said nothing about money at all.
     /// </summary>
     internal static DeskMoney.PhoneMoney? PhoneMoneyFor(
-        DriverProfile profile, RaceEvent? day, Func<string, RaceClass?> classNamed, EntryPayment? payment) =>
-        day is not null && DeskMoney.Charges(day, classNamed)
+        DriverProfile profile, RaceEvent? day, Func<string, RaceClass?> classNamed, EntryPayment? payment,
+        IEnumerable<RaceClass>? clubClasses = null) =>
+        day is not null && DeskMoney.Charges(day, classNamed, clubClasses)
             ? DeskMoney.ForPhone(FeeFor(profile, day, classNamed), payment)
             : null;
 
@@ -71,8 +72,9 @@ public sealed partial class CheckInControl
 
         var payment = _payments.Get(fees.Day.Id, profile.Transponder);
         var cell = row.Cells[column.Index];
-        cell.Value = DeskMoney.Words(payment, FeeFor(profile, fees.Day, ClassNamed));
-        cell.Style.ForeColor = (payment?.How ?? PaidHow.Owing) == PaidHow.Owing ? AppTheme.Warning : AppTheme.Success;
+        var fee = FeeFor(profile, fees.Day, ClassNamed);
+        cell.Value = DeskMoney.Words(payment, fee);
+        cell.Style.ForeColor = DeskMoney.StillOwed(payment, fee) > 0 ? AppTheme.Warning : AppTheme.Success;
     }
 
     /// <summary>The right-click menu's Paid cash / Paid card / Comp / Owing, for the drivers picked.</summary>
@@ -198,7 +200,8 @@ public sealed partial class CheckInControl
                 {
                     Settle(fees.Day, drivers, how, note);
                 }
-            });
+            },
+            profile => _profiles.Get(profile.Transponder) ?? profile);
 
         form.FormClosed += (_, _) => _paidForm = null;
         _paidForm = form;

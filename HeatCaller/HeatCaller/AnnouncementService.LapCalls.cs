@@ -1097,14 +1097,20 @@ public sealed partial class AnnouncementService
     /// if the standings changed under it while it was being read, in which
     /// case the report is said as it was worded.
     /// </summary>
-    private List<PositionReportOrder.Row>? RunningOrderNow(int depth)
+    /// <param name="noGhosts">
+    /// Every ghost left out, announced or not - for the winner's call, since
+    /// a ghost never wins the race (bug hunt 20).
+    /// </param>
+    private List<PositionReportOrder.Row>? RunningOrderNow(int depth, bool noGhosts = false)
     {
         try
         {
             // The same field the report was built from: no muted ghosts.
-            Func<string, bool>? leaveOut = AnnounceGhostsProvider?.Invoke() == false
-                ? transponder => MutedGhost(transponder)
-                : null;
+            Func<string, bool>? leaveOut = noGhosts
+                ? transponder => GhostService.IsGhost(transponder)
+                : AnnounceGhostsProvider?.Invoke() == false
+                    ? transponder => MutedGhost(transponder)
+                    : null;
 
             // The board as of the last crossing, not _standings itself: this
             // runs on a timer or the voice thread while the timing thread
@@ -1951,7 +1957,12 @@ public sealed partial class AnnouncementService
 
             var rivals = rivalsOn && AreRivals(front.Transponder, chaser.Transponder);
 
-            if (!rivals && !battlesOn)
+            // A heat classes share (bug hunt 20): two cars of different
+            // classes are not fighting for a place, so no battle line - two
+            // rivals side by side are still called, for no place.
+            var acrossClasses = InDifferentClasses(front.Transponder, chaser.Transponder);
+
+            if (!rivals && (!battlesOn || acrossClasses))
             {
                 continue;
             }
@@ -1998,7 +2009,12 @@ public sealed partial class AnnouncementService
 
             // What the fight is for - the broadcast's first question about
             // any battle. The front car's place among the cars being called.
-            var battleFor = i == 0 ? "the lead" : Ordinal(i + 1);
+            // In a heat classes share, the front car's place in its class
+            // (bug hunt 20), as the position report says it.
+            var inClass = ClassPlaceOf(ordered, front.Transponder);
+            var battleFor = acrossClasses ? null
+                : inClass is { } cls ? $"{(cls.Place <= 1 ? "the lead" : Ordinal(cls.Place))} in {cls.Class}"
+                : i == 0 ? "the lead" : Ordinal(i + 1);
 
             // The chaser is named first: the one coming at their rival.
             if (!(rivals
@@ -2021,12 +2037,13 @@ public sealed partial class AnnouncementService
     /// delivery tag, when it has one ("[shouting] ..."), so the tag still
     /// opens the line and the voice says the words the way it was told to.
     /// </summary>
-    internal static string BattleForTheLead(string line)
+    /// <param name="lead">What the lead is: "the lead", or "the lead in Stock" in a heat classes share.</param>
+    internal static string BattleForTheLead(string line, string lead = "the lead")
     {
         var match = System.Text.RegularExpressions.Regex.Match(line, @"^\s*(\[[^\]]+\]\s*)?");
         var tag = match.Groups[1].Value;
 
-        return $"{tag}Battle for the lead! {line[match.Length..]}".Trim();
+        return $"{tag}Battle for {lead}! {line[match.Length..]}".Trim();
     }
 
     /// <summary>
@@ -2101,9 +2118,10 @@ public sealed partial class AnnouncementService
             return false;
         }
 
-        if (battleFor == "the lead" && !template.Contains("{battle}", StringComparison.OrdinalIgnoreCase))
+        if (battleFor is not null && battleFor.StartsWith("the lead", StringComparison.Ordinal)
+            && !template.Contains("{battle}", StringComparison.OrdinalIgnoreCase))
         {
-            text = BattleForTheLead(text);
+            text = BattleForTheLead(text, battleFor);
         }
 
         var speed = config.SpeedFor(_voiceStore.Current.Speed);

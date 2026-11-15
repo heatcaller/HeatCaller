@@ -347,7 +347,10 @@ internal static class RaceLines
     {
         var full = (row.DriverName ?? string.Empty).Trim();
 
-        if (full.Length == 0 || string.Equals(full, "Unnamed driver", StringComparison.OrdinalIgnoreCase))
+        // RaceFiling.ResultsFrom files a car with no profile name under its
+        // transponder number (bug hunt 20): a number is nobody named.
+        if (full.Length == 0 || string.Equals(full, "Unnamed driver", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(full, (row.Transponder ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }

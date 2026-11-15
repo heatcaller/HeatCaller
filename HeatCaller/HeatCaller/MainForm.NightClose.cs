@@ -61,7 +61,7 @@ public partial class MainForm
         // A night that charges through its classes only counts too (12 Nov 2026, setup plan step 8).
         var classNamed = DeskMoney.ClassLookup(_raceClasses.All);
 
-        if (raceDay is not { IsLegacy: false } day || !DeskMoney.Charges(day, classNamed))
+        if (raceDay is not { IsLegacy: false } day || !DeskMoney.Charges(day, classNamed, _raceClasses.All))
         {
             return null;
         }
@@ -74,8 +74,7 @@ public partial class MainForm
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(t => _profiles.Get(t))
             .OfType<DriverProfile>()
-            .Where(p => (_payments.Get(day.Id, p.Transponder)?.How ?? PaidHow.Owing) == PaidHow.Owing
-                        && CheckInControl.FeeFor(p, day, classNamed) > 0)
+            .Where(p => DeskMoney.StillOwed(_payments.Get(day.Id, p.Transponder), CheckInControl.FeeFor(p, day, classNamed)) > 0)
             .Select(p => string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName)
             .ToList();
     }

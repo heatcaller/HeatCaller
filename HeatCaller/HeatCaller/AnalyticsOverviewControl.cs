@@ -246,6 +246,23 @@ public sealed class AnalyticsOverviewControl : UserControl
     /// rather than rewriting history, which is the honest behaviour when
     /// nobody can say whether the track was also changed.
     /// </summary>
+    /// <summary>
+    /// Who a result belongs to, for telling the record holder from the next
+    /// closest: the transponder (an alternate one counts as its main one),
+    /// or the name when a result has no transponder.
+    /// </summary>
+    private string DriverKey(SessionResultEntry result)
+    {
+        var transponder = result.Transponder?.Trim() ?? string.Empty;
+
+        if (transponder.Length == 0)
+        {
+            return "NAME:" + RaceCoach.WhoIs(result).ToUpperInvariant();
+        }
+
+        return (_profiles?.PrimaryForAlternate(transponder) ?? transponder).ToUpperInvariant();
+    }
+
     private void FillRecords(IReadOnlyList<SessionRecord> sessions)
     {
         _grid.Rows.Clear();
@@ -272,9 +289,13 @@ public sealed class AnalyticsOverviewControl : UserControl
 
                     // The quickest lap by anybody else: how close the field
                     // is to the record, in car lengths when the layout has a
-                    // length (Track Layouts).
-                    var key = holder.ToUpperInvariant();
-                    var other = laps.FirstOrDefault(x => RaceCoach.WhoIs(x.Result).ToUpperInvariant() != key);
+                    // length (Track Layouts). "Anybody else" goes by the
+                    // car (the transponder, an alternate folded into its
+                    // main one), not the saved name: the holder's own laps
+                    // saved before he had a name, or under an older one,
+                    // are still his.
+                    var key = DriverKey(result);
+                    var other = laps.FirstOrDefault(x => DriverKey(x.Result) != key);
 
                     if (other.Result is not null)
                     {

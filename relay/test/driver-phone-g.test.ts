@@ -22,6 +22,7 @@ describe("Listen Live on a bad signal (item 19)", () => {
   });
 
   it("asks no more often than the rest of the page while there is no signal", () => {
-    assert.match(html, /if \(typeof hcNet === 'object' && hcNet\.since > 0 && Date\.now\(\) < hcNet\.nextTry\) \{\s*listenHeldUp\(\);\s*return;\s*\}/);
+    // Bug hunt 20 #3: only once Listen's own ask has failed.
+    assert.match(html, /if \(listenPaused && typeof hcNet === 'object' && hcNet\.since > 0 && Date\.now\(\) < hcNet\.nextTry\) \{\s*return;\s*\}/);
   });
 });

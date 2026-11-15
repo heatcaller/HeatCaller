@@ -457,7 +457,7 @@ public sealed class RaceFilingService
         {
             try
             {
-                record.Handicap = HandicapCalculator.Snapshot(results, HandicapStore.Load(), round.ClassName);
+                record.Handicap = HandicapCalculator.Snapshot(results, HandicapStore.Load(), round.ClassName, MixedHeats.ClassesOf(round));
             }
             catch (Exception ex)
             {

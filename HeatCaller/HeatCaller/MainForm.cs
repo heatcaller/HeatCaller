@@ -1036,9 +1036,12 @@ public partial class MainForm : Form
                 // (MixedHeats.StampClasses). Left under the old name, the
                 // renamed class's championship dropped the heat (bug hunt 17).
                 // Here rather than above: saving a result republishes it.
+                // And the handicap kept with the race (bug hunt 20): left
+                // under the old name, the race was scored on today's credits.
                 foreach (var session in _sessionHistory.All
                              .Where(s => s.RoundId is { Length: > 0 } roundId
-                                         && MixedHeats.RenameStamps(s.Results, _rounds.Get(roundId), oldName, newName))
+                                         && (MixedHeats.RenameStamps(s.Results, _rounds.Get(roundId), oldName, newName)
+                                             | HandicapCalculator.RenameClass(s.Handicap, _rounds.Get(roundId), oldName, newName)))
                              .ToList())
                 {
                     _sessionHistory.SaveEdited(session);
@@ -1573,6 +1576,15 @@ public partial class MainForm : Form
         // the session was started as a qualifier - asked on demand, same as
         // practice, so it can never go stale.
         _announcer.QualifyingModeProvider = () => _race.StartType == RaceStartType.Qualifier;
+
+        // A class scored on handicap, with a credit to apply, names no winner
+        // at the flag (bug hunt 20): the recap says who won on handicap. As
+        // the recap has it, a pursuit start spent the credits on track.
+        _announcer.ScoredOnHandicap = transponders =>
+            _race.StartType != RaceStartType.StaggeredHandicap
+            && _activeRound is { } round
+            && _handicaps.ModeFor(round.ClassName) != HandicapMode.None
+            && transponders.Any(t => _handicaps.Get(t) is { HasAny: true });
 
         // THE BROADCAST FEATURES (18 Oct 2026). The sponsors who present a
         // moment ("the fastest lap, presented by"), read fresh each time so

@@ -71,14 +71,17 @@ public static partial class RaceCoach
     /// car that may hold one (AchievementEvaluator.CanHoldTrackRecord - no
     /// ghosts, rentals or excluded guests), so the Overview's records agree
     /// with the badge and the live record. Demo and imported sessions are
-    /// the caller's to leave out.
+    /// the caller's to leave out. A tie goes to whoever set it first, as the
+    /// badge has it - history is listed newest first, so without that the
+    /// later lap that only equalled it was named the holder.
     /// </summary>
     public static IEnumerable<(SessionRecord Session, SessionResultEntry Result)> RecordLaps(
         IEnumerable<SessionRecord> sessions, ProfileStore? profiles) =>
         sessions
             .SelectMany(s => s.Results.Select(r => (Session: s, Result: r)))
             .Where(x => x.Result.FastLapMs > 0 && AchievementEvaluator.CanHoldTrackRecord(x.Result.Transponder, profiles))
-            .OrderBy(x => x.Result.FastLapMs);
+            .OrderBy(x => x.Result.FastLapMs)
+            .ThenBy(x => x.Session.StartedAtUtc);
 
     /// <summary>The name a result goes by: the driver's, or the transponder when nobody was named.</summary>
     public static string WhoIs(SessionResultEntry result) =>

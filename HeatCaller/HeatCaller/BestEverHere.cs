@@ -32,7 +32,10 @@ internal static class BestEverHere
 
         foreach (var record in history)
         {
-            if (!string.Equals(record.TrackLayoutName, layout, StringComparison.OrdinalIgnoreCase))
+            // Never a saved demo's made-up laps or an imported result: the
+            // bar is a lap the driver really set here (bug hunt 20).
+            if (record.IsNotScored()
+                || !string.Equals(record.TrackLayoutName, layout, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }

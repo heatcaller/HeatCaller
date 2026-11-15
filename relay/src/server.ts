@@ -9447,8 +9447,13 @@ export class Relay {
     const stream = streamFrom(merged.body, this.videoCheck?.dead(club), STREAM_MAX_PIECES * (STREAM_NIGHTS_KEPT + 1));
     // Only pieces still inside their week of checks: an older night's video,
     // forgotten to make room for a new one, is not asked about all over again.
+    // Plus every dead one (bug hunt 20): streamFrom has dropped its pieces,
+    // and a video made public after its week must still come back.
     const since = this.now().getTime() - VIDEO_CHECK_FOR_MS;
-    if (stream !== undefined && this.videoCheck !== undefined) void this.videoCheck.saw(club, stream.pieces.filter((p) => p.startMs >= since).map((p) => p.videoId));
+    if (this.videoCheck !== undefined) {
+      const recent = (stream?.pieces ?? []).filter((p) => p.startMs >= since).map((p) => p.videoId);
+      void this.videoCheck.saw(club, [...recent, ...this.videoCheck.dead(club)]);
+    }
     return stream;
   }
 

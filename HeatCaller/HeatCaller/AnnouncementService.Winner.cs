@@ -90,7 +90,58 @@ public sealed partial class AnnouncementService
     internal static bool LeaderIsNotTheTopQualifier(bool qualifying, QualifyingMethod method) =>
         qualifying && method == QualifyingMethod.BestConsecutiveLaps;
 
-    private bool NoWinnerToName => LeaderIsNotTheTopQualifier(IsQualifyingMode, _qualifyingMethod);
+    private bool NoWinnerToName => LeaderIsNotTheTopQualifier(IsQualifyingMode, _qualifyingMethod) || ScoredOnHandicapNow();
+
+    /// <summary>
+    /// Whether the race on track is scored on handicap, for the cars given:
+    /// a class with lap or time credits, at least one of these cars with a
+    /// credit to apply, on a start that did not spend the credits on track.
+    /// Set by MainForm from the Handicaps page. Null for never.
+    /// </summary>
+    /// <remarks>
+    /// WHY (15 Nov 2026, bug hunt 20): the first car home is not the winner
+    /// then, and the recap says who won on handicap (CommentaryOfficialFacts.
+    /// Handicap) - seconds after the flag had given the win to the scratch
+    /// driver. As for a best-consecutive qualifier, the finish names nobody.
+    /// </remarks>
+    public Func<IReadOnlyCollection<string>, bool>? ScoredOnHandicap { get; set; }
+
+    private bool ScoredOnHandicapNow()
+    {
+        try
+        {
+            return ScoredOnHandicap is { } scored
+                && scored(_standings.Keys.Where(t => !GhostService.IsGhost(t)).ToList());
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The car to name as the winner at the flag: the leader, or - when a
+    /// ghost is in front (bug hunt 20) - the first real car. A ghost never
+    /// wins: the result leaves ghosts out (RaceFilingService), as the class
+    /// winners line here does, so "Victory for Ghost Sam!" named a winner the
+    /// result did not have.
+    /// </summary>
+    private string? TheWinnerToName()
+    {
+        var leader = _currentLeaderTransponder;
+
+        if (leader is null || !GhostService.IsGhost(leader))
+        {
+            return leader;
+        }
+
+        return _standings.Values
+            .Where(s => !GhostService.IsGhost(s.Transponder))
+            .OrderByDescending(s => s.Laps)
+            .ThenBy(s => s.ElapsedMs)
+            .Select(s => s.Transponder)
+            .FirstOrDefault();
+    }
 
     /// <summary>Whether the lines made ahead are the finish call's own - see WinnerLines. Under _winnerCallsLock.</summary>
     private bool _winnerCallsAreTheFinish;
@@ -121,7 +172,7 @@ public sealed partial class AnnouncementService
             }
 
             if (IsPracticeMode || Muted || WinnerLines() is not { } lines
-                || RunningOrderNow(WinnerContenders) is not { Count: > 0 } order)
+                || RunningOrderNow(WinnerContenders, noGhosts: true) is not { Count: > 0 } order)
             {
                 return;
             }
@@ -276,7 +327,7 @@ public sealed partial class AnnouncementService
                 }
             }
 
-            var winner = _currentLeaderTransponder;
+            var winner = TheWinnerToName();
 
             if (NoWinnerToName)
             {
@@ -376,7 +427,7 @@ public sealed partial class AnnouncementService
             namedByTheFinish = _finishNamedTheWinner;
         }
 
-        var winner = _currentLeaderTransponder;
+        var winner = TheWinnerToName();
 
         var config = WinnerCallConfig()
             ?? (namedByTheFinish ? _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.RaceCompleted)) : null);
@@ -428,7 +479,7 @@ public sealed partial class AnnouncementService
     /// </summary>
     private bool TrySpeakTheFinishWithTheWinner(AnnouncementEventConfig config)
     {
-        var winner = _currentLeaderTransponder;
+        var winner = TheWinnerToName();
 
         if (winner is null || IsPracticeMode || NoWinnerToName || FinishLinesNamingTheWinner(config.EffectiveTemplates) is not { Count: > 0 } named)
         {

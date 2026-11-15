@@ -55,12 +55,22 @@ public sealed partial class AnnouncementService
                 return;
             }
 
-            var leader = ordered[0];
-            var chaser = ordered[1];
+            // In a heat classes share, the fight for the lead of the crossing
+            // car's own class (bug hunt 20): the overall top two can be in
+            // different classes, not racing each other at all.
+            var field = TheLeadFightFor(ordered, crossed);
+
+            if (field.Count < 2)
+            {
+                return;
+            }
+
+            var leader = field[0];
+            var chaser = field[1];
 
             if (!string.Equals(chaser.Transponder, crossed.Transponder, StringComparison.OrdinalIgnoreCase)
                 || chaser.Laps < 2
-                || !InTheFinalLaps(leader.Laps, LapLimitProvider?.Invoke(), _inTheFinalMinute))
+                || !InTheFinalLaps(ordered[0].Laps, LapLimitProvider?.Invoke(), _inTheFinalMinute))
             {
                 return;
             }
@@ -94,5 +104,25 @@ public sealed partial class AnnouncementService
         {
             StatusMessage?.Invoke($"[voice] Couldn't call the gap for the lead ({ex.Message}).");
         }
+    }
+
+    /// <summary>
+    /// The cars whose front two fight for the lead the gap call is about:
+    /// the whole field, or - in a heat classes share - the cars of the
+    /// crossing car's class, in board order.
+    /// </summary>
+    private IReadOnlyList<RaceStanding> TheLeadFightFor(IReadOnlyList<RaceStanding> ordered, RaceStanding crossed)
+    {
+        if (SharedHeatClasses?.Invoke() is not { Count: > 0 } classOf
+            || !classOf.TryGetValue(crossed.Transponder.Trim(), out var cls)
+            || string.IsNullOrWhiteSpace(cls))
+        {
+            return ordered;
+        }
+
+        return ordered
+            .Where(standing => classOf.TryGetValue(standing.Transponder.Trim(), out var theirs)
+                && string.Equals(theirs, cls, StringComparison.OrdinalIgnoreCase))
+            .ToList();
     }
 }
