@@ -2135,6 +2135,19 @@ function hcVideoSheet(v, o) {
   out.rel = 'noopener';
   out.addEventListener('click', () => hcCount('video_youtube_app'));
   sheet.appendChild(out);
+
+  // SHARE THIS RACE (14 Nov 2026, stream overlay plan 7.4): the family's
+  // "send it to the aunties" - YouTube's own link, starting at this race
+  // (or the lap asked for). Offered only where this sheet already is: the
+  // driver's own night, or the public results when the club shows video
+  // there, so a junior's race is only ever shared by their own family.
+  const share = hcVel('button', 'page hcvyt', 'Share this race');
+  share.type = 'button';
+  share.addEventListener('click', () => {
+    hcCount('video_share');
+    hcShareLink(hcVideoYouTube(v, from), 'Watch this race' + (CLUB_NAME ? ' at ' + CLUB_NAME : ''));
+  });
+  sheet.appendChild(share);
   sheet.appendChild(hcVel('p', 'note hcvsrc', inAppBrowser() !== ''
     ? 'Plays from YouTube. Open in YouTube opens YouTube\\u2019s website here. If it doesn\\u2019t play, the club may have made it private.'
     : 'Plays from YouTube. If it doesn\\u2019t play, the club may have made it private.'));
@@ -2616,6 +2629,7 @@ function followAsked(search) {
   // Said, so whoever opened the link knows what it did - once the page's
   // own drawing has had its turn.
   setTimeout(() => toast('Following ' + asked + '. Tap their name to stop.'), 0);
+  setTimeout(() => { try { hcCount('follow_link_opened'); } catch (e) { /* never worth an error */ } }, 0);
   try {
     const rest = new URLSearchParams(search);
     rest.delete('follow');
@@ -2636,8 +2650,14 @@ function followLink(name) {
 // screen. Closing the sheet is a change of mind, not a failure.
 async function shareFollow(name) {
   if (!name) return;
-  const url = followLink(name);
-  const text = 'Watch ' + name + ' race live' + (CLUB_NAME ? ' at ' + CLUB_NAME : '');
+  try { hcCount('follow_link_shared'); } catch (e) { /* counting is never worth an error */ }
+  return hcShareLink(followLink(name), 'Watch ' + name + ' race live' + (CLUB_NAME ? ' at ' + CLUB_NAME : ''));
+}
+
+// A link through the phone's own share sheet, then the clipboard, then a
+// box on the page (follow links, a race's video - overlay plan 7.1, 7.4).
+async function hcShareLink(url, text) {
+  if (!url) return;
   if (typeof navigator.share === 'function') {
     try { await navigator.share({ title: text, text: text, url: url }); return; }
     catch (e) { if (e && e.name === 'AbortError') return; }

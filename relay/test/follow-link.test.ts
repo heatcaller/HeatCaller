@@ -158,3 +158,18 @@ describe("the followed driver's next race on Home", () => {
     assert.match(page.get("fol").textContent + page.get("fol").innerHTML, /Mia isn’t in tonight’s running order/);
   });
 });
+
+describe("sharing a race (overlay plan 7.4)", () => {
+  it("offers Share this race in the video sheet, with YouTube's own link at the race", () => {
+    const html = homePage("acme-rc", "Acme RC");
+    assert.match(html, /hcVel\('button', 'page hcvyt', 'Share this race'\)/);
+    assert.match(html, /hcShareLink\(hcVideoYouTube\(v, from\), 'Watch this race'/);
+  });
+
+  it("counts shares and opened follow links among the page's known events", async () => {
+    const { PAGE_COUNT_EVENTS } = await import("../src/pagecounts.js");
+    for (const name of ["video_share", "follow_link_shared", "follow_link_opened"]) {
+      assert.ok(PAGE_COUNT_EVENTS.includes(name), name);
+    }
+  });
+});
