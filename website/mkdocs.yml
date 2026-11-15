@@ -69,6 +69,7 @@ nav:
       - Big screen: screens/big-screen.md
       - Phones on the club Wi-Fi: screens/phone-and-web.md
       - Looks and the club logo: screens/looks-and-logo.md
+      - Stream overlays: screens/stream-overlays.md
   - Online:
       - Your club's online pages: online/index.md
       - Setting up the Club Website page: online/setup.md

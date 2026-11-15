@@ -130,3 +130,27 @@ describe("the family page", () => {
     assert.match(html, /post\('\/family\/manage', \{ id: CODE, action: 'make', label: label\.value \}\)/);
   });
 });
+
+describe("family links when a club stops sharing nights", () => {
+  it("are taken off, so none comes back to life if the club starts again", async () => {
+    const relay = new Relay({ store: new MemoryStore(), tenants: tenants(), log: () => {} });
+    const server = relay.listen(0, "127.0.0.1");
+    await new Promise<void>((resolve) => server.once("listening", resolve));
+    const a = server.address();
+    const h = { base: `http://127.0.0.1:${typeof a === "object" && a ? a.port : 0}` } as unknown as Harness;
+
+    try {
+      await call(h, "POST", `${API}/nights/open`, { token: ACME_TOKEN, json: { open: true } });
+      await call(h, "POST", `${API}/publish/nights/${BILL}?seq=1`, { token: ACME_TOKEN, json: NIGHT });
+      const made = await call(h, "POST", `${API}/family/manage`, { json: { id: BILL, action: "make", label: "Grandma" } });
+
+      await call(h, "POST", `${API}/nights/open`, { token: ACME_TOKEN, json: { open: false } });
+      await call(h, "POST", `${API}/nights/open`, { token: ACME_TOKEN, json: { open: true } });
+      await call(h, "POST", `${API}/publish/nights/${BILL}?seq=2`, { token: ACME_TOKEN, json: NIGHT });
+
+      assert.equal((await call(h, "POST", `${API}/family/read`, { json: { code: made.body.code } })).status, 404);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+});

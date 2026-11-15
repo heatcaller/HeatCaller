@@ -7789,6 +7789,15 @@ export class Relay {
    * driver's list back - see PushService.forget.
    */
   private async forgetPushSubs(club: string, wipe?: () => Promise<void>): Promise<void> {
+    // Family links go with the nights they open (overlay plan 7.1): a club
+    // that stops sharing drivers' nights leaves no link behind to come back
+    // to life if it starts again.
+    if (wipe === undefined) {
+      for (const item of await this.store.itemSizes(club, FAMILY_CHANNEL).catch(() => [])) {
+        await this.store.deleteItem(club, FAMILY_CHANNEL, item.id).catch(() => undefined);
+      }
+    }
+
     if (this.push !== undefined) {
       await this.push.forget(club, wipe);
       return;

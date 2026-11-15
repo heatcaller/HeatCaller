@@ -486,7 +486,25 @@ Tap any driver's name on any page to follow them. Their name is highlighted on e
 
 On **Live**, the driver you follow gets a line of their own on the flag card and a ring on the track map (see [On the Live page](#on-the-live-page)).
 
-Who you follow is remembered on that phone only. It's never sent to the relay or the laptop.
+Who you follow is remembered on that phone only. It's never sent to the relay or the laptop, unless you turn on alerts for them (below).
+
+#### A link that follows a driver
+
+**Share** on the "Following" chip, **Share my race** on your own card on **Live**, and **Send my family a link that follows me** on your night all send a link that follows that driver. Whoever opens it is following them straight away, with no need to find the name. The link opens **Home**, which then shows that driver's next race: "Up next", "2 races away" or "On track now", with the race and its rough start time. It needs the club to publish who is in each heat.
+
+#### Alerts for a driver you follow
+
+On that card on **Home**, **Tell me before** (their name) **races** sends an alert when their race becomes the next one, and another with where they finished when the result is in. There's no badge code or account. To do this, the relay keeps which phones want alerts for which driver's name: up to 10 phones a name. On an iPhone, add the club's page to the Home Screen first and turn alerts on from there. The relay only takes a name that's in the club's running order that day. Tap the button again to turn the alerts off. Following somebody else turns them off for the driver before.
+
+### Family links
+
+A family link is a read-only link to one driver's night for someone at home. Any driver can make one from their own night: under **Family links**, type who it's for ("Grandma") and press **Make a family link**, then send it. A driver can have up to 10 at once, each with **Send** and **Stop**.
+
+The family page shows, in plain words, where the driver finished in each race ("3rd of 8"), their laps and best lap, their next race, and their race videos. A junior's videos are included, because it's the family's own link. It never shows the badge code, the coaching card, penalties, the garage, check-in or change requests. A stopped link, or one opened while the club isn't sharing drivers' nights, says so instead.
+
+### Sharing a race video
+
+**Share this race** in the race video window sends YouTube's own link, starting at that race (or at the lap you opened). It's there wherever the video window is: on a driver's own night, and on the public results when the club shows video there.
 
 ### Add to Home Screen
 
@@ -536,9 +554,11 @@ A car nobody has named yet raced under its transponder number. Online, that name
 
 The rest is your choice, on the Club Website page:
 
-- **Short names.** "Shorten published names to a first name and an initial" is **on** by default, so "Dana Sloane" appears as "Dana S" everywhere online. If two drivers would end up looking the same, they get more letters until they differ.
+- **Short names.** "Shorten published names to a first name and an initial" is **on** by default, so "Dana Sloane" appears as "Dana S" everywhere online. If two drivers would end up looking the same, they get more letters until they differ. With it off, a junior (under 18) is still shown as a first name and an initial.
 - **The roster and heat line-ups** (who is entered, and who is in which heat) are **off** by default, with one checkbox for both. With it on, the Schedule page shows who is in each heat and gets a "Find your name" box. With it off, the schedule shows the heats but not who is in them. The roster itself (the list of who is entered and checked in) has no page of its own. The relay only shows the line-ups, or hands out the roster, if the relay admin has also allowed it for your club, so both ends have to agree before any of those names are public. Until they do, the Schedule page shows the heats without who is in them, even with the box ticked.
 - **Photos** only go into the online check-in list if you tick "Include photos (drivers can be children - off unless you're sure)". They're small thumbnails, and only someone holding the staff PIN, that driver's QR check-in or that driver's personal PIN can see them.
+
+Two things the relay keeps that phones ask for, not the laptop: a phone that turns on [alerts for a driver it follows](#alerts-for-a-driver-you-follow) leaves its push address against that driver's public name, and a [family link](#family-links) is a code that points at one driver's night. Both go when the club stops giving drivers their own nights.
 
 The online check-in list is private on the relay. It's never served whole to the public: the relay hands out one driver to a QR check-in link or a personal PIN, and the full list only to someone with the staff PIN. When you switch online check-in off, an empty list is published, which takes the names back off the relay.
 
