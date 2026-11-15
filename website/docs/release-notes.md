@@ -2,7 +2,9 @@
 
 HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whole feature lands, *c* for fixes and smaller additions.
 
-## Unreleased
+## 0.63.0
+
+Released 15 Nov 2026. Everything since 0.62.0, newest first.
 
 - **A bigger leaderboard on Race Control (15 November).**
     - **Fold the column under the clock.** A small **▴** in the clock's corner slides the buttons and level meters under the clock away to the right. The clock shrinks to the height of the Race Control card beside it, and the leaderboard widens across the page under them, keeping its place. **▾** brings them back, and the choice is remembered.
