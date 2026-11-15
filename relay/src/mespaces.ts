@@ -87,6 +87,31 @@ export const ME_CSS = `
   background: var(--good); color: var(--bg); }
 .me-act.wait .badge { background: var(--warn); }
 .me-act .badge svg { width: 12px; height: 12px; stroke-width: 3.2; }
+/* BIG TEXT (15 Nov 2026, Asher: "Transponder text not fitting in largest
+   text setting"). The tile's one column is held to the tile, so a long
+   status ellipses instead of pushing out past the border; and when the row
+   is too narrow for TRANSPONDER across three (A+ or A++ on most phones,
+   any size on a small one), the tiles stack into full-width rows - icon,
+   then what it is over where it stands, badge on the right. In em, so the
+   switch follows the text size as well as the phone's width. */
+.me-acts { container: me-acts / inline-size; }
+.me-act { grid-template-columns: minmax(0, 1fr); }
+@container me-acts (max-width: 19.5em) {
+  .me-acts:not(.two) .me-act { grid-column: 1 / -1; min-height: 60px; grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; row-gap: 0;
+    justify-items: start; text-align: left; padding: 8px 40px 8px 12px; }
+  .me-acts:not(.two) .me-act .ic { grid-row: 1 / 3; margin: 0; align-self: center; }
+  .me-acts:not(.two) .me-act .n { align-self: end; }
+  .me-acts:not(.two) .me-act .s { align-self: start; padding: 0; white-space: normal; }
+  .me-acts:not(.two) .me-act .badge { top: 50%; margin-top: -9px; right: 12px; }
+}
+@container me-acts (max-width: 13em) {
+  .me-acts.two .me-act { grid-column: 1 / -1; min-height: 60px; grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; row-gap: 0;
+    justify-items: start; text-align: left; padding: 8px 40px 8px 12px; }
+  .me-acts.two .me-act .ic { grid-row: 1 / 3; margin: 0; align-self: center; }
+  .me-acts.two .me-act .n { align-self: end; }
+  .me-acts.two .me-act .s { align-self: start; padding: 0; white-space: normal; }
+  .me-acts.two .me-act .badge { top: 50%; margin-top: -9px; right: 12px; }
+}
 /* THE DOCK (11 Nov 2026, Asher: "Build option A" of
    relay/mockups/me-hero-requests.html). See the running order, Need 5 more
    minutes and Car broken - skip me were a text link and two small buttons
