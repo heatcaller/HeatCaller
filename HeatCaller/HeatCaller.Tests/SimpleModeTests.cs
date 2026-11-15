@@ -385,7 +385,7 @@ public sealed class SimpleModeTests : IDisposable
         // Voice, Cast.
         "MainForm.Pages.cs|Race Calls",
         "VoiceSettingsControl.cs|Voice parameters", "VoiceSettingsControl.cs|Saved voice lines",
-        "CastControl.cs|Recap host", "CastControl.cs|Technical Lead", "CastControl.cs|Team Principal", "CastControl.cs|Achievements reader",
+        "CastControl.cs|Recap host", "CastControl.cs|Drivers' own crew", "CastControl.cs|Technical Lead", "CastControl.cs|Team Principal", "CastControl.cs|Achievements reader",
 
         // Connection.
         "MainForm.ConnectionPage.cs|Developer console",
@@ -418,7 +418,7 @@ public sealed class SimpleModeTests : IDisposable
         "MainForm.Pages.cs|Calendar", "MainForm.Pages.cs|Overview", "MainForm.Pages.cs|Personal Bests", "MainForm.Pages.cs|Lap Times",
         "MainForm.Pages.cs|Head to Head", "MainForm.Pages.cs|Trends", "MainForm.Pages.cs|Pace",
         "RaceDayEventControl.cs|Which race day", "RaceDayEventControl.cs|The night", "RaceDayEventControl.cs|Times",
-        "RaceDayEventControl.cs|Heats", "RaceDayEventControl.cs|Money", "RaceDayEventControl.cs|Running the night", "RaceDayEventControl.cs|The heats",
+        "RaceDayEventControl.cs|Heats", "RaceDayEventControl.cs|Money", "RaceDayEventControl.cs|Running the night", "RaceDayEventControl.cs|The heats", "RaceDayEventControl.cs|Commentary",
         "RaceDayEventControl.cs|Marshals", "RaceDayEventControl.cs|Papers", "RaceDayEventControl.cs|End of the night",
         "TodayControl.cs|Ready to race", "RaceProgramControl.cs|Tonight's program", "EventsControl.cs|Race days",
         "EventsControl.cs|Nights", "CheckInControl.cs|Drivers", "CheckInControl.Desk.cs|Scan to Check In", "CheckInControl.Desk.cs|Tonight at the Desk",

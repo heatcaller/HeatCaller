@@ -816,7 +816,10 @@ public sealed class CastControl : UserControl
             "From their phone, behind their personal PIN: a name and a voice for their own Team Principal and Technical "
             + "Lead, and a few words for the interviews - tonight's goal, who they'd like to thank, their car's story. "
             + "A voice they pick is used straight away; names and words wait for you on Driver Requests.");
-        crewGrid.AddRow("Voices:", _btnCrewVoices);
+        // In a line like every other button here: placed on the grid bare,
+        // the theme fixed its width at the 75px it had before its caption
+        // was measured, and "Voices drivers can pick..." was cut off.
+        crewGrid.AddRow("Voices:", Line(_btnCrewVoices));
         crewGrid.AddHint("Every voice on the engine in use, less any you hide here. The announcer's and the co-hosts' "
                          + "voices are never offered.");
         Switch(crewGrid, _chkJuniorNotesFromPhone,
