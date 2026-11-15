@@ -18,7 +18,7 @@
          assembly at runtime, and the installer (Velopack) reads the same
          assembly, so the package, the updater and the title bar cannot
          drift apart. Bump it here and nowhere else. -->
-    <Version>0.62.0</Version>
+    <Version>0.63.0</Version>
 
     <!-- The name Windows shows for the exe (Task Manager, file properties). -->
     <Product>HeatCaller</Product>

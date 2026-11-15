@@ -213,7 +213,7 @@ No. Your data isn't kept with the app, so replacing the app leaves it alone. Hea
 
 Email **support@heatcaller.com**, and include these:
 
-- The version, from the title bar, the startup screen or **About HeatCaller** (for example **BETA 0.62.0**).
+- The version, from the title bar, the startup screen or **About HeatCaller** (for example **BETA 0.63.0**).
 - What you were doing.
 - The support file: **Save Support Info** on the **Getting help** card of the **Backup & Restore** page. It has the console, the crash log, the version and the PC in it already, with driver names and email addresses taken out. See [Save Support Info](../admin/backups.md#save-support-info).
 
