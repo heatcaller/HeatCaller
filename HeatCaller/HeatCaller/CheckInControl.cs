@@ -1104,6 +1104,10 @@ public sealed partial class CheckInControl : UserControl
             return;
         }
 
+        // The race day moved on since the ticks were drawn: they are the old
+        // day's, so a difference is the new day, not a phone.
+        var newDay = MarksDayChanged();
+
         _suppressGridEvents = true;
 
         try
@@ -1124,7 +1128,7 @@ public sealed partial class CheckInControl : UserControl
 
                     // Not the desk's own change (CheckInDrivers and the rest
                     // say theirs): a driver's phone, or the self check-in page.
-                    if (!_deskMarking)
+                    if (!_deskMarking && !newDay)
                     {
                         LogDesk(DisplayName(profile), isIn ? "checked in from a phone" : "checked out from a phone");
                     }
@@ -1195,8 +1199,40 @@ public sealed partial class CheckInControl : UserControl
             .Where(p => Matches(p, _search))
             .ToList();
 
+    /// <summary>The race day the list's ticks were last drawn for (see MarksDayChanged).</summary>
+    private string? _marksDrawnFor;
+
+    /// <summary>
+    /// Whether the race day has changed since the list's ticks were last
+    /// drawn - and if so, notes the new one and starts the desk's log afresh.
+    ///
+    /// WHY (14 Nov 2026, bug hunt 19): starting tonight from another tab
+    /// moves the check-ins to the new day without redrawing Who's Racing, so
+    /// the next phone check-in found every row's tick "changed" and logged a
+    /// "checked in/out from a phone" line for almost every driver - under
+    /// the last day's lines, which nothing cleared.
+    /// </summary>
+    private bool MarksDayChanged()
+    {
+        var day = _checkIns.CurrentEventId;
+
+        if (string.Equals(day, _marksDrawnFor, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (_marksDrawnFor is not null)
+        {
+            _deskLog.Clear();
+        }
+
+        _marksDrawnFor = day;
+        return true;
+    }
+
     private void RefreshDriverList()
     {
+        MarksDayChanged();
         _suppressGridEvents = true;
         try
         {

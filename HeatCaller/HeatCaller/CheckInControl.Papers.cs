@@ -66,6 +66,19 @@ public sealed partial class CheckInControl
             return;
         }
 
+        // WHY (14 Nov 2026, bug hunt 19): the profile came from the list's row
+        // or Desk mode's card, drawn before any phone change since - a car
+        // picked for tonight, the driver's own edits approved. Saving that old
+        // copy put those changes back, so the papers go on the driver as they
+        // are on file now. Also covers a phone change while this window was open.
+        if (_profiles.Get(profile.Transponder) is not { } onFile)
+        {
+            RefreshDriverList();
+            return;
+        }
+
+        profile = onFile;
+
         var before = (profile.WaiverSignedOn, profile.IsJunior, profile.WaiverGuardian, profile.MembershipNumber, profile.MembershipExpires);
 
         form.WriteTo(profile);
@@ -111,7 +124,8 @@ public sealed partial class CheckInControl
 
         var before = new List<(string Transponder, DateTime? Waiver, DateTime? Expires)>();
 
-        foreach (var profile in drivers)
+        // As on file now, not the rows' copies (bug hunt 19 - see EditPapersFor).
+        foreach (var profile in drivers.Select(d => _profiles.Get(d.Transponder)).OfType<DriverProfile>())
         {
             before.Add((profile.Transponder, profile.WaiverSignedOn, profile.MembershipExpires));
             form.WriteToMany(profile);
