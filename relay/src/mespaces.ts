@@ -949,8 +949,11 @@ function meTonightLabel() {
   const day = typeof night === 'object' && night && typeof night.night === 'string' ? night.night : '';
   let words = 'Tonight';
   if (day !== '' && typeof hcIsTonight === 'function' && !hcIsTonight(day)) {
-    const d = new Date(day + 'T12:00:00');
-    if (!isNaN(d)) words = d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+    // Noon UTC, drawn as UTC: the night's own day whichever zone the phone
+    // or the club is in (the club-zone wrapper in CLOCK_JS would otherwise
+    // move it a day for a phone 12+ hours from the club).
+    const d = new Date(day + 'T12:00:00Z');
+    if (!isNaN(d)) words = d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
   }
   if (b.textContent !== words) b.textContent = words;
 }

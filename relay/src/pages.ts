@@ -10075,10 +10075,11 @@ function sameName(a, b) {
 }
 
 // A race night as its own heading - "Tue 28 Oct" - from the index's
-// yyyy-mm-dd. Noon, so no time zone can move it to the day before.
+// yyyy-mm-dd. Noon UTC, drawn as UTC, so neither the phone's zone nor the
+// club's (CLOCK_JS draws dates in the club's) can move it a day.
 function nightName(iso) {
-  const d = new Date(String(iso) + 'T12:00:00');
-  return isNaN(d) ? '' : d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+  const d = new Date(String(iso) + 'T12:00:00Z');
+  return isNaN(d) ? '' : d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
 // HOME CHANGES WITH THE NIGHT (30 Oct 2026, relay navigation round 6,

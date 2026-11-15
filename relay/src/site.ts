@@ -463,7 +463,7 @@ const SOCIAL_HOSTS: Readonly<Record<string, readonly string[]>> = Object.freeze(
   youtube: ["youtube.com", "youtu.be"],
   tiktok: ["tiktok.com"],
   x: ["x.com", "twitter.com"],
-  discord: ["discord.gg", "discord.com"],
+  discord: ["discord.gg", "discord.com", "discordapp.com"],
   whatsapp: ["wa.me", "whatsapp.com"],
 });
 
