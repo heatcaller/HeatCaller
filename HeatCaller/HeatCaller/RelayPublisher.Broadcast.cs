@@ -112,9 +112,22 @@ public sealed partial class RelayPublisher
             var sent = root.TryGetProperty("sent", out var s) && s.TryGetInt32(out var n) ? n : 0;
             var badges = root.TryGetProperty("badges", out var b) && b.TryGetInt32(out var m) ? m : 0;
 
-            return badges == 0
-                ? "a push went out, but no phone is signed up for alerts just now."
-                : $"a push went to {Plural.Of(sent, "phone")} ({Plural.Of(badges, "driver")} signed up for alerts).";
+            if (badges == 0)
+            {
+                return "a push went out, but no phone is signed up for alerts just now.";
+            }
+
+            // GOING, NOT GONE (15 Nov 2026, bug hunt 21 #26): the relay now
+            // answers once it has counted the phones and sends to them after,
+            // so the laptop's 8 s wait never says "no push" over a slow send.
+            // "queued" is how many it is sending to; a relay from before
+            // answers "sent", once they have all been tried.
+            if (root.TryGetProperty("queued", out var q) && q.TryGetInt32(out var queued))
+            {
+                return $"a push is going to {Plural.Of(queued, "phone")} ({Plural.Of(badges, "driver")} signed up for alerts).";
+            }
+
+            return $"a push went to {Plural.Of(sent, "phone")} ({Plural.Of(badges, "driver")} signed up for alerts).";
         }
         catch (JsonException)
         {

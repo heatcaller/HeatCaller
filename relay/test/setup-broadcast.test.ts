@@ -161,6 +161,8 @@ describe("POST push/broadcast", () => {
   const broadcast = (json: unknown, token: string | null = ACME_TOKEN) =>
     call(h(), "POST", `${API}/push/broadcast`, token === null ? { json } : { token, json });
   const good = { title: "Racing's off", body: "Thursday is cancelled - the track is flooded." };
+  // The relay answers before the phones are all sent to: a moment for them.
+  const sendsSettle = () => new Promise<void>((resolve) => setTimeout(resolve, 50));
 
   async function serve(withPush: boolean): Promise<void> {
     const store = new MemoryStore();
@@ -195,7 +197,9 @@ describe("POST push/broadcast", () => {
     it("tells every signed-up phone and answers the counts", async () => {
       const answer = await broadcast(good);
       assert.equal(answer.status, 200);
-      assert.deepEqual(answer.body, { ok: true, badges: 2, sent: 2, failed: 1 });
+      // Answered with the phones it is going to, not waiting for each (bug hunt 21 #26).
+      assert.deepEqual(answer.body, { ok: true, badges: 2, queued: 3 });
+      await sendsSettle();
       assert.equal(posted.length, 3);
       assert.ok(posted.every((p) => p.headers["TTL"] === String(BROADCAST_TTL_SECONDS)));
     });
@@ -243,6 +247,7 @@ describe("POST push/broadcast", () => {
       const fourth = await broadcast(good);
       assert.equal(fourth.status, 429);
       assert.equal(fourth.body.ok, false);
+      await sendsSettle();
       assert.equal(posted.length, 9, "the fourth told nobody");
 
       clock += 60 * 60 * 1000 + 1;
@@ -254,7 +259,7 @@ describe("POST push/broadcast", () => {
       await push.forget(CLUB);
       const answer = await broadcast(good);
       assert.equal(answer.status, 200);
-      assert.deepEqual(answer.body, { ok: true, badges: 0, sent: 0, failed: 0 });
+      assert.deepEqual(answer.body, { ok: true, badges: 0, queued: 0 });
     });
   });
 
