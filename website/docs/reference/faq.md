@@ -92,7 +92,7 @@ No. A car with an unknown transponder can still race. It's listed on a banner at
 
 ### How do I set how long a race is?
 
-Races follow a *race format*: lap limit, time limit, minimum lap time, start type and so on. On a new install the app default has no lap or time limit, so a race on it runs until you throw the checkered flag (press and hold **Checkered**, or press <kbd>F6</kbd>). A class added while that's so starts with a 5-minute time limit of its own. Set the app default with **Race Format** on **Race Control**, give a class its own format on the **Classes** page (with a separate one for qualifiers if you like), or override a single round. See [Running a race](../race-control/running-a-race.md).
+Races follow a *race format*: lap limit, time limit, minimum lap time, start type and so on. On a new install the app default has no lap or time limit, so a race on it runs until you throw the checkered flag (press and hold **Checkered**, or press <kbd>F6</kbd>). A class added while that's so starts with a 5-minute time limit of its own. Set the app default with **Format** on **Race Control**, give a class its own format on the **Classes** page (with a separate one for qualifiers if you like), or override a single round. See [Running a race](../race-control/running-a-race.md).
 
 ### Can I run more than one class on the same night?
 
@@ -104,7 +104,7 @@ Each class chooses how qualifying is scored: **total laps**, or the quickest run
 
 ### Can I start and flag races from the keyboard, or from my phone?
 
-Keyboard: on **Race Control**, <kbd>F1</kbd> starts the race (through **On Air** when **Start races On Air** is ticked, otherwise **Stage**), <kbd>0</kbd> On Air (hold it while On Air runs to skip to staging), <kbd>F2</kbd> Countdown, <kbd>F3</kbd> Green, <kbd>F4</kbd> Yellow, <kbd>F5</kbd> Red, <kbd>F6</kbd> Checkered. The keys act on a single press; the **Red**, **Checkered** and **Reset** buttons have to be held for about a second. See [Keyboard shortcuts](keyboard-shortcuts.md).
+Keyboard: on **Race Control**, <kbd>F1</kbd> starts the race (through **On Air** when **Start:** is set to **On Air**, otherwise **Stage**), <kbd>0</kbd> On Air (hold it while On Air runs to skip to staging), <kbd>F2</kbd> Countdown, <kbd>F3</kbd> Green, <kbd>F4</kbd> Yellow, <kbd>F5</kbd> Red, <kbd>F6</kbd> Checkered. The keys act on a single press; the **Red**, **Checkered** and **Reset** buttons have to be held for about a second. See [Keyboard shortcuts](keyboard-shortcuts.md).
 
 Phone: start the server on **Local Screens**, set a **Remote PIN:** of at least four digits, and open the **Phone remote:** address on a phone on the same Wi-Fi. See [Local Screens](../screens/phone-and-web.md).
 

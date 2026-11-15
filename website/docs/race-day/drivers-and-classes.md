@@ -447,8 +447,8 @@ The **Add Class** / **Edit Class** dialog has these settings:
 |---|---|---|
 | **Name:** | Required. The small colored square beside the name is the class color — click it to change it. | — |
 | **Notes:** | Free text. | Empty |
-| **Race length:** | A new class only: how many minutes its races last (1–180). On an existing class, change it with **Race Format...**. | 5, or the app default's time limit |
-| **When time's up:** | A new class only: **Time's up, then finish the lap** (the leader takes the flag and everyone else finishes the lap they're on) or **Stop when time's up** (the race ends at the time). Left as they were offered, the class follows the app default when that has a limit (a club racing to a lap count keeps its laps); changed, the class gets its own format with that time and finish and no lap limit. Once **Race Format...** or a **Sanctioning Preset** sets the format, these two rows are grayed and show what it set. | Then finish the lap, or the app default's rule |
+| **Race length:** | A new class only: how many minutes its races last (1–180). On an existing class, change it with **Format**. | 5, or the app default's time limit |
+| **When time's up:** | A new class only: **Time's up, then finish the lap** (the leader takes the flag and everyone else finishes the lap they're on) or **Stop when time's up** (the race ends at the time). Left as they were offered, the class follows the app default when that has a limit (a club racing to a lap count keeps its laps); changed, the class gets its own format with that time and finish and no lap limit. Once **Format** or a **Sanctioning Preset** sets the format, these two rows are grayed and show what it set. | Then finish the lap, or the app default's rule |
 | **Qualifying:** | **Most laps, then lowest time**, **Best consecutive laps (fastest clean run)**, or **Points per round (1st = 1 point, fewest wins)**. See [How qualifying ranks drivers](program-and-mains.md#how-qualifying-ranks-drivers) and [Points per round](program-and-mains.md#points-per-round). | Most laps, then lowest time |
 | **Consecutive laps to count:** | For best-consecutive scoring only: how many laps in a row make a run (2–20). | 3 |
 | **Heats that count:** | How many of each driver's best heats are totaled (1–20). Set 2 for "best 2 of 3". Leave at 1 to count only their single best heat. For **Points per round**, it's how many rounds count. | 1 |
@@ -461,14 +461,14 @@ The **Add Class** / **Edit Class** dialog has these settings:
 | **A jump start also costs the lap** | When on, a car that jumps the start loses the lap it jumped on as well as any time penalty. When off, it's credited with the start lap at the green like everyone else. | Off |
 | **Warn when a driver in a heat hasn't passed tech today** | When a heat is staged, Race Control warns about drivers in it who haven't been cleared by scrutineering today. It never stops the race. See [Tech warnings on Race Control](events-and-entries.md#tech-warnings-on-race-control). | On |
 
-The row of buttons under the settings opens the class's sub-editors: **Tech Checklist**, **Race Format**, **Qualifier Format**, **Color**, **Sanctioning Preset** and **Warnings**. Changes made in them are kept when you click **Save** on the class. **Cancel** on the class throws them away too, including a sanctioning preset or checklist change. **Tech Checklist**, **Qualifier Format** and **Warnings** are shown in Advanced mode only; in Simple mode they're hidden but keep working (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)).
+The row of buttons under the settings opens the class's sub-editors: **Tech Checklist**, **Format**, **Qualifier Format**, **Color**, **Sanctioning Preset** and **Warnings**. Changes made in them are kept when you click **Save** on the class. **Cancel** on the class throws them away too, including a sanctioning preset or checklist change. **Tech Checklist**, **Qualifier Format** and **Warnings** are shown in Advanced mode only; in Simple mode they're hidden but keep working (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)).
 
 !!! note
     Classes don't have a points scale. Points are set per championship — see [Results and championships](../race-control/results-and-championships.md).
 
 ### Race format and qualifier format
 
-A race format is how a class's races are run: limits, the start procedure and streak rules. Click **Race Format** to set the class's format, and **Qualifier Format** if its qualifying heats should run differently (the common "five-minute quals, eight-minute mains" setup).
+A race format is how a class's races are run: limits, the start procedure and streak rules. Click **Format** to set the class's format, and **Qualifier Format** if its qualifying heats should run differently (the common "five-minute quals, eight-minute mains" setup).
 
 HeatCaller picks the format for a race in this order:
 
@@ -562,7 +562,7 @@ Each preset names the rulebook edition it came from. Check it against your curre
     - The IFMAR, EFRA and NZRCA off-road presets switch on **Points per round** with **Top qualifier scores:** on that body's 0-point scale. IFMAR and EFRA count fewer rounds when fewer are run, so check **Heats that count:** against your schedule. The ROAR presets are for Level 1-4, which ranks on each driver's single best heat; ROAR's Qual-Points is for Level 5. See [The top qualifier on 0 points](program-and-mains.md#the-top-qualifier-on-0-points-ifmar-and-efra).
     - The IFMAR section, EFRA, NZRCA and Reedy presets set the class's **A-main:** to 3 legs. HeatCaller runs only the A-main in legs, so lower mains that their rules run in legs are run once.
     - The PNWC preset sets the length of one leg only. It doesn't change the class's **A-main:** setting, so to run PNWC's three-leg A-main, set that yourself (see [Double and triple A-mains](program-and-mains.md#double-and-triple-a-mains)). HeatCaller has no multi-leg lower mains. Read **WHAT IT DOES NOT SET** for each one.
-    - If the class was following the app default format, a preset that sets a duration gives the class its own format. Later changes to the app default won't reach it any more. The other settings in that new format start from HeatCaller's built-in values (for example a 3000 ms minimum lap), not from your app default, so check **Race Format** afterwards.
+    - If the class was following the app default format, a preset that sets a duration gives the class its own format. Later changes to the app default won't reach it any more. The other settings in that new format start from HeatCaller's built-in values (for example a 3000 ms minimum lap), not from your app default, so check **Format** afterwards.
     - Applied from the **Classes** page, the preset is saved as soon as you click **Yes**. Applied from inside the class editor, it's saved when you click **Save** on the class.
 
 ## Rentals

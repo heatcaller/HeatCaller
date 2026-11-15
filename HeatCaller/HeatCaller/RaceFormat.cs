@@ -186,7 +186,7 @@ public sealed class RaceFormat
     /// or the default with a 5-minute limit. Changed, the class gets its own
     /// format: the default's start procedure and the rest, raced to that time
     /// with that finish, and no lap limit, because the question was asked in
-    /// minutes. Everything can still be changed under Race Format....
+    /// minutes. Everything can still be changed under Format.
     /// </summary>
     public static RaceFormat? ForNewClass(RaceFormat? appDefault, int minutes, bool finishTheLap)
     {

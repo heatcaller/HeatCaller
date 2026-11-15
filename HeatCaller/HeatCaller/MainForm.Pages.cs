@@ -2462,6 +2462,10 @@ public partial class MainForm
         _raceControlControl.OwnBestGhosts = () => OwnBestGhost.ChasedBy(_ghostStore.Current);
         _raceControlControl.MissionControlRequested += ShowMissionControl;
 
+        // Expand board (15 Nov 2026): the sidebar narrowed with the column under the clock.
+        _raceControlControl.ExpandBoardRequested += SlideNavIconsOnly;
+        _raceControlControl.ShowNavNarrowed(_navIconsOnly);
+
         // Brings Race Control forward without closing the announcer's
         // window. It used to be a tab, so "Race Control" meant leaving the
         // announcer's page; now the two can be side by side and this only

@@ -35,7 +35,7 @@ Not every page below may be in your sidebar:
 
 ### Just the icons
 
-On a laptop at the track, the sidebar's 220 pixels is a column of the leaderboard. Click the chevron beside the **Search pages...** box, or press <kbd>Ctrl</kbd>+<kbd>B</kbd>, and the sidebar narrows to a rail of its icons - about a quarter of the width, with the rest going to the page beside it. Click the chevron again, or press <kbd>Ctrl</kbd>+<kbd>B</kbd> again, to open it.
+On a laptop at the track, the sidebar's 220 pixels is a column of the leaderboard. Click the chevron beside the **Search pages...** box, or press <kbd>Ctrl</kbd>+<kbd>B</kbd>, and the sidebar narrows to a rail of its icons - about a quarter of the width, with the rest going to the page beside it. Click the chevron again, or press <kbd>Ctrl</kbd>+<kbd>B</kbd> again, to open it. It slides shut and open rather than jumping. On **Race Control**, **Expand** at the foot of the leaderboard narrows the sidebar and folds away the column under the clock in one go (see [Make the leaderboard bigger](../race-control/running-a-race.md#make-the-leaderboard-bigger)).
 
 Nothing is hidden by this. Every page is still there, in the same order and in the same groups, and the page you were on stays on screen. What goes is the words: the page names, the group headings, the **Search pages...** box and the **HEATCALLER** header, which becomes **HC**. The club logo and the Synthwave scene go from the header too, since neither reads at that width; they come back when you open the sidebar. Hover over an icon to see its page's name, and its count if it has one - the **Rentals** count, for example, becomes a dot in the corner of the icon with the number in the tooltip.
 

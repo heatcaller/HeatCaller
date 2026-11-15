@@ -4,6 +4,14 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **A bigger leaderboard on Race Control (15 November).**
+    - **Fold the column under the clock.** A small **▴** in the clock's corner slides the buttons and level meters under the clock away to the right. The clock shrinks to the height of the Race Control card beside it, and the leaderboard widens across the page under them, keeping its place. **▾** brings them back, and the choice is remembered.
+    - **Expand** at the foot of the leaderboard folds both sides at once: the sidebar narrows to its icons and the column under the clock folds away. It then reads **Restore**.
+    - **The sidebar slides** shut and open, from its chevron, <kbd>Ctrl</kbd>+<kbd>B</kbd> or **Expand**, rather than jumping.
+    - **One row along the foot of the board,** down to a 1280-wide window: the switches read **Start:**, **Warm-up:** and **Auto:**, and **Race Format...** is **Format**, here and in the class editor and the race-day setup wizard.
+    - **The line of help over the leaderboard is gone.** Right-click a column heading to choose the columns; <kbd>?</kbd> still lists the shortcuts.
+
+    See [Make the leaderboard bigger](race-control/running-a-race.md#make-the-leaderboard-bigger). Update HeatCaller on the race PC; nothing changes on the relay.
 - **Setup starts from templates (14 November).** **Race Day → Setup** has three tabs: **Templates**, **Tonight** and **Club rules**.
     - **Templates** is where a night starts: tonight's choice on a banner with one **Start Tonight**, and a card for every template, **Like last time** and **Something different...**, each saying what it starts. **New Race Day** and the **Templates:** row are gone; **Set Up Tonight** is **Walk me through it...** on the banner.
     - **A forecast** on the banner and every card: about how many drivers, how many heats and finals, and when the night finishes against **Out of the venue by:**, from the phones' **I'm coming**, the last nights from the same template, or the last night.

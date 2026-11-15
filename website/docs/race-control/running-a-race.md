@@ -14,8 +14,15 @@ From top to bottom, the page has:
 - **The Session row.** Choose the round, the track and the session name.
 - **The Next Up bar.** Shows what's running now, what's next, and how the day is going.
 - **The Race Control card.** Holds one row of flag buttons, all the same width and centered across the card over the On Air bar under them. The lit flag button and the board show where the race is. Only the buttons that mean something at that moment are shown (see [The flag row](#the-flag-row)). The lit button shows the flag in effect. **Red**, **Checkered** and **Reset** have to be pressed and held for a second (see [Press and hold](#press-and-hold)); the line under the row says so, and shows the hold as it fills. The same line is the **On Air bar** while anything is going out (see [The On Air bar](#the-on-air-bar)).
-- **The Leaderboard card.** Takes up the rest of the page. Click a driver to open their corrections drawer under their row (see [The leaderboard](#the-leaderboard)). Along its foot are the format chip, the **Start races On Air** tick box, the **Warm-up first** switch (see [Warm-up](#warm-up)), the **Auto start** switch (see [Auto start between races](#auto-start-between-races)), **Race Format** and **Columns**. **Start races On Air**, **Warm-up first** and **Columns** are shown in Advanced mode only (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)).
-- **The clock column** on the right. It holds the race clock, then **Quick Race**, **Big Screen**, **Announcer Screen**, **Qualifying Projection**, **Pre-race check**, **Mission Control** and **Broadcast**, with the level meters under **Broadcast** (see [Level meters](#level-meters)).
+- **The Leaderboard card.** Takes up the rest of the page. Click a driver to open their corrections drawer under their row (see [The leaderboard](#the-leaderboard)). Along its foot are the format chip, then one row of controls: the **Start: Stage | On Air** switch (see [On Air](#on-air)), the **Warm-up: Off | On** switch (see [Warm-up](#warm-up)), the **Auto: Off | On** switch (see [Auto start between races](#auto-start-between-races)), **Format** (see [The race format](#the-race-format)) and **Expand** (see [Make the leaderboard bigger](#make-the-leaderboard-bigger)). **Start:** and **Warm-up:** are shown in Advanced mode only (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)).
+- **The clock column** on the right. It holds the race clock, then **Quick Race**, **Big Screen**, **Announcer Screen**, **Qualifying Projection**, **Pre-race check**, **Mission Control** and **Broadcast**, with the level meters under **Broadcast** (see [Level meters](#level-meters)). The small **▴** in the clock's bottom right-hand corner folds away everything under the clock (see [Make the leaderboard bigger](#make-the-leaderboard-bigger)).
+
+### Make the leaderboard bigger
+
+Two buttons give the leaderboard more room. Both slide into place, and both are remembered from night to night.
+
+- **▴ in the clock's corner** folds away the buttons and level meters under the clock. They slide off to the right, the clock shrinks to the height of the Race Control card beside it, and the leaderboard widens across the whole page under them, keeping its place. Press **▾** to bring them back. Their keys (<kbd>F8</kbd>, <kbd>B</kbd>, <kbd>A</kbd> and <kbd>R</kbd>) still work while they're folded away.
+- **Expand**, at the foot of the leaderboard, folds both sides at once: the sidebar narrows to its icons and the column under the clock folds away. It then reads **Restore**, which opens both again.
 
 ## The flag row
 
@@ -107,10 +114,10 @@ HeatCaller uses the first of these that exists:
 
 1. The round's own override.
 2. For a qualifying round, the class's **Qualifier Format**.
-3. The class's **Race Format**.
+3. The class's format (**Format** on the class).
 4. The app default.
 
-**Race Format** opens the format that's currently in force, wherever it comes from, so you always edit the one you can see. Class formats are also set on the **Classes** page. If you change the format while a race is running, the chip updates straight away, but the running race keeps the rules it started with.
+**Format** opens the format that's currently in force, wherever it comes from, so you always edit the one you can see. Class formats are also set on the **Classes** page. If you change the format while a race is running, the chip updates straight away, but the running race keeps the rules it started with.
 
 | Setting | What it does | App default |
 |---|---|---|
@@ -141,7 +148,7 @@ In Simple mode the format shows only the lap limit, the time limit and **Start:*
 
 ### On Air
 
-On Air is the normal start. With **Start races On Air** ticked at the foot of the leaderboard (it is by default), <kbd>F1</kbd>, **Start Next**, the program's **Start**, the phone and the day schedule all go through On Air first. Unticked, they stage straight away. The **Stage** button always stages straight away, whatever the tick box says.
+On Air is the normal start. With **Start:** set to **On Air** at the foot of the leaderboard (it is by default), <kbd>F1</kbd>, **Start Next**, the program's **Start**, the phone and the day schedule all go through On Air first. Set to **Stage**, they stage straight away. The **Stage** button always stages straight away, whatever the switch says.
 
 While On Air gets the opening ready, the strip under the flag row shows it the way it shows a press and hold: the step it's on ("On Air: writing the opening…", "On Air: voicing the opening…", "On Air: voicing the driver intros…"), a red bar filling from left to right, and the seconds it expects to need, learned from your last few openings, for example "about 12s · hold 0 to skip to Stage". The first few times there's no countdown yet, just the step. Once the show is live the strip turns cyan and reads "On air - the show is going out".
 
@@ -191,7 +198,7 @@ The warm-up is a flag of its own. While it's open the **Warm-up** button is lit,
 
 **The Warm-up button.** The first button on the flag row before the green. It opens a warm-up whether or not the format has one: the format's length, or two minutes if it has none. It doesn't open one over a race that's staged, counting down or running; the log says why.
 
-**Warm-up first.** At the foot of the leaderboard (Advanced mode), beside **Start races**. Switched **On**, every start opens a warm-up first: **Start Next**, **Auto start**, the program's **Start**, <kbd>F1</kbd>, the phone, **Stage** and **Quick Race**. With **Start races On Air** on too, On Air's opening comes first, then the warm-up. It's **Off** by default, and a format with a warm-up still has one either way.
+**Warm-up: Off | On.** At the foot of the leaderboard (Advanced mode), beside **Start:**. Switched **On**, every start opens a warm-up first: **Start Next**, **Auto start**, the program's **Start**, <kbd>F1</kbd>, the phone, **Stage** and **Quick Race**. With **Start:** on **On Air** too, On Air's opening comes first, then the warm-up. It's **Off** by default, and a format with a warm-up still has one either way.
 
 **Reset** cancels a warm-up. A warm-up never opens during practice, or over a race that's staged, counting down or running.
 
@@ -351,7 +358,7 @@ The board orders drivers by most laps, then by lowest total time. Total time inc
 
 ### Columns
 
-Press **Columns**, at the foot of the leaderboard, to choose the columns and their order. In the dialog, click the left edge of a row to show or hide that column, and use **Move Up** and **Move Down** to reorder them. **Restore Defaults** puts back **Pos**, **Driver**, **Car**, **Laps**, **Best Lap**, **Gap to P1** and **Streak**.
+Right-click a column heading on the leaderboard and choose **Choose the board's columns...** to choose the columns and their order. The same item is at the foot of a driver's right-click menu. It's there in Simple mode too. In the dialog, click the left edge of a row to show or hide that column, and use **Move Up** and **Move Down** to reorder them. **Restore Defaults** puts back **Pos**, **Driver**, **Car**, **Laps**, **Best Lap**, **Gap to P1** and **Streak**.
 
 | Column | Shows |
 |---|---|
@@ -453,7 +460,7 @@ A car that's broken, or a driver who's gone home: right-click the Next Up bar (b
 
 ### Auto start between races
 
-After each race, HeatCaller counts down a gap and starts the next race by itself, so nobody has to press **Start Next**. It's on by default. The switch is at the foot of the leaderboard: **Auto start: Off | On**.
+After each race, HeatCaller counts down a gap and starts the next race by itself, so nobody has to press **Start Next**. It's on by default. The switch is at the foot of the leaderboard: **Auto: Off | On**.
 
 - **When it counts.** From the checkered flag of a race on the program. It doesn't count after a demo, a Quick Race or a race kept on its own, and it doesn't start the first race of the night. The gap is 2:30 unless you choose another: right-click the switch for 1:30 to 5:00.
 - **The call-ups follow it.** The call-ups are timed to the real start, whether or not the timetable has times, and so is the spoken countdown ("one minute") when it's ticked on the **Between races** card. Phones show the start time too.
@@ -468,7 +475,7 @@ After each race, HeatCaller counts down a gap and starts the next race by itself
     - **Start without them** starts the race, **Wait** holds it, and a car that turns up clears the banner by itself.
     - With no decoder connected, or in a demo, cars aren't looked for.
 - **Marshals in place.** With **Wait for the marshals before starting** ticked on the switch's right-click menu, a race with marshals waits at zero until somebody presses **Marshals in place** on the banner that names them a minute before. See [Marshals in place](../race-day/program-and-mains.md#marshals-in-place).
-- **The start itself** is **Start Next**'s, so it goes through On Air when **Start races On Air** is on, and it never runs a step that's owed first. When bump-ups or the finals are due, the count stops and **Start Next** offers them for you to do.
+- **The start itself** is **Start Next**'s, so it goes through On Air when **Start:** is on **On Air**, and it never runs a step that's owed first. When bump-ups or the finals are due, the count stops and **Start Next** offers them for you to do.
 - **Off is for tonight only.** Switch it off and races wait for **Start Next** until tomorrow's racing. To keep it off, right-click the switch and choose **Off until I switch it on again**.
 - **On the Big Screen**, the countdown band says "NEXT RACE IN 1:42" between races, "NEXT RACE AT 20:40" while a race waits for its time, "NEXT RACE ON HOLD" while it's held, and "NEXT RACE SOON" at zero. A missing car isn't named there.
 - **From the phone:** the remote's **HOLD START** and **+1 MIN** (see [Phone remote](../screens/phone-and-web.md)). A driver can ask the desk for 5 more minutes or to be skipped, and once you approve, the count moves or they come out of the race (see [More time, or skip my race](../online/driver-requests.md#more-time-or-skip-my-race)). A driver whose race is about 5 minutes away gets a "Your race is in about 5 minutes" alert on their phone.

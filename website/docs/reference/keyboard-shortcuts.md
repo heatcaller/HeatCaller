@@ -11,7 +11,7 @@ These work while the **Race Control** page is showing, and throughout Race Mode.
 | Key | Does the same as |
 |---|---|
 | <kbd>0</kbd> | **On Air** (it has no button on the flag row). Hold it for a second while On Air runs to skip straight to staging; let go early and nothing happens. Either <kbd>0</kbd>, the top row's or the keypad's. |
-| <kbd>F1</kbd> | Starts the race the normal way: through **On Air** when **Start races On Air** is ticked, otherwise **Stage**. Pressed while On Air runs it does nothing except remind you, in the log, to hold <kbd>0</kbd> to skip. The **Stage** button itself always stages straight away. |
+| <kbd>F1</kbd> | Starts the race the normal way: through **On Air** when **Start:** is set to **On Air**, otherwise **Stage**. Pressed while On Air runs it does nothing except remind you, in the log, to hold <kbd>0</kbd> to skip. The **Stage** button itself always stages straight away. |
 | <kbd>F2</kbd> | **Countdown** |
 | <kbd>F3</kbd> | **Green**. It also resumes the race after a yellow or red. |
 | <kbd>F4</kbd> | **Yellow** |

@@ -122,7 +122,7 @@ public sealed class RaceClassEditForm : Form
     private readonly ClassLengthPicker? _length;
 
     /// <summary>
-    /// Set once Race Format... or a sanctioning preset has set the new class's
+    /// Set once Format or a sanctioning preset has set the new class's
     /// format, which then wins over the two rows - see SeedFormatFromLength.
     /// </summary>
     private bool _formatSetElsewhere;
@@ -294,7 +294,7 @@ public sealed class RaceClassEditForm : Form
         // from the club's default rather than the built-in values. Null
         // when this editor was opened without the store (the editor then
         // falls back to the built-ins, as it always did).
-        var btnFormat = new Button { Text = "Race Format..." };
+        var btnFormat = new Button { Text = "Format" };
         btnFormat.Click += (_, _) =>
         {
             // A new class's editor opens on the length and finish typed above.
@@ -547,7 +547,7 @@ public sealed class RaceClassEditForm : Form
 
     /// <summary>
     /// For a new class whose format nothing else has set yet: the format from
-    /// the race length and finish rows, so Race Format... and a sanctioning
+    /// the race length and finish rows, so Format and a sanctioning
     /// preset start from what was typed there rather than from the 5 minutes
     /// the class was made with (12 Nov 2026, setup plan step 8).
     /// </summary>
@@ -559,7 +559,7 @@ public sealed class RaceClassEditForm : Form
         }
     }
 
-    /// <summary>Race Format... or a preset has set the new class's format: that wins, and the rows say so.</summary>
+    /// <summary>Format or a preset has set the new class's format: that wins, and the rows say so.</summary>
     private void FormatSetElsewhere()
     {
         if (_length is null)
@@ -833,7 +833,7 @@ public sealed class RaceClassEditForm : Form
         Result.ColorArgb = _colourArgb;
 
         // A new class's race length and finish (setup plan step 8), unless
-        // Race Format... or a preset has set the format since.
+        // Format or a preset has set the format since.
         SeedFormatFromLength();
 
         // Its own fees, or null to follow the race day's (setup plan step 8).
