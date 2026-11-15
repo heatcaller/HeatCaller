@@ -428,6 +428,17 @@ header:has(.brand) { padding-top: 8px; }
                  line-height: 1; cursor: pointer; padding: 4px 10px; }
 /* Share, beside Stop: a link that follows this driver (overlay plan 7.1). */
 .fol-share { margin-top: 10px; }
+/* Family links (overlay plan 7.1). */
+.famlinks { padding: 14px 16px; }
+.famlinks h3 { margin: 0 0 6px; }
+.famrow { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+.famrow b { flex: 1 1 8rem; }
+.famrow input { flex: 1 1 10rem; min-height: 44px; font: inherit; padding: 8px 10px; border-radius: 8px;
+                border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+.famrace { padding: 12px 0; border-top: 1px solid var(--border); }
+.famrace:first-child { border-top: 0; }
+.famrace .big { font-size: 1.25rem; font-weight: 700; }
+.famrace .sub { color: var(--muted); font-size: 0.9rem; }
 .folbox { position: fixed; z-index: 40; left: 16px; right: 16px; top: calc(var(--sa-t) + 16px); margin: 0 auto; max-width: 30rem;
           background: var(--surface); color: var(--text); border: 1px solid var(--accent); border-radius: 14px; padding: 14px;
           box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35); }
@@ -16943,6 +16954,105 @@ function goLink(n) {
  * that 404s is a link they think is broken. The page asks, and says what
  * came back.
  */
+/**
+ * FAMILY LINKS ON A DRIVER'S NIGHT (14 Nov 2026, stream overlay plan 7.1,
+ * Asher: "family links-any driver"): make a link for each relative - a
+ * label like "Grandma" - list them, and stop any one. Each opens the
+ * family page (familyPage), read-only. At most ten at once.
+ */
+const NIGHT_FAMILY_JS = `
+const famBox = document.getElementById('famlinks');
+let famLinks = null;
+let famSaid = '';
+
+function famUrl(code) {
+  let origin = '';
+  try { origin = location.origin || ''; } catch (e) { /* relative works too */ }
+  return origin + '/c/' + encodeURIComponent(CLUB) + '/family#f=' + code;
+}
+
+function drawFamily() {
+  if (!famBox) return;
+  if (!CODE || famLinks === null) { famBox.hidden = true; return; }
+  famBox.hidden = false;
+  famBox.textContent = '';
+  const h = document.createElement('h3');
+  h.textContent = 'Family links';
+  famBox.appendChild(h);
+  const p = document.createElement('p');
+  p.className = 'note';
+  p.textContent = 'A link for each person at home: your races tonight, where you finished, your next race and your race videos. They can\\u2019t change anything or see anything else. Stop one any time.';
+  famBox.appendChild(p);
+  for (const l of famLinks) {
+    const row = document.createElement('div');
+    row.className = 'famrow';
+    const name = document.createElement('b');
+    name.textContent = l.label || 'Family link';
+    row.appendChild(name);
+    const send = document.createElement('button');
+    send.type = 'button';
+    send.className = 'page';
+    send.textContent = 'Send';
+    send.addEventListener('click', () => hcShareLink(famUrl(l.code), 'Follow ' + ((night && night.driver) || 'my racing') + (CLUB_NAME ? ' at ' + CLUB_NAME : '')));
+    row.appendChild(send);
+    const stop = document.createElement('button');
+    stop.type = 'button';
+    stop.className = 'page';
+    stop.textContent = 'Stop';
+    stop.addEventListener('click', async () => {
+      await post('/family/manage', { id: CODE, action: 'stop', code: l.code });
+      famSaid = 'Stopped. That link no longer opens.';
+      readFamily();
+    });
+    row.appendChild(stop);
+    famBox.appendChild(row);
+  }
+  if (famLinks.length < 10) {
+    const make = document.createElement('div');
+    make.className = 'famrow';
+    const label = document.createElement('input');
+    label.type = 'text';
+    label.maxLength = 30;
+    label.placeholder = 'Who is it for? (Grandma)';
+    label.setAttribute('aria-label', 'Who the link is for');
+    make.appendChild(label);
+    const go = document.createElement('button');
+    go.type = 'button';
+    go.className = 'go';
+    go.textContent = 'Make a family link';
+    go.addEventListener('click', async () => {
+      const a = await post('/family/manage', { id: CODE, action: 'make', label: label.value });
+      if (a.status === 200 && a.body.code) {
+        hcShareLink(famUrl(a.body.code), 'Follow ' + ((night && night.driver) || 'my racing') + (CLUB_NAME ? ' at ' + CLUB_NAME : ''));
+        famSaid = '';
+      } else {
+        famSaid = (a.body && a.body.error) || 'That link couldn\\u2019t be made just now.';
+      }
+      readFamily();
+    });
+    make.appendChild(go);
+    famBox.appendChild(make);
+  }
+  if (famSaid) {
+    const said = document.createElement('p');
+    said.className = 'note';
+    said.textContent = famSaid;
+    famBox.appendChild(said);
+  }
+}
+
+async function readFamily() {
+  if (!CODE) return;
+  try {
+    const a = await post('/family/manage', { id: CODE, action: 'list' });
+    famLinks = a.status === 200 && Array.isArray(a.body.links) ? a.body.links : null;
+  } catch (e) { famLinks = null; }
+  drawFamily();
+}
+
+readFamily();
+`;
+
 export function nightPage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
   return shell({
     club,
@@ -16974,8 +17084,9 @@ export function nightPage(club: string, clubName: string, context: PageContext =
       // No "Sign out on this phone" at the foot since 7 Nov 2026 (Asher:
       // "remove the sign out link at the bottom of the garage tab"): the
       // Signed in button at the top asks the same question.
-      GARAGE_EMBED_BODY + '<div id="yd"></div>' + ME_BODY_END,
-    script: LAPS_JS + QUAL_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS + garageEmbedScript() + ME_JS,
+      // Family links (overlay plan 7.1): under their details, hidden until read.
+      GARAGE_EMBED_BODY + '<div id="yd"></div>' + '<section class="card famlinks" id="famlinks" hidden></section>' + ME_BODY_END,
+    script: LAPS_JS + QUAL_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS + garageEmbedScript() + ME_JS + NIGHT_FAMILY_JS,
     noindex: true,
   }, context);
 }
@@ -18770,4 +18881,134 @@ export function pausedPage(club: string, clubName: string, _context: PageContext
   return heatcallerNotice(`${name} - paused`, `<p class="wordmark hcword">Heat<span class="hcc">Caller</span></p>
   <h1>${name}</h1>
   <p>This club's pages are paused for now. Results, schedules and live timing will be back here when the club returns.</p>`);
+}
+
+
+/**
+ * A FAMILY LINK'S PAGE (14 Nov 2026, stream overlay plan 7.1, Asher: "family
+ * links-any driver"): /c/:club/family#f=<code>, made by a driver from their
+ * night for one relative. Read-only and in plain words - "Mia finished 3rd
+ * of 8 in Junior - Heat 2" - with the laps and time small underneath, their
+ * next race, and their race videos (juniors' too: it is the family's own
+ * link). Nothing else of the driver's night. Polled every thirty seconds.
+ */
+const FAMILY_JS = `${CLOCK_JS}
+const fam = document.getElementById('fam');
+function famCode() {
+  const m = /[#&]f=([0-9a-fA-F]{24})(?:&|$)/.exec(String(location.hash || ''));
+  return m ? m[1].toLowerCase() : '';
+}
+const FCODE = famCode();
+let famText = '';
+
+function famOrdinal(n) {
+  const t = n % 100, e = n % 10;
+  return n + (t >= 11 && t <= 13 ? 'th' : e === 1 ? 'st' : e === 2 ? 'nd' : e === 3 ? 'rd' : 'th');
+}
+
+function famNext(n, who) {
+  if (!n || typeof n !== 'object') return '';
+  if (typeof n.words === 'string' && n.words.trim() !== '') return n.words;
+  if (n.now === true) return who + ' is on track now';
+  if (n.staged === true) return who + ' is on the grid';
+  const away = Math.max(0, Math.round(Number(n.away) || 0));
+  return away === 0 ? who + ' races next' : away === 1 ? '1 race before ' + who + '\\u2019s' : away + ' races before ' + who + '\\u2019s';
+}
+
+function drawFam(d) {
+  fam.textContent = '';
+  const who = d.driver || 'Your driver';
+  const head = document.createElement('div');
+  head.className = 'hero';
+  head.innerHTML = '<span class="kicker">Following</span>';
+  const big = document.createElement('span');
+  big.className = 'big';
+  big.textContent = who;
+  head.appendChild(big);
+  const when = document.createElement('span');
+  when.className = 'when';
+  when.textContent = [d.title, d.when].filter(Boolean).join(' \\u00b7 ');
+  head.appendChild(when);
+  fam.appendChild(head);
+
+  const next = famNext(d.next, who);
+  if (next) {
+    const card = document.createElement('section');
+    card.className = 'lc next';
+    const h = document.createElement('h3');
+    h.textContent = 'Next race';
+    card.appendChild(h);
+    const b = document.createElement('div');
+    b.className = 'lc-big';
+    b.textContent = next;
+    card.appendChild(b);
+    if (d.next && typeof d.next.race === 'string') { const r = document.createElement('div'); r.textContent = d.next.race; card.appendChild(r); }
+    fam.appendChild(card);
+  }
+
+  const races = Array.isArray(d.races) ? d.races : [];
+  const list = document.createElement('section');
+  list.className = 'card famlinks';
+  const h = document.createElement('h3');
+  h.textContent = races.length ? 'Tonight' : 'No races yet tonight';
+  list.appendChild(h);
+  for (const r of races.slice().reverse()) {
+    const row = document.createElement('div');
+    row.className = 'famrace';
+    const pos = Number(r.pos) || 0, of = Number(r.of) || 0;
+    const line = document.createElement('div');
+    line.className = 'big';
+    line.textContent = pos > 0 ? famOrdinal(pos) + (of > 0 ? ' of ' + of : '') : (r.out ? String(r.out) : 'Raced');
+    row.appendChild(line);
+    const what = document.createElement('div');
+    what.textContent = r.label || 'A race';
+    row.appendChild(what);
+    const nums = document.createElement('div');
+    nums.className = 'sub';
+    nums.textContent = [Number(r.laps) > 0 ? r.laps + ' laps' : '', Number(r.bestMs) > 0 ? 'best lap ' + (Number(r.bestMs) / 1000).toFixed(3) : ''].filter(Boolean).join(' \\u00b7 ');
+    row.appendChild(nums);
+    const v = d.videos && r.sid ? d.videos[r.sid] : null;
+    if (v) row.appendChild(hcVideoButton('Watch this race', 'Watch ' + (r.label || 'this race') + ', video from YouTube', () => hcVideoSheet(v, { title: r.label || 'Race video', where: 'night' })));
+    list.appendChild(row);
+  }
+  fam.appendChild(list);
+
+  for (const l of Array.isArray(d.lines) ? d.lines.slice(0, 6) : []) {
+    const p = document.createElement('p');
+    p.className = 'note';
+    p.textContent = l;
+    fam.appendChild(p);
+  }
+}
+
+async function loadFam() {
+  if (!FCODE) { fam.innerHTML = '<p class="note">This link isn\\u2019t complete. Ask for it to be sent again.</p>'; return; }
+  let r;
+  try {
+    r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/family/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: FCODE }), cache: 'no-store' });
+  } catch (e) { return; }
+  if (r.status === 404) { fam.innerHTML = '<p class="note">This family link has been stopped, or the club isn\\u2019t sharing drivers\\u2019 nights just now.</p>'; famText = ''; return; }
+  if (r.status !== 200) return;
+  let d = {};
+  try { d = await r.json(); } catch (e) { return; }
+  const text = JSON.stringify(d);
+  if (text === famText) return;
+  famText = text;
+  drawFam(d);
+}
+
+poll(loadFam, 30000);
+`;
+
+export function familyPage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
+  return shell({
+    club,
+    clubName,
+    active: "home",
+    heading: "Following",
+    sub: "Their races tonight, from the club's timing - a family link they sent you.",
+    body: '<div id="fam"><p class="note">Loading&hellip;</p></div>',
+    script: FAMILY_JS,
+    noindex: true,
+  }, context);
 }
