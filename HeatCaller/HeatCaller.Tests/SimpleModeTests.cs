@@ -396,6 +396,7 @@ public sealed class SimpleModeTests : IDisposable
         "MainForm.Pages.cs|Recording",
         "RelaySettingsControl.cs|What gets published", "RelaySettingsControl.cs|Look", "RelaySettingsControl.cs|Personal PINs",
         "RelaySettingsControl.cs|Email (for racer PINs)", "RelaySettingsControl.cs|Race-day manager",
+        "RelaySettingsControl.Video.cs|Race video (YouTube)",
         "RoomAndWebCard.cs|Room & Web",
 
         // AI Commentary (round 3): every card, in place of the section switches.
@@ -470,7 +471,7 @@ public sealed class SimpleModeTests : IDisposable
         "RecordingControl.cs|Recording the night", "RecordingControl.cs|Written from the night",
 
         // Venues, which Simple hides as a page.
-        "VenuesControl.cs|Venues", "VenuesControl.cs|Venue settings",
+        "VenuesControl.cs|Venues", "VenuesControl.cs|The venue", "VenuesControl.cs|Race defaults", "VenuesControl.cs|Apply",
 
         // Windows of their own, not settings pages.
         "AnnouncerControl.cs|Running order", "AnnouncerControl.cs|Spotlight", "AnnouncerControl.cs|Talking points",
