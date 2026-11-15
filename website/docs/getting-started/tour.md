@@ -164,7 +164,7 @@ To change the app's look:
 !!! warning
     Changing the app's look restarts the app. Don't do it while a race is running.
 
-The same page sets the look of the crowd screens (the Big Screen, the Wi-Fi pages and your club's online pages), which change without a restart, and the club logo. It also has the **Appearance** options: **Animate the Synthwave sidebar header (scrolling grid, twinkling stars)** and **Use 24-hour (military) time**. See [Looks and the club logo](../screens/looks-and-logo.md).
+The same page sets the look of the crowd screens (the Big Screen, the Wi-Fi pages and your club's online pages), which change without a restart, and the club logo. It also has the **Appearance** options: **Animate the Synthwave sidebar header (scrolling grid, twinkling stars)**, **Use 24-hour (military) time** and **Let drivers change the look of the club's pages on their own phones**. See [Looks and the club logo](../screens/looks-and-logo.md).
 
 How the app *sounds* (voice and sound-effect presets) isn't on **Themes**: it's on **Sounds → Soundscapes**. See [Soundscapes](../announcer/sounds-and-music.md#soundscapes).
 
@@ -240,4 +240,4 @@ Most dialogs follow the same rules:
 
 If something goes badly wrong, you'll see a plain Windows error box instead. It gives the file where the full details were written (`crash.log`). The same error isn't shown again within 30 seconds, so a repeating fault can't bury you in dialogs. See [Troubleshooting](../admin/troubleshooting.md).
 
-Some windows aren't dialogs and stay open alongside the main window. These include the **Big Screen**, the Announcer screen, the **Broadcast** window, **Mission Control**, the **Qualifying Projection**, a driver's lap breakdown, **Photo Finish**, **Driver Requests**, **This Month** and the QR posters. You can keep using the app while they're open. The **Timetable** and the **Scrutineering log** are windows too, but the main window waits while they're open: close them with **Close** or <kbd>Esc</kbd>.
+Some windows aren't dialogs and stay open alongside the main window. These include the **Big Screen**, the Announcer screen, the **Broadcast** window, **Mission Control**, the **Qualifying Projection**, a driver's lap breakdown, **Photo Finish**, the **Inbox**, **This Month** and the QR posters. You can keep using the app while they're open. The **Timetable** and the **Scrutineering log** are windows too, but the main window waits while they're open: close them with **Close** or <kbd>Esc</kbd>.

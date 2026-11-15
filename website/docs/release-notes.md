@@ -6,6 +6,29 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 Released 15 Nov 2026. Everything since 0.62.0, newest first.
 
+- **The Inbox (15 November).** One window, **Inbox**, for everything waiting for the desk. It replaces **Driver Requests**, **Tonight's club notes**, **Tonight's room vote** and **Online Sign-ups**.
+    - **One list, in order.** Whatever holds up the next race comes first (**More time**, **Skip my race**, a marshal swap, a query in its protest window), then the oldest. **Waited** turns amber, then red. Chips narrow it: **All**, **Race-blocking**, **Requests**, **Result queries**, **Crew and notes**, **Club notes** and **Sign-ups**.
+    - **Opening it.** Race Control's cyan button is now **Inbox** (was **Requests**), there while anything is waiting, with a badge that's red only while something holds up the next race. **Notes** and **Votes** in the **Broadcast** window open it on its club notes and its vote. On **Who's Racing** the buttons are **Inbox: Requests** and **Inbox: Sign-ups**.
+    - **Faster answers.** Keys <kbd>A</kbd>, <kbd>D</kbd>, <kbd>N</kbd>, <kbd>S</kbd> and <kbd>Enter</kbd>. **Later** puts one aside until the race on track finishes. **Decline** offers the club's quick replies first. Pick several of one kind and answer them together.
+    - **Undo for 10 seconds** under the buttons, for most answers. A battery pack no longer asks "Approve it?" first.
+    - **The room vote** is a card in the Inbox, with **Open voting on** the race about to run, **Stop voting** and **Show the tally**.
+    - **Sign-ups and invites** are under the **Sign-ups** chip, with the invite codes hidden until **Show Code**.
+    - **Dock in the main window** puts it in a panel down the right of Race Control, with a splitter.
+
+    See [The Inbox](race-control/inbox.md). Update HeatCaller on the race PC; nothing changes on the relay.
+- **Drivers pick their own look (15 November).**
+    - **A Look button** at the foot of every club page, next to the text size and contrast buttons, opens a picker: **Club colours**, **Night**, **Daylight**, **Pit Lane**, **Paddock**, **Carbon**, or a **Team colour** on night or daylight. The button then names the look, for example **Look: Pit Lane**.
+    - **Kept on that phone only.** High contrast still wins, and every look keeps text at 4.5:1 or better. The page opens in the look with no flash.
+    - **Family links** always show the club's own colors.
+    - **Clubs can turn it off** on the **Themes** page: **Let drivers change the look of the club's pages on their own phones**, on by default.
+
+    See [A driver's own look](online/index.md#a-drivers-own-look). Update the relay for the **Look** button, and HeatCaller on the race PC for the switch.
+- **Me says Tonight before your first race is filed (15 November).**
+    - **Tonight** is the first space's name as soon as the driver is on tonight's check-in list, or the desk is sending their live details, instead of the date of their last night until their first race was filed.
+    - **Races from an earlier night say so** at the top of **Races**, for example "From Sat 8 Nov.", with "Tonight's races show here once the desk files them." when tonight is on.
+    - **Family links** show only on **Tonight**.
+
+    See [Me on a phone](online/index.md#me-on-a-phone). Update the relay; nothing changes on the race PC.
 - **A bigger leaderboard on Race Control (15 November).**
     - **Fold the column under the clock.** A small **▴** in the clock's corner slides the buttons and level meters under the clock away to the right. The clock shrinks to the height of the Race Control card beside it, and the leaderboard widens across the page under them, keeping its place. **▾** brings them back, and the choice is remembered.
     - **Expand** at the foot of the leaderboard folds both sides at once: the sidebar narrows to its icons and the column under the clock folds away. It then reads **Restore**.
