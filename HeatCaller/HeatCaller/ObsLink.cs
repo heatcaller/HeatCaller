@@ -112,13 +112,23 @@ public sealed class ObsLink : IDisposable
             ? new InvalidOperationException("OBS refused the password. Check it matches the one in OBS's WebSocket Server Settings.")
             : new WebSocketException("OBS closed the link.");
 
+    /// <summary>Which OBS the settings point at: host, port and password - or null with video off.</summary>
+    public readonly record struct Target(string Host, int Port, string Password);
+
+    /// <summary>The OBS <paramref name="settings"/> say to connect to, or null when video is off or no host is set.</summary>
+    public static Target? TargetOf(AppSettings settings) =>
+        settings.VideoEnabled && !string.IsNullOrWhiteSpace(settings.VideoObsHost)
+            ? new Target(settings.VideoObsHost.Trim(), settings.VideoObsPort, settings.VideoObsPassword ?? string.Empty)
+            : null;
+
+    /// <summary>How often a live link looks at the settings again.</summary>
+    private static readonly TimeSpan SettingsCheck = TimeSpan.FromSeconds(2);
+
     private async Task RunAsync(CancellationToken token)
     {
         while (!token.IsCancellationRequested)
         {
-            var settings = _settings();
-
-            if (!settings.VideoEnabled || string.IsNullOrWhiteSpace(settings.VideoObsHost))
+            if (TargetOf(_settings()) is not { } target)
             {
                 State = "off";
                 await Delay(TimeSpan.FromSeconds(5), token);
@@ -128,7 +138,13 @@ public sealed class ObsLink : IDisposable
             try
             {
                 State = "connecting";
-                await OneConnectionAsync(settings, token);
+
+                // Left because the settings changed: straight on to the new
+                // OBS, or to "off", without the ten-second wait.
+                if (await OneConnectionAsync(target, token))
+                {
+                    continue;
+                }
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
@@ -152,20 +168,64 @@ public sealed class ObsLink : IDisposable
         }
     }
 
-    private async Task OneConnectionAsync(AppSettings settings, CancellationToken token)
+    /// <summary>One connection, until OBS drops it or the settings stop pointing at it. True when it was the settings.</summary>
+    /// <remarks>
+    /// WHY (15 Nov 2026, bug hunt 20): the settings were read only before
+    /// connecting, so a corrected host or password, or video switched off,
+    /// did nothing while connected - the link stayed on the first OBS all
+    /// night, and its stream pieces were the ones races were lined up with.
+    /// </remarks>
+    private async Task<bool> OneConnectionAsync(Target target, CancellationToken token)
+    {
+        using var changed = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var watch = WatchSettingsAsync(target, changed);
+
+        try
+        {
+            await ConnectedAsync(target, changed.Token);
+            return false;
+        }
+        catch (Exception) when (changed.IsCancellationRequested && !token.IsCancellationRequested)
+        {
+            _log?.Invoke("[video] The OBS settings changed - leaving that OBS.");
+            State = "connecting";
+            return true;
+        }
+        finally
+        {
+            changed.Cancel();
+            await watch;
+        }
+    }
+
+    /// <summary>Cancels <paramref name="changed"/> once the settings no longer point at <paramref name="target"/>.</summary>
+    private async Task WatchSettingsAsync(Target target, CancellationTokenSource changed)
+    {
+        while (!changed.IsCancellationRequested)
+        {
+            await Delay(SettingsCheck, changed.Token);
+
+            if (!changed.IsCancellationRequested && TargetOf(_settings()) != target)
+            {
+                changed.Cancel();
+            }
+        }
+    }
+
+    private async Task ConnectedAsync(Target target, CancellationToken token)
     {
         using var socket = new ClientWebSocket();
         socket.Options.AddSubProtocol("obswebsocket.json");
         using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         connectTimeout.CancelAfter(TimeSpan.FromSeconds(5));
-        await socket.ConnectAsync(new Uri($"ws://{settings.VideoObsHost.Trim()}:{settings.VideoObsPort}"), connectTimeout.Token);
+        await socket.ConnectAsync(new Uri($"ws://{target.Host}:{target.Port}"), connectTimeout.Token);
 
         using var hello = await ReceiveAsync(socket, token);
         var identify = new Dictionary<string, object> { ["rpcVersion"] = 1, ["eventSubscriptions"] = 64 };
 
         if (hello.RootElement.GetProperty("d").TryGetProperty("authentication", out var auth))
         {
-            identify["authentication"] = AuthAnswer(settings.VideoObsPassword, auth.GetProperty("salt").GetString() ?? "", auth.GetProperty("challenge").GetString() ?? "");
+            identify["authentication"] = AuthAnswer(target.Password, auth.GetProperty("salt").GetString() ?? "", auth.GetProperty("challenge").GetString() ?? "");
         }
 
         await SendAsync(socket, new { op = 1, d = identify }, token);

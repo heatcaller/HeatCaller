@@ -212,7 +212,8 @@ public static class NightPlan
         TimeSpan? firstRaceLocal = null,
         IReadOnlyList<PlannedBreak>? breaks = null,
         bool keepPromises = false,
-        RaceControlControl.NextStartFact? nextStart = null)
+        RaceControlControl.NextStartFact? nextStart = null,
+        int? heatSize = null)
     {
         var gap = tonightsGap is { } measured && measured > TimeSpan.Zero ? measured : DefaultGap;
         var slots = new List<Slot>();
@@ -400,7 +401,7 @@ public static class NightPlan
             tonightsGap is { } g && g > TimeSpan.Zero,
             outBy,
             over,
-            over is null ? Array.Empty<Fix>() : FixesFor(slots, gap, onTrack, dayRounds))
+            over is null ? Array.Empty<Fix>() : FixesFor(slots, gap, onTrack, dayRounds, heatSize))
         {
             BreakTime = breakTime,
         };
@@ -423,7 +424,7 @@ public static class NightPlan
     }
 
     /// <summary>What would bring the finish forward, biggest saving first.</summary>
-    private static List<Fix> FixesFor(List<Slot> slots, TimeSpan gap, RoundDefinition? onTrack, IReadOnlyList<RoundDefinition> dayRounds)
+    private static List<Fix> FixesFor(List<Slot> slots, TimeSpan gap, RoundDefinition? onTrack, IReadOnlyList<RoundDefinition> dayRounds, int? heatSize)
     {
         var fixes = new List<Fix>();
         var qualifiers = slots.Where(s => s.Round is not null && s.Kind == RoundKind.Qualifier && !ReferenceEquals(s.Round, onTrack)).ToList();
@@ -476,9 +477,11 @@ public static class NightPlan
         //    have to run, and each class is still scored on its own. Only a
         //    suggestion - the director puts the heats together with Run
         //    Together, so nothing here changes the program. The cap is the
-        //    biggest heat tonight or the usual heat size, whichever is more:
-        //    a field that big already runs here.
-        var cap = Math.Max(RaceEventStore.DefaultDriversPerHeat,
+        //    biggest heat tonight or tonight's heat size, whichever is more:
+        //    a field that big already runs here. Tonight's heat size, not
+        //    the app's 8: a 6-per-heat club was offered an 8-car heat
+        //    (15 Nov 2026, bug hunt 20).
+        var cap = Math.Max(heatSize is > 0 ? heatSize.Value : RaceEventStore.DefaultDriversPerHeat,
             dayRounds.Where(r => r is { Kind: RoundKind.Qualifier }).Select(r => r.AssignedTransponders.Count).DefaultIfEmpty(0).Max());
         var shareable = MixedHeats.ShareableClasses(qualifiers.Select(s => s.Round!).ToList(), cap);
 

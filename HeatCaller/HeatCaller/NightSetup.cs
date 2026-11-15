@@ -173,9 +173,43 @@ public static class EntriesClose
         Closed,
     }
 
+    /// <summary>
+    /// How long before the race day was opened its close can still fall: a
+    /// desk that opens the day at 18:45 for an 18:30 close is late, and the
+    /// close has passed. Further back than this, it was another day's.
+    /// </summary>
+    public static readonly TimeSpan OpenedAfterClose = TimeSpan.FromHours(3);
+
     /// <summary>When entries close as a moment, the occurrence nearest <paramref name="nowUtc"/> - or null with no time set.</summary>
-    public static DateTime? AtUtc(RaceEvent? day, DateTime nowUtc) =>
-        day?.EntriesCloseLocalTime is { } time ? NightPlan.NearestOccurrence(time, nowUtc) : null;
+    /// <remarks>
+    /// WHY (15 Nov 2026, bug hunt 20): a morning race day set up the evening
+    /// before read this morning's 09:00 as its close - nearer than
+    /// tomorrow's - so Next Steps said "Entries closed - build the heats",
+    /// and the heats built themselves from the evening's check-ins. A close
+    /// well before the day was opened belongs to an earlier day, so it moves
+    /// on to the next one.
+    /// </remarks>
+    public static DateTime? AtUtc(RaceEvent? day, DateTime nowUtc)
+    {
+        if (day?.EntriesCloseLocalTime is not { } time)
+        {
+            return null;
+        }
+
+        var close = NightPlan.NearestOccurrence(time, nowUtc);
+        var opened = DateTime.SpecifyKind(day.StartedUtc, DateTimeKind.Utc);
+
+        // A day opened "after now" is a clock oddity: keep the nearest.
+        if (opened <= nowUtc)
+        {
+            for (var tries = 0; tries < 3 && close < opened - OpenedAfterClose; tries++)
+            {
+                close = NightPlan.NearestOccurrence(time, close.AddDays(1));
+            }
+        }
+
+        return close;
+    }
 
     /// <summary>
     /// Whether the night's racing has started: a race of the day saved, or

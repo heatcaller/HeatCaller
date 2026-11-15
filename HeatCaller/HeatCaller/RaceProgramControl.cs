@@ -1277,7 +1277,8 @@ public sealed partial class RaceProgramControl : UserControl
                 raceDay.FirstRaceLocalTime,
                 raceDay.Breaks,
                 keepPromises && _settings.AutoStartNeverEarly && _settings.AutoStartBetweenRaces,
-                nextStart);
+                nextStart,
+                HeatSize());
         }
         catch (Exception ex)
         {
