@@ -278,6 +278,24 @@ const STYLE = `
   --sa-r: env(safe-area-inset-right, 0px);
   --sa-b: env(safe-area-inset-bottom, 0px);
   --sa-l: env(safe-area-inset-left, 0px);
+  /* Where a bar that sticks as the page scrolls stops: clear of the clock.
+     On a phone the page scrolls inside the body (A BAR THAT STAYS PUT), and
+     the body's own top padding already keeps a sticky bar that far down, so
+     there it is 0 - adding the inset again left a gap above the bar with the
+     page scrolling through it (15 Nov 2026). */
+  --stick-t: var(--sa-t);
+}
+/* CLEAR OF THE FADE (15 Nov 2026, Asher: "all the pages are a little to high
+   on my iphone 14 pro chrome. the very top is slightly faded like it's about
+   to disappear"). A phone's browser fades the page out along its top edge,
+   and where it reports no safe-area inset the page's top - and whatever
+   sticks there as it scrolls - sat right in that fade. On a phone the top is
+   at least 20px down, and a strip of the page's own colour covers it, so the
+   fade only ever falls on that. */
+@media (hover: none) and (pointer: coarse) and (max-width: 640px) {
+  :root { --sa-t: max(env(safe-area-inset-top, 0px), 20px); }
+  body::before { content: ""; position: fixed; left: 0; right: 0; top: 0; height: var(--sa-t);
+                 background: var(--bg); z-index: 13; pointer-events: none; }
 }
 * { box-sizing: border-box; }
 /* PORTRAIT ONLY (7 Nov 2026, Asher: "disable landscape mode web app
@@ -368,6 +386,7 @@ nav.subtabs a[aria-current] { color: var(--on-primary, #FFFFFF); background: var
      of its own to scroll, keeps its toolbars where they are, and the bar
      never moves. */
   html { height: 100%; overflow: hidden; overscroll-behavior: none; }
+  :root { --stick-t: 0px; }
   body { height: 100%; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch;
          padding-bottom: calc(76px + var(--sa-b)); }
   nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; margin: 0; gap: 0;
@@ -832,7 +851,7 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
    list with one open at a time and its lap stats, lap times and lap chart
    on tabs, and the driver score beside the report card. Thumb-sized rows
    for a phone in the pits; the lap table scrolls in its own box. */
-#nj { position: sticky; top: var(--sa-t); z-index: 3; background: var(--bg); margin: 8px -16px 0; padding: 0 16px; }
+#nj { position: sticky; top: var(--stick-t); z-index: 3; background: var(--bg); margin: 8px -16px 0; padding: 0 16px; }
 .jump { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0; max-width: 42rem; margin: 0 auto;
         scrollbar-width: none; }
 .jump::-webkit-scrollbar { display: none; }
@@ -1456,7 +1475,7 @@ html.framed .hcvideo .sheet { padding-bottom: calc(18px + 58px + var(--sa-b)); }
 .hcvmiss { color: var(--muted); font-size: 0.85rem; margin: 8px 0 0; }
 /* Live's docked player (race video V4): sticky at the top, the board
    scrolling under it; small, a corner player over the page. */
-.hcdock { position: sticky; top: var(--sa-t); z-index: 20; background: var(--bg); padding: 6px 0 4px; }
+.hcdock { position: sticky; top: var(--stick-t); z-index: 20; background: var(--bg); padding: 6px 0 4px; }
 .hcdock[hidden] { display: none; }
 .hcdock .hcdbar { position: absolute; top: 12px; right: 6px; display: flex; gap: 6px; }
 .hcdock .hcdbar .page { min-width: 44px; min-height: 44px; padding: 0; background: rgba(0, 0, 0, 0.6); color: #FFFFFF; border-color: transparent; }
@@ -1692,7 +1711,7 @@ html.hc .stale, html.hc.hcoffline .wrap > :not(header):not(.hcoff):not(footer) {
   #board .card:not(.all) th:not(.k), #board .card:not(.all) td:not(.k):not(.bmc) { display: none; }
   #board .card:not(.all) { overflow: visible; }
   #board .card:not(.all) table { width: 100%; min-width: 0; }
-  #board .card:not(.all) tr.me td { position: sticky; top: var(--sa-t); bottom: calc(68px + var(--sa-b)); z-index: 2; }
+  #board .card:not(.all) tr.me td { position: sticky; top: var(--stick-t); bottom: calc(68px + var(--sa-b)); z-index: 2; }
 }
 /* YOUR CARD ON LIVE (item 4). The Following chip is the card's job on Live. */
 body.has-you #follow { display: none; }

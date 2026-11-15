@@ -47,3 +47,31 @@ describe("Me: the entry fee and the setup tile (12 Nov 2026)", () => {
     assert.match(ME_JS, /typeof scrollToStay === 'function'\) scrollToStay\(s\)/);
   });
 });
+
+describe("Me: the pay banner stays at the top as Me scrolls (15 Nov 2026)", () => {
+  it("sticks at the top, with the four tabs stuck right under it", () => {
+    assert.match(ME_CSS, /\.me-fee \{ position: sticky; top: var\(--stick-t, 0px\); z-index: 6;/);
+    assert.match(ME_CSS, /\.me-switch \{ position: sticky; top: calc\(var\(--stick-t, 0px\) \+ var\(--me-fee-h, 0px\)\);/);
+  });
+
+  it("puts the banner's height on the page while they owe, and 0 once paid", () => {
+    const at = ME_JS.indexOf("let meFeeWatch = null;");
+    const body = ME_JS.slice(at, ME_JS.indexOf("\n}\n", ME_JS.indexOf("function meFeeHeight()")) + 2);
+    const run = (hidden: boolean) => {
+      const props: Record<string, string> = {};
+      const classes = new Set<string>();
+      const node = { hidden, offsetHeight: 62 };
+      const doc = {
+        getElementById: () => node,
+        body: {
+          classList: { toggle: (c: string, on: boolean) => { if (on) classes.add(c); else classes.delete(c); } },
+          style: { setProperty: (k: string, v: string) => { props[k] = v; } },
+        },
+      };
+      new Function("document", "ResizeObserver", body + "\nmeFeeHeight();")(doc, undefined);
+      return { h: props["--me-fee-h"], owe: classes.has("me-owe") };
+    };
+    assert.deepEqual(run(false), { h: "70px", owe: true });
+    assert.deepEqual(run(true), { h: "0px", owe: false });
+  });
+});
