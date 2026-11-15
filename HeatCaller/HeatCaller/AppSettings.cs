@@ -2327,6 +2327,15 @@ public sealed class AppSettings
     /// </summary>
     public bool RelayPublishRoster { get; set; }
 
+    /// <summary>
+    /// How a junior driver's name shows on the stream's graphics and captions
+    /// (14 Nov 2026, stream overlay plan 7.5, Asher: first name and initial
+    /// by default): "initial" (Mia K), "first" (Mia) or "full". A stream is
+    /// public; the room and the driver's own night still use the full name.
+    /// See JuniorNames.
+    /// </summary>
+    public string JuniorNamesOnStream { get; set; } = JuniorNames.Initial;
+
     /// <summary>Show published names as a first name and an initial rather than in full.</summary>
     public bool RelayAbbreviateNames { get; set; } = true;
 
@@ -2410,6 +2419,27 @@ public sealed class AppSettings
 
     /// <summary>The streaming PC running OBS, on the club's network: an address or a name.</summary>
     public string VideoObsHost { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Switch OBS scenes with the race (14 Nov 2026, stream overlay plan
+    /// 6.1): through the OBS link, HeatCaller puts OBS on the scene named
+    /// for each part of the night. Off by default: a club with somebody on
+    /// OBS keeps doing it by hand. A blank scene name leaves OBS alone for
+    /// that part. See ObsScenes.
+    /// </summary>
+    public bool ObsSwitchScenes { get; set; }
+
+    /// <summary>The OBS scene for staging and the countdown, or blank for none.</summary>
+    public string ObsSceneStaging { get; set; } = string.Empty;
+
+    /// <summary>The OBS scene while racing, or blank for none.</summary>
+    public string ObsSceneRacing { get; set; } = string.Empty;
+
+    /// <summary>The OBS scene for the result, or blank for none.</summary>
+    public string ObsSceneFinished { get; set; } = string.Empty;
+
+    /// <summary>The OBS scene between races, or blank for none.</summary>
+    public string ObsSceneBetween { get; set; } = string.Empty;
 
     /// <summary>OBS's WebSocket server port (Tools > WebSocket Server Settings).</summary>
     public int VideoObsPort { get; set; } = 4455;

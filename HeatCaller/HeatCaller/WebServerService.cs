@@ -101,6 +101,34 @@ public sealed partial class WebServerService
     public Func<IReadOnlyList<UpcomingRace>>? UpcomingRaces { get; set; }
 
     /// <summary>
+    /// Every marshal corner of the race day (MarshalAssigner.DutiesForDay),
+    /// for the stream's Between races screen (overlay plan 6.7): who marshals
+    /// the next races. A frozen feed threaded, like UpcomingRaces.
+    /// </summary>
+    public Func<IReadOnlyList<MarshalAssigner.MarshalDuty>>? MarshalDuties { get; set; }
+
+    /// <summary>
+    /// Where each driver would qualify overall if the heat ended now
+    /// (QualifyingProjector), for the Qual column on these pages and the
+    /// stream tower's Overall mode (overlay plan 6.4). Null outside a
+    /// qualifier. A frozen feed threaded, like UpcomingRaces.
+    /// </summary>
+    public Func<IReadOnlyDictionary<string, QualifyingProjector.Slot>?>? QualifyingProjection { get; set; }
+
+    /// <summary>The projection now, or null - never a throw for the board's sake.</summary>
+    private IReadOnlyDictionary<string, QualifyingProjector.Slot>? ProjectionNow()
+    {
+        try
+        {
+            return QualifyingProjection?.Invoke();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// The live track map - the line and every car on it - for the Live
     /// Results page's Track page. Asked on the UI thread as the LAN copy of
     /// the live state is built. Never in the relay's copy.
@@ -1812,6 +1840,13 @@ public sealed partial class WebServerService
                 // So nothing in it may be worth a PIN - every id in it is
                 // the roster's own opaque one rather than a transponder,
                 // for the reason AddIdsAndGrid gives.
+                // A stream page with its sponsor graphic up says so (overlay
+                // plan section 5): the logo up now is counted as on screen.
+                if (context.Request.QueryString["sponsor"] == "1")
+                {
+                    SponsorStream.Shown(_sponsorUpId, DateTime.UtcNow);
+                }
+
                 WriteJson(context, _publishedState);
                 break;
             case "/api/look":
@@ -2909,6 +2944,7 @@ public sealed partial class WebServerService
             Profiles = Names,
             Tracker = _kpiTracker,
             FastestOverall = bestLapMs,
+            Projection = ProjectionNow(),
             StreakThreshold = view?.StreakThreshold ?? _race.StreakThreshold,
             SectorLengthsFeet = view is null ? _race.SectorLengthsFeet : view.SectorLengthsFeet,
 
@@ -3361,16 +3397,40 @@ public sealed partial class WebServerService
         // Laps for the tower and the results, the gap ahead for the battle bar.
         var cards = new System.Text.Json.Nodes.JsonObject();
 
+        // With the checkered out (stream overlay plan 6.3), each car finishes
+        // on its own next crossing: "done" once it has, and its result the
+        // RC way (6.2), "23/5:02.341", for the tower to freeze on.
+        var finishing = _race.IsFinishing;
+        var byId = new Dictionary<string, RacerStanding>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var car in ordered)
+        {
+            byId.TryAdd(car.TransponderId, car);
+        }
+
         foreach (var (id, card) in PhoneFollow.Cards(ordered))
         {
-            cards[RosterId(rosterKey, id)] = new System.Text.Json.Nodes.JsonObject
+            var entry = new System.Text.Json.Nodes.JsonObject
             {
                 ["laps"] = card.Laps,
                 ["ahead"] = card.Ahead,
             };
+
+            if (byId.TryGetValue(id, out var car) && KpiCatalog.ResultText(car) is var result && result != "-")
+            {
+                entry["result"] = result;
+            }
+
+            if (finishing && _race.HasTakenFlag(id))
+            {
+                entry["done"] = true;
+            }
+
+            cards[RosterId(rosterKey, id)] = entry;
         }
 
         node["cards"] = cards;
+        node["finishing"] = finishing;
 
         IReadOnlyList<UpcomingRace> upcoming;
 
@@ -3409,6 +3469,102 @@ public sealed partial class WebServerService
             .ToArray();
 
         node["people"] = new System.Text.Json.Nodes.JsonArray(people);
+
+        node["upNext"] = UpNext(upcoming);
+
+        // JUNIORS ON THE STREAM (overlay plan 7.5): every junior on the
+        // board, in the races to come or marshalling them, by full name and
+        // what the stream calls them instead ("Mia K"). The stream's page
+        // uses it for every name it draws and inside the lines it shows -
+        // a moment's banner, the captions - which say names in full.
+        node["streamNames"] = StreamNames(ordered, upcoming);
+    }
+
+    private System.Text.Json.Nodes.JsonObject StreamNames(IReadOnlyList<RacerStanding> ordered, IReadOnlyList<UpcomingRace> upcoming)
+    {
+        var map = new System.Text.Json.Nodes.JsonObject();
+
+        try
+        {
+            IReadOnlyList<MarshalAssigner.MarshalDuty> duties;
+
+            try
+            {
+                duties = MarshalDuties?.Invoke() ?? Array.Empty<MarshalAssigner.MarshalDuty>();
+            }
+            catch
+            {
+                duties = Array.Empty<MarshalAssigner.MarshalDuty>();
+            }
+
+            var juniors = ordered.Select(s => s.TransponderId)
+                .Concat(upcoming.SelectMany(r => r.Grid))
+                .Concat(duties.Select(d => d.Transponder))
+                .Where(id => !string.IsNullOrWhiteSpace(id) && Names.Get(id) is { IsJunior: true })
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(id => DisplayNameFor(id, false));
+
+            foreach (var (full, shown) in JuniorNames.ForStream(juniors, _settings?.JuniorNamesOnStream))
+            {
+                map[full] = shown;
+            }
+        }
+        catch
+        {
+            // Names are worth a board; the board is not worth losing for them.
+        }
+
+        return map;
+    }
+
+    /// <summary>
+    /// THE NEXT THREE RACES (14 Nov 2026, stream overlay plan 6.7), for the
+    /// Between races screen: each race's title, its rough start ("about
+    /// 19:40", this laptop's clock), who drives it, and who marshals it -
+    /// what the pits and the people at home both look for between races.
+    /// The race on track is left out: it is not one to wait for.
+    /// </summary>
+    private System.Text.Json.Nodes.JsonArray UpNext(IReadOnlyList<UpcomingRace> upcoming)
+    {
+        IReadOnlyList<MarshalAssigner.MarshalDuty> duties;
+
+        try
+        {
+            duties = MarshalDuties?.Invoke() ?? Array.Empty<MarshalAssigner.MarshalDuty>();
+        }
+        catch
+        {
+            duties = Array.Empty<MarshalAssigner.MarshalDuty>();
+        }
+
+        var list = new System.Text.Json.Nodes.JsonArray();
+
+        foreach (var race in upcoming.Where(r => !r.OnTrack).Take(3))
+        {
+            var drivers = new System.Text.Json.Nodes.JsonArray(race.Grid
+                .Where(id => !string.IsNullOrWhiteSpace(id) && !Ghosts.IsGhost(id))
+                .Select(id => (System.Text.Json.Nodes.JsonNode)DisplayNameFor(id, false))
+                .ToArray());
+
+            var marshals = new System.Text.Json.Nodes.JsonArray(duties
+                .Where(d => race.RoundId is not null && string.Equals(d.RoundId, race.RoundId, StringComparison.Ordinal))
+                .Select(d => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject
+                {
+                    ["name"] = DisplayNameFor(d.Transponder, false),
+                    ["post"] = d.PostName,
+                })
+                .ToArray());
+
+            list.Add(new System.Text.Json.Nodes.JsonObject
+            {
+                ["title"] = race.Title,
+                ["eta"] = race.EtaUtc is { } eta ? "about " + eta.ToLocalTime().ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) : string.Empty,
+                ["drivers"] = drivers,
+                ["marshals"] = marshals,
+            });
+        }
+
+        return list;
     }
 
     /// <summary>
@@ -3745,6 +3901,14 @@ public sealed partial class WebServerService
         function esc(v){ return String(v==null?'':v).replace(/[&<>"']/g, function(c){
           return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
+        // A junior's name as the stream shows it, "Mia K" (overlay plan 7.5).
+        let SN = {};
+        function snText(text){
+          let t = String(text == null ? '' : text);
+          Object.keys(SN).sort((a, b) => b.length - a.length).forEach(full => { t = t.split(full).join(String(SN[full])); });
+          return t;
+        }
+
         // One poll at a time, and none left hanging: on poor Wi-Fi an older
         // answer could arrive after a newer one, and hung requests used up
         // the browser's connections.
@@ -3755,6 +3919,8 @@ public sealed partial class WebServerService
           const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 3000);
           try{
             const r = await fetch('/api/state', { signal: stop.signal }); const d = await r.json();
+            // Juniors' names as the stream shows them (overlay plan 7.5).
+            SN = d.streamNames && typeof d.streamNames === 'object' ? d.streamNames : {};
             showCaptions(d.captions);
             document.getElementById('state').textContent = d.state + ' - ' + d.flag + ' flag';
             document.getElementById('countdown').textContent = d.countdown || '';
@@ -3767,7 +3933,7 @@ public sealed partial class WebServerService
               (d.columns||[]).map((c,i) => `<th class="${i===0?'pos':''}">${esc(c)}</th>`).join('');
             document.getElementById('rows').innerHTML = d.standings.map((s,ri) =>
               `<tr class="${ri===0?'p1':''}">` + s.cells.map((c,i) =>
-                `<td class="${i===0?'pos':''} ${c.emphasis!=='none'?esc(c.emphasis):''}">${esc(c.text)}</td>`
+                `<td class="${i===0?'pos':''} ${c.emphasis!=='none'?esc(c.emphasis):''}">${esc(snText(c.text))}</td>`
               ).join('') + '</tr>').join('');
             document.getElementById('empty').style.display = d.standings.length ? 'none' : 'block';
 
@@ -3798,7 +3964,7 @@ public sealed partial class WebServerService
           if (!newest || newest.n === captionSeen) return;
           captionSeen = newest.n;
           const el = document.getElementById('captions');
-          el.textContent = newest.t;
+          el.textContent = snText(newest.t);
           el.classList.remove('fade'); el.classList.add('on');
           clearTimeout(captionTimer);
           captionTimer = setTimeout(() => el.classList.add('fade'), CAPTION_MS);

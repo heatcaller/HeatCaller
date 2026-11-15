@@ -18,6 +18,18 @@ public sealed partial class MainForm
         _streamTonight = new StreamTonight(StreamTonight.DefaultPath);
         _obsLink = new ObsLink(() => _settings, _streamTonight, line => OnClientRawMessage($"{AppTime.LogStampNow()}  {line}"));
         _obsLink.Start();
+
+        // Switch OBS scenes with the race (stream overlay plan 6.1): only
+        // when the club turned it on, never for practice or a demo, and the
+        // scene for each part of the night as the club named it.
+        _race.StateChanged += state =>
+        {
+            if (_settings.ObsSwitchScenes && !_race.IsPracticeMode && !_race.IsDemoMode
+                && ObsScenes.For(_settings, state) is { Length: > 0 } scene)
+            {
+                _obsLink?.SwitchTo(scene);
+            }
+        };
         RelaySettingsControl.Stream = _streamTonight;
         RelaySettingsControl.Obs = _obsLink;
         RelaySettingsControl.DeadVideos = () => _relayPublisher.DeadVideos;

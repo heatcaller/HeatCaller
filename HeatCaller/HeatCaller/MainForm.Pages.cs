@@ -256,6 +256,29 @@ public partial class MainForm
         // their next race and where do they grid. See PhoneFollow.
         _webServer.UpcomingRaces = LiveFeed<IReadOnlyList<UpcomingRace>>(() => raceControl.UpcomingRaces(8));
 
+        // Where this heat puts each driver overall, for the Qual column on the
+        // Wi-Fi pages and the stream's Overall mode (overlay plan 6.4).
+        _webServer.QualifyingProjection = LiveFeed<IReadOnlyDictionary<string, QualifyingProjector.Slot>?>(
+            () => raceControl.Projector?.Current()?.Slots);
+
+        // Who marshals each race, for the stream's Between races screen
+        // (overlay plan 6.7) - the same duties the phones and the grid call read.
+        // Worked out at most every five seconds: the feed is asked on every
+        // UI tick, and the duties only change when the program does.
+        IReadOnlyList<MarshalAssigner.MarshalDuty> duties = Array.Empty<MarshalAssigner.MarshalDuty>();
+        var dutiesAt = -1L;
+
+        _webServer.MarshalDuties = LiveFeed<IReadOnlyList<MarshalAssigner.MarshalDuty>>(() =>
+        {
+            if (dutiesAt < 0 || Environment.TickCount64 - dutiesAt > 5000)
+            {
+                duties = MarshalAssigner.DutiesForDay(_rounds, _raceEvents, _trackLayouts, _profiles);
+                dutiesAt = Environment.TickCount64;
+            }
+
+            return duties;
+        });
+
         // The championship as it would stand if the race ended now, for the
         // Live Results page - see ChampionshipLive.
         _webServer.IfItEndedNow = LiveFeed<IfItEndedNow?>(raceControl.ChampionshipIfItEndedNow);

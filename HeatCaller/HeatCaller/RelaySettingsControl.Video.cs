@@ -18,6 +18,13 @@ public sealed partial class RelaySettingsControl
     private readonly NumericUpDown _numObsPort = new();
     private readonly TextBox _txtObsPassword = new();
     private readonly NumericUpDown _numLeadIn = new();
+
+    // Switch OBS scenes with the race (stream overlay plan 6.1).
+    private readonly CheckBox _chkObsScenes = new ThemedCheckBox();
+    private readonly TextBox _txtSceneStaging = new();
+    private readonly TextBox _txtSceneRacing = new();
+    private readonly TextBox _txtSceneFinished = new();
+    private readonly TextBox _txtSceneBetween = new();
     private readonly Label _lblObsState = new() { AutoSize = true };
     private readonly FlowLayoutPanel _pieces = new() { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
     private readonly System.Windows.Forms.Timer _obsTimer = new() { Interval = 1000 };
@@ -49,12 +56,34 @@ public sealed partial class RelaySettingsControl
         _numLeadIn.Maximum = 30;
         _numLeadIn.ValueChanged += (_, _) => { if (!_loading) { _settings.VideoLeadInSeconds = (int)_numLeadIn.Value; _settings.Save(); } };
 
+        _chkObsScenes.Text = "Switch OBS scenes with the race (the scene names below; a blank one leaves OBS alone)";
+        _chkObsScenes.AutoSize = true;
+        _chkObsScenes.CheckedChanged += (_, _) => { if (!_loading) { _settings.ObsSwitchScenes = _chkObsScenes.Checked; _settings.Save(); } };
+
+        foreach (var (box, set) in new (TextBox, Action<string>)[]
+                 {
+                     (_txtSceneStaging, v => _settings.ObsSceneStaging = v),
+                     (_txtSceneRacing, v => _settings.ObsSceneRacing = v),
+                     (_txtSceneFinished, v => _settings.ObsSceneFinished = v),
+                     (_txtSceneBetween, v => _settings.ObsSceneBetween = v),
+                 })
+        {
+            box.PlaceholderText = "an OBS scene's name, exactly as OBS has it";
+            box.TextChanged += (_, _) => { if (!_loading) set(box.Text.Trim()); };
+            box.Leave += (_, _) => _settings.Save();
+        }
+
         var grid = new FieldGrid();
         grid.AddRow("OBS on:", _txtObsHost);
         // Stretched with the row, so "4455" fits at any text size, changed while running too (LayoutTests).
         grid.AddRow("Port:", _numObsPort, stretch: true);
         grid.AddRow("OBS password:", _txtObsPassword);
         grid.AddRow("Lead-in (seconds):", _numLeadIn);
+        grid.AddField(_chkObsScenes);
+        grid.AddRow("Scene for the grid:", _txtSceneStaging);
+        grid.AddRow("Scene while racing:", _txtSceneRacing);
+        grid.AddRow("Scene for the result:", _txtSceneFinished);
+        grid.AddRow("Scene between races:", _txtSceneBetween);
         _linedUp.Add(grid);
 
         var live = new Button { Text = "Stream went live now", AutoSize = true };
@@ -120,11 +149,16 @@ public sealed partial class RelaySettingsControl
         _numObsPort.Value = Math.Clamp(_settings.VideoObsPort, 1, 65535);
         _txtObsPassword.Text = _settings.VideoObsPassword;
         _numLeadIn.Value = Math.Clamp(_settings.VideoLeadInSeconds, 0, 30);
+        _chkObsScenes.Checked = _settings.ObsSwitchScenes;
+        _txtSceneStaging.Text = _settings.ObsSceneStaging;
+        _txtSceneRacing.Text = _settings.ObsSceneRacing;
+        _txtSceneFinished.Text = _settings.ObsSceneFinished;
+        _txtSceneBetween.Text = _settings.ObsSceneBetween;
     }
 
     private string ObsWords()
     {
-        if (!_settings.VideoEnabled) return "Race video is off.";
+        if (!_settings.VideoEnabled && !_settings.ObsSwitchScenes) return "Race video is off.";
         var state = Obs?.State ?? "off";
         var live = Stream?.Live == true ? " The stream is live." : string.Empty;
         return state switch

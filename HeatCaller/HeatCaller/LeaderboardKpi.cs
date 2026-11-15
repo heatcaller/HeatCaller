@@ -685,7 +685,37 @@ public static class KpiCatalog
 
         new("total", "Total Time", "Elapsed race time for this driver.", 75,
             (s, _, _) => new KpiValue(s.ElapsedMs > 0 ? $"{s.ElapsedMs / 60000}:{s.ElapsedMs / 1000 % 60:00}" : "-")),
+
+        // THE RESULT, THE RC WAY (14 Nov 2026, stream overlay plan 6.2): laps
+        // and total time in one, "23/5:02.341" - what racers read. More laps
+        // wins; on the same laps, the quicker time. The * for laps counted by
+        // hand stays on the laps.
+        new("result", "Result", "Laps and total time the RC way, 23/5:02.341: more laps wins, and on the same laps the quicker time.", 85,
+            (s, _, _) => new KpiValue(ResultText(s))),
     };
+
+    /// <summary>
+    /// "23/5:02.341": laps (with a * when some were counted by hand), then the
+    /// time from the start to the crossing that finished the last of them.
+    /// "1:02:05.120" past an hour. "-" before a car has a lap.
+    /// </summary>
+    internal static string ResultText(RacerStanding s) =>
+        ResultText(s.Laps, s.ElapsedMs, HandCountedLaps.During(s));
+
+    internal static string ResultText(int laps, long elapsedMs, int handCounted = 0)
+    {
+        if (laps <= 0 || elapsedMs <= 0)
+        {
+            return "-";
+        }
+
+        var t = TimeSpan.FromMilliseconds(elapsedMs);
+        var time = t.TotalHours >= 1
+            ? Invariant($"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}.{t.Milliseconds:000}")
+            : Invariant($"{(int)t.TotalMinutes}:{t.Seconds:00}.{t.Milliseconds:000}");
+
+        return HandCountedLaps.LapsText(laps, handCounted) + "/" + time;
+    }
 
     /// <summary>
     /// The driver's name with their warning mark after it ("Asher  \u26A02"),

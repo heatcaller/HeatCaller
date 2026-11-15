@@ -28,7 +28,9 @@ public sealed partial class WebServerService
         IReadOnlyList<string> WebKpis,
         IReadOnlyList<string> RelayKpis,
         string OnDeck,
-        IReadOnlyList<(string Moment, string Sponsor, string Logo)>? Presented);
+        IReadOnlyList<(string Moment, string Sponsor, string Logo)>? Presented,
+        IReadOnlyList<SponsorStream.Logo>? SponsorLogos = null,
+        int RacedTonight = 0);
 
     /// <summary>The last CaptureUiSide, threaded mode only. Replaced whole.</summary>
     private volatile UiSide? _uiSide;
@@ -89,7 +91,37 @@ public sealed partial class WebServerService
             presented = null;
         }
 
-        return new UiSide(webKpis, relayKpis, onDeck, presented);
+        // The sponsors with a logo, for the stream's sponsor graphic (overlay
+        // plan section 5) - copied out, like the presenters, so another
+        // thread never reads a booking as it is edited.
+        List<SponsorStream.Logo>? logos;
+
+        try
+        {
+            logos = (_sponsors?.Current.Sponsors ?? new List<SponsorBooking>())
+                .Where(s => s.Enabled && SponsorLogo.IsLogoName(s.LogoFileName) && RelaySponsors.NameOnTheWeb(s).Length > 0)
+                .Select(s => new SponsorStream.Logo(s.Id, RelaySponsors.NameOnTheWeb(s), SponsorLogoUrl(s.LogoFileName), Math.Max(1, s.Weight)))
+                .ToList();
+        }
+        catch
+        {
+            logos = null;
+        }
+
+        // How many races have run today (overlay plan 7.6), so the stream can
+        // tell "starting soon" from "that's it for tonight".
+        var raced = 0;
+
+        try
+        {
+            raced = _schedule?.All.Count(e => e.ActualStartUtc is not null) ?? 0;
+        }
+        catch
+        {
+            raced = 0;
+        }
+
+        return new UiSide(webKpis, relayKpis, onDeck, presented, logos, raced);
     }
 
     /// <summary>

@@ -72,7 +72,8 @@ internal static class SponsorReport
         string? eventName,
         DateTime nightLocal,
         IReadOnlyDictionary<string, IReadOnlyDictionary<SponsoredMoment, int>>? mentionsTonight = null,
-        IReadOnlyDictionary<string, (int Seen, int Taps)>? webTonight = null)
+        IReadOnlyDictionary<string, (int Seen, int Taps)>? webTonight = null,
+        IReadOnlyDictionary<string, int>? streamSecondsTonight = null)
     {
         var sold = (bookings ?? Array.Empty<SponsorBooking>())
             .Where(one => !string.IsNullOrWhiteSpace(one.Id) && !string.IsNullOrWhiteSpace(one.Name))
@@ -152,6 +153,15 @@ internal static class SponsorReport
             {
                 text.AppendLine(web);
             }
+
+            // THEIR LOGO ON THE STREAM (14 Nov 2026, stream overlay plan
+            // section 5). Unlike a slide, a logo belongs to its sponsor, so
+            // this is a figure the club can stand behind: counted only while
+            // a stream page had their logo actually on screen.
+            if (StreamLine(sponsor, streamSecondsTonight) is { Length: > 0 } stream)
+            {
+                text.AppendLine(stream);
+            }
         }
 
         text.AppendLine();
@@ -169,6 +179,21 @@ internal static class SponsorReport
         }
 
         return text.ToString();
+    }
+
+    /// <summary>"  Their logo was on the stream for about 41 minutes." - or nothing when it never was.</summary>
+    internal static string StreamLine(SponsorBooking sponsor, IReadOnlyDictionary<string, int>? seconds)
+    {
+        if (seconds is null || !seconds.TryGetValue(sponsor.Id, out var on) || on <= 0)
+        {
+            return string.Empty;
+        }
+
+        var minutes = (int)Math.Round(on / 60.0);
+
+        return minutes < 1
+            ? "  Their logo was on the stream for under a minute."
+            : $"  Their logo was on the stream for about {Plural.Of(minutes, "minute")}.";
     }
 
     /// <summary>

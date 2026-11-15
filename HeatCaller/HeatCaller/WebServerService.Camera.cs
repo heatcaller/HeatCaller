@@ -436,11 +436,19 @@ public sealed partial class WebServerService
                     background:var(--accent); color:#0a0c12; font-variant-numeric:tabular-nums; }
         .row .num:empty { visibility:hidden; }
         #tower:not(.nums) .row .num { display:none; }
+        /* The car's colour (6.5): a small block, outlined so a black or a
+           white car still shows on the glass. */
+        .sw { display:inline-block; width:.9vw; height:.9vw; border-radius:.2vw; flex:none; box-shadow:0 0 0 .1vw rgba(255,255,255,.55); vertical-align:middle; }
         .row .n { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; }
         .row .g { color:#c9cdd6; font-variant-numeric:tabular-nums; }
+        .row .g.purple { color:#B06CFF; font-weight:700; }
+        .row .g.green { color:#4ade80; font-weight:700; }
         .row.up { background:rgba(74,222,128,.25); }
         .row.fl .n::after { content:' \25C6'; color:#B06CFF; font-size:.8vw; }
         .row.led .p { color:var(--accent); }
+        /* Home: a car that has taken the checkered (6.3). */
+        .row.done .g { color:#fff; font-weight:700; }
+        .row.done .n::before { content:'\2691 '; color:#fff; font-size:.95vw; }
         #champ { position:absolute; left:2vw; width:21vw; padding:.6vw 1vw; font-size:.9vw; line-height:1.4; display:none; }
         #battle { position:absolute; left:50%; bottom:3vw; transform:translateX(-50%) translateY(10vw); padding:.8vw 1.6vw;
                   font-size:1.4vw; font-weight:700; white-space:nowrap; transition:transform .5s ease; text-align:center; }
@@ -469,6 +477,8 @@ public sealed partial class WebServerService
         .centre .line { font-size:1.4vw; padding:.35vw 0; display:flex; gap:1vw; }
         .centre .line b { width:2.4vw; text-align:right; color:var(--accent); }
         #podium .line { font-size:1.8vw; }
+        /* "1st", not "1" (overlay plan 7.2): plain words first, the RC numbers small beside. */
+        #podium .line b { width:3.6vw; }
         #podium .line span.t { margin-left:auto; color:#c9cdd6; font-size:1.2vw; align-self:center; }
         #podium .line span.r { color:var(--accent); font-size:1.1vw; align-self:center; min-width:6vw; text-align:right; }
         /* CAPTIONS (?captions=1, 22 Oct 2026, driver experience, item 9):
@@ -510,8 +520,19 @@ public sealed partial class WebServerService
         #mark .hcword { font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
         #mark .hcword .hcc { color:var(--accent); }
         #tower.nofoot .hcfoot { display:none; }
+        /* NEW TO RC RACING? (overlay plan 7.6): the basics, a card at a time, between races. */
+        #basics { position:absolute; left:50%; bottom:3vw; transform:translateX(-50%); width:56vw; padding:1vw 1.6vw; }
+        #basics .bs-k { font-size:1.15vw; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); margin-bottom:.4vw; }
+        #basics .bs-t { font-size:1.5vw; line-height:1.4; }
+        /* The sponsor graphic (section 5): their logo, or their name when the logo will not load. */
+        #sponsor { position:absolute; right:2vw; top:2vw; padding:.6vw .9vw; display:flex; align-items:center; gap:.7vw; font-size:1.2vw; font-weight:700; }
+        #sponsor img { display:block; height:4.2vw; max-width:16vw; width:auto; object-fit:contain; }
+        #sponsor img:not([src]) { display:none; }
+        .bylogo { height:1.6vw; width:auto; max-width:7vw; object-fit:contain; vertical-align:middle; margin-left:.5vw; }
         #schedule h2 .by { font-size:1.15vw; }
         #schedule .line { font-size:1.5vw; }
+        #schedule .who { font-size:1.2vw; color:#c9cdd6; margin:0 0 .6vw 3.4vw; line-height:1.35; }
+        #schedule .who.mar { color:var(--accent); }
         #schedule .line .when { margin-left:auto; color:#c9cdd6; font-size:1.2vw; align-self:center; }
         /* A graphic the layout has moved sits in a slot of its own, and
            fades rather than sliding in from the edge it used to live by. */
@@ -534,6 +555,8 @@ public sealed partial class WebServerService
         {{Part(OverlayElementKind.Bug, "<div id=\"bug\" class=\"glass fade\"><div class=\"bg-race\" id=\"bg-race\"></div><div class=\"bg-clock\" id=\"bg-clock\"></div><div class=\"bg-lead\" id=\"bg-lead\"></div></div>")}}
         {{Part(OverlayElementKind.ClubLogo, "<div id=\"clublogo\" class=\"fade\">" + look.Logo + "</div>")}}
         {{Part(OverlayElementKind.Schedule, "<div id=\"schedule\" class=\"glass centre anim\"></div>")}}
+        {{Part(OverlayElementKind.Basics, "<div id=\"basics\" class=\"glass fade\"><div class=\"bs-k\" id=\"bs-k\"></div><div class=\"bs-t\" id=\"bs-t\"></div></div>")}}
+        {{Part(OverlayElementKind.Sponsor, "<div id=\"sponsor\" class=\"glass fade\"><img id=\"sp-logo\" alt=\"\"><span id=\"sp-name\"></span></div>")}}
         {{Part(OverlayElementKind.Mark, "<div id=\"mark\" class=\"glass fade\">" + HeatCallerMark.SunSvg + HeatCallerMark.WordHtml + "</div>")}}
         <script>
         // The layout this page draws (stream overlay plan section 2).
@@ -585,15 +608,41 @@ public sealed partial class WebServerService
           if (!newest || newest.n === captionSeen) return;
           captionSeen = newest.n;
           const el = document.getElementById('captions');
-          el.textContent = newest.t;
+          el.textContent = snText(newest.t);
           el.classList.add('show');
           clearTimeout(captionTimer);
           captionTimer = setTimeout(() => el.classList.remove('show'), CAPTION_MS);
         }
 
+        // "1st", "2nd", "3rd", "11th", "22nd" (overlay plan 7.2).
+        function ordinal(n){
+          const t = n % 100, e = n % 10;
+          return n + (t >= 11 && t <= 13 ? 'th' : e === 1 ? 'st' : e === 2 ? 'nd' : e === 3 ? 'rd' : 'th');
+        }
         function fmt(ms){ return ms > 0 ? (ms/1000).toFixed(3) : '-'; }
         function gapSecs(g){ const m = /^\+(\d+([.,]\d+)?)$/.exec(g || ''); return m ? parseFloat(m[1].replace(',', '.')) : null; }
-        function nameOf(d, id){ const p = (d.people || []).find(x => x.id === id); return p ? p.name : id; }
+        // The car's colour as a swatch (6.5), or nothing for a car without one.
+        function swatch(d, id){
+          const c = ((d.pylon && d.pylon.cars) || {})[id] || {};
+          return /^#[0-9A-F]{6}$/.test(c.col || '') ? '<span class="sw" style="background:' + c.col + ';margin-right:.5vw"></span>' : '';
+        }
+        function nameOf(d, id){ const p = (d.people || []).find(x => x.id === id); return p ? sn(p.name) : id; }
+        // A junior's name as the stream shows it (overlay plan 7.5): "Mia K",
+        // and the same inside a line of words - a moment, a caption.
+        let SN = {};
+        function sn(name){ const n = String(name == null ? '' : name); return Object.prototype.hasOwnProperty.call(SN, n) ? String(SN[n]) : n; }
+        function snText(text){
+          let t = String(text == null ? '' : text);
+          Object.keys(SN).sort((a, b) => b.length - a.length).forEach(full => { t = t.split(full).join(String(SN[full])); });
+          return t;
+        }
+        // Only an address the laptop makes is ever put in an img (section 5).
+        const LOGO_URL = /^\/sponsor-logo\/sponsor-logo-[0-9a-f]{12}\.png$/;
+        // The presenting sponsor's logo beside their name, or nothing.
+        function byLogo(d, moment){
+          const url = (d.presentedLogos || {})[moment];
+          return typeof url === 'string' && LOGO_URL.test(url) ? '<img class="bylogo" alt="" src="' + url + '">' : '';
+        }
         function presentedBy(d, moment){ const p = d.presented || {}; return p[moment] ? 'Presented by ' + p[moment] : ''; }
 
         // Which gap the pylon's last column shows right now. Laps led joins
@@ -601,9 +650,16 @@ public sealed partial class WebServerService
         // until then it is one name with every lap, and says nothing the
         // order does not.
         function gapMode(racing, pylon){
-          if (gapPin === 'interval' || gapPin === 'leader') return gapPin;
-          const modes = ['interval', 'leader'];
-          if (racing && pylon && pylon.changes > 0) modes.push('led');
+          if (gapPin === 'interval' || gapPin === 'leader' || gapPin === 'last' || gapPin === 'overall') return gapPin;
+          // Last lap (overlay plan 6.6): purple for the fastest of the race,
+          // green for the driver's own best, plain otherwise - how a racer
+          // watches somebody finding pace or fading.
+          const modes = ['interval', 'leader', 'last'];
+          // In a qualifier (6.4): where this run puts each driver overall,
+          // in place of laps led - in qualifying nobody minds who leads on track.
+          const qualifying = Object.values((pylon && pylon.cars) || {}).some(c => c && c.qual);
+          if (qualifying) modes.push('overall');
+          else if (racing && pylon && pylon.changes > 0) modes.push('led');
           return modes[Math.floor(Date.now() / CYCLE_MS) % modes.length];
         }
 
@@ -623,20 +679,30 @@ public sealed partial class WebServerService
         // here in the page: it never comes from, or goes into, the night's
         // real data.
         const DEMO = params.get('demo') === '1';
+        // Whether the sponsor graphic is up: said on the next poll, so the
+        // laptop counts the time its logo is really on screen (section 5).
+        let sponsorShowing = false;
         const DEMO_NAMES = ['Mia Kent', 'Sam Tr', 'Terry Byte', 'Al Gorithim', 'Ella Vator', 'Annie Wayout', 'Rob Otics', 'Cy Clone'];
         // &at=60 starts the loop that many seconds in: 0 between races, 20
         // the grid, 35 the start, 95 a lead change, 140 the result.
         const DEMO_START = Date.now() - Math.max(0, Number(params.get('at')) || 0) * 1000;
+        // "about 19:40", that many minutes from now, as the laptop writes it.
+        function demoAbout(minutes){ const t = new Date(Date.now() + minutes * 60000); return 'about ' + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0'); }
         function demoState(){
           const loop = 160, t = ((Date.now() - DEMO_START) / 1000) % loop;
           const people = DEMO_NAMES.map((name, i) => ({ id: 'd' + i, name }));
-          const base = { race: 'Junior - Heat 2', people, presented: {}, presentedLogos: {}, champ: null, ratings: {}, captions: [], pylon: { changes: 0, leaders: 1, cars: {} } };
-          if (t < 20) return Object.assign(base, { state: 'Idle', flag: 'None', countdown: '', standings: [], cards: {}, onDeck: '19:40  •  Junior  •  Heat 2' });
+          const base = { sponsorUp: { name: 'Hobby Hut', logo: '' }, race: 'Junior - Heat 2', people, presented: {}, presentedLogos: {}, champ: null, ratings: {}, captions: [], pylon: { changes: 0, leaders: 1, cars: {} } };
+          if (t < 20) return Object.assign(base, { state: 'Idle', flag: 'None', countdown: '', standings: [], cards: {}, onDeck: '19:40  •  Junior  •  Heat 2',
+            upNext: [
+              { title: 'Heat 2 (Junior)', eta: demoAbout(8), drivers: DEMO_NAMES.slice(0, 6), marshals: [{ name: 'Rob Otics', post: 'Turn 1' }, { name: 'Cy Clone', post: 'Turn 3' }] },
+              { title: 'Heat 2 (Stock)', eta: demoAbout(16), drivers: [], marshals: [] },
+              { title: 'Heat 2 (Mod Buggy)', eta: demoAbout(24), drivers: [], marshals: [] },
+            ] });
           if (t < 35) {
             const callups = {}; people.forEach((p, i) => { callups[p.id] = { now: true, slot: i + 1 }; });
             return Object.assign(base, { state: 'Staging', flag: 'None', countdown: '', standings: [], cards: {}, callups });
           }
-          const racing = t < 140, el = Math.min(t, 140) - 35;
+          const racing = t < 140, el = Math.min(t, 140) - 35, finishing = racing && el >= 105;
           const order = people.map((p, i) => ({ p, i, pace: 9.6 + i * 0.07 + Math.sin(el / 9 + i) * 0.05 }));
           // Sam takes the lead a minute in.
           if (el > 60) { const a = order[0]; order[0] = order[1]; order[1] = a; }
@@ -644,13 +710,19 @@ public sealed partial class WebServerService
           order.forEach((o, pos) => {
             const laps = Math.floor(el / o.pace);
             standings.push({ id: o.p.id, name: o.p.name, best: Math.round((o.pace - 0.2) * 1000) });
-            cards[o.p.id] = { laps, ahead: pos === 0 ? '' : '+' + (pos === 1 ? (0.4 + Math.abs(Math.sin(el / 6)) * 0.4) : 0.9 + pos * 0.6).toFixed(3) };
-            cars[o.p.id] = { num: String(pos + 3), lead: pos === 0 ? '' : '+' + (pos * 1.1).toFixed(3), led: pos < 2 && el > 60 ? 4 : pos === 0 ? Math.floor(el / 10) : 0 };
+            const ms = Math.round(laps * o.pace * 1000), m = Math.floor(ms / 60000);
+            const result = laps > 0 ? laps + '/' + m + ':' + String(Math.floor(ms / 1000) % 60).padStart(2, '0') + '.' + String(ms % 1000).padStart(3, '0') : '';
+            cards[o.p.id] = { laps, result, done: finishing && pos <= (el - 105) / 3 || !racing,
+              ahead: pos === 0 ? '' : pos === 7 ? '+1L' : '+' + (pos === 1 ? (0.4 + Math.abs(Math.sin(el / 6)) * 0.4) : 0.9 + pos * 0.6).toFixed(3) };
+            // A last lap that is now and then the driver's best, and once in a while the race's.
+            const best = Math.round((o.pace - 0.2) * 1000), beat = Math.floor(el / 4) % 5;
+            const last = beat === o.i % 5 ? best : best + 120 + Math.round(Math.abs(Math.sin(el + o.i)) * 300);
+            cars[o.p.id] = { last, col: ['#E53935', '#1E88E5', '#FDD835', '#43A047', '#FB8C00', '#8E24AA', '#FFFFFF', '#212121'][o.i], num: String(pos + 3), lead: pos === 0 ? '' : '+' + (pos * 1.1).toFixed(3), led: pos < 2 && el > 60 ? 4 : pos === 0 ? Math.floor(el / 10) : 0 };
           });
           const left = Math.max(0, 105 - el);
           const clock = racing ? Math.floor(left / 60) + ':' + String(Math.floor(left % 60)).padStart(2, '0') : '';
           const moment = el > 61 ? { seq: 1, kind: 'lead', title: 'Lead change', line: 'Sam Tr takes the lead from Mia Kent', sponsor: '' } : null;
-          return Object.assign(base, { state: racing ? 'Racing' : 'Finished', flag: racing ? 'Green' : 'Checkered', countdown: clock, standings, cards, moment,
+          return Object.assign(base, { state: racing ? 'Racing' : 'Finished', flag: racing ? 'Green' : 'Checkered', countdown: clock, standings, cards, moment, finishing,
             pylon: { changes: el > 60 ? 1 : 0, leaders: el > 60 ? 2 : 1, cars } });
         }
 
@@ -659,10 +731,11 @@ public sealed partial class WebServerService
           if (DEMO) d = demoState();
           else {
             const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 3000);
-            try { d = await (await fetch('/api/state', { cache: 'no-store', signal: stop.signal })).json(); }
+            try { d = await (await fetch(sponsorShowing ? '/api/state?sponsor=1' : '/api/state', { cache: 'no-store', signal: stop.signal })).json(); }
             catch(e) { return; }
             finally { clearTimeout(timer); }
           }
+          SN = d.streamNames && typeof d.streamNames === 'object' ? d.streamNames : {};
           showCaptions(d.captions);
           PART = partOf(d.state);
           const racing = d.state === 'Racing', finished = d.state === 'Finished';
@@ -679,9 +752,9 @@ public sealed partial class WebServerService
           // column down every row would be a gap with nothing in it.
           tower.classList.toggle('nums', rows.slice(0, SHOWN).some(s => (pcars[s.id] || {}).num));
           document.getElementById('title').textContent = d.race || 'Live';
-          document.getElementById('clock').textContent = d.countdown || '';
+          document.getElementById('clock').textContent = d.finishing ? 'FINAL LAP' : (d.countdown || '');
           const mode = gapMode(racing, pylon);
-          document.getElementById('mode').textContent = mode === 'leader' ? 'To leader' : mode === 'led' ? 'Laps led' : 'Interval';
+          document.getElementById('mode').textContent = mode === 'leader' ? 'To leader' : mode === 'led' ? 'Laps led' : mode === 'last' ? 'Last lap' : mode === 'overall' ? 'Overall' : 'Interval';
           document.getElementById('changes').textContent = pylon.changes > 0
             ? pylon.changes + (pylon.changes === 1 ? ' lead change' : ' lead changes') + (pylon.leaders > 1 ? ' · ' + pylon.leaders + ' leaders' : '')
             : '';
@@ -692,19 +765,35 @@ public sealed partial class WebServerService
             let el = rowEls[s.id];
             if (!el){
               el = document.createElement('div'); el.className = 'row';
-              el.innerHTML = '<span class="p"></span><span class="num"></span><span class="n"></span><span class="g"></span>';
+              el.innerHTML = '<span class="p"></span><span class="num"></span><span class="sw"></span><span class="n"></span><span class="g"></span>';
               el.style.top = (SHOWN * rowH) + 'px';
               box.appendChild(el); rowEls[s.id] = el;
             }
             const c = cards[s.id] || {}, pc = pcars[s.id] || {};
             el.children[0].textContent = i + 1;
             el.children[1].textContent = pc.num || '';
-            el.children[2].textContent = s.name;
+            // The car's colour (6.5), only for a car that has one.
+            const col = /^#[0-9A-F]{6}$/.test(pc.col || '') ? pc.col : '';
+            el.children[2].style.background = col;
+            el.children[2].style.display = col ? '' : 'none';
+            el.children[3].textContent = sn(s.name);
             let g;
-            if (mode === 'led') g = pc.led > 0 ? pc.led + ' led' : '';
+            let pace = '';
+            if (mode === 'last'){
+              g = pc.last > 0 ? fmt(pc.last) : '';
+              const quickest = rows.reduce((m, r) => r.best > 0 && !r.ghost && (!m || r.best < m) ? r.best : m, 0);
+              pace = pc.last > 0 && pc.last === quickest ? 'purple' : pc.last > 0 && pc.last === s.best ? 'green' : '';
+            }
+            else if (mode === 'overall') g = pc.qual || '';
+            else if (mode === 'led') g = pc.led > 0 ? pc.led + ' led' : '';
             else if (i === 0) g = 'Lap ' + (c.laps || 0);
             else g = mode === 'leader' ? (pc.lead || c.ahead || '') : (c.ahead || '');
-            el.children[3].textContent = g;
+            // Home (stream overlay plan 6.2, 6.3): a car that has taken the
+            // checkered shows its result the RC way, 23/5:02.341, and keeps it.
+            if ((c.done || finished) && c.result) g = c.result;
+            el.children[4].textContent = g;
+            el.children[4].className = 'g' + (pace ? ' ' + pace : '');
+            el.classList.toggle('done', !!c.done || finished);
             el.classList.toggle('up', lastPos[s.id] !== undefined && i < lastPos[s.id]);
             el.classList.toggle('fl', best.id === s.id && best.ms > 0);
             el.classList.toggle('led', (pc.led || 0) > 0);
@@ -753,8 +842,8 @@ public sealed partial class WebServerService
             // The trend, the laps and the sponsor on a line of their own
             // under the names, so the box stays as wide as the fight and
             // never runs into the fastest-lap box beside it.
-            const meta = trend + together + (by ? '<span class="trend">' + esc(by.toUpperCase()) + '</span>' : '');
-            battle.innerHTML = (close.pos === 1 ? 'BATTLE FOR THE LEAD' : 'BATTLE FOR P' + close.pos) + ' &nbsp; ' + esc(close.a.name) + ' <span class="acc">vs</span> ' + esc(close.b.name) +
+            const meta = trend + together + (by ? '<span class="trend">' + esc(by.toUpperCase()) + byLogo(d, 'Battle') + '</span>' : '');
+            battle.innerHTML = (close.pos === 1 ? 'BATTLE FOR THE LEAD' : 'BATTLE FOR P' + close.pos) + ' &nbsp; ' + esc(sn(close.a.name)) + ' <span class="acc">vs</span> ' + esc(sn(close.b.name)) +
               '<span class="gap">' + close.g.toFixed(3) + 's</span>' + (meta ? '<span class="meta">' + meta + '</span>' : '');
             battle.classList.add('show');
           } else battle.classList.remove('show');
@@ -770,8 +859,8 @@ public sealed partial class WebServerService
           if (top.ms > 0 && (top.ms < best.ms || !best.ms) && !first && racing && want('fastest')){
             const row = rows.find(s => s.id === top.id);
             const by = presentedBy(d, 'FastestLap');
-            document.getElementById('fhead').textContent = 'FASTEST LAP' + (by ? ' · ' + by.toUpperCase() : '');
-            document.getElementById('fname').textContent = row ? row.name : '';
+            document.getElementById('fhead').innerHTML = 'FASTEST LAP' + (by ? ' · ' + esc(by.toUpperCase()) + byLogo(d, 'FastestLap') : '');
+            document.getElementById('fname').textContent = row ? sn(row.name) : '';
             document.getElementById('ftime').textContent = fmt(top.ms);
             const f = document.getElementById('fastest'); f.classList.add('show');
             clearTimeout(fastTimer); fastTimer = setTimeout(() => f.classList.remove('show'), 6000);
@@ -790,7 +879,7 @@ public sealed partial class WebServerService
               // The kind is a class; anim and the slot's class are kept.
               el.className = 'glass anim ' + esc(m.kind || '') + (placed('moment') ? ' inslot' : '');
               document.getElementById('mtitle').textContent = m.title || '';
-              document.getElementById('mline').textContent = m.line || '';
+              document.getElementById('mline').textContent = snText(m.line || '');
               document.getElementById('mby').textContent = m.sponsor ? 'Presented by ' + m.sponsor : '';
               requestAnimationFrame(() => el.classList.add('show'));
               clearTimeout(momentTimer); momentTimer = setTimeout(() => el.classList.remove('show'), MOMENT_MS);
@@ -802,10 +891,10 @@ public sealed partial class WebServerService
           const onGrid = Object.entries(d.callups || {}).filter(([, c]) => c.now).sort((x, y) => x[1].slot - y[1].slot);
           if (want('grid') && (d.state === 'Staging' || d.state === 'Countdown') && onGrid.length){
             const by = presentedBy(d, 'DriverIntros');
-            grid.innerHTML = '<h2>' + esc(d.race || 'The grid') + (by ? '<span class="by">' + esc(by) + '</span>' : '') + '</h2>' +
+            grid.innerHTML = '<h2>' + esc(d.race || 'The grid') + (by ? '<span class="by">' + esc(by) + byLogo(d, 'DriverIntros') + '</span>' : '') + '</h2>' +
               onGrid.map(([id, c]) => {
                 const num = (pcars[id] || {}).num;
-                return '<div class="line"><b>' + c.slot + '</b>' + (num ? '<span class="acc">#' + esc(num) + '</span> ' : '') + esc(nameOf(d, id)) + '</div>';
+                return '<div class="line"><b>' + c.slot + '</b>' + (num ? '<span class="acc">#' + esc(num) + '</span> ' : '') + swatch(d, id) + esc(nameOf(d, id)) + '</div>';
               }).join('');
             grid.classList.add('show');
           } else grid.classList.remove('show');
@@ -822,8 +911,8 @@ public sealed partial class WebServerService
           if (want('podium') && finished && podiumRows.length){
             const ratings = d.ratings || {};
             const by = presentedBy(d, 'RaceResult');
-            podium.innerHTML = '<h2>' + esc(d.race || 'Result') + (by ? '<span class="by">' + esc(by) + '</span>' : '') + '</h2>' + podiumRows.slice(0, 3).map((s, i) =>
-              '<div class="line"><b>' + (i + 1) + '</b>' + esc(s.name) + '<span class="t">' + ((cards[s.id] || {}).laps || 0) + ' laps &nbsp; best ' + fmt(s.best) + '</span>' +
+            podium.innerHTML = '<h2>' + esc(d.race || 'Result') + (by ? '<span class="by">' + esc(by) + byLogo(d, 'RaceResult') + '</span>' : '') + '</h2>' + podiumRows.slice(0, 3).map((s, i) =>
+              '<div class="line"><b>' + ordinal(i + 1) + '</b>' + swatch(d, s.id) + esc(sn(s.name)) + '<span class="t">' + esc((cards[s.id] || {}).result || (((cards[s.id] || {}).laps || 0) + ' laps')) + ' &nbsp; best ' + fmt(s.best) + '</span>' +
               (ratings[s.id] !== undefined ? '<span class="r">RTG ' + Number(ratings[s.id]).toFixed(1) + '</span>' : '') + '</div>').join('');
             podium.classList.add('show');
           } else podium.classList.remove('show');
@@ -832,18 +921,40 @@ public sealed partial class WebServerService
           first = false;
         }
 
+        // NEW TO RC RACING? (overlay plan 7.6): the basics and a few words,
+        // one card every twelve seconds between races.
+        const BASICS = [
+          ['New to RC racing?', 'Races run for a set time. When the clock runs out, everyone finishes the lap they\u2019re on. Most laps wins; on the same laps, the quicker time wins.'],
+          ['New to RC racing?', 'Everyone qualifies in heats. The quickest go through to the A-Main, the next to the B-Main.'],
+          ['New to RC racing?', 'The drivers standing by the track are marshals, from the race before. They put crashed cars back on their wheels.'],
+          ['New to RC racing?', 'Each car carries a transponder that counts its laps as it crosses the line.'],
+          ['Racing words', 'Laps/time, like 23/5:02.341: 23 laps in 5 minutes 2.341 seconds.'],
+          ['Racing words', 'TQ: top qualifier, the quickest driver in qualifying. They start the A-Main from the front.'],
+          ['Racing words', 'Lapped (+1L): the leader has gone a whole lap further. Interval: the gap to the car just ahead.'],
+          ['Racing words', 'A personal best (PB) is a driver\u2019s own fastest lap - often the thing worth cheering most.'],
+        ];
+
         // --- The layout's own graphics (stream overlay plan section 2) ---
+        // The last minute of a timed race, or the last lap of a lap race,
+        // read from the countdown the laptop writes ("0:45", "1 LAP TO GO").
+        function lastMinute(text){
+          const t = String(text || '').toUpperCase();
+          if (/FINAL LAP|1 LAP TO GO|LAST LAP/.test(t)) return true;
+          const m = /(\d+):(\d{2})/.exec(t);
+          return !!m && Number(m[1]) * 60 + Number(m[2]) < 60;
+        }
         function show(id, on){ const el = document.getElementById(id); if (el) el.classList.toggle('show', !!on); return el; }
         function setText(id, text){ const el = document.getElementById(id); if (el && el.textContent !== text) el.textContent = text; }
         let tickerHtml = '';
 
         function drawLayoutParts(d, rows, cards, racing, finished){
           const onTrack = racing || finished;
+          const pcars = (d.pylon && d.pylon.cars) || {};
           const leader = rows.length ? rows[0] : null;
 
           // The race and its clock, small, in a corner.
           const status = want('status') && (onTrack || PART === 'staging');
-          if (status){ setText('st-race', d.race || ''); setText('st-clock', d.countdown || (d.flag && d.flag !== 'None' ? d.flag + ' flag' : '')); }
+          if (status){ setText('st-race', d.race || ''); setText('st-clock', d.finishing ? 'Final lap' : (d.countdown || (d.flag && d.flag !== 'None' ? d.flag + ' flag' : ''))); }
           show('status', status);
 
           // One bar of positions, for a camera that needs the picture.
@@ -853,8 +964,9 @@ public sealed partial class WebServerService
             const n = (PARTS.ticker && PARTS.ticker.rows) || 10;
             const html = rows.slice(0, n).map((s, i) => {
               const c = cards[s.id] || {};
-              const g = i === 0 ? 'Lap ' + (c.laps || 0) : (c.ahead || '');
-              return '<span class="tk-item"><b>' + (i + 1) + '</b>' + esc(s.name) + (g ? '<span class="g">' + esc(g) + '</span>' : '') + '</span>';
+              const g = (c.done || finished) && c.result ? c.result : i === 0 ? 'Lap ' + (c.laps || 0) : (c.ahead || '');
+              const col = /^#[0-9A-F]{6}$/.test((pcars[s.id] || {}).col || '') ? pcars[s.id].col : '';
+              return '<span class="tk-item"><b>' + (i + 1) + '</b>' + (col ? '<span class="sw" style="background:' + col + ';margin-right:.4vw"></span>' : '') + esc(sn(s.name)) + (g ? '<span class="g">' + esc(g) + '</span>' : '') + '</span>';
             }).join('');
             if (html !== tickerHtml){
               tickerHtml = html;
@@ -875,8 +987,8 @@ public sealed partial class WebServerService
           if (bug){
             if (onTrack || PART === 'staging'){
               setText('bg-race', d.race || 'Live');
-              setText('bg-clock', d.countdown || '');
-              setText('bg-lead', leader ? (finished ? 'Won by ' : 'Leader ') + leader.name : '');
+              setText('bg-clock', d.finishing ? 'Final lap' : (d.countdown || ''));
+              setText('bg-lead', leader ? (finished ? 'Won by ' : 'Leader ') + sn(leader.name) : '');
             } else {
               setText('bg-race', 'Up next');
               setText('bg-clock', '');
@@ -891,12 +1003,59 @@ public sealed partial class WebServerService
 
           // What's next, between races.
           const sched = document.getElementById('schedule');
-          const next = want('schedule') && PART === 'between' && d.onDeck;
-          if (next){
-            const html = '<h2>Up next</h2><div class="line">' + esc(d.onDeck) + '</div>';
+          // The next three races (6.7): when, who drives, who marshals.
+          const up = Array.isArray(d.upNext) ? d.upNext.filter(r => r && r.title) : [];
+          const over = want('schedule') && PART === 'between' && up.length === 0 && !d.onDeck && (Number(d.racedTonight) || 0) > 0;
+          if (over){
+            const html = '<h2>That\'s it for tonight</h2><div class="line">Thanks for watching. The results are on the club\'s page.</div>';
             if (sched.innerHTML !== html) sched.innerHTML = html;
           }
-          if (sched) sched.classList.toggle('show', !!next);
+          const next = !over && want('schedule') && PART === 'between' && (up.length > 0 || d.onDeck);
+          if (next){
+            const raced = Number(d.racedTonight) || 0;
+            // Never looks broken (7.6): before the first race it is "starting
+            // soon", between races "back shortly", and after the last "that's it".
+            const head = raced === 0 ? 'Starting soon' : 'Back shortly · up next';
+            const html = '<h2>' + head + '</h2>' + (up.length ? up.map((r, i) => {
+              const drivers = Array.isArray(r.drivers) ? r.drivers : [];
+              const marshals = Array.isArray(r.marshals) ? r.marshals.filter(m => m && m.name) : [];
+              return '<div class="line"><b>' + (i + 1) + '</b>' + esc(r.title) + (r.eta ? '<span class="when">' + esc(r.eta) + '</span>' : '') + '</div>' +
+                (i === 0 && drivers.length ? '<div class="who">' + drivers.map(n => esc(sn(n))).join(', ') + '</div>' : '') +
+                (i === 0 && marshals.length ? '<div class="who mar">Marshals: ' + marshals.map(m => esc(sn(m.name)) + (m.post ? ' (' + esc(m.post) + ')' : '')).join(', ') + '</div>' : '');
+            }).join('') : '<div class="line">' + esc(d.onDeck) + '</div>');
+            if (sched.innerHTML !== html) sched.innerHTML = html;
+          }
+          if (sched) sched.classList.toggle('show', !!next || over);
+
+          // The basics, a card at a time (7.6), only with time to read them.
+          const firstEta = up.length && /about (\d{1,2}):(\d{2})/.exec(up[0].eta || '');
+          let minutesToGo = 99;
+          if (firstEta){ const at = new Date(); at.setHours(Number(firstEta[1]), Number(firstEta[2]), 0, 0); minutesToGo = (at - Date.now()) / 60000; }
+          const basics = want('basics') && PART === 'between' && !over && minutesToGo >= 2;
+          if (basics){
+            const card = BASICS[Math.floor(Date.now() / 12000) % BASICS.length];
+            setText('bs-k', card[0]);
+            setText('bs-t', card[1]);
+          }
+          show('basics', basics);
+
+          // The sponsor up now (section 5) - held back in the last minute,
+          // on the final lap and while the battle box is up, so a logo is
+          // never what hid the finish.
+          const battleUp = document.getElementById('battle').classList.contains('show');
+          const busy = racing && (d.finishing || lastMinute(d.countdown) || battleUp);
+          const sp = d.sponsorUp && typeof d.sponsorUp.name === 'string' ? d.sponsorUp : null;
+          const showSponsor = want('sponsor') && !!sp && !busy;
+          if (showSponsor){
+            const img = document.getElementById('sp-logo');
+            const url = typeof sp.logo === 'string' && LOGO_URL.test(sp.logo) ? sp.logo : '';
+            if (url && img.getAttribute('src') !== url) img.setAttribute('src', url);
+            if (!url) img.removeAttribute('src');
+            img.setAttribute('alt', sp.name);
+            setText('sp-name', url ? '' : sp.name);
+          }
+          show('sponsor', showSponsor);
+          sponsorShowing = showSponsor && !DEMO;
 
           // HeatCaller's mark, always somewhere on the stream: in the
           // tower's foot while the tower shows, or here, where the layout put it.

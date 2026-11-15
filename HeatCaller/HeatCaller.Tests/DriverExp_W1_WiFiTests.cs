@@ -37,7 +37,9 @@ public sealed class DriverExp_W1_WiFiTests : IDisposable
         // the follow card alone read: no position, last or best lap, gap
         // behind, warnings or penalty time.
         var card = state["cards"]![id]!.AsObject();
-        Assert.Equal(new[] { "ahead", "laps" }, card.Select(p => p.Key).OrderBy(k => k, StringComparer.Ordinal));
+        // And the result the RC way, 23/5:02.341, once the car has a lap (stream
+        // overlay plan 6.2) - a "done" joins it as the car takes the checkered.
+        Assert.Equal(new[] { "ahead", "laps", "result" }, card.Select(p => p.Key).OrderBy(k => k, StringComparer.Ordinal));
 
         // No laptop clock (it was for the follow card's "about 7 min"), no
         // penalty lines and no transponder sightings.

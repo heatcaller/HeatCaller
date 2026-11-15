@@ -85,7 +85,9 @@ public sealed class ObsLink : IDisposable
         {
             var settings = _settings();
 
-            if (!settings.VideoEnabled || string.IsNullOrWhiteSpace(settings.VideoObsHost))
+            // On for race video, or for switching scenes with the race
+            // (stream overlay plan 6.1) - either needs the link.
+            if ((!settings.VideoEnabled && !settings.ObsSwitchScenes) || string.IsNullOrWhiteSpace(settings.VideoObsHost))
             {
                 State = "off";
                 await Delay(TimeSpan.FromSeconds(5), token);
@@ -149,10 +151,86 @@ public sealed class ObsLink : IDisposable
         // A stream already live when HeatCaller started counts from now.
         await SendAsync(socket, new { op = 6, d = new { requestType = "GetStreamStatus", requestId = "hc-status" } }, token);
 
+        // Scene switches (stream overlay plan 6.1) go out from their own
+        // loop, so a switch never waits on OBS saying something. One send at
+        // a time: only this loop sends once the connection is up.
+        using var connection = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var sender = Task.Run(() => SendScenesAsync(socket, connection.Token), CancellationToken.None);
+
+        try
+        {
+            await ListenAsync(socket, token);
+        }
+        finally
+        {
+            connection.Cancel();
+            try { await sender; } catch (OperationCanceledException) { /* closing */ }
+        }
+    }
+
+    /// <summary>
+    /// The scenes asked for, the newest kept when several queue up while OBS
+    /// is away - only the last one matters by the time it is back.
+    /// </summary>
+    private readonly System.Threading.Channels.Channel<string> _scenes =
+        System.Threading.Channels.Channel.CreateBounded<string>(new System.Threading.Channels.BoundedChannelOptions(1)
+        {
+            FullMode = System.Threading.Channels.BoundedChannelFullMode.DropOldest,
+        });
+
+    /// <summary>
+    /// Asks OBS to show this scene. Never waits and never throws: only while
+    /// the link is up; a scene OBS doesn't have comes back in OBS's own
+    /// answer and is logged once (see ListenAsync).
+    /// </summary>
+    public void SwitchTo(string scene)
+    {
+        if (!string.IsNullOrWhiteSpace(scene) && State is "connected" or "streaming")
+        {
+            _scenes.Writer.TryWrite(scene.Trim());
+        }
+    }
+
+    private async Task SendScenesAsync(ClientWebSocket socket, CancellationToken token)
+    {
+        var n = 0;
+
+        await foreach (var scene in _scenes.Reader.ReadAllAsync(token))
+        {
+            if (socket.State != WebSocketState.Open)
+            {
+                return;
+            }
+
+            await SendAsync(socket, new
+            {
+                op = 6,
+                d = new { requestType = "SetCurrentProgramScene", requestId = "hc-scene-" + (++n), requestData = new { sceneName = scene } },
+            }, token);
+        }
+    }
+
+    private string _sceneProblem = string.Empty;
+
+    private async Task ListenAsync(ClientWebSocket socket, CancellationToken token)
+    {
         while (!token.IsCancellationRequested && socket.State == WebSocketState.Open)
         {
             using var message = await ReceiveAsync(socket, token);
             var root = message.RootElement;
+
+            // OBS's answer to a scene switch that failed - a scene name it
+            // doesn't have, most often. Said once until it changes.
+            if (SceneProblem(root) is { } problem)
+            {
+                if (problem != _sceneProblem)
+                {
+                    _sceneProblem = problem;
+                    _log?.Invoke("[video] OBS didn't switch scene: " + problem);
+                }
+
+                continue;
+            }
 
             if (StreamEvent(root) is { } started)
             {
@@ -167,6 +245,23 @@ public sealed class ObsLink : IDisposable
                 State = "streaming";
             }
         }
+    }
+
+    /// <summary>What OBS said was wrong with one of our scene switches, or null when the message is something else or the switch worked.</summary>
+    public static string? SceneProblem(JsonElement message)
+    {
+        if (!message.TryGetProperty("op", out var op) || op.GetInt32() != 7
+            || !message.TryGetProperty("d", out var d)
+            || !d.TryGetProperty("requestId", out var id) || !(id.GetString() ?? string.Empty).StartsWith("hc-scene-", StringComparison.Ordinal)
+            || !d.TryGetProperty("requestStatus", out var status)
+            || !status.TryGetProperty("result", out var ok) || ok.ValueKind != JsonValueKind.False)
+        {
+            return null;
+        }
+
+        return status.TryGetProperty("comment", out var comment) && comment.GetString() is { Length: > 0 } words
+            ? words
+            : "OBS refused the scene.";
     }
 
     private static async Task SendAsync(ClientWebSocket socket, object message, CancellationToken token)

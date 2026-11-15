@@ -37,6 +37,9 @@ public sealed partial class WebServerService
     /// moment as the board (view, threaded; null inline, where it is read
     /// here as always), so this can run off the UI thread.
     /// </remarks>
+    /// <summary>The sponsor whose logo the stream's sponsor graphic shows, as last published - see SponsorStream.</summary>
+    private volatile string? _sponsorUpId;
+
     private void AddBroadcast(JsonObject node, IReadOnlyList<RacerStanding> ordered, byte[] rosterKey, UiSide ui, LiveRaceView? view)
     {
         var (changes, leaders) = (0, 0);
@@ -53,6 +56,10 @@ public sealed partial class WebServerService
         var cars = new JsonObject();
         var front = ordered.Count > 0 ? ordered[0] : null;
 
+        // In a qualifier (overlay plan 6.4): where this run puts each driver
+        // overall, "P3 ▲2", from the same projection as the Qual column.
+        var projection = ProjectionNow();
+
         foreach (var standing in ordered)
         {
             var id = RosterId(rosterKey, standing.TransponderId);
@@ -67,7 +74,18 @@ public sealed partial class WebServerService
                 // The racing number from the driver's profile - empty for a
                 // driver without one, and the tower then leaves the box off.
                 ["num"] = (Names.Get(standing.TransponderId)?.RaceNumber ?? string.Empty).Trim(),
+
+                // The car's body colour, "#RRGGBB" or empty (stream overlay
+                // plan 6.5), for the swatch that tells the cars apart.
+                ["col"] = CarColour.Clean(Names.Get(standing.TransponderId)?.BodyColour),
                 ["led"] = standing.LapsLed,
+
+                // The last lap, for the tower's Last lap mode (overlay plan 6.6).
+                ["last"] = standing.LapTimesMs.Count > 0 ? standing.LapTimesMs[^1] : 0,
+
+                ["qual"] = projection is not null && projection.TryGetValue(standing.TransponderId, out var slot)
+                    ? "P" + slot.Position + (slot.IsNew || slot.Change == 0 ? string.Empty : slot.Change > 0 ? " ▲" + slot.Change : " ▼" + -slot.Change)
+                    : string.Empty,
 
                 // To the car at the top of the board, in the same words the
                 // interval to the car ahead is in (RaceGaps.Format), so the
@@ -109,6 +127,14 @@ public sealed partial class WebServerService
         }
 
         node["presented"] = presented;
+
+        // The sponsor whose logo is up now (overlay plan section 5): theirs
+        // while their read is on air, else turns by share. Kept for the
+        // count, when a page says it is showing it.
+        var up = SponsorStream.Up(ui.SponsorLogos, DateTime.UtcNow, SponsorOnAir.Showing ? SponsorOnAir.SponsorName : null);
+        _sponsorUpId = up?.Id;
+        node["sponsorUp"] = up is null ? null : new JsonObject { ["name"] = up.Name, ["logo"] = up.Url };
+        node["racedTonight"] = ui.RacedTonight;
 
         // Their logos, by moment, where they have one (stream overlay plan
         // section 1) - for the graphics to show beside the name.

@@ -739,7 +739,8 @@ public sealed class SponsorsControl : UserControl
                 // dated the day after the club raced.
                 TonightAtTheTrack.NightOf(DateTime.Now),
                 MentionsTonight?.Invoke(),
-                WebViewsTonight?.Invoke());
+                WebViewsTonight?.Invoke(),
+                SponsorStream.SecondsOn(TonightAtTheTrack.NightOf(DateTime.Now)));
 
             if (string.IsNullOrWhiteSpace(report))
             {
