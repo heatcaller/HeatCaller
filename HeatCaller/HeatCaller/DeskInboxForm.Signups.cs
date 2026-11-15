@@ -94,7 +94,7 @@ internal sealed partial class DeskInboxForm
                 note = note.Length > 0 ? $"From an invite this laptop doesn't know; {note}" : "From an invite this laptop doesn't know";
             }
 
-            var what = $"{request.ClassName}, transponder {request.TransponderText}, {(request.Email.Length == 0 ? "no email" : request.Email)}";
+            var what = $"{request.ClassName}; transponder: {request.TransponderText}; {(request.Email.Length == 0 ? "no email" : request.Email)}";
 
             yield return new InboxItem(
                 InboxSource.Signup,

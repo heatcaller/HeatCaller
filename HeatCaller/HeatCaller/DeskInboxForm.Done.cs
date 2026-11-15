@@ -20,6 +20,7 @@ internal sealed partial class DeskInboxForm
     private readonly CheckBox _chkSwapsNeedDesk = new ThemedCheckBox();
     private readonly CheckBox _chkSignupsOn = new ThemedCheckBox();
     private readonly Button _btnQuickReplies = new() { Text = "Quick Replies..." };
+    private readonly Label _lblHandled = new();
 
     private readonly Button _doneToggle = new() { AutoSize = true };
     private readonly DataGridView _gridDone = new();
@@ -57,20 +58,17 @@ internal sealed partial class DeskInboxForm
             }
         };
 
-        var handled = new Label
-        {
-            Text = "Battery packs, cars, photos and setups sent from phones are applied by themselves - they never wait here.",
-            AutoSize = true,
-            MaximumSize = new Size(UiLayout.AtTextSize(900), 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
+        _lblHandled.AutoSize = true;
+        _lblHandled.MaximumSize = new Size(UiLayout.AtTextSize(900), 0);
+        _lblHandled.ForeColor = AppTheme.TextMuted;
+        _lblHandled.Font = AppTheme.SmallFont;
+        _lblHandled.Text = HandledWords(0);
 
         _btnQuickReplies.Click += (_, _) => EditQuickReplies();
 
         _rules.Add(_chkSwapsNeedDesk, stretch: false, gapBelow: UiLayout.HintGap);
         _rules.Add(_chkSignupsOn, stretch: false, gapBelow: UiLayout.HintGap);
-        _rules.Add(handled, gapBelow: UiLayout.HintGap);
+        _rules.Add(_lblHandled, gapBelow: UiLayout.HintGap);
         _rules.Add(new ButtonBar().With(_btnQuickReplies), gapBelow: 0);
     }
 
@@ -164,9 +162,25 @@ internal sealed partial class DeskInboxForm
     private ClubNote? SelectedDoneNote() =>
         _showDone && _gridDone.SelectedRows.Count > 0 && _gridDone.SelectedRows[0].Tag is ClubNote note ? note : null;
 
+    /// <summary>What the rules say about the changes from phones that never wait here, with tonight's count.</summary>
+    internal static string HandledWords(int tonight) =>
+        "Battery packs, cars, photos and setups sent from phones are applied by themselves - they never wait here."
+        + (tonight > 0 ? $" {Plural.Of(tonight, "change")} handled for you tonight." : string.Empty);
+
+    /// <summary>How many changes from phones were applied by themselves today (the club's day, on this PC's clock).</summary>
+    internal static int HandledToday(IEnumerable<DriverRequest> all, DateTime nowLocal) =>
+        all.Count(r => DriverAsk.IsWrite(r.Kind) && r.Kind != DriverAsk.Cover && !r.IsWaiting && (r.AnsweredUtc ?? r.FiledUtc).ToLocalTime().Date == nowLocal.Date);
+
     /// <summary>The rules' ticks again from their desks - another window may have changed one.</summary>
     private void RefreshRules()
     {
+        var handled = HandledWords(_requests is null ? 0 : HandledToday(_requests.Store.All, DateTime.Now));
+
+        if (_lblHandled.Text != handled)
+        {
+            _lblHandled.Text = handled;
+        }
+
         _loadingRules = true;
 
         try

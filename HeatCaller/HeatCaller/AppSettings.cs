@@ -2501,8 +2501,11 @@ public sealed class AppSettings
     /// </summary>
     public List<string> InboxQuickReplies { get; set; } = new();
 
-    /// <summary>The Desk Inbox keeps to a strip down the side of the screen, beside Race Control.</summary>
-    public bool InboxPinnedToSide { get; set; }
+    /// <summary>The Desk Inbox is docked in the main window, beside Race Control, rather than a window of its own.</summary>
+    public bool InboxDocked { get; set; }
+
+    /// <summary>How wide the docked Desk Inbox is, in pixels at the screen's scale.</summary>
+    public int InboxDockWidth { get; set; } = 520;
 
     // --- Race video on YouTube (14 Nov 2026, race video plan) ---------
     //

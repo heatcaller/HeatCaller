@@ -40,7 +40,7 @@ public sealed partial class CheckInControl
 
     private readonly DeskLogView _deskLog = new();
     private readonly Label _lblCashBox = new() { AutoSize = true };
-    private readonly Button _btnDeskSignups = new() { Text = "Online Sign-ups" };
+    private readonly Button _btnDeskSignups = new() { Text = "Inbox: Sign-ups" };
 
     /// <summary>The driver on the desk's card - the last one scanned or typed - and what the card says about them.</summary>
     private DriverProfile? _deskShown;
