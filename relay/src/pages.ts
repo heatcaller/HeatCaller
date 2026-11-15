@@ -1645,7 +1645,8 @@ html.hc .stale, html.hc.hcoffline .wrap > :not(header):not(.hcoff):not(footer) {
 .hcthemes h3 { margin: 16px 0 8px; font-size: 1rem; }
 .hcthemes .note { margin: 0 0 12px; color: var(--muted); font-size: 0.9rem; }
 .hcthemes .thgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
-.hcthemes .thbase { margin: 10px 0 6px; }
+.hcthemes .thnote { margin: 0 0 12px; color: var(--muted); font-size: 0.9rem; }
+.hcthemes .thbase { margin: 12px 0 6px; padding: 0; text-align: left; color: var(--muted); font-size: 0.9rem; font-weight: 600; }
 .hcthemes .thgrid.team { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
 .hcthemes .thpick { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 10px; font: inherit; font-weight: 600;
   text-align: left; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 12px; cursor: pointer; }
@@ -2495,7 +2496,7 @@ function hcApplyTheme(hc) {
   if (lb) {
     const team = t.team ? HC_THEMES.team.find((s) => s.id === t.team) : null;
     lb.setAttribute('aria-pressed', String(!!th));
-    lb.textContent = th ? 'Look: ' + (team ? team.name : th.name) : 'Look';
+    lb.textContent = th ? 'Look: ' + (team ? team.name + ' on ' + th.name : th.name) : 'Look';
   }
 }
 function hcCloseThemes() {
@@ -2520,7 +2521,7 @@ function hcOpenThemes() {
   h.id = 'hcthemes-h';
   h.textContent = 'Look';
   const note = document.createElement('p');
-  note.className = 'note';
+  note.className = 'thnote';
   note.textContent = 'Just on this phone. High contrast still wins when it is on.';
   sheet.appendChild(h);
   sheet.appendChild(note);
@@ -2571,7 +2572,7 @@ function hcOpenThemes() {
     const bt = HC_THEMES.themes.find((x) => x.id === base);
     if (!bt) continue;
     const sub = document.createElement('p');
-    sub.className = 'note thbase';
+    sub.className = 'thbase';
     sub.textContent = 'On ' + bt.name;
     sheet.appendChild(sub);
     const teams = document.createElement('div');
