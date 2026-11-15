@@ -325,7 +325,7 @@ public sealed class InstallerTests
     {
         // Not the source repo: it is private, and reading a private feed
         // would need a GitHub token shipped inside the app.
-        Assert.Equal("https://github.com/asherizm/HeatCaller-releases", AppUpdates.FeedUrl);
+        Assert.Equal("https://github.com/heatcaller/HeatCaller-releases", AppUpdates.FeedUrl);
         Assert.DoesNotContain("/HeatCaller.git", AppUpdates.FeedUrl, StringComparison.Ordinal);
         Assert.EndsWith("HeatCaller-releases", AppUpdates.FeedUrl, StringComparison.Ordinal);
     }

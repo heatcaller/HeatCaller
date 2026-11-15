@@ -3,7 +3,7 @@
 This page covers getting HeatCaller onto a Windows PC with its installer: what it puts where, what happens the first time it starts, where it keeps your data, and how it updates and comes off again.
 
 !!! note "Getting the installer"
-    HeatCaller's installer is a single file, **HeatCallerApp-beta.msi**. Download the latest one from **[github.com/asherizm/HeatCaller-releases](https://github.com/asherizm/HeatCaller-releases/releases/latest/download/HeatCallerApp-beta.msi)**. It's about 1.3 GB, so download it at home or work rather than on the track's Wi-Fi, and copy it to the race laptop. Every release, with its notes, is listed on the [releases page](https://github.com/asherizm/HeatCaller-releases/releases). Once it's installed, HeatCaller fetches its own updates (see [Updates](#updates)).
+    HeatCaller's installer is a single file, **HeatCallerApp-beta.msi**. Download the latest one from **[github.com/heatcaller/HeatCaller-releases](https://github.com/heatcaller/HeatCaller-releases/releases/latest/download/HeatCallerApp-beta.msi)**. It's about 1.3 GB, so download it at home or work rather than on the track's Wi-Fi, and copy it to the race laptop. Every release, with its notes, is listed on the [releases page](https://github.com/heatcaller/HeatCaller-releases/releases). Once it's installed, HeatCaller fetches its own updates (see [Updates](#updates)).
 
 ## Before you start
 
@@ -16,7 +16,7 @@ You need:
 
 ## Install
 
-1. [Download **HeatCallerApp-beta.msi**](https://github.com/asherizm/HeatCaller-releases/releases/latest/download/HeatCallerApp-beta.msi), copy it to the race laptop and double-click it.
+1. [Download **HeatCallerApp-beta.msi**](https://github.com/heatcaller/HeatCaller-releases/releases/latest/download/HeatCallerApp-beta.msi), copy it to the race laptop and double-click it.
 2. **If Windows SmartScreen says "Windows protected your PC"**, click **More info**, check that the publisher is HeatCaller's, then click **Run anyway**. The installer is signed, but SmartScreen warns about any program it hasn't seen downloaded many times yet. This goes away as more clubs install it.
 3. Read the **license agreement and privacy notice**, tick the box to accept them, and click **Next**. HeatCaller can't be installed without accepting them. The privacy notice says what happens to your drivers' information, including the names sent to ElevenLabs when you use an online voice.
 4. Click **Install** and wait. It takes a minute or so. Then click **Finish**, and HeatCaller starts.

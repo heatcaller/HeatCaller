@@ -10,7 +10,7 @@ A new install is in Simple mode, which shows what a race night needs and hides t
 
 ## Before you start
 
-- HeatCaller is installed and opens. [Download the installer](https://github.com/asherizm/HeatCaller-releases/releases/latest/download/HeatCallerApp-beta.msi) and see [Installing and running](install.md).
+- HeatCaller is installed and opens. [Download the installer](https://github.com/heatcaller/HeatCaller-releases/releases/latest/download/HeatCallerApp-beta.msi) and see [Installing and running](install.md).
 - Your decoder is plugged in and powered, with its loop on the track.
 - You have at least two cars with transponders, or you're happy to try it with [Demo Mode](../race-control/practice-and-ghosts.md) first.
 - Optional: a different announcer voice. A new install already speaks with the free Kokoro voice, which runs on the laptop itself and sounds like a person, so the announcer works with nothing set up. If your club is set up on the **Club Website** page, the HeatCaller voice is included as well — nothing to sign up for. Your own ElevenLabs API key is the third way, and gives you control of every word. See [Choose the voice](../announcer/voice.md#choose-the-voice).

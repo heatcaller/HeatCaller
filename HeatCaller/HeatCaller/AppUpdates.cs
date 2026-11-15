@@ -57,7 +57,7 @@ internal static class AppUpdates
     /// The public releases repo the updater reads. Not the source repo -
     /// see the note at the top of this class.
     /// </summary>
-    internal const string FeedUrl = "https://github.com/asherizm/HeatCaller-releases";
+    internal const string FeedUrl = "https://github.com/heatcaller/HeatCaller-releases";
 
     /// <summary>
     /// The channel clubs are on. `vpk pack -c beta` has to match it, or a
