@@ -5259,7 +5259,15 @@ export class Relay {
   private async contextFor(request: IncomingMessage, club: string): Promise<PageContext> {
     // A fresh nonce per page: the one script each page carries names it,
     // and the content policy runs nothing that does not.
-    return { look: await this.lookFor(club), origin: originOf(request), nonce: randomBytes(16).toString("base64") };
+    // The phone's driver theme (15 Nov 2026), so the page is drawn in it
+    // from the start. Only the theme's own words; pages check them again.
+    const theme = themeCookieOf(request.headers.cookie);
+    return {
+      look: await this.lookFor(club),
+      origin: originOf(request),
+      nonce: randomBytes(16).toString("base64"),
+      ...(theme === undefined ? {} : { theme }),
+    };
   }
 
   // ---------------------------------------------------------- check-in
@@ -11648,6 +11656,16 @@ function sendJson(response: ServerResponse, status: number, body: unknown): void
  * Styles stay inline-able - the pages are built that way, and a style
  * cannot run code.
  */
+/**
+ * The hg-theme cookie's words ("pitlane", "daylight:teal"), or undefined -
+ * the only cookie these pages read, and nothing about who the phone is.
+ */
+export function themeCookieOf(header: string | string[] | undefined): string | undefined {
+  const line = Array.isArray(header) ? header.join("; ") : header ?? "";
+  const m = /(?:^|;\s*)hg-theme=([a-z]{1,16}(?::[a-z]{1,16})?)(?:;|$)/.exec(line);
+  return m === null ? undefined : m[1];
+}
+
 function sendHtml(response: ServerResponse, status: number, html: string, nonce: string): void {
   const policy = [
     "default-src 'none'",

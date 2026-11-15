@@ -37,6 +37,8 @@ export interface PageContext {
    * card - a link that has gone stale is still a link to the results.
    */
   readonly preview?: PagePreview;
+  /** The phone's driver theme from its hg-theme cookie ("pitlane", "night:teal"), or undefined. Checked again where it is used. */
+  readonly theme?: string;
 }
 
 export const DEFAULT_CONTEXT: PageContext = Object.freeze({ look: DEFAULT_LOOK, origin: "", nonce: "" });
@@ -210,23 +212,41 @@ export const DRIVER_THEMES: readonly DriverTheme[] = [
 ];
 
 /**
- * Team colour: Night with the driver's own colour as the primary. Every one
- * is bright enough to read on Night's background and to take black text.
+ * Team colour: Night or Daylight with the driver's own colour as the
+ * primary. On Night each is bright enough to read on the dark and to take
+ * black text (hex); on Daylight each is a deeper shade of the same colour,
+ * dark enough to read on the light and to take white text (onLight).
  */
-export const TEAM_SWATCHES: readonly { readonly id: string; readonly name: string; readonly hex: string }[] = [
-  { id: "red", name: "Red", hex: "#FF5A5A" },
-  { id: "orange", name: "Orange", hex: "#FF8A3D" },
-  { id: "yellow", name: "Yellow", hex: "#FFD23F" },
-  { id: "green", name: "Green", hex: "#4CD38A" },
-  { id: "teal", name: "Teal", hex: "#2ED3C6" },
-  { id: "blue", name: "Blue", hex: "#5AA9FF" },
-  { id: "purple", name: "Purple", hex: "#B28CFF" },
-  { id: "pink", name: "Pink", hex: "#FF6EC7" },
+export const TEAM_SWATCHES: readonly { readonly id: string; readonly name: string; readonly hex: string; readonly onLight: string }[] = [
+  { id: "red", name: "Red", hex: "#FF5A5A", onLight: "#B3261E" },
+  { id: "orange", name: "Orange", hex: "#FF8A3D", onLight: "#A84300" },
+  { id: "yellow", name: "Yellow", hex: "#FFD23F", onLight: "#7A5A00" },
+  { id: "green", name: "Green", hex: "#4CD38A", onLight: "#1B7339" },
+  { id: "teal", name: "Teal", hex: "#2ED3C6", onLight: "#00695C" },
+  { id: "blue", name: "Blue", hex: "#5AA9FF", onLight: "#0B57D0" },
+  { id: "purple", name: "Purple", hex: "#B28CFF", onLight: "#6A3DB8" },
+  { id: "pink", name: "Pink", hex: "#FF6EC7", onLight: "#B0124F" },
 ];
+
+/** The themes a team colour goes on. */
+export const TEAM_BASES: readonly string[] = ["night", "daylight"];
+
+/**
+ * A theme as a phone keeps it ("pitlane", "daylight:teal"), checked against
+ * the themes there are - or null for the club's own colours. The relay reads
+ * the same words from the hg-theme cookie to draw the page in it.
+ */
+export function driverThemeOf(value: unknown): { readonly id: string; readonly team: string } | null {
+  const m = typeof value === "string" ? /^([a-z]+)(?::([a-z]+))?$/.exec(value) : null;
+  if (m === null || !DRIVER_THEMES.some((t) => t.id === m[1])) return null;
+  const team = m[2] !== undefined && TEAM_BASES.includes(m[1]!) && TEAM_SWATCHES.some((t) => t.id === m[2]) ? m[2] : "";
+  return { id: m[1]!, team };
+}
 
 const DRIVER_THEME_CSS = DRIVER_THEMES
   .map((t) => `html.th-${t.id} { ${Object.entries(t.vars).map(([k, v]) => `${k}: ${v};`).join(" ")} }`)
   .concat(TEAM_SWATCHES.map((s) => `html.th-night.tc-${s.id} { --primary: ${s.hex}; --on-primary: #000000; --accent: ${s.hex}; }`))
+  .concat(TEAM_SWATCHES.map((s) => `html.th-daylight.tc-${s.id} { --primary: ${s.onLight}; --on-primary: #FFFFFF; --accent: ${s.onLight}; }`))
   .join("\n");
 
 /** What the theme picker draws from, handed to the page as data. */
@@ -1643,6 +1663,8 @@ html.hc .stale, html.hc.hcoffline .wrap > :not(header):not(.hcoff):not(footer) {
 .hcthemes h3 { margin: 16px 0 8px; font-size: 1rem; }
 .hcthemes .note { margin: 0 0 12px; color: var(--muted); font-size: 0.9rem; }
 .hcthemes .thgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.hcthemes .thnote { margin: 0 0 12px; color: var(--muted); font-size: 0.9rem; }
+.hcthemes .thbase { margin: 12px 0 6px; padding: 0; text-align: left; color: var(--muted); font-size: 0.9rem; font-weight: 600; }
 .hcthemes .thgrid.team { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
 .hcthemes .thpick { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 10px; font: inherit; font-weight: 600;
   text-align: left; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 12px; cursor: pointer; }
@@ -2441,18 +2463,38 @@ const HC_THEMES = ${DRIVER_THEME_LIST};
 function hcThemesOn() { return !document.documentElement.hasAttribute('data-nothemes'); }
 // The club's own light or dark, as the page was drawn - read before anything here changes it.
 let HC_CLUB_LIGHT = false;
-try { HC_CLUB_LIGHT = document.documentElement.classList.contains('light'); } catch (e) { /* dark */ }
+// A page drawn in the phone's theme by the relay says the club's own in data-club-scheme.
+try {
+  const drawn = document.documentElement.getAttribute('data-club-scheme');
+  HC_CLUB_LIGHT = drawn ? drawn === 'light' : document.documentElement.classList.contains('light');
+} catch (e) { /* dark */ }
 function hcTheme() {
   let t = '';
   try { t = localStorage.getItem(HC_TH_KEY) || ''; } catch (e) { /* the club's */ }
   const m = /^([a-z]+)(?::([a-z]+))?$/.exec(t);
   if (!m || !HC_THEMES.themes.some((x) => x.id === m[1])) return { id: '', team: '' };
-  const team = m[1] === 'night' && m[2] && HC_THEMES.team.some((s) => s.id === m[2]) ? m[2] : '';
+  const team = (m[1] === 'night' || m[1] === 'daylight') && m[2] && HC_THEMES.team.some((s) => s.id === m[2]) ? m[2] : '';
   return { id: m[1], team: team };
+}
+// The same words in a cookie, so the relay draws the next page in the theme
+// from the start rather than in the club's colours first. Only the theme -
+// never anything about a driver. Left alone where themes are off (the family
+// page), so a page that shows the club's look does not forget the phone's.
+function hcThemeCookie(t) {
+  if (!hcThemesOn()) return;
+  try {
+    const want = t.id ? (t.team ? t.id + ':' + t.team : t.id) : '';
+    const had = (/(?:^|; *)hg-theme=([^;]*)/.exec(document.cookie) || [])[1] || '';
+    if (want === had) return;
+    document.cookie = want
+      ? 'hg-theme=' + want + '; path=/; max-age=31536000; SameSite=Lax'
+      : 'hg-theme=; path=/; max-age=0; SameSite=Lax';
+  } catch (e) { /* the next page draws in the club's colours first */ }
 }
 function hcApplyTheme(hc) {
   const d = document.documentElement;
   const t = hcThemesOn() ? hcTheme() : { id: '', team: '' };
+  hcThemeCookie(t);
   for (const x of HC_THEMES.themes) d.classList.toggle('th-' + x.id, x.id === t.id);
   for (const s of HC_THEMES.team) d.classList.toggle('tc-' + s.id, s.id === t.team);
   const th = HC_THEMES.themes.find((x) => x.id === t.id) || null;
@@ -2472,7 +2514,7 @@ function hcApplyTheme(hc) {
   if (lb) {
     const team = t.team ? HC_THEMES.team.find((s) => s.id === t.team) : null;
     lb.setAttribute('aria-pressed', String(!!th));
-    lb.textContent = th ? 'Look: ' + (team ? team.name : th.name) : 'Look';
+    lb.textContent = th ? 'Look: ' + (team ? team.name + ' on ' + th.name : th.name) : 'Look';
   }
 }
 function hcCloseThemes() {
@@ -2497,7 +2539,7 @@ function hcOpenThemes() {
   h.id = 'hcthemes-h';
   h.textContent = 'Look';
   const note = document.createElement('p');
-  note.className = 'note';
+  note.className = 'thnote';
   note.textContent = 'Just on this phone. High contrast still wins when it is on.';
   sheet.appendChild(h);
   sheet.appendChild(note);
@@ -2543,11 +2585,19 @@ function hcOpenThemes() {
   const h3 = document.createElement('h3');
   h3.textContent = 'Team colour';
   sheet.appendChild(h3);
-  const night = HC_THEMES.themes.find((x) => x.id === 'night');
-  const teams = document.createElement('div');
-  teams.className = 'thgrid team';
-  sheet.appendChild(teams);
-  for (const s of HC_THEMES.team) pick('night', s.id, s.name, night.bg, night.fg, s.hex, teams);
+  // On Night and on Daylight (15 Nov 2026): a deeper shade of each on the light.
+  for (const base of ['night', 'daylight']) {
+    const bt = HC_THEMES.themes.find((x) => x.id === base);
+    if (!bt) continue;
+    const sub = document.createElement('p');
+    sub.className = 'thbase';
+    sub.textContent = 'On ' + bt.name;
+    sheet.appendChild(sub);
+    const teams = document.createElement('div');
+    teams.className = 'thgrid team';
+    sheet.appendChild(teams);
+    for (const s of HC_THEMES.team) pick(base, s.id, s.name, bt.bg, bt.fg, base === 'daylight' ? s.onLight : s.hex, teams);
+  }
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'go';
@@ -2556,7 +2606,19 @@ function hcOpenThemes() {
   sheet.appendChild(close);
   wrap.appendChild(sheet);
   wrap.addEventListener('click', (e) => { if (e.target === wrap) hcCloseThemes(); });
-  wrap.addEventListener('keydown', (e) => { if (e.key === 'Escape') hcCloseThemes(); });
+  // Escape closes it; Tab and Shift+Tab go round the sheet and never out to
+  // the page behind it (15 Nov 2026), as a modal dialog should.
+  wrap.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { hcCloseThemes(); return; }
+    if (e.key !== 'Tab') return;
+    const all = Array.from(sheet.querySelectorAll('button'));
+    if (all.length === 0) return;
+    const first = all[0];
+    const last = all[all.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    else if (!sheet.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+  });
   document.body.appendChild(wrap);
   const on = sheet.querySelector('.thpick[aria-pressed="true"]') || sheet.querySelector('.thpick');
   if (on) on.focus();
@@ -3757,6 +3819,8 @@ interface Shell {
   readonly script: string;
   /** Asks search engines to leave the page out - for a page reached only by a link somebody was sent, like sign-up. */
   readonly noindex?: boolean;
+  /** No driver themes here - the page keeps the club's own look and has no Look button (the family page). */
+  readonly noThemes?: boolean;
   /**
    * The page's own address when it is not /c/<club>/<active> (the podium
    * videos page used it until 28 Oct 2026). Already a relay path; escaped
@@ -3838,11 +3902,32 @@ function tabsNav(club: string, name: string, lit: string): string {
     </nav>`;
 }
 
+/**
+ * The <html> classes for the phone's theme, when the request carried one
+ * (the hg-theme cookie the page keeps beside localStorage): the theme's
+ * light or dark in place of the club's, its th-/tc- classes, and the club's
+ * own scheme in data-club-scheme so the page's script can put it back.
+ * Nothing extra without one, so a page with no theme is drawn as it always was.
+ */
+function themeHtmlClasses(look: Look, theme: string | undefined): { scheme: string; extra: string; clubScheme: string } {
+  const club = look.light ? "light" : "dark";
+  const picked = driverThemeOf(theme);
+  const t = picked === null ? undefined : DRIVER_THEMES.find((x) => x.id === picked.id);
+  if (picked === null || t === undefined) return { scheme: club, extra: "", clubScheme: "" };
+  return {
+    scheme: t.light ? "light" : "dark",
+    extra: ` th-${t.id}${picked.team ? ` tc-${picked.team}` : ""}`,
+    clubScheme: ` data-club-scheme="${club}"`,
+  };
+}
+
 export function shell(page: Shell, context: PageContext): string {
   const club = escapeHtml(page.club);
   const name = escapeHtml(page.clubName);
   const look = context.look;
   const sub = escapeHtml(page.sub);
+  const themesOn = look.driverThemes && page.noThemes !== true;
+  const themeClasses = themeHtmlClasses(look, themesOn ? context.theme : undefined);
 
   // One session's card, when this page was asked for by that session's
   // address. Every string on it is a club's own text out of its index -
@@ -3977,7 +4062,7 @@ export function shell(page: Shell, context: PageContext): string {
   const links = anchors === "" ? "" : `<span class="links">${anchors}</span>`;
 
   return `<!doctype html>
-<html lang="en" class="${look.light ? "light" : "dark"}${sunset ? " synthwave" : ""}"${clockAttr(look.clock24)}${tzAttr(look.timeZone)}${look.driverThemes ? "" : " data-nothemes"}>
+<html lang="en" class="${themeClasses.scheme}${sunset ? " synthwave" : ""}${themeClasses.extra}"${clockAttr(look.clock24)}${tzAttr(look.timeZone)}${themesOn ? "" : " data-nothemes"}${themeClasses.clubScheme}>
 <head>
 <meta charset="utf-8">
 ${NO_ZOOM_HEAD}
@@ -4012,7 +4097,7 @@ ${overrides}${sunset ? HC_SUNSET_STYLE : ""}
     ${subTab("badges", "Achievements")}
   </nav>` : ""}
   ${page.body}
-  <footer><span id="stamp">&nbsp;</span>${links}<span class="tip">Tap any driver's name to follow them on every page.</span><span class="hcread" id="hcread" role="group" aria-label="Reading"><span>Text</span><button type="button" data-ts="100" aria-label="Text size normal">A</button><button type="button" data-ts="115" aria-label="Text size larger">A+</button><button type="button" data-ts="130" aria-label="Text size largest">A++</button><button type="button" data-hc="1" aria-label="High contrast">Contrast</button>${look.driverThemes ? '<button type="button" data-look="1" aria-haspopup="dialog">Look</button>' : ""}</span><a class="hcmark" href="https://heatcaller.com" aria-label="What's HeatCaller?" data-hc-about>${HC_SUN}${HC_WORD}</a></footer>
+  <footer><span id="stamp">&nbsp;</span>${links}<span class="tip">Tap any driver's name to follow them on every page.</span><span class="hcread" id="hcread" role="group" aria-label="Reading"><span>Text</span><button type="button" data-ts="100" aria-label="Text size normal">A</button><button type="button" data-ts="115" aria-label="Text size larger">A+</button><button type="button" data-ts="130" aria-label="Text size largest">A++</button><button type="button" data-hc="1" aria-label="High contrast">Contrast</button>${themesOn ? '<button type="button" data-look="1" aria-haspopup="dialog">Look</button>' : ""}</span><a class="hcmark" href="https://heatcaller.com" aria-label="What's HeatCaller?" data-hc-about>${HC_SUN}${HC_WORD}</a></footer>
 </div>
 ${aboutSheet(name)}
 <div id="follow" class="follow" hidden></div>
@@ -19344,13 +19429,14 @@ export function appShellPage(club: string, clubName: string, context: PageContex
   const safeClub = escapeHtml(club);
   const name = escapeHtml(clubName);
   const look = context.look;
+  const shellTheme = themeHtmlClasses(look, look.driverThemes ? context.theme : undefined);
   const variables = Object.entries(look.vars);
   const overrides = variables.length === 0
     ? ""
     : `<style>:root{${variables.map(([k, v]) => `${k}:${v}`).join(";")}}</style>`;
 
   return `<!doctype html>
-<html lang="en" class="hcshell ${look.light ? "light" : "dark"}"${clockAttr(look.clock24)}${tzAttr(look.timeZone)}${look.driverThemes ? "" : " data-nothemes"}>
+<html lang="en" class="hcshell ${shellTheme.scheme}${shellTheme.extra}"${clockAttr(look.clock24)}${tzAttr(look.timeZone)}${look.driverThemes ? "" : " data-nothemes"}${shellTheme.clubScheme}>
 <head>
 <meta charset="utf-8">
 ${NO_ZOOM_HEAD}
@@ -19695,5 +19781,8 @@ export function familyPage(club: string, clubName: string, context: PageContext 
     body: '<div id="fam"><p class="note">Loading&hellip;</p></div>',
     script: FAMILY_JS,
     noindex: true,
+    // The club's own look (15 Nov 2026, driver themes plan): a relative's
+    // link is the club's page, not a driver's own.
+    noThemes: true,
   }, context);
 }
