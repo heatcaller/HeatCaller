@@ -1672,7 +1672,10 @@ public sealed partial class RaceControlControl
         });
 
         // The board's columns (15 Nov 2026) - where the Columns button was.
-        var columns = new ToolStripMenuItem("Choose the board's columns...", null, (_, _) => PickLeaderboardColumns());
+        // The same drop-down a heading's right-click opens, under the first
+        // heading, once this menu has gone.
+        var columns = new ToolStripMenuItem("Choose the board's columns", null, (_, _) =>
+            BeginInvoke(() => OpenColumnsPopover(new Point(0, _dgvLeaderboard.ColumnHeadersHeight), null)));
 
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(columns);
@@ -1790,20 +1793,73 @@ public sealed partial class RaceControlControl
     /// <summary>
     /// A right-click on the board's column headings (15 Nov 2026, in place of
     /// the Columns button at the foot of the board): the columns, and only
-    /// them - the driver's menu is for a driver's row.
+    /// them - the driver's menu is for a driver's row. Opens under the
+    /// heading that was clicked, starting on that heading's column.
     /// </summary>
     private void ShowColumnsMenu(Point at)
+    {
+        var hit = _dgvLeaderboard.HitTest(at.X, at.Y);
+        var key = hit.ColumnIndex >= 0 && hit.ColumnIndex < _dgvLeaderboard.Columns.Count
+            ? _dgvLeaderboard.Columns[hit.ColumnIndex].Name
+            : null;
+
+        OpenColumnsPopover(new Point(at.X, _dgvLeaderboard.ColumnHeadersHeight), key);
+    }
+
+    /// <summary>
+    /// The board's columns as a drop-down of ticks and arrows (ColumnsPopover).
+    /// Each tick or move changes the board straight away; closing it saves,
+    /// and puts the whole visit on the Undo list as one step rather than one
+    /// per click.
+    /// </summary>
+    private void OpenColumnsPopover(Point at, string? focusKey)
     {
         if (IsDisposed || Disposing)
         {
             return;
         }
 
-        var menu = new ContextMenuStrip();
-        menu.Items.Add(new ToolStripMenuItem("Choose the board's columns...", null, (_, _) => PickLeaderboardColumns()));
-        AppTheme.StyleContextMenu(menu);
-        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
-        menu.Show(_dgvLeaderboard, at);
+        // The setting as saved, for Undo - empty means the defaults - and
+        // the columns as the board shows them, to start the list from.
+        var savedBefore = _settings.RaceControlKpis.ToList();
+        var shownBefore = _kpiColumns.Select(k => k.Key).ToList();
+
+        var choices = new ColumnChoices(shownBefore, KpiCatalog.All);
+        choices.Changed += (_, _) =>
+        {
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            _settings.RaceControlKpis = choices.ShownKeys;
+            RebuildLeaderboardColumns();
+            RenderLeaderboard();
+        };
+
+        ColumnsPopover.Show(_dgvLeaderboard, at, choices, focusKey, KpiCatalog.DefaultRaceControl,
+            closed: () =>
+            {
+                if (choices.ShownKeys.SequenceEqual(shownBefore, StringComparer.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                _settings.Save();
+
+                _undo.Capture("Change the Race Control columns", () =>
+                {
+                    _settings.RaceControlKpis = savedBefore.ToList();
+                    _settings.Save();
+
+                    if (!IsDisposed)
+                    {
+                        RebuildLeaderboardColumns();
+                        RenderLeaderboard();
+                    }
+                });
+            },
+            more: PickLeaderboardColumns);
     }
 
     /// <summary>The board's column picker, with Undo. What the Columns button did until 15 Nov 2026.</summary>
