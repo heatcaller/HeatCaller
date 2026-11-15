@@ -1074,9 +1074,15 @@ public sealed partial class CheckInControl : UserControl
     /// <summary>
     /// Only the classes racing tonight, and only the one picked in Class:
     /// when one is - see RaceControlControl.DeskJudgesTechFor.
+    ///
+    /// Not in Desk mode (bug hunt 20), where the chips are out of sight: a
+    /// chip left picked on the roster, and remembered after a restart, had
+    /// the desk say "ready to race" to a driver with a second car not yet
+    /// looked at. The roster is redrawn on the way back - see ShowDeskMode.
     /// </summary>
     private bool JudgesTechFor(string className) =>
-        RaceControlControl.DeskJudgesTechFor(className, _raceClasses.All, _tech!, _events?.Active, ClassFilter);
+        RaceControlControl.DeskJudgesTechFor(className, _raceClasses.All, _tech!, _events?.Active,
+            _modeSwitch.On ? null : ClassFilter);
 
     public void RefreshAll()
     {

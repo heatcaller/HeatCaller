@@ -182,6 +182,12 @@ public static class DeskMoney
 
         foreach (var (name, fee, payment) in drivers)
         {
+            // Paid for less than the fee is now - a class ticked since: the rest is owed.
+            if (payment?.How is PaidHow.Cash or PaidHow.Card && StillOwed(payment, fee) is > 0 and var more)
+            {
+                owing.Add((name, more));
+            }
+
             switch (payment?.How ?? PaidHow.Owing)
             {
                 case PaidHow.Cash:
@@ -224,14 +230,28 @@ public static class DeskMoney
             return null;
         }
 
-        var paid = (payment?.How ?? PaidHow.Owing) != PaidHow.Owing;
+        var owed = StillOwed(payment, fee);
 
         var money = Money(fee);
 
-        return paid
+        return owed <= 0
             ? new PhoneMoney(money, true, "Paid ✓")
-            : new PhoneMoney(money, false, $"Entry: {money} - pay at the desk");
+            : new PhoneMoney(money, false, $"Entry: {Money(owed)} - pay at the desk");
     }
+
+    /// <summary>
+    /// What a driver still owes tonight against their fee now: all of it when
+    /// they haven't paid, nothing when comped, and when paid by cash or card
+    /// whatever the fee has gone up by since (bug hunt 20) - a second class
+    /// ticked after paying for one left its extra-class fee uncollected, the
+    /// driver showing as paid and ready.
+    /// </summary>
+    public static decimal StillOwed(EntryPayment? payment, decimal fee) => (payment?.How ?? PaidHow.Owing) switch
+    {
+        PaidHow.Comp => 0,
+        PaidHow.Cash or PaidHow.Card => Math.Max(0, fee - payment!.Amount),
+        _ => Math.Max(0, fee),
+    };
 
     /// <summary>Money as the club writes it, in this PC's currency format: "$15.00".</summary>
     public static string Money(decimal amount) => amount.ToString("C", CultureInfo.CurrentCulture);
@@ -239,6 +259,8 @@ public static class DeskMoney
     /// <summary>The Paid column: "Cash $15.00", "Card $25.00", "Comp - Marshal", "Owes $15.00", or "" with nothing owed.</summary>
     public static string Words(EntryPayment? payment, decimal fee) => (payment?.How ?? PaidHow.Owing) switch
     {
+        PaidHow.Cash or PaidHow.Card when StillOwed(payment, fee) is > 0 and var more =>
+            $"Owes {Money(more)} more ({payment!.How} {Money(payment.Amount)} paid)",
         PaidHow.Cash => $"Cash {Money(payment!.Amount)}",
         PaidHow.Card => $"Card {Money(payment!.Amount)}",
         PaidHow.Comp => payment!.Note.Length > 0 ? $"Comp - {payment.Note}" : "Comp",

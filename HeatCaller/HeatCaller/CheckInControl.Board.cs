@@ -66,7 +66,10 @@ public sealed partial class CheckInControl
     {
         var here = _checkIns.IsCheckedIn(profile.Transponder);
 
-        var tech = _tech is null
+        // Not run for a driver none of whose classes runs tech tonight - at a
+        // club that never inspects, that is everybody (bug hunt 20): their
+        // gate used to be "not looked at yet", so nobody was ever ready.
+        var tech = _tech is null || !profile.AllClasses.Any(JudgesTechFor)
             ? Gate.NotRun
             : TechFor(profile) switch
             {
@@ -79,9 +82,10 @@ public sealed partial class CheckInControl
 
         if (_payments is not null && TonightsFees() is { Charges: true } fees)
         {
+            // Settled only when what was taken covers tonight's fee (bug hunt
+            // 20): a class ticked after paying leaves the extra-class fee owed.
             var payment = _payments.Get(fees.Day.Id, profile.Transponder);
-            var settled = (payment?.How ?? PaidHow.Owing) != PaidHow.Owing || FeeFor(profile, fees.Day, ClassNamed) <= 0;
-            paid = settled ? Gate.Done : Gate.Open;
+            paid = DeskMoney.StillOwed(payment, FeeFor(profile, fees.Day, ClassNamed)) <= 0 ? Gate.Done : Gate.Open;
         }
 
         var papers = ChecksPapers
@@ -91,13 +95,17 @@ public sealed partial class CheckInControl
         return new Readiness(here, tech, paid, papers);
     }
 
-    /// <summary>Whether a driver is one the gate filter is showing.</summary>
+    /// <summary>
+    /// Whether a driver is one the gate filter is showing. The gates are
+    /// tonight's, so only drivers who are here wait at one - as the strip
+    /// counts them (bug hunt 20: the whole roster used to read as owing).
+    /// </summary>
     private static bool Shows(RosterShow show, Readiness r) => show switch
     {
         RosterShow.NotHere => !r.Here,
-        RosterShow.NeedsTech => r.Tech is Gate.Open or Gate.Failed,
-        RosterShow.Owes => r.Paid == Gate.Open,
-        RosterShow.Papers => r.Papers == Gate.Open,
+        RosterShow.NeedsTech => r.Here && r.Tech is Gate.Open or Gate.Failed,
+        RosterShow.Owes => r.Here && r.Paid == Gate.Open,
+        RosterShow.Papers => r.Here && r.Papers == Gate.Open,
         RosterShow.Ready => r.Ready,
         _ => true,
     };
@@ -259,21 +267,24 @@ public sealed partial class CheckInControl
             new(nameof(RosterShow.NotHere), "Not here", states.Count(s => !s.Here)),
         };
 
-        if (_tech is not null)
+        // Tech only when a class here runs it tonight - see ReadinessOf.
+        var runsTech = _tech is not null && states.Any(s => s.Tech != Gate.NotRun);
+
+        if (runsTech)
         {
-            chips.Add(new(nameof(RosterShow.NeedsTech), "Needs tech", states.Count(s => s.Tech is Gate.Open or Gate.Failed)));
+            chips.Add(new(nameof(RosterShow.NeedsTech), "Needs tech", states.Count(s => Shows(RosterShow.NeedsTech, s))));
         }
 
         var charging = _payments is not null && TonightsFees() is { Charges: true };
 
         if (charging)
         {
-            chips.Add(new(nameof(RosterShow.Owes), "Owes", states.Count(s => s.Paid == Gate.Open)));
+            chips.Add(new(nameof(RosterShow.Owes), "Owes", states.Count(s => Shows(RosterShow.Owes, s))));
         }
 
         if (ChecksPapers)
         {
-            chips.Add(new(nameof(RosterShow.Papers), "Papers", states.Count(s => s.Papers == Gate.Open)));
+            chips.Add(new(nameof(RosterShow.Papers), "Papers", states.Count(s => Shows(RosterShow.Papers, s))));
         }
 
         chips.Add(new(nameof(RosterShow.Ready), "Ready", states.Count(s => s.Ready)));
@@ -296,7 +307,7 @@ public sealed partial class CheckInControl
             new(nameof(RosterShow.NotHere), "Checked in", here.ToString(), $"of {inClass.Count}", Share(here, inClass.Count), AppTheme.Accent),
         };
 
-        if (_tech is not null)
+        if (runsTech)
         {
             var cleared = states.Count(s => s.Here && s.Tech == Gate.Done);
             var failed = states.Count(s => s.Here && s.Tech == Gate.Failed);
@@ -308,7 +319,7 @@ public sealed partial class CheckInControl
         {
             var paid = states.Count(s => s.Here && s.Paid == Gate.Done);
             var owed = inClass.Where((p, i) => states[i].Here && states[i].Paid == Gate.Open)
-                .Sum(p => FeeFor(p, fees.Day, ClassNamed));
+                .Sum(p => DeskMoney.StillOwed(_payments!.Get(fees.Day.Id, p.Transponder), FeeFor(p, fees.Day, ClassNamed)));
             tiles.Add(new(nameof(RosterShow.Owes), "Paid", paid.ToString(),
                 owed > 0 ? $"of {here} · {DeskMoney.Money(owed)} owed" : $"of {here} here", Share(paid, here), AppTheme.Success));
         }
@@ -354,6 +365,7 @@ public sealed partial class CheckInControl
             {
                 Gate.Done => ((object)inspection!.ResultText, AppTheme.Success, string.Empty),
                 Gate.Failed => ("Failed", AppTheme.Danger, FailedWhy(inspection)),
+                Gate.NotRun => ("—", AppTheme.TextMuted, string.Empty),
                 _ when r.Here => ("Waiting", AppTheme.Warning, "Not looked at yet tonight. Double-click to inspect."),
                 _ => ("—", AppTheme.TextMuted, string.Empty),
             };

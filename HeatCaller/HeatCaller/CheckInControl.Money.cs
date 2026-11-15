@@ -71,8 +71,9 @@ public sealed partial class CheckInControl
 
         var payment = _payments.Get(fees.Day.Id, profile.Transponder);
         var cell = row.Cells[column.Index];
-        cell.Value = DeskMoney.Words(payment, FeeFor(profile, fees.Day, ClassNamed));
-        cell.Style.ForeColor = (payment?.How ?? PaidHow.Owing) == PaidHow.Owing ? AppTheme.Warning : AppTheme.Success;
+        var fee = FeeFor(profile, fees.Day, ClassNamed);
+        cell.Value = DeskMoney.Words(payment, fee);
+        cell.Style.ForeColor = DeskMoney.StillOwed(payment, fee) > 0 ? AppTheme.Warning : AppTheme.Success;
     }
 
     /// <summary>The right-click menu's Paid cash / Paid card / Comp / Owing, for the drivers picked.</summary>

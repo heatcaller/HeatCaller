@@ -74,8 +74,7 @@ public partial class MainForm
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(t => _profiles.Get(t))
             .OfType<DriverProfile>()
-            .Where(p => (_payments.Get(day.Id, p.Transponder)?.How ?? PaidHow.Owing) == PaidHow.Owing
-                        && CheckInControl.FeeFor(p, day, classNamed) > 0)
+            .Where(p => DeskMoney.StillOwed(_payments.Get(day.Id, p.Transponder), CheckInControl.FeeFor(p, day, classNamed)) > 0)
             .Select(p => string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName)
             .ToList();
     }
