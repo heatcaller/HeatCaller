@@ -1251,7 +1251,7 @@ public sealed partial class RaceProgramControl : UserControl
                     }
 
                     var length = NightPlan.LengthOf(NightPlan.Shortened(format, raceDay.FinalsMinutesShorter) ?? format);
-                    unbuilt.Add(new NightPlan.UnbuiltMains(group.Key, mains, length));
+                    unbuilt.Add(new NightPlan.UnbuiltMains(group.Key, mains, length, format));
                 }
             }
 
@@ -4858,8 +4858,9 @@ public sealed partial class RaceProgramControl : UserControl
 
         // With an out-by time, the finals can give time back too (12 Nov
         // 2026, setup plan step 8): shorter, or one main fewer per class,
-        // each with what it saves - see NightPlan.FinalsCuts.
-        var cuts = DayIsClubNight ? null : NightPlan.FinalsCuts(Plan());
+        // each with what it saves - see NightPlan.FinalsCuts. A cut already
+        // chosen tonight is already in the plan, so isn't offered again.
+        var cuts = DayIsClubNight ? null : NightPlan.FinalsCuts(Plan(), ActiveDay?.FinalsMinutesShorter ?? 0, ActiveDay?.FinalsOneMainFewer ?? false);
 
         if (cuts is null || (!cuts.CanShorten && !cuts.CanDropOne))
         {
