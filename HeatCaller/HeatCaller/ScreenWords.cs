@@ -169,15 +169,108 @@ internal static class ScreenWords
             return text;
         }
 
-        var kept = keep is null
-            ? null
-            : new HashSet<string>(keep.Where(w => !string.IsNullOrWhiteSpace(w)), StringComparer.OrdinalIgnoreCase);
+        var kept = KeepSet(keep);
 
         return Swears.Replace(text, m =>
             kept is not null && kept.Contains(m.Value)
                 ? m.Value
                 : m.Value[0] + new string('*', m.Value.Length - 1));
     }
+
+    /// <summary>
+    /// Swears used as an intensifier - "is fucking stuck", "a damn good
+    /// lap" - which come out of a line leaving a sentence that still reads.
+    /// "Damn it" is not one: taking "damn" leaves "it".
+    /// </summary>
+    private static readonly Regex Intensifier = new(
+        @"\b(?:mother)?f+u+c+k(?:ing|in')(?!\w)\s+(?=[a-z])|\b(?:god)?damn(?:ed)?\s+(?!it\b)(?=[a-z])",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex Words = new(@"[\p{L}\p{N}']+", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    /// <summary>How many swears are in <paramref name="text"/>, not counting a kept word (a driver's name).</summary>
+    public static int SwearCount(string? text, IEnumerable<string>? keep = null)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return 0;
+        }
+
+        var kept = KeepSet(keep);
+
+        return Swears.Matches(text).Count(m => kept is null || !kept.Contains(m.Value));
+    }
+
+    /// <summary>
+    /// <paramref name="written"/> brought within the Sailor-mouth dial (15
+    /// Nov 2026): at most <paramref name="perLine"/> swears for every
+    /// <see cref="CommentaryTones.WordsPerLine"/> words.
+    ///
+    /// Over it, the spare intensifiers come out first, the last ones first -
+    /// "Bill is fucking stuck" becomes "Bill is stuck", which still says the
+    /// race. A short line still over after that is refused (null): what is
+    /// left needs the swears it has to make sense, and a line the club did
+    /// not ask for is not said. A long piece - the recap show, an interview -
+    /// is kept with what could be taken out taken out, as one sentence too
+    /// many is not worth four minutes of show.
+    /// </summary>
+    /// <param name="keep">Words that are never counted - the facts the line was written from, so a driver called Dick is not a swear.</param>
+    public static string? WithinSwears(string? written, int perLine, IEnumerable<string>? keep = null)
+    {
+        if (string.IsNullOrWhiteSpace(written))
+        {
+            return written;
+        }
+
+        var kept = KeepSet(keep);
+        var words = Words.Matches(written).Count;
+        var allowed = Math.Max(0, perLine) * Math.Max(1, (int)Math.Ceiling(words / (double)CommentaryTones.WordsPerLine));
+        var text = written;
+
+        while (SwearCount(text, kept) > allowed)
+        {
+            var spare = Intensifier.Matches(text)
+                .Where(m => kept is null || !kept.Contains(m.Value.Trim()))
+                .LastOrDefault();
+
+            if (spare is null)
+            {
+                break;
+            }
+
+            text = SentenceCase(text.Remove(spare.Index, spare.Length), spare.Index);
+        }
+
+        if (SwearCount(text, kept) <= allowed)
+        {
+            return text;
+        }
+
+        return words <= CommentaryTones.WordsPerLine * 3 / 2 ? null : text;
+    }
+
+    /// <summary>The letter at <paramref name="at"/> capitalised when it now starts a sentence - "Fucking hell" with the first word gone reads "Hell".</summary>
+    private static string SentenceCase(string text, int at)
+    {
+        if (at >= text.Length || !char.IsLower(text[at]))
+        {
+            return text;
+        }
+
+        var before = text[..at].TrimEnd();
+
+        return before.Length == 0 || before[^1] is '.' or '!' or '?' or '"' or ':'
+            ? text[..at] + char.ToUpperInvariant(text[at]) + text[(at + 1)..]
+            : text;
+    }
+
+    private static HashSet<string>? KeepSet(IEnumerable<string>? keep) =>
+        keep switch
+        {
+            null => null,
+            HashSet<string> set when set.Comparer.Equals(StringComparer.OrdinalIgnoreCase) => set,
+            _ => new HashSet<string>(keep.Where(w => !string.IsNullOrWhiteSpace(w)), StringComparer.OrdinalIgnoreCase),
+        };
 
     /// <summary>Every word of every name - what <see cref="Masked"/> keeps for a list of drivers.</summary>
     public static IEnumerable<string> NameWords(IEnumerable<string?> names) =>

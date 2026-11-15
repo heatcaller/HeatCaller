@@ -59,3 +59,19 @@ never uses slurs of any kind. It is built on the branch `claude/sailor-mouth-ton
   the facts stay exact?
 - **The user guide** doesn't mention it yet.
 - **Premium gating** waits on a plan or licence system.
+
+## The swear dial (added 15 Nov 2026)
+
+Asher heard six swear words in one line, so the AI Commentary page now has a **Swearing:** dial under
+the Writing tone. It shows only while Sailor-mouth is the tone that plays.
+
+- **The setting** is `AppSettings.SailorMouthSwears`: 0 to 6 swear words a line, default 2.
+- **A line** is about 40 words (`CommentaryTones.WordsPerLine`). A longer piece gets the number for
+  every 40 words.
+- **The model is told the number** in the prompt ("count them, and never go over"), through
+  `CommentaryTones.RuleFor`.
+- **It is held to in code** by `ScreenWords.WithinSwears`, in `Ask`.
+  - Over the count, the spare intensifiers come out, the last ones first: "fucking stuck" becomes
+    "stuck". "Damn it" is never cut.
+  - A short line that is still over is dropped. A long piece is kept as trimmed.
+  - Drivers' names are never counted.

@@ -537,6 +537,33 @@ public sealed class CommentaryService
             return null;
         }
 
+        // The Sailor-mouth dial (15 Nov 2026): told to the model in the
+        // prompt, and held to here - see ScreenWords.WithinSwears. A driver's
+        // name is not counted (a driver called Dick), and nothing else is spared.
+        if (Tone == CommentaryTone.SailorMouth && !string.IsNullOrWhiteSpace(written))
+        {
+            var perLine = CommentaryTones.SwearsPerLine(_settings);
+            var within = ScreenWords.WithinSwears(written, perLine, DriverNameWords());
+
+            try
+            {
+                if (within is null)
+                {
+                    Log?.Invoke($"Commentary line dropped - more swearing than the Sailor-mouth dial allows ({perLine} a line). Nothing was said.");
+                }
+                else if (!string.Equals(within, written, StringComparison.Ordinal))
+                {
+                    Log?.Invoke($"Sailor-mouth: took some swearing out of a line to keep to the dial ({perLine} a line).");
+                }
+            }
+            catch
+            {
+                // Saying why is a nicety.
+            }
+
+            return within;
+        }
+
         return written;
     }
 
@@ -546,6 +573,23 @@ public sealed class CommentaryService
     /// in the app; nothing, in a test that does not listen.
     /// </summary>
     public Action<string>? Log { get; set; }
+
+    /// <summary>
+    /// Every word of every driver's name and announcer name - never counted
+    /// as a swear by the Sailor-mouth dial. Empty if the drivers can't be read.
+    /// </summary>
+    private IReadOnlyList<string> DriverNameWords()
+    {
+        try
+        {
+            return ScreenWords.NameWords(_profiles.AllIncludingGhostsForAnyThread
+                .SelectMany(p => new[] { p.DriverName, p.AnnouncerName })).ToList();
+        }
+        catch
+        {
+            return Array.Empty<string>();
+        }
+    }
 
     /// <summary>
     /// What <paramref name="writing"/> comes back with, or null when a figure
@@ -1338,7 +1382,7 @@ public sealed class CommentaryService
 
         var toneLine = tone switch
         {
-            _ when character is not null => character.ToneLine + character.Rule,
+            _ when character is not null => character.ToneLine + CommentaryTones.RuleFor(character, _settings),
             CommentaryTone.DryUnderstated =>
                 "Be dry and understated - deadpan delivery, no exclamation marks, closer to a wry aside than hype.",
             CommentaryTone.Neutral =>
@@ -5665,7 +5709,7 @@ public sealed class CommentaryService
 
         var hostTone = Tone switch
         {
-            _ when character is not null => character.Host + character.Rule,
+            _ when character is not null => character.Host + CommentaryTones.RuleFor(character, _settings),
             CommentaryTone.DryUnderstated => "The host is dry and understated.",
             CommentaryTone.Neutral => "The host is calm and clear.",
             _ => "The host is excited and punchy, like a trackside TV reporter.",

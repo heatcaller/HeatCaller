@@ -54,7 +54,7 @@ public sealed class CharacterToneTests : IDisposable
         public Task<string?> TestAsync(CancellationToken ct = default) => Task.FromResult<string?>("ok");
     }
 
-    private static (CommentaryService Desk, Scribe Model) Desk(CommentaryTone tone, bool tags = true, bool v3 = true, bool allowSailorMouth = true)
+    private static (CommentaryService Desk, Scribe Model) Desk(CommentaryTone tone, bool tags = true, bool v3 = true, bool allowSailorMouth = true, int swears = 2)
     {
         var model = new Scribe();
         var settings = new AppSettings
@@ -64,6 +64,7 @@ public sealed class CharacterToneTests : IDisposable
             CommentaryToneStyle = tone,
             CommentaryVoiceTags = tags,
             AllowSailorMouth = allowSailorMouth,
+            SailorMouthSwears = swears,
         };
 
         var desk = new CommentaryService(ProfileStore.Load(), settings)
@@ -327,6 +328,48 @@ public sealed class CharacterToneTests : IDisposable
         Assert.Equal(CommentaryTone.SailorMouth, settings.CommentaryToneStyle);
         settings.AllowSailorMouth = true;
         Assert.Equal(CommentaryTone.SailorMouth, CommentaryTones.Effective(settings));
+    }
+
+    [Theory]
+    [InlineData(0, "SWEARING: none at all")]
+    [InlineData(1, "SWEARING: at most 1 swear word in a line")]
+    [InlineData(3, "SWEARING: at most 3 swear words in a line")]
+    [InlineData(99, "SWEARING: at most 6 swear words in a line")]
+    public async Task The_dial_count_is_told_to_the_model(int swears, string told)
+    {
+        var (desk, model) = Desk(CommentaryTone.SailorMouth, swears: swears);
+
+        await desk.BuildSegmentAsync(SegmentKind.BattleWatch, Facts("Sam leads Bill by 0.4s on lap 12."));
+
+        Assert.Contains(told, model.SystemPrompt);
+    }
+
+    [Fact]
+    public async Task Other_tones_are_never_told_a_swear_count()
+    {
+        var (desk, model) = Desk(CommentaryTone.Pirate);
+
+        await desk.BuildSegmentAsync(SegmentKind.BattleWatch, Facts("Sam leads Bill by 0.4s on lap 12."));
+
+        Assert.DoesNotContain("SWEARING:", model.SystemPrompt);
+    }
+
+    [Fact]
+    public async Task A_line_over_the_dial_has_its_spare_swears_taken_out()
+    {
+        var (desk, model) = Desk(CommentaryTone.SailorMouth);
+        model.Reply = "Sam is fucking clear, and Bill is fucking stuck on lap 12, fucking hell.";
+
+        // Default dial: two a line.
+        Assert.Equal(
+            "Sam is fucking clear, and Bill is stuck on lap 12, hell.",
+            await desk.BuildSegmentAsync(SegmentKind.BattleWatch, Facts("Sam leads Bill by 0.4s on lap 12.")));
+    }
+
+    [Fact]
+    public void The_dial_starts_at_two()
+    {
+        Assert.Equal(2, new AppSettings().SailorMouthSwears);
     }
 
     [Fact]

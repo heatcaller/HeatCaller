@@ -114,6 +114,17 @@ public sealed class CommentaryControl : UserControl
     private readonly NumericUpDown _numInterval = new();
     private readonly NumericUpDown _numObservations = new();
     private readonly ComboBox _cmbTone = new();
+
+    /// <summary>The Sailor-mouth dial (15 Nov 2026): swear words a line, 0 to CommentaryTones.MostSwears. Shown only while Sailor-mouth is the tone.</summary>
+    private readonly SliderControl _sldSwears = new() { Minimum = 0, Maximum = CommentaryTones.MostSwears, SmallChange = 1, LargeChange = 1 };
+
+    private readonly Label _lblSwears = new() { AutoSize = true };
+
+    /// <summary>The dial's caption, slider and hint - shown and hidden together (ShowSwearDial).</summary>
+    private IReadOnlyList<Control> _swearRow = Array.Empty<Control>();
+
+    /// <summary>Whether the dial's row is meant to be on show - for tests, since a page not on screen reads every control as hidden.</summary>
+    internal bool SwearDialShown { get; private set; }
     private readonly NumericUpDown _numMaxWords = new();
     private readonly NumericUpDown _numVariety = new();
     private readonly NumericUpDown _numSummaryDelay = new();
@@ -170,6 +181,9 @@ public sealed class CommentaryControl : UserControl
 
     /// <summary>The boxes' and pickers' widths at the normal text size - see SizeFields.</summary>
     private const int TonePickerWidth = 220;
+
+    /// <summary>The Sailor-mouth dial's width at the normal text size - seven stops, room to land on each.</summary>
+    private const int SwearDialWidth = 180;
     private const int ShowNameWidth = 280;
 
     /// <summary>The least width of the How chatty and Pacing pickers at the normal text size - it was the show music's library drop-downs' width, which moved to Sounds > Imaging on 17 Oct 2026.</summary>
@@ -766,6 +780,25 @@ public sealed class CommentaryControl : UserControl
 
             // The tag box lives or dies by this - see UpdateEnabledState.
             UpdateEnabledState();
+            ShowSwearDial();
+        };
+
+        // The Sailor-mouth dial (15 Nov 2026, Asher: "I want to control how
+        // many"): swear words a line, right under the tone, there only while
+        // Sailor-mouth is picked.
+        _sldSwears.Value = CommentaryTones.SwearsPerLine(_settings);
+        _lblSwears.Text = SwearsWords(_sldSwears.Value);
+        _sldSwears.ValueChanged += (_, _) =>
+        {
+            _lblSwears.Text = SwearsWords(_sldSwears.Value);
+
+            if (_settings.SailorMouthSwears == _sldSwears.Value)
+            {
+                return;
+            }
+
+            _settings.SailorMouthSwears = _sldSwears.Value;
+            _settings.Save();
         };
 
         _numMaxWords.Minimum = 8;
@@ -799,6 +832,10 @@ public sealed class CommentaryControl : UserControl
         };
 
         Flush(styleGrid.AddRow("Writing tone:", _cmbTone));
+        Flush(styleGrid.AddRow("Swearing:", Line(_sldSwears, _lblSwears)));
+        styleGrid.AddHint("How many swear words Sailor-mouth may use in a line - longer pieces get this many for every forty words. Lines over it have the spare ones taken out.");
+        _swearRow = styleGrid.RowParts(_sldSwears);
+        ShowSwearDial();
         Flush(styleGrid.AddRow(string.Empty, _chkVoiceTags));
         styleGrid.AddHint("Needs an ElevenLabs v3 voice, and a tone with a delivery of its own - not Neutral or Dry.");
 
@@ -1302,6 +1339,7 @@ public sealed class CommentaryControl : UserControl
         Fit(_txtTeaser, UiLayout.AtTextSize(TeaserWidth), Pieces.LineHeight(_txtTeaser.Font) * TeaserLines + UiLayout.HintGap * 2);
 
         Fit(_cmbTone, Math.Max(UiLayout.AtTextSize(TonePickerWidth), Pieces.PickerWidth(_cmbTone, ref _toneWidth)));
+Fit(_sldSwears, UiLayout.AtTextSize(SwearDialWidth), Math.Max(UiLayout.AtTextSize(24), _cmbTone.Height));
         Fit(_cmbChatter, Math.Max(UiLayout.AtTextSize(ShowPieceWidth), Pieces.PickerWidth(_cmbChatter, ref _chatterWidth)));
 
         foreach (var number in new[]
@@ -1448,7 +1486,34 @@ public sealed class CommentaryControl : UserControl
         }
 
         SelectTone(CommentaryTones.Effective(_settings));
+        ShowSwearDial();
     }
+
+    /// <summary>
+    /// The Sailor-mouth dial's row shown only while Sailor-mouth is the tone
+    /// that plays - not a saved one the club has switched off.
+    /// </summary>
+    private void ShowSwearDial()
+    {
+        var shown = CommentaryTones.Effective(_settings) == CommentaryTone.SailorMouth;
+        SwearDialShown = shown;
+
+        foreach (var part in _swearRow)
+        {
+            if (part.Visible != shown)
+            {
+                part.Visible = shown;
+            }
+        }
+    }
+
+    /// <summary>What the dial's number means, beside it.</summary>
+    internal static string SwearsWords(int swears) => swears switch
+    {
+        <= 0 => "none - crude, but no swear words",
+        1 => "1 a line",
+        _ => $"up to {swears} a line",
+    };
 
     /// <summary>Selects <paramref name="tone"/> without saving it (or the first tone, if it is not offered).</summary>
     private void SelectTone(CommentaryTone tone)
@@ -1815,6 +1880,7 @@ public sealed class CommentaryControl : UserControl
         _numTeaserGap.Enabled = summariesOn && _chkTeaser.Checked;
 
         _cmbTone.Enabled = on;
+        _sldSwears.Enabled = on;
         _numMaxWords.Enabled = on;
         _numVariety.Enabled = on;
 

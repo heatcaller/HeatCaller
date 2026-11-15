@@ -161,6 +161,7 @@ internal static class SettingsTable
             nameof(AppSettings.CommentaryQualifyingRecap),
             nameof(AppSettings.FlagResultRead),
             nameof(AppSettings.CommentaryToneStyle),
+            nameof(AppSettings.SailorMouthSwears),
             nameof(AppSettings.CommentaryMaxWords),
             nameof(AppSettings.CommentaryVariety),
             nameof(AppSettings.CommentarySummaryFinishers),
