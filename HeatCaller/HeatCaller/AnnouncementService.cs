@@ -717,6 +717,12 @@ public sealed partial class AnnouncementService
     /// the Big Screen, the feed, the phones' captions, the race video. The
     /// voice says them as written. Every word of every driver's name is kept
     /// as it is, so a driver called Dick is never "D***". See ScreenWords.Masked.
+    ///
+    /// And every other proper name the club typed (15 Nov 2026, bug hunt
+    /// 21): drivers' teams, sponsors, classes and crews, tonight's sponsors,
+    /// and the club's own cast from <see cref="ClubNamesProvider"/> - a
+    /// sponsor "Dick's Sporting Goods" or a host called Dick Johnson was
+    /// starred. See ScreenWords.ProperNameWords.
     /// </summary>
     private string Starred(string shown)
     {
@@ -725,21 +731,46 @@ public sealed partial class AnnouncementService
             return shown;
         }
 
+        var more = new List<string?>();
+
+        try
+        {
+            more.AddRange(SponsorsProvider?.Invoke()?.Select(s => s.Name) ?? Enumerable.Empty<string?>());
+        }
+        catch
+        {
+            // Read from a pool thread while the Sponsors page may be editing; the names are a nicety.
+        }
+
+        try
+        {
+            more.AddRange(ClubNamesProvider?.Invoke() ?? Enumerable.Empty<string?>());
+        }
+        catch
+        {
+            // As above.
+        }
+
         IEnumerable<string>? names = null;
 
         try
         {
-            names = ScreenWords.NameWords(_profiles.AllIncludingGhostsForAnyThread
-                .SelectMany(p => new[] { p.DriverName, p.AnnouncerName }))
-                .ToList();
+            names = ScreenWords.ProperNameWords(_profiles.AllIncludingGhostsForAnyThread, more: more).ToList();
         }
         catch
         {
             // Names are a nicety here; the starring is not.
         }
 
-        return ScreenWords.Masked(shown, names);
+        return ScreenWords.Masked(shown, names ?? ScreenWords.NameWords(more));
     }
+
+    /// <summary>
+    /// The club's own cast and show names - announcer, recap host, co-host,
+    /// mechanic, Team Principal, honours reader, show, track - never starred
+    /// on a screen (15 Nov 2026, bug hunt 21). See ScreenWords.ClubNames.
+    /// </summary>
+    public Func<IEnumerable<string?>>? ClubNamesProvider { get; set; }
 
     /// <summary>
     /// Puts each driver's real name back where the line has the name the

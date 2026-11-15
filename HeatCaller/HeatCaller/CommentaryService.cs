@@ -577,17 +577,21 @@ public sealed class CommentaryService
     /// <summary>
     /// Every word of every driver's name and announcer name - never counted
     /// as a swear by the Sailor-mouth dial. Empty if the drivers can't be read.
+    ///
+    /// And their teams, sponsors, classes and crews, and the club's own cast
+    /// (15 Nov 2026, bug hunt 21): a Team Principal or sponsor called Dick
+    /// counted as a swear, and at a dial of 1 a line naming him that swore
+    /// once was dropped. See ScreenWords.ProperNameWords.
     /// </summary>
     private IReadOnlyList<string> DriverNameWords()
     {
         try
         {
-            return ScreenWords.NameWords(_profiles.AllIncludingGhostsForAnyThread
-                .SelectMany(p => new[] { p.DriverName, p.AnnouncerName })).ToList();
+            return ScreenWords.ProperNameWords(_profiles.AllIncludingGhostsForAnyThread, _settings).ToList();
         }
         catch
         {
-            return Array.Empty<string>();
+            return ScreenWords.NameWords(ScreenWords.ClubNames(_settings)).ToList();
         }
     }
 
