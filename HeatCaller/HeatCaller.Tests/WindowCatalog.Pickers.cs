@@ -25,6 +25,15 @@ internal static partial class WindowCatalog
             KpiCatalog.All.Select(definition => definition.Key).ToList(),
             KpiCatalog.DefaultWeb)),
         ("Choose columns (none picked)", () => new KpiPickerForm("Big Screen", new List<string>(), KpiCatalog.DefaultBigScreen)),
+        // Stream overlays, your own (14 Nov 2026, stream overlay plan section 4):
+        // on a preset, and on a layout of the club's own with a long name.
+        ("Stream overlays", () => new OverlayEditorForm(OverlayStore.Load(Path.Combine(Path.GetTempPath(), "hc-catalog-overlays-none.json")), id => "http://localhost:8080/overlay/" + id, OverlayLayouts.AutoId)),
+        ("Stream overlays (your own)", () =>
+        {
+            var store = OverlayStore.Load(Path.Combine(Path.GetTempPath(), "hc-catalog-overlays-" + Guid.NewGuid().ToString("N")[..8] + ".json"));
+            var mine = store.AddCopy(OverlayLayouts.BuiltIn("lower-third")!, "Friday night stream with the sponsor in the corner");
+            return new OverlayEditorForm(store, id => "http://192.168.1.40:8080/overlay/" + id, mine.Id);
+        }),
         ("Manage Navigation", () => new TabVisibilityForm(
             PickerNavPages(),
             new[] { "Ghost Cars", "Demo Mode", "Sponsors" },

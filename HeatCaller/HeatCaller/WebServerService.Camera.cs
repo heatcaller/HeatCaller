@@ -369,9 +369,42 @@ public sealed partial class WebServerService
     /// graphic every time - "FASTEST LAP · PRESENTED BY ..." - which costs
     /// the room nothing, unlike the voice, which rations it.
     /// </summary>
-    internal string BuildBroadcastPage()
+    /// <summary>
+    /// One graphic's markup, as the layout wants it: where it has always
+    /// been, or - moved by the layout - inside a slot of its own (see
+    /// OverlayLayouts.SlotCss), marked inslot so it fades there instead of
+    /// sliding. Always written, so the page's script finds every element;
+    /// one the layout leaves out simply never shows (want() in the script).
+    /// </summary>
+    private static string PlaceInLayout(OverlayLayout layout, OverlayElementKind kind, string html)
+    {
+        if (layout.Element(kind) is not { On: true, Anchor: not OverlayAnchor.Default })
+        {
+            return html;
+        }
+
+        var at = html.IndexOf("class=\"", StringComparison.Ordinal);
+        var inner = at < 0 ? html : html.Insert(at + "class=\"".Length, "inslot ");
+
+        return "<div id=\"slot-" + OverlayLayouts.ElementName(kind) + "\" class=\"slot\">" + inner + "</div>";
+    }
+
+    internal string BuildBroadcastPage(OverlayLayout? layout = null)
     {
         var look = CurrentPageLook();
+
+        // THE LAYOUT (14 Nov 2026, plans/obs-overlay-plan.md section 2):
+        // which graphics show, where and when. The Broadcast preset places
+        // nothing, so /broadcast draws as it always has.
+        layout ??= OverlayLayouts.BuiltIn(OverlayLayouts.BroadcastId)!;
+        var markPlaced = layout.Element(OverlayElementKind.Mark) is { Anchor: not OverlayAnchor.Default };
+        string Part(OverlayElementKind kind, string html) => PlaceInLayout(layout, kind, html);
+        var slotCss = OverlayLayouts.SlotCss(layout);
+        var layoutJson = OverlayLayouts.ScriptJson(layout).Replace("</", "<\\/", StringComparison.Ordinal);
+        var basicsJson = StreamBasics.ScriptJson(_settings?.StreamBasics);
+        var glass = Math.Abs(layout.Glass - 0.82) < 0.001
+            ? ".82"
+            : Math.Clamp(layout.Glass, 0.4, 1).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 
         return $$"""
         <!DOCTYPE html><html class="{{look.Scheme}}"><head>
@@ -380,21 +413,23 @@ public sealed partial class WebServerService
         * { box-sizing:border-box; }
         html, body { margin:0; background:transparent; overflow:hidden; width:100vw; height:100vh;
                      font-family:'Bahnschrift','Segoe UI',system-ui,sans-serif; color:#fff; }
-        /* Everything is sized in vw so the graphics fit any canvas size. */
-        .glass { background:rgba(10,12,18,.82); border-radius:.5vw; box-shadow:0 .3vw 1.2vw rgba(0,0,0,.35); }
+        /* Everything is sized in vw so the graphics fit any canvas size.
+           Nothing under .95vw (14 Nov 2026, stream overlay plan 6.8): most
+           viewers watch on a phone, where .72vw was about 3px tall. */
+        .glass { background:rgba(10,12,18,{{glass}}); border-radius:.5vw; box-shadow:0 .3vw 1.2vw rgba(0,0,0,.35); }
         .acc { color:var(--accent); }
-        .by { display:block; font-size:.7vw; letter-spacing:.14em; color:#c9cdd6; text-transform:uppercase; margin-top:.3vw; }
+        .by { display:block; font-size:.95vw; letter-spacing:.14em; color:#c9cdd6; text-transform:uppercase; margin-top:.3vw; }
         #tower { position:absolute; left:2vw; top:3vw; width:21vw; overflow:hidden; transition:opacity .4s; }
         #tower .head { padding:.7vw 1vw; font-size:1vw; letter-spacing:.12em; font-weight:700; display:flex; justify-content:space-between;
                        border-bottom:.15vw solid var(--accent); text-transform:uppercase; }
-        #tower .sub { padding:.35vw 1vw; font-size:.72vw; letter-spacing:.14em; color:#c9cdd6; display:flex; justify-content:space-between;
+        #tower .sub { padding:.35vw 1vw; font-size:.95vw; letter-spacing:.14em; color:#c9cdd6; display:flex; justify-content:space-between;
                       text-transform:uppercase; background:rgba(255,255,255,.04); }
         #tower .sub .mode { color:var(--accent); font-weight:700; }
         #rows { position:relative; }
         /* HeatCaller's credit at the foot of the tower (31 Oct 2026, the mark
            always on everywhere), the way a broadcast credits its timing. In
            the look's accent, like the rest of the tower. */
-        #tower .hcfoot { display:flex; align-items:center; gap:.4vw; padding:.4vw 1vw; font-size:.72vw; color:#c9cdd6;
+        #tower .hcfoot { display:flex; align-items:center; gap:.4vw; padding:.4vw 1vw; font-size:.95vw; color:#c9cdd6;
                          border-top:1px solid rgba(255,255,255,.08); }
         #tower .hcsun { width:1vw; height:1vw; flex:none; fill:currentColor; color:var(--accent); }
         #tower .hcword { font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
@@ -402,28 +437,36 @@ public sealed partial class WebServerService
         .row { position:absolute; left:0; right:0; height:2.3vw; display:flex; align-items:center; font-size:1.15vw;
                transition:top .6s ease, background .6s; padding:0 1vw; gap:.6vw; }
         .row .p { width:1.8vw; font-weight:800; text-align:right; }
-        .row .num { min-width:1.9vw; padding:0 .25vw; font-size:.85vw; font-weight:800; text-align:center; border-radius:.2vw;
+        .row .num { min-width:1.9vw; padding:0 .25vw; font-size:.95vw; font-weight:800; text-align:center; border-radius:.2vw;
                     background:var(--accent); color:#0a0c12; font-variant-numeric:tabular-nums; }
         .row .num:empty { visibility:hidden; }
         #tower:not(.nums) .row .num { display:none; }
+        /* The car's colour (6.5): a small block, outlined so a black or a
+           white car still shows on the glass. */
+        .sw { display:inline-block; width:.9vw; height:.9vw; border-radius:.2vw; flex:none; box-shadow:0 0 0 .1vw rgba(255,255,255,.55); vertical-align:middle; }
         .row .n { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; }
         .row .g { color:#c9cdd6; font-variant-numeric:tabular-nums; }
+        .row .g.purple { color:#B06CFF; font-weight:700; }
+        .row .g.green { color:#4ade80; font-weight:700; }
         .row.up { background:rgba(74,222,128,.25); }
         .row.fl .n::after { content:' \25C6'; color:#B06CFF; font-size:.8vw; }
         .row.led .p { color:var(--accent); }
+        /* Home: a car that has taken the checkered (6.3). */
+        .row.done .g { color:#fff; font-weight:700; }
+        .row.done .n::before { content:'\2691 '; color:#fff; font-size:.95vw; }
         #champ { position:absolute; left:2vw; width:21vw; padding:.6vw 1vw; font-size:.9vw; line-height:1.4; display:none; }
         #battle { position:absolute; left:50%; bottom:3vw; transform:translateX(-50%) translateY(10vw); padding:.8vw 1.6vw;
                   font-size:1.4vw; font-weight:700; white-space:nowrap; transition:transform .5s ease; text-align:center; }
         #battle.show { transform:translateX(-50%) translateY(0); }
         #battle .gap { color:var(--accent); margin-left:1vw; font-variant-numeric:tabular-nums; }
-        #battle .meta { display:block; font-size:.8vw; letter-spacing:.14em; margin-top:.3vw; color:#c9cdd6; }
+        #battle .meta { display:block; font-size:.95vw; letter-spacing:.14em; margin-top:.3vw; color:#c9cdd6; }
         #battle .trend { margin-right:1vw; }
         #battle .trend.closing { color:#4ade80; }
         #battle .trend.pulling { color:#f87171; }
         #fastest { position:absolute; right:2vw; bottom:3vw; padding:.9vw 1.4vw; font-size:1.3vw; font-weight:700;
                    transform:translateX(30vw); transition:transform .5s ease; border-left:.4vw solid #B06CFF; }
         #fastest.show { transform:translateX(0); }
-        #fastest small { display:block; font-size:.8vw; letter-spacing:.14em; color:#B06CFF; }
+        #fastest small { display:block; font-size:.95vw; letter-spacing:.14em; color:#B06CFF; }
         #moment { position:absolute; left:50%; top:3vw; transform:translateX(-50%) translateY(-14vw); padding:1vw 2.2vw; min-width:28vw; max-width:52vw;
                   text-align:center; transition:transform .5s ease; border-top:.35vw solid var(--accent); }
         #moment.show { transform:translateX(-50%) translateY(0); }
@@ -435,10 +478,16 @@ public sealed partial class WebServerService
                   transition:opacity .5s, transform .5s; padding:1.6vw 2.4vw; min-width:30vw; }
         .centre.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
         .centre h2 { margin:0 0 1vw; font-size:1.6vw; letter-spacing:.12em; text-transform:uppercase; border-bottom:.15vw solid var(--accent); padding-bottom:.6vw; }
-        .centre h2 .by { font-size:.75vw; font-weight:400; }
+        .centre h2 .by { font-size:.95vw; font-weight:400; }
         .centre .line { font-size:1.4vw; padding:.35vw 0; display:flex; gap:1vw; }
         .centre .line b { width:2.4vw; text-align:right; color:var(--accent); }
         #podium .line { font-size:1.8vw; }
+        /* "1st", not "1" (overlay plan 7.2): plain words first, the RC numbers small beside. */
+        #podium .line b { width:3.6vw; }
+        /* PROVISIONAL / CORRECTED beside the race's name (6.9). */
+        .prov { margin-left:1vw; padding:.15vw .6vw; border-radius:.3vw; font-size:1.15vw; letter-spacing:.12em; vertical-align:middle;
+                background:rgba(250,204,21,.18); color:#facc15; }
+        .prov.fix { background:rgba(74,222,128,.18); color:#4ade80; }
         #podium .line span.t { margin-left:auto; color:#c9cdd6; font-size:1.2vw; align-self:center; }
         #podium .line span.r { color:var(--accent); font-size:1.1vw; align-self:center; min-width:6vw; text-align:right; }
         /* CAPTIONS (?captions=1, 22 Oct 2026, driver experience, item 9):
@@ -450,26 +499,124 @@ public sealed partial class WebServerService
                     opacity:0; transition:opacity .6s; }
         #captions.show { opacity:1; }
         body.cap #battle, body.cap #fastest { bottom:5.4vw; }
+        /* THE LAYOUT'S OWN GRAPHICS (14 Nov 2026, stream overlay plan
+           sections 2 and 3). Nothing smaller than 1.15vw - 22px on a 1920
+           canvas - because most viewers watch on a phone. Each fades in and
+           out; hidden until the layout asks for it. */
+        .fade { opacity:0; transition:opacity .45s; }
+        .fade.show { opacity:1; }
+        #status { position:absolute; right:2vw; top:2vw; padding:.6vw 1.1vw; font-size:1.3vw; font-weight:700; display:flex; gap:1vw;
+                  align-items:baseline; white-space:nowrap; text-transform:uppercase; letter-spacing:.08em; }
+        #status .acc { font-variant-numeric:tabular-nums; }
+        #ticker { position:absolute; left:4vw; bottom:2vw; width:92vw; display:flex; align-items:center; gap:1.2vw; padding:.6vw 1.1vw;
+                  font-size:1.3vw; white-space:nowrap; overflow:hidden; }
+        #ticker .tk-race { flex:none; color:var(--accent); font-weight:800; text-transform:uppercase; letter-spacing:.1em; }
+        #ticker .tk-track { flex:1; overflow:hidden; }
+        #ticker .tk-items { display:inline-flex; gap:2.2vw; }
+        #ticker .tk-items.scroll { animation:tk var(--tk-s, 12s) linear infinite alternate; }
+        @keyframes tk { from { transform:translateX(0); } to { transform:translateX(var(--tk-d, 0)); } }
+        #ticker .tk-item b { color:var(--accent); margin-right:.4vw; font-variant-numeric:tabular-nums; }
+        #ticker .tk-item .g { color:#c9cdd6; margin-left:.5vw; font-variant-numeric:tabular-nums; }
+        #bug { position:absolute; right:2vw; top:2vw; min-width:17vw; max-width:30vw; padding:.7vw 1.1vw; font-size:1.2vw; line-height:1.35; }
+        #bug .bg-race { font-weight:800; text-transform:uppercase; letter-spacing:.1em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        #bug .bg-clock { font-size:1.7vw; font-weight:800; color:var(--accent); font-variant-numeric:tabular-nums; }
+        #bug .bg-lead { color:#c9cdd6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        #clublogo { position:absolute; left:2vw; top:2vw; }
+        #clublogo .logo { display:block; height:6vw; width:auto; max-width:18vw; object-fit:contain; }
+        #clublogo .logo.plate { background:var(--plate); padding:.4vw; border-radius:.5vw; }
+        #mark { position:absolute; right:2vw; bottom:2vw; display:flex; align-items:center; gap:.5vw; padding:.45vw .9vw; font-size:1.15vw; color:#c9cdd6; }
+        #mark .hcsun { width:1.3vw; height:1.3vw; flex:none; fill:currentColor; color:var(--accent); }
+        #mark .hcword { font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+        #mark .hcword .hcc { color:var(--accent); }
+        #tower.nofoot .hcfoot { display:none; }
+        /* NEW TO RC RACING? (overlay plan 7.6): the basics, a card at a time, between races. */
+        #basics { position:absolute; left:50%; bottom:3vw; transform:translateX(-50%); width:56vw; padding:1vw 1.6vw; }
+        #basics .bs-k { font-size:1.15vw; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); margin-bottom:.4vw; }
+        #basics .bs-t { font-size:1.5vw; line-height:1.4; }
+        /* The sponsor graphic (section 5): their logo, or their name when the logo will not load. */
+        #sponsor { position:absolute; right:2vw; top:2vw; padding:.6vw .9vw; display:flex; align-items:center; gap:.7vw; font-size:1.2vw; font-weight:700; }
+        #sponsor img { display:block; height:4.2vw; max-width:16vw; width:auto; object-fit:contain; }
+        #sponsor img:not([src]) { display:none; }
+        .bylogo { height:1.6vw; width:auto; max-width:7vw; object-fit:contain; vertical-align:middle; margin-left:.5vw; }
+        #schedule h2 .by { font-size:1.15vw; }
+        #schedule .line { font-size:1.5vw; }
+        #schedule .who { font-size:1.2vw; color:#c9cdd6; margin:0 0 .6vw 3.4vw; line-height:1.35; }
+        #schedule .who.mar { color:var(--accent); }
+        #schedule .line .when { margin-left:auto; color:#c9cdd6; font-size:1.2vw; align-self:center; }
+        /* A graphic the layout has moved sits in a slot of its own, and
+           fades rather than sliding in from the edge it used to live by. */
+        .slot > .inslot { position:relative !important; left:auto !important; right:auto !important; top:auto !important; bottom:auto !important;
+                          transform:none !important; }
+        .slot > .inslot.anim { opacity:0; transition:opacity .45s; }
+        .slot > .inslot.anim.show { opacity:1; }
+        {{slotCss}}
+        {{(Math.Abs(layout.TextScale - 1) < 0.001 ? string.Empty : "body{zoom:" + Math.Clamp(layout.TextScale, 0.8, 1.6).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "}")}}
         </style></head><body data-look="{{look.Fingerprint}}">
-        <div id="tower" class="glass" style="opacity:0"><div class="head"><span id="title">-</span><span id="clock" class="acc"></span></div><div class="sub"><span id="mode" class="mode"></span><span id="changes"></span></div><div id="rows"></div><div class="hcfoot">{{HeatCallerMark.SunSvg}}{{HeatCallerMark.WordHtml}}</div></div>
-        <div id="champ" class="glass"></div>
-        <div id="battle" class="glass"></div>
-        <div id="fastest" class="glass"><small id="fhead">FASTEST LAP</small><span id="fname"></span> <span id="ftime" class="acc"></span></div>
-        <div id="moment" class="glass"><div class="t" id="mtitle"></div><div class="l" id="mline"></div><span class="by" id="mby"></span></div>
-        <div id="grid" class="glass centre"></div>
-        <div id="podium" class="glass centre"></div>
-        <div id="captions" class="glass" aria-live="polite"></div>
+        {{Part(OverlayElementKind.Tower, "<div id=\"tower\" class=\"glass" + (markPlaced ? " nofoot" : string.Empty) + "\" style=\"opacity:0\"><div class=\"head\"><span id=\"title\">-</span><span id=\"clock\" class=\"acc\"></span></div><div class=\"sub\"><span id=\"mode\" class=\"mode\"></span><span id=\"changes\"></span></div><div id=\"rows\"></div><div class=\"hcfoot\">" + HeatCallerMark.SunSvg + HeatCallerMark.WordHtml + "</div></div>")}}
+        {{Part(OverlayElementKind.Champ, "<div id=\"champ\" class=\"glass\"></div>")}}
+        {{Part(OverlayElementKind.Battle, "<div id=\"battle\" class=\"glass anim\"></div>")}}
+        {{Part(OverlayElementKind.Fastest, "<div id=\"fastest\" class=\"glass anim\"><small id=\"fhead\">FASTEST LAP</small><span id=\"fname\"></span> <span id=\"ftime\" class=\"acc\"></span></div>")}}
+        {{Part(OverlayElementKind.Moment, "<div id=\"moment\" class=\"glass anim\"><div class=\"t\" id=\"mtitle\"></div><div class=\"l\" id=\"mline\"></div><span class=\"by\" id=\"mby\"></span></div>")}}
+        {{Part(OverlayElementKind.Grid, "<div id=\"grid\" class=\"glass centre anim\"></div>")}}
+        {{Part(OverlayElementKind.Podium, "<div id=\"podium\" class=\"glass centre anim\"></div>")}}
+        {{Part(OverlayElementKind.Captions, "<div id=\"captions\" class=\"glass anim\" aria-live=\"polite\"></div>")}}
+        {{Part(OverlayElementKind.Status, "<div id=\"status\" class=\"glass fade\"><span id=\"st-race\"></span><span id=\"st-clock\" class=\"acc\"></span></div>")}}
+        {{Part(OverlayElementKind.Ticker, "<div id=\"ticker\" class=\"glass fade\"><span class=\"tk-race\" id=\"tk-race\"></span><div class=\"tk-track\" id=\"tk-track\"><div class=\"tk-items\" id=\"tk-items\"></div></div></div>")}}
+        {{Part(OverlayElementKind.Bug, "<div id=\"bug\" class=\"glass fade\"><div class=\"bg-race\" id=\"bg-race\"></div><div class=\"bg-clock\" id=\"bg-clock\"></div><div class=\"bg-lead\" id=\"bg-lead\"></div></div>")}}
+        {{Part(OverlayElementKind.ClubLogo, "<div id=\"clublogo\" class=\"fade\">" + look.Logo + "</div>")}}
+        {{Part(OverlayElementKind.Schedule, "<div id=\"schedule\" class=\"glass centre anim\"></div>")}}
+        {{Part(OverlayElementKind.Basics, "<div id=\"basics\" class=\"glass fade\"><div class=\"bs-k\" id=\"bs-k\"></div><div class=\"bs-t\" id=\"bs-t\"></div></div>")}}
+        {{Part(OverlayElementKind.Sponsor, "<div id=\"sponsor\" class=\"glass fade\"><img id=\"sp-logo\" alt=\"\"><span id=\"sp-name\"></span></div>")}}
+        {{Part(OverlayElementKind.Mark, "<div id=\"mark\" class=\"glass fade\">" + HeatCallerMark.SunSvg + HeatCallerMark.WordHtml + "</div>")}}
         <script>
+        // The layout this page draws (stream overlay plan section 2).
+        const LAYOUT = {{layoutJson}};
         function esc(v){ return String(v==null?'':v).replace(/[&<>"']/g, function(c){
           return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
         const params = new URLSearchParams(location.search);
         const hide = (params.get('hide') || '').toLowerCase().split(',');
-        const want = part => !hide.includes(part);
+        // What the layout shows, and in which part of the night: "racing",
+        // "staging", "finished" or "between". ?hide= still leaves a part
+        // out on top of that, as it always did.
+        const PARTS = (LAYOUT && LAYOUT.elements) || {};
+        let PART = 'between';
+        function partOf(state){
+          if (state === 'Racing') return 'racing';
+          if (state === 'Finished') return 'finished';
+          if (state === 'Staging' || state === 'Countdown') return 'staging';
+          return 'between';
+        }
+        function want(part){
+          if (hide.includes(part)) return false;
+          const e = PARTS[part];
+          if (!e || !e.on) return false;
+          return !Array.isArray(e.during) || e.during.length === 0 || e.during.includes(PART);
+        }
+        // Moved by the layout: fades in its slot rather than sliding.
+        function placed(part){ const e = PARTS[part]; return !!(e && e.placed); }
         const gapPin = (params.get('gap') || '').toLowerCase();
-        const SHOWN = 8, CYCLE_MS = 8000, MOMENT_MS = 7000;
+        const SHOWN = (PARTS.tower && PARTS.tower.rows) || 8, TOP = 8, CYCLE_MS = 8000, MOMENT_MS = 7000;
         const rowEls = {};
         let lastPos = {}, best = { ms: 0, id: '' }, fastTimer = 0, first = true;
-        let fight = null, momentSeq = -1, momentTimer = 0;
+        let fight = null, momentSeq = -1, momentTimer = 0, podiumSeen = null, momentQueue = [], momentBusy = false;
+        function showNextMoment(){
+          if (momentBusy || momentQueue.length === 0) return;
+          const m = momentQueue.shift();
+          momentBusy = true;
+          const el = document.getElementById('moment');
+          // The kind is a class; anim and the slot's class are kept.
+          el.className = 'glass anim ' + esc(m.kind || '') + (placed('moment') ? ' inslot' : '');
+          document.getElementById('mtitle').textContent = m.title || '';
+          document.getElementById('mline').textContent = snText(m.line || '');
+          document.getElementById('mby').textContent = m.sponsor ? 'Presented by ' + m.sponsor : '';
+          requestAnimationFrame(() => el.classList.add('show'));
+          clearTimeout(momentTimer);
+          momentTimer = setTimeout(() => {
+            el.classList.remove('show');
+            // A beat between banners, then the next.
+            setTimeout(() => { momentBusy = false; showNextMoment(); }, 700);
+          }, MOMENT_MS);
+        }
 
         // Captions, only when asked for: the line the announcer has just
         // said, fading after eight seconds. Only a line said while the page
@@ -477,7 +624,7 @@ public sealed partial class WebServerService
         // OBS reloading the source does not put an old line on the stream.
         // A different number counts as new rather than only a bigger one,
         // because the numbers start again when HeatCaller does.
-        const captionsOn = params.get('captions') === '1';
+        const captionsOn = params.get('captions') === '1' || !!(PARTS.captions && PARTS.captions.on);
         if (captionsOn) document.body.classList.add('cap');
         const CAPTION_MS = 8000;
         let captionSeen = -1, captionTimer = 0;
@@ -489,15 +636,41 @@ public sealed partial class WebServerService
           if (!newest || newest.n === captionSeen) return;
           captionSeen = newest.n;
           const el = document.getElementById('captions');
-          el.textContent = newest.t;
+          el.textContent = snText(newest.t);
           el.classList.add('show');
           clearTimeout(captionTimer);
           captionTimer = setTimeout(() => el.classList.remove('show'), CAPTION_MS);
         }
 
+        // "1st", "2nd", "3rd", "11th", "22nd" (overlay plan 7.2).
+        function ordinal(n){
+          const t = n % 100, e = n % 10;
+          return n + (t >= 11 && t <= 13 ? 'th' : e === 1 ? 'st' : e === 2 ? 'nd' : e === 3 ? 'rd' : 'th');
+        }
         function fmt(ms){ return ms > 0 ? (ms/1000).toFixed(3) : '-'; }
         function gapSecs(g){ const m = /^\+(\d+([.,]\d+)?)$/.exec(g || ''); return m ? parseFloat(m[1].replace(',', '.')) : null; }
-        function nameOf(d, id){ const p = (d.people || []).find(x => x.id === id); return p ? p.name : id; }
+        // The car's colour as a swatch (6.5), or nothing for a car without one.
+        function swatch(d, id){
+          const c = ((d.pylon && d.pylon.cars) || {})[id] || {};
+          return /^#[0-9A-F]{6}$/.test(c.col || '') ? '<span class="sw" style="background:' + c.col + ';margin-right:.5vw"></span>' : '';
+        }
+        function nameOf(d, id){ const p = (d.people || []).find(x => x.id === id); return p ? sn(p.name) : id; }
+        // A junior's name as the stream shows it (overlay plan 7.5): "Mia K",
+        // and the same inside a line of words - a moment, a caption.
+        let SN = {};
+        function sn(name){ const n = String(name == null ? '' : name); return Object.prototype.hasOwnProperty.call(SN, n) ? String(SN[n]) : n; }
+        function snText(text){
+          let t = String(text == null ? '' : text);
+          Object.keys(SN).sort((a, b) => b.length - a.length).forEach(full => { t = t.split(full).join(String(SN[full])); });
+          return t;
+        }
+        // Only an address the laptop makes is ever put in an img (section 5).
+        const LOGO_URL = /^\/sponsor-logo\/sponsor-logo-[0-9a-f]{12}\.png$/;
+        // The presenting sponsor's logo beside their name, or nothing.
+        function byLogo(d, moment){
+          const url = (d.presentedLogos || {})[moment];
+          return typeof url === 'string' && LOGO_URL.test(url) ? '<img class="bylogo" alt="" src="' + url + '">' : '';
+        }
         function presentedBy(d, moment){ const p = d.presented || {}; return p[moment] ? 'Presented by ' + p[moment] : ''; }
 
         // Which gap the pylon's last column shows right now. Laps led joins
@@ -505,9 +678,16 @@ public sealed partial class WebServerService
         // until then it is one name with every lap, and says nothing the
         // order does not.
         function gapMode(racing, pylon){
-          if (gapPin === 'interval' || gapPin === 'leader') return gapPin;
-          const modes = ['interval', 'leader'];
-          if (racing && pylon && pylon.changes > 0) modes.push('led');
+          if (gapPin === 'interval' || gapPin === 'leader' || gapPin === 'last' || gapPin === 'overall') return gapPin;
+          // Last lap (overlay plan 6.6): purple for the fastest of the race,
+          // green for the driver's own best, plain otherwise - how a racer
+          // watches somebody finding pace or fading.
+          const modes = ['interval', 'leader', 'last'];
+          // In a qualifier (6.4): where this run puts each driver overall,
+          // in place of laps led - in qualifying nobody minds who leads on track.
+          const qualifying = Object.values((pylon && pylon.cars) || {}).some(c => c && c.qual);
+          if (qualifying) modes.push('overall');
+          else if (racing && pylon && pylon.changes > 0) modes.push('led');
           return modes[Math.floor(Date.now() / CYCLE_MS) % modes.length];
         }
 
@@ -520,13 +700,91 @@ public sealed partial class WebServerService
           try { await draw(); } finally { ticking = false; }
         }
 
+        // ?demo=1 (stream overlay plan section 4, step 4): a made-up race on
+        // a loop - between races, the grid, two minutes of racing with a
+        // battle, fastest laps and a lead change, then the result - so a
+        // layout can be set up on a weeknight with nothing on track. Made
+        // here in the page: it never comes from, or goes into, the night's
+        // real data.
+        // ?phone=1 (overlay plan 6.8): the overlay as most viewers see it -
+        // the whole 1920 x 1080 picture shrunk to a phone held sideways.
+        const PHONE = params.get('phone') === '1' && window.top === window;
+        if (PHONE){
+          const inner = new URLSearchParams(location.search); inner.delete('phone');
+          document.body.innerHTML = '<div style="position:fixed;inset:0;background:#2b3a2b;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font:14px system-ui;color:#ddd">' +
+            '<iframe src="?' + esc(inner.toString()) + '" style="width:390px;height:219px;border:2px solid #000;border-radius:10px;background:#556b4a"></iframe>' +
+            '<div>About what a viewer sees on a phone held sideways (390 px wide).</div></div>';
+        }
+        const DEMO = params.get('demo') === '1';
+        // Whether the sponsor graphic is up: said on the next poll, so the
+        // laptop counts the time its logo is really on screen (section 5).
+        let sponsorShowing = false;
+        // "Presented by" graphics put up since the last poll, by moment name.
+        const graphicsShown = new Set();
+        function shownBy(d, moment){ if (!DEMO && presentedBy(d, moment)) graphicsShown.add(moment); }
+        const DEMO_NAMES = ['Mia Kent', 'Sam Tr', 'Terry Byte', 'Al Gorithim', 'Ella Vator', 'Annie Wayout', 'Rob Otics', 'Cy Clone'];
+        // &at=60 starts the loop that many seconds in: 0 between races, 20
+        // the grid, 35 the start, 95 a lead change, 140 the result.
+        // A page opened from a file has no laptop to ask.
+        const DEMO_ONLY_STATIC = location.protocol === 'file:';
+        const DEMO_START = Date.now() - Math.max(0, Number(params.get('at')) || 0) * 1000;
+        // "about 19:40", that many minutes from now, as the laptop writes it.
+        function demoAbout(minutes){ const t = new Date(Date.now() + minutes * 60000); return 'about ' + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0'); }
+        function demoState(){
+          const loop = 160, t = ((Date.now() - DEMO_START) / 1000) % loop;
+          const people = DEMO_NAMES.map((name, i) => ({ id: 'd' + i, name }));
+          const base = { sponsorUp: { name: 'Hobby Hut', logo: '' }, race: 'Junior - Heat 2', people, presented: {}, presentedLogos: {}, improved: { name: 'Sam Tr', line: '0.42 s quicker than in Junior - Heat 1' }, champ: null, ratings: {}, captions: [], pylon: { changes: 0, leaders: 1, cars: {} } };
+          if (t < 20) return Object.assign(base, { state: 'Idle', flag: 'None', countdown: '', standings: [], cards: {}, onDeck: '19:40  •  Junior  •  Heat 2',
+            upNext: [
+              { title: 'Heat 2 (Junior)', eta: demoAbout(8), drivers: DEMO_NAMES.slice(0, 6), marshals: [{ name: 'Rob Otics', post: 'Turn 1' }, { name: 'Cy Clone', post: 'Turn 3' }] },
+              { title: 'Heat 2 (Stock)', eta: demoAbout(16), drivers: [], marshals: [] },
+              { title: 'Heat 2 (Mod Buggy)', eta: demoAbout(24), drivers: [], marshals: [] },
+            ] });
+          if (t < 35) {
+            const callups = {}; people.forEach((p, i) => { callups[p.id] = { now: true, slot: i + 1 }; });
+            return Object.assign(base, { state: 'Staging', flag: 'None', countdown: '', standings: [], cards: {}, callups });
+          }
+          const racing = t < 140, el = Math.min(t, 140) - 35, finishing = racing && el >= 105;
+          const order = people.map((p, i) => ({ p, i, pace: 9.6 + i * 0.07 + Math.sin(el / 9 + i) * 0.05 }));
+          // Sam takes the lead a minute in.
+          if (el > 60) { const a = order[0]; order[0] = order[1]; order[1] = a; }
+          const standings = [], cards = {}, cars = {};
+          order.forEach((o, pos) => {
+            const laps = Math.floor(el / o.pace);
+            standings.push({ id: o.p.id, name: o.p.name, best: Math.round((o.pace - 0.2) * 1000) });
+            const ms = Math.round(laps * o.pace * 1000), m = Math.floor(ms / 60000);
+            const result = laps > 0 ? laps + '/' + m + ':' + String(Math.floor(ms / 1000) % 60).padStart(2, '0') + '.' + String(ms % 1000).padStart(3, '0') : '';
+            cards[o.p.id] = { laps, result, done: finishing && pos <= (el - 105) / 3 || !racing,
+              ahead: pos === 0 ? '' : pos === 7 ? '+1L' : '+' + (pos === 1 ? (0.4 + Math.abs(Math.sin(el / 6)) * 0.4) : 0.9 + pos * 0.6).toFixed(3) };
+            // A last lap that is now and then the driver's best, and once in a while the race's.
+            const best = Math.round((o.pace - 0.2) * 1000), beat = Math.floor(el / 4) % 5;
+            const last = beat === o.i % 5 ? best : best + 120 + Math.round(Math.abs(Math.sin(el + o.i)) * 300);
+            cars[o.p.id] = { last, col: ['#E53935', '#1E88E5', '#FDD835', '#43A047', '#FB8C00', '#8E24AA', '#FFFFFF', '#212121'][o.i], num: String(pos + 3), lead: pos === 0 ? '' : '+' + (pos * 1.1).toFixed(3), led: pos < 2 && el > 60 ? 4 : pos === 0 ? Math.floor(el / 10) : 0 };
+          });
+          const left = Math.max(0, 105 - el);
+          const clock = racing ? Math.floor(left / 60) + ':' + String(Math.floor(left % 60)).padStart(2, '0') : '';
+          const moment = el > 61 ? { seq: 1, kind: 'lead', title: 'Lead change', line: 'Sam Tr takes the lead from Mia Kent', sponsor: '' } : null;
+          return Object.assign(base, { state: racing ? 'Racing' : 'Finished', flag: racing ? 'Green' : 'Checkered', countdown: clock, standings, cards, moment, finishing,
+            pylon: { changes: el > 60 ? 1 : 0, leaders: el > 60 ? 2 : 1, cars } });
+        }
+
         async function draw(){
           let d;
-          const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 3000);
-          try { d = await (await fetch('/api/state', { cache: 'no-store', signal: stop.signal })).json(); }
-          catch(e) { return; }
-          finally { clearTimeout(timer); }
+          if (DEMO) d = demoState();
+          else {
+            const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 3000);
+            // What it showed since the last poll goes with this one (section 5).
+            const said = [];
+            if (sponsorShowing) said.push('sponsor=1');
+            if (graphicsShown.size) said.push('shown=' + encodeURIComponent([...graphicsShown].join(',')));
+            graphicsShown.clear();
+            try { d = await (await fetch('/api/state' + (said.length ? '?' + said.join('&') : ''), { cache: 'no-store', signal: stop.signal })).json(); }
+            catch(e) { return; }
+            finally { clearTimeout(timer); }
+          }
+          SN = d.streamNames && typeof d.streamNames === 'object' ? d.streamNames : {};
           showCaptions(d.captions);
+          PART = partOf(d.state);
           const racing = d.state === 'Racing', finished = d.state === 'Finished';
           const rows = (d.standings || []).filter(s => s.id);
           const cards = d.cards || {};
@@ -541,9 +799,9 @@ public sealed partial class WebServerService
           // column down every row would be a gap with nothing in it.
           tower.classList.toggle('nums', rows.slice(0, SHOWN).some(s => (pcars[s.id] || {}).num));
           document.getElementById('title').textContent = d.race || 'Live';
-          document.getElementById('clock').textContent = d.countdown || '';
+          document.getElementById('clock').textContent = d.finishing ? 'FINAL LAP' : (d.countdown || '');
           const mode = gapMode(racing, pylon);
-          document.getElementById('mode').textContent = mode === 'leader' ? 'To leader' : mode === 'led' ? 'Laps led' : 'Interval';
+          document.getElementById('mode').textContent = mode === 'leader' ? 'To leader' : mode === 'led' ? 'Laps led' : mode === 'last' ? 'Last lap' : mode === 'overall' ? 'Overall' : 'Interval';
           document.getElementById('changes').textContent = pylon.changes > 0
             ? pylon.changes + (pylon.changes === 1 ? ' lead change' : ' lead changes') + (pylon.leaders > 1 ? ' · ' + pylon.leaders + ' leaders' : '')
             : '';
@@ -554,19 +812,35 @@ public sealed partial class WebServerService
             let el = rowEls[s.id];
             if (!el){
               el = document.createElement('div'); el.className = 'row';
-              el.innerHTML = '<span class="p"></span><span class="num"></span><span class="n"></span><span class="g"></span>';
+              el.innerHTML = '<span class="p"></span><span class="num"></span><span class="sw"></span><span class="n"></span><span class="g"></span>';
               el.style.top = (SHOWN * rowH) + 'px';
               box.appendChild(el); rowEls[s.id] = el;
             }
             const c = cards[s.id] || {}, pc = pcars[s.id] || {};
             el.children[0].textContent = i + 1;
             el.children[1].textContent = pc.num || '';
-            el.children[2].textContent = s.name;
+            // The car's colour (6.5), only for a car that has one.
+            const col = /^#[0-9A-F]{6}$/.test(pc.col || '') ? pc.col : '';
+            el.children[2].style.background = col;
+            el.children[2].style.display = col ? '' : 'none';
+            el.children[3].textContent = sn(s.name);
             let g;
-            if (mode === 'led') g = pc.led > 0 ? pc.led + ' led' : '';
+            let pace = '';
+            if (mode === 'last'){
+              g = pc.last > 0 ? fmt(pc.last) : '';
+              const quickest = rows.reduce((m, r) => r.best > 0 && !r.ghost && (!m || r.best < m) ? r.best : m, 0);
+              pace = pc.last > 0 && pc.last === quickest ? 'purple' : pc.last > 0 && pc.last === s.best ? 'green' : '';
+            }
+            else if (mode === 'overall') g = pc.qual || '';
+            else if (mode === 'led') g = pc.led > 0 ? pc.led + ' led' : '';
             else if (i === 0) g = 'Lap ' + (c.laps || 0);
             else g = mode === 'leader' ? (pc.lead || c.ahead || '') : (c.ahead || '');
-            el.children[3].textContent = g;
+            // Home (stream overlay plan 6.2, 6.3): a car that has taken the
+            // checkered shows its result the RC way, 23/5:02.341, and keeps it.
+            if ((c.done || finished) && c.result) g = c.result;
+            el.children[4].textContent = g;
+            el.children[4].className = 'g' + (pace ? ' ' + pace : '');
+            el.classList.toggle('done', !!c.done || finished);
             el.classList.toggle('up', lastPos[s.id] !== undefined && i < lastPos[s.id]);
             el.classList.toggle('fl', best.id === s.id && best.ms > 0);
             el.classList.toggle('led', (pc.led || 0) > 0);
@@ -590,7 +864,7 @@ public sealed partial class WebServerService
           const battle = document.getElementById('battle');
           let close = null;
           if (racing){
-            rows.slice(1, SHOWN).forEach((s, i) => {
+            rows.slice(1, TOP).forEach((s, i) => {
               const g = gapSecs((cards[s.id] || {}).ahead);
               if (g !== null && g < 1.0 && (!close || g < close.g)) close = { g, a: rows[i], b: s, pos: i + 1 };
             });
@@ -615,9 +889,10 @@ public sealed partial class WebServerService
             // The trend, the laps and the sponsor on a line of their own
             // under the names, so the box stays as wide as the fight and
             // never runs into the fastest-lap box beside it.
-            const meta = trend + together + (by ? '<span class="trend">' + esc(by.toUpperCase()) + '</span>' : '');
-            battle.innerHTML = (close.pos === 1 ? 'BATTLE FOR THE LEAD' : 'BATTLE FOR P' + close.pos) + ' &nbsp; ' + esc(close.a.name) + ' <span class="acc">vs</span> ' + esc(close.b.name) +
+            const meta = trend + together + (by ? '<span class="trend">' + esc(by.toUpperCase()) + byLogo(d, 'Battle') + '</span>' : '');
+            battle.innerHTML = (close.pos === 1 ? 'BATTLE FOR THE LEAD' : 'BATTLE FOR P' + close.pos) + ' &nbsp; ' + esc(sn(close.a.name)) + ' <span class="acc">vs</span> ' + esc(sn(close.b.name)) +
               '<span class="gap">' + close.g.toFixed(3) + 's</span>' + (meta ? '<span class="meta">' + meta + '</span>' : '');
+            if (!battle.classList.contains('show')) shownBy(d, 'Battle');
             battle.classList.add('show');
           } else battle.classList.remove('show');
 
@@ -632,10 +907,11 @@ public sealed partial class WebServerService
           if (top.ms > 0 && (top.ms < best.ms || !best.ms) && !first && racing && want('fastest')){
             const row = rows.find(s => s.id === top.id);
             const by = presentedBy(d, 'FastestLap');
-            document.getElementById('fhead').textContent = 'FASTEST LAP' + (by ? ' · ' + by.toUpperCase() : '');
-            document.getElementById('fname').textContent = row ? row.name : '';
+            document.getElementById('fhead').innerHTML = 'FASTEST LAP' + (by ? ' · ' + esc(by.toUpperCase()) + byLogo(d, 'FastestLap') : '');
+            document.getElementById('fname').textContent = row ? sn(row.name) : '';
             document.getElementById('ftime').textContent = fmt(top.ms);
             const f = document.getElementById('fastest'); f.classList.add('show');
+            shownBy(d, 'FastestLap');
             clearTimeout(fastTimer); fastTimer = setTimeout(() => f.classList.remove('show'), 6000);
           }
           best = top;
@@ -643,31 +919,31 @@ public sealed partial class WebServerService
           // A banner for each new moment - a lead change, a milestone.
           // Only for one that arrives while the page is open: a page loaded
           // (or reloaded in OBS) takes the current number as already seen.
-          const m = d.moment;
-          if (m && m.seq !== momentSeq){
-            const fresh = !first;
-            momentSeq = m.seq;
-            if (fresh && want('moment')){
-              const el = document.getElementById('moment');
-              el.className = 'glass ' + esc(m.kind || '');
-              document.getElementById('mtitle').textContent = m.title || '';
-              document.getElementById('mline').textContent = m.line || '';
-              document.getElementById('mby').textContent = m.sponsor ? 'Presented by ' + m.sponsor : '';
-              requestAnimationFrame(() => el.classList.add('show'));
-              clearTimeout(momentTimer); momentTimer = setTimeout(() => el.classList.remove('show'), MOMENT_MS);
-            }
+          // Every new moment is queued and shown in turn (overlay plan 7.3):
+          // several badges land at once after a race. A number lower than
+          // the last seen is HeatCaller started again - counted afresh.
+          const list = Array.isArray(d.moments) && d.moments.length ? d.moments : (d.moment ? [d.moment] : []);
+          const highest = list.reduce((n, m) => Math.max(n, Number(m.seq) || 0), 0);
+          if (highest < momentSeq) momentSeq = 0;
+          for (const m of list){
+            if (!m || !(Number(m.seq) > momentSeq)) continue;
+            momentSeq = Number(m.seq);
+            if (!first && want('moment')) momentQueue.push(m);
           }
+          if (momentQueue.length > 6) momentQueue.splice(0, momentQueue.length - 6);
+          showNextMoment();
 
           // The grid, before the start.
           const grid = document.getElementById('grid');
           const onGrid = Object.entries(d.callups || {}).filter(([, c]) => c.now).sort((x, y) => x[1].slot - y[1].slot);
           if (want('grid') && (d.state === 'Staging' || d.state === 'Countdown') && onGrid.length){
             const by = presentedBy(d, 'DriverIntros');
-            grid.innerHTML = '<h2>' + esc(d.race || 'The grid') + (by ? '<span class="by">' + esc(by) + '</span>' : '') + '</h2>' +
+            grid.innerHTML = '<h2>' + esc(d.race || 'The grid') + (by ? '<span class="by">' + esc(by) + byLogo(d, 'DriverIntros') + '</span>' : '') + '</h2>' +
               onGrid.map(([id, c]) => {
                 const num = (pcars[id] || {}).num;
-                return '<div class="line"><b>' + c.slot + '</b>' + (num ? '<span class="acc">#' + esc(num) + '</span> ' : '') + esc(nameOf(d, id)) + '</div>';
+                return '<div class="line"><b>' + c.slot + '</b>' + (num ? '<span class="acc">#' + esc(num) + '</span> ' : '') + swatch(d, id) + esc(nameOf(d, id)) + '</div>';
               }).join('');
+            if (!grid.classList.contains('show')) shownBy(d, 'DriverIntros');
             grid.classList.add('show');
           } else grid.classList.remove('show');
 
@@ -683,17 +959,185 @@ public sealed partial class WebServerService
           if (want('podium') && finished && podiumRows.length){
             const ratings = d.ratings || {};
             const by = presentedBy(d, 'RaceResult');
-            podium.innerHTML = '<h2>' + esc(d.race || 'Result') + (by ? '<span class="by">' + esc(by) + '</span>' : '') + '</h2>' + podiumRows.slice(0, 3).map((s, i) =>
-              '<div class="line"><b>' + (i + 1) + '</b>' + esc(s.name) + '<span class="t">' + ((cards[s.id] || {}).laps || 0) + ' laps &nbsp; best ' + fmt(s.best) + '</span>' +
+            // PROVISIONAL until the protest window closes, CORRECTED when
+            // the order changes while it is up (overlay plan 6.9).
+            const podiumKey = (d.race || '') + '|' + podiumRows.slice(0, 3).map(s => s.id).join(',');
+            if (!podiumSeen || podiumSeen.race !== (d.race || '')) podiumSeen = { race: d.race || '', key: podiumKey, corrected: false };
+            else if (podiumSeen.key !== podiumKey) { podiumSeen.key = podiumKey; podiumSeen.corrected = true; }
+            const until = Date.parse(d.provisionalUntil || '');
+            const badge = podiumSeen.corrected ? '<span class="prov fix">Corrected</span>' : Number.isFinite(until) && Date.now() < until ? '<span class="prov">Provisional</span>' : '';
+            podium.innerHTML = '<h2>' + esc(d.race || 'Result') + badge + (by ? '<span class="by">' + esc(by) + byLogo(d, 'RaceResult') + '</span>' : '') + '</h2>' + podiumRows.slice(0, 3).map((s, i) =>
+              '<div class="line"><b>' + ordinal(i + 1) + '</b>' + swatch(d, s.id) + esc(sn(s.name)) + '<span class="t">' + esc((cards[s.id] || {}).result || (((cards[s.id] || {}).laps || 0) + ' laps')) + ' &nbsp; best ' + fmt(s.best) + '</span>' +
               (ratings[s.id] !== undefined ? '<span class="r">RTG ' + Number(ratings[s.id]).toFixed(1) + '</span>' : '') + '</div>').join('');
+            if (!podium.classList.contains('show')) shownBy(d, 'RaceResult');
             podium.classList.add('show');
           } else podium.classList.remove('show');
 
+          drawLayoutParts(d, rows, cards, racing, finished);
           first = false;
         }
 
-        setInterval(tick, 1000);
-        tick();
+        // NEW TO RC RACING? (overlay plan 7.6): the basics and a few words,
+        // one card every twelve seconds between races.
+        // The club's own cards, or HeatCaller's (StreamBasics).
+        const BASICS = {{basicsJson}};
+
+        // --- The layout's own graphics (stream overlay plan section 2) ---
+        // The last minute of a timed race, or the last lap of a lap race,
+        // read from the countdown the laptop writes ("0:45", "1 LAP TO GO").
+        function lastMinute(text){
+          const t = String(text || '').toUpperCase();
+          if (/FINAL LAP|1 LAP TO GO|LAST LAP/.test(t)) return true;
+          const m = /(\d+):(\d{2})/.exec(t);
+          return !!m && Number(m[1]) * 60 + Number(m[2]) < 60;
+        }
+        function show(id, on){ const el = document.getElementById(id); if (el) el.classList.toggle('show', !!on); return el; }
+        function setText(id, text){ const el = document.getElementById(id); if (el && el.textContent !== text) el.textContent = text; }
+        let tickerHtml = '';
+
+        function drawLayoutParts(d, rows, cards, racing, finished){
+          const onTrack = racing || finished;
+          const pcars = (d.pylon && d.pylon.cars) || {};
+          const leader = rows.length ? rows[0] : null;
+
+          // The race and its clock, small, in a corner.
+          const status = want('status') && (onTrack || PART === 'staging');
+          if (status){ setText('st-race', d.race || ''); setText('st-clock', d.finishing ? 'Final lap' : (d.countdown || (d.flag && d.flag !== 'None' ? d.flag + ' flag' : ''))); }
+          show('status', status);
+
+          // One bar of positions, for a camera that needs the picture.
+          const ticker = want('ticker') && onTrack && rows.length > 0;
+          if (ticker){
+            setText('tk-race', d.race || 'Live');
+            const n = (PARTS.ticker && PARTS.ticker.rows) || 10;
+            const html = rows.slice(0, n).map((s, i) => {
+              const c = cards[s.id] || {};
+              const g = (c.done || finished) && c.result ? c.result : i === 0 ? 'Lap ' + (c.laps || 0) : (c.ahead || '');
+              const col = /^#[0-9A-F]{6}$/.test((pcars[s.id] || {}).col || '') ? pcars[s.id].col : '';
+              return '<span class="tk-item"><b>' + (i + 1) + '</b>' + (col ? '<span class="sw" style="background:' + col + ';margin-right:.4vw"></span>' : '') + esc(sn(s.name)) + (g ? '<span class="g">' + esc(g) + '</span>' : '') + '</span>';
+            }).join('');
+            if (html !== tickerHtml){
+              tickerHtml = html;
+              const items = document.getElementById('tk-items'), track = document.getElementById('tk-track');
+              items.innerHTML = html;
+              // Too many to fit: drift along and back, slowly.
+              const over = items.scrollWidth - track.clientWidth;
+              items.classList.toggle('scroll', over > 4);
+              items.style.setProperty('--tk-d', over > 4 ? (-over) + 'px' : '0px');
+              items.style.setProperty('--tk-s', Math.max(8, Math.round(over / 40)) + 's');
+            }
+          }
+          show('ticker', ticker);
+
+          // The corner bug: the race, the clock and the leader - or, with
+          // nothing on track, what is up next.
+          const bug = want('bug') && (onTrack || PART === 'staging' || d.onDeck);
+          if (bug){
+            if (onTrack || PART === 'staging'){
+              setText('bg-race', d.race || 'Live');
+              setText('bg-clock', d.finishing ? 'Final lap' : (d.countdown || ''));
+              setText('bg-lead', leader ? (finished ? 'Won by ' : 'Leader ') + sn(leader.name) : '');
+            } else {
+              setText('bg-race', 'Up next');
+              setText('bg-clock', '');
+              setText('bg-lead', d.onDeck || '');
+            }
+          }
+          show('bug', bug);
+
+          // The club's own logo, when it has one.
+          const logo = document.querySelector('#clublogo img');
+          show('clublogo', want('clublogo') && !!logo);
+
+          // What's next, between races.
+          const sched = document.getElementById('schedule');
+          // The next three races (6.7): when, who drives, who marshals.
+          const up = Array.isArray(d.upNext) ? d.upNext.filter(r => r && r.title) : [];
+          const over = want('schedule') && PART === 'between' && up.length === 0 && !d.onDeck && (Number(d.racedTonight) || 0) > 0;
+          if (over){
+            const html = '<h2>That\'s it for tonight</h2><div class="line">Thanks for watching. The results are on the club\'s page.</div>';
+            if (sched.innerHTML !== html) sched.innerHTML = html;
+          }
+          const next = !over && want('schedule') && PART === 'between' && (up.length > 0 || d.onDeck);
+          if (next){
+            const raced = Number(d.racedTonight) || 0;
+            // Never looks broken (7.6): before the first race it is "starting
+            // soon", between races "back shortly", and after the last "that's it".
+            const head = raced === 0 ? 'Starting soon' : 'Back shortly · up next';
+            const html = '<h2>' + head + '</h2>' + (up.length ? up.map((r, i) => {
+              const drivers = Array.isArray(r.drivers) ? r.drivers : [];
+              const marshals = Array.isArray(r.marshals) ? r.marshals.filter(m => m && m.name) : [];
+              return '<div class="line"><b>' + (i + 1) + '</b>' + esc(r.title) + (r.eta ? '<span class="when">' + esc(r.eta) + '</span>' : '') + '</div>' +
+                (i === 0 && drivers.length ? '<div class="who">' + drivers.map(n => esc(sn(n))).join(', ') + '</div>' : '') +
+                (i === 0 && marshals.length ? '<div class="who mar">Marshals: ' + marshals.map(m => esc(sn(m.name)) + (m.post ? ' (' + esc(m.post) + ')' : '')).join(', ') + '</div>' : '');
+            }).join('') : '<div class="line">' + esc(d.onDeck) + '</div>');
+            if (sched.innerHTML !== html) sched.innerHTML = html;
+          }
+          if (sched) sched.classList.toggle('show', !!next || over);
+
+          // The basics, a card at a time (7.6), only with time to read them.
+          const firstEta = up.length && /about (\d{1,2}):(\d{2})/.exec(up[0].eta || '');
+          let minutesToGo = 99;
+          if (firstEta){ const at = new Date(); at.setHours(Number(firstEta[1]), Number(firstEta[2]), 0, 0); minutesToGo = (at - Date.now()) / 60000; }
+          const basics = want('basics') && PART === 'between' && !over && minutesToGo >= 2;
+          if (basics){
+            // Tonight's bests (7.3) join the turns once there are some:
+            // "Mia K: First podium".
+            const bests = Array.isArray(d.bests) ? d.bests.filter(b => b && b.title).slice(-4) : [];
+            let cards = bests.length
+              ? BASICS.concat([['Tonight\u2019s bests', bests.map(b => snText(String(b.line || '').split(' \u00b7 ')[0]) + ': ' + b.title).join(' \u00b7 ')]])
+              : BASICS;
+            // Most improved tonight: one driver, their own numbers, nobody
+            // listed below them (MostImprovedTonight).
+            const imp = d.improved && typeof d.improved.name === 'string' && d.improved.name ? d.improved : null;
+            if (imp) cards = cards.concat([['Most improved tonight', sn(imp.name) + ': ' + String(imp.line || '')]]);
+            const card = cards[Math.floor(Date.now() / 12000) % cards.length];
+            setText('bs-k', card[0]);
+            setText('bs-t', card[1]);
+          }
+          show('basics', basics);
+
+          // The sponsor up now (section 5) - held back in the last minute,
+          // on the final lap and while the battle box is up, so a logo is
+          // never what hid the finish.
+          const battleUp = document.getElementById('battle').classList.contains('show');
+          const busy = racing && (d.finishing || lastMinute(d.countdown) || battleUp);
+          const sp = d.sponsorUp && typeof d.sponsorUp.name === 'string' ? d.sponsorUp : null;
+          const showSponsor = want('sponsor') && !!sp && !busy;
+          if (showSponsor){
+            const img = document.getElementById('sp-logo');
+            const url = typeof sp.logo === 'string' && LOGO_URL.test(sp.logo) ? sp.logo : '';
+            if (url && img.getAttribute('src') !== url) img.setAttribute('src', url);
+            if (!url) img.removeAttribute('src');
+            img.setAttribute('alt', sp.name);
+            setText('sp-name', url ? '' : sp.name);
+          }
+          show('sponsor', showSponsor);
+          sponsorShowing = showSponsor && !DEMO;
+
+          // HeatCaller's mark, always somewhere on the stream: in the
+          // tower's foot while the tower shows, or here, where the layout put it.
+          const towerShowing = document.getElementById('tower').style.opacity === '1';
+          show('mark', want('mark') && (placed('mark') || !towerShowing && !PARTS.tower));
+        }
+
+        // A CLUB'S OWN LAYOUT REDRAWS AS IT IS EDITED (section 4): every three
+        // seconds it asks whether it has changed, and reloads when it has -
+        // or when it has been deleted, to say so in words.
+        if (!PHONE && LAYOUT && LAYOUT.custom && !DEMO_ONLY_STATIC){
+          let layoutSeen = null;
+          setInterval(async () => {
+            try {
+              const a = await (await fetch('/api/overlay-version?id=' + encodeURIComponent(LAYOUT.id), { cache: 'no-store' })).json();
+              const now = a.v + '|' + a.here;
+              if (layoutSeen === null) layoutSeen = now;
+              else if (now !== layoutSeen) location.reload();
+            } catch (e) { /* the laptop is away; try again */ }
+          }, 3000);
+        }
+
+        // The phone view only frames the overlay; the frame does the drawing.
+        if (!PHONE) { setInterval(tick, 1000); tick(); }
         </script><script>{{LookWatchScript}}</script></body></html>
         """;
     }

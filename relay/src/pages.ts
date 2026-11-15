@@ -426,6 +426,32 @@ header:has(.brand) { padding-top: 8px; }
 .follow span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .follow button { background: none; border: 0; color: var(--muted); font: inherit; font-size: 1.2rem;
                  line-height: 1; cursor: pointer; padding: 4px 10px; }
+/* Share, beside Stop: a link that follows this driver (overlay plan 7.1). */
+.fol-share { margin-top: 10px; }
+/* Family links (overlay plan 7.1). */
+.famlinks { padding: 14px 16px; }
+.famlinks h3 { margin: 0 0 6px; }
+.famrow { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+.famrow b { flex: 1 1 8rem; }
+.famrow input { flex: 1 1 10rem; min-height: 44px; font: inherit; padding: 8px 10px; border-radius: 8px;
+                border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+.famrace { padding: 12px 0; border-top: 1px solid var(--border); }
+.famrace:first-child { border-top: 0; }
+.famrace .big { font-size: 1.25rem; font-weight: 700; }
+.famrace .sub { color: var(--muted); font-size: 0.9rem; }
+.folbox { position: fixed; z-index: 40; left: 16px; right: 16px; top: calc(var(--sa-t) + 16px); margin: 0 auto; max-width: 30rem;
+          background: var(--surface); color: var(--text); border: 1px solid var(--accent); border-radius: 14px; padding: 14px;
+          box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35); }
+.folbox[hidden] { display: none; }
+.folbox p { margin: 0 0 8px; }
+.folbox input { display: block; width: 100%; font: inherit; font-size: 0.9rem; padding: 10px; border-radius: 8px;
+                border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+.folbox button { margin-top: 10px; width: 100%; min-height: 44px; font: inherit; font-weight: 700; color: var(--text);
+                 background: none; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+.fol-share .fshare { background: none; font-family: inherit; cursor: pointer; width: 100%; min-height: 44px; }
+.follow .fshare, .you .fshare, .fol-share .fshare { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; color: var(--accent);
+                               border: 1px solid var(--accent); border-radius: 999px; padding: 6px 12px; min-height: 32px; }
+.you .fshare { margin-left: auto; background: none; font-family: inherit; cursor: pointer; }
 /* In-app alerts as a banner (12 Nov 2026): the club's colours, dropping in
    from the top like the phone's own notifications - see alertNow. */
 .hc-banner { position: fixed; z-index: 30; left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px));
@@ -2120,6 +2146,19 @@ function hcVideoSheet(v, o) {
   out.rel = 'noopener';
   out.addEventListener('click', () => hcCount('video_youtube_app'));
   sheet.appendChild(out);
+
+  // SHARE THIS RACE (14 Nov 2026, stream overlay plan 7.4): the family's
+  // "send it to the aunties" - YouTube's own link, starting at this race
+  // (or the lap asked for). Offered only where this sheet already is: the
+  // driver's own night, or the public results when the club shows video
+  // there, so a junior's race is only ever shared by their own family.
+  const share = hcVel('button', 'page hcvyt', 'Share this race');
+  share.type = 'button';
+  share.addEventListener('click', () => {
+    hcCount('video_share');
+    hcShareLink(hcVideoYouTube(v, from), 'Watch this race' + (CLUB_NAME ? ' at ' + CLUB_NAME : ''));
+  });
+  sheet.appendChild(share);
   sheet.appendChild(hcVel('p', 'note hcvsrc', inAppBrowser() !== ''
     ? 'Plays from YouTube. Open in YouTube opens YouTube\\u2019s website here. If it doesn\\u2019t play, the club may have made it private.'
     : 'Plays from YouTube. If it doesn\\u2019t play, the club may have made it private.'));
@@ -2575,6 +2614,100 @@ function setFollowed(name) {
 
 let memory = followed();
 
+// A LINK THAT FOLLOWS A DRIVER (14 Nov 2026, overlay plan 7.1, Asher: "Build
+// those first"). ?follow=Mia on any page sets who this phone follows, so a
+// driver can text their family one link and Grandma lands on Mia without
+// knowing to find and tap the name. The link that is shared opens Home,
+// which says when Mia races next and, while she is on track, Watch live -
+// Live alone would show nothing about her between her races. Nothing private rides on it: a name the
+// public board already shows. Taken off the address once read, so a reload
+// or a bookmark never undoes somebody choosing a different driver later;
+// the choice itself is kept on this phone, as a tap would keep it.
+const FOLLOW_LINK_MAX = 60;
+function followAsked(search) {
+  let asked = '';
+  try { asked = new URLSearchParams(search || '').get('follow') || ''; } catch (e) { return ''; }
+  asked = asked.trim().replace(/\\s+/g, ' ');
+  return asked.length > FOLLOW_LINK_MAX ? '' : asked;
+}
+(function followFromLink() {
+  let search = '';
+  try { search = location.search || ''; } catch (e) { return; }
+  const asked = followAsked(search);
+  if (asked === '') return;
+  memory = asked;
+  try { localStorage.setItem(FOLLOW_KEY, asked); } catch (e) { /* followed until the page is left */ }
+  // Said, so whoever opened the link knows what it did - once the page's
+  // own drawing has had its turn.
+  setTimeout(() => toast('Following ' + asked + '. Tap their name to stop.'), 0);
+  setTimeout(() => { try { hcCount('follow_link_opened'); } catch (e) { /* never worth an error */ } }, 0);
+  try {
+    const rest = new URLSearchParams(search);
+    rest.delete('follow');
+    const s = rest.toString();
+    history.replaceState(null, '', location.pathname + (s ? '?' + s : '') + (location.hash || ''));
+  } catch (e) { /* the address keeps it - harmless, it says the same */ }
+})();
+
+// The link that follows a driver, whole, for the share sheet.
+function followLink(name) {
+  let origin = '';
+  try { origin = location.origin || ''; } catch (e) { /* a relative link still works pasted into this site */ }
+  return origin + '/c/' + encodeURIComponent(CLUB) + '?follow=' + encodeURIComponent(name);
+}
+
+// The phone's own share sheet first, as the results page does: it reaches
+// the app the family actually uses. Then the clipboard, then the link on
+// screen. Closing the sheet is a change of mind, not a failure.
+async function shareFollow(name) {
+  if (!name) return;
+  try { hcCount('follow_link_shared'); } catch (e) { /* counting is never worth an error */ }
+  return hcShareLink(followLink(name), 'Watch ' + name + ' race live' + (CLUB_NAME ? ' at ' + CLUB_NAME : ''));
+}
+
+// A link through the phone's own share sheet, then the clipboard, then a
+// box on the page (follow links, a race's video - overlay plan 7.1, 7.4).
+async function hcShareLink(url, text) {
+  if (!url) return;
+  if (typeof navigator.share === 'function') {
+    try { await navigator.share({ title: text, text: text, url: url }); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    try { await navigator.clipboard.writeText(url); toast('Link copied. Paste it into a message.'); return; }
+    catch (e) { /* refused, so show it instead */ }
+  }
+  // Last of all, the link in a box on the page that stays until it is
+  // closed, selected ready to copy - a toast is gone before anybody could,
+  // and these pages never use the browser's own dialogs.
+  showFollowLink(url);
+}
+
+function showFollowLink(url) {
+  let box = document.getElementById('folbox');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'folbox';
+    box.className = 'folbox';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-label', 'A link to send');
+    document.body.appendChild(box);
+  }
+  box.innerHTML = '<p>Copy this link and send it:</p><input readonly id="folurl" value="' + esc(url) + '">' +
+    '<button type="button" class="fstop" id="folclose">Done</button>';
+  box.hidden = false;
+  const input = document.getElementById('folurl');
+  try { input.focus(); input.select(); } catch (e) { /* selected by hand */ }
+  const close = document.getElementById('folclose');
+  if (close) close.addEventListener('click', () => { box.hidden = true; });
+}
+
+// The Share button for a driver, wherever their name is drawn as followed.
+function followShareButton(name, words) {
+  return '<button type="button" class="fshare" data-follow-share="' + esc(name) + '" aria-label="Send a link that follows ' +
+    esc(name) + '">' + esc(words || 'Share') + '</button>';
+}
+
 // One stylesheet, rewritten, rather than classes added row by row: the
 // pages redraw on every poll, and a rule survives a redraw where a class
 // on an element does not.
@@ -2602,7 +2735,8 @@ function paintFollow() {
   if (chip) {
     chip.hidden = !who;
     chip.innerHTML = who
-      ? '<span>Following <b>' + esc(who) + '</b></span><button type="button" aria-label="Stop following">&times;</button>'
+      ? '<span>Following <b>' + esc(who) + '</b></span>' + followShareButton(who) +
+        '<button type="button" class="fstop" aria-label="Stop following">&times;</button>'
       : '';
   }
 }
@@ -2611,7 +2745,14 @@ document.addEventListener('click', (e) => {
   const t = e.target;
   if (!(t instanceof Element)) return;
 
-  if (t.closest('#follow button')) {
+  const sharing = t.closest('[data-follow-share]');
+  if (sharing) {
+    e.preventDefault();
+    shareFollow(sharing.getAttribute('data-follow-share') || '');
+    return;
+  }
+
+  if (t.closest('#follow .fstop')) {
     setFollowed('');
     return;
   }
@@ -7389,7 +7530,10 @@ function drawYou(state, rows, stale) {
   const left = lbToGo(state.countdown);
   const extra = state.state === 'Finished' ? '' : lbFollow(state, rows, left);
   you.className = 'you' + (stale ? ' stale' : '');
-  you.innerHTML = '<div class="yw"><span class="chip' + (isYou ? '' : ' ghost') + '">' + (isYou ? 'You' : '\\u2606 Following') + '</span> <b>' + esc(who) + '</b></div>'
+  you.innerHTML = '<div class="yw"><span class="chip' + (isYou ? '' : ' ghost') + '">' + (isYou ? 'You' : '\\u2606 Following') + '</span> <b>' + esc(who) + '</b>'
+    // Send a link that follows them (overlay plan 7.1): the chip that has
+    // Share is hidden while this card shows, so the card carries it.
+    + followShareButton(who, isYou ? 'Share my race' : 'Share') + '</div>'
     + '<div class="ym"><div class="yp">P' + pos + '<small>of ' + rows.length + '</small></div><div class="ygs">'
     + line(ahead ? rowName(ahead, roles) : '', gA, 'ahead', '\\u25B2', 'to catch', 'Nobody ahead')
     + line(behind ? rowName(behind, roles) : '', gB, 'behind', '\\u25BC', 'clear', 'Nobody behind')
@@ -9641,6 +9785,195 @@ async function readMine() {
 
 if (mine && MINE) poll(readMine, 60000);
 
+// THE FOLLOWED DRIVER'S NEXT RACE (14 Nov 2026, overlay plan 7.1, Asher:
+// "Build those first"). Your next race needs the badge code; a family at
+// home following by name had nothing to tell them when to come back. This
+// is the same card for a FOLLOWED driver, from the public running order
+// alone - the names in each line-up and the laptop's "about 20:42" - so it
+// knows nothing the Schedule page does not already show. Said with their
+// name ("Mia's next race"), never "Your", so following somebody and being
+// them never look the same (driver phone plan item 2). Nothing for a phone
+// following nobody, following the driver it is signed in as (Your next
+// race covers them), or a club that does not publish line-ups.
+const fol = document.getElementById('fol');
+let folDoc = null;
+
+function folSignedInName() {
+  try {
+    const code = meCode();
+    const d = code ? meDrivers().find((x) => x.c === code) : null;
+    return d && d.n ? String(d.n) : '';
+  } catch (e) { return ''; }
+}
+
+// What the card says for this driver in this running order, or null for no card.
+function folNext(doc, who) {
+  if (!doc || !who) return null;
+  const ev = doc.event || {};
+  if (ev.startedUtc && !hcIsTonight(ev.startedUtc)) return null;
+  if (!doc.lineups) return null;
+  const lines = Array.isArray(doc.lines) ? doc.lines : [];
+  const has = (l) => Array.isArray(l.drivers) && l.drivers.some((n) => String(n) === who);
+  const open = (l) => l.status === 'running' || l.status === 'next' || l.status === 'upcoming';
+  let away = 0;
+  for (const l of lines) {
+    if (!open(l)) continue;
+    if (has(l)) {
+      const title = [l.className, l.description].filter(Boolean).join(' - ');
+      const e = typeof l.estimate === 'string' ? l.estimate.trim() : '';
+      const when = l.status !== 'running' && /^about /.test(e) ? e : '';
+      const big = l.status === 'running' ? 'On track now'
+        : away === 0 ? 'Up next'
+        // Plain words under a heading that already says whose race it is.
+        : away === 1 ? '1 race away'
+        : away + ' races away';
+      return { big: big, title: title, when: when, now: l.status === 'running', next: l.status !== 'running' && away === 0 };
+    }
+    away += 1;
+  }
+  if (lines.some(has)) return { big: who + '\\u2019s racing is done for tonight', title: '', when: '', done: true };
+  return lines.length > 0 ? { big: who + ' isn\\u2019t in tonight\\u2019s running order', title: '', when: '', missing: true } : null;
+}
+
+function drawFol() {
+  if (!fol) return;
+  folAlertsCheck();
+  const who = memory;
+  const n = who && who !== folSignedInName() ? folNext(folDoc, who) : null;
+  fol.textContent = '';
+  fol.hidden = n === null;
+  if (n === null) return;
+  fol.className = 'lc' + (n.now || n.next ? ' next' : '');
+
+  const h = document.createElement('h3');
+  h.textContent = who + '\\u2019s next race';
+  fol.appendChild(h);
+
+  const big = document.createElement('div');
+  big.className = 'lc-big';
+  big.textContent = n.big;
+  fol.appendChild(big);
+
+  for (const text of [n.title, n.when]) {
+    if (!text) continue;
+    const p = document.createElement('div');
+    p.textContent = text;
+    fol.appendChild(p);
+  }
+
+  const where = n.now ? mineLink('Watch live', '/live') : n.done ? mineLink('See the results', '/results') : n.missing ? null : mineLink('See the running order', '/schedule');
+  if (where) fol.appendChild(where);
+  const share = document.createElement('div');
+  share.className = 'fol-share';
+  share.innerHTML = followShareButton(who, 'Send a link that follows ' + who);
+  fol.appendChild(share);
+
+  // FOLLOWER ALERTS (overlay plan 7.1): before their race, and their result.
+  if (!n.done && !n.missing) {
+    const alerts = document.createElement('div');
+    alerts.className = 'fol-share';
+    const on = folAlertsFor() === who;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'fshare';
+    b.id = 'folalerts';
+    b.textContent = folAlertWords || (on ? 'Alerts on for ' + who + ' \u00b7 Turn off' : 'Tell me before ' + who + ' races');
+    b.addEventListener('click', () => { if (folAlertsFor() === who) folAlertsOff(who); else folAlertsOn(who); });
+    alerts.appendChild(b);
+    fol.appendChild(alerts);
+  }
+}
+
+// Which name this phone has follower alerts on for, kept on the phone.
+const FOL_ALERTS_KEY = 'hg-follow-alerts-' + CLUB;
+let folAlertWords = '';
+function folAlertsFor() {
+  try { return localStorage.getItem(FOL_ALERTS_KEY) || ''; } catch (e) { return ''; }
+}
+function folAlertsKeep(name) {
+  try { if (name) localStorage.setItem(FOL_ALERTS_KEY, name); else localStorage.removeItem(FOL_ALERTS_KEY); } catch (e) { /* this visit only */ }
+}
+function folKeyBytes(text) {
+  const t = String(text).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(t + '='.repeat((4 - t.length % 4) % 4));
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+function folSay(words) { folAlertWords = words; drawFol(); setTimeout(() => { folAlertWords = ''; drawFol(); }, 6000); }
+async function folPost(path, body) {
+  const r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), cache: 'no-store' });
+  let a = {};
+  try { a = await r.json(); } catch (e) { /* no words */ }
+  return { status: r.status, error: a && typeof a.error === 'string' ? a.error : '' };
+}
+
+// Signs this phone up for alerts about the driver it follows. Permission is
+// asked inside the tap - an iPhone only asks from a tap, and only from the
+// page added to its Home Screen (Apple's rule), which is said plainly.
+function folAlertsOn(name) {
+  const supported = typeof navigator === 'object' && 'serviceWorker' in navigator && typeof window.PushManager !== 'undefined' && typeof Notification === 'function';
+  if (!supported) {
+    folSay(/iPhone|iPad|iPod/.test(navigator.userAgent || '') ? 'On an iPhone: Share, then Add to Home Screen, then open it from there' : 'This browser can\u2019t show alerts');
+    return;
+  }
+  let asked = null;
+  try { asked = Notification.requestPermission(); } catch (e) { asked = null; }
+  folSay('Setting up alerts\u2026');
+  Promise.resolve(asked).then(async (answer) => {
+    if ((answer || Notification.permission) !== 'granted') { folSay('Alerts are blocked for this page in the phone\u2019s settings'); return; }
+    try {
+      await navigator.serviceWorker.register('/c/' + encodeURIComponent(CLUB) + '/sw.js');
+      const reg = await navigator.serviceWorker.ready;
+      const k = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/push/key', { cache: 'no-store' }).then((r) => r.json());
+      if (!k || typeof k.key !== 'string') throw new Error('no key');
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: folKeyBytes(k.key) });
+      const a = await folPost('/push/follow/subscribe', { name, sub: sub.toJSON(), kinds: ['race', 'result'] });
+      if (a.status === 200) { folAlertsKeep(name); folSay('Alerts on: we\u2019ll tell you before ' + name + ' races, and their result'); }
+      else folSay(a.error || 'Alerts couldn\u2019t be set up just now');
+    } catch (e) {
+      folSay('Alerts couldn\u2019t be set up just now');
+    }
+  });
+}
+
+// Takes this phone off a name's alerts (the phone keeps its own push
+// sign-up: a driver's own alerts may be using it too).
+async function folAlertsOff(name) {
+  folAlertsKeep('');
+  try {
+    const reg = await navigator.serviceWorker.getRegistration('/c/' + encodeURIComponent(CLUB) + '/sw.js');
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    if (sub) await folPost('/push/follow/unsubscribe', { name, sub: { endpoint: sub.endpoint } });
+  } catch (e) { /* the relay forgets a gone phone on its own */ }
+  folSay('Alerts off for ' + name);
+}
+
+// Following somebody else takes the alerts off the one before.
+function folAlertsCheck() {
+  const was = folAlertsFor();
+  if (was && was !== memory) folAlertsOff(was);
+}
+
+async function readFol() {
+  if (!memory) { folDoc = null; drawFol(); return; }
+  const answer = await grab('/snapshot/programme').catch(() => null);
+  // A busy relay or no signal keeps what is on screen.
+  if (answer === null || (answer.missing && answer.status !== 404)) return;
+  folDoc = answer.missing ? null : (answer.body && answer.body.body) || null;
+  drawFol();
+}
+
+if (fol) {
+  poll(readFol, 30000);
+  // Following somebody else, or nobody, is a tap on a name: redraw from
+  // what is already read rather than waiting for the next read.
+  document.addEventListener('click', () => setTimeout(() => {
+    if (folDoc === null && memory) readFol(); else drawFol();
+  }, 0));
+}
+
 // THE "YOU" STRIP that was here (30 Oct 2026, relay navigation round 6:
 // a remembered driver's best finish, standings place and newest
 // achievement) went on 6 Nov 2026, asked for by Asher: "remove the You,
@@ -10659,6 +10992,11 @@ export function homePage(club: string, clubName: string, context: PageContext = 
       // Racing tonight? (14 Nov 2026, driver phone plan item 22): three steps
       // for somebody who has just scanned the poster, filled in by HOME_JS.
       // Above Your next race, which only a signed-in phone ever shows.
+      // The followed driver's next race (overlay plan 7.1), from the public
+      // running order: for a family following by name, with no badge code.
+      // Above Racing tonight?, which is for drivers: Grandma opening the
+      // link she was sent sees Mia first, not how to sign in.
+      '<section class="lc" id="fol" hidden></section>' +
       '<div id="rtw"></div>' +
       '<section class="lc" id="mine" hidden></section>' +
       `<div id="now" data-when="${escapeHtml(n.when)}"><p class="note">Loading&hellip;</p></div>` +
@@ -12545,6 +12883,11 @@ function draw() {
   const head = [
     '<h2>' + esc(night.driver || 'Your night') + '</h2>',
     '<div class="sub">' + esc([night.title, nightSaysItsDay(night) ? '' : night.when].filter(Boolean).join(' · ')) + '</div>',
+    // For the family at home (overlay plan 7.1): a link that follows this
+    // driver on the club's public pages. Only the name rides on it, never
+    // this night's code.
+    // (Asked for by name: draw is also run on its own, away from the shared script.)
+    night.driver && typeof followShareButton === 'function' ? '<div class="fol-share">' + followShareButton(String(night.driver), 'Send my family a link that follows me') + '</div>' : '',
   ].join('');
 
   // A night of more than one car (22 Oct 2026, second transponder) draws
@@ -16636,6 +16979,105 @@ function goLink(n) {
  * that 404s is a link they think is broken. The page asks, and says what
  * came back.
  */
+/**
+ * FAMILY LINKS ON A DRIVER'S NIGHT (14 Nov 2026, stream overlay plan 7.1,
+ * Asher: "family links-any driver"): make a link for each relative - a
+ * label like "Grandma" - list them, and stop any one. Each opens the
+ * family page (familyPage), read-only. At most ten at once.
+ */
+const NIGHT_FAMILY_JS = `
+const famBox = document.getElementById('famlinks');
+let famLinks = null;
+let famSaid = '';
+
+function famUrl(code) {
+  let origin = '';
+  try { origin = location.origin || ''; } catch (e) { /* relative works too */ }
+  return origin + '/c/' + encodeURIComponent(CLUB) + '/family#f=' + code;
+}
+
+function drawFamily() {
+  if (!famBox) return;
+  if (!CODE || famLinks === null) { famBox.hidden = true; return; }
+  famBox.hidden = false;
+  famBox.textContent = '';
+  const h = document.createElement('h3');
+  h.textContent = 'Family links';
+  famBox.appendChild(h);
+  const p = document.createElement('p');
+  p.className = 'note';
+  p.textContent = 'A link for each person at home: your races tonight, where you finished, your next race and your race videos. They can\\u2019t change anything or see anything else. Stop one any time.';
+  famBox.appendChild(p);
+  for (const l of famLinks) {
+    const row = document.createElement('div');
+    row.className = 'famrow';
+    const name = document.createElement('b');
+    name.textContent = l.label || 'Family link';
+    row.appendChild(name);
+    const send = document.createElement('button');
+    send.type = 'button';
+    send.className = 'page';
+    send.textContent = 'Send';
+    send.addEventListener('click', () => hcShareLink(famUrl(l.code), 'Follow ' + ((night && night.driver) || 'my racing') + (CLUB_NAME ? ' at ' + CLUB_NAME : '')));
+    row.appendChild(send);
+    const stop = document.createElement('button');
+    stop.type = 'button';
+    stop.className = 'page';
+    stop.textContent = 'Stop';
+    stop.addEventListener('click', async () => {
+      await post('/family/manage', { id: CODE, action: 'stop', code: l.code });
+      famSaid = 'Stopped. That link no longer opens.';
+      readFamily();
+    });
+    row.appendChild(stop);
+    famBox.appendChild(row);
+  }
+  if (famLinks.length < 10) {
+    const make = document.createElement('div');
+    make.className = 'famrow';
+    const label = document.createElement('input');
+    label.type = 'text';
+    label.maxLength = 30;
+    label.placeholder = 'Who is it for? (Grandma)';
+    label.setAttribute('aria-label', 'Who the link is for');
+    make.appendChild(label);
+    const go = document.createElement('button');
+    go.type = 'button';
+    go.className = 'go';
+    go.textContent = 'Make a family link';
+    go.addEventListener('click', async () => {
+      const a = await post('/family/manage', { id: CODE, action: 'make', label: label.value });
+      if (a.status === 200 && a.body.code) {
+        hcShareLink(famUrl(a.body.code), 'Follow ' + ((night && night.driver) || 'my racing') + (CLUB_NAME ? ' at ' + CLUB_NAME : ''));
+        famSaid = '';
+      } else {
+        famSaid = (a.body && a.body.error) || 'That link couldn\\u2019t be made just now.';
+      }
+      readFamily();
+    });
+    make.appendChild(go);
+    famBox.appendChild(make);
+  }
+  if (famSaid) {
+    const said = document.createElement('p');
+    said.className = 'note';
+    said.textContent = famSaid;
+    famBox.appendChild(said);
+  }
+}
+
+async function readFamily() {
+  if (!CODE) return;
+  try {
+    const a = await post('/family/manage', { id: CODE, action: 'list' });
+    famLinks = a.status === 200 && Array.isArray(a.body.links) ? a.body.links : null;
+  } catch (e) { famLinks = null; }
+  drawFamily();
+}
+
+readFamily();
+`;
+
 export function nightPage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
   return shell({
     club,
@@ -16667,8 +17109,9 @@ export function nightPage(club: string, clubName: string, context: PageContext =
       // No "Sign out on this phone" at the foot since 7 Nov 2026 (Asher:
       // "remove the sign out link at the bottom of the garage tab"): the
       // Signed in button at the top asks the same question.
-      GARAGE_EMBED_BODY + '<div id="yd"></div>' + ME_BODY_END,
-    script: LAPS_JS + QUAL_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS + garageEmbedScript() + ME_JS,
+      // Family links (overlay plan 7.1): under their details, hidden until read.
+      GARAGE_EMBED_BODY + '<div id="yd"></div>' + '<section class="card famlinks" id="famlinks" hidden></section>' + ME_BODY_END,
+    script: LAPS_JS + QUAL_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS + garageEmbedScript() + ME_JS + NIGHT_FAMILY_JS,
     noindex: true,
   }, context);
 }
@@ -18463,4 +18906,134 @@ export function pausedPage(club: string, clubName: string, _context: PageContext
   return heatcallerNotice(`${name} - paused`, `<p class="wordmark hcword">Heat<span class="hcc">Caller</span></p>
   <h1>${name}</h1>
   <p>This club's pages are paused for now. Results, schedules and live timing will be back here when the club returns.</p>`);
+}
+
+
+/**
+ * A FAMILY LINK'S PAGE (14 Nov 2026, stream overlay plan 7.1, Asher: "family
+ * links-any driver"): /c/:club/family#f=<code>, made by a driver from their
+ * night for one relative. Read-only and in plain words - "Mia finished 3rd
+ * of 8 in Junior - Heat 2" - with the laps and time small underneath, their
+ * next race, and their race videos (juniors' too: it is the family's own
+ * link). Nothing else of the driver's night. Polled every thirty seconds.
+ */
+const FAMILY_JS = `${CLOCK_JS}
+const fam = document.getElementById('fam');
+function famCode() {
+  const m = /[#&]f=([0-9a-fA-F]{24})(?:&|$)/.exec(String(location.hash || ''));
+  return m ? m[1].toLowerCase() : '';
+}
+const FCODE = famCode();
+let famText = '';
+
+function famOrdinal(n) {
+  const t = n % 100, e = n % 10;
+  return n + (t >= 11 && t <= 13 ? 'th' : e === 1 ? 'st' : e === 2 ? 'nd' : e === 3 ? 'rd' : 'th');
+}
+
+function famNext(n, who) {
+  if (!n || typeof n !== 'object') return '';
+  if (typeof n.words === 'string' && n.words.trim() !== '') return n.words;
+  if (n.now === true) return who + ' is on track now';
+  if (n.staged === true) return who + ' is on the grid';
+  const away = Math.max(0, Math.round(Number(n.away) || 0));
+  return away === 0 ? who + ' races next' : away === 1 ? '1 race before ' + who + '\\u2019s' : away + ' races before ' + who + '\\u2019s';
+}
+
+function drawFam(d) {
+  fam.textContent = '';
+  const who = d.driver || 'Your driver';
+  const head = document.createElement('div');
+  head.className = 'hero';
+  head.innerHTML = '<span class="kicker">Following</span>';
+  const big = document.createElement('span');
+  big.className = 'big';
+  big.textContent = who;
+  head.appendChild(big);
+  const when = document.createElement('span');
+  when.className = 'when';
+  when.textContent = [d.title, d.when].filter(Boolean).join(' \\u00b7 ');
+  head.appendChild(when);
+  fam.appendChild(head);
+
+  const next = famNext(d.next, who);
+  if (next) {
+    const card = document.createElement('section');
+    card.className = 'lc next';
+    const h = document.createElement('h3');
+    h.textContent = 'Next race';
+    card.appendChild(h);
+    const b = document.createElement('div');
+    b.className = 'lc-big';
+    b.textContent = next;
+    card.appendChild(b);
+    if (d.next && typeof d.next.race === 'string') { const r = document.createElement('div'); r.textContent = d.next.race; card.appendChild(r); }
+    fam.appendChild(card);
+  }
+
+  const races = Array.isArray(d.races) ? d.races : [];
+  const list = document.createElement('section');
+  list.className = 'card famlinks';
+  const h = document.createElement('h3');
+  h.textContent = races.length ? 'Tonight' : 'No races yet tonight';
+  list.appendChild(h);
+  for (const r of races.slice().reverse()) {
+    const row = document.createElement('div');
+    row.className = 'famrace';
+    const pos = Number(r.pos) || 0, of = Number(r.of) || 0;
+    const line = document.createElement('div');
+    line.className = 'big';
+    line.textContent = pos > 0 ? famOrdinal(pos) + (of > 0 ? ' of ' + of : '') : (r.out ? String(r.out) : 'Raced');
+    row.appendChild(line);
+    const what = document.createElement('div');
+    what.textContent = r.label || 'A race';
+    row.appendChild(what);
+    const nums = document.createElement('div');
+    nums.className = 'sub';
+    nums.textContent = [Number(r.laps) > 0 ? r.laps + ' laps' : '', Number(r.bestMs) > 0 ? 'best lap ' + (Number(r.bestMs) / 1000).toFixed(3) : ''].filter(Boolean).join(' \\u00b7 ');
+    row.appendChild(nums);
+    const v = d.videos && r.sid ? d.videos[r.sid] : null;
+    if (v) row.appendChild(hcVideoButton('Watch this race', 'Watch ' + (r.label || 'this race') + ', video from YouTube', () => hcVideoSheet(v, { title: r.label || 'Race video', where: 'night' })));
+    list.appendChild(row);
+  }
+  fam.appendChild(list);
+
+  for (const l of Array.isArray(d.lines) ? d.lines.slice(0, 6) : []) {
+    const p = document.createElement('p');
+    p.className = 'note';
+    p.textContent = l;
+    fam.appendChild(p);
+  }
+}
+
+async function loadFam() {
+  if (!FCODE) { fam.innerHTML = '<p class="note">This link isn\\u2019t complete. Ask for it to be sent again.</p>'; return; }
+  let r;
+  try {
+    r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/family/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: FCODE }), cache: 'no-store' });
+  } catch (e) { return; }
+  if (r.status === 404) { fam.innerHTML = '<p class="note">This family link has been stopped, or the club isn\\u2019t sharing drivers\\u2019 nights just now.</p>'; famText = ''; return; }
+  if (r.status !== 200) return;
+  let d = {};
+  try { d = await r.json(); } catch (e) { return; }
+  const text = JSON.stringify(d);
+  if (text === famText) return;
+  famText = text;
+  drawFam(d);
+}
+
+poll(loadFam, 30000);
+`;
+
+export function familyPage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
+  return shell({
+    club,
+    clubName,
+    active: "home",
+    heading: "Following",
+    sub: "Their races tonight, from the club's timing - a family link they sent you.",
+    body: '<div id="fam"><p class="note">Loading&hellip;</p></div>',
+    script: FAMILY_JS,
+    noindex: true,
+  }, context);
 }

@@ -160,6 +160,9 @@ describe("relay navigation, round 3: Your next race on Home", () => {
 
   it("puts it above everything else on Home, hidden until there is something to say", () => {
     assert.match(homePage("acme-rc", "Acme RC"), /<section class="lc" id="mine" hidden><\/section><div id="now" data-when="">/);
+    // The followed driver's card (overlay plan 7.1, 14 Nov 2026) comes first
+    // of all the cards about a driver, above Racing tonight?.
+    assert.match(homePage("acme-rc", "Acme RC"), /<section class="lc" id="fol" hidden><\/section><div id="rtw"><\/div>/);
   });
 });
 

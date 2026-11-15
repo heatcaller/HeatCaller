@@ -434,6 +434,7 @@ These are on the **Sponsor reads** card, at the foot of the page.
 | **One-line tagline:** | One short line, said after every credit for a moment they present (see **Presents:**), and once on their first read of the night. Leave it empty if they only bought the full read. |
 | **Their read:** | The sentences to read out, up to 600 characters. Leave it empty and the sponsor gets a one-line mention instead. |
 | **Picture for their read:** | What the Big Screen shows for the length of their read. Choose a picture the club has already uploaded, or **Upload** one for the read. With **None - show their name** chosen the screen shows their name instead — see below. |
+| **Logo:** | The sponsor's own logo, separate from the picture for their read. **Upload** one (a transparent PNG works best; a wide logo stays wide) or **Remove** it. It goes on their card on the club's Live page, and on the [stream overlays](stream-overlays.md). |
 | **Share of the reads:** | 1 to 10. Two gets twice the reads of one, however many the night has room for. Everyone ends up within one of their share. |
 | **Presents:** | The moments of the race this sponsor presents, ticked from a list. See [Moments a sponsor presents](#moments-a-sponsor-presents). |
 | **In tonight's rotation** | Untick to take a sponsor out of tonight's reads and keep everything you've typed, for a sponsor whose season has finished. |

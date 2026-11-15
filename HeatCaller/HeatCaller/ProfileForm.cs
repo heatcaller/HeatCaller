@@ -77,6 +77,12 @@ public sealed class ProfileForm : Form
     /// <summary>Their pronouns - one of Pronouns.Common or their own, typed. See DriverProfile.Pronouns.</summary>
     private readonly ComboBox _cmbPronouns = new();
     private readonly TextBox _txtRaceNumber = new();
+
+    // The car's body colour (stream overlay plan 6.5): a swatch, Choose and None.
+    private readonly Panel _pnlBodyColour = new() { BorderStyle = BorderStyle.FixedSingle };
+    private readonly Button _btnBodyColour = new() { Text = "Choose..." };
+    private readonly Button _btnBodyColourNone = new() { Text = "None" };
+    private string _bodyColour = string.Empty;
     private readonly TextBox _txtHomeTrack = new();
     private readonly TextBox _txtSkillLevel = new();
     private readonly CheckBox _chkNovice = new ThemedCheckBox();
@@ -307,6 +313,14 @@ public sealed class ProfileForm : Form
         fields.AddHint("The car they race in now, announced and recorded. Pick one, or type a new one and press Add: it joins their garage when you save. Retire or transfer cars in their garage.");
 
         captions.Add(AddLabeledTextBox(fields, "Race number:", _txtRaceNumber, Result.RaceNumber));
+
+        _bodyColour = CarColour.Clean(Result.BodyColour);
+        _pnlBodyColour.Size = new Size(UiLayout.AtTextSize(44), UiLayout.AtTextSize(24));
+        _btnBodyColour.Click += (_, _) => ChooseBodyColour();
+        _btnBodyColourNone.Click += (_, _) => { _bodyColour = string.Empty; ShowBodyColour(); };
+        ShowBodyColour();
+        captions.Add(fields.AddRow("Car colour:", FieldGrid.Inline(_pnlBodyColour, _btnBodyColour, _btnBodyColourNone)));
+        fields.AddHint("The main colour of their car's body. It goes beside their name on the stream, so viewers can tell the cars apart.");
         captions.Add(AddLabeledTextBox(fields, "Home track:", _txtHomeTrack, Result.HomeTrack));
         captions.Add(AddLabeledTextBox(fields, "Skill level:", _txtSkillLevel, Result.SkillLevel));
         _txtSkillLevel.PlaceholderText = "e.g. Novice / Intermediate / Expert";
@@ -1115,6 +1129,30 @@ public sealed class ProfileForm : Form
         FitPicker(_cmbTransponders, keepToRow: true);
     }
 
+    private void ChooseBodyColour()
+    {
+        using var dialog = new ColorDialog { FullOpen = true, AnyColor = true };
+
+        if (CarColour.ToColour(_bodyColour) is { } current)
+        {
+            dialog.Color = current;
+        }
+
+        if (dialog.ShowDialog(this) == DialogResult.OK)
+        {
+            _bodyColour = CarColour.FromColour(dialog.Color);
+            ShowBodyColour();
+        }
+    }
+
+    /// <summary>The swatch shows the colour, or a plain box with "None" greyed out when there is none.</summary>
+    private void ShowBodyColour()
+    {
+        var colour = CarColour.ToColour(_bodyColour);
+        _pnlBodyColour.BackColor = colour ?? AppTheme.Surface;
+        _btnBodyColourNone.Enabled = colour is not null;
+    }
+
     /// <summary>A caption and its text box, filled in, the box running to the grid's right-hand edge. Returns the caption.</summary>
     private static Label AddLabeledTextBox(FieldGrid fields, string label, TextBox box, string initialValue)
     {
@@ -1239,6 +1277,7 @@ public sealed class ProfileForm : Form
             AnnouncerName = _txtAnnouncerName.Text.Trim(),
             Pronouns = Pronouns.Clean(_cmbPronouns.Text),
             RaceNumber = _txtRaceNumber.Text.Trim(),
+            BodyColour = _bodyColour,
             HomeTrack = _txtHomeTrack.Text.Trim(),
             SkillLevel = _txtSkillLevel.Text.Trim(),
 

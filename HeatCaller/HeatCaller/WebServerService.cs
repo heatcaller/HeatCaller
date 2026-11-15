@@ -101,6 +101,40 @@ public sealed partial class WebServerService
     public Func<IReadOnlyList<UpcomingRace>>? UpcomingRaces { get; set; }
 
     /// <summary>
+    /// Every marshal corner of the race day (MarshalAssigner.DutiesForDay),
+    /// for the stream's Between races screen (overlay plan 6.7): who marshals
+    /// the next races. A frozen feed threaded, like UpcomingRaces.
+    /// </summary>
+    public Func<IReadOnlyList<MarshalAssigner.MarshalDuty>>? MarshalDuties { get; set; }
+
+    /// <summary>
+    /// Tonight's most improved driver (MostImprovedTonight), for the stream's
+    /// between-races cards. A frozen feed threaded, like MarshalDuties.
+    /// </summary>
+    public Func<MostImprovedTonight.Pick?>? MostImproved { get; set; }
+
+    /// <summary>
+    /// Where each driver would qualify overall if the heat ended now
+    /// (QualifyingProjector), for the Qual column on these pages and the
+    /// stream tower's Overall mode (overlay plan 6.4). Null outside a
+    /// qualifier. A frozen feed threaded, like UpcomingRaces.
+    /// </summary>
+    public Func<IReadOnlyDictionary<string, QualifyingProjector.Slot>?>? QualifyingProjection { get; set; }
+
+    /// <summary>The projection now, or null - never a throw for the board's sake.</summary>
+    private IReadOnlyDictionary<string, QualifyingProjector.Slot>? ProjectionNow()
+    {
+        try
+        {
+            return QualifyingProjection?.Invoke();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// The live track map - the line and every car on it - for the Live
     /// Results page's Track page. Asked on the UI thread as the LAN copy of
     /// the live state is built. Never in the relay's copy.
@@ -1719,6 +1753,42 @@ public sealed partial class WebServerService
 
         var path = context.Request.Url?.AbsolutePath.TrimEnd('/').ToLowerInvariant() ?? "/";
 
+        // A sponsor's logo (14 Nov 2026, stream overlay plan section 1), for
+        // the stream's graphics: /sponsor-logo/sponsor-logo-<12 hex>.png. Only
+        // a name SponsorLogo itself makes is ever turned into a file, and
+        // only a real PNG of a logo's size is served (SponsorLogo.PngBytes).
+        if (path.StartsWith(SponsorLogoPath, StringComparison.Ordinal))
+        {
+            HandleSponsorLogo(context, path[SponsorLogoPath.Length..]);
+            return;
+        }
+
+        // A stream overlay layout by its address (14 Nov 2026, stream overlay
+        // plan section 3): /overlay/broadcast, /overlay/lower-third, ... The
+        // Results table is the overlay page it has always been.
+        if (path.StartsWith(OverlayPath + "/", StringComparison.Ordinal))
+        {
+            var id = path[(OverlayPath.Length + 1)..];
+
+            if (id == OverlayLayouts.ResultsId)
+            {
+                WriteHtml(context, BuildOverlayPage());
+            }
+            else if (OverlayLayoutFor(id) is { } layout)
+            {
+                WriteHtml(context, BuildBroadcastPage(layout));
+            }
+            else
+            {
+                // An OBS source left pointing at a layout that has gone:
+                // a sentence, never a blank source nobody can explain.
+                context.Response.StatusCode = 404;
+                WriteText(context, "This overlay isn't in HeatCaller any more. Pick another on the Web Server page and copy its address.");
+            }
+
+            return;
+        }
+
         switch (path)
         {
             case "":
@@ -1776,7 +1846,51 @@ public sealed partial class WebServerService
                 // So nothing in it may be worth a PIN - every id in it is
                 // the roster's own opaque one rather than a transponder,
                 // for the reason AddIdsAndGrid gives.
+                // A stream page with its sponsor graphic up says so (overlay
+                // plan section 5): the logo up now is counted as on screen.
+                if (context.Request.QueryString["sponsor"] == "1")
+                {
+                    SponsorStream.Shown(_sponsorUpId, DateTime.UtcNow);
+                }
+
+                // And the "presented by" graphics it has just put up, by
+                // moment name - counted for that moment's sponsor.
+                if (context.Request.QueryString["shown"] is { Length: > 0 and <= 200 } shown)
+                {
+                    var ids = _presentedIds;
+
+                    foreach (var moment in shown.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(8))
+                    {
+                        if (ids.TryGetValue(moment, out var sponsorId))
+                        {
+                            SponsorStream.GraphicShown(sponsorId, moment, DateTime.UtcNow);
+                        }
+                    }
+                }
+
                 WriteJson(context, _publishedState);
+                break;
+            case "/api/overlay-version":
+                // An open overlay of the club's own asks every few seconds
+                // whether its layout has changed (stream overlay plan
+                // section 4), and redraws itself when it has.
+                {
+                    var id = context.Request.QueryString["id"] ?? string.Empty;
+                    var known = OverlayLayoutFor(id) is not null;
+                    int version;
+
+                    try
+                    {
+                        version = CustomOverlayVersion?.Invoke(id) ?? 0;
+                    }
+                    catch
+                    {
+                        version = 0;
+                    }
+
+                    WriteJson(context, "{\"v\":" + version + ",\"here\":" + (known ? "true" : "false") + "}");
+                }
+
                 break;
             case "/api/look":
                 // Which look the pages would be built with now - see
@@ -2537,6 +2651,61 @@ public sealed partial class WebServerService
     /// browser takes the type at its word. Any query string (the pages add
     /// ?v= so a new logo is never mistaken for the old one) is ignored.
     /// </summary>
+    /// <summary>
+    /// The club's own overlay layouts (section 4), by id - set by MainForm
+    /// once the store is loaded. Read on the server's thread: the store
+    /// hands back copies, never the layouts it is editing.
+    /// </summary>
+    internal Func<string, OverlayLayout?>? CustomOverlay { get; set; }
+
+    /// <summary>How many times one of the club's own layouts has changed - an open overlay page redraws when it moves (section 4).</summary>
+    internal Func<string, int>? CustomOverlayVersion { get; set; }
+
+    /// <summary>A layout by its address part: a preset, else one of the club's own, else null.</summary>
+    internal OverlayLayout? OverlayLayoutFor(string id)
+    {
+        if (OverlayLayouts.BuiltIn(id) is { } preset)
+        {
+            return preset;
+        }
+
+        try
+        {
+            return CustomOverlay?.Invoke(id);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Where sponsor logos are served from - see HandleSponsorLogo.</summary>
+    internal const string SponsorLogoPath = "/sponsor-logo/";
+
+    /// <summary>The address of a sponsor's logo on this server, or empty when the name isn't one SponsorLogo makes.</summary>
+    internal static string SponsorLogoUrl(string? fileName) =>
+        SponsorLogo.IsLogoName(fileName) ? SponsorLogoPath + fileName : string.Empty;
+
+    private static void HandleSponsorLogo(HttpListenerContext context, string fileName)
+    {
+        var bytes = SponsorLogo.PngBytes(fileName);
+
+        if (bytes is null)
+        {
+            context.Response.StatusCode = 404;
+            WriteText(context, "Not found");
+            return;
+        }
+
+        // A name is never reused (each upload makes a new one), so a stream
+        // source may keep it as long as it likes.
+        context.Response.ContentType = "image/png";
+        context.Response.Headers["Cache-Control"] = "public, max-age=86400, immutable";
+        context.Response.ContentLength64 = bytes.Length;
+        context.Response.OutputStream.Write(bytes, 0, bytes.Length);
+        context.Response.OutputStream.Close();
+    }
+
     private void HandleLogo(HttpListenerContext context)
     {
         var bytes = _settings is null ? null : ClubLogo.PngBytes(_settings.RelayLogoFile);
@@ -2821,6 +2990,7 @@ public sealed partial class WebServerService
             Profiles = Names,
             Tracker = _kpiTracker,
             FastestOverall = bestLapMs,
+            Projection = ProjectionNow(),
             StreakThreshold = view?.StreakThreshold ?? _race.StreakThreshold,
             SectorLengthsFeet = view is null ? _race.SectorLengthsFeet : view.SectorLengthsFeet,
 
@@ -3273,16 +3443,40 @@ public sealed partial class WebServerService
         // Laps for the tower and the results, the gap ahead for the battle bar.
         var cards = new System.Text.Json.Nodes.JsonObject();
 
+        // With the checkered out (stream overlay plan 6.3), each car finishes
+        // on its own next crossing: "done" once it has, and its result the
+        // RC way (6.2), "23/5:02.341", for the tower to freeze on.
+        var finishing = _race.IsFinishing;
+        var byId = new Dictionary<string, RacerStanding>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var car in ordered)
+        {
+            byId.TryAdd(car.TransponderId, car);
+        }
+
         foreach (var (id, card) in PhoneFollow.Cards(ordered))
         {
-            cards[RosterId(rosterKey, id)] = new System.Text.Json.Nodes.JsonObject
+            var entry = new System.Text.Json.Nodes.JsonObject
             {
                 ["laps"] = card.Laps,
                 ["ahead"] = card.Ahead,
             };
+
+            if (byId.TryGetValue(id, out var car) && KpiCatalog.ResultText(car) is var result && result != "-")
+            {
+                entry["result"] = result;
+            }
+
+            if (finishing && _race.HasTakenFlag(id))
+            {
+                entry["done"] = true;
+            }
+
+            cards[RosterId(rosterKey, id)] = entry;
         }
 
         node["cards"] = cards;
+        node["finishing"] = finishing;
 
         IReadOnlyList<UpcomingRace> upcoming;
 
@@ -3321,6 +3515,102 @@ public sealed partial class WebServerService
             .ToArray();
 
         node["people"] = new System.Text.Json.Nodes.JsonArray(people);
+
+        node["upNext"] = UpNext(upcoming);
+
+        // JUNIORS ON THE STREAM (overlay plan 7.5): every junior on the
+        // board, in the races to come or marshalling them, by full name and
+        // what the stream calls them instead ("Mia K"). The stream's page
+        // uses it for every name it draws and inside the lines it shows -
+        // a moment's banner, the captions - which say names in full.
+        node["streamNames"] = StreamNames(ordered, upcoming);
+    }
+
+    private System.Text.Json.Nodes.JsonObject StreamNames(IReadOnlyList<RacerStanding> ordered, IReadOnlyList<UpcomingRace> upcoming)
+    {
+        var map = new System.Text.Json.Nodes.JsonObject();
+
+        try
+        {
+            IReadOnlyList<MarshalAssigner.MarshalDuty> duties;
+
+            try
+            {
+                duties = MarshalDuties?.Invoke() ?? Array.Empty<MarshalAssigner.MarshalDuty>();
+            }
+            catch
+            {
+                duties = Array.Empty<MarshalAssigner.MarshalDuty>();
+            }
+
+            var juniors = ordered.Select(s => s.TransponderId)
+                .Concat(upcoming.SelectMany(r => r.Grid))
+                .Concat(duties.Select(d => d.Transponder))
+                .Where(id => !string.IsNullOrWhiteSpace(id) && Names.Get(id) is { IsJunior: true })
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(id => DisplayNameFor(id, false));
+
+            foreach (var (full, shown) in JuniorNames.ForStream(juniors, _settings?.JuniorNamesOnStream))
+            {
+                map[full] = shown;
+            }
+        }
+        catch
+        {
+            // Names are worth a board; the board is not worth losing for them.
+        }
+
+        return map;
+    }
+
+    /// <summary>
+    /// THE NEXT THREE RACES (14 Nov 2026, stream overlay plan 6.7), for the
+    /// Between races screen: each race's title, its rough start ("about
+    /// 19:40", this laptop's clock), who drives it, and who marshals it -
+    /// what the pits and the people at home both look for between races.
+    /// The race on track is left out: it is not one to wait for.
+    /// </summary>
+    private System.Text.Json.Nodes.JsonArray UpNext(IReadOnlyList<UpcomingRace> upcoming)
+    {
+        IReadOnlyList<MarshalAssigner.MarshalDuty> duties;
+
+        try
+        {
+            duties = MarshalDuties?.Invoke() ?? Array.Empty<MarshalAssigner.MarshalDuty>();
+        }
+        catch
+        {
+            duties = Array.Empty<MarshalAssigner.MarshalDuty>();
+        }
+
+        var list = new System.Text.Json.Nodes.JsonArray();
+
+        foreach (var race in upcoming.Where(r => !r.OnTrack).Take(3))
+        {
+            var drivers = new System.Text.Json.Nodes.JsonArray(race.Grid
+                .Where(id => !string.IsNullOrWhiteSpace(id) && !Ghosts.IsGhost(id))
+                .Select(id => (System.Text.Json.Nodes.JsonNode)DisplayNameFor(id, false))
+                .ToArray());
+
+            var marshals = new System.Text.Json.Nodes.JsonArray(duties
+                .Where(d => race.RoundId is not null && string.Equals(d.RoundId, race.RoundId, StringComparison.Ordinal))
+                .Select(d => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject
+                {
+                    ["name"] = DisplayNameFor(d.Transponder, false),
+                    ["post"] = d.PostName,
+                })
+                .ToArray());
+
+            list.Add(new System.Text.Json.Nodes.JsonObject
+            {
+                ["title"] = race.Title,
+                ["eta"] = race.EtaUtc is { } eta ? "about " + eta.ToLocalTime().ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) : string.Empty,
+                ["drivers"] = drivers,
+                ["marshals"] = marshals,
+            });
+        }
+
+        return list;
     }
 
     /// <summary>
@@ -3657,6 +3947,14 @@ public sealed partial class WebServerService
         function esc(v){ return String(v==null?'':v).replace(/[&<>"']/g, function(c){
           return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
+        // A junior's name as the stream shows it, "Mia K" (overlay plan 7.5).
+        let SN = {};
+        function snText(text){
+          let t = String(text == null ? '' : text);
+          Object.keys(SN).sort((a, b) => b.length - a.length).forEach(full => { t = t.split(full).join(String(SN[full])); });
+          return t;
+        }
+
         // One poll at a time, and none left hanging: on poor Wi-Fi an older
         // answer could arrive after a newer one, and hung requests used up
         // the browser's connections.
@@ -3667,8 +3965,13 @@ public sealed partial class WebServerService
           const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 3000);
           try{
             const r = await fetch('/api/state', { signal: stop.signal }); const d = await r.json();
+            // Juniors' names as the stream shows them (overlay plan 7.5).
+            SN = d.streamNames && typeof d.streamNames === 'object' ? d.streamNames : {};
             showCaptions(d.captions);
-            document.getElementById('state').textContent = d.state + ' - ' + d.flag + ' flag';
+            // PROVISIONAL until the protest window closes (overlay plan 6.9).
+            const until = Date.parse(d.provisionalUntil || '');
+            const prov = d.state === 'Finished' && Number.isFinite(until) && Date.now() < until ? ' - PROVISIONAL' : '';
+            document.getElementById('state').textContent = d.state + ' - ' + d.flag + ' flag' + prov;
             document.getElementById('countdown').textContent = d.countdown || '';
 
             const od = document.getElementById('ondeck');
@@ -3679,7 +3982,7 @@ public sealed partial class WebServerService
               (d.columns||[]).map((c,i) => `<th class="${i===0?'pos':''}">${esc(c)}</th>`).join('');
             document.getElementById('rows').innerHTML = d.standings.map((s,ri) =>
               `<tr class="${ri===0?'p1':''}">` + s.cells.map((c,i) =>
-                `<td class="${i===0?'pos':''} ${c.emphasis!=='none'?esc(c.emphasis):''}">${esc(c.text)}</td>`
+                `<td class="${i===0?'pos':''} ${c.emphasis!=='none'?esc(c.emphasis):''}">${esc(snText(c.text))}</td>`
               ).join('') + '</tr>').join('');
             document.getElementById('empty').style.display = d.standings.length ? 'none' : 'block';
 
@@ -3710,7 +4013,7 @@ public sealed partial class WebServerService
           if (!newest || newest.n === captionSeen) return;
           captionSeen = newest.n;
           const el = document.getElementById('captions');
-          el.textContent = newest.t;
+          el.textContent = snText(newest.t);
           el.classList.remove('fade'); el.classList.add('on');
           clearTimeout(captionTimer);
           captionTimer = setTimeout(() => el.classList.add('fade'), CAPTION_MS);

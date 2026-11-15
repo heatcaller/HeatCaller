@@ -256,6 +256,45 @@ public partial class MainForm
         // their next race and where do they grid. See PhoneFollow.
         _webServer.UpcomingRaces = LiveFeed<IReadOnlyList<UpcomingRace>>(() => raceControl.UpcomingRaces(8));
 
+        // Where this heat puts each driver overall, for the Qual column on the
+        // Wi-Fi pages and the stream's Overall mode (overlay plan 6.4).
+        _webServer.QualifyingProjection = LiveFeed<IReadOnlyDictionary<string, QualifyingProjector.Slot>?>(
+            () => raceControl.Projector?.Current()?.Slots);
+
+        // Who marshals each race, for the stream's Between races screen
+        // (overlay plan 6.7) - the same duties the phones and the grid call read.
+        // Worked out at most every five seconds: the feed is asked on every
+        // UI tick, and the duties only change when the program does.
+        IReadOnlyList<MarshalAssigner.MarshalDuty> duties = Array.Empty<MarshalAssigner.MarshalDuty>();
+        var dutiesAt = -1L;
+
+        _webServer.MarshalDuties = LiveFeed<IReadOnlyList<MarshalAssigner.MarshalDuty>>(() =>
+        {
+            if (dutiesAt < 0 || Environment.TickCount64 - dutiesAt > 5000)
+            {
+                duties = MarshalAssigner.DutiesForDay(_rounds, _raceEvents, _trackLayouts, _profiles);
+                dutiesAt = Environment.TickCount64;
+            }
+
+            return duties;
+        });
+
+        // Tonight's most improved driver, for the stream's between-races
+        // cards. At most every ten seconds: it only changes when a race is filed.
+        MostImprovedTonight.Pick? improved = null;
+        var improvedAt = -1L;
+
+        _webServer.MostImproved = LiveFeed<MostImprovedTonight.Pick?>(() =>
+        {
+            if (improvedAt < 0 || Environment.TickCount64 - improvedAt > 10000)
+            {
+                improved = MostImprovedTonight.From(RacesTonight());
+                improvedAt = Environment.TickCount64;
+            }
+
+            return improved;
+        });
+
         // The championship as it would stand if the race ended now, for the
         // Live Results page - see ChampionshipLive.
         _webServer.IfItEndedNow = LiveFeed<IfItEndedNow?>(raceControl.ChampionshipIfItEndedNow);
@@ -2811,6 +2850,22 @@ public partial class MainForm
         {
             Dock = DockStyle.Fill,
         };
+
+        // THE CLUB'S OWN STREAM OVERLAYS (stream overlay plan section 4):
+        // overlays.json, read by the Wi-Fi server for /overlay/<id> and
+        // edited from this page's Stream overlay row.
+        var overlays = OverlayStore.Load();
+
+        if (overlays.Problem.Length > 0)
+        {
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [overlays] {overlays.Problem}");
+        }
+
+        _webServer.CustomOverlay = overlays.Get;
+        _webServer.CustomOverlayVersion = overlays.Version;
+        webServer.Overlays = overlays;
+        webServer.CustomOverlays = () => overlays.Layouts;
+        webServer.FillStreamOverlays();
 
         pageWebServer.Controls.Add(webServer);
         _localScreens = webServer;

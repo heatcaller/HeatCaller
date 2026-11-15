@@ -238,6 +238,15 @@ public sealed class DriverProfile
     /// <summary>Racing number, for callouts and results sheets.</summary>
     public string RaceNumber { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The main colour of their car's body, "#RRGGBB" (14 Nov 2026, stream
+    /// overlay plan 6.5): a swatch beside their name on the stream, because
+    /// on a camera ten small cars look the same and a number is only any use
+    /// when it's on the car. Empty is none, which draws no swatch at all -
+    /// every profile saved before this. See CarColour.
+    /// </summary>
+    public string BodyColour { get; set; } = string.Empty;
+
     /// <summary>Home club or town - useful colour for intros at an open meeting.</summary>
     public string HomeTrack { get; set; } = string.Empty;
 

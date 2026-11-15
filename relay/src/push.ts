@@ -1,4 +1,4 @@
-import { createECDH, createPrivateKey, generateKeyPairSync, hkdfSync, randomBytes, sign, createCipheriv, type KeyObject } from "node:crypto";
+import { createECDH, createHash, createPrivateKey, generateKeyPairSync, hkdfSync, randomBytes, sign, createCipheriv, type KeyObject } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { StoreReadError, type Store } from "./store.js";
@@ -51,6 +51,128 @@ import { StoreReadError, type Store } from "./store.js";
 
 /** Where a club's push sign-ups are kept in the store: one item per badge code. */
 export const PUSH_CHANNEL = "pushsubs";
+
+/**
+ * FOLLOWER ALERTS (14 Nov 2026, stream overlay plan 7.1, Asher: "follower
+ * alerts-yes"). A phone following a driver BY NAME - the family at home,
+ * with no badge code - can be told before that driver races and when their
+ * result is in. Kept apart from the drivers' own sign-ups: one item per
+ * followed name (FOLLOW_CHANNEL), keyed by a hash of the name so no name
+ * sits in a file name, holding the name and the phones.
+ *
+ * WHAT THIS CHANGES. The follow feature was built so that nothing about who
+ * follows whom left the phone. Asked, Asher chose alerts: the relay now
+ * keeps, per club, which phones (push addresses, never people) want alerts
+ * for which public name. Nothing else: no badge code, no account. Built
+ * only from what the club's public pages already show - the running order
+ * and published results - so an alert never says more than the Schedule
+ * and Results pages do.
+ */
+export const FOLLOW_CHANNEL = "followsubs";
+
+/** Phones following one name. A relative's phone never pushes the driver's own (PUSH_SUBS_PER_DRIVER) off. */
+export const FOLLOW_SUBS_PER_NAME = 10;
+
+/** Follower phones per club, every name together - a ceiling, not a plan. */
+export const FOLLOW_SUBS_PER_CLUB = 2000;
+
+/** The kinds a follower can have: before their race, and their result. */
+export const FOLLOW_KINDS: readonly string[] = ["race", "result"];
+
+/** A followed name, tidied: one space between words, at most 60 characters, no control characters; "" for none. */
+export function followNameFrom(value: unknown): string {
+  const v = typeof value === "string" ? value.replace(/[\u0000-\u001f\u007f]/g, " ").trim().replace(/\s+/g, " ") : "";
+  return v.length >= 1 && v.length <= 60 ? v : "";
+}
+
+/** The store id for a followed name: "f" and 32 hex digits of a hash of it, any case the same. */
+export function followIdOf(name: string): string {
+  return "f" + createHash("sha256").update(name.toLowerCase(), "utf8").digest("hex").slice(0, 32);
+}
+
+const FOLLOW_ID = /^f[0-9a-f]{32}$/;
+
+/** The first race still to run (or running) that this name is in, with how many open races come before it. */
+function followLineOf(programme: unknown, name: string): { line: Record<string, unknown>; away: number } | undefined {
+  const lines = isObject(programme) && Array.isArray(programme["lines"]) ? programme["lines"] : [];
+  const lower = name.toLowerCase();
+  let away = 0;
+
+  for (const l of lines) {
+    if (!isObject(l)) continue;
+    const open = l["status"] === "running" || l["status"] === "next" || l["status"] === "upcoming";
+    if (!open) continue;
+    const drivers = Array.isArray(l["drivers"]) ? l["drivers"] : [];
+    if (drivers.some((d) => typeof d === "string" && d.toLowerCase() === lower)) {
+      return { line: l, away };
+    }
+    away++;
+  }
+
+  return undefined;
+}
+
+/** The race's name as the Schedule page writes it: "Junior - Heat 2". */
+function lineTitle(l: Record<string, unknown>): string {
+  return [l["className"], l["description"]].filter((x) => typeof x === "string" && x.trim() !== "").join(" - ") || "their race";
+}
+
+/**
+ * What a follower of <name> should hear now the running order has changed:
+ * their race has just become the next one. Once per race - a line that was
+ * already "next" before says nothing again. Never on the first look.
+ */
+export function followProgrammeAlerts(before: unknown, after: unknown, name: string, url: string): PushMessage[] {
+  if (!isObject(before) || !isObject(after) || after["lineups"] !== true) {
+    return [];
+  }
+
+  const now = followLineOf(after, name);
+
+  if (now === undefined || now.line["status"] !== "next") {
+    return [];
+  }
+
+  const was = followLineOf(before, name);
+
+  if (was !== undefined && was.line["status"] === "next" && was.line["id"] === now.line["id"]) {
+    return [];
+  }
+
+  const estimate = typeof now.line["estimate"] === "string" && /^about /.test(now.line["estimate"]) ? ", " + now.line["estimate"] : "";
+  return [{ title: name + "'s race is next", body: lineTitle(now.line) + estimate, tag: "hc-race", url }];
+}
+
+/** "1st", "2nd", "3rd", "11th". */
+function ordinalWords(n: number): string {
+  const t = n % 100;
+  const e = n % 10;
+  return n + (t >= 11 && t <= 13 ? "th" : e === 1 ? "st" : e === 2 ? "nd" : e === 3 ? "rd" : "th");
+}
+
+/**
+ * What a follower of <name> should hear for a result just published: where
+ * they finished, in plain words. Only for a result that is new - one
+ * republished (a correction) says nothing again.
+ */
+export function followResultAlerts(before: unknown, after: unknown, name: string, url: string): PushMessage[] {
+  if (before !== undefined || !isObject(after) || !Array.isArray(after["results"])) {
+    return [];
+  }
+
+  const lower = name.toLowerCase();
+  const row = after["results"].find((r) => isObject(r) && typeof r["name"] === "string" && r["name"].toLowerCase() === lower);
+
+  if (!isObject(row)) {
+    return [];
+  }
+
+  const pos = Number(row["pos"]);
+  const what = [after["label"], after["type"]].find((x) => typeof x === "string" && x.trim() !== "") as string | undefined;
+  const where = Number.isInteger(pos) && pos > 0 ? "finished " + ordinalWords(pos) : "has a result in";
+
+  return [{ title: name + " " + where, body: what ? what : "See the result", tag: "hc-result", url }];
+}
 
 /** Phones per driver. A new one past this pushes out the oldest. */
 export const PUSH_SUBS_PER_DRIVER = 5;
@@ -646,8 +768,8 @@ export class PushService {
    * file, or one that is not JSON - which only a new write mends - is an
    * empty list.
    */
-  private async subsOf(club: string, id: string): Promise<PushSub[]> {
-    const doc = await this.store.getItem(club, PUSH_CHANNEL, id).catch((error: unknown) => {
+  private async subsOf(club: string, id: string, channel: string = PUSH_CHANNEL): Promise<PushSub[]> {
+    const doc = await this.store.getItem(club, channel, id).catch((error: unknown) => {
       if (error instanceof StoreReadError && error.corrupt) {
         return undefined;
       }
@@ -660,13 +782,110 @@ export class PushService {
       .map((s) => (s.kinds === undefined ? s : { ...s, kinds: pushKindsFrom(s.kinds) })) as PushSub[];
   }
 
-  private async keep(club: string, id: string, subs: readonly PushSub[]): Promise<void> {
+  private async keep(club: string, id: string, subs: readonly PushSub[], channel: string = PUSH_CHANNEL, extra: Record<string, unknown> = {}): Promise<void> {
     if (subs.length === 0) {
-      await this.store.deleteItem(club, PUSH_CHANNEL, id).catch(() => undefined);
+      await this.store.deleteItem(club, channel, id).catch(() => undefined);
       return;
     }
 
-    await this.store.putItem(club, PUSH_CHANNEL, id, { seq: 0, publishedAt: this.now().toISOString(), body: { subs } });
+    await this.store.putItem(club, channel, id, { seq: 0, publishedAt: this.now().toISOString(), body: { ...extra, subs } });
+  }
+
+  /** Signs a phone up for alerts about a driver it follows by name (follower alerts, see FOLLOW_CHANNEL). "full" at the ceilings. */
+  async followSubscribe(club: string, name: string, sub: PushSub): Promise<"ok" | "full" | "bad"> {
+    const clean = followNameFrom(name);
+
+    if (clean === "") {
+      return "bad";
+    }
+
+    const kinds = (sub.kinds ?? FOLLOW_KINDS).filter((k) => FOLLOW_KINDS.includes(k));
+    // No label: a follower phone hears the driver's name in every title already.
+    const { label: _label, ...unlabelled } = sub;
+    const mine: PushSub = { ...unlabelled, kinds: kinds.length > 0 ? kinds : [...FOLLOW_KINDS] };
+    const id = followIdOf(clean);
+
+    return this.withLock(club, async () => {
+      const subs = await this.subsOf(club, id, FOLLOW_CHANNEL);
+
+      if (!subs.some((s) => s.endpoint === mine.endpoint)) {
+        const all = await this.store.listItems(club, FOLLOW_CHANNEL);
+        const count = all.reduce((n, item) => n + (isObject(item.doc.body) && Array.isArray(item.doc.body["subs"]) ? item.doc.body["subs"].length : 0), 0);
+
+        if (count >= FOLLOW_SUBS_PER_CLUB) {
+          return "full" as const;
+        }
+      }
+
+      const others = subs.filter((s) => s.endpoint !== mine.endpoint);
+      await this.keep(club, id, [...others, mine].slice(-FOLLOW_SUBS_PER_NAME), FOLLOW_CHANNEL, { name: clean });
+      return "ok" as const;
+    });
+  }
+
+  /** Takes one phone off a followed name's alerts. */
+  async followUnsubscribe(club: string, name: string, endpoint: string): Promise<void> {
+    const clean = followNameFrom(name);
+
+    if (clean === "") {
+      return;
+    }
+
+    const id = followIdOf(clean);
+
+    await this.withLock(club, async () => {
+      const subs = await this.subsOf(club, id, FOLLOW_CHANNEL);
+      const left = subs.filter((s) => s.endpoint !== endpoint);
+
+      if (left.length !== subs.length) {
+        await this.keep(club, id, left, FOLLOW_CHANNEL, { name: clean });
+      }
+    });
+  }
+
+  /** Every followed name with a phone signed up, by store id. */
+  private async followed(club: string): Promise<Map<string, string>> {
+    const all = await this.store.listItems(club, FOLLOW_CHANNEL).catch(() => []);
+    const out = new Map<string, string>();
+
+    for (const item of all) {
+      const name = isObject(item.doc.body) ? followNameFrom(item.doc.body["name"]) : "";
+      if (FOLLOW_ID.test(item.id) && name !== "") out.set(item.id, name);
+    }
+
+    return out;
+  }
+
+  /** The running order has just been written over: a followed driver whose race is now next. Never throws. */
+  async afterProgramme(club: string, before: unknown, after: unknown): Promise<void> {
+    try {
+      const names = await this.followed(club);
+      const url = `/c/${encodeURIComponent(club)}/`;
+
+      for (const [id, name] of names) {
+        for (const message of followProgrammeAlerts(before, after, name, url)) {
+          await this.deliver(club, id, message, PUSH_TTL_SECONDS, FOLLOW_CHANNEL);
+        }
+      }
+    } catch (e) {
+      this.log(`[push] "${club}": could not work out the follower alerts: ${String(e)}`);
+    }
+  }
+
+  /** A result has just been published: a followed driver who is in it. Never throws. */
+  async afterResult(club: string, sessionId: string, before: unknown, after: unknown): Promise<void> {
+    try {
+      const names = await this.followed(club);
+      const url = `/c/${encodeURIComponent(club)}/results#${encodeURIComponent(sessionId)}`;
+
+      for (const [id, name] of names) {
+        for (const message of followResultAlerts(before, after, name, url)) {
+          await this.deliver(club, id, message, PUSH_TTL_SECONDS, FOLLOW_CHANNEL);
+        }
+      }
+    } catch (e) {
+      this.log(`[push] "${club}": could not work out the follower result alerts: ${String(e)}`);
+    }
   }
 
   private async withLock<T>(club: string, work: () => Promise<T>): Promise<T> {
@@ -702,8 +921,10 @@ export class PushService {
         return;
       }
 
-      for (const item of await this.store.itemSizes(club, PUSH_CHANNEL)) {
-        await this.store.deleteItem(club, PUSH_CHANNEL, item.id).catch(() => undefined);
+      for (const channel of [PUSH_CHANNEL, FOLLOW_CHANNEL]) {
+        for (const item of await this.store.itemSizes(club, channel).catch(() => [])) {
+          await this.store.deleteItem(club, channel, item.id).catch(() => undefined);
+        }
       }
     });
   }
@@ -884,13 +1105,13 @@ export class PushService {
   }
 
   /** send, also saying how many phones were tried. */
-  private async deliver(club: string, id: string, message: PushMessage, ttlSeconds: number): Promise<{ tried: number; sent: number }> {
+  private async deliver(club: string, id: string, message: PushMessage, ttlSeconds: number, channel: string = PUSH_CHANNEL): Promise<{ tried: number; sent: number }> {
     const ttl = Number.isFinite(ttlSeconds)
       ? Math.min(Math.max(Math.floor(ttlSeconds), 0), PUSH_TTL_MAX_SECONDS)
       : PUSH_TTL_SECONDS;
     // Only the phones that want this kind (14 Nov 2026, item 9).
     const kind = alertKindOf(message.tag);
-    const subs = (await this.subsOf(club, id)).filter((s) => s.kinds === undefined || s.kinds.includes(kind));
+    const subs = (await this.subsOf(club, id, channel)).filter((s) => s.kinds === undefined || s.kinds.includes(kind));
 
     if (subs.length === 0) {
       return { tried: 0, sent: 0 };
@@ -945,11 +1166,12 @@ export class PushService {
     // phone is forgotten on a later alert instead.
     if (gone.length > 0) {
       await this.withLock(club, async () => {
-        const now = await this.subsOf(club, id);
+        const now = await this.subsOf(club, id, channel);
         const left = now.filter((s) => !gone.includes(s.endpoint));
 
         if (left.length !== now.length) {
-          await this.keep(club, id, left);
+          const kept = channel === FOLLOW_CHANNEL ? await this.store.getItem(club, channel, id).catch(() => undefined) : undefined;
+          await this.keep(club, id, left, channel, kept && isObject(kept.body) ? { name: kept.body["name"] } : {});
         }
       }).catch((e: unknown) => this.log(`[push] "${club}": could not forget a gone phone: ${String(e)}`));
     }
