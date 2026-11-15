@@ -279,6 +279,22 @@ public partial class MainForm
             return duties;
         });
 
+        // Tonight's most improved driver, for the stream's between-races
+        // cards. At most every ten seconds: it only changes when a race is filed.
+        MostImprovedTonight.Pick? improved = null;
+        var improvedAt = -1L;
+
+        _webServer.MostImproved = LiveFeed<MostImprovedTonight.Pick?>(() =>
+        {
+            if (improvedAt < 0 || Environment.TickCount64 - improvedAt > 10000)
+            {
+                improved = MostImprovedTonight.From(RacesTonight());
+                improvedAt = Environment.TickCount64;
+            }
+
+            return improved;
+        });
+
         // The championship as it would stand if the race ended now, for the
         // Live Results page - see ChampionshipLive.
         _webServer.IfItEndedNow = LiveFeed<IfItEndedNow?>(raceControl.ChampionshipIfItEndedNow);

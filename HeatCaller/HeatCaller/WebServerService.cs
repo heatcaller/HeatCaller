@@ -108,6 +108,12 @@ public sealed partial class WebServerService
     public Func<IReadOnlyList<MarshalAssigner.MarshalDuty>>? MarshalDuties { get; set; }
 
     /// <summary>
+    /// Tonight's most improved driver (MostImprovedTonight), for the stream's
+    /// between-races cards. A frozen feed threaded, like MarshalDuties.
+    /// </summary>
+    public Func<MostImprovedTonight.Pick?>? MostImproved { get; set; }
+
+    /// <summary>
     /// Where each driver would qualify overall if the heat ended now
     /// (QualifyingProjector), for the Qual column on these pages and the
     /// stream tower's Overall mode (overlay plan 6.4). Null outside a

@@ -731,7 +731,7 @@ public sealed partial class WebServerService
         function demoState(){
           const loop = 160, t = ((Date.now() - DEMO_START) / 1000) % loop;
           const people = DEMO_NAMES.map((name, i) => ({ id: 'd' + i, name }));
-          const base = { sponsorUp: { name: 'Hobby Hut', logo: '' }, race: 'Junior - Heat 2', people, presented: {}, presentedLogos: {}, champ: null, ratings: {}, captions: [], pylon: { changes: 0, leaders: 1, cars: {} } };
+          const base = { sponsorUp: { name: 'Hobby Hut', logo: '' }, race: 'Junior - Heat 2', people, presented: {}, presentedLogos: {}, improved: { name: 'Sam Tr', line: '0.42 s quicker than in Junior - Heat 1' }, champ: null, ratings: {}, captions: [], pylon: { changes: 0, leaders: 1, cars: {} } };
           if (t < 20) return Object.assign(base, { state: 'Idle', flag: 'None', countdown: '', standings: [], cards: {}, onDeck: '19:40  •  Junior  •  Heat 2',
             upNext: [
               { title: 'Heat 2 (Junior)', eta: demoAbout(8), drivers: DEMO_NAMES.slice(0, 6), marshals: [{ name: 'Rob Otics', post: 'Turn 1' }, { name: 'Cy Clone', post: 'Turn 3' }] },
@@ -1082,9 +1082,13 @@ public sealed partial class WebServerService
             // Tonight's bests (7.3) join the turns once there are some:
             // "Mia K: First podium".
             const bests = Array.isArray(d.bests) ? d.bests.filter(b => b && b.title).slice(-4) : [];
-            const cards = bests.length
+            let cards = bests.length
               ? BASICS.concat([['Tonight\u2019s bests', bests.map(b => snText(String(b.line || '').split(' \u00b7 ')[0]) + ': ' + b.title).join(' \u00b7 ')]])
               : BASICS;
+            // Most improved tonight: one driver, their own numbers, nobody
+            // listed below them (MostImprovedTonight).
+            const imp = d.improved && typeof d.improved.name === 'string' && d.improved.name ? d.improved : null;
+            if (imp) cards = cards.concat([['Most improved tonight', sn(imp.name) + ': ' + String(imp.line || '')]]);
             const card = cards[Math.floor(Date.now() / 12000) % cards.length];
             setText('bs-k', card[0]);
             setText('bs-t', card[1]);

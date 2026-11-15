@@ -43,6 +43,42 @@ public sealed partial class WebServerService
     /// <summary>The presenting sponsor's id by moment name, as last published - see SponsorStream.GraphicShown.</summary>
     private volatile Dictionary<string, string> _presentedIds = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Tonight's most improved driver for the stream (MostImprovedTonight):
+    /// their name as the stream shows it ("Mia K" for a junior) and the line
+    /// under it. Null for nobody yet.
+    /// </summary>
+    private JsonObject? ImprovedNode()
+    {
+        try
+        {
+            if (MostImproved?.Invoke() is not { } pick)
+            {
+                return null;
+            }
+
+            var name = DisplayNameFor(pick.Transponder, false);
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return null;
+            }
+
+            if (Names.Get(pick.Transponder) is { IsJunior: true }
+                && JuniorNames.ForStream(new[] { name }, _settings?.JuniorNamesOnStream).TryGetValue(name, out var shown))
+            {
+                name = shown;
+            }
+
+            return new JsonObject { ["name"] = name, ["line"] = pick.Line };
+        }
+        catch
+        {
+            // A card is not worth the board.
+            return null;
+        }
+    }
+
     private void AddBroadcast(JsonObject node, IReadOnlyList<RacerStanding> ordered, byte[] rosterKey, UiSide ui, LiveRaceView? view)
     {
         var (changes, leaders) = (0, 0);
@@ -165,6 +201,8 @@ public sealed partial class WebServerService
             ["title"] = m.Title,
             ["line"] = m.Line,
         }).ToArray());
+
+        node["improved"] = ImprovedNode();
 
         node["moment"] = Moments.Current() is { } current
             ? new JsonObject
