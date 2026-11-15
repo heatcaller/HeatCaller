@@ -14,20 +14,30 @@ public sealed class NewDriversTests : IDisposable
     public void Dispose() => _data.Dispose();
 
     [Fact]
-    public void A_driver_first_seen_today_is_on_their_first_night_and_a_ticked_novice_is_new()
+    public void A_driver_with_no_earlier_results_is_on_their_first_night_and_a_ticked_novice_is_new()
     {
-        var firstNight = new DriverProfile { Transponder = "1", FirstSeenUtc = DateTime.UtcNow };
-        var regular = new DriverProfile { Transponder = "2", FirstSeenUtc = DateTime.UtcNow.AddDays(-60) };
-        var novice = new DriverProfile { Transponder = "3", FirstSeenUtc = DateTime.UtcNow.AddDays(-14), IsNovice = true, Mentor = "Al Gorithim" };
+        // Since bug hunt 21, the filed results say who is new, not when the profile was made.
+        var history = Enumerable.Range(1, 4)
+            .Select(week => new SessionRecord
+            {
+                SessionType = RaceSessionType.Race,
+                StartedAtUtc = DateTime.UtcNow.AddDays(-7 * week),
+                Results = new List<SessionResultEntry> { new() { Position = 1, Transponder = "2" }, new() { Position = 2, Transponder = "3" } },
+            })
+            .ToList();
+        var before = NewDrivers.RacedBefore.From(history, Today);
 
-        Assert.True(NewDrivers.FirstNight(firstNight, Today));
-        Assert.False(NewDrivers.IsNew(regular, Today));
-        Assert.True(NewDrivers.IsNew(novice, Today));
-        Assert.False(NewDrivers.IsNew(new DriverProfile { Transponder = "4" }, Today));
+        var firstNight = new DriverProfile { Transponder = "1" };
+        var regular = new DriverProfile { Transponder = "2" };
+        var novice = new DriverProfile { Transponder = "3", IsNovice = true, Mentor = "Al Gorithim" };
 
-        Assert.Equal(" · first night", NewDrivers.Badge(firstNight, Today));
-        Assert.Equal(" · novice, mentor Al Gorithim", NewDrivers.Badge(novice, Today));
-        Assert.Equal(string.Empty, NewDrivers.Badge(regular, Today));
+        Assert.True(NewDrivers.FirstNight(firstNight, before));
+        Assert.False(NewDrivers.IsNew(regular, before));
+        Assert.True(NewDrivers.IsNew(novice, before));
+
+        Assert.Equal(" · first night", NewDrivers.Badge(firstNight, before));
+        Assert.Equal(" · novice, mentor Al Gorithim", NewDrivers.Badge(novice, before));
+        Assert.Equal(string.Empty, NewDrivers.Badge(regular, before));
     }
 
     [Fact]

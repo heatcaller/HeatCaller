@@ -123,17 +123,14 @@ public sealed partial class CheckInControl
         var before = drivers.ToDictionary(p => p.Transponder, p => payments.Get(day.Id, p.Transponder), StringComparer.OrdinalIgnoreCase);
         var now = DateTime.UtcNow;
 
+        // A top-up takes only what is still owed, kept by the way it was
+        // taken (bug hunt 21) - see DeskMoney.Settle.
+        (EntryPayment? Payment, decimal Taken, bool TopUp) settled = default;
+
         foreach (var profile in drivers)
         {
-            payments.Set(day.Id, profile.Transponder, how == PaidHow.Owing
-                ? null
-                : new EntryPayment
-                {
-                    How = how,
-                    Amount = how is PaidHow.Cash or PaidHow.Card ? FeeFor(profile, day, ClassNamed) : 0,
-                    Note = note,
-                    AtUtc = now,
-                });
+            settled = DeskMoney.Settle(payments.Get(day.Id, profile.Transponder), how, FeeFor(profile, day, ClassNamed), note, now);
+            payments.Set(day.Id, profile.Transponder, settled.Payment);
         }
 
         _undo.Capture($"Mark {Plural.Of(drivers.Count, "driver")} {how.ToString().ToLowerInvariant()}", () =>
@@ -150,8 +147,9 @@ public sealed partial class CheckInControl
         {
             PaidHow.Owing => "marked as still owing",
             PaidHow.Comp => note.Length > 0 ? $"comp ({note})" : "comp",
-            _ => drivers.Count == 1 && TonightsFees() is { } night
-                ? $"paid {DeskMoney.Money(FeeFor(drivers[0], night.Day, ClassNamed))} {how.ToString().ToLowerInvariant()}"
+            // What was taken just now (bug hunt 21): a top-up's $10, not the whole fee again.
+            _ => drivers.Count == 1
+                ? $"paid {DeskMoney.Money(settled.Taken)}{(settled.TopUp ? " more" : string.Empty)} {how.ToString().ToLowerInvariant()}"
                 : $"paid by {how.ToString().ToLowerInvariant()}",
         });
 
@@ -201,7 +199,10 @@ public sealed partial class CheckInControl
                     Settle(fees.Day, drivers, how, note);
                 }
             },
-            profile => _profiles.Get(profile.Transponder) ?? profile);
+            profile => _profiles.Get(profile.Transponder) ?? profile,
+            profile => TonightsFees() is { } fees
+                ? DeskMoney.StillOwed(payments.Get(fees.Day.Id, profile.Transponder), FeeFor(profile, fees.Day, ClassNamed))
+                : 0);
 
         form.FormClosed += (_, _) => _paidForm = null;
         _paidForm = form;

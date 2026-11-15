@@ -19,6 +19,13 @@ public sealed partial class CheckInControl : UserControl
     private readonly EntryPaymentStore? _payments;
 
     /// <summary>
+    /// Who had raced here before tonight, for the "first night" badge (15 Nov
+    /// 2026, bug hunt 21 - see NewDrivers.FirstNight). Null with no history
+    /// given: nobody is badged as on their first night.
+    /// </summary>
+    private readonly NewDrivers.RacedBeforeKept? _racedBefore;
+
+    /// <summary>
     /// The race days, so this page can say when it is filing check-ins
     /// against nothing.
     ///
@@ -194,8 +201,9 @@ public sealed partial class CheckInControl : UserControl
 
     public CheckInControl(ProfileStore profiles, CheckInStore checkIns, RaceClassStore raceClasses, AppSettings settings, UndoService undo,
         TechInspectionStore? tech = null, WebServerService? web = null, RaceEventStore? events = null,
-        BatteryPackStore? batteries = null, EntryPaymentStore? payments = null)
+        BatteryPackStore? batteries = null, EntryPaymentStore? payments = null, SessionHistoryStore? history = null)
     {
+        _racedBefore = history is null ? null : new NewDrivers.RacedBeforeKept(() => history.All);
         // The packs are not this page's any more (13 Nov 2026): Asher had the
         // Pack column taken off - which pack is in a car is nothing to do with
         // who is here and ready. The store is still taken, so the callers
@@ -1245,10 +1253,12 @@ public sealed partial class CheckInControl : UserControl
         try
         {
             _grid.Rows.Clear();
+            var before = _racedBefore?.Now(DateTime.Now);
+
             foreach (var profile in CurrentlyShownProfiles())
             {
                 // New to racing (setup plan D12): " · first night", " · novice, mentor Al".
-                var displayName = (string.IsNullOrWhiteSpace(profile.DriverName) ? profile.Transponder : profile.DriverName) + NewDrivers.Badge(profile, DateTime.Now);
+                var displayName = (string.IsNullOrWhiteSpace(profile.DriverName) ? profile.Transponder : profile.DriverName) + NewDrivers.Badge(profile, before);
                 var rowIndex = _grid.Rows.Add(_checkIns.IsCheckedIn(profile.Transponder), displayName, ClassCellText(profile));
 
                 _grid.Rows[rowIndex].Tag = profile;
