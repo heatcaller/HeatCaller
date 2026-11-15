@@ -2780,8 +2780,10 @@ const ME_LEFTOVERS = ['hg-me-seen-' + CLUB, 'hg-charge-' + CLUB, 'hg-me-space', 
   'hg-night-hide-runs', 'hg-nighttalk-' + CLUB, 'hg-nighttalk-short-' + CLUB, 'hg-nighttalk-say-' + CLUB, 'hc-alerts:' + CLUB];
 
 // Signing out stops this phone's push alerts too (6 Nov 2026): the relay
-// forgets it for that driver, and the phone drops its push address.
-function meStopPush(code) {
+// forgets it for that driver, and the phone drops its push address - only
+// when no other driver is left on it (bug hunt 19 #11): the phone has one
+// push address, and every driver signed in on it shares it.
+function meStopPush(code, last) {
   try {
     if (!/^[0-9a-f]{20}$/.test(String(code)) || !('serviceWorker' in navigator)) return;
     navigator.serviceWorker.getRegistration('/c/' + encodeURIComponent(CLUB) + '/sw.js').then((reg) => reg ? reg.pushManager.getSubscription() : null).then((sub) => {
@@ -2790,7 +2792,7 @@ function meStopPush(code) {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id: String(code), sub: { endpoint: sub.endpoint } }),
-      }).catch(() => {}).then(() => sub.unsubscribe());
+      }).catch(() => {}).then(() => { if (last) return sub.unsubscribe(); });
     }).catch(() => {});
   } catch (e) { /* the relay drops a phone the push service says is gone */ }
 }
@@ -2798,8 +2800,8 @@ function meStopPush(code) {
 // Signs one driver out of this phone. With another driver still on it, that
 // one becomes the driver shown, and their code is answered (''  when none).
 function meSignOut(code) {
-  meStopPush(code);
   const others = meDrivers().filter((d) => d.c !== code);
+  meStopPush(code, others.length === 0);
   meKeepDrivers(others);
   if (others.length > 0) {
     try { localStorage.setItem(ME_KEY, others[0].c); } catch (e) { /* asked again */ }
@@ -2808,6 +2810,8 @@ function meSignOut(code) {
     try { localStorage.removeItem(ME_WAS_KEY); } catch (e) { /* nothing was kept */ }
   }
   for (const k of ME_LEFTOVERS) {
+    // The phone's alerts stay on for the drivers still on it.
+    if (k === 'hc-alerts:' + CLUB && others.length > 0) continue;
     try { localStorage.removeItem(k); } catch (e) { /* nothing was kept */ }
   }
   // The pages' own copies of what the relay answered, for when there is no
@@ -8496,9 +8500,15 @@ const LIVE_VIDEO_JS = `
     dock.appendChild(box);
     dock.appendChild(controls());
     const notes = [lowLatency ? 'The video runs a few seconds behind the timing.' : 'The video runs about 20 s behind the timing.'];
+    // Listen goes off only for a tap on Watch live (bug hunt 19 #39): a
+    // player docked again by itself is not playing, so Listen carries on.
     if (typeof window.hcStopListen === 'function' && typeof window.hcListening === 'function' && window.hcListening() === true) {
-      window.hcStopListen();
-      notes.push('Listen is off while you watch.');
+      if (byTap) {
+        window.hcStopListen();
+        notes.push('Listen is off while you watch.');
+      } else {
+        notes.push('Listen is still on. Turn it off before you play the video.');
+      }
     }
     dock.appendChild(hcVel('p', 'note hcdnote', notes.join(' ')));
     drawButton();
@@ -8540,7 +8550,10 @@ const LIVE_VIDEO_JS = `
     let id = null;
     try {
       const answer = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/video/live', { cache: 'no-store' });
-      const body = answer.ok ? await answer.json() : null;
+      // A busy or restarting relay (a 429, a 502) is no signal, not "no
+      // stream" (bug hunt 19 #38): the player is left as it was.
+      if (!answer.ok) throw new Error('not answered');
+      const body = await answer.json();
       id = body && typeof body.live === 'string' && /^[A-Za-z0-9_-]{11}$/.test(body.live) ? body.live : null;
       lowLatency = !!(body && body.lowLatency === true);
       lastRace = body && body.last && typeof body.last === 'object' && hcVideoOk(body.last.video) ? body.last : null;
@@ -8971,7 +8984,7 @@ const LISTEN_JS = `
           }
         }
 
-        chain = chain.then(() => play(said, mine)).catch(() => {});
+        chain = chain.then(() => play(said, mine, one.at)).catch(() => {});
       }
 
       await chain;
@@ -9053,7 +9066,7 @@ const LISTEN_JS = `
     return decode(ctx, bytesOf(said.audio));
   }
 
-  async function play(said, mine) {
+  async function play(said, mine, relayAt) {
     if (!on || mine !== turn || ctx === null) {
       return;
     }
@@ -9124,6 +9137,17 @@ const LISTEN_JS = `
       // dropAll forgot which stretch this is, and the one after it then
       // started on top of it rather than joining on.
       if (said.kind === 'mix') { lastRun = said.run; lastN = said.n; }
+    }
+
+    // NEVER A RACE CALL LATE, AT ITS START (14 Nov 2026, bug hunt 19 #40):
+    // the eight seconds are checked again for when the line would start,
+    // not only when it was fetched - one queued behind other lines, or held
+    // up decoding, could otherwise still be heard well over eight late.
+    const relayNowAt = typeof relayClock === 'function' ? relayClock() : null;
+    if (said.kind !== 'mix' && relayAt > 0 && relayNowAt !== null && relayNowAt + (at - now) * 1000 - relayAt > 8000) {
+      stats.lateDropped = (stats.lateDropped || 0) + 1;
+      if (typeof hcCount === 'function') hcCount('listen_late_dropped');
+      return;
     }
 
     const source = ctx.createBufferSource();
