@@ -801,6 +801,17 @@ public sealed class AppSettings
     public bool AllowSailorMouth { get; set; } = true;
 
     /// <summary>
+    /// How many swear words Sailor-mouth may use in a line (15 Nov 2026, the
+    /// dial under the Writing tone when Sailor-mouth is picked) - 0 to
+    /// <see cref="CommentaryTones.MostSwears"/>, per line of about forty
+    /// words. The model is told the number, and a line over it has its
+    /// spare "fucking"s and "bloody"s taken out, or is dropped if that is
+    /// not enough (ScreenWords.WithinSwears). Asher heard six in one line
+    /// before there was a dial; two is the start.
+    /// </summary>
+    public int SailorMouthSwears { get; set; } = 2;
+
+    /// <summary>
     /// The next race night as told to the drivers (12 Nov 2026, setup plan
     /// D13): on the phones' Home page, and the night "I'm coming" is for.
     /// Null when the club hasn't announced one. See NextNight.

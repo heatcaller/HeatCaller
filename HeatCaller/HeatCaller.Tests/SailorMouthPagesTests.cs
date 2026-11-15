@@ -64,6 +64,36 @@ public sealed class SailorMouthPagesTests : IDisposable
     }
 
     [Fact]
+    public void The_swear_dial_is_there_only_for_sailor_mouth_and_saves_its_number()
+    {
+        var (enthusiastic, sailor, off, saved, words) = StaThread.Run(() =>
+        {
+            var settings = new AppSettings { CommentaryEnabled = false };
+            using var page = new CommentaryControl(settings, new CommentaryService(ProfileStore.Load(), settings));
+            var notShown = page.SwearDialShown;
+
+            settings.CommentaryToneStyle = CommentaryTone.SailorMouth;
+            page.FillTones();
+            var shown = page.SwearDialShown;
+
+            settings.AllowSailorMouth = false;
+            page.FillTones();
+            var switchedOff = page.SwearDialShown;
+
+            var dial = All(page).OfType<SliderControl>().Single(s => s.Maximum == CommentaryTones.MostSwears);
+            dial.Value = 4;
+
+            return (notShown, shown, switchedOff, settings.SailorMouthSwears, CommentaryControl.SwearsWords(0));
+        }, TimeSpan.FromMinutes(3), () => "AI Commentary page");
+
+        Assert.False(enthusiastic);
+        Assert.True(sailor);
+        Assert.False(off);
+        Assert.Equal(4, saved);
+        Assert.StartsWith("none", words);
+    }
+
+    [Fact]
     public void Club_rules_has_the_tick_and_it_saves_straight_to_the_club()
     {
         var (found, before, after) = StaThread.Run(() =>

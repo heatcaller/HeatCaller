@@ -165,10 +165,10 @@ public static class CommentaryTones
         new ToneProfile(
             CommentaryTone.SailorMouth,
             "Adult: Sailor-mouth - swears, crude, 18+",
-            "Call it like a foul-mouthed pit crew chief who has had a long night - swearing freely (fuck, shit, bloody, "
+            "Call it like a foul-mouthed pit crew chief who has had a long night - swearing (fuck, shit, damn, "
             + "bastard, ass, piss) and crude, but quick and funny with it, and still clear about who is where. "
             + "Example of the VOICE wanted: given \"P1 leads P2 by 0.4s on lap 12\", write something like "
-            + "\"Four tenths, Sam. Four damn tenths, and Bill is fucking stuck there on lap twelve.\" - "
+            + "\"Four tenths, Sam, and Bill is fucking stuck there on lap twelve.\" - "
             + "not \"Sam leads Bill by 0.4 seconds.\"",
             " A sweary aside between races - one piece of news from the facts, told the way the crew tells it at the "
             + "back of the pits. Crude about the race, never about a driver.",
@@ -184,6 +184,39 @@ public static class CommentaryTones
     };
 
     private static readonly Dictionary<CommentaryTone, ToneProfile> ByTone = All.ToDictionary(p => p.Tone);
+
+    /// <summary>The top of the Sailor-mouth dial (AppSettings.SailorMouthSwears).</summary>
+    public const int MostSwears = 6;
+
+    /// <summary>
+    /// What one "line" is for the dial: about forty words, a spoken line or
+    /// two. A longer piece - the recap show, an interview, two voices
+    /// trading turns - gets the dial's number for every forty words.
+    /// </summary>
+    public const int WordsPerLine = 40;
+
+    /// <summary>The dial's number, kept in range.</summary>
+    public static int SwearsPerLine(AppSettings settings) => Math.Clamp(settings.SailorMouthSwears, 0, MostSwears);
+
+    /// <summary>
+    /// The rule a tone's prompt ends with: <see cref="ToneProfile.Rule"/>, and
+    /// for Sailor-mouth the dial's count after it (15 Nov 2026). Told as a
+    /// number with "count them", because "swear a bit" gave six in a line.
+    /// </summary>
+    public static string RuleFor(ToneProfile tone, AppSettings settings)
+    {
+        if (tone.Tone != CommentaryTone.SailorMouth)
+        {
+            return tone.Rule;
+        }
+
+        var most = SwearsPerLine(settings);
+
+        return tone.Rule + (most == 0
+            ? " SWEARING: none at all - be crude, blunt and cheeky, but use no swear words."
+            : $" SWEARING: at most {most} swear word{(most == 1 ? string.Empty : "s")} in a line - count them, and never go over. "
+              + $"In anything longer than {WordsPerLine} words, at most {most} in every {WordsPerLine} words.");
+    }
 
     /// <summary>
     /// The tone actually used: the saved one, unless it is Sailor-mouth and

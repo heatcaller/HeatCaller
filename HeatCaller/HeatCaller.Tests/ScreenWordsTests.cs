@@ -64,3 +64,62 @@ public sealed class ScreenWordsTests
         Assert.Equal("dick leads.", ScreenWords.Masked("dick leads.", keep));
     }
 }
+
+/// <summary>The Sailor-mouth dial (15 Nov 2026): ScreenWords.WithinSwears.</summary>
+public sealed class SwearDialTests
+{
+    private const string Six =
+        "Fucking hell, Sam is fucking flying, Bill is shit out of luck, what a damn mess, holy shit.";
+
+    [Fact]
+    public void A_line_within_the_dial_is_left_as_it_is()
+    {
+        Assert.Equal("Sam is fucking clear.", ScreenWords.WithinSwears("Sam is fucking clear.", 2));
+    }
+
+    [Fact]
+    public void Spare_intensifiers_come_out_last_first()
+    {
+        Assert.Equal(
+            "Sam is fucking clear and Bill is stuck.",
+            ScreenWords.WithinSwears("Sam is fucking clear and Bill is fucking stuck.", 1));
+    }
+
+    [Fact]
+    public void A_sentence_that_loses_its_first_word_starts_with_a_capital()
+    {
+        Assert.Equal("Brilliant lap, Sam.", ScreenWords.WithinSwears("Fucking brilliant lap, Sam.", 0));
+    }
+
+    [Fact]
+    public void Damn_it_is_not_an_intensifier_so_a_short_line_still_over_is_dropped()
+    {
+        Assert.Null(ScreenWords.WithinSwears("Damn it, Bill.", 0));
+    }
+
+    [Fact]
+    public void Six_in_one_short_line_comes_down_to_the_dial_or_is_dropped()
+    {
+        var two = ScreenWords.WithinSwears(Six, 2);
+
+        Assert.True(two is null || ScreenWords.SwearCount(two) <= 2);
+        Assert.Equal(6, ScreenWords.SwearCount(Six));
+    }
+
+    [Fact]
+    public void A_long_piece_gets_the_dial_for_every_forty_words()
+    {
+        var filler = string.Join(" ", Enumerable.Repeat("Sam leads on lap twelve.", 10));
+        var piece = filler + " Shit. Shit. Shit.";
+
+        // About 53 words: two lines' worth, so two a line allows four.
+        Assert.Equal(piece, ScreenWords.WithinSwears(piece, 2));
+    }
+
+    [Fact]
+    public void A_drivers_name_is_not_counted()
+    {
+        Assert.Equal("Dick is fucking clear.", ScreenWords.WithinSwears("Dick is fucking clear.", 1, new[] { "Dick" }));
+        Assert.Null(ScreenWords.WithinSwears("Dick is fucking clear, damn it.", 1));
+    }
+}
