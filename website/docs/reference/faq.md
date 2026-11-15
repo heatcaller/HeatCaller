@@ -6,7 +6,7 @@ Short answers to the questions race directors and club admins ask most, with lin
 
 ### Does HeatCaller run on a Mac or Linux?
 
-No. HeatCaller is a Windows desktop app. It needs a 64-bit Windows 11 (or Windows 10) PC; the installer brings everything else it needs. [Download the installer](https://github.com/asherizm/HeatCaller-releases/releases/latest/download/HeatCallerApp-beta.msi), and see [What you need](../getting-started/index.md#what-you-need).
+No. HeatCaller is a Windows desktop app. It needs a 64-bit Windows 11 (or Windows 10) PC; the installer brings everything else it needs. [Download the installer](https://github.com/heatcaller/HeatCaller-releases/releases/latest/download/HeatCallerApp-beta.msi), and see [What you need](../getting-started/index.md#what-you-need).
 
 ### Which timing systems does it work with?
 
