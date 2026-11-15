@@ -107,6 +107,16 @@ public static partial class RaceCoach
     }
 
     /// <summary>
+    /// The fields that were races, practice left out - for the grid, the
+    /// card's score and its reading. WHY (15 Nov 2026, bug hunt 21): Fields
+    /// keeps practice for the career table, which labels it, but the grid
+    /// and the score say "races" and "finished ahead", and in a practice
+    /// session the order is only best laps.
+    /// </summary>
+    public static List<SharedField> RacesOnly(IEnumerable<SharedField> fields) =>
+        fields.Where(f => f.Session.SessionType != RaceSessionType.Practice).ToList();
+
+    /// <summary>
     /// Whether the row driver beat the column driver in one race, on the
     /// measure: true, false, or null when the race does not count for it
     /// (a missing lap time, a tied best lap).

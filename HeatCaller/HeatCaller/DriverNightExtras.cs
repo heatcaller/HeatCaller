@@ -119,9 +119,17 @@ internal static class DriverNightExtras
             // with the laps as they are filtered - so a lap the filter drops
             // takes its position with it.
             var placesAt = LapByLap.Positions(results)[results.IndexOf(row)];
-            var flying = (row.LapTimesMs ?? new List<long>()).Skip(1).ToList();
+            //
+            // 15 Nov 2026 (bug hunt 21): a driver credited with the start
+            // lap has one more start slot - a zero, then the dash from their
+            // crossing before the green - so StartSlots says how many to
+            // drop. Paired with positions first, which run in step with
+            // Skip(1), so the extra slot takes its position with it.
+            var lapTimes = row.LapTimesMs ?? new List<long>();
+            var flying = lapTimes.Skip(1).ToList();
             var kept = flying
                 .Select((ms, i) => (Ms: ms, Pos: i < placesAt.Length ? placesAt[i] : 0))
+                .Skip(row.StartSlots(lapTimes) - 1)
                 .Where(lap => lap.Ms > 0)
                 .Take(MostLaps)
                 .ToList();
@@ -517,8 +525,11 @@ internal static class DriverNightExtras
         return rows.Select((r, i) =>
         {
             var at = places?[IndexOfRow(results, r)];
-            var flying = (r.LapTimesMs ?? new List<long>()).Skip(1)
+            // StartSlots (bug hunt 21): see the driver's own lap list above.
+            var lapTimes = r.LapTimesMs ?? new List<long>();
+            var flying = lapTimes.Skip(1)
                 .Select((ms, k) => (Ms: ms, Pos: at is not null && k < at.Length ? at[k] : 0))
+                .Skip(r.StartSlots(lapTimes) - 1)
                 .Where(lap => lap.Ms > 0)
                 .Take(MostLaps)
                 .ToList();

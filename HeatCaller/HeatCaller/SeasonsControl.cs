@@ -591,12 +591,20 @@ public sealed class SeasonsControl : UserControl
     internal static (string Line, double? Progress, bool Finished, int Rounds) ProgressOf(
         Season season, IReadOnlyList<SessionRecord> counted, RaceEventStore? events)
     {
-        var rounds = CommentaryReaders.RoundsCountedSoFar(counted, events, null) ?? RaceDaysOf(counted, events);
+        var exact = CommentaryReaders.RoundsCountedSoFar(counted, events, null);
+        var rounds = exact ?? RaceDaysOf(counted, events);
         var className = season.ClassName.Length > 0 ? season.ClassName : "Every class";
 
         if (season.PlannedRounds > 0)
         {
-            var finished = rounds >= season.PlannedRounds;
+            // WHY (15 Nov 2026, bug hunt 21): counting days, the last night
+            // became a whole round the moment its FIRST counted race was in,
+            // so the card said "finished" and "Champion" before the deciding
+            // A-main had run. When a day can hold more than one counted race
+            // (the fallback), a day still open is not done yet: the card says
+            // the rounds so far until that race day is closed.
+            var finished = rounds >= season.PlannedRounds
+                && (exact is not null || !AnyOnAnOpenDay(counted, events));
             return ($"{className} · {(finished ? $"finished, {Plural.Of(season.PlannedRounds, "round")}" : $"round {rounds} of {season.PlannedRounds}")}",
                 rounds / (double)season.PlannedRounds, finished, rounds);
         }
@@ -616,6 +624,11 @@ public sealed class SeasonsControl : UserControl
                 : "date:" + s.StartedAtUtc.ToLocalTime().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture))
             .Distinct(StringComparer.Ordinal)
             .Count();
+
+    /// <summary>Whether any of the races was run on a race day that is still open - more of its races may yet count.</summary>
+    private static bool AnyOnAnOpenDay(IReadOnlyList<SessionRecord> counted, RaceEventStore? events) =>
+        counted.Any(s => s.RoundId is { Length: > 0 } roundId
+            && events?.EventForRound(roundId) is { IsOpen: true, IsLegacy: false });
 
     /// <summary>
     /// The "Can they still win?" rows. WHY (14 Nov 2026): a season that ended

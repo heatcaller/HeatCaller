@@ -523,12 +523,12 @@ public sealed class RaceHistoryControl : UserControl
     private static string Count(int count, string word) => count == 1 ? $"1 {word}" : $"{count} {word}s";
 
     /// <summary>The tiles for one race, or dashes for none.</summary>
-    private void ShowTiles(SessionRecord? session)
+    private void ShowTiles(SessionRecord? session, IReadOnlyList<HandicapCalculator.Adjusted>? adjusted = null)
     {
         var finishers = session?.Results.OrderBy(r => r.Position).ToList() ?? new List<SessionResultEntry>();
 
-        var winner = finishers.FirstOrDefault();
-        SetTile(0, winner is null ? "-" : winner.DriverName, winner is null ? "Winner" : $"Winner · {Count(winner.Laps, "lap")}", "Winner");
+        var (winnerValue, winnerCaption) = WinnerTile(finishers, adjusted);
+        SetTile(0, winnerValue, winnerCaption, "Winner");
 
         var fastest = finishers.Where(r => r.FastLapMs > 0).OrderBy(r => r.FastLapMs).FirstOrDefault();
         SetTile(1, fastest is null ? "-" : $"{fastest.FastLapMs / 1000.0:0.000}s", fastest is null ? "Fastest lap" : $"Fastest lap · {fastest.DriverName}", "Fastest lap");
@@ -545,6 +545,24 @@ public sealed class RaceHistoryControl : UserControl
         var warned = finishers.Count(r => r.Warnings.Count > 0);
         SetTile(3, session is null ? "-" : warnings.ToString(CultureInfo.CurrentCulture),
             warned == 0 ? "Warnings" : $"Warnings · {Count(warned, "driver")}", "Warnings");
+    }
+
+    /// <summary>
+    /// The Winner tile's value and caption. WHY (15 Nov 2026, bug hunt 21):
+    /// in a handicap class it named the as-raced winner while the Handicap
+    /// Pos column beside it put somebody else in P1. With a handicap order it
+    /// names that order's winner, and says so.
+    /// </summary>
+    internal static (string Value, string Caption) WinnerTile(
+        IReadOnlyList<SessionResultEntry> finishers, IReadOnlyList<HandicapCalculator.Adjusted>? adjusted)
+    {
+        if (adjusted?.OrderBy(a => a.AdjustedPosition).FirstOrDefault() is { } first)
+        {
+            return (first.Result.DriverName, $"Handicap winner · {Count(first.Result.Laps, "lap")}");
+        }
+
+        var winner = finishers.OrderBy(r => r.Position).FirstOrDefault();
+        return winner is null ? ("-", "Winner") : (winner.DriverName, $"Winner · {Count(winner.Laps, "lap")}");
     }
 
     /// <summary>What each tile says under its value: the whole caption, and the short one for a tile too narrow for it.</summary>
@@ -643,7 +661,16 @@ public sealed class RaceHistoryControl : UserControl
             return;
         }
 
-        ShowTiles(session);
+        // Handicaps apply at presentation, never to the recorded result - so
+        // the raw position stays in its own column and the adjusted one sits
+        // beside it. Both visible, or the result can't be checked.
+        // On the credits kept with the race when it was filed (B52) - today's
+        // only for a race saved before they were kept.
+        var adjustedOrder = _handicaps is null
+            ? null
+            : HandicapCalculator.ForSession(session, HandicapClassFor(session), _handicaps).Adjusted;
+
+        ShowTiles(session, adjustedOrder);
         _currentSessionId = session.Id;
         _txtNotes.Text = session.Notes;
         _notesAsLoaded = session.Notes;
@@ -654,14 +681,7 @@ public sealed class RaceHistoryControl : UserControl
         var labelPart = string.IsNullOrWhiteSpace(session.Label) ? "" : $" - {session.Label}";
         _lblDetailTitle.Text = $"{TypeText(session, full: true)}{trackPart}{labelPart}\n{AppTime.DateAndTime(session.StartedAtUtc.ToLocalTime())} ({duration:hh\\:mm\\:ss})";
 
-        // Handicaps apply at presentation, never to the recorded result - so
-        // the raw position stays in its own column and the adjusted one sits
-        // beside it. Both visible, or the result can't be checked.
-        // On the credits kept with the race when it was filed (B52) - today's
-        // only for a race saved before they were kept.
-        var adjusted = _handicaps is null
-            ? null
-            : HandicapCalculator.ForSession(session, HandicapClassFor(session), _handicaps).Adjusted?
+        var adjusted = adjustedOrder?
                 .ToDictionary(a => a.Result.Transponder, a => a, StringComparer.OrdinalIgnoreCase);
 
         _detailGrid.Columns["adj"]!.Visible = adjusted is not null;
