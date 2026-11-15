@@ -75,7 +75,7 @@ import { LapVoiceLibrary } from "./lapvoice.js";
 import { STREAM_FORMAT, VOICE_PLAN_OFF, type MeterUsage, type VoicePlan, type VoiceService } from "./voice.js";
 import { isMeterName, type TopUpRequests } from "./topuprequests.js";
 import type { UsageLog } from "./usagelog.js";
-import { BROADCAST_TTL_SECONDS, myNightUrl, PUSH_CHANNEL, pushKindsFrom, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
+import { BROADCAST_TTL_SECONDS, followNameFrom, myNightUrl, PUSH_CHANNEL, pushKindsFrom, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
 import { PAGES_BUILD } from "./pagebuild.js";
 import { nextNightIcs } from "./ics.js";
 import { hiddenAfter, liveVideo, mergedStreamBody, raceVideo, STREAM_MAX_PIECES, STREAM_NIGHTS_KEPT, streamFrom, streamNightId, VideoCheck, type OEmbedAsk, type RaceVideo, type Stream } from "./video.js";
@@ -2805,6 +2805,13 @@ export class Relay {
       return;
     }
 
+    // Follower alerts (14 Nov 2026, stream overlay plan 7.1): a phone
+    // following a driver by name, no badge code - see push.ts FOLLOW_CHANNEL.
+    if (method === "POST" && rest.length === 3 && rest[0] === "push" && rest[1] === "follow" && (rest[2] === "subscribe" || rest[2] === "unsubscribe")) {
+      await this.followSignUp(request, response, club, rest[2] === "subscribe");
+      return;
+    }
+
     // The laptop telling every signed-up phone at once (12 Nov 2026, setup
     // plan step 7): the next race night is off. Its token, never a phone.
     if (method === "POST" && rest.length === 2 && rest[0] === "push" && rest[1] === "broadcast") {
@@ -3222,6 +3229,13 @@ export class Relay {
           void this.push.afterLive(club, existing?.body, body);
         }
 
+        // Follower alerts (overlay plan 7.1): a followed driver's race now
+        // next. From the programme as the public sees it - only a club that
+        // publishes line-ups names anybody in it.
+        if (spec.name === "programme" && this.push !== undefined && !unreadable) {
+          void this.push.afterProgramme(club, existing?.body, doc.body);
+        }
+
         if (spec.name === "checkin") {
           this.forgetCheckin(club);
 
@@ -3342,6 +3356,11 @@ export class Relay {
         // their result in. Not waited for, and never throws.
         if (spec.name === NIGHTS_CHANNEL && this.push !== undefined && !unreadable) {
           void this.push.afterNight(club, itemId as string, existing?.body, body);
+        }
+
+        // Follower alerts (overlay plan 7.1): a followed driver's result.
+        if (spec.name === "results" && this.push !== undefined && !unreadable) {
+          void this.push.afterResult(club, itemId as string, existing?.body, body);
         }
 
         await this.prune(club, spec.name, victims);
@@ -7128,6 +7147,84 @@ export class Relay {
     const outcome = await push.sendAll(club, { ...message, url: myNightUrl(club) }, BROADCAST_TTL_SECONDS);
     this.log(`[push] "${club}": broadcast ${message.tag} to ${outcome.badges} driver${outcome.badges === 1 ? "" : "s"}: ${outcome.sent} sent, ${outcome.failed} failed`);
     sendJson(response, 200, { ok: true, badges: outcome.badges, sent: outcome.sent, failed: outcome.failed });
+  }
+
+  /**
+   * A phone signing up for (or off) alerts about a driver it follows by name
+   * (stream overlay plan 7.1). Public, as following is: no badge code. The
+   * name must be one the club's own running order names now - so the relay
+   * can't be filled with made-up names - and the phone gets only the two
+   * kinds a follower can have, their race next and their result.
+   */
+  private async followSignUp(request: IncomingMessage, response: ServerResponse, club: string, on: boolean): Promise<void> {
+    const who = `${club}|${clientAddress(request)}`;
+
+    if (this.push === undefined) {
+      sendJson(response, 404, { ok: false, error: "This relay does not send alerts." });
+      return;
+    }
+
+    if (this.checkinReads.blocked(who)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
+      return;
+    }
+
+    this.checkinReads.hit(who);
+    const body = await readBody(request, response, CHECKIN_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    const name = followNameFrom(body["name"]);
+
+    if (name === "") {
+      sendJson(response, 400, { ok: false, error: "Which driver?" });
+      return;
+    }
+
+    const push = this.push;
+
+    if (!on) {
+      const endpoint = isPlainObject(body["sub"]) && typeof body["sub"]["endpoint"] === "string" ? body["sub"]["endpoint"] : "";
+      await push.followUnsubscribe(club, name, endpoint);
+      sendJson(response, 200, { ok: true });
+      return;
+    }
+
+    const programme = (await this.store.getSnapshot(club, "programme").catch(() => undefined))?.body;
+    const lines = isPlainObject(programme) && programme["lineups"] === true && Array.isArray(programme["lines"]) ? programme["lines"] : [];
+    const lower = name.toLowerCase();
+    const named = lines.some((l) => isPlainObject(l) && Array.isArray(l["drivers"]) && l["drivers"].some((d) => typeof d === "string" && d.toLowerCase() === lower));
+
+    if (!named) {
+      sendJson(response, 404, { ok: false, error: name + " isn't in the club's running order today. Try again on a race night." });
+      return;
+    }
+
+    const parsed = pushSubFrom(body["sub"], this.now().toISOString());
+    const kinds = pushKindsFrom(body["kinds"]);
+    const sub = parsed === undefined ? undefined : kinds === undefined ? parsed : { ...parsed, kinds };
+
+    if (sub === undefined) {
+      sendJson(response, 400, { ok: false, error: "This phone's alerts could not be set up." });
+      return;
+    }
+
+    const outcome = await push.followSubscribe(club, name, sub);
+
+    if (outcome === "full") {
+      sendJson(response, 507, { ok: false, error: "This club cannot take any more phones for alerts." });
+      return;
+    }
+
+    if (outcome === "bad") {
+      sendJson(response, 400, { ok: false, error: "Which driver?" });
+      return;
+    }
+
+    sendJson(response, 200, { ok: true });
   }
 
   private async pushSignUp(request: IncomingMessage, response: ServerResponse, club: string, on: boolean): Promise<void> {

@@ -9802,6 +9802,7 @@ function folNext(doc, who) {
 
 function drawFol() {
   if (!fol) return;
+  folAlertsCheck();
   const who = memory;
   const n = who && who !== folSignedInName() ? folNext(folDoc, who) : null;
   fol.textContent = '';
@@ -9831,6 +9832,93 @@ function drawFol() {
   share.className = 'fol-share';
   share.innerHTML = followShareButton(who, 'Send a link that follows ' + who);
   fol.appendChild(share);
+
+  // FOLLOWER ALERTS (overlay plan 7.1): before their race, and their result.
+  if (!n.done && !n.missing) {
+    const alerts = document.createElement('div');
+    alerts.className = 'fol-share';
+    const on = folAlertsFor() === who;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'fshare';
+    b.id = 'folalerts';
+    b.textContent = folAlertWords || (on ? 'Alerts on for ' + who + ' \u00b7 Turn off' : 'Tell me before ' + who + ' races');
+    b.addEventListener('click', () => { if (folAlertsFor() === who) folAlertsOff(who); else folAlertsOn(who); });
+    alerts.appendChild(b);
+    fol.appendChild(alerts);
+  }
+}
+
+// Which name this phone has follower alerts on for, kept on the phone.
+const FOL_ALERTS_KEY = 'hg-follow-alerts-' + CLUB;
+let folAlertWords = '';
+function folAlertsFor() {
+  try { return localStorage.getItem(FOL_ALERTS_KEY) || ''; } catch (e) { return ''; }
+}
+function folAlertsKeep(name) {
+  try { if (name) localStorage.setItem(FOL_ALERTS_KEY, name); else localStorage.removeItem(FOL_ALERTS_KEY); } catch (e) { /* this visit only */ }
+}
+function folKeyBytes(text) {
+  const t = String(text).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(t + '='.repeat((4 - t.length % 4) % 4));
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+function folSay(words) { folAlertWords = words; drawFol(); setTimeout(() => { folAlertWords = ''; drawFol(); }, 6000); }
+async function folPost(path, body) {
+  const r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), cache: 'no-store' });
+  let a = {};
+  try { a = await r.json(); } catch (e) { /* no words */ }
+  return { status: r.status, error: a && typeof a.error === 'string' ? a.error : '' };
+}
+
+// Signs this phone up for alerts about the driver it follows. Permission is
+// asked inside the tap - an iPhone only asks from a tap, and only from the
+// page added to its Home Screen (Apple's rule), which is said plainly.
+function folAlertsOn(name) {
+  const supported = typeof navigator === 'object' && 'serviceWorker' in navigator && typeof window.PushManager !== 'undefined' && typeof Notification === 'function';
+  if (!supported) {
+    folSay(/iPhone|iPad|iPod/.test(navigator.userAgent || '') ? 'On an iPhone: Share, then Add to Home Screen, then open it from there' : 'This browser can\u2019t show alerts');
+    return;
+  }
+  let asked = null;
+  try { asked = Notification.requestPermission(); } catch (e) { asked = null; }
+  folSay('Setting up alerts\u2026');
+  Promise.resolve(asked).then(async (answer) => {
+    if ((answer || Notification.permission) !== 'granted') { folSay('Alerts are blocked for this page in the phone\u2019s settings'); return; }
+    try {
+      await navigator.serviceWorker.register('/c/' + encodeURIComponent(CLUB) + '/sw.js');
+      const reg = await navigator.serviceWorker.ready;
+      const k = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/push/key', { cache: 'no-store' }).then((r) => r.json());
+      if (!k || typeof k.key !== 'string') throw new Error('no key');
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: folKeyBytes(k.key) });
+      const a = await folPost('/push/follow/subscribe', { name, sub: sub.toJSON(), kinds: ['race', 'result'] });
+      if (a.status === 200) { folAlertsKeep(name); folSay('Alerts on: we\u2019ll tell you before ' + name + ' races, and their result'); }
+      else folSay(a.error || 'Alerts couldn\u2019t be set up just now');
+    } catch (e) {
+      folSay('Alerts couldn\u2019t be set up just now');
+    }
+  });
+}
+
+// Takes this phone off a name's alerts (the phone keeps its own push
+// sign-up: a driver's own alerts may be using it too).
+async function folAlertsOff(name) {
+  folAlertsKeep('');
+  try {
+    const reg = await navigator.serviceWorker.getRegistration('/c/' + encodeURIComponent(CLUB) + '/sw.js');
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    if (sub) await folPost('/push/follow/unsubscribe', { name, sub: { endpoint: sub.endpoint } });
+  } catch (e) { /* the relay forgets a gone phone on its own */ }
+  folSay('Alerts off for ' + name);
+}
+
+// Following somebody else takes the alerts off the one before.
+function folAlertsCheck() {
+  const was = folAlertsFor();
+  if (was && was !== memory) folAlertsOff(was);
 }
 
 async function readFol() {
