@@ -473,9 +473,23 @@ public sealed class PersonalBestsControl : UserControl
 
         var gap = best.BestLapMs - record.Result.FastLapMs;
 
-        if (gap <= 0)
+        // Only the driver the record is credited to holds it. A PB quicker
+        // than the record came from a car that can't hold one (a rental, or
+        // a driver kept out of records - RecordLaps leaves those out), and
+        // a PB equal to it only ties whoever set it first.
+        if (gap <= 0 && string.Equals(RaceCoach.WhoIs(record.Result), best.Driver.Trim(), StringComparison.OrdinalIgnoreCase))
         {
             return "You hold the record";
+        }
+
+        if (gap == 0)
+        {
+            return "Equals the record";
+        }
+
+        if (gap < 0)
+        {
+            return $"{RaceCoach.Gap(gap)} (not counted for the record)";
         }
 
         var lengths = RaceCoach.SayLengths(gap, record.Result.FastLapMs, RaceCoach.TrackCars(Layouts, best.Track));

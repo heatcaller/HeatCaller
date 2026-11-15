@@ -151,6 +151,42 @@ public sealed class RaceAnalyticsPersonalBestsTests
     }
 
     [Fact]
+    public void Only_the_record_s_holder_is_told_they_hold_it()
+    {
+        // Bug hunt 20: a rental's quicker lap and a lap that only tied an
+        // earlier record were both told "You hold the record".
+        var gaps = StaThread.Run(() =>
+        {
+            using var data = new TempAppData();
+
+            var profiles = ProfileStore.Load();
+            profiles.Upsert(new DriverProfile { Transponder = "RENT", DriverName = "Guest", IsRental = true });
+
+            var history = SessionHistoryStore.FromSessions(new[]
+            {
+                AnalyticsData.Session("Club Infield", Start, "Heat", AnalyticsData.Driver("Priya", "1", AnalyticsData.Steady(15.1)),
+                    AnalyticsData.Driver("Guest", "RENT", AnalyticsData.Steady(14.8))),
+                AnalyticsData.Session("Club Infield", Start.AddDays(7), "Heat", AnalyticsData.Driver("Sam", "2", AnalyticsData.Steady(15.1))),
+            });
+
+            using var page = new PersonalBestsControl(history, PersonalBestResetStore.Load(), new UndoService()) { Profiles = profiles };
+
+            string? GapFor(string driver)
+            {
+                page.SelectDriver(driver);
+                page.RefreshAll();
+                return Assert.Single(page.Grid.Rows.Cast<DataGridViewRow>()).Cells["gap"].Value?.ToString();
+            }
+
+            return (Priya: GapFor("Priya"), Guest: GapFor("Guest"), Sam: GapFor("Sam"));
+        }, TimeSpan.FromSeconds(30), () => "building Personal Bests with a rental");
+
+        Assert.Equal("You hold the record", gaps.Priya);
+        Assert.Equal("-0.300s (not counted for the record)", gaps.Guest);
+        Assert.Equal("Equals the record", gaps.Sam);
+    }
+
+    [Fact]
     public void Sorting_by_a_heading_keeps_each_pill_on_its_own_track()
     {
         // Bug hunt 18: the pills were kept by row index, so a header-click
