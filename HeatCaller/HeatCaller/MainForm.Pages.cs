@@ -288,7 +288,7 @@ public partial class MainForm
         {
             if (improvedAt < 0 || Environment.TickCount64 - improvedAt > 10000)
             {
-                improved = MostImprovedTonight.From(RacesTonight());
+                improved = MostImprovedTonight.From(RacesTonight(), id => _rounds?.Get(id));
                 improvedAt = Environment.TickCount64;
             }
 

@@ -104,7 +104,7 @@ public sealed partial class WebServerService
         {
             logos = (_sponsors?.Current.Sponsors ?? new List<SponsorBooking>())
                 .Where(s => s.Enabled && SponsorLogo.IsLogoName(s.LogoFileName) && RelaySponsors.NameOnTheWeb(s).Length > 0)
-                .Select(s => new SponsorStream.Logo(s.Id, RelaySponsors.NameOnTheWeb(s), SponsorLogoUrl(s.LogoFileName), Math.Max(1, s.Weight)))
+                .Select(s => new SponsorStream.Logo(s.Id, RelaySponsors.NameOnTheWeb(s), SponsorLogoUrl(s.LogoFileName), Math.Max(1, s.Weight), (s.Name ?? string.Empty).Trim()))
                 .ToList();
         }
         catch

@@ -27,7 +27,9 @@ internal static class SponsorStream
     private static readonly TimeSpan MaxGap = TimeSpan.FromSeconds(2.5);
 
     /// <summary>One sponsor with a logo, as the stream needs them.</summary>
-    internal sealed record Logo(string Id, string Name, string Url, int Weight);
+    /// <param name="Name">The name as the web shows it (RelaySponsors.NameOnTheWeb).</param>
+    /// <param name="SpokenName">The booking's own Name, the one a read on air is begun with - see <see cref="Up"/>.</param>
+    internal sealed record Logo(string Id, string Name, string Url, int Weight, string? SpokenName = null);
 
     /// <summary>
     /// The logo up now, or null when no sponsor has one. Their read on air
@@ -41,8 +43,14 @@ internal static class SponsorStream
             return null;
         }
 
+        // WHY (15 Nov 2026, bug hunt 21): the read is begun with the
+        // booking's spoken Name ("Smith and co"), the logo list carries the
+        // web name ("Smith & Co.") where there is one, and matching only the
+        // second left a rival's logo up - and counted - through Smith's read.
+        // Either name is theirs.
         if (!string.IsNullOrWhiteSpace(onAirName)
-            && logos.FirstOrDefault(l => string.Equals(l.Name.Trim(), onAirName.Trim(), StringComparison.OrdinalIgnoreCase)) is { } onAir)
+            && logos.FirstOrDefault(l => string.Equals(l.Name.Trim(), onAirName.Trim(), StringComparison.OrdinalIgnoreCase)
+                || string.Equals((l.SpokenName ?? string.Empty).Trim(), onAirName.Trim(), StringComparison.OrdinalIgnoreCase)) is { } onAir)
         {
             return onAir;
         }
