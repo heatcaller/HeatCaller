@@ -2,21 +2,21 @@
 
 ## Build status (14 Nov 2026, evening)
 
-Built on branch `claude/follow-link`, not merged, not pushed, relay not deployed (Asher: "complete the rest of the plan step by step... move autonomously"). Commits: `779c152` follow link, `53b4613` sponsor logos, `690782a` layouts and presets, `69ecede` racers and families, `448b626` provisional and phone view, `c2bff2c` your own layouts, `7508ac3` share this race.
+Built on branch `claude/follow-link`, not merged, not pushed, relay not deployed (Asher: "complete the rest of the plan step by step... move autonomously", then "follower alerts-yes, family links-any driver, build and fix the rest"). Commits: `779c152` follow link, `53b4613` sponsor logos, `690782a` layouts and presets, `69ecede` racers and families, `448b626` provisional and phone view, `c2bff2c` your own layouts, `7508ac3` share this race.
 
 | Part | State |
 |---|---|
 | 1 Sponsor logo upload | Built. Logo row on the Sponsors page, Live card uses it, `/sponsor-logo/<name>`. |
 | 2 Element engine | Built. `/broadcast` unchanged; `?demo=1&at=` runs a made-up race. |
 | 3 Presets | Built: seven at `/overlay/<id>`; Stream overlay row on the Web Server page with Copy, Preview, Phone view, Edit. |
-| 4 Your own layouts | Built: the Stream overlays window, `overlays.json`, live redraw. Not built: the overlap warning, text size, undo. |
-| 5 Sponsor logos on the stream | Built: turns by share, read on air wins, quiet moments, minutes in the report. Not built: counting "presented by" graphics. |
+| 4 Your own layouts | Built: the Stream overlays window, `overlays.json`, live redraw, overlap warning, size of the whole layout, Undo, Basics cards. |
+| 5 Sponsor logos on the stream | Built: turns by share, read on air wins, quiet moments, minutes and "presented by" graphics in the report. |
 | 6.1 Runs itself | Built: Race night (auto), and OBS scene switching (off by default). |
 | 6.2-6.7 | Built: laps/time and Result column, the finish, the Overall mode in qualifying (and the Qual column now works on Wi-Fi pages), car colour, Last lap, next three races with marshals. |
-| 6.8-6.10 | Built: .95vw minimum on the old pylon, phone view; provisional/corrected on the podium (not yet on the Results table); state build measured at 0.7 ms. |
-| 7.1 | Built: follow link and the followed driver's next race on Home. **Not built, waiting on Asher:** follower alerts (they need the relay to keep which phone follows which name, against "nothing about who follows whom ever leaves the phone"), and family codes (decision 10). |
-| 7.2, 7.3, 7.5, 7.6 | Built: 1st/2nd/3rd, plain words for first-ever badges, juniors as "Mia K" on every overlay and caption, basics cards and starting soon / that's it. Not built: most improved, a "Tonight's bests" card, club-editable basics, the junior rule on relay pages when a club turns short names off. |
-| 7.4 | Built: Share this race in the video sheet. Not built: a result card picture. |
+| 6.8-6.10 | Built: .95vw minimum on the old pylon, phone view; provisional/corrected on the podium and the Results table; state build measured at 0.7 ms. |
+| 7.1 | Built: follow link, the followed driver's next race on Home, follower alerts (race next, result), family links for any driver (10 each, read-only page, gone when nights close). |
+| 7.2, 7.3, 7.5, 7.6 | Built: 1st/2nd/3rd, plain words for first-ever badges, banners in turn, Tonight's bests, juniors as "Mia K" on every overlay, caption and (with short names off) relay page, club-written basics cards, starting soon / that's it. **Not built, on purpose:** "most improved tonight" - the app's own rule (SeasonPiece) is not to say who improved, as it ranks everyone else. |
+| 7.4 | Built: Share this race in the video sheet. The result card picture already existed (Make a picture to share, on a driver's night). |
 
 *14 November 2026. Plan first, then built (above). From reading `WebServerService.cs` (`BuildOverlayPage`), `WebServerService.Camera.cs` (`BuildBroadcastPage`), `WebServerService.Pylon.cs`, `WebServerService.LiveInputs.cs`, `WebServerControl.cs`, `SponsorStore.cs`, `SponsorsControl.cs`, `RelaySponsors.cs` and `ClubLogo.cs`.*
 
@@ -431,6 +431,6 @@ Docs: update `website/docs/screens/` with a Stream overlays page and the Sponsor
 7. **Body colour** (6.5): one colour, or a main and a second?
 8. **Photos on the stream** (6.5): follow the existing `NoPhotoOnline` switch, or get a switch of their own? (7.5 already makes juniors off unless turned on.)
 9. ~~**Junior names** (7.5): is *first name and initial* the right default?~~ **Yes** (Asher, 14 Nov).
-10. **Family links** (7.1): ~~is 10 per driver right?~~ **Yes, 10** (Asher, 14 Nov). Following by name already covers every driver, adult or junior, for everything public. Family codes add only the private parts. Can any driver make one, or only juniors? The plan says any driver.
+10. **Family links** (7.1): ~~is 10 per driver right?~~ **Yes, 10** (Asher, 14 Nov). Following by name already covers every driver, adult or junior, for everything public. Family codes add only the private parts. ~~Can any driver make one, or only juniors?~~ **Any driver** (Asher, 14 Nov).
 11. **Personal moments on the stream** (7.3): three per race at most, or fewer? (Built as the badges already were: one banner at a time, the latest wins.)
-12. **Follower alerts** (7.1): may the relay keep, per club, which phones want alerts for which driver's name? It's needed for "tell me before Mia races" without a badge code, and it goes against the follow design's "nothing about who follows whom ever leaves the phone".
+12. ~~**Follower alerts** (7.1)~~ **Yes** (Asher, 14 Nov). May the relay keep, per club, which phones want alerts for which driver's name? It's needed for "tell me before Mia races" without a badge code, and it goes against the follow design's "nothing about who follows whom ever leaves the phone".
