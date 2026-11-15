@@ -62,7 +62,14 @@ internal sealed class SegmentedSwitch : Control
     private void SyncAccessible() => AccessibleName = $"{Text} {(_on ? _onText : _offText)}";
 
     private int Gap => UiLayout.AtDpi(8);
-    private int SegmentPad => UiLayout.AtDpi(14);
+    private int SegmentPad => UiLayout.AtDpi(Compact ? 11 : 14);
+
+    /// <summary>
+    /// A little less room either side of each choice (15 Nov 2026) - for Race
+    /// Control's three switches at the foot of the board, which with Format
+    /// and Expand have to fit on one row at 1280 wide.
+    /// </summary>
+    public bool Compact { get; init; }
     private int VerticalPad => UiLayout.AtDpi(6);
 
     private Size Measure(string text) =>

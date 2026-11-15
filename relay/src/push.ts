@@ -876,7 +876,12 @@ export class PushService {
   async afterResult(club: string, sessionId: string, before: unknown, after: unknown): Promise<void> {
     try {
       const names = await this.followed(club);
-      const url = `/c/${encodeURIComponent(club)}/results#${encodeURIComponent(sessionId)}`;
+      // The race's own page, as the driver's own result alert (15 Nov 2026,
+      // bug hunt 21 #25): "/results#<sid>" had deliver's ?from= added into
+      // the fragment, so a tap opened the Results list and was never counted.
+      const url = /^[0-9a-f]{32}$/.test(sessionId)
+        ? `/c/${encodeURIComponent(club)}/results/${sessionId}`
+        : `/c/${encodeURIComponent(club)}/results`;
 
       for (const [id, name] of names) {
         for (const message of followResultAlerts(before, after, name, url)) {
@@ -1065,6 +1070,36 @@ export class PushService {
    */
   async send(club: string, id: string, message: PushMessage, ttlSeconds: number = PUSH_TTL_SECONDS): Promise<number> {
     return (await this.deliver(club, id, message, ttlSeconds)).sent;
+  }
+
+  /**
+   * sendAll started rather than waited for (15 Nov 2026, bug hunt 21 #26):
+   * the phones are sent to one by one, and past the laptop's 8 s wait the
+   * director was told "no push" though every phone got it - and a second
+   * try buzzed them all again. Counted first, so the laptop can be told how
+   * many drivers and phones it is going to; done is the sending itself,
+   * which never rejects.
+   */
+  async startAll(
+    club: string,
+    message: PushMessage,
+    ttlSeconds: number = BROADCAST_TTL_SECONDS,
+  ): Promise<{ badges: number; queued: number; done: Promise<{ badges: number; sent: number; failed: number }> }> {
+    const ids = await this.signedUp(club);
+    const kind = alertKindOf(message.tag);
+    let queued = 0;
+
+    for (const id of ids) {
+      const subs = await this.subsOf(club, id).catch(() => []);
+      queued += subs.filter((s) => s.kinds === undefined || s.kinds.includes(kind)).length;
+    }
+
+    const done = this.sendAll(club, message, ttlSeconds).catch((e: unknown) => {
+      this.log(`[push] "${club}": could not send ${message.tag}: ${String(e)}`);
+      return { badges: ids.size, sent: 0, failed: queued };
+    });
+
+    return { badges: ids.size, queued, done };
   }
 
   /**

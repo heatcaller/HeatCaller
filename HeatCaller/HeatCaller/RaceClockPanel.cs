@@ -14,7 +14,7 @@ namespace HeatCaller;
 /// full double-buffering style set - and all loops are bounded, since this
 /// runs on the paint thread.
 /// </summary>
-public sealed class RaceClockPanel : Control
+public sealed class RaceClockPanel : Control, ISlidesAsPicture
 {
     private readonly RaceTiming _race;
 
@@ -76,8 +76,32 @@ public sealed class RaceClockPanel : Control
         }
     }
 
+    /// <summary>While Race Control's fold slides the clock to its new size, the picture it shows scaled - see ISlidesAsPicture.</summary>
+    public Bitmap? SlidePicture { get; set; }
+
+    /// <summary>The clock as it draws itself now, at its size now - without the fold button inside it.</summary>
+    public Bitmap TakeSlidePicture()
+    {
+        var picture = new Bitmap(Math.Max(1, Width), Math.Max(1, Height), System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+
+        using (var g = Graphics.FromImage(picture))
+        {
+            OnPaint(new PaintEventArgs(g, new Rectangle(Point.Empty, picture.Size)));
+        }
+
+        return picture;
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
+        if (SlidePicture is { } picture)
+        {
+            e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBilinear;
+            e.Graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+            e.Graphics.DrawImage(picture, ClientRectangle);
+            return;
+        }
+
         var g = e.Graphics;
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
@@ -168,21 +192,40 @@ public sealed class RaceClockPanel : Control
             return FontLibrary.Create(AppTheme.MonoFamily, cached.Points, FontStyle.Bold);
         }
 
-        for (var points = start; points > 12f; points -= 1f)
+        // The same sizes as ever - start, a point less, and so on down to 12 -
+        // but halved towards the answer rather than stepped through one by
+        // one (15 Nov 2026): while Race Control's fold slides the clock to a
+        // new size, every frame is a new width, and stepping down a point at
+        // a time measured a dozen fonts or more per frame. Wider never fits
+        // where narrower does not, so the halving finds the same size.
+        bool Fits(float points)
         {
-            var candidate = FontLibrary.Create(AppTheme.MonoFamily, points, FontStyle.Bold);
-
-            if (g.MeasureString(text, candidate).Width <= available)
-            {
-                _fitCache = (text.Length, available, start, points);
-                return candidate;
-            }
-
-            candidate.Dispose();
+            using var candidate = FontLibrary.Create(AppTheme.MonoFamily, points, FontStyle.Bold);
+            return g.MeasureString(text, candidate).Width <= available;
         }
 
-        _fitCache = (text.Length, available, start, 12f);
-        return FontLibrary.Create(AppTheme.MonoFamily, 12f, FontStyle.Bold);
+        // Steps below start: 0 is start itself; steps is the first past 12.
+        var steps = Math.Max(0, (int)Math.Ceiling(start - 12f));
+        int low = 0, high = steps;
+
+        while (low < high)
+        {
+            var middle = (low + high) / 2;
+
+            if (Fits(start - middle))
+            {
+                high = middle;
+            }
+            else
+            {
+                low = middle + 1;
+            }
+        }
+
+        var found = low < steps ? start - low : 12f;
+
+        _fitCache = (text.Length, available, start, found);
+        return FontLibrary.Create(AppTheme.MonoFamily, found, FontStyle.Bold);
     }
 
     /// <summary>The last size FitFont settled on, and what it was fitted to.</summary>

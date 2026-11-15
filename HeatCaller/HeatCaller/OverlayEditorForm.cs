@@ -449,6 +449,17 @@ public sealed class OverlayEditorForm : Form
 
         var before = _undo[at];
         _undo.RemoveAt(at);
+
+        // WHY (15 Nov 2026, bug hunt 21): Undo takes back a change to the
+        // graphics, not a Rename made since - which is not on the undo list.
+        // The copy was taken before the rename, so it keeps the name as it
+        // is now; otherwise the layout went back to its old name while this
+        // window's list still showed the new one.
+        if (_store.Get(before.Id) is { } now)
+        {
+            before.Name = now.Name;
+        }
+
         _store.Update(before);
         ShowLayoutKeepingElement();
     }

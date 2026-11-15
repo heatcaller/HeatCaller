@@ -175,7 +175,7 @@ public sealed class BugHunt7ListenAppTests
     public void The_caption_listeners_read_has_no_audio_tags()
     {
         var offer = Between(SourceOf("AnnouncementService.ListenAlong.cs"), "private bool OfferLineToListeners(", "private byte[]? AsMp3(");
-        Assert.Contains("var words = VoiceProfile.StripAudioTags(text);", offer);
+        Assert.Contains("var words = Starred(VoiceProfile.StripAudioTags(text));", offer);
     }
 
     [Fact]

@@ -816,9 +816,10 @@ public sealed class CastControl : UserControl
             "From their phone, behind their personal PIN: a name and a voice for their own Team Principal and Technical "
             + "Lead, and a few words for the interviews - tonight's goal, who they'd like to thank, their car's story. "
             + "A voice they pick is used straight away; names and words wait for you on Driver Requests.");
-        // Inline, as the Test Voice buttons are: a bare button in the field
-        // column is held to the grid's button width and its caption cut off.
-        crewGrid.AddRow("Voices:", Line(_btnCrewVoices));
+        // In a ButtonBar, which sizes a button to its caption: put in the row on
+        // its own the button kept the default 75px and cut "Voices drivers can
+        // pick..." short (LayoutTests, 15 Nov 2026).
+        crewGrid.AddRow("Voices:", new ButtonBar().With(_btnCrewVoices));
         crewGrid.AddHint("Every voice on the engine in use, less any you hide here. The announcer's and the co-hosts' "
                          + "voices are never offered.");
         Switch(crewGrid, _chkJuniorNotesFromPhone,

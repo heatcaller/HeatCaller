@@ -506,7 +506,9 @@ public static partial class AchievementEvaluator
             // loop - and it sat in the minimum, so no real last lap could
             // ever be the quickest and the award could not be won. It also
             // counted towards the three, which made the minimum two laps.
-            var flyingLaps = entry.LapTimesMs.Skip(1).Where(l => l > 0).ToList();
+            // StartSlots (15 Nov 2026, bug hunt 21): a credited start lap is
+            // a zero then the rest of the start, which Skip(1) let in.
+            var flyingLaps = entry.LapTimesMs.Skip(entry.StartSlots(entry.LapTimesMs)).Where(l => l > 0).ToList();
 
             if (flyingLaps.Count >= 3)
             {
@@ -741,7 +743,7 @@ public static partial class AchievementEvaluator
                 var running = previousBest;
                 var bestsBroken = 0;
 
-                foreach (var lap in entry.LapTimesMs.Skip(1))
+                foreach (var lap in entry.LapTimesMs.Skip(entry.StartSlots(entry.LapTimesMs)))
                 {
                     if (lap > 0 && lap < running)
                     {

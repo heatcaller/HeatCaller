@@ -130,6 +130,31 @@ function aboutSheet(name: string): string {
 </div>`;
 }
 
+/* The Lap times in my ear chip for every tick box (15 Nov 2026): outlined
+   and quiet when off, filled in the club's colour with a tick when on. The
+   box itself is still there, see-through over the whole chip, so a tap,
+   the keyboard and a screen reader work as they always did. In the club
+   pages' STYLE and the manager page's own sheet. */
+const TICK_CHIP_CSS = `
+label:has(> input[type=checkbox]) { position: relative; display: inline-flex; align-items: center; gap: 8px;
+  min-height: 40px; padding: 8px 14px 8px 10px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--muted); font-size: 0.9rem; font-weight: 400; text-align: left;
+  cursor: pointer; user-select: none; transition: background 0.15s, border-color 0.15s, color 0.15s; }
+label.chk:has(> input[type=checkbox]) { border-radius: 14px; max-width: 100%; }
+label:has(> input[type=checkbox]) > input[type=checkbox] { position: absolute; inset: 0; width: 100%; height: 100%;
+  margin: 0; opacity: 0; cursor: pointer; }
+label:has(> input[type=checkbox])::before { content: ""; flex: none; display: grid; place-items: center;
+  width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--muted); font-size: 11px;
+  font-weight: 800; line-height: 1; color: var(--on-primary, #FFFFFF); }
+label:has(> input[type=checkbox]:checked) { border-color: var(--primary); color: var(--text);
+  background: color-mix(in srgb, var(--primary) 20%, var(--bg)); }
+label:has(> input[type=checkbox]:checked)::before { content: "\\2713"; background: var(--primary); border-color: var(--primary); }
+label:has(> input[type=checkbox]:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+label:has(> input[type=checkbox]:disabled) { opacity: 0.55; cursor: default; }
+label:has(> input[type=checkbox]:disabled) > input[type=checkbox] { cursor: default; }
+@media (prefers-reduced-motion: reduce) { label:has(> input[type=checkbox]) { transition: none; } }
+`;
+
 const STYLE = `
 .pinask{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.65)}
 .pinask-card{width:100%;max-width:360px;background:var(--surface);color:var(--text);border-radius:14px;padding:18px}
@@ -862,19 +887,13 @@ html.synthwave { --ln0: #FF2E9A; --ln1: #2EE6FF; --ln2: #FFD23F; --ln3: #B967FF;
 .lvsay { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
 .lvsay > span { flex-basis: 100%; color: var(--muted); font-size: 0.72rem; font-weight: 700;
                 letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 0; }
-.lvsay label, .ears .lvsay label { position: relative; display: inline-flex; align-items: center; gap: 8px; margin: 0;
-  min-height: 40px; padding: 8px 14px 8px 10px; border-radius: 999px; border: 1px solid var(--border);
-  background: var(--bg); color: var(--muted); font-size: 0.9rem; cursor: pointer; user-select: none;
-  transition: background 0.15s, border-color 0.15s, color 0.15s; }
-.lvsay input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
-.lvsay label::before { content: ""; flex: none; display: grid; place-items: center; width: 18px; height: 18px;
-  border-radius: 50%; border: 1.5px solid var(--muted); font-size: 11px; font-weight: 800; line-height: 1;
-  color: var(--on-primary, #FFFFFF); }
-.lvsay label:has(input:checked) { border-color: var(--primary); color: var(--text);
-  background: color-mix(in srgb, var(--primary) 20%, var(--bg)); }
-.lvsay label:has(input:checked)::before { content: "\\2713"; background: var(--primary); border-color: var(--primary); }
-.lvsay label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .lvsay label { transition: none; } }
+.lvsay label, .ears .lvsay label { margin: 0; }
+/* Every tick box on the relay wears that same chip (15 Nov 2026, Asher:
+   "make all check boxes themed like lap time in my ear on me relay"): any
+   label holding a checkbox - alerts, I'm coming, Just me, Hide demo, the
+   garage and the sign-up form - not only What to say. A browser without
+   :has() skips the lot and shows its own plain box, which still works. */
+${TICK_CHIP_CSS}
 /* Message the announcer and Who wins? (2 Nov 2026): the live page's two
    ways into the room from outside it, when the club has them switched on.
    Every field full width and 16px text, as sign-up's are, so a phone does
@@ -1857,6 +1876,20 @@ function hcIsTonight(dayOrTime) {
   let hour = now.getHours();
   try { hour = Number(now.toLocaleTimeString('en-GB', { hour: '2-digit', hour12: false }).slice(0, 2)); } catch (e) { /* the phone's */ }
   return hour < 6 && day === hcYmd(new Date(now.getTime() - 24 * 3600 * 1000));
+}
+// IS THIS RACE DAY TONIGHT? (15 Nov 2026, bug hunt 21 #6) A day's own
+// startedUtc is when it was made on the laptop - often the night before, or
+// on day one of a two-day meeting - so on its own a day opened yesterday read
+// "Last race day" all through today's racing. Any sign of the day being in
+// use tonight counts: when it was made, when the laptop last sent the
+// running order (it sends it while it is open with the day current), or a
+// race in it started tonight. A week-old day nobody has opened since has
+// none of them.
+function hcDayIsTonight(doc, publishedAt) {
+  const ev = doc && doc.event ? doc.event : {};
+  const seen = [ev.startedUtc, publishedAt];
+  for (const l of (doc && Array.isArray(doc.lines) ? doc.lines : [])) seen.push(l && l.startedUtc);
+  return seen.some((t) => typeof t === 'string' && t !== '' && hcIsTonight(t));
 }
 // The short form, for a big number in a small space: the time today, else
 // the day and the time ("Thu 7:14 PM").
@@ -7423,6 +7456,9 @@ function cellText(row, i) {
 let boardOpen = '';
 let boardAll = false;
 let boardState = null;
+// When the folded-away last race was published (see drawFolded), for a tap
+// inside "See the last race" to draw it folded again.
+let boardFoldAt = 0;
 
 function drawBoard(state) {
   boardState = state;
@@ -7599,6 +7635,14 @@ function ordinalWord(n) {
 
 // A tap on a row opens the rest of it (a name tapped follows, as everywhere);
 // All columns shows the club's whole table.
+// WHY (15 Nov 2026, bug hunt 21 #24): a tap inside "See the last race" drew
+// the plain board, so the next read found no folded box open and folded it
+// shut. A folded board is drawn folded again, still open.
+function boardRedraw() {
+  if (!boardState) return;
+  const fold = board.querySelector ? board.querySelector('details.lastrace') : null;
+  if (fold) drawFolded(boardState, boardFoldAt); else drawBoard(boardState);
+}
 if (board && typeof board.addEventListener === 'function') {
   board.addEventListener('click', (e) => {
     const t = e.target;
@@ -7606,7 +7650,7 @@ if (board && typeof board.addEventListener === 'function') {
     if (t.closest('[data-all]')) {
       boardAll = !boardAll;
       boardHtml = '';
-      if (boardState) drawBoard(boardState);
+      boardRedraw();
       return;
     }
     const tr = t.closest('tr[data-row]');
@@ -7614,7 +7658,7 @@ if (board && typeof board.addEventListener === 'function') {
     const name = tr.getAttribute('data-row') || '';
     boardOpen = boardOpen === name ? '' : name;
     boardHtml = '';
-    if (boardState) drawBoard(boardState);
+    boardRedraw();
   });
 }
 
@@ -7749,6 +7793,7 @@ function render(state, seen, at, empty, copy) {
 // Twelve hours after the last race (see HOW OLD THE BOARD IS): not racing,
 // when the last race was, and its board one tap away rather than on top.
 function drawFolded(state, at) {
+  boardFoldAt = at;
   bar.className = 'flagbar f-none';
   const counting = nextStartWords(state.nextStart, nextStartNow(), nextStartAt);
   const next = state.onDeck ? '<span class="ondeck">Next up: <b>' + esc(state.onDeck) + '</b></span>' : '';
@@ -8752,6 +8797,17 @@ const LIVE_VIDEO_JS = `
       if (asked || was === 'open' || was === 'small') {
         small = was === 'small';
         open(liveId, false);
+      }
+      // Asked once, honoured once (15 Nov 2026, bug hunt 21 #23): left on
+      // the address, ?watch=1 docked the player again a minute after it
+      // was closed, every minute. Taken off as follow= and from= are.
+      if (asked) {
+        try {
+          const rest = new URLSearchParams(location.search);
+          rest.delete('watch');
+          const s = rest.toString();
+          history.replaceState(history.state, '', location.pathname + (s ? '?' + s : '') + (location.hash || ''));
+        } catch (e) { /* the address keeps it */ }
       }
     }
     drawButton();
@@ -9840,6 +9896,7 @@ if (mine && MINE) poll(readMine, 60000);
 // race covers them), or a club that does not publish line-ups.
 const fol = document.getElementById('fol');
 let folDoc = null;
+let folAt = '';
 
 function folSignedInName() {
   try {
@@ -9850,10 +9907,10 @@ function folSignedInName() {
 }
 
 // What the card says for this driver in this running order, or null for no card.
-function folNext(doc, who) {
+function folNext(doc, who, publishedAt) {
   if (!doc || !who) return null;
   const ev = doc.event || {};
-  if (ev.startedUtc && !hcIsTonight(ev.startedUtc)) return null;
+  if (ev.startedUtc && !hcDayIsTonight(doc, publishedAt)) return null;
   if (!doc.lineups) return null;
   const lines = Array.isArray(doc.lines) ? doc.lines : [];
   const has = (l) => Array.isArray(l.drivers) && l.drivers.some((n) => String(n) === who);
@@ -9882,7 +9939,7 @@ function drawFol() {
   if (!fol) return;
   folAlertsCheck();
   const who = memory;
-  const n = who && who !== folSignedInName() ? folNext(folDoc, who) : null;
+  const n = who && who !== folSignedInName() ? folNext(folDoc, who, folAt) : null;
   fol.textContent = '';
   fol.hidden = n === null;
   if (n === null) return;
@@ -10005,6 +10062,7 @@ async function readFol() {
   // A busy relay or no signal keeps what is on screen.
   if (answer === null || (answer.missing && answer.status !== 404)) return;
   folDoc = answer.missing ? null : (answer.body && answer.body.body) || null;
+  folAt = !answer.missing && answer.body && typeof answer.body.publishedAt === 'string' ? answer.body.publishedAt : '';
   drawFol();
 }
 
@@ -10615,7 +10673,7 @@ function drawRacingTonight(prog) {
   if (!at) return;
   const p = prog && !prog.missing && prog.body ? prog.body.body || {} : null;
   const ev = p && p.event ? p.event : null;
-  const tonight = !!(ev && ev.startedUtc && hcIsTonight(ev.startedUtc));
+  const tonight = !!(ev && ev.startedUtc && hcDayIsTonight(p, prog.body.publishedAt));
   if (!tonight || meCode() !== '') { at.innerHTML = ''; return; }
   const me = BASE + '/mynight';
   at.innerHTML = '<section class="lc rtw"><h3>Racing tonight?</h3>'
@@ -11113,6 +11171,8 @@ const find = document.getElementById('find');
 const LABEL = { done: 'Done', running: 'On track', next: 'Next', upcoming: '' };
 const opened = new Set();
 let doc = null;
+// When the laptop last sent the running order: one sign the day is tonight's.
+let docAt = '';
 let lastText = '';
 
 function hit(name, q) {
@@ -11213,7 +11273,7 @@ function draw() {
   if (lines.length === 0) {
     // "today" only when it is (item 3): an old race day had no order.
     const ev = doc.event || {};
-    board.innerHTML = !ev.startedUtc || hcIsTonight(ev.startedUtc)
+    board.innerHTML = !ev.startedUtc || hcDayIsTonight(doc, docAt)
       ? '<p class="note">No running order has been published for today yet.</p>'
       : '<p class="note">No running order was published for that race day.</p>';
     return;
@@ -11291,18 +11351,21 @@ async function load() {
     return;
   }
 
-  const text = JSON.stringify(answer.body.body);
+  // With when it was sent (bug hunt 21 #6): the laptop sending the same
+  // order again today makes an old-looking day today's.
+  const text = JSON.stringify(answer.body.body) + '|' + (answer.body.publishedAt || '');
   touched();
 
   if (text === lastText) return;
 
   lastText = text;
   doc = answer.body.body || {};
+  docAt = typeof answer.body.publishedAt === 'string' ? answer.body.publishedAt : '';
 
   const ev = doc.event || {};
   const facts = [ev.venue, ev.track ? 'Track: ' + ev.track : '', day(ev.startedUtc)].filter(Boolean);
   // Today only when it is (item 3): a race day a week old is the last one.
-  const today = !ev.startedUtc || hcIsTonight(ev.startedUtc);
+  const today = !ev.startedUtc || hcDayIsTonight(doc, docAt);
   head.innerHTML = ev.name
     ? '<div class="hero"><span class="kicker">' + (today ? 'Today' : 'Last race day') + '</span><span class="big">' + esc(ev.name) + '</span>' +
       (facts.length ? '<span class="when">' + facts.map(esc).join(' &middot; ') + '</span>' : '') + '</div>'
@@ -12926,11 +12989,9 @@ function draw() {
   const head = [
     '<h2>' + esc(night.driver || 'Your night') + '</h2>',
     '<div class="sub">' + esc([night.title, nightSaysItsDay(night) ? '' : night.when].filter(Boolean).join(' · ')) + '</div>',
-    // For the family at home (overlay plan 7.1): a link that follows this
-    // driver on the club's public pages. Only the name rides on it, never
-    // this night's code.
-    // (Asked for by name: draw is also run on its own, away from the shared script.)
-    night.driver && typeof followShareButton === 'function' ? '<div class="fol-share">' + followShareButton(String(night.driver), 'Send my family a link that follows me') + '</div>' : '',
+    // No "Send my family a link that follows me" under their name since
+    // 15 Nov 2026 (Asher: "remove the family link from the top keep on
+    // bottom"): the Family links card at the foot of Me makes them.
   ].join('');
 
   // A night of more than one car (22 Oct 2026, second transponder) draws
@@ -18880,6 +18941,7 @@ a.note { color: var(--accent); }
 select { font-family: inherit; font-size: 14px; padding: 10px; border-radius: 8px;
          border: 1px solid var(--raised); background: var(--surface); color: var(--text); }
 label.chk { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); margin: 10px 0; }
+${TICK_CHIP_CSS}
 
 /* PIT WALL (3 Nov 2026, Asher picked direction A of the relay refresh):
    the club pages' kit on the desk too, so a button here looks like the

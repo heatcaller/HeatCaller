@@ -1305,6 +1305,13 @@ public partial class MainForm
             }
 
             var step = System.Diagnostics.Stopwatch.StartNew();
+
+            // Where the keys go now, put back after the step (bug hunt 21, 15
+            // Nov 2026): a hidden page shown and hidden again, or a tab
+            // selected, can take the focus - and someone typing in the first
+            // seconds after startup found the rest of a word going to the
+            // bare-letter shortcuts.
+            var focused = DeepestFocus(this);
             NoRedraw.Begin(pnlContent);
 
             var hold = next.Kind == WarmKind.Page;
@@ -1382,6 +1389,11 @@ public partial class MainForm
                     pnlContent.ResumeLayout(false);
                 }
 
+                if (FocusWentAway(focused, DeepestFocus(this)))
+                {
+                    focused!.Focus();
+                }
+
                 NoRedraw.End(pnlContent);
                 busy += step.Elapsed;
 
@@ -1397,6 +1409,27 @@ public partial class MainForm
 
         timer.Start();
     }
+
+    /// <summary>The control the keys go to: ActiveControl, followed down through any UserControl it is inside.</summary>
+    internal static Control? DeepestFocus(ContainerControl container)
+    {
+        Control? focused = container.ActiveControl;
+
+        while (focused is ContainerControl { ActiveControl: { } inner })
+        {
+            focused = inner;
+        }
+
+        return focused;
+    }
+
+    /// <summary>
+    /// Whether a warm-up step took the focus from a control that can still
+    /// have it back: one still there, on screen and able to take it (bug
+    /// hunt 21). A control the step hid stays where the step left it.
+    /// </summary>
+    internal static bool FocusWentAway(Control? was, Control? now) =>
+        was is { IsDisposed: false, Visible: true, CanFocus: true } && !ReferenceEquals(was, now);
 
     /// <summary>
     /// Every tab page inside a page, each one selected - and so made visible

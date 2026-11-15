@@ -274,7 +274,7 @@ Each leaderboard in HeatCaller keeps its own choice of columns, because what's u
 
 | Leaderboard | Where to change it | Default columns |
 |---|---|---|
-| Race Control | **Columns** on the **Race Control** page | Pos, Driver, Car, Laps, Best Lap, Gap to P1, Streak |
+| Race Control | Right-click a column heading on the **Race Control** leaderboard | Pos, Driver, Car, Laps, Best Lap, Gap to P1, Streak |
 | Practice | **Choose Columns** on the **Practice** page | Driver, Laps, Last Lap, vs Best, Best Lap, Rolling Avg, Std Dev, Streak, Best Streak, Streak Pace, Trend, PBs |
 | Big Screen | **Choose Big Screen Columns** on the **Local Screens** page | Pos, Driver, Laps, Best Lap, Gap to P1 |
 | OBS overlay on the Wi-Fi | **Choose Web Columns** on the **Local Screens** page | Pos, Driver, Laps, Last Lap, Best Lap, Gap to P1, Trend |
@@ -291,7 +291,7 @@ To change the columns:
 
 **Restore Defaults** puts back that leaderboard's default set. If you untick everything, the defaults are used.
 
-In Simple mode these buttons are hidden: **Columns** on Race Control, **Choose Columns** on Practice, both column choosers on **Local Screens**, and the **What gets published** card on **Club Website** with its own. Turn on Advanced mode to change the columns; the leaderboards keep the columns you chose either way. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
+In Simple mode these buttons are hidden: **Choose Columns** on Practice, both column choosers on **Local Screens**, and the **What gets published** card on **Club Website** with its own. Turn on Advanced mode to change the columns; the leaderboards keep the columns you chose either way. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
 
 Race Control and Practice update as soon as you press **OK**. The web page updates straight away, and the club's website with its next update. The Big Screen picks up the change the next time you open it, so close it and open it again.
 

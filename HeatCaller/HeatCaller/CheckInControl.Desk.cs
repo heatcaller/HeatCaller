@@ -155,6 +155,9 @@ public sealed partial class CheckInControl
 
         if (on)
         {
+            // The strip counts everyone at the desk, not the roster's class
+            // chip (bug hunt 21, see InClass): counted again without it.
+            RefreshCounts();
             RefreshDeskCard();
             FocusDeskScan();
         }
@@ -267,7 +270,7 @@ public sealed partial class CheckInControl
         var fee = profile is not null && fees is { Charges: true } charging ? FeeFor(profile, charging.Day, ClassNamed) : 0m;
         var signature = profile is null
             ? string.Empty
-            : $"{profile.Transponder}|{fees?.Day.Id}|{fee}|{r}|{payment?.How}|{payment?.Amount}|{string.Join(";", problems)}|{(_tech is not null ? FailedWhy(TechFor(profile)) : "")}";
+            : $"{profile.Transponder}|{fees?.Day.Id}|{fee}|{r}|{payment?.How}|{payment?.Amount}|{payment?.OtherWay}|{string.Join(";", problems)}|{(_tech is not null ? FailedWhy(TechFor(profile)) : "")}";
 
         if (signature == _deskNeedsBuiltFor)
         {
@@ -412,11 +415,10 @@ public sealed partial class CheckInControl
         {
             switch (_payments.Get(fees.Day.Id, profile.Transponder))
             {
-                case { How: PaidHow.Cash } p:
-                    cash += p.Amount;
-                    break;
-                case { How: PaidHow.Card } p:
-                    card += p.Amount;
+                // A top-up taken the other way counts where it went (bug hunt 21).
+                case { How: PaidHow.Cash or PaidHow.Card } p:
+                    cash += DeskMoney.CashOf(p);
+                    card += DeskMoney.CardOf(p);
                     break;
                 case { How: PaidHow.Comp }:
                     comps++;

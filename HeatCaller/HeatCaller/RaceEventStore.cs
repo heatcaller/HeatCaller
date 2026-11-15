@@ -749,6 +749,43 @@ public sealed class RaceEventStore
     }
 
     /// <summary>
+    /// Follows a night template being renamed (bug hunt 21, 15 Nov 2026):
+    /// every day started from it takes the new name, closed ones included, as
+    /// RenameClass does for classes. Its forecast finds "nights like it" by
+    /// this name (TemplateForecast.Turnout), so a rename orphaned every past
+    /// night and the forecast fell back to "last time". Matched ignoring case
+    /// and spaces round the name. Returns how many days moved; saves only then.
+    /// </summary>
+    public int RenameTemplate(string oldName, string newName)
+    {
+        var from = oldName?.Trim() ?? string.Empty;
+        var to = newName?.Trim() ?? string.Empty;
+
+        if (from.Length == 0 || to.Length == 0 || string.Equals(from, to, StringComparison.Ordinal))
+        {
+            return 0;
+        }
+
+        var moved = 0;
+
+        foreach (var raceEvent in _events)
+        {
+            if (string.Equals(raceEvent.TemplateName?.Trim(), from, StringComparison.OrdinalIgnoreCase))
+            {
+                raceEvent.TemplateName = to;
+                moved++;
+            }
+        }
+
+        if (moved > 0)
+        {
+            Save();
+        }
+
+        return moved;
+    }
+
+    /// <summary>
     /// Follows a class being renamed, in every event - closed ones included,
     /// so reopening an old event does not bring back a class name that no
     /// longer exists.

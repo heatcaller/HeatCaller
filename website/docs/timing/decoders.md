@@ -246,7 +246,7 @@ Line Up waits until at least three crossings agree to within a tenth of a second
 
 With the split loop on, each flying lap is cut into two sectors: **S1** from the line to the split loop, **S2** from the split loop back to the line. The sectors always add up to the lap time exactly.
 
-- **On the board:** add the **S1**, **S2**, **Ideal Lap** and **At Split** columns with **Columns**. See [Columns](../race-control/running-a-race.md#columns). The quickest sector of the session is in the look's accent color (blue in most looks), and a driver's own best is green, on Race Control and the Big Screen alike. **At Split** shows, as a car crosses the split loop, whether it's up or down on its best lap.
+- **On the board:** add the **S1**, **S2**, **Ideal Lap** and **At Split** columns: right-click a column heading on the leaderboard. See [Columns](../race-control/running-a-race.md#columns). The quickest sector of the session is in the look's accent color (blue in most looks), and a driver's own best is green, on Race Control and the Big Screen alike. **At Split** shows, as a car crosses the split loop, whether it's up or down on its best lap.
 - **On the Big Screen:** the same columns, and a banner such as "FASTEST SECTOR 1 — MAYA 12.31" when someone sets the quickest sector of the session.
 - **In the lap breakdown:** each lap's sectors, and the driver's ideal lap.
 - **Saved with the race:** each lap's sectors are kept in the results.

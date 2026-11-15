@@ -211,9 +211,14 @@ internal static class CoachReport
     private static bool SameLayout(SessionRecord session, string layout) =>
         string.Equals((session.TrackLayoutName ?? string.Empty).Trim(), layout.Trim(), StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>A result's laps without the start lap, which runs from the green and is not a lap time.</summary>
+    /// <summary>
+    /// A result's laps without the start lap, which runs from the green and is
+    /// not a lap time. WHY StartSlots (15 Nov 2026, bug hunt 21): a driver
+    /// credited with the start lap has a zero first and then the rest of the
+    /// start - a dash Skip(1) let through as their best lap of the night.
+    /// </summary>
     internal static IEnumerable<long> FlyingLaps(SessionResultEntry entry) =>
-        entry.LapTimesMs.Skip(1).Where(ms => ms > 0);
+        entry.LapTimesMs.Skip(entry.StartSlots(entry.LapTimesMs)).Where(ms => ms > 0);
 
     /// <summary>
     /// The average distance of a clean lap from the driver's typical one

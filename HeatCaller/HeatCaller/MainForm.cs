@@ -1599,6 +1599,7 @@ public partial class MainForm : Form
         // the pylon, from the one tracker the voice uses so the two agree.
         // See SponsoredMoments, BroadcastMomentFeed and LeadTracker.
         _announcer.SponsorsProvider = () => _sponsors.Current.Sponsors.ToList();
+        _announcer.ClubNamesProvider = () => ScreenWords.ClubNames(_settings).ToList(); // never starred on screens (bug hunt 21)
         _announcer.MomentHappened += moment => _webServer.Moments.Post(moment);
         //
         // Threaded, through a frozen feed (24 Oct 2026, timing layer, P8):

@@ -39,7 +39,7 @@ These are the RC racing terms and HeatCaller terms used in the app and in these 
 | **Pursuit start** | A staggered start in reverse: **Staggered - reverse grid** releases the last car on the grid first. |
 | **Handicap start** | **Staggered - handicap**. Each driver's delay is their handicap time credit. |
 | **Qualifying start** | **Qualifying - own clock from 1st crossing**. Everyone goes on the green together, but each driver's clock starts at their own first crossing, so the run from the grid to the line costs nobody anything. |
-| **Race format** | How a race is run: lap limit, time limit, minimum lap time, start type, streak rules and finish rule. There's an app default (set with **Race Format** on Race Control). A class can have its own format, plus a separate one for its qualifiers, and a single round can override it. |
+| **Race format** | How a race is run: lap limit, time limit, minimum lap time, start type, streak rules and finish rule. There's an app default (set with **Format** on Race Control). A class can have its own format, plus a separate one for its qualifiers, and a single round can override it. |
 
 ## Race days, heats and mains
 

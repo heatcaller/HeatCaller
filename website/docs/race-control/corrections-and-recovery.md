@@ -92,7 +92,7 @@ Taking a black flag back before the race is saved means the driver isn't marked 
 
 **Where warnings show.**
 
-- **The Warnings column.** Add it to any leaderboard with **Columns** (see [Columns](running-a-race.md#columns)). It shows "-" for a clean driver, ⚠ and the count, or the count and **⚑ BLACK** after a black flag. On Race Control it's in red.
+- **The Warnings column.** Add it to any leaderboard with its column chooser (on Race Control, right-click a column heading; see [Columns](running-a-race.md#columns)). It shows "-" for a clean driver, ⚠ and the count, or the count and **⚑ BLACK** after a black flag. On Race Control it's in red.
 - **Race History** has a **Warnings** column for every saved race. Hover over it to see each warning. See [Results and championships](results-and-championships.md).
 - **The Big Screen** shows a warning as a banner across the screen rather than in red on the board. See [The Big Screen](../screens/big-screen.md#the-banner-across-the-screen).
 - **Driver rating** takes 5 off for each warning.

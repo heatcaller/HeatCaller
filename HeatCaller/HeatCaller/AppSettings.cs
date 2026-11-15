@@ -653,6 +653,13 @@ public sealed class AppSettings
     public bool RaceStartWithOnAir { get; set; } = true;
 
     /// <summary>
+    /// Race Control's buttons and level meters under the clock folded away
+    /// (15 Nov 2026), so the leaderboard takes the whole width under the
+    /// clock. Off by default: everything shown, as it always was.
+    /// </summary>
+    public bool RaceControlSideFolded { get; set; }
+
+    /// <summary>
     /// Race Control's "Warm-up first" switch (14 Nov 2026): every start opens
     /// the warm-up flag first - free laps, then Stage, then the countdown -
     /// for the format's warm-up, or two minutes when it has none. Off by
@@ -3596,6 +3603,12 @@ public sealed class PrivacyRetainedDriver
     public bool NoVideo { get; set; }
 
     public bool Initials { get; set; }
+
+    /// <summary>
+    /// Under 18, so their name was shortened online (15 Nov 2026, bug hunt
+    /// 21). Absent from older files, which load as false.
+    /// </summary>
+    public bool Junior { get; set; }
 }
 
 /// <summary>

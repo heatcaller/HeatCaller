@@ -48,6 +48,8 @@ internal sealed class TemplateEditForm : Form
     /// <param name="layouts">Track layouts to suggest.</param>
     /// <param name="seasons">Championships.</param>
     /// <param name="forecast">What a night from the template as it stands would come to, or null when there's nothing to go by.</param>
+    /// <param name="roundsUnset">The rounds a night from it would race when the template never set its own - last night's. 0 for the day's default (3).</param>
+    /// <param name="heatSizeUnset">The heat size a night from it would use when the template never set its own - the club's (RaceEventStore.HeatSizeFor). 0 for 8.</param>
     public TemplateEditForm(
         NightTemplate template,
         bool isNew,
@@ -56,7 +58,9 @@ internal sealed class TemplateEditForm : Form
         IEnumerable<string> venues,
         IEnumerable<string> layouts,
         IEnumerable<Season> seasons,
-        Func<NightTemplate, (string Line, bool Late)?>? forecast)
+        Func<NightTemplate, (string Line, bool Late)?>? forecast,
+        int roundsUnset = 0,
+        int heatSizeUnset = 0)
     {
         _original = template;
         _takenNames = takenNames;
@@ -82,10 +86,20 @@ internal sealed class TemplateEditForm : Form
             _fields = new NightFields(_textSize);
 
             // The template, as a day. A template that never set its rounds or heat
-            // size keeps the day's defaults - 3, and 8 shown.
+            // size shows the numbers a night from it would actually use - last
+            // night's rounds, the club's heat size - shown, not written (bug
+            // hunt 21, 15 Nov 2026). It showed a flat 3 and 8, so a club whose
+            // nights run 6s saw 8, and asking for 8 could never be saved: 8
+            // was "unchanged", and the night went on racing 6s.
             NightTemplates.ApplyTo(template, _scratch);
+
+            if (template.QualifyingRounds <= 0 && roundsUnset > 0)
+            {
+                _scratch.QualifyingRounds = roundsUnset;
+            }
+
             _fields.FillLists(classes, venues, layouts, seasons);
-            _fields.Load(_scratch, template.DriversPerHeat > 0 ? template.DriversPerHeat : 8);
+            _fields.Load(_scratch, template.DriversPerHeat > 0 ? template.DriversPerHeat : heatSizeUnset > 0 ? heatSizeUnset : 8);
             _roundsShown = (int)_fields.Rounds.Value;
             _heatSizeShown = (int)_fields.HeatSize.Value;
 

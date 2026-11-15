@@ -198,7 +198,12 @@ public sealed partial class RaceDayEventControl
         _ => new[] { option.Detail },
     };
 
-    private static int Rounds(int rounds) => rounds > 0 ? rounds : 3;
+    /// <summary>
+    /// A template's rounds, or for one that never set its own, what a night
+    /// from it would race: last night's, which StartDayFrom carries forward
+    /// (3 on a club's first). Bug hunt 21: it said a flat 3.
+    /// </summary>
+    private int Rounds(int rounds) => rounds > 0 ? rounds : LastRealDay() is { QualifyingRounds: > 0 } last ? last.QualifyingRounds : 3;
 
     private int HeatSize(int perHeat) => perHeat > 0 ? perHeat : _events.HeatSizeFor(LastRealDay());
 
@@ -513,6 +518,10 @@ public sealed partial class RaceDayEventControl
             _settings.NightTemplates.Where(t => !ReferenceEquals(t, template)),
             edited);
         _settings.Save();
+
+        // The nights started from it follow a rename, so its forecast keeps
+        // their history (bug hunt 21) - see RaceEventStore.RenameTemplate.
+        _events.RenameTemplate(template.Name, edited.Name);
         RefreshShelf();
         NightSetupChanged?.Invoke();
     }
@@ -532,7 +541,11 @@ public sealed partial class RaceDayEventControl
             _venues.All.Select(v => v.Name),
             _layouts.All.Select(l => l.Name),
             _seasons.All,
-            edited => Forecast(edited, tonight: ReferenceEquals(NightTemplates.ForDay(_settings?.NightTemplates, DateTime.Today), template)));
+            edited => Forecast(edited, tonight: ReferenceEquals(NightTemplates.ForDay(_settings?.NightTemplates, DateTime.Today), template)),
+
+            // What a night from it would use where it sets nothing (bug hunt 21).
+            roundsUnset: Rounds(0),
+            heatSizeUnset: HeatSize(0));
 
         return form.ShowDialog(this) == DialogResult.OK ? form.Result : null;
     }

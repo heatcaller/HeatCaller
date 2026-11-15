@@ -33,6 +33,15 @@ internal sealed partial class DriverRequestDesk
     public Func<string, CrewVoicePick?>? CrewVoiceOf { get; set; }
 
     /// <summary>
+    /// Whether the voices of the engine in use have been listed yet (15 Nov
+    /// 2026, bug hunt 21). Until they are, a pick is left waiting rather than
+    /// declined as gone - at start-up, after an engine switch, or while the
+    /// listing fails, no key is known. Set by the host; without it the
+    /// listing is taken as known, as before.
+    /// </summary>
+    public Func<bool>? CrewVoicesListed { get; set; }
+
+    /// <summary>
     /// Whether tonight's racing is done - races run and none left - so a
     /// goal sent now is for the next night (plan 2.4). Set by the host;
     /// without it a goal is always for the night it was sent on.
@@ -91,6 +100,12 @@ internal sealed partial class DriverRequestDesk
         var asked = CrewVoiceFields.Where(request.Texts.ContainsKey).ToList();
 
         if (asked.Count == 0 || DriverOf(request) is not { } profile || CrewVoiceOf is null)
+        {
+            return 0;
+        }
+
+        // Not known is not gone: left whole for the next tick (see CrewVoicesListed).
+        if (CrewVoicesListed?.Invoke() == false && asked.Any(field => request.Text(field).Trim().Length > 0))
         {
             return 0;
         }

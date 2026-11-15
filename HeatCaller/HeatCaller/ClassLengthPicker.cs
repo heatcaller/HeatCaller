@@ -85,7 +85,7 @@ internal sealed class ClassLengthPicker
     }
 
     /// <summary>
-    /// Shows a format set some other way - Race Format... or a sanctioning
+    /// Shows a format set some other way - Format or a sanctioning
     /// preset - and greys the rows, because that format is what will be saved.
     /// </summary>
     public void ShowSetElsewhere(RaceFormat? format)
@@ -100,7 +100,7 @@ internal sealed class ClassLengthPicker
         _cmbFinish.SelectedIndex = (effective?.FinishOnNextCrossing ?? true) ? 0 : 1;
         _numMinutes.Enabled = false;
         _cmbFinish.Enabled = false;
-        _lblHint.Text = $"Set under Race Format...: {effective?.Describe() ?? "the app default"}.";
+        _lblHint.Text = $"Set under Format: {effective?.Describe() ?? "the app default"}.";
 
         foreach (var caption in new[] { _lblMinutesCaption, _lblFinishCaption })
         {

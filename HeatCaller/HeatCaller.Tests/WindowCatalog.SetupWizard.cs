@@ -21,7 +21,7 @@ internal static partial class WindowCatalog
         // The club's classes: one following the app default, some with a
         // format of their own, and one whose name - and whose format, with a
         // qualifier format as well - runs long enough to wrap beside its
-        // Race Format... button.
+        // Format button.
         static List<RaceClass> Classes() => new()
         {
             new RaceClass { Name = "Stock Buggy" },

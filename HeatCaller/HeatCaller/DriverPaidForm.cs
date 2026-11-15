@@ -31,6 +31,7 @@ internal sealed class DriverPaidForm : Form
     private readonly Func<DriverProfile, string> _paidWords;
     private readonly Action<IReadOnlyList<DriverProfile>, PaidHow, string> _settle;
     private readonly Func<DriverProfile, DriverProfile> _current;
+    private readonly Func<DriverProfile, decimal> _owedFor;
 
     /// <param name="feeFor">What a driver owes tonight.</param>
     /// <param name="paidWords">How a driver stands now, as the Paid column says it.</param>
@@ -41,16 +42,25 @@ internal sealed class DriverPaidForm : Form
     /// profile, and a class ticked after that changes the copy on file, not
     /// the one on the slip - which then showed and settled the old, lower fee.
     /// </param>
+    /// <param name="owedFor">
+    /// What a driver still owes tonight - the whole fee when they haven't
+    /// paid, the rest when they paid before a class was ticked
+    /// (DeskMoney.StillOwed). The fee when not given. WHY (15 Nov 2026, bug
+    /// hunt 21): the slip's "to take" added up the whole fee, so a driver
+    /// owing a $10 extra class read "$25.00 to take".
+    /// </param>
     public DriverPaidForm(
         Func<DriverProfile, decimal> feeFor,
         Func<DriverProfile, string> paidWords,
         Action<IReadOnlyList<DriverProfile>, PaidHow, string> settle,
-        Func<DriverProfile, DriverProfile>? current = null)
+        Func<DriverProfile, DriverProfile>? current = null,
+        Func<DriverProfile, decimal>? owedFor = null)
     {
         _feeFor = feeFor;
         _paidWords = paidWords;
         _settle = settle;
         _current = current ?? (profile => profile);
+        _owedFor = owedFor ?? feeFor;
 
         Text = "Driver Paid";
         Font = AppTheme.BodyFont;
@@ -172,7 +182,7 @@ internal sealed class DriverPaidForm : Form
             }
             else
             {
-                total += fee;
+                total += _owedFor(profile);
             }
 
             var row = _grid.Rows[_grid.Rows.Add(name, DeskMoney.Money(fee), words)];

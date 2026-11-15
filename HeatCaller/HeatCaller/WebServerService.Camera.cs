@@ -854,7 +854,7 @@ public sealed partial class WebServerService
           const ch = document.getElementById('champ');
           if (want('champ') && racing && d.champ && d.champ.rows && d.champ.rows.length){
             ch.style.top = (showTower ? tower.offsetTop + tower.offsetHeight + window.innerWidth * 0.006 : window.innerWidth * 0.03) + 'px';
-            ch.innerHTML = '<b class="acc">IF IT ENDED NOW</b><br>' + esc(d.champ.headline);
+            ch.innerHTML = '<b class="acc">IF IT ENDED NOW</b><br>' + esc(snText(d.champ.headline));
             ch.style.display = 'block';
           } else ch.style.display = 'none';
 
@@ -998,7 +998,10 @@ public sealed partial class WebServerService
         function drawLayoutParts(d, rows, cards, racing, finished){
           const onTrack = racing || finished;
           const pcars = (d.pylon && d.pylon.cars) || {};
-          const leader = rows.length ? rows[0] : null;
+          // The leader the corner bug names: the first real car, as the
+          // podium counts them (15 Nov 2026, bug hunt 21) - a Quick Rival
+          // on top of the board is not who "Won by" should name.
+          const leader = rows.find(s => !s.ghost) || null;
 
           // The race and its clock, small, in a corner.
           const status = want('status') && (onTrack || PART === 'staging');
