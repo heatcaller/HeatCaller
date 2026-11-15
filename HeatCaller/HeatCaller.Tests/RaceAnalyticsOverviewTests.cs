@@ -265,6 +265,33 @@ public sealed class RaceAnalyticsOverviewTests
     }
 
     [Fact]
+    public void The_next_closest_is_never_the_holder_under_another_name()
+    {
+        // Bug hunt 20: Sam's earlier lap was saved before his transponder had
+        // a name, so it reads "4412345". It is still Sam, not the next driver.
+        var next = StaThread.Run(() =>
+        {
+            using var data = new TempAppData();
+
+            var history = SessionHistoryStore.FromSessions(new[]
+            {
+                AnalyticsData.Session("Club Infield", Oct12, "A-Main",
+                    AnalyticsData.Driver("", "4412345", AnalyticsData.Steady(14.000))),
+                AnalyticsData.Session("Club Infield", Nov7, "A-Main",
+                    AnalyticsData.Driver("Sam Smith", "4412345", AnalyticsData.Steady(13.842)),
+                    AnalyticsData.Driver("Priya Shah", "1", AnalyticsData.Steady(14.105))),
+            });
+
+            using var page = new AnalyticsOverviewControl(history) { Layouts = Layouts() };
+            page.RefreshAll();
+
+            return page.RecordsGrid.Rows[0].Cells["next"].Value?.ToString();
+        }, TimeSpan.FromSeconds(30), () => "building the Analytics overview");
+
+        Assert.StartsWith("Priya Shah, +0.263s", next);
+    }
+
+    [Fact]
     public void The_overview_with_nothing_raced_hides_the_news_and_says_so()
     {
         var (headline, count) = StaThread.Run(() =>
