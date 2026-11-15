@@ -122,6 +122,67 @@ public sealed partial class RaceControlControl
         }
     }
 
+    /// <summary>The lengths on Warm-up first's right-click menu, in seconds.</summary>
+    private static readonly int[] WarmUpLengthChoices = { 60, 90, 120, 180, 300, 600 };
+
+    /// <summary>
+    /// Right-click "Warm-up first" (15 Nov 2026, asked for by Asher): how long
+    /// the warm-up runs. A length picked here is used by the switch and the
+    /// Warm-up button in place of the format's own, and switches Warm-up first
+    /// on - picking a length is asking for a warm-up. "The race format's"
+    /// goes back to the format's (two minutes when it has none).
+    /// </summary>
+    private ContextMenuStrip BuildWarmUpLengthMenu()
+    {
+        var menu = new ContextMenuStrip();
+        AppTheme.StyleContextMenu(menu);
+
+        menu.Opening += (_, _) =>
+        {
+            menu.Items.Clear();
+
+            var chosen = _settings.RaceWarmUpFirstSeconds;
+            var formatSeconds = EffectiveFormat(out _).WarmUpSeconds;
+            var formatWords = formatSeconds > 0
+                ? RaceFormat.DescribeWarmUp(formatSeconds)
+                : $"none, so {RaceFormat.DescribeWarmUp(WarmUpWhenFormatHasNone)}";
+
+            menu.Items.Add(new ToolStripMenuItem($"Warm-up length: the race format's ({formatWords})", null, (_, _) => SetWarmUpLength(0))
+            {
+                Checked = chosen <= 0,
+            });
+
+            menu.Items.Add(new ToolStripSeparator());
+
+            foreach (var seconds in WarmUpLengthChoices)
+            {
+                var pick = seconds;
+                menu.Items.Add(new ToolStripMenuItem($"Warm-up length: {RaceFormat.DescribeWarmUp(seconds)}", null, (_, _) => SetWarmUpLength(pick))
+                {
+                    Checked = chosen == seconds,
+                });
+            }
+        };
+
+        return menu;
+    }
+
+    /// <summary>Saves the warm-up length picked on the switch's menu; 0 goes back to the format's.</summary>
+    private void SetWarmUpLength(int seconds)
+    {
+        _settings.RaceWarmUpFirstSeconds = Math.Clamp(seconds, 0, RaceFormat.MaxWarmUpSeconds);
+        _settings.Save();
+
+        if (seconds > 0)
+        {
+            StartWithWarmUp = true;
+        }
+
+        StatusMessage?.Invoke(seconds > 0
+            ? $"{AppTime.LogStampNow()}  [race] Warm-up first is on - {RaceFormat.DescribeWarmUp(seconds)} of free laps before every race from now on."
+            : $"{AppTime.LogStampNow()}  [race] The warm-up is the race format's own length again.");
+    }
+
     /// <summary>What On Air calls itself while it holds the broadcast floor - see ShowFloor.</summary>
     private const string OnAirHoldsTheFloor = "On Air opening the next race";
 
@@ -218,10 +279,12 @@ public sealed partial class RaceControlControl
 
         _swWarmUpFirst.On = _settings.RaceStartWithWarmUp;
         _swWarmUpFirst.OnChanged += (_, _) => StartWithWarmUp = _swWarmUpFirst.On;
+        _swWarmUpFirst.ContextMenuStrip = BuildWarmUpLengthMenu();
         tip.SetToolTip(_swWarmUpFirst,
             "On: every race starts with the warm-up flag - free laps, not counted, for the format's warm-up "
-            + "(two minutes if it has none) - then Stage and the countdown. On Air, when it is on, goes first. "
-            + "Off: only a format with a warm-up has one. Press Warm-up or Stage during it to skip the rest.");
+            + "(two minutes if it has none, or the length you right-click to choose) - then Stage and the countdown. "
+            + "On Air, when it is on, goes first. Off: only a format with a warm-up has one. "
+            + "Press Warm-up or Stage during it to skip the rest.");
 
         // The strip's bar and countdown while the opening is got ready.
         _onAirProgressTimer.Interval = 150;

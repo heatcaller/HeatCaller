@@ -198,6 +198,20 @@ public sealed class WarmUpFlagTests : IDisposable
         Assert.Equal(RaceFormat.MaxWarmUpSeconds, RaceControlControl.WarmUpSecondsFor(RaceFormat.MaxWarmUpSeconds + 600, wanted: true));
     }
 
+    [Theory]
+    [InlineData(90, true, 300, 300)]
+    [InlineData(0, true, 60, 60)]
+    [InlineData(90, false, 300, 90)]
+    [InlineData(0, false, 300, 0)]
+    [InlineData(0, true, 0, RaceControlControl.WarmUpWhenFormatHasNone)]
+    public void A_length_chosen_on_the_switch_wins_whenever_a_warm_up_is_wanted(int formatSeconds, bool wanted, int chosen, int expected)
+    {
+        Assert.Equal(expected, RaceControlControl.WarmUpSecondsFor(formatSeconds, wanted, chosen));
+        Assert.Equal(0, new AppSettings().RaceWarmUpFirstSeconds);
+        Assert.Contains("nameof(AppSettings.RaceWarmUpFirstSeconds)", Source("SettingsTable.cs"), StringComparison.Ordinal);
+        Assert.Contains("_swWarmUpFirst.ContextMenuStrip = BuildWarmUpLengthMenu();", Source("RaceControlControl.OnAir.cs"), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Warm_up_first_is_off_by_default_and_kept_with_the_settings()
     {
@@ -236,7 +250,7 @@ public sealed class WarmUpFlagTests : IDisposable
         Assert.Contains("AutoStartClock.Band(_autoStartState, ToTheGreen(", autoStart, StringComparison.Ordinal);
         Assert.Contains("AutoStartClock.Words(_autoStartState, ToTheGreen(", autoStart, StringComparison.Ordinal);
         Assert.Contains("_autoStartState == AutoStartState.Counting && remaining is { } left ? left + StartToGreen() : remaining", autoStart, StringComparison.Ordinal);
-        Assert.Contains("WarmUpSecondsFor(format.WarmUpSeconds, StartWithWarmUp), format.AutoAdvance, format.StagingSeconds, format.CountdownSeconds", autoStart, StringComparison.Ordinal);
+        Assert.Contains("WarmUpSecondsFor(format.WarmUpSeconds, StartWithWarmUp, _settings.RaceWarmUpFirstSeconds), format.AutoAdvance, format.StagingSeconds, format.CountdownSeconds", autoStart, StringComparison.Ordinal);
         Assert.Contains("_autoStartState == AutoStartState.Counting ? at + StartToGreen()", Source("RaceControlControl.Marshals.cs"), StringComparison.Ordinal);
     }
 
