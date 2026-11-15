@@ -66,7 +66,36 @@ public sealed partial class RaceControlControl
         return OrderedProgram()
             .FirstOrDefault(r => !r.IsRecorded
                                  && !string.Equals(r.Id, onTrack, StringComparison.Ordinal)
-                                 && r.AssignedTransponders.Contains(transponder, StringComparer.OrdinalIgnoreCase));
+                                 && SeatOf(r, transponder) is not null);
+    }
+
+    /// <summary>
+    /// The id <paramref name="transponder"/>'s driver is on
+    /// <paramref name="race"/>'s grid under, or null when they aren't on it.
+    /// </summary>
+    private string? SeatOf(RoundDefinition race, string transponder) =>
+        SeatOn(race.AssignedTransponders, transponder, _profiles.PrimaryForAlternate);
+
+    /// <summary>
+    /// The grid entry that is <paramref name="transponder"/> itself or,
+    /// failing that, another of the same driver's transponders (bug hunt 19):
+    /// a driver seated on their second car's transponder is still in the
+    /// race, and their phone, which asks by the main one, must find them.
+    /// <paramref name="mainOf"/> is ProfileStore.PrimaryForAlternate.
+    /// </summary>
+    internal static string? SeatOn(IReadOnlyCollection<string> grid, string transponder, Func<string, string?> mainOf)
+    {
+        if (string.IsNullOrWhiteSpace(transponder))
+        {
+            return null;
+        }
+
+        var id = transponder.Trim();
+        var main = mainOf(id) ?? id;
+
+        return grid.FirstOrDefault(t => string.Equals(t?.Trim(), id, StringComparison.OrdinalIgnoreCase))
+               ?? grid.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t)
+                                           && string.Equals(mainOf(t.Trim()) ?? t.Trim(), main, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -97,7 +126,16 @@ public sealed partial class RaceControlControl
     /// </summary>
     internal RoundDefinition? SkipDriverDns(string transponder, string name, string why, RoundDefinition? inRace = null)
     {
-        if ((inRace ?? NextRaceOf(transponder)) is not { } race || SkipDns.Skip(race, transponder) is not { } undo)
+        if ((inRace ?? NextRaceOf(transponder)) is not { } race)
+        {
+            return null;
+        }
+
+        // The id they are on this grid under - their second car's, it may
+        // be, when the phone asked by their main one (bug hunt 19).
+        transponder = SeatOf(race, transponder) ?? transponder;
+
+        if (SkipDns.Skip(race, transponder) is not { } undo)
         {
             return null;
         }

@@ -684,7 +684,7 @@ public sealed partial class RaceControlControl
     {
         var next = NextRound();
 
-        if (next is null || !next.AssignedTransponders.Contains(transponder, StringComparer.OrdinalIgnoreCase))
+        if (next is null || SeatOf(next, transponder) is null)
         {
             // 12 Nov 2026 (the first night on step 8): kept for their race
             // rather than refused. Drivers ask while they are still fixing
@@ -707,6 +707,9 @@ public sealed partial class RaceControlControl
                 return $"The desk knows you need {LateMinutes} minutes before {theirs.RoundLabel}.";
             }
 
+            // Owed under the id they are on the grid by, so Keep still finds
+            // them there (bug hunt 19: it may be their second car's).
+            transponder = SeatOf(theirs, transponder) ?? transponder;
             var owed = _moreTimeOwed.Owe(theirs.Id, transponder, name, LateMinutes);
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] {name} asked for more time from their phone - {theirs.RoundLabel} isn't next yet, "
                                   + $"so it goes back {Plural.Of(owed, "minute")} when it is.");
