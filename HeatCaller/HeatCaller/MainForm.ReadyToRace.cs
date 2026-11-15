@@ -172,7 +172,40 @@ public partial class MainForm
 
         form.ReadOut += text =>
         {
-            _announcer.SpeakReminder(DriversMeeting.Spoken(text), showOnScreens: true, onAir: "Notice");
+            // WHY (15 Nov 2026): Read It Out said nothing back, and a long
+            // meeting takes seconds to render, so it was pressed again and
+            // the meeting was read twice. Now the window says where it is,
+            // and the button stays off until the reading is over.
+            if (_announcer.DescribeVoiceBlocker() is { } blocked)
+            {
+                form.ShowReading($"Not read out - {blocked}.", reading: false);
+                return;
+            }
+
+            form.Used = true;
+            form.ShowReading("Waiting for the announcer...", reading: true);
+
+            void OnUi(Action act)
+            {
+                if (!form.IsDisposed && form.IsHandleCreated)
+                {
+                    form.BeginInvoke(() =>
+                    {
+                        if (!form.IsDisposed)
+                        {
+                            act();
+                        }
+                    });
+                }
+            }
+
+            _announcer.SpeakReminder(
+                DriversMeeting.Spoken(text),
+                showOnScreens: true,
+                onAir: "Drivers' meeting",
+                dequeued: () => OnUi(() => form.ShowReading("Reading it out now...", reading: true)),
+                finished: () => OnUi(() => form.ShowReading($"Read out at {AppTime.TimeOfDay(DateTime.Now)}.", reading: false)));
+
             OnClientRawMessage($"{AppTime.LogStampNow()}  [program] The drivers' meeting was read out.");
         };
 
@@ -217,7 +250,31 @@ internal sealed class DriversMeetingForm : Form
     public event Action<string>? Print;
 
     /// <summary>Printed or read out at least once.</summary>
-    public bool Used { get; private set; }
+    public bool Used { get; set; }
+
+    private readonly Label _lblStatus = new() { AutoSize = true, ForeColor = AppTheme.TextMuted, Text = string.Empty };
+    private readonly Button _btnRead = new() { Text = "Read It Out", AutoSize = true };
+
+    /// <summary>
+    /// Lets Read It Out go again if the announcer never says it's done -
+    /// the line can be dropped unheard (Stop, a cleared queue), and a button
+    /// left off for good would be worse than a second reading.
+    /// </summary>
+    private readonly System.Windows.Forms.Timer _giveUp = new() { Interval = 180_000 };
+
+    /// <summary>Where the read-out is, under the box; the button is off while it is going.</summary>
+    public void ShowReading(string status, bool reading)
+    {
+        _lblStatus.Text = status;
+        _btnRead.Enabled = !reading;
+        _btnRead.Text = !reading && Used ? "Read It Again" : "Read It Out";
+        _giveUp.Stop();
+
+        if (reading)
+        {
+            _giveUp.Start();
+        }
+    }
 
     public DriversMeetingForm(string text)
     {
@@ -240,26 +297,42 @@ internal sealed class DriversMeetingForm : Form
 
         var btnClose = new Button { Text = "Close", DialogResult = DialogResult.Cancel, AutoSize = true };
         var btnPrint = new Button { Text = "Print...", AutoSize = true };
-        var btnRead = new Button { Text = "Read It Out", AutoSize = true };
+        var btnRead = _btnRead;
 
         btnPrint.Click += (_, _) =>
         {
             Used = true;
             Print?.Invoke(_txt.Text);
         };
-        btnRead.Click += (_, _) =>
+        btnRead.Click += (_, _) => ReadOut?.Invoke(_txt.Text);
+
+        _giveUp.Tick += (_, _) =>
         {
-            Used = true;
-            ReadOut?.Invoke(_txt.Text);
+            _giveUp.Stop();
+            _btnRead.Enabled = true;
+            _btnRead.Text = "Read It Again";
+            _lblStatus.Text = "The announcer never said it finished - Read It Again if it wasn't heard.";
         };
 
         var page = new FillPage();
         page.Add(lblHow, stretch: false, gapBelow: UiLayout.RowGap);
         page.AddFill(_txt, 260, gapBelow: UiLayout.RowGap);
+        page.Add(_lblStatus, stretch: false, gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar(alignRight: true).With(btnClose, btnRead, btnPrint), gapBelow: 0);
 
         Controls.Add(page);
         CancelButton = btnClose;
+
+        // WHY (15 Nov 2026): the box is the first thing focused, and a text
+        // box focused that way selects everything - one stray key and the
+        // meeting was gone. Opens with the caret at the top instead.
+        Shown += (_, _) =>
+        {
+            _txt.SelectionStart = 0;
+            _txt.SelectionLength = 0;
+        };
+
+        FormClosed += (_, _) => _giveUp.Dispose();
 
         AppTheme.ApplyRecursively(this);
         DialogFit.Keep(this, page, width: 640, height: 520);
