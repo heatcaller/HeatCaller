@@ -51,7 +51,8 @@ public sealed partial class RelaySettingsControl
 
         var grid = new FieldGrid();
         grid.AddRow("OBS on:", _txtObsHost);
-        grid.AddRow("Port:", _numObsPort);
+        // Stretched with the row, so "4455" fits at any text size, changed while running too (LayoutTests).
+        grid.AddRow("Port:", _numObsPort, stretch: true);
         grid.AddRow("OBS password:", _txtObsPassword);
         grid.AddRow("Lead-in (seconds):", _numLeadIn);
         _linedUp.Add(grid);
@@ -105,7 +106,8 @@ public sealed partial class RelaySettingsControl
         }
 
         DrawPieces();
-        return card;
+        // Advanced only: the club decides to stream. Tagged here, where it is built.
+        return SimpleMode.Hide(card);
     }
 
     /// <summary>Fills the card from settings - called with the rest in LoadFromSettings.</summary>
@@ -152,7 +154,7 @@ public sealed partial class RelaySettingsControl
             var index = i;
             var p = pieces[i];
             var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
-            var when = p.StartedUtc.ToLocalTime().ToShortTimeString() + (p.EndedUtc is { } e ? " - " + e.ToLocalTime().ToShortTimeString() : " - live");
+            var when = AppTime.TimeOfDay(p.StartedUtc.ToLocalTime()) + (p.EndedUtc is { } e ? " - " + AppTime.TimeOfDay(e.ToLocalTime()) : " - live");
             row.Controls.Add(new Label { AutoSize = true, Text = $"Piece {i + 1}, {when}:", Margin = new Padding(0, 6, 6, 0) });
             var link = new TextBox { Width = UiLayout.AtTextSize(260), Text = p.VideoId, PlaceholderText = "YouTube link" };
             link.Leave += (_, _) =>

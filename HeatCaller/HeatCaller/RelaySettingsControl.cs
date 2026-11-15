@@ -401,7 +401,7 @@ public sealed partial class RelaySettingsControl : UserControl
         page.Add(SimpleMode.Hide(BuildPinsCard()));
         page.Add(SimpleMode.Hide(BuildMailCard()));
         page.Add(SimpleMode.Hide(BuildManagerCard()));
-        page.Add(SimpleMode.Hide(BuildVideoCard()));
+        page.Add(BuildVideoCard());
         page.Add(BuildShareCard());
 
         // ROOM & WEB (17 Oct 2026): what the room and the people at home can
