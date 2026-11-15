@@ -1020,7 +1020,8 @@ public partial class MainForm
     /// does not need re-sending sixty times a minute - but the frame that
     /// records a session STOPPING does go, so the relay is left showing
     /// the result of the heat that just ended rather than the last moment
-    /// of it running.
+    /// of it running. An idle board still goes once a minute (StateFrameDue),
+    /// so the relay can tell a laptop between races from one gone home.
     /// </summary>
     private void PublishStateToRelay()
     {
@@ -1044,10 +1045,14 @@ public partial class MainForm
         _lastRelayRaceState = state;
         changed |= CountdownChanged(ref _lastRelayCountdown);
 
-        if (!live && !changed)
+        var now = Environment.TickCount64;
+
+        if (!StateFrameDue(live, changed, now, _lastRelayStateSentMs))
         {
             return;
         }
+
+        _lastRelayStateSentMs = now;
 
         try
         {

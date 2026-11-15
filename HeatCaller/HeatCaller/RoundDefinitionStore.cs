@@ -244,6 +244,14 @@ public sealed class RoundDefinitionStore
             {
                 moved.Add(round.Id);
             }
+
+            // Bug hunt 19: a marshal no-show names the class whose best
+            // qualifier it costs (MarshalRule.ForfeitsFor). Left on the old
+            // name, a mid-night rename handed the driver that result back.
+            if (RenameNoShows(round, oldName, newName) && !moved.Contains(round.Id))
+            {
+                moved.Add(round.Id);
+            }
         }
 
         if (moved.Count > 0)
@@ -252,6 +260,23 @@ public sealed class RoundDefinitionStore
         }
 
         return moved;
+    }
+
+    /// <summary>A class renamed on the round's marshal no-shows (bug hunt 19). True when anything changed.</summary>
+    private static bool RenameNoShows(RoundDefinition round, string from, string to)
+    {
+        var changed = false;
+
+        foreach (var noShow in round.NoShowMarshals ?? new List<MarshalNoShow>())
+        {
+            if (string.Equals(noShow.ClassName?.Trim(), from.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                noShow.ClassName = to;
+                changed = true;
+            }
+        }
+
+        return changed;
     }
 
     /// <summary>A class renamed where it shares a heat (Phase 4.1). True when anything changed.</summary>
@@ -321,6 +346,7 @@ public sealed class RoundDefinitionStore
         foreach (var round in _rounds.Where(r => !keep.Contains(r.Id)))
         {
             changed |= RenameShared(round, newName, oldName);
+            changed |= RenameNoShows(round, newName, oldName);
         }
 
         if (changed)

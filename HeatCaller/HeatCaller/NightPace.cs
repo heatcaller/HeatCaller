@@ -176,10 +176,21 @@ public static class NightPace
         var span = TimeSpan.Zero;
         var sittingStart = races[0].StartedAtUtc;
 
+        // The furthest round the night has got to: a planned break behind it
+        // was crossed already, so a held Q1 heat run after Q2 Heat 1 doesn't
+        // name the after-Q1 break again before Q2 Heat 2 (14 Nov 2026, bug
+        // hunt 19 - as NightPlan does since bug hunt 18).
+        int? reached = null;
+
         for (var i = 0; i < races.Count; i++)
         {
             var race = races[i];
             racing += race.EndedAtUtc - race.StartedAtUtc;
+
+            if (NightBreaks.PositionOf(RoundOf(race)) is { } position && (reached is not { } furthest || position > furthest))
+            {
+                reached = position;
+            }
 
             var last = i == races.Count - 1;
             var next = last ? null : races[i + 1];
@@ -211,7 +222,7 @@ public static class NightPace
             var before = RoundOf(race);
             var after = RoundOf(next);
 
-            gaps.Add(new Gap(race, next, length, CausesOf(race, next, before, after, roundList, all, gapSet, breaks))
+            gaps.Add(new Gap(race, next, length, CausesOf(race, next, before, after, roundList, all, gapSet, breaks, reached))
             {
                 // Only a stamp that falls inside this gap is this gap's: a
                 // round saved again later, or called up in an earlier gap
@@ -279,7 +290,8 @@ public static class NightPace
         List<RoundDefinition> rounds,
         List<SessionRecord> sessions,
         TimeSpan setGap,
-        IReadOnlyList<PlannedBreak>? breaks)
+        IReadOnlyList<PlannedBreak>? breaks,
+        int? reached)
     {
         var from = before.EndedAtUtc;
         var to = after.StartedAtUtc;
@@ -287,7 +299,7 @@ public static class NightPace
 
         bool InGap(DateTime utc) => utc > from && utc < to;
 
-        var planned = NightBreaks.Length(NightBreaks.Between(beforeRound, afterRound, breaks));
+        var planned = NightBreaks.Length(NightBreaks.Between(beforeRound, afterRound, breaks, reached));
 
         if (planned > TimeSpan.Zero)
         {

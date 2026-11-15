@@ -127,7 +127,7 @@ public sealed partial class WebServerService
     /// crossings to keep, and sends back the frames from half a second
     /// before each to half a second after.
     /// </summary>
-    private string BuildCameraPage()
+    internal string BuildCameraPage()
     {
         var look = CurrentPageLook();
 
@@ -228,13 +228,15 @@ public sealed partial class WebServerService
         });
 
         // The last few seconds, stamped with the time each frame was taken,
-        // and that time written on the picture too.
+        // and that time written on the picture too. Bug hunt 19: the browser
+        // places the milliseconds, so in 12-hour mode they come before the
+        // PM (7:14:05.123 PM, as the app writes it) and not after it.
         setInterval(() => {
           if (!cameraOk || video.readyState < 2 || !video.videoWidth) return;
           if (grab.width !== video.videoWidth || grab.height !== video.videoHeight){ grab.width = video.videoWidth; grab.height = video.videoHeight; }
           const t = Date.now();
           gx.drawImage(video, 0, 0);
-          const d = new Date(t), stamp = d.toLocaleTimeString([], { hour12: !window.HC24 }) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+          const d = new Date(t), stamp = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3, hour12: !window.HC24 });
           const size = Math.max(14, Math.round(grab.height / 28));
           gx.font = 'bold ' + size + 'px system-ui'; gx.fillStyle = 'rgba(0,0,0,.6)';
           gx.fillRect(0, grab.height - size * 1.6, gx.measureText(stamp).width + size, size * 1.6);

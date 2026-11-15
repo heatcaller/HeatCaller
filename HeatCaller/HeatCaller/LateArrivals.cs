@@ -75,13 +75,19 @@ public static class LateArrivals
     /// <summary>
     /// The Next Steps card's headline: "Max Power checked in after the heats
     /// were posted." or "3 drivers checked in after the heats were posted."
+    /// On a night whose heats were never posted, the question comes because
+    /// a race has run, so it says "after racing started" (bug hunt 19).
     /// </summary>
-    public static string Headline(IReadOnlyList<string> names, bool clubNight)
+    public static string Headline(IReadOnlyList<string> names, bool clubNight, bool posted = true)
     {
-        var what = clubNight ? "races" : "heats";
+        var after = After(clubNight, posted, "the");
 
         return names.Count == 1
-            ? $"{names[0]} checked in after the {what} were posted."
-            : $"{names.Count} drivers checked in after the {what} were posted.";
+            ? $"{names[0]} checked in after {after}."
+            : $"{names.Count} drivers checked in after {after}.";
     }
+
+    /// <summary>"the heats were posted", or "racing started" when they never were - <paramref name="the"/> is "the" or "tonight's".</summary>
+    public static string After(bool clubNight, bool posted, string the) =>
+        posted ? $"{the} {(clubNight ? "races" : "heats")} were posted" : "racing started";
 }

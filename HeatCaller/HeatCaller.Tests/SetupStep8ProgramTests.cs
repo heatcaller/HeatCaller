@@ -149,9 +149,10 @@ public sealed class SetupStep8ProgramTests : IDisposable
 
         var cuts = NightPlan.FinalsCuts(plan)!;
 
-        // 2 minutes off each main that stays at least 3 minutes long: the two 6-minute Stock mains.
+        // 2 minutes off each main, never below 3 minutes: 2 off each 6-minute
+        // Stock main, 1 off the 4-minute Mod main (bug hunt 19).
         Assert.Equal(2, cuts.MinutesShorter);
-        Assert.Equal(TimeSpan.FromMinutes(4), cuts.ShorterSaves);
+        Assert.Equal(TimeSpan.FromMinutes(5), cuts.ShorterSaves);
 
         // Only Stock has two mains: one fewer saves a main and its gap.
         Assert.Equal(TimeSpan.FromMinutes(9), cuts.FewerSaves);
@@ -204,7 +205,7 @@ public sealed class SetupStep8ProgramTests : IDisposable
         var source = Source("RaceProgramControl.cs");
         Assert.Contains("var plan = FinalsPlanTonight(MainsBuilder.PlanSeeding(ranked, mainSize));", source);
         Assert.Contains("round.FormatOverride = shortened.Clone();", source);
-        Assert.Contains("NightPlan.FinalsCuts(Plan())", source);
+        Assert.Contains("NightPlan.FinalsCuts(Plan(), ActiveDay?.FinalsMinutesShorter ?? 0, ActiveDay?.FinalsOneMainFewer ?? false)", source);
         Assert.Contains("alsoUndo: PutCutBack", source);
     }
 

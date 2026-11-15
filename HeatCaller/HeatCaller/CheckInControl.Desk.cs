@@ -257,9 +257,14 @@ public sealed partial class CheckInControl
         var fees = TonightsFees();
         var payment = profile is not null && fees is { Charges: true } f ? _payments?.Get(f.Day.Id, profile.Transponder) : null;
         var problems = profile is not null && ChecksPapers ? PapersProblems(profile) : new List<string>();
+
+        // The day and the fee as well (bug hunt 19): a class ticked in Roster,
+        // or a fee edited in setup, changes what's owed without changing any
+        // gate, and the list kept saying "Owes $15" while Paid Cash took $25.
+        var fee = profile is not null && fees is { Charges: true } charging ? FeeFor(profile, charging.Day, ClassNamed) : 0m;
         var signature = profile is null
             ? string.Empty
-            : $"{profile.Transponder}|{r}|{payment?.How}|{payment?.Amount}|{string.Join(";", problems)}|{(_tech is not null ? FailedWhy(TechFor(profile)) : "")}";
+            : $"{profile.Transponder}|{fees?.Day.Id}|{fee}|{r}|{payment?.How}|{payment?.Amount}|{string.Join(";", problems)}|{(_tech is not null ? FailedWhy(TechFor(profile)) : "")}";
 
         if (signature == _deskNeedsBuiltFor)
         {
@@ -357,8 +362,6 @@ public sealed partial class CheckInControl
 
             if (r.Paid != Gate.NotRun && fees is { Charges: true } night)
             {
-                var fee = FeeFor(profile, night.Day, ClassNamed);
-
                 if (r.Paid == Gate.Done)
                 {
                     var words = DeskMoney.Words(payment, fee);
@@ -576,6 +579,14 @@ internal sealed class DeskLogView : Control
             AccessibleName = _entries.Count > 0 ? $"{_entries[0].Who} {_entries[0].What}" : null;
             Invalidate();
         }
+    }
+
+    /// <summary>Empties the log - a new race day starts its own.</summary>
+    public void Clear()
+    {
+        _entries.Clear();
+        AccessibleName = null;
+        Invalidate();
     }
 
     public void Add(Entry entry)

@@ -134,7 +134,8 @@ public partial class MainForm
             var now = DateTime.UtcNow;
             var scope = _raceEvents.ActiveRoundScope();
             var dayRounds = _rounds.All.Where(r => scope is null || scope.Contains(r.Id)).ToList();
-            var racingStarted = dayRounds.Any(r => r.IsRecorded && r.Kind != RoundKind.Practice);
+            var racingStarted = EntriesClose.RacingStarted(dayRounds,
+                raceOnTrack: !_race.IsPracticeMode && _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing);
 
             var key = $"{day.Id}|{closeAt.Ticks}|";
             var call = EntriesClose.Due(closeAt, now, racingStarted,

@@ -19,7 +19,13 @@ import { fileURLToPath } from "node:url";
  * has to remember to bump a number. Twelve hex characters: enough to tell
  * builds apart, short enough to sit in a header on every answer.
  */
-const PAGE_FILES = ["./pages.js", "./push.js", "./mespaces.js", "./garagepage.js"];
+export const PAGE_FILES: readonly string[] = [
+  "./pages.js", "./push.js", "./mespaces.js", "./garagepage.js",
+  // What the pages pull in and join into their scripts when the relay runs
+  // (CLOCK_JS, DEFAULT_LOOK, SUN_ICON_SIZE): compiled pages.js holds only
+  // the import, so a change there alone must still be a new build.
+  "./clock.js", "./site.js", "./sun.js",
+];
 
 export const PAGES_BUILD: string = (() => {
   try {

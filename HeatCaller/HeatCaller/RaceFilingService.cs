@@ -418,9 +418,18 @@ public sealed class RaceFilingService
             {
                 try
                 {
-                    var pending = MarshalRule.PendingPenalties(record.Results, round.Id, _rounds.All, _events?.ActiveRoundScope());
+                    // Bug hunt 19: by the driver's main transponder, and a
+                    // penalty marked on a race that never reached the history
+                    // (its save failed, then the app closed) is still owed. A
+                    // race waiting in _unfiledRaces is listed by Get, so it
+                    // keeps its penalty; a history that could not be read
+                    // lists nothing, so then every mark is believed.
+                    Func<string, bool>? raceIsFiled = _sessionHistory.LoadedUnreadable
+                        ? null
+                        : id => _sessionHistory.Get(id) is not null;
+                    var pending = MarshalRule.PendingPenalties(record.Results, round.Id, _rounds.All, _events?.ActiveRoundScope(), _profiles, raceIsFiled);
 
-                    foreach (var line in MarshalRule.ApplyPenalties(record, pending))
+                    foreach (var line in MarshalRule.ApplyPenalties(record, pending, _profiles))
                     {
                         StatusMessage(line);
                     }

@@ -67,7 +67,8 @@ public static partial class RaceCoach
         int SessionsSinceBest,
         DateTime BestWhen,
         CurveStage? Stage,
-        TrendFit? Fit);
+        TrendFit? Fit,
+        int RecentSessions = 0);
 
     /// <summary>Reads a driver's sessions on one track, oldest first or not - they are put in order here.</summary>
     public static TrendReading ReadTrend(IEnumerable<TrendSample> samples)
@@ -89,10 +90,25 @@ public static partial class RaceCoach
         }
 
         // Halves, so each rate rests on at least two points and an odd
-        // middle one counts towards both.
+        // middle one counts towards both. A half that falls inside one week
+        // - every heat of last night, say - is widened until it spans one, so
+        // eight heats over two nights a week apart still read as a trend.
+        // Only when every session is within a week do the rates stay null.
         var half = (points.Count + 1) / 2;
-        var early = points.Take(half).ToList();
-        var recent = points.Skip(points.Count - half).ToList();
+        var earlyCount = half;
+        while (earlyCount < points.Count && (points[earlyCount - 1].When - points[0].When).TotalDays < 7)
+        {
+            earlyCount++;
+        }
+
+        var recentCount = half;
+        while (recentCount < points.Count && (points[^1].When - points[points.Count - recentCount].When).TotalDays < 7)
+        {
+            recentCount++;
+        }
+
+        var early = points.Take(earlyCount).ToList();
+        var recent = points.Skip(points.Count - recentCount).ToList();
 
         var earlyRate = RatePerWeek(early);
         var recentRate = RatePerWeek(recent);
@@ -105,7 +121,8 @@ public static partial class RaceCoach
             sinceBest,
             points[bestIndex].When,
             StageOf(recentRate, sinceBest),
-            FitCurve(points));
+            FitCurve(points),
+            recent.Count);
     }
 
     /// <summary>

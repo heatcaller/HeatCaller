@@ -44,13 +44,17 @@ public static class NightPlan
     public const int RacesForMeasuredGap = 3;
 
     /// <summary>A class's mains that have not been built yet, for the finish to count.</summary>
-    public sealed record UnbuiltMains(string ClassName, int Count, TimeSpan Length);
+    /// <param name="Format">The class's own format for its mains, before tonight's cut - so "finals shorter" can say what it really saves.</param>
+    public sealed record UnbuiltMains(string ClassName, int Count, TimeSpan Length, RaceFormat? Format = null);
 
     /// <summary>One race still to run, and when it should start.</summary>
     /// <param name="Round">The round, or null for a main that has not been built yet.</param>
     public sealed record Slot(RoundDefinition? Round, string Label, string ClassName, RoundKind Kind, TimeSpan Length, DateTime StartUtc)
     {
         public DateTime EndUtc => StartUtc + Length;
+
+        /// <summary>For a main not built yet: its class's own format, before tonight's cut. See <see cref="UnbuiltMains.Format"/>.</summary>
+        public RaceFormat? Format { get; init; }
     }
 
     /// <summary>A change that would bring the finish forward, and by how much.</summary>
@@ -375,7 +379,7 @@ public static class NightPlan
             for (var tier = Math.Max(0, mains.Count) - 1; tier >= 0; tier--)
             {
                 var letter = tier < 26 ? ((char)('A' + tier)).ToString() : (tier + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
-                slots.Add(new Slot(null, $"{letter}-Main", mains.ClassName, RoundKind.Main, mains.Length, cursor));
+                slots.Add(new Slot(null, $"{letter}-Main", mains.ClassName, RoundKind.Main, mains.Length, cursor) { Format = mains.Format });
                 cursor += mains.Length + gap;
             }
         }
@@ -612,8 +616,16 @@ public static class NightPlan
     /// director deciding at 21:15 to finish early wants the other two levers
     /// in the same breath, with what each buys, not a hunt through the
     /// class settings afterwards.
+    ///
+    /// 14 Nov 2026 (bug hunt 19): each main counts what <see cref="Shortened"/>
+    /// really takes off its time limit - a 4-minute main loses 1 minute, a
+    /// 3-minute main or a lap race nothing - not the full 2 minutes off a
+    /// slot that includes staging and the countdown. And a cut already chosen
+    /// tonight (<paramref name="minutesShorterTonight"/>,
+    /// <paramref name="oneMainFewerTonight"/>) isn't offered again: choosing
+    /// it a second time changes nothing.
     /// </summary>
-    public static FinalsCut? FinalsCuts(Projection? plan)
+    public static FinalsCut? FinalsCuts(Projection? plan, int minutesShorterTonight = 0, bool oneMainFewerTonight = false)
     {
         if (plan is not { OutByUtc: not null })
         {
@@ -631,17 +643,39 @@ public static class NightPlan
         }
 
         var shorter = TimeSpan.FromMinutes(FinalsShorterBy);
-        var shortenable = mains.Count(s => s.Length - shorter >= ShortestToShorten);
 
-        var fewer = mains
-            .GroupBy(s => s.ClassName, StringComparer.OrdinalIgnoreCase)
-            .Where(g => g.Count() > 1)
-            .Select(g => (Class: g.Key, Saves: g.First().Length + plan.Gap))
-            .ToList();
+        // What the cut takes off one main. Without its format, the slot's
+        // length stands in for the time limit.
+        TimeSpan ShorterSaves(Slot s)
+        {
+            if (minutesShorterTonight >= FinalsShorterBy)
+            {
+                return TimeSpan.Zero;
+            }
+
+            if (s.Format is not { } format)
+            {
+                return TimeSpan.FromTicks(Math.Clamp((s.Length - ShortestToShorten).Ticks, 0, shorter.Ticks));
+            }
+
+            var now = Shortened(format, minutesShorterTonight) ?? format;
+            var cut = Shortened(format, FinalsShorterBy) ?? format;
+            return LengthOf(now) - LengthOf(cut);
+        }
+
+        var shorterSaves = TimeSpan.FromTicks(mains.Sum(s => Math.Max(0, ShorterSaves(s).Ticks)));
+
+        var fewer = oneMainFewerTonight
+            ? new List<(string Class, TimeSpan Saves)>()
+            : mains
+                .GroupBy(s => s.ClassName, StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1)
+                .Select(g => (Class: g.Key, Saves: g.First().Length + plan.Gap))
+                .ToList();
 
         return new FinalsCut(
             FinalsShorterBy,
-            TimeSpan.FromTicks(shorter.Ticks * shortenable),
+            shorterSaves,
             TimeSpan.FromTicks(fewer.Sum(f => f.Saves.Ticks)),
             fewer.Select(f => f.Class).ToList());
     }

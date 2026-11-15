@@ -455,9 +455,9 @@ public sealed class TrendChartControl : UserControl
         _headline.Text = RaceCoach.TrendHeadline(reading);
         _lblWhere.Text = reading.Stage is null
             ? $"It takes {RaceCoach.TrendLeastSessions} sessions over more than a week to place you."
-            : $"From your last {Plural.Of((reading.Sessions + 1) / 2, "session")} here.";
+            : $"From your last {Plural.Of(reading.RecentSessions, "session")} here.";
         ShowStage(reading.Stage);
-        _lblRecord.Text = RecordGap(track, points.Min(p => p.BestLapMs));
+        _lblRecord.Text = RecordGap(track, Driver!, points.Min(p => p.BestLapMs));
         _drill.Say(RaceCoach.TrendDrill(reading));
 
         _chartPanel.Invalidate();
@@ -489,14 +489,25 @@ public sealed class TrendChartControl : UserControl
     /// scored session, practice included, as the points are. "Real" is
     /// RaceCoach.RecordLaps' rule - no ghosts, rentals or excluded guests -
     /// so this names the same holder as the Records page and the badge.
+    ///
+    /// Whether the driver holds it is read from those record laps, not from
+    /// their best on the chart: a rental or excluded guest can be quicker
+    /// than the record without holding it, and with practice unticked the
+    /// chart's best can miss the practice lap the driver set the record with.
     /// </summary>
-    private string RecordGap(string track, long driverBest)
+    private string RecordGap(string track, string driver, long driverBest) =>
+        RecordText(_history.All, track, driver, driverBest, Profiles, Layouts);
+
+    internal static string RecordText(
+        IEnumerable<SessionRecord> sessions, string track, string driver, long driverBest, ProfileStore? profiles, TrackLayoutStore? layouts)
     {
-        var holder = RaceCoach.RecordLaps(
-                _history.All.Where(s => !s.IsNotScored() && string.Equals(s.TrackLayoutName, track, StringComparison.OrdinalIgnoreCase)),
-                Profiles)
+        var laps = RaceCoach.RecordLaps(
+                sessions.Where(s => !s.IsNotScored() && string.Equals(s.TrackLayoutName, track, StringComparison.OrdinalIgnoreCase)),
+                profiles)
             .Select(x => x.Result)
-            .FirstOrDefault();
+            .ToList();
+
+        var holder = laps.FirstOrDefault();
 
         if (holder is null)
         {
@@ -504,15 +515,22 @@ public sealed class TrendChartControl : UserControl
         }
 
         var record = holder.FastLapMs;
+        var own = laps.FirstOrDefault(r => string.Equals(r.DriverName, driver, StringComparison.OrdinalIgnoreCase));
 
-        if (driverBest <= record)
+        if (own is not null && own.FastLapMs <= record)
         {
             return $"You hold the track record here: {PaceAnalysis.Time(record)}.";
         }
 
-        var gap = driverBest - record;
         var who = string.IsNullOrWhiteSpace(holder.DriverName) ? string.Empty : $" by {holder.DriverName}";
-        var lengths = RaceCoach.SayLengths(gap, record, RaceCoach.TrackCars(Layouts, track));
+
+        if (driverBest <= record)
+        {
+            return $"Track record {PaceAnalysis.Time(record)}{who}. Your {PaceAnalysis.Time(driverBest)} doesn't count towards it: it was on a rental transponder, or you're left out of records.";
+        }
+
+        var gap = driverBest - record;
+        var lengths = RaceCoach.SayLengths(gap, record, RaceCoach.TrackCars(layouts, track));
 
         return lengths is null
             ? $"Track record {PaceAnalysis.Time(record)}{who}. Your best is {gap / 1000.0:0.000} s off it."
