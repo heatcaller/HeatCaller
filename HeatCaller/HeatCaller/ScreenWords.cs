@@ -49,7 +49,9 @@ internal static class ScreenWords
     /// to "spic", so "that spices things up" dropped a whole recap. Checked
     /// before the endings come off; "spics" is still caught.
     /// </summary>
-    private static readonly HashSet<string> OrdinaryWords = new(StringComparer.Ordinal)
+    private static readonly Regex SpickAndSpan = new(@"\bspick[\s-]*(?:and|&|'?n'?)[\s-]*span\b", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly HashSet<string> OrdinaryWords =new(StringComparer.Ordinal)
     {
         "spices", "spiced", "spicing",
     };
@@ -109,7 +111,9 @@ internal static class ScreenWords
             return null;
         }
 
-        var text = Fold(written);
+        // WHY (15 Nov 2026, bug hunt 21): "spick" is a slur on its own, but
+        // "spick and span" is an everyday phrase for a tidy car or pit table.
+        var text = SpickAndSpan.Replace(Fold(written), " ");
         var allowed = string.IsNullOrEmpty(allowedFrom) ? string.Empty : Fold(allowedFrom);
         var words = Word.Matches(text).Select(m => m.Value).ToList();
         var allowedWords = Word.Matches(allowed).Select(m => m.Value).ToHashSet();

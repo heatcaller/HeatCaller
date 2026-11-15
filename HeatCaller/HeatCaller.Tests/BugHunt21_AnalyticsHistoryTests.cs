@@ -19,7 +19,8 @@ public sealed class BugHunt21_AnalyticsHistoryTests
         // last night's first main is in; its second has not run.
         var events = RaceEventStore.Load();
         var races = new List<SessionRecord>();
-        var start = new DateTime(2026, 9, 4, 19, 0, 0, DateTimeKind.Utc);
+        // The last night is tonight: an open day from an earlier night counts as done.
+        var start = DateTime.UtcNow.AddDays(-14).AddMinutes(-1);
         var days = new List<RaceEvent>();
 
         for (var night = 0; night < 2; night++)

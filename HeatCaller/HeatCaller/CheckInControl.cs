@@ -1258,8 +1258,12 @@ public sealed partial class CheckInControl : UserControl
             foreach (var profile in CurrentlyShownProfiles())
             {
                 // New to racing (setup plan D12): " · first night", " · novice, mentor Al".
-                var displayName = (string.IsNullOrWhiteSpace(profile.DriverName) ? profile.Transponder : profile.DriverName) + NewDrivers.Badge(profile, before);
-                var rowIndex = _grid.Rows.Add(_checkIns.IsCheckedIn(profile.Transponder), displayName, ClassCellText(profile));
+                // Only for a driver who is here: since bug hunt 21 "first night"
+                // means no races before tonight, which an absent member who has
+                // never raced would otherwise show every week.
+                var here = _checkIns.IsCheckedIn(profile.Transponder);
+                var displayName = (string.IsNullOrWhiteSpace(profile.DriverName) ? profile.Transponder : profile.DriverName) + (here ? NewDrivers.Badge(profile, before) : string.Empty);
+                var rowIndex = _grid.Rows.Add(here, displayName, ClassCellText(profile));
 
                 _grid.Rows[rowIndex].Tag = profile;
                 ShowPaid(_grid.Rows[rowIndex]);

@@ -625,10 +625,24 @@ public sealed class SeasonsControl : UserControl
             .Distinct(StringComparer.Ordinal)
             .Count();
 
-    /// <summary>Whether any of the races was run on a race day that is still open - more of its races may yet count.</summary>
+    /// <summary>
+    /// Whether any of the races was run tonight on a race day that is still
+    /// open - more of its races may yet count. A day left open after its
+    /// night is over counts as done: plenty of clubs never close a race day,
+    /// and their seasons must still finish (15 Nov 2026). A night runs 6 AM
+    /// to 6 AM, so a main after midnight is still tonight's.
+    /// </summary>
     private static bool AnyOnAnOpenDay(IReadOnlyList<SessionRecord> counted, RaceEventStore? events) =>
-        counted.Any(s => s.RoundId is { Length: > 0 } roundId
-            && events?.EventForRound(roundId) is { IsOpen: true, IsLegacy: false });
+        AnyOnAnOpenDay(counted, events, DateTime.Now);
+
+    internal static bool AnyOnAnOpenDay(IReadOnlyList<SessionRecord> counted, RaceEventStore? events, DateTime nowLocal)
+    {
+        var tonight = nowLocal.AddHours(-6).Date;
+
+        return counted.Any(s => s.RoundId is { Length: > 0 } roundId
+            && events?.EventForRound(roundId) is { IsOpen: true, IsLegacy: false }
+            && s.StartedAtUtc.ToLocalTime().AddHours(-6).Date >= tonight);
+    }
 
     /// <summary>
     /// The "Can they still win?" rows. WHY (14 Nov 2026): a season that ended
