@@ -385,7 +385,8 @@ public sealed class SimpleModeTests : IDisposable
         // Voice, Cast.
         "MainForm.Pages.cs|Race Calls",
         "VoiceSettingsControl.cs|Voice parameters", "VoiceSettingsControl.cs|Saved voice lines",
-        "CastControl.cs|Recap host", "CastControl.cs|Technical Lead", "CastControl.cs|Team Principal", "CastControl.cs|Achievements reader",
+        "CastControl.cs|Recap host", "CastControl.cs|Technical Lead", "CastControl.cs|Team Principal", "CastControl.cs|Drivers' own crew",
+        "CastControl.cs|Achievements reader",
 
         // Connection.
         "MainForm.ConnectionPage.cs|Developer console",
