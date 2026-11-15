@@ -439,6 +439,38 @@ public sealed class CastStandInTests : IDisposable
         return (announcer, profile, take);
     }
 
+    /// <summary>
+    /// THE FLAKE (15 Nov 2026). The test below failed once in a full run -
+    /// "Library" where "StandIn" was due - and passed alone. An announcer
+    /// warms the real Kokoro up on a background task (KokoroSpeech.WarmUp),
+    /// and a warm-up left over from an earlier test can run late: it reads
+    /// ModelPath when it runs, finds THIS test's 60 MB placeholder, fails to
+    /// load it, and records "the model wouldn't load" - so Kokoro reads as
+    /// unavailable for a minute, the saved ElevenLabs take is not passed
+    /// over, and the stand-in never speaks. A real load failing behind a
+    /// test's stand-in model says nothing about that model, so it is no
+    /// longer recorded while one is set.
+    /// </summary>
+    [Fact]
+    public async Task A_stray_kokoro_warm_up_behind_the_test_model_leaves_kokoro_available()
+    {
+        FakeKokoro();
+        Assert.True(KokoroSpeech.IsAvailable);
+
+        // What the leftover warm-up does: try the real engine on the placeholder.
+        KokoroSpeech.WarmUp();
+
+        var loading = typeof(KokoroSpeech).GetField("_loading", BindingFlags.Static | BindingFlags.NonPublic)!;
+
+        for (var i = 0; i < 200 && loading.GetValue(null) is not Task { IsCompleted: true }; i++)
+        {
+            await Task.Delay(50);
+        }
+
+        Assert.True(loading.GetValue(null) is Task { IsCompleted: true }, "the warm-up never finished");
+        Assert.True(KokoroSpeech.IsAvailable, KokoroSpeech.UnavailableReason);
+    }
+
     [Fact]
     public async Task At_100_percent_on_the_usage_chip_kokoro_says_a_saved_line_and_at_under_100_the_saved_take_plays_again()
     {

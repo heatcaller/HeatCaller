@@ -723,6 +723,18 @@ internal static class KokoroSpeech
             {
                 var reason = $"the Kokoro model wouldn't load ({ex.GetType().Name}: {ex.Message}) - downloading it again on the Voice tab usually fixes this";
 
+                // Tests only (15 Nov 2026): while a test's stand-in model is
+                // speaking, a real load failing behind it - a warm-up left
+                // running by an earlier test, finding this one's placeholder
+                // file - says nothing about the voice in use, and recording
+                // it made Kokoro read as unavailable for a minute in the
+                // middle of the next test. ModelForTests is never set in the
+                // app, so nothing changes there.
+                if (ModelForTests is not null)
+                {
+                    throw new InvalidOperationException($"The Kokoro voice can't speak - {reason}.", ex);
+                }
+
                 lock (EngineLock)
                 {
                     _loadFailure = reason;
