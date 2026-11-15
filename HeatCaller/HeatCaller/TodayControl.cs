@@ -52,6 +52,9 @@ public sealed class TodayControl : UserControl
     /// <summary>The Ready to Race card's "Ready to Race..." once everything is set up (12 Nov 2026, setup plan B3).</summary>
     public event Action? ReadyToRaceRequested;
 
+    /// <summary>The Ready to Race card's "Drivers' Meeting...", any time a day is open (15 Nov 2026, setup plan D10) - not only through Ready to race, which goes once a heat is raced.</summary>
+    public event Action? DriversMeetingRequested;
+
     /// <summary>Raised when the timer needs connecting.</summary>
     public event Action? ConnectTimerRequested;
 
@@ -105,6 +108,10 @@ public sealed class TodayControl : UserControl
     private readonly Label _lblReadyCount = new();
     private readonly Label _lblTodo = new();
     private readonly Button _btnFinish = new();
+    private readonly Button _btnMeeting = new() { Text = "Drivers' Meeting..." };
+
+    /// <summary>Whether the meeting button is showing - our own record, as with _finishShown.</summary>
+    private bool _meetingShown;
 
     /// <summary>The bar the button is in, hidden with it so it leaves no gap under what is left to do.</summary>
     private ButtonBar? _finishBar;
@@ -280,13 +287,15 @@ public sealed class TodayControl : UserControl
         _lblTodo.ForeColor = AppTheme.TextMuted;
 
         _btnFinish.Click += (_, _) => _onFinish?.Invoke();
+        _btnMeeting.Click += (_, _) => DriversMeetingRequested?.Invoke();
+        AppTheme.StyleButton(_btnMeeting, AppTheme.ButtonKind.Secondary);
 
         var ready = new Section("Ready to race");
 
         ready.Add(FieldGrid.Inline(_barReady, _lblReadyCount));
         ready.Add(_lblTodo);
 
-        _finishBar = ready.Add(new ButtonBar().With(_btnFinish), gapBelow: 0);
+        _finishBar = ready.Add(new ButtonBar().With(_btnFinish, _btnMeeting), gapBelow: 0);
 
         var band = new Beside(ReadyWidth)
         {
@@ -345,7 +354,9 @@ public sealed class TodayControl : UserControl
     {
         var count = TextRenderer.MeasureText("6 of 6 ready", AppTheme.BoldFont).Width;
         var bar = _barReady.Width + UiLayout.ButtonGap + count;
-        var button = _finishShown ? _btnFinish.Width : 0;
+        var button = (_finishShown ? _btnFinish.Width : 0)
+                     + (_meetingShown ? _btnMeeting.Width : 0)
+                     + (_finishShown && _meetingShown ? UiLayout.ButtonGap : 0);
 
         return Math.Max(UiLayout.AtTextSize(ReadyCardWidth), Math.Max(bar, button) + Section.Inset.Horizontal);
     }
@@ -675,6 +686,10 @@ public sealed class TodayControl : UserControl
         var rounds = _program.TodaysRounds();
         var checks = BuildChecks(day);
 
+        // The drivers' meeting, whenever there's a day for it to be about.
+        _meetingShown = day is not null && DriversMeetingRequested is not null;
+        _btnMeeting.Visible = _meetingShown;
+
         _readyTotal = checks.Count;
         _readyDone = checks.Count(c => c.Done);
         _barReady.Invalidate();
@@ -800,11 +815,13 @@ public sealed class TodayControl : UserControl
             AppTheme.StyleButton(_btnFinish, AppTheme.ButtonKind.Secondary);
         }
 
-        // The bar, not the button: a bar with nothing showing in it would
-        // still keep its row, and a row's gap, under what is left to do.
+        _btnFinish.Visible = _finishShown;
+
+        // The bar, not just the buttons: a bar with nothing showing in it
+        // would still keep its row, and a row's gap, under what is left to do.
         if (_finishBar is not null)
         {
-            _finishBar.Visible = _finishShown;
+            _finishBar.Visible = _finishShown || _meetingShown;
         }
     }
 

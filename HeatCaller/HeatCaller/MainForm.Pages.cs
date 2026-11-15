@@ -981,6 +981,9 @@ public partial class MainForm
         // And, once it's all set, the start-of-night checklist (setup plan B3).
         today.ReadyToRaceRequested += OpenReadyToRace;
 
+        // The drivers' meeting on its own button, any time of the night (setup plan D10).
+        today.DriversMeetingRequested += () => OpenDriversMeeting(null);
+
         // --- The timetable drawer ---
         //
         // The sheet is a few-times-an-evening job: set the times, add doors
