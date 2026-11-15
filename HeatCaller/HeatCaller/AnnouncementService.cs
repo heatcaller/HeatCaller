@@ -1231,9 +1231,14 @@ public sealed partial class AnnouncementService
     /// it is dropped unheard once a quicker lap, a new leader or another lap
     /// by the leader makes it untrue - see AnnouncementService.Freshness.
     /// </param>
+    /// <param name="finished">
+    /// Told once the line has been played, or has failed to - for a window
+    /// that waits on its own read-out, like the drivers' meeting's (15 Nov
+    /// 2026). Never told when the line is muted away or dropped unheard.
+    /// </param>
     public void SpeakReminder(string text, (double Stability, double Style)? deliveryOverride = null, SecondVoice? voice = null, bool showOnScreens = false,
         SpeechTail tail = SpeechTail.Normal, SpeechLead lead = SpeechLead.Normal, string? onAir = null, Action? dequeued = null, bool forListeners = true,
-        RaceFactsStamp? facts = null)
+        RaceFactsStamp? facts = null, Action? finished = null)
     {
         if (Muted || string.IsNullOrWhiteSpace(text))
         {
@@ -1245,13 +1250,21 @@ public sealed partial class AnnouncementService
         // must not go out on the public listen-along page.
         var spoken = SpellOutTimesForSpeech(text);
         EnqueueVoiceWork(AnnouncementEventType.Reminder, null,
-            () =>
+            async () =>
             {
                 // WHY (26 Oct 2026): told the moment the queue takes this
                 // line, so a long read fed in piece by piece knows when the
                 // queue has nothing left behind it - see dequeued.
                 Dequeued(dequeued);
-                return SynthesizeAndPlayAsync(spoken, "[voice] Reminder", deliveryOverride: deliveryOverride, voice: voice, tail: tail, lead: lead, forListeners: forListeners);
+
+                try
+                {
+                    await SynthesizeAndPlayAsync(spoken, "[voice] Reminder", deliveryOverride: deliveryOverride, voice: voice, tail: tail, lead: lead, forListeners: forListeners);
+                }
+                finally
+                {
+                    Dequeued(finished);
+                }
             },
             displayText: showOnScreens ? text : null,
             onAir: onAir,
