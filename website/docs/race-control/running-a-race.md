@@ -358,7 +358,7 @@ The board orders drivers by most laps, then by lowest total time. Total time inc
 
 ### Columns
 
-Right-click a column heading on the leaderboard and choose **Choose the board's columns...** to choose the columns and their order. The same item is at the foot of a driver's right-click menu. It's there in Simple mode too. In the dialog, click the left edge of a row to show or hide that column, and use **Move Up** and **Move Down** to reorder them. **Restore Defaults** puts back **Pos**, **Driver**, **Car**, **Laps**, **Best Lap**, **Gap to P1** and **Streak**.
+Right-click a column heading on the leaderboard to choose the columns and their order. A list drops down with every column: the ones on the board come first, ticked, in board order, and the rest follow under **Hidden**. Tick or untick a column to show or hide it, and use the ▲ ▼ arrows on a row to move it left or right. The board changes as you go. With the keyboard, Space ticks and Ctrl+Up or Ctrl+Down moves the picked column. The last column on the board can't be hidden. **Restore default columns** puts back **Pos**, **Driver**, **Car**, **Laps**, **Best Lap**, **Gap to P1** and **Streak**. **More column options...** opens the full picker, which also says what each column shows. Press Esc or click away to close the list. **Undo** takes back everything you changed while it was open, in one step. **Choose the board's columns** at the foot of a driver's right-click menu opens the same list. It's there in Simple mode too.
 
 | Column | Shows |
 |---|---|
