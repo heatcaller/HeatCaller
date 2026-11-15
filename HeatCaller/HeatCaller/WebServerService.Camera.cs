@@ -399,6 +399,7 @@ public sealed partial class WebServerService
         string Part(OverlayElementKind kind, string html) => PlaceInLayout(layout, kind, html);
         var slotCss = OverlayLayouts.SlotCss(layout);
         var layoutJson = OverlayLayouts.ScriptJson(layout).Replace("</", "<\\/", StringComparison.Ordinal);
+        var basicsJson = StreamBasics.ScriptJson(_settings?.StreamBasics);
         var glass = Math.Abs(layout.Glass - 0.82) < 0.001
             ? ".82"
             : Math.Clamp(layout.Glass, 0.4, 1).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
@@ -547,6 +548,7 @@ public sealed partial class WebServerService
         .slot > .inslot.anim { opacity:0; transition:opacity .45s; }
         .slot > .inslot.anim.show { opacity:1; }
         {{slotCss}}
+        {{(Math.Abs(layout.TextScale - 1) < 0.001 ? string.Empty : "body{zoom:" + Math.Clamp(layout.TextScale, 0.8, 1.6).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "}")}}
         </style></head><body data-look="{{look.Fingerprint}}">
         {{Part(OverlayElementKind.Tower, "<div id=\"tower\" class=\"glass" + (markPlaced ? " nofoot" : string.Empty) + "\" style=\"opacity:0\"><div class=\"head\"><span id=\"title\">-</span><span id=\"clock\" class=\"acc\"></span></div><div class=\"sub\"><span id=\"mode\" class=\"mode\"></span><span id=\"changes\"></span></div><div id=\"rows\"></div><div class=\"hcfoot\">" + HeatCallerMark.SunSvg + HeatCallerMark.WordHtml + "</div></div>")}}
         {{Part(OverlayElementKind.Champ, "<div id=\"champ\" class=\"glass\"></div>")}}
@@ -594,7 +596,25 @@ public sealed partial class WebServerService
         const SHOWN = (PARTS.tower && PARTS.tower.rows) || 8, TOP = 8, CYCLE_MS = 8000, MOMENT_MS = 7000;
         const rowEls = {};
         let lastPos = {}, best = { ms: 0, id: '' }, fastTimer = 0, first = true;
-        let fight = null, momentSeq = -1, momentTimer = 0, podiumSeen = null;
+        let fight = null, momentSeq = -1, momentTimer = 0, podiumSeen = null, momentQueue = [], momentBusy = false;
+        function showNextMoment(){
+          if (momentBusy || momentQueue.length === 0) return;
+          const m = momentQueue.shift();
+          momentBusy = true;
+          const el = document.getElementById('moment');
+          // The kind is a class; anim and the slot's class are kept.
+          el.className = 'glass anim ' + esc(m.kind || '') + (placed('moment') ? ' inslot' : '');
+          document.getElementById('mtitle').textContent = m.title || '';
+          document.getElementById('mline').textContent = snText(m.line || '');
+          document.getElementById('mby').textContent = m.sponsor ? 'Presented by ' + m.sponsor : '';
+          requestAnimationFrame(() => el.classList.add('show'));
+          clearTimeout(momentTimer);
+          momentTimer = setTimeout(() => {
+            el.classList.remove('show');
+            // A beat between banners, then the next.
+            setTimeout(() => { momentBusy = false; showNextMoment(); }, 700);
+          }, MOMENT_MS);
+        }
 
         // Captions, only when asked for: the line the announcer has just
         // said, fading after eight seconds. Only a line said while the page
@@ -697,6 +717,9 @@ public sealed partial class WebServerService
         // Whether the sponsor graphic is up: said on the next poll, so the
         // laptop counts the time its logo is really on screen (section 5).
         let sponsorShowing = false;
+        // "Presented by" graphics put up since the last poll, by moment name.
+        const graphicsShown = new Set();
+        function shownBy(d, moment){ if (!DEMO && presentedBy(d, moment)) graphicsShown.add(moment); }
         const DEMO_NAMES = ['Mia Kent', 'Sam Tr', 'Terry Byte', 'Al Gorithim', 'Ella Vator', 'Annie Wayout', 'Rob Otics', 'Cy Clone'];
         // &at=60 starts the loop that many seconds in: 0 between races, 20
         // the grid, 35 the start, 95 a lead change, 140 the result.
@@ -748,7 +771,12 @@ public sealed partial class WebServerService
           if (DEMO) d = demoState();
           else {
             const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 3000);
-            try { d = await (await fetch(sponsorShowing ? '/api/state?sponsor=1' : '/api/state', { cache: 'no-store', signal: stop.signal })).json(); }
+            // What it showed since the last poll goes with this one (section 5).
+            const said = [];
+            if (sponsorShowing) said.push('sponsor=1');
+            if (graphicsShown.size) said.push('shown=' + encodeURIComponent([...graphicsShown].join(',')));
+            graphicsShown.clear();
+            try { d = await (await fetch('/api/state' + (said.length ? '?' + said.join('&') : ''), { cache: 'no-store', signal: stop.signal })).json(); }
             catch(e) { return; }
             finally { clearTimeout(timer); }
           }
@@ -862,6 +890,7 @@ public sealed partial class WebServerService
             const meta = trend + together + (by ? '<span class="trend">' + esc(by.toUpperCase()) + byLogo(d, 'Battle') + '</span>' : '');
             battle.innerHTML = (close.pos === 1 ? 'BATTLE FOR THE LEAD' : 'BATTLE FOR P' + close.pos) + ' &nbsp; ' + esc(sn(close.a.name)) + ' <span class="acc">vs</span> ' + esc(sn(close.b.name)) +
               '<span class="gap">' + close.g.toFixed(3) + 's</span>' + (meta ? '<span class="meta">' + meta + '</span>' : '');
+            if (!battle.classList.contains('show')) shownBy(d, 'Battle');
             battle.classList.add('show');
           } else battle.classList.remove('show');
 
@@ -880,6 +909,7 @@ public sealed partial class WebServerService
             document.getElementById('fname').textContent = row ? sn(row.name) : '';
             document.getElementById('ftime').textContent = fmt(top.ms);
             const f = document.getElementById('fastest'); f.classList.add('show');
+            shownBy(d, 'FastestLap');
             clearTimeout(fastTimer); fastTimer = setTimeout(() => f.classList.remove('show'), 6000);
           }
           best = top;
@@ -887,21 +917,19 @@ public sealed partial class WebServerService
           // A banner for each new moment - a lead change, a milestone.
           // Only for one that arrives while the page is open: a page loaded
           // (or reloaded in OBS) takes the current number as already seen.
-          const m = d.moment;
-          if (m && m.seq !== momentSeq){
-            const fresh = !first;
-            momentSeq = m.seq;
-            if (fresh && want('moment')){
-              const el = document.getElementById('moment');
-              // The kind is a class; anim and the slot's class are kept.
-              el.className = 'glass anim ' + esc(m.kind || '') + (placed('moment') ? ' inslot' : '');
-              document.getElementById('mtitle').textContent = m.title || '';
-              document.getElementById('mline').textContent = snText(m.line || '');
-              document.getElementById('mby').textContent = m.sponsor ? 'Presented by ' + m.sponsor : '';
-              requestAnimationFrame(() => el.classList.add('show'));
-              clearTimeout(momentTimer); momentTimer = setTimeout(() => el.classList.remove('show'), MOMENT_MS);
-            }
+          // Every new moment is queued and shown in turn (overlay plan 7.3):
+          // several badges land at once after a race. A number lower than
+          // the last seen is HeatCaller started again - counted afresh.
+          const list = Array.isArray(d.moments) && d.moments.length ? d.moments : (d.moment ? [d.moment] : []);
+          const highest = list.reduce((n, m) => Math.max(n, Number(m.seq) || 0), 0);
+          if (highest < momentSeq) momentSeq = 0;
+          for (const m of list){
+            if (!m || !(Number(m.seq) > momentSeq)) continue;
+            momentSeq = Number(m.seq);
+            if (!first && want('moment')) momentQueue.push(m);
           }
+          if (momentQueue.length > 6) momentQueue.splice(0, momentQueue.length - 6);
+          showNextMoment();
 
           // The grid, before the start.
           const grid = document.getElementById('grid');
@@ -913,6 +941,7 @@ public sealed partial class WebServerService
                 const num = (pcars[id] || {}).num;
                 return '<div class="line"><b>' + c.slot + '</b>' + (num ? '<span class="acc">#' + esc(num) + '</span> ' : '') + swatch(d, id) + esc(nameOf(d, id)) + '</div>';
               }).join('');
+            if (!grid.classList.contains('show')) shownBy(d, 'DriverIntros');
             grid.classList.add('show');
           } else grid.classList.remove('show');
 
@@ -938,6 +967,7 @@ public sealed partial class WebServerService
             podium.innerHTML = '<h2>' + esc(d.race || 'Result') + badge + (by ? '<span class="by">' + esc(by) + byLogo(d, 'RaceResult') + '</span>' : '') + '</h2>' + podiumRows.slice(0, 3).map((s, i) =>
               '<div class="line"><b>' + ordinal(i + 1) + '</b>' + swatch(d, s.id) + esc(sn(s.name)) + '<span class="t">' + esc((cards[s.id] || {}).result || (((cards[s.id] || {}).laps || 0) + ' laps')) + ' &nbsp; best ' + fmt(s.best) + '</span>' +
               (ratings[s.id] !== undefined ? '<span class="r">RTG ' + Number(ratings[s.id]).toFixed(1) + '</span>' : '') + '</div>').join('');
+            if (!podium.classList.contains('show')) shownBy(d, 'RaceResult');
             podium.classList.add('show');
           } else podium.classList.remove('show');
 
@@ -947,16 +977,8 @@ public sealed partial class WebServerService
 
         // NEW TO RC RACING? (overlay plan 7.6): the basics and a few words,
         // one card every twelve seconds between races.
-        const BASICS = [
-          ['New to RC racing?', 'Races run for a set time. When the clock runs out, everyone finishes the lap they\u2019re on. Most laps wins; on the same laps, the quicker time wins.'],
-          ['New to RC racing?', 'Everyone qualifies in heats. The quickest go through to the A-Main, the next to the B-Main.'],
-          ['New to RC racing?', 'The drivers standing by the track are marshals, from the race before. They put crashed cars back on their wheels.'],
-          ['New to RC racing?', 'Each car carries a transponder that counts its laps as it crosses the line.'],
-          ['Racing words', 'Laps/time, like 23/5:02.341: 23 laps in 5 minutes 2.341 seconds.'],
-          ['Racing words', 'TQ: top qualifier, the quickest driver in qualifying. They start the A-Main from the front.'],
-          ['Racing words', 'Lapped (+1L): the leader has gone a whole lap further. Interval: the gap to the car just ahead.'],
-          ['Racing words', 'A personal best (PB) is a driver\u2019s own fastest lap - often the thing worth cheering most.'],
-        ];
+        // The club's own cards, or HeatCaller's (StreamBasics).
+        const BASICS = {{basicsJson}};
 
         // --- The layout's own graphics (stream overlay plan section 2) ---
         // The last minute of a timed race, or the last lap of a lap race,
@@ -1057,7 +1079,13 @@ public sealed partial class WebServerService
           if (firstEta){ const at = new Date(); at.setHours(Number(firstEta[1]), Number(firstEta[2]), 0, 0); minutesToGo = (at - Date.now()) / 60000; }
           const basics = want('basics') && PART === 'between' && !over && minutesToGo >= 2;
           if (basics){
-            const card = BASICS[Math.floor(Date.now() / 12000) % BASICS.length];
+            // Tonight's bests (7.3) join the turns once there are some:
+            // "Mia K: First podium".
+            const bests = Array.isArray(d.bests) ? d.bests.filter(b => b && b.title).slice(-4) : [];
+            const cards = bests.length
+              ? BASICS.concat([['Tonight\u2019s bests', bests.map(b => snText(String(b.line || '').split(' \u00b7 ')[0]) + ': ' + b.title).join(' \u00b7 ')]])
+              : BASICS;
+            const card = cards[Math.floor(Date.now() / 12000) % cards.length];
             setText('bs-k', card[0]);
             setText('bs-t', card[1]);
           }

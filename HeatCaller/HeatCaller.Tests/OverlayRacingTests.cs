@@ -231,7 +231,7 @@ public sealed class OverlayRacingTests
         var page = Server().BuildBroadcastPage(OverlayLayouts.BuiltIn("between"));
 
         Assert.Contains("'<div class=\"line\"><b>' + ordinal(i + 1) + '</b>'", page);
-        Assert.Contains("['New to RC racing?', 'Races run for a set time.", page);
+        Assert.Contains("[\"New to RC racing?\",\"Races run for a set time.", page);
         Assert.Contains("const basics = want('basics') && PART === 'between' && !over && minutesToGo >= 2;", page);
         Assert.Contains("That\\'s it for tonight", page);
         Assert.Contains("'Starting soon'", page);
@@ -262,7 +262,7 @@ public sealed class OverlayRacingTests
         var page = Server().BuildBroadcastPage(OverlayLayouts.BuiltIn("corner"));
 
         Assert.Contains("const busy = racing && (d.finishing || lastMinute(d.countdown) || battleUp);", page);
-        Assert.Contains("sponsorShowing ? '/api/state?sponsor=1' : '/api/state'", page);
+        Assert.Contains("if (sponsorShowing) said.push('sponsor=1');", page);
         // Only an address the laptop makes is ever put in an img.
         Assert.Contains("const LOGO_URL = /^\\/sponsor-logo\\/sponsor-logo-[0-9a-f]{12}\\.png$/;", page);
         Assert.Contains("const m = /(\\d+):(\\d{2})/.exec(t);", page);

@@ -357,6 +357,7 @@ public partial class MainForm
             key.Append(string.Join(",", profile.AllTransponderIds)).Append('|')
                 .Append(profile.DriverName).Append('|')
                 .Append(profile.AnnouncerName).Append('|')
+                .Append(profile.IsJunior ? 'J' : '-')
                 .Append(profile.NoPhotoOnline ? '1' : '0')
                 .Append(profile.NoVideoOnline ? '1' : '0')
                 .Append(profile.InitialsOnline ? '1' : '0')

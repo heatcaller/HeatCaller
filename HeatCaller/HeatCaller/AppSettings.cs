@@ -2336,6 +2336,13 @@ public sealed class AppSettings
     /// </summary>
     public string JuniorNamesOnStream { get; set; } = JuniorNames.Initial;
 
+    /// <summary>
+    /// The club's own "New to RC racing?" cards for the stream (14 Nov 2026,
+    /// overlay plan 7.6): one a line, "Heading | words". Empty uses
+    /// HeatCaller's own. See StreamBasics.
+    /// </summary>
+    public string StreamBasics { get; set; } = string.Empty;
+
     /// <summary>Show published names as a first name and an initial rather than in full.</summary>
     public bool RelayAbbreviateNames { get; set; } = true;
 

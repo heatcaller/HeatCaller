@@ -32,7 +32,7 @@ namespace HeatCaller;
 internal sealed class PublicPrivacy
 {
     /// <summary>One driver's three flags and the names they go by.</summary>
-    private sealed record Entry(string Transponder, string Name, string AnnouncerName, bool NoPhoto, bool NoVideo, bool Initials);
+    private sealed record Entry(string Transponder, string Name, string AnnouncerName, bool NoPhoto, bool NoVideo, bool Initials, bool Junior = false);
 
     /// <summary>Everybody's, keyed by every transponder they own.</summary>
     private readonly Dictionary<string, Entry> _byTransponder;
@@ -65,7 +65,7 @@ internal sealed class PublicPrivacy
         foreach (var entry in entries.OrderBy(e => e.Transponder, StringComparer.OrdinalIgnoreCase))
         {
             fingerprint.Append(entry.Transponder.ToUpperInvariant()).Append('|')
-                .Append(entry.NoPhoto ? '1' : '0').Append(entry.NoVideo ? '1' : '0').Append(entry.Initials ? '1' : '0').Append('|')
+                .Append(entry.NoPhoto ? '1' : '0').Append(entry.NoVideo ? '1' : '0').Append(entry.Initials ? '1' : '0').Append(entry.Junior ? 'J' : '-').Append('|')
                 .Append(entry.Name).Append('|').Append(entry.AnnouncerName).Append('\n');
 
             if (!entry.Initials)
@@ -189,7 +189,7 @@ internal sealed class PublicPrivacy
 
             foreach (var id in profile.AllTransponderIds)
             {
-                var entry = new Entry(id, name, announcer, profile.NoPhotoOnline, profile.NoVideoOnline, profile.InitialsOnline);
+                var entry = new Entry(id, name, announcer, profile.NoPhotoOnline, profile.NoVideoOnline, profile.InitialsOnline, profile.IsJunior);
 
                 (string.Equals(id.Trim(), main, StringComparison.OrdinalIgnoreCase) ? entries : extras).Add(entry);
             }
@@ -378,6 +378,14 @@ internal sealed class PublicPrivacy
 
     /// <summary>True when anybody at all is shown by initials - so a caller can skip the name work for most clubs, on most nights.</summary>
     public bool AnyInitials => _initialsByName.Count > 0;
+
+    /// <summary>
+    /// True when the driver with this transponder is a junior (under 18) -
+    /// whose name the club's pages shorten to a first name and an initial
+    /// even when the club shows other names in full (14 Nov 2026, stream
+    /// overlay plan 7.5). See RelayPublisher.DisplayNames.
+    /// </summary>
+    public bool JuniorForTransponder(string? transponder) => Find(transponder)?.Junior == true;
 
     /// <summary>True when <paramref name="name"/> is the full or announcer name of a driver shown online by initials only.</summary>
     public bool InitialsFor(string? name) =>

@@ -740,7 +740,8 @@ public sealed class SponsorsControl : UserControl
                 TonightAtTheTrack.NightOf(DateTime.Now),
                 MentionsTonight?.Invoke(),
                 WebViewsTonight?.Invoke(),
-                SponsorStream.SecondsOn(TonightAtTheTrack.NightOf(DateTime.Now)));
+                SponsorStream.SecondsOn(TonightAtTheTrack.NightOf(DateTime.Now)),
+                SponsorStream.GraphicsOn(TonightAtTheTrack.NightOf(DateTime.Now)));
 
             if (string.IsNullOrWhiteSpace(report))
             {

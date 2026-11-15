@@ -184,8 +184,9 @@ public static class OverlayLayouts
                 E(OverlayElementKind.Sponsor, OverlayAnchor.TopRight, 2, 2, during: OverlayDuring.Between | OverlayDuring.Staging),
                 E(OverlayElementKind.ClubLogo, OverlayAnchor.TopLeft, 2, 2, during: OverlayDuring.Between),
                 E(OverlayElementKind.Captions, on: false),
-                // Placed, so it stays on between races when the tower goes.
-                E(OverlayElementKind.Mark, OverlayAnchor.BottomRight, 2, 2),
+                // Placed, so it stays on between races when the tower goes -
+                // bottom left, clear of the fastest lap's pop-up.
+                E(OverlayElementKind.Mark, OverlayAnchor.BottomLeft, 2, 2),
             },
         },
         new()
@@ -221,7 +222,8 @@ public static class OverlayLayouts
             Elements = new()
             {
                 E(OverlayElementKind.Bug, OverlayAnchor.TopRight, 2, 2),
-                E(OverlayElementKind.Sponsor, OverlayAnchor.TopRight, 2, 9),
+                // Under the bug, clear of it.
+                E(OverlayElementKind.Sponsor, OverlayAnchor.TopRight, 2, 11),
                 E(OverlayElementKind.Captions, on: false),
                 E(OverlayElementKind.Mark, OverlayAnchor.BottomRight, 2, 2),
             },

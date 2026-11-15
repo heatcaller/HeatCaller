@@ -40,6 +40,9 @@ public sealed partial class WebServerService
     /// <summary>The sponsor whose logo the stream's sponsor graphic shows, as last published - see SponsorStream.</summary>
     private volatile string? _sponsorUpId;
 
+    /// <summary>The presenting sponsor's id by moment name, as last published - see SponsorStream.GraphicShown.</summary>
+    private volatile Dictionary<string, string> _presentedIds = new(StringComparer.Ordinal);
+
     private void AddBroadcast(JsonObject node, IReadOnlyList<RacerStanding> ordered, byte[] rosterKey, UiSide ui, LiveRaceView? view)
     {
         var (changes, leaders) = (0, 0);
@@ -116,8 +119,11 @@ public sealed partial class WebServerService
 
         var presentedLogos = new JsonObject();
 
-        foreach (var (moment, sponsor, logo) in presentedBy)
+        var ids = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var (moment, sponsor, logo, sponsorId) in presentedBy)
         {
+            ids[moment] = sponsorId;
             presented[moment] = sponsor;
 
             if (logo.Length > 0)
@@ -127,6 +133,9 @@ public sealed partial class WebServerService
         }
 
         node["presented"] = presented;
+
+        // Who presents what, for counting a graphic a page says it showed.
+        _presentedIds = ids;
 
         // The sponsor whose logo is up now (overlay plan section 5): theirs
         // while their read is on air, else turns by share. Kept for the
@@ -140,6 +149,22 @@ public sealed partial class WebServerService
         // Their logos, by moment, where they have one (stream overlay plan
         // section 1) - for the graphics to show beside the name.
         node["presentedLogos"] = presentedLogos;
+
+        // Every moment of the last few seconds, for the page to show in turn
+        // (overlay plan 7.3), and tonight's milestones for "Tonight's bests".
+        node["moments"] = new JsonArray(Moments.Recent().Select(m => (JsonNode)new JsonObject
+        {
+            ["seq"] = m.Seq,
+            ["kind"] = m.Moment.Kind,
+            ["title"] = m.Moment.Title,
+            ["line"] = m.Moment.Line,
+            ["sponsor"] = m.Moment.Sponsor ?? string.Empty,
+        }).ToArray());
+        node["bests"] = new JsonArray(Moments.Tonight().Select(m => (JsonNode)new JsonObject
+        {
+            ["title"] = m.Title,
+            ["line"] = m.Line,
+        }).ToArray());
 
         node["moment"] = Moments.Current() is { } current
             ? new JsonObject

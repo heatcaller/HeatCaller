@@ -95,6 +95,8 @@ internal static class SponsorStream
             {
                 _night = night;
                 Seconds.Clear();
+                Graphics.Clear();
+                GraphicSeen.Clear();
                 _lastShownUtc = default;
             }
 
@@ -121,12 +123,67 @@ internal static class SponsorStream
         }
     }
 
+    private static readonly Dictionary<string, int> Graphics = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, DateTime> GraphicSeen = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// A stream page put up a "presented by" graphic for this sponsor - the
+    /// fastest lap, a battle, the grid, the result (14 Nov 2026, overlay plan
+    /// section 5). Counted once however many sources say so: the same
+    /// sponsor's same moment within ten seconds is the same graphic.
+    /// </summary>
+    internal static void GraphicShown(string? sponsorId, string moment, DateTime nowUtc)
+    {
+        if (string.IsNullOrWhiteSpace(sponsorId) || string.IsNullOrWhiteSpace(moment))
+        {
+            return;
+        }
+
+        lock (Gate)
+        {
+            var night = TonightAtTheTrack.NightOf(nowUtc.ToLocalTime());
+
+            if (night != _night)
+            {
+                _night = night;
+                Seconds.Clear();
+                Graphics.Clear();
+                GraphicSeen.Clear();
+                _lastShownUtc = default;
+            }
+
+            var key = sponsorId + "|" + moment;
+
+            if (GraphicSeen.TryGetValue(key, out var seen) && nowUtc - seen < TimeSpan.FromSeconds(10))
+            {
+                GraphicSeen[key] = nowUtc;
+                return;
+            }
+
+            GraphicSeen[key] = nowUtc;
+            Graphics[sponsorId] = (Graphics.TryGetValue(sponsorId, out var had) ? had : 0) + 1;
+        }
+    }
+
+    /// <summary>How many "presented by" graphics each sponsor had on the stream on this race night, by sponsor id.</summary>
+    internal static IReadOnlyDictionary<string, int> GraphicsOn(DateTime nightLocal)
+    {
+        lock (Gate)
+        {
+            return nightLocal.Date == _night.Date
+                ? new Dictionary<string, int>(Graphics, StringComparer.Ordinal)
+                : new Dictionary<string, int>(StringComparer.Ordinal);
+        }
+    }
+
     internal static void ResetForTests()
     {
         lock (Gate)
         {
             _night = default;
             Seconds.Clear();
+            Graphics.Clear();
+            GraphicSeen.Clear();
             _lastShownUtc = default;
         }
     }

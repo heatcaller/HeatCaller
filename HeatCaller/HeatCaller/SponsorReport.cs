@@ -73,7 +73,8 @@ internal static class SponsorReport
         DateTime nightLocal,
         IReadOnlyDictionary<string, IReadOnlyDictionary<SponsoredMoment, int>>? mentionsTonight = null,
         IReadOnlyDictionary<string, (int Seen, int Taps)>? webTonight = null,
-        IReadOnlyDictionary<string, int>? streamSecondsTonight = null)
+        IReadOnlyDictionary<string, int>? streamSecondsTonight = null,
+        IReadOnlyDictionary<string, int>? streamGraphicsTonight = null)
     {
         var sold = (bookings ?? Array.Empty<SponsorBooking>())
             .Where(one => !string.IsNullOrWhiteSpace(one.Id) && !string.IsNullOrWhiteSpace(one.Name))
@@ -158,7 +159,7 @@ internal static class SponsorReport
             // section 5). Unlike a slide, a logo belongs to its sponsor, so
             // this is a figure the club can stand behind: counted only while
             // a stream page had their logo actually on screen.
-            if (StreamLine(sponsor, streamSecondsTonight) is { Length: > 0 } stream)
+            if (StreamLine(sponsor, streamSecondsTonight, streamGraphicsTonight) is { Length: > 0 } stream)
             {
                 text.AppendLine(stream);
             }
@@ -182,18 +183,24 @@ internal static class SponsorReport
     }
 
     /// <summary>"  Their logo was on the stream for about 41 minutes." - or nothing when it never was.</summary>
-    internal static string StreamLine(SponsorBooking sponsor, IReadOnlyDictionary<string, int>? seconds)
+    internal static string StreamLine(SponsorBooking sponsor, IReadOnlyDictionary<string, int>? seconds, IReadOnlyDictionary<string, int>? graphics = null)
     {
-        if (seconds is null || !seconds.TryGetValue(sponsor.Id, out var on) || on <= 0)
+        var on = seconds is not null && seconds.TryGetValue(sponsor.Id, out var s) ? s : 0;
+        var shown = graphics is not null && graphics.TryGetValue(sponsor.Id, out var g) ? g : 0;
+
+        if (on <= 0 && shown <= 0)
         {
             return string.Empty;
         }
 
         var minutes = (int)Math.Round(on / 60.0);
+        var logo = on <= 0 ? string.Empty
+            : minutes < 1 ? "Their logo was on the stream for under a minute"
+            : $"Their logo was on the stream for about {Plural.Of(minutes, "minute")}";
+        var named = shown <= 0 ? string.Empty
+            : (logo.Length > 0 ? ", and their name on " : "Their name was on ") + Plural.Of(shown, "\"presented by\" graphic");
 
-        return minutes < 1
-            ? "  Their logo was on the stream for under a minute."
-            : $"  Their logo was on the stream for about {Plural.Of(minutes, "minute")}.";
+        return "  " + logo + named + ".";
     }
 
     /// <summary>

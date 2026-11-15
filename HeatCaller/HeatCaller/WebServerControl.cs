@@ -1034,7 +1034,7 @@ public sealed partial class WebServerControl : UserControl
         }
 
         var picked = (_cmbStreamOverlay.SelectedItem as StreamOverlayItem)?.Layout.Id;
-        using var editor = new OverlayEditorForm(store, StreamAddress, picked);
+        using var editor = new OverlayEditorForm(store, StreamAddress, picked, _settings);
         editor.ShowDialog(FindForm());
         FillStreamOverlays();
     }

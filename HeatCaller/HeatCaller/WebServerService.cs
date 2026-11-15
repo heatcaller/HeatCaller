@@ -1847,6 +1847,21 @@ public sealed partial class WebServerService
                     SponsorStream.Shown(_sponsorUpId, DateTime.UtcNow);
                 }
 
+                // And the "presented by" graphics it has just put up, by
+                // moment name - counted for that moment's sponsor.
+                if (context.Request.QueryString["shown"] is { Length: > 0 and <= 200 } shown)
+                {
+                    var ids = _presentedIds;
+
+                    foreach (var moment in shown.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(8))
+                    {
+                        if (ids.TryGetValue(moment, out var sponsorId))
+                        {
+                            SponsorStream.GraphicShown(sponsorId, moment, DateTime.UtcNow);
+                        }
+                    }
+                }
+
                 WriteJson(context, _publishedState);
                 break;
             case "/api/overlay-version":
@@ -3947,7 +3962,10 @@ public sealed partial class WebServerService
             // Juniors' names as the stream shows them (overlay plan 7.5).
             SN = d.streamNames && typeof d.streamNames === 'object' ? d.streamNames : {};
             showCaptions(d.captions);
-            document.getElementById('state').textContent = d.state + ' - ' + d.flag + ' flag';
+            // PROVISIONAL until the protest window closes (overlay plan 6.9).
+            const until = Date.parse(d.provisionalUntil || '');
+            const prov = d.state === 'Finished' && Number.isFinite(until) && Date.now() < until ? ' - PROVISIONAL' : '';
+            document.getElementById('state').textContent = d.state + ' - ' + d.flag + ' flag' + prov;
             document.getElementById('countdown').textContent = d.countdown || '';
 
             const od = document.getElementById('ondeck');

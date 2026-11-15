@@ -349,6 +349,7 @@ internal static class SettingsTable
             nameof(AppSettings.VideoEnabled),
             nameof(AppSettings.VideoObsHost),
             nameof(AppSettings.JuniorNamesOnStream),
+            nameof(AppSettings.StreamBasics),
             nameof(AppSettings.ObsSwitchScenes),
             nameof(AppSettings.ObsSceneStaging),
             nameof(AppSettings.ObsSceneRacing),

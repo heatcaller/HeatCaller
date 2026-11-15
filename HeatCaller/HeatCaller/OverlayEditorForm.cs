@@ -43,6 +43,16 @@ public sealed class OverlayEditorForm : Form
     private readonly CheckBox _chkFinished = new ThemedCheckBox { Text = "The result" };
     private readonly CheckBox _chkBetween = new ThemedCheckBox { Text = "Between races" };
     private readonly NumericUpDown _numGlass = new();
+    private readonly NumericUpDown _numTextScale = new();
+    private readonly Label _lblOverlap = new() { AutoSize = true };
+    private readonly Button _btnUndo = new() { Text = "Undo" };
+    private readonly Button _btnBasics = new() { Text = "Basics cards..." };
+
+    /// <summary>The club's settings, for the basics cards - null leaves that button off.</summary>
+    private readonly AppSettings? _settings;
+
+    /// <summary>Each change's layout as it was before, newest last, for Undo. This window's changes only.</summary>
+    private readonly List<OverlayLayout> _undo = new();
     private readonly TextBox _txtAddress = new() { ReadOnly = true };
     private readonly Button _btnCopyAddress = new() { Text = "Copy" };
     private readonly Button _btnPreview = new() { Text = "Preview" };
@@ -88,10 +98,11 @@ public sealed class OverlayEditorForm : Form
         (OverlayAnchor.BottomRight, "Bottom right"),
     };
 
-    public OverlayEditorForm(OverlayStore store, Func<string, string> addressOf, string? pick = null)
+    public OverlayEditorForm(OverlayStore store, Func<string, string> addressOf, string? pick = null, AppSettings? clubSettings = null)
     {
         _store = store;
         _addressOf = addressOf;
+        _settings = clubSettings;
 
         Text = "Stream overlays";
         Font = AppTheme.BodyFont;
@@ -149,6 +160,12 @@ public sealed class OverlayEditorForm : Form
         Spinner(_numScale, 50, 200, 5, 0);
         Spinner(_numRows, 0, 20, 1, 0);
         Spinner(_numGlass, 40, 100, 5, 0);
+        Spinner(_numTextScale, 80, 160, 5, 0);
+        _numTextScale.ValueChanged += (_, _) => Edit(layout => layout.TextScale = (double)_numTextScale.Value / 100);
+        _btnUndo.Click += (_, _) => UndoLast();
+        _btnBasics.Click += (_, _) => EditBasics();
+        _btnBasics.Visible = clubSettings is not null;
+        _lblOverlap.ForeColor = AppTheme.Danger;
         _numX.ValueChanged += (_, _) => EditElement(e => e.X = (double)_numX.Value);
         _numY.ValueChanged += (_, _) => EditElement(e => e.Y = (double)_numY.Value);
         _numScale.ValueChanged += (_, _) => EditElement(e => e.Scale = (double)_numScale.Value / 100);
@@ -201,10 +218,13 @@ public sealed class OverlayEditorForm : Form
         settings.AddRow("Shows during:", FieldGrid.Inline(_chkStaging, _chkRacing, _chkFinished, _chkBetween));
         settings.AddHint("None ticked: whenever it has something to show.");
         settings.AddRow("Boxes (% solid):", _numGlass);
+        settings.AddRow("Everything (% size):", _numTextScale);
+        settings.AddHint("Makes every graphic bigger or smaller at once - bigger reads better on a phone.");
         settings.AddRow("Its address:", FieldGrid.Inline(_txtAddress, _btnCopyAddress, _btnPreview));
 
         var main = new FillPage();
         main.Add(_lblNote, gapBelow: UiLayout.RowGap);
+        main.Add(_lblOverlap, gapBelow: UiLayout.RowGap);
         main.AddFill(_lstElements, _ => _lstElements.ItemHeight * 6 + 4, gapBelow: UiLayout.RowGap);
         main.Add(settings, gapBelow: 0);
 
@@ -213,7 +233,9 @@ public sealed class OverlayEditorForm : Form
         columns.AddSideFill(_lstLayouts, _ => _lstLayouts.ItemHeight * 6 + 4, gapBelow: UiLayout.RowGap);
         columns.AddSide(_btnCopy, gapBelow: UiLayout.ButtonGap);
         columns.AddSide(_btnRename, gapBelow: UiLayout.ButtonGap);
-        columns.AddSide(_btnDelete, gapBelow: 0);
+        columns.AddSide(_btnDelete, gapBelow: UiLayout.SectionGap);
+        columns.AddSide(_btnUndo, gapBelow: UiLayout.ButtonGap);
+        columns.AddSide(_btnBasics, gapBelow: 0);
 
         var intro = new Label
         {
@@ -296,6 +318,7 @@ public sealed class OverlayEditorForm : Form
             }
 
             _numGlass.Value = (decimal)Math.Round(Math.Clamp(layout?.Glass ?? 0.82, 0.4, 1) * 100);
+            _numTextScale.Value = (decimal)Math.Round(Math.Clamp(layout?.TextScale ?? 1, 0.8, 1.6) * 100);
             _txtAddress.Text = layout is null ? string.Empty : _addressOf(layout.Id);
         }
         finally
@@ -311,6 +334,10 @@ public sealed class OverlayEditorForm : Form
         _btnRename.Enabled = editable;
         _btnDelete.Enabled = editable;
         _numGlass.Enabled = editable;
+        _numTextScale.Enabled = editable;
+        _btnUndo.Enabled = editable && _undo.Any(u => u.Id == item!.Layout.Id);
+        var warnings = layout is null ? Array.Empty<string>() : OverlayOverlap.Warnings(layout, KindWords);
+        _lblOverlap.Text = warnings.Count == 0 ? string.Empty : string.Join(" ", warnings.Take(3));
         _btnPreview.Enabled = _txtAddress.Text.Length > 0;
         _btnCopyAddress.Enabled = _txtAddress.Text.Length > 0;
 
@@ -383,9 +410,101 @@ public sealed class OverlayEditorForm : Form
             return;
         }
 
+        _undo.Add(layout.Copy());
+        if (_undo.Count > 50)
+        {
+            _undo.RemoveAt(0);
+        }
+
         change(layout);
         _store.Update(layout);
-        ShowElement();
+        ShowLayoutKeepingElement();
+    }
+
+    /// <summary>Redraws the picked layout's state - the warnings, Undo - without losing the graphic picked.</summary>
+    private void ShowLayoutKeepingElement()
+    {
+        var at = _lstElements.SelectedIndex;
+        ShowLayout();
+        if (at >= 0 && at < _lstElements.Items.Count)
+        {
+            _lstElements.SelectedIndex = at;
+        }
+    }
+
+    /// <summary>Puts the picked layout back as it was before its last change in this window.</summary>
+    private void UndoLast()
+    {
+        if (Picked is not { Preset: false } item)
+        {
+            return;
+        }
+
+        var at = _undo.FindLastIndex(u => u.Id == item.Layout.Id);
+
+        if (at < 0)
+        {
+            return;
+        }
+
+        var before = _undo[at];
+        _undo.RemoveAt(at);
+        _store.Update(before);
+        ShowLayoutKeepingElement();
+    }
+
+    /// <summary>
+    /// The club's own "New to RC racing?" cards (overlay plan 7.6): one a
+    /// line, "Heading | words". Emptied, HeatCaller's own come back.
+    /// </summary>
+    private void EditBasics()
+    {
+        if (_settings is null)
+        {
+            return;
+        }
+
+        using var ask = new Form { Text = "Basics cards", Font = AppTheme.BodyFont, BackColor = AppTheme.Background };
+        var text = new TextBox
+        {
+            Multiline = true,
+            ScrollBars = ScrollBars.Vertical,
+            AcceptsReturn = true,
+            WordWrap = true,
+            Text = string.IsNullOrWhiteSpace(_settings.StreamBasics) ? StreamBasics.BuiltInText : _settings.StreamBasics,
+            Height = UiLayout.AtTextSize(260),
+        };
+        var ok = new Button { Text = "Save", DialogResult = DialogResult.OK };
+        var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
+        var reset = new Button { Text = "HeatCaller's own" };
+        reset.Click += (_, _) => text.Text = StreamBasics.BuiltInText;
+
+        var page = new FillPage();
+        page.Add(new Label
+        {
+            Text = "One card a line: a heading, a bar, then the words - \"Tonight's classes | Junior: under-16s on 1/28 cars\". "
+                 + "They show between races, one every twelve seconds, on layouts with New to RC racing? on.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        }, gapBelow: UiLayout.RowGap);
+        page.AddFill(text, UiLayout.AtTextSize(200), gapBelow: UiLayout.RowGap);
+        page.Add(new ButtonBar(alignRight: true).With(cancel, ok, reset), gapBelow: 0);
+        ask.Controls.Add(page);
+        ask.AcceptButton = null;
+        ask.CancelButton = cancel;
+        AppTheme.ApplyRecursively(ask);
+        DialogFit.Keep(ask, page, width: 720, height: 460);
+
+        if (ask.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        // The built-in cards saved unchanged are kept as "HeatCaller's own",
+        // so a later version's better wording still reaches the club.
+        var typed = text.Text.Replace("\r\n", "\n", StringComparison.Ordinal).Trim();
+        _settings.StreamBasics = typed == StreamBasics.BuiltInText.Replace("\r\n", "\n", StringComparison.Ordinal) ? string.Empty : typed;
+        _settings.Save();
     }
 
     private void EditElement(Action<OverlayElement> change)

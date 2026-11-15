@@ -3950,6 +3950,48 @@ public sealed partial class RelayPublisher : IDisposable
         IReadOnlyList<string?>? transponders,
         PublicPrivacy privacy)
     {
+        var shown = DisplayNamesKept(names, abbreviate, transponders, privacy);
+
+        // JUNIORS SHORTENED EVEN WHEN OTHERS ARE NOT (14 Nov 2026, stream
+        // overlay plan 7.5, Asher: first name and initial for juniors). A
+        // club that turns "Shorten published names" off shows adults in
+        // full; an under-18's name still goes out as "Mia K". Matched by
+        // transponder, so only where the caller knows them; initials-only
+        // drivers stay initials. With shortening on, every name already is.
+        if (abbreviate || privacy is null || transponders is null)
+        {
+            return shown;
+        }
+
+        var juniors = Enumerable.Range(0, names.Count)
+            .Where(i => i < transponders.Count && privacy.JuniorForTransponder(transponders[i])
+                        && !privacy.InitialsForTransponder(transponders[i])
+                        && string.Equals(shown[i], (names[i] ?? string.Empty).Trim(), StringComparison.Ordinal))
+            .ToList();
+
+        if (juniors.Count == 0)
+        {
+            return shown;
+        }
+
+        var result = shown.ToArray();
+        var shortened = DisplayNamesForTheRoom(juniors.Select(i => shown[i]).ToList(), abbreviate: true);
+
+        for (var j = 0; j < juniors.Count; j++)
+        {
+            result[juniors[j]] = shortened[j];
+        }
+
+        return result;
+    }
+
+    /// <summary>DisplayNames before the junior rule: shortened for the club's setting, and initials for those who asked.</summary>
+    private static IReadOnlyList<string> DisplayNamesKept(
+        IReadOnlyList<string> names,
+        bool abbreviate,
+        IReadOnlyList<string?>? transponders,
+        PublicPrivacy privacy)
+    {
         // The usual case, nobody asked: exactly the old answer, so every
         // document stays byte for byte what it was.
         if (privacy is null || (!privacy.AnyInitials && transponders is null))
