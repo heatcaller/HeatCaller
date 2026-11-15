@@ -15165,7 +15165,7 @@ function listPart(title, said) {
 // view.race is the race open in the list: '' until they choose, which
 // opens their latest race (the one they came to look at after a heat), and
 // 'none' once they close it.
-const view = { race: '', tab: 'stats', pick: 'best', asks: false, details: false, scroll: '', hideRuns: false };
+const view = { race: '', tab: 'stats', pick: 'best', asks: false, details: false, crew: false, scroll: '', hideRuns: false };
 
 // Demo races and practice runs (3 Nov 2026, asked for by Asher: "marked as
 // demo, and do the same for practice. make a tick mark to remove both
@@ -16074,7 +16074,11 @@ async function sendAsk(kind, f) {
     drawLive();
     // "coming" too (12 Nov 2026, setup plan C1): the laptop files it by itself.
     const self = kind === 'pack' || kind === 'setup' || kind === 'coming' || kind === 'post' || kind === 'swap' || kind === 'cover';
-    return { ok: true, status: 200, words: (self ? 'Sent - HeatCaller will have it in a few seconds' : 'Sent - the desk will check it') + (ref !== '' ? ' (ref ' + ref + ')' : '') };
+    // A crew ask is the desk's - it reads the names and notes - but its
+    // voice picks apply by themselves (15 Nov 2026, driver crew plan).
+    const words = kind === 'crew' ? 'Sent - voice picks apply in a few seconds; the desk checks names and notes'
+      : self ? 'Sent - HeatCaller will have it in a few seconds' : 'Sent - the desk will check it';
+    return { ok: true, status: 200, words: words + (ref !== '' ? ' (ref ' + ref + ')' : '') };
   }
 
   return { ok: false, status: a === null ? 0 : a.status, words: askTrouble(a) };
@@ -16095,6 +16099,7 @@ function kindWords(kind) {
   if (kind === 'cover') return 'Marshal swap';
   if (kind === 'videooff') return 'Video in the wrong place';
   if (kind === 'videohide') return 'Hide a race video';
+  if (kind === 'crew') return 'Your crew';
   return 'Request';
 }
 
@@ -16334,6 +16339,16 @@ function drawAsks(message) {
   else change.appendChild(detailsForm(message));
   sec.appendChild(change);
 
+  // My crew in a fold of its own (15 Nov 2026), with its own PIN box.
+  if (crewOn()) {
+    const crew = el('details', 'yd-change');
+    crew.open = view.crew === true;
+    crew.addEventListener('toggle', () => { view.crew = crew.open; });
+    crew.appendChild(el('summary', '', 'My crew'));
+    crew.appendChild(crewSection(message, false));
+    sec.appendChild(crew);
+  }
+
   ydBox.appendChild(sec);
   drawJump();
 }
@@ -16367,6 +16382,8 @@ function ydSummary() {
   line('Email', typeof me.email === 'string' ? cleanText(me.email) : '', 'None on file');
   line('Night email', me.emailMyNight === true ? 'On' : '', 'Off');
   line('Online', hidden.join(' \\u00b7 '), 'Shown as normal');
+  // Their own crew (15 Nov 2026), behind the personal PIN as its form is.
+  if (crewOn() && me.pin === true) line('Your crew', crewWords(), '');
   return dl;
 }
 
@@ -16390,7 +16407,11 @@ function ydFillSheet(message) {
   if (!box) return;
   box.textContent = '';
   box.appendChild(el('p', 'when', 'Nothing changes until the timing desk checks it.'));
-  box.appendChild(me.pin === true && pass() === '' ? pinGate(message) : detailsForm(message));
+  const gated = me.pin === true && pass() === '';
+  box.appendChild(gated ? pinGate(message) : detailsForm(message));
+  // My crew, a part of its own with its own Send (15 Nov 2026). One PIN
+  // box in the sheet: while it is up, My crew points at it.
+  if (crewOn()) box.appendChild(crewSection(message, gated));
 }
 
 // ---- signing in with the personal PIN
@@ -16649,6 +16670,241 @@ function detailsForm(message) {
   }
 
   return form;
+}
+
+// ---- My crew (15 Nov 2026, plans/driver-crew-plan.md 2.5 and 5)
+//
+// Their own Team Principal and Technical Lead - a made-up name and a voice
+// each - and three short broadcast notes, sent as one "crew" ask. Only
+// while driverme carries a crew (the club has "Drivers can pick their own
+// crew" on), and behind the personal PIN, which the relay insists on too.
+// Voice picks apply as soon as HeatCaller fetches the ask; names and notes
+// wait for the desk. A sample clip is fetched only when Play is tapped.
+
+const CREW_KEY = /^[0-9a-f]{12}$/;
+// The relay's own rule: letters of any script, spaces, hyphens, apostrophes, full stops.
+const CREW_NAME = /^[\\p{L}\\p{M} '\\u2019.-]*$/u;
+const CREW_NAME_WORDS = 'A crew name can only have letters, spaces, hyphens and apostrophes.';
+const CREW_JUNIOR_WORDS = "A parent or guardian needs to send notes for a junior - tick 'I'm making this change for them'.";
+let crewAudio = null;
+
+function crewOn() {
+  return !!me && !!me.crew && typeof me.crew === 'object' && !Array.isArray(me.crew);
+}
+
+function crewVoices() {
+  return (Array.isArray(me.crew.voices) ? me.crew.voices : [])
+    .filter((v) => v && typeof v.k === 'string' && CREW_KEY.test(v.k) && typeof v.n === 'string' && cleanText(v.n) !== '')
+    .slice(0, 200);
+}
+
+// One role as driverme has it. A voice no longer on the list reads as the
+// club's own, so the list never shows a pick it cannot name.
+function crewMember(role) {
+  const m = me.crew[role] && typeof me.crew[role] === 'object' ? me.crew[role] : {};
+  const voice = typeof m.voice === 'string' && crewVoices().some((v) => v.k === m.voice) ? m.voice : '';
+  return { name: cleanText(m.name), voice: voice };
+}
+
+function crewVoiceName(k) {
+  const v = crewVoices().find((x) => x.k === k);
+  return v ? cleanText(v.n) : '';
+}
+
+// For the card: "Principal: Gravel Jones (Voice: Rachel) · Tech lead: club's own".
+function crewWords() {
+  const one = (title, role) => {
+    const m = crewMember(role);
+    const voice = crewVoiceName(m.voice);
+    if (m.name === '' && voice === '') return title + ": club's own";
+    return title + ': ' + (m.name || "club's own name") + (voice !== '' ? ' (Voice: ' + voice + ')' : '');
+  };
+  return one('Principal', 'principal') + ' \\u00b7 ' + one('Tech lead', 'tech');
+}
+
+function crewStopAudio() {
+  if (crewAudio === null) return;
+  try { if (typeof crewAudio.pause === 'function') crewAudio.pause(); } catch (e) { /* already gone */ }
+  if (typeof crewAudio.remove === 'function') crewAudio.remove();
+  crewAudio = null;
+}
+
+// My crew as a part: the form when signed in with the personal PIN, the
+// PIN box when not (or, in the sheet, a pointer to the one above it), and
+// one line for a driver with no personal PIN at all.
+function crewSection(message, gated) {
+  const part = el('div', 'su');
+  part.appendChild(el('h4', '', 'My crew'));
+
+  if (me.pin !== true) {
+    part.appendChild(el('p', 'when', 'Ask the desk for a personal PIN to pick your crew.'));
+    return part;
+  }
+
+  if (pass() === '') {
+    if (gated) part.appendChild(el('p', 'when', 'Sign in with your personal PIN above to pick your crew.'));
+    else part.appendChild(pinGate(message));
+    return part;
+  }
+
+  crewForm(part);
+  return part;
+}
+
+// A note box with its count under it, as the query box has.
+function crewNote(parent, title, hint, value, max) {
+  const input = textField(parent, title, hint, value, max, max > 80);
+  const count = el('div', 'when', '');
+  const show = () => { count.textContent = cleanText(input.value).length + ' of ' + max + ' characters.'; };
+  show();
+  input.addEventListener('input', show);
+  parent.appendChild(count);
+  return input;
+}
+
+// One role: a name box, a voice list, and Play for the voice picked.
+function crewRole(parent, title, role, junior) {
+  const m = crewMember(role);
+  const name = textField(parent, title + ' name',
+    junior ? "Make one up - not Mum, Dad or anyone's real name." : "Make one up - not a real person's name.", m.name, 24, false);
+
+  const label = el('label', 'f', title + ' voice');
+  const pick = document.createElement('select');
+  for (const [k, n] of [['', "The club's own voice"]].concat(crewVoices().map((v) => [v.k, cleanText(v.n)]))) {
+    const o = document.createElement('option');
+    o.value = k;
+    o.textContent = n;
+    if (k === m.voice) o.selected = true;
+    pick.appendChild(o);
+  }
+  pick.value = m.voice;
+  label.appendChild(pick);
+  parent.appendChild(label);
+
+  const sample = () => {
+    const v = crewVoices().find((x) => x.k === String(pick.value || ''));
+    return v && typeof v.s === 'string' && /^https:\\/\\//.test(v.s) ? v.s : '';
+  };
+
+  // The <audio> is made here, on the tap, and not before: nothing is
+  // fetched from the voice's host until they ask to hear it.
+  const play = tapButton('Play', 'go quiet', () => {
+    const url = sample();
+    crewStopAudio();
+    if (url === '') return;
+    const a = document.createElement('audio');
+    a.src = url;
+    crewAudio = a;
+    parent.appendChild(a);
+    try {
+      const p = typeof a.play === 'function' ? a.play() : null;
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (e) { /* the phone would not play it */ }
+  });
+  play.setAttribute('aria-label', 'Play the ' + title + ' voice');
+  play.hidden = sample() === '';
+  parent.appendChild(play);
+
+  pick.addEventListener('change', () => {
+    markEdited();
+    crewStopAudio();
+    play.hidden = sample() === '';
+  });
+
+  return { name: name, pick: pick, base: m };
+}
+
+function crewForm(form) {
+  const c = me.crew;
+  const junior = c.junior === true;
+
+  if (c.repick === true) form.appendChild(el('p', 'when', "Your club changed voices - pick your crew's voice again."));
+
+  const p = crewRole(form, 'Team Principal', 'principal', junior);
+  const t = crewRole(form, 'Technical Lead', 'tech', junior);
+
+  // Notes typed at the desk, not from a phone (15 Nov 2026): a junior's,
+  // unless the club takes them from phones. No boxes, and one line why.
+  const notesHere = c.notes !== false;
+  form.appendChild(el('h4', '', 'Your notes for the commentary'));
+  if (!notesHere) form.appendChild(el('p', 'when', 'Your notes are filled in at the desk, with a parent or guardian there. Ask at the desk.'));
+  else if (junior) form.appendChild(el('p', 'when', 'A parent or guardian needs to send notes.'));
+  const goal = notesHere ? crewNote(form, "Tonight's goal", 'Said before your race tonight only', cleanText(c.goal), 80) : null;
+  const thanks = notesHere ? crewNote(form, 'Thanks / shout-out', '', cleanText(c.thanks), 80) : null;
+  const car = notesHere ? crewNote(form, "Your car's story", '', cleanText(c.car), 120) : null;
+  const guardian = junior && notesHere ? tick(form, "I'm making this change for them", '', false, false) : null;
+
+  // What they have now, to send only what has changed.
+  const base = {
+    pName: p.base.name, pVoice: p.base.voice, tName: t.base.name, tVoice: t.base.voice,
+    goal: cleanText(c.goal), thanks: cleanText(c.thanks), story: cleanText(c.car),
+  };
+
+  const said = el('p', 'yd-said', '');
+  said.setAttribute('role', 'status');
+
+  const send = tapButton('Send my crew', 'go', async () => {
+    const now = {
+      pName: cleanText(p.name.value), pVoice: String(p.pick.value || ''),
+      tName: cleanText(t.name.value), tVoice: String(t.pick.value || ''),
+      goal: goal ? cleanText(goal.value) : cleanText(c.goal), thanks: thanks ? cleanText(thanks.value) : cleanText(c.thanks), story: car ? cleanText(car.value) : cleanText(c.car),
+    };
+    const f = {};
+    for (const k of Object.keys(base)) if (now[k] !== base[k]) f[k] = now[k];
+
+    if (Object.keys(f).length === 0) {
+      said.textContent = 'Nothing has changed yet.';
+      return;
+    }
+
+    for (const k of ['pName', 'tName']) {
+      if (f[k] === undefined) continue;
+      if (f[k].length > 24) { said.textContent = 'Keep a crew name under 24 characters.'; return; }
+      if (!CREW_NAME.test(f[k])) { said.textContent = CREW_NAME_WORDS; return; }
+    }
+
+    if ((f.goal !== undefined && f.goal.length > 80) || (f.thanks !== undefined && f.thanks.length > 80) || (f.story !== undefined && f.story.length > 120)) {
+      said.textContent = 'One of those is too long - the box stops you at its limit.';
+      return;
+    }
+
+    const notes = ['goal', 'thanks', 'story'].some((k) => typeof f[k] === 'string' && f[k] !== '');
+    if (junior && notes && !(guardian && guardian.checked === true)) {
+      said.textContent = CREW_JUNIOR_WORDS;
+      return;
+    }
+
+    if (guardian && guardian.checked === true) f.guardian = true;
+
+    send.disabled = true;
+    said.textContent = 'Sending\\u2026';
+    const got = await sendAsk('crew', f);
+    send.disabled = false;
+
+    if (got.ok) {
+      for (const k of Object.keys(base)) if (typeof f[k] === 'string') base[k] = f[k];
+      if (guardian) guardian.checked = false;
+      edited = false;
+      said.textContent = got.words;
+      return;
+    }
+
+    // Their PIN has changed since they signed in: back to the PIN, saying why.
+    if (got.status === 403 && /personal PIN/.test(got.words)) {
+      setPass('');
+      drawAsks(got.words);
+      return;
+    }
+
+    said.textContent = got.words;
+  });
+
+  form.appendChild(send);
+  form.appendChild(el('p', 'when', 'Voice picks change straight away. Names and notes wait for the desk to check them.'));
+  // Said before they send (15 Nov 2026, the Terms' 7.1): what they write
+  // is spoken in public, and sending lets the club use it that way.
+  form.appendChild(el('p', 'when', 'What you send may be said over the PA and on the club\\u2019s stream. By sending, you let your club and HeatCaller use it in the announcer\\u2019s commentary.'));
+  form.appendChild(said);
 }
 
 // The pack part, built once for the packs the desk last sent and moved

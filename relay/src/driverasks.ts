@@ -12,7 +12,10 @@
  *             race on;
  *   packedit  one of their own packs added, edited, retired or removed;
  *   car       one of their own cars, every field, photos, racing tonight;
- *   setup     a setup sheet, or the short five-part log.
+ *   setup     a setup sheet, or the short five-part log;
+ *   crew      their own Team Principal and Technical Lead (a made-up name
+ *             and a voice each) and three broadcast notes - personal PIN
+ *             only (15 Nov 2026, plans/driver-crew-plan.md).
  *
  * NOTHING HERE CHANGES ANYTHING. The relay holds each ask until the laptop
  * collects it (driver/inbox, then driver/collected - the notes shape). The
@@ -156,9 +159,14 @@ const EMAIL = /^[^\s@<>()",;:\\[\]]+@[^\s@<>()",;:\\[\]]+\.[^\s@<>()",;:\\[\]]+$
 // race's video starts in the wrong place" and "ask the club to hide this
 // video" - which race, and for videooff which way and about how far. No free
 // text, so nothing needs moderating. Both for the desk.
-export type DriverAskKind = "details" | "pack" | "query" | "setup" | "packedit" | "car" | "late" | "skip" | "coming" | "post" | "swap" | "cover" | "videooff" | "videohide";
+// "crew" (15 Nov 2026, driver crew plan 2.5): the driver's own Team
+// Principal and Technical Lead - a made-up name and a voice for each - and
+// three short broadcast notes. Behind the personal PIN, and for the desk:
+// the laptop applies the voice picks on arrival and holds the text for the
+// desk to check (crewAskFrom, at the foot of this file).
+export type DriverAskKind = "details" | "pack" | "query" | "setup" | "packedit" | "car" | "late" | "skip" | "coming" | "post" | "swap" | "cover" | "videooff" | "videohide" | "crew";
 
-export const DRIVER_ASK_KINDS: readonly DriverAskKind[] = ["details", "pack", "query", "setup", "packedit", "car", "late", "skip", "coming", "post", "swap", "cover", "videooff", "videohide"];
+export const DRIVER_ASK_KINDS: readonly DriverAskKind[] = ["details", "pack", "query", "setup", "packedit", "car", "late", "skip", "coming", "post", "swap", "cover", "videooff", "videohide", "crew"];
 
 /** The longest note a "late" or "skip" can carry. */
 export const ASK_MAX_RACE_NOTE = 120;
@@ -222,12 +230,21 @@ const refuse = (status: number, error: string): AskCheck => ({ ok: false, status
  * is a bearer credential printed on a lanyard, and an email is where the
  * desk sends the PIN itself.
  */
-export function askFieldsFrom(kind: string, f: unknown, withPin: boolean): AskCheck {
+// `notesOff` (15 Nov 2026): driverme's crew says this driver's notes are
+// typed at the desk, not sent from a phone - a junior's, unless the club
+// has "Juniors can send notes from their phone" on (COPPA: a child's words
+// said in public need a parent's verified consent, which a tick is not).
+export function askFieldsFrom(kind: string, f: unknown, withPin: boolean, junior = false, notesOff = false): AskCheck {
   if (typeof f !== "object" || f === null || Array.isArray(f)) {
     return refuse(400, "That request could not be read.");
   }
 
   const input = f as Record<string, unknown>;
+
+  // `junior` is whether driverme's crew says this driver is under 18.
+  if (kind === "crew") {
+    return crewAskFrom(input, withPin, junior, notesOff);
+  }
 
   if (kind === "pack") {
     const pack = typeof input["pack"] === "string" ? input["pack"].trim().toLowerCase() : "";
@@ -743,4 +760,311 @@ export function asDriverAsk(value: unknown): DriverAskBody | undefined {
   }
 
   return { b, k: k as DriverAskKind, v: proof, f: fields, at };
+}
+
+/*
+ * THE DRIVER'S OWN CREW (15 Nov 2026, plans/driver-crew-plan.md 2.3-2.5
+ * and 5). A "crew" ask's fields, all optional, at least one present; a
+ * present "" asks to clear it:
+ *
+ *   pName, tName       the Team Principal's and Technical Lead's made-up names
+ *   pVoice, tVoice     "" (the club's own voice) or a voice key off driverme
+ *   goal, thanks, car  the three broadcast notes
+ *   guardian           true: "I'm making this change for them"
+ *
+ * The whole kind needs the personal PIN: the badge code is printed on a
+ * lanyard, and what is typed here is said over the PA and the stream. A
+ * junior's notes need a parent or guardian on top (5.2): the guardian
+ * tick, since a family link cannot ask for anything (it only reads).
+ */
+
+export const ASK_MAX_CREW_NAME = 24;
+export const ASK_MAX_CREW_GOAL = 80;
+export const ASK_MAX_CREW_THANKS = 80;
+export const ASK_MAX_CREW_CAR = 120;
+
+/** A voice the club lets drivers pick, as the laptop keys it: twelve hex. */
+export const CREW_VOICE_KEY = /^[0-9a-f]{12}$/;
+
+/** The most voices driverme's crew.voices may list, and the longest name each may have. */
+export const CREW_MAX_VOICES = 200;
+export const CREW_MAX_VOICE_NAME = 60;
+const CREW_MAX_SAMPLE_URL = 500;
+
+/** Letters of any script (with their accents), spaces, hyphens, apostrophes and full stops. */
+const CREW_NAME = /^[\p{L}\p{M} '’.-]*$/u;
+
+/**
+ * The obvious ones, whole words, any case. Not a filter - the desk is the
+ * real check (plan 5.2.6) - just enough that "Principal: Mr Poopypants"
+ * is turned away on the phone rather than at the desk.
+ */
+const CREW_RUDE = new Set([
+  "poo", "poos", "pooey", "poop", "poops", "poopy", "poopypants", "poopyhead", "fart", "farts", "farty", "farting", "farted",
+  "bum", "bums", "bumhole", "butt", "butthole", "turd", "turds", "piss", "pissed", "pissing",
+  "shit", "shits", "shite", "shitty", "crap", "crappy", "fuck", "fucks", "fucking", "fucker", "cunt", "twat",
+  "wank", "wanker", "bollocks", "bastard", "bitch", "dickhead", "cock", "prick", "arse", "arsehole", "ass", "asshole",
+  "tits", "knob", "knobhead", "slag", "boobs",
+]);
+
+/** Whether a name or note has one of CREW_RUDE in it as a whole word. */
+export function crewRude(text: string): boolean {
+  return text.toLowerCase().split(/[^\p{L}\p{M}]+/u).some((word) => word !== "" && CREW_RUDE.has(word));
+}
+
+const CREW_RUDE_WORDS = "Please pick something else - the desk would have to turn that down.";
+
+function crewAskFrom(input: Record<string, unknown>, withPin: boolean, junior: boolean, notesOff = false): AskCheck {
+  if (!withPin) {
+    return refuse(403, "Your crew needs your personal PIN - ask at the desk.");
+  }
+
+  const out: Record<string, string | boolean> = {};
+
+  for (const name of ["pName", "tName"]) {
+    const value = input[name];
+
+    if (value === undefined) {
+      continue;
+    }
+
+    if (typeof value !== "string") {
+      return refuse(400, "That request could not be read.");
+    }
+
+    const cleaned = cleanAskText(value, ASK_MAX_CREW_NAME + 1);
+
+    if (cleaned.length > ASK_MAX_CREW_NAME) {
+      return refuse(400, `Keep a crew name under ${ASK_MAX_CREW_NAME} characters.`);
+    }
+
+    if (!CREW_NAME.test(cleaned)) {
+      return refuse(400, "A crew name can only have letters, spaces, hyphens and apostrophes.");
+    }
+
+    if (crewRude(cleaned)) {
+      return refuse(400, CREW_RUDE_WORDS);
+    }
+
+    out[name] = cleaned;
+  }
+
+  for (const name of ["pVoice", "tVoice"]) {
+    const value = input[name];
+
+    if (value === undefined) {
+      continue;
+    }
+
+    const key = typeof value === "string" ? value.trim().toLowerCase() : "-";
+
+    if (key !== "" && !CREW_VOICE_KEY.test(key)) {
+      return refuse(400, "Pick a voice from the list.");
+    }
+
+    out[name] = key;
+  }
+
+  const notes: readonly [string, number][] = [
+    ["goal", ASK_MAX_CREW_GOAL],
+    ["thanks", ASK_MAX_CREW_THANKS],
+    // "story", not "car": "car" is already a garage ask's field on the
+    // laptop (a car id, 40 characters), and one name for two things would
+    // cut a car's story to forty.
+    ["story", ASK_MAX_CREW_CAR],
+  ];
+
+  for (const [name, max] of notes) {
+    const value = input[name];
+
+    if (value === undefined) {
+      continue;
+    }
+
+    if (typeof value !== "string") {
+      return refuse(400, "That request could not be read.");
+    }
+
+    const cleaned = cleanAskText(value, max + 1);
+
+    if (cleaned.length > max) {
+      return refuse(400, `Keep that under ${max} characters.`);
+    }
+
+    if (crewRude(cleaned)) {
+      return refuse(400, CREW_RUDE_WORDS);
+    }
+
+    out[name] = cleaned;
+  }
+
+  if (Object.keys(out).length === 0) {
+    return refuse(400, "There is nothing to change.");
+  }
+
+  const guardian = input["guardian"] === true;
+
+  // Notes the club takes only at the desk (a junior's, by default).
+  if (notesOff && notes.some(([name]) => typeof out[name] === "string" && out[name] !== "")) {
+    return refuse(403, "Your notes are filled in at the desk, with a parent there. Ask at the desk.");
+  }
+
+  // A junior's notes come only from a parent or guardian (plan 5.2.2).
+  // Clearing one is fine from anybody: an empty note says nothing.
+  if (junior && !guardian && notes.some(([name]) => typeof out[name] === "string" && out[name] !== "")) {
+    return refuse(403, "A parent or guardian needs to send notes for a junior - tick 'I'm making this change for them'.");
+  }
+
+  if (guardian) {
+    out["guardian"] = true;
+  }
+
+  return { ok: true, f: out };
+}
+
+/** One role's crew member as driverme has it. */
+export interface CrewMember {
+  readonly name: string;
+  readonly voice: string;
+}
+
+/** A voice the driver may pick: key, display name, and an https sample clip when there is one. */
+export interface CrewVoice {
+  readonly k: string;
+  readonly n: string;
+  readonly s?: string;
+}
+
+/** driverme's optional crew, as the relay hands it to a phone (voices from the document's crewVoices). */
+export interface CrewDoc {
+  readonly junior: boolean;
+  /** False when this driver's notes are typed at the desk, not sent from a phone. */
+  readonly notes: boolean;
+  readonly principal: CrewMember;
+  readonly tech: CrewMember;
+  readonly goal: string;
+  readonly thanks: string;
+  readonly car: string;
+  readonly voices: readonly CrewVoice[];
+  readonly repick?: true;
+}
+
+function crewMemberFrom(value: unknown): CrewMember | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const v = value as Record<string, unknown>;
+  const voice = v["voice"];
+
+  if (typeof v["name"] !== "string" || typeof voice !== "string" || (voice !== "" && !CREW_VOICE_KEY.test(voice))) {
+    return undefined;
+  }
+
+  return { name: cleanAskText(v["name"], ASK_MAX_CREW_NAME), voice };
+}
+
+function sampleFrom(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length > CREW_MAX_SAMPLE_URL) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.username === "" && url.password === "" ? url.href : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The voices drivers may pick, as driverme lists them ONCE at its top level
+ * (crewVoices, beside drivers - the document is 512 KB for every driver, so
+ * the list is not repeated in each entry). Entries that will not read are
+ * left out one by one; at most CREW_MAX_VOICES, names cut to
+ * CREW_MAX_VOICE_NAME, and a sample kept only when it is an https address.
+ * Anything that is not a list reads as no voices.
+ */
+export function crewVoicesFrom(value: unknown): CrewVoice[] {
+  const voices: CrewVoice[] = [];
+
+  if (!Array.isArray(value)) {
+    return voices;
+  }
+
+  const seen = new Set<string>();
+
+  for (const entry of value as unknown[]) {
+    if (voices.length >= CREW_MAX_VOICES) {
+      break;
+    }
+
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      continue;
+    }
+
+    const e = entry as Record<string, unknown>;
+    const k = e["k"];
+    const n = cleanAskText(e["n"], CREW_MAX_VOICE_NAME);
+
+    if (typeof k !== "string" || !CREW_VOICE_KEY.test(k) || seen.has(k) || n === "") {
+      continue;
+    }
+
+    seen.add(k);
+    const s = sampleFrom(e["s"]);
+    voices.push(s === undefined ? { k, n } : { k, n, s });
+  }
+
+  return voices;
+}
+
+/**
+ * One driver's crew in driverme, checked field by field - or undefined when
+ * it is absent or will not read, which drops the whole of it: a phone is
+ * never handed a half-made crew to send asks against. `voices` is the
+ * document's own list, already checked by crewVoicesFrom, handed on as the
+ * crew's voices so the phone reads them in one place.
+ */
+export function crewFrom(value: unknown, voices: readonly CrewVoice[] = []): CrewDoc | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const v = value as Record<string, unknown>;
+  const principal = crewMemberFrom(v["principal"]);
+  const tech = crewMemberFrom(v["tech"]);
+  const goal = v["goal"] ?? "";
+  const thanks = v["thanks"] ?? "";
+  const car = v["car"] ?? "";
+  const junior = v["junior"];
+
+  if (typeof junior !== "boolean" || principal === undefined || tech === undefined
+    || typeof goal !== "string" || typeof thanks !== "string" || typeof car !== "string") {
+    return undefined;
+  }
+
+  return {
+    junior,
+    notes: v["notes"] !== false,
+    principal,
+    tech,
+    goal: cleanAskText(goal, ASK_MAX_CREW_GOAL),
+    thanks: cleanAskText(thanks, ASK_MAX_CREW_THANKS),
+    car: cleanAskText(car, ASK_MAX_CREW_CAR),
+    voices: voices.slice(0, CREW_MAX_VOICES),
+    ...(v["repick"] === true ? { repick: true as const } : {}),
+  };
+}
+
+/**
+ * One driver's driverme entry as a phone is handed it: as the laptop
+ * published it, but with crew checked by crewFrom - and gone when that
+ * will not read it - and the document's voice list attached to it as
+ * crew.voices.
+ */
+export function meEntryForPhone(entry: Readonly<Record<string, unknown>>, voices: readonly CrewVoice[] = []): Record<string, unknown> {
+  const { crew, ...rest } = entry;
+  const checked = crew === undefined ? undefined : crewFrom(crew, voices);
+  return checked === undefined ? rest : { ...rest, crew: checked };
 }

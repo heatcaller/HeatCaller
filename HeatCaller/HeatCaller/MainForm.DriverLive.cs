@@ -381,7 +381,8 @@ public partial class MainForm
         return DriverLive.MeDocument(
             profiles,
             t => badgeOf.TryGetValue(t, out var badge) ? badge : null,
-            DriverLivePacksOf);
+            DriverLivePacksOf,
+            CrewForPhoneNow());
     }
 
     /// <summary>A driver's packs for the phone - the same choices Race Control's pack picker offers.</summary>

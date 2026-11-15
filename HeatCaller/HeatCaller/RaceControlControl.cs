@@ -1,4 +1,4 @@
-﻿namespace HeatCaller;
+namespace HeatCaller;
 
 /// <summary>
 /// Standalone race control window: staging/countdown/flags, the race clock,
@@ -1386,6 +1386,7 @@ public sealed partial class RaceControlControl : UserControl
             _broadcastWindow = new BroadcastWindow(_announcerStrip, RaceKeyFromBroadcastWindow)
             {
                 SkipGapLine = SkipNextCallUp,
+                CrewNotesAlert = () => _commentary?.CrewNotesAlert,
             };
 
             // A new window starts blank: its Between races row is filled on

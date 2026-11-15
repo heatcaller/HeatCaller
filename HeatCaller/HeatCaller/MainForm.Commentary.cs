@@ -43,6 +43,10 @@ public partial class MainForm
         // running order counts the sponsor reads only when the club has them
         // read in segments.
         commentary.TonightsGap = raceControl.TonightsGapFacts;
+
+        // A driver's crew voice that has gone from the account since they
+        // picked it is swapped for the club's when it is spoken (15 Nov 2026).
+        raceControl.CrewVoiceStillThere = CrewVoiceStillOffered;
         commentary.PlayGap = lines =>
         {
             foreach (var line in lines)
@@ -60,6 +64,11 @@ public partial class MainForm
         // its one Load Voices fills every list from the engine in use.
         cast.EngineInUse = () => _voiceStore.Current.EffectiveEngine;
         cast.LoadVoices = MechanicVoiceChoicesAsync;
+
+        // Drivers' own crew (15 Nov 2026): the voices they may pick, and a
+        // fresh listing for the phones whenever the Cast tab changes it.
+        cast.LoadCrewVoices = CrewVoicesForCastAsync;
+        cast.CrewChanged = CrewSettingsChanged;
 
         // And the announcer's ElevenLabs list (25 Oct 2026) - its own Load
         // Voices went. Read when pressed, not now: a soundscape builds the

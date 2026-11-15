@@ -98,6 +98,12 @@ While their race is next up, the **Up next** card on **Me** has two buttons:
 
 Each asks "Ask the desk to...?" first, and the request then shows under the driver's requests as **More time** or **Skip my race**. The desk approves it (see [More time and skip my race at the desk](#more-time-and-skip-my-race-at-the-desk)), and the phone shows what happened.
 
+### My crew
+
+When the club has ticked **Drivers can pick their own crew** (see [Drivers' own crew](../announcer/commentary.md#drivers-own-crew)), **Your details** has a **My crew** part. It needs their personal PIN: a driver without one sees "Ask the desk for a personal PIN to pick your crew."
+
+For their **Team Principal** and **Technical Lead** they can type a made-up name and pick a voice, with **Play** to hear it. Under **Your notes for the commentary** are **Tonight's goal**, **Thanks / shout-out** and **Your car's story**. **Send my crew** sends what changed. A voice they pick changes straight away; names and notes wait for the desk. Under the button it says "What you send may be said over the PA and on the club's stream. By sending, you let your club and HeatCaller use it in the announcer's commentary." For a junior there are no note boxes ("Your notes are filled in at the desk, with a parent or guardian there. Ask at the desk.") unless the club ticks **Juniors can send notes from their phone**; then a parent must tick **I'm making this change for them**.
+
 ### How each request is getting on
 
 Once a driver has sent something, the **Right now** card on their night page lists **Your requests to the desk**, for up to a day afterward, folded to a count such as **Your requests to the desk (2, 1 answered)**. Each line gives the reference, how it stands, and any answer:
@@ -126,6 +132,12 @@ A setup change shows as "Setup log", and a change to their packs or cars as "Req
 | "The desk has a lot to get through right now. Try again in a while, or ask at the desk." | 200 requests from the club are waiting on the relay for the laptop to collect them. |
 | "The desk is not taking requests from phones just now, or you are not on tonight's check-in list. Ask at the desk." | Requests are switched off, online check-in or drivers' nights are off, or the driver isn't on the check-in list. |
 | "Could not reach the club. Check your connection and try again." | The phone can't reach the relay. |
+| "Your crew needs your personal PIN - ask at the desk." | A crew request without signing in with their personal PIN. |
+| "A crew name can only have letters, spaces, hyphens and apostrophes." | A crew name with numbers or symbols in it. |
+| "Please pick something else - the desk would have to turn that down." | A rude word in a crew name or note. |
+| "A parent or guardian needs to send notes for a junior - tick 'I'm making this change for them'." | A junior's note without the tick. |
+| "Your club is not taking crew picks from phones just now. Ask at the desk." | **Drivers can pick their own crew** is unticked. |
+| "Your notes are filled in at the desk, with a parent there. Ask at the desk." | A junior's note while **Juniors can send notes from their phone** is unticked. |
 
 ## Answering requests at the desk
 
@@ -172,6 +184,17 @@ What happens next:
 - **Undo** ("Apply *name*'s own changes (their phone was told yes)") puts the profile back and the request back on the waiting list, and the driver's phone shows it as waiting again. It's refused if the profile has been changed since, so a later edit isn't lost with it.
 - **A new email address** gets a note sent to the **old** address, "Your email address at the race club was changed", saying it was changed at the desk as asked from their phone, and to tell the desk if they didn't ask. It goes through the club mailbox (see [Emailing racer PINs](email.md)).
 - **A privacy tick** takes effect on the club's pages within a few seconds. HeatCaller re-sends that driver's results so older pages follow it too. (No podium video goes on the relay any more, so there is none to take down.) The console says "[privacy] A driver's online privacy changed - the club's page is being brought in line." and, when it's done, "[privacy] The club's page now shows the drivers' latest privacy choices." See [Online privacy](../race-day/drivers-and-classes.md#online-privacy).
+
+### Their crew and notes
+
+A crew request shows as **Crew and notes**. Tick **Crew and broadcast notes only** to see only these; it unticks **Result queries only**, and the other way round.
+
+- **Voices apply by themselves.** A voice they picked is on their profile within seconds. A request that was only voices goes straight to **Answered** as "Approved" and their phone shows "Applied". A voice you've since hidden, or one from another engine, is declined: "That voice isn't available any more - pick another."
+- **Names and notes wait for you.** Select the request and click **Approve**. It lists each change with what it is now, and asks "These are words the announcer will say. Approve them?" Click **Yes** to apply them all, or **Decline** to send a reason back. To change the wording, decline it and type it on their profile instead.
+- **Note** says **Junior** for a junior (and "No parent's consent on their profile..." until it's ticked), and "A voice they picked isn't offered any more" when a voice couldn't be applied - the phone is told when you answer.
+- **Note** says **Junior** for a junior, along with "A junior's words, spoken over the PA and the stream. Check for real names, a school, an age or where they live." when you approve. It says **Names another driver (*name*)** when a note mentions another driver by name, so read it before it reaches the PA.
+
+A name that isn't letters, spaces, hyphens and apostrophes is refused, and so is a junior's note without a parent's tick. A newer crew request from the same driver takes in the older one, so only one waits.
 
 ### Changes HeatCaller makes by itself
 

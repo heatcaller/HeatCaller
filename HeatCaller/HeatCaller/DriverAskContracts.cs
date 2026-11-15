@@ -109,6 +109,17 @@ internal static class DriverAsk
     /// </summary>
     public const string Cover = "cover";
 
+    /// <summary>
+    /// Their own crew and notes (15 Nov 2026, driver crew plan): fields
+    /// "pName" and "tName" (their Team Principal's and Technical Lead's names),
+    /// "pVoice" and "tVoice" (a voice's DriverCrew.KeyOf key, or "" for the
+    /// club's), "goal", "thanks" and "story" (their notes), and the guardian
+    /// tick. Only ever with the personal PIN. Only the fields that changed
+    /// come; "" clears one. The voices apply by themselves; the names and
+    /// notes wait for the desk.
+    /// </summary>
+    public const string Crew = "crew";
+
     /// <summary>The kinds the laptop applies by itself, with no desk in between - the relay's DRIVER_WRITE_KINDS, and photos. A "yes" cover may still wait for the desk.</summary>
     public static bool IsWrite(string? kind) => kind is Pack or PackEdit or Car or Setup or Photo or Coming or Post or Swap or Cover;
 
@@ -175,7 +186,7 @@ internal static class DriverAsk
     }
 
     /// <summary>True for one of the kinds above, exactly as the relay spells them. A kind left out here is thrown away when the inbox is read.</summary>
-    public static bool IsKind(string? kind) => kind is Details or Pack or Query or Setup or PackEdit or Car or Photo or Late or Skip or Coming or Post or Swap or Cover or VideoOff or VideoHide;
+    public static bool IsKind(string? kind) => kind is Details or Pack or Query or Setup or PackEdit or Car or Photo or Late or Skip or Coming or Post or Swap or Cover or VideoOff or VideoHide or Crew;
 
     /// <summary>True for one of the four states, exactly as the phone reads them.</summary>
     public static bool IsState(string? state) => state is Waiting or Approved or Noted or Declined;

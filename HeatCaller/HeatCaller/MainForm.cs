@@ -1055,6 +1055,12 @@ public partial class MainForm : Form
         _heatCallerVoice = new HeatCallerVoiceClient(_settings);
         _commentary = new CommentaryService(_profiles, _settings, _rivalryStore);
 
+        // A streamed night - any piece streamed since the night began - keeps
+        // a junior's own notes off the air unless the club says otherwise
+        // (15 Nov 2026, driver crew plan 5.2). Read when an interview is
+        // written, so a stream that starts later in the night counts.
+        _commentary.StreamIsOn = () => _streamTonight is { } stream && (stream.Live || stream.Pieces.Count > 0);
+
         // A recap or a night's piece the number check dropped (8 Nov 2026)
         // says so in the console, as a segment the director drops does.
         _commentary.Log = line => OnClientRawMessage($"{AppTime.LogStampNow()}  {line}");

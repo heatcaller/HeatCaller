@@ -31,6 +31,7 @@ internal sealed class DriverRequestsForm : Form
 
     private readonly Label _lblState = new();
     private readonly CheckBox _chkQueriesOnly = new ThemedCheckBox();
+    private readonly CheckBox _chkCrewOnly = new ThemedCheckBox();
     private readonly CheckBox _chkSwapsNeedDesk = new ThemedCheckBox();
     private readonly DataGridView _gridWaiting = new();
     private readonly DataGridView _gridAnswered = new();
@@ -64,7 +65,29 @@ internal sealed class DriverRequestsForm : Form
 
         _chkQueriesOnly.Text = "Result queries only";
         _chkQueriesOnly.AutoSize = true;
-        _chkQueriesOnly.CheckedChanged += (_, _) => RefreshAll(force: true);
+        _chkQueriesOnly.CheckedChanged += (_, _) =>
+        {
+            // One filter at a time (15 Nov 2026): ticking one unticks the other.
+            if (_chkQueriesOnly.Checked)
+            {
+                _chkCrewOnly.Checked = false;
+            }
+
+            RefreshAll(force: true);
+        };
+
+        // Drivers' own crew and notes (15 Nov 2026, driver crew plan).
+        _chkCrewOnly.Text = "Crew and broadcast notes only";
+        _chkCrewOnly.AutoSize = true;
+        _chkCrewOnly.CheckedChanged += (_, _) =>
+        {
+            if (_chkCrewOnly.Checked)
+            {
+                _chkQueriesOnly.Checked = false;
+            }
+
+            RefreshAll(force: true);
+        };
 
         // 12 Nov 2026, setup plan step 8: a club setting, kept beside the
         // requests it decides about.
@@ -116,6 +139,7 @@ internal sealed class DriverRequestsForm : Form
         var page = new FillPage();
         page.Add(_lblState, gapBelow: UiLayout.RowGap);
         page.Add(_chkQueriesOnly, stretch: false, gapBelow: UiLayout.HintGap);
+        page.Add(_chkCrewOnly, stretch: false, gapBelow: UiLayout.HintGap);
         page.Add(_chkSwapsNeedDesk, stretch: false, gapBelow: UiLayout.RowGap);
         page.Add(lblWaiting, stretch: false, gapBelow: UiLayout.HintGap);
         page.AddFill(_gridWaiting, _ => LeastListHeight(_gridWaiting), gapBelow: UiLayout.RowGap);
@@ -157,6 +181,10 @@ internal sealed class DriverRequestsForm : Form
         ShowInTaskbar = true;
     }
 
+    /// <summary>The requests the two filters leave: result queries only, crew and notes only, or everything.</summary>
+    internal static List<DriverRequest> Filtered(IEnumerable<DriverRequest> all, bool queriesOnly, bool crewOnly) =>
+        all.Where(r => queriesOnly ? r.Kind == DriverAsk.Query : !crewOnly || r.Kind == DriverAsk.Crew).ToList();
+
     private static int LeastListHeight(DataGridView grid) =>
         grid.ColumnHeadersHeight + LeastRows * grid.RowTemplate.Height + 2;
 
@@ -196,8 +224,7 @@ internal sealed class DriverRequestsForm : Form
 
         _drawnVersion = version;
 
-        var queriesOnly = _chkQueriesOnly.Checked;
-        var all = _desk.Store.All.Where(r => !queriesOnly || r.Kind == DriverAsk.Query).ToList();
+        var all = Filtered(_desk.Store.All, _chkQueriesOnly.Checked, _chkCrewOnly.Checked);
 
         var selectedWaiting = SelectedWaiting()?.Id;
         _gridWaiting.Rows.Clear();
@@ -257,7 +284,7 @@ internal sealed class DriverRequestsForm : Form
         var request = SelectedWaiting();
         var known = request is not null && _desk.DriverOf(request) is not null;
 
-        _btnApprove.Enabled = known && request!.Kind is DriverAsk.Details or DriverAsk.Pack or DriverAsk.Late or DriverAsk.Skip or DriverAsk.Cover or DriverAsk.VideoHide;
+        _btnApprove.Enabled = known && request!.Kind is DriverAsk.Details or DriverAsk.Pack or DriverAsk.Late or DriverAsk.Skip or DriverAsk.Cover or DriverAsk.VideoHide or DriverAsk.Crew;
         _btnNoted.Enabled = request is { Kind: DriverAsk.Query or DriverAsk.VideoOff };
         _btnDecline.Enabled = request is not null;
         _btnDiscard.Enabled = request is not null && !known;
@@ -304,6 +331,32 @@ internal sealed class DriverRequestsForm : Form
                     {
                         AppDialog.Show(this, refusal, "Not applied", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     }
+                }
+
+                break;
+
+            // Their own crew and notes (15 Nov 2026): the words, all at
+            // once - the voices have applied by themselves already.
+            case DriverAsk.Crew:
+                if (_desk.DriverOf(current) is not { } crewDriver)
+                {
+                    return;
+                }
+
+                if (AppDialog.Show(this,
+                        $"{_desk.NameFor(current)} asks for:{Environment.NewLine}{Environment.NewLine}"
+                        + string.Join(Environment.NewLine, _desk.Describe(current))
+                        + Environment.NewLine + Environment.NewLine
+                        + (crewDriver.IsJunior ? DriverRequestDesk.JuniorCrewWarning + Environment.NewLine + Environment.NewLine : string.Empty)
+                        + "These are words the announcer will say. Approve them?",
+                        "Crew and notes", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                {
+                    return;
+                }
+
+                if (!_desk.ApplyCrew(current, out refusal))
+                {
+                    AppDialog.Show(this, refusal, "Not applied", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
 
                 break;

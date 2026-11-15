@@ -632,13 +632,27 @@ internal static class DriverLive
     /// credential, and whoever holds one should be able to recognize the
     /// address, not read it. Never their transponder.
     /// </summary>
+    /// <param name="crew">
+    /// The crew drivers may pick (15 Nov 2026, driver crew plan), or null
+    /// when the club has not switched "Drivers can pick their own crew" on -
+    /// and then no driver's entry says anything about a crew.
+    /// </param>
     public static string MeDocument(
         IEnumerable<DriverProfile> profiles,
         Func<string, string?> badgeOf,
-        Func<DriverProfile, PackView?>? packsOf = null)
+        Func<DriverProfile, PackView?>? packsOf = null,
+        CrewForPhone? crew = null)
     {
         var drivers = new Dictionary<string, object?>(StringComparer.Ordinal);
-        var budget = MostMeBytes - 64;
+
+        // THE VOICES ONCE, beside the drivers, not in every entry: this
+        // document is capped for everybody together (MostMeBytes), and an
+        // ElevenLabs account's list repeated eighty times would crowd
+        // drivers out of it. The relay hands each phone the list with its
+        // own entry.
+        var voices = crew is null ? null : CrewVoicesOf(crew);
+        var voicesBytes = voices is null ? 0 : Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(voices)) + 16;
+        var budget = MostMeBytes - 64 - voicesBytes;
         var used = 0;
 
         foreach (var profile in profiles ?? Array.Empty<DriverProfile>())
@@ -703,6 +717,11 @@ internal static class DriverLive
                 me["packs"] = packs;
             }
 
+            if (crew is not null)
+            {
+                me["crew"] = CrewOf(profile, crew);
+            }
+
             var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(me)) + badge!.Length + 4;
 
             if (used + bytes > budget)
@@ -714,7 +733,110 @@ internal static class DriverLive
             drivers[badge] = me;
         }
 
-        return JsonSerializer.Serialize(new Dictionary<string, object?> { ["drivers"] = InBadgeOrder(drivers) });
+        var document = new Dictionary<string, object?> { ["drivers"] = InBadgeOrder(drivers) };
+
+        if (voices is not null)
+        {
+            document["crewVoices"] = voices;
+        }
+
+        return JsonSerializer.Serialize(document);
+    }
+
+    /// <summary>
+    /// What the phone is told about the crew drivers may pick: the engine in
+    /// use and the voices on it they may choose from (DriverCrew.Pickable).
+    /// </summary>
+    /// <param name="JuniorNotesFromPhone">A junior's notes may be sent from a phone (AppSettings.JuniorNotesFromPhone).</param>
+    public sealed record CrewForPhone(VoiceEngine Engine, IReadOnlyList<CrewVoiceOption> Voices, bool JuniorNotesFromPhone = false);
+
+    /// <summary>The most crew voices a phone is offered - the relay's own cap.</summary>
+    public const int MostCrewVoices = 200;
+
+    /// <summary>The crewVoices list: each voice's key, its name, and its sample when it has an https one.</summary>
+    private static List<Dictionary<string, object?>> CrewVoicesOf(CrewForPhone crew) =>
+        crew.Voices
+            .Take(MostCrewVoices)
+            .Select(v =>
+            {
+                var one = new Dictionary<string, object?>
+                {
+                    ["k"] = DriverCrew.KeyOf(v.Pick),
+                    ["n"] = Truncate(DriverCrew.Clean(string.IsNullOrWhiteSpace(v.Pick.Name) ? v.Pick.Id : v.Pick.Name), 60),
+                };
+
+                if (Uri.TryCreate(v.Sample, UriKind.Absolute, out var sample) && sample.Scheme == Uri.UriSchemeHttps)
+                {
+                    one["s"] = sample.AbsoluteUri;
+                }
+
+                return one;
+            })
+            .ToList();
+
+    private static string Truncate(string text, int most) => text.Length <= most ? text : text[..most].TrimEnd();
+
+    /// <summary>
+    /// One driver's "crew" object: their names and notes, and each voice as
+    /// the key of a voice they may pick now - empty for the club's own, and
+    /// for a pick that is hidden, reserved or on another engine. A pick for
+    /// another engine also says "repick", so the phone can ask them to
+    /// choose again rather than quietly showing the club's voice.
+    /// </summary>
+    internal static Dictionary<string, object?> CrewOf(DriverProfile profile, CrewForPhone crew)
+    {
+        var offered = new HashSet<string>(crew.Voices.Select(v => DriverCrew.KeyOf(v.Pick)), StringComparer.Ordinal);
+        var repick = false;
+
+        string KeyFor(CrewVoicePick? pick)
+        {
+            if (!DriverCrew.IsAPick(pick))
+            {
+                return string.Empty;
+            }
+
+            if (DriverCrew.EngineOf(pick) != crew.Engine)
+            {
+                repick = true;
+                return string.Empty;
+            }
+
+            var key = DriverCrew.KeyOf(pick!);
+            return offered.Contains(key) ? key : string.Empty;
+        }
+
+        var one = new Dictionary<string, object?>
+        {
+            ["junior"] = profile.IsJunior,
+            ["principal"] = new Dictionary<string, object?>
+            {
+                ["name"] = DriverCrew.Clean(profile.CrewPrincipalName),
+                ["voice"] = KeyFor(profile.CrewPrincipalVoice),
+            },
+            ["tech"] = new Dictionary<string, object?>
+            {
+                ["name"] = DriverCrew.Clean(profile.CrewTechName),
+                ["voice"] = KeyFor(profile.CrewTechVoice),
+            },
+            ["goal"] = DriverCrew.GoalTonight(profile, DateTime.Now),
+            ["thanks"] = DriverCrew.Clean(profile.CrewThanks),
+            ["car"] = DriverCrew.Clean(profile.CrewCarStory),
+        };
+
+        if (repick)
+        {
+            one["repick"] = true;
+        }
+
+        // A junior's notes are typed at the desk unless the club takes them
+        // from phones: the phone shows no note boxes and the relay refuses
+        // one (15 Nov 2026).
+        if (profile.IsJunior && !crew.JuniorNotesFromPhone)
+        {
+            one["notes"] = false;
+        }
+
+        return one;
     }
 
     /// <summary>

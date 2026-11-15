@@ -174,7 +174,7 @@ is the part that can be wrong on a machine where every test passes.
 | `signup` | snapshot, **private** | driver sign-up: open or not, the classes, and each invite code's hash and expiry |
 | `nights` | collection, **private** | one driver's own night per badge id: 400 at most, 64 KB each, 4 MB of its own |
 | `driverlive` | snapshot, **private** | each driver's live evening (next race, marshal duty, the desk's answers), 256 KB at most |
-| `driverme` | snapshot, **private** | each driver's own details they can ask the desk to change, 512 KB at most |
+| `driverme` | snapshot, **private** | each driver's own details they can ask the desk to change, their own crew when the club allows it, and the club's `crewVoices` once at the top, 512 KB at most |
 | `garage` | collection, **private** | one driver's garage per badge id - packs, races, cars with 240-pixel photo thumbnails, setup sheets: 400 at most, 512 KB each, 24 MB of its own |
 
 A channel with a budget of its own ("of its own" above) is not counted
@@ -1208,6 +1208,33 @@ the JPEG marker here; the laptop decodes the whole picture before it keeps
 any of it. The upload may take longer than the usual 30-second ceiling, on
 an idle timeout, as a clip does. Turning driver requests off deletes every
 garage and every photo still waiting.
+
+### Drivers' own crews (personal PIN; 15 Nov 2026)
+
+`plans/driver-crew-plan.md`. With the club's "Drivers can pick their own
+crew" on, each driver's `driverme` entry carries `crew` - `junior`,
+`principal` and `tech` (`{name, voice}` each), `goal`, `thanks`, `car`,
+and `repick: true` when their pick was for an engine the club no longer
+uses - and the document carries the voices drivers may pick once, beside
+`drivers`: `crewVoices: [{k, n, s?}]` (a twelve-hex key, a name, an
+optional sample clip). The relay checks both before a phone sees them
+(`crewFrom`, `crewVoicesFrom` in `src/driverasks.ts`): a crew that will not
+read is dropped whole; voices are capped at 200, names at 60 characters, and
+a sample is kept only as an https address. A phone gets the list as
+`me.crew.voices`. The page's media policy allows
+`https://storage.googleapis.com`, where ElevenLabs keeps its preview clips;
+the Me tab makes the `<audio>` only when Play is tapped.
+
+The phone sends a `crew` ask through `driver/ask` (fields `pName`, `pVoice`,
+`tName`, `tVoice`, `goal`, `thanks`, `story` (the car's story; not `car`, which is a garage ask's car id on the laptop), `guardian`; `""` clears one). It
+needs the personal PIN's pass (`403` without it), and the crew offered in
+`driverme` (`403` without). Names are at most 24 letters, spaces, hyphens,
+apostrophes and full stops; notes 80, 80 and 120; a short list of rude
+words is refused in both. A junior's notes need `guardian: true` (family
+links only read, so they cannot send one). It is a desk kind, held to the
+desk kinds' limits; the laptop applies the voice picks on arrival and holds
+the names and notes for the desk. In `driver/inbox` it is
+`{id, b, k: "crew", v: "pin", f, at}` like any other ask.
 
 ### Push alerts (badge id)
 

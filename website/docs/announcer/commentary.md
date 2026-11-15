@@ -552,6 +552,29 @@ What the Technical Lead says about the car comes from the **Garage**: the setup 
 
 A voice is kept for each engine, so if you switch engine on **Voice → Voice**, pick a voice for the new one too - except a Kokoro voice picked from another engine's list, which is kept whatever the engine. With none picked for the engine in use, the announcer's own voice answers, and the console says so after the race.
 
+<a id="drivers-own-crew"></a>
+
+#### Drivers' own crew
+
+Each driver can have their own Team Principal and Technical Lead: a name and a voice for each, picked from their phone. They can also share a few words the interviews use. Turn it on with **Drivers can pick their own crew** on the **Drivers' own crew** card on **Voice → Cast** (Advanced). It's off by default.
+
+- **A voice** comes from every voice on the engine in use, less any you hide. The list is refreshed every 10 minutes (a minute after a failed try), so a voice added to your ElevenLabs account reaches the phones, and one you delete stops being used: a driver whose voice has gone hears the club's voice instead. Click **Voices drivers can pick...** and untick a voice to hide it, such as a cloned voice of a real person. The announcer's voice and the co-hosts' voices are never offered. A voice a driver picks is used straight away. If you switch engine, their pick is left behind and they hear the club's voice until they pick again; their phone asks them to.
+- **A name** for each, which they make up. Blank, they get the club's name from the card above.
+- **Their notes**: **Tonight's goal** (for the principal before their race, or the race intro), **Thanks** (for the principal after a race they win, or the recap when the principal isn't on) and **Their car's story** (for the Technical Lead). A note is said as something the driver told the team, never as a result, and each note is used **once a night** at most. A goal sent after the night's last race is kept for the next night.
+
+Notes always go into what the announcer is written from in full. When one segment carries a lot of them (300 characters or more, such as an intro with several drivers' goals), the **Drivers' notes** line in the [Broadcast window](#the-broadcast-window) says so, because a small local model can write a looser line from a long prompt.
+
+Names and notes are words the announcer will say, so each one waits for you on [Driver Requests](../online/driver-requests.md#their-crew-and-notes). Voices don't wait. You can also type all of these on the driver's profile in the Driver Hub.
+
+Without a crew of their own, a driver gets the club's principal and Technical Lead. If a driver's principal and Technical Lead would speak in the same voice after one race, the principal speaks in the club's voice instead, and the console says so. When ElevenLabs runs out, everyone's principal falls back to the principal's Kokoro voice under **If ElevenLabs runs out:**.
+
+**Juniors.** What is said goes out on the PA, the stream and its captions. So:
+
+- **Their notes are typed at your desk, not on their phone**, unless you tick **Juniors can send notes from their phone**. Leave it off: in the US, COPPA needs a parent's verified consent before a child under 13 sends words online that are said in public, and a tick on a phone isn't that. With it on, a parent must still tick **I'm making this change for them**.
+- **A parent must agree first.** A junior's notes are never said until **A parent or guardian agreed these notes can be said on the PA and the stream** is ticked on their profile. Get it signed at the desk, as for the waiver. There is a form to print in the club pack.
+- On a night the stream is on, a junior's notes aren't said unless you tick **Juniors' notes on stream nights**. Their crew's names and voices are heard either way.
+- A junior's principal never comes in defensive, frustrated or blunt, and the interview is told to keep it warm and encouraging.
+
 <a id="broadcast"></a>
 
 ### Recap show

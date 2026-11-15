@@ -84,6 +84,14 @@ public partial class MainForm
             // setup plan step 8) - see MainForm.ProtestWindow.
             QueryInWindow = QueryInProtestWindow,
 
+            // Their own crew's voices from the phone apply by themselves
+            // (15 Nov 2026, driver crew) - only voices the club offers.
+            CrewVoiceOf = CrewVoiceForKey,
+
+            // A goal sent after the night's last race is for the next night.
+            TonightIsOver = TonightsRacingIsOver,
+            NextNightDay = () => _settings.NextNight?.Day,
+
             // More time, or skip my race, from a driver's phone - done in
             // Race Control once the desk approves (11 Nov 2026).
             RaceAsk = (kind, transponder, name) => _raceControlControl is not { } raceControl
@@ -155,6 +163,7 @@ public partial class MainForm
         try
         {
             _driverRequestDesk?.FileWaitingWrites();
+            _driverRequestDesk?.FileWaitingCrewVoices();
         }
         catch (Exception ex)
         {

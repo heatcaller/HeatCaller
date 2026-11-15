@@ -2794,10 +2794,14 @@ public sealed partial class RaceControlControl
                     $"{AppTime.LogStampNow()}  [commentary] The sign-off is held back to come after the achievements, so the program ends on it.");
             }
 
-            return WithPrincipal(new RecapPlan(context, false, closing, string.Empty, Array.Empty<string>(), null), principal);
+            return WithPrincipal(new RecapPlan(context, false, closing, string.Empty, Array.Empty<string>(), null), principal, CommentaryService.ClassifiedWinner(record)?.Transponder);
         }
 
-        var mechanicName = (_settings.RecapMechanicName ?? string.Empty).Trim();
+        // THE WINNER'S OWN TECHNICAL LEAD when they have one (15 Nov 2026,
+        // driver crew) - their name and voice, else the club's. See CrewOf.
+        var winnerId = CommentaryService.ClassifiedWinner(record)?.Transponder;
+        var crew = CrewOf(winnerId, principal: false);
+        var mechanicName = crew.Name;
         IReadOnlyList<string> setupFacts = Array.Empty<string>();
 
         try
@@ -2813,8 +2817,13 @@ public sealed partial class RaceControlControl
         // it the announcer's own voice answers - and that is said, because
         // both parts in one voice sounds like a mistake.
         var engine = _announcer.VoiceEngineInUse;
-        var voices = _settings.MechanicVoice;
-        var voice = voices.IsSetFor(engine) ? voices : null;
+        var voice = crew.Voice;
+        var voices = voice ?? _settings.MechanicVoice;
+
+        if (crew.Why.Length > 0)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] The winner's own Technical Lead: {crew.Why}.");
+        }
 
         var who = mechanicName.Length > 0 ? mechanicName : "the Technical Lead";
 
@@ -2827,7 +2836,7 @@ public sealed partial class RaceControlControl
                 ? ", with the setup the Garage has for the winning car."
                 : ". No setup is logged for the winning car, so the Technical Lead won't talk settings."));
 
-        return WithPrincipal(new RecapPlan(context, true, closing, mechanicName, setupFacts, voice), principal);
+        return WithPrincipal(new RecapPlan(context, true, closing, mechanicName, setupFacts, voice), principal, winnerId);
     }
 
     private static string EngineName(VoiceEngine engine) => engine switch
@@ -3178,17 +3187,42 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>The recap's plan with the Team Principal added when one follows, and the voice they speak in said.</summary>
-    private RecapPlan WithPrincipal(RecapPlan plan, bool principal)
+    private RecapPlan WithPrincipal(RecapPlan plan, bool principal, string? winnerId)
     {
         if (!principal)
         {
             return plan;
         }
 
-        var name = (_settings.PrincipalName ?? string.Empty).Trim();
+        // THE WINNER'S OWN PRINCIPAL when they have one (15 Nov 2026, driver
+        // crew) - see CrewOf.
+        var crew = CrewOf(winnerId, principal: true);
+        var name = crew.Name;
         var engine = _announcer.VoiceEngineInUse;
-        var voices = _settings.PrincipalVoice;
-        var voice = voices.IsSetFor(engine) ? voices : null;
+        var voice = crew.Voice;
+
+        if (crew.Why.Length > 0)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] The winner's own Team Principal: {crew.Why}.");
+        }
+
+        // THE SAME VOICE TWICE IN ONE EXCHANGE (plan 2.2): a driver whose
+        // principal and Technical Lead come out in one voice, both following
+        // this race, would sound like one person answering both. The
+        // principal goes back to the club's own voice, and that is said.
+        if (plan.Interview
+            && voice is not null
+            && DriverCrew.KeyOn(voice, engine) is { Length: > 0 } principalKey
+            && principalKey == DriverCrew.KeyOn(plan.MechanicVoice, engine))
+        {
+            var clubs = _settings.PrincipalVoice;
+            voice = clubs.IsSetFor(engine) && DriverCrew.KeyOn(clubs, engine) != principalKey ? clubs : null;
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] The winner's principal and Technical Lead would share a voice, so the "
+                + (voice is not null ? "principal speaks in the club's own." : "principal speaks in the announcer's."));
+        }
+
+        var voices = voice ?? _settings.PrincipalVoice;
 
         StatusMessage?.Invoke(
             $"{AppTime.LogStampNow()}  [commentary] On the recap show: {(name.Length > 0 ? name : "the winner's Team Principal")} in the booth"
@@ -3363,7 +3397,16 @@ public sealed partial class RaceControlControl
             // best night anybody ever had.
             var best = night.Finishes.Where(place => place > 0).DefaultIfEmpty(0).Min();
 
-            return (PrincipalFacts.ForThePrincipal(night, rival, key), PrincipalStance.For(night, best, standing));
+            var stance = PrincipalStance.For(night, best, standing);
+
+            // A junior's principal comes in warm or plain, never defending,
+            // frustrated or blunt (15 Nov 2026, driver crew plan 5.2).
+            if (_profiles.Get(transponder)?.IsJunior == true)
+            {
+                stance = PrincipalStance.ForJunior(stance);
+            }
+
+            return (PrincipalFacts.ForThePrincipal(night, rival, key), stance);
         }
         catch (Exception ex)
         {
@@ -7960,7 +8003,11 @@ public sealed partial class RaceControlControl
         var (focus, kind, stake) = chosen;
         var interviewer = InterviewerName;
         var grid = WrittenAhead.Fingerprint(next.AssignedTransponders);
-        var name = (_settings.PrincipalName ?? string.Empty).Trim();
+
+        // The driver's own principal's name when they have one (15 Nov 2026,
+        // driver crew) - the same answer PreparePrincipal gives, so an
+        // interview written ahead still matches when it is taken.
+        var name = CrewOf(focus, principal: true).Name;
         var label = next.RoundLabel;
         CommentaryService commentary = _commentary;
 
@@ -8215,7 +8262,11 @@ public sealed partial class RaceControlControl
         }
 
         var (focus, kind, stake) = chosen;
-        var name = (_settings.PrincipalName ?? string.Empty).Trim();
+
+        // THE DRIVER'S OWN PRINCIPAL when they have one (15 Nov 2026, driver
+        // crew): their name and voice, else the club's. See CrewOf.
+        var crew = CrewOf(focus, principal: true);
+        var name = crew.Name;
         var interviewer = InterviewerName;
 
         // WRITTEN AHEAD? Taken whatever happens - a held interview is for
@@ -8256,9 +8307,13 @@ public sealed partial class RaceControlControl
         }
 
         var engine = _announcer.VoiceEngineInUse;
-        var voices = _settings.PrincipalVoice;
-        SecondVoice? voice = voices.IsSetFor(engine) ? voices : null;
+        SecondVoice? voice = crew.Voice;
         var driver = _profiles.Get(focus)?.DriverName is { Length: > 0 } known ? known : focus;
+
+        if (crew.Why.Length > 0)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {driver}'s own Team Principal: {crew.Why}.");
+        }
 
         StatusMessage?.Invoke(
             $"{AppTime.LogStampNow()}  [commentary] Before {round.RoundLabel}: a word with {(name.Length > 0 ? name : "the Team Principal")} "

@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -1697,6 +1697,44 @@ public sealed class AppSettings
         PrincipalKokoroVoiceName ?? string.Empty,
         PrincipalKokoroAlways,
         CastStandIns.Resolve(PrincipalKokoroStandInVoiceName, PrincipalKokoroVoiceName, CastStandIns.TeamPrincipal));
+
+    // --- Drivers' own crew (15 Nov 2026, driver crew plan) ---------------
+    //
+    // A driver can give their own Team Principal and Technical Lead a name
+    // and a voice, and share short notes the interviews use. See DriverCrew.
+
+    /// <summary>
+    /// Drivers can pick their own crew's names and voices, and send notes,
+    /// from their phone. Off by default. Off, a crew a driver already has is
+    /// not heard - the club's own cast speaks for everyone.
+    /// </summary>
+    public bool DriversPickCrew { get; set; }
+
+    /// <summary>
+    /// The voices the club has hidden from drivers, as DriverCrew.KeyOf keys
+    /// - a cloned voice of a real person, say. The announcer's and the
+    /// co-hosts' are hidden without being on here.
+    /// </summary>
+    public List<string> CrewVoicesHidden { get; set; } = new();
+
+    /// <summary>
+    /// A junior's own notes are said on nights the stream is on. Off by
+    /// default: what is said goes out on the stream and its captions, and a
+    /// child's words in a public recording are there for good. Their crew's
+    /// names and voices are heard either way.
+    /// </summary>
+    public bool JuniorNotesOnStream { get; set; }
+
+    /// <summary>
+    /// A junior's notes can be sent from a phone at all (15 Nov 2026). Off by
+    /// default, and off is the safer way to run: a child typing words online
+    /// that are then said in public is what the US children's privacy law
+    /// (COPPA) needs a parent's verified consent for, and the "I'm making this
+    /// change for them" tick is not that. Off, a junior's notes are typed at
+    /// the desk, with a parent there and their consent recorded on the
+    /// profile. A junior can still pick their crew's voices and names.
+    /// </summary>
+    public bool JuniorNotesFromPhone { get; set; }
 
     // --- The honours (10 Oct 2026) ---------------------------------------
     //

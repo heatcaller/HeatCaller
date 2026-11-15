@@ -290,6 +290,19 @@ internal static class PrincipalStance
     }
 
     /// <summary>
+    /// The position a JUNIOR's principal comes in with (15 Nov 2026, driver
+    /// crew plan 5.2, rule 5): the warm ones only. A child hearing their
+    /// principal defend a bad night over the PA, or sound frustrated or
+    /// blunt about it, is hearing a grown-up voice on the speakers say the
+    /// night went badly - so a night that would have been defensive,
+    /// frustrated or blunt gets the plain principal, and the JuniorRule in
+    /// the prompt keeps it encouraging. Vindicated and pleased stay: those
+    /// are the nights a junior should hear about.
+    /// </summary>
+    internal static Stance ForJunior(Stance stance) =>
+        stance == Vindicated || stance == Pleased ? stance : Plain;
+
+    /// <summary>
     /// What goes into the interview brief for a stance - its own sentences
     /// and the loyalty rule, or NOTHING at all for the plain principal.
     ///
