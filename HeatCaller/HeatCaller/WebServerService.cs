@@ -1729,6 +1729,32 @@ public sealed partial class WebServerService
             return;
         }
 
+        // A stream overlay layout by its address (14 Nov 2026, stream overlay
+        // plan section 3): /overlay/broadcast, /overlay/lower-third, ... The
+        // Results table is the overlay page it has always been.
+        if (path.StartsWith(OverlayPath + "/", StringComparison.Ordinal))
+        {
+            var id = path[(OverlayPath.Length + 1)..];
+
+            if (id == OverlayLayouts.ResultsId)
+            {
+                WriteHtml(context, BuildOverlayPage());
+            }
+            else if (OverlayLayoutFor(id) is { } layout)
+            {
+                WriteHtml(context, BuildBroadcastPage(layout));
+            }
+            else
+            {
+                // An OBS source left pointing at a layout that has gone:
+                // a sentence, never a blank source nobody can explain.
+                context.Response.StatusCode = 404;
+                WriteText(context, "This overlay isn't in HeatCaller any more. Pick another on the Web Server page and copy its address.");
+            }
+
+            return;
+        }
+
         switch (path)
         {
             case "":
@@ -2547,6 +2573,31 @@ public sealed partial class WebServerService
     /// browser takes the type at its word. Any query string (the pages add
     /// ?v= so a new logo is never mistaken for the old one) is ignored.
     /// </summary>
+    /// <summary>
+    /// The club's own overlay layouts (section 4), by id - set by MainForm
+    /// once the store is loaded. Read on the server's thread: the store
+    /// hands back copies, never the layouts it is editing.
+    /// </summary>
+    internal Func<string, OverlayLayout?>? CustomOverlay { get; set; }
+
+    /// <summary>A layout by its address part: a preset, else one of the club's own, else null.</summary>
+    internal OverlayLayout? OverlayLayoutFor(string id)
+    {
+        if (OverlayLayouts.BuiltIn(id) is { } preset)
+        {
+            return preset;
+        }
+
+        try
+        {
+            return CustomOverlay?.Invoke(id);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>Where sponsor logos are served from - see HandleSponsorLogo.</summary>
     internal const string SponsorLogoPath = "/sponsor-logo/";
 

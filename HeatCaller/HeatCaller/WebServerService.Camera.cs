@@ -367,9 +367,41 @@ public sealed partial class WebServerService
     /// graphic every time - "FASTEST LAP · PRESENTED BY ..." - which costs
     /// the room nothing, unlike the voice, which rations it.
     /// </summary>
-    internal string BuildBroadcastPage()
+    /// <summary>
+    /// One graphic's markup, as the layout wants it: where it has always
+    /// been, or - moved by the layout - inside a slot of its own (see
+    /// OverlayLayouts.SlotCss), marked inslot so it fades there instead of
+    /// sliding. Always written, so the page's script finds every element;
+    /// one the layout leaves out simply never shows (want() in the script).
+    /// </summary>
+    private static string PlaceInLayout(OverlayLayout layout, OverlayElementKind kind, string html)
+    {
+        if (layout.Element(kind) is not { On: true, Anchor: not OverlayAnchor.Default })
+        {
+            return html;
+        }
+
+        var at = html.IndexOf("class=\"", StringComparison.Ordinal);
+        var inner = at < 0 ? html : html.Insert(at + "class=\"".Length, "inslot ");
+
+        return "<div id=\"slot-" + OverlayLayouts.ElementName(kind) + "\" class=\"slot\">" + inner + "</div>";
+    }
+
+    internal string BuildBroadcastPage(OverlayLayout? layout = null)
     {
         var look = CurrentPageLook();
+
+        // THE LAYOUT (14 Nov 2026, plans/obs-overlay-plan.md section 2):
+        // which graphics show, where and when. The Broadcast preset places
+        // nothing, so /broadcast draws as it always has.
+        layout ??= OverlayLayouts.BuiltIn(OverlayLayouts.BroadcastId)!;
+        var markPlaced = layout.Element(OverlayElementKind.Mark) is { Anchor: not OverlayAnchor.Default };
+        string Part(OverlayElementKind kind, string html) => PlaceInLayout(layout, kind, html);
+        var slotCss = OverlayLayouts.SlotCss(layout);
+        var layoutJson = OverlayLayouts.ScriptJson(layout).Replace("</", "<\\/", StringComparison.Ordinal);
+        var glass = Math.Abs(layout.Glass - 0.82) < 0.001
+            ? ".82"
+            : Math.Clamp(layout.Glass, 0.4, 1).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 
         return $$"""
         <!DOCTYPE html><html class="{{look.Scheme}}"><head>
@@ -379,7 +411,7 @@ public sealed partial class WebServerService
         html, body { margin:0; background:transparent; overflow:hidden; width:100vw; height:100vh;
                      font-family:'Bahnschrift','Segoe UI',system-ui,sans-serif; color:#fff; }
         /* Everything is sized in vw so the graphics fit any canvas size. */
-        .glass { background:rgba(10,12,18,.82); border-radius:.5vw; box-shadow:0 .3vw 1.2vw rgba(0,0,0,.35); }
+        .glass { background:rgba(10,12,18,{{glass}}); border-radius:.5vw; box-shadow:0 .3vw 1.2vw rgba(0,0,0,.35); }
         .acc { color:var(--accent); }
         .by { display:block; font-size:.7vw; letter-spacing:.14em; color:#c9cdd6; text-transform:uppercase; margin-top:.3vw; }
         #tower { position:absolute; left:2vw; top:3vw; width:21vw; overflow:hidden; transition:opacity .4s; }
@@ -448,23 +480,89 @@ public sealed partial class WebServerService
                     opacity:0; transition:opacity .6s; }
         #captions.show { opacity:1; }
         body.cap #battle, body.cap #fastest { bottom:5.4vw; }
+        /* THE LAYOUT'S OWN GRAPHICS (14 Nov 2026, stream overlay plan
+           sections 2 and 3). Nothing smaller than 1.15vw - 22px on a 1920
+           canvas - because most viewers watch on a phone. Each fades in and
+           out; hidden until the layout asks for it. */
+        .fade { opacity:0; transition:opacity .45s; }
+        .fade.show { opacity:1; }
+        #status { position:absolute; right:2vw; top:2vw; padding:.6vw 1.1vw; font-size:1.3vw; font-weight:700; display:flex; gap:1vw;
+                  align-items:baseline; white-space:nowrap; text-transform:uppercase; letter-spacing:.08em; }
+        #status .acc { font-variant-numeric:tabular-nums; }
+        #ticker { position:absolute; left:4vw; bottom:2vw; width:92vw; display:flex; align-items:center; gap:1.2vw; padding:.6vw 1.1vw;
+                  font-size:1.3vw; white-space:nowrap; overflow:hidden; }
+        #ticker .tk-race { flex:none; color:var(--accent); font-weight:800; text-transform:uppercase; letter-spacing:.1em; }
+        #ticker .tk-track { flex:1; overflow:hidden; }
+        #ticker .tk-items { display:inline-flex; gap:2.2vw; }
+        #ticker .tk-items.scroll { animation:tk var(--tk-s, 12s) linear infinite alternate; }
+        @keyframes tk { from { transform:translateX(0); } to { transform:translateX(var(--tk-d, 0)); } }
+        #ticker .tk-item b { color:var(--accent); margin-right:.4vw; font-variant-numeric:tabular-nums; }
+        #ticker .tk-item .g { color:#c9cdd6; margin-left:.5vw; font-variant-numeric:tabular-nums; }
+        #bug { position:absolute; right:2vw; top:2vw; min-width:17vw; max-width:30vw; padding:.7vw 1.1vw; font-size:1.2vw; line-height:1.35; }
+        #bug .bg-race { font-weight:800; text-transform:uppercase; letter-spacing:.1em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        #bug .bg-clock { font-size:1.7vw; font-weight:800; color:var(--accent); font-variant-numeric:tabular-nums; }
+        #bug .bg-lead { color:#c9cdd6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        #clublogo { position:absolute; left:2vw; top:2vw; }
+        #clublogo .logo { display:block; height:6vw; width:auto; max-width:18vw; object-fit:contain; }
+        #clublogo .logo.plate { background:var(--plate); padding:.4vw; border-radius:.5vw; }
+        #mark { position:absolute; right:2vw; bottom:2vw; display:flex; align-items:center; gap:.5vw; padding:.45vw .9vw; font-size:1.15vw; color:#c9cdd6; }
+        #mark .hcsun { width:1.3vw; height:1.3vw; flex:none; fill:currentColor; color:var(--accent); }
+        #mark .hcword { font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+        #mark .hcword .hcc { color:var(--accent); }
+        #tower.nofoot .hcfoot { display:none; }
+        #schedule h2 .by { font-size:1.15vw; }
+        #schedule .line { font-size:1.5vw; }
+        #schedule .line .when { margin-left:auto; color:#c9cdd6; font-size:1.2vw; align-self:center; }
+        /* A graphic the layout has moved sits in a slot of its own, and
+           fades rather than sliding in from the edge it used to live by. */
+        .slot > .inslot { position:relative !important; left:auto !important; right:auto !important; top:auto !important; bottom:auto !important;
+                          transform:none !important; }
+        .slot > .inslot.anim { opacity:0; transition:opacity .45s; }
+        .slot > .inslot.anim.show { opacity:1; }
+        {{slotCss}}
         </style></head><body data-look="{{look.Fingerprint}}">
-        <div id="tower" class="glass" style="opacity:0"><div class="head"><span id="title">-</span><span id="clock" class="acc"></span></div><div class="sub"><span id="mode" class="mode"></span><span id="changes"></span></div><div id="rows"></div><div class="hcfoot">{{HeatCallerMark.SunSvg}}{{HeatCallerMark.WordHtml}}</div></div>
-        <div id="champ" class="glass"></div>
-        <div id="battle" class="glass"></div>
-        <div id="fastest" class="glass"><small id="fhead">FASTEST LAP</small><span id="fname"></span> <span id="ftime" class="acc"></span></div>
-        <div id="moment" class="glass"><div class="t" id="mtitle"></div><div class="l" id="mline"></div><span class="by" id="mby"></span></div>
-        <div id="grid" class="glass centre"></div>
-        <div id="podium" class="glass centre"></div>
-        <div id="captions" class="glass" aria-live="polite"></div>
+        {{Part(OverlayElementKind.Tower, "<div id=\"tower\" class=\"glass" + (markPlaced ? " nofoot" : string.Empty) + "\" style=\"opacity:0\"><div class=\"head\"><span id=\"title\">-</span><span id=\"clock\" class=\"acc\"></span></div><div class=\"sub\"><span id=\"mode\" class=\"mode\"></span><span id=\"changes\"></span></div><div id=\"rows\"></div><div class=\"hcfoot\">" + HeatCallerMark.SunSvg + HeatCallerMark.WordHtml + "</div></div>")}}
+        {{Part(OverlayElementKind.Champ, "<div id=\"champ\" class=\"glass\"></div>")}}
+        {{Part(OverlayElementKind.Battle, "<div id=\"battle\" class=\"glass anim\"></div>")}}
+        {{Part(OverlayElementKind.Fastest, "<div id=\"fastest\" class=\"glass anim\"><small id=\"fhead\">FASTEST LAP</small><span id=\"fname\"></span> <span id=\"ftime\" class=\"acc\"></span></div>")}}
+        {{Part(OverlayElementKind.Moment, "<div id=\"moment\" class=\"glass anim\"><div class=\"t\" id=\"mtitle\"></div><div class=\"l\" id=\"mline\"></div><span class=\"by\" id=\"mby\"></span></div>")}}
+        {{Part(OverlayElementKind.Grid, "<div id=\"grid\" class=\"glass centre anim\"></div>")}}
+        {{Part(OverlayElementKind.Podium, "<div id=\"podium\" class=\"glass centre anim\"></div>")}}
+        {{Part(OverlayElementKind.Captions, "<div id=\"captions\" class=\"glass anim\" aria-live=\"polite\"></div>")}}
+        {{Part(OverlayElementKind.Status, "<div id=\"status\" class=\"glass fade\"><span id=\"st-race\"></span><span id=\"st-clock\" class=\"acc\"></span></div>")}}
+        {{Part(OverlayElementKind.Ticker, "<div id=\"ticker\" class=\"glass fade\"><span class=\"tk-race\" id=\"tk-race\"></span><div class=\"tk-track\" id=\"tk-track\"><div class=\"tk-items\" id=\"tk-items\"></div></div></div>")}}
+        {{Part(OverlayElementKind.Bug, "<div id=\"bug\" class=\"glass fade\"><div class=\"bg-race\" id=\"bg-race\"></div><div class=\"bg-clock\" id=\"bg-clock\"></div><div class=\"bg-lead\" id=\"bg-lead\"></div></div>")}}
+        {{Part(OverlayElementKind.ClubLogo, "<div id=\"clublogo\" class=\"fade\">" + look.Logo + "</div>")}}
+        {{Part(OverlayElementKind.Schedule, "<div id=\"schedule\" class=\"glass centre anim\"></div>")}}
+        {{Part(OverlayElementKind.Mark, "<div id=\"mark\" class=\"glass fade\">" + HeatCallerMark.SunSvg + HeatCallerMark.WordHtml + "</div>")}}
         <script>
+        // The layout this page draws (stream overlay plan section 2).
+        const LAYOUT = {{layoutJson}};
         function esc(v){ return String(v==null?'':v).replace(/[&<>"']/g, function(c){
           return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
         const params = new URLSearchParams(location.search);
         const hide = (params.get('hide') || '').toLowerCase().split(',');
-        const want = part => !hide.includes(part);
+        // What the layout shows, and in which part of the night: "racing",
+        // "staging", "finished" or "between". ?hide= still leaves a part
+        // out on top of that, as it always did.
+        const PARTS = (LAYOUT && LAYOUT.elements) || {};
+        let PART = 'between';
+        function partOf(state){
+          if (state === 'Racing') return 'racing';
+          if (state === 'Finished') return 'finished';
+          if (state === 'Staging' || state === 'Countdown') return 'staging';
+          return 'between';
+        }
+        function want(part){
+          if (hide.includes(part)) return false;
+          const e = PARTS[part];
+          if (!e || !e.on) return false;
+          return !Array.isArray(e.during) || e.during.length === 0 || e.during.includes(PART);
+        }
+        // Moved by the layout: fades in its slot rather than sliding.
+        function placed(part){ const e = PARTS[part]; return !!(e && e.placed); }
         const gapPin = (params.get('gap') || '').toLowerCase();
-        const SHOWN = 8, CYCLE_MS = 8000, MOMENT_MS = 7000;
+        const SHOWN = (PARTS.tower && PARTS.tower.rows) || 8, TOP = 8, CYCLE_MS = 8000, MOMENT_MS = 7000;
         const rowEls = {};
         let lastPos = {}, best = { ms: 0, id: '' }, fastTimer = 0, first = true;
         let fight = null, momentSeq = -1, momentTimer = 0;
@@ -475,7 +573,7 @@ public sealed partial class WebServerService
         // OBS reloading the source does not put an old line on the stream.
         // A different number counts as new rather than only a bigger one,
         // because the numbers start again when HeatCaller does.
-        const captionsOn = params.get('captions') === '1';
+        const captionsOn = params.get('captions') === '1' || !!(PARTS.captions && PARTS.captions.on);
         if (captionsOn) document.body.classList.add('cap');
         const CAPTION_MS = 8000;
         let captionSeen = -1, captionTimer = 0;
@@ -518,13 +616,55 @@ public sealed partial class WebServerService
           try { await draw(); } finally { ticking = false; }
         }
 
+        // ?demo=1 (stream overlay plan section 4, step 4): a made-up race on
+        // a loop - between races, the grid, two minutes of racing with a
+        // battle, fastest laps and a lead change, then the result - so a
+        // layout can be set up on a weeknight with nothing on track. Made
+        // here in the page: it never comes from, or goes into, the night's
+        // real data.
+        const DEMO = params.get('demo') === '1';
+        const DEMO_NAMES = ['Mia Kent', 'Sam Tr', 'Terry Byte', 'Al Gorithim', 'Ella Vator', 'Annie Wayout', 'Rob Otics', 'Cy Clone'];
+        // &at=60 starts the loop that many seconds in: 0 between races, 20
+        // the grid, 35 the start, 95 a lead change, 140 the result.
+        const DEMO_START = Date.now() - Math.max(0, Number(params.get('at')) || 0) * 1000;
+        function demoState(){
+          const loop = 160, t = ((Date.now() - DEMO_START) / 1000) % loop;
+          const people = DEMO_NAMES.map((name, i) => ({ id: 'd' + i, name }));
+          const base = { race: 'Junior - Heat 2', people, presented: {}, presentedLogos: {}, champ: null, ratings: {}, captions: [], pylon: { changes: 0, leaders: 1, cars: {} } };
+          if (t < 20) return Object.assign(base, { state: 'Idle', flag: 'None', countdown: '', standings: [], cards: {}, onDeck: '19:40  •  Junior  •  Heat 2' });
+          if (t < 35) {
+            const callups = {}; people.forEach((p, i) => { callups[p.id] = { now: true, slot: i + 1 }; });
+            return Object.assign(base, { state: 'Staging', flag: 'None', countdown: '', standings: [], cards: {}, callups });
+          }
+          const racing = t < 140, el = Math.min(t, 140) - 35;
+          const order = people.map((p, i) => ({ p, i, pace: 9.6 + i * 0.07 + Math.sin(el / 9 + i) * 0.05 }));
+          // Sam takes the lead a minute in.
+          if (el > 60) { const a = order[0]; order[0] = order[1]; order[1] = a; }
+          const standings = [], cards = {}, cars = {};
+          order.forEach((o, pos) => {
+            const laps = Math.floor(el / o.pace);
+            standings.push({ id: o.p.id, name: o.p.name, best: Math.round((o.pace - 0.2) * 1000) });
+            cards[o.p.id] = { laps, ahead: pos === 0 ? '' : '+' + (pos === 1 ? (0.4 + Math.abs(Math.sin(el / 6)) * 0.4) : 0.9 + pos * 0.6).toFixed(3) };
+            cars[o.p.id] = { num: String(pos + 3), lead: pos === 0 ? '' : '+' + (pos * 1.1).toFixed(3), led: pos < 2 && el > 60 ? 4 : pos === 0 ? Math.floor(el / 10) : 0 };
+          });
+          const left = Math.max(0, 105 - el);
+          const clock = racing ? Math.floor(left / 60) + ':' + String(Math.floor(left % 60)).padStart(2, '0') : '';
+          const moment = el > 61 ? { seq: 1, kind: 'lead', title: 'Lead change', line: 'Sam Tr takes the lead from Mia Kent', sponsor: '' } : null;
+          return Object.assign(base, { state: racing ? 'Racing' : 'Finished', flag: racing ? 'Green' : 'Checkered', countdown: clock, standings, cards, moment,
+            pylon: { changes: el > 60 ? 1 : 0, leaders: el > 60 ? 2 : 1, cars } });
+        }
+
         async function draw(){
           let d;
-          const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 3000);
-          try { d = await (await fetch('/api/state', { cache: 'no-store', signal: stop.signal })).json(); }
-          catch(e) { return; }
-          finally { clearTimeout(timer); }
+          if (DEMO) d = demoState();
+          else {
+            const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 3000);
+            try { d = await (await fetch('/api/state', { cache: 'no-store', signal: stop.signal })).json(); }
+            catch(e) { return; }
+            finally { clearTimeout(timer); }
+          }
           showCaptions(d.captions);
+          PART = partOf(d.state);
           const racing = d.state === 'Racing', finished = d.state === 'Finished';
           const rows = (d.standings || []).filter(s => s.id);
           const cards = d.cards || {};
@@ -588,7 +728,7 @@ public sealed partial class WebServerService
           const battle = document.getElementById('battle');
           let close = null;
           if (racing){
-            rows.slice(1, SHOWN).forEach((s, i) => {
+            rows.slice(1, TOP).forEach((s, i) => {
               const g = gapSecs((cards[s.id] || {}).ahead);
               if (g !== null && g < 1.0 && (!close || g < close.g)) close = { g, a: rows[i], b: s, pos: i + 1 };
             });
@@ -647,7 +787,8 @@ public sealed partial class WebServerService
             momentSeq = m.seq;
             if (fresh && want('moment')){
               const el = document.getElementById('moment');
-              el.className = 'glass ' + esc(m.kind || '');
+              // The kind is a class; anim and the slot's class are kept.
+              el.className = 'glass anim ' + esc(m.kind || '') + (placed('moment') ? ' inslot' : '');
               document.getElementById('mtitle').textContent = m.title || '';
               document.getElementById('mline').textContent = m.line || '';
               document.getElementById('mby').textContent = m.sponsor ? 'Presented by ' + m.sponsor : '';
@@ -687,7 +828,80 @@ public sealed partial class WebServerService
             podium.classList.add('show');
           } else podium.classList.remove('show');
 
+          drawLayoutParts(d, rows, cards, racing, finished);
           first = false;
+        }
+
+        // --- The layout's own graphics (stream overlay plan section 2) ---
+        function show(id, on){ const el = document.getElementById(id); if (el) el.classList.toggle('show', !!on); return el; }
+        function setText(id, text){ const el = document.getElementById(id); if (el && el.textContent !== text) el.textContent = text; }
+        let tickerHtml = '';
+
+        function drawLayoutParts(d, rows, cards, racing, finished){
+          const onTrack = racing || finished;
+          const leader = rows.length ? rows[0] : null;
+
+          // The race and its clock, small, in a corner.
+          const status = want('status') && (onTrack || PART === 'staging');
+          if (status){ setText('st-race', d.race || ''); setText('st-clock', d.countdown || (d.flag && d.flag !== 'None' ? d.flag + ' flag' : '')); }
+          show('status', status);
+
+          // One bar of positions, for a camera that needs the picture.
+          const ticker = want('ticker') && onTrack && rows.length > 0;
+          if (ticker){
+            setText('tk-race', d.race || 'Live');
+            const n = (PARTS.ticker && PARTS.ticker.rows) || 10;
+            const html = rows.slice(0, n).map((s, i) => {
+              const c = cards[s.id] || {};
+              const g = i === 0 ? 'Lap ' + (c.laps || 0) : (c.ahead || '');
+              return '<span class="tk-item"><b>' + (i + 1) + '</b>' + esc(s.name) + (g ? '<span class="g">' + esc(g) + '</span>' : '') + '</span>';
+            }).join('');
+            if (html !== tickerHtml){
+              tickerHtml = html;
+              const items = document.getElementById('tk-items'), track = document.getElementById('tk-track');
+              items.innerHTML = html;
+              // Too many to fit: drift along and back, slowly.
+              const over = items.scrollWidth - track.clientWidth;
+              items.classList.toggle('scroll', over > 4);
+              items.style.setProperty('--tk-d', over > 4 ? (-over) + 'px' : '0px');
+              items.style.setProperty('--tk-s', Math.max(8, Math.round(over / 40)) + 's');
+            }
+          }
+          show('ticker', ticker);
+
+          // The corner bug: the race, the clock and the leader - or, with
+          // nothing on track, what is up next.
+          const bug = want('bug') && (onTrack || PART === 'staging' || d.onDeck);
+          if (bug){
+            if (onTrack || PART === 'staging'){
+              setText('bg-race', d.race || 'Live');
+              setText('bg-clock', d.countdown || '');
+              setText('bg-lead', leader ? (finished ? 'Won by ' : 'Leader ') + leader.name : '');
+            } else {
+              setText('bg-race', 'Up next');
+              setText('bg-clock', '');
+              setText('bg-lead', d.onDeck || '');
+            }
+          }
+          show('bug', bug);
+
+          // The club's own logo, when it has one.
+          const logo = document.querySelector('#clublogo img');
+          show('clublogo', want('clublogo') && !!logo);
+
+          // What's next, between races.
+          const sched = document.getElementById('schedule');
+          const next = want('schedule') && PART === 'between' && d.onDeck;
+          if (next){
+            const html = '<h2>Up next</h2><div class="line">' + esc(d.onDeck) + '</div>';
+            if (sched.innerHTML !== html) sched.innerHTML = html;
+          }
+          if (sched) sched.classList.toggle('show', !!next);
+
+          // HeatCaller's mark, always somewhere on the stream: in the
+          // tower's foot while the tower shows, or here, where the layout put it.
+          const towerShowing = document.getElementById('tower').style.opacity === '1';
+          show('mark', want('mark') && (placed('mark') || !towerShowing && !PARTS.tower));
         }
 
         setInterval(tick, 1000);
