@@ -101,6 +101,9 @@ public sealed partial class RaceDayEventControl : UserControl
 
     private readonly CheckBox _chkMemberships = new ThemedCheckBox();
 
+    /// <summary>Whether the Sailor-mouth commentary tone is allowed (15 Nov 2026 - AppSettings.AllowSailorMouth). The club's.</summary>
+    private readonly CheckBox _chkAllowSailorMouth = new ThemedCheckBox();
+
 
     /// <summary>The rest gap's row (setup plan step 8) - RaceEvent.RacesOffBetween.</summary>
     internal const string RacesOffCaption = NightFields.RacesOffCaption;
@@ -566,6 +569,20 @@ public sealed partial class RaceDayEventControl : UserControl
 
         closingRules.Add(closingGrid, gapBelow: 0);
 
+        // Commentary (15 Nov 2026): whether the swearing tone is allowed at
+        // all - a club rule rather than a Commentary setting, so a club that
+        // runs junior nights decides it once, for every night.
+        var commentaryGrid = new FieldGrid();
+
+        ClubTick(_chkAllowSailorMouth, "Allow Sailor-mouth commentary",
+            () => _settings!.AllowSailorMouth, on => _settings!.AllowSailorMouth = on, true);
+        commentaryGrid.AddField(_chkAllowSailorMouth);
+        commentaryGrid.AddHint("The commentary tone that swears. Off, the Commentary page doesn't offer it, and a club that had picked it hears Enthusiastic instead.");
+
+        var commentaryRules = new Section("Commentary");
+
+        commentaryRules.Add(commentaryGrid, gapBelow: 0);
+
         // --- The actions ---
         //
         // There is no Save button. There was, and it was the one step in
@@ -633,7 +650,8 @@ public sealed partial class RaceDayEventControl : UserControl
         _clubPage.Add(postingRules);
         _clubPage.Add(marshalRules);
         _clubPage.Add(papersRules);
-        _clubPage.Add(closingRules, gapBelow: 0);
+        _clubPage.Add(closingRules);
+        _clubPage.Add(commentaryRules, gapBelow: 0);
 
         BuildTemplatesPage();
         BuildPages();

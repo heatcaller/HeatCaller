@@ -30,6 +30,8 @@ public sealed class CharacterToneTests : IDisposable
     {
         public string SystemPrompt { get; private set; } = string.Empty;
 
+        public string Reply { get; set; } = "Sam is four tenths up on Bill.";
+
         public event Action<string>? StatusMessage;
 
         public string Describe => "the test";
@@ -44,7 +46,7 @@ public sealed class CharacterToneTests : IDisposable
         {
             SystemPrompt = systemPrompt;
             StatusMessage?.Invoke(string.Empty);
-            return Task.FromResult<string?>("Sam is four tenths up on Bill.");
+            return Task.FromResult<string?>(Reply);
         }
 
         public Task WarmUpAsync(CancellationToken ct = default) => Task.CompletedTask;
@@ -52,7 +54,7 @@ public sealed class CharacterToneTests : IDisposable
         public Task<string?> TestAsync(CancellationToken ct = default) => Task.FromResult<string?>("ok");
     }
 
-    private static (CommentaryService Desk, Scribe Model) Desk(CommentaryTone tone, bool tags = true, bool v3 = true)
+    private static (CommentaryService Desk, Scribe Model) Desk(CommentaryTone tone, bool tags = true, bool v3 = true, bool allowSailorMouth = true)
     {
         var model = new Scribe();
         var settings = new AppSettings
@@ -61,6 +63,7 @@ public sealed class CharacterToneTests : IDisposable
             CommentaryMaxWords = 60,
             CommentaryToneStyle = tone,
             CommentaryVoiceTags = tags,
+            AllowSailorMouth = allowSailorMouth,
         };
 
         var desk = new CommentaryService(ProfileStore.Load(), settings)
@@ -121,7 +124,7 @@ public sealed class CharacterToneTests : IDisposable
     {
         var profile = CommentaryTones.Find(tone)!;
 
-        Assert.Matches("^(Dark|Silly|Distorted): ", profile.Label);
+        Assert.Matches("^(Dark|Silly|Distorted|Adult): ", profile.Label);
         Assert.Contains("given \"P1 leads P2 by 0.4s on lap 12\"", profile.ToneLine);
         Assert.False(string.IsNullOrWhiteSpace(profile.Segment));
         Assert.False(string.IsNullOrWhiteSpace(profile.Exchange));
@@ -156,7 +159,7 @@ public sealed class CharacterToneTests : IDisposable
         await desk.BuildSegmentAsync(SegmentKind.BattleWatch, Facts("Sam leads Bill by 0.4s on lap 12."));
 
         Assert.Contains(profile.ToneLine, model.SystemPrompt);
-        Assert.Contains(CommentaryTones.CharacterRule, model.SystemPrompt);
+        Assert.Contains(profile.Rule, model.SystemPrompt);
         Assert.Contains(profile.Segment, model.SystemPrompt);
         Assert.Contains("Never invent names, times, positions or events", model.SystemPrompt);
         Assert.DoesNotContain("hype-man", model.SystemPrompt);
@@ -172,7 +175,7 @@ public sealed class CharacterToneTests : IDisposable
         await desk.BuildRaceSummaryAsync(ARace());
 
         Assert.Contains(profile.Close, model.SystemPrompt);
-        Assert.Contains(CommentaryTones.CharacterRule, model.SystemPrompt);
+        Assert.Contains(profile.Rule, model.SystemPrompt);
         Assert.DoesNotContain("high-energy trackside broadcaster", model.SystemPrompt);
     }
 
@@ -219,7 +222,8 @@ public sealed class CharacterToneTests : IDisposable
         Assert.Equal(7, (int)CommentaryTone.Villain);
         Assert.Equal(8, (int)CommentaryTone.Pirate);
         Assert.Equal(10, (int)CommentaryTone.TownCrier);
-        Assert.Equal(3, CommentaryTones.All.Count);
+        Assert.Equal(12, (int)CommentaryTone.SailorMouth);
+        Assert.Equal(4, CommentaryTones.All.Count);
     }
 
     [Fact]
@@ -269,5 +273,137 @@ public sealed class CharacterToneTests : IDisposable
     {
         Assert.Equal("Hear ye.", Desk(CommentaryTone.TownCrier, v3: false).Desk.PrepareSummaryForSpeech("Hear ye."));
         Assert.Equal("Hear ye.", Desk(CommentaryTone.TownCrier, tags: false).Desk.PrepareSummaryForSpeech("Hear ye."));
+    }
+
+    // ------------------------------------------------------------------
+    //  Sailor-mouth (15 Nov 2026)
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task Sailor_mouth_swears_under_its_own_hard_lines_not_family_friendly()
+    {
+        var (desk, model) = Desk(CommentaryTone.SailorMouth);
+
+        await desk.BuildSegmentAsync(SegmentKind.BattleWatch, Facts("Sam leads Bill by 0.4s on lap 12."));
+
+        Assert.Contains(CommentaryTones.SailorMouthRule, model.SystemPrompt);
+        Assert.DoesNotContain("family-friendly", model.SystemPrompt);
+        Assert.Contains("nothing racist, antisemitic or hateful", model.SystemPrompt);
+        Assert.Contains("no slurs", model.SystemPrompt);
+        Assert.Contains("never at a driver as a person", model.SystemPrompt);
+
+        // The facts-first opening is the shared rule's, word for word.
+        Assert.StartsWith(CommentaryTones.CharacterRule[..120], CommentaryTones.SailorMouthRule);
+    }
+
+    [Fact]
+    public async Task The_other_character_tones_stay_family_friendly()
+    {
+        foreach (var tone in new[] { CommentaryTone.Villain, CommentaryTone.Pirate, CommentaryTone.TownCrier })
+        {
+            var (desk, model) = Desk(tone);
+
+            await desk.BuildSegmentAsync(SegmentKind.BattleWatch, Facts("Sam leads Bill by 0.4s on lap 12."));
+
+            Assert.Contains(CommentaryTones.CharacterRule, model.SystemPrompt);
+            Assert.DoesNotContain(CommentaryTones.SailorMouthRule, model.SystemPrompt);
+        }
+    }
+
+    [Fact]
+    public async Task Switched_off_by_the_club_a_saved_sailor_mouth_plays_as_enthusiastic()
+    {
+        var (desk, model) = Desk(CommentaryTone.SailorMouth, allowSailorMouth: false);
+
+        await desk.BuildSegmentAsync(SegmentKind.BattleWatch, Facts("Sam leads Bill by 0.4s on lap 12."));
+
+        Assert.Contains("Be LOUD and thrilled", model.SystemPrompt);
+        Assert.DoesNotContain(CommentaryTones.SailorMouthRule, model.SystemPrompt);
+
+        var settings = new AppSettings { CommentaryToneStyle = CommentaryTone.SailorMouth, AllowSailorMouth = false };
+        Assert.Equal(CommentaryTone.Enthusiastic, CommentaryTones.Effective(settings));
+
+        // The saved choice is left alone, so switching the rule back on brings it back.
+        Assert.Equal(CommentaryTone.SailorMouth, settings.CommentaryToneStyle);
+        settings.AllowSailorMouth = true;
+        Assert.Equal(CommentaryTone.SailorMouth, CommentaryTones.Effective(settings));
+    }
+
+    [Fact]
+    public void Clubs_allow_sailor_mouth_until_they_switch_it_off()
+    {
+        Assert.True(new AppSettings().AllowSailorMouth);
+    }
+
+    [Fact]
+    public async Task The_recap_show_is_read_to_the_room_in_sailor_mouth()
+    {
+        var (desk, model) = Desk(CommentaryTone.SailorMouth);
+
+        await desk.BuildNightRecapAsync(Facts("Sam won the A-Main by 0.4s."));
+
+        Assert.Contains(CommentaryTones.SailorMouthRule, model.SystemPrompt);
+    }
+
+    [Fact]
+    public async Task What_gets_posted_is_never_written_sailor_mouth()
+    {
+        var facts = Facts("Sam won the A-Main by 0.4s.");
+
+        foreach (var write in new Func<CommentaryService, Task>[]
+                 {
+                     d => d.BuildDriverCutAsync(facts),
+                     d => d.BuildSeasonPieceAsync(facts),
+                     d => d.BuildNightBeforeAsync(facts),
+                 })
+        {
+            var (desk, model) = Desk(CommentaryTone.SailorMouth);
+
+            await write(desk);
+
+            Assert.DoesNotContain(CommentaryTones.SailorMouthRule, model.SystemPrompt);
+            Assert.Contains("Be LOUD and thrilled", model.SystemPrompt);
+        }
+    }
+
+    [Fact]
+    public async Task The_night_recap_keeps_any_other_character_tone()
+    {
+        var (desk, model) = Desk(CommentaryTone.Pirate);
+
+        await desk.BuildNightRecapAsync(Facts("Sam won the A-Main by 0.4s."));
+
+        Assert.Contains(CommentaryTones.Find(CommentaryTone.Pirate)!.ToneLine, model.SystemPrompt);
+    }
+
+    [Theory]
+    [InlineData(CommentaryTone.SailorMouth)]
+    [InlineData(CommentaryTone.Enthusiastic)]
+    public async Task A_line_with_a_hate_term_is_dropped_in_any_tone(CommentaryTone tone)
+    {
+        var (desk, model) = Desk(tone);
+        model.Reply = "Sam is four tenths up on that f@g Bill.";
+
+        Assert.Null(await desk.BuildSegmentAsync(SegmentKind.BattleWatch, Facts("Sam leads Bill by 0.4s on lap 12.")));
+    }
+
+    [Fact]
+    public async Task A_sweary_line_is_said_as_written()
+    {
+        var (desk, model) = Desk(CommentaryTone.SailorMouth);
+        model.Reply = "Sam is fucking clear of Bill on lap 12.";
+
+        Assert.Equal(model.Reply, await desk.BuildSegmentAsync(SegmentKind.BattleWatch, Facts("Sam leads Bill by 0.4s on lap 12.")));
+    }
+
+    [Fact]
+    public void The_four_character_tones_are_premium_and_say_so()
+    {
+        Assert.All(CommentaryTones.All, tone =>
+        {
+            Assert.True(tone.Premium);
+            Assert.EndsWith(" (Premium)", tone.DisplayLabel);
+            Assert.StartsWith(tone.Label, tone.DisplayLabel);
+        });
     }
 }
