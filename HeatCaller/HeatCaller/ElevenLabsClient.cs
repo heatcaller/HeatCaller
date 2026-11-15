@@ -32,7 +32,7 @@ public sealed class ElevenLabsClient
     /// </summary>
     internal static HttpClient SubscriptionHttp { get; set; } = new() { Timeout = TimeSpan.FromSeconds(10) };
 
-    public sealed record VoiceInfo(string VoiceId, string Name);
+    public sealed record VoiceInfo(string VoiceId, string Name, string PreviewUrl = "");
 
     /// <summary>Where the key's own ElevenLabs plan stands this month, in characters.</summary>
     public sealed record Subscription(long CharacterCount, long CharacterLimit, DateTime? ResetsUtc);
@@ -123,9 +123,14 @@ public sealed class ElevenLabsClient
             {
                 var id = v.GetProperty("voice_id").GetString();
                 var name = v.TryGetProperty("name", out var n) ? n.GetString() : null;
+
+                // The account's own preview clip (15 Nov 2026, driver crew):
+                // a driver picking a crew voice on their phone hears it from
+                // here, so a sample costs no characters.
+                var preview = v.TryGetProperty("preview_url", out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
                 if (!string.IsNullOrEmpty(id))
                 {
-                    voices.Add(new VoiceInfo(id, name ?? id));
+                    voices.Add(new VoiceInfo(id, name ?? id, preview ?? string.Empty));
                 }
             }
         }

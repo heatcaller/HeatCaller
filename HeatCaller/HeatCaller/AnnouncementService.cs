@@ -1211,6 +1211,27 @@ public sealed partial class AnnouncementService
     public VoiceEngine VoiceEngineInUse => _voiceStore.Current.EffectiveEngine;
 
     /// <summary>
+    /// The announcer's own voice on <paramref name="engine"/>, as a crew key
+    /// (15 Nov 2026, driver crew) - the one voice no driver may give their
+    /// crew. Empty when none is set for it.
+    /// </summary>
+    internal string AnnouncerCrewKey(VoiceEngine engine)
+    {
+        var profile = _voiceStore.Current;
+
+        var id = engine switch
+        {
+            VoiceEngine.ElevenLabs => profile.VoiceId,
+            VoiceEngine.HeatCaller => profile.HeatCallerVoice,
+            _ => profile.KokoroVoiceName,
+        };
+
+        return string.IsNullOrWhiteSpace(id)
+            ? string.Empty
+            : DriverCrew.KeyOf(new CrewVoicePick { Engine = DriverCrew.EngineWord(engine), Id = id });
+    }
+
+    /// <summary>
     /// What a line rendered now would sound like - engine, voice, model and
     /// delivery - as one string, for Race Control to tell whether the lines
     /// it voiced ahead are still in the voice in use (22 Oct 2026, bug hunt).

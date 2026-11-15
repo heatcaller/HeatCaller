@@ -92,6 +92,12 @@ public sealed class ProfileForm : Form
 
     /// <summary>A line in their own words for the AI commentary - see DriverProfile.AboutLine.</summary>
     private readonly TextBox _txtAboutLine = new();
+    private readonly TextBox _txtCrewPrincipal = new();
+    private readonly TextBox _txtCrewTech = new();
+    private readonly TextBox _txtCrewGoal = new();
+    private readonly TextBox _txtCrewThanks = new();
+    private readonly TextBox _txtCrewCar = new();
+    private readonly CheckBox _chkCrewConsent = new ThemedCheckBox();
 
     /// <summary>Email them their night - see DriverProfile.EmailMyNight. Only enabled while Email is filled in.</summary>
     private readonly CheckBox _chkEmailMyNight = new ThemedCheckBox();
@@ -270,6 +276,40 @@ public sealed class ProfileForm : Form
         _txtAboutLine.PlaceholderText = "optional - for the AI commentary, in their own words";
         fields.AddHint($"For the AI commentary: a line in their own words, up to {DriverProfile.AboutLineMaxChars} characters "
                        + "(like \"racing since I was eight; my dad builds the cars\"). Never shown publicly.");
+
+        // THEIR OWN CREW AND NOTES (15 Nov 2026, driver crew plan): beside
+        // the about line, the other words of theirs only the commentary
+        // reads. A phone can send these too; the desk sees and edits them
+        // here. The voices they picked are kept as they are - a phone picks
+        // those from the club's whole list (DriverCrew).
+        captions.Add(AddLabeledTextBox(fields, "Their principal:", _txtCrewPrincipal, Result.CrewPrincipalName ?? string.Empty));
+        _txtCrewPrincipal.MaxLength = DriverCrew.NameMaxChars;
+        _txtCrewPrincipal.PlaceholderText = "optional - blank for the club's Team Principal";
+        captions.Add(AddLabeledTextBox(fields, "Their tech lead:", _txtCrewTech, Result.CrewTechName ?? string.Empty));
+        _txtCrewTech.MaxLength = DriverCrew.NameMaxChars;
+        _txtCrewTech.PlaceholderText = "optional - blank for the club's Technical Lead";
+        fields.AddHint("Made-up names for their own Team Principal and Technical Lead. Letters, spaces, hyphens and "
+                       + "apostrophes. " + CrewVoicesHint(Result));
+
+        captions.Add(AddLabeledTextBox(fields, "Tonight's goal:", _txtCrewGoal, DriverCrew.GoalTonight(Result, DateTime.Now)));
+        _txtCrewGoal.MaxLength = DriverCrew.GoalMaxChars;
+        _txtCrewGoal.PlaceholderText = "optional - said before their race tonight only";
+        captions.Add(AddLabeledTextBox(fields, "Thanks:", _txtCrewThanks, Result.CrewThanks ?? string.Empty));
+        _txtCrewThanks.MaxLength = DriverCrew.ThanksMaxChars;
+        _txtCrewThanks.PlaceholderText = "optional - who they'd like to thank";
+        captions.Add(AddLabeledTextBox(fields, "Car's story:", _txtCrewCar, Result.CrewCarStory ?? string.Empty));
+        _txtCrewCar.MaxLength = DriverCrew.CarStoryMaxChars;
+        _txtCrewCar.PlaceholderText = "optional - for the Technical Lead";
+        fields.AddHint("In their own words, for the principal and the Technical Lead. Spoken over the PA and the stream; "
+                       + "never shown online.");
+
+        // A junior's notes are said only with a parent's consent recorded
+        // here (15 Nov 2026) - see DriverCrew.NotesMayBeSaid.
+        _chkCrewConsent.Text = "A parent or guardian agreed these notes can be said on the PA and the stream";
+        _chkCrewConsent.AutoSize = true;
+        _chkCrewConsent.Checked = Result.CrewNotesParentConsent;
+        fields.AddRow(string.Empty, _chkCrewConsent);
+        fields.AddHint("For a junior. Without it their notes are kept but never said. Ask the parent at the desk, as for the waiver.");
 
         // Their garage's cars, the active one showing - what they are
         // announced and recorded in. A name typed and Added is a new car,
@@ -1339,7 +1379,67 @@ public sealed class ProfileForm : Form
             AboutLine = string.Equals(_txtAboutLine.Text, Result.AboutLine ?? string.Empty, StringComparison.Ordinal)
                 ? Result.AboutLine ?? string.Empty
                 : AboutLineFrom(_txtAboutLine.Text),
+
+            // Their crew and notes (15 Nov 2026). Unchanged boxes keep the
+            // profile's own text exactly, as the about line does, so opening
+            // and saving a driver is never a change. The voices are not on
+            // this dialog and are kept as they were.
+            CrewPrincipalName = Kept(_txtCrewPrincipal.Text, Result.CrewPrincipalName, DriverCrew.NameMaxChars),
+            CrewTechName = Kept(_txtCrewTech.Text, Result.CrewTechName, DriverCrew.NameMaxChars),
+            CrewPrincipalVoice = Result.CrewPrincipalVoice?.Copy(),
+            CrewTechVoice = Result.CrewTechVoice?.Copy(),
+            CrewThanks = Kept(_txtCrewThanks.Text, Result.CrewThanks, DriverCrew.ThanksMaxChars),
+            CrewCarStory = Kept(_txtCrewCar.Text, Result.CrewCarStory, DriverCrew.CarStoryMaxChars),
+            CrewGoal = GoalKept(_txtCrewGoal.Text, Result).Goal,
+            CrewGoalNight = GoalKept(_txtCrewGoal.Text, Result).Night,
+            CrewGoalHeld = GoalKept(_txtCrewGoal.Text, Result).Held,
+            CrewNotesParentConsent = _chkCrewConsent.Checked,
         };
+    }
+
+    /// <summary>A crew or notes box as it is kept: unchanged keeps the profile's own text; changed is cleaned onto one line and capped.</summary>
+    internal static string Kept(string? typed, string? had, int most)
+    {
+        if (string.Equals(typed ?? string.Empty, had ?? string.Empty, StringComparison.Ordinal))
+        {
+            return had ?? string.Empty;
+        }
+
+        var text = DriverCrew.Clean(typed);
+        return text.Length > most ? text[..most].TrimEnd() : text;
+    }
+
+    /// <summary>
+    /// Tonight's goal as it is kept. The box shows tonight's goal only, so
+    /// an unchanged box keeps whatever the profile had (a goal for another
+    /// night included); a changed one is for tonight, and a cleared one
+    /// clears it.
+    /// </summary>
+    internal static (string Goal, DateTime? Night, bool Held) GoalKept(string? typed, DriverProfile had)
+    {
+        if (string.Equals(typed ?? string.Empty, DriverCrew.GoalTonight(had, DateTime.Now), StringComparison.Ordinal))
+        {
+            return (had.CrewGoal ?? string.Empty, had.CrewGoalNight, had.CrewGoalHeld);
+        }
+
+        var goal = Kept(typed, null, DriverCrew.GoalMaxChars);
+        return goal.Length == 0 ? (string.Empty, null, false) : (goal, TonightAtTheTrack.NightOf(DateTime.Now), false);
+    }
+
+    /// <summary>Which voices their crew speaks in, for the hint under the names.</summary>
+    private static string CrewVoicesHint(DriverProfile profile)
+    {
+        var principal = DriverCrew.IsAPick(profile.CrewPrincipalVoice) ? profile.CrewPrincipalVoice!.Name : string.Empty;
+        var tech = DriverCrew.IsAPick(profile.CrewTechVoice) ? profile.CrewTechVoice!.Name : string.Empty;
+
+        if (principal.Length == 0 && tech.Length == 0)
+        {
+            return "They speak in the club's voices on Voice > Cast; a driver can pick their own from their phone.";
+        }
+
+        return "Voices picked on their phone: "
+               + (principal.Length > 0 ? $"principal \"{principal}\"" : "principal the club's")
+               + ", " + (tech.Length > 0 ? $"tech lead \"{tech}\"" : "tech lead the club's") + ".";
     }
 
     /// <summary>

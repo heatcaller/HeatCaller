@@ -44,6 +44,8 @@ import {
   askFieldsFrom,
   askRefOf,
   asDriverAsk,
+  crewFrom,
+  crewVoicesFrom,
   DRIVER_ASK_KINDS,
   DRIVER_ASK_MAX_BODY,
   DRIVER_ASK_MAX_STORED,
@@ -55,6 +57,8 @@ import {
   DRIVER_ASK_SETUP_MAX_BODY,
   DRIVER_WRITES_PER_DRIVER,
   isWriteKind,
+  meEntryForPhone,
+  type CrewVoice,
   type DriverAskBody,
 } from "./driverasks.js";
 import {
@@ -952,6 +956,8 @@ interface DriverDoc {
   readonly at: string;
   /** Badge id to that driver's entry. A Map, so no key a laptop sent can be "__proto__". */
   readonly drivers: ReadonlyMap<string, Readonly<Record<string, unknown>>>;
+  /** driverme's crewVoices, checked once (crewVoicesFrom) - the voices drivers may pick, for every driver at once. Empty elsewhere. */
+  readonly crewVoices: readonly CrewVoice[];
 }
 
 /**
@@ -7564,8 +7570,11 @@ export class Relay {
     // is whether they have a personal PIN, which the laptop never needs
     // to say: the relay knows from its own racer map.
     const checkin = await this.askGateOf(club, id);
-    const meEntry = checkin === undefined ? undefined : (await this.driverDocOf(club, DRIVER_ME_CHANNEL))?.drivers.get(id);
-    const me = checkin === undefined || meEntry === undefined ? {} : { me: { ...meEntry, pin: hasRacerPin(checkin, id) } };
+    const meDoc = checkin === undefined ? undefined : await this.driverDocOf(club, DRIVER_ME_CHANNEL);
+    const meEntry = meDoc?.drivers.get(id);
+    // Crew checked on the way out (meEntryForPhone): malformed, it is
+    // dropped; whole, it carries the document's one voice list as crew.voices.
+    const me = checkin === undefined || meEntry === undefined ? {} : { me: { ...meEntryForPhone(meEntry, meDoc?.crewVoices ?? []), pin: hasRacerPin(checkin, id) } };
     const queriesOff = checkin !== undefined && await this.resultQueriesOffFor(club);
 
     sendJson(response, 200, {
@@ -8113,10 +8122,24 @@ export class Relay {
       return;
     }
 
-    const check = askFieldsFrom(kind, body["f"], withPin);
+    // THE DRIVER'S OWN CREW (15 Nov 2026, plans/driver-crew-plan.md): only
+    // while the laptop offers it - driverme carries a crew for this driver
+    // only when the club has "Drivers can pick their own crew" on - and a
+    // junior's notes only with a parent's tick (askFieldsFrom). Read from
+    // the stored driverme, never from anything the phone says about itself.
+    const crew = kind === "crew" && checkin !== undefined
+      ? crewFrom((await this.driverDocOf(club, DRIVER_ME_CHANNEL))?.drivers.get(id)?.["crew"])
+      : undefined;
+
+    const check = askFieldsFrom(kind, body["f"], withPin, crew?.junior === true, crew?.notes === false);
 
     if (!check.ok) {
       sendJson(response, check.status, { ok: false, error: check.error });
+      return;
+    }
+
+    if (kind === "crew" && crew === undefined) {
+      sendJson(response, 403, { ok: false, error: "Your club is not taking crew picks from phones just now. Ask at the desk." });
       return;
     }
 
@@ -10978,6 +11001,7 @@ function driverDocFrom(doc: StoredDocument | undefined): DriverDoc | undefined {
     takenAt: Date.parse(doc.publishedAt) || 0,
     at: typeof at === "string" && !Number.isNaN(Date.parse(at)) ? at : "",
     drivers,
+    crewVoices: crewVoicesFrom(doc.body["crewVoices"]),
   };
 }
 
@@ -11637,7 +11661,12 @@ function sendHtml(response: ServerResponse, status: number, html: string, nonce:
     // string for the whole site, two would be two things to keep right,
     // and the widening is small - a page with a nonce on its only script
     // and every value escaped has no way to put an <audio> anywhere.
-    "media-src 'self' data:",
+    //
+    // And ElevenLabs' voice preview clips (15 Nov 2026, driver crew plan):
+    // My crew's Play button plays the sample of a voice the club lets
+    // drivers pick, and those live on Google's storage. That host only,
+    // and only as media - an <audio> made when Play is tapped, never before.
+    "media-src 'self' data: https://storage.googleapis.com",
     "connect-src 'self'",
     "manifest-src 'self'",
     // PUSH ALERTS (6 Nov 2026) - see push.ts. The club's service worker,

@@ -337,6 +337,26 @@ internal sealed class DriverRequestStore
                         MarkReplaced(request, nowUtc);
                     }
                 }
+                else if (request.Kind == DriverAsk.Crew)
+                {
+                    // A newer crew request takes in an older one still
+                    // waiting (15 Nov 2026), the way details do: the phone
+                    // sends only what changed, so the older one's fields ride
+                    // along and only the newest one waits.
+                    var older = _file.Requests.Where(r => r.IsWaiting && r.Kind == DriverAsk.Crew && r.Badge == request.Badge).ToList();
+
+                    foreach (var old in older.Where(r => r.AskedUtc <= request.AskedUtc).OrderBy(r => r.AskedUtc))
+                    {
+                        CarryForwardCrew(old, request);
+                        MarkReplaced(old, nowUtc);
+                    }
+
+                    if (older.Where(r => r.AskedUtc > request.AskedUtc).OrderByDescending(r => r.AskedUtc).FirstOrDefault() is { } keep)
+                    {
+                        CarryForwardCrew(request, keep);
+                        MarkReplaced(request, nowUtc);
+                    }
+                }
                 else if (request.Kind == DriverAsk.Query)
                 {
                     var night = NightOf(request.AskedUtc);
@@ -377,6 +397,51 @@ internal sealed class DriverRequestStore
         }
 
         return confirmable;
+    }
+
+    /// <summary>What an older crew request asked for, carried into the newer one: each field the newer one doesn't have, and the guardian tick. Under the lock.</summary>
+    internal static void CarryForwardCrew(DriverRequest from, DriverRequest into)
+    {
+        foreach (var (key, text) in from.Texts)
+        {
+            into.Texts.TryAdd(key, text);
+        }
+
+        if (from.Guardian)
+        {
+            into.Flags["guardian"] = true;
+        }
+    }
+
+    /// <summary>
+    /// Takes fields out of a request still waiting - the voice picks, once
+    /// applied by themselves (15 Nov 2026, driver crew). False when it is no
+    /// longer waiting.
+    /// </summary>
+    /// <param name="mark">A field to set to "1" on the request as well, or null.</param>
+    internal bool DropTexts(string id, IEnumerable<string> keys, string? mark = null)
+    {
+        lock (_gate)
+        {
+            if (_file.Requests.FirstOrDefault(r => r.Id == id) is not { IsWaiting: true } request)
+            {
+                return false;
+            }
+
+            foreach (var key in keys)
+            {
+                request.Texts.Remove(key);
+            }
+
+            if (mark is not null)
+            {
+                request.Texts[mark] = "1";
+            }
+
+            Changed();
+            Save();
+            return true;
+        }
     }
 
     private static void MarkReplaced(DriverRequest request, DateTime nowUtc)
@@ -748,6 +813,13 @@ internal sealed class DriverRequestStore
         "tires" or "gearing" or "springs" or "ride" or "motor" => DriverAsk.SetupPartMaxChars,
         "notes" => DriverAsk.SetupNotesMaxChars,
 
+        // 15 Nov 2026, their own crew and notes (DriverAsk.Crew).
+        "pName" or "tName" => DriverCrew.NameMaxChars,
+        "pVoice" or "tVoice" => 12,
+        "goal" => DriverCrew.GoalMaxChars,
+        "thanks" => DriverCrew.ThanksMaxChars,
+        "story" => DriverCrew.CarStoryMaxChars,
+
         // 12 Nov 2026, "I'm coming" (setup plan C1).
         "day" => 10,
         "classes" => 200,
@@ -1110,6 +1182,11 @@ internal sealed partial class DriverRequestDesk
                 lines.Add("Setup change: " + SetupWords(request));
                 break;
 
+            // Their own crew and notes (15 Nov 2026).
+            case DriverAsk.Crew:
+                lines.AddRange(CrewLines(request, profile));
+                break;
+
             case DriverAsk.Late:
                 lines.Add($"Needs {RaceControlControl.LateMinutes} more minutes before their next race" + NoteWords(request));
                 break;
@@ -1173,6 +1250,11 @@ internal sealed partial class DriverRequestDesk
             notes.Add("A parent or guardian sent it");
         }
 
+        if (request.Kind == DriverAsk.Crew)
+        {
+            notes.AddRange(CrewNotes(request, DriverOf(request)));
+        }
+
         if (request.Kind == DriverAsk.Query && RaceOf(request) is not null && !InThatRace(request))
         {
             notes.Add("Not in that race");
@@ -1219,6 +1301,7 @@ internal sealed partial class DriverRequestDesk
         DriverAsk.Post => "At my marshal post",
         DriverAsk.Swap => "Cover my post?",
         DriverAsk.Cover => "Marshal swap",
+        DriverAsk.Crew => "Crew and notes",
         _ => kind,
     };
 

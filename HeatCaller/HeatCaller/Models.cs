@@ -338,6 +338,53 @@ public sealed class DriverProfile
     /// <summary>Longest <see cref="AboutLine"/> the desk or a phone can set.</summary>
     public const int AboutLineMaxChars = 120;
 
+    // --- Their own crew and broadcast notes (15 Nov 2026, driver crew plan) ---
+    //
+    // The name and voice of their own Team Principal and Technical Lead, and
+    // three short notes the interviews can use. Blank means the club's own.
+    // Set at the desk on the profile or sent from the phone behind the
+    // personal PIN; a voice pick from a phone applies by itself, the names
+    // and notes wait for the desk. Never published online. See DriverCrew.
+
+    /// <summary>What the announcer calls their Team Principal. Blank: the club's name, or the role alone.</summary>
+    public string CrewPrincipalName { get; set; } = string.Empty;
+
+    /// <summary>The voice their Team Principal speaks in, for one engine. Null: the club's.</summary>
+    public CrewVoicePick? CrewPrincipalVoice { get; set; }
+
+    /// <summary>What the announcer calls their Technical Lead. Blank: the club's name, or the role alone.</summary>
+    public string CrewTechName { get; set; } = string.Empty;
+
+    /// <summary>The voice their Technical Lead speaks in, for one engine. Null: the club's.</summary>
+    public CrewVoicePick? CrewTechVoice { get; set; }
+
+    /// <summary>Their goal for one night, in their own words ("after a top three in the main"). Said only on <see cref="CrewGoalNight"/>.</summary>
+    public string CrewGoal { get; set; } = string.Empty;
+
+    /// <summary>The night <see cref="CrewGoal"/> was given for (TonightAtTheTrack.NightOf), or null.</summary>
+    public DateTime? CrewGoalNight { get; set; }
+
+    /// <summary>
+    /// The goal came after that night's last race, with no next night
+    /// announced, so it is for the next race night after it instead -
+    /// any night in the <see cref="DriverCrew.HeldGoalDays"/> days after.
+    /// </summary>
+    public bool CrewGoalHeld { get; set; }
+
+    /// <summary>
+    /// A parent or guardian has agreed that a junior's notes may be said over
+    /// the PA and on the stream (15 Nov 2026) - recorded at the desk, like a
+    /// signed waiver. Without it a junior's notes are kept but never said.
+    /// Means nothing for an adult. See DriverCrew.NotesMayBeSaid.
+    /// </summary>
+    public bool CrewNotesParentConsent { get; set; }
+
+    /// <summary>Who they'd like to thank, in their own words ("Dad's workshop"). For the principal after a race.</summary>
+    public string CrewThanks { get; set; } = string.Empty;
+
+    /// <summary>Their car's story, in their own words ("built it from a kit over winter"). For the Technical Lead.</summary>
+    public string CrewCarStory { get; set; } = string.Empty;
+
     /// <summary>
     /// Every transponder this driver has besides the main one - a second
     /// car's, a replacement, a spare - and, when it has been given one, an

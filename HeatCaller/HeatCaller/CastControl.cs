@@ -91,6 +91,20 @@ public sealed class CastControl : UserControl
     private readonly CheckBox _chkPrincipalHeats = new ThemedCheckBox();
     private readonly CheckBox _chkPrincipalTeamsOnly = new ThemedCheckBox();
     private readonly TextBox _txtPrincipalName = new();
+    private readonly CheckBox _chkDriversPickCrew = new ThemedCheckBox();
+    private readonly CheckBox _chkJuniorNotesOnStream = new ThemedCheckBox();
+    private readonly CheckBox _chkJuniorNotesFromPhone = new ThemedCheckBox();
+    private readonly Button _btnCrewVoices = new();
+
+    /// <summary>
+    /// The voices on the engine in use that a driver could be offered, the
+    /// announcer's and co-hosts' already left out (15 Nov 2026, driver crew).
+    /// Throws with a sentence the page can show when it can't list them.
+    /// </summary>
+    internal Func<Task<IReadOnlyList<CrewVoiceOption>>>? LoadCrewVoices { get; set; }
+
+    /// <summary>Drivers' crew settings changed - the phones' list is published again.</summary>
+    public Action? CrewChanged { get; set; }
     private readonly ComboBox _cmbPrincipalVoice = new();
     private readonly Button _btnTestPrincipal = new();
 
@@ -762,6 +776,66 @@ public sealed class CastControl : UserControl
         principal.Add(principalGrid, gapBelow: 0);
 
         // ------------------------------------------------------------------
+        // Drivers' own crew (15 Nov 2026, driver crew plan)
+        // ------------------------------------------------------------------
+
+        Check(_chkDriversPickCrew, "Drivers can pick their own crew");
+        _chkDriversPickCrew.Checked = _settings.DriversPickCrew;
+        _chkDriversPickCrew.CheckedChanged += (_, _) =>
+        {
+            _settings.DriversPickCrew = _chkDriversPickCrew.Checked;
+            _settings.Save();
+            RefreshEnabledState();
+            CrewChanged?.Invoke();
+        };
+
+        Check(_chkJuniorNotesOnStream, "Juniors' notes on stream nights");
+        _chkJuniorNotesOnStream.Checked = _settings.JuniorNotesOnStream;
+        _chkJuniorNotesOnStream.CheckedChanged += (_, _) =>
+        {
+            _settings.JuniorNotesOnStream = _chkJuniorNotesOnStream.Checked;
+            _settings.Save();
+        };
+
+        Check(_chkJuniorNotesFromPhone, "Juniors can send notes from their phone");
+        _chkJuniorNotesFromPhone.Checked = _settings.JuniorNotesFromPhone;
+        _chkJuniorNotesFromPhone.CheckedChanged += (_, _) =>
+        {
+            _settings.JuniorNotesFromPhone = _chkJuniorNotesFromPhone.Checked;
+            _settings.Save();
+            CrewChanged?.Invoke();
+        };
+
+        _btnCrewVoices.Text = "Voices drivers can pick...";
+        _btnCrewVoices.AutoSize = true;
+        _btnCrewVoices.Click += async (_, _) => await ChooseCrewVoicesAsync();
+
+        var crewGrid = new FieldGrid();
+
+        Switch(crewGrid, _chkDriversPickCrew,
+            "From their phone, behind their personal PIN: a name and a voice for their own Team Principal and Technical "
+            + "Lead, and a few words for the interviews - tonight's goal, who they'd like to thank, their car's story. "
+            + "A voice they pick is used straight away; names and words wait for you on Driver Requests.");
+        crewGrid.AddRow("Voices:", _btnCrewVoices);
+        crewGrid.AddHint("Every voice on the engine in use, less any you hide here. The announcer's and the co-hosts' "
+                         + "voices are never offered.");
+        Switch(crewGrid, _chkJuniorNotesFromPhone,
+            "Off (the safer way), a junior's notes are typed at the desk with a parent there, and the parent's consent "
+            + "ticked on their profile. In the US, a child under 13 sending words online that are then said in public "
+            + "needs a parent's verified consent under COPPA, and the phone's \"I'm making this change for them\" tick "
+            + "is not that. A junior can still pick their crew's names and voices.");
+        Switch(crewGrid, _chkJuniorNotesOnStream,
+            "Off, a junior's own words are left out on any night the stream is on - what is said goes out on the stream "
+            + "and its captions. Their crew's names and voices are heard either way.");
+
+        var crewSection = new Section("Drivers' own crew");
+
+        crewSection.Add(About(
+            "Lets each driver have their own Team Principal and Technical Lead. Without a pick of their own a driver "
+            + "gets the club's, above."));
+        crewSection.Add(crewGrid, gapBelow: 0);
+
+        // ------------------------------------------------------------------
         // The badges reader
         // ------------------------------------------------------------------
 
@@ -825,6 +899,7 @@ public sealed class CastControl : UserControl
         page.Add(coHost);
         page.Add(SimpleMode.Hide(mechanic));
         page.Add(SimpleMode.Hide(principal));
+        page.Add(SimpleMode.Hide(crewSection));
         page.Add(SimpleMode.Hide(honours), gapBelow: 0);
         page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
 
@@ -1039,10 +1114,58 @@ public sealed class CastControl : UserControl
     /// when anything here changes, and whenever the page is shown - the
     /// master switch, the recaps and the segments are all on AI Commentary.
     /// </summary>
+    /// <summary>
+    /// Opens the list of voices drivers may pick for their crew, and saves
+    /// which are hidden (15 Nov 2026, driver crew). A failure to list them
+    /// is said on the page and nothing changes.
+    /// </summary>
+    private async Task ChooseCrewVoicesAsync()
+    {
+        if (LoadCrewVoices is null || _loadingVoices)
+        {
+            return;
+        }
+
+        IReadOnlyList<CrewVoiceOption> all;
+        _loadingVoices = true;
+
+        try
+        {
+            all = await LoadCrewVoices();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(FindForm(), $"The voices could not be listed - {ex.Message}.", "Voices drivers can pick",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        finally
+        {
+            _loadingVoices = false;
+        }
+
+        using var dialog = new CrewVoicesForm(all, _settings.CrewVoicesHidden ?? new List<string>());
+
+        if (dialog.ShowDialog(FindForm()) != DialogResult.OK)
+        {
+            return;
+        }
+
+        _settings.CrewVoicesHidden = dialog.Hidden.ToList();
+        _settings.Save();
+        CrewChanged?.Invoke();
+    }
+
     internal void RefreshEnabledState()
     {
         var on = IsCommentaryOn;
         var summariesOn = on && _settings.CommentaryRaceSummaries;
+
+        // Drivers' own crew: the voices and the juniors' switch mean nothing
+        // until drivers may pick (15 Nov 2026).
+        _btnCrewVoices.Enabled = _settings.DriversPickCrew;
+        _chkJuniorNotesOnStream.Enabled = _settings.DriversPickCrew;
+        _chkJuniorNotesFromPhone.Enabled = _settings.DriversPickCrew;
 
         // NOT tied to the recap. This name is also used by the COLD OPEN,
         // which is a segment of its own, so a club running the cold open

@@ -58,6 +58,14 @@ internal sealed class BroadcastWindow : Form
     private readonly Label _lblTonight = new();
     private readonly Label _lblThisRace = new();
     private readonly Label _lblNotes = new();
+    private readonly Label _lblCrewNotes = new();
+
+    /// <summary>
+    /// The last prompt tonight that drivers' own notes made long
+    /// (CommentaryService.CrewNotesAlert), or null - for the Drivers' notes
+    /// line (15 Nov 2026, driver crew).
+    /// </summary>
+    internal Func<string?>? CrewNotesAlert { get; set; }
     private readonly Label _lblVotes = new();
     private readonly Label _lblShow = new();
     private readonly Label _lblReplay = new();
@@ -103,6 +111,7 @@ internal sealed class BroadcastWindow : Form
                      ("Tonight:", _lblTonight),
                      ("This race:", _lblThisRace),
                      ("Club notes:", _lblNotes),
+                     ("Drivers' notes:", _lblCrewNotes),
                      ("Room vote:", _lblVotes),
                      ("Recap show:", _lblShow),
                      ("Replay Moment:", _lblReplay),
@@ -279,6 +288,11 @@ internal sealed class BroadcastWindow : Form
                 ? $"{Plural.Of(notesWaiting, "note")} waiting for you to approve - press Notes."
                 : "None waiting.",
             notesWaiting > 0 ? AppTheme.Accent : AppTheme.TextDark);
+
+        // Drivers' own notes (15 Nov 2026): said when one prompt carried a lot
+        // of them, so a club can see why a line came out long or loose.
+        var heavy = CrewNotesAlert?.Invoke();
+        Set(_lblCrewNotes, heavy ?? "Nothing to say.", heavy is not null ? AppTheme.Accent : AppTheme.TextDark);
 
         Set(_lblVotes, votesIn > 0
                 ? $"{Plural.Of(votesIn, "vote")} in so far - press Votes."
