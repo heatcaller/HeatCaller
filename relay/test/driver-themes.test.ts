@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { createContext, runInContext } from "node:vm";
 import { PAGE_COUNT_EVENTS } from "../src/pagecounts.js";
-import { appShellPage, DEFAULT_CONTEXT, DRIVER_THEMES, homePage, livePage, TEAM_SWATCHES, type PageContext } from "../src/pages.js";
+import { appShellPage, DEFAULT_CONTEXT, DRIVER_THEMES, driverThemeOf, familyPage, homePage, livePage, TEAM_SWATCHES, type PageContext } from "../src/pages.js";
+import { themeCookieOf } from "../src/server.js";
 import { DEFAULT_LOOK, lookFrom } from "../src/site.js";
 import type { StoredDocument } from "../src/types.js";
 
@@ -100,7 +101,8 @@ describe("the page's script puts the theme on <html>", () => {
   const script = /<script[^>]*>([\s\S]*)<\/script>/.exec(homePage("acme-rc", "Acme RC"))![1]!;
   const list = /const HC_THEMES = (\{[\s\S]*?\});\n/.exec(script)![1]!;
 
-  function run(stored: string | null, opts: { hc?: boolean; nothemes?: boolean; scheme?: string } = {}) {
+  function run(stored: string | null, opts: { hc?: boolean; nothemes?: boolean; scheme?: string; cookie?: string } = {}) {
+    const jar = { cookie: opts.cookie ?? "" };
     const set = new Set([opts.scheme === "light" ? "light" : "dark"]);
     const metas: Record<string, Record<string, string>> = {
       'meta[name="theme-color"]': { content: "#0F0722" },
@@ -116,27 +118,45 @@ describe("the page's script puts the theme on <html>", () => {
       document: {
         documentElement: {
           hasAttribute: (n: string) => n === "data-nothemes" && opts.nothemes === true,
+          getAttribute: () => null,
           classList: {
             contains: (c: string) => set.has(c),
             toggle: (c: string, on: boolean) => (on ? set.add(c) : set.delete(c)),
           },
         },
         querySelector: (q: string) => (q in metas ? meta(metas[q]!) : null),
+        get cookie() { return jar.cookie; },
+        set cookie(v: string) { jar.cookie = v; },
       },
     });
     runInContext(`const HC_TH_KEY = 'hg-theme'; const HC_THEMES = ${list};\n`
-      + [fn(script, "hcThemesOn"), fn(script, "hcTheme"), fn(script, "hcApplyTheme")].join("\n")
+      + [/function hcThemesOn\(\) \{[^\n]*\}/.exec(script)![0], `let HC_CLUB_LIGHT = ${opts.scheme === "light"};`, fn(script, "hcTheme"), fn(script, "hcThemeCookie"), fn(script, "hcApplyTheme")].join("\n")
       + `\nhcApplyTheme(${opts.hc === true});`, context);
     return {
       classes: [...set].sort(),
       themeColor: metas['meta[name="theme-color"]']!["content"],
       scheme: metas['meta[name="color-scheme"]']!["content"],
+      cookie: jar.cookie,
     };
   }
 
+  it("puts a team colour on Daylight too", () => {
+    assert.deepEqual(run("daylight:teal").classes, ["light", "tc-teal", "th-daylight"]);
+    assert.deepEqual(run("pitlane:teal").classes, ["dark", "th-pitlane"]);
+  });
+
+  it("keeps the theme in a cookie too, so the next page is drawn in it, and clears it for the club's colours", () => {
+    assert.match(run("daylight:teal").cookie, /^hg-theme=daylight:teal; path=\/; max-age=31536000; SameSite=Lax$/);
+    assert.match(run(null, { cookie: "hg-theme=pitlane" }).cookie, /^hg-theme=; path=\/; max-age=0/);
+    assert.equal(run("pitlane", { cookie: "a=1; hg-theme=pitlane" }).cookie, "a=1; hg-theme=pitlane");
+    // Where themes are off (the family page) the phone's cookie is left alone.
+    assert.equal(run(null, { nothemes: true, cookie: "hg-theme=pitlane" }).cookie, "hg-theme=pitlane");
+  });
+
+
   it("puts the phone's theme on, light or dark to match, with the phone's bar in its colour", () => {
-    assert.deepEqual(run("pitlane"), { classes: ["dark", "th-pitlane"], themeColor: "#17181A", scheme: "dark" });
-    assert.deepEqual(run("daylight"), { classes: ["light", "th-daylight"], themeColor: "#F7F7F4", scheme: "light" });
+    assert.deepEqual({ ...run("pitlane"), cookie: undefined }, { cookie: undefined, classes: ["dark", "th-pitlane"], themeColor: "#17181A", scheme: "dark" });
+    assert.deepEqual({ ...run("daylight"), cookie: undefined }, { cookie: undefined, classes: ["light", "th-daylight"], themeColor: "#F7F7F4", scheme: "light" });
     assert.deepEqual(run("night:teal").classes, ["dark", "tc-teal", "th-night"]);
   });
 
@@ -155,7 +175,69 @@ describe("the page's script puts the theme on <html>", () => {
   });
 
   it("under High contrast keeps the club's own light or dark and the club's bar colour", () => {
-    assert.deepEqual(run("daylight", { hc: true }), { classes: ["dark", "th-daylight"], themeColor: "#0F0722", scheme: "dark" });
+    assert.deepEqual({ ...run("daylight", { hc: true }), cookie: undefined }, { cookie: undefined, classes: ["dark", "th-daylight"], themeColor: "#0F0722", scheme: "dark" });
+  });
+});
+
+describe("team colours on Daylight", () => {
+  it("each deeper shade reads on Daylight and takes white text", () => {
+    const day = DRIVER_THEMES.find((t) => t.id === "daylight")!.vars;
+    for (const s of TEAM_SWATCHES) {
+      for (const bg of ["--bg", "--surface", "--row-alt"]) {
+        const ratio = contrast(s.onLight, day[bg]!);
+        assert.ok(ratio >= 4.5, `${s.id} on Daylight ${bg} is ${ratio.toFixed(2)}:1`);
+      }
+      const on = contrast("#FFFFFF", s.onLight);
+      assert.ok(on >= 4.5, `white on ${s.id} is ${on.toFixed(2)}:1`);
+    }
+    assert.match(homePage("acme-rc", "Acme RC"), /html\.th-daylight\.tc-teal \{ --primary: #00695C; --on-primary: #FFFFFF;/);
+  });
+});
+
+describe("drawn in the phone's theme from the start", () => {
+  const themed = (theme: string): PageContext => ({ ...DEFAULT_CONTEXT, theme });
+
+  it("reads only the theme cookie's own words", () => {
+    assert.equal(themeCookieOf("hg-theme=pitlane"), "pitlane");
+    assert.equal(themeCookieOf("a=1; hg-theme=daylight:teal; b=2"), "daylight:teal");
+    assert.equal(themeCookieOf("hg-theme=<script>"), undefined);
+    assert.equal(themeCookieOf(undefined), undefined);
+    assert.deepEqual(driverThemeOf("daylight:teal"), { id: "daylight", team: "teal" });
+    assert.deepEqual(driverThemeOf("carbon:teal"), { id: "carbon", team: "" });
+    assert.equal(driverThemeOf("neon"), null);
+  });
+
+  it("puts the theme on <html>, its light or dark, and the club's own scheme beside it", () => {
+    const html = homePage("acme-rc", "Acme RC", themed("daylight:teal"));
+    assert.match(html, /<html lang="en" class="light synthwave th-daylight tc-teal"[^>]* data-club-scheme="dark">/);
+    assert.match(appShellPage("acme-rc", "Acme RC", themed("pitlane")), /<html lang="en" class="hcshell dark th-pitlane"[^>]* data-club-scheme="dark">/);
+  });
+
+  it("draws a page as it always was with no cookie or one it doesn't know", () => {
+    assert.match(homePage("acme-rc", "Acme RC"), /<html lang="en" class="dark synthwave"[^>]*>/);
+    assert.doesNotMatch(homePage("acme-rc", "Acme RC", themed("neon")), /<html [^>]*(data-club-scheme|th-neon)/);
+  });
+
+  it("ignores it where the club has themes off", () => {
+    const off: PageContext = { ...themed("pitlane"), look: { ...DEFAULT_LOOK, driverThemes: false } };
+    assert.doesNotMatch(homePage("acme-rc", "Acme RC", off), /class="[^"]*th-pitlane/);
+  });
+});
+
+describe("the family page keeps the club's own look", () => {
+  it("has no Look button and no theme, cookie or not", () => {
+    const html = familyPage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, theme: "pitlane" });
+    assert.doesNotMatch(html, /data-look="1"/);
+    assert.match(html, /<html [^>]*data-nothemes/);
+    assert.doesNotMatch(html, /class="[^"]*th-pitlane/);
+  });
+});
+
+describe("the Look sheet keeps Tab inside it", () => {
+  it("goes round from the last button to the first and back", () => {
+    const html = homePage("acme-rc", "Acme RC");
+    assert.match(html, /if \(e\.key !== 'Tab'\) return;/);
+    assert.match(html, /if \(e\.shiftKey && document\.activeElement === first\) \{ e\.preventDefault\(\); last\.focus\(\); \}/);
   });
 });
 
