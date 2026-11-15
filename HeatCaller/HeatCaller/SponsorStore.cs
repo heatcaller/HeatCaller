@@ -72,6 +72,7 @@ public sealed class SponsorStore
                         sponsor.SalesCopy ??= string.Empty;
                         sponsor.PictureFileName ??= string.Empty;
                         sponsor.WebName ??= string.Empty;
+                        sponsor.LogoFileName ??= string.Empty;
                         sponsor.Website ??= string.Empty;
                         sponsor.Presents ??= new List<string>();
                     }
@@ -696,6 +697,16 @@ public sealed class SponsorBooking
     /// uses Name. See RelaySponsors.
     /// </summary>
     public string WebName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Their logo (14 Nov 2026, stream overlay plan section 1): a
+    /// "sponsor-logo-…png" in the Sponsors folder, made by SponsorLogo.Import.
+    /// Separate from <see cref="PictureFileName"/>, the slide for their read:
+    /// the logo goes on their card on the club's Live page and, later, on the
+    /// stream's graphics. Empty is no logo, which is every booking saved
+    /// before this existed.
+    /// </summary>
+    public string LogoFileName { get; set; } = string.Empty;
 
     /// <summary>
     /// Their website, linked from their card on the club's Live page

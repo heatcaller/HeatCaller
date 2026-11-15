@@ -148,6 +148,19 @@ public sealed class SponsorsControl : UserControl
 
     private readonly Button _btnSponsorPicture = new();
 
+    /// <summary>
+    /// THE SPONSOR'S LOGO (14 Nov 2026, stream overlay plan section 1):
+    /// a small preview, on the page's own surface, and its two buttons. A
+    /// different thing from the picture for their read above - see
+    /// SponsorBooking.LogoFileName.
+    /// </summary>
+    private readonly PictureBox _picSponsorLogo = new();
+    private readonly Button _btnSponsorLogo = new();
+    private readonly Button _btnSponsorLogoRemove = new();
+
+    /// <summary>The logo preview at the normal text size: wide, because logos are.</summary>
+    private static readonly Size SponsorLogoPreview = new(180, 72);
+
     /// <summary>What "none" reads as in the drop-down - it says what happens, not that nothing does.</summary>
     private const string NoPictureItem = "None - show their name";
 
@@ -190,6 +203,14 @@ public sealed class SponsorsControl : UserControl
 
         // Undo changes the store, never this page - see OnStoreRestored.
         _store.Restored += OnStoreRestored;
+
+        // Logos no sponsor names any more, a week on - long past any undo.
+        // Never on a store that could not be read: every logo would look
+        // unused then.
+        if (!_store.LoadedUnreadable)
+        {
+            SponsorLogo.Prune(_store.Sponsors.Select(s => s.LogoFileName), DateTime.UtcNow);
+        }
     }
 
     /// <summary>Re-reads the slides and timing after an undo changed them.</summary>
@@ -236,6 +257,8 @@ public sealed class SponsorsControl : UserControl
         if (disposing)
         {
             _store.Restored -= OnStoreRestored;
+            _picSponsorLogo.Image?.Dispose();
+            _picSponsorLogo.Image = null;
         }
 
         base.Dispose(disposing);
@@ -610,6 +633,21 @@ public sealed class SponsorsControl : UserControl
             "On the Big Screen for the length of their read. Choose a picture already uploaded, or upload one - it "
             + "joins the slides above, where you can see or remove it.");
 
+        _picSponsorLogo.SizeMode = PictureBoxSizeMode.Zoom;
+        _picSponsorLogo.BorderStyle = BorderStyle.FixedSingle;
+        _picSponsorLogo.BackColor = AppTheme.Surface;
+
+        _btnSponsorLogo.Text = "Upload...";
+        _btnSponsorLogo.Click += (_, _) => UploadSponsorLogo();
+
+        _btnSponsorLogoRemove.Text = "Remove";
+        _btnSponsorLogoRemove.Click += (_, _) => SetSponsorLogo(string.Empty, "Remove");
+
+        grid.AddRow("Logo:", FieldGrid.Inline(_picSponsorLogo, _btnSponsorLogo, _btnSponsorLogoRemove));
+        grid.AddHint(
+            "A transparent PNG works best. It goes on their card on the club's Live page and on the stream's graphics. "
+            + "It's separate from the picture for their read, which fills the Big Screen.");
+
         grid.AddRow("Share of the reads:", _numSponsorWeight);
         grid.AddHint("Two gets twice the reads of one, however many the night has room for. Everyone ends up within one of their share.");
 
@@ -759,6 +797,7 @@ public sealed class SponsorsControl : UserControl
         Fit(_txtSponsorWebName, UiLayout.AtTextSize(SponsorNameWidth));
         Fit(_txtSponsorWebsite, UiLayout.AtTextSize(SalesCopyWidth));
         Fit(_cmbSponsorPicture, UiLayout.AtTextSize(SponsorPictureWidth));
+        Fit(_picSponsorLogo, UiLayout.AtTextSize(SponsorLogoPreview.Width), UiLayout.AtTextSize(SponsorLogoPreview.Height));
 
         // Four lines of the box's own font, and the hint's gap twice over
         // for the room a text box keeps inside its edge - exactly how the
@@ -1273,6 +1312,7 @@ public sealed class SponsorsControl : UserControl
             }
 
             FillPictureChoices(sponsor?.PictureFileName);
+            ShowSponsorLogo(sponsor?.LogoFileName);
         }
         finally
         {
@@ -1291,6 +1331,8 @@ public sealed class SponsorsControl : UserControl
         _lstSponsorMoments.Enabled = on;
         _cmbSponsorPicture.Enabled = on;
         _btnSponsorPicture.Enabled = on;
+        _btnSponsorLogo.Enabled = on;
+        _btnSponsorLogoRemove.Enabled = on && !string.IsNullOrWhiteSpace(sponsor?.LogoFileName);
 
         ShowCopyLength();
         ShowMomentClashes();
@@ -1453,6 +1495,95 @@ public sealed class SponsorsControl : UserControl
         // entry - both are the same folder.
         RefreshSlides();
         FillPictureChoices(stored);
+    }
+
+    /// <summary>Puts this sponsor's logo in the preview, or clears it. The page owns the image and disposes the old one.</summary>
+    private void ShowSponsorLogo(string? fileName)
+    {
+        var old = _picSponsorLogo.Image;
+        _picSponsorLogo.Image = SponsorLogo.Load(fileName);
+        old?.Dispose();
+    }
+
+    /// <summary>
+    /// Brings a logo in for the selected sponsor through SponsorLogo.Import,
+    /// which checks it, keeps its transparency and shape, and stores it under
+    /// a name of its own.
+    /// </summary>
+    private void UploadSponsorLogo()
+    {
+        if (_store.Sponsor(SelectedSponsorId) is null)
+        {
+            return;
+        }
+
+        using var picker = new OpenFileDialog
+        {
+            Title = "Choose this sponsor's logo",
+            Filter = "Images (" + string.Join(";", SponsorMedia.ImageExtensions.Select(e => "*" + e)) + ")|"
+                + string.Join(";", SponsorMedia.ImageExtensions.Select(e => "*" + e))
+                + "|All files (*.*)|*.*",
+        };
+
+        if (picker.ShowDialog(FindForm()) != DialogResult.OK)
+        {
+            return;
+        }
+
+        var stored = SponsorLogo.Import(picker.FileName, out var why);
+
+        if (stored is null)
+        {
+            AppDialog.Show(
+                this,
+                why ?? "That picture couldn't be used as a logo.",
+                "Couldn't add the logo",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            return;
+        }
+
+        SetSponsorLogo(stored, "Upload");
+    }
+
+    /// <summary>
+    /// Sets (or, with an empty name, removes) the selected sponsor's logo,
+    /// with undo putting the one before back. The old file is left on disk
+    /// for that undo - SponsorLogo.Prune clears it a week on.
+    /// </summary>
+    private void SetSponsorLogo(string fileName, string verb)
+    {
+        if (_store.Sponsor(SelectedSponsorId) is not { } sponsor)
+        {
+            return;
+        }
+
+        var before = sponsor.LogoFileName ?? string.Empty;
+
+        if (string.Equals(before, fileName, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var store = _store;
+        var id = sponsor.Id;
+        var name = string.IsNullOrWhiteSpace(sponsor.Name) ? "the sponsor" : sponsor.Name.Trim();
+
+        sponsor.LogoFileName = fileName;
+        _store.Save();
+
+        _undo.Capture($"{verb} the logo for {name}", () =>
+        {
+            if (store.Sponsor(id) is { } again)
+            {
+                again.LogoFileName = before;
+                store.Save();
+                store.NotifyRestored();
+            }
+        });
+
+        FillSponsorFields();
     }
 
     /// <summary>

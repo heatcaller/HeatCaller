@@ -28,7 +28,7 @@ public sealed partial class WebServerService
         IReadOnlyList<string> WebKpis,
         IReadOnlyList<string> RelayKpis,
         string OnDeck,
-        IReadOnlyList<(string Moment, string Sponsor)>? Presented);
+        IReadOnlyList<(string Moment, string Sponsor, string Logo)>? Presented);
 
     /// <summary>The last CaptureUiSide, threaded mode only. Replaced whole.</summary>
     private volatile UiSide? _uiSide;
@@ -60,12 +60,12 @@ public sealed partial class WebServerService
         // Presents list is edited in place on the Sponsors page, so only the
         // answer is safe to hand to another thread. Guarded on its own, as
         // AddBroadcast's was: the board must not go for the sake of them.
-        List<(string Moment, string Sponsor)>? presented;
+        List<(string Moment, string Sponsor, string Logo)>? presented;
 
         try
         {
             var sponsors = _sponsors?.Current.Sponsors;
-            presented = new List<(string Moment, string Sponsor)>();
+            presented = new List<(string Moment, string Sponsor, string Logo)>();
 
             foreach (var moment in new[]
                      {
@@ -76,7 +76,11 @@ public sealed partial class WebServerService
             {
                 if (SponsoredMoments.SponsorFor(sponsors, moment) is { } sponsor)
                 {
-                    presented.Add((moment.ToString(), sponsor.Name.Trim()));
+                    // The name as it is WRITTEN (14 Nov 2026, stream overlay plan section 1):
+                    // a graphic is read, not heard, so "Smith & Co." rather than the
+                    // "Smith and co" spelt for the voice. And their logo's address, empty
+                    // for none.
+                    presented.Add((moment.ToString(), RelaySponsors.NameOnTheWeb(sponsor), SponsorLogoUrl(sponsor.LogoFileName)));
                 }
             }
         }

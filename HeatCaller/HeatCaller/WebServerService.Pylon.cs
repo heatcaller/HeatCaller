@@ -96,12 +96,23 @@ public sealed partial class WebServerService
         var presented = new JsonObject();
         var presentedBy = ui.Presented ?? throw new InvalidOperationException("The sponsors could not be read.");
 
-        foreach (var (moment, sponsor) in presentedBy)
+        var presentedLogos = new JsonObject();
+
+        foreach (var (moment, sponsor, logo) in presentedBy)
         {
             presented[moment] = sponsor;
+
+            if (logo.Length > 0)
+            {
+                presentedLogos[moment] = logo;
+            }
         }
 
         node["presented"] = presented;
+
+        // Their logos, by moment, where they have one (stream overlay plan
+        // section 1) - for the graphics to show beside the name.
+        node["presentedLogos"] = presentedLogos;
 
         node["moment"] = Moments.Current() is { } current
             ? new JsonObject

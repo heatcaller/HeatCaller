@@ -28,8 +28,16 @@ internal static class RelaySponsors
     /// <paramref name="pictureOf"/> turns a picture file name into a data
     /// URI, or null - see <see cref="Picture"/>.
     /// </summary>
-    internal static string Document(IReadOnlyList<SponsorBooking>? bookings, Func<string, string?> pictureOf)
+    internal static string Document(IReadOnlyList<SponsorBooking>? bookings, Func<string, string?> pictureOf, Func<string, string?>? logoOf = null)
     {
+        // THE LOGO FIRST (14 Nov 2026, stream overlay plan section 1): a
+        // sponsor's own logo, kept as a transparent PNG, is what the card was
+        // always trying to show. The picture for their read - a 16:9 slide
+        // made for the Big Screen, shrunk to a JPEG - is the fallback for a
+        // sponsor with no logo, as every sponsor was before logos existed.
+        // Same field, so the relay's page needs no change.
+        logoOf ??= SponsorLogo.CardDataUri;
+
         var shown = (bookings ?? Array.Empty<SponsorBooking>())
             .Where(one => one.Enabled && !string.IsNullOrWhiteSpace(one.Id) && !string.IsNullOrWhiteSpace(NameOnTheWeb(one)))
             .Select(one => new
@@ -38,7 +46,8 @@ internal static class RelaySponsors
                 name = NameOnTheWeb(one),
                 tagline = (one.Tagline ?? string.Empty).Trim(),
                 url = WebsiteOf(one),
-                picture = string.IsNullOrWhiteSpace(one.PictureFileName) ? null : pictureOf(one.PictureFileName),
+                picture = (string.IsNullOrWhiteSpace(one.LogoFileName) ? null : logoOf(one.LogoFileName))
+                          ?? (string.IsNullOrWhiteSpace(one.PictureFileName) ? null : pictureOf(one.PictureFileName)),
             })
             .ToList();
 

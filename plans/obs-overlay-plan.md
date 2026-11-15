@@ -39,6 +39,8 @@ What's missing:
 
 ## 1. Sponsor logo upload on the Sponsors page
 
+*Built 14 Nov 2026 (branch `claude/follow-link`). Changes from the plan: an old logo file is kept in place for undo and cleared a week after no sponsor names it (`SponsorLogo.Prune`), rather than moved to `_removed`; the Wi-Fi address is `/sponsor-logo/<file name>`; the relay card gets a 360 x 160 PNG of the logo in the same `picture` field, so the relay needs no change and no deploy. Not yet seen on screen: the Logo row passed the layout tests at every text size, but nobody has looked at it.*
+
 Do this first: it's small, it stands on its own, and the overlays need it.
 
 **Fix.** Each sponsor gets a **logo** of their own, separate from the picture for their read.

@@ -1719,6 +1719,16 @@ public sealed partial class WebServerService
 
         var path = context.Request.Url?.AbsolutePath.TrimEnd('/').ToLowerInvariant() ?? "/";
 
+        // A sponsor's logo (14 Nov 2026, stream overlay plan section 1), for
+        // the stream's graphics: /sponsor-logo/sponsor-logo-<12 hex>.png. Only
+        // a name SponsorLogo itself makes is ever turned into a file, and
+        // only a real PNG of a logo's size is served (SponsorLogo.PngBytes).
+        if (path.StartsWith(SponsorLogoPath, StringComparison.Ordinal))
+        {
+            HandleSponsorLogo(context, path[SponsorLogoPath.Length..]);
+            return;
+        }
+
         switch (path)
         {
             case "":
@@ -2537,6 +2547,33 @@ public sealed partial class WebServerService
     /// browser takes the type at its word. Any query string (the pages add
     /// ?v= so a new logo is never mistaken for the old one) is ignored.
     /// </summary>
+    /// <summary>Where sponsor logos are served from - see HandleSponsorLogo.</summary>
+    internal const string SponsorLogoPath = "/sponsor-logo/";
+
+    /// <summary>The address of a sponsor's logo on this server, or empty when the name isn't one SponsorLogo makes.</summary>
+    internal static string SponsorLogoUrl(string? fileName) =>
+        SponsorLogo.IsLogoName(fileName) ? SponsorLogoPath + fileName : string.Empty;
+
+    private static void HandleSponsorLogo(HttpListenerContext context, string fileName)
+    {
+        var bytes = SponsorLogo.PngBytes(fileName);
+
+        if (bytes is null)
+        {
+            context.Response.StatusCode = 404;
+            WriteText(context, "Not found");
+            return;
+        }
+
+        // A name is never reused (each upload makes a new one), so a stream
+        // source may keep it as long as it likes.
+        context.Response.ContentType = "image/png";
+        context.Response.Headers["Cache-Control"] = "public, max-age=86400, immutable";
+        context.Response.ContentLength64 = bytes.Length;
+        context.Response.OutputStream.Write(bytes, 0, bytes.Length);
+        context.Response.OutputStream.Close();
+    }
+
     private void HandleLogo(HttpListenerContext context)
     {
         var bytes = _settings is null ? null : ClubLogo.PngBytes(_settings.RelayLogoFile);
