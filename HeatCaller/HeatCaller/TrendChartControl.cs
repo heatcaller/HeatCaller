@@ -517,12 +517,18 @@ public sealed class TrendChartControl : UserControl
         var record = holder.FastLapMs;
         var own = laps.FirstOrDefault(r => string.Equals(r.DriverName, driver, StringComparison.OrdinalIgnoreCase));
 
+        var who = string.IsNullOrWhiteSpace(holder.DriverName) ? string.Empty : $" by {holder.DriverName}";
+
+        // WHY (15 Nov 2026, bug hunt 21): <= told a driver who EQUALLED the
+        // record that they held it. Only the driver it is credited to holds
+        // it; an equal lap ties whoever set it first - as
+        // PersonalBestsControl.GapToRecord already says.
         if (own is not null && own.FastLapMs <= record)
         {
-            return $"You hold the track record here: {PaceAnalysis.Time(record)}.";
+            return string.Equals(holder.DriverName, driver, StringComparison.OrdinalIgnoreCase)
+                ? $"You hold the track record here: {PaceAnalysis.Time(record)}."
+                : $"You equal the track record here: {PaceAnalysis.Time(record)}, set first{who}.";
         }
-
-        var who = string.IsNullOrWhiteSpace(holder.DriverName) ? string.Empty : $" by {holder.DriverName}";
 
         if (driverBest <= record)
         {

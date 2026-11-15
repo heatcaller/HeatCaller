@@ -51,19 +51,37 @@ public static class MostImprovedTonight
     }
 
     /// <summary>The most improved driver of <paramref name="tonight"/>, or null when nobody improved enough.</summary>
-    public static Pick? From(IEnumerable<SessionRecord> tonight)
+    public static Pick? From(IEnumerable<SessionRecord> tonight) => From(tonight, null);
+
+    /// <summary>
+    /// The most improved driver of <paramref name="tonight"/>, each race's
+    /// class read from its round through <paramref name="roundOf"/> (or the
+    /// class stamped on a shared heat's entry).
+    /// </summary>
+    /// <remarks>
+    /// WHY (15 Nov 2026, bug hunt 21): keyed by transponder and layout only,
+    /// a driver who runs Stock and then Mod on one transponder was "0.80 s
+    /// quicker than in Stock" for changing to the faster car, and beat a
+    /// driver who really found time. Now by class too: a lap is only ever
+    /// compared with the same driver's laps in the same class.
+    /// </remarks>
+    public static Pick? From(IEnumerable<SessionRecord> tonight, Func<string, RoundDefinition?>? roundOf)
     {
         var races = (tonight ?? Array.Empty<SessionRecord>())
             .Where(r => r is not null && !r.IsNotScored() && r.SessionType != RaceSessionType.Practice)
             .OrderBy(r => r.StartedAtUtc)
             .ToList();
 
-        // Per driver and layout: their first race's best, and their best since.
-        var first = new Dictionary<(string, string), (string Label, long Ms)>();
-        var since = new Dictionary<(string, string), long>();
+        // Per driver, layout and class: their first race's best, and their best since.
+        var first = new Dictionary<(string, string, string), (string Label, long Ms)>();
+        var since = new Dictionary<(string, string, string), long>();
 
         foreach (var race in races)
         {
+            var roundClass = !string.IsNullOrEmpty(race.RoundId) && roundOf?.Invoke(race.RoundId) is { } round
+                ? round.ClassName ?? string.Empty
+                : string.Empty;
+
             foreach (var entry in race.Results ?? new List<SessionResultEntry>())
             {
                 if (entry is null || string.IsNullOrWhiteSpace(entry.Transponder) || entry.FastLapMs <= 0)
@@ -71,7 +89,12 @@ public static class MostImprovedTonight
                     continue;
                 }
 
-                var key = (entry.Transponder.Trim().ToUpperInvariant(), (race.TrackLayoutName ?? string.Empty).Trim().ToUpperInvariant());
+                // A shared heat stamps each entry with its own class; the
+                // round's is only the main one there.
+                var cls = string.IsNullOrWhiteSpace(entry.ClassName) ? roundClass : entry.ClassName;
+
+                var key = (entry.Transponder.Trim().ToUpperInvariant(), (race.TrackLayoutName ?? string.Empty).Trim().ToUpperInvariant(),
+                    (cls ?? string.Empty).Trim().ToUpperInvariant());
 
                 if (!first.ContainsKey(key))
                 {

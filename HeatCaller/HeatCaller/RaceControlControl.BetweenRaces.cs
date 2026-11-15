@@ -328,8 +328,11 @@ public sealed partial class RaceControlControl
     {
         // Auto start's own start, when it is counting for this race: the
         // call-ups and countdown marks are then timed to the race actually
-        // starting, run sheet or not (11 Nov 2026).
-        if (AutoStartsAtUtc(round.Id, now) is { } autoStart)
+        // starting, run sheet or not (11 Nov 2026). Timed to its green, as
+        // the Big Screen and the phones count, not to Auto start's Start
+        // press (bug hunt 21, 15 Nov 2026), so the room hears the number it
+        // reads.
+        if (AutoGreenAtUtc(round.Id, now) is { } autoStart)
         {
             return DueStill(autoStart, now);
         }

@@ -390,7 +390,8 @@ public sealed class HeadToHeadControl : UserControl
     /// <summary>The grid again, on the races and the measure in use.</summary>
     private void BuildMatrix()
     {
-        _matrixView.Show(RaceCoach.BuildMatrix(_fields, Counting, Profiles), Counting);
+        // Races only (bug hunt 21): see RaceCoach.RacesOnly. The career table below keeps practice, labelled.
+        _matrixView.Show(RaceCoach.BuildMatrix(RaceCoach.RacesOnly(_fields), Counting, Profiles), Counting);
         _matrixView.Parent?.PerformLayout();
     }
 
@@ -465,7 +466,7 @@ public sealed class HeadToHeadControl : UserControl
     /// <summary>The card: the score on the measure in use, the deciding rows, and what they add up to.</summary>
     private void FillCard()
     {
-        var pair = RaceCoach.Pair(_fields, _nameA, _nameB);
+        var pair = RaceCoach.Pair(RaceCoach.RacesOnly(_fields), _nameA, _nameB);
         var (shortA, shortB) = RaceCoach.ShortNames(_nameA, _nameB);
         var (forA, forB) = pair.On(Counting);
         var trackCars = RaceCoach.TrackCars(Layouts, pair.Track);
@@ -606,9 +607,11 @@ public sealed class HeadToHeadControl : UserControl
             if (rB.FastLapMs > 0) { bestLapsB.Add(rB.FastLapMs); }
             // Flying laps only (see PaceAnalysis.CountedLaps): the first
             // entry is the dash from the green to the first crossing, and it
-            // pulled the average lap down and the spread up.
-            allLapsA.AddRange(rA.LapTimesMs.Skip(1).Where(l => l > 0));
-            allLapsB.AddRange(rB.LapTimesMs.Skip(1).Where(l => l > 0));
+            // pulled the average lap down and the spread up. StartSlots, not
+            // Skip(1) (bug hunt 21): a credited start lap's dash is the next
+            // entry, after a zero.
+            allLapsA.AddRange(rA.LapTimesMs.Skip(rA.StartSlots(rA.LapTimesMs)).Where(l => l > 0));
+            allLapsB.AddRange(rB.LapTimesMs.Skip(rB.StartSlots(rB.LapTimesMs)).Where(l => l > 0));
 
             if (rA.FastLapMs > 0 && rB.FastLapMs > 0)
             {

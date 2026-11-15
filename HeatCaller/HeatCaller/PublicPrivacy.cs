@@ -32,7 +32,16 @@ namespace HeatCaller;
 internal sealed class PublicPrivacy
 {
     /// <summary>One driver's three flags and the names they go by.</summary>
-    private sealed record Entry(string Transponder, string Name, string AnnouncerName, bool NoPhoto, bool NoVideo, bool Initials, bool Junior = false);
+    private sealed record Entry(string Transponder, string Name, string AnnouncerName, bool NoPhoto, bool NoVideo, bool Initials, bool Junior = false)
+    {
+        /// <summary>
+        /// Anything that changes how they go online. Junior counts (15 Nov
+        /// 2026, bug hunt 21): with name shortening off a junior's name is
+        /// shortened for them alone, so ticking it must republish their saved
+        /// results, and deleting their profile must not bring the full name back.
+        /// </summary>
+        public bool Flagged => NoPhoto || NoVideo || Initials || Junior;
+    }
 
     /// <summary>Everybody's, keyed by every transponder they own.</summary>
     private readonly Dictionary<string, Entry> _byTransponder;
@@ -107,13 +116,22 @@ internal sealed class PublicPrivacy
         var flagged = new StringBuilder();
 
         foreach (var entry in _byTransponder.Values
-                     .Where(e => e.NoPhoto || e.NoVideo || e.Initials)
+                     .Where(e => e.Flagged)
                      .OrderBy(e => e.Transponder, StringComparer.OrdinalIgnoreCase))
         {
             flagged.Append(entry.Transponder.ToUpperInvariant()).Append('|')
                 .Append(entry.NoPhoto ? '1' : '0').Append(entry.NoVideo ? '1' : '0').Append(entry.Initials ? '1' : '0').Append('|')
                 .Append(entry.Initials ? entry.Name : string.Empty).Append('|')
-                .Append(entry.Initials ? entry.AnnouncerName : string.Empty).Append('\n');
+                .Append(entry.Initials ? entry.AnnouncerName : string.Empty);
+
+            // Only for a junior, so a club with none keeps the fingerprint it
+            // saved before juniors counted (no needless republish at start-up).
+            if (entry.Junior)
+            {
+                flagged.Append("|J|").Append(entry.Name);
+            }
+
+            flagged.Append('\n');
         }
 
         FlaggedFingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(flagged.ToString())));
@@ -209,7 +227,7 @@ internal sealed class PublicPrivacy
         // stays with the later one, as it was while their profile existed.
         foreach (var gone in (retained ?? Enumerable.Empty<PrivacyRetainedDriver>()).Reverse())
         {
-            if (gone is null || !(gone.NoPhoto || gone.NoVideo || gone.Initials))
+            if (gone is null || !(gone.NoPhoto || gone.NoVideo || gone.Initials || gone.Junior))
             {
                 continue;
             }
@@ -225,7 +243,7 @@ internal sealed class PublicPrivacy
                 // Always added, so their names are caught. A transponder a
                 // live driver holds now stays theirs: the constructor keeps
                 // the FIRST entry per id, and the live ones are first.
-                entries.Add(new Entry(id, name, announcer, gone.NoPhoto, gone.NoVideo, gone.Initials));
+                entries.Add(new Entry(id, name, announcer, gone.NoPhoto, gone.NoVideo, gone.Initials, gone.Junior));
             }
         }
 
@@ -284,11 +302,11 @@ internal sealed class PublicPrivacy
         // One driver per name and flags, holding every id of theirs that is
         // gone - an entry is per transponder.
         var newlyGone = before._byTransponder.Values
-            .Where(e => (e.NoPhoto || e.NoVideo || e.Initials)
+            .Where(e => e.Flagged
                         && !owned.Contains(e.Transponder)
                         && !already.Contains(Holding(e.Transponder, e.Name))
                         && !liveNames.Contains(e.Name))
-            .GroupBy(e => (Name: e.Name.ToUpperInvariant(), Announcer: e.AnnouncerName.ToUpperInvariant(), e.NoPhoto, e.NoVideo, e.Initials))
+            .GroupBy(e => (Name: e.Name.ToUpperInvariant(), Announcer: e.AnnouncerName.ToUpperInvariant(), e.NoPhoto, e.NoVideo, e.Initials, e.Junior))
             .OrderBy(g => g.Key.Name, StringComparer.Ordinal);
 
         foreach (var group in newlyGone)
@@ -303,6 +321,7 @@ internal sealed class PublicPrivacy
                 NoPhoto = first.NoPhoto,
                 NoVideo = first.NoVideo,
                 Initials = first.Initials,
+                Junior = first.Junior,
             });
 
             changed = true;
@@ -371,7 +390,7 @@ internal sealed class PublicPrivacy
     /// <summary>Every transponder whose driver has any flag set, in order.</summary>
     public IReadOnlyList<string> FlaggedTransponders =>
         _byTransponder.Values
-            .Where(e => e.NoPhoto || e.NoVideo || e.Initials)
+            .Where(e => e.Flagged)
             .Select(e => e.Transponder)
             .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -517,8 +536,8 @@ internal sealed class PublicPrivacy
     /// </summary>
     private static bool Differs(Entry? was, Entry? isNow)
     {
-        var wasFlagged = was is { } w && (w.NoPhoto || w.NoVideo || w.Initials);
-        var nowFlagged = isNow is { } n && (n.NoPhoto || n.NoVideo || n.Initials);
+        var wasFlagged = was?.Flagged == true;
+        var nowFlagged = isNow?.Flagged == true;
 
         if (!wasFlagged && !nowFlagged)
         {
@@ -533,7 +552,8 @@ internal sealed class PublicPrivacy
         return was.NoPhoto != isNow.NoPhoto
                || was.NoVideo != isNow.NoVideo
                || was.Initials != isNow.Initials
-               || (isNow.Initials && (!string.Equals(was.Name, isNow.Name, StringComparison.Ordinal)
+               || was.Junior != isNow.Junior
+               || ((isNow.Initials || isNow.Junior) && (!string.Equals(was.Name, isNow.Name, StringComparison.Ordinal)
                                       || !string.Equals(was.AnnouncerName, isNow.AnnouncerName, StringComparison.Ordinal)));
     }
 

@@ -48,8 +48,32 @@ public sealed partial class MainForm
     /// no good listing for the engine in use yet - not knowing is not a
     /// reason to take a driver's pick away.
     /// </summary>
-    internal bool CrewVoiceStillOffered(CrewVoicePick pick) =>
-        _crewOnAccount is not { } keys || _crewListedFor != DriverCrew.EngineOf(pick) || keys.Contains(DriverCrew.KeyOf(pick));
+    internal bool CrewVoiceStillOffered(CrewVoicePick pick) => CrewVoiceStillOffered(_crewOnAccount, _crewListedFor, pick);
+
+    /// <summary>CrewVoiceStillOffered against the keys and engine given - for tests.</summary>
+    internal static bool CrewVoiceStillOffered(HashSet<string>? onAccount, VoiceEngine? listedFor, CrewVoicePick pick) =>
+        onAccount is not { } keys || listedFor != DriverCrew.EngineOf(pick) || keys.Contains(DriverCrew.KeyOf(pick));
+
+    /// <summary>
+    /// The keys still to check picks against after a listing for
+    /// <paramref name="engine"/> failed: those of the last good listing when
+    /// it was for the same engine, and none (not known) when it was for
+    /// another - see ListCrewVoicesAsync.
+    /// </summary>
+    internal static HashSet<string>? KeysAfterFailedListing(HashSet<string>? onAccount, VoiceEngine? goodListingFor, VoiceEngine engine) =>
+        goodListingFor == engine ? onAccount : null;
+
+    /// <summary>
+    /// Whether there is a good listing of the engine in use's voices, for
+    /// DriverRequestDesk.CrewVoicesListed (15 Nov 2026, bug hunt 21): until
+    /// there is, a driver's pick waits rather than being declined as gone.
+    /// Starts a listing when one is due.
+    /// </summary>
+    internal bool CrewVoicesListedNow()
+    {
+        _ = CrewForPhoneNow();
+        return _crewForPhone is { } listed && listed.Engine == _voiceStore.Current.EffectiveEngine;
+    }
 
     /// <summary>
     /// What driverme tells the phones about the crew: null with drivers'
@@ -106,6 +130,12 @@ public sealed partial class MainForm
         {
             // Tried again in a minute, not every few seconds. What was listed
             // before stays, so phones keep the voices they had.
+            //
+            // BUT NOT ANOTHER ENGINE'S KEYS (15 Nov 2026, bug hunt 21): after
+            // a switch whose first listing failed, the old engine's keys were
+            // taken as this one's, no driver's pick was on them, and every
+            // crew voice fell back to the club's. Not known is "still there".
+            _crewOnAccount = KeysAfterFailedListing(_crewOnAccount, _crewForPhone?.Engine, engine);
             _crewListedFor = engine;
             _crewListFailed = true;
             _crewListedUtc = DateTime.UtcNow;
@@ -194,8 +224,26 @@ public sealed partial class MainForm
             return false;
         }
 
+        // NOT IN THE GAP BEFORE THE FINALS (15 Nov 2026, bug hunt 21): the
+        // heats are all run and the mains not built yet, so Race Control has
+        // nothing to run - but the programme still has a step, and a goal
+        // approved then is for the finals, not the next night.
+        if (ProgrammeStillToRun(raceControl.NextStepProvider?.Invoke()))
+        {
+            return false;
+        }
+
         return TonightAtTheTrack.Races(_sessionHistory.All, id => _rounds.Get(id), DateTime.Now).Any();
     }
+
+    /// <summary>
+    /// Whether the programme's next step is more racing tonight: rounds to
+    /// run, or mains or bump-ups still to build. Not "build qualifying",
+    /// which a club running its races by hand sees all night.
+    /// </summary>
+    internal static bool ProgrammeStillToRun(ProgramStep? step) =>
+        step?.Stage is ProgramStage.RunNext or ProgramStage.PostHeats or ProgramStage.LateArrivals
+            or ProgramStage.BumpUps or ProgramStage.SeedMains;
 
     /// <summary>
     /// A voice key a phone sent, as the voice it means on the engine in use,

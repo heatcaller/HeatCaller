@@ -587,6 +587,9 @@ public sealed class TrackLayoutManagerControl : UserControl
     /// <summary>The race days, for which layout is tonight's (Use Tonight). Null in a host without them.</summary>
     private readonly RaceEventStore? _events;
 
+    /// <summary>The rounds, so Use Tonight moves tonight's unrun ones too (bug hunt 21). Null in a host without them.</summary>
+    private readonly RoundDefinitionStore? _rounds;
+
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
@@ -600,13 +603,14 @@ public sealed class TrackLayoutManagerControl : UserControl
     private readonly SessionHistoryStore? _sessions;
 
     public TrackLayoutManagerControl(TrackLayoutStore store, AppSettings settings, UndoService undo, SessionHistoryStore? sessions = null,
-        RaceEventStore? events = null)
+        RaceEventStore? events = null, RoundDefinitionStore? rounds = null)
     {
         _sessions = sessions;
         _store = store;
         _undo = undo;
         _settings = settings;
         _events = events;
+        _rounds = rounds;
 
         Dock = DockStyle.Fill;
 
@@ -1084,9 +1088,32 @@ public sealed class TrackLayoutManagerControl : UserControl
         var before = day.TrackLayoutName;
         var dayId = day.Id;
         var events = _events;
+        var rounds = _rounds;
+
+        // Tonight's rounds not yet run go to the new layout too (bug hunt 21,
+        // 15 Nov 2026). A round keeps the layout it was built on, and Race
+        // Control's Track box locks to a picked round's own layout - so the
+        // page said RACING TONIGHT on the new one while every heat left was
+        // timed, filed and marshalled on the old. Rounds already run stay
+        // where they were raced. Each one's old layout is kept for the undo.
+        var moved = UnrunRoundsOf(day, rounds, track.Name)
+            .Select(r => (r.Id, Was: r.TrackLayoutName))
+            .ToList();
 
         _undo.Capture($"Race on '{track.Name}' tonight", () =>
         {
+            // Moved back only while still unrun and still on this layout:
+            // one raced since, or moved again, is left as it is now.
+            foreach (var (roundId, was) in moved)
+            {
+                if (rounds?.Get(roundId) is { IsRecorded: false } round
+                    && string.Equals(round.TrackLayoutName, track.Name, StringComparison.Ordinal))
+                {
+                    round.TrackLayoutName = was;
+                    rounds.Update(round);
+                }
+            }
+
             if (events.Get(dayId) is { } target)
             {
                 target.TrackLayoutName = before;
@@ -1094,9 +1121,35 @@ public sealed class TrackLayoutManagerControl : UserControl
             }
         });
 
+        // The rounds first: saving the day tells Race Control's Track box,
+        // which then reads the picked round's layout (MainForm.SyncTrackLayoutToRaceDay).
+        foreach (var (roundId, _) in moved)
+        {
+            if (rounds?.Get(roundId) is { } round)
+            {
+                round.TrackLayoutName = track.Name;
+                rounds.Update(round);
+            }
+        }
+
         day.TrackLayoutName = track.Name;
         _events.Upsert(day);
         RefreshList();
+    }
+
+    /// <summary>The day's rounds that haven't been run and aren't on <paramref name="layout"/> already - what Use Tonight moves. Pure but for the store read.</summary>
+    internal static IReadOnlyList<RoundDefinition> UnrunRoundsOf(RaceEvent day, RoundDefinitionStore? rounds, string layout)
+    {
+        if (rounds is null)
+        {
+            return Array.Empty<RoundDefinition>();
+        }
+
+        return (day.RoundIds ?? new List<string>())
+            .Select(rounds.Get)
+            .OfType<RoundDefinition>()
+            .Where(r => !r.IsRecorded && !string.Equals(r.TrackLayoutName, layout, StringComparison.Ordinal))
+            .ToList();
     }
 
     /// <summary>The designer on a blank floor, for a new layout - New Layout's first choice.</summary>

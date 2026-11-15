@@ -14,6 +14,13 @@ namespace HeatCaller;
 ///  - At zero, a car the loop hasn't heard puts up a banner: "Frank not seen
 ///    by the loop - Start without them / Wait". The announcer calls the
 ///    driver once. A car turning up clears it.
+///  - Every clock counts to the green, not to Auto start's own Start press
+///    (bug hunt 21, 15 Nov 2026). The Big Screen, the Next Up bar and the
+///    phones already did (ToTheGreen); the PA's countdown marks and its
+///    "{minutes}" (DueFor) and the night plan (NoteNextStart) counted to the
+///    press, a warm-up, staging and a countdown earlier - two numbers for
+///    one race. They now read AutoGreenAtUtc. When Auto start presses Start
+///    is unchanged.
 ///  - The start itself is Start Next's own, so On Air, the call-up to the
 ///    grid and every refusal Start Next has still apply.
 /// </summary>
@@ -536,6 +543,23 @@ public sealed partial class RaceControlControl
         AutoStartOn && _autoStart.IsOpen && string.Equals(_autoStart.RoundId, roundId, StringComparison.Ordinal)
             ? _autoStart.StartsAtUtc(now, Gap.PushedBackMinutes)
             : null;
+
+    /// <summary>
+    /// When the next race goes green by Auto start - its start carried on to
+    /// the green, as the Big Screen and the phones count (bug hunt 21, 15 Nov
+    /// 2026) - for the PA's countdown marks and the night plan. Null when
+    /// Auto start isn't counting for it.
+    /// </summary>
+    private DateTime? AutoGreenAtUtc(string roundId, DateTime now) =>
+        AutoStartsAtUtc(roundId, now) is { } start ? GreenAt(start, _autoStartState, StartToGreen) : null;
+
+    /// <summary>
+    /// Auto start's start carried on to the green while the gap is counting.
+    /// A race waiting for the time drivers were given keeps that time, as
+    /// ToTheGreen does. The lead is worked out only when it is needed.
+    /// </summary>
+    internal static DateTime GreenAt(DateTime start, AutoStartState state, Func<TimeSpan> startToGreen) =>
+        state == AutoStartState.Counting ? start + startToGreen() : start;
 
     /// <summary>What the Next Up bar adds after the next race: "starts in 1:42". Empty with Auto start not counting.</summary>
     private string AutoStartWords(DateTime now) =>

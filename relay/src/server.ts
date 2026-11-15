@@ -7173,9 +7173,15 @@ export class Relay {
     }
 
     this.pushBroadcasts.hit(club);
-    const outcome = await push.sendAll(club, { ...message, url: myNightUrl(club) }, BROADCAST_TTL_SECONDS);
-    this.log(`[push] "${club}": broadcast ${message.tag} to ${outcome.badges} driver${outcome.badges === 1 ? "" : "s"}: ${outcome.sent} sent, ${outcome.failed} failed`);
-    sendJson(response, 200, { ok: true, badges: outcome.badges, sent: outcome.sent, failed: outcome.failed });
+    // Answered once the phones are counted, not once each is sent to (15
+    // Nov 2026, bug hunt 21 #26): sending one by one ran past the laptop's
+    // 8 s wait, which then said "no push" and invited a second buzz. The
+    // outcome is logged when the last phone has been tried.
+    const started = await push.startAll(club, { ...message, url: myNightUrl(club) }, BROADCAST_TTL_SECONDS);
+    void started.done.then((outcome) => {
+      this.log(`[push] "${club}": broadcast ${message.tag} to ${outcome.badges} driver${outcome.badges === 1 ? "" : "s"}: ${outcome.sent} sent, ${outcome.failed} failed`);
+    });
+    sendJson(response, 200, { ok: true, badges: started.badges, queued: started.queued });
   }
 
   /**

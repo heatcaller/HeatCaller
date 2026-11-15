@@ -3603,6 +3603,12 @@ public sealed class PrivacyRetainedDriver
     public bool NoVideo { get; set; }
 
     public bool Initials { get; set; }
+
+    /// <summary>
+    /// Under 18, so their name was shortened online (15 Nov 2026, bug hunt
+    /// 21). Absent from older files, which load as false.
+    /// </summary>
+    public bool Junior { get; set; }
 }
 
 /// <summary>

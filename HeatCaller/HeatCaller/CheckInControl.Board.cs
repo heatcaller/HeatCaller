@@ -110,9 +110,22 @@ public sealed partial class CheckInControl
         _ => true,
     };
 
-    /// <summary>Everyone in the class picked - before the gate filter and the search.</summary>
-    private List<DriverProfile> InClass() =>
-        _profiles.All.Where(p => _classFilter is null || p.RunsClass(_classFilter)).ToList();
+    /// <summary>
+    /// Everyone in the class picked - before the gate filter and the search.
+    ///
+    /// Everyone in Desk mode (15 Nov 2026, bug hunt 21), where the class
+    /// chips are out of sight - as JudgesTechFor already has it. A chip left
+    /// picked on the roster, and remembered after a restart, had the strip
+    /// count only that class ("Checked in 3 of 4") under a "Taken tonight"
+    /// line that counts everybody. The roster is redrawn with its chip on the
+    /// way back - see ShowDeskMode.
+    /// </summary>
+    private List<DriverProfile> InClass()
+    {
+        var picked = _modeSwitch.On ? null : _classFilter;
+
+        return _profiles.All.Where(p => picked is null || p.RunsClass(picked)).ToList();
+    }
 
     /// <summary>Whether a driver's name or transponder has the search in it.</summary>
     private static bool Matches(DriverProfile profile, string search) =>

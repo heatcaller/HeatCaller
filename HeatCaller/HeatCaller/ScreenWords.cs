@@ -44,6 +44,19 @@ internal static class ScreenWords
     };
 
     /// <summary>
+    /// Everyday words a slur's ending would otherwise catch (15 Nov 2026,
+    /// bug hunt 21): "spices", "spiced" and "spicing" all lose their ending
+    /// to "spic", so "that spices things up" dropped a whole recap. Checked
+    /// before the endings come off; "spics" is still caught.
+    /// </summary>
+    private static readonly Regex SpickAndSpan = new(@"\bspick[\s-]*(?:and|&|'?n'?)[\s-]*span\b", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly HashSet<string> OrdinaryWords =new(StringComparer.Ordinal)
+    {
+        "spices", "spiced", "spicing",
+    };
+
+    /// <summary>
     /// Slurs long and unambiguous enough to match at the START of a word,
     /// so every ending and compound is caught too.
     /// </summary>
@@ -98,7 +111,9 @@ internal static class ScreenWords
             return null;
         }
 
-        var text = Fold(written);
+        // WHY (15 Nov 2026, bug hunt 21): "spick" is a slur on its own, but
+        // "spick and span" is an everyday phrase for a tidy car or pit table.
+        var text = SpickAndSpan.Replace(Fold(written), " ");
         var allowed = string.IsNullOrEmpty(allowedFrom) ? string.Empty : Fold(allowedFrom);
         var words = Word.Matches(text).Select(m => m.Value).ToList();
         var allowedWords = Word.Matches(allowed).Select(m => m.Value).ToHashSet();
@@ -116,6 +131,11 @@ internal static class ScreenWords
             if (HateWords.Contains(word))
             {
                 return word;
+            }
+
+            if (OrdinaryWords.Contains(word))
+            {
+                continue;
             }
 
             foreach (var ending in new[] { "s", "es", "ed", "ing" })
@@ -272,6 +292,37 @@ internal static class ScreenWords
             _ => new HashSet<string>(keep.Where(w => !string.IsNullOrWhiteSpace(w)), StringComparer.OrdinalIgnoreCase),
         };
 
+    /// <summary>
+    /// Every word of every proper name the club typed that a shown line may
+    /// carry (15 Nov 2026, bug hunt 21) - what <see cref="Masked"/> and the
+    /// Sailor-mouth dial keep. It used to be the drivers' names alone, so a
+    /// sponsor "Dick's Sporting Goods", a team "Hell Racing" or a recap host
+    /// called Dick Johnson came up starred on every screen, in every tone,
+    /// and with Sailor-mouth on counted as a swear against the dial.
+    ///
+    /// From each driver: their name and announcer name, team, sponsors,
+    /// classes, mentor and their own crew's names. From the club, when
+    /// <paramref name="settings"/> is given: <see cref="ClubNames"/>. Plus
+    /// anything in <paramref name="more"/> (tonight's sponsors).
+    /// </summary>
+    public static IEnumerable<string> ProperNameWords(
+        IEnumerable<DriverProfile> profiles,
+        AppSettings? settings = null,
+        IEnumerable<string?>? more = null) =>
+        NameWords(profiles
+            .SelectMany(p => new[] { p.DriverName, p.AnnouncerName, p.Team, p.Sponsors, p.Mentor, p.CrewPrincipalName, p.CrewTechName }
+                .Concat(p.AllClasses))
+            .Concat(settings is null ? Enumerable.Empty<string?>() : ClubNames(settings))
+            .Concat(more ?? Enumerable.Empty<string?>()));
+
+    /// <summary>The club's own cast and show names: the announcer, recap host, co-host, mechanic, Team Principal, honours reader, the show and the track.</summary>
+    public static IEnumerable<string?> ClubNames(AppSettings settings) =>
+        new[]
+        {
+            settings.RecapAnnouncerName, settings.RecapHostName, settings.CommentaryCoHostName, settings.RecapMechanicName,
+            settings.PrincipalName, settings.RecapHonoursName, settings.RecapShowName, settings.LastRaceControlTrackName,
+        };
+
     /// <summary>Every word of every name - what <see cref="Masked"/> keeps for a list of drivers.</summary>
     public static IEnumerable<string> NameWords(IEnumerable<string?> names) =>
         names
@@ -279,27 +330,57 @@ internal static class ScreenWords
             .SelectMany(n => Regex.Split(n!, @"[^\p{L}\p{N}']+"))
             .Where(w => w.Length > 0);
 
-    /// <summary>Lower case, look-alike digits and symbols as letters, a masked letter as a wildcard-free gap.</summary>
+    /// <summary>
+    /// Lower case, look-alike digits and symbols as letters, a masked letter as a wildcard-free gap.
+    ///
+    /// A symbol is read as a letter only when a letter or digit follows it
+    /// (15 Nov 2026, bug hunt 21) - "k!ke", "f@g", "n*gger", "$pic". One at
+    /// the END of a word is punctuation and is left alone: "retard!" used to
+    /// fold to "retardi", which is no word on the list, so an exclaimed slur
+    /// was said; and "What a win for Sam Pak!" folded to "paki", so a driver
+    /// called Pak lost every line that ended on his name.
+    /// </summary>
     private static string Fold(string text)
     {
-        var folded = new StringBuilder(text.Length);
+        var lower = text.ToLowerInvariant();
+        var folded = new StringBuilder(lower.Length);
 
-        foreach (var c in text.ToLowerInvariant())
+        for (var i = 0; i < lower.Length; i++)
         {
+            var c = lower[i];
+
             folded.Append(c switch
             {
                 '0' => 'o',
-                '1' or '!' or '|' => 'i',
+                '1' => 'i',
                 '3' => 'e',
-                '4' or '@' => 'a',
-                '5' or '$' => 's',
+                '4' => 'a',
+                '5' => 's',
                 '7' => 't',
-                '*' => 'i',
+                '!' or '|' or '*' when LetterFollows(lower, i) => 'i',
+                '@' when LetterFollows(lower, i) => 'a',
+                '$' when LetterFollows(lower, i) => 's',
                 _ => c,
             });
         }
 
         return folded.ToString();
+    }
+
+    /// <summary>True when, past any more look-alike symbols, the next character after <paramref name="at"/> is a letter or digit - the symbol sits inside a word.</summary>
+    private static bool LetterFollows(string text, int at)
+    {
+        for (var i = at + 1; i < text.Length; i++)
+        {
+            if (text[i] is '!' or '|' or '*' or '@' or '$')
+            {
+                continue;
+            }
+
+            return char.IsLetterOrDigit(text[i]);
+        }
+
+        return false;
     }
 
     /// <summary>Runs of single letters joined up: "k i k e" read as "kike".</summary>

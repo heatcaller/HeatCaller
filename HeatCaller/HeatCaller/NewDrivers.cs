@@ -14,31 +14,144 @@ namespace HeatCaller;
 public static class NewDrivers
 {
     /// <summary>
-    /// A driver first seen tonight - their profile made tonight - is on their
-    /// first night. The night runs 6am to 6am (TonightAtTheTrack.NightOf), so
-    /// a newcomer checked in at 19:30 is still on their first night at 00:05;
-    /// by the calendar date the welcome and the badge went at midnight.
+    /// A driver with no result at the club before tonight is on their first
+    /// night - see RacedBefore. The night runs 6am to 6am
+    /// (TonightAtTheTrack.NightOf), so a newcomer who raced at 19:30 is still
+    /// on their first night at 00:05.
+    ///
+    /// WHY NOT DriverProfile.FirstSeenUtc (15 Nov 2026, bug hunt 21): that is
+    /// when somebody typed the profile in. Profiles made tonight by an
+    /// entry-list import, at the desk, or on a club's first night with
+    /// HeatCaller are mostly regulars, and the desk badged every one of them
+    /// "first night" and the announcer welcomed them as "racing with us for
+    /// the first time tonight". CommentaryReaders.NightDone counts its
+    /// debutants from the filed results for the same reason.
+    ///
+    /// False with no history to go on, or too little - see RacedBefore.Knows.
     /// </summary>
-    public static bool FirstNight(DriverProfile profile, DateTime nowLocal) =>
-        profile.FirstSeenUtc is { } first
-        && TonightAtTheTrack.NightOf(first.ToLocalTime()) == TonightAtTheTrack.NightOf(nowLocal);
+    public static bool FirstNight(DriverProfile profile, RacedBefore? before) =>
+        before is { Knows: true } && !before.Has(profile);
 
     /// <summary>New to racing: ticked as a novice, or on their first night.</summary>
-    public static bool IsNew(DriverProfile profile, DateTime nowLocal) =>
-        profile.IsNovice || FirstNight(profile, nowLocal);
+    public static bool IsNew(DriverProfile profile, RacedBefore? before) =>
+        profile.IsNovice || FirstNight(profile, before);
 
     /// <summary>What Who's Racing puts after their name: " · first night", " · novice, mentor Al Gorithim", or nothing.</summary>
-    public static string Badge(DriverProfile profile, DateTime nowLocal)
+    public static string Badge(DriverProfile profile, RacedBefore? before)
     {
-        if (!IsNew(profile, nowLocal))
+        if (!IsNew(profile, before))
         {
             return string.Empty;
         }
 
-        var what = FirstNight(profile, nowLocal) ? "first night" : "novice";
+        var what = FirstNight(profile, before) ? "first night" : "novice";
         var mentor = string.IsNullOrWhiteSpace(profile.Mentor) ? string.Empty : $", mentor {profile.Mentor.Trim()}";
 
         return $" · {what}{mentor}";
+    }
+
+    /// <summary>
+    /// Who has raced at the club before tonight, from its filed sessions
+    /// (15 Nov 2026, bug hunt 21) - any scored session with results, practice
+    /// included, as DriverFirsts.IsFirstNight has it for the phone's
+    /// first-night guide: a driver who practised here last week is not new.
+    /// </summary>
+    public sealed class RacedBefore
+    {
+        private readonly HashSet<string> _transponders;
+
+        private RacedBefore(HashSet<string> transponders, int nights)
+        {
+            _transponders = transponders;
+            Nights = nights;
+        }
+
+        /// <summary>How many nights before tonight the club has results filed for.</summary>
+        public int Nights { get; }
+
+        /// <summary>
+        /// Whether there is enough on file to say who is new: the bar
+        /// CommentaryReaders.NightDone sets for its debutants
+        /// (CommentaryShowFacts.LeastDaysOnFile). A club in its first nights
+        /// with HeatCaller has everybody's first filed race this week, and
+        /// would otherwise badge and welcome its whole membership.
+        /// </summary>
+        public bool Knows => Nights >= CommentaryShowFacts.LeastDaysOnFile;
+
+        /// <summary>Whether any transponder of this driver's, retired ones too, has a result before tonight.</summary>
+        public bool Has(DriverProfile profile) =>
+            profile.AllTransponderIds.Any(id => _transponders.Contains(id))
+            || (profile.Transponder?.Trim() is { Length: > 0 } main && _transponders.Contains(main));
+
+        /// <summary>Reads the club's filed sessions for the nights before tonight's (the 6am night of <paramref name="nowLocal"/>).</summary>
+        public static RacedBefore From(IEnumerable<SessionRecord>? history, DateTime nowLocal)
+        {
+            var tonight = TonightAtTheTrack.NightOf(nowLocal);
+            var nights = new HashSet<DateTime>();
+            var transponders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var session in history ?? Enumerable.Empty<SessionRecord>())
+            {
+                if (session is null || session.IsNotScored() || session.Results is not { Count: > 0 } results)
+                {
+                    continue;
+                }
+
+                var night = TonightAtTheTrack.NightOf(session.StartedAtUtc.ToLocalTime());
+
+                if (night >= tonight)
+                {
+                    continue;
+                }
+
+                nights.Add(night);
+
+                foreach (var result in results)
+                {
+                    if (result?.Transponder?.Trim() is { Length: > 0 } who)
+                    {
+                        transponders.Add(who);
+                    }
+                }
+            }
+
+            return new RacedBefore(transponders, nights.Count);
+        }
+    }
+
+    /// <summary>
+    /// RacedBefore, read again only when the night changes or ten minutes
+    /// have passed (for a history imported or deleted meanwhile): the desk
+    /// redraws its roster at every check-in, and walking the whole history
+    /// each time is the UI thread's time for nothing. The same keeping as
+    /// MainForm.DriverIsOnFirstNight's for the phone.
+    /// </summary>
+    public sealed class RacedBeforeKept
+    {
+        private static readonly TimeSpan KeptFor = TimeSpan.FromMinutes(10);
+
+        private readonly Func<IEnumerable<SessionRecord>?> _history;
+        private RacedBefore? _read;
+        private DateTime _night;
+        private DateTime _readUtc;
+
+        public RacedBeforeKept(Func<IEnumerable<SessionRecord>?> history) => _history = history;
+
+        /// <summary>Who had raced before the night of <paramref name="nowLocal"/>.</summary>
+        public RacedBefore Now(DateTime nowLocal)
+        {
+            var nowUtc = DateTime.UtcNow;
+            var night = TonightAtTheTrack.NightOf(nowLocal);
+
+            if (_read is null || _night != night || nowUtc - _readUtc >= KeptFor || nowUtc < _readUtc)
+            {
+                _read = RacedBefore.From(_history(), nowLocal);
+                _night = night;
+                _readUtc = nowUtc;
+            }
+
+            return _read;
+        }
     }
 
     /// <summary>

@@ -25,6 +25,17 @@ public sealed class EntryPayment
     /// <summary>What was taken, in the club's money. Zero for a comp or owing.</summary>
     public decimal Amount { get; set; }
 
+    /// <summary>
+    /// Of Amount, the part taken the other way: card when How is Cash, cash
+    /// when How is Card. Zero - as in every file saved before it - when it
+    /// was all taken one way.
+    ///
+    /// WHY (15 Nov 2026, bug hunt 21): a driver who paid $15 cash and later
+    /// $10 card for a class ticked since was rewritten as "Card $25", and the
+    /// cash box came up $15 short of the night's count. See DeskMoney.Settle.
+    /// </summary>
+    public decimal OtherWay { get; set; }
+
     /// <summary>For a comp: why ("Marshal", "Junior"). Optional.</summary>
     public string Note { get; set; } = string.Empty;
 
@@ -199,11 +210,9 @@ public static class DeskMoney
 
             switch (payment?.How ?? PaidHow.Owing)
             {
-                case PaidHow.Cash:
-                    cash += payment!.Amount;
-                    break;
-                case PaidHow.Card:
-                    card += payment!.Amount;
+                case PaidHow.Cash or PaidHow.Card:
+                    cash += CashOf(payment);
+                    card += CardOf(payment);
                     break;
                 case PaidHow.Comp:
                     comps++;
@@ -262,16 +271,82 @@ public static class DeskMoney
         _ => Math.Max(0, fee),
     };
 
+    /// <summary>The part of a payment taken in cash - see EntryPayment.OtherWay.</summary>
+    public static decimal CashOf(EntryPayment? payment) => payment?.How switch
+    {
+        PaidHow.Cash => payment!.Amount - OtherWayOf(payment),
+        PaidHow.Card => OtherWayOf(payment!),
+        _ => 0,
+    };
+
+    /// <summary>The part of a payment taken by card - see EntryPayment.OtherWay.</summary>
+    public static decimal CardOf(EntryPayment? payment) => payment?.How switch
+    {
+        PaidHow.Card => payment!.Amount - OtherWayOf(payment),
+        PaidHow.Cash => OtherWayOf(payment!),
+        _ => 0,
+    };
+
+    /// <summary>OtherWay as far as it can be true: never below nothing, nor more than was taken.</summary>
+    private static decimal OtherWayOf(EntryPayment payment) => Math.Clamp(payment.OtherWay, 0, Math.Max(0, payment.Amount));
+
+    /// <summary>
+    /// A driver settled one way at the desk: the payment to file (null for
+    /// still owing), and what was taken just now.
+    ///
+    /// A driver already paid by cash or card who owes more - a class ticked
+    /// since - is a TOP-UP (15 Nov 2026, bug hunt 21): only what they still
+    /// owe is taken, and it is kept by the way it was taken, beside what they
+    /// paid before. It used to file the whole fee again under the new way, so
+    /// "$15 cash, then $10 card" read "Card $25" and the cash box was out.
+    ///
+    /// Anyone else - owing, comped, or a driver who has paid in full being
+    /// put right ("that was card, not cash") - is filed as the whole fee
+    /// taken this way, as it always was.
+    /// </summary>
+    public static (EntryPayment? Payment, decimal Taken, bool TopUp) Settle(EntryPayment? before, PaidHow how, decimal fee, string note, DateTime atUtc)
+    {
+        switch (how)
+        {
+            case PaidHow.Owing:
+                return (null, 0, false);
+            case PaidHow.Comp:
+                return (new EntryPayment { How = how, Amount = 0, Note = note, AtUtc = atUtc }, 0, false);
+        }
+
+        if (before?.How is PaidHow.Cash or PaidHow.Card && StillOwed(before, fee) is > 0 and var more)
+        {
+            var cash = CashOf(before) + (how == PaidHow.Cash ? more : 0);
+            var card = CardOf(before) + (how == PaidHow.Card ? more : 0);
+
+            return (new EntryPayment
+            {
+                How = how,
+                Amount = cash + card,
+                OtherWay = how == PaidHow.Cash ? card : cash,
+                Note = note,
+                AtUtc = atUtc,
+            }, more, true);
+        }
+
+        return (new EntryPayment { How = how, Amount = fee, Note = note, AtUtc = atUtc }, fee, false);
+    }
+
     /// <summary>Money as the club writes it, in this PC's currency format: "$15.00".</summary>
     public static string Money(decimal amount) => amount.ToString("C", CultureInfo.CurrentCulture);
 
-    /// <summary>The Paid column: "Cash $15.00", "Card $25.00", "Comp - Marshal", "Owes $15.00", or "" with nothing owed.</summary>
+    /// <summary>How a cash or card payment was taken: "Cash $15.00", or "Cash $15.00 + Card $10.00" for a top-up taken the other way.</summary>
+    private static string TakenWords(EntryPayment payment) =>
+        OtherWayOf(payment) > 0
+            ? $"Cash {Money(CashOf(payment))} + Card {Money(CardOf(payment))}"
+            : $"{payment.How} {Money(payment.Amount)}";
+
+    /// <summary>The Paid column: "Cash $15.00", "Card $25.00", "Cash $15.00 + Card $10.00", "Comp - Marshal", "Owes $15.00", or "" with nothing owed.</summary>
     public static string Words(EntryPayment? payment, decimal fee) => (payment?.How ?? PaidHow.Owing) switch
     {
         PaidHow.Cash or PaidHow.Card when StillOwed(payment, fee) is > 0 and var more =>
-            $"Owes {Money(more)} more ({payment!.How} {Money(payment.Amount)} paid)",
-        PaidHow.Cash => $"Cash {Money(payment!.Amount)}",
-        PaidHow.Card => $"Card {Money(payment!.Amount)}",
+            $"Owes {Money(more)} more ({TakenWords(payment!)} paid)",
+        PaidHow.Cash or PaidHow.Card => TakenWords(payment!),
         PaidHow.Comp => payment!.Note.Length > 0 ? $"Comp - {payment.Note}" : "Comp",
         _ => fee > 0 ? $"Owes {Money(fee)}" : string.Empty,
     };

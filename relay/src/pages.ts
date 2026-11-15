@@ -1877,6 +1877,20 @@ function hcIsTonight(dayOrTime) {
   try { hour = Number(now.toLocaleTimeString('en-GB', { hour: '2-digit', hour12: false }).slice(0, 2)); } catch (e) { /* the phone's */ }
   return hour < 6 && day === hcYmd(new Date(now.getTime() - 24 * 3600 * 1000));
 }
+// IS THIS RACE DAY TONIGHT? (15 Nov 2026, bug hunt 21 #6) A day's own
+// startedUtc is when it was made on the laptop - often the night before, or
+// on day one of a two-day meeting - so on its own a day opened yesterday read
+// "Last race day" all through today's racing. Any sign of the day being in
+// use tonight counts: when it was made, when the laptop last sent the
+// running order (it sends it while it is open with the day current), or a
+// race in it started tonight. A week-old day nobody has opened since has
+// none of them.
+function hcDayIsTonight(doc, publishedAt) {
+  const ev = doc && doc.event ? doc.event : {};
+  const seen = [ev.startedUtc, publishedAt];
+  for (const l of (doc && Array.isArray(doc.lines) ? doc.lines : [])) seen.push(l && l.startedUtc);
+  return seen.some((t) => typeof t === 'string' && t !== '' && hcIsTonight(t));
+}
 // The short form, for a big number in a small space: the time today, else
 // the day and the time ("Thu 7:14 PM").
 function whenShort(at) {
@@ -7442,6 +7456,9 @@ function cellText(row, i) {
 let boardOpen = '';
 let boardAll = false;
 let boardState = null;
+// When the folded-away last race was published (see drawFolded), for a tap
+// inside "See the last race" to draw it folded again.
+let boardFoldAt = 0;
 
 function drawBoard(state) {
   boardState = state;
@@ -7618,6 +7635,14 @@ function ordinalWord(n) {
 
 // A tap on a row opens the rest of it (a name tapped follows, as everywhere);
 // All columns shows the club's whole table.
+// WHY (15 Nov 2026, bug hunt 21 #24): a tap inside "See the last race" drew
+// the plain board, so the next read found no folded box open and folded it
+// shut. A folded board is drawn folded again, still open.
+function boardRedraw() {
+  if (!boardState) return;
+  const fold = board.querySelector ? board.querySelector('details.lastrace') : null;
+  if (fold) drawFolded(boardState, boardFoldAt); else drawBoard(boardState);
+}
 if (board && typeof board.addEventListener === 'function') {
   board.addEventListener('click', (e) => {
     const t = e.target;
@@ -7625,7 +7650,7 @@ if (board && typeof board.addEventListener === 'function') {
     if (t.closest('[data-all]')) {
       boardAll = !boardAll;
       boardHtml = '';
-      if (boardState) drawBoard(boardState);
+      boardRedraw();
       return;
     }
     const tr = t.closest('tr[data-row]');
@@ -7633,7 +7658,7 @@ if (board && typeof board.addEventListener === 'function') {
     const name = tr.getAttribute('data-row') || '';
     boardOpen = boardOpen === name ? '' : name;
     boardHtml = '';
-    if (boardState) drawBoard(boardState);
+    boardRedraw();
   });
 }
 
@@ -7768,6 +7793,7 @@ function render(state, seen, at, empty, copy) {
 // Twelve hours after the last race (see HOW OLD THE BOARD IS): not racing,
 // when the last race was, and its board one tap away rather than on top.
 function drawFolded(state, at) {
+  boardFoldAt = at;
   bar.className = 'flagbar f-none';
   const counting = nextStartWords(state.nextStart, nextStartNow(), nextStartAt);
   const next = state.onDeck ? '<span class="ondeck">Next up: <b>' + esc(state.onDeck) + '</b></span>' : '';
@@ -8771,6 +8797,17 @@ const LIVE_VIDEO_JS = `
       if (asked || was === 'open' || was === 'small') {
         small = was === 'small';
         open(liveId, false);
+      }
+      // Asked once, honoured once (15 Nov 2026, bug hunt 21 #23): left on
+      // the address, ?watch=1 docked the player again a minute after it
+      // was closed, every minute. Taken off as follow= and from= are.
+      if (asked) {
+        try {
+          const rest = new URLSearchParams(location.search);
+          rest.delete('watch');
+          const s = rest.toString();
+          history.replaceState(history.state, '', location.pathname + (s ? '?' + s : '') + (location.hash || ''));
+        } catch (e) { /* the address keeps it */ }
       }
     }
     drawButton();
@@ -9859,6 +9896,7 @@ if (mine && MINE) poll(readMine, 60000);
 // race covers them), or a club that does not publish line-ups.
 const fol = document.getElementById('fol');
 let folDoc = null;
+let folAt = '';
 
 function folSignedInName() {
   try {
@@ -9869,10 +9907,10 @@ function folSignedInName() {
 }
 
 // What the card says for this driver in this running order, or null for no card.
-function folNext(doc, who) {
+function folNext(doc, who, publishedAt) {
   if (!doc || !who) return null;
   const ev = doc.event || {};
-  if (ev.startedUtc && !hcIsTonight(ev.startedUtc)) return null;
+  if (ev.startedUtc && !hcDayIsTonight(doc, publishedAt)) return null;
   if (!doc.lineups) return null;
   const lines = Array.isArray(doc.lines) ? doc.lines : [];
   const has = (l) => Array.isArray(l.drivers) && l.drivers.some((n) => String(n) === who);
@@ -9901,7 +9939,7 @@ function drawFol() {
   if (!fol) return;
   folAlertsCheck();
   const who = memory;
-  const n = who && who !== folSignedInName() ? folNext(folDoc, who) : null;
+  const n = who && who !== folSignedInName() ? folNext(folDoc, who, folAt) : null;
   fol.textContent = '';
   fol.hidden = n === null;
   if (n === null) return;
@@ -10024,6 +10062,7 @@ async function readFol() {
   // A busy relay or no signal keeps what is on screen.
   if (answer === null || (answer.missing && answer.status !== 404)) return;
   folDoc = answer.missing ? null : (answer.body && answer.body.body) || null;
+  folAt = !answer.missing && answer.body && typeof answer.body.publishedAt === 'string' ? answer.body.publishedAt : '';
   drawFol();
 }
 
@@ -10634,7 +10673,7 @@ function drawRacingTonight(prog) {
   if (!at) return;
   const p = prog && !prog.missing && prog.body ? prog.body.body || {} : null;
   const ev = p && p.event ? p.event : null;
-  const tonight = !!(ev && ev.startedUtc && hcIsTonight(ev.startedUtc));
+  const tonight = !!(ev && ev.startedUtc && hcDayIsTonight(p, prog.body.publishedAt));
   if (!tonight || meCode() !== '') { at.innerHTML = ''; return; }
   const me = BASE + '/mynight';
   at.innerHTML = '<section class="lc rtw"><h3>Racing tonight?</h3>'
@@ -11132,6 +11171,8 @@ const find = document.getElementById('find');
 const LABEL = { done: 'Done', running: 'On track', next: 'Next', upcoming: '' };
 const opened = new Set();
 let doc = null;
+// When the laptop last sent the running order: one sign the day is tonight's.
+let docAt = '';
 let lastText = '';
 
 function hit(name, q) {
@@ -11232,7 +11273,7 @@ function draw() {
   if (lines.length === 0) {
     // "today" only when it is (item 3): an old race day had no order.
     const ev = doc.event || {};
-    board.innerHTML = !ev.startedUtc || hcIsTonight(ev.startedUtc)
+    board.innerHTML = !ev.startedUtc || hcDayIsTonight(doc, docAt)
       ? '<p class="note">No running order has been published for today yet.</p>'
       : '<p class="note">No running order was published for that race day.</p>';
     return;
@@ -11310,18 +11351,21 @@ async function load() {
     return;
   }
 
-  const text = JSON.stringify(answer.body.body);
+  // With when it was sent (bug hunt 21 #6): the laptop sending the same
+  // order again today makes an old-looking day today's.
+  const text = JSON.stringify(answer.body.body) + '|' + (answer.body.publishedAt || '');
   touched();
 
   if (text === lastText) return;
 
   lastText = text;
   doc = answer.body.body || {};
+  docAt = typeof answer.body.publishedAt === 'string' ? answer.body.publishedAt : '';
 
   const ev = doc.event || {};
   const facts = [ev.venue, ev.track ? 'Track: ' + ev.track : '', day(ev.startedUtc)].filter(Boolean);
   // Today only when it is (item 3): a race day a week old is the last one.
-  const today = !ev.startedUtc || hcIsTonight(ev.startedUtc);
+  const today = !ev.startedUtc || hcDayIsTonight(doc, docAt);
   head.innerHTML = ev.name
     ? '<div class="hero"><span class="kicker">' + (today ? 'Today' : 'Last race day') + '</span><span class="big">' + esc(ev.name) + '</span>' +
       (facts.length ? '<span class="when">' + facts.map(esc).join(' &middot; ') + '</span>' : '') + '</div>'

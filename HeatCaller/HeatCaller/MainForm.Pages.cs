@@ -288,7 +288,7 @@ public partial class MainForm
         {
             if (improvedAt < 0 || Environment.TickCount64 - improvedAt > 10000)
             {
-                improved = MostImprovedTonight.From(RacesTonight());
+                improved = MostImprovedTonight.From(RacesTonight(), id => _rounds?.Get(id));
                 improvedAt = Environment.TickCount64;
             }
 
@@ -596,7 +596,7 @@ public partial class MainForm
         // Who's Racing IS the merged roster: present, tech and inspect
         // per row. The Tech Log tab keeps the scrutineer's full record
         // list; the gate itself is one sheet.
-        var checkIn = new CheckInControl(_profiles, _checkInStore, _raceClasses, _settings, _undo, _techInspections, _webServer, _raceEvents, _batteryPacks, _payments) { Dock = DockStyle.Fill };
+        var checkIn = new CheckInControl(_profiles, _checkInStore, _raceClasses, _settings, _undo, _techInspections, _webServer, _raceEvents, _batteryPacks, _payments, _sessionHistory) { Dock = DockStyle.Fill };
         _checkInControl = checkIn;
 
         // The banner this page shows when check-ins have nowhere to go.
@@ -1386,7 +1386,7 @@ public partial class MainForm
 
     private void BuildTrackLayoutsAndRaceHistoryPages()
     {
-        var trackLayouts = new TrackLayoutManagerControl(_trackLayouts, _settings, _undo, _sessionHistory, _raceEvents) { Dock = DockStyle.Fill };
+        var trackLayouts = new TrackLayoutManagerControl(_trackLayouts, _settings, _undo, _sessionHistory, _raceEvents, _rounds) { Dock = DockStyle.Fill };
         pageTrackLayouts.Controls.Add(trackLayouts);
         _navRefreshHooks["Track Layouts"] = trackLayouts.RefreshAll;
 

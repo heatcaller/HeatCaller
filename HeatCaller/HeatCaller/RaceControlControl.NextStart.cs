@@ -17,7 +17,8 @@ public partial class RaceControlControl
 {
     /// <summary>
     /// What the night plan needs to know about the next race. RoundId is the
-    /// race. StartsAtUtc is when Auto start will start it, or null with Auto
+    /// race. StartsAtUtc is when it goes green by Auto start (the Start press
+    /// plus warm-up, staging and countdown - bug hunt 21), or null with Auto
     /// start off or not counting. PushedBackMinutes is how far the desk has
     /// put it back, which counts when there's no Auto start time.
     /// </summary>
@@ -41,7 +42,8 @@ public partial class RaceControlControl
     private void NoteNextStart(DateTime now, GapFacts facts)
     {
         var fact = facts.NextId is { } id
-            ? new NextStartFact(id, AutoStartsAtUtc(id, now), Gap.PushedBackMinutes)
+            // To the green, as every other clock counts (bug hunt 21).
+            ? new NextStartFact(id, AutoGreenAtUtc(id, now), Gap.PushedBackMinutes)
             : null;
 
         Volatile.Write(ref _nextStart, fact);

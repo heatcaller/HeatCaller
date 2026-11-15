@@ -328,14 +328,24 @@ public static partial class RaceCoach
             }
             else
             {
-                detail = "Your only lap over 4% off your best. Every other lap was clean.";
+                detail = OffByMoreThanMistakeShare(laps) == 1
+                    ? "Your only lap over 4% off your best. Every other lap was clean."
+                    : "The only lap that stood out from the laps around it.";
             }
 
             found.Add(new Finding(line, detail));
         }
         else
         {
-            found.Add(new Finding("No big mistakes", "Every lap was within 4% of your best."));
+            // WHY (15 Nov 2026, bug hunt 21): a mistake must also stand out
+            // from the laps around it (MistakeLaps), so a slow warm-up or a
+            // fade can be well over 4% off the best with no mistake in it -
+            // and this still said every lap was within 4%.
+            var off = OffByMoreThanMistakeShare(laps);
+
+            found.Add(new Finding("No big mistakes", off == 0
+                ? "Every lap was within 4% of your best."
+                : $"{Plural.Of(off, "lap")} over 4% off your best, but none stood out from the laps around it."));
         }
 
         // 3. The last laps against the rest, mistakes left out of both.
@@ -368,6 +378,14 @@ public static partial class RaceCoach
         }
 
         return found;
+    }
+
+    /// <summary>How many laps are more than MistakeShare off the best - the first test MistakeLaps makes.</summary>
+    private static int OffByMoreThanMistakeShare(IReadOnlyList<long> laps)
+    {
+        var best = laps.Min();
+        var limit = best + (long)(best * MistakeShare);
+        return laps.Count(l => l > limit);
     }
 
     private static string Capital(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];

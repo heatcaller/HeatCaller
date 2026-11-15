@@ -87,6 +87,7 @@ public partial class MainForm
             // Their own crew's voices from the phone apply by themselves
             // (15 Nov 2026, driver crew) - only voices the club offers.
             CrewVoiceOf = CrewVoiceForKey,
+            CrewVoicesListed = CrewVoicesListedNow,
 
             // A goal sent after the night's last race is for the next night.
             TonightIsOver = TonightsRacingIsOver,

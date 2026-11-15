@@ -3249,6 +3249,8 @@ public sealed partial class WebServerService
             // The board without the broadcast extras, rather than no board.
         }
 
+        AddJuniorsNamedInText(node);
+
         return node.ToJsonString();
     }
 
@@ -3561,6 +3563,88 @@ public sealed partial class WebServerService
         }
 
         return map;
+    }
+
+    /// <summary>
+    /// Adds to node["streamNames"] every junior named in a line of words the
+    /// stream shows - the "if it ended now" headline, tonight's bests, the
+    /// moment banners, the captions - who is not on it already.
+    /// </summary>
+    /// <remarks>
+    /// WHY (15 Nov 2026, bug hunt 21): StreamNames only knows the juniors on
+    /// the board, in the next races or marshalling them. A junior who had
+    /// finished for the night still had their "First podium" in Tonight's
+    /// bests, and the championship headline names the driver the lead is
+    /// taken from, who need not be racing at all - and both went out on the
+    /// stream in full. Only juniors whose name is in the text are added, so
+    /// the club's whole junior list never goes out in the document.
+    /// </remarks>
+    private void AddJuniorsNamedInText(System.Text.Json.Nodes.JsonObject node)
+    {
+        try
+        {
+            if (node["streamNames"] is not System.Text.Json.Nodes.JsonObject map)
+            {
+                return;
+            }
+
+            var texts = new List<string>();
+
+            void Take(System.Text.Json.Nodes.JsonNode? value)
+            {
+                if (value is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<string>(out var t) && !string.IsNullOrWhiteSpace(t))
+                {
+                    texts.Add(t);
+                }
+            }
+
+            void TakeEach(System.Text.Json.Nodes.JsonNode? list, string field)
+            {
+                if (list is System.Text.Json.Nodes.JsonArray items)
+                {
+                    foreach (var item in items)
+                    {
+                        Take(item?[field]);
+                    }
+                }
+            }
+
+            Take(node["champ"]?["headline"]);
+            TakeEach(node["bests"], "line");
+            TakeEach(node["moments"], "line");
+            Take(node["moment"]?["line"]);
+            TakeEach(node["captions"], "t");
+
+            if (texts.Count == 0)
+            {
+                return;
+            }
+
+            var named = _profiles.AllIncludingGhostsForAnyThread
+                .Where(p => p.IsJunior && !string.IsNullOrWhiteSpace(p.DriverName))
+                .Select(p => p.DriverName.Trim())
+                .Where(n => !map.ContainsKey(n) && texts.Any(t => t.Contains(n, StringComparison.Ordinal)))
+                .ToList();
+
+            if (named.Count == 0)
+            {
+                return;
+            }
+
+            // The whole map again, with them in: "Mia K" beside "Mia Ke" is
+            // worked out across every junior the stream names.
+            var all = map.Select(kv => kv.Key).Concat(named).ToList();
+            map.Clear();
+
+            foreach (var (full, shown) in JuniorNames.ForStream(all, _settings?.JuniorNamesOnStream))
+            {
+                map[full] = shown;
+            }
+        }
+        catch
+        {
+            // Names are worth a board; the board is not worth losing for them.
+        }
     }
 
     /// <summary>
