@@ -144,9 +144,22 @@ export const ME_CSS = `
 .me-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
 .me-tiles:empty { display: none; }
 /* Tonight's entry, at the top of Me under their name (12 Nov 2026). */
-.me-fee { font-weight: 700; color: var(--warn); margin: 0 0 10px; }
+/* Larger and louder since 15 Nov 2026 (Asher: "make the payment reminder at
+   the top larger and louder"): a banner in the warning colour, not a line of
+   text. It only shows while they owe, so it is always the owing look. */
+.me-fee { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 14px 16px;
+  border: 2px solid var(--warn); border-radius: 14px; color: var(--text);
+  background: color-mix(in srgb, var(--warn) 22%, var(--bg));
+  font-size: 1.2rem; font-weight: 800; line-height: 1.25;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 14%, transparent);
+  animation: me-fee-pulse 2.4s ease-in-out infinite; }
+.me-fee::before { content: "$"; flex: none; display: grid; place-items: center; width: 34px; height: 34px;
+  border-radius: 50%; background: var(--warn); color: var(--bg); font-size: 1.2rem; font-weight: 900; }
+@keyframes me-fee-pulse {
+  0%, 100% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 14%, transparent); }
+  50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--warn) 26%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .me-fee { animation: none; } }
 .me-fee[hidden] { display: none !important; }
-.me-fee.ok { color: var(--good); }
 /* I'm coming to the next race night (12 Nov 2026, setup plan C1). */
 .me-coming:empty { display: none; }
 .me-coming { border: 1px solid var(--border); border-radius: 16px; padding: 12px 14px; background: var(--surface); margin: 0 0 14px; }
@@ -909,13 +922,18 @@ function meQual() {
 // under their name (Asher: "move entry fee reminder to the top of the me tab
 // right below the driver name") - on every part of Me, not only while the
 // Check in card is up. Their own, from their own live entry.
+// Only while they owe since 15 Nov 2026 (Asher: "once paid remove indicator
+// from top of me but keep it on tonight as proof"): the reminder goes once
+// the desk marks them paid, and Tonight's Setup card keeps "Paid ✓" as the
+// proof to show at the desk.
 function meFee() {
   const at = document.getElementById('me-fee');
   if (!at) return;
-  const words = meEntryWords();
+  const paid = !!(live && live.entry && live.entry.paid === true);
+  const words = paid ? '' : meEntryWords();
   at.textContent = words;
   at.hidden = words === '';
-  at.className = 'me-fee' + (live && live.entry && live.entry.paid === true ? ' ok' : '');
+  at.className = 'me-fee';
 }
 
 // "Are you at the track?" before a check-in (see the Check in card). Yes
