@@ -50,6 +50,8 @@ public sealed class ScreenWordsTests
     [InlineData("What the hell, a crappy pass and a dick move.", "What the h***, a c***** pass and a d*** move.")]
     [InlineData("Prick of a gap, cock-up at the hairpin, damn it.", "P**** of a gap, c***-up at the hairpin, d*** it.")]
     [InlineData("Hello Dickson, Cockburn and Shellie.", "Hello Dickson, Cockburn and Shellie.")]
+    [InlineData("That cocksucker of a hairpin, the motherfucker.", "That c********* of a hairpin, the m***********.")]
+    [InlineData("Turn three can eat shit and a bag of sick dicks.", "Turn three can eat s*** and a bag of sick d****.")]
     public void Swears_are_starred_for_screens_and_names_are_left_alone(string said, string shown)
     {
         Assert.Equal(shown, ScreenWords.Masked(said));

@@ -152,12 +152,37 @@ export const ME_CSS = `
   background: color-mix(in srgb, var(--warn) 22%, var(--bg));
   font-size: 1.2rem; font-weight: 800; line-height: 1.25;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 14%, transparent);
-  animation: me-fee-pulse 2.4s ease-in-out infinite; }
+  animation: me-fee-pulse 2.4s ease-in-out infinite, me-fee-nag 120s linear infinite; }
 .me-fee::before { content: "$"; flex: none; display: grid; place-items: center; width: 34px; height: 34px;
   border-radius: 50%; background: var(--warn); color: var(--bg); font-size: 1.2rem; font-weight: 900; }
 @keyframes me-fee-pulse {
   0%, 100% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 14%, transparent); }
   50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--warn) 26%, transparent); } }
+/* And a nag every other minute (15 Nov 2026, Asher: "make the owe at the desk
+   card animate in an annoying way every other minute"): once every 120 s it
+   shakes, swells and flashes for about 6 s, then sits still until the next
+   one. Transform and background only, so it rides on top of the pulse. */
+@keyframes me-fee-nag {
+  0% { transform: none; }
+  0.4% { transform: translateX(-10px) rotate(-3deg) scale(1.06);
+    background: color-mix(in srgb, var(--warn) 70%, var(--bg)); }
+  0.8% { transform: translateX(10px) rotate(3deg) scale(1.08); }
+  1.2% { transform: translateX(-10px) rotate(-3deg) scale(1.06);
+    background: color-mix(in srgb, var(--warn) 22%, var(--bg)); }
+  1.6% { transform: translateX(10px) rotate(3deg) scale(1.08);
+    background: color-mix(in srgb, var(--warn) 70%, var(--bg)); }
+  2% { transform: translateX(-8px) rotate(-2deg) scale(1.06); }
+  2.4% { transform: translateX(8px) rotate(2deg) scale(1.08);
+    background: color-mix(in srgb, var(--warn) 22%, var(--bg)); }
+  2.8% { transform: translateX(-6px) rotate(-2deg) scale(1.06);
+    background: color-mix(in srgb, var(--warn) 70%, var(--bg)); }
+  3.2% { transform: translateX(6px) rotate(1deg) scale(1.08); }
+  3.6% { transform: translateX(-4px) rotate(-1deg) scale(1.04);
+    background: color-mix(in srgb, var(--warn) 22%, var(--bg)); }
+  4% { transform: translateX(4px) scale(1.04);
+    background: color-mix(in srgb, var(--warn) 70%, var(--bg)); }
+  4.6% { transform: scale(1.02); }
+  5%, 100% { transform: none; background: color-mix(in srgb, var(--warn) 22%, var(--bg)); } }
 @media (prefers-reduced-motion: reduce) { .me-fee { animation: none; } }
 .me-fee[hidden] { display: none !important; }
 /* I'm coming to the next race night (12 Nov 2026, setup plan C1). */
@@ -453,11 +478,34 @@ function meSwipe() {
 // "Need 5 more minutes" and "Car broken - skip me" (11 Nov 2026): asked once,
 // after a yes, and sent to the desk - which approves it, and the answer
 // comes back on the live card's requests.
-async function meRaceAsk(kind) {
-  const q = kind === 'late'
+//
+// Asked on Me's own sheet since 15 Nov 2026 (Asher: "can we theme the popup
+// on relay ask the desk to hold your next race for 5 more minutes and my car
+// is broken"): the browser's confirm box can't take the club's colours or the
+// driver's Look. The confirm box is only the fallback where the sheet isn't
+// on the page, as Are you at the track does.
+function meRaceAsk(kind) {
+  const late = kind === 'late';
+  const q = late
     ? 'Ask the desk to hold your next race for 5 more minutes?'
     : 'Ask the desk to take you out of your next race?';
-  if (!window.confirm(q)) return;
+  if (typeof meOpenSheet !== 'function' || !document.getElementById('me-sheet')) {
+    let yes = false;
+    try { yes = window.confirm(q); } catch (e) { yes = false; }
+    if (yes) meRaceAskSend(kind);
+    return;
+  }
+  meOpenSheet(late ? 'Need 5 more minutes?' : 'Car broken?', (body) => {
+    body.appendChild(el('p', 'note', q + ' The desk answers here.'));
+    body.appendChild(tapButton(late ? 'Yes, hold my race' : 'Yes, skip my next race', 'go', () => {
+      meCloseSheet();
+      meRaceAskSend(kind);
+    }));
+    body.appendChild(tapButton('Never mind', 'go quiet', meCloseSheet));
+  }, true);
+}
+
+async function meRaceAskSend(kind) {
   const got = await sendAsk(kind, {});
   if (got.ok) {
     meToast(kind === 'late' ? 'Asked for 5 more minutes - the desk will answer here' : 'Asked to skip your next race - the desk will answer here');

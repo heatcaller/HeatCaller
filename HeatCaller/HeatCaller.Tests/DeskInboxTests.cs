@@ -415,4 +415,25 @@ public sealed class DeskInboxTests : IDisposable
             Assert.Null(app.GetType(gone));
         }
     }
+
+    [Fact]
+    public void Quick_replies_open_with_nothing_selected()
+    {
+        // 15 Nov 2026, Asher: "quick replies load with the text selected".
+        // Shown, as the desk sees it: Windows selects all of the box it focuses first.
+        var (start, length, total) = StaThread.Run(() =>
+        {
+            using var form = new QuickRepliesForm(new[] { "Not tonight, sorry", "Ask at the desk" });
+            form.ShowInTaskbar = false;
+            form.Show();
+            Application.DoEvents();
+            var box = form.RepliesBox;
+            var got = (box.SelectionStart, box.SelectionLength, box.TextLength);
+            form.Close();
+            return got;
+        }, TimeSpan.FromSeconds(30), () => "showing Quick replies");
+
+        Assert.Equal(0, length);
+        Assert.Equal(total, start);
+    }
 }

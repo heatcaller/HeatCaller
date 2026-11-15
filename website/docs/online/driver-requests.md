@@ -2,7 +2,7 @@
 
 Driver requests let drivers ask the timing desk for small changes from their own phone, instead of queuing at the desk. From their night page a driver (or a parent) can ask to change how the announcer says their name, their pronouns, a line about them for the commentary, their email address, whether they're emailed their night, or how private they are online. They can also ask the desk to look at a result.
 
-These are only requests. Nothing about the driver changes until somebody at the desk approves it, in the **Driver Requests** window on **Race Day → Who's Racing**, and the driver's phone shows the answer.
+These are only requests. Nothing about the driver changes until somebody at the desk approves it, in the [Inbox](../race-control/inbox.md), and the driver's phone shows the answer.
 
 The same switch also lets drivers look after their own garage from their phone: which battery pack is in their car, the pack they ran each race on, their own packs and cars, photos of their cars and their setup sheets. Since 5 November 2026 HeatCaller applies those by itself, straight into the **Driver Hub**, with no approval at the desk (see [Changes HeatCaller makes by itself](#changes-heatcaller-makes-by-itself)).
 
@@ -11,7 +11,7 @@ The same switch also lets drivers look after their own garage from their phone: 
 - Publishing to the relay must be working. See [Setting up the Club Website page](setup.md).
 - Online check-in must be on. See [Online check-in](check-in.md).
 - **Give each driver their own night at a private address** must be ticked on the Club Website page, because requests are sent from the driver's night page. See [A driver's own night](index.md#a-drivers-own-night).
-- The relay must have been redeployed since 22 Oct 2026. An older relay doesn't know about requests, and the **Driver Requests** window says "The relay does not know about driver requests yet - redeploy it (fly deploy --ha=false)." See [Updating the relay](../admin/relay-hosting.md#updating-the-relay). The garage from the phone and **Let drivers query a result** need it redeployed since 5 Nov 2026.
+- The relay must have been redeployed since 22 Oct 2026. An older relay doesn't know about requests, and the line at the top of the **Inbox** says "The relay does not know about driver requests yet - redeploy it (fly deploy --ha=false)." See [Updating the relay](../admin/relay-hosting.md#updating-the-relay). The garage from the phone and **Let drivers query a result** need it redeployed since 5 Nov 2026.
 - For a driver to change their own email address, they need a personal PIN. See [Personal PINs](check-in.md#personal-pins).
 
 ## Turn it on
@@ -19,11 +19,11 @@ The same switch also lets drivers look after their own garage from their phone: 
 1. Open the **Club Website** page.
 2. In the **What gets published** card, under **Give each driver their own night at a private address**, tick **Let drivers send changes from their phone**. It's grayed out until drivers' nights and online check-in are both on.
 3. Under it, **Let drivers query a result** is ticked by default. Untick it if you'd rather drivers asked about results at the desk (see [Querying a result](#querying-a-result)).
-4. Go to **Race Day → Who's Racing**. A **Driver Requests** button is now under the list on the **Drivers** card, beside **Online Sign-ups**.
+4. Go to **Race Day → Who's Racing**. An **Inbox: Requests** button is now under the list on the **Drivers** card, beside **Inbox: Sign-ups**.
 
 The hint under the tick says: "Off by default. From their night page a driver can ask to change their details or battery pack, ask to be kept more private online, or query a result. Nothing changes until the desk approves it. Needs online check-in and the box above. Unticking throws away any requests still on the relay." (Since 5 November a battery pack, and the rest of the driver's garage, change without the desk; see [Changes HeatCaller makes by itself](#changes-heatcaller-makes-by-itself).)
 
-Unticking **Let drivers send changes from their phone** stops the night pages offering requests and their garage, and throws away any requests the relay is still holding. Requests the laptop has already collected stay in the **Driver Requests** window, and you can still answer them. Unticking drivers' nights does the same.
+Unticking **Let drivers send changes from their phone** stops the night pages offering requests and their garage, and throws away any requests the relay is still holding. Requests the laptop has already collected stay in the **Inbox**, and you can still answer them. Unticking drivers' nights does the same.
 
 ## What the driver sees
 
@@ -45,7 +45,7 @@ On **Me**, under **Tonight**, a **Your details** card lists what's on file now, 
 | **Online privacy** | Three ticks: **Leave my photo off the web pages**, **Leave me out of podium videos online** and **Show only my initials online**, under "These change the club's web pages only. In the room - the PA, the big screen and the club's Wi-Fi pages - nothing changes." | |
 | **I'm a parent or guardian making this change** | A tick the desk sees with the request. | |
 
-**Send to the desk** sends only what was changed. The card answers "Sent - the desk will check it (ref A1B2C3)", where the reference is the one the desk sees in its **Ref** column. If nothing was changed, it says "Nothing has changed yet."
+**Send to the desk** sends only what was changed. The card answers "Sent - the desk will check it (ref A1B2C3)", where the reference is the one the desk sees in the **Ref** column once it's answered (under **Show done** in the Inbox). If nothing was changed, it says "Nothing has changed yet."
 
 **Privacy can only be turned up from a phone.** A privacy tick that's already on shows "On - ask at the desk to undo." and can't be unticked there. Turning one off is a change only the desk can make, on the driver's profile (see [Online privacy](../race-day/drivers-and-classes.md#online-privacy)).
 
@@ -141,32 +141,36 @@ A setup change shows as "Setup log", and a change to their packs or cars as "Req
 
 ## Answering requests at the desk
 
-### The Driver Requests button
+### Where requests wait: the Inbox
 
-On **Race Day → Who's Racing**, the **Driver Requests** button under the **Drivers** card shows how many requests are waiting, for example **Driver Requests (3)**. It's there while **Let drivers send changes from their phone** is ticked, and also while any requests are still waiting after you've unticked it. When new ones arrive, the console says "[driver requests] A driver has sent a request from their phone. Approve or decline it under Driver Requests on Race Day → Who's Racing."
+Requests wait in the **Inbox**, the window the desk answers everything in (see [The Inbox](../race-control/inbox.md)). Until 15 November 2026 they had a window of their own, **Driver Requests**.
 
-Click it to open the **Driver Requests** window. It isn't a dialog: leave it open beside Race Control while you work, and it keeps itself up to date. A request appears in it within about 15 seconds of the driver sending it.
+To open it:
 
-<!-- screenshot: Driver Requests window with two requests waiting and one answered -->
+- On **Race Control**, click the cyan **Inbox** button at the end of the flag row. It's there while anything is waiting, with a badge saying how many. The badge is red while a request holds up the next race (**More time**, **Skip my race**, a marshal swap, or a query in its race's protest window), and dark otherwise.
+- On **Race Day → Who's Racing**, click **Inbox: Requests** under the **Drivers** card. It shows how many requests are waiting, for example **Inbox: Requests (3)**, and opens the Inbox on its **Requests** chip. It's there while **Let drivers send changes from their phone** is ticked, and also while any requests are still waiting after you've unticked it.
+
+When new ones arrive, the console says "[driver requests] A driver has sent a request from their phone. Approve or decline it in the Inbox (Race Control's Inbox button, or Race Day → Who's Racing)."
+
+The Inbox isn't a dialog: leave it open beside Race Control while you work, or dock it in the main window, and it keeps itself up to date. A request appears in it within about 15 seconds of the driver sending it.
 
 ### The list
 
-The line at the top says whether requests are working, for example "On. Requests from drivers' phones appear here within about 15 seconds. Nothing changes until you approve it, and the driver's phone shows your answer." **Result queries only** narrows both lists to queries.
+The line at the top of the Inbox says whether requests are working, for example "On. Requests from drivers' phones appear here within about 15 seconds. Nothing changes until you approve it, and the driver's phone shows your answer." The **Requests**, **Result queries** and **Crew and notes** chips narrow the list to those; **Race-blocking** shows only what holds up the next race.
 
-**Waiting for you** has the requests still to answer:
+What's waiting is listed with whatever holds up the next race first, then oldest first:
 
 | Column | What it shows |
 |---|---|
-| **Sent** | When the driver sent it, for example "Tue 19:42". |
-| **Driver** | Their full name, or "Unknown driver". |
-| **Asked about** | "Their details", "Battery pack" or "Result query"; for a garage change, "Their packs", "Their garage", "Car photo" or "Setup sheet". |
-| **What they asked for** | Each change, with what it is now, for example "Announcer name: 'Zhock' (was 'Jacques')", "No photo online: yes (was no)", "Battery pack: 'Red 2S #3' (was 'Blue 2S #1')" or "Query about Q1 Heat 2: "...". |
+| **Waited** | How long it has waited: "now", "4m", "1h 5m". It turns amber, then red: at 2 and 5 minutes for a race-blocking request, 5 and 15 for the rest. |
+| **Kind** | "Their details", "Battery pack", "Result query", **More time** or **Skip my race**; for a garage change, "Their packs", "Their garage", "Car photo" or "Setup sheet". |
+| **From** | The driver's full name, or "Unknown driver". |
+| **What** | Each change, with what it is now, for example "Announcer name: 'Zhock' (was 'Jacques')", "No photo online: yes (was no)", "Battery pack: 'Red 2S #3' (was 'Blue 2S #1')" or "Query about Q1 Heat 2: "...". |
 | **Note** | "Checked by their personal PIN" or "Checked by their badge code", "A parent or guardian sent it", and for a query "Not in that race" or "A race this laptop doesn't have" when it applies. |
-| **Ref** | The reference the driver's phone shows. |
 
-Under it are **Approve**, **Noted**, **Decline** and **Discard**. Double-clicking a row does the same as **Approve** (or **Noted** for a query).
+The line under the list shows the picked request in full. Under it are **Approve**, **Noted**, **Decline**, **Later** and **Discard**. Double-clicking a row, or pressing <kbd>Enter</kbd>, does the same as **Approve** (or **Noted** for a query). The keys <kbd>A</kbd>, <kbd>D</kbd>, <kbd>N</kbd> and <kbd>S</kbd> are **Approve**, **Decline**, **Noted** and **Later**. You can pick several requests of one kind and answer them together, and most answers can be undone for 10 seconds from the line under the buttons. See [Answering](../race-control/inbox.md#answering).
 
-**Answered (kept 30 days)** has the same columns, with **Answer** in place of **Note**: "Approved", "Noted", "Declined: *reason*" or "Replaced by a newer request". The newest answer is at the top. **Close** closes the window.
+**Show done (n)** at the foot of the Inbox lists the requests you've answered, kept 30 days, newest first, with **Sent**, **Kind**, **From**, **What**, **Answer** and **Ref** (the reference the driver's phone shows). **Answer** is "Approved", "Noted", "Declined: *reason*" or "Replaced by a newer request".
 
 When a driver sends a new details request while an older one is still waiting, the older one is replaced: the desk sees "Replaced by a newer request", and the driver's phone sees "declined: Replaced by your newer request."
 
@@ -187,10 +191,10 @@ What happens next:
 
 ### Their crew and notes
 
-A crew request shows as **Crew and notes**. Tick **Crew and broadcast notes only** to see only these; it unticks **Result queries only**, and the other way round.
+A crew request shows as **Crew and notes**. The **Crew and notes** chip in the Inbox shows only these.
 
-- **Voices apply by themselves.** A voice they picked is on their profile within seconds. A request that was only voices goes straight to **Answered** as "Approved" and their phone shows "Applied". A voice you've since hidden, or one from another engine, is declined: "That voice isn't available any more - pick another."
-- **Names and notes wait for you.** Select the request and click **Approve**. It lists each change with what it is now, and asks "These are words the announcer will say. Approve them?" Click **Yes** to apply them all, or **Decline** to send a reason back. To change the wording, decline it and type it on their profile instead.
+- **Voices apply by themselves.** A voice they picked is on their profile within seconds. A request that was only voices goes straight to the answered list (**Show done**) as "Approved" and their phone shows "Applied". A voice you've since hidden, or one from another engine, is declined: "That voice isn't available any more - pick another."
+- **Names and notes wait for you.** Select the request and click **Approve**. It lists each change with what it is now, and asks "These are words the announcer will say. Approve them?" Click **Yes** to apply them all, or **Decline** to send a reason back. Crew requests are answered one at a time. To change the wording, decline it and type it on their profile instead.
 - **Note** says **Junior** for a junior (and "No parent's consent on their profile..." until it's ticked), and "A voice they picked isn't offered any more" when a voice couldn't be applied - the phone is told when you answer.
 - **Note** says **Junior** for a junior, along with "A junior's words, spoken over the PA and the stream. Check for real names, a school, an age or where they live." when you approve. It says **Names another driver (*name*)** when a note mentions another driver by name, so read it before it reaches the PA.
 
@@ -207,11 +211,11 @@ Since 5 November 2026, a driver's garage changes from their phone are applied by
 
 Only the driver's own packs and cars are changed: ones whose owner is that driver's transponder, never a club pack or car, or one lent to them. A race's pack the desk set after the phone asked is left as the desk set it.
 
-Each change appears under **Answered (kept 30 days)** in the **Driver Requests** window, "Approved" or "Declined: *why*" (for example "Declined: That car isn't one of yours."), and the phone shows the same answer. The console says what was done, for example "[driver requests] A driver changed the pack in their car from their phone." Each one is a step of its own in **Undo**, headed "Phone:", for example "Phone: Add pack Red 2S #3 for Sam Parker".
+Each change appears under **Show done** in the Inbox, "Approved" or "Declined: *why*" (for example "Declined: That car isn't one of yours."), and the phone shows the same answer. The console says what was done, for example "[driver requests] A driver changed the pack in their car from their phone." Each one is a step of its own in **Undo**, headed "Phone:", for example "Phone: Add pack Red 2S #3 for Sam Parker".
 
 A driver naming a chassis that isn't on the club's list has it kept in the car's notes, and the console says "[driver requests] A driver named a chassis that isn't on the club's list - it is in their car's notes; add it under Chassis Types if it's real."
 
-A change HeatCaller can't apply yet, such as one sent while it couldn't read the driver profiles when it started, stays under **Waiting for you** until it can. A battery pack change still waiting can be approved by hand: select it and click **Approve**. HeatCaller asks, for example, "Battery pack: 'Red 2S #3' (was 'Blue 2S #1') - for Sam Parker. Approve it?". Click **Yes** and that pack is put in their car, exactly as if you'd picked it in the **Pack** column on **Who's Racing**. If the pack has been retired or given to someone else since, it says "That pack isn't one *name* can run any more (retired, or somebody else's now). Decline it and ask them which." Any waiting change can be declined.
+A change HeatCaller can't apply yet, such as one sent while it couldn't read the driver profiles when it started, stays in the Inbox's list until it can. A battery pack change still waiting can be approved by hand: select it and click **Approve**. Since 15 November HeatCaller doesn't ask "Approve it?" first; instead the line under the buttons has **Undo** for 10 seconds. That pack is put in their car, exactly as if you'd picked it in the **Pack** column on **Who's Racing**. If the pack has been retired or given to someone else since, it says "That pack isn't one *name* can run any more (retired, or somebody else's now). Decline it and ask them which." Any waiting change can be declined.
 
 ### Noting a query
 
@@ -225,7 +229,7 @@ When the laptop doesn't have the race the query is about, **Noted** says "This l
 
 ### More time and skip my race at the desk
 
-Select the request and click **Approve**, then **Yes**. The **Requests** button on Race Control lights up for these, as for every request.
+Select the request and click **Approve**, then **Yes**: neither can be undone, so the Inbox asks first. These go to the top of the Inbox as race-blocking, and the **Inbox** button on Race Control has a red badge while one is waiting.
 
 - **More time:** when the driver's race is the next one out, it goes back 5 minutes, and with [Auto start](../race-control/running-a-race.md#auto-start-between-races) on, its count moves with it. Every "about" time after it moves too: the program, the phones' **Schedule** page and the Big Screen's **UP NEXT**. Two approvals put it back 10 minutes. The phone shows "Q2 Heat 3 goes back 5 minutes for you." When their race isn't next yet, the 5 minutes are kept for it and the phone says "Q3 Heat 2 will go back 5 minutes for you when it's next." The moment that race becomes the next one out, it goes back 5 minutes by itself, and the console says so. Two approvals for the same race add up. What's kept goes if the race runs or is deleted first, or the driver comes out of it. There's no **Undo** for a push-back.
 - **Schedule and timetable:** the push-back shows wherever the night's times do, in the running order Race Control will use even when the desk runs a race out of program order. The [Day Schedule](../race-day/program-and-mains.md#reading-the-sheet) shows the lines still to come as "expected 20:47 · 7 min late"; the times typed on it aren't changed.
@@ -239,13 +243,15 @@ Since 12 November 2026 a driver with marshal duty can say from their phone that 
 
 - **At my marshal post** is filed by itself: Race Control has them in for that race, and the phone says "Thanks - Race Control has you on Turn 3 for Q2 Heat 3." A driver who isn't marshalling that race any more is told so.
 - **Cover my post?** is filed by itself too, since it only asks. The phone says "Asked Hugh T. to cover Turn 3 - waiting for them to say yes."
-- **Marshal swap** is the asked driver's answer. A no is filed by itself. A yes waits under **Waiting for you**, reading "Covers Max Power's post: Turn 3 in Q2 Heat 3 (Stock)", while **Marshal swaps from phones need the desk's OK** is ticked at the top of the window (it is to start with). Click **Approve...**, then **Yes**, and the swap is made, as **Swap...** in the Marshals window makes it, with a step in **Undo**. Untick the box and a yes is made by itself.
+- **Marshal swap** is the asked driver's answer. A no is filed by itself. A yes waits in the Inbox, at the top as race-blocking, reading "Covers Max Power's post: Turn 3 in Q2 Heat 3 (Stock)", while **Marshal swaps from phones need the desk's OK** is ticked under **Rules** in the Inbox (it is to start with). Click **Approve...**, then **Yes**, and the swap is made, as **Swap...** in the Marshals window makes it, with a step in **Undo**. Untick the box and a yes is made by itself.
 
 The asked driver must be checked in tonight and not racing or marshalling that race. Phones see only a first name and an initial for the other driver.
 
 ### Declining
 
-Select any waiting request and click **Decline**. The **Decline *name*'s Request** window asks you to "Tell them why, or what to do instead (optional - shown on their phone). Nothing about them is changed:". Type up to 120 characters, such as "Come and see us at the desk", and click **Decline**. The phone shows "declined" with your reason. **Undo** puts the request back on the waiting list.
+Select any waiting request and click **Decline** (or press <kbd>D</kbd>). The club's quick replies come up first, such as "Ask at the desk" or "After this heat": click one and the request is declined with it as the reason. See [Declining with a quick reply](../race-control/inbox.md#declining-with-a-quick-reply).
+
+For a reason of your own, click **Other reason...**. The **Decline *name*'s Request** window asks you to "Tell them why, or what to do instead (optional - shown on their phone). Nothing about them is changed:". Type up to 120 characters, such as "Come and see us at the desk", and click **Decline**. The phone shows "declined" with your reason. **Undo**, on the line under the buttons for 10 seconds or in the main window, puts the request back on the waiting list.
 
 ### Discard
 
@@ -253,7 +259,7 @@ Select any waiting request and click **Decline**. The **Decline *name*'s Request
 
 ## Troubleshooting
 
-The line at the top of the **Driver Requests** window says what's wrong:
+The state line at the top of the **Inbox** says what's wrong:
 
 | Line | What to do |
 |---|---|
@@ -264,6 +270,6 @@ The line at the top of the **Driver Requests** window says what's wrong:
 | "Could not collect driver requests: ..." | The laptop couldn't reach the relay. It keeps trying, and nothing is lost: requests wait on the relay until the laptop has filed them. |
 | "The driver requests file (driver-requests.json) couldn't be read when HeatCaller started. ..." | Another program, usually a backup or sync tool, had the file open. Close it and restart HeatCaller. Requests wait on the relay meanwhile. |
 
-**A driver says nothing changed.** Check **Waiting for you**: nothing changes until it's approved. If it was approved, the change is on their profile on the [Driver Hub](../race-day/drivers-and-classes.md#driver-hub).
+**A driver says nothing changed.** Check the Inbox: nothing changes until it's approved. If it was approved, the change is on their profile on the [Driver Hub](../race-day/drivers-and-classes.md#driver-hub).
 
 **A driver wants a privacy tick turned off.** Untick it on their driver profile. A phone can't turn one off.

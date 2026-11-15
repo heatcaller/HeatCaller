@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ME_BODY_TOP, ME_JS } from "../src/mespaces.js";
+import { ME_BODY_TOP, ME_CSS, ME_JS } from "../src/mespaces.js";
 import { garageEmbedScript } from "../src/garagepage.js";
 
 describe("Me: the entry fee and the setup tile (12 Nov 2026)", () => {
@@ -31,6 +31,13 @@ describe("Me: the entry fee and the setup tile (12 Nov 2026)", () => {
     const paid = run({ words: "Paid ✓", paid: true });
     assert.equal(paid.textContent, "");
     assert.equal(paid.hidden, true);
+  });
+
+  it("nags every other minute: a 120 s cycle that shakes for the first few seconds, off with reduced motion (15 Nov 2026)", () => {
+    assert.match(ME_CSS, /\.me-fee \{[^}]*animation: me-fee-pulse 2\.4s ease-in-out infinite, me-fee-nag 120s linear infinite;/);
+    assert.match(ME_CSS, /@keyframes me-fee-nag \{/);
+    assert.match(ME_CSS, /5%, 100% \{ transform: none;/);
+    assert.match(ME_CSS, /prefers-reduced-motion: reduce\) \{ \.me-fee \{ animation: none; \}/);
   });
 
   it("checks the Garage's setup section is really at the top once the page settles", () => {

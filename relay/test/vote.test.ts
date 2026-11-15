@@ -148,8 +148,9 @@ describe("the ballot", () => {
     assert.equal(answer.body.tally, undefined);
     assert.equal(answer.body.counts, undefined);
 
-    // And nothing shaped like a count has leaked in under another name.
-    assert.deepEqual(Object.keys(answer.body).sort(), ["drivers", "ok", "open", "race"]);
+    // And nothing shaped like a count has leaked in under another name. ("custom", 15 Nov 2026, is
+    // whether the desk typed the question, a yes or no.)
+    assert.deepEqual(Object.keys(answer.body).sort(), ["custom", "drivers", "ok", "open", "race"]);
     assert.ok(!said.includes("\"n\":"), "The ballot carried something that looks like a count.");
   });
 

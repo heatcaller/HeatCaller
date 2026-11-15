@@ -183,6 +183,13 @@ internal sealed class RoomVote
 
         /// <summary>True once the race has been run, so a verdict is never offered before there is a result.</summary>
         public bool Finished { get; set; }
+
+        /// <summary>
+        /// A vote on anything the desk typed (15 Nov 2026) - RoundName is
+        /// the question and the options are the desk's own words, not
+        /// drivers. Absent (false) in files written before.
+        /// </summary>
+        public bool Custom { get; set; }
     }
 
     private sealed class VoteFile
@@ -481,6 +488,95 @@ internal sealed class RoomVote
         }
     }
 
+    /// <summary>The start of a custom vote's key - never a round's id, so a race's start or result never touches it.</summary>
+    internal const string CustomKeyPrefix = "custom:";
+
+    /// <summary>The start of a custom vote's option ids: "choice-1", "choice-2"...</summary>
+    internal const string CustomChoicePrefix = "choice-";
+
+    /// <summary>
+    /// Opens a vote on anything (15 Nov 2026, Asher: "be able to launch a
+    /// vote from inbox and set up a custom vote on anything") - best paint
+    /// job, track of the month, pizza or burgers - closing whatever was open
+    /// before it, as a race vote does.
+    ///
+    /// WHY ITS OWN KEY: a race vote is closed by its race going green and
+    /// judged by its result, and the announcer says how the room did. A
+    /// custom vote has no race, so its key ("custom:" and a new id) never
+    /// matches a round: the green and the result leave it alone, no verdict
+    /// is ever offered on it, and it closes when the desk says so or after
+    /// <see cref="LongestOpen"/>, like any vote.
+    ///
+    /// Null means it opened. Anything else is why not, in the desk's words.
+    /// </summary>
+    /// <param name="question">What the room is asked, up to <see cref="MostChars"/>.</param>
+    /// <param name="choices">The answers, one each; blanks and repeats are dropped, up to <see cref="MostOptions"/>.</param>
+    internal string? OpenCustom(string? question, IEnumerable<string?>? choices)
+    {
+        lock (_gate)
+        {
+            var asked = Clean(question, MostChars);
+
+            if (asked.Length == 0)
+            {
+                return "Type the question first.";
+            }
+
+            var picked = new List<VoteOption>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var choice in choices ?? Enumerable.Empty<string?>())
+            {
+                var words = Clean(choice, MostChars);
+
+                if (words.Length == 0 || !seen.Add(words))
+                {
+                    continue;
+                }
+
+                picked.Add(new VoteOption(CustomChoicePrefix + (picked.Count + 1), words));
+
+                if (picked.Count >= MostOptions)
+                {
+                    break;
+                }
+            }
+
+            if (picked.Count < 2)
+            {
+                return "Give the room at least two choices, one a line.";
+            }
+
+            var id = Guid.NewGuid().ToString("N");
+
+            _file.Current = new Poll
+            {
+                Id = id,
+                RaceKey = CustomKeyPrefix + id,
+                RoundName = asked,
+                Options = picked,
+                OpenedUtc = DateTime.UtcNow,
+                Custom = true,
+            };
+
+            Save();
+
+            return null;
+        }
+    }
+
+    /// <summary>True when tonight's vote is a custom one - a question the desk typed, not who wins a race.</summary>
+    internal bool IsCustom
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _file.Current?.Custom == true;
+            }
+        }
+    }
+
     /// <summary>
     /// Stops the vote taking any more. Safe when nothing is open and safe
     /// twice - the race director may well press it after it has timed out
@@ -736,7 +832,7 @@ internal sealed class RoomVote
 
             if (!poll.Options.Any(one => string.Equals(one.Id, pick, StringComparison.Ordinal)))
             {
-                return "That driver is not on the grid for this race.";
+                return poll.Custom ? "That isn't one of the choices." : "That driver is not on the grid for this race.";
             }
 
             // THE CEILING ONLY BITES ON A NEW VOTER. Somebody changing their

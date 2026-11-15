@@ -54,7 +54,7 @@ describe("text size and high contrast are the phone's choice (item 6)", () => {
 
   it("puts the reading controls in every footer", () => {
     assert.match(homePage("acme-rc", "Acme RC"), /<span class="hcread" id="hcread" role="group" aria-label="Reading">/);
-    assert.match(livePage("acme-rc", "Acme RC"), /data-ts="130"[^>]*>A\+\+<\/button><button type="button" data-hc="1">High contrast<\/button>/);
+    assert.match(livePage("acme-rc", "Acme RC"), /data-ts="130"[^>]*>A\+\+<\/button><button type="button" data-hc="1" aria-label="High contrast">Contrast<\/button>/);
   });
 
   it("applies what the phone chose", async () => {

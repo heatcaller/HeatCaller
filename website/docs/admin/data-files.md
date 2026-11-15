@@ -112,8 +112,8 @@ All data files are plain JSON text, except where noted.
 | `imaging.json` | Station imaging settings (**Sounds → Imaging**). |
 | `Imaging\` | Imaging pieces you've added yourself, one folder per soundscape. The ones HeatCaller ships aren't stored here. |
 | `ShowMusic\` | The club's own show music (opener, bed and sting) from the **Show treatment** card on **Sounds → Imaging**. |
-| `club-notes.json` | Tonight's notes for the announcer (a birthday, the raffle closing), from **Notes** in the **Broadcast** window. Cleared when the race day changes. |
-| `room-vote.json` | Tonight's vote on who will win a race, from **Votes** in the **Broadcast** window, and the votes cast. |
+| `club-notes.json` | Tonight's notes for the announcer (a birthday, the raffle closing), typed or approved in the **Inbox** (its **Club notes** chip). Cleared when the race day changes. |
+| `room-vote.json` | Tonight's vote on who will win a race, opened on the **Room vote** card in the **Inbox**, and the votes cast. |
 | `principal-diary.json` | What each team principal said on air in the booth, so the host can put it back to them next time. Up to 200 teams are remembered. |
 | `usage-meters.json` | The latest figures for each monthly allowance (AI commentary, the HeatCaller voice, your own ElevenLabs plan), and which 80% and 100% warning emails have gone this month, so a restart doesn't send them again. |
 | `voice-allowance.json` | What HeatCaller remembers about the HeatCaller voice's monthly allowance between runs, so the warning comes once a month and a spent allowance stays spent after a restart. |

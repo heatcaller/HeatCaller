@@ -282,8 +282,8 @@ The buttons under the list, against the right-hand edge:
 
 - **Add Driver** opens the **Add a driver** window for someone who isn't on file yet: **Name**, **Transponder** and **Classes**, a tick box for each class, so you can tick every class they race. The class picked on the chips is ticked to start with, and stays their main class while it's ticked; otherwise the first ticked is. Click **Add Driver** and they're saved with the drivers on file and checked in straight away.
 - **Import Entries** brings in tonight's entry list from a CSV file or a table you copied, such as an RCSignup export or a LiveRC entry list. See [Import entries](#import-entries).
-- **Online Sign-ups** opens the drivers who have signed up online, waiting to be approved. The button shows how many are waiting, for example **Online Sign-ups (3)**. See [Driver sign-up](../online/sign-up.md).
-- **Driver Requests** opens the changes drivers have asked for from their phones, and their result queries, waiting for the desk. The button shows how many are waiting, for example **Driver Requests (2)**. It's only there while the club takes requests, or while some are still waiting. See [Driver requests](../online/driver-requests.md).
+- **Inbox: Sign-ups** opens the [Inbox](../race-control/inbox.md) on its **Sign-ups** chip: the drivers who have signed up online, waiting to be approved, and the invites. The button shows how many are waiting, for example **Inbox: Sign-ups (3)**. See [Driver sign-up](../online/sign-up.md). (It was **Online Sign-ups** until 15 November 2026.)
+- **Inbox: Requests** opens the Inbox on its **Requests** chip: the changes drivers have asked for from their phones, and their result queries, waiting for the desk. The button shows how many are waiting, for example **Inbox: Requests (2)**. It's only there while the club takes requests, or while some are still waiting. See [Driver requests](../online/driver-requests.md). (It was **Driver Requests** until 15 November 2026.)
 - **Driver Paid** opens the payment slip, on a night with an entry fee. See [Money at the desk](#money-at-the-desk).
 - **More** holds the rest:
     - **Check In Everyone** (or **Check In Everyone Shown** while a filter is on) ticks in every driver currently in the list.
@@ -300,7 +300,7 @@ The buttons under the list, against the right-hand edge:
 - **The scan box** is large, and stays ready for the next scan. Scan a driver's QR check-in, or type their name and press <kbd>Enter</kbd>. Under it, a line says what happened, with the same messages as the roster (see [Scan QR check-ins](#scan-qr-check-ins)).
 - **The driver's card** shows the driver just scanned, large enough to read from across the desk: their initials, name and classes, and "Checked in · 7:52 PM", "Already checked in" or "Not checked in".
 - **What they still need** lists each of tonight's gates for that driver. A gate they're through is a green line ("Paid: Cash $10.00"). One still to do has its buttons: **Inspect Car...** (or **Inspect Again...** after a fail), **Paid Cash** and **Paid Card**, **Record Papers...**, or **Check In**. A driver checked in by mistake has **Undo** beside **Checked in**. After any of them, the scan box is ready again.
-- Under it are **Add Walk-Up...** (the same **Add a driver** window as **Add Driver**), **Print QR Check-ins...**, **Self Check-In Poster...** and **Online Sign-ups**.
+- Under it are **Add Walk-Up...** (the same **Add a driver** window as **Add Driver**), **Print QR Check-ins...**, **Self Check-In Poster...** and **Inbox: Sign-ups**.
 - **Tonight at the Desk**, beside it, lists the evening as it happens, newest at the top: check-ins and check-outs at the desk, payments, and drivers who checked in from their phones. On a night with an entry fee, the line at its foot says what has been taken: "Taken tonight: $33.00 cash · $16.00 card". The list is kept until HeatCaller is closed.
 ### Papers: waivers and memberships
 
@@ -320,7 +320,7 @@ Click a driver's **Papers** to fill them in: **Waiver signed on** (today, or the
 
 When the club has announced the next race night (**Next night on phones:** on **Setup**) and drivers have said from their **Me** page that they're coming, **Who's Racing** shows a line on that night: "12 said they're coming · 9 here · still to come: Al Gorithim, Hugh Turn and 1 more." It updates as drivers check in.
 
-A driver's answer is filed by itself, and their phone is told "You're down for Tue 18 Nov: Stock and Mod. Check in when you arrive." Saying they're coming doesn't check them in or put them in the heats: they still check in when they arrive. Only classes on the announced night are kept, and **Not coming after all** takes them off the list. **Driver Requests** lists each answer as "Coming next race night". This needs online check-in on, and the relay updated.
+A driver's answer is filed by itself, and their phone is told "You're down for Tue 18 Nov: Stock and Mod. Check in when you arrive." Saying they're coming doesn't check them in or put them in the heats: they still check in when they arrive. Only classes on the announced night are kept, and **Not coming after all** takes them off the list. The **Inbox** lists each answer, under **Show done**, as "Coming next race night". This needs online check-in on, and the relay updated.
 
 ### Import entries
 

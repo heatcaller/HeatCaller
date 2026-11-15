@@ -564,7 +564,7 @@ Each driver can have their own Team Principal and Technical Lead: a name and a v
 
 Notes always go into what the announcer is written from in full. When one segment carries a lot of them (300 characters or more, such as an intro with several drivers' goals), the **Drivers' notes** line in the [Broadcast window](#the-broadcast-window) says so, because a small local model can write a looser line from a long prompt.
 
-Names and notes are words the announcer will say, so each one waits for you on [Driver Requests](../online/driver-requests.md#their-crew-and-notes). Voices don't wait. You can also type all of these on the driver's profile in the Driver Hub.
+Names and notes are words the announcer will say, so each one waits for you in the [Inbox](../online/driver-requests.md#their-crew-and-notes), under **Crew and notes**. Voices don't wait. You can also type all of these on the driver's profile in the Driver Hub.
 
 Without a crew of their own, a driver gets the club's principal and Technical Lead. If a driver's principal and Technical Lead would speak in the same voice after one race, the principal speaks in the club's voice instead, and the console says so. When ElevenLabs runs out, everyone's principal falls back to the principal's Kokoro voice under **If ElevenLabs runs out:**.
 
@@ -1150,9 +1150,9 @@ A club note is the other kind: *"it's Jack's first race since his operation — 
 
 ### Typing one
 
-**Notes** in the **Broadcast** window (the **Broadcast** button on **Race Control**) — beside Hold, Play again and Skip, because that's the screen you're looking at when somebody tells you. Type it, press Enter, and the announcer works it into a sentence of its own between races.
+**Notes** in the **Broadcast** window (the **Broadcast** button on **Race Control**) — beside Hold, Play again and Skip, because that's the screen you're looking at when somebody tells you. Since 15 November 2026 it opens the [Inbox](../race-control/inbox.md) on its **Club notes** chip. Type the note in **Your own note:**, press Enter (or click **Add**), and the announcer works it into a sentence of its own between races.
 
-The window lists everything for tonight: what's waiting for you, what's ready to go out, and what's already been said. Notes last for one night and are cleared when you start a new race day — a dedication read out at the wrong meeting, to the wrong room, about people who aren't there, is the one thing this must never do.
+The **Club notes** chip lists what's waiting for you, and **Show done** lists what's ready to go out ("Ready to be said") and what's already been said ("Said"), with **Remove Note**. A note from the room waits until you pick it and click **Let the announcer say it**; **Remove** throws it away. Notes last for one night and are cleared when you start a new race day — a dedication read out at the wrong meeting, to the wrong room, about people who aren't there, is the one thing this must never do.
 
 ### Letting the room send them
 
@@ -1204,13 +1204,13 @@ That last one is the line people repeat in the car park, and no amount of lap da
 
 ### Running one
 
-Open and close it on the **Votes** button in the **Broadcast** window (the **Broadcast** button on **Race Control**), beside **Notes**.
+Open and close it on the **Room vote** card in the [Inbox](../race-control/inbox.md#the-room-vote). **Votes** in the **Broadcast** window (the **Broadcast** button on **Race Control**), beside **Notes**, opens the Inbox at that card.
 
 | Step | What happens |
 |---|---|
-| Call the race to the grid | The window offers **Open voting on &lt;this race&gt;**, with the drivers actually staged on the ballot |
+| Call the race to the grid | The card offers **Open voting on &lt;this race&gt;**, with the drivers actually staged on the ballot. It's grayed out until at least two are staged |
 | Open it | Phones can vote. The **Votes** button carries the count as it climbs, in your look's accent |
-| Before the start | Press **Close voting** — or don't; it closes itself when that race goes green |
+| Before the start | Press **Stop voting** — or don't; it closes itself when that race goes green |
 | After the race | The announcer works the verdict in as a segment of its own, **The Room's Verdict** on the Big Screen's band |
 
 The ballot is the cars **actually staged**, not the program's assigned list: a driver who didn't turn up must not be on it. The program's list is the fallback for a vote opened before anybody has crossed the loop.

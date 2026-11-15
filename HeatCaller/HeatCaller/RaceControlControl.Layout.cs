@@ -238,7 +238,8 @@ public sealed partial class RaceControlControl
         // THE COLUMNS BUTTON IS GONE (15 Nov 2026, asked for by Asher): the
         // board's columns are chosen by right-clicking its column headings,
         // or from the foot of a driver's right-click menu - see
-        // PickLeaderboardColumns.
+        // OpenColumnsPopover (ticks and arrows in a drop-down) and
+        // PickLeaderboardColumns (the full picker behind its "More...").
 
         // --- The page ---
         //

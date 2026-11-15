@@ -134,8 +134,17 @@ internal sealed partial class DeskInboxForm : Form
         // A note longer than its column is wrapped, never cut off: the desk
         // is agreeing to words it has to have seen all of (Bug Hunt 8, A29-5).
         _grid.Columns["what"]!.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+
+        // Kind and From wrap too: narrow (docked) they would be cut to "Mor..." and "Sam P...".
+        _grid.Columns["kind"]!.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+        _grid.Columns["from"]!.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
         _grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
         _grid.SelectionChanged += (_, _) => UpdateDetail();
+
+        // Narrow - docked beside Race Control - the Note column goes: the
+        // line under the list says the note in full, and Kind and From keep
+        // the room to be read.
+        _grid.SizeChanged += (_, _) => FitColumns();
         _grid.CellDoubleClick += (_, e) =>
         {
             if (e.RowIndex >= 0)
@@ -182,17 +191,22 @@ internal sealed partial class DeskInboxForm : Form
         BuildRules();
         BuildDone();
 
-        // Pinned to the side: a strip down the right of the screen Race
-        // Control is on, so it sits beside it all night - the nearest a
-        // window gets to docking.
-        _chkPinned.Text = "Keep at the side of the screen";
+        // Docked: a panel down the right of the main window, beside Race
+        // Control, resized by its splitter - the host (MainForm) moves this
+        // window in and out of it.
+        _chkPinned.Text = "Dock in the main window";
         _chkPinned.AutoSize = true;
-        _chkPinned.Checked = _settings.InboxPinnedToSide;
+        _chkPinned.Checked = _settings.InboxDocked;
         _chkPinned.CheckedChanged += (_, _) =>
         {
-            _settings.InboxPinnedToSide = _chkPinned.Checked;
+            if (_settings.InboxDocked == _chkPinned.Checked)
+            {
+                return;
+            }
+
+            _settings.InboxDocked = _chkPinned.Checked;
             _settings.Save();
-            PinIfAsked();
+            DockWanted?.Invoke(_chkPinned.Checked);
         };
 
         var btnClose = new Button { Text = "Close" };
@@ -256,7 +270,6 @@ internal sealed partial class DeskInboxForm : Form
         MinimizeBox = true;
         ShowInTaskbar = true;
 
-        Shown += (_, _) => PinIfAsked();
     }
 
     // ------------------------------------------------------------ the list
@@ -352,16 +365,34 @@ internal sealed partial class DeskInboxForm : Form
             }
 
             var age = later ? InboxAge.Fine : DeskInbox.Age(item, now);
-            cell.Style.ForeColor = age switch
+            var colour = age switch
             {
                 InboxAge.Red => AppTheme.Danger,
                 InboxAge.Amber => AppTheme.Warning,
                 _ => later ? AppTheme.TextMuted : AppTheme.TextDark,
             };
+
+            // On the picked row too - the selection colour used to hide it.
+            cell.Style.ForeColor = colour;
+            cell.Style.SelectionForeColor = colour;
         }
 
         _lblEmpty.Visible = shown.Count == 0;
         _grid.Visible = shown.Count > 0;
+    }
+
+    /// <summary>The width under which the list drops its Note column, at the text size in use.</summary>
+    internal static int NoteColumnWidth => UiLayout.AtTextSize(760);
+
+    /// <summary>The Note column only where there is room for it - see the grid's SizeChanged.</summary>
+    internal void FitColumns()
+    {
+        var wide = _grid.Width >= NoteColumnWidth;
+
+        if (_grid.Columns["note"] is { } note && note.Visible != wide)
+        {
+            note.Visible = wide;
+        }
     }
 
     private void DrawRows(List<InboxItem> shown, HashSet<string> snoozed)
@@ -380,6 +411,7 @@ internal sealed partial class DeskInboxForm : Form
             if (item.RaceBlocking)
             {
                 row.Cells["kind"].Style.ForeColor = AppTheme.Danger;
+                row.Cells["kind"].Style.SelectionForeColor = AppTheme.Danger;
                 row.Cells["kind"].Style.Font = AppTheme.BoldFont;
             }
 
@@ -807,18 +839,38 @@ internal sealed partial class DeskInboxForm : Form
     /// <summary>The id of the step the app's Undo would take next, or 0.</summary>
     private long NewestUndo() => _undo?.PendingIds.FirstOrDefault() ?? 0;
 
-    // ------------------------------------------------------------ the side of the screen
+    /// <summary>The steps put on the app's Undo since <paramref name="before"/> was the newest, newest first.</summary>
+    private List<long> StepsSince(long before) =>
+        _undo is null ? new List<long>() : _undo.PendingIds.TakeWhile(id => id != before).ToList();
 
-    private void PinIfAsked()
-    {
-        if (!_chkPinned.Checked || IsDisposed)
+    /// <summary>
+    /// Undo for the steps one answer put on the app's Undo - all of a batch
+    /// at once - only while they are still the newest: otherwise null-safe
+    /// and it says so rather than taking somebody else's change back.
+    /// </summary>
+    private Action? UndoForSteps(IReadOnlyList<long> steps) => _undo is null || steps.Count == 0
+        ? null
+        : () =>
         {
-            return;
-        }
+            if (_undo.UndoThrough(steps) is null)
+            {
+                AppDialog.Show(this, "Something newer has been done since. Use Undo in the main window to work back to it.",
+                    "Not undone", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        };
 
-        var screen = Screen.FromControl(Owner ?? (Control)this).WorkingArea;
-        var width = Math.Min(Width, Math.Max(MinimumSize.Width, screen.Width / 3));
-        Bounds = new Rectangle(screen.Right - width, screen.Top, width, screen.Height);
+    // ------------------------------------------------------------ docked
+
+    /// <summary>"Dock in the main window" was ticked (true) or unticked: the host moves the window.</summary>
+    internal event Action<bool>? DockWanted;
+
+    /// <summary>The tick, as the host has it now.</summary>
+    internal void ShowDocked(bool docked)
+    {
+        if (_chkPinned.Checked != docked)
+        {
+            _chkPinned.Checked = docked;
+        }
     }
 
     // ------------------------------------------------------------ pieces
@@ -900,6 +952,28 @@ internal sealed class QuickRepliesForm : Form
         AppTheme.ApplyRecursively(this);
         DialogFit.Keep(this, page, width: 500, height: 320);
     }
+
+    /// <summary>
+    /// The cursor at the end, nothing selected (15 Nov 2026, Asher: "quick
+    /// replies load with the text selected"). The box is the first thing
+    /// focused, and Windows selects all of a text box it tabs into - one
+    /// key pressed then wiped every reply.
+    /// </summary>
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        UnselectReplies();
+    }
+
+    /// <summary>The box's cursor put after the last reply, with nothing selected.</summary>
+    internal void UnselectReplies()
+    {
+        _box.Select(_box.TextLength, 0);
+        _box.ScrollToCaret();
+    }
+
+    /// <summary>The replies box, for tests.</summary>
+    internal TextBox RepliesBox => _box;
 
     /// <summary>The lines typed, tidied.</summary>
     internal IReadOnlyList<string> Replies =>

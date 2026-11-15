@@ -261,10 +261,15 @@ public sealed partial class RelayPublisher
     /// ballot is a public route like the roster, so it shortens names the
     /// same way - full names went out on it whatever the club had chosen.
     /// </param>
-    internal static List<object> RelayBallotDrivers(IEnumerable<VoteOption> options, string pollId, string key, bool abbreviate = false)
+    /// <param name="custom">
+    /// A vote on anything the desk typed (15 Nov 2026): the choices are the
+    /// desk's own words, not drivers' names, so they go up as typed - never
+    /// shortened like a name or called "Unnamed driver".
+    /// </param>
+    internal static List<object> RelayBallotDrivers(IEnumerable<VoteOption> options, string pollId, string key, bool abbreviate = false, bool custom = false)
     {
         var real = options.Where(one => !Ghosts.IsGhost(one.Id)).ToList();
-        var names = RelayPublisher.DisplayNames(
+        var names = custom ? real.Select(one => one.Name).ToList() : RelayPublisher.DisplayNames(
             real.Select(one => RelayDocuments.PublicNameOrUnnamed(one.Name, one.Id)).ToList(),
             abbreviate,
             real.Select(one => (string?)one.Id).ToList());
@@ -609,6 +614,11 @@ public sealed partial class RelayPublisher
         // the old votes and handed them back into the new one.
         var ballot = vote.OnPollId ?? string.Empty;
 
+        // A vote on anything the desk typed (15 Nov 2026): the phones ask
+        // the question rather than "Who wins?", and never score the pick
+        // against the next race's winner.
+        var custom = vote.IsCustom;
+
         // Built rather than selected into a ternary: one branch would be
         // an array of an anonymous type and the other an array of object,
         // and leaving the compiler to reconcile those is the sort of line
@@ -623,7 +633,7 @@ public sealed partial class RelayPublisher
 
         if (open)
         {
-            drivers = RelayBallotDrivers(vote.Options, ballot, key, _settings.RelayAbbreviateNames);
+            drivers = RelayBallotDrivers(vote.Options, ballot, key, _settings.RelayAbbreviateNames, custom);
         }
 
         // THE RACE IS IN THE FINGERPRINT, so moving to the next race is
@@ -657,7 +667,7 @@ public sealed partial class RelayPublisher
             using var request = new HttpRequestMessage(HttpMethod.Post, $"{target.Root}/api/v1/c/{club}/vote/open");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", target.Token);
             request.Content = new StringContent(
-                JsonSerializer.Serialize(new { enabled, open, race, raceKey, ballot, drivers }),
+                JsonSerializer.Serialize(new { enabled, open, race, raceKey, ballot, drivers, custom }),
                 Encoding.UTF8,
                 "application/json");
 

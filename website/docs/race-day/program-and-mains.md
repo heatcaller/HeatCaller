@@ -545,7 +545,7 @@ Each qualifying round of a class, once all its heats are recorded, and each main
 - On the phones, the class's qualifying on the **Schedule** page, and a driver's own qualifying line, say "Provisional until 20:42" while the latest qualifying round's window is open.
 - The **Big Screen**'s finished board says "RACE COMPLETE — PROVISIONAL UNTIL 20:42" while the window of the race on it is open.
 - Drivers can query a result from their phone in the meantime (see [Querying a result](../online/driver-requests.md#querying-a-result)). When a round's window closes, **Something wrong?** goes from its races on each driver's night page. A round with heats still to run keeps it as before.
-- A query asked while its race's window was open goes to the top of **Driver Requests**, marked **In the protest window** in its notes.
+- A query asked while its race's window was open goes to the top of the [Inbox](../race-control/inbox.md), counted as race-blocking, marked **In the protest window** in its notes.
 - The finals still wait only for the class's last qualifying round: the next-step card says "Results are provisional until 20:42 (the protest window)." above **Build the finals from qualifying**. Building the finals before then is allowed. The question starts with the same words and "A query still to come could change this order."
 - A window of 0 turns it off, and the phones behave as before.
 
@@ -622,7 +622,7 @@ To stop Auto start going green with empty posts, right-click the **Auto:** switc
 
 **From the marshals' own phones.** While a driver's marshal duty is the next race to start, their night page offers **I'm at my post (Turn 3)**. A tap tells Race Control they're in, and the banner says who's in and who isn't: "Marshals for Q2 Heat 3 - 2 of 3 in: Hugh Turn, Rhoda Rage; waiting for Axel Grease (Turn 3)." When every marshal of the race has tapped it, the race no longer waits for them, as if you'd pressed **Marshals in place**. At zero the announcer calls only the posts still empty. **Marshals in place** still confirms them all, whatever the phones say. This needs the driver's own night and [Driver requests](../online/driver-requests.md) turned on.
 
-**Swaps from phones.** On their marshal duty a driver can tap **Ask someone to cover...** and pick a driver who's checked in tonight and isn't racing or marshalling that race. The asked driver's phone says "Max P. asks you to cover Turn 3 in Q2 Heat 3 (Stock)" with **Accept** and **Decline**. A yes is the same swap **Swap...** makes. While **Marshal swaps from phones need the desk's OK** is ticked in the **Driver Requests** window (it is to start with), the yes waits there as a **Marshal swap** for you to **Approve...**. Untick it and the swap is made by itself. A no never waits.
+**Swaps from phones.** On their marshal duty a driver can tap **Ask someone to cover...** and pick a driver who's checked in tonight and isn't racing or marshalling that race. The asked driver's phone says "Max P. asks you to cover Turn 3 in Q2 Heat 3 (Stock)" with **Accept** and **Decline**. A yes is the same swap **Swap...** makes. While **Marshal swaps from phones need the desk's OK** is ticked under **Rules** in the [Inbox](../race-control/inbox.md) (it is to start with), the yes waits there as a **Marshal swap**, at the top as race-blocking, for you to **Approve...**. Untick it and the swap is made by itself. A no never waits.
 
 A race with nobody on a post (a layout with no **Corner marshal posts:**) never waits.
 

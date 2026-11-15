@@ -113,7 +113,7 @@ public sealed partial class CheckInControl : UserControl
     /// </summary>
     public event Action<string>? CheckInChangedAtDesk;
 
-    /// <summary>Raised when the desk asks to see the drivers who have signed up online. The host owns the Online Sign-ups window.</summary>
+    /// <summary>Raised when the desk asks to see the drivers who have signed up online. The host opens the Desk Inbox on its Sign-ups chip.</summary>
     public event Action? SignupsRequested;
 
     /// <summary>
@@ -137,14 +137,14 @@ public sealed partial class CheckInControl : UserControl
     public event Action? TechLogRequested;
 
     /// <summary>The Online Sign-ups button, held so its caption can say how many are waiting.</summary>
-    private readonly Button _btnSignups = new() { Text = "Online Sign-ups (00)" };
+    private readonly Button _btnSignups = new() { Text = "Inbox: Sign-ups (00)" };
 
     /// <summary>
     /// The Driver Requests button, beside Online Sign-ups, held so its
     /// caption can say how many are waiting. Hidden until the host says the
     /// club takes requests or some are waiting (22 Oct 2026, driver experience).
     /// </summary>
-    private readonly Button _btnDriverRequests = new() { Text = "Driver Requests (00)", Visible = false };
+    private readonly Button _btnDriverRequests = new() { Text = "Inbox: Requests (00)", Visible = false };
     private readonly UndoService _undo;
 
     private readonly RosterGrid _grid = new();
@@ -656,7 +656,8 @@ public sealed partial class CheckInControl : UserControl
     {
         // The bar it is in re-measures it: the caption gets longer or
         // shorter with the count, and the button with it.
-        _btnSignups.Text = waiting > 0 ? $"Online Sign-ups ({Math.Min(waiting, 99)})" : "Online Sign-ups";
+        // They open the Desk Inbox on that chip (15 Nov 2026), and say so.
+        _btnSignups.Text = waiting > 0 ? $"Inbox: Sign-ups ({Math.Min(waiting, 99)})" : "Inbox: Sign-ups";
         _btnDeskSignups.Text = _btnSignups.Text;
     }
 
@@ -669,7 +670,7 @@ public sealed partial class CheckInControl : UserControl
     /// </summary>
     public void SetDriverRequestCount(int waiting, bool shown)
     {
-        var text = waiting > 0 ? $"Driver Requests ({Math.Min(waiting, 99)})" : "Driver Requests";
+        var text = waiting > 0 ? $"Inbox: Requests ({Math.Min(waiting, 99)})" : "Inbox: Requests";
 
         if (!string.Equals(_btnDriverRequests.Text, text, StringComparison.Ordinal))
         {
