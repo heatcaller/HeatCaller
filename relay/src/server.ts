@@ -9052,7 +9052,7 @@ export class Relay {
    * it.
    */
   private async roomBallotFor(club: string): Promise<
-    { open: boolean; race: string; drivers: { id: string; name: string }[]; salt: string } | undefined
+    { open: boolean; race: string; custom: boolean; drivers: { id: string; name: string }[]; salt: string } | undefined
   > {
     // WHY (20 Oct 2026, Bug Hunt 8): a corrupt ballot file reads as "not
     // enabled" (404) instead of a 503 on every phone, until the laptop's
@@ -9068,6 +9068,8 @@ export class Relay {
     return {
       open: body["open"] === true,
       race: typeof body["race"] === "string" ? body["race"] : "",
+      // A vote on anything the desk typed (15 Nov 2026): race is its question.
+      custom: body["custom"] === true,
       salt: typeof body["salt"] === "string" ? body["salt"] : "",
       drivers: drivers
         .filter(isPlainObject)
@@ -9143,6 +9145,10 @@ export class Relay {
 
     const offered = Array.isArray(body["drivers"]) ? (body["drivers"] as unknown[]) : [];
 
+    // A vote on anything the desk typed (15 Nov 2026), not who wins a race:
+    // the phones ask the question and never score the pick against a race.
+    const custom = body["custom"] === true;
+
     const seen = new Set<string>();
     const drivers: { id: string; name: string }[] = [];
 
@@ -9216,7 +9222,7 @@ export class Relay {
     await this.store.putSnapshot(club, VOTE_BALLOT_DOC, {
       seq: this.now().getTime(),
       publishedAt: this.now().toISOString(),
-      body: { enabled, open, race, raceKey, ballot: ballotId, drivers, salt },
+      body: { enabled, open, race, raceKey, ballot: ballotId, drivers, salt, custom },
     });
 
     // CLEARED when the club switches the feature off, and when the ballot
@@ -9260,6 +9266,7 @@ export class Relay {
       ok: true,
       open: ballot.open,
       race: ballot.race,
+      custom: ballot.custom,
       drivers: ballot.drivers,
     });
   }
@@ -9906,7 +9913,7 @@ export class Relay {
     // channel to a set of the laptop's own ids rather than a place to
     // write arbitrary strings into a club's folder.
     if (!ballot.drivers.some((one) => one.id === picked)) {
-      sendJson(response, 400, { ok: false, error: "That driver is not on the grid for this race." });
+      sendJson(response, 400, { ok: false, error: ballot.custom ? "That isn't one of the choices." : "That driver is not on the grid for this race." });
       return;
     }
 

@@ -165,18 +165,28 @@ public static class CommentaryTones
         new ToneProfile(
             CommentaryTone.SailorMouth,
             "Adult: Sailor-mouth - swears, crude, 18+",
-            "Call it like a foul-mouthed pit crew chief who has had a long night - swearing (fuck, shit, damn, "
-            + "bastard, ass, piss) and crude, but quick and funny with it, and still clear about who is where. "
+            // More f-bombs across the board (15 Nov 2026, Asher: "make the
+            // model drop more f bombs across the board on sailor setting"):
+            // the f-word is the go-to swear in every kind of piece, still
+            // within the dial's count (RuleFor). Then "less damn, shit is
+            // good": shit is the second pick, damn hardly ever. And
+            // "cocksucker and motherfucker should be part of the vocab" - for
+            // the track, the car, the luck, a corner, never for a driver.
+            "Call it like a foul-mouthed pit crew chief who has had a long night - the f-word is your go-to (fuck, "
+            + "fucking, fucked, what the fuck, motherfucker), shit is your next favourite (shit, shitty, holy shit, eat shit), "
+            + "with cocksucker, bastard, ass and piss now and then - call the track, a corner, a car or the luck a "
+            + "motherfucker or a cocksucker, or tell it to eat a bag of sick dicks, never a driver. Hardly ever say damn - it's too tame. Crude, but quick "
+            + "and funny with it, and still clear about who is where. "
             + "Example of the VOICE wanted: given \"P1 leads P2 by 0.4s on lap 12\", write something like "
-            + "\"Four tenths, Sam, and Bill is fucking stuck there on lap twelve.\" - "
+            + "\"Four fucking tenths, Sam, and Bill is fucking stuck there on lap twelve.\" - "
             + "not \"Sam leads Bill by 0.4 seconds.\"",
             " A sweary aside between races - one piece of news from the facts, told the way the crew tells it at the "
-            + "back of the pits. Crude about the race, never about a driver.",
-            " Two foul-mouthed pit crew chiefs between races, giving each other grief about the race. Each turn answers "
-            + "the last, and the second adds a fact the first didn't give. Short and sweary.",
-            " Close the race the way the crew would at the bar afterwards - who the hell won, by how much, and who got "
-            + "screwed by the luck. Sweary but exact, and nobody's mocked.",
-            "The host is a foul-mouthed but friendly pit-lane reporter - swears freely about the race, never at the guest.",
+            + "back of the pits, with an f-bomb in it. Crude about the race, never about a driver.",
+            " Two foul-mouthed pit crew chiefs between races, giving each other fucking grief about the race. Each turn "
+            + "answers the last, the second adds a fact the first didn't give, and both drop f-bombs. Short and sweary.",
+            " Close the race the way the crew would at the bar afterwards - who the fuck won, by how much, and who got "
+            + "fucked by the luck. Sweary but exact, and nobody's mocked.",
+            "The host is a foul-mouthed but friendly pit-lane reporter - drops f-bombs freely about the race, never at the guest.",
             "[laughs]",
             null,
             SailorMouthRule,
@@ -215,7 +225,9 @@ public static class CommentaryTones
         return tone.Rule + (most == 0
             ? " SWEARING: none at all - be crude, blunt and cheeky, but use no swear words."
             : $" SWEARING: at most {most} swear word{(most == 1 ? string.Empty : "s")} in a line - count them, and never go over. "
-              + $"In anything longer than {WordsPerLine} words, at most {most} in every {WordsPerLine} words.");
+              + $"In anything longer than {WordsPerLine} words, at most {most} in every {WordsPerLine} words. "
+              + "Use what you're allowed, and make the f-word (fuck, fucking, fucked) your first pick: every line "
+              + "should have at least one. Shit is the next pick; skip damn.");
     }
 
     /// <summary>

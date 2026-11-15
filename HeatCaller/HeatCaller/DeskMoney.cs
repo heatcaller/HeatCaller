@@ -253,7 +253,8 @@ public static class DeskMoney
         var money = Money(fee);
 
         return owed <= 0
-            ? new PhoneMoney(money, true, "Paid ✓")
+            // "Thank you" since 15 Nov 2026 (Asher: "add "thank you" to the paid note").
+            ? new PhoneMoney(money, true, "Paid ✓ - thank you!")
             : new PhoneMoney(money, false, $"Entry: {Money(owed)} - pay at the desk");
     }
 

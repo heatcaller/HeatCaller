@@ -89,7 +89,7 @@ internal static class ScreenWords
         + @"|\bbastards?\b|\bbollocks?\b|\bpiss(?:ed|es|ing|y)?\b"
         + @"|\b(?:ass|arse)(?:holes?)?\b|\bwank(?:er|ers|ing|ed)?\b|\btwats?\b"
         + @"|\bbitch(?:es|ing|y)?\b|\bcunts?\b|\b(?:god)?damn(?:ed|it)?\b"
-        + @"|\bdick(?:s|head|heads)?\b|\bcocks?\b|\bpricks?\b|\bcrap(?:s|py|pier)?\b|\bhell\b",
+        + @"|\bdick(?:s|head|heads)?\b|\bcocks?\b|\bcocksuck(?:er|ers|ing)\b|\bpricks?\b|\bcrap(?:s|py|pier)?\b|\bhell\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex Word = new(@"[a-z0-9]+", RegexOptions.CultureInvariant | RegexOptions.Compiled);

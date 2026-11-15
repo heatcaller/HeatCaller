@@ -71,7 +71,7 @@ describe("the Look button and the club's switch", () => {
 
   it("sits next to High contrast on every club page", () => {
     for (const html of [homePage("acme-rc", "Acme RC"), livePage("acme-rc", "Acme RC")]) {
-      assert.match(html, /data-hc="1">High contrast<\/button><button type="button" data-look="1" aria-haspopup="dialog">Look<\/button><\/span>/);
+      assert.match(html, /data-hc="1" aria-label="High contrast">Contrast<\/button><button type="button" data-look="1" aria-haspopup="dialog">Look<\/button><\/span>/);
       assert.doesNotMatch(html, /<html [^>]*data-nothemes/);
     }
   });
