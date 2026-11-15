@@ -41,8 +41,11 @@ public partial class MainForm
             return;
         }
 
+        // Nor with the sidebar hidden - Race Mode keeps its width but not its
+        // place, so a slide would only lurch the board 220px and back (bug
+        // hunt 21, 15 Nov 2026).
         if (LayoutCheckMode || !IsHandleCreated || !Visible || WindowState == FormWindowState.Minimized
-            || pnlContent.Dock != DockStyle.Fill || pnlSidebar.Width <= 0)
+            || pnlContent.Dock != DockStyle.Fill || pnlSidebar.Width <= 0 || !pnlSidebar.Visible)
         {
             SetNavIconsOnly(iconsOnly);
             return;
