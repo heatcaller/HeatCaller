@@ -322,10 +322,12 @@ public sealed class AutoStartTests
     [Fact]
     public void Approving_them_hands_them_to_race_control()
     {
-        var form = Source("DriverRequestsForm.cs");
+        // The Desk Inbox since 15 Nov 2026 - one at a time, and several at once.
+        var form = Source("DeskInboxForm.Requests.cs");
         var main = Source("MainForm.DriverRequests.cs");
 
-        Assert.Contains("_desk.ApproveRaceAsk(current, out refusal)", form);
+        Assert.Contains("desk.ApproveRaceAsk(one, out refusal)", form);
+        Assert.Contains("DriverAsk.Late or DriverAsk.Skip => desk.ApproveRaceAsk(one, out refusal)", form);
         Assert.Contains("raceControl.GiveDriverMoreTime(transponder, name)", main);
         Assert.Contains("raceControl.SkipDriverInNextRace(transponder, name)", main);
     }

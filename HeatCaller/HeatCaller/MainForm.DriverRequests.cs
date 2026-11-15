@@ -15,7 +15,6 @@ public partial class MainForm
 {
     private DriverRequestStore? _driverRequests;
     private DriverRequestDesk? _driverRequestDesk;
-    private DriverRequestsForm? _driverRequestsForm;
 
     /// <summary>Whether the Entries page's button has been joined to the window yet.</summary>
     private bool _driverRequestsButtonWired;
@@ -146,6 +145,10 @@ public partial class MainForm
 
     partial void RosterTickDriverRequests()
     {
+        // The Inbox button on Race Control's flag row (15 Nov 2026): every
+        // desk's count, whether or not this PC takes drivers' requests.
+        UpdateInboxBadge();
+
         if (_driverRequests is not { } store || _closingDown)
         {
             return;
@@ -175,7 +178,6 @@ public partial class MainForm
         // tick, before the "nothing changed" return below: it does nothing
         // itself while the count is the same, and it must catch the first
         // tick after Race Control is built.
-        _raceControlControl?.SetDeskWaiting(store.WaitingCount);
 
         var shown = _settings.RelayDriverRequests || store.WaitingCount > 0;
         var version = store.Version;
@@ -198,43 +200,10 @@ public partial class MainForm
         if (fresh > 0)
         {
             OnClientRawMessage($"[driver requests] {(fresh == 1 ? "A driver has" : $"{fresh} drivers have")} sent a request from their phone. "
-                + "Approve or decline it under Driver Requests on Race Day → Who's Racing.");
+                + "Approve or decline it in the Inbox (Race Control's Inbox button, or Race Day → Who's Racing).");
         }
     }
 
-    /// <summary>Opens Driver Requests, or brings it forward if it is already open - as Online Sign-ups.</summary>
-    private void ShowDriverRequests()
-    {
-        if (_driverRequestDesk is not { } desk)
-        {
-            return;
-        }
-
-        if (_driverRequestsForm is { IsDisposed: false } open)
-        {
-            // Activate alone leaves a minimised window minimised - and the
-            // Desk click looking as if it did nothing.
-            if (open.WindowState == FormWindowState.Minimized)
-            {
-                open.WindowState = FormWindowState.Normal;
-            }
-
-            open.Activate();
-            return;
-        }
-
-        var form = new DriverRequestsForm(desk, _profiles, text => _announcer.SpeakTest(text, _voiceStore.Current.Speed), _checkInStore);
-        form.FormClosed += (_, _) =>
-        {
-            if (ReferenceEquals(_driverRequestsForm, form))
-            {
-                _driverRequestsForm = null;
-            }
-
-            form.Dispose();
-        };
-
-        _driverRequestsForm = form;
-        form.Show(this);
-    }
+    /// <summary>Who's Racing's Driver Requests button: the Desk Inbox, on its Requests chip (15 Nov 2026).</summary>
+    private void ShowDriverRequests() => ShowInbox(InboxFilter.Requests);
 }

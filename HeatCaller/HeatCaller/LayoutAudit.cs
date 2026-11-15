@@ -193,8 +193,9 @@ internal static class LayoutAudit
         // A class's heats side by side, drivers dragged between them (HeatBalanceForm).
         "Move drivers between heats",
 
-        // Online sign-up: the switch, the sign-ups waiting and the invites (SignupsForm).
-        "Online Sign-ups",
+        // The Desk Inbox (15 Nov 2026): drivers' requests, club notes, the room
+        // vote and sign-ups in one list, with the invites under Sign-ups (DeskInboxForm).
+        "Inbox",
 
         // One sign-up checked before it becomes a driver (ApproveSignupForm, titled "Approve <name>").
         "Approve",

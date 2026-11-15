@@ -123,7 +123,8 @@ public sealed class SetupStep8ProgramTests : IDisposable
 
         Assert.Contains("provisional: () => ProvisionalBoard?.Invoke()", Source("RaceControlControl.Layout.cs"));
         Assert.Contains("RaceState.Finished => FinishedWords()", Source("BigScreenForm.cs"));
-        Assert.Contains("ProtestWindow.DeskOrder(all.Where(r => r.IsWaiting), _desk.InProtestWindow)", Source("DriverRequestsForm.cs"));
+        Assert.Contains("ProtestWindow.DeskOrder(desk.Store.All.Where(r => r.IsWaiting), desk.InProtestWindow)", Source("DeskInboxForm.Requests.cs"));
+        Assert.Contains("(request.Kind == DriverAsk.Query && desk.InProtestWindow(request))", Source("DeskInboxForm.Requests.cs"));
         Assert.Contains("notes.Add(InProtestWindowWords);", Source("DriverRequests.cs"));
         Assert.Contains("QueryInWindow = QueryInProtestWindow,", Source("MainForm.DriverRequests.cs"));
 

@@ -454,7 +454,10 @@ public sealed partial class RaceControlControl
     /// </summary>
     private void ShowTonightsClubNotes()
     {
-        if (TonightsNotes?.Invoke() is not { } notes)
+        // The Desk Inbox since 15 Nov 2026 - one window for everything the
+        // room sends, on its Club notes chip. Not modal any more: it sits
+        // beside Race Control, and the strip's count follows it.
+        if (TonightsNotes?.Invoke() is null)
         {
             StatusMessage?.Invoke(
                 $"{AppTime.LogStampNow()}  [show] Club notes aren't set up on this PC.");
@@ -462,22 +465,7 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        try
-        {
-            using var form = new ClubNotesForm(notes);
-
-            form.ShowDialog(FindForm());
-
-            var (toSay, toApprove, said) = notes.Counts();
-
-            StatusMessage?.Invoke(
-                $"{AppTime.LogStampNow()}  [show] Club notes: {Plural.Of(toSay, "note")} ready to be said, "
-                + $"{toApprove} waiting to be approved, {said} already said tonight.");
-        }
-        catch (Exception ex)
-        {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Couldn't open the club notes: {ex.GetType().Name}: {ex.Message}");
-        }
+        InboxRequested?.Invoke(InboxFilter.Notes);
     }
 
     /// <summary>
@@ -540,7 +528,8 @@ public sealed partial class RaceControlControl
 
     private void ShowTonightsRoomVote()
     {
-        if (TonightsVote?.Invoke() is not { } vote)
+        // The Desk Inbox's vote card since 15 Nov 2026.
+        if (TonightsVote?.Invoke() is null)
         {
             StatusMessage?.Invoke(
                 $"{AppTime.LogStampNow()}  [show] The room vote isn't set up on this PC.");
@@ -548,31 +537,23 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        try
-        {
-            var round = _activeRound?.Invoke();
+        InboxRequested?.Invoke(InboxFilter.Vote);
+    }
 
-            using var form = new RoomVoteForm(
-                vote,
-                round?.Id,
-                RaceLabel(round),
-                round?.ClassName,
-                GridToVoteOn(round),
-                _settings.RoomVoteFromTheRoom
-                    ? $"{WebServerService.VotePath} on this PC's address"
-                    : null);
+    /// <summary>
+    /// The race the inbox's vote card offers to open a vote on: the round
+    /// about to run, and the cars actually staged for it - see GridToVoteOn.
+    /// </summary>
+    internal VoteTarget CurrentVoteTarget()
+    {
+        var round = _activeRound?.Invoke();
 
-            form.ShowDialog(FindForm());
-
-            StatusMessage?.Invoke(vote.OnRace is { Length: > 0 } onRace
-                ? $"{AppTime.LogStampNow()}  [show] Room vote on {onRace}: {Plural.Of(vote.Votes, "vote")} in, "
-                  + (vote.Taking ? "still open." : "closed.")
-                : $"{AppTime.LogStampNow()}  [show] No room vote has been opened tonight.");
-        }
-        catch (Exception ex)
-        {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Couldn't open the room vote: {ex.GetType().Name}: {ex.Message}");
-        }
+        return new VoteTarget(
+            round?.Id,
+            RaceLabel(round),
+            round?.ClassName,
+            GridToVoteOn(round),
+            _settings.RoomVoteFromTheRoom ? $"{WebServerService.VotePath} on this PC's address" : null);
     }
 
     /// <summary>

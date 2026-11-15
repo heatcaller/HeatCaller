@@ -310,7 +310,8 @@ public partial class MainForm
 
         // The Desk button on the flag row (7 Nov 2026): Driver Requests,
         // where the waiting requests are approved or declined.
-        raceControl.DeskRequested += ShowDriverRequests;
+        raceControl.DeskRequested += () => ShowInbox(InboxFilter.All);
+        raceControl.InboxRequested += ShowInbox;
 
         raceControl.SessionSaved += () =>
         {
