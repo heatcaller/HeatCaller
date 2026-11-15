@@ -135,7 +135,7 @@ public sealed class SetupStep8PhonesTests : IDisposable
 
         var paid = DeskMoney.ForPhone(15m, new EntryPayment { How = PaidHow.Cash, Amount = 15m })!;
         Assert.True(paid.Paid);
-        Assert.Equal("Paid ✓", paid.Words);
+        Assert.Equal("Paid ✓ - thank you!", paid.Words);
 
         Assert.True(DeskMoney.ForPhone(15m, new EntryPayment { How = PaidHow.Comp, Note = "Marshal" })!.Paid);
         Assert.False(DeskMoney.ForPhone(15m, new EntryPayment { How = PaidHow.Owing })!.Paid);
@@ -175,7 +175,7 @@ public sealed class SetupStep8PhonesTests : IDisposable
 
         Assert.Equal($"Entry: {DeskMoney.Money(15m)} - pay at the desk", sam.GetProperty("words").GetString());
         Assert.False(sam.GetProperty("paid").GetBoolean());
-        Assert.Equal("Paid ✓", alex.GetProperty("words").GetString());
+        Assert.Equal("Paid ✓ - thank you!", alex.GetProperty("words").GetString());
         Assert.True(alex.GetProperty("paid").GetBoolean());
 
         // No fee tonight (or an older caller): no "entry" at all.

@@ -102,6 +102,11 @@ describe("Me's hero card: the dock", () => {
   it("sends the ask, and the key says it is waiting", async () => {
     const { page, sent } = await open();
     dock(page)!.children[1]!.click();
+    // Asked on Me's own sheet since 15 Nov 2026, not the browser's confirm box.
+    assert.equal(sent.length, 0, "nothing sent before the yes");
+    const yes = page.get("me-sheet-body").find((n) => n.textContent === "Yes, hold my race")[0];
+    assert.ok(yes, "the sheet asks first");
+    yes.click();
     await page.settle();
     page.eval("meMoment()");
 

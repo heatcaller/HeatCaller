@@ -132,6 +132,9 @@ public sealed partial class WebServerService
             running = vote.OnPollId is not null,
             open = vote.Taking,
             race = vote.OnRace ?? string.Empty,
+            // A vote on anything the desk typed (15 Nov 2026): race is the
+            // question, and the page asks it rather than "Who wins?".
+            custom = vote.IsCustom,
             drivers = vote.Options.Select(one => new { id = RosterId(key, one.Id), name = one.Name }).ToArray(),
             pick = picked is { Length: > 0 } ? RosterId(key, picked) : null,
         });
@@ -236,6 +239,7 @@ public sealed partial class WebServerService
             var whyNot = string.IsNullOrWhiteSpace(served) ? "That vote did not come through - try again."
                 : vote.OnPollId is null ? "There is no vote running at the moment."
                 : !vote.Taking ? "Voting on this one has closed."
+                : vote.IsCustom ? "That isn't one of the choices."
                 : "That driver is not on the grid for this race.";
 
             context.Response.StatusCode = 400;
@@ -283,12 +287,12 @@ public sealed partial class WebServerService
         .msg { text-align:center; padding:10px; font-weight:700; min-height:22px; font-size:15px; }
         .small { color:var(--muted); font-size:13px; line-height:1.5; }
         </style></head><body data-look="{{look.Fingerprint}}">
-        <div class="bar"><h1>{{look.Logo}}WHO WINS?</h1></div>
+        <div class="bar"><h1>{{look.Logo}}<span id="head">WHO WINS?</span></h1></div>
         <div class="wrap">
           <div class="race" id="race"></div>
           <div id="list"></div>
           <div class="msg" id="msg">Loading...</div>
-          <p class="small">Tap a name. You can change your mind while voting is open, and the announcer says what
+          <p class="small" id="note">Tap a name. You can change your mind while voting is open, and the announcer says what
           the room reckoned after the race - it never says who you picked. Nothing you tap here reaches the timing
           or the results.</p>
         </div>
@@ -299,6 +303,7 @@ public sealed partial class WebServerService
         var msg = document.getElementById('msg');
         var mine = null;
         var open = true;
+        var custom = false;
         var shown = null;
 
         // A random id this browser makes once and keeps, sent with the
@@ -337,6 +342,13 @@ public sealed partial class WebServerService
             return;
           }
           race.textContent = d.race || 'Tonight';
+          // A vote on anything (15 Nov 2026): the desk's question, not "Who wins?".
+          custom = !!d.custom;
+          document.getElementById('head').textContent = custom ? 'ROOM VOTE' : 'WHO WINS?';
+          document.title = custom ? (d.race || 'Room vote') : 'Who wins?';
+          document.getElementById('note').textContent = custom
+            ? 'Tap your answer. You can change your mind while voting is open. Nobody is told who picked what, and nothing you tap here reaches the timing or the results.'
+            : 'Tap a name. You can change your mind while voting is open, and the announcer says what the room reckoned after the race - it never says who you picked. Nothing you tap here reaches the timing or the results.';
           open = !!d.open;
           // This phone's pick as the laptop holds it, not as this page
           // remembers it: a new vote starts with nobody's pick in it, and a
@@ -359,8 +371,8 @@ public sealed partial class WebServerService
           if (now === shown) { return; }
           shown = now;
           if (!open) { msg.textContent = mine ? 'Voting has closed. Your pick is in.' : 'Voting has closed.'; }
-          else if (mine) { msg.textContent = 'You have ' + (mineName || 'your pick') + '. Good luck.'; }
-          else { msg.textContent = 'Tap who you reckon wins.'; }
+          else if (mine) { msg.textContent = 'You have ' + (mineName || 'your pick') + (custom ? '.' : '. Good luck.'); }
+          else { msg.textContent = custom ? 'Tap your answer.' : 'Tap who you reckon wins.'; }
         }
 
         function ballot() {
@@ -386,7 +398,7 @@ public sealed partial class WebServerService
             .then(function(d){
               if (d && d.ok) {
                 mine = id;
-                msg.textContent = 'You have ' + name + '. Good luck.';
+                msg.textContent = 'You have ' + name + (custom ? '.' : '. Good luck.');
                 ballot();
                 return;
               }

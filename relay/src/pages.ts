@@ -407,6 +407,9 @@ nav.tabs { view-transition-name: hc-tabs; }
 html.framed nav.tabs { display: none; }
 html.framed body { padding-bottom: calc(76px + var(--sa-b)); }
 html.framed .hcabout .sheet { padding-bottom: calc(28px + 58px + var(--sa-b)); }
+/* The Look sheet sits on the shell's bar, not under it (15 Nov 2026: its
+   Done button was half hidden behind the bar). */
+html.framed .hcthemes { padding-bottom: calc(58px + var(--sa-b)); }
 html.hcleaving body { visibility: hidden; }
 html.hcshell { height: 100vh; height: 100lvh; overflow: hidden; overscroll-behavior: none; }
 html.hcshell body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
@@ -1612,15 +1615,30 @@ html.hc .card, html.hc .lc, html.hc .flagbar, html.hc .you, html.hc details, htm
 html.hc .you { border-color: var(--primary); }
 html.hc #board tr.me td { outline: 2px solid var(--primary); outline-offset: -2px; }
 html.hc .stale, html.hc.hcoffline .wrap > :not(header):not(.hcoff):not(footer) { opacity: 0.8; filter: none; }
-.hcread { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 0; font-size: 0.85rem; color: var(--muted); }
-.hcread button { min-height: 44px; min-width: 44px; padding: 0 12px; font: inherit; font-weight: 700; color: var(--text);
-  background: transparent; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; }
+/* One row (15 Nov 2026, Asher: "make the text size, contrast, and look
+   buttons all fit on one row"): no wrapping; the A buttons keep their size,
+   and Contrast and Look give way, cut short with "...", when a phone is
+   narrow or the text is large. "Text" is for screen readers only now - the
+   A buttons say what they are. */
+.hcread { display: flex; flex-wrap: nowrap; align-items: center; gap: 5px; width: 100%; max-width: 100%; margin: 10px 0 0;
+  font-size: 0.85rem; color: var(--muted); }
+.hcread > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.hcread button { flex: none; min-height: 44px; min-width: 44px; padding: 0 9px; font: inherit; font-weight: 700; color: var(--text);
+  background: transparent; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; white-space: nowrap; }
+.hcread button[data-hc], .hcread button[data-look] { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .hcread button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); border-color: transparent; }
 /* The Look sheet (driver themes, 15 Nov 2026). */
 .hcthemes { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center;
   background: rgba(0, 0, 0, 0.6); padding: 0 0 var(--sa-b); }
-.hcthemes .sheet { width: 100%; max-width: 520px; max-height: 88vh; overflow-y: auto; background: var(--surface); color: var(--text);
-  border: 1px solid var(--border); border-radius: 18px 18px 0 0; padding: 18px 16px 20px; }
+/* Done was half under the phone's own bottom bar (15 Nov 2026): 88vh counts
+   the screen behind the browser's toolbar, so the sheet's bottom ran off the
+   visible page. 88dvh is the page you can actually see, and Done sticks to
+   the bottom of the sheet so it is always in full view, however long the
+   list of looks. */
+.hcthemes .sheet { width: 100%; max-width: 520px; max-height: 88vh; max-height: min(88dvh, calc(100% - 12px)); overflow-y: auto;
+  background: var(--surface);
+  color: var(--text); border: 1px solid var(--border); border-radius: 18px 18px 0 0;
+  padding: 18px 16px 16px; }
 .hcthemes h2 { margin: 0 0 4px; font-size: 1.25rem; }
 .hcthemes h3 { margin: 16px 0 8px; font-size: 1rem; }
 .hcthemes .note { margin: 0 0 12px; color: var(--muted); font-size: 0.9rem; }
@@ -1633,7 +1651,7 @@ html.hc .stale, html.hc.hcoffline .wrap > :not(header):not(.hcoff):not(footer) {
 .hcthemes .sw { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px;
   border-radius: 10px; border: 1px solid var(--border); font-weight: 800; font-size: 0.85rem; }
 .hcthemes .sw .dot { position: absolute; right: -3px; bottom: -3px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--surface); }
-.hcthemes .go { width: 100%; margin-top: 16px; }
+.hcthemes .go { position: sticky; bottom: 0; width: 100%; margin-top: 16px; box-shadow: 0 10px 0 var(--surface), 0 -10px 16px var(--surface); }
 /* A BOARD MADE FOR A PHONE (item 4): four columns under 480 px, the rest a
    tap away, the driver's own row stuck to the edge it scrolls off. */
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -2565,7 +2583,9 @@ function hcApplyReading() {
     const hcb = box.querySelector('[data-hc]');
     if (hcb) {
       hcb.setAttribute('aria-pressed', String(r.hc === 'high' || r.hc === 'light'));
-      hcb.textContent = r.hc === 'high' ? 'High contrast: dark' : r.hc === 'light' ? 'High contrast: light' : 'High contrast';
+      // "Contrast" on the button, to fit the one row; "High contrast" to a screen reader.
+      hcb.textContent = r.hc === 'high' ? 'Contrast: dark' : r.hc === 'light' ? 'Contrast: light' : 'Contrast';
+      hcb.setAttribute('aria-label', r.hc === 'high' ? 'High contrast: dark' : r.hc === 'light' ? 'High contrast: light' : 'High contrast');
     }
   } catch (e) { /* the club's look */ }
 }
@@ -3992,7 +4012,7 @@ ${overrides}${sunset ? HC_SUNSET_STYLE : ""}
     ${subTab("badges", "Achievements")}
   </nav>` : ""}
   ${page.body}
-  <footer><span id="stamp">&nbsp;</span>${links}<span class="tip">Tap any driver's name to follow them on every page.</span><span class="hcread" id="hcread" role="group" aria-label="Reading"><span>Text</span><button type="button" data-ts="100" aria-label="Text size normal">A</button><button type="button" data-ts="115" aria-label="Text size larger">A+</button><button type="button" data-ts="130" aria-label="Text size largest">A++</button><button type="button" data-hc="1">High contrast</button>${look.driverThemes ? '<button type="button" data-look="1" aria-haspopup="dialog">Look</button>' : ""}</span><a class="hcmark" href="https://heatcaller.com" aria-label="What's HeatCaller?" data-hc-about>${HC_SUN}${HC_WORD}</a></footer>
+  <footer><span id="stamp">&nbsp;</span>${links}<span class="tip">Tap any driver's name to follow them on every page.</span><span class="hcread" id="hcread" role="group" aria-label="Reading"><span>Text</span><button type="button" data-ts="100" aria-label="Text size normal">A</button><button type="button" data-ts="115" aria-label="Text size larger">A+</button><button type="button" data-ts="130" aria-label="Text size largest">A++</button><button type="button" data-hc="1" aria-label="High contrast">Contrast</button>${look.driverThemes ? '<button type="button" data-look="1" aria-haspopup="dialog">Look</button>' : ""}</span><a class="hcmark" href="https://heatcaller.com" aria-label="What's HeatCaller?" data-hc-about>${HC_SUN}${HC_WORD}</a></footer>
 </div>
 ${aboutSheet(name)}
 <div id="follow" class="follow" hidden></div>
@@ -8285,11 +8305,11 @@ function voteControl(vote: boolean): string {
   }
 
   return '<div class="card vote" id="vote" hidden>'
-    + "<h3>Who wins?</h3>"
+    + '<h3 id="votehead">Who wins?</h3>'
     + '<p class="race" id="voterace"></p>'
     + '<div id="votelist"></div>'
     + '<p class="said" id="votesaid" role="status"></p>'
-    + '<p class="note">Tap a name. You can change your mind while voting is open, and the announcer says what '
+    + '<p class="note" id="votenote">Tap a name. You can change your mind while voting is open, and the announcer says what '
     + "the room reckoned after the race - it never says who you picked. Nothing you tap here reaches the timing "
     + "or the results.</p>"
     + "</div>";
@@ -8416,6 +8436,10 @@ function picksWords() {
   let mine = null;
   let mineName = '';
   let shown = null;
+  // A vote on anything the desk typed (15 Nov 2026, Asher: "set up a
+  // custom vote on anything"): its question in place of "Who wins?", and
+  // never on this phone's Who wins? record - it has no race to come right.
+  let custom = false;
 
   function draw(d) {
     const drivers = Array.isArray(d.drivers) ? d.drivers.filter((one) => one
@@ -8441,6 +8465,13 @@ function picksWords() {
 
     box.hidden = false;
     race.textContent = d.race || 'Tonight';
+    custom = d.custom === true;
+    const head = document.getElementById('votehead');
+    if (head) head.textContent = custom ? 'Room vote' : 'Who wins?';
+    const note = document.getElementById('votenote');
+    if (note) note.textContent = custom
+      ? 'Tap your answer. You can change your mind while voting is open. Nobody is told who picked what, and nothing you tap here reaches the timing or the results.'
+      : 'Tap a name. You can change your mind while voting is open, and the announcer says what the room reckoned after the race - it never says who you picked. Nothing you tap here reaches the timing or the results.';
     list.textContent = '';
 
     for (const one of drivers) {
@@ -8459,10 +8490,10 @@ function picksWords() {
     if (now === shown) return;
     shown = now;
 
-    const record = typeof picksWords === 'function' ? picksWords() : '';
+    const record = !custom && typeof picksWords === 'function' ? picksWords() : '';
     if (!open) said.textContent = 'Voting has closed. Your pick is in.' + (record ? ' ' + record + '.' : '');
-    else if (mine) said.textContent = 'You have ' + mineName + '. Good luck.' + (record ? ' ' + record + '.' : '');
-    else said.textContent = 'Tap who you reckon wins.' + (record ? ' ' + record + ' so far.' : '');
+    else if (mine) said.textContent = 'You have ' + mineName + (custom ? '.' : '. Good luck.') + (record ? ' ' + record + '.' : '');
+    else said.textContent = (custom ? 'Tap your answer.' : 'Tap who you reckon wins.') + (record ? ' ' + record + ' so far.' : '');
   }
 
   async function ballot() {
@@ -8513,7 +8544,7 @@ function picksWords() {
       mine = id;
       mineName = name;
       shown = null;
-      if (typeof picksAdd === 'function') picksAdd(race.textContent || '', name);
+      if (!custom && typeof picksAdd === 'function') picksAdd(race.textContent || '', name);
       ballot();
       return;
     }

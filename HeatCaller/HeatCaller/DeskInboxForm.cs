@@ -901,6 +901,28 @@ internal sealed class QuickRepliesForm : Form
         DialogFit.Keep(this, page, width: 500, height: 320);
     }
 
+    /// <summary>
+    /// The cursor at the end, nothing selected (15 Nov 2026, Asher: "quick
+    /// replies load with the text selected"). The box is the first thing
+    /// focused, and Windows selects all of a text box it tabs into - one
+    /// key pressed then wiped every reply.
+    /// </summary>
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        UnselectReplies();
+    }
+
+    /// <summary>The box's cursor put after the last reply, with nothing selected.</summary>
+    internal void UnselectReplies()
+    {
+        _box.Select(_box.TextLength, 0);
+        _box.ScrollToCaret();
+    }
+
+    /// <summary>The replies box, for tests.</summary>
+    internal TextBox RepliesBox => _box;
+
     /// <summary>The lines typed, tidied.</summary>
     internal IReadOnlyList<string> Replies =>
         _box.Text.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).Take(8).ToList();

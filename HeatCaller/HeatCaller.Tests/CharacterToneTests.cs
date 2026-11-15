@@ -344,6 +344,39 @@ public sealed class CharacterToneTests : IDisposable
         Assert.Contains(told, model.SystemPrompt);
     }
 
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(2, true)]
+    [InlineData(0, false)]
+    public async Task The_f_word_is_the_first_pick_whenever_the_dial_allows_a_swear(int swears, bool asked)
+    {
+        // 15 Nov 2026, Asher: "make the model drop more f bombs across the board on sailor setting".
+        var (desk, model) = Desk(CommentaryTone.SailorMouth, swears: swears);
+
+        await desk.BuildSegmentAsync(SegmentKind.BattleWatch, Facts("Sam leads Bill by 0.4s on lap 12."));
+
+        Assert.Equal(asked, model.SystemPrompt.Contains("make the f-word (fuck, fucking, fucked) your first pick", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Every_sailor_mouth_piece_asks_for_f_bombs()
+    {
+        var sailor = CommentaryTones.All.Single(t => t.Tone == CommentaryTone.SailorMouth);
+
+        Assert.Contains("the f-word is your go-to", sailor.ToneLine);
+        Assert.Contains("shit is your next favourite", sailor.ToneLine);
+        Assert.Contains("Hardly ever say damn", sailor.ToneLine);
+        Assert.Contains("motherfucker", sailor.ToneLine);
+        Assert.Contains("cocksucker", sailor.ToneLine);
+        Assert.Contains("eat shit", sailor.ToneLine);
+        Assert.Contains("eat a bag of sick dicks", sailor.ToneLine);
+        Assert.Contains("never a driver", sailor.ToneLine);
+        Assert.Contains("f-bomb", sailor.Segment);
+        Assert.Contains("f-bombs", sailor.Exchange);
+        Assert.Contains("who the fuck won", sailor.Close);
+        Assert.Contains("f-bombs", sailor.Host);
+    }
+
     [Fact]
     public async Task Other_tones_are_never_told_a_swear_count()
     {
