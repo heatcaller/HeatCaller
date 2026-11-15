@@ -1819,47 +1819,71 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        // The setting as saved, for Undo - empty means the defaults - and
-        // the columns as the board shows them, to start the list from.
-        var savedBefore = _settings.RaceControlKpis.ToList();
-        var shownBefore = _kpiColumns.Select(k => k.Key).ToList();
+        var visit = BeginColumnsVisit();
 
-        var choices = new ColumnChoices(shownBefore, KpiCatalog.All);
-        choices.Changed += (_, _) =>
+        ColumnsPopover.Show(_dgvLeaderboard, at, visit.Choices, focusKey, KpiCatalog.DefaultRaceControl,
+            closed: () => EndColumnsVisit(visit),
+            more: PickLeaderboardColumns);
+    }
+
+    /// <summary>
+    /// One opening of the columns drop-down: its list, the setting as it was
+    /// saved (for Undo - empty means the defaults), and the columns the board
+    /// showed when it opened.
+    /// </summary>
+    internal sealed record ColumnsVisit(ColumnChoices Choices, List<string> SavedBefore, List<string> ShownBefore);
+
+    /// <summary>
+    /// Starts a visit to the columns drop-down: the list starts from the
+    /// board's columns, and every change to it is put on the board at once.
+    /// Apart from showing the menu, so it can be tested without one.
+    /// </summary>
+    internal ColumnsVisit BeginColumnsVisit()
+    {
+        var shownBefore = _kpiColumns.Select(k => k.Key).ToList();
+        var visit = new ColumnsVisit(new ColumnChoices(shownBefore, KpiCatalog.All), _settings.RaceControlKpis.ToList(), shownBefore);
+
+        visit.Choices.Changed += (_, _) =>
         {
             if (IsDisposed)
             {
                 return;
             }
 
-            _settings.RaceControlKpis = choices.ShownKeys;
+            _settings.RaceControlKpis = visit.Choices.ShownKeys;
             RebuildLeaderboardColumns();
             RenderLeaderboard();
         };
 
-        ColumnsPopover.Show(_dgvLeaderboard, at, choices, focusKey, KpiCatalog.DefaultRaceControl,
-            closed: () =>
+        return visit;
+    }
+
+    /// <summary>
+    /// Ends a visit when the drop-down closes: saves, and puts the whole
+    /// visit on the Undo list as one step - nothing, when the board ended as
+    /// it started.
+    /// </summary>
+    internal void EndColumnsVisit(ColumnsVisit visit)
+    {
+        if (visit.Choices.ShownKeys.SequenceEqual(visit.ShownBefore, StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _settings.Save();
+
+        var savedBefore = visit.SavedBefore.ToList();
+        _undo.Capture("Change the Race Control columns", () =>
+        {
+            _settings.RaceControlKpis = savedBefore.ToList();
+            _settings.Save();
+
+            if (!IsDisposed)
             {
-                if (choices.ShownKeys.SequenceEqual(shownBefore, StringComparer.OrdinalIgnoreCase))
-                {
-                    return;
-                }
-
-                _settings.Save();
-
-                _undo.Capture("Change the Race Control columns", () =>
-                {
-                    _settings.RaceControlKpis = savedBefore.ToList();
-                    _settings.Save();
-
-                    if (!IsDisposed)
-                    {
-                        RebuildLeaderboardColumns();
-                        RenderLeaderboard();
-                    }
-                });
-            },
-            more: PickLeaderboardColumns);
+                RebuildLeaderboardColumns();
+                RenderLeaderboard();
+            }
+        });
     }
 
     /// <summary>The board's column picker, with Undo. What the Columns button did until 15 Nov 2026.</summary>

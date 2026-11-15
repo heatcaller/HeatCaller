@@ -2,6 +2,15 @@
 
 HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whole feature lands, *c* for fixes and smaller additions.
 
+## Unreleased
+
+- **Choose the leaderboard's columns from its headings (15 November).** Right-click a column heading on Race Control and a list of every column drops down, the board's columns first and ticked, the rest under **Hidden**.
+    - **Tick or untick** to show or hide a column, and use the **▲ ▼** arrows on a row (or <kbd>Ctrl</kbd>+<kbd>Up</kbd> / <kbd>Ctrl</kbd>+<kbd>Down</kbd>) to move it left or right. The board changes as you go; the last column can't be hidden.
+    - **Restore default columns** and **More column options...** (the full picker, with what each column shows) are at the foot. **Undo** takes back the whole visit in one step.
+    - **The full picker** for Practice, the Big Screen, the OBS overlay and the club website uses the same list: an unticked column moves down under **Hidden**, and a ticked one joins the end of the board.
+
+    See [Running a race](race-control/running-a-race.md). Update HeatCaller on the race PC; nothing changes on the relay.
+
 ## 0.63.0
 
 Released 15 Nov 2026. Everything since 0.62.0, newest first.

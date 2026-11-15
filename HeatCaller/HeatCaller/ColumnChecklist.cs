@@ -148,7 +148,7 @@ public sealed class ColumnChoices
 /// right-click (ColumnsPopover) and by the full picker (KpiPickerForm), so
 /// the two always look and behave alike.
 ///
-/// Keys: Space ticks, Alt or Ctrl with Up/Down moves the picked column.
+/// Keys: Space ticks, Ctrl+Up/Ctrl+Down moves the picked column.
 /// </summary>
 internal sealed class ColumnChecklist : ListBox
 {
@@ -308,8 +308,10 @@ internal sealed class ColumnChecklist : ListBox
 
     protected override bool IsInputKey(Keys keyData)
     {
+        // Ctrl+Up/Down too, so they reach OnKeyDown rather than the menu
+        // around the list.
         var key = keyData & Keys.KeyCode;
-        return key is Keys.Up or Keys.Down || base.IsInputKey(keyData);
+        return (key is Keys.Up or Keys.Down && (keyData & Keys.Alt) == 0) || base.IsInputKey(keyData);
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -321,7 +323,9 @@ internal sealed class ColumnChecklist : ListBox
             return;
         }
 
-        if ((e.Alt || e.Control) && e.KeyCode is Keys.Up or Keys.Down)
+        // Ctrl, not Alt: in a drop-down, Alt on its own is the menu key and
+        // closes the menu before the arrow ever arrives.
+        if (e.Control && !e.Alt && e.KeyCode is Keys.Up or Keys.Down)
         {
             MoveSelected(e.KeyCode == Keys.Up ? -1 : 1);
             e.Handled = e.SuppressKeyPress = true;
