@@ -175,7 +175,6 @@ public sealed class BugHunt7ListenAppTests
     public void The_caption_listeners_read_has_no_audio_tags()
     {
         var offer = Between(SourceOf("AnnouncementService.ListenAlong.cs"), "private bool OfferLineToListeners(", "private byte[]? AsMp3(");
-        // Starred (sailor-mouth, 15 Nov 2026) wraps it now; the tags still come off first.
         Assert.Contains("var words = Starred(VoiceProfile.StripAudioTags(text));", offer);
     }
 

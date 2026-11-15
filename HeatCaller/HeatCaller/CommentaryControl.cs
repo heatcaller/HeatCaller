@@ -118,10 +118,42 @@ public sealed class CommentaryControl : UserControl
     /// <summary>The Sailor-mouth dial (15 Nov 2026): swear words a line, 0 to CommentaryTones.MostSwears. Shown only while Sailor-mouth is the tone.</summary>
     private readonly SliderControl _sldSwears = new() { Minimum = 0, Maximum = CommentaryTones.MostSwears, SmallChange = 1, LargeChange = 1 };
 
-    private readonly Label _lblSwears = new() { AutoSize = true };
+    /// <summary>What the dial's number means - "up to 2 a line".</summary>
+    private readonly Label _lblSwears = new() { AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Margin = Padding.Empty };
+
+    /// <summary>
+    /// A plain panel round <see cref="_lblSwears"/>, as wide as its longest
+    /// text (SizeFields), so a new value is laid out in here and goes no
+    /// further. A label straight in the row, sized by its text or not, laid
+    /// the whole card out again at every stop of the dial - a third of a
+    /// second each, so dragging it stuttered (15 Nov 2026).
+    /// </summary>
+    private readonly Panel _lblSwearsHost = new() { AutoSize = false, Margin = Padding.Empty, BackColor = Color.Transparent, Tag = AppTheme.KeepBackColor };
 
     /// <summary>The dial's caption, slider and hint - shown and hidden together (ShowSwearDial).</summary>
-    private IReadOnlyList<Control> _swearRow = Array.Empty<Control>();
+    /// <summary>
+    /// The room kept for the dial beside the tone picker, the same size
+    /// whichever tone is picked - so showing the dial changes nothing
+    /// outside it (ShowSwearDial). Sized in SizeFields.
+    /// </summary>
+    private readonly Panel _swearHost = new() { AutoSize = false, Margin = Padding.Empty, BackColor = Color.Transparent, Tag = AppTheme.KeepBackColor };
+
+    /// <summary>The dial's caption, slider and number, along one line inside <see cref="_swearHost"/> - shown or hidden whole.</summary>
+    private readonly FlowLayoutPanel _swearInner = new()
+    {
+        AutoSize = false,
+        Dock = DockStyle.Fill,
+        WrapContents = false,
+        FlowDirection = FlowDirection.LeftToRight,
+        Margin = Padding.Empty,
+        Padding = Padding.Empty,
+        BackColor = Color.Transparent,
+        Tag = AppTheme.KeepBackColor,
+    };
+
+    private readonly Label _lblSwearsCaption = new() { AutoSize = true, Anchor = AnchorStyles.Left };
+
+    private readonly ToolTip _swearTips = new();
 
     /// <summary>Whether the dial's row is meant to be on show - for tests, since a page not on screen reads every control as hidden.</summary>
     internal bool SwearDialShown { get; private set; }
@@ -183,7 +215,7 @@ public sealed class CommentaryControl : UserControl
     private const int TonePickerWidth = 220;
 
     /// <summary>The Sailor-mouth dial's width at the normal text size - seven stops, room to land on each.</summary>
-    private const int SwearDialWidth = 180;
+    private const int SwearDialWidth = 140;
     private const int ShowNameWidth = 280;
 
     /// <summary>The least width of the How chatty and Pacing pickers at the normal text size - it was the show music's library drop-downs' width, which moved to Sounds > Imaging on 17 Oct 2026.</summary>
@@ -787,6 +819,7 @@ public sealed class CommentaryControl : UserControl
         // many"): swear words a line, right under the tone, there only while
         // Sailor-mouth is picked.
         _sldSwears.Value = CommentaryTones.SwearsPerLine(_settings);
+        _lblSwearsHost.Controls.Add(_lblSwears);
         _lblSwears.Text = SwearsWords(_sldSwears.Value);
         _sldSwears.ValueChanged += (_, _) =>
         {
@@ -797,8 +830,27 @@ public sealed class CommentaryControl : UserControl
                 return;
             }
 
+            // Kept at once - the next line written uses it - but SAVED once
+            // the dial settles: a save is a fifth of a second, and saving at
+            // every stop made dragging the dial stutter (15 Nov 2026).
             _settings.SailorMouthSwears = _sldSwears.Value;
-            _settings.Save();
+            _swearSavePending = true;
+            _swearSave.Stop();
+            _swearSave.Start();
+        };
+
+        _swearSave.Tick += (_, _) => SaveSwearsNow();
+        VisibleChanged += (_, _) =>
+        {
+            if (!Visible)
+            {
+                SaveSwearsNow();
+            }
+        };
+        Disposed += (_, _) =>
+        {
+            SaveSwearsNow();
+            _swearSave.Dispose();
         };
 
         _numMaxWords.Minimum = 8;
@@ -831,10 +883,24 @@ public sealed class CommentaryControl : UserControl
             UpdateEnabledState();
         };
 
-        Flush(styleGrid.AddRow("Writing tone:", _cmbTone));
-        Flush(styleGrid.AddRow("Swearing:", Line(_sldSwears, _lblSwears)));
-        styleGrid.AddHint("How many swear words Sailor-mouth may use in a line - longer pieces get this many for every forty words. Lines over it have the spare ones taken out.");
-        _swearRow = styleGrid.RowParts(_sldSwears);
+        // The dial on the tone's own line, in room that is always kept for
+        // it (_swearHost) - see ShowSwearDial for why it is not a row.
+        _lblSwearsCaption.Text = "Swearing:";
+        _swearInner.Controls.Add(_lblSwearsCaption);
+        _swearInner.Controls.Add(_sldSwears);
+        _swearInner.Controls.Add(_lblSwearsHost);
+        _swearHost.Controls.Add(_swearInner);
+
+        const string swearHelp = "How many swear words Sailor-mouth may use in a line - longer pieces get this many "
+                               + "for every forty words. Lines over it have the spare ones taken out.";
+        _swearTips.SetToolTip(_sldSwears, swearHelp);
+        _swearTips.SetToolTip(_lblSwearsCaption, swearHelp);
+        _swearTips.SetToolTip(_lblSwears, swearHelp);
+        _sldSwears.AccessibleName = "Sailor-mouth swear words a line";
+        _sldSwears.AccessibleDescription = swearHelp;
+        Disposed += (_, _) => _swearTips.Dispose();
+
+        Flush(styleGrid.AddRow("Writing tone:", Line(_cmbTone, _swearHost)));
         ShowSwearDial();
         Flush(styleGrid.AddRow(string.Empty, _chkVoiceTags));
         styleGrid.AddHint("Needs an ElevenLabs v3 voice, and a tone with a delivery of its own - not Neutral or Dry.");
@@ -1339,7 +1405,24 @@ public sealed class CommentaryControl : UserControl
         Fit(_txtTeaser, UiLayout.AtTextSize(TeaserWidth), Pieces.LineHeight(_txtTeaser.Font) * TeaserLines + UiLayout.HintGap * 2);
 
         Fit(_cmbTone, Math.Max(UiLayout.AtTextSize(TonePickerWidth), Pieces.PickerWidth(_cmbTone, ref _toneWidth)));
-Fit(_sldSwears, UiLayout.AtTextSize(SwearDialWidth), Math.Max(UiLayout.AtTextSize(24), _cmbTone.Height));
+        Fit(_sldSwears, UiLayout.AtTextSize(SwearDialWidth), Math.Max(UiLayout.AtTextSize(24), _cmbTone.Height));
+        Fit(_lblSwearsHost, Enumerable.Range(0, CommentaryTones.MostSwears + 1).Max(n => TextRenderer.MeasureText(SwearsWords(n), _lblSwears.Font).Width) + UiLayout.LabelGap, _sldSwears.Height);
+
+        // The room beside the tone picker: a gap, the caption, the dial and
+        // its widest number - the same whichever tone is picked.
+        var swearsGap = UiLayout.LabelGap * 2;
+
+        if (_swearInner.Padding.Left != swearsGap)
+        {
+            _swearInner.Padding = new Padding(swearsGap, 0, 0, 0);
+        }
+
+        Fit(_swearHost,
+            swearsGap
+            + _lblSwearsCaption.PreferredWidth + _lblSwearsCaption.Margin.Horizontal
+            + _sldSwears.Width + _sldSwears.Margin.Horizontal
+            + _lblSwearsHost.Width + _lblSwearsHost.Margin.Horizontal,
+            Math.Max(_sldSwears.Height + _sldSwears.Margin.Vertical, _cmbTone.Height));
         Fit(_cmbChatter, Math.Max(UiLayout.AtTextSize(ShowPieceWidth), Pieces.PickerWidth(_cmbChatter, ref _chatterWidth)));
 
         foreach (var number in new[]
@@ -1490,27 +1573,72 @@ Fit(_sldSwears, UiLayout.AtTextSize(SwearDialWidth), Math.Max(UiLayout.AtTextSiz
     }
 
     /// <summary>
-    /// The Sailor-mouth dial's row shown only while Sailor-mouth is the tone
-    /// that plays - not a saved one the club has switched off.
+    /// The Sailor-mouth dial shown only while Sailor-mouth is the tone that
+    /// plays - not a saved one the club has switched off.
+    ///
+    /// BESIDE THE TONE PICKER, IN ROOM KEPT FOR IT (15 Nov 2026, Asher: "the
+    /// dial is jerky when you flip it sailor"). It was a row of its own, and
+    /// a row coming or going changes the card's height - which lays every
+    /// card on the page out again, a third of a second to a second each
+    /// time, the page jumping as it went. Now the room beside the picker is
+    /// the same size whatever the tone, and only what is inside it is shown
+    /// or hidden: nothing outside it moves, so the switch is instant.
     /// </summary>
     private void ShowSwearDial()
     {
         var shown = CommentaryTones.Effective(_settings) == CommentaryTone.SailorMouth;
         SwearDialShown = shown;
 
-        foreach (var part in _swearRow)
+        // The card's own colour, so the room reads as part of it and the
+        // slider - which paints its parent's colour - has one to paint.
+        var card = _swearHost.Parent;
+
+        while (card is not null && card.BackColor.A < 255)
         {
-            if (part.Visible != shown)
+            card = card.Parent;
+        }
+
+        if (card is not null)
+        {
+            foreach (var part in new Control[] { _swearHost, _swearInner, _lblSwearsHost })
             {
-                part.Visible = shown;
+                if (part.BackColor != card.BackColor)
+                {
+                    part.BackColor = card.BackColor;
+                }
             }
         }
+
+        if (_swearInner.Visible != shown)
+        {
+            _swearInner.Visible = shown;
+        }
+    }
+
+    /// <summary>Saves the dial once it has settled - see the dial's ValueChanged.</summary>
+    private readonly System.Windows.Forms.Timer _swearSave = new() { Interval = 400 };
+
+    /// <summary>The dial has moved since it was last saved.</summary>
+    private bool _swearSavePending;
+
+    /// <summary>Saves the dial's number if it has moved since the last save.</summary>
+    private void SaveSwearsNow()
+    {
+        _swearSave.Stop();
+
+        if (!_swearSavePending)
+        {
+            return;
+        }
+
+        _swearSavePending = false;
+        _settings.Save();
     }
 
     /// <summary>What the dial's number means, beside it.</summary>
     internal static string SwearsWords(int swears) => swears switch
     {
-        <= 0 => "none - crude, but no swear words",
+        <= 0 => "none, just crude",
         1 => "1 a line",
         _ => $"up to {swears} a line",
     };

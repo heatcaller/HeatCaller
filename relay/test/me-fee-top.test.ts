@@ -15,6 +15,24 @@ describe("Me: the entry fee and the setup tile (12 Nov 2026)", () => {
     assert.ok(!ME_JS.includes("hero.appendChild(el('div', 'me-fee'"));
   });
 
+  it("drops the top line once paid, leaving Tonight's Paid ✓ as the proof (15 Nov 2026)", () => {
+    const at = ME_JS.indexOf("function meFee()");
+    const body = ME_JS.slice(at, ME_JS.indexOf("\n}\n", at) + 2);
+    const run = (entry: unknown) => {
+      const node = { textContent: "", hidden: false, className: "" };
+      new Function("document", "live", "meEntryWords", body + "\nmeFee();")(
+        { getElementById: () => node }, { entry },
+        () => (entry as { words?: string }).words ?? "");
+      return node;
+    };
+    const owing = run({ words: "Entry: $15.00 - pay at the desk", paid: false });
+    assert.equal(owing.textContent, "Entry: $15.00 - pay at the desk");
+    assert.equal(owing.hidden, false);
+    const paid = run({ words: "Paid ✓", paid: true });
+    assert.equal(paid.textContent, "");
+    assert.equal(paid.hidden, true);
+  });
+
   it("checks the Garage's setup section is really at the top once the page settles", () => {
     const garage = garageEmbedScript();
     assert.match(garage, /function scrollToStay\(target\)/);

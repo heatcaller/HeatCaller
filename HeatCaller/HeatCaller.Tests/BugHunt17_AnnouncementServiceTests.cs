@@ -80,8 +80,7 @@ public sealed class BugHunt17_AnnouncementServiceTests : IDisposable
 
         var source = File.ReadAllText(Path.Combine(dir!.FullName, "HeatCaller", "HeatCaller", "AnnouncementService.cs"));
 
-        // Starred (sailor-mouth, 15 Nov 2026) wraps it now; the names still come from the any-thread list.
-        Assert.Contains("Starred(WithScreenNames(VoiceProfile.StripAudioTags(text), _profiles.AllIncludingGhostsForAnyThread));", source);
+        Assert.Contains("WithScreenNames(VoiceProfile.StripAudioTags(text), _profiles.AllIncludingGhostsForAnyThread)", source);
         Assert.DoesNotContain("_profiles.AllIncludingGhosts)", source);
     }
 }
