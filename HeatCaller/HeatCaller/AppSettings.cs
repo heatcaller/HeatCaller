@@ -792,6 +792,15 @@ public sealed class AppSettings
     public bool CheckMemberships { get; set; }
 
     /// <summary>
+    /// The club allows the Sailor-mouth commentary tone (15 Nov 2026) - the
+    /// one that swears. On by default; a club that runs junior nights can
+    /// switch it off on Setup's Club rules, and then it is not offered on the
+    /// Commentary page and a saved Sailor-mouth choice plays as Enthusiastic
+    /// (CommentaryTones.Effective).
+    /// </summary>
+    public bool AllowSailorMouth { get; set; } = true;
+
+    /// <summary>
     /// The next race night as told to the drivers (12 Nov 2026, setup plan
     /// D13): on the phones' Home page, and the night "I'm coming" is for.
     /// Null when the club hasn't announced one. See NextNight.

@@ -26,6 +26,15 @@ namespace HeatCaller;
 /// only, so the strip pattern takes it off again for the screen.
 /// </param>
 /// <param name="Sentence">The cue on every sentence after the first, or null for none.</param>
+/// <param name="Rule">
+/// What the tone is held to, on the end of its tone line and its host -
+/// <see cref="CommentaryTones.CharacterRule"/> unless the tone has its own
+/// (Sailor-mouth, 15 Nov 2026, swaps "family-friendly" for its hard lines).
+/// </param>
+/// <param name="Premium">
+/// A premium tone (15 Nov 2026): marked "(Premium)" in the dropdown. Only a
+/// mark for now - the app has no plans or licences to check it against yet.
+/// </param>
 public sealed record ToneProfile(
     CommentaryTone Tone,
     string Label,
@@ -35,10 +44,15 @@ public sealed record ToneProfile(
     string Close,
     string Host,
     string? Opener,
-    string? Sentence)
+    string? Sentence,
+    string Rule = CommentaryTones.CharacterRule,
+    bool Premium = false)
 {
     /// <summary>Whether the voice-tag pass has anything to add for this tone.</summary>
     public bool HasTags => Opener is not null || Sentence is not null;
+
+    /// <summary>What the Tone dropdown shows: the label, marked when the tone is premium.</summary>
+    public string DisplayLabel => Premium ? Label + " (Premium)" : Label;
 }
 
 public static class CommentaryTones
@@ -58,6 +72,28 @@ public static class CommentaryTones
         + "exactly as given, and the listener must still be able to tell who is where. The character is "
         + "how you say it, never an excuse to add anything. Keep it family-friendly - no gore, no real "
         + "injury or death, nothing cruel - and never mock a driver; the drama is about the race, not the person.";
+
+    /// <summary>
+    /// Sailor-mouth's rule (15 Nov 2026, Asher: "swears and is crude. never
+    /// racist or antisemitic"). The same facts-first opening as
+    /// <see cref="CharacterRule"/>, word for word, then the hard lines in
+    /// place of "family-friendly". The prompt is not the only guard: every
+    /// line the model writes, in every tone, is checked for hate terms
+    /// before it is used - see <see cref="ScreenWords.HateTermIn"/>.
+    ///
+    /// The swearing is aimed at the race, never at a driver: juniors race at
+    /// these clubs, and a crude line about the gap is a joke while a crude
+    /// line about a twelve-year-old is not.
+    /// </summary>
+    internal const string SailorMouthRule =
+        " Stay in character, but the facts come first: every name, position and number you use must be "
+        + "exactly as given, and the listener must still be able to tell who is where. The character is "
+        + "how you say it, never an excuse to add anything. Swearing and crude humor are allowed - aim them at "
+        + "the race, the luck, the track and the gap, never at a driver as a person, and never mock anyone. "
+        + "HARD LINES, with no exceptions and not even as a joke: nothing racist, antisemitic or hateful about "
+        + "anyone's race, religion, ethnicity, nationality, sex, sexuality, gender identity or disability; no slurs "
+        + "of any kind, not even softened or starred; never the c-word; nothing sexual about anybody; no gore, real "
+        + "injury or death.";
 
     public static readonly IReadOnlyList<ToneProfile> All = new[]
     {
@@ -79,7 +115,8 @@ public static class CommentaryTones
             + "rest of the field as worthy-but-doomed rivals. Grand, specific, never cruel.",
             "The host is a theatrical villain interviewing their latest champion or rival - silky, scheming, delighted.",
             "[laughs]",
-            "[mischievously]"),
+            "[mischievously]",
+            Premium: true),
 
         // ------------------------------------------------------------ silly
 
@@ -99,7 +136,8 @@ public static class CommentaryTones
             + "left at sea. Rowdy but exact.",
             "The host is a boisterous pirate captain - loud, friendly, every question a bit of a growl.",
             "[laughs]",
-            "[excited]"),
+            "[excited]",
+            Premium: true),
 
         new ToneProfile(
             CommentaryTone.TownCrier,
@@ -116,10 +154,56 @@ public static class CommentaryTones
             + "others honorably mentioned. End with a flourish.",
             "The host is a medieval town crier - booming, formal, very pleased with every answer.",
             "[shouting]",
-            "[shouting]"),
+            "[shouting]",
+            Premium: true),
+
+        // ------------------------------------------------------------ adult
+
+        // Sailor-mouth (15 Nov 2026). A club can switch it off on Setup's
+        // Club rules (AppSettings.AllowSailorMouth); off, it is not offered
+        // and a saved choice plays as Enthusiastic - see Effective.
+        new ToneProfile(
+            CommentaryTone.SailorMouth,
+            "Adult: Sailor-mouth - swears, crude, 18+",
+            "Call it like a foul-mouthed pit crew chief who has had a long night - swearing freely (fuck, shit, bloody, "
+            + "bastard, ass, piss) and crude, but quick and funny with it, and still clear about who is where. "
+            + "Example of the VOICE wanted: given \"P1 leads P2 by 0.4s on lap 12\", write something like "
+            + "\"Four tenths, Sam. Four damn tenths, and Bill is fucking stuck there on lap twelve.\" - "
+            + "not \"Sam leads Bill by 0.4 seconds.\"",
+            " A sweary aside between races - one piece of news from the facts, told the way the crew tells it at the "
+            + "back of the pits. Crude about the race, never about a driver.",
+            " Two foul-mouthed pit crew chiefs between races, giving each other grief about the race. Each turn answers "
+            + "the last, and the second adds a fact the first didn't give. Short and sweary.",
+            " Close the race the way the crew would at the bar afterwards - who the hell won, by how much, and who got "
+            + "screwed by the luck. Sweary but exact, and nobody's mocked.",
+            "The host is a foul-mouthed but friendly pit-lane reporter - swears freely about the race, never at the guest.",
+            "[laughs]",
+            null,
+            SailorMouthRule,
+            Premium: true),
     };
 
     private static readonly Dictionary<CommentaryTone, ToneProfile> ByTone = All.ToDictionary(p => p.Tone);
+
+    /// <summary>
+    /// The tone actually used: the saved one, unless it is Sailor-mouth and
+    /// the club has switched Sailor-mouth off (15 Nov 2026), when it plays as
+    /// Enthusiastic - so a junior night never hears it from a choice somebody
+    /// left saved.
+    /// </summary>
+    public static CommentaryTone Effective(AppSettings settings) =>
+        settings.CommentaryToneStyle == CommentaryTone.SailorMouth && !settings.AllowSailorMouth
+            ? CommentaryTone.Enthusiastic
+            : settings.CommentaryToneStyle;
+
+    /// <summary>
+    /// The tone for writing that is SHARED - the night recap, a driver's own
+    /// night, the season piece, the night before - which clubs post and
+    /// people send around. Sailor-mouth is for the room, so these are written
+    /// Enthusiastic instead (15 Nov 2026).
+    /// </summary>
+    public static CommentaryTone ForSharedWriting(AppSettings settings) =>
+        Effective(settings) is var tone && tone == CommentaryTone.SailorMouth ? CommentaryTone.Enthusiastic : tone;
 
     /// <summary>The character tone's entry, or null for Enthusiastic, Neutral and Dry.</summary>
     public static ToneProfile? Find(CommentaryTone tone) => ByTone.GetValueOrDefault(tone);

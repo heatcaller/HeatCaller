@@ -215,6 +215,7 @@ internal static class SettingsTable
             nameof(AppSettings.AskForWaivers),
             nameof(AppSettings.WaiverMonths),
             nameof(AppSettings.CheckMemberships),
+            nameof(AppSettings.AllowSailorMouth),
 
             // Cast: the Co-host's "What they're like", every "If ElevenLabs
             // runs out" Kokoro voice (5 Nov 2026), and the Recap host,

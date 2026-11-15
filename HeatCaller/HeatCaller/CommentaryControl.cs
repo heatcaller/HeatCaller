@@ -735,30 +735,36 @@ public sealed class CommentaryControl : UserControl
         // card on the page, until 1 Nov 2026)
         // ------------------------------------------------------------------
 
-        var toneItems = new[]
-        {
-            new ToneItem(CommentaryTone.Enthusiastic, "Enthusiastic - trackside hype"),
-            new ToneItem(CommentaryTone.Neutral, "Neutral - calm play-by-play"),
-            new ToneItem(CommentaryTone.DryUnderstated, "Dry - understated, deadpan"),
-        }
-        // The character tones (8 Nov 2026), labelled with their group -
-        // "Dark: Villain - ..." - since a dropdown list has no headings.
-        .Concat(CommentaryTones.All.Select(tone => new ToneItem(tone.Tone, tone.Label)))
-        .ToArray();
-
         _cmbTone.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbTone.Items.AddRange(toneItems);
-        SelectTone(_settings.CommentaryToneStyle);
+        FillTones();
         _cmbTone.SelectedIndexChanged += (_, _) =>
         {
-            if (_cmbTone.SelectedItem is ToneItem item)
+            if (_fillingTones || _cmbTone.SelectedItem is not ToneItem item)
             {
-                _settings.CommentaryToneStyle = item.Tone;
-                _settings.Save();
-
-                // The tag box lives or dies by this - see UpdateEnabledState.
-                UpdateEnabledState();
+                return;
             }
+
+            // Sailor-mouth (15 Nov 2026) swears, so it is asked about
+            // every time it is picked rather than switched to by a slip of
+            // the arrow keys. No puts the dropdown back where it was.
+            if (item.Tone == CommentaryTone.SailorMouth
+                && _settings.CommentaryToneStyle != CommentaryTone.SailorMouth
+                && AppDialog.Show(this,
+                    "Sailor-mouth swears and is crude - out loud, on the speakers. Screens, phones and the "
+                    + "overlay show the swears starred, and the night recap stays clean. It never says anything "
+                    + "racist, antisemitic or hateful.\n\nUse it only where everyone in the room is fine with that. "
+                    + "Switch to Sailor-mouth?",
+                    "Sailor-mouth commentary", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+            {
+                SelectTone(CommentaryTones.Effective(_settings));
+                return;
+            }
+
+            _settings.CommentaryToneStyle = item.Tone;
+            _settings.Save();
+
+            // The tag box lives or dies by this - see UpdateEnabledState.
+            UpdateEnabledState();
         };
 
         _numMaxWords.Minimum = 8;
@@ -1246,6 +1252,9 @@ public sealed class CommentaryControl : UserControl
             // what the relay line says depends on it.
             UpdateRelayState();
 
+            // Sailor-mouth comes and goes with a club rule on Setup (15 Nov 2026).
+            FillTones();
+
             // And Race Calls' max calls per lap and the Cast tab's co-host,
             // which the How chatty line counts from, and the Voice tab's
             // voice, which decides whether the excited marks can be read at
@@ -1397,20 +1406,73 @@ public sealed class CommentaryControl : UserControl
         _settings.Save();
     }
 
-    private void SelectTone(CommentaryTone tone)
+    /// <summary>Set while the tone list is being filled or a choice put back, so neither saves anything.</summary>
+    private bool _fillingTones;
+
+    /// <summary>
+    /// The tones the dropdown offers, the club's choice selected. Filled
+    /// again whenever the page is shown, because Sailor-mouth comes and goes
+    /// with a club rule on Setup (AppSettings.AllowSailorMouth, 15 Nov 2026).
+    /// A saved Sailor-mouth the club has since switched off shows as
+    /// Enthusiastic, which is what it plays as - the saved choice itself is
+    /// left alone, so switching the rule back on brings it back.
+    /// </summary>
+    internal void FillTones()
     {
-        for (var i = 0; i < _cmbTone.Items.Count; i++)
+        var toneItems = new[]
         {
-            if (_cmbTone.Items[i] is ToneItem item && item.Tone == tone)
-            {
-                _cmbTone.SelectedIndex = i;
-                return;
-            }
+            new ToneItem(CommentaryTone.Enthusiastic, "Enthusiastic - trackside hype"),
+            new ToneItem(CommentaryTone.Neutral, "Neutral - calm play-by-play"),
+            new ToneItem(CommentaryTone.DryUnderstated, "Dry - understated, deadpan"),
+        }
+        // The character tones (8 Nov 2026), labelled with their group -
+        // "Dark: Villain - ..." - since a dropdown list has no headings.
+        .Concat(CommentaryTones.All
+            .Where(tone => tone.Tone != CommentaryTone.SailorMouth || _settings.AllowSailorMouth)
+            .Select(tone => new ToneItem(tone.Tone, tone.DisplayLabel)))
+        .ToArray();
+
+        _fillingTones = true;
+
+        try
+        {
+            _cmbTone.BeginUpdate();
+            _cmbTone.Items.Clear();
+            _cmbTone.Items.AddRange(toneItems);
+            _cmbTone.EndUpdate();
+        }
+        finally
+        {
+            _fillingTones = false;
         }
 
-        if (_cmbTone.Items.Count > 0)
+        SelectTone(CommentaryTones.Effective(_settings));
+    }
+
+    /// <summary>Selects <paramref name="tone"/> without saving it (or the first tone, if it is not offered).</summary>
+    private void SelectTone(CommentaryTone tone)
+    {
+        _fillingTones = true;
+
+        try
         {
-            _cmbTone.SelectedIndex = 0;
+            for (var i = 0; i < _cmbTone.Items.Count; i++)
+            {
+                if (_cmbTone.Items[i] is ToneItem item && item.Tone == tone)
+                {
+                    _cmbTone.SelectedIndex = i;
+                    return;
+                }
+            }
+
+            if (_cmbTone.Items.Count > 0)
+            {
+                _cmbTone.SelectedIndex = 0;
+            }
+        }
+        finally
+        {
+            _fillingTones = false;
         }
     }
 
@@ -1696,7 +1758,7 @@ public sealed class CommentaryControl : UserControl
         // CommentaryService.Tagged makes. Unknown (nothing wired)
         // reads as supported, so the box is never greyed on a guess.
         var voiceReadsTags = _commentary.VoiceSupportsAudioTagsProvider?.Invoke() ?? true;
-        _chkVoiceTags.Enabled = on && voiceReadsTags && CommentaryTones.ReadsTags(_settings.CommentaryToneStyle);
+        _chkVoiceTags.Enabled = on && voiceReadsTags && CommentaryTones.ReadsTags(CommentaryTones.Effective(_settings));
 
         _chkIntros.Enabled = on;
         _chkIntrosSelective.Enabled = on && _chkIntros.Checked;

@@ -21,6 +21,10 @@ public enum CommentaryTone
     Villain = 7,
     Pirate = 8,
     TownCrier = 10,
+
+    // Sailor-mouth (15 Nov 2026) - the one adult tone. A club can switch it
+    // off on Club rules; see CommentaryTones.Effective.
+    SailorMouth = 12,
 }
 
 /// <summary>
@@ -273,6 +277,13 @@ public sealed class CommentaryService
     private static string FieldSizeFact(int fieldSize, int named) =>
         fieldSize > named ? $"Drivers in the race: {fieldSize} (not all of them are named here)\n" : string.Empty;
 
+    /// <summary>
+    /// The tone every line is written in - the saved one, or Enthusiastic
+    /// for a Sailor-mouth choice the club has since switched off (15 Nov
+    /// 2026). Every prompt reads this, never the setting itself.
+    /// </summary>
+    private CommentaryTone Tone => CommentaryTones.Effective(_settings);
+
     /// <summary>Configured externally so the settings page can rebuild it without restarting anything.</summary>
     public ICommentaryBrain? Client { get; set; }
 
@@ -284,8 +295,15 @@ public sealed class CommentaryService
     /// <see cref="WithPronouns"/>. Thirteen kinds of line are written by
     /// the model, and one place that adds them is the only way a fourteenth
     /// cannot forget to.
+    ///
+    /// And so it is also where every line is checked for hate terms (15 Nov
+    /// 2026, with the Sailor-mouth tone, but in EVERY tone): a line with a
+    /// slur in it is dropped whole, said through <see cref="Log"/>, and the
+    /// caller sees what it sees when the model gives nothing - see
+    /// <see cref="ScreenWords.HateTermIn"/>. A word that came in with the
+    /// facts (a driver's name the club typed) does not count.
     /// </summary>
-    private Task<string?> Ask(
+    private async Task<string?> Ask(
         ICommentaryBrain brain,
         string systemPrompt,
         string userPrompt,
@@ -295,7 +313,23 @@ public sealed class CommentaryService
         TimeSpan? timeout = null)
     {
         var (system, user) = WithPronouns(systemPrompt, userPrompt);
-        return brain.GenerateAsync(system, user, maxTokens, temperature, ct, timeout);
+        var written = await brain.GenerateAsync(system, user, maxTokens, temperature, ct, timeout).ConfigureAwait(false);
+
+        if (ScreenWords.HateTermIn(written, user) is { } term)
+        {
+            try
+            {
+                Log?.Invoke($"Commentary line dropped - it had a hate term in it (\"{term[0]}{new string('*', term.Length - 1)}\"). Nothing was said.");
+            }
+            catch
+            {
+                // Saying why is a nicety; dropping the line is the point.
+            }
+
+            return null;
+        }
+
+        return written;
     }
 
     /// <summary>
@@ -863,9 +897,9 @@ public sealed class CommentaryService
         const string noTagsLine =
             " Do not write any square-bracket tags or stage directions - delivery cues are added separately.";
 
-        var character = CommentaryTones.Find(_settings.CommentaryToneStyle);
+        var character = CommentaryTones.Find(Tone);
 
-        var coaching = _settings.CommentaryToneStyle switch
+        var coaching = Tone switch
         {
             _ when character is not null => forExchange ? character.Exchange : character.Segment,
 
@@ -912,14 +946,14 @@ public sealed class CommentaryService
         const string noTagsLine =
             " Do not write any square-bracket tags or stage directions - delivery cues are added separately.";
 
-        if (CommentaryTones.Find(_settings.CommentaryToneStyle) is { } character)
+        if (CommentaryTones.Find(Tone) is { } character)
         {
             return basePrompt + character.Close +
                    " Never mention being an announcer and never address the drivers directly." +
                    noTagsLine;
         }
 
-        switch (_settings.CommentaryToneStyle)
+        switch (Tone)
         {
             case CommentaryTone.DryUnderstated:
                 // Deliberately left alone. Someone who picked "dry" does not
@@ -1023,7 +1057,7 @@ public sealed class CommentaryService
         if (clean.Length == 0
             || !_settings.CommentaryVoiceTags
             || !VoiceSupportsAudioTags
-            || !CommentaryTones.ReadsTags(_settings.CommentaryToneStyle))
+            || !CommentaryTones.ReadsTags(Tone))
         {
             return clean;
         }
@@ -1035,7 +1069,7 @@ public sealed class CommentaryService
         string? first = opener ?? "[excited]";
         string? rest = "[excited]";
 
-        if (CommentaryTones.Find(_settings.CommentaryToneStyle) is { } character)
+        if (CommentaryTones.Find(Tone) is { } character)
         {
             first = character.Opener ?? character.Sentence;
             rest = character.Sentence;
@@ -1083,13 +1117,19 @@ public sealed class CommentaryService
     /// more room than the shared setting allows - currently the race
     /// summary, which has a whole result to cover.
     /// </param>
-    private string BuildSystemPrompt(int extraWords = 0)
+    /// <param name="shared">
+    /// Writing that is posted and sent around - the night recap, a driver's
+    /// night, the season piece, the night before - rather than said to the
+    /// room. Never Sailor-mouth (15 Nov 2026): see CommentaryTones.ForSharedWriting.
+    /// </param>
+    private string BuildSystemPrompt(int extraWords = 0, bool shared = false)
     {
-        var character = CommentaryTones.Find(_settings.CommentaryToneStyle);
+        var tone = shared ? CommentaryTones.ForSharedWriting(_settings) : Tone;
+        var character = CommentaryTones.Find(tone);
 
-        var toneLine = _settings.CommentaryToneStyle switch
+        var toneLine = tone switch
         {
-            _ when character is not null => character.ToneLine + CommentaryTones.CharacterRule,
+            _ when character is not null => character.ToneLine + character.Rule,
             CommentaryTone.DryUnderstated =>
                 "Be dry and understated - deadpan delivery, no exclamation marks, closer to a wry aside than hype.",
             CommentaryTone.Neutral =>
@@ -5369,11 +5409,11 @@ public sealed class CommentaryService
 
     private string BuildInterviewSystemPrompt()
     {
-        var character = CommentaryTones.Find(_settings.CommentaryToneStyle);
+        var character = CommentaryTones.Find(Tone);
 
-        var hostTone = _settings.CommentaryToneStyle switch
+        var hostTone = Tone switch
         {
-            _ when character is not null => character.Host + CommentaryTones.CharacterRule,
+            _ when character is not null => character.Host + character.Rule,
             CommentaryTone.DryUnderstated => "The host is dry and understated.",
             CommentaryTone.Neutral => "The host is calm and clear.",
             _ => "The host is excited and punchy, like a trackside TV reporter.",
@@ -5896,7 +5936,7 @@ public sealed class CommentaryService
         var extra = NightRecap.ExtraWordsOver(_settings.CommentaryMaxWords);
 
         return await RecordAndReturn("Night recap", FiguresCheckedAsync(Ask(Client,
-            BuildSystemPrompt(extra),
+            BuildSystemPrompt(extra, shared: true),
             body,
             maxTokens: MaxTokensForWordLimit(extra),
             temperature: Variety,
@@ -5955,7 +5995,7 @@ public sealed class CommentaryService
         var extra = DriverCut.ExtraWordsOver(_settings.CommentaryMaxWords);
 
         return await RecordAndReturn("Driver's night", FiguresCheckedAsync(Ask(Client,
-            BuildSystemPrompt(extra),
+            BuildSystemPrompt(extra, shared: true),
             body,
             maxTokens: MaxTokensForWordLimit(extra),
             temperature: Variety,
@@ -5986,7 +6026,7 @@ public sealed class CommentaryService
         var extra = Math.Max(0, SeasonPiece.Words - Math.Max(0, _settings.CommentaryMaxWords));
 
         return await RecordAndReturn("Season piece", FiguresCheckedAsync(Ask(Client,
-            BuildSystemPrompt(extra),
+            BuildSystemPrompt(extra, shared: true),
             body,
             maxTokens: MaxTokensForWordLimit(extra),
             temperature: Variety,
@@ -6035,7 +6075,7 @@ public sealed class CommentaryService
         var extra = NightBefore.ExtraWordsOver(_settings.CommentaryMaxWords);
 
         return await RecordAndReturn("Night before", FiguresCheckedAsync(Ask(Client,
-            BuildSystemPrompt(extra),
+            BuildSystemPrompt(extra, shared: true),
             body,
             maxTokens: MaxTokensForWordLimit(extra),
             temperature: Variety,

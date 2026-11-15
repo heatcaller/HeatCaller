@@ -710,7 +710,7 @@ public sealed partial class AnnouncementService
     /// could throw, which lost the line before it was queued.
     /// </summary>
     private string ForTheScreens(string text) =>
-        WithScreenNames(VoiceProfile.StripAudioTags(text), _profiles.AllIncludingGhostsForAnyThread);
+        ScreenWords.Masked(WithScreenNames(VoiceProfile.StripAudioTags(text), _profiles.AllIncludingGhostsForAnyThread));
 
     /// <summary>
     /// Puts each driver's real name back where the line has the name the
