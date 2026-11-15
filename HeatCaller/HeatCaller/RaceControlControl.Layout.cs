@@ -27,6 +27,110 @@ public sealed partial class RaceControlControl
     /// </summary>
     private BigScreenForm? _bigScreen;
 
+    /// <summary>In the clock's corner: folds away the buttons and meters below it, and brings them back - see BuildLayout.</summary>
+    private readonly Button _btnFoldSide = new() { AccessibleName = "Hide or show the buttons under the clock", TabStop = false };
+
+    /// <summary>The fold button sized to its chevron and kept in the clock's bottom right-hand corner.</summary>
+    private void PlaceFoldButton()
+    {
+        var size = UiLayout.ButtonSizeFor(_btnFoldSide);
+        var height = Math.Max(_btnFoldSide.Height, size.Height);
+        // The room a flat button's caption needs, as the layout test counts it (LayoutAudit.CheckButton).
+        var width = Math.Max(height, TextRenderer.MeasureText(_btnFoldSide.Text, _btnFoldSide.Font).Width + 22);
+        var inset = UiLayout.AtDpi(8);
+        var bounds = new Rectangle(_clock.ClientSize.Width - width - inset, _clock.ClientSize.Height - height - inset, width, height);
+
+        if (_btnFoldSide.Bounds != bounds)
+        {
+            _btnFoldSide.Bounds = bounds;
+        }
+    }
+
+    /// <summary>At the foot of the board: folds the sidebar and the column under the clock together - see BuildLayout.</summary>
+    private readonly Button _btnExpandBoard = new() { Text = "Expand" };
+
+    /// <summary>The sidebar is narrowed to its icons - told by MainForm (ShowNavNarrowed).</summary>
+    private bool _navNarrowed;
+
+    /// <summary>Asks for the sidebar narrowed (true) or opened (false), with Expand board.</summary>
+    public event Action<bool>? ExpandBoardRequested;
+
+    /// <summary>Both sides folded: the sidebar narrowed to its icons, and the column under the clock folded away.</summary>
+    private bool BoardExpanded => _navNarrowed && _settings.RaceControlSideFolded;
+
+    /// <summary>The sidebar narrowed or opened, from anywhere - for Expand board's caption.</summary>
+    internal void ShowNavNarrowed(bool narrowed)
+    {
+        _navNarrowed = narrowed;
+        ShowExpandCaption();
+    }
+
+    private void ShowExpandCaption()
+    {
+        var caption = BoardExpanded ? "Restore" : "Expand";
+
+        if (_btnExpandBoard.Text != caption)
+        {
+            _btnExpandBoard.Text = caption;
+        }
+    }
+
+    /// <summary>What the fold button hides: everything in the clock column under it.</summary>
+    private readonly List<Control> _foldedAway = new();
+
+    /// <summary>The flags card beside the clock - the folded clock keeps to its height. Set in BuildLayout.</summary>
+    private Section? _flagsCard;
+
+    /// <summary>
+    /// The clock's height now. Folded, no taller than the flags card beside
+    /// it (15 Nov 2026, asked for by Asher), so the board widening under it
+    /// keeps its place rather than dropping below a clock taller than the
+    /// card - and no taller than it is unfolded.
+    /// </summary>
+    private int ClockHeightNow =>
+        _settings.RaceControlSideFolded && _flagsCard is { Height: > 0 } card
+            ? Math.Clamp(card.Height, UiLayout.AtDpi(100), ClockHeight)
+            : ClockHeight;
+
+    /// <summary>The clock column's width: the clock's, kept to its shape as it shrinks folded.</summary>
+    private int ClockWidthNow => (int)Math.Round(ClockWidth * (double)ClockHeightNow / ClockHeight);
+
+    /// <summary>The clock folded or not as the setting says, at its height for that - folded, the flags card's.</summary>
+    private void FitClockToFold()
+    {
+        var height = ClockHeightNow;
+
+        if (_clock.Height != height)
+        {
+            _clock.Height = height;
+        }
+    }
+
+    /// <summary>Shows or hides the column under the clock as AppSettings.RaceControlSideFolded says, and the fold button's caption with it.</summary>
+    private void ShowSideFolded()
+    {
+        var folded = _settings.RaceControlSideFolded;
+
+        _btnFoldSide.Text = folded ? "▾" : "▴";
+
+        // Folding, the buttons go before the meters, and unfolding the meters
+        // come back first: the board goes under the column only once nothing
+        // in the column reaches the bottom (Beside.FillWidensUnderSide).
+        var parts = folded ? _foldedAway : Enumerable.Reverse(_foldedAway);
+
+        foreach (var part in parts)
+        {
+            if (part.Visible == folded)
+            {
+                part.Visible = !folded;
+            }
+        }
+
+        FitClockToFold();
+        ShowExpandCaption();
+        PlaceFoldButton();
+    }
+
     /// <summary>
     /// Puts the host's Session row - the Name, Track and Round pickers,
     /// which MainForm owns - at the top of the page, above the Next Up bar.
@@ -64,10 +168,6 @@ public sealed partial class RaceControlControl
             }
         }
     }
-
-    /// <summary>A line of help in the small muted type the app's hints use, wrapping to the room it is given.</summary>
-    private Label Hint(string text) =>
-        Wear(new Label { Text = text, AutoSize = true, ForeColor = AppTheme.TextMuted }, () => AppTheme.SmallFont);
 
     /// <summary>
     /// The least height the leaderboard's grid can do with: its headings and
@@ -196,15 +296,10 @@ public sealed partial class RaceControlControl
         // two labels are still kept up to date, so nothing that reads them
         // changes - they are just not on the page.
 
-        // The board's instructions used to be its group box's caption, all
-        // hundred-odd characters of it; a card's caption is a heading, and
-        // they are a line of help under it.
+        // THE LINE OF HELP OVER THE BOARD IS GONE (15 Nov 2026, asked for by
+        // Asher): click, double-click and right-click are learnt once, and
+        // ? still lists the shortcuts. The board gets the line's room.
         var board = new Section("Leaderboard");
-
-        board.Add(
-            Hint("Click a driver for laps, penalties and warnings, or double-click for their lap breakdown. "
-                 + "Right-click for names and everything else, or a column heading to choose the columns. Press ? for shortcuts."),
-            gapBelow: UiLayout.HintGap);
 
         board.AddFill(_dgvLeaderboard, LeastBoardHeight);
 
@@ -219,7 +314,9 @@ public sealed partial class RaceControlControl
         // whether races start themselves, which a volunteer has to see.
         // Warm-up first (14 Nov 2026) beside Start races: both say how a race
         // starts, and both are Advanced.
-        var footer = new ButtonBar().With(SimpleMode.Hide(_chkStartWithOnAir), SimpleMode.Hide(_swWarmUpFirst), _swAutoStart, _btnFormat);
+        // Tight (15 Nov 2026, asked for by Asher: "on one level"): each button
+        // as wide as its caption, so the row fits on one line beside the clock.
+        var footer = new ButtonBar(tight: true).With(SimpleMode.Hide(_chkStartWithOnAir), SimpleMode.Hide(_swWarmUpFirst), _swAutoStart, _btnFormat, _btnExpandBoard);
 
         // The switches are shorter than the buttons beside them; the bar lines
         // everything up along the top, so they are brought down to their middle.
@@ -239,12 +336,73 @@ public sealed partial class RaceControlControl
 
         board.Add(footer, gapBelow: 0);
 
-        var body = new Beside(sideLeastWidth: ClockWidth);
+        // The board goes the whole width, under the clock, while the column's
+        // buttons and meters are folded away - see _btnFoldSide below.
+        var body = new Beside(() => ClockWidthNow) { FillWidensUnderSide = true };
+
+        _flagsCard = flags;
+
+        // Folded, the clock keeps to the card's height - which only settles
+        // once the card is laid out, and changes with the text size.
+        flags.Resize += (_, _) =>
+        {
+            if (!body.IsSliding)
+            {
+                FitClockToFold();
+            }
+        };
 
         body.Add(flags);
         body.AddFill(board, board.LeastHeight);
 
         body.AddSide(_clock);
+
+        // FOLD THE COLUMN (15 Nov 2026, asked for by Asher: "make all the
+        // buttons and vu meters below the clock collapsible so that the
+        // leaderboard can expand"). A small chevron in the clock's bottom
+        // right-hand corner hides everything below the clock, and the board
+        // widens into the room. In the clock rather than a row under it, so
+        // folded the column is the clock alone and the board loses as
+        // little height as it can. Folded, the clock also shrinks to the
+        // flags card's height, so the board keeps its place. It slides there
+        // rather than jumping (Beside.SlideTo). Kept from night to night
+        // (AppSettings.RaceControlSideFolded).
+        _btnFoldSide.Click += (_, _) =>
+        {
+            _settings.RaceControlSideFolded = !_settings.RaceControlSideFolded;
+            _settings.Save();
+            body.SlideTo(ShowSideFolded);
+        };
+
+        // EXPAND BOARD (15 Nov 2026, asked for by Asher: "add an expand
+        // button at the bottom of board that folds both sides at the same
+        // time"). At the foot of the board: the sidebar narrowed to its
+        // icons (MainForm, through ExpandBoardRequested) and the column
+        // under the clock folded, sliding together. Pressed again with both
+        // folded, it opens both.
+        _btnExpandBoard.Click += (_, _) =>
+        {
+            var expand = !BoardExpanded;
+
+            if (_settings.RaceControlSideFolded != expand)
+            {
+                _settings.RaceControlSideFolded = expand;
+                _settings.Save();
+                body.SlideTo(ShowSideFolded);
+            }
+
+            ExpandBoardRequested?.Invoke(expand);
+            ShowExpandCaption();
+        };
+
+        _clock.Controls.Add(_btnFoldSide);
+        _clock.Resize += (_, _) => PlaceFoldButton();
+        _btnFoldSide.Resize += (_, _) => PlaceFoldButton();
+
+        // The theme sets a new text size's height before its font, so the
+        // width is worked out again once the font has arrived.
+        _btnFoldSide.FontChanged += (_, _) => PlaceFoldButton();
+
         body.AddSide(_btnQuickRace);
         body.AddSide(_btnBigScreen);
         body.AddSide(_btnAnnouncer);
@@ -262,6 +420,7 @@ public sealed partial class RaceControlControl
         var btnMissionControl = new Button { Text = "Mission Control" };
         btnMissionControl.Click += (_, _) => MissionControlRequested?.Invoke();
         body.AddSide(btnMissionControl);
+        _foldedAway.Add(btnMissionControl);
 
         // The broadcast's controls, in a window of their own (25 Oct 2026) -
         // they were the row under the Next Up bar. See BroadcastWindow.
@@ -281,7 +440,11 @@ public sealed partial class RaceControlControl
         if (_flagRow is { } row)
         {
             body.AddSideFill(row.Meters, _ => 0, gapBelow: 0);
+            _foldedAway.Add(row.Meters);
         }
+
+        _foldedAway.AddRange(new Control[] { _btnQuickRace, _btnBigScreen, _btnAnnouncer, _btnProjection, _btnReadiness, _btnBroadcast });
+        ShowSideFolded();
 
         _page.Add(_nextUpBar, gapBelow: UiLayout.RowGap);
 
@@ -1517,6 +1680,7 @@ public sealed partial class RaceControlControl
     {
         var shortcutTips = new ToolTip();
         AppTheme.StyleToolTip(shortcutTips, keep: true);
+        shortcutTips.SetToolTip(_btnFoldSide, "Hide or show the buttons and level meters under the clock - hidden, the leaderboard takes their room.");
         // F1 is the START key now, not this button's (17 Oct 2026): through
         // On Air when Start races On Air is ticked. This button stages
         // straight away, as it always has. See TriggerStart.
@@ -1600,7 +1764,9 @@ public sealed partial class RaceControlControl
             "The format for the next race: the round's override, else its class's format, else the app default. "
             + "Class formats are set on the Classes page.");
 
-        _btnFormat.Text = "Race Format...";
+        // "Format" (15 Nov 2026, asked for by Asher), short so the foot of the
+        // board stays on one row.
+        _btnFormat.Text = "Format";
         _btnFormat.Click += (_, _) => EditFormat();
 
         ApplyEffectiveFormat();

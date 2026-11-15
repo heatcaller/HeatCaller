@@ -68,7 +68,9 @@ public sealed partial class RaceControlControl
     /// the foot of the board. A segmented switch since 9 Nov 2026, in place
     /// of the "Start races On Air" tick box, so both choices are on show.
     /// </summary>
-    private readonly SegmentedSwitch _chkStartWithOnAir = new("Start races:", "Stage", "On Air");
+    // "Start:" rather than "Start races:" (15 Nov 2026, asked for by Asher), so
+    // the foot of the board fits on one row at 1280 wide.
+    private readonly SegmentedSwitch _chkStartWithOnAir = new("Start:", "Stage", "On Air") { Compact = true };
 
     /// <summary>
     /// Whether a race started any way but the Stage button goes through On
@@ -95,7 +97,9 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>"Warm-up first: Off | On" (14 Nov 2026), beside Start races at the foot of the board - see <see cref="StartWithWarmUp"/>.</summary>
-    private readonly SegmentedSwitch _swWarmUpFirst = new("Warm-up first:", "Off", "On");
+    // "Warm-up:" rather than "Warm-up first:" (15 Nov 2026), so the foot of
+    // the board fits on one row at 1366 wide - see BuildLayout.
+    private readonly SegmentedSwitch _swWarmUpFirst = new("Warm-up:", "Off", "On") { Compact = true };
 
     /// <summary>
     /// Whether every start opens the warm-up flag first (14 Nov 2026): Start

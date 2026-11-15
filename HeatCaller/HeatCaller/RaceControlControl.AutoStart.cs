@@ -22,7 +22,9 @@ public sealed partial class RaceControlControl
     private readonly AutoStartClock _autoStart = new();
 
     /// <summary>"Auto start: Off | On" - at the foot of the board.</summary>
-    private readonly SegmentedSwitch _swAutoStart = new("Auto start:", "Off", "On");
+    // "Auto:" rather than "Auto start:" (15 Nov 2026), so the foot of the
+    // board fits on one row at 1280 wide, with "Start:" and "Warm-up:".
+    private readonly SegmentedSwitch _swAutoStart = new("Auto:", "Off", "On") { Compact = true };
 
     /// <summary>Hold / Resume, beside Start Next on the Next Up bar.</summary>
     private readonly Button _btnAutoHold = new();

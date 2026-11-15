@@ -264,16 +264,22 @@ public partial class MainForm
     /// the settings file: writing it straight back would be a disk write per
     /// launch that changes nothing.
     /// </summary>
-    private void SetNavIconsOnly(bool iconsOnly, bool save = true)
+    private void SetNavIconsOnly(bool iconsOnly, bool save = true, bool holdPainting = true)
     {
         _navIconsOnly = iconsOnly;
+
+        // Race Control's Expand board button says Restore while both sides are folded.
+        if (_raceControlControl is not null)
+        {
+            _raceControlControl.ShowNavNarrowed(iconsOnly);
+        }
 
         // Painting is held off for the whole change and the window drawn once
         // at the end, so the sidebar goes from one width to the other in a
         // single frame - without it the sidebar, the header, the footer and
         // the page beside them each repainted at their own step, and the
         // narrowing flickered through a half-laid-out sidebar on the way.
-        var frozen = IsHandleCreated && Visible;
+        var frozen = holdPainting && IsHandleCreated && Visible;
 
         if (frozen)
         {
@@ -359,7 +365,7 @@ public partial class MainForm
     private static extern bool RedrawWindow(IntPtr hWnd, IntPtr lprcUpdate, IntPtr hrgnUpdate, uint flags);
 
     /// <summary>Ctrl+B, and the chevron at the top of the sidebar.</summary>
-    private void ToggleNavIconsOnly() => SetNavIconsOnly(!_navIconsOnly);
+    private void ToggleNavIconsOnly() => SlideNavIconsOnly(!_navIconsOnly);
 
     /// <summary>
     /// Pushes the current scale through the whole window.

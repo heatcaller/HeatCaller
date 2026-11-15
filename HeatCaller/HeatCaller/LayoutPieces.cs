@@ -2104,6 +2104,16 @@ internal sealed class Beside : Panel
     /// <summary>The column down the left-hand edge rather than the right, the other parts to the right of it. Set as the Beside is made.</summary>
     public bool SideOnLeft { get; init; }
 
+    /// <summary>
+    /// The part that takes the height left over (AddFill) goes the whole
+    /// width, under the column, whenever the column stops short - has no
+    /// part of its own shown that takes the height it has left. Race
+    /// Control's board, once the buttons and meters under the clock are
+    /// folded away (15 Nov 2026). Beside the column as usual otherwise.
+    /// Set as the Beside is made, before AddFill.
+    /// </summary>
+    public bool FillWidensUnderSide { get; init; }
+
     /// <param name="sideLeastWidth">The narrowest the column gets - the width its drawn parts (a clock) were designed at.</param>
     public Beside(int sideLeastWidth = 0)
         : this(() => sideLeastWidth)
@@ -2173,6 +2183,15 @@ internal sealed class Beside : Panel
         // can change the least this can do with, and only the part sees it.
         // See AddSideCard.
         part.Layout += (_, _) => PerformLayout();
+
+        // One that can go under the column is placed by hand, in Place,
+        // rather than in the left-hand table, whose cells end at the column.
+        if (FillWidensUnderSide)
+        {
+            holder.Dock = DockStyle.None;
+            Controls.Add(holder);
+            return part;
+        }
 
         _main.RowCount++;
         _main.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
@@ -2299,6 +2318,19 @@ internal sealed class Beside : Panel
 
         var side = MeasureSide();
         var mainWidth = MainWidth(width, side);
+
+        if (FillWidensUnderSide && _fillHolder is not null && _fillLeast is not null)
+        {
+            var under = FillUnderSide();
+            var top = MainTopHeight(mainWidth);
+            var fill = Math.Max(0, _fillLeast(Math.Max(1, (under ? width : mainWidth) - _fillHolder.Margin.Horizontal)))
+                + _fillHolder.Margin.Vertical;
+
+            return under
+                ? FillTopUnderSide(top, side) + fill
+                : Math.Max(side.Height, top + fill);
+        }
+
         var main = 0;
 
         foreach (Control part in _main.Controls)
@@ -2381,6 +2413,36 @@ internal sealed class Beside : Panel
         }
     }
 
+    /// <summary>How tall the left-hand parts other than the filling one come to, one under another, at <paramref name="mainWidth"/>.</summary>
+    private int MainTopHeight(int mainWidth)
+    {
+        var top = 0;
+
+        foreach (Control part in _main.Controls)
+        {
+            // As in LeastHeight.
+            if (_main.Visible && !part.Visible || part is ThinScrollBar || ReferenceEquals(part, _fillHolder))
+            {
+                continue;
+            }
+
+            var partWidth = Math.Max(1, mainWidth - part.Margin.Horizontal);
+
+            top += (Pieces.SizesItself(part) ? part.GetPreferredSize(new Size(partWidth, 0)).Height : part.Height)
+                + part.Margin.Vertical;
+        }
+
+        return top;
+    }
+
+    /// <summary>With FillWidensUnderSide: whether the filling part goes under the column now - nothing shown in the column reaches to the bottom.</summary>
+    private bool FillUnderSide() =>
+        FillWidensUnderSide && !(_sideFill is { } fill && Counts(fill.Part));
+
+    /// <summary>Where the filling part starts when it goes under the column: under the left-hand parts above it, and a gap under the column.</summary>
+    private static int FillTopUnderSide(int top, Size side) =>
+        Math.Max(top, side.Height > 0 ? side.Height + UiLayout.RowGap : 0);
+
     /// <summary>The other parts across the width the column leaves, the column against the right-hand edge - or the left, with SideOnLeft.</summary>
     private void Place()
     {
@@ -2388,7 +2450,30 @@ internal sealed class Beside : Panel
         var side = MeasureSide();
 
         var mainLeft = SideOnLeft && side.Width > 0 ? side.Width + UiLayout.RowGap : 0;
-        var main = new Rectangle(mainLeft, 0, MainWidth(client.Width, side), Math.Max(0, client.Height));
+        var mainWidth = MainWidth(client.Width, side);
+        var main = new Rectangle(mainLeft, 0, mainWidth, Math.Max(0, client.Height));
+
+        // The filling part placed by hand (FillWidensUnderSide): the table
+        // holds only the parts above it, and is only as tall as they are.
+        if (FillWidensUnderSide && _fillHolder is not null)
+        {
+            var top = MainTopHeight(mainWidth);
+            main.Height = Math.Min(main.Height, top);
+
+            var fill = FillUnderSide()
+                ? new Rectangle(0, FillTopUnderSide(top, side), client.Width, 0)
+                : new Rectangle(mainLeft, top, mainWidth, 0);
+
+            fill.Height = Math.Max(1, client.Height - fill.Top - _fillHolder.Margin.Bottom);
+            fill = Sliding(_fillHolder, fill);
+
+            if (_fillHolder.Bounds != fill)
+            {
+                _fillHolder.Bounds = fill;
+            }
+        }
+
+        main = Sliding(_main, main);
 
         if (_main.Bounds != main)
         {
@@ -2419,6 +2504,8 @@ internal sealed class Beside : Panel
                 ? new Rectangle(left + 1, y + 1, Math.Max(1, side.Width - 2), Math.Max(1, height - 2))
                 : new Rectangle(left, y, side.Width, height);
 
+            bounds = Sliding(part, bounds);
+
             if (part.Bounds != bounds)
             {
                 part.Bounds = bounds;
@@ -2427,6 +2514,373 @@ internal sealed class Beside : Panel
             y += height + gapBelow;
         }
     }
+
+    // --- Sliding from one layout to the next (15 Nov 2026) ---
+    //
+    // Race Control's fold: the buttons and meters under the clock slide
+    // away to the right and the clock shrinks into its corner, or the other
+    // way round, in under a third of a second rather than one jump.
+    //
+    // The new layout is worked out whole, in one go, while painting is held
+    // off - so the page's scrolling range never sees a half-made one (a
+    // scrollbar came and went on the way) - and the parts on the left, the
+    // board among them, simply take their new places in that one frame.
+    // Sliding them as well laid the leaderboard out again at every frame,
+    // 30 to 40 ms a time, and the slide stuttered at a few frames a second.
+    // What slides is cheap to move: the column's parts, the clock among
+    // them as a picture (ISlidesAsPicture). A part the change hides slides
+    // out past the right-hand edge before it goes; one it shows slides in
+    // from there.
+
+    /// <summary>How long a slide takes.</summary>
+    private const double SlideMs = 280;
+
+    /// <summary>
+    /// How often a frame is asked for. Windows' timers tick every 15.6 ms
+    /// unless asked for finer (timeBeginPeriod, for the slide only), so this
+    /// is what makes it sixty-odd frames a second rather than a stutter.
+    /// </summary>
+    private const int FrameMs = 10;
+
+    /// <summary>How far through the slide this frame is, eased - one number for every part, so they move together.</summary>
+    private double _slideEase;
+    /// <summary>How long the slide has run - see SlideTime.</summary>
+    private readonly SlideTime _slideClock = new();
+
+    private bool _finerTimer;
+
+    /// <summary>Where each of the column's parts was when the slide began; empty when nothing is sliding.</summary>
+    private readonly Dictionary<Control, Rectangle> _slideFrom = new();
+
+    /// <summary>Where each of the column's parts goes in the new layout - as the last Place found it.</summary>
+    private readonly Dictionary<Control, Rectangle> _slideTo = new();
+
+    /// <summary>Parts the change hid, kept on screen while they slide out to the right - and left out of the layout meanwhile (Counts).</summary>
+    private readonly HashSet<Control> _leaving = new();
+
+    /// <summary>Parts the change showed, sliding in from the right to their place.</summary>
+    private readonly HashSet<Control> _arriving = new();
+
+    /// <summary>The column's parts' own heights in the new layout - read in place of Height while sliding, which is part-way there.</summary>
+    private readonly Dictionary<Control, int> _heldHeights = new();
+
+    private System.Windows.Forms.Timer? _slideTimer;
+
+    /// <summary>True while a slide is running.</summary>
+    public bool IsSliding => _slideTimer is not null;
+
+    /// <summary>
+    /// Makes <paramref name="change"/> - parts of the column shown or
+    /// hidden, a part given a new height - and slides the column's parts
+    /// from where they were to where the change puts them. The parts on the
+    /// left go straight to their new places. Painting is held off while the
+    /// change is made, so the half-made layout is never drawn.
+    /// </summary>
+    public void SlideTo(Action change)
+    {
+        var shown = IsHandleCreated && Visible;
+        var painted = Pieces.FillPageOf(this) as Control ?? this;
+
+        // Where each is drawn now - part of the way through a slide still
+        // running, when pressed twice - is where the new one starts.
+        var from = shown
+            ? _side.Select(entry => entry.Part).Where(part => part.Visible).ToDictionary(part => part, part => part.Bounds)
+            : new Dictionary<Control, Rectangle>();
+
+        StopSlide();
+
+        // Before the change: the layout it brings is first drawn where
+        // everything still is.
+        _slideEase = 0;
+
+        if (shown && painted.IsHandleCreated)
+        {
+            SendMessage(painted.Handle, WmSetRedraw, IntPtr.Zero, IntPtr.Zero);
+        }
+
+        SuspendLayout();
+
+        try
+        {
+            change();
+        }
+        finally
+        {
+            if (shown)
+            {
+                foreach (var (part, _, _) in _side)
+                {
+                    _heldHeights[part] = part.Height;
+
+                    if (from.TryGetValue(part, out var was))
+                    {
+                        _slideFrom[part] = was;
+
+                        // Hidden by the change: back on screen to slide away,
+                        // and out of the layout until it has.
+                        if (!part.Visible)
+                        {
+                            _leaving.Add(part);
+                            part.Visible = true;
+                        }
+                    }
+                    else if (part.Visible)
+                    {
+                        _arriving.Add(part);
+                    }
+                }
+
+                // The column's parts in front of everything else - the flags
+                // card and the board, which go straight to their new places - so
+                // what slides away is seen going, and the clock shrinks over the
+                // card that has already widened into its room.
+                _main.SendToBack();
+                _fillHolder?.SendToBack();
+            }
+
+            ResumeLayout(false);
+            PerformLayout();
+
+            if (shown)
+            {
+                HoldPictures();
+            }
+
+            if (shown && painted.IsHandleCreated)
+            {
+                SendMessage(painted.Handle, WmSetRedraw, new IntPtr(1), IntPtr.Zero);
+                painted.Invalidate(true);
+            }
+        }
+
+        if (!shown || (_slideFrom.Count == 0 && _arriving.Count == 0))
+        {
+            StopSlide();
+            PerformLayout();
+            return;
+        }
+
+        // Timed from the first frame, not from here: the change's own layout
+        // and paint take a frame or three, and timed from here the slide
+        // began part of the way through, with a jump.
+        _slideClock.Reset();
+
+        _finerTimer = TimeBeginPeriod(1) == 0;
+        _slideTimer = new System.Windows.Forms.Timer { Interval = FrameMs };
+        _slideTimer.Tick += (_, _) => NextFrame();
+        _slideTimer.Start();
+    }
+
+    /// <summary>
+    /// One frame of the slide: every sliding part moved to the same point of
+    /// the way at once, and nothing else touched - each is drawn on the next
+    /// paint, all of them together, and only what moved is drawn.
+    /// </summary>
+    private void NextFrame()
+    {
+        var t = Math.Clamp(_slideClock.Tick() / SlideMs, 0, 1);
+
+        // Eased in and out: it gathers speed, then settles gently into place.
+        _slideEase = SlideTime.Ease(t);
+
+        // The last frame: everything where the new layout puts it, the parts
+        // that slid away hidden, and the parts given back their own heights.
+        if (t >= 1)
+        {
+            StopSlide();
+            PerformLayout();
+            return;
+        }
+
+        // Held while they move: each part moved would otherwise lay this out
+        // again, and the page's scrolling range be measured - the whole
+        // board - eight times a frame, which cost 100 ms a frame.
+        SuspendLayout();
+
+        try
+        {
+            foreach (var (part, _, _) in _side)
+            {
+                if (Frame(part) is { } bounds && part.Bounds != bounds)
+                {
+                    part.Bounds = bounds;
+                }
+            }
+        }
+        finally
+        {
+            ResumeLayout(false);
+        }
+    }
+
+    private void StopSlide()
+    {
+        _slideTimer?.Stop();
+        _slideTimer?.Dispose();
+        _slideTimer = null;
+        _slideClock.Reset();
+
+        if (_finerTimer)
+        {
+            TimeEndPeriod(1);
+            _finerTimer = false;
+        }
+
+        _slideFrom.Clear();
+        _slideTo.Clear();
+        _arriving.Clear();
+
+        // Gone, now they have slid away. Out of _leaving first, so hiding
+        // them is a part hidden like any other.
+        var leaving = _leaving.ToList();
+        _leaving.Clear();
+
+        foreach (var part in leaving)
+        {
+            part.Visible = false;
+        }
+
+        // Each part's own height back as the new layout has it - the slide
+        // left it part of the way there, and the column reads its height
+        // (SideHeight).
+        foreach (var (part, held) in _heldHeights)
+        {
+            if (part.Height != held && !IsSideFill(part))
+            {
+                part.Height = held;
+            }
+        }
+
+        _heldHeights.Clear();
+
+        foreach (var (part, _, _) in _side)
+        {
+            if (part is ISlidesAsPicture { SlidePicture: { } picture } pictured)
+            {
+                pictured.SlidePicture = null;
+                picture.Dispose();
+                part.Invalidate();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Each part that slides as a picture (ISlidesAsPicture) given one: of
+    /// itself where it starts or where it ends, whichever is the bigger, so
+    /// the picture is only ever shrunk. Drawn at its end size and then put
+    /// back at its start - while painting is held off, so neither is seen.
+    /// </summary>
+    private void HoldPictures()
+    {
+        // Held, or moving the part would lay this out and put it back
+        // before its picture was taken.
+        SuspendLayout();
+
+        try
+        {
+            foreach (var (part, _, _) in _side)
+            {
+                if (part is not ISlidesAsPicture pictured
+                    || !part.Visible
+                    || _leaving.Contains(part)
+                    || !_slideFrom.TryGetValue(part, out var start)
+                    || !_slideTo.TryGetValue(part, out var end))
+                {
+                    continue;
+                }
+
+                part.Bounds = start;
+                var before = pictured.TakeSlidePicture();
+
+                part.Bounds = end;
+                var after = pictured.TakeSlidePicture();
+
+                var bigger = after.Width * after.Height >= before.Width * before.Height;
+
+                pictured.SlidePicture = bigger ? after : before;
+                (bigger ? before : after).Dispose();
+
+                part.Bounds = start;
+            }
+        }
+        finally
+        {
+            ResumeLayout(false);
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            StopSlide();
+        }
+
+        base.Dispose(disposing);
+    }
+
+    /// <summary>
+    /// Where a part of the column is drawn this frame, or null for one that
+    /// is not sliding. One sliding away goes from where it was out past the
+    /// right-hand edge; one arriving comes in from there to its place; the
+    /// rest move from where they were to where they go.
+    /// </summary>
+    private Rectangle? Frame(Control part)
+    {
+        var e = _slideEase;
+        var right = ClientSize.Width;
+
+        if (_leaving.Contains(part) && _slideFrom.TryGetValue(part, out var gone))
+        {
+            return gone with { X = gone.X + (int)Math.Round((right - gone.X) * e) };
+        }
+
+        if (!_slideTo.TryGetValue(part, out var to))
+        {
+            return null;
+        }
+
+        if (_arriving.Contains(part))
+        {
+            return to with { X = to.X + (int)Math.Round((right - to.X) * (1 - e)) };
+        }
+
+        if (!_slideFrom.TryGetValue(part, out var from))
+        {
+            return null;
+        }
+
+        int Mix(int a, int b) => a + (int)Math.Round((b - a) * e);
+
+        return Rectangle.FromLTRB(
+            Mix(from.Left, to.Left),
+            Mix(from.Top, to.Top),
+            Mix(from.Right, to.Right),
+            Mix(from.Bottom, to.Bottom));
+    }
+
+    /// <summary>Where a part of the column is put as it is placed: <paramref name="target"/>, or this frame's point on its way there while a slide runs.</summary>
+    private Rectangle Sliding(Control part, Rectangle target)
+    {
+        if (!IsSliding && _slideFrom.Count == 0 && _arriving.Count == 0)
+        {
+            return target;
+        }
+
+        _slideTo[part] = target;
+        return Frame(part) ?? target;
+    }
+
+    private const int WmSetRedraw = 0x000B;
+
+    [System.Runtime.InteropServices.DllImport("winmm.dll", EntryPoint = "timeBeginPeriod")]
+    private static extern uint TimeBeginPeriod(uint milliseconds);
+
+    [System.Runtime.InteropServices.DllImport("winmm.dll", EntryPoint = "timeEndPeriod")]
+    private static extern uint TimeEndPeriod(uint milliseconds);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
     /// <summary>The column's width, and how tall its parts come to one under another. Empty when it has none.</summary>
     private Size MeasureSide()
@@ -2488,7 +2942,7 @@ internal sealed class Beside : Panel
             ? Math.Max(0, fill.Least(Math.Max(1, width - ring))) + ring
             : measured
                 ? part.GetPreferredSize(new Size(Math.Max(1, width), 0)).Height
-                : part.Height + ring;
+                : (_heldHeights.TryGetValue(part, out var held) ? held : part.Height) + ring;
     }
 
     private bool IsSideFill(Control part) => _sideFill is { } fill && ReferenceEquals(fill.Part, part);
@@ -2500,7 +2954,7 @@ internal sealed class Beside : Panel
             : Math.Max(1, width);
 
     /// <summary>Hidden in its own right leaves a part out - askable only while this is on screen, as in Pieces.TrailingGap.</summary>
-    private bool Counts(Control part) => !Visible || part.Visible;
+    private bool Counts(Control part) => (!Visible || part.Visible) && !_leaving.Contains(part);
 
     private void ButtonChanged(object? sender, EventArgs e)
     {
@@ -4202,4 +4656,67 @@ internal static class Pieces
         scrollable.HorizontalScroll.Visible = false;
         scrollable.AutoScroll = true;
     }
+}
+
+/// <summary>
+/// A part of a Beside's column that, while the Beside slides it to a new
+/// size (Beside.SlideTo), shows a picture of itself scaled to each size on
+/// the way rather than drawing itself afresh at every one - Race Control's
+/// clock (15 Nov 2026). Drawn afresh, its digits were fitted to a whole
+/// point size each frame and the ring to a whole pixel, and the two stepped
+/// at different moments: the slide looked herky-jerky. A picture shrinks
+/// evenly.
+/// </summary>
+internal interface ISlidesAsPicture
+{
+    /// <summary>The part's own drawing, at its size now - without the controls inside it, which draw themselves.</summary>
+    Bitmap TakeSlidePicture();
+
+    /// <summary>While set, the part draws this, scaled to its size, in place of itself. The Beside sets it and takes it away.</summary>
+    Bitmap? SlidePicture { get; set; }
+}
+
+/// <summary>
+/// How long a slide has run, counted a frame at a time - Race Control's
+/// fold (Beside.SlideTo) and the sidebar's (MainForm.SlideNavIconsOnly).
+///
+/// No frame counts for more than MaxStepMs, however long it really took.
+/// The first frame after the change waits for the page to be drawn in its
+/// new layout - 90 to 110 ms - and timed by the clock alone, the slide
+/// jumped a third of the way at once and looked herky-jerky. Counted this
+/// way a slow frame slows the slide for a moment instead of skipping it on.
+/// </summary>
+internal sealed class SlideTime
+{
+    /// <summary>Two frames at sixty a second.</summary>
+    private const double MaxStepMs = 34;
+
+    private readonly System.Diagnostics.Stopwatch _clock = new();
+    private double _last;
+    private double _run;
+
+    public void Reset()
+    {
+        _clock.Reset();
+        _last = 0;
+        _run = 0;
+    }
+
+    /// <summary>Called once a frame: how long the slide has now run, in milliseconds. The first call starts it, at nought.</summary>
+    public double Tick()
+    {
+        if (!_clock.IsRunning)
+        {
+            _clock.Start();
+            _last = 0;
+        }
+
+        var now = _clock.Elapsed.TotalMilliseconds;
+        _run += Math.Min(now - _last, MaxStepMs);
+        _last = now;
+        return _run;
+    }
+
+    /// <summary>Eased in and out: it gathers speed, then settles gently into place.</summary>
+    public static double Ease(double t) => t < 0.5 ? 4 * t * t * t : 1 - Math.Pow(-2 * t + 2, 3) / 2;
 }

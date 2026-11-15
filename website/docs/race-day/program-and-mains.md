@@ -608,7 +608,7 @@ For each round, the **Corner Marshals** window lists **Round**, **Marshaled By**
 
 ### Marshals in place
 
-To stop Auto start going green with empty posts, right-click the **Auto start** switch on **Race Control** and tick **Wait for the marshals before starting** (off to start with). From then on, for every race with marshals:
+To stop Auto start going green with empty posts, right-click the **Auto:** switch (Auto start) on **Race Control** and tick **Wait for the marshals before starting** (off to start with). From then on, for every race with marshals:
 
 - A minute before the start, a banner names them: "Marshals for Q2 Heat 3: Hugh Turn (Turn 1), Rhoda Rage (Turn 2). In place?"
 - **Marshals in place** confirms them, and the race starts on time.

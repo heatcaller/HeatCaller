@@ -726,7 +726,7 @@ internal sealed class RaceDaySetupWizard : Form
             Font = AppTheme.SmallFont,
         };
 
-        var button = new Button { Text = "Race Format..." };
+        var button = new Button { Text = "Format" };
 
         // The name over the format, wrapping to the room left of the button
         // rather than cut short - two lines of text about as tall as the
