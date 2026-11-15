@@ -130,6 +130,31 @@ function aboutSheet(name: string): string {
 </div>`;
 }
 
+/* The Lap times in my ear chip for every tick box (15 Nov 2026): outlined
+   and quiet when off, filled in the club's colour with a tick when on. The
+   box itself is still there, see-through over the whole chip, so a tap,
+   the keyboard and a screen reader work as they always did. In the club
+   pages' STYLE and the manager page's own sheet. */
+const TICK_CHIP_CSS = `
+label:has(> input[type=checkbox]) { position: relative; display: inline-flex; align-items: center; gap: 8px;
+  min-height: 40px; padding: 8px 14px 8px 10px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--muted); font-size: 0.9rem; font-weight: 400; text-align: left;
+  cursor: pointer; user-select: none; transition: background 0.15s, border-color 0.15s, color 0.15s; }
+label.chk:has(> input[type=checkbox]) { border-radius: 14px; max-width: 100%; }
+label:has(> input[type=checkbox]) > input[type=checkbox] { position: absolute; inset: 0; width: 100%; height: 100%;
+  margin: 0; opacity: 0; cursor: pointer; }
+label:has(> input[type=checkbox])::before { content: ""; flex: none; display: grid; place-items: center;
+  width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--muted); font-size: 11px;
+  font-weight: 800; line-height: 1; color: var(--on-primary, #FFFFFF); }
+label:has(> input[type=checkbox]:checked) { border-color: var(--primary); color: var(--text);
+  background: color-mix(in srgb, var(--primary) 20%, var(--bg)); }
+label:has(> input[type=checkbox]:checked)::before { content: "\\2713"; background: var(--primary); border-color: var(--primary); }
+label:has(> input[type=checkbox]:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+label:has(> input[type=checkbox]:disabled) { opacity: 0.55; cursor: default; }
+label:has(> input[type=checkbox]:disabled) > input[type=checkbox] { cursor: default; }
+@media (prefers-reduced-motion: reduce) { label:has(> input[type=checkbox]) { transition: none; } }
+`;
+
 const STYLE = `
 .pinask{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.65)}
 .pinask-card{width:100%;max-width:360px;background:var(--surface);color:var(--text);border-radius:14px;padding:18px}
@@ -862,19 +887,13 @@ html.synthwave { --ln0: #FF2E9A; --ln1: #2EE6FF; --ln2: #FFD23F; --ln3: #B967FF;
 .lvsay { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
 .lvsay > span { flex-basis: 100%; color: var(--muted); font-size: 0.72rem; font-weight: 700;
                 letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 0; }
-.lvsay label, .ears .lvsay label { position: relative; display: inline-flex; align-items: center; gap: 8px; margin: 0;
-  min-height: 40px; padding: 8px 14px 8px 10px; border-radius: 999px; border: 1px solid var(--border);
-  background: var(--bg); color: var(--muted); font-size: 0.9rem; cursor: pointer; user-select: none;
-  transition: background 0.15s, border-color 0.15s, color 0.15s; }
-.lvsay input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
-.lvsay label::before { content: ""; flex: none; display: grid; place-items: center; width: 18px; height: 18px;
-  border-radius: 50%; border: 1.5px solid var(--muted); font-size: 11px; font-weight: 800; line-height: 1;
-  color: var(--on-primary, #FFFFFF); }
-.lvsay label:has(input:checked) { border-color: var(--primary); color: var(--text);
-  background: color-mix(in srgb, var(--primary) 20%, var(--bg)); }
-.lvsay label:has(input:checked)::before { content: "\\2713"; background: var(--primary); border-color: var(--primary); }
-.lvsay label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .lvsay label { transition: none; } }
+.lvsay label, .ears .lvsay label { margin: 0; }
+/* Every tick box on the relay wears that same chip (15 Nov 2026, Asher:
+   "make all check boxes themed like lap time in my ear on me relay"): any
+   label holding a checkbox - alerts, I'm coming, Just me, Hide demo, the
+   garage and the sign-up form - not only What to say. A browser without
+   :has() skips the lot and shows its own plain box, which still works. */
+${TICK_CHIP_CSS}
 /* Message the announcer and Who wins? (2 Nov 2026): the live page's two
    ways into the room from outside it, when the club has them switched on.
    Every field full width and 16px text, as sign-up's are, so a phone does
@@ -12926,11 +12945,9 @@ function draw() {
   const head = [
     '<h2>' + esc(night.driver || 'Your night') + '</h2>',
     '<div class="sub">' + esc([night.title, nightSaysItsDay(night) ? '' : night.when].filter(Boolean).join(' · ')) + '</div>',
-    // For the family at home (overlay plan 7.1): a link that follows this
-    // driver on the club's public pages. Only the name rides on it, never
-    // this night's code.
-    // (Asked for by name: draw is also run on its own, away from the shared script.)
-    night.driver && typeof followShareButton === 'function' ? '<div class="fol-share">' + followShareButton(String(night.driver), 'Send my family a link that follows me') + '</div>' : '',
+    // No "Send my family a link that follows me" under their name since
+    // 15 Nov 2026 (Asher: "remove the family link from the top keep on
+    // bottom"): the Family links card at the foot of Me makes them.
   ].join('');
 
   // A night of more than one car (22 Oct 2026, second transponder) draws
@@ -18880,6 +18897,7 @@ a.note { color: var(--accent); }
 select { font-family: inherit; font-size: 14px; padding: 10px; border-radius: 8px;
          border: 1px solid var(--raised); background: var(--surface); color: var(--text); }
 label.chk { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); margin: 10px 0; }
+${TICK_CHIP_CSS}
 
 /* PIT WALL (3 Nov 2026, Asher picked direction A of the relay refresh):
    the club pages' kit on the desk too, so a button here looks like the
