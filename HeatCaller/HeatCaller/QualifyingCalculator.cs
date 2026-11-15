@@ -759,8 +759,15 @@ public static class QualifyingCalculator
                 .ToList();
 
             // The best single heat anywhere - the second tie-breaker, and
-            // the laps and time shown beside the points.
-            var bestHeat = heats.OrderByDescending(h => h.Laps).ThenBy(h => h.ElapsedMs).First();
+            // the laps and time shown beside the points. Never from a round
+            // the marshal rule took away (bug hunt 19): as the non-points
+            // path drops the lost heat, so it neither shows as their Best
+            // Heat nor breaks a tie for them.
+            var bestHeat = heats
+                .Where(h => !lost.TryGetValue(driver, out var lostKey) || !string.Equals(h.RoundGroup, lostKey, StringComparison.Ordinal))
+                .OrderByDescending(h => h.Laps)
+                .ThenBy(h => h.ElapsedMs)
+                .FirstOrDefault();
             var bestFinish = scores.Where(s => s.Place > 0).Select(s => s.Place).DefaultIfEmpty(0).Min();
             var single = countedHeats.Count == 1 && counted.Count == 1 ? countedHeats[0] : null;
 
@@ -774,8 +781,8 @@ public static class QualifyingCalculator
                 driver,
                 names[driver].Driver,
                 names[driver].Car,
-                bestHeat.Laps,
-                bestHeat.ElapsedMs,
+                bestHeat?.Laps ?? 0,
+                bestHeat?.ElapsedMs ?? 0,
                 countedHeats.Where(h => h.FastLapMs > 0).Select(h => h.FastLapMs).DefaultIfEmpty(0).Min(),
                 heats.Count,
                 // In running order, whichever order they were picked in.
