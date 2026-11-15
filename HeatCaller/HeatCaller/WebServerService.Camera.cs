@@ -410,21 +410,23 @@ public sealed partial class WebServerService
         * { box-sizing:border-box; }
         html, body { margin:0; background:transparent; overflow:hidden; width:100vw; height:100vh;
                      font-family:'Bahnschrift','Segoe UI',system-ui,sans-serif; color:#fff; }
-        /* Everything is sized in vw so the graphics fit any canvas size. */
+        /* Everything is sized in vw so the graphics fit any canvas size.
+           Nothing under .95vw (14 Nov 2026, stream overlay plan 6.8): most
+           viewers watch on a phone, where .72vw was about 3px tall. */
         .glass { background:rgba(10,12,18,{{glass}}); border-radius:.5vw; box-shadow:0 .3vw 1.2vw rgba(0,0,0,.35); }
         .acc { color:var(--accent); }
-        .by { display:block; font-size:.7vw; letter-spacing:.14em; color:#c9cdd6; text-transform:uppercase; margin-top:.3vw; }
+        .by { display:block; font-size:.95vw; letter-spacing:.14em; color:#c9cdd6; text-transform:uppercase; margin-top:.3vw; }
         #tower { position:absolute; left:2vw; top:3vw; width:21vw; overflow:hidden; transition:opacity .4s; }
         #tower .head { padding:.7vw 1vw; font-size:1vw; letter-spacing:.12em; font-weight:700; display:flex; justify-content:space-between;
                        border-bottom:.15vw solid var(--accent); text-transform:uppercase; }
-        #tower .sub { padding:.35vw 1vw; font-size:.72vw; letter-spacing:.14em; color:#c9cdd6; display:flex; justify-content:space-between;
+        #tower .sub { padding:.35vw 1vw; font-size:.95vw; letter-spacing:.14em; color:#c9cdd6; display:flex; justify-content:space-between;
                       text-transform:uppercase; background:rgba(255,255,255,.04); }
         #tower .sub .mode { color:var(--accent); font-weight:700; }
         #rows { position:relative; }
         /* HeatCaller's credit at the foot of the tower (31 Oct 2026, the mark
            always on everywhere), the way a broadcast credits its timing. In
            the look's accent, like the rest of the tower. */
-        #tower .hcfoot { display:flex; align-items:center; gap:.4vw; padding:.4vw 1vw; font-size:.72vw; color:#c9cdd6;
+        #tower .hcfoot { display:flex; align-items:center; gap:.4vw; padding:.4vw 1vw; font-size:.95vw; color:#c9cdd6;
                          border-top:1px solid rgba(255,255,255,.08); }
         #tower .hcsun { width:1vw; height:1vw; flex:none; fill:currentColor; color:var(--accent); }
         #tower .hcword { font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
@@ -432,7 +434,7 @@ public sealed partial class WebServerService
         .row { position:absolute; left:0; right:0; height:2.3vw; display:flex; align-items:center; font-size:1.15vw;
                transition:top .6s ease, background .6s; padding:0 1vw; gap:.6vw; }
         .row .p { width:1.8vw; font-weight:800; text-align:right; }
-        .row .num { min-width:1.9vw; padding:0 .25vw; font-size:.85vw; font-weight:800; text-align:center; border-radius:.2vw;
+        .row .num { min-width:1.9vw; padding:0 .25vw; font-size:.95vw; font-weight:800; text-align:center; border-radius:.2vw;
                     background:var(--accent); color:#0a0c12; font-variant-numeric:tabular-nums; }
         .row .num:empty { visibility:hidden; }
         #tower:not(.nums) .row .num { display:none; }
@@ -454,14 +456,14 @@ public sealed partial class WebServerService
                   font-size:1.4vw; font-weight:700; white-space:nowrap; transition:transform .5s ease; text-align:center; }
         #battle.show { transform:translateX(-50%) translateY(0); }
         #battle .gap { color:var(--accent); margin-left:1vw; font-variant-numeric:tabular-nums; }
-        #battle .meta { display:block; font-size:.8vw; letter-spacing:.14em; margin-top:.3vw; color:#c9cdd6; }
+        #battle .meta { display:block; font-size:.95vw; letter-spacing:.14em; margin-top:.3vw; color:#c9cdd6; }
         #battle .trend { margin-right:1vw; }
         #battle .trend.closing { color:#4ade80; }
         #battle .trend.pulling { color:#f87171; }
         #fastest { position:absolute; right:2vw; bottom:3vw; padding:.9vw 1.4vw; font-size:1.3vw; font-weight:700;
                    transform:translateX(30vw); transition:transform .5s ease; border-left:.4vw solid #B06CFF; }
         #fastest.show { transform:translateX(0); }
-        #fastest small { display:block; font-size:.8vw; letter-spacing:.14em; color:#B06CFF; }
+        #fastest small { display:block; font-size:.95vw; letter-spacing:.14em; color:#B06CFF; }
         #moment { position:absolute; left:50%; top:3vw; transform:translateX(-50%) translateY(-14vw); padding:1vw 2.2vw; min-width:28vw; max-width:52vw;
                   text-align:center; transition:transform .5s ease; border-top:.35vw solid var(--accent); }
         #moment.show { transform:translateX(-50%) translateY(0); }
@@ -473,12 +475,16 @@ public sealed partial class WebServerService
                   transition:opacity .5s, transform .5s; padding:1.6vw 2.4vw; min-width:30vw; }
         .centre.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
         .centre h2 { margin:0 0 1vw; font-size:1.6vw; letter-spacing:.12em; text-transform:uppercase; border-bottom:.15vw solid var(--accent); padding-bottom:.6vw; }
-        .centre h2 .by { font-size:.75vw; font-weight:400; }
+        .centre h2 .by { font-size:.95vw; font-weight:400; }
         .centre .line { font-size:1.4vw; padding:.35vw 0; display:flex; gap:1vw; }
         .centre .line b { width:2.4vw; text-align:right; color:var(--accent); }
         #podium .line { font-size:1.8vw; }
         /* "1st", not "1" (overlay plan 7.2): plain words first, the RC numbers small beside. */
         #podium .line b { width:3.6vw; }
+        /* PROVISIONAL / CORRECTED beside the race's name (6.9). */
+        .prov { margin-left:1vw; padding:.15vw .6vw; border-radius:.3vw; font-size:1.15vw; letter-spacing:.12em; vertical-align:middle;
+                background:rgba(250,204,21,.18); color:#facc15; }
+        .prov.fix { background:rgba(74,222,128,.18); color:#4ade80; }
         #podium .line span.t { margin-left:auto; color:#c9cdd6; font-size:1.2vw; align-self:center; }
         #podium .line span.r { color:var(--accent); font-size:1.1vw; align-self:center; min-width:6vw; text-align:right; }
         /* CAPTIONS (?captions=1, 22 Oct 2026, driver experience, item 9):
@@ -588,7 +594,7 @@ public sealed partial class WebServerService
         const SHOWN = (PARTS.tower && PARTS.tower.rows) || 8, TOP = 8, CYCLE_MS = 8000, MOMENT_MS = 7000;
         const rowEls = {};
         let lastPos = {}, best = { ms: 0, id: '' }, fastTimer = 0, first = true;
-        let fight = null, momentSeq = -1, momentTimer = 0;
+        let fight = null, momentSeq = -1, momentTimer = 0, podiumSeen = null;
 
         // Captions, only when asked for: the line the announcer has just
         // said, fading after eight seconds. Only a line said while the page
@@ -678,6 +684,15 @@ public sealed partial class WebServerService
         // layout can be set up on a weeknight with nothing on track. Made
         // here in the page: it never comes from, or goes into, the night's
         // real data.
+        // ?phone=1 (overlay plan 6.8): the overlay as most viewers see it -
+        // the whole 1920 x 1080 picture shrunk to a phone held sideways.
+        const PHONE = params.get('phone') === '1' && window.top === window;
+        if (PHONE){
+          const inner = new URLSearchParams(location.search); inner.delete('phone');
+          document.body.innerHTML = '<div style="position:fixed;inset:0;background:#2b3a2b;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font:14px system-ui;color:#ddd">' +
+            '<iframe src="?' + esc(inner.toString()) + '" style="width:390px;height:219px;border:2px solid #000;border-radius:10px;background:#556b4a"></iframe>' +
+            '<div>About what a viewer sees on a phone held sideways (390 px wide).</div></div>';
+        }
         const DEMO = params.get('demo') === '1';
         // Whether the sponsor graphic is up: said on the next poll, so the
         // laptop counts the time its logo is really on screen (section 5).
@@ -911,7 +926,14 @@ public sealed partial class WebServerService
           if (want('podium') && finished && podiumRows.length){
             const ratings = d.ratings || {};
             const by = presentedBy(d, 'RaceResult');
-            podium.innerHTML = '<h2>' + esc(d.race || 'Result') + (by ? '<span class="by">' + esc(by) + byLogo(d, 'RaceResult') + '</span>' : '') + '</h2>' + podiumRows.slice(0, 3).map((s, i) =>
+            // PROVISIONAL until the protest window closes, CORRECTED when
+            // the order changes while it is up (overlay plan 6.9).
+            const podiumKey = (d.race || '') + '|' + podiumRows.slice(0, 3).map(s => s.id).join(',');
+            if (!podiumSeen || podiumSeen.race !== (d.race || '')) podiumSeen = { race: d.race || '', key: podiumKey, corrected: false };
+            else if (podiumSeen.key !== podiumKey) { podiumSeen.key = podiumKey; podiumSeen.corrected = true; }
+            const until = Date.parse(d.provisionalUntil || '');
+            const badge = podiumSeen.corrected ? '<span class="prov fix">Corrected</span>' : Number.isFinite(until) && Date.now() < until ? '<span class="prov">Provisional</span>' : '';
+            podium.innerHTML = '<h2>' + esc(d.race || 'Result') + badge + (by ? '<span class="by">' + esc(by) + byLogo(d, 'RaceResult') + '</span>' : '') + '</h2>' + podiumRows.slice(0, 3).map((s, i) =>
               '<div class="line"><b>' + ordinal(i + 1) + '</b>' + swatch(d, s.id) + esc(sn(s.name)) + '<span class="t">' + esc((cards[s.id] || {}).result || (((cards[s.id] || {}).laps || 0) + ' laps')) + ' &nbsp; best ' + fmt(s.best) + '</span>' +
               (ratings[s.id] !== undefined ? '<span class="r">RTG ' + Number(ratings[s.id]).toFixed(1) + '</span>' : '') + '</div>').join('');
             podium.classList.add('show');
@@ -1063,8 +1085,8 @@ public sealed partial class WebServerService
           show('mark', want('mark') && (placed('mark') || !towerShowing && !PARTS.tower));
         }
 
-        setInterval(tick, 1000);
-        tick();
+        // The phone view only frames the overlay; the frame does the drawing.
+        if (!PHONE) { setInterval(tick, 1000); tick(); }
         </script><script>{{LookWatchScript}}</script></body></html>
         """;
     }

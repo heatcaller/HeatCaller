@@ -49,6 +49,9 @@ public sealed partial class WebServerControl : UserControl
     private readonly ComboBox _cmbStreamOverlay = new();
     private readonly TextBox _txtStreamUrl = new();
     private readonly Button _btnPreviewStream = new() { Text = "Preview" };
+
+    /// <summary>The preview as a phone viewer sees it (overlay plan 6.8): the whole picture at 390 px wide.</summary>
+    private readonly Button _btnPhoneStream = new() { Text = "Phone view" };
     private readonly Label _lblStreamAbout = new();
 
     /// <summary>How a junior's name shows on the stream (overlay plan 7.5): "Mia K", "Mia" or in full.</summary>
@@ -561,8 +564,15 @@ public sealed partial class WebServerControl : UserControl
 
         grid.AddRow("Stream overlay:", _cmbStreamOverlay);
         grid.AddHint(_lblStreamAbout);
-        grid.AddRow("Its address:", FieldGrid.Inline(_txtStreamUrl, btnCopyStream, _btnPreviewStream));
+        grid.AddRow("Its address:", FieldGrid.Inline(_txtStreamUrl, btnCopyStream, _btnPreviewStream, _btnPhoneStream));
         btnCopyStream.Click += (_, _) => CopyIfPresent(_txtStreamUrl.Text);
+        _btnPhoneStream.Click += (_, _) =>
+        {
+            if (_txtStreamUrl.Text.Length > 0)
+            {
+                AppSupport.Open(_txtStreamUrl.Text + "?demo=1&phone=1");
+            }
+        };
         _btnPreviewStream.Click += (_, _) =>
         {
             if (_txtStreamUrl.Text.Length > 0)
@@ -1054,6 +1064,7 @@ public sealed partial class WebServerControl : UserControl
         var root = elsewhere ? _server.LocalUrl() : $"http://localhost:{_server.Port}/";
         _txtStreamUrl.Text = running && layout is not null ? root + "overlay/" + layout.Id : string.Empty;
         _btnPreviewStream.Enabled = running && layout is not null;
+        _btnPhoneStream.Enabled = running && layout is not null && layout.Id != OverlayLayouts.ResultsId;
     }
 
     /// <summary>A layout in the drop-down, shown by its name.</summary>

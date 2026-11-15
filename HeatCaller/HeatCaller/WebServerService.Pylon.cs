@@ -135,6 +135,7 @@ public sealed partial class WebServerService
         _sponsorUpId = up?.Id;
         node["sponsorUp"] = up is null ? null : new JsonObject { ["name"] = up.Name, ["logo"] = up.Url };
         node["racedTonight"] = ui.RacedTonight;
+        node["provisionalUntil"] = ui.ProvisionalUntilUtc?.ToString("o", System.Globalization.CultureInfo.InvariantCulture);
 
         // Their logos, by moment, where they have one (stream overlay plan
         // section 1) - for the graphics to show beside the name.

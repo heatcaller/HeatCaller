@@ -30,7 +30,11 @@ public sealed partial class WebServerService
         string OnDeck,
         IReadOnlyList<(string Moment, string Sponsor, string Logo)>? Presented,
         IReadOnlyList<SponsorStream.Logo>? SponsorLogos = null,
-        int RacedTonight = 0);
+        int RacedTonight = 0,
+        DateTime? ProvisionalUntilUtc = null);
+
+    /// <summary>When the window's side first saw the race finished, for the provisional result (6.9). UI side only.</summary>
+    private DateTime? _finishedSeenUtc;
 
     /// <summary>The last CaptureUiSide, threaded mode only. Replaced whole.</summary>
     private volatile UiSide? _uiSide;
@@ -121,7 +125,24 @@ public sealed partial class WebServerService
             raced = 0;
         }
 
-        return new UiSide(webKpis, relayKpis, onDeck, presented, logos, raced);
+        // PROVISIONAL (overlay plan 6.9): a result is provisional for the
+        // protest window after the race finishes - the window Driver Requests
+        // and the phones already use (ProtestWindow). Counted from the moment
+        // this side first saw the race finished.
+        DateTime? provisionalUntil = null;
+
+        if (_race.State == RaceState.Finished)
+        {
+            _finishedSeenUtc ??= DateTime.UtcNow;
+            var minutes = ProtestWindow.Minutes(_settings?.ProtestMinutes, null);
+            provisionalUntil = minutes > 0 ? _finishedSeenUtc.Value.AddMinutes(minutes) : null;
+        }
+        else
+        {
+            _finishedSeenUtc = null;
+        }
+
+        return new UiSide(webKpis, relayKpis, onDeck, presented, logos, raced, provisionalUntil);
     }
 
     /// <summary>
