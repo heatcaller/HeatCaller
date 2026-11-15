@@ -72,7 +72,7 @@ public static class EventReportBuilder
 
         WriteSummary(sb, sessions, profiles);
         WriteNightPace(sb, sessions, rounds, ReportEvent(options));
-        WriteMoney(sb, sessions, ReportEvent(options), payments, profiles, DeskMoney.ClassLookup(classes.All));
+        WriteMoney(sb, sessions, ReportEvent(options), payments, profiles, DeskMoney.ClassLookup(classes.All), classes.All);
         WriteMarshalNoShows(sb, rounds, ReportEvent(options));
 
         // Outstanding items first when there are any - the point of putting
@@ -281,9 +281,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     /// figure against the price board.
     /// </remarks>
     private static void WriteMoney(StringBuilder sb, List<SessionRecord> sessions, RaceEvent? raceEvent, EntryPaymentStore? payments, ProfileStore profiles,
-        Func<string, RaceClass?> classNamed)
+        Func<string, RaceClass?> classNamed, IEnumerable<RaceClass> clubClasses)
     {
-        if (payments is null || raceEvent is not { } day || !DeskMoney.Charges(day, classNamed))
+        if (payments is null || raceEvent is not { } day || !DeskMoney.Charges(day, classNamed, clubClasses))
         {
             return;
         }

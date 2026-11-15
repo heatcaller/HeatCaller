@@ -15,7 +15,7 @@ public sealed partial class CheckInControl
     /// DeskMoney.Charges.
     /// </summary>
     private (RaceEvent Day, bool Charges)? TonightsFees() =>
-        _events?.Active is { IsLegacy: false } day ? (day, DeskMoney.Charges(day, ClassNamed)) : null;
+        _events?.Active is { IsLegacy: false } day ? (day, DeskMoney.Charges(day, ClassNamed, _raceClasses.All)) : null;
 
     /// <summary>A class by name from the club's classes, for its fees.</summary>
     private RaceClass? ClassNamed(string name) => DeskMoney.ClassLookup(_raceClasses.All)(name);
@@ -55,8 +55,9 @@ public sealed partial class CheckInControl
     /// night priced by its classes the phone said nothing about money at all.
     /// </summary>
     internal static DeskMoney.PhoneMoney? PhoneMoneyFor(
-        DriverProfile profile, RaceEvent? day, Func<string, RaceClass?> classNamed, EntryPayment? payment) =>
-        day is not null && DeskMoney.Charges(day, classNamed)
+        DriverProfile profile, RaceEvent? day, Func<string, RaceClass?> classNamed, EntryPayment? payment,
+        IEnumerable<RaceClass>? clubClasses = null) =>
+        day is not null && DeskMoney.Charges(day, classNamed, clubClasses)
             ? DeskMoney.ForPhone(FeeFor(profile, day, classNamed), payment)
             : null;
 

@@ -1122,6 +1122,11 @@ public partial class MainForm
 
             return keptTable;
         };
+
+        // The table above is the filed race's, so its class is too - not the
+        // round picked next (bug hunt 20). See CommentaryDirector.ClassFor.
+        director.ChampionshipClass = () =>
+            LastFiled()?.RoundId is { } roundId ? _rounds.Get(roundId)?.ClassName : null;
     }
 
     /// <summary>The class the active round belongs to, for the qualifying method and its lap counts.</summary>

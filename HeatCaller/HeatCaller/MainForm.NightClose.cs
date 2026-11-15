@@ -61,7 +61,7 @@ public partial class MainForm
         // A night that charges through its classes only counts too (12 Nov 2026, setup plan step 8).
         var classNamed = DeskMoney.ClassLookup(_raceClasses.All);
 
-        if (raceDay is not { IsLegacy: false } day || !DeskMoney.Charges(day, classNamed))
+        if (raceDay is not { IsLegacy: false } day || !DeskMoney.Charges(day, classNamed, _raceClasses.All))
         {
             return null;
         }

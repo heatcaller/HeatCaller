@@ -19,8 +19,13 @@ namespace HeatCaller;
 /// </param>
 /// <param name="LeadMatters">False for a line a lead change cannot make untrue - a fight for fifth, a record lap.</param>
 /// <param name="LapsTakenOff">How many times a lap had been taken off by hand (bug hunt 15).</param>
+/// <param name="LapTimesMatter">
+/// False for a line no lap time can make untrue - the pit lane's chat about
+/// one car and its team, which names no lap (bug hunt 20). A quicker lap or
+/// a lap taken off then leaves it standing.
+/// </param>
 public sealed record RaceFactsStamp(long Race, long FastestLaps, long LeadChanges, int LeaderLaps, long AtMs, long? SayByMs = null,
-    int? LeaderLapsAllowed = 1, bool LeadMatters = true, long LapsTakenOff = 0);
+    int? LeaderLapsAllowed = 1, bool LeadMatters = true, long LapsTakenOff = 0, bool LapTimesMatter = true);
 
 /// <summary>
 /// Lines that are no longer true by the time they would be heard (8 Nov
@@ -257,7 +262,7 @@ public sealed partial class AnnouncementService
             return "the race it was about is over";
         }
 
-        if (now.FastestLaps != then.FastestLaps)
+        if (then.LapTimesMatter && now.FastestLaps != then.FastestLaps)
         {
             return "a quicker lap has been set since it was written";
         }
@@ -267,7 +272,7 @@ public sealed partial class AnnouncementService
         // lap ever set on this layout: 2.100s" - is about a lap that is no
         // longer on the board, and the fastest-lap count never moves for a
         // lap taken away.
-        if (now.LapsTakenOff != then.LapsTakenOff)
+        if (then.LapTimesMatter && now.LapsTakenOff != then.LapsTakenOff)
         {
             return "a lap has been taken off by hand since it was written";
         }

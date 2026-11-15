@@ -631,7 +631,9 @@ public sealed partial class CheckInControl : UserControl
 
         var newlyIn = shown.Count(t => !_checkIns.IsCheckedIn(t));
 
-        _checkIns.CheckInAll(shown);
+        // A bulk tick, often before anyone has come - not doors open (bug
+        // hunt 20, see CheckInStore.CheckInAll).
+        _checkIns.CheckInAll(shown, opensDoors: false);
         RaiseDeskChanges(shown);
         RefreshDriverList();
 

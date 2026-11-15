@@ -347,7 +347,7 @@ public partial class MainForm
 
         // With the classes' own fees, as the desk works it out - see PhoneMoneyFor.
         return CheckInControl.PhoneMoneyFor(
-            profile, day, DeskMoney.ClassLookup(_raceClasses.All), _payments.Get(day.Id, profile.Transponder));
+            profile, day, DeskMoney.ClassLookup(_raceClasses.All), _payments.Get(day.Id, profile.Transponder), _raceClasses.All);
     }
 
     /// <summary>The transponders behind every badge with a request to hear back about - see DriverRequestStore.BadgesWithAnswers.</summary>

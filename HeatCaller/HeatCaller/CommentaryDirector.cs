@@ -86,6 +86,9 @@ public sealed class CommentaryDirector
 
     private string _raceKey = string.Empty;
     private string? _className;
+
+    // The class of the last race to go green - see ClassFor.
+    private string? _racedClassName;
     private bool _racing;
 
     /// <summary>
@@ -681,6 +684,12 @@ public sealed class CommentaryDirector
     public Func<IReadOnlyList<ChampionshipStanding>>? Championship { get; set; }
 
     /// <summary>
+    /// The class of the race <see cref="Championship"/>'s table is after -
+    /// the last race filed - or null when it can't say. See ClassFor.
+    /// </summary>
+    public Func<string?>? ChampionshipClass { get; set; }
+
+    /// <summary>
     /// How much of tonight's programme has run, and how much there is -
     /// what the budget releases the night's allotment against.
     ///
@@ -969,6 +978,7 @@ public sealed class CommentaryDirector
     {
         _raceKey = string.IsNullOrWhiteSpace(raceKey) ? _clock().Ticks.ToString() : raceKey;
         _className = className;
+        _racedClassName = className;
         _racing = true;
         _afterARace = false;
 
@@ -1016,6 +1026,30 @@ public sealed class CommentaryDirector
         }
 
         _className = className;
+    }
+
+    /// <summary>
+    /// The class a segment of this kind is about: the class under the
+    /// announcer, except for the championship check, whose table is the
+    /// LAST FILED race's (MainForm.Commentary's Championship reader), not
+    /// the picked round's.
+    ///
+    /// WHY (15 Nov 2026, bug hunt 20): bug hunt 17 made the class between
+    /// races follow the Round box, which put the next round's class on the
+    /// last race's table - "Dot takes over the lead of the Stock
+    /// championship" about the Mod points - and booked it against Stock's
+    /// allowance.
+    /// </summary>
+    private string? ClassFor(SegmentKind kind)
+    {
+        if (kind != SegmentKind.ChampionshipCheck)
+        {
+            return _className;
+        }
+
+        return ChampionshipClass?.Invoke() is { } filed && !string.IsNullOrWhiteSpace(filed)
+            ? filed
+            : _racedClassName ?? _className;
     }
 
     /// <summary>
@@ -1682,7 +1716,7 @@ public sealed class CommentaryDirector
 
         try
         {
-            own = Candidates(kind, _className);
+            own = Candidates(kind, ClassFor(kind));
         }
         catch (Exception ex)
         {
@@ -1759,7 +1793,7 @@ public sealed class CommentaryDirector
     private IReadOnlyList<FactBlock> CandidatesForPass(SegmentKind kind, string? className)
     {
         if (_pass is { } pass
-            && string.Equals(className, _className, StringComparison.Ordinal)
+            && string.Equals(className, ClassFor(kind), StringComparison.Ordinal)
             && pass.TryGetValue(kind, out var gathered))
         {
             return gathered;
@@ -2214,6 +2248,14 @@ public sealed class CommentaryDirector
         _ => true,
     };
 
+    /// <summary>
+    /// Whether a quicker lap, or a lap taken off, makes an in-race line of
+    /// this kind untrue. Not the pit lane's (bug hunt 20): it is about one
+    /// car and its team and names no lap time, yet a new fastest lap while
+    /// it was written or queued threw it away after it was paid for.
+    /// </summary>
+    internal static bool LapTimesMatterFor(SegmentKind kind) => kind != SegmentKind.PitLaneLive;
+
     internal static bool InRace(SegmentKind kind) =>
         kind is SegmentKind.BattleWatch or SegmentKind.PaceNote or SegmentKind.Horizon or SegmentKind.RecordWatch
             or SegmentKind.PitLaneLive;
@@ -2246,7 +2288,7 @@ public sealed class CommentaryDirector
         // NightAccount.
         Account.Weighed(kind);
 
-        var blocks = CandidatesForPass(kind, _className);
+        var blocks = CandidatesForPass(kind, ClassFor(kind));
 
         if (blocks.Count == 0)
         {
@@ -2305,8 +2347,8 @@ public sealed class CommentaryDirector
         // The Tonight Open is asked for by On Air's press, so the gap since
         // the last line does not hold it either - see ForTonightOpenAsync.
         var verdict = _forTheProgramme || _onlyKind is not null
-            ? Budget.ReserveForProgramme(kind, _className)
-            : Budget.Reserve(kind, _className);
+            ? Budget.ReserveForProgramme(kind, ClassFor(kind))
+            : Budget.Reserve(kind, ClassFor(kind));
 
         if (!verdict.Allowed)
         {
@@ -2344,6 +2386,7 @@ public sealed class CommentaryDirector
                 SayByMs = stamp.AtMs + (long)spec.NeedsBy.TotalMilliseconds,
                 LeaderLapsAllowed = LeaderLapsAllowedFor(kind, _calling),
                 LeadMatters = LeadMattersFor(kind, _calling),
+                LapTimesMatter = LapTimesMatterFor(kind),
             }
             : null;
 

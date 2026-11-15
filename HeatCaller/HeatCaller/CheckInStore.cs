@@ -262,7 +262,8 @@ public sealed class CheckInStore
 
     /// <summary>
     /// Somebody was checked in at the current race day (12 Nov 2026, setup
-    /// plan step 8), by whatever route: the desk, a phone, Check In All. The
+    /// plan step 8), by whatever route: the desk, a phone, a pick of drivers
+    /// (not a bulk tick - see CheckInAll). The
     /// race day's id. MainForm stamps the first one as doors open
     /// (RaceEvent.DoorsOpenUtc - see NightMeasures.StampDoorsOpen). Here,
     /// in the one place every check-in passes, so no route is missed.
@@ -289,19 +290,31 @@ public sealed class CheckInStore
     }
 
 
-    public void CheckInAll(IEnumerable<string> transponders)
+    /// <summary>
+    /// Checks in every one of <paramref name="transponders"/>. CheckedIn is
+    /// raised only when somebody new came in, and only when
+    /// <paramref name="opensDoors"/>.
+    ///
+    /// WHY (15 Nov 2026, bug hunt 20): doors open is the first driver to
+    /// arrive. An entry list imported at 2pm with "check everyone in"
+    /// ticked, or Check In Everyone pressed before anyone came, stamped it
+    /// then, and "doors open to first green" said five hours - and undoing
+    /// the import left the stamp. Those bulk ticks pass false, so the first
+    /// driver checked in by hand, by phone or at the sign-up desk opens the
+    /// doors instead; and a tick of drivers already in raises nothing.
+    /// </summary>
+    public void CheckInAll(IEnumerable<string> transponders, bool opensDoors = true)
     {
         var any = false;
 
         foreach (var transponder in transponders)
         {
-            Current.CheckedIn.Add(transponder);
-            any = true;
+            any |= Current.CheckedIn.Add(transponder);
         }
 
         Save();
 
-        if (any)
+        if (any && opensDoors)
         {
             CheckedIn?.Invoke(CurrentEventId);
         }

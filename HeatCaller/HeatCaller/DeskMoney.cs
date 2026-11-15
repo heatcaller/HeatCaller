@@ -101,10 +101,19 @@ public static class DeskMoney
     /// Whether tonight charges anything at all (12 Nov 2026, setup plan step
     /// 8): the day has an entry fee, or one of its classes has its own. What
     /// shows the Paid column, the Driver Paid button and the report's money.
+    ///
+    /// With no classes ticked every class runs, and each driver pays for
+    /// their main class (CheckInControl.FeeFor) - so any of the club's
+    /// classes with its own fee counts (bug hunt 20). Only checked was the
+    /// ticked list, which is empty then, so a club pricing only its classes
+    /// tracked no money that night though each driver's fee came out at $20.
     /// </summary>
-    public static bool Charges(RaceEvent? day, Func<string, RaceClass?> classNamed) =>
+    public static bool Charges(RaceEvent? day, Func<string, RaceClass?> classNamed, IEnumerable<RaceClass>? clubClasses = null) =>
         day is { IsLegacy: false } real
-        && (real.EntryFee > 0 || (real.ClassNames ?? new List<string>()).Any(name => classNamed(name)?.EntryFee is > 0));
+        && (real.EntryFee > 0
+            || (real.ClassNames is { Count: > 0 } ticked
+                ? ticked.Any(name => classNamed(name)?.EntryFee is > 0)
+                : (clubClasses ?? Enumerable.Empty<RaceClass>()).Any(c => c.EntryFee is > 0)));
 
     /// <summary>
     /// A class's own fees in a few words, for the Classes page - "$5.00",
