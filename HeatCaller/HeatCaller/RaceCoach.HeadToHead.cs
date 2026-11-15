@@ -487,10 +487,11 @@ public static partial class RaceCoach
         if (result is null || resultWins / (double)n < WinningShare)
         {
             var who = result is null ? "Dead level" : $"{result} just shades it";
+            var score = $"{resultWins}–{Math.Min(pair.AheadA, pair.AheadB)}";
 
             return pace is null
-                ? $"{who} at the flag, {pair.AheadA}–{pair.AheadB}, and the pace is even too. Every race is a fresh fight."
-                : $"{who} at the flag, {Math.Max(pair.AheadA, pair.AheadB)}–{Math.Min(pair.AheadA, pair.AheadB)}, but {pace} has had the quicker lap in {paceWins} of {lapped}.";
+                ? $"{who} at the flag, {score}, and the pace is even too. Every race is a fresh fight."
+                : $"{who} at the flag, {score}, but {pace} has had the quicker lap in {paceWins} of {lapped}.";
         }
 
         // One driver has the results, and the pace too or the pace is even.
