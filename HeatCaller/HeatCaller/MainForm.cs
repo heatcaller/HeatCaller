@@ -2933,14 +2933,21 @@ public partial class MainForm : Form
     /// </summary>
     private void WireUpdates()
     {
-        if (!AppUpdates.Available(_settings))
+        if (!AppUpdates.CanUpdateItself)
         {
             // Not an installed build (a developer running from bin\Debug, or
-            // a portable copy), or the club turned checks off. Nothing is
-            // wired, nothing is downloaded, and nothing is said - an app
-            // that cannot update itself has no business mentioning updates.
+            // a portable copy), or a rehearsal. Nothing is wired, nothing is
+            // downloaded, and nothing is said - an app that cannot update
+            // itself has no business mentioning updates. (The Updates card
+            // on Backup and Restore says why, if somebody asks.)
             return;
         }
+
+        // Wired even when the club turned the automatic checks off: Check
+        // for Updates on Backup and Restore still asks through all of this.
+        // The timer below runs either way, and CheckAsync does nothing on a
+        // tick while the checks are off - so ticking them back on needs no
+        // restart.
 
         // The console in place of the session log now there is a window to
         // show it in - and the log file still gets everything, because
