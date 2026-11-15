@@ -586,8 +586,9 @@ export function nightAlerts(before: unknown, after: unknown, url: string): PushM
     body: [[label, out || placed].filter((s) => s !== "").join(" - "), ...leaderboardLines(race)].join("\n"),
     tag: "hc-result",
     // The race's own result (14 Nov 2026, driver phone plan item 9), not
-    // just Me: a tap lands on the thing the alert was about.
-    url: typeof race["sid"] === "string" && /^[0-9a-f]{32}$/.test(race["sid"]) ? url.replace(/\/mynight$/, `/results/${race["sid"]}`) : url,
+    // just Me: a tap lands on the thing the alert was about. A demo race is
+    // never sent to results, so its tap stays on their night, where it is.
+    url: race["kind"] !== "demo" && typeof race["sid"] === "string" && /^[0-9a-f]{32}$/.test(race["sid"]) ? url.replace(/\/mynight$/, `/results/${race["sid"]}`) : url,
   }];
 }
 

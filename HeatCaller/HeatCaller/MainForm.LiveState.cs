@@ -68,6 +68,28 @@ public partial class MainForm
         return true;
     }
 
+    /// <summary>
+    /// How often an idle board still goes to the relay (14 Nov 2026, bug hunt
+    /// 19 #12). The relay shows the club's stream as live only while the race
+    /// state is under two minutes old, so a quiet break between races with no
+    /// frame at all tore the drivers' docked video down every race break.
+    /// </summary>
+    internal const long IdleStateEveryMs = 60_000;
+
+    /// <summary>When PublishStateToRelay last sent a frame (Environment.TickCount64), inline: the UI thread's.</summary>
+    private long _lastRelayStateSentMs;
+
+    /// <summary>When PublishStateToRelayOffUi last sent a frame, threaded: the worker's alone.</summary>
+    private long _lastRelayStateSentMsOffUi;
+
+    /// <summary>
+    /// Whether a live-state frame goes now: every tick while a race is on,
+    /// the one that records a change, and once a minute while idle so the
+    /// relay knows the laptop is still there.
+    /// </summary>
+    internal static bool StateFrameDue(bool live, bool changed, long nowMs, long lastSentMs) =>
+        live || changed || nowMs - lastSentMs >= IdleStateEveryMs;
+
     /// <summary>The relay settings PublishStateToRelay reads, as last read on the UI thread.</summary>
     private volatile bool _frozenRelayEnabled;
 
@@ -240,10 +262,14 @@ public partial class MainForm
         _lastRelayRaceStateOffUi = state;
         changed |= CountdownChanged(ref _lastRelayCountdownOffUi);
 
-        if (!live && !changed)
+        var now = Environment.TickCount64;
+
+        if (!StateFrameDue(live, changed, now, _lastRelayStateSentMsOffUi))
         {
             return;
         }
+
+        _lastRelayStateSentMsOffUi = now;
 
         try
         {

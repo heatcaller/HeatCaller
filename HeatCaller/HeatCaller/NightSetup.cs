@@ -178,6 +178,19 @@ public static class EntriesClose
         day?.EntriesCloseLocalTime is { } time ? NightPlan.NearestOccurrence(time, nowUtc) : null;
 
     /// <summary>
+    /// Whether the night's racing has started: a race of the day saved, or
+    /// one on the track now. Practice doesn't count either way.
+    /// </summary>
+    /// <remarks>
+    /// WHY (14 Nov 2026, bug hunt 19): only saved races counted, so with the
+    /// heats built early and the first one still on track as the close fell
+    /// due, the announcer said "entries are now closed, tonight's heats are
+    /// being put together" over that race.
+    /// </remarks>
+    public static bool RacingStarted(IEnumerable<RoundDefinition> dayRounds, bool raceOnTrack) =>
+        raceOnTrack || dayRounds.Any(r => r.IsRecorded && r.Kind != RoundKind.Practice);
+
+    /// <summary>
     /// Which call is due now, if any. Only before the night's racing has
     /// started: once a race has run, "entries close" is old news, and a
     /// club that set the time but is already racing doesn't want to hear it.

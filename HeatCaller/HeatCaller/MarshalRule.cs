@@ -152,11 +152,20 @@ public static class MarshalRule
     /// <paramref name="results"/>, logged on a round other than this race's
     /// own and inside <paramref name="roundFilter"/> - their NEXT race. In
     /// the order they were logged.
+    ///
+    /// WHY (bug hunt 19): a driver is matched by their main transponder
+    /// (<paramref name="profiles"/>), as the lost-qualifier rule is. A post
+    /// is held under the car they raced the heat before - their second
+    /// car's, perhaps - so a next race on their other car carried nothing.
+    /// And a penalty marked on a race that never reached the history
+    /// (<paramref name="raceIsFiled"/> says no: its save failed, and the
+    /// crash journal filed it again under a new id) is still owed.
     /// </summary>
     public static List<(RoundDefinition Round, MarshalNoShow NoShow)> PendingPenalties(
-        IEnumerable<SessionResultEntry> results, string? thisRoundId, IEnumerable<RoundDefinition> rounds, IReadOnlyCollection<string>? roundFilter)
+        IEnumerable<SessionResultEntry> results, string? thisRoundId, IEnumerable<RoundDefinition> rounds, IReadOnlyCollection<string>? roundFilter,
+        ProfileStore? profiles = null, Func<string, bool>? raceIsFiled = null)
     {
-        var racing = results.Select(r => r.Transponder).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var racing = results.Select(r => DriverKey(r.Transponder, profiles)).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         return rounds
             .Where(r => r.NoShowMarshals is { Count: > 0 }
@@ -164,8 +173,8 @@ public static class MarshalRule
                         && (roundFilter is null || roundFilter.Contains(r.Id)))
             .SelectMany(r => r.NoShowMarshals!.Select(n => (Round: r, NoShow: n)))
             .Where(x => x.NoShow.Rule == MarshalNoShowRule.TimePenalty
-                        && x.NoShow.AppliedToSessionId is null
-                        && racing.Contains(x.NoShow.Transponder))
+                        && (x.NoShow.AppliedToSessionId is not { } applied || (raceIsFiled is not null && !raceIsFiled(applied)))
+                        && racing.Contains(DriverKey(x.NoShow.Transponder, profiles)))
             .OrderBy(x => x.NoShow.LoggedUtc)
             .ToList();
     }
@@ -176,13 +185,13 @@ public static class MarshalRule
     /// taken off like any other), and marks the no-show applied. Returns a
     /// line per penalty for the log. The caller saves the rounds.
     /// </summary>
-    public static List<string> ApplyPenalties(SessionRecord record, IReadOnlyList<(RoundDefinition Round, MarshalNoShow NoShow)> pending)
+    public static List<string> ApplyPenalties(SessionRecord record, IReadOnlyList<(RoundDefinition Round, MarshalNoShow NoShow)> pending, ProfileStore? profiles = null)
     {
         var lines = new List<string>();
 
         foreach (var (round, noShow) in pending)
         {
-            var entry = record.Results.FirstOrDefault(r => string.Equals(r.Transponder, noShow.Transponder, StringComparison.OrdinalIgnoreCase));
+            var entry = EntryOf(record, noShow, profiles);
 
             if (entry is null)
             {
@@ -207,9 +216,9 @@ public static class MarshalRule
     /// no-show logged by mistake. True when the race changed; the caller
     /// saves it (SessionHistoryStore.SaveEdited).
     /// </summary>
-    public static bool TakePenaltyOff(SessionRecord record, RoundDefinition round, MarshalNoShow noShow)
+    public static bool TakePenaltyOff(SessionRecord record, RoundDefinition round, MarshalNoShow noShow, ProfileStore? profiles = null)
     {
-        var entry = record.Results.FirstOrDefault(r => string.Equals(r.Transponder, noShow.Transponder, StringComparison.OrdinalIgnoreCase));
+        var entry = EntryOf(record, noShow, profiles);
 
         if (entry is null || noShow.PenaltySeconds <= 0)
         {
@@ -221,4 +230,13 @@ public static class MarshalRule
 
         return ResultEditor.Apply(record, new[] { adjustment }, "No-show taken off: " + Reason(round, noShow), "Marshal rule") > 0;
     }
+
+    /// <summary>The no-show's driver on this race: on the transponder it was logged under, else on any of theirs (bug hunt 19).</summary>
+    private static SessionResultEntry? EntryOf(SessionRecord record, MarshalNoShow noShow, ProfileStore? profiles) =>
+        record.Results.FirstOrDefault(r => string.Equals(r.Transponder, noShow.Transponder, StringComparison.OrdinalIgnoreCase))
+        ?? record.Results.FirstOrDefault(r => string.Equals(DriverKey(r.Transponder, profiles), DriverKey(noShow.Transponder, profiles), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>A driver's main transponder from any of theirs - as QualifyingCalculator files them.</summary>
+    private static string DriverKey(string? transponder, ProfileStore? profiles) =>
+        profiles?.PrimaryForAlternate(transponder ?? string.Empty) ?? transponder ?? string.Empty;
 }

@@ -85,7 +85,7 @@ public partial class MainForm
             saved.NoShowMarshals!.Remove(noShow);
 
             if (noShow.AppliedToSessionId is { } sessionId && _sessionHistory.Get(sessionId) is { } race
-                && MarshalRule.TakePenaltyOff(race, saved, noShow))
+                && MarshalRule.TakePenaltyOff(race, saved, noShow, _profiles))
             {
                 _sessionHistory.SaveEdited(race);
                 OnClientRawMessage($"{AppTime.LogStampNow()}  [marshals] {noShow.PenaltySeconds}s taken back off {who}'s race ({race.Label}).");

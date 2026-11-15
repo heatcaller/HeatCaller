@@ -66,6 +66,25 @@ public sealed partial class CheckInControl
             return;
         }
 
+        SavePapers(profile, name, form);
+    }
+
+    /// <summary>Saves what the one-driver papers window says, once it closed with Save.</summary>
+    private void SavePapers(DriverProfile profile, string name, PapersForm form)
+    {
+        // WHY (14 Nov 2026, bug hunt 19): the profile came from the list's row
+        // or Desk mode's card, drawn before any phone change since - a car
+        // picked for tonight, the driver's own edits approved. Saving that old
+        // copy put those changes back, so the papers go on the driver as they
+        // are on file now. Also covers a phone change while this window was open.
+        if (_profiles.Get(profile.Transponder) is not { } onFile)
+        {
+            RefreshDriverList();
+            return;
+        }
+
+        profile = onFile;
+
         var before = (profile.WaiverSignedOn, profile.IsJunior, profile.WaiverGuardian, profile.MembershipNumber, profile.MembershipExpires);
 
         form.WriteTo(profile);
@@ -104,14 +123,26 @@ public sealed partial class CheckInControl
 
         using var form = new PapersForm(drivers.Count, _settings.AskForWaivers, _settings.CheckMemberships);
 
-        if (form.ShowDialog(this) != DialogResult.OK || !form.ChangesAnything)
+        if (form.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        SavePapersForMany(drivers, form);
+    }
+
+    /// <summary>Saves what the several-driver papers window says, once it closed with Save.</summary>
+    private void SavePapersForMany(IReadOnlyList<DriverProfile> drivers, PapersForm form)
+    {
+        if (!form.ChangesAnything)
         {
             return;
         }
 
         var before = new List<(string Transponder, DateTime? Waiver, DateTime? Expires)>();
 
-        foreach (var profile in drivers)
+        // As on file now, not the rows' copies (bug hunt 19 - see EditPapersFor).
+        foreach (var profile in drivers.Select(d => _profiles.Get(d.Transponder)).OfType<DriverProfile>())
         {
             before.Add((profile.Transponder, profile.WaiverSignedOn, profile.MembershipExpires));
             form.WriteToMany(profile);

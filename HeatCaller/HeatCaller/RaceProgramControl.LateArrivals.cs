@@ -162,7 +162,7 @@ public sealed partial class RaceProgramControl
 
         return new ProgramStep(
             ProgramStage.LateArrivals,
-            LateArrivals.Headline(names, DayIsClubNight),
+            LateArrivals.Headline(names, DayIsClubNight, HeatPosting.Posted(ActiveDay)),
             $"{string.Join(", ", arrivals.Select(a => $"{NameOf(a.Transponder)} ({a.ClassName})"))}. "
             + "Each goes into the heat nearest their pace that has room, in every round still to run, and nobody else moves. "
             + "Or say not tonight.",
@@ -192,7 +192,7 @@ public sealed partial class RaceProgramControl
             })
             .ToList();
 
-        using var form = new LateArrivalsForm(lines.Select(l => l.Text).ToList(), DayIsClubNight);
+        using var form = new LateArrivalsForm(lines.Select(l => l.Text).ToList(), DayIsClubNight, HeatPosting.Posted(ActiveDay));
 
         if (form.ShowDialog(this) != DialogResult.OK)
         {
@@ -345,7 +345,7 @@ internal sealed class LateArrivalsForm : Form
 
     public bool Ticked(int index) => index >= 0 && index < _ticks.Count && _ticks[index].Checked;
 
-    public LateArrivalsForm(IReadOnlyList<string> lines, bool clubNight)
+    public LateArrivalsForm(IReadOnlyList<string> lines, bool clubNight, bool posted)
     {
         Text = "Checked In Late";
         Font = AppTheme.BodyFont;
@@ -355,7 +355,7 @@ internal sealed class LateArrivalsForm : Form
 
         var lblHow = new Label
         {
-            Text = $"These drivers checked in after tonight's {(clubNight ? "races" : "heats")} were posted. A ticked driver goes into the heat "
+            Text = $"These drivers checked in after {LateArrivals.After(clubNight, posted, "tonight's")}. A ticked driver goes into the heat "
                    + "nearest their pace that has room, in every round still to run, and nobody else moves. "
                    + "An unticked one isn't added tonight, and Next Steps stops asking. Undo takes either back.",
             AutoSize = true,

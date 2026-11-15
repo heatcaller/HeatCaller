@@ -539,13 +539,41 @@ public sealed class SeasonsControl : UserControl
 
         if (item.Leader.Length > 0)
         {
-            var label = item.Finished ? "Champion " : "Leader ";
+            var label = item.Label;
             var labelWidth = TextRenderer.MeasureText(g, label, AppTheme.SmallFont, Size.Empty, TextFormatFlags.NoPadding).Width;
 
             TextRenderer.DrawText(g, label, AppTheme.SmallFont, new Rectangle(x, y, labelWidth + 2, AppTheme.SmallFont.Height), AppTheme.TextMuted, line);
             TextRenderer.DrawText(g, item.Leader, AppTheme.SmallFont, new Rectangle(x + labelWidth, y, Math.Max(1, width - labelWidth), AppTheme.SmallFont.Height),
-                item.Finished ? AppTheme.Warning : AppTheme.TextDark, line);
+                label == ChampionLabel ? AppTheme.Warning : AppTheme.TextDark, line);
         }
+    }
+
+    private const string ChampionLabel = "Champion ";
+
+    /// <summary>
+    /// Who a championship's card names, and as what: "Leader Al" while it
+    /// runs, "Champion Al" once it is over. WHY (14 Nov 2026, bug hunt 19):
+    /// a season that ended level on points named the tiebreak's pick
+    /// "Champion" while Can they still win? beside it said it ended level.
+    /// It now reads "Level Al and Annie", the drivers that card marks Level.
+    /// </summary>
+    internal static (string Label, string Leader) CardLeader(IReadOnlyList<SeasonStandingEntry> standings, bool finished)
+    {
+        if (standings.Count == 0)
+        {
+            return (string.Empty, string.Empty);
+        }
+
+        if (!finished)
+        {
+            return ("Leader ", standings[0].DriverName);
+        }
+
+        var level = standings.Where(s => s.TotalPoints >= standings[0].TotalPoints).Select(s => s.DriverName).ToList();
+
+        return level.Count == 1
+            ? (ChampionLabel, level[0])
+            : ("Level ", string.Join(", ", level.Take(level.Count - 1)) + " and " + level[^1]);
     }
 
     /// <summary>What a championship's card and header say about how far through it is: "Stock · round 7 of 8".</summary>
@@ -952,7 +980,9 @@ public sealed class SeasonsControl : UserControl
         var standings = SeasonStore.ComputeStandings(season, counted, _profiles);
         var (line, progress, finished, _) = ProgressOf(season, counted);
 
-        return new SeasonListItem(season, line, progress, finished, standings.Count > 0 ? standings[0].DriverName : string.Empty);
+        var (label, leader) = CardLeader(standings, finished);
+
+        return new SeasonListItem(season, line, progress, finished, label, leader);
     }
     private void LoadSelectedSeasonIntoUi()
     {
@@ -1291,7 +1321,7 @@ public sealed class SeasonsControl : UserControl
             card.Line = line;
             card.Progress = progress;
             card.Finished = finished;
-            card.Leader = standings.Count > 0 ? standings[0].DriverName : string.Empty;
+            (card.Label, card.Leader) = CardLeader(standings, finished);
             _lstSeasons.Invalidate();
         }
     }
@@ -1449,12 +1479,13 @@ public sealed class SeasonsControl : UserControl
     }
 
     /// <summary>A championship's card in the list: its line, how far through it is, and who leads (or won).</summary>
-    private sealed class SeasonListItem(Season season, string line, double? progress, bool finished, string leader)
+    private sealed class SeasonListItem(Season season, string line, double? progress, bool finished, string label, string leader)
     {
         public Season Season { get; } = season;
         public string Line { get; set; } = line;
         public double? Progress { get; set; } = progress;
         public bool Finished { get; set; } = finished;
+        public string Label { get; set; } = label;
         public string Leader { get; set; } = leader;
 
         public override string ToString() => Season.Name;

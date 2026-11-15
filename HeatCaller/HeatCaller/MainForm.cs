@@ -2429,6 +2429,7 @@ public partial class MainForm : Form
             // shutting down or a restart after a restore must not hang on a
             // dialog nobody will see.
             if (e.CloseReason == CloseReason.UserClosing
+                && !_closingAgreedMidRace
                 && _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
             {
                 // Practice runs on the same session, so it lands here too -

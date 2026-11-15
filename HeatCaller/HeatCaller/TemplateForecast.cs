@@ -195,7 +195,12 @@ public static class TemplateForecast
         var racing = onTrack + between * (races - 1) + breakTime;
 
         TimeSpan? finish = firstRace is { } start ? start + racing : null;
-        TimeSpan? spare = finish is { } f && outBy is { } by ? by - f : null;
+        // The out-by on whichever day puts it nearest the finish, as NightPlan
+        // does (NearestOccurrence): out by 00:30 is after a 23:20 finish, not
+        // 23 hours before it.
+        TimeSpan? spare = finish is { } f && outBy is { } by
+            ? by + TimeSpan.FromDays(Math.Round((f - by).TotalDays)) - f
+            : null;
 
         return new NightForecast(drivers, heats, finals, racing, finish, spare, clubNight);
     }

@@ -79,6 +79,39 @@ public sealed class ObsLink : IDisposable
         };
     }
 
+    /// <summary>
+    /// OBS's answer to GetStreamStatus (op 7): whether it is streaming, and
+    /// since when on this laptop's clock (now less outputDuration, when OBS
+    /// gives it). Null for any other message.
+    /// </summary>
+    public static (bool Streaming, DateTime? LiveSinceUtc)? StreamStatus(JsonElement message, DateTime nowUtc)
+    {
+        if (!message.TryGetProperty("op", out var op) || op.GetInt32() != 7
+            || !message.TryGetProperty("d", out var d)
+            || !d.TryGetProperty("responseData", out var data)
+            || !data.TryGetProperty("outputActive", out var active)
+            || active.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+        {
+            return null;
+        }
+
+        DateTime? since = active.GetBoolean() && data.TryGetProperty("outputDuration", out var duration) && duration.TryGetDouble(out var ms) && ms >= 0
+            ? nowUtc - TimeSpan.FromMilliseconds(ms)
+            : null;
+
+        return (active.GetBoolean(), since);
+    }
+
+    /// <summary>
+    /// What OBS closing the link means. 4009 is obs-websocket's
+    /// AuthenticationFailed: a wrong or missing password (bug hunt 19, #23),
+    /// said as such rather than "isn't answering".
+    /// </summary>
+    public static Exception Closed(WebSocketCloseStatus? status) =>
+        (int?)status == 4009
+            ? new InvalidOperationException("OBS refused the password. Check it matches the one in OBS's WebSocket Server Settings.")
+            : new WebSocketException("OBS closed the link.");
+
     private async Task RunAsync(CancellationToken token)
     {
         while (!token.IsCancellationRequested)
@@ -142,7 +175,7 @@ public sealed class ObsLink : IDisposable
 
         if (identified.RootElement.GetProperty("op").GetInt32() != 2)
         {
-            throw new InvalidOperationException("OBS refused the password.");
+            throw Closed((WebSocketCloseStatus)4009);
         }
 
         State = "connected";
@@ -238,11 +271,12 @@ public sealed class ObsLink : IDisposable
                 else { _stream.Stopped(DateTime.UtcNow); State = "connected"; }
                 _log?.Invoke(started ? "[video] The stream went live." : "[video] The stream stopped.");
             }
-            else if (root.GetProperty("op").GetInt32() == 7 && root.GetProperty("d").TryGetProperty("responseData", out var data)
-                && data.TryGetProperty("outputActive", out var active) && active.GetBoolean())
+            else if (StreamStatus(root, DateTime.UtcNow) is { } status)
             {
-                _stream.Started(DateTime.UtcNow);
-                State = "streaming";
+                // Bug hunt 19, #6: a stop or restart while the link was down
+                // sent no event, so OBS's answer settles the open piece.
+                _stream.ObsSays(status.Streaming, status.LiveSinceUtc, DateTime.UtcNow);
+                State = status.Streaming ? "streaming" : "connected";
             }
         }
     }
@@ -281,7 +315,7 @@ public sealed class ObsLink : IDisposable
 
             if (got.MessageType == WebSocketMessageType.Close)
             {
-                throw new WebSocketException("OBS closed the link.");
+                throw Closed(got.CloseStatus);
             }
 
             stream.Write(buffer, 0, got.Count);

@@ -436,8 +436,24 @@ public sealed class RaceHistoryControl : UserControl
 
     /// <summary>Each night with saved sessions (local dates), and how many it had.</summary>
     private Dictionary<DateTime, int> Nights() => _history.All
-        .GroupBy(s => s.StartedAtUtc.ToLocalTime().Date)
+        .GroupBy(NightOf)
         .ToDictionary(g => g.Key, g => g.Count());
+
+    /// <summary>
+    /// The race night a session is listed under: 6am to 6am, like
+    /// <see cref="TonightAtTheTrack.NightOf"/> and the relay's results archive.
+    /// WHY (bug hunt 19): this was the calendar date, so a night whose mains
+    /// ran past midnight was split across two days, and opening the page
+    /// showed only the after-midnight races as the latest night.
+    /// </summary>
+    internal static DateTime NightOf(SessionRecord session)
+    {
+        var local = session.StartedAtUtc.ToLocalTime();
+
+        // A session saved with no time at all is DateTime.MinValue, and six
+        // hours before that is no date - listed under its own day.
+        return local < DateTime.MinValue.AddDays(1) ? local.Date : TonightAtTheTrack.NightOf(local);
+    }
 
     /// <summary>
     /// The list, for the night picked - or every night, ticked - with one
@@ -454,7 +470,7 @@ public sealed class RaceHistoryControl : UserControl
 
         var everyNight = _chkEveryNight.Checked;
         var listed = _history.All
-            .Where(s => everyNight || s.StartedAtUtc.ToLocalTime().Date == _night)
+            .Where(s => everyNight || NightOf(s) == _night)
             .ToList();
 
         _lblNight.Text = _night is not { } night
@@ -601,7 +617,7 @@ public sealed class RaceHistoryControl : UserControl
 
         if (!_chkEveryNight.Checked)
         {
-            _night = session.StartedAtUtc.ToLocalTime().Date;
+            _night = NightOf(session);
         }
 
         FillList(select: id);

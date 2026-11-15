@@ -25,6 +25,14 @@ internal sealed class TemplateEditForm : Form
     /// <summary>The race day the fields edit: the template's settings, never saved as a day.</summary>
     private readonly RaceEvent _scratch = new();
 
+    /// <summary>
+    /// The rounds and heat size the fields opened showing. For a template
+    /// that never set its own, they are shown, not written: saved unchanged,
+    /// the template keeps 0, so a night from it keeps the club's own numbers.
+    /// </summary>
+    private readonly int _roundsShown;
+    private readonly int _heatSizeShown;
+
     private readonly TextBox _txtName = new();
     private readonly Label _lblForecast = new() { AutoSize = true, UseMnemonic = false };
     private readonly Label _lblProblem = new() { AutoSize = true, UseMnemonic = false, Visible = false };
@@ -78,6 +86,8 @@ internal sealed class TemplateEditForm : Form
             NightTemplates.ApplyTo(template, _scratch);
             _fields.FillLists(classes, venues, layouts, seasons);
             _fields.Load(_scratch, template.DriversPerHeat > 0 ? template.DriversPerHeat : 8);
+            _roundsShown = (int)_fields.Rounds.Value;
+            _heatSizeShown = (int)_fields.HeatSize.Value;
 
             _fields.EditBreaks = EditBreaks;
             _fields.EditClassOrder = EditClassOrder;
@@ -223,6 +233,9 @@ internal sealed class TemplateEditForm : Form
 
         var made = NightTemplates.From(day, name);
 
+        made.QualifyingRounds = ShownNotWritten(_original.QualifyingRounds, _roundsShown, made.QualifyingRounds);
+        made.DriversPerHeat = ShownNotWritten(_original.DriversPerHeat, _heatSizeShown, made.DriversPerHeat);
+
         // The running order keeps the classes still ticked, in their order.
         made.ClassRunningOrder = made.ClassRunningOrder.Where(c => made.ClassNames.Contains(c, StringComparer.OrdinalIgnoreCase)).ToList();
         made.Weekdays = (_original.Weekdays ?? new List<DayOfWeek>()).ToList();
@@ -230,6 +243,13 @@ internal sealed class TemplateEditForm : Form
 
         return made;
     }
+
+    /// <summary>
+    /// A template's own value when it set one; when it never did (0), still 0
+    /// unless the field was changed from the value it opened showing. Pure.
+    /// </summary>
+    internal static int ShownNotWritten(int saved, int shown, int onScreen) =>
+        saved <= 0 && onScreen == shown ? saved : onScreen;
 
     /// <summary>Why the template as it stands can't be saved, or null when it can. Pure, for the tests.</summary>
     internal static string? Problem(string name, int classesTicked, IReadOnlyCollection<string> takenNames)

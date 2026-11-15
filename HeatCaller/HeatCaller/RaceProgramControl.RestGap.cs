@@ -12,12 +12,19 @@ namespace HeatCaller;
 /// </summary>
 public sealed partial class RaceProgramControl
 {
-    /// <summary>Tonight's running order as (label, drivers), practice left out, with <paramref name="driversOf"/> for each round's drivers.</summary>
-    private static List<(string Label, IReadOnlyCollection<string> Drivers)> RunningOrder(
+    /// <summary>
+    /// Tonight's running order as (label, drivers), practice left out, with
+    /// <paramref name="driversOf"/> for each round's drivers. The label names
+    /// the class - "Stock Q1 Heat 1" - because every class has a "Q1 Heat 1":
+    /// a driver in two classes, who the gap is for, was told he'd race "Q1
+    /// Heat 1 and Q1 Heat 1 back to back", and NewlyTooClose took a new clash
+    /// for an old one with the same labels (bug hunt 19).
+    /// </summary>
+    internal static List<(string Label, IReadOnlyCollection<string> Drivers)> RunningOrder(
         IEnumerable<RoundDefinition> inOrder, Func<RoundDefinition, IReadOnlyCollection<string>> driversOf) =>
         inOrder
             .Where(r => r.Kind != RoundKind.Practice)
-            .Select(r => (r.RoundLabel, driversOf(r)))
+            .Select(r => ($"{MixedHeats.ClassLabel(r)} {r.RoundLabel}".Trim(), driversOf(r)))
             .ToList();
 
     /// <summary>

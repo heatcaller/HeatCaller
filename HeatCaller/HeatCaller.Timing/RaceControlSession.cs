@@ -4219,6 +4219,19 @@ public sealed partial class RaceControlSession
         // adds up to the driver's elapsed time.
         var gapMs = (long)gap.TotalMilliseconds;
 
+        // Bug hunt 19: on the monotonic clock where the snapshot has the
+        // reading, as redBeforeSnapshot is above. The race clock and the
+        // decoder both ran through the gap whatever the wall clock did, so a
+        // time sync between the reset and the undo moved the start's reading
+        // (and the decoder's) by the wrong amount: stepped back 30 s in a
+        // minute's wait, the clock came back 30 s ahead and the checkered
+        // came out early. Not when the caller handed over the moment to
+        // measure to - that gap is exact on purpose, see nowUtc.
+        if (nowUtc is null && snapshot.TakenClockMs is { } takenAtMs)
+        {
+            gapMs = Math.Max(0, NowMs - takenAtMs);
+        }
+
         RestoreSnapshot(snapshot with
         {
             Flag = FlagState.Red,

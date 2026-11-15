@@ -79,7 +79,7 @@ import type { UsageLog } from "./usagelog.js";
 import { BROADCAST_TTL_SECONDS, followNameFrom, myNightUrl, PUSH_CHANNEL, pushKindsFrom, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
 import { PAGES_BUILD } from "./pagebuild.js";
 import { nextNightIcs } from "./ics.js";
-import { hiddenAfter, liveVideo, mergedStreamBody, raceVideo, STREAM_MAX_PIECES, STREAM_NIGHTS_KEPT, streamFrom, streamNightId, VideoCheck, type OEmbedAsk, type RaceVideo, type Stream } from "./video.js";
+import { hiddenAfter, liveVideo, mergedStreamBody, raceVideo, STREAM_MAX_PIECES, STREAM_NIGHTS_KEPT, streamFrom, streamNightId, VIDEO_CHECK_FOR_MS, VideoCheck, type OEmbedAsk, type RaceVideo, type Stream } from "./video.js";
 import { SIGNIN_MAIL, SIGNIN_MAIL_MAX, SIGNIN_MAIL_MAX_BODY, SIGNIN_MAIL_PER_HOUR, signinEmailFrom, signinItemsFrom } from "./signinmail.js";
 import { addCounts, countableEvents, PAGE_COUNTS, PAGE_COUNTS_DAYS, PAGE_COUNTS_MAX_BODY, PAGE_COUNTS_PER_ADDRESS, totalsOver } from "./pagecounts.js";
 
@@ -9445,7 +9445,10 @@ export class Relay {
 
     await this.videoCheck?.ready(club);
     const stream = streamFrom(merged.body, this.videoCheck?.dead(club), STREAM_MAX_PIECES * (STREAM_NIGHTS_KEPT + 1));
-    if (stream !== undefined && this.videoCheck !== undefined) void this.videoCheck.saw(club, stream.pieces.map((p) => p.videoId));
+    // Only pieces still inside their week of checks: an older night's video,
+    // forgotten to make room for a new one, is not asked about all over again.
+    const since = this.now().getTime() - VIDEO_CHECK_FOR_MS;
+    if (stream !== undefined && this.videoCheck !== undefined) void this.videoCheck.saw(club, stream.pieces.filter((p) => p.startMs >= since).map((p) => p.videoId));
     return stream;
   }
 
@@ -9497,7 +9500,10 @@ export class Relay {
       const stream = await this.latestStreamOf(club);
       const linked = stream === undefined || !stream.on ? [] : stream.pieces.filter((p) => p.videoId !== "" && !p.hidden);
       if (stream === undefined || linked.length === 0) return;
-      const night = String(Math.min(...linked.map((p) => p.startMs)));
+      // Named after the stream's first piece, linked or not: a link pasted
+      // into an earlier piece later, or the first linked piece hidden, is
+      // still the same night and must not send everybody the alert again.
+      const night = String(Math.min(...stream.pieces.map((p) => p.startMs)));
 
       await push.afterVideos(club, night, async (id) => {
         const doc = await this.store.getItem(club, NIGHTS_CHANNEL, id).catch(() => undefined);

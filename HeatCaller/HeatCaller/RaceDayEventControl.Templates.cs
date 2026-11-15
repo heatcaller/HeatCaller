@@ -61,6 +61,13 @@ public sealed partial class RaceDayEventControl
         };
         _btnGoToCloseDay.Click += (_, _) =>
         {
+            // The open night, when a past night being looked at has taken
+            // the day picker off it.
+            if (OpenNight() is { } open && !string.Equals(Selected?.Id, open.Id, StringComparison.Ordinal))
+            {
+                ShowDay(open.Id);
+            }
+
             ShowTab(TonightTab);
             _tonightPage.ScrollControlIntoView(_btnCloseDay);
             _btnCloseDay.Focus();
@@ -93,11 +100,20 @@ public sealed partial class RaceDayEventControl
     /// which nothing on this tab starts a night over. Null when none is. An
     /// open day with nothing in it at all (older installs opened one by
     /// themselves) is taken over by the next start, as it always was.
+    ///
+    /// The current day first, then any other open one: looking at a past
+    /// night (Past Nights..., the day picker) makes that closed day current,
+    /// and tonight's still counts as open then (bug hunt 19 #9).
     /// </summary>
-    private RaceEvent? OpenNight() =>
-        _events.Active is { IsLegacy: false, IsOpen: true } open && !(open.RoundIds.Count == 0 && open.ClassNames.Count == 0)
-            ? open
-            : null;
+    private RaceEvent? OpenNight()
+    {
+        static bool InUse(RaceEvent day) =>
+            day is { IsLegacy: false, IsOpen: true } && !(day.RoundIds.Count == 0 && day.ClassNames.Count == 0);
+
+        return _events.Active is { } active && InUse(active)
+            ? active
+            : _events.Real.Where(InUse).OrderByDescending(d => d.StartedUtc).FirstOrDefault();
+    }
 
     /// <summary>The banner and the cards, from the templates and race days as they are now.</summary>
     private void RefreshShelf()

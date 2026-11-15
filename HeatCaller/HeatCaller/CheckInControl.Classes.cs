@@ -126,6 +126,19 @@ public sealed partial class CheckInControl
 
     private void ChangeClass(DriverProfile profile, string name, string className, bool runs)
     {
+        // WHY (14 Nov 2026, bug hunt 19): the row's profile is the one the
+        // list was drawn with. A phone's car pick, or the desk approving a
+        // driver's own edits, stores a new copy without redrawing the list,
+        // and saving the row's old one put those changes back. The class is
+        // changed on the driver as they are on file now.
+        if (_profiles.Get(profile.Transponder) is not { } onFile)
+        {
+            RefreshDriverList();
+            return;
+        }
+
+        profile = onFile;
+
         var mainBefore = profile.ClassName;
         var othersBefore = (profile.Classes ?? new List<string>()).ToList();
 

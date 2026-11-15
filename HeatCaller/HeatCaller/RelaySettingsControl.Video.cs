@@ -28,6 +28,7 @@ public sealed partial class RelaySettingsControl
     private readonly Label _lblObsState = new() { AutoSize = true };
     private readonly FlowLayoutPanel _pieces = new() { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
     private readonly System.Windows.Forms.Timer _obsTimer = new() { Interval = 1000 };
+    private bool _piecesStale;
 
     private Section BuildVideoCard()
     {
@@ -123,7 +124,12 @@ public sealed partial class RelaySettingsControl
             if (dead != deadSeen)
             {
                 deadSeen = dead;
-                DrawPieces();
+                _piecesStale = true;
+            }
+
+            if (_piecesStale)
+            {
+                DrawPiecesWhenFree();
             }
         };
         _obsTimer.Start();
@@ -131,7 +137,7 @@ public sealed partial class RelaySettingsControl
 
         if (Stream is { } stream)
         {
-            stream.Changed += () => { if (IsHandleCreated && !IsDisposed) BeginInvoke(DrawPieces); };
+            stream.Changed += () => { if (IsHandleCreated && !IsDisposed) BeginInvoke(DrawPiecesWhenFree); };
         }
 
         DrawPieces();
@@ -171,6 +177,28 @@ public sealed partial class RelaySettingsControl
         };
     }
 
+    /// <summary>
+    /// The rows redrawn, but not under the operator's hands (bug hunt 19,
+    /// #49): never while a mouse button is down - leaving a link box fires on
+    /// mouse-down, and a redraw then would take away the nudge or Hide being
+    /// clicked - and never while a link is being typed. Put off till the
+    /// card's next tick.
+    /// </summary>
+    private void DrawPiecesWhenFree()
+    {
+        var typing = _pieces.Controls.OfType<FlowLayoutPanel>().SelectMany(r => r.Controls.OfType<TextBox>())
+            .Any(t => t.Focused && t.Text != t.Tag as string);
+
+        if (MouseButtons != MouseButtons.None || typing)
+        {
+            _piecesStale = true;
+            return;
+        }
+
+        _piecesStale = false;
+        DrawPieces();
+    }
+
     /// <summary>One row a piece: when it ran, its YouTube link, and the nudge.</summary>
     private void DrawPieces()
     {
@@ -190,7 +218,7 @@ public sealed partial class RelaySettingsControl
             var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
             var when = AppTime.TimeOfDay(p.StartedUtc.ToLocalTime()) + (p.EndedUtc is { } e ? " - " + AppTime.TimeOfDay(e.ToLocalTime()) : " - live");
             row.Controls.Add(new Label { AutoSize = true, Text = $"Piece {i + 1}, {when}:", Margin = new Padding(0, 6, 6, 0) });
-            var link = new TextBox { Width = UiLayout.AtTextSize(260), Text = p.VideoId, PlaceholderText = "YouTube link" };
+            var link = new TextBox { Width = UiLayout.AtTextSize(260), Text = p.VideoId, Tag = p.VideoId, PlaceholderText = "YouTube link" };
             link.Leave += (_, _) =>
             {
                 if (Stream?.SetLink(index, link.Text) == false)

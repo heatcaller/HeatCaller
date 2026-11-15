@@ -28,6 +28,14 @@ public sealed partial class RelayPublisher
     private long _nextSignInMailTick;
 
     /// <summary>
+    /// The relay (root and club) and the highest ask already emailed there
+    /// whose ack hasn't landed yet (bug hunt 19): a failed ack leaves the
+    /// asks on the relay, and the next pass must not email them again.
+    /// Cleared once an ack lands, as the relay has dropped them by then.
+    /// </summary>
+    private (string Relay, long UpTo) _signInMailedUnacked = ("", 0);
+
+    /// <summary>
     /// The transponder of the one driver with this email address, or null for
     /// none or more than one. Set by MainForm; null until then, and then
     /// nothing is collected.
@@ -155,9 +163,17 @@ public sealed partial class RelayPublisher
 
             var clubName = PinMailer.ClubName(_settings);
             var mails = new List<(string To, string Subject, string Body)>();
+            var relay = $"{target.Root}|{target.Club}";
+            var mailedUpTo = _signInMailedUnacked.Relay == relay ? _signInMailedUnacked.UpTo : 0;
+            var upTo = asks.Max(a => a.N);
 
             foreach (var ask in asks)
             {
+                if (ask.N <= mailedUpTo)
+                {
+                    continue;
+                }
+
                 var transponder = TransponderForEmail(ask.Email);
                 var link = transponder is null ? null : NightEmail.NightLink(_settings, transponder);
 
@@ -182,10 +198,22 @@ public sealed partial class RelayPublisher
                 _ = SendSignInMailsAsync(mails);
             }
 
+            // Remembered before the ack, which can time out or fail.
+            _signInMailedUnacked = (relay, Math.Max(mailedUpTo, upTo));
+
             using var ack = new HttpRequestMessage(HttpMethod.Post, $"{target.Root}/api/v1/c/{club}/signin/email/ack");
             ack.Headers.Authorization = new AuthenticationHeaderValue("Bearer", target.Token);
-            ack.Content = new StringContent(JsonSerializer.Serialize(new { upTo = asks.Max(a => a.N) }), Encoding.UTF8, "application/json");
-            Send(ack, token).Dispose();
+            ack.Content = new StringContent(JsonSerializer.Serialize(new { upTo }), Encoding.UTF8, "application/json");
+            using var acked = Send(ack, token);
+
+            if (acked.IsSuccessStatusCode)
+            {
+                _signInMailedUnacked = ("", 0);
+            }
+            else
+            {
+                Log?.Invoke($"[relay] Couldn't tell the relay the sign-in link asks were collected (HTTP {(int)acked.StatusCode}). Trying again in a moment.");
+            }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {

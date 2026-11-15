@@ -171,6 +171,27 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Videos one club's checks have seen. */
 const VIDEO_CHECK_MAX = 200;
 
+/** How long a video is checked for: the night it arrives, then once a day for a week. */
+export const VIDEO_CHECK_FOR_MS = 7 * DAY_MS;
+
+/**
+ * Makes room for a new video once a club's checks are full (bug hunt 19
+ * #14): forgets the oldest video whose week of checks is over, one still
+ * playing before one found dead, so a dead video stays dead the longest.
+ * False when every video is still inside its week.
+ */
+function roomFor(mine: Map<string, { firstMs: number; dead: boolean; asking: boolean }>, now: number): boolean {
+  let oldest: [string, { firstMs: number; dead: boolean }] | undefined;
+  for (const entry of mine) {
+    const [, v] = entry;
+    if (v.asking || now - v.firstMs < VIDEO_CHECK_FOR_MS) continue;
+    if (oldest === undefined || (oldest[1].dead && !v.dead) || (oldest[1].dead === v.dead && v.firstMs < oldest[1].firstMs)) oldest = entry;
+  }
+  if (oldest === undefined) return false;
+  mine.delete(oldest[0]);
+  return true;
+}
+
 /**
  * Checks each video the night it arrives, then once a day for a week (V7).
  * 401 (embedding turned off), 403 and 404 (private, removed) make it dead:
@@ -229,10 +250,10 @@ export class VideoCheck {
       if (!YOUTUBE_ID.test(id)) continue;
       const known = mine.get(id);
       if (known === undefined) {
-        if (mine.size >= VIDEO_CHECK_MAX) continue;
+        if (mine.size >= VIDEO_CHECK_MAX && !roomFor(mine, now)) continue;
         mine.set(id, { firstMs: now, lastMs: now, dead: false, asking: true });
         due.push(id);
-      } else if (!known.asking && now - known.lastMs >= DAY_MS && now - known.firstMs < 7 * DAY_MS) {
+      } else if (!known.asking && now - known.lastMs >= DAY_MS && now - known.firstMs < VIDEO_CHECK_FOR_MS) {
         known.lastMs = now;
         known.asking = true;
         due.push(id);
