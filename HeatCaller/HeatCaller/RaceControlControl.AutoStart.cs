@@ -628,13 +628,20 @@ public sealed partial class RaceControlControl
             return string.Empty;
         }
 
-        var about = EstimatedStart;
+        return UpNextLine(OrderedProgram(), EstimatedStart);
+    }
 
-        return NightPlan.UpNext(OrderedProgram()
+    /// <summary>
+    /// <see cref="BigScreenUpNext"/>'s line for a program in running order.
+    /// A shared heat is named by both its classes - "Stock + Mod Q2 Heat 3"
+    /// - as the Next Up bar and the heat sheet name it (bug hunt 19): with
+    /// the main class alone, the other class's drivers didn't see their race.
+    /// </summary>
+    internal static string UpNextLine(IEnumerable<RoundDefinition> orderedProgram, Func<string, string?>? about) =>
+        NightPlan.UpNext(orderedProgram
             .Where(r => !r.IsRecorded && r.Kind != RoundKind.Practice)
             .Take(UpNextOnBigScreen)
-            .Select(r => (r.ClassName, r.RoundLabel, about?.Invoke(r.Id))));
-    }
+            .Select(r => (MixedHeats.ClassLabel(r), r.RoundLabel, about?.Invoke(r.Id))));
 
     // --- From the phone remote (11 Nov 2026) ---
 

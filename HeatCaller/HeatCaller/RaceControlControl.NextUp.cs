@@ -688,6 +688,10 @@ public sealed partial class RaceControlControl
         // The old rosters, captured before anything moves, so one Undo puts
         // the whole re-seed back rather than one heat of it.
         var before = pending.ToDictionary(r => r.Id, r => r.AssignedTransponders.ToList(), StringComparer.Ordinal);
+        var mapsBefore = pending.ToDictionary(
+            r => r.Id,
+            r => r.SharedClassOf is null ? null : new Dictionary<string, string>(r.SharedClassOf, StringComparer.OrdinalIgnoreCase),
+            StringComparer.Ordinal);
 
         // The rosters the re-seed hands out, filled in below as each heat
         // is rebuilt, so the undo can tell whether a heat still holds what
@@ -738,6 +742,7 @@ public sealed partial class RaceControlControl
                 }
 
                 current.AssignedTransponders = old.ToList();
+                current.SharedClassOf = mapsBefore[id];
                 rounds.Update(current);
                 restored++;
             }
@@ -792,6 +797,14 @@ public sealed partial class RaceControlControl
             }
 
             heat.AssignedTransponders = given;
+
+            // A shared heat's drivers are written down in the class they were
+            // dealt as, as Late Entry does - see RedealAcrossClasses.
+            if (redo.ClassOf.TryGetValue(heat.Id, out var classOf))
+            {
+                heat.SharedClassOf = classOf;
+            }
+
             _rounds.Update(heat);
             after[heat.Id] = given.ToList();
             touched++;
@@ -813,9 +826,10 @@ public sealed partial class RaceControlControl
         UpdateNextUpBar();
     }
 
-    /// <summary>What Redo Remaining Heats hands out: each rebuilt heat's roster by round id, the classes with nobody checked in, and the heats left as they are because everyone has raced their round.</summary>
+    /// <summary>What Redo Remaining Heats hands out: each rebuilt heat's roster by round id, the classes with nobody checked in, the heats left as they are because everyone has raced their round, and for each rebuilt shared heat the class each of its drivers runs in there.</summary>
     internal sealed record RedoRosters(
-        Dictionary<string, List<string>> Rosters, List<string> NobodyIn, List<RoundDefinition> LeftAlone);
+        Dictionary<string, List<string>> Rosters, List<string> NobodyIn, List<RoundDefinition> LeftAlone,
+        Dictionary<string, Dictionary<string, string>> ClassOf);
 
     /// <summary>
     /// The rosters Redo Remaining Heats deals every not-yet-run qualifier on
@@ -894,10 +908,18 @@ public sealed partial class RaceControlControl
 
         var rosters = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var leftAlone = new List<RoundDefinition>();
+        var classOfIn = new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal);
 
         foreach (var heat in pending)
         {
             var given = new List<string>();
+
+            // WHY (bug hunt 19): a two-class driver can be dealt into a shared
+            // heat by the one of their classes that isn't first on their
+            // profile. Nothing wrote down which class that was, so
+            // ClassOfDriver fell back to the profile and scored a Mod run as
+            // Stock. Each driver is now recorded as the class that dealt them.
+            var classOf = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var dealtAny = false;
             var triedAny = false;
 
@@ -911,13 +933,16 @@ public sealed partial class RaceControlControl
                     {
                         dealtAny = true;
                         given.AddRange(theirs);
+                        Record(theirs, className);
                         continue;
                     }
                 }
 
                 // Nobody checked in for this class, or all of them have
                 // raced the round: its drivers in the heat stay as they are.
-                given.AddRange(heat.AssignedTransponders.Where(t => InClass(heat, t, className)));
+                var staying = heat.AssignedTransponders.Where(t => InClass(heat, t, className)).ToList();
+                given.AddRange(staying);
+                Record(staying, className);
             }
 
             if (dealtAny)
@@ -925,14 +950,29 @@ public sealed partial class RaceControlControl
                 rosters[heat.Id] = MixedHeats.IsShared(heat)
                     ? given.Distinct(StringComparer.OrdinalIgnoreCase).ToList()
                     : given;
+
+                if (MixedHeats.IsShared(heat))
+                {
+                    classOfIn[heat.Id] = classOf;
+                }
             }
             else if (triedAny)
             {
                 leftAlone.Add(heat);
             }
+
+            // A car runs once in a heat: one dealt in by both its classes
+            // keeps the first, as the roster's Distinct does.
+            void Record(IEnumerable<string> drivers, string className)
+            {
+                foreach (var t in drivers.Where(t => !string.IsNullOrWhiteSpace(t)))
+                {
+                    classOf.TryAdd(t.Trim(), className);
+                }
+            }
         }
 
-        return new RedoRosters(rosters, nobodyIn, leftAlone);
+        return new RedoRosters(rosters, nobodyIn, leftAlone, classOfIn);
     }
 
     /// <summary>
