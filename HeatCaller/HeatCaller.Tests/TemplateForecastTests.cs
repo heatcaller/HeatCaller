@@ -113,6 +113,30 @@ public sealed class TemplateForecastTests
         Assert.Equal(3, counts["Stock"]);
     }
 
+    // Bug hunt 20: a shared (mixed-class) heat's guest drivers counted for
+    // the heat's main class, so a Stock + Mod night read Stock=7, Mod=0.
+    [Fact]
+    public void A_shared_heat_counts_each_driver_for_the_class_they_ran_in()
+    {
+        var shared = Round("Stock", "1", "2", "3", "4", "5", "6", "7");
+        shared.SharedClasses = new List<string> { "Mod" };
+        shared.SharedClassOf = new Dictionary<string, string>
+        {
+            ["1"] = "Stock", ["2"] = "Stock", ["3"] = "Stock",
+            ["4"] = "Mod", ["5"] = "Mod", ["6"] = "Mod", ["7"] = "Mod",
+        };
+
+        var counts = TemplateForecast.CountsOf(new[] { shared });
+
+        Assert.Equal(3, counts["Stock"]);
+        Assert.Equal(4, counts["Mod"]);
+
+        var turnout = TemplateForecast.Turnout(null, new[] { "Mod" }, new[] { Day("Points", 7, shared) }, RoundsOf);
+
+        Assert.NotNull(turnout);
+        Assert.Equal(4, turnout!.PerClass["Mod"]);
+    }
+
     [Fact]
     public void Nothing_to_go_by_gives_no_turnout_rather_than_a_guess()
     {

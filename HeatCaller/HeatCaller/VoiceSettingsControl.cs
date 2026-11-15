@@ -53,11 +53,21 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// club heard the soft "ah main" the race no longer says, and a Test take
     /// was saved under words the race never looks up. Screens keep the line
     /// as written; this is for the voice only.
+    ///
+    /// The online voices are given the line as written to respell themselves
+    /// (15 Nov 2026, bug hunt 20): ForCloudVoice spells "A-Main" "Ay-Main",
+    /// as the race sends it, but only from "A-Main" - handed Kokoro's
+    /// "Eh-Main" it left it alone, so ElevenLabs was tuned on the flat "eh"
+    /// and a Test take was saved under words the race never asks for.
     /// </summary>
     internal static string TextTheRaceSpeaks(string text, bool kokoro, Func<string, string>? forCloudVoice)
     {
-        var said = RaceNumbers.SpokenRoundNames(text);
-        return kokoro || forCloudVoice is null ? said : forCloudVoice(said);
+        if (kokoro)
+        {
+            return RaceNumbers.SpokenRoundNames(text);
+        }
+
+        return forCloudVoice is null ? RaceNumbers.SpokenRoundNames(text, cloudVoice: true) : forCloudVoice(text);
     }
 
     private string TextTheRaceSpeaks(string text, bool kokoro) =>
@@ -3200,7 +3210,7 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         await HearAsync(
             "Asking the relay to say your line...",
-            // As the race would send it - "Eh-Main" and shortened names
+            // As the race would send it - "Ay-Main" and shortened names
             // (10 Nov 2026, bug hunt 16): see TextTheRaceSpeaks.
             async (client, voiceId) => await client.PreviewAsync(voiceId, TextTheRaceSpeaks(line, kokoro: false)),
             name => $"That was your line in {name}. Previews come out of a small daily allowance of their own - your race-night voice is untouched.");

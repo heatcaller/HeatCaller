@@ -117,13 +117,21 @@ public static class TemplateForecast
         return null;
     }
 
-    /// <summary>The drivers who raced in each class on a day: everybody put in any of its races.</summary>
+    /// <summary>
+    /// The drivers who raced in each class on a day: everybody put in any of
+    /// its races. A driver in a shared (mixed-class) heat counts for the class
+    /// they ran in there (MixedHeats.ClassOfDriver), not the heat's main class
+    /// (15 Nov 2026, bug hunt 20).
+    /// </summary>
     internal static Dictionary<string, int> CountsOf(IEnumerable<RoundDefinition> rounds) =>
         rounds
             .Where(r => r is not null && !string.IsNullOrWhiteSpace(r.ClassName) && r.Kind != RoundKind.Practice)
-            .GroupBy(r => r.ClassName.Trim(), StringComparer.OrdinalIgnoreCase)
-            .Select(g => (g.Key, Count: g.SelectMany(r => r.AssignedTransponders ?? new List<string>())
+            .SelectMany(r => (r.AssignedTransponders ?? new List<string>())
                 .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Select(t => (Class: MixedHeats.ClassOfDriver(r, t).Trim(), Transponder: t.Trim())))
+            .Where(d => d.Class.Length > 0)
+            .GroupBy(d => d.Class, StringComparer.OrdinalIgnoreCase)
+            .Select(g => (g.Key, Count: g.Select(d => d.Transponder)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Count()))
             .Where(g => g.Count > 0)

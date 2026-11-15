@@ -37,7 +37,7 @@ public class VoiceTestSpellingTests
         var announcer = Announcer(shorten: true);
 
         Assert.Equal(
-            "Billy S leads the Eh-Main!",
+            "Billy S leads the Ay-Main!",
             VoiceSettingsControl.TextTheRaceSpeaks("Billy Smith leads the A-Main!", kokoro: false, announcer.TextForCloudVoice));
     }
 
@@ -45,7 +45,29 @@ public class VoiceTestSpellingTests
     public void Without_an_announcer_the_letter_is_still_respelt()
     {
         Assert.Equal(
-            "Sam leads the Eh-Main from Bill and Frank.",
+            "Sam leads the Ay-Main from Bill and Frank.",
             VoiceSettingsControl.TextTheRaceSpeaks("Sam leads the A-Main from Bill and Frank.", kokoro: false, null));
+    }
+
+    [Fact]
+    public void Without_an_announcer_Kokoro_still_gets_its_own_spelling()
+    {
+        Assert.Equal(
+            "Sam leads the Eh-Main.",
+            VoiceSettingsControl.TextTheRaceSpeaks("Sam leads the A-Main.", kokoro: true, null));
+    }
+
+    // Bug hunt 20: the Test take is saved under the words a race sends, so
+    // the race finds it rather than paying for the line again.
+    [Fact]
+    public void An_online_voice_test_matches_the_words_the_race_sends()
+    {
+        using var data = new TempAppData();
+        var announcer = Announcer(shorten: false);
+
+        Assert.Equal(
+            announcer.TextForCloudVoice("Billy Smith wins the A-Main!"),
+            VoiceSettingsControl.TextTheRaceSpeaks("Billy Smith wins the A-Main!", kokoro: false, announcer.TextForCloudVoice));
+        Assert.Contains("Ay-Main", VoiceSettingsControl.TextTheRaceSpeaks("Billy Smith wins the A-Main!", kokoro: false, announcer.TextForCloudVoice));
     }
 }
