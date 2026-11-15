@@ -1671,8 +1671,23 @@ public sealed partial class RaceControlControl
             copyId,
         });
 
+        // The board's columns (15 Nov 2026) - where the Columns button was.
+        var columns = new ToolStripMenuItem("Choose the board's columns...", null, (_, _) => PickLeaderboardColumns());
+
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(columns);
+
         menu.Opening += (_, e) =>
         {
+            // A column heading: its own menu, the columns - see ShowColumnsMenu.
+            var at = _dgvLeaderboard.PointToClient(Cursor.Position);
+            if (_dgvLeaderboard.HitTest(at.X, at.Y).Type == DataGridViewHitTestType.ColumnHeader)
+            {
+                e.Cancel = true;
+                BeginInvoke(() => ShowColumnsMenu(at));
+                return;
+            }
+
             var transponder = SelectedTransponder();
 
             if (transponder is null)
@@ -1770,6 +1785,58 @@ public sealed partial class RaceControlControl
         AppTheme.StyleContextMenu(menu);
 
         return menu;
+    }
+
+    /// <summary>
+    /// A right-click on the board's column headings (15 Nov 2026, in place of
+    /// the Columns button at the foot of the board): the columns, and only
+    /// them - the driver's menu is for a driver's row.
+    /// </summary>
+    private void ShowColumnsMenu(Point at)
+    {
+        if (IsDisposed || Disposing)
+        {
+            return;
+        }
+
+        var menu = new ContextMenuStrip();
+        menu.Items.Add(new ToolStripMenuItem("Choose the board's columns...", null, (_, _) => PickLeaderboardColumns()));
+        AppTheme.StyleContextMenu(menu);
+        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
+        menu.Show(_dgvLeaderboard, at);
+    }
+
+    /// <summary>The board's column picker, with Undo. What the Columns button did until 15 Nov 2026.</summary>
+    private void PickLeaderboardColumns()
+    {
+        using var form = new KpiPickerForm("Race Control", _settings.RaceControlKpis, KpiCatalog.DefaultRaceControl);
+        if (form.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        // The picker's Restore Defaults lands here too, so the old list is
+        // kept for Undo. This page lives as long as the app.
+        var before = _settings.RaceControlKpis.ToList();
+        if (!before.SequenceEqual(form.SelectedKeys))
+        {
+            _undo.Capture("Change the Race Control columns", () =>
+            {
+                _settings.RaceControlKpis = before.ToList();
+                _settings.Save();
+
+                if (!IsDisposed)
+                {
+                    RebuildLeaderboardColumns();
+                    RenderLeaderboard();
+                }
+            });
+        }
+
+        _settings.RaceControlKpis = form.SelectedKeys;
+        _settings.Save();
+        RebuildLeaderboardColumns();
+        RenderLeaderboard();
     }
 
     /// <summary>

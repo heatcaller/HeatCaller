@@ -573,7 +573,7 @@ public sealed partial class RaceControlControl
         var format = FormatFor(next, ClassFor(next), () => RaceFormat.FromSettings(_settings), out _);
 
         return LeadToTheGreen(
-            WarmUpSecondsFor(format.WarmUpSeconds, StartWithWarmUp), format.AutoAdvance, format.StagingSeconds, format.CountdownSeconds);
+            WarmUpSecondsFor(format.WarmUpSeconds, StartWithWarmUp, _settings.RaceWarmUpFirstSeconds), format.AutoAdvance, format.StagingSeconds, format.CountdownSeconds);
     }
 
     /// <summary>

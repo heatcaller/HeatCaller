@@ -134,36 +134,11 @@ public sealed partial class RaceControlControl
         // from it, and the board gets the room the buttons took: more rows
         // of drivers. The keys (+, -, P, Shift+P, C, W) and the right-click
         // menu are unchanged.
-        var btnColumns = new Button { Text = "Columns..." };
-        btnColumns.Click += (_, _) =>
-        {
-            using var form = new KpiPickerForm("Race Control", _settings.RaceControlKpis, KpiCatalog.DefaultRaceControl);
-            if (form.ShowDialog(this) == DialogResult.OK)
-            {
-                // The picker's Restore Defaults lands here too, so the old
-                // list is kept for Undo. This page lives as long as the app.
-                var before = _settings.RaceControlKpis.ToList();
-                if (!before.SequenceEqual(form.SelectedKeys))
-                {
-                    _undo.Capture("Change the Race Control columns", () =>
-                    {
-                        _settings.RaceControlKpis = before.ToList();
-                        _settings.Save();
-
-                        if (!IsDisposed)
-                        {
-                            RebuildLeaderboardColumns();
-                            RenderLeaderboard();
-                        }
-                    });
-                }
-
-                _settings.RaceControlKpis = form.SelectedKeys;
-                _settings.Save();
-                RebuildLeaderboardColumns();
-                RenderLeaderboard();
-            }
-        };
+        //
+        // THE COLUMNS BUTTON IS GONE (15 Nov 2026, asked for by Asher): the
+        // board's columns are chosen by right-clicking its column headings,
+        // or from the foot of a driver's right-click menu - see
+        // PickLeaderboardColumns.
 
         // --- The page ---
         //
@@ -228,7 +203,7 @@ public sealed partial class RaceControlControl
 
         board.Add(
             Hint("Click a driver for laps, penalties and warnings, or double-click for their lap breakdown. "
-                 + "Right-click for names and everything else. Press ? for shortcuts."),
+                 + "Right-click for names and everything else, or a column heading to choose the columns. Press ? for shortcuts."),
             gapBelow: UiLayout.HintGap);
 
         board.AddFill(_dgvLeaderboard, LeastBoardHeight);
@@ -238,13 +213,13 @@ public sealed partial class RaceControlControl
         // race format in force, and which columns the board shows.
         board.Add(_lblFormat, gapBelow: UiLayout.HintGap);
 
-        // Simple mode (1 Nov 2026) keeps Race Format; Start races On Air and
-        // the Columns button are Advanced - see SimpleMode.
+        // Simple mode (1 Nov 2026) keeps Race Format; Start races On Air is
+        // Advanced - see SimpleMode.
         // Auto start (11 Nov 2026) shows in Simple mode too: it decides
         // whether races start themselves, which a volunteer has to see.
         // Warm-up first (14 Nov 2026) beside Start races: both say how a race
         // starts, and both are Advanced.
-        var footer = new ButtonBar().With(SimpleMode.Hide(_chkStartWithOnAir), SimpleMode.Hide(_swWarmUpFirst), _swAutoStart, _btnFormat, SimpleMode.Hide(btnColumns));
+        var footer = new ButtonBar().With(SimpleMode.Hide(_chkStartWithOnAir), SimpleMode.Hide(_swWarmUpFirst), _swAutoStart, _btnFormat);
 
         // The switches are shorter than the buttons beside them; the bar lines
         // everything up along the top, so they are brought down to their middle.

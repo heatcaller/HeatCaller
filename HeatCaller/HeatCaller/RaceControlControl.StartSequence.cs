@@ -800,7 +800,7 @@ public sealed partial class RaceControlControl
             return false;
         }
 
-        var seconds = WarmUpSecondsFor(EffectiveFormat(out _).WarmUpSeconds, force || StartWithWarmUp);
+        var seconds = WarmUpSecondsFor(EffectiveFormat(out _).WarmUpSeconds, force || StartWithWarmUp, _settings.RaceWarmUpFirstSeconds);
         if (seconds <= 0)
         {
             return false;
@@ -948,8 +948,17 @@ public sealed partial class RaceControlControl
     /// <see cref="WarmUpWhenFormatHasNone"/> when one is wanted regardless,
     /// else none (0). Never past RaceFormat.MaxWarmUpSeconds.
     /// </summary>
-    internal static int WarmUpSecondsFor(int formatSeconds, bool wanted)
+    /// <param name="chosenSeconds">
+    /// The length picked on the switch's right-click menu (15 Nov 2026), 0
+    /// for none: when a warm-up is wanted it wins over the format's own.
+    /// </param>
+    internal static int WarmUpSecondsFor(int formatSeconds, bool wanted, int chosenSeconds = 0)
     {
+        if (wanted && chosenSeconds > 0)
+        {
+            return Math.Min(chosenSeconds, RaceFormat.MaxWarmUpSeconds);
+        }
+
         var seconds = Math.Clamp(formatSeconds, 0, RaceFormat.MaxWarmUpSeconds);
         return seconds > 0 ? seconds : wanted ? WarmUpWhenFormatHasNone : 0;
     }

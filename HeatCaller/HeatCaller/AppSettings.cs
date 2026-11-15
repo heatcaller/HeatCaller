@@ -661,6 +661,14 @@ public sealed class AppSettings
     public bool RaceStartWithWarmUp { get; set; }
 
     /// <summary>
+    /// The warm-up length chosen by right-clicking "Warm-up first" (15 Nov
+    /// 2026), in seconds. Used by that switch and the Warm-up button in place
+    /// of the format's own; 0 (the default) keeps the format's, or two
+    /// minutes when it has none.
+    /// </summary>
+    public int RaceWarmUpFirstSeconds { get; set; }
+
+    /// <summary>
     /// Race Control's "Auto start" switch (11 Nov 2026, race-night build plan,
     /// Phase 1): after each race, count down the gap and start the next race
     /// by itself. On by default, as decided. See AutoStartClock.
