@@ -155,7 +155,11 @@ export const ME_CSS = `
   @keyframes me-rise { from { transform: translateY(10px); opacity: 0; } }
 }
 
-.me-switch { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; display: grid;
+/* Under the pay banner while it shows (15 Nov 2026, Asher: "keep the need to
+   pay notification at the top of the screen as you scroll. it pushes down the
+   four tabs that stack under it"): --me-fee-h is the banner's height and the
+   gap under it, set by meFeeHeight, 0 when they don't owe. */
+.me-switch { position: sticky; top: calc(var(--stick-t, 0px) + var(--me-fee-h, 0px)); z-index: 5; display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 10px 0 12px; padding: 4px; border-radius: 16px;
   background: var(--surface); border: 1px solid var(--border); box-shadow: 0 8px 18px -12px rgba(0, 0, 0, 0.6); }
 /* The relay's segmented control (Pit Wall, 5 Nov 2026): the chosen space
@@ -163,6 +167,10 @@ export const ME_CSS = `
 .me-switch button { border: 0; background: none; color: var(--muted); padding: 9px 0; border-radius: 12px; font: inherit;
   font-weight: 700; font-size: 0.9rem; cursor: pointer; min-height: 44px; position: relative; }
 @media (hover: hover) { .me-switch button:hover { color: var(--text); background: var(--row-alt); } }
+/* The page's own background in the gap between the banner and the tabs, so
+   what scrolls under them doesn't show through it. */
+body.me-owe .me-switch::before { content: ""; position: absolute; left: -6px; right: -6px; bottom: 100%; height: 12px;
+  background: var(--bg); pointer-events: none; }
 .me-switch button[aria-selected="true"] { background: var(--primary); color: var(--on-primary); }
 .me-switch button .me-dot { position: absolute; top: 6px; right: 10px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 
@@ -172,7 +180,10 @@ export const ME_CSS = `
 /* Larger and louder since 15 Nov 2026 (Asher: "make the payment reminder at
    the top larger and louder"): a banner in the warning colour, not a line of
    text. It only shows while they owe, so it is always the owing look. */
-.me-fee { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 14px 16px;
+/* Stays at the top of the screen as Me scrolls (15 Nov 2026), above the
+   tabs, which stick right under it. */
+.me-fee { position: sticky; top: var(--stick-t, 0px); z-index: 6;
+  display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 14px 16px;
   border: 2px solid var(--warn); border-radius: 14px; color: var(--text);
   background: color-mix(in srgb, var(--warn) 22%, var(--bg));
   font-size: 1.2rem; font-weight: 800; line-height: 1.25;
@@ -1010,6 +1021,24 @@ function meFee() {
   at.textContent = words;
   at.hidden = words === '';
   at.className = 'me-fee';
+  if (typeof meFeeHeight === 'function') meFeeHeight();
+}
+
+// The tabs stick just under the banner, however many lines it takes: its
+// height, plus a gap, goes on the page as --me-fee-h (0 once paid).
+let meFeeWatch = null;
+function meFeeHeight() {
+  const at = document.getElementById('me-fee');
+  if (!at || !document.body) return;
+  const h = at.hidden ? 0 : (at.offsetHeight || 0);
+  try {
+    document.body.classList.toggle('me-owe', h > 0);
+    document.body.style.setProperty('--me-fee-h', h > 0 ? (h + 8) + 'px' : '0px');
+  } catch (e) { /* the tabs stick at the top as before */ }
+  if (!meFeeWatch && typeof ResizeObserver === 'function') {
+    meFeeWatch = new ResizeObserver(() => meFeeHeight());
+    meFeeWatch.observe(at);
+  }
 }
 
 // "Are you at the track?" before a check-in (see the Check in card). Yes

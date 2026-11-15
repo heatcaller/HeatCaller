@@ -57,7 +57,7 @@ describe("Me as a pit wall", () => {
     const at = (id: string) => html.indexOf(`id="${id}"`);
     assert.ok(at("nh") < at("me-moment") && at("me-moment") < at("me-switch"));
     // With the strip gone, the switch sticks to the very top.
-    assert.ok(html.includes(".me-switch { position: sticky; top: env(safe-area-inset-top, 0px);"));
+    assert.ok(html.includes(".me-switch { position: sticky; top: calc(var(--stick-t, 0px) + var(--me-fee-h, 0px));"));
     assert.ok(at("me-switch") < at("me-tiles") && at("me-tiles") < at("nx"));
     assert.ok(at("nt") < at("me-garage") && at("me-garage") < at("yd"));
   });
