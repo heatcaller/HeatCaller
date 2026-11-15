@@ -174,8 +174,8 @@ internal static class DriverAsk
             : id[..6].ToUpperInvariant();
     }
 
-    /// <summary>True for one of the four kinds, exactly as the relay spells them.</summary>
-    public static bool IsKind(string? kind) => kind is Details or Pack or Query or Setup or PackEdit or Car or Photo or Late or Skip or Coming or Post or Swap or Cover;
+    /// <summary>True for one of the kinds above, exactly as the relay spells them. A kind left out here is thrown away when the inbox is read.</summary>
+    public static bool IsKind(string? kind) => kind is Details or Pack or Query or Setup or PackEdit or Car or Photo or Late or Skip or Coming or Post or Swap or Cover or VideoOff or VideoHide;
 
     /// <summary>True for one of the four states, exactly as the phone reads them.</summary>
     public static bool IsState(string? state) => state is Waiting or Approved or Noted or Declined;
