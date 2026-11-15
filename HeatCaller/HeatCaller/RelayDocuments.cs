@@ -763,6 +763,9 @@ internal static class RelayDocuments
             // driver phone plan item 5). The relay checks both again.
             ["alias"] = settings.RelayClubAlias.Trim().ToLowerInvariant(),
             ["shortName"] = settings.RelayShortName.Trim(),
+            // Driver themes (15 Nov 2026): whether drivers may pick their own
+            // look on their phones. The relay takes anything but false as on.
+            ["driverThemes"] = settings.RelayDriverThemes,
         };
 
         if (plate is Color plateColor)

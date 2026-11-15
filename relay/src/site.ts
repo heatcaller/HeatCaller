@@ -84,6 +84,13 @@ export interface Look {
   /** Whether a driver may email themselves a sign-in link on Me (14 Nov 2026, signinmail.ts). */
   readonly emailLink: boolean;
   /**
+   * Whether drivers may pick their own look for the club's pages on their
+   * phones (15 Nov 2026, driver themes; Asher: "club driver can change the
+   * look should be on by default"). On unless the club's site document says
+   * false, so a club on an older app has it too.
+   */
+  readonly driverThemes: boolean;
+  /**
    * Links to the club's own pages elsewhere - Facebook, Instagram, its
    * website - in the order the laptop sent them. Only http(s) addresses
    * with a platform this file knows reach here; see socialFrom.
@@ -198,6 +205,7 @@ export const DEFAULT_LOOK: Look = Object.freeze({
   iconVersion: SUN_ICON_VERSION,
   checkIn: false,
   emailLink: false,
+  driverThemes: true,
   listening: false,
   notes: false,
   vote: false,
@@ -290,6 +298,7 @@ export function lookFrom(site: StoredDocument | undefined, checkin: StoredDocume
     iconVersion: SUN_ICON_VERSION,
     checkIn: record(checkin?.body)?.["enabled"] === true,
     emailLink: record(checkin?.body)?.["enabled"] === true && record(checkin?.body)?.["emailLink"] === true,
+    driverThemes: body?.["driverThemes"] !== false,
 
     // Merged in by Relay.lookFor from a document of its own, the way
     // checkIn's own flag is above. False here is the honest default for a
