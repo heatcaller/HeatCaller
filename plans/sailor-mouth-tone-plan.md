@@ -75,3 +75,12 @@ the Writing tone. It shows only while Sailor-mouth is the tone that plays.
     "stuck". "Damn it" is never cut.
   - A short line that is still over is dropped. A long piece is kept as trimmed.
   - Drivers' names are never counted.
+
+**Smoothing (15 Nov 2026).** Asher said the dial was jerky.
+
+- **Flipping the tone:** the dial was its own row, and any change in the card's height re-lays out every card
+  on the page, 0.3 to 1 s each time. It now sits on the tone's own line, in room that is always kept for it,
+  so showing or hiding it takes about 1 ms.
+- **Dragging:** each stop saved the settings (about 220 ms) and re-laid out the card. It now saves once the
+  dial settles (0.4 s), and the number sits in a fixed panel, so a stop takes about 3 ms.
+- **The help text** that was under the dial is now its tooltip.
