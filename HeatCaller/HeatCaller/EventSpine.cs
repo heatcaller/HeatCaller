@@ -236,25 +236,25 @@ public static class EventSpine
         }
 
         // The venue's out-by time carries over (11 Nov 2026, race-night
-        // build plan, Phase 2): it belongs to the building, not the night,
-        // so the last day at the same venue that had one is the best guess.
-        raceEvent.OutByLocalTime = events.Real
-            .Where(e => e.OutByLocalTime is not null
-                        && string.Equals(e.VenueName ?? string.Empty, venueName ?? string.Empty, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(e => e.StartedUtc)
-            .FirstOrDefault()?.OutByLocalTime;
-
+        // build plan, Phase 2): it belongs to the building, not the night.
         // So do the entries-close time and the planned breaks (12 Nov 2026,
         // setup plan D1 and D5). They're the club's habits at that venue -
-        // "entries close at 6:30", "water the track after Q2" - so the last
-        // day at the same venue that had them is the best guess too.
-        var sameVenue = events.Real
+        // "entries close at 6:30", "water the track after Q2".
+        //
+        // All three come from the LAST day at the same venue, as it was left
+        // (bug hunt 21, 15 Nov 2026). They used to come from the last day
+        // that HAD one, so a break or a close time the director took off
+        // last week came back this week - announced, built into the
+        // timetable - with nothing said. A last day with none set means none.
+        // (A template sets all three itself afterwards - NightTemplates.ApplyTo.)
+        var lastHere = events.Real
             .Where(e => string.Equals(e.VenueName ?? string.Empty, venueName ?? string.Empty, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(e => e.StartedUtc)
-            .ToList();
+            .FirstOrDefault();
 
-        raceEvent.EntriesCloseLocalTime = sameVenue.FirstOrDefault(e => e.EntriesCloseLocalTime is not null)?.EntriesCloseLocalTime;
-        raceEvent.Breaks = NightBreaks.Copy(sameVenue.FirstOrDefault(e => e.Breaks is { Count: > 0 })?.Breaks);
+        raceEvent.OutByLocalTime = lastHere?.OutByLocalTime;
+        raceEvent.EntriesCloseLocalTime = lastHere?.EntriesCloseLocalTime;
+        raceEvent.Breaks = NightBreaks.Copy(lastHere?.Breaks);
 
         CarryOverFromLastNight(events, raceEvent);
 

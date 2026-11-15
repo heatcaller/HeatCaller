@@ -1386,7 +1386,7 @@ public partial class MainForm
 
     private void BuildTrackLayoutsAndRaceHistoryPages()
     {
-        var trackLayouts = new TrackLayoutManagerControl(_trackLayouts, _settings, _undo, _sessionHistory, _raceEvents) { Dock = DockStyle.Fill };
+        var trackLayouts = new TrackLayoutManagerControl(_trackLayouts, _settings, _undo, _sessionHistory, _raceEvents, _rounds) { Dock = DockStyle.Fill };
         pageTrackLayouts.Controls.Add(trackLayouts);
         _navRefreshHooks["Track Layouts"] = trackLayouts.RefreshAll;
 

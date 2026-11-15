@@ -575,13 +575,13 @@ public partial class MainForm
         _followedDayTrack = _raceEvents.Current.TrackLayoutName;
 
         // A round's own layout is more specific than the day's default, and
-        // the box is locked to it while one is chosen.
-        if (_activeRound is not null)
-        {
-            return;
-        }
-
-        var wanted = _raceEvents.Current.TrackLayoutName;
+        // the box is locked to it while one is chosen. Read again from the
+        // store, though: Track Layouts' Use Tonight moves tonight's unrun
+        // rounds with the day (bug hunt 21, 15 Nov 2026), and the box stayed
+        // on the layout the round was picked with.
+        var wanted = _activeRound is null
+            ? _raceEvents.Current.TrackLayoutName
+            : (_rounds.Get(_activeRound.Id) ?? _activeRound).TrackLayoutName;
 
         // A day that names no layout has no opinion, so whatever is in the
         // box stays - which is also what happens with no day open at all.
