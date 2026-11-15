@@ -66,6 +66,12 @@ public sealed partial class CheckInControl
             return;
         }
 
+        SavePapers(profile, name, form);
+    }
+
+    /// <summary>Saves what the one-driver papers window says, once it closed with Save.</summary>
+    private void SavePapers(DriverProfile profile, string name, PapersForm form)
+    {
         // WHY (14 Nov 2026, bug hunt 19): the profile came from the list's row
         // or Desk mode's card, drawn before any phone change since - a car
         // picked for tonight, the driver's own edits approved. Saving that old
@@ -117,7 +123,18 @@ public sealed partial class CheckInControl
 
         using var form = new PapersForm(drivers.Count, _settings.AskForWaivers, _settings.CheckMemberships);
 
-        if (form.ShowDialog(this) != DialogResult.OK || !form.ChangesAnything)
+        if (form.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        SavePapersForMany(drivers, form);
+    }
+
+    /// <summary>Saves what the several-driver papers window says, once it closed with Save.</summary>
+    private void SavePapersForMany(IReadOnlyList<DriverProfile> drivers, PapersForm form)
+    {
+        if (!form.ChangesAnything)
         {
             return;
         }

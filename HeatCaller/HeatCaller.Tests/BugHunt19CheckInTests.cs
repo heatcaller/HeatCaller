@@ -137,25 +137,15 @@ public sealed class BugHunt19CheckInTests : IDisposable
                 var row = RowProfile(s.Grid, "1001");
                 PhonePicksCarB(s.Profiles);
 
-                // The papers window: waiver ticked, then OK.
-                using var timer = new System.Windows.Forms.Timer { Interval = 50 };
-                timer.Tick += (_, _) =>
+                // The papers window as it closes with Save, waiver ticked. Not
+                // shown: a test can't answer a window (StaThread closes it).
+                using var form = new PapersForm("Ana", row, waivers: true, memberships: false);
+                foreach (var box in Everything(form).OfType<CheckBox>().Where(b => b.Text.Contains("aiver", StringComparison.Ordinal)))
                 {
-                    if (Application.OpenForms.OfType<PapersForm>().FirstOrDefault() is { } form)
-                    {
-                        timer.Stop();
+                    box.Checked = true;
+                }
 
-                        foreach (var box in Everything(form).OfType<CheckBox>().Where(b => b.Text.Contains("aiver", StringComparison.Ordinal)))
-                        {
-                            box.Checked = true;
-                        }
-
-                        form.DialogResult = DialogResult.OK;
-                    }
-                };
-                timer.Start();
-
-                Call(s.Page, "EditPapersFor", row);
+                Call(s.Page, "SavePapers", row, "Ana", form);
 
                 var saved = s.Profiles.Get("1001")!;
                 Assert.Equal("Car B", saved.CarModel);
@@ -174,24 +164,13 @@ public sealed class BugHunt19CheckInTests : IDisposable
                 var rows = new List<DriverProfile> { RowProfile(s.Grid, "1001"), RowProfile(s.Grid, "1002") };
                 PhonePicksCarB(s.Profiles);
 
-                using var timer = new System.Windows.Forms.Timer { Interval = 50 };
-                timer.Tick += (_, _) =>
+                using var form = new PapersForm(rows.Count, waivers: true, memberships: false);
+                foreach (var box in Everything(form).OfType<CheckBox>())
                 {
-                    if (Application.OpenForms.OfType<PapersForm>().FirstOrDefault() is { } form)
-                    {
-                        timer.Stop();
+                    box.Checked = true;
+                }
 
-                        foreach (var box in Everything(form).OfType<CheckBox>())
-                        {
-                            box.Checked = true;
-                        }
-
-                        form.DialogResult = DialogResult.OK;
-                    }
-                };
-                timer.Start();
-
-                Call(s.Page, "EditPapersForMany", (IReadOnlyList<DriverProfile>)rows);
+                Call(s.Page, "SavePapersForMany", (IReadOnlyList<DriverProfile>)rows, form);
 
                 var saved = s.Profiles.Get("1001")!;
                 Assert.Equal("Car B", saved.CarModel);
