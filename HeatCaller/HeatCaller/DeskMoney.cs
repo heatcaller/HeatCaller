@@ -368,6 +368,10 @@ public sealed class EntryPaymentStore
     public EntryPayment? Get(string eventId, string transponder) =>
         _byEvent.TryGetValue(eventId, out var day) && day.TryGetValue(transponder, out var payment) ? payment : null;
 
+    /// <summary>The transponders with a payment on file for this race day, whether or not they ever ran.</summary>
+    public IReadOnlyList<string> TranspondersFor(string eventId) =>
+        _byEvent.TryGetValue(eventId, out var day) ? day.Keys.ToList() : new List<string>();
+
     /// <summary>Records how a driver settled; null clears it back to owing.</summary>
     public void Set(string eventId, string transponder, EntryPayment? payment)
     {

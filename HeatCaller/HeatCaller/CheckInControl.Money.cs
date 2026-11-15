@@ -200,7 +200,8 @@ public sealed partial class CheckInControl
                 {
                     Settle(fees.Day, drivers, how, note);
                 }
-            });
+            },
+            profile => _profiles.Get(profile.Transponder) ?? profile);
 
         form.FormClosed += (_, _) => _paidForm = null;
         _paidForm = form;

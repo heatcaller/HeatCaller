@@ -270,7 +270,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     /// <summary>
     /// Money at the desk (11 Nov 2026, race-night build plan, Phase 4): what
     /// was taken by cash and card, the comps, and who is still owing - for
-    /// the drivers who raced. Only for a race day with an entry fee. See
+    /// the drivers who ran and anyone who paid. Only for a race day with an entry fee. See
     /// DeskMoney.
     /// </summary>
     /// <remarks>
@@ -288,18 +288,23 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
             return;
         }
 
-        var raced = sessions
-            .Where(s => s.SessionType == RaceSessionType.Race)
+        // WHY (15 Nov 2026, bug hunt 20): only the drivers in a Race session
+        // were counted, so a driver who paid and then broke in practice or
+        // went home before their heat was left out of Taken, Cash and Card -
+        // less than the till held. Everyone who ran in any session counts now
+        // (as the closing checklist's owing list does, MainForm.OwingTonight),
+        // and so does everyone with a payment on file for the day.
+        var ran = sessions
             .SelectMany(s => s.Results.Select(r => r.Transponder))
             .Where(t => !string.IsNullOrWhiteSpace(t) && !GhostService.IsGhost(t))
             .Select(t => profiles.PrimaryForAlternate(t) ?? t)
+            .Concat(payments.TranspondersFor(day.Id))
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(t => profiles.Get(t))
-            .OfType<DriverProfile>()
             .ToList();
 
-        var totals = DeskMoney.Count(raced.Select(p =>
-            (string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName, CheckInControl.FeeFor(p, day, classNamed), payments.Get(day.Id, p.Transponder))));
+        var totals = DeskMoney.Count(ran.Select(t => profiles.Get(t) is { } p
+            ? (string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName, CheckInControl.FeeFor(p, day, classNamed), payments.Get(day.Id, p.Transponder))
+            : (t, 0m, payments.Get(day.Id, t))));
 
         sb.AppendLine("<h2>Money at the desk</h2>");
 

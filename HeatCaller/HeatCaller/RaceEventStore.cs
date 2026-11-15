@@ -1135,6 +1135,25 @@ public sealed class RaceEventStore
             .ToList();
 
     /// <summary>
+    /// The club nights an event ran on, each as its date - 6am to 6am, as
+    /// TonightAtTheTrack.NightOf has it. For the Race Days calendar.
+    ///
+    /// WHY (15 Nov 2026, bug hunt 20): the calendar used DaysFor's calendar
+    /// dates, so a club night whose A-mains ran at 00:20 got a second dot on
+    /// the next day and read "night 2 of 2", as if it were a two-night meeting.
+    /// </summary>
+    public List<DateTime> NightsFor(RaceEvent raceEvent, RoundDefinitionStore rounds, SessionHistoryStore history) =>
+        raceEvent.RoundIds
+            .Select(rounds.Get)
+            .Where(r => r?.LinkedSessionId is not null)
+            .Select(r => history.Get(r!.LinkedSessionId!))
+            .Where(s => s is not null)
+            .Select(s => TonightAtTheTrack.NightOf(s!.StartedAtUtc.ToLocalTime()))
+            .Distinct()
+            .OrderBy(d => d)
+            .ToList();
+
+    /// <summary>
     /// Puts back an event that was deleted - the undo half of Delete. The
     /// event is put back as it was, less any of its rounds that have since
     /// been filed under another event: a round belongs to one event, and

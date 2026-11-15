@@ -614,6 +614,18 @@ public static class HandicapCalculator
             return kept.Mode == HandicapMode.None ? (HandicapMode.None, null) : (kept.Mode, Apply(session.Results, kept));
         }
 
+        // A class that shared the heat (bug hunt 20): its own mode as filed,
+        // on the same kept credits.
+        if (session.Handicap?.SharedClasses?.FirstOrDefault(c => string.Equals(c.ClassName, className, StringComparison.OrdinalIgnoreCase)) is { } guest)
+        {
+            var held = session.Handicap;
+            return guest.Mode == HandicapMode.None
+                ? (HandicapMode.None, null)
+                : (guest.Mode, Apply(session.Results, guest.Mode,
+                    t => (held.For(t)?.TimeCreditSeconds ?? 0) * 1000.0,
+                    t => held.For(t)?.LapCredit ?? 0));
+        }
+
         var mode = live?.ModeFor(className) ?? HandicapMode.None;
         return mode == HandicapMode.None ? (HandicapMode.None, null) : (mode, Apply(session.Results, live!, mode));
     }
@@ -622,11 +634,20 @@ public static class HandicapCalculator
     /// What to keep with a race filed against a round of
     /// <paramref name="className"/>: the class's mode now, and the credit of
     /// each driver in it who has one. See <see cref="SessionHandicap"/>.
+    /// <paramref name="sharedClasses"/> are the classes of a shared heat
+    /// (MixedHeats.ClassesOf); each one besides <paramref name="className"/>
+    /// keeps its own mode.
     /// </summary>
-    public static SessionHandicap Snapshot(IEnumerable<SessionResultEntry> results, HandicapStore handicaps, string className) => new()
+    public static SessionHandicap Snapshot(IEnumerable<SessionResultEntry> results, HandicapStore handicaps, string className,
+        IEnumerable<string>? sharedClasses = null) => new()
     {
         ClassName = className,
         Mode = handicaps.ModeFor(className),
+        SharedClasses = (sharedClasses ?? Enumerable.Empty<string>())
+            .Where(c => !string.IsNullOrWhiteSpace(c) && !string.Equals(c, className, StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(c => new SessionHandicapClass { ClassName = c, Mode = handicaps.ModeFor(c) })
+            .ToList(),
         Credits = results
             .Select(r => handicaps.Get(r.Transponder))
             .Where(h => h is { HasAny: true })
@@ -639,6 +660,44 @@ public static class HandicapCalculator
             })
             .ToList(),
     };
+
+    /// <summary>
+    /// Moves a saved race's kept handicap onto a class's new name, once its
+    /// round carries it (the rename cascade, or its undo, has moved the
+    /// round). True when anything changed, so the race is saved.
+    ///
+    /// WHY (15 Nov 2026, bug hunt 20): nothing renamed the kept class, so
+    /// after a rename Race History and the Event Report asked for the new
+    /// name, the kept "Stock" did not match it, and the old race was scored
+    /// on today's credits again - the re-ranking B52 was meant to stop.
+    /// </summary>
+    public static bool RenameClass(SessionHandicap? kept, RoundDefinition? round, string oldName, string newName)
+    {
+        if (kept is null || round is null || string.IsNullOrWhiteSpace(oldName) || MixedHeats.RunsClass(round, oldName)
+            || MixedHeats.ClassesOf(round).FirstOrDefault(c => string.Equals(c, newName?.Trim(), StringComparison.OrdinalIgnoreCase)) is not { } renamed)
+        {
+            return false;
+        }
+
+        var changed = false;
+
+        if (string.Equals(kept.ClassName, oldName, StringComparison.OrdinalIgnoreCase))
+        {
+            kept.ClassName = renamed;
+            changed = true;
+        }
+
+        foreach (var shared in kept.SharedClasses ?? new List<SessionHandicapClass>())
+        {
+            if (string.Equals(shared.ClassName, oldName, StringComparison.OrdinalIgnoreCase))
+            {
+                shared.ClassName = renamed;
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
 
     private static List<Adjusted> Apply(
         IReadOnlyList<SessionResultEntry> results,

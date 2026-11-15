@@ -1036,9 +1036,12 @@ public partial class MainForm : Form
                 // (MixedHeats.StampClasses). Left under the old name, the
                 // renamed class's championship dropped the heat (bug hunt 17).
                 // Here rather than above: saving a result republishes it.
+                // And the handicap kept with the race (bug hunt 20): left
+                // under the old name, the race was scored on today's credits.
                 foreach (var session in _sessionHistory.All
                              .Where(s => s.RoundId is { Length: > 0 } roundId
-                                         && MixedHeats.RenameStamps(s.Results, _rounds.Get(roundId), oldName, newName))
+                                         && (MixedHeats.RenameStamps(s.Results, _rounds.Get(roundId), oldName, newName)
+                                             | HandicapCalculator.RenameClass(s.Handicap, _rounds.Get(roundId), oldName, newName)))
                              .ToList())
                 {
                     _sessionHistory.SaveEdited(session);

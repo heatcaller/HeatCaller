@@ -30,18 +30,27 @@ internal sealed class DriverPaidForm : Form
     private readonly Func<DriverProfile, decimal> _feeFor;
     private readonly Func<DriverProfile, string> _paidWords;
     private readonly Action<IReadOnlyList<DriverProfile>, PaidHow, string> _settle;
+    private readonly Func<DriverProfile, DriverProfile> _current;
 
     /// <param name="feeFor">What a driver owes tonight.</param>
     /// <param name="paidWords">How a driver stands now, as the Paid column says it.</param>
     /// <param name="settle">Settles the drivers one way, with a note for a comp.</param>
+    /// <param name="current">
+    /// The driver's profile on file now. WHY (15 Nov 2026, bug hunt 20): a
+    /// phone car pick, an approved edit or Driver Hub saves a new copy of a
+    /// profile, and a class ticked after that changes the copy on file, not
+    /// the one on the slip - which then showed and settled the old, lower fee.
+    /// </param>
     public DriverPaidForm(
         Func<DriverProfile, decimal> feeFor,
         Func<DriverProfile, string> paidWords,
-        Action<IReadOnlyList<DriverProfile>, PaidHow, string> settle)
+        Action<IReadOnlyList<DriverProfile>, PaidHow, string> settle,
+        Func<DriverProfile, DriverProfile>? current = null)
     {
         _feeFor = feeFor;
         _paidWords = paidWords;
         _settle = settle;
+        _current = current ?? (profile => profile);
 
         Text = "Driver Paid";
         Font = AppTheme.BodyFont;
@@ -145,6 +154,7 @@ internal sealed class DriverPaidForm : Form
     /// <summary>Redraws the slip from the drivers on it - their fees and how they stand now.</summary>
     public void RefreshRows()
     {
+        TakeCurrentProfiles();
         _grid.Rows.Clear();
         decimal total = 0;
         var settled = 0;
@@ -178,6 +188,15 @@ internal sealed class DriverPaidForm : Form
         _btnRemove.Enabled = any;
     }
 
+    /// <summary>Swaps each driver on the slip for their profile on file now - see the constructor's current.</summary>
+    private void TakeCurrentProfiles()
+    {
+        for (var i = 0; i < _drivers.Count; i++)
+        {
+            _drivers[i] = _current(_drivers[i]);
+        }
+    }
+
     private void RemoveSelected()
     {
         var gone = _grid.SelectedRows.Cast<DataGridViewRow>().Select(r => r.Index).OrderByDescending(i => i).ToList();
@@ -201,6 +220,7 @@ internal sealed class DriverPaidForm : Form
             return;
         }
 
+        TakeCurrentProfiles();
         _settle(ToSettle(_drivers, _paidWords), how, note);
         _drivers.Clear();
         RefreshRows();

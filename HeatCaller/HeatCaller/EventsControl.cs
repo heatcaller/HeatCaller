@@ -295,7 +295,7 @@ public sealed class EventsControl : UserControl
 
         foreach (var raceEvent in _events.All)
         {
-            var days = _events.DaysFor(raceEvent, _rounds, _history);
+            var days = _events.NightsFor(raceEvent, _rounds, _history);
             var recorded = raceEvent.RoundIds.Count(id => _rounds.Get(id)?.IsRecorded == true);
 
             var daysText = days.Count switch
