@@ -104,6 +104,23 @@ internal static class EntryImport
 
         public int Skipped => Entries.Count(e => e.Action == EntryAction.Skip);
 
+        /// <summary>
+        /// <see cref="Saves"/> as they should be stored now, with
+        /// <paramref name="onFile"/> giving each driver as on file: a field
+        /// the import left alone keeps what is on file rather than what the
+        /// plan copied when the preview opened.
+        ///
+        /// WHY (14 Nov 2026, bug hunt 18): a phone's "racing tonight" pick is
+        /// applied on the roster tick while the preview is open, and the
+        /// import used to put the old car back over it.
+        /// </summary>
+        public IReadOnlyList<DriverProfile> SavesKeepingChangesMadeSince(Func<string, DriverProfile?> onFile) =>
+            Saves.Select(save =>
+                    Before.FirstOrDefault(b => string.Equals(b.Transponder, save.Transponder, StringComparison.OrdinalIgnoreCase)) is { } was
+                        ? ProfileStore.KeepChangesMadeSince(was, save, onFile(save.Transponder))
+                        : save)
+                .ToList();
+
         /// <summary>Drivers already here that the list names and doesn't change.</summary>
         public int UnchangedDrivers =>
             Entries.Where(e => e.Action == EntryAction.Unchanged).Select(e => e.Transponder)

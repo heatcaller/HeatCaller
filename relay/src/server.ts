@@ -1736,7 +1736,10 @@ export class Relay {
       // Off.
     }
 
-    return checkIn === site.look.checkIn && listening === site.look.listening
+    // emailLink too (bug hunt 18): the day after a night check-in is stale,
+    // so checkIn matches the cached look and the club's "email me a link"
+    // was thrown away while the route behind it still took asks.
+    return checkIn === site.look.checkIn && emailLink === site.look.emailLink && listening === site.look.listening
       && notes === site.look.notes && vote === site.look.vote
       ? site.look
       : { ...site.look, checkIn, emailLink, listening, notes, vote };

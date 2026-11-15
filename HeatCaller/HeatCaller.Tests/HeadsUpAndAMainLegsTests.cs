@@ -44,6 +44,29 @@ public sealed class HeadsUpAndAMainLegsTests
         Assert.Equal(HeadsUpQualifying.Round(0, EightSeeds, 2, null), HeadsUpQualifying.Round(2, EightSeeds, 2, null));
     }
 
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 0)]
+    [InlineData(2, 2)]
+    [InlineData(3, 2)]
+    [InlineData(4, 4)]
+    [InlineData(5, 4)]
+    public void Each_round_is_seeded_on_the_points_its_pair_was(int round, int pointsRounds)
+    {
+        // 14 Nov 2026, bug hunt 18: Q4 took the practice seed (repeating Q2)
+        // or the Q1-Q3 points, so it never mirrored Q3.
+        Assert.Equal(pointsRounds, HeadsUpQualifying.PointsRoundsFor(round));
+    }
+
+    [Fact]
+    public void Round_four_reverses_round_three_given_the_same_points()
+    {
+        var points = new[] { "s8", "s7", "s6", "s5", "s4", "s3", "s2", "s1" };
+        var q3 = HeadsUpQualifying.Round(2, EightSeeds, 2, points);
+
+        Assert.Equal(HeadsUpQualifying.Reversed(q3), HeadsUpQualifying.Round(3, EightSeeds, 2, points));
+    }
+
     [Fact]
     public void The_reseed_keeps_a_late_entry_and_drops_a_driver_who_left()
     {

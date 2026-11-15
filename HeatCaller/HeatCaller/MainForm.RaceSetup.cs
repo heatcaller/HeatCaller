@@ -395,7 +395,7 @@ public partial class MainForm
         _checkInChangedUtc[transponder] = DateTime.UtcNow;
 
         PublishCheckInRosterSoon();
-        _checkInControl?.RefreshCheckInMarks();
+        _checkInControl?.RefreshMarksFromDesk();
     }
 
     /// <summary>

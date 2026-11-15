@@ -56,10 +56,14 @@ internal static class LeaderBehind
     /// on the track - and, while it led, never warned them about the real
     /// leader at all. A ghost is never warned either.
     /// </summary>
-    internal static int? Approach(RacerStanding car, IReadOnlyList<RacerStanding> ordered) =>
+    internal static int? Approach(
+        RacerStanding car,
+        IReadOnlyList<RacerStanding> ordered,
+        RaceStartType startType = RaceStartType.Standard,
+        StaggerClock staggerClock = StaggerClock.SharedGreen) =>
         car is null || ordered is null || Ghosts.IsGhost(car.TransponderId)
             ? null
-            : Approach(car, ordered.FirstOrDefault(s => !Ghosts.IsGhost(s.TransponderId))!);
+            : Approach(car, ordered.FirstOrDefault(s => !Ghosts.IsGhost(s.TransponderId))!, startType, staggerClock);
 
     /// <summary>
     /// The approach for one car against the race leader, or null for none - see the class notes.
@@ -70,13 +74,26 @@ internal static class LeaderBehind
     /// 5 s penalty on a backmarker made a leader 7 s behind look 2 s behind
     /// ("Leader behind" most of a lap early, and nothing when it arrived),
     /// and one really 2 s behind look as if it had already gone by.
+    ///
+    /// And each car's own clock zero is put back (bug hunt 18), so both are
+    /// on the green's clock. ElapsedMs runs from a qualifier's own first
+    /// crossing, and under OwnRelease from the car's release: a backmarker
+    /// that first crossed 3 s after the leader had a leader 5 s behind look
+    /// 2 s behind, and the opposite offset lost the call altogether. The
+    /// same rule as the ghost gap (RaceControlControl.ClockZeroSinceGreenMs).
     /// </summary>
-    internal static int? Approach(RacerStanding car, RacerStanding leader) =>
+    internal static int? Approach(
+        RacerStanding car,
+        RacerStanding leader,
+        RaceStartType startType = RaceStartType.Standard,
+        StaggerClock staggerClock = StaggerClock.SharedGreen) =>
         car is null || leader is null || ReferenceEquals(car, leader)
             ? null
             : Approach(
-                car.LapTimesMs, car.Laps, car.ElapsedMs - car.PenaltyMs,
-                leader.LapTimesMs, leader.Laps, leader.ElapsedMs - leader.PenaltyMs);
+                car.LapTimesMs, car.Laps,
+                car.ElapsedMs - car.PenaltyMs + RaceControlControl.ClockZeroSinceGreenMs(car, startType, staggerClock),
+                leader.LapTimesMs, leader.Laps,
+                leader.ElapsedMs - leader.PenaltyMs + RaceControlControl.ClockZeroSinceGreenMs(leader, startType, staggerClock));
 
     /// <summary>
     /// The approach worked out from lap histories alone, for tests and any

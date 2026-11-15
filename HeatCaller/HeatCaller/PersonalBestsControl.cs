@@ -386,8 +386,13 @@ public sealed class PersonalBestsControl : UserControl
         }
     }
 
-    /// <summary>What each row's reading is, by row - painted as a pill and dots (PaintReading).</summary>
-    private readonly Dictionary<int, RaceCoach.PbRead> _reads = new();
+    /// <summary>
+    /// The reading painted on a row as a pill and dots (PaintReading). It
+    /// rides in the row's Tag, not by row index, so a header-click sort keeps
+    /// each pill on its own track. A row waiting after a reset has none.
+    /// </summary>
+    internal RaceCoach.PbRead? ReadingAt(int rowIndex) =>
+        rowIndex >= 0 && rowIndex < _grid.Rows.Count ? _grid.Rows[rowIndex].Tag as RaceCoach.PbRead : null;
 
     private void RefreshGrid()
     {
@@ -402,7 +407,6 @@ public sealed class PersonalBestsControl : UserControl
                 .ToList();
 
         _grid.Rows.Clear();
-        _reads.Clear();
 
         var lines = new List<RaceCoach.PbLine>();
 
@@ -434,7 +438,7 @@ public sealed class PersonalBestsControl : UserControl
                 GapToRecord(everything, b),
                 means);
 
-            _reads[row] = read;
+            _grid.Rows[row].Tag = read;
             lines.Add(new RaceCoach.PbLine(b.Track, b.BestLapMs, b.SetAtUtc, read));
         }
 
@@ -486,7 +490,7 @@ public sealed class PersonalBestsControl : UserControl
     /// </summary>
     private void PaintReading(object? sender, DataGridViewCellPaintingEventArgs e)
     {
-        if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.Graphics is null || !_reads.TryGetValue(e.RowIndex, out var read))
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.Graphics is null || ReadingAt(e.RowIndex) is not { } read)
         {
             return;
         }

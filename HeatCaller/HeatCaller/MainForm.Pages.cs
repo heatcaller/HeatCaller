@@ -1451,7 +1451,7 @@ public partial class MainForm
         subPageHeadToHead.Controls.Add(headToHead);
 
         var subPageTrends = new TabPage("Trends");
-        var trend = new TrendChartControl(_sessionHistory, _settings) { Dock = DockStyle.Fill, Layouts = _trackLayouts };
+        var trend = new TrendChartControl(_sessionHistory, _settings) { Dock = DockStyle.Fill, Layouts = _trackLayouts, Profiles = _profiles };
         subPageTrends.Controls.Add(trend);
 
         // The same table Race Control opens after a race, with a picker on

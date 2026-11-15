@@ -32,11 +32,16 @@ public sealed class BugHunt17_HandScoringFormTests
         {
             var laps = new List<string>();
 
+            // The board counts the laps tapped, as the race does: a car
+            // can't have more taps to take back than laps by hand (bug hunt 18).
+            var byHand = new Dictionary<string, int> { ["A"] = 0, ["B"] = 0 };
+
             using var form = new HandScoringForm(
-                cars: () => new[] { Car("A"), Car("B") },
+                cars: () => new[] { Car("A") with { ByHand = byHand["A"] }, Car("B") with { ByHand = byHand["B"] } },
                 lap: (t, delta) =>
                 {
                     laps.Add($"{t}{delta:+0;-0}");
+                    byHand[t] += delta;
                     return null;
                 },
                 isOn: () => true,

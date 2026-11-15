@@ -1605,10 +1605,12 @@ internal sealed partial class DriverRequestDesk
 
     /// <summary>
     /// Whether a query about this race, asked then, came in while the race's
-    /// protest window was open (12 Nov 2026, setup plan step 8). Set by
-    /// MainForm; null leaves every query where it falls.
+    /// protest window was open (12 Nov 2026, setup plan step 8), given the
+    /// asking driver's transponder (null when their badge is not known): on
+    /// a mixed-class night each class's window closes on its own (bug hunt
+    /// 18). Set by MainForm; null leaves every query where it falls.
     /// </summary>
-    public Func<SessionRecord, DateTime, bool>? QueryInWindow { get; set; }
+    public Func<SessionRecord, DateTime, string?, bool>? QueryInWindow { get; set; }
 
     /// <summary>The marker Driver Requests shows on such a query, first in its notes.</summary>
     public const string InProtestWindowWords = "In the protest window";
@@ -1625,7 +1627,7 @@ internal sealed partial class DriverRequestDesk
             return request.Kind == DriverAsk.Query
                    && QueryInWindow is { } inWindow
                    && RaceOf(request) is { } race
-                   && inWindow(race, request.AskedUtc);
+                   && inWindow(race, request.AskedUtc, _transponderOf(request.Badge));
         }
         catch (Exception)
         {

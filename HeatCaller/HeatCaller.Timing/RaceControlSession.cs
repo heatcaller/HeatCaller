@@ -1658,7 +1658,13 @@ public sealed partial class RaceControlSession
         {
             _standings.Remove(alternate);
 
-            if (!_standings.ContainsKey(primary))
+            // Not for an owner on a release of their own, though: the green
+            // credits no start lap to a car with one (their lap starts at
+            // their release), so neither does this. The pass being merged
+            // makes their row instead, with their release offset on it -
+            // built here, the row had none, and on their own clock they
+            // were timed from the green all race (bug hunt 18).
+            if (!_standings.ContainsKey(primary) && ReleaseOffsetMsFor(primary) <= 0)
             {
                 var row = new RacerStanding
                 {

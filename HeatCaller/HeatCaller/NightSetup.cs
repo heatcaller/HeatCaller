@@ -70,13 +70,21 @@ public static class NightBreaks
     /// The breaks that fall between two races that run one after the other:
     /// "after Q2" falls between Q2 Heat 4 and Q3 Heat 1, and also between
     /// Q2 and the first main when Q3 has been dropped. None between two
-    /// heats of the same round.
+    /// heats of the same round. <paramref name="reached"/> is the furthest
+    /// position the night has already got to: a break behind it was crossed
+    /// already, so a held heat of an earlier round run late does not bring
+    /// it round again.
     /// </summary>
-    public static IReadOnlyList<PlannedBreak> Between(RoundDefinition? before, RoundDefinition? next, IEnumerable<PlannedBreak>? breaks)
+    public static IReadOnlyList<PlannedBreak> Between(RoundDefinition? before, RoundDefinition? next, IEnumerable<PlannedBreak>? breaks, int? reached = null)
     {
         if (breaks is null || PositionOf(before) is not { } a || PositionOf(next) is not { } b || b <= a)
         {
             return Array.Empty<PlannedBreak>();
+        }
+
+        if (reached is { } furthest && furthest > a)
+        {
+            a = furthest;
         }
 
         return breaks

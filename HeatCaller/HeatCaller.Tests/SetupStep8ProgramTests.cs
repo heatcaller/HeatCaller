@@ -162,6 +162,29 @@ public sealed class SetupStep8ProgramTests : IDisposable
     }
 
     [Fact]
+    public void Stopping_early_leaves_out_mains_already_on_the_program()
+    {
+        // Stock's finals are already seeded (built, not run); Mod's are still to come.
+        var plan = PlanWithMains(T0, ("Stock", 6), ("Stock", 6), ("Mod", 6), ("Mod", 6));
+        var built = plan.Slots
+            .Select(s => s.ClassName == "Stock"
+                ? s with { Round = new RoundDefinition { ClassName = "Stock", RoundLabel = "A-Main", Kind = RoundKind.Main } }
+                : s)
+            .ToList();
+        plan = plan with { Slots = built };
+
+        var cuts = NightPlan.FinalsCuts(plan)!;
+
+        // The cut only reaches mains not built yet, so only Mod's count.
+        Assert.Equal(TimeSpan.FromMinutes(4), cuts.ShorterSaves);
+        Assert.Equal(TimeSpan.FromMinutes(9), cuts.FewerSaves);
+        Assert.Equal(new[] { "Mod" }, cuts.FewerClasses);
+
+        // Every class's finals already built: nothing left to cut.
+        Assert.Null(NightPlan.FinalsCuts(plan with { Slots = built.Where(s => s.ClassName == "Stock").ToList() }));
+    }
+
+    [Fact]
     public void The_cut_is_applied_when_the_finals_are_built()
     {
         var format = new RaceFormat { TimeLimitMinutes = 6 };

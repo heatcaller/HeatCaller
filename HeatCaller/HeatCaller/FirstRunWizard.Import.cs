@@ -51,18 +51,7 @@ public sealed partial class FirstRunWizard
 
         var plan = previewed.Plan;
 
-        foreach (var name in plan.UnknownClasses.Where(n => !string.IsNullOrWhiteSpace(n)))
-        {
-            if (!_raceClasses.All.Any(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)))
-            {
-                _raceClasses.Upsert(new RaceClass { Name = name.Trim(), Format = RaceFormat.ForNewClass(_raceClasses.AppDefaultFormat?.Invoke()) });
-            }
-
-            if (!_doneClasses.Contains(name, StringComparer.OrdinalIgnoreCase))
-            {
-                _doneClasses.Add(name.Trim());
-            }
-        }
+        AddListedClasses(plan.UnknownClasses);
 
         if (plan.Saves.Count > 0)
         {
@@ -74,5 +63,27 @@ public sealed partial class FirstRunWizard
 
         _lblImported.Text = $"Imported from {list.Source}: {Plural.Of(plan.NewDrivers, "new driver")}, {plan.UpdatedDrivers} updated"
                             + (plan.UnknownClasses.Count > 0 ? $", and {Plural.Of(plan.UnknownClasses.Count, "class", "classes")} added ({string.Join(", ", plan.UnknownClasses)})." : ".");
+    }
+
+    /// <summary>
+    /// The classes a list names that the club hasn't got, made with the race
+    /// length and finish asked for on the Classes step - as the classes typed
+    /// there are (SaveClasses) - so the first night's classes all race the one
+    /// length the club picked rather than the imported ones the app default.
+    /// </summary>
+    internal void AddListedClasses(IEnumerable<string> names)
+    {
+        foreach (var name in names.Where(n => !string.IsNullOrWhiteSpace(n)))
+        {
+            if (!_raceClasses.All.Any(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                _raceClasses.Upsert(new RaceClass { Name = name.Trim(), Format = _classLength.Format() });
+            }
+
+            if (!_doneClasses.Contains(name, StringComparer.OrdinalIgnoreCase))
+            {
+                _doneClasses.Add(name.Trim());
+            }
+        }
     }
 }

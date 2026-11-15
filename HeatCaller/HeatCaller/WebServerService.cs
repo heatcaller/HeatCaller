@@ -2898,6 +2898,10 @@ public sealed partial class WebServerService
 
             if (relayNode["standings"] is System.Text.Json.Nodes.JsonArray rows)
             {
+                // Each car's own clock zero, for "lapping" - see LeaderBehind.Approach.
+                var startType = _race.StartType;
+                var staggerClock = _race.StaggerClockMode;
+
                 for (var i = 0; i < ordered.Count && i < rows.Count; i++)
                 {
                     if (rows[i] is not System.Text.Json.Nodes.JsonObject row)
@@ -2930,7 +2934,7 @@ public sealed partial class WebServerService
                     // can say "Leader behind" once. See LeaderBehind. Only
                     // when it is so; never on the leader. Against the first
                     // real car, never a ghost - see LeaderBehind.Approach.
-                    if (i > 0 && LeaderBehind.Approach(car, ordered) is { } lapping)
+                    if (i > 0 && LeaderBehind.Approach(car, ordered, startType, staggerClock) is { } lapping)
                     {
                         row["lapping"] = lapping;
                     }
@@ -4935,9 +4939,15 @@ public sealed partial class WebServerService
         // an order that never changes, so a button never moves under a thumb.
         var handTaps = [];
         var handShownKey = '';
+        var handRace = null;
         function refreshHand(){
           return call('race.handCars', {}, null, READ_WAIT).then(function(d){
             var box = document.getElementById('handBox');
+            // Undo last tap only ever takes back a tap from this race while
+            // hand scoring is on: the last race's taps (or ones from before it
+            // was switched off) belong to other laps (bug hunt 18).
+            if (d.ok && d.data && (!d.data.racing || !d.data.on || d.data.raceGeneration !== handRace)) { handTaps = []; }
+            if (d.ok && d.data) { handRace = d.data.raceGeneration; }
             if (!d.ok || !d.data || !d.data.racing) { box.style.display = 'none'; return; }
             var data = d.data;
             box.style.display = 'block';

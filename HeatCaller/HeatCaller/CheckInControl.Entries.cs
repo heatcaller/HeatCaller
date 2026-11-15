@@ -106,7 +106,8 @@ public sealed partial class CheckInControl
 
         if (plan.Saves.Count > 0)
         {
-            _profiles.UpsertMany(plan.Saves);
+            // A phone's car pick can land while the preview is open.
+            _profiles.UpsertMany(plan.SavesKeepingChangesMadeSince(_profiles.Get));
         }
 
         if (newCheckIns.Count > 0)

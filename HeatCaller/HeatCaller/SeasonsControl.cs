@@ -549,9 +549,21 @@ public sealed class SeasonsControl : UserControl
     }
 
     /// <summary>What a championship's card and header say about how far through it is: "Stock · round 7 of 8".</summary>
-    private (string Line, double? Progress, bool Finished, int Rounds) ProgressOf(Season season, IReadOnlyList<SessionRecord> counted)
+    private (string Line, double? Progress, bool Finished, int Rounds) ProgressOf(Season season, IReadOnlyList<SessionRecord> counted) =>
+        ProgressOf(season, counted, _events);
+
+    /// <summary>
+    /// The same, for a given set of race days. WHY (14 Nov 2026): when the
+    /// races don't come to one a race day (an every-class championship on a
+    /// three-class night, an A- and a B-main), RoundsCountedSoFar refuses and
+    /// this fell back to counting RACES - so an eight-round season was
+    /// "finished" with a "Champion" after three nights. A round is a race
+    /// day, so the days are counted instead.
+    /// </summary>
+    internal static (string Line, double? Progress, bool Finished, int Rounds) ProgressOf(
+        Season season, IReadOnlyList<SessionRecord> counted, RaceEventStore? events)
     {
-        var rounds = CommentaryReaders.RoundsCountedSoFar(counted, _events, null) ?? counted.Count;
+        var rounds = CommentaryReaders.RoundsCountedSoFar(counted, events, null) ?? RaceDaysOf(counted, events);
         var className = season.ClassName.Length > 0 ? season.ClassName : "Every class";
 
         if (season.PlannedRounds > 0)
@@ -562,6 +574,46 @@ public sealed class SeasonsControl : UserControl
         }
 
         return ($"{className} · {Plural.Of(counted.Count, "race")} counted", null, false, rounds);
+    }
+
+    /// <summary>
+    /// How many race days the races were run on: the meeting each one's round
+    /// is filed under, or - for a race placed on no meeting, ticked in by
+    /// hand - the local date it was run.
+    /// </summary>
+    private static int RaceDaysOf(IReadOnlyList<SessionRecord> counted, RaceEventStore? events) =>
+        counted
+            .Select(s => s.RoundId is { Length: > 0 } roundId && events?.EventForRound(roundId) is { } day
+                ? "event:" + day.Id
+                : "date:" + s.StartedAtUtc.ToLocalTime().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture))
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+
+    /// <summary>
+    /// The "Can they still win?" rows. WHY (14 Nov 2026): a season that ended
+    /// with two level at the top showed the first as "Leading" and the other
+    /// as "Still in it" with a gap of "−0", under a heading saying it was
+    /// over. Once it is over every driver level with the leader is in place 1,
+    /// marked Champion if they are alone there and Level if not.
+    /// </summary>
+    internal static List<TitleRaceView.Row> TitleRaceRows(TitleRace race)
+    {
+        var over = race.RoundsLeft == 0;
+        var stillIn = race.Rows.Count(r => r.CanWin);
+        var top = race.Rows.Count == 0 ? 0 : race.Rows[0].Points;
+
+        return race.Rows.Select((r, i) =>
+        {
+            if (over && r.CanWin)
+            {
+                return new TitleRaceView.Row(1, r.Driver, r.Points, r.Points - top,
+                    stillIn == 1 ? TitleRaceView.State.Champion : TitleRaceView.State.Level);
+            }
+
+            return new TitleRaceView.Row(i + 1, r.Driver, r.Points, r.Points - top,
+                i == 0 ? TitleRaceView.State.Leading
+                    : r.CanWin ? TitleRaceView.State.StillIn : TitleRaceView.State.OutOfReach);
+        }).ToList();
     }
 
     /// <summary>The rules in a line under the name: "Stock · mains only · best 6 count · new races added automatically".</summary>
@@ -667,11 +719,7 @@ public sealed class SeasonsControl : UserControl
                     ? $"{Plural.Of(race.RoundsLeft, "round")} left, and nobody can catch {race.Rows[0].Driver} now."
                     : $"{Plural.Of(race.RoundsLeft, "round")} left, up to {best} points each. {stillIn} drivers can still win it.";
 
-            _titleRace.SetRows(race.Rows.Select((r, i) => new TitleRaceView.Row(
-                i + 1, r.Driver, r.Points, r.Points - race.Rows[0].Points,
-                i == 0
-                    ? race.RoundsLeft == 0 && stillIn == 1 ? TitleRaceView.State.Champion : TitleRaceView.State.Leading
-                    : r.CanWin ? TitleRaceView.State.StillIn : TitleRaceView.State.OutOfReach)).ToList());
+            _titleRace.SetRows(TitleRaceRows(race));
         }
 
         _lblRules.Text = RulesList(season);

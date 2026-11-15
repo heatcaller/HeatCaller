@@ -81,6 +81,37 @@ public sealed partial class RelayPublisher
          + "Open it on your phone and it remembers you. Adding the club's page to your Home Screen keeps you signed in.\r\n\r\n"
          + "If you didn't ask for this, you can ignore it - nothing has changed.\r\n");
 
+    /// <summary>
+    /// Sends one sign-in link email: to, subject, body. PinMailer when null;
+    /// a test swaps it to see what would have gone, and when.
+    /// </summary>
+    internal Func<string, string, string, Task<MailResult>>? SendSignInMail { get; set; }
+
+    /// <summary>The collected emails, one at a time, off the worker thread. Never throws.</summary>
+    private async Task SendSignInMailsAsync(IReadOnlyList<(string To, string Subject, string Body)> mails)
+    {
+        var settings = _settings;
+        var send = SendSignInMail ?? ((to, subject, body) => PinMailer.SendOneAsync(settings, to, subject, body, CancellationToken.None));
+
+        // Off the worker before the first send starts.
+        await Task.Yield();
+
+        foreach (var (to, subject, body) in mails)
+        {
+            try
+            {
+                var sent = await send(to, subject, body).ConfigureAwait(false);
+                Log?.Invoke(sent.Ok
+                    ? "[relay] Emailed a driver the link to their page, as they asked on Me."
+                    : $"[relay] Couldn't email a driver the link to their page: {sent.Message}");
+            }
+            catch (Exception ex)
+            {
+                Log?.Invoke($"[relay] Couldn't email a driver the link to their page: {Plain(ex)}");
+            }
+        }
+    }
+
     /// <summary>Once per pass, from the worker loop: on its own tick, only while wanted.</summary>
     partial void CollectSignInMailPass(CancellationToken token)
     {
@@ -123,6 +154,7 @@ public sealed partial class RelayPublisher
             }
 
             var clubName = PinMailer.ClubName(_settings);
+            var mails = new List<(string To, string Subject, string Body)>();
 
             foreach (var ask in asks)
             {
@@ -135,16 +167,25 @@ public sealed partial class RelayPublisher
                 }
 
                 var (subject, body) = SignInMailMessage(clubName, link);
-                var sent = PinMailer.SendOneAsync(_settings, ask.Email, subject, body, token).GetAwaiter().GetResult();
-                Log?.Invoke(sent.Ok
-                    ? "[relay] Emailed a driver the link to their page, as they asked on Me."
-                    : $"[relay] Couldn't email a driver the link to their page: {sent.Message}");
+                mails.Add((ask.Email, subject, body));
+            }
+
+            // Sent off this thread (bug hunt 18): this is the worker that
+            // drains the live frames, and a send - seconds normally, up to a
+            // minute against a slow server, longer behind a PIN or invite
+            // batch holding the mailbox - froze the phones' board and had
+            // lap calls dropped as stale. Collected and acknowledged here;
+            // the mail goes on its own, one at a time, as DriverRequests'
+            // notices do.
+            if (mails.Count > 0)
+            {
+                _ = SendSignInMailsAsync(mails);
             }
 
             using var ack = new HttpRequestMessage(HttpMethod.Post, $"{target.Root}/api/v1/c/{club}/signin/email/ack");
             ack.Headers.Authorization = new AuthenticationHeaderValue("Bearer", target.Token);
             ack.Content = new StringContent(JsonSerializer.Serialize(new { upTo = asks.Max(a => a.N) }), Encoding.UTF8, "application/json");
-            using var _ = Send(ack, token);
+            Send(ack, token).Dispose();
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {

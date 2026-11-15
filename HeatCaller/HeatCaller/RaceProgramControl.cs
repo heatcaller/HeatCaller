@@ -2621,20 +2621,33 @@ public sealed partial class RaceProgramControl : UserControl
 
         List<string>? points = null;
 
-        if (round >= 2 && Enumerable.Range(1, round).All(run.Contains))
+        // An odd round mirrors the one before it, so both are seeded on the
+        // same rounds' points - Q4 on Q1 and Q2, like Q3, even once Q3 has
+        // run (14 Nov 2026, bug hunt 18). See HeadsUpQualifying.PointsRoundsFor.
+        var pointsRounds = HeadsUpQualifying.PointsRoundsFor(round);
+
+        if (pointsRounds > 0 && Enumerable.Range(1, pointsRounds).All(run.Contains))
         {
             var asPoints = new RaceClass
             {
                 Name = className,
                 QualifyingMethod = QualifyingMethod.RoundPoints,
-                CountBestRounds = round,
+                CountBestRounds = pointsRounds,
                 // 12 Nov 2026: on the class's own scale, so the round's heats
                 // are dealt in the order its standings will print.
                 RoundPointsScale = ClassByName(className)?.RoundPointsScale ?? RoundPointsScale.Club,
             };
 
+            // Only those rounds' heats: a later round already run would
+            // otherwise make it best 2 of 3, not the points Q3 was seeded on.
+            var dayRounds = DayRoundsForClass(className);
+            var scope = new HashSet<string>(QualifyingRoundFilter(), StringComparer.Ordinal);
+            scope.IntersectWith(dayRounds
+                .Where(r => BuildRoundOf(r, dayRounds) is { } n && n <= pointsRounds)
+                .Select(r => r.Id));
+
             points = QualifyingCalculator
-                .Compute(className, _rounds, _sessionHistory, _profiles, asPoints, QualifyingRoundFilter())
+                .Compute(className, _rounds, _sessionHistory, _profiles, asPoints, scope)
                 .Select(e => e.Transponder)
                 .ToList();
         }

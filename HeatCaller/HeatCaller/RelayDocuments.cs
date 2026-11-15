@@ -1059,7 +1059,11 @@ internal static class RelayDocuments
                 // Email me a link on Me (14 Nov 2026, driver phone plan item
                 // 17): only when the club has turned it on AND its mail can
                 // send, so the relay never offers a link nobody will email.
-                emailLink = settings.RelayEmailSignInLink && PinMailer.IsConfigured(settings),
+                // The same test the laptop collects on (bug hunt 18): without
+                // driver nights published there is no page to link to and the
+                // asks were never read, so the phone was promised a link that
+                // never came.
+                emailLink = RelayPublisher.SignInMailWanted(settings),
                 drivers = entrants.Select((d, i) =>
                 {
                     var profile = profiles.Get(d.Transponder);

@@ -1403,7 +1403,16 @@ public sealed partial class CheckInControl : UserControl
         {
             _checkIns.SetCheckedIn(before.Transponder, before.WasIn);
             CheckInChangedAtDesk?.Invoke(before.Transponder);
-            RefreshCheckInMarks();
+
+            // The desk's own put-back, not a phone's (Bug hunt 18) - and the
+            // first click's "checked in/out" line comes off the log with it,
+            // since that tick never stood.
+            RefreshMarksFromDesk();
+
+            if (_profiles.Get(before.Transponder) is { } profile)
+            {
+                _deskLog.RemoveNewest(DisplayName(profile), before.WasIn ? "checked out" : "checked in");
+            }
         }
     }
 
@@ -1709,7 +1718,7 @@ public sealed partial class CheckInControl : UserControl
             if (CheckInStore.ClosedCurrentDay(_events) is { } closedDay)
             {
                 SetScanStatus($"Not changed: this day is closed (\"{closedDay.DisplayName}\").", AppTheme.Danger);
-                BeginInvoke(new Action(RefreshCheckInMarks));
+                BeginInvoke(new Action(RefreshMarksFromDesk));
                 return;
             }
 

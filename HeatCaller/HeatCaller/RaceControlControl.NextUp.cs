@@ -209,6 +209,18 @@ public sealed partial class RaceControlControl
         // too (18 Oct 2026) - see ShowRound.
         var round = ShowRound();
 
+        return FormatFor(round, ClassFor(round), () => RaceFormat.FromSettings(_settings), out source);
+    }
+
+    /// <summary>
+    /// The format a round runs under: its override, else (for a qualifier)
+    /// the class's qualifier format, else the class's format, else the app
+    /// default. EffectiveFormat asks for the round in the Round box; the
+    /// gap's count to the green asks for the race being counted down (14 Nov
+    /// 2026), which is not the Round box's round until it starts.
+    /// </summary>
+    internal static RaceFormat FormatFor(RoundDefinition? round, RaceClass? raceClass, Func<RaceFormat> appDefault, out string source)
+    {
         if (round?.FormatOverride is { } overridden)
         {
             source = $"{round.RoundLabel} override";
@@ -218,20 +230,20 @@ public sealed partial class RaceControlControl
         // A qualifier runs under the class's qualifier format when it has
         // one; everything else - and a qualifier without one - runs under
         // the class format. Both fall through to the app default.
-        if (round?.Kind == RoundKind.Qualifier && ClassFor(round)?.QualifierFormat is { } qualifierFormat)
+        if (round?.Kind == RoundKind.Qualifier && raceClass?.QualifierFormat is { } qualifierFormat)
         {
             source = $"{round.ClassName} qualifiers";
             return qualifierFormat;
         }
 
-        if (ClassFor(round)?.Format is { } classFormat)
+        if (raceClass?.Format is { } classFormat)
         {
             source = $"{round!.ClassName} class";
             return classFormat;
         }
 
         source = "app default";
-        return RaceFormat.FromSettings(_settings);
+        return appDefault();
     }
 
     /// <summary>

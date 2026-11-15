@@ -59,6 +59,10 @@ public sealed partial class RaceDayService
             on = control.HandScoringOn,
             offer = HandScoring.ShouldOffer(control.TimingProblemKey?.Invoke(), race.State, race.IsPracticeMode, control.HandScoringOn),
             racing = race.State == RaceState.Racing && !race.IsPracticeMode,
+
+            // Which race this is, so a phone's Undo last tap never reaches
+            // back into the last race's taps (bug hunt 18).
+            raceGeneration = race.SessionGeneration,
             cars = control.HandScoringCars()
                 .Select(c => new
                 {
