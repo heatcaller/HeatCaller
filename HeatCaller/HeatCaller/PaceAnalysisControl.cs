@@ -561,6 +561,14 @@ public sealed class PaceAnalysisControl : UserControl
     /// of Sam Okafor.", "P2 of 5, 3.1 s behind Priya Shah.". Nothing for
     /// practice, which has no result to speak of, or for a driver with no
     /// place.
+    ///
+    /// Places are counted among the real cars only (bug hunt 19): an older
+    /// saved race can still hold ghosts, and reading the raw position gave
+    /// "P3 of 2", with nobody called the winner when a ghost took P1. In a
+    /// shared (mixed-class) heat a driver is placed in their own class and
+    /// measured against that class's winner, the same split the results use
+    /// (MixedHeats.ScoringFields): "Won Stock." rather than "P3 of 3, 1 lap
+    /// down on" a Mod driver.
     /// </summary>
     internal static string ResultClause(SessionRecord session, SessionResultEntry entry)
     {
@@ -569,35 +577,42 @@ public sealed class PaceAnalysisControl : UserControl
             return string.Empty;
         }
 
-        var field = session.Results.Where(r => r.Position > 0 && !GhostService.IsGhost(r.Transponder)).OrderBy(r => r.Position).ToList();
-        var count = field.Count;
+        var fields = MixedHeats.ScoringFields(session.Results, null);
+        var own = fields.FirstOrDefault(f => f.Any(r => ReferenceEquals(r, entry))) ?? session.Results;
+        var field = own.Where(r => r.Position > 0 && !GhostService.IsGhost(r.Transponder)).OrderBy(r => r.Position).ToList();
+        var rank = field.FindIndex(r => ReferenceEquals(r, entry)) + 1;
 
-        if (entry.Position == 1)
+        if (rank == 0)
         {
-            var second = field.FirstOrDefault(r => r.Position == 2);
+            return string.Empty;
+        }
+
+        var className = fields.Count > 1
+            ? own.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.ClassName))?.ClassName?.Trim()
+            : null;
+
+        if (rank == 1)
+        {
+            var won = className is null ? "Won it" : $"Won {className}";
+            var second = field.Count > 1 ? field[1] : null;
 
             if (second is null)
             {
-                return "Won it.";
+                return $"{won}.";
             }
 
             if (second.Laps < entry.Laps)
             {
-                return $"Won it by {Plural.Of(entry.Laps - second.Laps, "lap")}.";
+                return $"{won} by {Plural.Of(entry.Laps - second.Laps, "lap")}.";
             }
 
             return second.ElapsedMs > entry.ElapsedMs && entry.ElapsedMs > 0
-                ? $"Won it, {(second.ElapsedMs - entry.ElapsedMs) / 1000.0:0.0} s clear of {NameOf(second)}."
-                : "Won it.";
+                ? $"{won}, {(second.ElapsedMs - entry.ElapsedMs) / 1000.0:0.0} s clear of {NameOf(second)}."
+                : $"{won}.";
         }
 
-        var winner = field.FirstOrDefault(r => r.Position == 1);
-        var place = $"P{entry.Position} of {count}";
-
-        if (winner is null)
-        {
-            return $"{place}.";
-        }
+        var winner = field[0];
+        var place = className is null ? $"P{rank} of {field.Count}" : $"P{rank} of {field.Count} in {className}";
 
         if (winner.Laps > entry.Laps)
         {
