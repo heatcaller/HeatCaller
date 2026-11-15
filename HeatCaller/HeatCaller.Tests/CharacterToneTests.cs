@@ -336,14 +336,34 @@ public sealed class CharacterToneTests : IDisposable
     }
 
     [Fact]
-    public async Task The_night_recap_is_never_written_sailor_mouth()
+    public async Task The_recap_show_is_read_to_the_room_in_sailor_mouth()
     {
         var (desk, model) = Desk(CommentaryTone.SailorMouth);
 
         await desk.BuildNightRecapAsync(Facts("Sam won the A-Main by 0.4s."));
 
-        Assert.DoesNotContain(CommentaryTones.SailorMouthRule, model.SystemPrompt);
-        Assert.Contains("Be LOUD and thrilled", model.SystemPrompt);
+        Assert.Contains(CommentaryTones.SailorMouthRule, model.SystemPrompt);
+    }
+
+    [Fact]
+    public async Task What_gets_posted_is_never_written_sailor_mouth()
+    {
+        var facts = Facts("Sam won the A-Main by 0.4s.");
+
+        foreach (var write in new Func<CommentaryService, Task>[]
+                 {
+                     d => d.BuildDriverCutAsync(facts),
+                     d => d.BuildSeasonPieceAsync(facts),
+                     d => d.BuildNightBeforeAsync(facts),
+                 })
+        {
+            var (desk, model) = Desk(CommentaryTone.SailorMouth);
+
+            await write(desk);
+
+            Assert.DoesNotContain(CommentaryTones.SailorMouthRule, model.SystemPrompt);
+            Assert.Contains("Be LOUD and thrilled", model.SystemPrompt);
+        }
     }
 
     [Fact]

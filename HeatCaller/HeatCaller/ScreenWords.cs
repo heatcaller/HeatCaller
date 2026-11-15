@@ -62,16 +62,21 @@ internal static class ScreenWords
 
     /// <summary>
     /// Swears to star on screens. Whole words with only their own endings
-    /// listed, so a name is never starred by accident - "Pissarro", the
-    /// Wankel engine, "Shitara" all show as written. "Fuck" alone takes any
-    /// ending: no name starts with it.
+    /// listed, so an ordinary word is never starred by accident -
+    /// "Pissarro", the Wankel engine, "Shitara", "hello", "Dickson" all show
+    /// as written. "Fuck" alone takes any ending: no name starts with it.
+    ///
+    /// The milder ones too (15 Nov 2026) - dick, cock, prick, crap, damn,
+    /// hell. A driver CALLED Dick is the reason for the keep list on
+    /// <see cref="Masked"/>: his name shows as it is.
     /// </summary>
     private static readonly Regex Swears = new(
         @"\b(?:mother)?f+u+c+k\w*"
         + @"|\b(?:bull)?shit(?:s|ty|tier|ting|ted|head|heads|show)?\b"
         + @"|\bbastards?\b|\bbollocks?\b|\bpiss(?:ed|es|ing|y)?\b"
         + @"|\b(?:ass|arse)(?:holes?)?\b|\bwank(?:er|ers|ing|ed)?\b|\btwats?\b"
-        + @"|\bbitch(?:es|ing|y)?\b|\bcunts?\b|\bgoddamn(?:ed|it)?\b",
+        + @"|\bbitch(?:es|ing|y)?\b|\bcunts?\b|\b(?:god)?damn(?:ed|it)?\b"
+        + @"|\bdick(?:s|head|heads)?\b|\bcocks?\b|\bpricks?\b|\bcrap(?:s|py|pier)?\b|\bhell\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex Word = new(@"[a-z0-9]+", RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -153,10 +158,33 @@ internal static class ScreenWords
     /// letter - "fucking" shows as "f******". For screens only: what is
     /// SAID is never masked.
     /// </summary>
-    public static string Masked(string text) =>
-        string.IsNullOrEmpty(text)
-            ? text
-            : Swears.Replace(text, m => m.Value[0] + new string('*', m.Value.Length - 1));
+    /// <param name="keep">
+    /// Words never starred, whatever they are - the drivers' names, so a
+    /// driver called Dick or Hell shows as himself. Case is ignored.
+    /// </param>
+    public static string Masked(string text, IEnumerable<string>? keep = null)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return text;
+        }
+
+        var kept = keep is null
+            ? null
+            : new HashSet<string>(keep.Where(w => !string.IsNullOrWhiteSpace(w)), StringComparer.OrdinalIgnoreCase);
+
+        return Swears.Replace(text, m =>
+            kept is not null && kept.Contains(m.Value)
+                ? m.Value
+                : m.Value[0] + new string('*', m.Value.Length - 1));
+    }
+
+    /// <summary>Every word of every name - what <see cref="Masked"/> keeps for a list of drivers.</summary>
+    public static IEnumerable<string> NameWords(IEnumerable<string?> names) =>
+        names
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .SelectMany(n => Regex.Split(n!, @"[^\p{L}\p{N}']+"))
+            .Where(w => w.Length > 0);
 
     /// <summary>Lower case, look-alike digits and symbols as letters, a masked letter as a wildcard-free gap.</summary>
     private static string Fold(string text)

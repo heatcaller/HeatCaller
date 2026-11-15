@@ -45,10 +45,22 @@ public sealed class ScreenWordsTests
     [InlineData("Bullshit, that's a shitty line.", "B*******, that's a s***** line.")]
     [InlineData("Pissed off and a bastard of a gap.", "P***** off and a b****** of a gap.")]
     [InlineData("What an ass.", "What an a**.")]
-    [InlineData("Damn, he passed the class.", "Damn, he passed the class.")]
+    [InlineData("Damn, he passed the class.", "D***, he passed the class.")]
     [InlineData("Pissarro and Shitara on the Wankel.", "Pissarro and Shitara on the Wankel.")]
+    [InlineData("What the hell, a crappy pass and a dick move.", "What the h***, a c***** pass and a d*** move.")]
+    [InlineData("Prick of a gap, cock-up at the hairpin, damn it.", "P**** of a gap, c***-up at the hairpin, d*** it.")]
+    [InlineData("Hello Dickson, Cockburn and Shellie.", "Hello Dickson, Cockburn and Shellie.")]
     public void Swears_are_starred_for_screens_and_names_are_left_alone(string said, string shown)
     {
         Assert.Equal(shown, ScreenWords.Masked(said));
+    }
+
+    [Fact]
+    public void A_driver_whose_name_is_a_swear_shows_as_himself()
+    {
+        var keep = ScreenWords.NameWords(new[] { "Dick Hell", null, "Sam O'Neil" });
+
+        Assert.Equal("Dick Hell leads, a d*** clear.", ScreenWords.Masked("Dick Hell leads, a damn clear.", keep));
+        Assert.Equal("dick leads.", ScreenWords.Masked("dick leads.", keep));
     }
 }

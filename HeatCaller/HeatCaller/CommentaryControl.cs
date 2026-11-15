@@ -750,8 +750,9 @@ public sealed class CommentaryControl : UserControl
             if (item.Tone == CommentaryTone.SailorMouth
                 && _settings.CommentaryToneStyle != CommentaryTone.SailorMouth
                 && AppDialog.Show(this,
-                    "Sailor-mouth swears and is crude - out loud, on the speakers. Screens, phones and the "
-                    + "overlay show the swears starred, and the night recap stays clean. It never says anything "
+                    "Sailor-mouth swears and is crude - out loud, on the speakers, and in the recap show's "
+                    + "recording. Screens, phones and the overlay show the swears starred, and what gets posted - "
+                    + "a driver's night, the season piece, the night before - stays clean. It never says anything "
                     + "racist, antisemitic or hateful.\n\nUse it only where everyone in the room is fine with that. "
                     + "Switch to Sailor-mouth?",
                     "Sailor-mouth commentary", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)

@@ -299,7 +299,7 @@ public sealed partial class AnnouncementService
         {
             try
             {
-                var shown = ScreenWords.Masked(VoiceProfile.StripAudioTags(text));
+                var shown = Starred(VoiceProfile.StripAudioTags(text));
 
                 if (!string.IsNullOrWhiteSpace(shown))
                 {
@@ -333,7 +333,7 @@ public sealed partial class AnnouncementService
         // Without the [excited]-style tags a v3 voice keeps in the text it
         // is given: they are directions to the voice, and the page shows
         // these words as the caption.
-        var words = ScreenWords.Masked(VoiceProfile.StripAudioTags(text));
+        var words = Starred(VoiceProfile.StripAudioTags(text));
 
         // The privacy register as it is the moment the line is heard - read
         // here, a volatile field read, so a register swapped while this one

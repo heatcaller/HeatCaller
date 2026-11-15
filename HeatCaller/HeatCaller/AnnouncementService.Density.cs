@@ -433,7 +433,7 @@ public sealed partial class AnnouncementService
 
         var said = string.IsNullOrWhiteSpace(words)
             ? null
-            : ScreenWords.Masked(VoiceProfile.StripAudioTags(words).Trim());
+            : Starred(VoiceProfile.StripAudioTags(words).Trim());
 
         return new UnsaidLine(DateTime.UtcNow, kind, CallName(type), string.IsNullOrWhiteSpace(driver) ? null : driver,
             string.IsNullOrWhiteSpace(said) ? null : said, why);

@@ -197,10 +197,11 @@ public static class CommentaryTones
             : settings.CommentaryToneStyle;
 
     /// <summary>
-    /// The tone for writing that is SHARED - the night recap, a driver's own
-    /// night, the season piece, the night before - which clubs post and
-    /// people send around. Sailor-mouth is for the room, so these are written
-    /// Enthusiastic instead (15 Nov 2026).
+    /// The tone for writing that is SHARED - a driver's own night, the season
+    /// piece, the night before - which clubs post and people send around.
+    /// Sailor-mouth is for the room, so these are written Enthusiastic instead
+    /// (15 Nov 2026). The night recap is the recap SHOW, read to the room, so
+    /// it keeps the tone (Asher, 15 Nov 2026); its screen text is starred.
     /// </summary>
     public static CommentaryTone ForSharedWriting(AppSettings settings) =>
         Effective(settings) is var tone && tone == CommentaryTone.SailorMouth ? CommentaryTone.Enthusiastic : tone;

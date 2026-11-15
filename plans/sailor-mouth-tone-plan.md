@@ -1,84 +1,61 @@
-# Sailor-mouth commentary tone: plan (15 Nov 2026)
+# Sailor-mouth commentary tone (15 Nov 2026)
 
-A new choice in the Commentary page's Tone dropdown that swears and is crude.
-It is never racist or antisemitic, and it never uses slurs of any kind.
+This adds a commentary tone that swears and is crude. It is never racist or antisemitic, and it
+never uses slurs of any kind. It is built on the branch `claude/sailor-mouth-tone`.
 
-## Where it slots in
+## What was built
 
-The tones live in one table, `CommentaryTones.All` (CommentaryTones.cs). Each
-character tone is a single `ToneProfile` row. The dropdown (CommentaryControl.cs:746)
-and all five prompt builders in CommentaryService.cs pick the row up from there, so
-the new tone is mostly one more row. The relay brain (Claude Haiku) only gets the
-prompt the app builds, so the relay itself should not need to change. Check
-brain.ts for any content screening before you rule out a deploy.
+- **The tone.** `CommentaryTone.SailorMouth = 12` is one row in `CommentaryTones.All`. The dropdown shows
+  it as "Adult: Sailor-mouth - swears, crude, 18+ (Premium)". Numbers 3, 4, 5, 6, 9 and 11 are retired
+  and must never be reused.
+- **Its own rule.** `ToneProfile.Rule` defaults to `CharacterRule` ("family-friendly"). Sailor-mouth
+  uses `SailorMouthRule` instead. It keeps the same facts-first opening, word for word, then sets these
+  hard lines:
+  - The swearing is aimed at the race, never at a driver, and nobody is mocked.
+  - Nothing racist, antisemitic or hateful, and no slurs, not even softened or starred.
+  - Never the c-word.
+  - Nothing sexual about anybody.
+  - No gore and no real injury.
+- **The hate-term drop**, in every tone. `CommentaryService.Ask` checks each model line with
+  `ScreenWords.HateTermIn`. A line with a slur is dropped and logged, and nothing is said.
+  - It reads through simple disguises: "k1ke", "f.a.g", "n*gger".
+  - A word that came in with the facts, such as a driver's name the club typed, doesn't count.
+  - It only catches slurs. A hateful line with no slur in it relies on the prompt.
+- **Starred on screens.** `AnnouncementService.Starred` covers the Big Screen, the feed, the phones'
+  captions, the race video, and the unsaid-lines list. The voice says the line as written.
+  - Starred: fuck, shit, bastard, bollocks, piss, ass, wank, twat, bitch, cunt, damn, dick, cock,
+    prick, crap, hell.
+  - Each word only matches with its own endings, so "Pissarro", "Wankel", "Dickson" and "hello" show
+    as written.
+  - Every word of every driver's name is kept, so a driver called Dick shows as Dick.
+- **What is posted stays clean.** A driver's night, the season piece and the night before are written
+  Enthusiastic when the tone is Sailor-mouth (`CommentaryTones.ForSharedWriting`).
+  - The night recap is the recap show read to the room, so it keeps Sailor-mouth (decided 15 Nov 2026).
+    Its recording on Club Website → Recording has the swears in.
+- **The club switch.** Setup → Club rules → Commentary has "Allow Sailor-mouth commentary"
+  (`AppSettings.AllowSailorMouth`), on by default.
+  - While it is off, Sailor-mouth isn't in the dropdown, and a saved Sailor-mouth plays as Enthusiastic
+    (`CommentaryTones.Effective`).
+  - The saved choice is kept, so switching the tick back on restores it.
+- **Asks first.** Picking Sailor-mouth opens a Yes/No warning, and No puts the dropdown back.
+- **Premium.** Sailor-mouth, Villain, Pirate and Town crier carry `Premium: true` and show "(Premium)".
+  That is a label only, because the app has no plan or licence check to lock them behind.
+- **No relay change.** The relay brain passes the system prompt straight through.
+  - Measured 15 Nov 2026: Sailor-mouth's longest system prompt is about 2,980 characters, against the
+    relay's 8,000 limit (`MAX_PROMPT_CHARS`). The facts go in the user prompt, which has its own cap.
 
-## Steps
+## Tests
 
-1. **Enum value.** Add `Crude = 12` to `CommentaryTone` (CommentaryService.cs:10).
-   Numbers 3, 4, 5, 6, 9 and 11 are retired and must never be reused.
+- **CharacterToneTests:** the rule and prompts, the club switch, the recap show versus the posted pieces,
+  the hate drop in any tone, sweary lines said as written, and the premium flags.
+- **ScreenWordsTests:** the disguises, ordinary words that must not trip the check, the starring,
+  and the name keep list.
+- **SailorMouthPagesTests:** the dropdown's labels, the switch hiding and restoring the tone, and the
+  Club rules tick saving.
 
-2. **A per-tone rule.** At the moment every character tone gets the same
-   `CharacterRule` appended, and that rule says "family-friendly". Change it like this:
-   - Add a `Rule` field to `ToneProfile`, defaulting to `CharacterRule`.
-   - Point both call sites at `character.Rule`: CommentaryService.cs:1092 for the
-     voice and :5376 for the pit-lane host.
-   - Give Crude its own `CrudeRule`. It keeps "facts come first" word for word, then sets these hard lines:
-     - Swearing and crude humour are allowed. Aim them at the race, the luck, the
-       track and the gap, never at a driver as a person.
-     - Never racist, antisemitic or hateful about race, religion, ethnicity,
-       nationality, sex, sexuality, gender identity or disability. No slurs, not
-       even "as a joke" and not even softened.
-     - Nothing sexual about anyone. Junior drivers race at these clubs.
-     - No gore, real injury or death.
+## Still open
 
-3. **The tone row.** Label it `"Adult: Crude - swears like a pit crew, 18+"`. The tone
-   line carries a worked example on the usual fact, as every other row does, e.g.
-   `"Four tenths, Sam. Four bloody tenths, and Bill's fucking stuck there."`
-   Each tone also needs its own segment, exchange, close and host lines.
-   ElevenLabs cues: `[laughs]` / `[annoyed]`.
-
-4. **A safety net after generation.** Add a small word list of slurs and hate terms
-   (slurs only, not swear words), checked on every generated line before it is spoken
-   or shown. The check runs in every tone, not just Crude. A hit drops the line
-   silently, following the "drop rather than say it badly" rule from stale calls.
-   It also counts toward the Health page. This net is what makes the "never" a promise
-   rather than a hope, since the prompt alone can't guarantee it.
-
-5. **Opt-in.** Choosing Crude opens a one-time confirm: "This tone swears. Use it only
-   where everyone in the room is fine with that." If they cancel, the dropdown goes
-   back to the previous tone. The Support bundle already logs the tone.
-
-6. **What gets written down vs. said.** The voice says the line uncensored. Anything
-   that ends up shared or public stays clean:
-   - Text on the phone pages, the OBS overlay and the race video captions is
-     starred (`f***`). This uses a small mask list, separate from the slur list.
-   - The night recap and honours writing use Enthusiastic when the tone is Crude,
-     because people send those around.
-
-7. **Tests** (CharacterToneTests.cs):
-   - Update the count from 3 to 4 and add the enum value check for `Crude = 12`.
-   - The Crude system prompt contains `CrudeRule` and does not contain "family-friendly".
-     The other tones still contain `CharacterRule`.
-   - The slur filter drops a line that contains a listed term, in any tone.
-   - The screen mask stars swears, and the spoken text is left alone.
-   - The recap and honours prompts never carry the Crude tone line.
-
-8. **Try it for real.** Run some races with the tone on through the relay brain and read
-   what comes back. Look at how crude it actually gets, whether Haiku holds back, and
-   whether the facts stay exact.
-
-## Decided (15 Nov 2026)
-
-- **Name: Sailor-mouth.** Use `CommentaryTone.SailorMouth = 12`, with the label
-  `"Adult: Sailor-mouth - swears, crude, 18+"`. The `CrudeRule` from step 2 becomes `SailorMouthRule`.
-- **Screen text is starred**, as in step 6.
-- **Clubs can switch it off.** Add a club rule in Setup → Club rules, "Allow
-  Sailor-mouth commentary", on by default. While it is off:
-  - Sailor-mouth does not appear in the Tone dropdown.
-  - A saved Sailor-mouth setting reads as Enthusiastic, so nobody hears it by surprise.
-
-  Put it in the same place the other club rules live, with a test that covers both
-  halves. This is step 5b.
-- **Premium** (added 15 Nov 2026): Sailor-mouth, Pirate, Town crier and Villain
-  carry `Premium: true` and show "(Premium)" in the dropdown. For now that is only a
-  label, because the app has no plan or licence check to lock them behind.
+- **Real races.** Try it through the relay brain on real races. How crude does Haiku actually get, and do
+  the facts stay exact?
+- **The user guide** doesn't mention it yet.
+- **Premium gating** waits on a plan or licence system.

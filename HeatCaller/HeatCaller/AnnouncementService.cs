@@ -710,7 +710,36 @@ public sealed partial class AnnouncementService
     /// could throw, which lost the line before it was queued.
     /// </summary>
     private string ForTheScreens(string text) =>
-        ScreenWords.Masked(WithScreenNames(VoiceProfile.StripAudioTags(text), _profiles.AllIncludingGhostsForAnyThread));
+        Starred(WithScreenNames(VoiceProfile.StripAudioTags(text), _profiles.AllIncludingGhostsForAnyThread));
+
+    /// <summary>
+    /// A shown line with its swears starred (15 Nov 2026, Sailor-mouth) -
+    /// the Big Screen, the feed, the phones' captions, the race video. The
+    /// voice says them as written. Every word of every driver's name is kept
+    /// as it is, so a driver called Dick is never "D***". See ScreenWords.Masked.
+    /// </summary>
+    private string Starred(string shown)
+    {
+        if (string.IsNullOrEmpty(shown))
+        {
+            return shown;
+        }
+
+        IEnumerable<string>? names = null;
+
+        try
+        {
+            names = ScreenWords.NameWords(_profiles.AllIncludingGhostsForAnyThread
+                .SelectMany(p => new[] { p.DriverName, p.AnnouncerName }))
+                .ToList();
+        }
+        catch
+        {
+            // Names are a nicety here; the starring is not.
+        }
+
+        return ScreenWords.Masked(shown, names);
+    }
 
     /// <summary>
     /// Puts each driver's real name back where the line has the name the

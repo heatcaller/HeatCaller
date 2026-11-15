@@ -1118,9 +1118,10 @@ public sealed class CommentaryService
     /// summary, which has a whole result to cover.
     /// </param>
     /// <param name="shared">
-    /// Writing that is posted and sent around - the night recap, a driver's
-    /// night, the season piece, the night before - rather than said to the
-    /// room. Never Sailor-mouth (15 Nov 2026): see CommentaryTones.ForSharedWriting.
+    /// Writing that is posted and sent around - a driver's night, the season
+    /// piece, the night before - rather than said to the room. Never
+    /// Sailor-mouth (15 Nov 2026): see CommentaryTones.ForSharedWriting.
+    /// The night recap is NOT shared: it is the recap show, read to the room.
     /// </param>
     private string BuildSystemPrompt(int extraWords = 0, bool shared = false)
     {
@@ -5936,7 +5937,7 @@ public sealed class CommentaryService
         var extra = NightRecap.ExtraWordsOver(_settings.CommentaryMaxWords);
 
         return await RecordAndReturn("Night recap", FiguresCheckedAsync(Ask(Client,
-            BuildSystemPrompt(extra, shared: true),
+            BuildSystemPrompt(extra),
             body,
             maxTokens: MaxTokensForWordLimit(extra),
             temperature: Variety,
