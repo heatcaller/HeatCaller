@@ -17495,7 +17495,9 @@ export function nightPage(club: string, clubName: string, context: PageContext =
       // "remove the sign out link at the bottom of the garage tab"): the
       // Signed in button at the top asks the same question.
       // Family links (overlay plan 7.1): under their details, hidden until read.
-      GARAGE_EMBED_BODY + '<div id="yd"></div>' + '<section class="card famlinks" id="famlinks" hidden></section>' + ME_BODY_END,
+      // On Tonight only (15 Nov 2026, Asher: "family links should only be on
+      // tonight tab"): with no data-sp nothing hid it, so it sat under every space.
+      GARAGE_EMBED_BODY + '<div id="yd"></div>' + '<section class="card famlinks" id="famlinks" data-sp="tonight" hidden></section>' + ME_BODY_END,
     script: LAPS_JS + QUAL_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS + garageEmbedScript() + ME_JS + NIGHT_FAMILY_JS,
     noindex: true,
   }, context);

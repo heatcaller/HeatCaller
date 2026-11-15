@@ -277,7 +277,10 @@ export const ME_BODY_TOP =
   '<div class="me-fee" id="me-fee" role="status" hidden></div>' +
   '<div class="me-moment" id="me-moment" aria-live="polite"></div>' +
   '<div class="me-switch" id="me-switch" role="tablist" aria-label="Parts of Me"></div>' +
-  '<div class="me-tiles" id="me-tiles" data-sp="tonight"></div>';
+  '<div class="me-tiles" id="me-tiles" data-sp="tonight"></div>' +
+  // An earlier night's races say so, at the top of Races (15 Nov 2026,
+  // Asher: "testing shows the tonight tab on relay showing an old date?").
+  '<p class="note me-old" id="me-old" data-sp="races" hidden></p>';
 
 /**
  * I'm coming to the next race night (12 Nov 2026, setup plan C1); empty
@@ -961,19 +964,47 @@ function meAskCheckIn() {
 // The first space says "Tonight" only when the night is tonight (14 Nov
 // 2026, driver phone plan item 3); a night from last week says its day.
 // The words only - the space and its place stay as they are.
+//
+// TONIGHT IS ON EVEN BEFORE A RACE IS FILED (15 Nov 2026, Asher: "testing
+// shows the tonight tab on relay showing an old date?"). The relay keeps one
+// night per driver - the last one the laptop filed - so a driver checked in
+// tonight, before their first race was filed, still had last week's night
+// and the tab read "Sat 8 Nov" all evening. Any sign that tonight is on for
+// them counts: they are on tonight's check-in list (asksOpen), the desk is
+// sending their live entry tonight, or the night on offer is today.
+function meTonightOn() {
+  if (typeof asksOpen !== 'undefined' && asksOpen === true) return true;
+  if (typeof hcIsTonight !== 'function') return false;
+  if (typeof live !== 'undefined' && live && typeof live.at === 'string' && hcIsTonight(live.at)) return true;
+  const offer = typeof meComingNight === 'function' ? meComingNight() : null;
+  return !!(offer && hcIsTonight(offer.day));
+}
 function meTonightLabel() {
   const b = document.querySelector('#me-switch [data-s="tonight"]');
-  if (!b) return;
   const day = typeof night === 'object' && night && typeof night.night === 'string' ? night.night : '';
-  let words = 'Tonight';
-  if (day !== '' && typeof hcIsTonight === 'function' && !hcIsTonight(day)) {
-    // Noon UTC, drawn as UTC: the night's own day whichever zone the phone
-    // or the club is in (the club-zone wrapper in CLOCK_JS would otherwise
-    // move it a day for a phone 12+ hours from the club).
+  const old = day !== '' && typeof hcIsTonight === 'function' && !hcIsTonight(day);
+  const on = typeof meTonightOn === 'function' && meTonightOn();
+  // The night's own day in words ("Sat 8 Nov"). Noon UTC, drawn as UTC: the
+  // night's own day whichever zone the phone or the club is in (the
+  // club-zone wrapper in CLOCK_JS would otherwise move it a day for a phone
+  // 12+ hours from the club).
+  let dayWords = '';
+  if (old) {
     const d = new Date(day + 'T12:00:00Z');
-    if (!isNaN(d)) words = d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+    if (!isNaN(d)) dayWords = d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
   }
-  if (b.textContent !== words) b.textContent = words;
+  if (b) {
+    const words = old && !on && dayWords !== '' ? dayWords : 'Tonight';
+    if (b.textContent !== words) b.textContent = words;
+  }
+  // Races from an earlier night say so at the top of Races, so last week's
+  // laps are never read as tonight's.
+  const strip = typeof document.getElementById === 'function' ? document.getElementById('me-old') : null;
+  if (!strip) return;
+  const has = old && typeof meRacesReal === 'function' && meRacesReal().length > 0;
+  const text = !has ? '' : 'From ' + (dayWords || day) + '.' + (on ? " Tonight's races show here once the desk files them." : '');
+  if (strip.textContent !== text) strip.textContent = text;
+  strip.hidden = text === '';
 }
 
 function meMoment() {
