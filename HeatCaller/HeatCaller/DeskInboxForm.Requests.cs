@@ -98,6 +98,7 @@ internal sealed partial class DeskInboxForm
         }
 
         var one = current[0];
+        var before = NewestUndo();
         string refusal;
 
         switch (one.Kind)
@@ -151,14 +152,11 @@ internal sealed partial class DeskInboxForm
 
                 break;
 
+            // No "Approve it?" since 15 Nov 2026: the desk can undo a pack, so
+            // the toast offers Undo instead. (Late, skip, a marshal swap and
+            // hiding a video have no undo, and still ask.)
             case DriverAsk.Pack:
                 if (desk.DriverOf(one) is null)
-                {
-                    return;
-                }
-
-                if (AppDialog.Show(this, $"{desk.Summary(one)} - for {desk.NameFor(one)}. Approve it?",
-                        "Battery pack", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                 {
                     return;
                 }
@@ -229,7 +227,7 @@ internal sealed partial class DeskInboxForm
                 return;
         }
 
-        Toast($"Approved: {desk.NameFor(one)} - {DriverRequestDesk.KindWords(one.Kind)}. Their phone has been told.");
+        Toast($"Approved: {desk.NameFor(one)} - {DriverRequestDesk.KindWords(one.Kind)}. Their phone has been told.", UndoForSteps(StepsSince(before)));
     }
 
     /// <summary>
@@ -242,7 +240,9 @@ internal sealed partial class DeskInboxForm
         var nl = Environment.NewLine;
         var lines = string.Join(nl, current.Select(r => $"  {desk.NameFor(r)}: {desk.Summary(r)}"));
 
-        if (AppDialog.Show(this, $"Approve all {current.Count}?{nl}{nl}{lines}",
+        // Packs can be undone, so they don't ask; the rest ask once for all of them.
+        if (kind != DriverAsk.Pack
+            && AppDialog.Show(this, $"Approve all {current.Count}?{nl}{nl}{lines}",
                 DriverRequestDesk.KindWords(kind), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
         {
             return;
@@ -250,6 +250,7 @@ internal sealed partial class DeskInboxForm
 
         var refused = new List<string>();
         var done = 0;
+        var before = NewestUndo();
 
         foreach (var one in current)
         {
@@ -286,7 +287,7 @@ internal sealed partial class DeskInboxForm
         }
         else
         {
-            Toast($"Approved {Plural.Of(done, "request")}: {DriverRequestDesk.KindWords(kind)}. Their phones have been told.");
+            Toast($"Approved {Plural.Of(done, "request")}: {DriverRequestDesk.KindWords(kind)}. Their phones have been told.", UndoForSteps(StepsSince(before)));
         }
     }
 
@@ -305,6 +306,7 @@ internal sealed partial class DeskInboxForm
         }
 
         var done = 0;
+        var before = NewestUndo();
 
         foreach (var request in items.Select(i => desk.Store.Get(i.Id)).OfType<DriverRequest>().Where(r => r.IsWaiting))
         {
@@ -327,7 +329,7 @@ internal sealed partial class DeskInboxForm
 
         if (done > 0)
         {
-            Toast(done == 1 ? "Noted. Their phone has been told." : $"{Plural.Of(done, "request")} noted. Their phones have been told.");
+            Toast(done == 1 ? "Noted. Their phone has been told." : $"{Plural.Of(done, "request")} noted. Their phones have been told.", UndoForSteps(StepsSince(before)));
         }
     }
 
@@ -363,6 +365,7 @@ internal sealed partial class DeskInboxForm
             reason = prompt.Reason;
         }
 
+        var before = NewestUndo();
         var done = requests.Count(r => desk.Decline(r, reason));
 
         if (done < requests.Count)
@@ -373,7 +376,7 @@ internal sealed partial class DeskInboxForm
 
         if (done > 0)
         {
-            Toast(done == 1 ? $"Declined: {desk.NameFor(requests[0])}. Their phone has been told." : $"{Plural.Of(done, "request")} declined.");
+            Toast(done == 1 ? $"Declined: {desk.NameFor(requests[0])}. Their phone has been told." : $"{Plural.Of(done, "request")} declined.", UndoForSteps(StepsSince(before)));
         }
     }
 

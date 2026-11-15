@@ -238,6 +238,7 @@ Everything HeatCaller makes for people to see ends with a small sun and the HEAT
 |---|---|---|
 | **Animate the Synthwave sidebar header (scrolling grid, twinkling stars)** | Animates the sidebar header. Only for looks with Synthwave effects, and not while the club logo is shown there. Turn it off for a still image if you'd rather avoid the motion. Advanced mode only. | On |
 | **Use 24-hour (military) time** | Shows times as 24-hour instead of AM/PM everywhere a time is written: the app's screens, status lines and logs, the Wi-Fi pages, and your club's online pages on phones (after the relay picks up the change). Lists and pickers already open update as they refresh; a Wi-Fi or phone page shows the change the next time it is opened. Before 12 November 2026 the phone pages used each phone's own setting. | Off |
+| **Let drivers change the look of the club's pages on their own phones** | Puts a **Look** button at the foot of every club page, so each driver can pick a look for the pages on their own phone. Off, the button goes and every phone shows the club's look. Family links always show the club's look. Since 15 November 2026; needs the relay updated. See [A driver's own look](../online/index.md#a-drivers-own-look). | On |
 
 ## After updating from 0.47
 

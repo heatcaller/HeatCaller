@@ -7,23 +7,26 @@ Nobody can sign up without an invite. Each invite is a single-use eight-digit co
 ## Before you start
 
 - Publishing to the relay must be set up and working. See [Setting up the Club Website page](setup.md).
-- The relay must be new enough to have sign-up. If it isn't, the **Online Sign-ups** window says "The relay answered "not found" for driver sign-up." Redeploy it (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)).
+- The relay must be new enough to have sign-up. If it isn't, the line at the top of the Inbox's **Sign-ups** chip says "The relay answered "not found" for driver sign-up." Redeploy it (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)).
 - To email invites and PINs, set up the club mailbox. See [Emailing racer PINs](email.md). Without it you can still give out codes at the desk.
 - For a new driver to get a check-in card and their own PIN, [online check-in](check-in.md) must be on, with **Give every racer their own PIN** ticked.
 
-## Open Online Sign-ups
+## Open the Inbox on Sign-ups
 
-Go to **Race Day → Who's Racing** and click **Online Sign-ups**, under the list on the **Drivers** card. When sign-ups are waiting, the button shows how many, for example **Online Sign-ups (2)**, and so does a count beside **Race Day** in the sidebar.
+Sign-ups wait in the **Inbox**, on its **Sign-ups** chip (see [The Inbox](../race-control/inbox.md)). Until 15 November 2026 they had a window of their own, **Online Sign-ups**.
 
-The window has three parts:
+Go to **Race Day → Who's Racing** and click **Inbox: Sign-ups**, under the list on the **Drivers** card. When sign-ups are waiting, the button shows how many, for example **Inbox: Sign-ups (2)**, and so does a count beside **Race Day** in the sidebar. The cyan **Inbox** button on Race Control counts them too; click it, then the **Sign-ups** chip.
 
-- At the top, **Let new drivers sign up online with an invite**, and a line saying whether sign-up is working.
-- **Waiting for you**: sign-ups the desk hasn't answered yet.
-- **Invites**: every invite made, and where it stands.
+On the **Sign-ups** chip:
 
-The window can stay open while you work. A sign-up made while it's open appears within about ten seconds.
+- The line at the top says whether sign-up is working.
+- The list has the sign-ups the desk hasn't answered yet, with **Approve**, **Turn Down** and **Later**.
+- **Invites** lists every invite made, and where it stands.
+- **Let new drivers sign up online with an invite** is under **Rules**.
 
-<!-- screenshot: Online Sign-ups window with one sign-up waiting and a few invites -->
+The Inbox can stay open while you work. A sign-up made while it's open appears within about ten seconds.
+
+![The Inbox on the Sign-ups chip: three sign-ups waiting, with Approve, Turn Down and Later, and the Invites list below them with the codes hidden](../assets/images/inbox-signups.png)
 
 ## Turn it on
 
@@ -49,7 +52,7 @@ For a driver standing in front of you with no invite:
 2. Optionally type who it's for, then click **Make Code**.
 3. The code is shown on screen. Read it out, and point them at the sign-up page address shown with it.
 
-They sign up on their own phone and the sign-up appears under **Waiting for you**.
+They sign up on their own phone and the sign-up appears on the Inbox's **Sign-ups** chip.
 
 ## What the new driver does
 
@@ -63,7 +66,7 @@ Their phone then says their sign-up is with the timing desk, and updates by itse
 
 ## Approve a sign-up
 
-1. Select the sign-up under **Waiting for you** and click **Approve** (or double-click it).
+1. Select the sign-up on the **Sign-ups** chip and click **Approve** (or double-click it, or press <kbd>A</kbd>).
 2. Check the details. Everything they typed can be changed.
 3. Make sure **Transponder** is filled in:
     - If they have their own, it's already there.
@@ -89,6 +92,8 @@ A transponder that already belongs to another driver is refused, with the same m
 
 Select it, click **Turn Down**, optionally type why or what to do instead, and click **Turn Down**. Their phone shows "Not signed up" with your message.
 
+For 10 seconds after you approve or turn down a sign-up, the line under the buttons has **Undo**.
+
 ## Invites
 
 | Status | What it means |
@@ -100,8 +105,8 @@ Select it, click **Turn Down**, optionally type why or what to do instead, and c
 | Canceled | Canceled before it was used. |
 | Expired | Not used within 14 days. |
 
-- **Show Code** shows the selected invite's code, for reading it out.
-- **Cancel Invite** stops a code working at once. A sign-up already made with it is turned down.
+- **Code** shows dots until you select an invite and click **Show Code**, which shows its code for reading out.
+- **Cancel Invite** stops a code working at once. A sign-up already made with it is turned down. **Undo** on the line under the buttons, for 10 seconds, takes it back.
 - An invite works once, for 14 days. Answered and expired invites drop off the list after 60 days.
 
 ## Troubleshooting
@@ -113,7 +118,7 @@ It says what's wrong. "Publishing to the relay is off" means the relay isn't set
 Check the invite under **Invites**. If it says "Expired" or "Canceled", make them a new one. If sign-up is switched off, their phone says "Sign-up is not open right now."
 
 **"The sign-up invites file (signups.json) couldn't be read".**
-Another program, usually a backup or sync tool, had the file open when HeatCaller started. So that the invites in it aren't lost, nothing on **Online Sign-ups** can be changed until HeatCaller is restarted: the tick box, **Invite Drivers** and **Code for Someone Here** are grayed out. Invites you've already made keep working, and sign-ups made with them wait on the relay. Close anything that might have the file open and restart HeatCaller.
+Another program, usually a backup or sync tool, had the file open when HeatCaller started. So that the invites in it aren't lost, nothing on the Inbox's **Sign-ups** chip can be changed until HeatCaller is restarted: the tick box, **Invite Drivers** and **Code for Someone Here** are grayed out. Invites you've already made keep working, and sign-ups made with them wait on the relay. Close anything that might have the file open and restart HeatCaller.
 
 **"The invites couldn't be saved".**
 HeatCaller couldn't write `signups.json`, so no invite was made and nothing was emailed. Close anything that might have the file open and try again.

@@ -288,10 +288,12 @@ Since 5 November a driver's night is laid out as a pit wall. From the top:
 
 | Space | What's in it |
 |---|---|
-| **Tonight** | Tiles: **Next race** (when the card at the top isn't already showing it), **Pack in the car** ("Tap to swap"), **Car tonight** (whether a setup has been logged today), **Last result**, **Transponder** ("Tap to check it") and **Pack health** (how much each pack fades by the end of a race, with a small chart). Under them, **Lap times in my ear**, the **Alerts** card (see [Right now](#right-now)) and, when the club takes requests, **Your details**. |
+| **Tonight** | Tiles: **Next race** (when the card at the top isn't already showing it), **Pack in the car** ("Tap to swap"), **Car tonight** (whether a setup has been logged today), **Last result**, **Transponder** ("Tap to check it") and **Pack health** (how much each pack fades by the end of a race, with a small chart). Under them, **Lap times in my ear**, the **Alerts** card (see [Right now](#right-now)), **Family links** (see [Family links](#family-links)) and, when the club takes requests, **Your details**. |
 | **Races** | The night at a glance, the night's facts, **Your races** with each race's laps and charts, their race calls, and **Make a picture to share** (see [Finding your way round](#finding-your-way-round)). |
 | **Garage** | Their battery packs, cars and setups (see [Garage](#garage)). |
 | **Stats** | **Your report card**, **Driver score**, **Your progress** and **Achievements in reach** (see [How the night went](#how-the-night-went)). |
+
+**Tonight, or a date.** The first space is called **Tonight** once the driver is on tonight's check-in list, the desk is sending their live details tonight, or tonight's night is the one on offer. Otherwise it's called by the date of their last filed night instead. (Before 15 November it showed that date until their first race tonight was filed.) When the races on **Races** are from an earlier night, the top of **Races** says so, for example "From Sat 8 Nov.", and, if tonight is on, "Tonight's races show here once the desk files them."
 
 A space with nothing in it yet says so, for example "No races filed for you yet. Each one shows here, with its laps and charts, as soon as the desk files it."
 
@@ -498,9 +500,9 @@ On that card on **Home**, **Tell me before** (their name) **races** sends an ale
 
 ### Family links
 
-A family link is a read-only link to one driver's night for someone at home. Any driver can make one from their own night: under **Family links**, type who it's for ("Grandma") and press **Make a family link**, then send it. A driver can have up to 10 at once, each with **Send** and **Stop**.
+A family link is a read-only link to one driver's night for someone at home. Any driver can make one from their own night: under **Family links**, on the **Tonight** space of **Me** (since 15 November it's only there), type who it's for ("Grandma") and press **Make a family link**, then send it. A driver can have up to 10 at once, each with **Send** and **Stop**.
 
-The family page shows, in plain words, where the driver finished in each race ("3rd of 8"), their laps and best lap, their next race, and their race videos. A junior's videos are included, because it's the family's own link. It never shows the badge code, the coaching card, penalties, the garage, check-in or change requests. A stopped link, or one opened while the club isn't sharing drivers' nights, says so instead.
+The family page shows, in plain words, where the driver finished in each race ("3rd of 8"), their laps and best lap, their next race, and their race videos. A junior's videos are included, because it's the family's own link. It never shows the badge code, the coaching card, penalties, the garage, check-in or change requests. A stopped link, or one opened while the club isn't sharing drivers' nights, says so instead. The family page is always in the club's own colors, whatever look the driver has picked on their phone, and has no **Look** button.
 
 ### Sharing a race video
 
@@ -521,6 +523,29 @@ The logo sits in a block of its own beside the club's name, at the top of every 
 When someone shares a page link in a chat app, the preview shows the club name, the page name and the page's description.
 
 Every page says **on HeatCaller**, with a small sun, on the right of your club's name, and ends with a HeatCaller mark in the footer. Tap the mark for a short card about HeatCaller, with **Bring HeatCaller to your track** (to heatcaller.com) and **Close**. While a race is staging, counting down or running, the **Live** page shows a small **LIVE** badge (the word alone) above the byline; on **Me**, **Signed in** sits there. Since 5 November there's no line under each page's name saying what the page is for. Pictures made to share, from a result link or **Make a picture to share** ("Timed and called by HeatCaller"), carry the sun too. Your club's name, logo and colors stay in charge of the page; the HeatCaller mark is always on. The relay's own address, "No club here" and a paused club are drawn in HeatCaller's own look.
+
+### A driver's own look
+
+Since 15 November 2026 a driver can pick a look for the club's pages on their own phone. **Look** sits at the foot of every club page, next to the text size buttons (**A A+ A++**) and the contrast button (**Contrast**).
+
+1. Tap **Look**. A picker opens.
+2. Pick a theme: **Club colours** (the club's own look, and the one to start with), **Night**, **Daylight**, **Pit Lane**, **Paddock** or **Carbon**.
+3. Or, under **Team colour**, pick one of eight colours (**Red**, **Orange**, **Yellow**, **Green**, **Teal**, **Blue**, **Purple** or **Pink**), **On Night** or **On Daylight**.
+4. Tap **Done** (or press <kbd>Esc</kbd>) to close the picker.
+
+The button then says which look is on, for example **Look: Pit Lane**, or **Look: Teal on Daylight** for a team colour.
+
+![The Look picker on a phone, in Pit Lane: Club colours, Night, Daylight, Pit Lane (ticked), Paddock and Carbon, each with an Aa swatch, then Team colour with eight colours On Night and On Daylight](../assets/images/look-picker.jpg)
+
+- **It's kept on that phone only.** It doesn't follow the driver to another phone, and signing out on **Me** doesn't clear it.
+- **The pages open in it straight away**, with no flash of the club's colors first.
+- **High contrast still wins.** With the contrast button on, the page is in high contrast whatever look is picked.
+- **Every look is easy to read.** Each one keeps text at a contrast of at least 4.5:1 against its background.
+- **A family link** always shows the club's own colors, and has no **Look** button (see [Family links](#family-links)).
+
+A club that would rather every phone showed its own look can turn this off: untick **Let drivers change the look of the club's pages on their own phones** on the **Appearance** card of the laptop's **Themes** page (see [Appearance](../screens/looks-and-logo.md#appearance)). It's on by default. Off, the **Look** button goes and every phone shows the club's look.
+
+The **Look** button needs the relay updated (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)), and the switch needs HeatCaller updated on the race PC.
 
 ## What's published, and what never is
 

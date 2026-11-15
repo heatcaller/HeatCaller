@@ -120,7 +120,12 @@ This covers the "scan to join" posters opened from **Local Screens** (**QR code*
 | **Themes**, the list of looks | <kbd>Delete</kbd> | Deletes the selected look, if it's one you made, after asking. Built-in looks can't be deleted. |
 | **Manage Navigation** | <kbd>Space</kbd> | Ticks or unticks the selected page. |
 | **Suggest Handicaps** | <kbd>Space</kbd> | Ticks or unticks **Apply** on the selected row. |
-| **Tonight's club notes** | <kbd>Enter</kbd> | Adds the note you've typed. |
+| **Inbox** | <kbd>A</kbd> | **Approve** the picked item. Not while you're typing in a box. See [The Inbox](../race-control/inbox.md#keys). |
+| **Inbox** | <kbd>D</kbd> | **Decline**, opening the quick replies. |
+| **Inbox** | <kbd>N</kbd> | **Noted**. |
+| **Inbox** | <kbd>S</kbd> | **Later**: moves it to the foot until the race on track finishes (10 minutes at most). Again brings it back. |
+| **Inbox** | <kbd>Enter</kbd> | The main answer: **Approve**, or **Noted**. Double-clicking a row does the same. |
+| **Inbox**, **Your own note:** box | <kbd>Enter</kbd> | Adds the note you've typed. |
 
 ## Race Day → Who's Racing: scanning QR check-ins
 

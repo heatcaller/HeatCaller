@@ -48,14 +48,14 @@ Open any race from that piece on a phone and see where it lands. Then use the pi
 
 **Lead-in (seconds)** is how long before the green flag each video opens, so drivers see the grid. 10 seconds is the default.
 
-Drivers can say **It opens too early** or **It opens too late** from under the player. It comes to [Driver requests](driver-requests.md) as **Video in the wrong place**: nudge the piece, then click **Noted**.
+Drivers can say **It opens too early** or **It opens too late** from under the player. It comes to the [Inbox](../race-control/inbox.md), with the [driver requests](driver-requests.md), as **Video in the wrong place**: nudge the piece, then click **Noted**.
 
 ## Who sees video, and taking it down
 
 - **Show it on the public results too** (on by default): every race with video shows it on Results as well as on each driver's night. Off: only on each driver's own night.
 - **Juniors' races** (any race with a driver whose profile is marked junior) only ever show on each driver's own night, never on public results.
 - **Hide one race:** click **Hide races...** and tick it. **Hide a whole piece:** tick its **Hide** box. The link goes from every page at once.
-- **Drivers can ask** from under the player: **Ask the club to hide this video**. It comes to Driver requests as **Hide a race video**; **Approve** hides it.
+- **Drivers can ask** from under the player: **Ask the club to hide this video**. It comes to the Inbox as **Hide a race video**; **Approve** hides it, after asking first.
 
 Hiding only removes HeatCaller's link. To remove the video itself, edit or delete it in YouTube Studio.
 
