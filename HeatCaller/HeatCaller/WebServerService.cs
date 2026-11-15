@@ -1849,6 +1849,28 @@ public sealed partial class WebServerService
 
                 WriteJson(context, _publishedState);
                 break;
+            case "/api/overlay-version":
+                // An open overlay of the club's own asks every few seconds
+                // whether its layout has changed (stream overlay plan
+                // section 4), and redraws itself when it has.
+                {
+                    var id = context.Request.QueryString["id"] ?? string.Empty;
+                    var known = OverlayLayoutFor(id) is not null;
+                    int version;
+
+                    try
+                    {
+                        version = CustomOverlayVersion?.Invoke(id) ?? 0;
+                    }
+                    catch
+                    {
+                        version = 0;
+                    }
+
+                    WriteJson(context, "{\"v\":" + version + ",\"here\":" + (known ? "true" : "false") + "}");
+                }
+
+                break;
             case "/api/look":
                 // Which look the pages would be built with now - see
                 // LookWatchScript. Kept out of /api/state on purpose: that
@@ -2614,6 +2636,9 @@ public sealed partial class WebServerService
     /// hands back copies, never the layouts it is editing.
     /// </summary>
     internal Func<string, OverlayLayout?>? CustomOverlay { get; set; }
+
+    /// <summary>How many times one of the club's own layouts has changed - an open overlay page redraws when it moves (section 4).</summary>
+    internal Func<string, int>? CustomOverlayVersion { get; set; }
 
     /// <summary>A layout by its address part: a preset, else one of the club's own, else null.</summary>
     internal OverlayLayout? OverlayLayoutFor(string id)

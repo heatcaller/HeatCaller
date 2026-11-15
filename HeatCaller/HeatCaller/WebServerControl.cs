@@ -66,6 +66,11 @@ public sealed partial class WebServerControl : UserControl
     /// <summary>The club's own layouts, for the drop-down after the presets - set by MainForm (section 4).</summary>
     internal Func<IReadOnlyList<OverlayLayout>>? CustomOverlays { get; set; }
 
+    /// <summary>The club's own layouts, for the editor (section 4) - set by MainForm.</summary>
+    internal OverlayStore? Overlays { get; set; }
+
+    private readonly Button _btnEditStream = new() { Text = "Edit..." };
+
     // The relay's one line on this page. It is a shortcut to the Online
     // page, never the only door to it - somebody who never opens Phone &
     // Web must still be able to find the relay settings.
@@ -562,7 +567,8 @@ public sealed partial class WebServerControl : UserControl
         _lblStreamAbout.ForeColor = AppTheme.TextMuted;
         _textSize.Wear(_lblStreamAbout, () => AppTheme.SmallFont);
 
-        grid.AddRow("Stream overlay:", _cmbStreamOverlay);
+        grid.AddRow("Stream overlay:", FieldGrid.Inline(_cmbStreamOverlay, _btnEditStream));
+        _btnEditStream.Click += (_, _) => EditStreamOverlays();
         grid.AddHint(_lblStreamAbout);
         grid.AddRow("Its address:", FieldGrid.Inline(_txtStreamUrl, btnCopyStream, _btnPreviewStream, _btnPhoneStream));
         btnCopyStream.Click += (_, _) => CopyIfPresent(_txtStreamUrl.Text);
@@ -1019,6 +1025,33 @@ public sealed partial class WebServerControl : UserControl
         ShowStreamOverlay();
     }
 
+    /// <summary>Opens the layout editor on the picked layout, then lists what it leaves.</summary>
+    private void EditStreamOverlays()
+    {
+        if (Overlays is not { } store)
+        {
+            return;
+        }
+
+        var picked = (_cmbStreamOverlay.SelectedItem as StreamOverlayItem)?.Layout.Id;
+        using var editor = new OverlayEditorForm(store, StreamAddress, picked);
+        editor.ShowDialog(FindForm());
+        FillStreamOverlays();
+    }
+
+    /// <summary>A layout's address for OBS, or empty while the server is stopped.</summary>
+    private string StreamAddress(string id)
+    {
+        if (!_server.IsRunning)
+        {
+            return string.Empty;
+        }
+
+        var host = (_settings.VideoObsHost ?? string.Empty).Trim();
+        var elsewhere = host.Length > 0 && !string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) && host != "127.0.0.1";
+        return (elsewhere ? _server.LocalUrl() : $"http://localhost:{_server.Port}/") + "overlay/" + id;
+    }
+
     /// <summary>The presets, then the club's own layouts, keeping the one picked if it is still there.</summary>
     internal void FillStreamOverlays()
     {
@@ -1059,10 +1092,7 @@ public sealed partial class WebServerControl : UserControl
         // OBS on another PC (the Race video card's advice: stream from a
         // second PC, never the timing laptop) needs this laptop's network
         // address; OBS on this PC, localhost, which never changes.
-        var host = (_settings.VideoObsHost ?? string.Empty).Trim();
-        var elsewhere = host.Length > 0 && !string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) && host != "127.0.0.1";
-        var root = elsewhere ? _server.LocalUrl() : $"http://localhost:{_server.Port}/";
-        _txtStreamUrl.Text = running && layout is not null ? root + "overlay/" + layout.Id : string.Empty;
+        _txtStreamUrl.Text = layout is null ? string.Empty : StreamAddress(layout.Id);
         _btnPreviewStream.Enabled = running && layout is not null;
         _btnPhoneStream.Enabled = running && layout is not null && layout.Id != OverlayLayouts.ResultsId;
     }

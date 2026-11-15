@@ -700,6 +700,8 @@ public sealed partial class WebServerService
         const DEMO_NAMES = ['Mia Kent', 'Sam Tr', 'Terry Byte', 'Al Gorithim', 'Ella Vator', 'Annie Wayout', 'Rob Otics', 'Cy Clone'];
         // &at=60 starts the loop that many seconds in: 0 between races, 20
         // the grid, 35 the start, 95 a lead change, 140 the result.
+        // A page opened from a file has no laptop to ask.
+        const DEMO_ONLY_STATIC = location.protocol === 'file:';
         const DEMO_START = Date.now() - Math.max(0, Number(params.get('at')) || 0) * 1000;
         // "about 19:40", that many minutes from now, as the laptop writes it.
         function demoAbout(minutes){ const t = new Date(Date.now() + minutes * 60000); return 'about ' + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0'); }
@@ -1083,6 +1085,21 @@ public sealed partial class WebServerService
           // tower's foot while the tower shows, or here, where the layout put it.
           const towerShowing = document.getElementById('tower').style.opacity === '1';
           show('mark', want('mark') && (placed('mark') || !towerShowing && !PARTS.tower));
+        }
+
+        // A CLUB'S OWN LAYOUT REDRAWS AS IT IS EDITED (section 4): every three
+        // seconds it asks whether it has changed, and reloads when it has -
+        // or when it has been deleted, to say so in words.
+        if (!PHONE && LAYOUT && LAYOUT.custom && !DEMO_ONLY_STATIC){
+          let layoutSeen = null;
+          setInterval(async () => {
+            try {
+              const a = await (await fetch('/api/overlay-version?id=' + encodeURIComponent(LAYOUT.id), { cache: 'no-store' })).json();
+              const now = a.v + '|' + a.here;
+              if (layoutSeen === null) layoutSeen = now;
+              else if (now !== layoutSeen) location.reload();
+            } catch (e) { /* the laptop is away; try again */ }
+          }, 3000);
         }
 
         // The phone view only frames the overlay; the frame does the drawing.

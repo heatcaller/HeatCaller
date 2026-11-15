@@ -2835,6 +2835,22 @@ public partial class MainForm
             Dock = DockStyle.Fill,
         };
 
+        // THE CLUB'S OWN STREAM OVERLAYS (stream overlay plan section 4):
+        // overlays.json, read by the Wi-Fi server for /overlay/<id> and
+        // edited from this page's Stream overlay row.
+        var overlays = OverlayStore.Load();
+
+        if (overlays.Problem.Length > 0)
+        {
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [overlays] {overlays.Problem}");
+        }
+
+        _webServer.CustomOverlay = overlays.Get;
+        _webServer.CustomOverlayVersion = overlays.Version;
+        webServer.Overlays = overlays;
+        webServer.CustomOverlays = () => overlays.Layouts;
+        webServer.FillStreamOverlays();
+
         pageWebServer.Controls.Add(webServer);
         _localScreens = webServer;
 

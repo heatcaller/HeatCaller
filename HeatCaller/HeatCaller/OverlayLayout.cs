@@ -275,7 +275,8 @@ public static class OverlayLayouts
             };
         }
 
-        return JsonSerializer.Serialize(new { id = layout.Id, elements });
+        // A club's own layout watches for its own changes (section 4).
+        return JsonSerializer.Serialize(new { id = layout.Id, custom = BuiltIn(layout.Id) is null, elements });
     }
 
     /// <summary>"tower", "clublogo" - the element's name in the page and in ?hide=.</summary>
