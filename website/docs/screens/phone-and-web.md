@@ -121,6 +121,10 @@ A driver's report card for the night is on their own night page on the club's on
 
 A clean lap is a flying lap no slower than 7% over their best on that layout tonight, so a crash or a pit stop doesn't count against them. Every line is worked out from the timed laps, and a line with too little to go on is left out rather than guessed. A driver who ran two layouts gets the card for the layout of their latest run.
 
+### Stream overlays
+
+**Stream overlay:** picks one of seven ready-made layouts, or one of your own, and **Its address:** is the one to paste into OBS. **Preview** shows it with a made-up race, **Phone view** shows it as most viewers see it, and **Edit** opens the **Stream overlays** window to make your own. **Junior drivers:** sets how an under-18's name shows on them. See [Stream overlays](stream-overlays.md).
+
 ### OBS overlay
 
 The overlay address (`/overlay`) is the results table with a transparent background and no sponsor slides, so it sits cleanly over video. In OBS, add a **Browser** source and paste the **OBS overlay:** address. An OBS source still set to the old address, `/?overlay=1`, keeps working.

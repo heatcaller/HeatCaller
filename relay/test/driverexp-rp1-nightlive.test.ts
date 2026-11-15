@@ -107,7 +107,8 @@ describe("the code stays out of every address", () => {
 
     for (const s of page.sent) {
       assert.doesNotMatch(s.url, new RegExp(CODE), "never in an address");
-      assert.match(s.url, /^\/api\/v1\/c\/acme-rc\/(night|checkin\/one|checkin\/tap|driver\/garage|video\/night)$/);
+      // family/manage (14 Nov 2026, family links): the same - a fixed path, the code in the body.
+      assert.match(s.url, /^\/api\/v1\/c\/acme-rc\/(night|checkin\/one|checkin\/tap|driver\/garage|video\/night|family\/manage)$/);
       assert.equal(s.body["id"], CODE);
     }
 

@@ -95,6 +95,10 @@ public sealed class BugHunt20PlanCloseObsPaceTests
         Assert.Equal(first, ObsLink.TargetOf(settings));
         settings.VideoEnabled = false;
         Assert.Null(ObsLink.TargetOf(settings));
+
+        // Scene switching (stream overlay plan 6.1) needs the link too.
+        settings.ObsSwitchScenes = true;
+        Assert.Equal(first, ObsLink.TargetOf(settings));
     }
 
     [Fact]

@@ -18,6 +18,7 @@ import {
   manifest,
   missingPage,
   nightPage,
+  familyPage,
   pausedPage,
   relayNoticePage,
   resultsPage,
@@ -75,7 +76,7 @@ import { LapVoiceLibrary } from "./lapvoice.js";
 import { STREAM_FORMAT, VOICE_PLAN_OFF, type MeterUsage, type VoicePlan, type VoiceService } from "./voice.js";
 import { isMeterName, type TopUpRequests } from "./topuprequests.js";
 import type { UsageLog } from "./usagelog.js";
-import { BROADCAST_TTL_SECONDS, myNightUrl, PUSH_CHANNEL, pushKindsFrom, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
+import { BROADCAST_TTL_SECONDS, followNameFrom, myNightUrl, PUSH_CHANNEL, pushKindsFrom, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
 import { PAGES_BUILD } from "./pagebuild.js";
 import { nextNightIcs } from "./ics.js";
 import { hiddenAfter, liveVideo, mergedStreamBody, raceVideo, STREAM_MAX_PIECES, STREAM_NIGHTS_KEPT, streamFrom, streamNightId, VIDEO_CHECK_FOR_MS, VideoCheck, type OEmbedAsk, type RaceVideo, type Stream } from "./video.js";
@@ -2468,6 +2469,15 @@ export class Relay {
             return;
           }
 
+          // A family link (overlay plan 7.1): the code rides in the
+          // fragment, as the night's does, so this route never sees it and
+          // serves the page whatever the answer will be.
+          if (page === "family") {
+            const context = await this.contextFor(request, tenant.club);
+            sendHtml(response, 200, familyPage(tenant.club, tenant.name, context), context.nonce);
+            return;
+          }
+
           // A driver's own garage (5 Nov 2026) - opened from their night
           // with the same code in the fragment, and served whatever the
           // answer will be for the night page's reasons.
@@ -2778,6 +2788,19 @@ export class Relay {
       return;
     }
 
+    // FAMILY LINKS (14 Nov 2026, stream overlay plan 7.1, Asher: "family
+    // links-any driver"): a driver makes, lists and stops them with their
+    // badge code; a family reads with theirs. See FAMILY_CHANNEL.
+    if (method === "POST" && rest.length === 2 && rest[0] === "family" && rest[1] === "manage") {
+      await this.familyManage(request, response, club);
+      return;
+    }
+
+    if (method === "POST" && rest.length === 2 && rest[0] === "family" && rest[1] === "read") {
+      await this.familyRead(request, response, club);
+      return;
+    }
+
     // PUSH ALERTS (6 Nov 2026) - see push.ts and pushSignUp. The key the
     // browser needs is public; signing a phone up or off takes the badge
     // code, in the body, as reading the night does.
@@ -2802,6 +2825,13 @@ export class Relay {
 
     if (method === "POST" && rest.length === 2 && rest[0] === "push" && (rest[1] === "subscribe" || rest[1] === "unsubscribe")) {
       await this.pushSignUp(request, response, club, rest[1] === "subscribe");
+      return;
+    }
+
+    // Follower alerts (14 Nov 2026, stream overlay plan 7.1): a phone
+    // following a driver by name, no badge code - see push.ts FOLLOW_CHANNEL.
+    if (method === "POST" && rest.length === 3 && rest[0] === "push" && rest[1] === "follow" && (rest[2] === "subscribe" || rest[2] === "unsubscribe")) {
+      await this.followSignUp(request, response, club, rest[2] === "subscribe");
       return;
     }
 
@@ -3222,6 +3252,13 @@ export class Relay {
           void this.push.afterLive(club, existing?.body, body);
         }
 
+        // Follower alerts (overlay plan 7.1): a followed driver's race now
+        // next. From the programme as the public sees it - only a club that
+        // publishes line-ups names anybody in it.
+        if (spec.name === "programme" && this.push !== undefined && !unreadable) {
+          void this.push.afterProgramme(club, existing?.body, doc.body);
+        }
+
         if (spec.name === "checkin") {
           this.forgetCheckin(club);
 
@@ -3342,6 +3379,11 @@ export class Relay {
         // their result in. Not waited for, and never throws.
         if (spec.name === NIGHTS_CHANNEL && this.push !== undefined && !unreadable) {
           void this.push.afterNight(club, itemId as string, existing?.body, body);
+        }
+
+        // Follower alerts (overlay plan 7.1): a followed driver's result.
+        if (spec.name === "results" && this.push !== undefined && !unreadable) {
+          void this.push.afterResult(club, itemId as string, existing?.body, body);
         }
 
         await this.prune(club, spec.name, victims);
@@ -7130,6 +7172,84 @@ export class Relay {
     sendJson(response, 200, { ok: true, badges: outcome.badges, sent: outcome.sent, failed: outcome.failed });
   }
 
+  /**
+   * A phone signing up for (or off) alerts about a driver it follows by name
+   * (stream overlay plan 7.1). Public, as following is: no badge code. The
+   * name must be one the club's own running order names now - so the relay
+   * can't be filled with made-up names - and the phone gets only the two
+   * kinds a follower can have, their race next and their result.
+   */
+  private async followSignUp(request: IncomingMessage, response: ServerResponse, club: string, on: boolean): Promise<void> {
+    const who = `${club}|${clientAddress(request)}`;
+
+    if (this.push === undefined) {
+      sendJson(response, 404, { ok: false, error: "This relay does not send alerts." });
+      return;
+    }
+
+    if (this.checkinReads.blocked(who)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
+      return;
+    }
+
+    this.checkinReads.hit(who);
+    const body = await readBody(request, response, CHECKIN_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    const name = followNameFrom(body["name"]);
+
+    if (name === "") {
+      sendJson(response, 400, { ok: false, error: "Which driver?" });
+      return;
+    }
+
+    const push = this.push;
+
+    if (!on) {
+      const endpoint = isPlainObject(body["sub"]) && typeof body["sub"]["endpoint"] === "string" ? body["sub"]["endpoint"] : "";
+      await push.followUnsubscribe(club, name, endpoint);
+      sendJson(response, 200, { ok: true });
+      return;
+    }
+
+    const programme = (await this.store.getSnapshot(club, "programme").catch(() => undefined))?.body;
+    const lines = isPlainObject(programme) && programme["lineups"] === true && Array.isArray(programme["lines"]) ? programme["lines"] : [];
+    const lower = name.toLowerCase();
+    const named = lines.some((l) => isPlainObject(l) && Array.isArray(l["drivers"]) && l["drivers"].some((d) => typeof d === "string" && d.toLowerCase() === lower));
+
+    if (!named) {
+      sendJson(response, 404, { ok: false, error: name + " isn't in the club's running order today. Try again on a race night." });
+      return;
+    }
+
+    const parsed = pushSubFrom(body["sub"], this.now().toISOString());
+    const kinds = pushKindsFrom(body["kinds"]);
+    const sub = parsed === undefined ? undefined : kinds === undefined ? parsed : { ...parsed, kinds };
+
+    if (sub === undefined) {
+      sendJson(response, 400, { ok: false, error: "This phone's alerts could not be set up." });
+      return;
+    }
+
+    const outcome = await push.followSubscribe(club, name, sub);
+
+    if (outcome === "full") {
+      sendJson(response, 507, { ok: false, error: "This club cannot take any more phones for alerts." });
+      return;
+    }
+
+    if (outcome === "bad") {
+      sendJson(response, 400, { ok: false, error: "Which driver?" });
+      return;
+    }
+
+    sendJson(response, 200, { ok: true });
+  }
+
   private async pushSignUp(request: IncomingMessage, response: ServerResponse, club: string, on: boolean): Promise<void> {
     const who = `${club}|${clientAddress(request)}`;
 
@@ -7209,6 +7329,151 @@ export class Relay {
     }
 
     sendJson(response, 200, { ok: true });
+  }
+
+  /**
+   * FAMILY LINKS (overlay plan 7.1): {id: badge code, action: "list" | "make"
+   * | "stop", label?, code?}. Only the driver - whoever holds the badge code -
+   * makes or stops them, and only while the club is opening drivers' nights.
+   * At most FAMILY_LINKS_PER_DRIVER at once: a link for each relative, each
+   * stopped on its own.
+   */
+  private async familyManage(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = `${club}|${clientAddress(request)}`;
+
+    if (this.checkinReads.blocked(who)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
+      return;
+    }
+
+    this.checkinReads.hit(who);
+    const body = await readBody(request, response, CHECKIN_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    const id = typeof body["id"] === "string" ? body["id"].trim().toLowerCase() : "";
+
+    if (!DRIVER_ID.test(id) || !(await this.nightsOpenFor(club))) {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    const known = (await this.liveEntryOf(club, id)) !== undefined || (await this.store.getItem(club, NIGHTS_CHANNEL, id)) !== undefined;
+
+    if (!known) {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    const action = body["action"];
+
+    await this.withLock(club, async () => {
+      const mine = (await this.store.listItems(club, FAMILY_CHANNEL).catch(() => []))
+        .filter((item) => FAMILY_CODE.test(item.id) && isPlainObject(item.doc.body) && item.doc.body["d"] === id);
+
+      if (action === "make") {
+        if (mine.length >= FAMILY_LINKS_PER_DRIVER) {
+          sendJson(response, 409, { ok: false, error: `You have ${FAMILY_LINKS_PER_DRIVER} family links already. Stop one to make another.` });
+          return;
+        }
+
+        const label = familyLabelFrom(body["label"]);
+        const code = randomBytes(12).toString("hex");
+        const at = this.now();
+        await this.store.putItem(club, FAMILY_CHANNEL, code, { seq: at.getTime(), publishedAt: at.toISOString(), body: { d: id, label, made: at.toISOString() } });
+        sendJson(response, 200, { ok: true, code, label });
+        return;
+      }
+
+      if (action === "stop") {
+        const code = typeof body["code"] === "string" ? body["code"].trim().toLowerCase() : "";
+
+        if (mine.some((item) => item.id === code)) {
+          await this.store.deleteItem(club, FAMILY_CHANNEL, code).catch(() => undefined);
+        }
+
+        sendJson(response, 200, { ok: true });
+        return;
+      }
+
+      sendJson(response, 200, {
+        ok: true,
+        links: mine.map((item) => ({
+          code: item.id,
+          label: familyLabelFrom((item.doc.body as Record<string, unknown>)["label"]),
+          made: String((item.doc.body as Record<string, unknown>)["made"] ?? ""),
+        })),
+      });
+    });
+  }
+
+  /**
+   * A family reading through their link (overlay plan 7.1): {code} ->
+   * {driver, title, when, lines, races, next, videos}. Read-only, and only
+   * these: the driver's races tonight with their places and laps, their
+   * next race, and their race videos - juniors' included, it is the
+   * family's own link. Never the garage, the waiver, check-in, the
+   * coaching card, change requests or anybody else's night.
+   */
+  private async familyRead(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = `${club}|${clientAddress(request)}`;
+
+    if (this.checkinReads.blocked(who)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
+      return;
+    }
+
+    this.checkinReads.hit(who);
+    const body = await readBody(request, response, CHECKIN_MAX_BODY);
+    const code = isPlainObject(body) && typeof body["code"] === "string" ? body["code"].trim().toLowerCase() : "";
+
+    if (!FAMILY_CODE.test(code) || !(await this.nightsOpenFor(club))) {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    const link = await this.store.getItem(club, FAMILY_CHANNEL, code).catch(() => undefined);
+    const id = link !== undefined && isPlainObject(link.body) && typeof link.body["d"] === "string" ? link.body["d"] : "";
+
+    if (!DRIVER_ID.test(id)) {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    const night = await this.store.getItem(club, NIGHTS_CHANNEL, id).catch(() => undefined);
+    const live = await this.liveEntryOf(club, id);
+    const nb = night !== undefined && isPlainObject(night.body) ? (night.body as Record<string, unknown>) : {};
+    const races = Array.isArray(nb["races"]) ? (nb["races"] as unknown[]).filter(isPlainObject).slice(0, 60) : [];
+
+    // Their videos, as their own night has them (videoForNight), juniors' included.
+    const stream = await this.streamOf(club);
+    const videos: Record<string, RaceVideo> = {};
+
+    for (const r of races) {
+      if (typeof r["sid"] !== "string") continue;
+      const result = await this.store.getItem(club, "results", r["sid"]).catch(() => undefined);
+      const rb = isPlainObject(result?.body) ? (result.body as Record<string, unknown>) : undefined;
+      if (rb === undefined) continue;
+      const video = raceVideo(stream, { sid: r["sid"], startedUtc: rb["startedUtc"], endedUtc: rb["endedUtc"] }, false, r);
+      if (video !== undefined) videos[r["sid"]] = video;
+    }
+
+    const next = live !== undefined && isPlainObject(live.entry["next"]) ? live.entry["next"] : null;
+
+    sendJson(response, 200, {
+      ok: true,
+      label: familyLabelFrom(link?.body && isPlainObject(link.body) ? link.body["label"] : ""),
+      driver: typeof nb["driver"] === "string" ? nb["driver"] : "",
+      title: typeof nb["title"] === "string" ? nb["title"] : "",
+      when: typeof nb["when"] === "string" ? nb["when"] : "",
+      lines: Array.isArray(nb["lines"]) ? (nb["lines"] as unknown[]).filter((l) => typeof l === "string").slice(0, 20) : [],
+      races: races.map((r) => familyRaceFrom(r)),
+      next: next === null ? null : familyNextFrom(next as Record<string, unknown>),
+      videos,
+    });
   }
 
   private async readOneNight(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
@@ -7524,6 +7789,15 @@ export class Relay {
    * driver's list back - see PushService.forget.
    */
   private async forgetPushSubs(club: string, wipe?: () => Promise<void>): Promise<void> {
+    // Family links go with the nights they open (overlay plan 7.1): a club
+    // that stops sharing drivers' nights leaves no link behind to come back
+    // to life if it starts again.
+    if (wipe === undefined) {
+      for (const item of await this.store.itemSizes(club, FAMILY_CHANNEL).catch(() => [])) {
+        await this.store.deleteItem(club, FAMILY_CHANNEL, item.id).catch(() => undefined);
+      }
+    }
+
     if (this.push !== undefined) {
       await this.push.forget(club, wipe);
       return;
@@ -11497,4 +11771,38 @@ function sendPublicBytes(response: ServerResponse, status: number, bytes: Buffer
   });
 
   response.end(bytes);
+}
+
+
+/** Where a club's family links are kept: one item per family code. */
+const FAMILY_CHANNEL = "familylinks";
+
+/** A family code: 24 hex digits, never a badge code's 20. */
+const FAMILY_CODE = /^[0-9a-f]{24}$/;
+
+/** Family links one driver may have at once (Asher, 14 Nov 2026: "I think that's a good number"). */
+export const FAMILY_LINKS_PER_DRIVER = 10;
+
+/** "Grandma": a short label, letters, digits and a few marks; "" for none. */
+function familyLabelFrom(value: unknown): string {
+  const v = typeof value === "string" ? value.replace(/[\u0000-\u001f\u007f]/g, " ").trim().replace(/\s+/g, " ") : "";
+  return v.length <= 30 && /^[\p{L}\p{M}\p{N}'., -]*$/u.test(v) ? v : "";
+}
+
+/** One race as a family link shows it: what happened, nothing of the driver's own working. */
+function familyRaceFrom(r: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of ["sid", "label", "at", "kind", "pos", "of", "laps", "bestMs", "car", "out"]) {
+    if (r[key] !== undefined) out[key] = r[key];
+  }
+  return out;
+}
+
+/** Their next race as a family link shows it: which race, how far away, and when. */
+function familyNextFrom(n: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of ["race", "away", "now", "staged", "eta", "words"]) {
+    if (n[key] !== undefined) out[key] = n[key];
+  }
+  return out;
 }

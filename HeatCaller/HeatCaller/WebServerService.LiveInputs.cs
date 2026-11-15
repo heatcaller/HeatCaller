@@ -28,7 +28,13 @@ public sealed partial class WebServerService
         IReadOnlyList<string> WebKpis,
         IReadOnlyList<string> RelayKpis,
         string OnDeck,
-        IReadOnlyList<(string Moment, string Sponsor)>? Presented);
+        IReadOnlyList<(string Moment, string Sponsor, string Logo, string Id)>? Presented,
+        IReadOnlyList<SponsorStream.Logo>? SponsorLogos = null,
+        int RacedTonight = 0,
+        DateTime? ProvisionalUntilUtc = null);
+
+    /// <summary>When the window's side first saw the race finished, for the provisional result (6.9). UI side only.</summary>
+    private DateTime? _finishedSeenUtc;
 
     /// <summary>The last CaptureUiSide, threaded mode only. Replaced whole.</summary>
     private volatile UiSide? _uiSide;
@@ -60,12 +66,12 @@ public sealed partial class WebServerService
         // Presents list is edited in place on the Sponsors page, so only the
         // answer is safe to hand to another thread. Guarded on its own, as
         // AddBroadcast's was: the board must not go for the sake of them.
-        List<(string Moment, string Sponsor)>? presented;
+        List<(string Moment, string Sponsor, string Logo, string Id)>? presented;
 
         try
         {
             var sponsors = _sponsors?.Current.Sponsors;
-            presented = new List<(string Moment, string Sponsor)>();
+            presented = new List<(string Moment, string Sponsor, string Logo, string Id)>();
 
             foreach (var moment in new[]
                      {
@@ -76,7 +82,11 @@ public sealed partial class WebServerService
             {
                 if (SponsoredMoments.SponsorFor(sponsors, moment) is { } sponsor)
                 {
-                    presented.Add((moment.ToString(), sponsor.Name.Trim()));
+                    // The name as it is WRITTEN (14 Nov 2026, stream overlay plan section 1):
+                    // a graphic is read, not heard, so "Smith & Co." rather than the
+                    // "Smith and co" spelt for the voice. And their logo's address, empty
+                    // for none.
+                    presented.Add((moment.ToString(), RelaySponsors.NameOnTheWeb(sponsor), SponsorLogoUrl(sponsor.LogoFileName), sponsor.Id));
                 }
             }
         }
@@ -85,7 +95,54 @@ public sealed partial class WebServerService
             presented = null;
         }
 
-        return new UiSide(webKpis, relayKpis, onDeck, presented);
+        // The sponsors with a logo, for the stream's sponsor graphic (overlay
+        // plan section 5) - copied out, like the presenters, so another
+        // thread never reads a booking as it is edited.
+        List<SponsorStream.Logo>? logos;
+
+        try
+        {
+            logos = (_sponsors?.Current.Sponsors ?? new List<SponsorBooking>())
+                .Where(s => s.Enabled && SponsorLogo.IsLogoName(s.LogoFileName) && RelaySponsors.NameOnTheWeb(s).Length > 0)
+                .Select(s => new SponsorStream.Logo(s.Id, RelaySponsors.NameOnTheWeb(s), SponsorLogoUrl(s.LogoFileName), Math.Max(1, s.Weight)))
+                .ToList();
+        }
+        catch
+        {
+            logos = null;
+        }
+
+        // How many races have run today (overlay plan 7.6), so the stream can
+        // tell "starting soon" from "that's it for tonight".
+        var raced = 0;
+
+        try
+        {
+            raced = _schedule?.All.Count(e => e.ActualStartUtc is not null) ?? 0;
+        }
+        catch
+        {
+            raced = 0;
+        }
+
+        // PROVISIONAL (overlay plan 6.9): a result is provisional for the
+        // protest window after the race finishes - the window Driver Requests
+        // and the phones already use (ProtestWindow). Counted from the moment
+        // this side first saw the race finished.
+        DateTime? provisionalUntil = null;
+
+        if (_race.State == RaceState.Finished)
+        {
+            _finishedSeenUtc ??= DateTime.UtcNow;
+            var minutes = ProtestWindow.Minutes(_settings?.ProtestMinutes, null);
+            provisionalUntil = minutes > 0 ? _finishedSeenUtc.Value.AddMinutes(minutes) : null;
+        }
+        else
+        {
+            _finishedSeenUtc = null;
+        }
+
+        return new UiSide(webKpis, relayKpis, onDeck, presented, logos, raced, provisionalUntil);
     }
 
     /// <summary>

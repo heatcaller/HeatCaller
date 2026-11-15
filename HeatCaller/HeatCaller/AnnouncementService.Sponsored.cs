@@ -193,10 +193,20 @@ public sealed partial class AnnouncementService
         RaiseMoment(new BroadcastMoment("lead", "Lead change", line, SponsorOf(SponsoredMoment.LeadChange)?.Name.Trim()));
     }
 
-    /// <summary>The banner for an achievement: its name over the driver's.</summary>
-    private void PostMilestoneMoment(string transponderId, string badgeName) =>
-        RaiseMoment(new BroadcastMoment("milestone", badgeName, ScreenNameFor(transponderId),
+    /// <summary>
+    /// The banner for an achievement: its name over the driver's - or, for
+    /// the firsts and bests a family at home cheers (14 Nov 2026, stream
+    /// overlay plan 7.3), the plain words over the driver's name and the
+    /// badge: "FIRST PODIUM" / "Mia K · On the Box".
+    /// </summary>
+    private void PostMilestoneMoment(string transponderId, string badgeName)
+    {
+        var plain = MilestoneWords.PlainTitle(badgeName);
+        var who = ScreenNameFor(transponderId);
+
+        RaiseMoment(new BroadcastMoment("milestone", plain ?? badgeName, plain is null ? who : who + " · " + badgeName,
             SponsorOf(SponsoredMoment.Milestones)?.Name.Trim()));
+    }
 
     /// <summary>
     /// A driver's name as a screen should show it - the real name, not the

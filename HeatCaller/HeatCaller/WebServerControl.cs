@@ -41,6 +41,36 @@ public sealed partial class WebServerControl : UserControl
     private readonly TextBox _txtOverlayUrl = new();
     private readonly TextBox _txtBroadcastUrl = new();
 
+    /// <summary>
+    /// STREAM OVERLAYS (14 Nov 2026, stream overlay plan section 3): pick a
+    /// layout - a preset or one of the club's own - and copy its address
+    /// into OBS, or preview it with a made-up race (?demo=1).
+    /// </summary>
+    private readonly ComboBox _cmbStreamOverlay = new();
+    private readonly TextBox _txtStreamUrl = new();
+    private readonly Button _btnPreviewStream = new() { Text = "Preview" };
+
+    /// <summary>The preview as a phone viewer sees it (overlay plan 6.8): the whole picture at 390 px wide.</summary>
+    private readonly Button _btnPhoneStream = new() { Text = "Phone view" };
+    private readonly Label _lblStreamAbout = new();
+
+    /// <summary>How a junior's name shows on the stream (overlay plan 7.5): "Mia K", "Mia" or in full.</summary>
+    private readonly ComboBox _cmbJuniorNames = new();
+    private static readonly (string Rule, string Words)[] JuniorNameChoices =
+    {
+        (JuniorNames.Initial, "First name and initial (Mia K)"),
+        (JuniorNames.First, "First name only (Mia)"),
+        (JuniorNames.Full, "Full name"),
+    };
+
+    /// <summary>The club's own layouts, for the drop-down after the presets - set by MainForm (section 4).</summary>
+    internal Func<IReadOnlyList<OverlayLayout>>? CustomOverlays { get; set; }
+
+    /// <summary>The club's own layouts, for the editor (section 4) - set by MainForm.</summary>
+    internal OverlayStore? Overlays { get; set; }
+
+    private readonly Button _btnEditStream = new() { Text = "Edit..." };
+
     // The relay's one line on this page. It is a shortcut to the Online
     // page, never the only door to it - somebody who never opens Phone &
     // Web must still be able to find the relay settings.
@@ -527,6 +557,57 @@ public sealed partial class WebServerControl : UserControl
         grid.AddRow("Phone remote:", FieldGrid.Inline(_txtRemoteUrl, btnCopyRemote, btnQrRemote));
         grid.AddRow("Driver check-in:", FieldGrid.Inline(_txtCheckInUrl, btnCopyCheckIn, btnQrCheckIn));
         grid.AddRow("Race manager:", FieldGrid.Inline(_txtManageUrl, btnCopyManage, btnQrManage));
+        var btnCopyStream = new Button { Text = "Copy" };
+        _txtStreamUrl.ReadOnly = true;
+        _cmbStreamOverlay.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbStreamOverlay.SelectedIndexChanged += (_, _) => ShowStreamOverlay();
+        FillStreamOverlays();
+
+        _lblStreamAbout.AutoSize = true;
+        _lblStreamAbout.ForeColor = AppTheme.TextMuted;
+        _textSize.Wear(_lblStreamAbout, () => AppTheme.SmallFont);
+
+        grid.AddRow("Stream overlay:", FieldGrid.Inline(_cmbStreamOverlay, _btnEditStream));
+        _btnEditStream.Click += (_, _) => EditStreamOverlays();
+        grid.AddHint(_lblStreamAbout);
+        grid.AddRow("Its address:", FieldGrid.Inline(_txtStreamUrl, btnCopyStream, _btnPreviewStream, _btnPhoneStream));
+        btnCopyStream.Click += (_, _) => CopyIfPresent(_txtStreamUrl.Text);
+        _btnPhoneStream.Click += (_, _) =>
+        {
+            if (_txtStreamUrl.Text.Length > 0)
+            {
+                AppSupport.Open(_txtStreamUrl.Text + "?demo=1&phone=1");
+            }
+        };
+        _btnPreviewStream.Click += (_, _) =>
+        {
+            if (_txtStreamUrl.Text.Length > 0)
+            {
+                AppSupport.Open(_txtStreamUrl.Text + "?demo=1");
+            }
+        };
+
+        _cmbJuniorNames.DropDownStyle = ComboBoxStyle.DropDownList;
+        foreach (var (_, words) in JuniorNameChoices)
+        {
+            _cmbJuniorNames.Items.Add(words);
+        }
+
+        _cmbJuniorNames.SelectedIndex = Math.Max(0, Array.FindIndex(JuniorNameChoices, c => c.Rule == JuniorNames.Rule(_settings.JuniorNamesOnStream)));
+        _cmbJuniorNames.SelectedIndexChanged += (_, _) =>
+        {
+            var rule = JuniorNameChoices[Math.Max(0, _cmbJuniorNames.SelectedIndex)].Rule;
+
+            if (rule != JuniorNames.Rule(_settings.JuniorNamesOnStream))
+            {
+                _settings.JuniorNamesOnStream = rule;
+                _settings.Save();
+            }
+        };
+
+        grid.AddRow("Junior drivers:", _cmbJuniorNames);
+        grid.AddHint("How an under-18's name shows on every stream overlay and its captions. A stream is public; the room and their own night keep the full name.");
+
         grid.AddRow("OBS overlay:", FieldGrid.Inline(_txtOverlayUrl, btnCopyOverlay));
 
         // The broadcast graphics for a stream - see WebServerService.Camera.
@@ -549,8 +630,9 @@ public sealed partial class WebServerControl : UserControl
 
         var lblUrlHint = new Label
         {
-            Text = "All devices must be on the same Wi-Fi. The OBS overlay is the results table with a transparent "
-                 + "background and no sponsor slides. The check-in wall poster is Self Check-In Poster on Race Day > Who's Racing.",
+            Text = "All devices must be on the same Wi-Fi. Stream overlay is the one to paste into OBS as a Browser source "
+                 + "(1920 x 1080); Preview shows it with a made-up race. The OBS overlay and Broadcast graphics addresses "
+                 + "still work, for sources already set up. The check-in wall poster is Self Check-In Poster on Race Day > Who's Racing.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -686,10 +768,13 @@ public sealed partial class WebServerControl : UserControl
             Fit(box, pin);
         }
 
-        foreach (var box in new[] { _txtRemoteUrl, _txtCheckInUrl, _txtManageUrl, _txtOverlayUrl, _txtBroadcastUrl })
+        foreach (var box in new[] { _txtRemoteUrl, _txtCheckInUrl, _txtManageUrl, _txtOverlayUrl, _txtBroadcastUrl, _txtStreamUrl })
         {
             Fit(box, url);
         }
+
+        Fit(_cmbStreamOverlay, url);
+        Fit(_cmbJuniorNames, url);
 
         // Only when it changed: a new width lays the grid out again.
         static void Fit(Control field, int width)
@@ -936,6 +1021,86 @@ public sealed partial class WebServerControl : UserControl
             _txtOverlayUrl.Text = string.Empty;
             _txtBroadcastUrl.Text = string.Empty;
         }
+
+        ShowStreamOverlay();
+    }
+
+    /// <summary>Opens the layout editor on the picked layout, then lists what it leaves.</summary>
+    private void EditStreamOverlays()
+    {
+        if (Overlays is not { } store)
+        {
+            return;
+        }
+
+        var picked = (_cmbStreamOverlay.SelectedItem as StreamOverlayItem)?.Layout.Id;
+        using var editor = new OverlayEditorForm(store, StreamAddress, picked, _settings);
+        editor.ShowDialog(FindForm());
+        FillStreamOverlays();
+    }
+
+    /// <summary>A layout's address for OBS, or empty while the server is stopped.</summary>
+    private string StreamAddress(string id)
+    {
+        if (!_server.IsRunning)
+        {
+            return string.Empty;
+        }
+
+        var host = (_settings.VideoObsHost ?? string.Empty).Trim();
+        var elsewhere = host.Length > 0 && !string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) && host != "127.0.0.1";
+        return (elsewhere ? _server.LocalUrl() : $"http://localhost:{_server.Port}/") + "overlay/" + id;
+    }
+
+    /// <summary>The presets, then the club's own layouts, keeping the one picked if it is still there.</summary>
+    internal void FillStreamOverlays()
+    {
+        var picked = (_cmbStreamOverlay.SelectedItem as StreamOverlayItem)?.Layout.Id ?? OverlayLayouts.AutoId;
+        var layouts = OverlayLayouts.BuiltIns.ToList();
+
+        try
+        {
+            layouts.AddRange(CustomOverlays?.Invoke() ?? Array.Empty<OverlayLayout>());
+        }
+        catch
+        {
+            // The club's own could not be read: the presets still work.
+        }
+
+        _cmbStreamOverlay.BeginUpdate();
+        _cmbStreamOverlay.Items.Clear();
+
+        foreach (var layout in layouts)
+        {
+            _cmbStreamOverlay.Items.Add(new StreamOverlayItem(layout));
+        }
+
+        _cmbStreamOverlay.EndUpdate();
+
+        var again = _cmbStreamOverlay.Items.Cast<StreamOverlayItem>().ToList().FindIndex(i => i.Layout.Id == picked);
+        _cmbStreamOverlay.SelectedIndex = again >= 0 ? again : 0;
+    }
+
+    /// <summary>The picked layout's line and address. localhost, as for the broadcast graphics: OBS runs on this PC.</summary>
+    private void ShowStreamOverlay()
+    {
+        var layout = (_cmbStreamOverlay.SelectedItem as StreamOverlayItem)?.Layout;
+        _lblStreamAbout.Text = layout?.About ?? string.Empty;
+
+        var running = _server.IsRunning;
+
+        // OBS on another PC (the Race video card's advice: stream from a
+        // second PC, never the timing laptop) needs this laptop's network
+        // address; OBS on this PC, localhost, which never changes.
+        _txtStreamUrl.Text = layout is null ? string.Empty : StreamAddress(layout.Id);
+        _btnPreviewStream.Enabled = running && layout is not null;
+        _btnPhoneStream.Enabled = running && layout is not null && layout.Id != OverlayLayouts.ResultsId;
+    }
+
+    /// <summary>A layout in the drop-down, shown by its name.</summary>
+    private sealed record StreamOverlayItem(OverlayLayout Layout)
+    {
+        public override string ToString() => Layout.BuiltIn ? Layout.Name : Layout.Name + " (yours)";
     }
 
     /// <summary>

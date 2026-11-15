@@ -79,6 +79,11 @@ export const PAGE_COUNT_EVENTS: readonly string[] = [
   "video_off_reported",
   "video_hide_asked",
   "video_unavailable_shown",
+  // Sharing (14 Nov 2026, stream overlay plan 7.1 and 7.4): a race video, and
+  // a link that follows a driver.
+  "video_share",
+  "follow_link_shared",
+  "follow_link_opened",
 ];
 
 const KNOWN = new Set(PAGE_COUNT_EVENTS);
