@@ -2898,6 +2898,8 @@ let hcComing = null;
 let hcKept = null;
 let hcHeld = false;
 let hcHeldPath = '';
+// This page's own address once it has held the bar, kept after it lets go.
+let hcHeldOnce = '';
 let hcHeldTitle = '';
 let hcHeldLit = null;
 // Only the club's own pages are ever shown under the bar.
@@ -3012,8 +3014,18 @@ window.hcGo = hcGo;
 // it back (hcUnhold). Home with nothing behind it leaves the app.
 try {
   addEventListener('popstate', () => {
-    if (!SHELL && !hcHeld) return;
     const path = location.pathname + location.search + location.hash;
+    // A Live page that held the bar and took it back (bug hunt 20 #4) still
+    // has the other tabs' entries in its history: Back onto one of them
+    // changed the address and left Live on screen. It holds the bar again
+    // and shows that page.
+    if (!SHELL && !hcHeld) {
+      if (hcHeldOnce === '' || hcPathOf(path) === hcPathOf(hcHeldOnce) || !hcInside(path)) return;
+      hcHold(hcHeldOnce);
+      if (typeof hcCount === 'function') hcCount('back_used');
+      hcGo(path);
+      return;
+    }
     if (hcHeld && hcPathOf(path) === hcPathOf(hcHeldPath)) { hcUnhold(); return; }
     if (hcInside(path)) { if (typeof hcCount === 'function') hcCount('back_used'); hcGo(path); }
   });
@@ -3035,13 +3047,15 @@ function hcWouldHold() {
 }
 // This page becomes the bar's page for as long as the other tabs are shown:
 // it stays where it is, playing, under a stage of frames.
-function hcHold() {
+function hcHold(own) {
   if (hcHeld) return;
   hcHeld = true;
-  hcHeldPath = location.pathname + location.search + location.hash;
+  // Held again from Back (own), the address is already the other page's.
+  hcHeldPath = typeof own === 'string' && own !== '' ? own : location.pathname + location.search + location.hash;
+  hcHeldOnce = hcHeldPath;
   hcHeldTitle = document.title;
   // This page's own tab, by its address: the tab just tapped is already lit.
-  hcHeldLit = Array.from(document.querySelectorAll('nav.tabs a')).find((a) => hcPathOf(a.href) === hcNorm(location.pathname))
+  hcHeldLit = Array.from(document.querySelectorAll('nav.tabs a')).find((a) => hcPathOf(a.href) === hcPathOf(hcHeldPath))
     || document.querySelector('nav.tabs a[aria-current]');
   hcKept = 'self';
   if (!document.getElementById('hcprobe')) {
@@ -7274,7 +7288,7 @@ function drawBoard(state) {
   const columns = Array.isArray(state.columns) ? state.columns : [];
   const rows = Array.isArray(state.standings) ? state.standings : [];
   const roles = boardRoles(columns);
-  const mine = typeof youName === 'function' ? youName() : '';
+  const mine = typeof youName === 'function' ? youName(rows, roles) : '';
   const hiding = columns.some((c, i) => !boardKeeps(roles, i));
   const more = (r) => '<tr class="bmore"><td class="bmc" colspan="' + columns.length + '"><div class="bm">'
     + columns.map((c, i) => boardKeeps(roles, i) ? '' : '<span><b>' + esc(cellText(r, i) || '-') + '</b><i>' + esc(c) + '</i></span>').join('')
@@ -7330,8 +7344,31 @@ function youSignedIn() {
     return d && d.n ? d.n : '';
   } catch (e) { return ''; }
 }
-function youName() {
-  return memory || youSignedIn();
+// THE BOARD'S NAME FOR THE DRIVER SIGNED IN (bug hunt 20 #1). Their night
+// carries their full name ("Ella Smith") and the board the club's short one
+// ("Ella S", "Ella Sm" beside an "Ella Stone" - RelayPublisher.DisplayNames
+// cuts the last word to the letters that keep the field apart), so the two
+// never matched and the card hid. A row is theirs when it is the full name,
+// or the full name with its last word cut short; the full name wins over a
+// short one, and two short ones that could both be them are nobody.
+function youIsSignedIn(name) {
+  const full = youSignedIn();
+  if (!full || !name) return false;
+  if (name === full) return true;
+  const parts = full.split(/\\s+/);
+  if (parts.length < 2) return false;
+  const head = parts.slice(0, -1).join(' ') + ' ';
+  const cut = name.slice(head.length);
+  return name.indexOf(head) === 0 && cut !== '' && parts[parts.length - 1].indexOf(cut) === 0;
+}
+function youBoardName(rows, roles) {
+  const names = (Array.isArray(rows) ? rows : []).map((r) => rowName(r, roles)).filter((n) => youIsSignedIn(n));
+  const full = youSignedIn();
+  if (names.indexOf(full) >= 0) return full;
+  return names.length === 1 ? names[0] : '';
+}
+function youName(rows, roles) {
+  return memory || youBoardName(rows, roles);
 }
 function youHide() {
   if (!you) return;
@@ -7361,9 +7398,9 @@ function youGap(state, row, pos, aheadRow) {
 }
 function drawYou(state, rows, stale) {
   if (!you) return;
-  const who = youName();
   const columns = Array.isArray(state.columns) ? state.columns : [];
   const roles = boardRoles(columns);
+  const who = youName(rows, roles);
   const mine = who ? rows.filter((r) => rowName(r, roles) === who) : [];
   if (mine.length !== 1) { youHide(); return; }
   const row = mine[0];
@@ -7372,7 +7409,7 @@ function drawYou(state, rows, stale) {
   const behind = rows[pos] || null;
   const gA = ahead ? youGap(state, row, pos, ahead) : null;
   const gB = behind ? youGap(state, behind, pos + 1, row) : null;
-  const isYou = who === youSignedIn() && who !== '';
+  const isYou = who !== '' && who === youBoardName(rows, roles);
   const gapWords = (g, tail) => !g ? '' : g.secs !== null ? g.secs.toFixed(2) + '<em>' + tail + '</em>' : esc(g.text.replace(/^\\+/, ''));
   const line = (name, g, cls, arrow, tail, none) => '<div class="yg ' + cls + '"><span class="ar" aria-hidden="true">' + arrow + '</span>'
     + '<span class="n">' + (name ? esc(name) : none) + '</span><span class="t">' + (g ? gapWords(g, tail) : esc(cls === 'ahead' ? 'Leading' : 'Last on road')) + '</span></div>';
@@ -8864,14 +8901,20 @@ const LISTEN_JS = `
   async function sweepOnce() {
     const mine = turn;
 
-    if (typeof hcNet === 'object' && hcNet.since > 0 && Date.now() < hcNet.nextTry) {
-      listenHeldUp();
+    // Only once Listen's own ask has failed (bug hunt 20 #3): one board read
+    // slower than its 5 s on venue signal set the page's backoff, and the
+    // audio - whose own small asks were still getting through - stopped for
+    // up to 15 s with "no signal" on a phone that had some.
+    if (listenPaused && typeof hcNet === 'object' && hcNet.since > 0 && Date.now() < hcNet.nextTry) {
       return;
     }
 
     try {
       let listing;
       try { listing = await ask('/api/v1/c/' + CLUB + '/collection/listen?meta=1'); } catch (e) { listenHeldUp(); return; }
+
+      // An answer is signal: the page stops saying there is none.
+      if (typeof hcNetOk === 'function') hcNetOk();
 
       if (!listing.ok) {
         return;
@@ -13072,12 +13115,32 @@ function pushOn() {
       const a = await post('/push/subscribe', { id: CODE, sub: sub.toJSON(), label: pushLabel(), kinds: alertKinds() });
       if (run !== pushRun) return;
       pushState = a.status === 200 ? 'on' : 'failed';
+      await pushTellOthers(sub);
     } catch (e) {
       if (run !== pushRun) return;
       pushState = 'failed';
     }
     drawLive();
   });
+}
+
+// THE OTHER DRIVERS ON THIS PHONE (bug hunt 20 #2). The switch and Which
+// alerts are kept for the phone (ALERTS_KEY, ALERT_KINDS_KEY), and the
+// phone has one push address that every driver signed in on it shares. Off
+// and on again on Ella's page made a new address and told the relay for
+// Ella only, so Ben's alerts went to the dead one while his page said on;
+// a kind ticked off on Ella's page stayed on for Ben. Every driver on the
+// phone is told whatever this page tells the relay.
+function pushOthers() {
+  try {
+    const many = meDrivers().length > 1;
+    return meDrivers().filter((d) => d.c !== CODE).map((d) => ({ c: d.c, label: many && meFirstName(d.n) !== '' ? meFirstName(d.n) : undefined }));
+  } catch (e) { return []; }
+}
+async function pushTellOthers(sub) {
+  for (const d of pushOthers()) {
+    try { await post('/push/subscribe', { id: d.c, sub: sub.toJSON(), label: d.label, kinds: alertKinds() }); } catch (e) { /* told again when their page opens */ }
+  }
 }
 
 // Takes this phone off: the relay forgets it, and so does the phone.
@@ -13090,6 +13153,9 @@ async function pushOff() {
     const sub = reg ? await reg.pushManager.getSubscription() : null;
     if (!sub || run !== pushRun) return;
     await post('/push/unsubscribe', { id: CODE, sub: { endpoint: sub.endpoint } });
+    for (const d of pushOthers()) {
+      try { await post('/push/unsubscribe', { id: d.c, sub: { endpoint: sub.endpoint } }); } catch (e) { /* the relay drops it on the first 410 */ }
+    }
     if (run !== pushRun) return;
     await sub.unsubscribe();
   } catch (e) { /* the relay drops a phone the push service says is gone */ }
@@ -13097,7 +13163,7 @@ async function pushOff() {
 
 // A phone that turned alerts on before: on again, and signed up again
 // quietly where it still is - a push address can change under it.
-async function pushResume() {
+async function pushResume(everyone) {
   try { alertsOn = localStorage.getItem(ALERTS_KEY) === '1'; } catch (e) { alertsOn = false; }
   if (!alertsOn) return;
   if (!pushSupported()) { pushState = /iPhone|iPad|iPod/.test(navigator.userAgent || '') ? 'install' : 'unsupported'; return; }
@@ -13108,6 +13174,7 @@ async function pushResume() {
     if (!sub) { pushState = ''; return; }
     const a = await post('/push/subscribe', { id: CODE, sub: sub.toJSON(), label: pushLabel(), kinds: alertKinds() });
     pushState = a.status === 200 ? 'on' : 'failed';
+    if (everyone) await pushTellOthers(sub);
   } catch (e) {
     pushState = 'failed';
   }
@@ -13157,7 +13224,8 @@ function alertKindsBox() {
         localStorage.setItem('hc-alert-kinds-seen:' + CLUB, JSON.stringify(ALERT_KIND_WORDS.map((w) => w[0])));
       } catch (e) { /* this visit only */ }
       // Told again with the new choice; the subscription itself is the same.
-      void pushResume();
+      // Every driver on the phone, whose pages show this same choice.
+      void pushResume(true);
     });
     label.appendChild(tick);
     label.appendChild(el('span', '', words));
