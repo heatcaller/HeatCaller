@@ -470,7 +470,7 @@ public sealed class SimpleModeTests : IDisposable
         "RecordingControl.cs|Recording the night", "RecordingControl.cs|Written from the night",
 
         // Venues, which Simple hides as a page.
-        "VenuesControl.cs|Venues", "VenuesControl.cs|Venue settings",
+        "VenuesControl.cs|Venues", "VenuesControl.cs|The venue", "VenuesControl.cs|Race defaults", "VenuesControl.cs|Apply",
 
         // Windows of their own, not settings pages.
         "AnnouncerControl.cs|Running order", "AnnouncerControl.cs|Spotlight", "AnnouncerControl.cs|Talking points",
