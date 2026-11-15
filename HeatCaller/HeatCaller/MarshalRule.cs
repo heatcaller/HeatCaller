@@ -165,9 +165,19 @@ public static class MarshalRule
         IEnumerable<SessionResultEntry> results, string? thisRoundId, IEnumerable<RoundDefinition> rounds, IReadOnlyCollection<string>? roundFilter,
         ProfileStore? profiles = null, Func<string, bool>? raceIsFiled = null)
     {
+        var all = rounds as IReadOnlyCollection<RoundDefinition> ?? rounds.ToList();
+
+        // Bug hunt 20: never on a practice round. Practice isn't scored, so
+        // a penalty there counts for nothing - and marked applied, it never
+        // reached the qualifier after it. It waits for their next real race.
+        if (all.FirstOrDefault(r => string.Equals(r.Id, thisRoundId, StringComparison.Ordinal)) is { Kind: RoundKind.Practice })
+        {
+            return new List<(RoundDefinition Round, MarshalNoShow NoShow)>();
+        }
+
         var racing = results.Select(r => DriverKey(r.Transponder, profiles)).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        return rounds
+        return all
             .Where(r => r.NoShowMarshals is { Count: > 0 }
                         && !string.Equals(r.Id, thisRoundId, StringComparison.Ordinal)
                         && (roundFilter is null || roundFilter.Contains(r.Id)))

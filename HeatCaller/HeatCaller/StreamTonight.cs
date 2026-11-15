@@ -368,6 +368,17 @@ public sealed class StreamTonight
         }
     }
 
+    /// <summary>
+    /// Whether a race goes on the junior list: a driver whose profile is
+    /// marked junior, or anyone on a club rental (bug hunt 20). A rental is
+    /// lent by name only, so its result finds the shared rental profile (or
+    /// none) and nothing says whether the renter is a child - a junior
+    /// trying the club out must not end up on public video, so a rental race
+    /// is kept off it too.
+    /// </summary>
+    public static bool HasJuniorOrRental(IEnumerable<string> transponders, Func<string, DriverProfile?> profileOf, Func<string, bool> isRental) =>
+        transponders.Any(t => isRental(t) || profileOf(t) is { IsJunior: true } or { IsRental: true });
+
     private static Piece Copy(Piece p) => new()
     {
         StartedUtc = p.StartedUtc,

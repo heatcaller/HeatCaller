@@ -77,7 +77,7 @@ public sealed partial class MainForm
     /// Today's races with a junior in them, by session id - the relay never
     /// shows these on public results (Asher, 14 Nov 2026: "juniors stay on
     /// their own night"). From the profiles' own junior flag (the guardian's
-    /// waiver), never a name.
+    /// waiver), never a name - and every race with a club rental in it.
     /// </summary>
     private IEnumerable<string> JuniorRacesToday()
     {
@@ -87,7 +87,9 @@ public sealed partial class MainForm
 
         foreach (var session in _sessionHistory.SavedView().Saved.Where(s => s.StartedAtUtc >= since))
         {
-            if (session.Results.Any(r => _profiles.GetForAnyThread(r.Transponder) is { IsJunior: true }))
+            // A rental counts too (bug hunt 20): it is lent by name only, so
+            // nothing says whether the renter is a junior.
+            if (StreamTonight.HasJuniorOrRental(session.Results.Select(r => r.Transponder), _profiles.GetForAnyThread, _rentals.IsRental))
             {
                 yield return session.Id;
             }

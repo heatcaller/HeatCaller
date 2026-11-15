@@ -772,7 +772,8 @@ public static class MixedHeats
     /// <summary>
     /// For the curfew planner (NightPlan.FixesFor): the pairs of classes
     /// that could share their heats, smallest first - classes running ONE
-    /// heat a round whose rosters fit in a heat together. Each pair saves
+    /// heat a round whose rosters fit in a heat together and share no
+    /// driver. Each pair saves
     /// one heat per qualifying round still to run.
     /// </summary>
     public static IReadOnlyList<(string A, string B, int HeatsSaved)> ShareableClasses(IReadOnlyList<RoundDefinition> unrunQualifiers, int heatSize)
@@ -813,6 +814,17 @@ public static class MixedHeats
                     .Count();
 
                 if (rounds == 0)
+                {
+                    continue;
+                }
+
+                // Bug hunt 20: not a pair with a driver in both classes -
+                // nobody can drive two cars in one race, and WhyNotTogether
+                // would refuse the very fix this offered.
+                var aDrivers = a.Heats.SelectMany(h => h.AssignedTransponders).Select(t => t.Trim())
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                if (b.Heats.SelectMany(h => h.AssignedTransponders).Any(t => aDrivers.Contains(t.Trim())))
                 {
                     continue;
                 }
