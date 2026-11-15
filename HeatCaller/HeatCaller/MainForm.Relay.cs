@@ -633,35 +633,8 @@ public partial class MainForm
 
     // ------------------------------------------------------ online sign-up
 
-    /// <summary>Opens Online Sign-ups, or brings it forward if it is already open.</summary>
-    private void ShowSignups()
-    {
-        if (_signupsForm is { IsDisposed: false } open)
-        {
-            // Activate alone leaves a minimised window minimised.
-            if (open.WindowState == FormWindowState.Minimized)
-            {
-                open.WindowState = FormWindowState.Normal;
-            }
-
-            open.Activate();
-            return;
-        }
-
-        var form = new SignupsForm(_signupDesk, _settings, _profiles, _raceClasses, _rentals, _undo);
-        form.FormClosed += (_, _) =>
-        {
-            if (ReferenceEquals(_signupsForm, form))
-            {
-                _signupsForm = null;
-            }
-
-            form.Dispose();
-        };
-
-        _signupsForm = form;
-        form.Show(this);
-    }
+    /// <summary>Who's Racing's Online Sign-ups button: the Desk Inbox, on its Sign-ups chip (15 Nov 2026).</summary>
+    private void ShowSignups() => ShowInbox(InboxFilter.Signups);
 
     /// <summary>How many sign-ups are waiting, on the Entries button and in the sidebar.</summary>
     private void UpdateSignupCounts()

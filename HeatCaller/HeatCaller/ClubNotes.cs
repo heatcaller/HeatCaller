@@ -720,6 +720,30 @@ internal sealed class ClubNotes
     }
 
     /// <summary>
+    /// Takes an approval back - the Desk Inbox's Undo (15 Nov 2026). Only
+    /// while the note has not been said: one already said cannot be unsaid,
+    /// and is left as it is.
+    /// </summary>
+    internal void Unapprove(string? id)
+    {
+        lock (_gate)
+        {
+            if (_file.Notes.FirstOrDefault(one => string.Equals(one.Id, id, StringComparison.Ordinal)) is not { } note)
+            {
+                return;
+            }
+
+            if (!note.Approved || note.SaidAtUtc is not null)
+            {
+                return;
+            }
+
+            note.Approved = false;
+            Save();
+        }
+    }
+
+    /// <summary>
     /// The next note the announcer may say: approved, and not said yet.
     ///
     /// OLDEST FIRST, because a dedication typed at seven is about something

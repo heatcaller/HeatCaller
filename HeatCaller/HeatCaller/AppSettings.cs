@@ -2495,6 +2495,15 @@ public sealed class AppSettings
     /// </summary>
     public bool RelayDriverThemes { get; set; } = true;
 
+    /// <summary>
+    /// The Desk Inbox's quick replies for a decline (15 Nov 2026), one each;
+    /// empty for HeatCaller's own (DeskInbox.DefaultQuickReplies).
+    /// </summary>
+    public List<string> InboxQuickReplies { get; set; } = new();
+
+    /// <summary>The Desk Inbox keeps to a strip down the side of the screen, beside Race Control.</summary>
+    public bool InboxPinnedToSide { get; set; }
+
     // --- Race video on YouTube (14 Nov 2026, race video plan) ---------
     //
     // The club streams from a second PC with OBS to its own YouTube

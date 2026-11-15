@@ -11,7 +11,7 @@ namespace HeatCaller.Tests;
 /// told, privacy only ever turned on, a pack refused when it isn't theirs,
 /// and a query noted exactly once without touching the result.
 /// </summary>
-public sealed class DriverExp_Q_DriverRequestsTests : IDisposable
+public sealed partial class DriverExp_Q_DriverRequestsTests : IDisposable
 {
     private readonly TempAppData _data = new();
 
@@ -531,9 +531,11 @@ public sealed class DriverExp_Q_DriverRequestsTests : IDisposable
             }));
             w.File(Ask(2, NobodyBadge, DriverAsk.Pack, Tonight, r => r.Texts["pack"] = "none"));
 
-            using (var list = new DriverRequestsForm(w.Desk, w.Profiles, _ => { }))
+            // The Desk Inbox since 15 Nov 2026: both waiting, in the list.
+            using (var list = new DeskInboxForm(w.Desk, w.Profiles, _ => { }, null, null, null, null, null, new AppSettings(), null, null, null))
             {
-                Assert.Equal("Driver Requests", list.Text);
+                Assert.Equal("Inbox (2)", list.Text);
+                Assert.Equal(2, list.Items.Count(i => i.Source == InboxSource.Request));
             }
 
             using (var approve = new ApproveDriverRequestForm(w.Desk, details, w.Profiles.Get("100")!, w.Profiles, _ => { }, null))

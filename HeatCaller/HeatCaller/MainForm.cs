@@ -21,7 +21,6 @@ public partial class MainForm : Form
     private readonly RelaySignupDesk _signupDesk;
 
     /// <summary>The Online Sign-ups window while it is open - one at a time, left open while the desk works through the queue.</summary>
-    private SignupsForm? _signupsForm;
 
     /// <summary>The last roster document sent to the relay, so an unchanged one is not sent again every two seconds.</summary>
     private string _lastRelayRoster = string.Empty;

@@ -444,18 +444,17 @@ public sealed class DriverCrewTests : IDisposable
     }
 
     [Fact]
-    public void The_crew_filter_shows_only_crew_requests_and_the_queries_filter_wins_when_both_are_ticked()
+    public void The_crew_chip_shows_only_crew_requests_and_the_queries_chip_only_queries()
     {
-        var all = new[]
-        {
-            new DriverRequest { Id = "1", Kind = DriverAsk.Crew },
-            new DriverRequest { Id = "2", Kind = DriverAsk.Query },
-            new DriverRequest { Id = "3", Kind = DriverAsk.Details },
-        };
+        // The Desk Inbox's chips since 15 Nov 2026 (Driver Requests' two ticks before).
+        static InboxItem Item(string id, string kind) =>
+            new(InboxSource.Request, id, kind, kind, "Sam", "", "", DateTime.UtcNow, false, null);
 
-        Assert.Equal(new[] { "1" }, DriverRequestsForm.Filtered(all, queriesOnly: false, crewOnly: true).Select(r => r.Id));
-        Assert.Equal(new[] { "2" }, DriverRequestsForm.Filtered(all, queriesOnly: true, crewOnly: false).Select(r => r.Id));
-        Assert.Equal(3, DriverRequestsForm.Filtered(all, queriesOnly: false, crewOnly: false).Count);
+        var all = new[] { Item("1", DriverAsk.Crew), Item("2", DriverAsk.Query), Item("3", DriverAsk.Details) };
+
+        Assert.Equal(new[] { "1" }, DeskInbox.Filter(all, InboxFilter.Crew).Select(r => r.Id));
+        Assert.Equal(new[] { "2" }, DeskInbox.Filter(all, InboxFilter.Queries).Select(r => r.Id));
+        Assert.Equal(3, DeskInbox.Filter(all, InboxFilter.Requests).Count);
     }
 
     // ------------------------------------------------------------ 15 Nov: the gaps

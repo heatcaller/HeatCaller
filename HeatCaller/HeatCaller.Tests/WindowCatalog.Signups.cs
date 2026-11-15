@@ -11,8 +11,8 @@ internal static partial class WindowCatalog
     /// </summary>
     private static IEnumerable<(string Name, Func<Form> Build)> SignupWindows() => new (string, Func<Form>)[]
     {
-        ("Online Sign-ups", () => OnlineSignupsWindow(filled: true)),
-        ("Online Sign-ups (nothing yet)", () => OnlineSignupsWindow(filled: false)),
+        ("Inbox", () => OnlineSignupsWindow(filled: true)),
+        ("Inbox (nothing yet)", () => OnlineSignupsWindow(filled: false)),
         ("Approve", () => ApproveSignupWindow(wantsRental: false)),
         ("Approve (wants a rental, signed up by a parent)", () => ApproveSignupWindow(wantsRental: true)),
         ("Invite Drivers", () => new InviteDriversForm()),
@@ -32,7 +32,7 @@ internal static partial class WindowCatalog
     /// with twelve invites and six sign-ups waiting (FillSignupDesk). Not
     /// filled: a fresh install - the relay off, no invites, nothing waiting.
     /// </summary>
-    private static SignupsForm OnlineSignupsWindow(bool filled)
+    internal static DeskInboxForm OnlineSignupsWindow(bool filled)
     {
         var settings = new AppSettings();
 
@@ -62,7 +62,10 @@ internal static partial class WindowCatalog
                 FillSignupDesk(desk, settings);
             }
 
-            var form = new SignupsForm(desk, settings, profiles, classes, rentals);
+            // The Desk Inbox on its Sign-ups chip since 15 Nov 2026 - the
+            // sign-ups in the list, the invites under it.
+            var form = new DeskInboxForm(null, profiles, null, null, null, null, null, desk, settings, classes, rentals, null);
+            form.SetFilter(InboxFilter.Signups);
             form.Disposed += (_, _) => publisher.Dispose();
 
             return form;

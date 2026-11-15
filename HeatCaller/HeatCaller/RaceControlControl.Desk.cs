@@ -25,26 +25,42 @@ public partial class RaceControlControl
     /// <summary>The cyan the Desk button wears - On Air's live cyan.</summary>
     internal static readonly Color DeskCyan = Color.FromArgb(0x2E, 0xE6, 0xFF);
 
-    /// <summary>The red of the count badge.</summary>
+    /// <summary>The red of the count badge - while anything waiting holds up the next race.</summary>
     internal static readonly Color DeskBadgeRed = Color.FromArgb(0xE5, 0x39, 0x35);
 
-    /// <summary>Desk: opens Driver Requests. Only on the row while requests are waiting - see SetDeskWaiting.</summary>
+    /// <summary>The badge with nothing race-blocking waiting: dark on the cyan, so red still means "now".</summary>
+    internal static readonly Color DeskBadgeCalm = Color.FromArgb(0x10, 0x2A, 0x43);
+
+    /// <summary>Inbox: opens the Desk Inbox. Only on the row while anything is waiting - see SetDeskWaiting.</summary>
     private readonly FlagButton _btnBarDesk = new()
     {
-        // "Requests" since 14 Nov 2026 (Asher) - it was "Desk".
-        Text = "Requests",
+        // "Inbox" since 15 Nov 2026 (Asher: "change the button on race
+        // control to read Inbox") - "Requests" from 14 Nov, "Desk" before.
+        Text = "Inbox",
         FlagColour = DeskCyan,
         FlagText = Color.FromArgb(8, 28, 36),
         Lit = true,
         Visible = false,
-        AccessibleName = "Requests",
+        AccessibleName = "Inbox",
     };
+
+    /// <summary>Whether anything waiting holds up the next race - the badge is red then.</summary>
+    private bool _deskUrgent;
 
     /// <summary>How many requests the badge shows - 0 while the button is off the row.</summary>
     private int _deskWaiting;
 
-    /// <summary>Desk on the flag row was clicked: the host opens Driver Requests.</summary>
+    /// <summary>Inbox on the flag row was clicked: the host opens the Desk Inbox.</summary>
     internal event Action? DeskRequested;
+
+    /// <summary>The announcer strip's Notes or Votes was clicked: the host opens the Desk Inbox on that chip.</summary>
+    internal event Action<InboxFilter>? InboxRequested;
+
+    /// <summary>The badge's colour: red while anything waiting holds up the next race, dark otherwise.</summary>
+    internal static Color DeskBadgeColour(bool urgent) => urgent ? DeskBadgeRed : DeskBadgeCalm;
+
+    /// <summary>Whether the badge is red - for the tests.</summary>
+    internal bool DeskUrgent => _deskUrgent;
 
     /// <summary>The Desk button - for the tests.</summary>
     internal Button DeskButton => _btnBarDesk;
@@ -65,21 +81,24 @@ public partial class RaceControlControl
     /// waiting and takes it off the row when none are, laying the row out
     /// again either way. Does nothing when the number has not changed.
     /// </summary>
-    internal void SetDeskWaiting(int count)
+    internal void SetDeskWaiting(int count, bool urgent = false)
     {
         count = Math.Max(0, count);
+        urgent = urgent && count > 0;
 
-        if (count == _deskWaiting || IsDisposed || Disposing)
+        if ((count == _deskWaiting && urgent == _deskUrgent) || IsDisposed || Disposing)
         {
             return;
         }
 
         var wasShown = _deskWaiting > 0;
         _deskWaiting = count;
+        _deskUrgent = urgent;
 
         _btnBarDesk.AccessibleDescription = count == 0
             ? null
-            : count == 1 ? "One driver request waiting" : $"{count} driver requests waiting";
+            : (count == 1 ? "One thing waiting in the inbox" : $"{count} things waiting in the inbox")
+              + (urgent ? ", holding up the next race" : string.Empty);
 
         _btnBarDesk.Invalidate();
 
@@ -147,7 +166,7 @@ public partial class RaceControlControl
         g.SmoothingMode = SmoothingMode.AntiAlias;
 
         using (var path = AppTheme.RoundedRect(badge, height / 2))
-        using (var fill = new SolidBrush(DeskBadgeRed))
+        using (var fill = new SolidBrush(DeskBadgeColour(_deskUrgent)))
         {
             g.FillPath(fill, path);
         }

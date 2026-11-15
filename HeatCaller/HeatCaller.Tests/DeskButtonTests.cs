@@ -38,17 +38,42 @@ public sealed class DeskButtonTests
         Assert.True(RaceControlControl.DeskBadgeRed.R > 200 && RaceControlControl.DeskBadgeRed.G < 80);
     }
 
+    // 15 Nov 2026, Asher: "change the button on race control to read Inbox".
+    // Red only while something holds up the next race; dark otherwise.
     [Fact]
-    public void A_click_opens_Driver_Requests_and_the_count_follows_the_desk()
+    public void It_reads_Inbox_and_its_badge_is_red_only_while_something_holds_up_the_race()
     {
-        Assert.Contains("raceControl.DeskRequested += ShowDriverRequests;", Source("MainForm.Pages.cs"), StringComparison.Ordinal);
+        var desk = Source("RaceControlControl.Desk.cs");
+        Assert.Contains("Text = \"Inbox\",", desk, StringComparison.Ordinal);
+        Assert.Contains("AccessibleName = \"Inbox\",", desk, StringComparison.Ordinal);
+
+        // Nothing waiting is never urgent, and the badge redraws when only urgency changes.
+        Assert.Contains("urgent = urgent && count > 0;", desk, StringComparison.Ordinal);
+        Assert.Contains("(count == _deskWaiting && urgent == _deskUrgent)", desk, StringComparison.Ordinal);
+
+        Assert.Equal(RaceControlControl.DeskBadgeRed, RaceControlControl.DeskBadgeColour(urgent: true));
+        Assert.Equal(RaceControlControl.DeskBadgeCalm, RaceControlControl.DeskBadgeColour(urgent: false));
+        Assert.True(RaceControlControl.DeskBadgeCalm.R < 60 && RaceControlControl.DeskBadgeCalm.G < 80);
+    }
+
+    [Fact]
+    public void A_click_opens_the_inbox_and_the_count_follows_every_desk()
+    {
+        // The Desk Inbox since 15 Nov 2026: requests, club notes and sign-ups.
+        Assert.Contains("raceControl.DeskRequested += () => ShowInbox(InboxFilter.All);", Source("MainForm.Pages.cs"), StringComparison.Ordinal);
+        Assert.Contains("raceControl.InboxRequested += ShowInbox;", Source("MainForm.Pages.cs"), StringComparison.Ordinal);
 
         var tick = Source("MainForm.DriverRequests.cs");
-        var set = tick.IndexOf("_raceControlControl?.SetDeskWaiting(store.WaitingCount);", StringComparison.Ordinal);
+        var set = tick.IndexOf("UpdateInboxBadge();", StringComparison.Ordinal);
+        var noStore = tick.IndexOf("if (_driverRequests is not { } store || _closingDown)", StringComparison.Ordinal);
         var unchanged = tick.IndexOf("if (version == _driverRequestsVersionShown", StringComparison.Ordinal);
 
-        Assert.True(set > 0 && unchanged > set,
-            "The Desk button's count is set after the roster tick's \"nothing changed\" return, so it can miss its first tick.");
+        Assert.True(set > 0 && noStore > set && unchanged > set,
+            "The Inbox button's count is set after a return in the roster tick, so it can miss a tick - or every tick on a PC with no requests.");
+
+        var badge = Source("MainForm.Inbox.cs");
+        Assert.Contains("var total = requests.Count() + _clubNotes.Counts().ToApprove + _signupDesk.Waiting.Count;", badge, StringComparison.Ordinal);
+        Assert.Contains("_raceControlControl?.SetDeskWaiting(total, urgent);", badge, StringComparison.Ordinal);
 
         Assert.Contains("_btnReset, _btnBarDesk);", Source("RaceControlControl.Layout.cs"), StringComparison.Ordinal);
     }
@@ -56,8 +81,7 @@ public sealed class DeskButtonTests
     // Bug hunt 14: Driver Requests minimised, then Desk clicked - Activate()
     // alone left it minimised and the click did nothing visible.
     [Theory]
-    [InlineData("MainForm.DriverRequests.cs", "private void ShowDriverRequests()")]
-    [InlineData("MainForm.Relay.cs", "private void ShowSignups()")]
+    [InlineData("MainForm.Inbox.cs", "internal void ShowInbox(InboxFilter filter)")]
     public void Bringing_the_window_forward_restores_it_from_minimised(string file, string method)
     {
         var source = Source(file);
@@ -85,7 +109,7 @@ public sealed class DeskButtonTests
         Assert.False(RaceControlControl.DeskMayMoveRow(new IShownHold[] { new Held(null), new Held(0.4f) }));
 
         var desk = Source("RaceControlControl.Desk.cs");
-        var set = desk[desk.IndexOf("internal void SetDeskWaiting(int count)", StringComparison.Ordinal)..desk.IndexOf("private bool _deskMoveOwed;", StringComparison.Ordinal)];
+        var set = desk[desk.IndexOf("internal void SetDeskWaiting(int count, bool urgent = false)", StringComparison.Ordinal)..desk.IndexOf("private bool _deskMoveOwed;", StringComparison.Ordinal)];
         Assert.DoesNotContain("Rearrange()", set, StringComparison.Ordinal);
         Assert.Contains("MoveDeskIfOwed();", set, StringComparison.Ordinal);
 

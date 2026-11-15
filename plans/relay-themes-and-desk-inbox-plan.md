@@ -164,6 +164,16 @@ Each row of this list gets a test against the inbox before the old window's file
 2. Keyboard, undo toast, wait timers, canned replies, and the announcer-strip badge.
 3. Batch actions, the rules panel, docking, then the parity tests and deleting the four old windows.
 
+### As built (15 Nov 2026)
+All three phases are built in one change, and the four old windows are deleted. The code is in `DeskInbox.cs` (the list, its order, wait times and Later, with no UI) and `DeskInboxForm*.cs` (the window, with one file per desk). Each parity row has a test in `DeskInboxTests.cs` and `DriverExp_Q_DeskInboxParityTests.cs`. Where it differs from the plan:
+- **Race Control's button reads "Inbox"** (Asher, 15 Nov 2026). It's the cyan flag-row button that read "Requests". It counts every desk's waiting items, and its badge is **red only while something holds up the next race** (late, skip, marshal swap, or a query in a protest window). Otherwise the badge is dark. The announcer strip keeps its Notes (n) and Votes (n), and both now open the inbox on their chip.
+- **Undo replaces "Are you sure?" only where something can be undone.** That covers approving club notes (new `ClubNotes.Unapprove`, while the note hasn't been said) and the sign-up answers, which already had the app's Undo: approve, turn down, cancel invite. A request's answer reaches the driver's phone straight away and the desk has no undo for it, so the questions Driver Requests asked (approve this pack, this late, this swap?) stay. Batch approve asks once for the whole set.
+- **Docking is "Keep at the side of the screen".** It's a tick that snaps the window to the right third of the screen at full height, beside Race Control. It isn't a panel inside Race Control.
+- **The rules panel** says that packs, cars, photos and setups apply by themselves. There's no running "handled for you" count, because the desk doesn't keep one.
+- **Batch:** Approve and Noted work on several of one kind at once (packs, late, skip, swaps, video hide, queries, video off) and on several club notes. Details and crew stay one at a time, because each needs its own form or a read of the words. Decline with a quick reply works on several at once.
+- **Captions** follow the app's house style, with no "..." on buttons: Approve, Decline, Turn Down.
+- **Screenshots:** the inbox replaces Online Sign-ups in the window catalog ("Inbox", "Inbox (nothing yet)"), so the layout test checks it at every window size and text size.
+
 ---
 
 ## Order of work
