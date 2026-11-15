@@ -57,6 +57,29 @@ public partial class MainForm
         $"{title} - closing when {ClipsStillBeingMade(races, withVideos)} are finished";
 
     /// <summary>
+    /// True while waiting to close on the clips with the race that was on the
+    /// track when the person said to close anyway still running. Cleared once
+    /// that race is off the track.
+    /// </summary>
+    private bool _closingOnRunningRace;
+
+    /// <summary>True only inside the wait's own Close() when the race it was agreed on is still running: the race question isn't asked again.</summary>
+    private bool _closingAgreedMidRace;
+
+    /// <summary>
+    /// Whether the race on the track stops the wait to close: only one that
+    /// started while it waited.
+    /// </summary>
+    /// <remarks>
+    /// WHY (14 Nov 2026, bug hunt 19): the person closing mid-race is asked
+    /// "A race is running. Close HeatCaller anyway?" before the clips
+    /// question. That race, already agreed to, stopped the wait on its first
+    /// tick with "A race has started", and the app never closed.
+    /// </remarks>
+    internal static bool RaceStartedWhileWaitingForClips(bool raceOnTrack, bool closingOnRunningRace) =>
+        raceOnTrack && !closingOnRunningRace;
+
+    /// <summary>
     /// Asks, when there is something to ask about. True when the close is to
     /// be refused for now because the answer was to wait.
     /// </summary>
@@ -95,6 +118,9 @@ public partial class MainForm
             _closeWhenClipsDone.Start();
         }
 
+        // Reaching here mid-race means the person said to close anyway.
+        _closingOnRunningRace = _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing;
+
         Text = ClipsWaitingTitle(AppVersion.Full, races, withVideos);
         return true;
     }
@@ -109,8 +135,13 @@ public partial class MainForm
         }
 
         // A race started while it waited: the window is in use again, and
-        // must not close under it when the last video lands.
-        if (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
+        // must not close under it when the last video lands. Not the race
+        // the person already agreed to close on - see RaceStartedWhileWaitingForClips.
+        var raceOnTrack = _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing;
+
+        _closingOnRunningRace &= raceOnTrack;
+
+        if (RaceStartedWhileWaitingForClips(raceOnTrack, _closingOnRunningRace))
         {
             StopWaitingForClips();
             OnClientRawMessage($"{AppTime.LogStampNow()}  [audio] A race has started, so HeatCaller is staying open. "
@@ -134,9 +165,23 @@ public partial class MainForm
             return;
         }
 
+        // The race the person agreed to close on, still running: not asked
+        // about it a second time.
+        var agreedToRace = _closingOnRunningRace;
+
         StopWaitingForClips();
         OnClientRawMessage($"{AppTime.LogStampNow()}  [audio] The clips are finished. Closing HeatCaller.");
-        Close();
+
+        _closingAgreedMidRace = agreedToRace;
+
+        try
+        {
+            Close();
+        }
+        finally
+        {
+            _closingAgreedMidRace = false;
+        }
     }
 
     /// <summary>Stops waiting to close, and puts the window's title back.</summary>
@@ -148,6 +193,7 @@ public partial class MainForm
         }
 
         _closeWhenClipsDone = null;
+        _closingOnRunningRace = false;
         timer.Stop();
         timer.Dispose();
 

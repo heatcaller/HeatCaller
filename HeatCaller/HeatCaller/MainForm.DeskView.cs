@@ -128,6 +128,15 @@ public partial class MainForm
             return false;
         }
 
+        // AltGr arrives as Ctrl+Alt, and on many European keyboards it is how
+        // '@' and the euro sign are typed: refused here, an email address
+        // couldn't be typed at the desk (bug hunt 19). Nothing in HeatCaller
+        // is on Ctrl+Alt, so letting it through opens no shortcut.
+        if ((keyData & (Keys.Control | Keys.Alt)) == (Keys.Control | Keys.Alt))
+        {
+            return true;
+        }
+
         if ((keyData & Keys.Alt) != 0)
         {
             return false;
