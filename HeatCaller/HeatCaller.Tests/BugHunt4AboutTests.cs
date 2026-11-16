@@ -202,7 +202,10 @@ public sealed class BugHunt4AboutTests
         // to bundle the Kokoro model in the installer, and one GPL or LGPL
         // component IN THAT STACK would decide it for them. Nothing in it is
         // - MisakiSharp is a port with no espeak-ng (GPL-3.0) in it - and
-        // this fails the day something changes that.
+        // this fails the day something changes that. (Its NOTICE's
+        // phonemizer lineage is a separate question: traced 15 Nov 2026,
+        // HeatCaller does reach EspeakFallback, and About.cs records it for
+        // counsel. The licence MisakiSharp grants is still Apache-2.0.)
         //
         // Narrowed from "nothing on the whole list" on 8 Oct 2026, when
         // sponsor videos brought in LibVLC (LGPL-2.1-or-later). That does
@@ -267,6 +270,29 @@ public sealed class BugHunt4AboutTests
 
         Assert.Contains("GNU LESSER GENERAL PUBLIC LICENSE", text, StringComparison.Ordinal);
         Assert.Contains("Version 2.1, February 1999", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_video_players_source_offer_and_plugin_list_ship_with_the_app()
+    {
+        // 15 Nov 2026, the IP plan's item 3.2: LGPL section 6 wants the
+        // source available, and the About box and LibVLC-plugins.txt are
+        // where HeatCaller offers it. The plugin list is the record of what
+        // of VLC is distributed, plugin by plugin, with its licence.
+        var plugins = Path.Combine(AppContext.BaseDirectory, "Assets", "Licences", "LibVLC-plugins.txt");
+
+        Assert.True(File.Exists(plugins), plugins + " is missing - the build would ship VLC's plugins with no list of them.");
+
+        var text = File.ReadAllText(plugins);
+
+        Assert.Contains("support@heatcaller.com", text, StringComparison.Ordinal);
+        Assert.Contains("three years", text, StringComparison.Ordinal);
+        Assert.Contains(@"plugins\codec\libavcodec_plugin.dll", text, StringComparison.Ordinal);
+
+        var libvlc = ThirdPartyCatalog.Components.Single(c => c.Name == "LibVLC");
+
+        Assert.Contains("support@heatcaller.com", libvlc.Note!, StringComparison.Ordinal);
+        Assert.Contains("LibVLC-plugins.txt", libvlc.Note!, StringComparison.Ordinal);
     }
 
     [Theory]

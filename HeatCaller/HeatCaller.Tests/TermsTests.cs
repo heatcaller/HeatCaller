@@ -112,6 +112,22 @@ public sealed class TermsTests : IDisposable
     }
 
     [Fact]
+    public void The_terms_keep_the_promises_the_IP_and_childrens_privacy_review_asked_for()
+    {
+        // 15 Nov 2026 (revision 2, plans/children-privacy-and-ip-plan.md
+        // items 3.1-3.5): the LGPL section 6 carve-out the video player
+        // needs, the club's content licence, music, AI output, and the
+        // safeguarding line. The garbled sentence in section 2 stays fixed.
+        Assert.Contains("reverse engineer it to debug those modifications", Terms.Text, StringComparison.Ordinal);
+        Assert.Contains("**7.4 Your content on the relay.**", Terms.Text, StringComparison.Ordinal);
+        Assert.Contains("**7.5 Music.**", Terms.Text, StringComparison.Ordinal);
+        Assert.Contains("**7.6 AI-written output.**", Terms.Text, StringComparison.Ordinal);
+        Assert.Contains("You run your own safeguarding", Terms.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("allows you to whatever", Terms.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Juniors can send notes from their phone", Terms.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Line_endings_are_not_new_terms()
     {
         const string text = "# Terms\n\nOne line.\nAnother.\n";
