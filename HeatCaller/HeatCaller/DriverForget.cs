@@ -37,6 +37,9 @@ internal sealed class DriverDataSources
     /// <summary>The principal's diary has no shared instance (PrincipalDiary.Load); a function so it is read when needed.</summary>
     public Func<PrincipalDiary?>? Diary { get; init; }
 
+    /// <summary>Ghost cars - one chasing this driver's best keeps their transponder and maybe their name (review pass, 15 Nov 2026).</summary>
+    public GhostStore? Ghosts { get; init; }
+
     public AppSettings? Settings { get; init; }
 }
 
@@ -456,6 +459,23 @@ internal static class DriverForget
         if (name.Length > 0)
         {
             sources.PersonalBestResets?.ClearAllForDriver(profile.DriverName);
+        }
+
+        // --- Ghost cars (review pass, 15 Nov 2026) -------------------------
+        // A ghost chasing this driver's best keeps their transponder, and its
+        // name is often theirs ("Mia's best"). The ghost goes: its pace came
+        // from their laps, and a ghost with no source has nothing to chase.
+        if (sources.Ghosts is { } ghosts)
+        {
+            var gone = ghosts.Current.Ghosts.RemoveAll(g =>
+                idSet.Contains((g.SourceTransponder ?? string.Empty).Trim())
+                || names.Any(n => n.Length > 0 && (g.Name ?? string.Empty).Contains(n, StringComparison.OrdinalIgnoreCase)));
+
+            if (gone > 0)
+            {
+                ghosts.Save();
+                Say(gone, "1 ghost car chasing them", "ghost cars chasing them");
+            }
         }
 
         // --- Settings: PIN, emails sent, desk shortcuts -------------------

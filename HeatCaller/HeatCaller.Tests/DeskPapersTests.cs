@@ -1,3 +1,6 @@
+using System.Reflection;
+using System.Windows.Forms;
+
 namespace HeatCaller.Tests;
 
 /// <summary>
@@ -156,5 +159,33 @@ public sealed class DeskPapersSurviveAnEditTests : IDisposable
         Assert.Equal("Pat Power", shown.WaiverGuardian);
         Assert.Equal("BRCA 12345", shown.MembershipNumber);
         Assert.Equal(driver.MembershipExpires, shown.MembershipExpires);
+    }
+
+    [Fact]
+    public void A_club_that_checks_no_papers_can_still_mark_a_junior_and_their_age_band_in_Driver_Hub()
+    {
+        // 15 Nov 2026, children's privacy review: the Junior tick lived only
+        // in the Papers window, which a club checking neither waivers nor
+        // memberships never sees - so none of the junior protections could
+        // ever reach its drivers. The profile dialog has it now.
+        var driver = new DriverProfile { Transponder = "2", DriverName = "Mia Kent" };
+
+        var shown = StaThread.Run(() =>
+        {
+            using var form = new ProfileForm(driver, RaceClassStore.Load());
+            var junior = (CheckBox)typeof(ProfileForm).GetField("_chkJunior", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(form)!;
+            var age = (ComboBox)typeof(ProfileForm).GetField("_cmbJuniorAge", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(form)!;
+            junior.Checked = true;
+            age.SelectedIndex = 2;
+            var ticked = form.ProfileAsShown();
+            junior.Checked = false;
+            var unticked = form.ProfileAsShown();
+            return (ticked, unticked);
+        }, TimeSpan.FromSeconds(30), () => "marking Mia Kent a junior in Driver Hub");
+
+        Assert.True(shown.ticked.IsJunior);
+        Assert.Equal(JuniorAge.ThirteenToSeventeen, shown.ticked.JuniorAge);
+        Assert.False(shown.unticked.IsJunior);
+        Assert.Equal(JuniorAge.NotSet, shown.unticked.JuniorAge);
     }
 }

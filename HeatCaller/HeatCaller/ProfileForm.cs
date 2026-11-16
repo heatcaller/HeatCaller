@@ -99,6 +99,10 @@ public sealed class ProfileForm : Form
     private readonly TextBox _txtCrewCar = new();
     private readonly CheckBox _chkCrewConsent = new ThemedCheckBox();
 
+    /// <summary>Junior and their age band (15 Nov 2026) - see AddJuniorRow.</summary>
+    private readonly CheckBox _chkJunior = new ThemedCheckBox();
+    private readonly ComboBox _cmbJuniorAge = new();
+
     /// <summary>A junior on the stream (15 Nov 2026) - see DriverProfile.JuniorOffStream and StreamConsent.</summary>
     private readonly ComboBox _cmbOnStream = new();
     private readonly CheckBox _chkStreamConsent = new ThemedCheckBox();
@@ -313,6 +317,8 @@ public sealed class ProfileForm : Form
         _txtCrewCar.PlaceholderText = "optional - for the Technical Lead";
         fields.AddHint("In their own words, for the principal and the Technical Lead. Spoken over the PA and the stream; "
                        + "never shown online.");
+
+        AddJuniorRow(fields, captions);
 
         // A junior's notes and about line are said only with a parent's
         // consent recorded here (15 Nov 2026) - see DriverCrew.OwnWordsMayBeSaid.
@@ -1374,8 +1380,10 @@ public sealed class ProfileForm : Form
             // not on this dialog, so kept exactly as they were - a Driver Hub
             // edit must never wipe a signed waiver or a membership.
             WaiverSignedOn = Result.WaiverSignedOn,
-            IsJunior = Result.IsJunior,
-            JuniorAge = Result.JuniorAge,
+            // Junior and the age band ARE on this dialog now (15 Nov 2026,
+            // AddJuniorRow), so any club can set them, waivers or not.
+            IsJunior = _chkJunior.Checked,
+            JuniorAge = JuniorAgeChosen,
             WaiverGuardian = Result.WaiverGuardian ?? string.Empty,
             MembershipNumber = Result.MembershipNumber ?? string.Empty,
             MembershipExpires = Result.MembershipExpires,
@@ -1456,6 +1464,52 @@ public sealed class ProfileForm : Form
                        + "their name off the stream's overlays and the club's captions, keeps lines naming them from listeners "
                        + "at home, and leaves them out of the night-before preview. The PA in the room still says their name.");
     }
+
+    /// <summary>The "Age:" choices for a junior, in the order the drop-down lists them.</summary>
+    private static readonly (JuniorAge Age, string Words)[] JuniorAgeChoices =
+    {
+        (JuniorAge.NotSet, "Age not set (treated as under 13)"),
+        (JuniorAge.Under13, "Under 13"),
+        (JuniorAge.ThirteenToSeventeen, "13-17"),
+    };
+
+    /// <summary>
+    /// JUNIOR AND AGE BAND ON THE PROFILE (15 Nov 2026, children's privacy
+    /// review). Until now the Junior tick lived only in the Papers window,
+    /// which a club sees only when it checks waivers or memberships - so a
+    /// club that checks neither could not mark a junior at all, and every
+    /// junior protection (shortened names, desk-only notes, no following by
+    /// name, fixed desk replies, clean Sailor-mouth) passed them by. The same
+    /// two fields, here too, so any club can set them; the Papers window
+    /// still edits them, and both write the same profile.
+    /// </summary>
+    private void AddJuniorRow(FieldGrid fields, List<Label> captions)
+    {
+        _chkJunior.Text = "Under 18";
+        _chkJunior.AutoSize = true;
+        _chkJunior.Checked = Result.IsJunior;
+
+        _cmbJuniorAge.DropDownStyle = ComboBoxStyle.DropDownList;
+
+        foreach (var (_, words) in JuniorAgeChoices)
+        {
+            _cmbJuniorAge.Items.Add(words);
+        }
+
+        _cmbJuniorAge.SelectedIndex = Math.Max(0, Array.FindIndex(JuniorAgeChoices, c => c.Age == Result.JuniorAge));
+        _cmbJuniorAge.Enabled = _chkJunior.Checked;
+        _chkJunior.CheckedChanged += (_, _) => _cmbJuniorAge.Enabled = _chkJunior.Checked;
+
+        captions.Add(fields.AddRow("Junior:", FieldGrid.Inline(_chkJunior, _cmbJuniorAge)));
+        fields.AddHint("Juniors' names are shortened online, their own words are taken only at the desk, and under 13s get "
+                       + "the strictest rules. Set the age band so 13-17s can send crew names from their phone.");
+    }
+
+    /// <summary>The age band as saved: NotSet unless Junior is ticked.</summary>
+    private JuniorAge JuniorAgeChosen =>
+        !_chkJunior.Checked || _cmbJuniorAge.SelectedIndex < 0 || _cmbJuniorAge.SelectedIndex >= JuniorAgeChoices.Length
+            ? JuniorAge.NotSet
+            : JuniorAgeChoices[_cmbJuniorAge.SelectedIndex].Age;
 
     /// <summary>The "On stream:" choice as saved: true for "Not at all".</summary>
     private bool OnStreamOffChosen =>

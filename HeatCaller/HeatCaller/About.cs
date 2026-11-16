@@ -58,10 +58,10 @@ namespace HeatCaller;
 ///     not a modification of it, and every plugin that ships is byte for
 ///     byte VideoLAN's. Which plugins ship, and the licence each one
 ///     declares, is Assets\Licences\LibVLC-plugins.txt (read from the
-///     DLLs themselves on 15 Nov 2026: 264 plugins, 262 declaring the LGPL
-///     and two small audio filters - dolby_surround_decoder and
-///     headphone_channel_mixer - declaring GPL-2.0-or-later, flagged there
-///     for counsel and for excluding in the csproj).
+///     DLLs themselves on 15 Nov 2026: 262 plugins, every one declaring the
+///     LGPL. The package's two GPL-2.0-or-later audio filters -
+///     dolby_surround_decoder and headphone_channel_mixer - are excluded in
+///     the csproj, so no GPL code ships).
 ///   - The source must be available. LGPL section 6 is met here by a
 ///     written offer (15 Nov 2026, the IP plan's item 3.2), in the About box
 ///     and at the top of LibVLC-plugins.txt: the exact source of VLC 3.0.24

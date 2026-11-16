@@ -44,6 +44,7 @@ public partial class MainForm
         Batteries = _batteryPacks,
         Signups = _signupDesk?.Store,
         Diary = PrincipalDiary.Load,
+        Ghosts = _ghostStore,
         Settings = _settings,
     };
 

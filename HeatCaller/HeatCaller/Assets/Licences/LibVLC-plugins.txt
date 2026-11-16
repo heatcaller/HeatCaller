@@ -50,7 +50,7 @@ notes at the end.
 Not legal advice. Anything marked [CHECK] is for counsel.
 
 
-THE PLUGINS THAT SHIP (264)
+THE PLUGINS THAT SHIP (262)
 ---------------------------
 
 Also shipped: libvlc.dll and libvlccore.dll (LGPL-2.1-or-later), and
@@ -88,10 +88,8 @@ carries an LGPL-2.1-or-later notice).
   plugins\audio_filter\libaudiobargraph_a_plugin.dll           LGPL-2.1-or-later
   plugins\audio_filter\libchorus_flanger_plugin.dll            LGPL-2.1-or-later
   plugins\audio_filter\libcompressor_plugin.dll                LGPL-2.1-or-later
-  plugins\audio_filter\libdolby_surround_decoder_plugin.dll    GPL-2.0-or-later  [CHECK]
   plugins\audio_filter\libequalizer_plugin.dll                 LGPL-2.1-or-later
   plugins\audio_filter\libgain_plugin.dll                      LGPL-2.1-or-later
-  plugins\audio_filter\libheadphone_channel_mixer_plugin.dll   GPL-2.0-or-later  [CHECK]
   plugins\audio_filter\libkaraoke_plugin.dll                   LGPL-2.1-or-later
   plugins\audio_filter\libnormvol_plugin.dll                   LGPL-2.1-or-later
   plugins\audio_filter\libparam_eq_plugin.dll                  LGPL-2.1-or-later
@@ -326,15 +324,16 @@ carries an LGPL-2.1-or-later notice).
 NOTES AND OPEN QUESTIONS
 ------------------------
 
-1. Two plugins declare the GPL, not the LGPL [CHECK]:
+1. Two plugins in the package declare the GPL, not the LGPL, and are NOT
+   shipped (excluded in HeatCaller.csproj on 15 Nov 2026):
      audio_filter\libdolby_surround_decoder_plugin.dll
      audio_filter\libheadphone_channel_mixer_plugin.dll
    Both are small audio filters (Dolby Surround decoding, and a headphone
    downmix effect). HeatCaller never asks for either, but VLC can pick a
    plugin by itself, and shipping a GPL plugin is a GPL distribution of that
    plugin. The simplest fix is to add both to the exclude list in
-   HeatCaller.csproj (VlcWindowsX64ExcludeFiles). Counsel to say whether
-   that is needed or whether shipping them with their source is enough.
+   HeatCaller.csproj (VlcWindowsX64ExcludeFiles) - done 15 Nov 2026, so no
+   GPL plugin ships. Every plugin listed above declares the LGPL.
 
 2. Built-in third-party libraries. Several plugins have another project's
    library compiled into them. From general knowledge of VLC 3.0's

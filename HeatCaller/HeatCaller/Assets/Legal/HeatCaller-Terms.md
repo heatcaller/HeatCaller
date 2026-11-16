@@ -55,7 +55,7 @@ Information about your drivers is handled as described in Part 2. You are respon
 - **Names online.** A junior's name is shortened on every page HeatCaller publishes, whatever your club-wide setting, and pages that name a junior ask search engines not to list them. Nobody can follow a junior by name; their family can follow them through a family link.
 - **Messages.** Replies from your desk to a junior's phone are fixed messages only. If you need to say more, tell the parent in person. HeatCaller has no messages between drivers.
 - **Tone.** The **Sailor-mouth** commentary tone plays clean in any race with a junior in it.
-- **Parents' rights.** On request, let a parent see their child's information, change or delete it, and stop any more being collected. **Export this driver's data** gives you a copy to hand over, and **Forget this driver** deletes it from HeatCaller and the relay.
+- **Parents' rights.** On request, let a parent see their child's information, change or delete it, and stop any more being collected. **Export** on the driver's menu in Driver Hub gives you a copy to hand over, and **Forget** deletes it from HeatCaller and the relay (backups made before it still hold it until they are replaced).
 
 You must not use HeatCaller to collect information from children in a way the law where you race does not allow. Laws differ: in the UK and EU, for example, the age at which a child can consent for themselves online is between 13 and 16, and the UK Children's Code expects children's information to be kept private by default.
 
@@ -85,6 +85,8 @@ This agreement is governed by the laws of the State of New York, USA.
 
 support@heatcaller.com
 
+During the beta we answer by email on a best-efforts basis, with no guaranteed response time. For a club's first nights we will agree in advance when someone is reachable.
+
 # Part 2: Privacy notice
 
 This notice explains what information about drivers HeatCaller handles when a club uses it, where that information goes, and how long it is kept.
@@ -102,7 +104,7 @@ This notice explains what information about drivers HeatCaller handles when a cl
 - Audio recordings of each race and, if the club turns it on, short highlight videos.
 - The announcer's spoken lines, saved so they don't have to be made again.
 
-Keys and PINs are stored encrypted, locked to the Windows account that saved them. Backups are encrypted with the club's backup password, and HeatCaller will not back up to a cloud-synced folder without one.
+Keys and PINs are stored encrypted, locked to the Windows account that saved them. Drivers' profiles and results on the club's computer are not encrypted, so keep the computer's own Windows sign-in private. When the club sets a backup password, each backup is encrypted with it, and HeatCaller will not copy backups to Google Drive, iCloud or OneDrive, or save them in one of their folders, without one.
 
 ## Drivers' own crew and notes
 
@@ -141,7 +143,7 @@ Only if the club turns on **Drivers can pick their own crew**.
 - Driver photos, only in the online check-in list, only if the club turns them on, and only visible to someone with a check-in code or PIN.
 - Highlight videos for the top three in a race.
 - Check-ins, sign-ups and requests drivers make from their phones.
-- Follows and phone notifications. Anyone can follow an adult driver by name. A junior can only be followed through a family link the club gives their family.
+- Follows and phone notifications. Anyone can follow an adult driver by name. A junior can only be followed through a family link made from their own phone.
 
 Transponder numbers and email addresses are never published.
 
@@ -172,7 +174,7 @@ We do not sell driver information or use it for advertising.
 - **A junior's sign-in on a phone:** ends after 30 days; they sign in again with their PIN.
 - **A driver's goal for the night:** used on that night only (or, sent after the night's last race, the next race night within eight days), then never again. It stays on the profile until it is replaced or deleted.
 - **Other crew names, notes and about lines:** until the driver or the club changes or deletes them, or the driver is forgotten.
-- **Old race nights:** a club can choose to take nights older than a set number of seasons off the relay. This is off unless the club turns it on.
+- **Old results:** a club can choose to take results older than a set number of years off the relay (**Unpublish results older than**). This is off unless the club turns it on.
 - **Everything else published to the relay:** until the club publishes again, forgets the driver, or uses **Delete Everything Published**.
 
 ## Choices a club and a driver have
@@ -181,8 +183,8 @@ We do not sell driver information or use it for advertising.
 - A club can keep the roster, photos and full names off the internet, publish nothing at all, or use **Delete Everything Published** to erase everything it has on the relay at once.
 - Each driver's profile has **Online privacy** choices: leave their photo out, no podium videos of them, and initials only. A junior's profile also has **On stream**.
 - A driver can clear any of their crew names or notes from their phone, and the club can delete them on the driver's profile. A club can turn off **Drivers can pick their own crew** at any time; their crews are then not heard.
-- **A copy of a driver's information:** **Export this driver's data** on their profile saves everything HeatCaller holds about them in one file, for the club to give the driver or their parent.
-- **Removing a driver:** **Forget this driver** deletes what HeatCaller holds about them on the club's computer, and their copies on the relay. Their past results stay, shown as "Removed driver", so other drivers' places and points don't change.
+- **A copy of a driver's information:** **Export** on the driver's menu in Driver Hub saves everything HeatCaller holds about them in one file, for the club to give the driver or their parent.
+- **Removing a driver:** **Forget** on the driver's menu in Driver Hub deletes what HeatCaller holds about them on the club's computer, and their copies on the relay. Their past results stay, shown as "Removed driver", so other drivers' places and points don't change.
 - A driver, or a parent or guardian, can ask the club for a copy of their information or for it to be removed. For anything on the relay or in the HeatCaller voice, they or the club can also email us.
 
 ## Contact

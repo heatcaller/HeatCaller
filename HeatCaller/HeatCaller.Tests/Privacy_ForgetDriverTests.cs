@@ -239,4 +239,31 @@ public sealed class Privacy_ForgetDriverTests : IDisposable
         Assert.Equal(new[] { "a1", "b2" }, body.GetProperty("badges").EnumerateArray().Select(e => e.GetString()));
         Assert.Equal(new[] { "Mia Kent", "M.K." }, body.GetProperty("names").EnumerateArray().Select(e => e.GetString()));
     }
+
+    [Fact]
+    public void Forget_removes_ghost_cars_chasing_the_driver_and_leaves_the_others()
+    {
+        // Review pass, 15 Nov 2026: a ghost chasing a driver's best keeps
+        // their transponder and often their name, so Forget takes it too.
+        var w = Arrange();
+        var ghosts = GhostStore.Load();
+        ghosts.Current.Ghosts.Clear();
+        ghosts.Current.Ghosts.Add(new GhostCar { Name = "Mia Kent's best", PaceSource = GhostPaceSource.DriverPersonalBest, SourceTransponder = MiaSpare });
+        ghosts.Current.Ghosts.Add(new GhostCar { Name = "Chasing her", PaceSource = GhostPaceSource.DriverPersonalBest, SourceTransponder = Mia });
+        ghosts.Current.Ghosts.Add(new GhostCar { Name = "Sam's best", PaceSource = GhostPaceSource.DriverPersonalBest, SourceTransponder = Sam });
+        ghosts.Current.Ghosts.Add(new GhostCar { Name = "Pace car" });
+        ghosts.Save();
+
+        var sources = w.Sources;
+        var outcome = DriverForget.Forget(w.Profiles.Get(Mia)!, new DriverDataSources
+        {
+            Profiles = sources.Profiles,
+            History = sources.History,
+            Settings = sources.Settings,
+            Ghosts = ghosts,
+        });
+
+        Assert.Equal(new[] { "Sam's best", "Pace car" }, GhostStore.Load().Current.Ghosts.Select(g => g.Name));
+        Assert.Contains(outcome.Lines, l => l.Contains("ghost cars", StringComparison.Ordinal));
+    }
 }
