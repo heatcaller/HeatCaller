@@ -27,7 +27,7 @@ Asher answered decisions 1-8 (below): remove the phone-notes switch; under-13 cr
 | 2.6 | **Code built:** 180-day follow/push expiry, 30-day junior sign-ins, optional unpublish of old nights. **Docs done:** schedule published in Terms Part 2. |
 | 2.7 | **Drafted** (documents pass): security-program.md (coordinator blank), dpia.md, retention policy in the Terms. **Left for counsel** and for Asher to name the coordinator. |
 | 3.1 | **Done** in the Terms (revision 2). **Counsel** to see the wording. |
-| 3.2 | **Done in About.cs and Assets\Licences\LibVLC-plugins.txt:** written offer (3 years, support@heatcaller.com) and a placeholder link. 262 plugins listed, all LGPL; the two GPL-2.0-or-later audio filters (dolby_surround_decoder, headphone_channel_mixer) are **excluded in HeatCaller.csproj** (review pass, 15 Nov). **Left for Asher:** **upload the source tarball** to HeatCaller-releases and fill in the link. |
+| 3.2 | **Done in About.cs and Assets\Licences\LibVLC-plugins.txt:** written offer (3 years, support@heatcaller.com) and the link. The sources (VLC 3.0.24 checked against VideoLAN's SHA-256, and LibVLCSharp 3.10.1) went up on 16 Nov 2026 as the third-party-source pre-release on HeatCaller-releases. 262 plugins listed, all LGPL; the two GPL-2.0-or-later audio filters (dolby_surround_decoder, headphone_channel_mixer) are **excluded in HeatCaller.csproj** (review pass, 15 Nov). **Done 16 Nov 2026.** |
 | 3.3 | **Done** in the Terms, 7.4 and 7.6. **Counsel.** |
 | 3.4 | **Done** in the Terms (7.5) and on the music docs page. The listen-along code comment is in AnnouncementService.ListenAlong.cs (review pass). |
 | 3.5 | **Done** in the Terms, 7.3. |
