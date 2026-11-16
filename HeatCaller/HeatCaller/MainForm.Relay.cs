@@ -1425,6 +1425,14 @@ public partial class MainForm
         // thirty.
         SendToRelayIfChanged(RelayChannel.Manage, "the race-day manager", () => RelayDocuments.Manage(_settings));
 
+        // The privacy rules the relay enforces itself (15 Nov 2026, children's
+        // privacy) - the juniors' published names and how many years of
+        // results to keep. Every tick, so a birthday put in or a driver ticked
+        // junior stops strangers following them within seconds. See
+        // RelayPrivacyDocument.
+        SendToRelayIfChanged(RelayChannel.Privacy, "the privacy rules", () => RelayPrivacyDocument.Build(
+            PublicPrivacy.Current, _settings.RelayUnpublishAfterYears, DateTime.Now));
+
         // Settings-only too: sign-up open or not, the classes, the invite
         // codes' hashes - so an invite just emailed works within seconds.
         // Only once a club has used it: a relay from before sign-up has no
@@ -1937,6 +1945,14 @@ public partial class MainForm
     /// </summary>
     private void PublishResultsIndexForYear(string year, bool onlyIfChanged = false)
     {
+        // Older than the club keeps online (15 Nov 2026, children's privacy
+        // 2.6): not sent. The relay takes the year down itself when the
+        // privacy document says so, and refuses it coming back.
+        if (RelayPrivacyDocument.YearTooOld(year, _settings.RelayUnpublishAfterYears, DateTime.Now))
+        {
+            return;
+        }
+
         try
         {
             var json = RelayResultsIndex.Build(
@@ -2098,6 +2114,13 @@ public partial class MainForm
         // A demo race is a rehearsal, not a result - it never goes on the
         // club's public results page.
         if (session.IsNotScored())
+        {
+            return;
+        }
+
+        // Older than the club keeps online (15 Nov 2026, children's privacy
+        // 2.6) - a privacy republish of an old season must not put it back.
+        if (RelayPrivacyDocument.TooOld(RelayResultsIndex.EffectiveStart(session), _settings.RelayUnpublishAfterYears, DateTime.UtcNow))
         {
             return;
         }

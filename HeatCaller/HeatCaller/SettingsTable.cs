@@ -340,6 +340,7 @@ internal static class SettingsTable
             nameof(AppSettings.RelayBaseUrl),
             nameof(AppSettings.RelayPublishRoster),
             nameof(AppSettings.RelayAbbreviateNames),
+            nameof(AppSettings.RelayUnpublishAfterYears),
             nameof(AppSettings.PublishDriverNightsToTheRelay),
             nameof(AppSettings.PublishNightBeforeToTheRelay),
             nameof(AppSettings.ListenAlongOnTheRelay),

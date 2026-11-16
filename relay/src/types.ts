@@ -390,6 +390,17 @@ export const CHANNELS: Readonly<Record<string, ChannelSpec>> = Object.freeze({
     what: "the announcer's last few lines, as captions",
     maxItemBytes: 16 * 1024,
   },
+  // The club's privacy rules the relay enforces itself (15 Nov 2026,
+  // children's privacy): the published forms of juniors' names, and how many
+  // years of results to keep. Private - which names are children's is
+  // nobody's business. See privacy.ts.
+  privacy: {
+    name: "privacy",
+    kind: "snapshot",
+    what: "the juniors' published names and how many years of results to keep",
+    private: true,
+    maxItemBytes: 256 * 1024,
+  },
   signup: {
     name: "signup",
     kind: "snapshot",

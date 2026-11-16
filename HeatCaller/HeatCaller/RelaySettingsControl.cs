@@ -77,6 +77,9 @@ public sealed partial class RelaySettingsControl : UserControl
     private readonly CheckBox _chkAbbreviate = new ThemedCheckBox();
     private readonly CheckBox _chkFullNamesAloud = new ThemedCheckBox();
 
+    // 15 Nov 2026 (children's privacy 2.6): unpublish results older than N years.
+    private readonly NumericUpDown _numUnpublishYears = new();
+
     // --- Driver experience (22 Oct 2026) ---------------------------------
     //
     // WHY (22 Oct 2026, driver experience): the drivers' own requests from
@@ -473,6 +476,7 @@ public sealed partial class RelaySettingsControl : UserControl
 
         Fit(_txtSmtpHost, shortMail);
         Fit(_numProtestMinutes, UiLayout.AtTextSize(UiLayout.NumericWidth));
+        Fit(_numUnpublishYears, UiLayout.AtTextSize(UiLayout.NumericWidth));
         Fit(_numSmtpPort, Math.Max(
             UiLayout.AtTextSize(UiLayout.NumericWidth),
             TextRenderer.MeasureText(new string('0', PortDigits), _numSmtpPort.Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra));
@@ -726,6 +730,32 @@ public sealed partial class RelaySettingsControl : UserControl
             + "club's pages and captions still show the short name, and a line that says a full name is not "
             + "sent to people listening along at home.");
 
+        // UNPUBLISH OLD RESULTS (15 Nov 2026, children's privacy 2.6): off by
+        // default. Results older than this many years come off the club's
+        // pages - and the relay - and are not sent again. See
+        // AppSettings.RelayUnpublishAfterYears and RelayPrivacyDocument.
+        _numUnpublishYears.Minimum = 0;
+        _numUnpublishYears.Maximum = RelayPrivacyDocument.MostYears;
+        _numUnpublishYears.ValueChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            _settings.RelayUnpublishAfterYears = (int)_numUnpublishYears.Value;
+            _settings.Save();
+            _publisher.SettingsChanged();
+        };
+
+        var unpublishGrid = new FieldGrid();
+        unpublishGrid.AddRow("Unpublish results older than (years):", _numUnpublishYears);
+        _linedUp.Add(unpublishGrid);
+
+        var lblUnpublishHint = HintLabel(
+            "0 keeps every year online. 2 keeps this year and last: older results, and their year on the "
+            + "Results page, are taken off the club's pages and not sent again. They stay on this PC.");
+
         var (btnBoardColumns, lblBoardColumns) = BuildBoardColumns();
 
         var card = new Section("What gets published");
@@ -760,7 +790,10 @@ public sealed partial class RelaySettingsControl : UserControl
         card.Add(_chkAbbreviate, stretch: false, gapBelow: UiLayout.HintGap);
         card.Add(lblNameHint);
         StepIn(card.Add(_chkFullNamesAloud, stretch: false, gapBelow: UiLayout.HintGap));
-        StepIn(card.Add(lblFullNamesHint, gapBelow: 0));
+        StepIn(card.Add(lblFullNamesHint));
+
+        card.Add(unpublishGrid, gapBelow: UiLayout.HintGap);
+        card.Add(lblUnpublishHint, gapBelow: 0);
 
         return card;
     }
@@ -3096,6 +3129,7 @@ public sealed partial class RelaySettingsControl : UserControl
             _chkDriverRequests.Checked = _settings.RelayDriverRequests;
             _chkResultQueries.Checked = _settings.RelayResultQueries;
             _numProtestMinutes.Value = Math.Clamp(_settings.ProtestMinutesFor(null), (int)_numProtestMinutes.Minimum, (int)_numProtestMinutes.Maximum);
+            _numUnpublishYears.Value = Math.Clamp(_settings.RelayUnpublishAfterYears, (int)_numUnpublishYears.Minimum, (int)_numUnpublishYears.Maximum);
             _chkNightEmail.Checked = _settings.NightEmailOffered;
             _chkNightEmailAuto.Checked = _settings.NightEmailAutomatic;
             _chkRelayCaptions.Checked = _settings.RelayCaptions;

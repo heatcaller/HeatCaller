@@ -39,6 +39,12 @@ export interface PageContext {
   readonly preview?: PagePreview;
   /** The phone's driver theme from its hg-theme cookie ("pitlane", "night:teal"), or undefined. Checked again where it is used. */
   readonly theme?: string;
+  /**
+   * What this page shows names a junior (15 Nov 2026, children's privacy
+   * 4.3): search engines are asked to leave it out. Worked out by the
+   * server from the club's documents (Relay.namesAJuniorOn).
+   */
+  readonly noindex?: boolean;
 }
 
 export const DEFAULT_CONTEXT: PageContext = Object.freeze({ look: DEFAULT_LOOK, origin: "", nonce: "" });
@@ -3257,13 +3263,14 @@ function meForgotten() {
   try { return meCode() === '' && localStorage.getItem(ME_WAS_KEY) === '1'; } catch (e) { return false; }
 }
 
-function meRemember(code, name) {
+function meRemember(code, name, junior) {
   if (!/^[0-9a-f]{20}$/.test(String(code))) return;
   try { localStorage.setItem(ME_KEY, String(code)); } catch (e) { /* asked again next time */ }
   meKeepStorage();
   const list = meDrivers();
   const was = list.find((d) => d.c === code);
   const one = { c: String(code), n: typeof name === 'string' && name.trim() !== '' ? name.trim().slice(0, 60) : (was ? was.n : '') };
+  meNoteSignIn(String(code), junior);
   const rest = list.filter((d) => d.c !== code);
   // A sixth driver pushes out the one signed in longest ago, alerts and all.
   while (rest.length >= ME_MAX) { const old = rest.pop(); meStopPush(old.c); }
@@ -3324,6 +3331,8 @@ function meSignOut(code) {
   } else {
     meForget();
     try { localStorage.removeItem(ME_WAS_KEY); } catch (e) { /* nothing was kept */ }
+    // With nobody left, their sign-in times too (ME_JUNIOR_DAYS).
+    try { localStorage.removeItem('hg-me-at-' + CLUB); } catch (e) { /* nothing was kept */ }
   }
   for (const k of ME_LEFTOVERS) {
     // The phone's alerts stay on for the drivers still on it.
@@ -3366,6 +3375,70 @@ function meSignOutAll() {
   meSignOut(current || (list[0] ? list[0].c : ''));
   meForget();
 }
+
+// A JUNIOR'S SIGN-IN EXPIRES (15 Nov 2026, children's privacy 2.6). A
+// phone remembered a driver until they signed out, which for a child's
+// badge on a shared or handed-down phone could be for good. A junior's
+// sign-in is now forgotten 30 days after it was made - the relay says
+// which drivers are juniors when their night opens (junior: true) - and
+// they sign in again with their PIN or badge. Adults' are kept as before.
+// The time and the junior mark are kept beside the list, by code, in
+// ME_AT_KEY ({ code: { t: ms, j: true } }), so the list itself is what it
+// was. A driver remembered before this has no time: their 30 days start
+// from the first visit since.
+const ME_JUNIOR_DAYS = 30;
+const ME_AT_KEY = 'hg-me-at-' + CLUB;
+
+function meSignIns() {
+  try {
+    const at = JSON.parse(localStorage.getItem(ME_AT_KEY) || '{}');
+    return at && typeof at === 'object' && !Array.isArray(at) ? at : {};
+  } catch (e) { return {}; }
+}
+
+function meKeepSignIns(at) {
+  try {
+    if (Object.keys(at).length > 0) localStorage.setItem(ME_AT_KEY, JSON.stringify(at));
+    else localStorage.removeItem(ME_AT_KEY);
+  } catch (e) { /* the next visit stamps it again */ }
+}
+
+// Noted when a driver is remembered: the time of the sign-in (kept, not
+// moved, on later visits) and whether the relay says they are a junior.
+function meNoteSignIn(code, junior) {
+  const at = meSignIns();
+  const was = at[code] && typeof at[code] === 'object' ? at[code] : {};
+  const one = { t: typeof was.t === 'number' && isFinite(was.t) ? was.t : Date.now() };
+  if (junior === true || (junior === undefined && was.j === true)) one.j = true;
+  at[code] = one;
+  meKeepSignIns(at);
+}
+
+function meExpireJuniors() {
+  const codes = meDrivers().map((d) => d.c);
+  const shown = meCode();
+  if (shown && codes.indexOf(shown) < 0) codes.push(shown);
+  const at = meSignIns();
+  const now = Date.now();
+  const kept = {};
+  for (const c of codes) {
+    const one = at[c] && typeof at[c] === 'object' ? at[c] : {};
+    kept[c] = { t: typeof one.t === 'number' && isFinite(one.t) ? one.t : now };
+    if (one.j === true) kept[c].j = true;
+  }
+  meKeepSignIns(kept);
+  for (const c of codes) {
+    if (kept[c].j === true && now - kept[c].t > ME_JUNIOR_DAYS * 24 * 3600 * 1000) {
+      // Signed out as a sign-out does it: alerts stopped, the night's copies forgotten.
+      meSignOut(c);
+      if (meCode() === c) meForget();
+      const left = meSignIns();
+      delete left[c];
+      meKeepSignIns(left);
+    }
+  }
+}
+try { meExpireJuniors(); } catch (e) { /* kept until the next page */ }
 
 // Whether this tab signed out of this code and is being taken back to it -
 // Back, Forward, a reload, or a page the browser kept (restored). A badge
@@ -4087,7 +4160,8 @@ export function shell(page: Shell, context: PageContext): string {
 ${NO_ZOOM_HEAD}
 <meta name="color-scheme" content="${look.light ? "light" : "dark"}">
 <meta name="theme-color" content="${look.themeColor}">${page.noindex === true ? `
-<meta name="robots" content="noindex, nofollow">` : ""}
+<meta name="robots" content="noindex, nofollow">` : context.noindex === true ? `
+<meta name="robots" content="noindex">` : ""}
 <meta name="description" content="${description}">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="${name}">
@@ -17603,7 +17677,7 @@ async function load() {
   refreshAsks();
   startLive();
   loadCheckIn();
-  meRemembered(CODE);
+  meRemembered(CODE, body.junior === true);
   void loadVideos();
   setInterval(() => { void loadVideos(); }, 300000);
 }
@@ -17618,12 +17692,13 @@ load();
  * it. Kept apart from NIGHT_JS so the night itself does not change.
  */
 const NIGHT_ME_JS = `
-function meRemembered(code) {
+function meRemembered(code, junior) {
   // Signed out of in this tab and come back to by Back or a reload: the
   // PIN again, never remembered again.
   if (meSignedOut(code)) { meToPin(); return; }
-  // With the name the night gives, so the phone can say who is on it (item 8).
-  meRemember(code, typeof night === 'object' && night && typeof night.driver === 'string' ? night.driver : '');
+  // With the name the night gives, so the phone can say who is on it (item 8),
+  // and whether they are a junior, whose sign-in expires (ME_JUNIOR_DAYS).
+  meRemember(code, typeof night === 'object' && night && typeof night.driver === 'string' ? night.driver : '', junior === true);
   if (meCode() !== code) return;
   meSignedInButton();
 }

@@ -48,6 +48,11 @@ public enum RelayChannel
     // 14 Nov 2026 (race video plan Phase 0): tonight's YouTube stream - see
     // StreamTonight. PRIVATE: the relay works each race's moment out of it.
     Stream,
+
+    // 15 Nov 2026 (children's privacy): the juniors' published names and how
+    // many years of results to keep - see RelayPrivacyDocument. PRIVATE: the
+    // relay enforces it (no following a junior by name, noindex, old results).
+    Privacy,
 }
 
 /// <summary>
@@ -3883,6 +3888,7 @@ public sealed partial class RelayPublisher : IDisposable
         RelayChannel.Sponsors => "sponsors",
         RelayChannel.NextNight => "nextnight",
         RelayChannel.Stream => "stream",
+        RelayChannel.Privacy => "privacy",
 
         // A NAME THE RELAY WILL REFUSE, not "state" (13 Oct 2026). This
         // arm used to answer "state", so a channel added to the enum and

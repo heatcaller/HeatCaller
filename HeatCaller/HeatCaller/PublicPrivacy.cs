@@ -58,6 +58,9 @@ internal sealed class PublicPrivacy
     /// <summary>Every name and each word of it for those drivers, for <see cref="MentionsWithheld"/>; null when nobody asked.</summary>
     private readonly Redactor? _mentions;
 
+    /// <summary>Every form a junior's name can go online in - see <see cref="JuniorPublicNames"/>. Sorted, no repeats.</summary>
+    private readonly IReadOnlyList<string> _juniorPublicNames;
+
     private PublicPrivacy(IReadOnlyList<Entry> entries)
     {
         _byTransponder = new Dictionary<string, Entry>(StringComparer.OrdinalIgnoreCase);
@@ -109,6 +112,25 @@ internal sealed class PublicPrivacy
         {
             _byTransponder.TryAdd(entry.Transponder, entry);
         }
+
+        // From every entry, not only those keeping their transponder, so a
+        // removed junior (kept by name, PrivacyRetained) still counts.
+        var juniorForms = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entry in entries.Where(e => e.Junior))
+        {
+            foreach (var form in PublicFormsOf(entry.Name))
+            {
+                juniorForms.Add(form);
+            }
+
+            if (entry.Initials && Initials(entry.Name) is { Length: > 0 } initials)
+            {
+                juniorForms.Add(initials);
+            }
+        }
+
+        _juniorPublicNames = juniorForms.ToList();
 
         Fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint.ToString())));
 
@@ -405,6 +427,41 @@ internal sealed class PublicPrivacy
     /// overlay plan 7.5). See RelayPublisher.DisplayNames.
     /// </summary>
     public bool JuniorForTransponder(string? transponder) => Find(transponder)?.Junior == true;
+
+    /// <summary>
+    /// Every form a junior's name can take on the club's pages (15 Nov 2026,
+    /// children's privacy): "Mia K", "Mia Ke" ... "Mia Kent" - which of them a
+    /// page shows depends on who else raced (RelayPublisher.DisplayNames) -
+    /// and their initials when they are shown by initials. What the relay is
+    /// told in the private privacy document (RelayPrivacyDocument), so it can
+    /// refuse following a junior by name and keep pages naming one out of
+    /// search engines. Every driver who is a junior now, or was when removed.
+    /// </summary>
+    public IReadOnlyList<string> JuniorPublicNames => _juniorPublicNames;
+
+    /// <summary>
+    /// "Mia Kent" as every shortening can show it: the last word cut to one
+    /// letter, two, and so on to the whole name. A one-word name is only itself.
+    /// </summary>
+    internal static IReadOnlyList<string> PublicFormsOf(string? name)
+    {
+        var words = SingleSpaced(name).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        if (words.Length == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        if (words.Length == 1)
+        {
+            return new[] { words[0] };
+        }
+
+        var head = string.Join(' ', words[..^1]);
+        var last = words[^1];
+
+        return Enumerable.Range(1, last.Length).Select(take => head + " " + last[..take]).ToList();
+    }
 
     /// <summary>True when <paramref name="name"/> is the full or announcer name of a driver shown online by initials only.</summary>
     public bool InitialsFor(string? name) =>

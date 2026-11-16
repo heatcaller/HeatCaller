@@ -2420,6 +2420,14 @@ public sealed class AppSettings
     public bool RelayAbbreviateNames { get; set; } = true;
 
     /// <summary>
+    /// Unpublish results older than this many years (15 Nov 2026, children's
+    /// privacy 2.6): 0, the default, keeps every year online. 2 keeps this
+    /// year and last; older results and their year's index are taken off the
+    /// relay and never sent again. They stay on this PC. See RelayPrivacyDocument.
+    /// </summary>
+    public int RelayUnpublishAfterYears { get; set; }
+
+    /// <summary>
     /// The announcer says drivers' names in full with the HeatCaller voice
     /// and ElevenLabs too, even while RelayAbbreviateNames shortens them on
     /// the club's pages (24 Oct 2026). Off by default: those voices render

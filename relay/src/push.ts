@@ -216,6 +216,43 @@ export interface PushSub {
    * all of them, as every phone signed up before this had.
    */
   readonly kinds?: readonly string[];
+  /**
+   * When an alert last reached this phone (15 Nov 2026, children's privacy
+   * 2.6), ISO. Absent until the first one. See PUSH_SUB_IDLE_DAYS.
+   */
+  readonly used?: string;
+}
+
+/**
+ * HOW LONG A SIGN-UP IS KEPT WITHOUT USE (15 Nov 2026, children's privacy
+ * 2.6). A phone's push address used to be kept until the push service said
+ * it was gone, which a phone in a drawer never makes it say - so a sign-up,
+ * and for a follower the name it follows, could sit on the relay for good.
+ * Now one that has had no alert and not been signed up again (which a
+ * phone does every time alerts are turned on, or a page refreshes them)
+ * for 180 days is forgotten: never sent to again, and taken off the next
+ * time the club's sign-ups are counted. "Used" is the later of `since`
+ * (the last sign-up) and `used` (the last alert a push service took).
+ */
+export const PUSH_SUB_IDLE_DAYS = 180;
+
+const PUSH_SUB_IDLE_MS = PUSH_SUB_IDLE_DAYS * 24 * 3600 * 1000;
+
+/** How old `used` may get before an alert writes the new time back - once a day is plenty for 180. */
+const PUSH_SUB_USED_EVERY_MS = 24 * 3600 * 1000;
+
+/** When a sign-up was last used, in ms; NaN when it says nothing readable. */
+export function pushSubLastUsed(sub: { readonly since?: unknown; readonly used?: unknown }): number {
+  const since = typeof sub.since === "string" ? Date.parse(sub.since) : NaN;
+  const used = typeof sub.used === "string" ? Date.parse(sub.used) : NaN;
+  if (Number.isFinite(since) && Number.isFinite(used)) return Math.max(since, used);
+  return Number.isFinite(used) ? used : since;
+}
+
+/** Whether a sign-up has gone unused past PUSH_SUB_IDLE_DAYS. One with no readable time is kept: it is not known to be old. */
+export function pushSubIdle(sub: { readonly since?: unknown; readonly used?: unknown }, nowMs: number): boolean {
+  const last = pushSubLastUsed(sub);
+  return Number.isFinite(last) && nowMs - last > PUSH_SUB_IDLE_MS;
 }
 
 /** The kinds of alert a phone can switch on and off (see PushSub.kinds). */
@@ -779,7 +816,31 @@ export class PushService {
     const list = doc && isObject(doc.body) && Array.isArray(doc.body["subs"]) ? doc.body["subs"] : [];
     return list.filter((s): s is PushSub => isObject(s) && typeof s["endpoint"] === "string" && typeof s["p256dh"] === "string" && typeof s["auth"] === "string")
       .map((s) => (s.label === undefined || pushLabelFrom(s.label) === s.label ? s : { ...s, label: undefined }))
-      .map((s) => (s.kinds === undefined ? s : { ...s, kinds: pushKindsFrom(s.kinds) })) as PushSub[];
+      .map((s) => (s.kinds === undefined ? s : { ...s, kinds: pushKindsFrom(s.kinds) }))
+      // Unused past PUSH_SUB_IDLE_DAYS (15 Nov 2026): as good as gone - never
+      // sent to, and left out of whatever is written back.
+      .filter((s) => !pushSubIdle(s, this.now().getTime())) as PushSub[];
+  }
+
+  /**
+   * Every sign-up in one channel unused past PUSH_SUB_IDLE_DAYS taken off
+   * the disk (15 Nov 2026, children's privacy 2.6) - a followed name whose
+   * phones have all gone goes with them. Called inside the club's lock,
+   * from the sign-up paths, just before the club's sign-ups are counted:
+   * the one place that already reads them all.
+   */
+  private async pruneIdle(club: string, channel: string): Promise<void> {
+    const nowMs = this.now().getTime();
+
+    for (const item of await this.store.listItems(club, channel).catch(() => [])) {
+      const body = isObject(item.doc.body) ? item.doc.body : {};
+      const subs = Array.isArray(body["subs"]) ? body["subs"] : [];
+      const left = subs.filter((s) => !(isObject(s) && pushSubIdle(s, nowMs)));
+
+      if (left.length !== subs.length) {
+        await this.keep(club, item.id, left as PushSub[], channel, channel === FOLLOW_CHANNEL ? { name: body["name"] } : {});
+      }
+    }
   }
 
   private async keep(club: string, id: string, subs: readonly PushSub[], channel: string = PUSH_CHANNEL, extra: Record<string, unknown> = {}): Promise<void> {
@@ -809,6 +870,7 @@ export class PushService {
       const subs = await this.subsOf(club, id, FOLLOW_CHANNEL);
 
       if (!subs.some((s) => s.endpoint === mine.endpoint)) {
+        await this.pruneIdle(club, FOLLOW_CHANNEL);
         const all = await this.store.listItems(club, FOLLOW_CHANNEL);
         const count = all.reduce((n, item) => n + (isObject(item.doc.body) && Array.isArray(item.doc.body["subs"]) ? item.doc.body["subs"].length : 0), 0);
 
@@ -856,13 +918,20 @@ export class PushService {
     return out;
   }
 
-  /** The running order has just been written over: a followed driver whose race is now next. Never throws. */
-  async afterProgramme(club: string, before: unknown, after: unknown): Promise<void> {
+  /**
+   * The running order has just been written over: a followed driver whose
+   * race is now next. Never throws. isJunior (15 Nov 2026, children's
+   * privacy 1.2): a junior's name is never alerted on to a follower phone -
+   * their family follows them through a family link instead.
+   */
+  async afterProgramme(club: string, before: unknown, after: unknown, isJunior: (name: string) => boolean = () => false): Promise<void> {
     try {
       const names = await this.followed(club);
       const url = `/c/${encodeURIComponent(club)}/`;
 
       for (const [id, name] of names) {
+        if (isJunior(name)) continue;
+
         for (const message of followProgrammeAlerts(before, after, name, url)) {
           await this.deliver(club, id, message, PUSH_TTL_SECONDS, FOLLOW_CHANNEL);
         }
@@ -872,8 +941,8 @@ export class PushService {
     }
   }
 
-  /** A result has just been published: a followed driver who is in it. Never throws. */
-  async afterResult(club: string, sessionId: string, before: unknown, after: unknown): Promise<void> {
+  /** A result has just been published: a followed driver who is in it - never a junior (see afterProgramme). Never throws. */
+  async afterResult(club: string, sessionId: string, before: unknown, after: unknown, isJunior: (name: string) => boolean = () => false): Promise<void> {
     try {
       const names = await this.followed(club);
       // The race's own page, as the driver's own result alert (15 Nov 2026,
@@ -884,12 +953,40 @@ export class PushService {
         : `/c/${encodeURIComponent(club)}/results`;
 
       for (const [id, name] of names) {
+        if (isJunior(name)) continue;
+
         for (const message of followResultAlerts(before, after, name, url)) {
           await this.deliver(club, id, message, PUSH_TTL_SECONDS, FOLLOW_CHANNEL);
         }
       }
     } catch (e) {
       this.log(`[push] "${club}": could not work out the follower result alerts: ${String(e)}`);
+    }
+  }
+
+  /**
+   * Every follow of a junior's name forgotten (15 Nov 2026, children's
+   * privacy 1.2): called when the laptop publishes which names are juniors'.
+   * A phone that followed a junior before the rule, or before the driver's
+   * birthday was put in, stops hearing about them. Never throws; answers
+   * how many names were dropped.
+   */
+  async dropFollows(club: string, isJunior: (name: string) => boolean): Promise<number> {
+    try {
+      return await this.withLock(club, async () => {
+        let dropped = 0;
+
+        for (const [id, name] of await this.followed(club)) {
+          if (!isJunior(name)) continue;
+          await this.store.deleteItem(club, FOLLOW_CHANNEL, id).catch(() => undefined);
+          dropped++;
+        }
+
+        return dropped;
+      });
+    } catch (e) {
+      this.log(`[push] "${club}": could not drop the follows of juniors: ${String(e)}`);
+      return 0;
     }
   }
 
@@ -949,6 +1046,7 @@ export class PushService {
     if (!mine.some((s) => s.endpoint === sub.endpoint)) {
       // Not caught (Bug Hunt 15): a listing that failed is not a club
       // with no phones, and would have let the ceiling be passed.
+      await this.pruneIdle(club, PUSH_CHANNEL);
       const all = await this.store.listItems(club, PUSH_CHANNEL);
       const count = all.reduce((n, item) => n + (isObject(item.doc.body) && Array.isArray(item.doc.body["subs"]) ? item.doc.body["subs"].length : 0), 0);
 
@@ -1162,6 +1260,7 @@ export class PushService {
     const keys = await this.vapid();
     const payload = Buffer.from(JSON.stringify(message));
     const gone: string[] = [];
+    const reached: string[] = [];
     let sent = 0;
 
     for (const sub of subs) {
@@ -1187,6 +1286,7 @@ export class PushService {
           gone.push(sub.endpoint);
         } else if (answer.status >= 200 && answer.status < 300) {
           sent++;
+          reached.push(sub.endpoint);
         } else {
           this.log(`[push] "${club}": ${new URL(sub.endpoint).hostname} answered ${answer.status}${answer.reason ? ` ${answer.reason}` : ""}`);
         }
@@ -1199,12 +1299,25 @@ export class PushService {
     // may since have gained a phone, or gone with the club.
     // A list that could not be read this time is left as it is: the gone
     // phone is forgotten on a later alert instead.
-    if (gone.length > 0) {
+    //
+    // And each phone an alert reached noted as used (15 Nov 2026, children's
+    // privacy 2.6 - see PUSH_SUB_IDLE_DAYS), at most once a day per phone so
+    // a busy night is not a write per alert.
+    const nowMs = this.now().getTime();
+    const stamp = reached.filter((endpoint) => {
+      const sub = subs.find((s) => s.endpoint === endpoint);
+      return sub !== undefined && !(nowMs - pushSubLastUsed(sub) < PUSH_SUB_USED_EVERY_MS);
+    });
+
+    if (gone.length > 0 || stamp.length > 0) {
       await this.withLock(club, async () => {
         const now = await this.subsOf(club, id, channel);
-        const left = now.filter((s) => !gone.includes(s.endpoint));
+        const usedAt = this.now().toISOString();
+        const left = now
+          .filter((s) => !gone.includes(s.endpoint))
+          .map((s) => (stamp.includes(s.endpoint) ? { ...s, used: usedAt } : s));
 
-        if (left.length !== now.length) {
+        if (left.length !== now.length || stamp.length > 0) {
           const kept = channel === FOLLOW_CHANNEL ? await this.store.getItem(club, channel, id).catch(() => undefined) : undefined;
           await this.keep(club, id, left, channel, kept && isObject(kept.body) ? { name: kept.body["name"] } : {});
         }
