@@ -1993,9 +1993,29 @@ internal sealed partial class DriverRequestDesk
 
     // ------------------------------------------------------------ the rest
 
-    /// <summary>Declines it, with a reason for their phone (at most <see cref="DriverAsk.SaidMaxChars"/>).</summary>
+    /// <summary>
+    /// True when only a set reply may go to this request's phone: a junior,
+    /// or a badge nobody on this laptop has (nobody can say they're an adult).
+    /// See DeskInbox.JuniorReplyHint.
+    /// </summary>
+    public bool SetRepliesOnly(DriverRequest request) => DriverOf(request) is not { IsJunior: false };
+
+    /// <summary>
+    /// Declines it, with a reason for their phone (at most <see cref="DriverAsk.SaidMaxChars"/>).
+    /// A junior's reason is always one of HeatCaller's fixed replies, whatever was passed.
+    /// </summary>
     public bool Decline(DriverRequest request, string reason)
     {
+        // 15 Nov 2026, plan 1.4: enforced here, below the inbox, so no window
+        // or later caller can send a junior the desk's own words. Typed text
+        // or a club's edited reply becomes the nearest fixed one.
+        var setReply = SetRepliesOnly(request);
+
+        if (setReply)
+        {
+            reason = DeskInbox.SetReplyFor(reason);
+        }
+
         if (!_store.Answer(request.Id, DriverAsk.Declined, reason, DateTime.UtcNow))
         {
             return false;
@@ -2004,7 +2024,9 @@ internal sealed partial class DriverRequestDesk
         var store = _store;
         var id = request.Id;
         _undo.Capture("Decline a driver's request (their phone was told no)", () => store.Reopen(id));
-        _log("[driver requests] Declined a driver's request.");
+        _log(setReply
+            ? $"[driver requests] Declined a junior's (or unknown badge's) request with the set reply \"{reason}\"."
+            : "[driver requests] Declined a driver's request.");
         return true;
     }
 

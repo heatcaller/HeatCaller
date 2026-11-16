@@ -671,15 +671,54 @@ internal sealed class RelaySignupDesk
         Changed?.Invoke();
     }
 
+    /// <summary>What a turned-down phone is told when the desk gave no reason.</summary>
+    internal const string DefaultRejectMessage = "The timing desk couldn't take this sign-up.";
+
+    // JUNIORS GET A SET REPLY (15 Nov 2026, plan 1.4), as a junior's declined
+    // request does (DeskInbox.JuniorReplyHint): a turn-down's line goes to
+    // that one phone, so for a sign-up from a parent or guardian (under 18),
+    // or for a driver already down here as a junior, the desk can only pick
+    // one of these. Anything more is said to the parent in person. The line
+    // sent stays on the invite (AnswerMessage), so it is on record.
+
+    /// <summary>The only lines a junior's turned-down sign-up can be sent. The first is the default.</summary>
+    internal static readonly IReadOnlyList<string> JuniorRejectReplies = new[]
+    {
+        DefaultRejectMessage,
+        "Please sign up at the desk instead.",
+        "Please pick a different class.",
+    };
+
+    /// <summary>True when only a set line may go back: a parent or guardian's sign-up, or a junior already here.</summary>
+    public bool SetRepliesOnly(RelaySignupRequest request) =>
+        request.Guardian
+        || (request.HasOwnTransponder
+            && _profiles.Get(request.Transponder) is { IsJunior: true } profile
+            && string.Equals(profile.Transponder, request.Transponder, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>A junior's line: the set one asked for, as spelled here, else the default.</summary>
+    internal static string SetRejectFor(string? message)
+    {
+        var wanted = (message ?? string.Empty).Trim();
+
+        return JuniorRejectReplies.FirstOrDefault(r => string.Equals(r, wanted, StringComparison.OrdinalIgnoreCase))
+               ?? DefaultRejectMessage;
+    }
+
     /// <summary>
     /// Turns a sign-up down, with a line for their phone. False, with
     /// nothing changed or sent, when the invite's new state couldn't be saved.
+    /// A junior's line is always one of <see cref="JuniorRejectReplies"/>, whatever was passed.
     /// </summary>
     public bool Reject(RelaySignupRequest request, string message)
     {
-        var text = string.IsNullOrWhiteSpace(message)
-            ? "The timing desk couldn't take this sign-up."
-            : message.Trim();
+        // Enforced here, below the inbox (15 Nov 2026, plan 1.4), so no
+        // window or later caller can send a junior the desk's own words.
+        var text = SetRepliesOnly(request)
+            ? SetRejectFor(message)
+            : string.IsNullOrWhiteSpace(message)
+                ? DefaultRejectMessage
+                : message.Trim();
 
         if (Store.ByHash(request.Hash, Club) is { State: SignupInviteState.Open } invite)
         {
