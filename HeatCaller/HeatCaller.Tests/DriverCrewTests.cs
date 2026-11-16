@@ -130,12 +130,12 @@ public sealed class DriverCrewTests : IDisposable
         var noConsent = new DriverProfile { Transponder = "3", IsJunior = true };
 
         // No parent's consent on the profile: never, stream or not.
-        Assert.False(DriverCrew.NotesMayBeSaid(noConsent, streamOn: false, juniorNotesOnStream: true));
+        Assert.False(DriverCrew.OwnWordsMayBeSaid(noConsent, streamOn: false, juniorNotesOnStream: true));
 
-        Assert.False(DriverCrew.NotesMayBeSaid(junior, streamOn: true, juniorNotesOnStream: false));
-        Assert.True(DriverCrew.NotesMayBeSaid(junior, streamOn: true, juniorNotesOnStream: true));
-        Assert.True(DriverCrew.NotesMayBeSaid(junior, streamOn: false, juniorNotesOnStream: false));
-        Assert.True(DriverCrew.NotesMayBeSaid(adult, streamOn: true, juniorNotesOnStream: false));
+        Assert.False(DriverCrew.OwnWordsMayBeSaid(junior, streamOn: true, juniorNotesOnStream: false));
+        Assert.True(DriverCrew.OwnWordsMayBeSaid(junior, streamOn: true, juniorNotesOnStream: true));
+        Assert.True(DriverCrew.OwnWordsMayBeSaid(junior, streamOn: false, juniorNotesOnStream: false));
+        Assert.True(DriverCrew.OwnWordsMayBeSaid(adult, streamOn: true, juniorNotesOnStream: false));
     }
 
     [Fact]
@@ -261,15 +261,14 @@ public sealed class DriverCrewTests : IDisposable
 
         public DriverRequestStore Store { get; } = DriverRequestStore.Load();
 
-        public AppSettings Settings { get; } = new() { DriversPickCrew = true, JuniorNotesFromPhone = true };
+        public AppSettings Settings { get; } = new() { DriversPickCrew = true };
 
         public Dictionary<string, CrewVoicePick> Offered { get; } = new();
 
         public DriverRequestDesk Desk { get; }
 
-        public World(bool junior = false, bool juniorNotesFromPhone = true, JuniorAge age = JuniorAge.NotSet)
+        public World(bool junior = false, JuniorAge age = JuniorAge.NotSet)
         {
-            Settings.JuniorNotesFromPhone = juniorNotesFromPhone;
             // Upsert: a second world in one test loads the first one's drivers from disk.
             Profiles.Upsert(new DriverProfile { Transponder = "100", DriverName = "Sam Parker", IsJunior = junior, JuniorAge = age });
             Profiles.Upsert(new DriverProfile { Transponder = "500", DriverName = "Bill Hart" });
@@ -409,20 +408,31 @@ public sealed class DriverCrewTests : IDisposable
     }
 
     [Fact]
-    public void A_juniors_notes_need_a_parent_and_a_badge_only_request_or_a_bad_name_is_refused()
+    public void A_juniors_notes_from_a_phone_a_badge_only_request_or_a_bad_name_is_refused()
     {
-        var junior = new World(junior: true);
+        // 13 to 17: an under-13's names are the desk's too (see below).
+        var junior = new World(junior: true, age: JuniorAge.ThirteenToSeventeen);
         var note = junior.File(1, r => r.Texts["thanks"] = "My nan");
         Assert.False(junior.Desk.ApplyCrew(note, out var refusal));
-        Assert.Contains("parent", refusal);
+        Assert.Contains("at the desk", refusal);
         Assert.Contains("Junior", junior.Desk.NoteFor(note));
 
+        // Even with a parent's tick: the switch that took that was removed (15 Nov 2026).
         var withParent = junior.File(2, r =>
         {
             r.Texts["thanks"] = "My nan";
             r.Flags["guardian"] = true;
         });
-        Assert.True(junior.Desk.ApplyCrew(withParent, out refusal), refusal);
+        Assert.False(junior.Desk.ApplyCrew(withParent, out refusal));
+
+        // Their crew's names are still theirs to send, and clearing a note is fine.
+        // Id 9: the worlds below share the store on disk, and file 3 and 4.
+        var names = junior.File(9, r =>
+        {
+            r.Texts["pName"] = "Gravel";
+            r.Texts["thanks"] = "";
+        });
+        Assert.True(junior.Desk.ApplyCrew(names, out refusal), refusal);
 
         // Each in a world of its own: a second crew request would replace the first.
         var badgeOnly = new World();
@@ -550,9 +560,9 @@ public sealed class DriverCrewTests : IDisposable
     }
 
     [Fact]
-    public void A_juniors_notes_from_a_phone_are_refused_while_the_club_takes_them_at_the_desk()
+    public void A_juniors_notes_from_a_phone_are_refused_even_with_a_parents_tick()
     {
-        var w = new World(junior: true, juniorNotesFromPhone: false);
+        var w = new World(junior: true);
         var ask = w.File(1, r =>
         {
             r.Texts["thanks"] = "My nan";
@@ -567,11 +577,153 @@ public sealed class DriverCrewTests : IDisposable
     [Fact]
     public void The_phone_is_told_a_juniors_notes_are_taken_at_the_desk()
     {
-        var crew = new DriverLive.CrewForPhone(VoiceEngine.ElevenLabs, Array.Empty<CrewVoiceOption>(), JuniorNotesFromPhone: false);
+        var crew = new DriverLive.CrewForPhone(VoiceEngine.ElevenLabs, Array.Empty<CrewVoiceOption>());
 
         Assert.Equal(false, DriverLive.CrewOf(new DriverProfile { Transponder = "1", IsJunior = true }, crew)["notes"]);
+        Assert.Equal(false, DriverLive.CrewOf(new DriverProfile { Transponder = "3", IsJunior = true, CrewNotesParentConsent = true }, crew)["notes"]);
         Assert.False(DriverLive.CrewOf(new DriverProfile { Transponder = "2" }, crew).ContainsKey("notes"));
-        Assert.False(DriverLive.CrewOf(new DriverProfile { Transponder = "3", IsJunior = true }, crew with { JuniorNotesFromPhone = true }).ContainsKey("notes"));
+    }
+
+    [Fact]
+    public void A_juniors_notes_go_online_only_as_set_or_not_until_a_parent_agreed()
+    {
+        var crew = new DriverLive.CrewForPhone(VoiceEngine.ElevenLabs, Array.Empty<CrewVoiceOption>());
+        var junior = new DriverProfile { Transponder = "1", IsJunior = true, CrewThanks = "My nan", CrewCarStory = "" };
+
+        var without = DriverLive.CrewOf(junior, crew);
+        Assert.Equal(true, without["thanks"]);
+        Assert.Equal(false, without["car"]);
+        Assert.Equal(false, without["goal"]);
+        Assert.DoesNotContain("My nan", JsonSerializer.Serialize(without));
+
+        junior.CrewNotesParentConsent = true;
+        Assert.Equal("My nan", DriverLive.CrewOf(junior, crew)["thanks"]);
+
+        var adult = new DriverProfile { Transponder = "2", CrewThanks = "My nan" };
+        Assert.Equal("My nan", DriverLive.CrewOf(adult, crew)["thanks"]);
+    }
+
+    [Fact]
+    public void A_juniors_about_line_goes_online_only_as_set_until_a_parent_agreed_and_the_phone_knows_they_are_one()
+    {
+        string Me(DriverProfile p) => DriverLive.MeDocument(new[] { p }, _ => SamBadge);
+
+        var junior = new DriverProfile { Transponder = "1", DriverName = "Sam Parker", IsJunior = true, AboutLine = "Races a red buggy" };
+        var doc = Me(junior);
+        Assert.DoesNotContain("red buggy", doc);
+        Assert.Contains("\"aboutSet\":true", doc);
+        Assert.Contains("\"junior\":true", doc);
+
+        junior.CrewNotesParentConsent = true;
+        Assert.Contains("red buggy", Me(junior));
+
+        var adult = new DriverProfile { Transponder = "2", DriverName = "Bill Hart", AboutLine = "Races a red buggy" };
+        var adultDoc = Me(adult);
+        Assert.Contains("red buggy", adultDoc);
+        Assert.DoesNotContain("junior", adultDoc);
+    }
+
+    // ------------------------------------------------------------ the about line (plan 1.1)
+
+    [Fact]
+    public void A_juniors_about_line_is_left_out_of_the_prompt_as_their_notes_are()
+    {
+        var junior = new DriverProfile { Transponder = "1", IsJunior = true, Team = "HFCC", AboutLine = "Races a red buggy" };
+
+        var line = CommentaryService.DriverDetailLine("Sam", junior,
+            DriverCrew.OwnWordsMayBeSaid(junior, streamOn: false, juniorNotesOnStream: false));
+        Assert.Equal("Sam: team HFCC", line);
+
+        junior.CrewNotesParentConsent = true;
+        Assert.Contains("red buggy", CommentaryService.DriverDetailLine("Sam", junior,
+            DriverCrew.OwnWordsMayBeSaid(junior, streamOn: false, juniorNotesOnStream: false)));
+        Assert.Equal("Sam: team HFCC", CommentaryService.DriverDetailLine("Sam", junior,
+            DriverCrew.OwnWordsMayBeSaid(junior, streamOn: true, juniorNotesOnStream: false)));
+    }
+
+    [Fact]
+    public void A_juniors_pronouns_about_line_and_email_from_a_phone_are_refused_at_the_desk()
+    {
+        var w = new World(junior: true);
+        var ask = w.File(1, r =>
+        {
+            r.Kind = DriverAsk.Details;
+            r.Texts["about"] = "Races a red buggy";
+        });
+
+        var choice = new DriverRequestDesk.DetailsChoice(
+            new Dictionary<string, string> { ["about"] = "Races a red buggy" }, new Dictionary<string, bool>());
+        Assert.False(w.Desk.ApplyDetails(ask, choice, out var refusal));
+        Assert.Contains("about line", refusal);
+        Assert.Equal(string.Empty, w.Profiles.Get("100")!.AboutLine ?? string.Empty);
+
+        var name = new DriverRequestDesk.DetailsChoice(
+            new Dictionary<string, string> { ["announcer"] = "Sammy" }, new Dictionary<string, bool>());
+        Assert.True(w.Desk.ApplyDetails(ask, name, out refusal), refusal);
+        Assert.Equal("Sammy", w.Profiles.Get("100")!.AnnouncerName);
+    }
+
+    // ------------------------------------------------------------ marshal swaps (plan 4.4)
+
+    [Fact]
+    public void A_junior_cannot_ask_another_driver_to_cover_their_post()
+    {
+        var w = new World(junior: true);
+        w.Desk.DutyOf = (_, _) => new MarshalSwaps.Duty("Q2 Heat 3", "Turn 3");
+        w.Desk.CoverCandidates = (_, _) => new[] { ("500", "abcdefabcdefabcdefab") };
+        var ask = w.File(1, r =>
+        {
+            r.Kind = DriverAsk.Swap;
+            r.Texts["round"] = new string('a', 32);
+            r.Texts["to"] = MarshalSwaps.KeyOf("abcdefabcdefabcdefab");
+        });
+
+        Assert.False(w.Desk.ApplySwap(ask, out var said));
+        Assert.Equal(DriverRequestDesk.JuniorSwapWords, said);
+    }
+
+    [Fact]
+    public void A_junior_is_never_asked_by_another_driver_to_cover_a_post()
+    {
+        var w = new World();
+        w.Profiles.Upsert(new DriverProfile { Transponder = "500", DriverName = "Bill Hart", IsJunior = true });
+        w.Desk.DutyOf = (_, _) => new MarshalSwaps.Duty("Q2 Heat 3", "Turn 3");
+        w.Desk.CoverCandidates = (_, _) => new[] { ("500", "abcdefabcdefabcdefab") };
+        var ask = w.File(1, r =>
+        {
+            r.Kind = DriverAsk.Swap;
+            r.Texts["round"] = new string('a', 32);
+            r.Texts["to"] = MarshalSwaps.KeyOf("abcdefabcdefabcdefab");
+        });
+
+        Assert.False(w.Desk.ApplySwap(ask, out var said));
+        Assert.Contains("can't cover it", said);
+    }
+
+    // ------------------------------------------------------------ shout-outs (plan 4.5)
+
+    [Fact]
+    public void A_shout_out_naming_a_junior_here_tonight_is_flagged()
+    {
+        var sam = new DriverProfile { Transponder = "1", DriverName = "Sam Parker", AnnouncerName = "Sammy P", IsJunior = true };
+        var bill = new DriverProfile { Transponder = "2", DriverName = "Bill Hart" };
+        var jo = new DriverProfile { Transponder = "3", DriverName = "Jo Wells", IsJunior = true };
+        var all = new[] { sam, bill, jo };
+        DriverProfile? Of(string t) => all.FirstOrDefault(p => p.Transponder == t);
+
+        var tonight = ClubNotes.JuniorsTonight(all, Of, new[] { "1", "2" });
+        Assert.Equal(new[] { sam }, tonight);
+
+        Assert.Equal("Sam", ClubNotes.NamesAJunior("Good luck sam from Oakfield Primary!", tonight));
+        Assert.Equal("Sam Parker", ClubNotes.NamesAJunior("Go Sam Parker!", tonight));
+        Assert.Equal("Sammy P", ClubNotes.NamesAJunior("Sammy P's mum says hi", tonight));
+        Assert.NotNull(ClubNotes.NamesAJunior("Happy birthday to Sam's dad", tonight));
+        Assert.Null(ClubNotes.NamesAJunior("Go Bill!", tonight));
+        Assert.Null(ClubNotes.NamesAJunior("Samantha's cakes are in the canteen", tonight));
+
+        // Jo isn't checked in, so not here tonight - but before anyone checks in, every junior counts.
+        Assert.Null(ClubNotes.NamesAJunior("Go Jo Wells", tonight));
+        Assert.NotNull(ClubNotes.NamesAJunior("Go Jo Wells", ClubNotes.JuniorsTonight(all, Of, Array.Empty<string>())));
     }
 
     // --- Under-13s' crew names: desk only (15 Nov 2026, children's privacy plan 2.1) ---

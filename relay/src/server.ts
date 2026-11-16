@@ -8405,13 +8405,17 @@ export class Relay {
     // THE DRIVER'S OWN CREW (15 Nov 2026, plans/driver-crew-plan.md): only
     // while the laptop offers it - driverme carries a crew for this driver
     // only when the club has "Drivers can pick their own crew" on - and a
-    // junior's notes only with a parent's tick (askFieldsFrom). Read from
-    // the stored driverme, never from anything the phone says about itself.
-    const crew = kind === "crew" && checkin !== undefined
-      ? crewFrom((await this.driverDocOf(club, DRIVER_ME_CHANNEL))?.drivers.get(id)?.["crew"])
+    // junior's notes never (askFieldsFrom). Read from the stored driverme,
+    // never from anything the phone says about itself. A junior's details
+    // too (15 Nov 2026): driverme's entry says "junior", and of their
+    // details only the announcer name is taken from a phone.
+    const meEntry = (kind === "crew" || kind === "details") && checkin !== undefined
+      ? (await this.driverDocOf(club, DRIVER_ME_CHANNEL))?.drivers.get(id)
       : undefined;
+    const crew = kind === "crew" ? crewFrom(meEntry?.["crew"]) : undefined;
+    const junior = meEntry?.["junior"] === true || crew?.junior === true;
 
-    const check = askFieldsFrom(kind, body["f"], withPin, crew?.junior === true, crew?.notes === false, crew?.under13 === true);
+    const check = askFieldsFrom(kind, body["f"], withPin, junior, crew?.notes === false, crew?.under13 === true);
 
     if (!check.ok) {
       sendJson(response, check.status, { ok: false, error: check.error });

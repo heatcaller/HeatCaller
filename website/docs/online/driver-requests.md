@@ -43,6 +43,8 @@ On **Me**, under **Tonight**, a **Your details** card lists what's on file now, 
 | **New email address** | Only for a driver signed in with their personal PIN: "Only if it has changed. The desk lets your old address know." Without the PIN the card says "Changing your email needs your personal PIN - ask at the desk." | 120 characters |
 | **Email me my night after racing** | Whether they're sent their night by email, when the club sends them (see [Drivers' nights by email](setup.md#drivers-nights-by-email)). Grayed out with no address on file. | |
 | **Online privacy** | Three ticks: **Leave my photo off the web pages**, **Leave me out of podium videos online** and **Show only my initials online**, under "These change the club's web pages only. In the room - the PA, the big screen and the club's Wi-Fi pages - nothing changes." | |
+
+**For a junior** (under 18 on their profile), the form offers only **Announcer name**. In place of **Pronouns**, **About you** and **Email** it says "Ask at the desk - a parent fills this in with you." Type those on their profile in the Driver Hub with the parent there. Their **About you** line on the card says "Set at the desk" until a parent has agreed on the profile that it can be said (see [Juniors](../announcer/commentary.md#drivers-own-crew)).
 | **I'm a parent or guardian making this change** | A tick the desk sees with the request. | |
 
 **Send to the desk** sends only what was changed. The card answers "Sent - the desk will check it (ref A1B2C3)", where the reference is the one the desk sees in the **Ref** column once it's answered (under **Show done** in the Inbox). If nothing was changed, it says "Nothing has changed yet."
@@ -102,7 +104,7 @@ Each asks "Ask the desk to...?" first, and the request then shows under the driv
 
 When the club has ticked **Drivers can pick their own crew** (see [Drivers' own crew](../announcer/commentary.md#drivers-own-crew)), **Your details** has a **My crew** part. It needs their personal PIN: a driver without one sees "Ask the desk for a personal PIN to pick your crew."
 
-For their **Team Principal** and **Technical Lead** they can type a made-up name and pick a voice, with **Play** to hear it. Under **Your notes for the commentary** are **Tonight's goal**, **Thanks / shout-out** and **Your car's story**. **Send my crew** sends what changed. A voice they pick changes straight away; names and notes wait for the desk. Under the button it says "What you send may be said over the PA and on the club's stream. By sending, you let your club and HeatCaller use it in the announcer's commentary." For a junior there are no note boxes ("Your notes are filled in at the desk, with a parent or guardian there. Ask at the desk."): a junior's notes and about line are always typed at the desk. An under-13's crew names are typed at the desk too; see [Drivers' own crew](../announcer/commentary.md#drivers-own-crew).
+For their **Team Principal** and **Technical Lead** they can type a made-up name and pick a voice, with **Play** to hear it. Under **Your notes for the commentary** are **Tonight's goal**, **Thanks / shout-out** and **Your car's story**. **Send my crew** sends what changed. A voice they pick changes straight away; names and notes wait for the desk. Under the button it says "What you send may be said over the PA and on the club's stream. By sending, you let your club and HeatCaller use it in the announcer's commentary." For a junior there are no note boxes ("Your notes are filled in at the desk, with a parent or guardian there. Ask at the desk."): a junior's notes and about line are always typed at the desk. Each note the desk has set is listed there instead - its words once a parent has agreed on the profile, "Set at the desk" until then. An under-13's crew names are typed at the desk too; see [Drivers' own crew](../announcer/commentary.md#drivers-own-crew).
 
 ### How each request is getting on
 
@@ -137,6 +139,8 @@ A setup change shows as "Setup log", and a change to their packs or cars as "Req
 | "Please pick something else - the desk would have to turn that down." | A rude word in a crew name or note. |
 | "Your club is not taking crew picks from phones just now. Ask at the desk." | **Drivers can pick their own crew** is unticked. |
 | "Your notes are filled in at the desk, with a parent there. Ask at the desk." | A junior's note sent from a phone. A junior's notes are always typed at the desk. |
+| "Ask at the desk - a parent fills this in with you." | Pronouns, an about line or an email from a junior's phone. A junior's phone offers only the announcer name. |
+| "Need a swap? Ask at the desk - they'll sort it for you." | A junior asking another driver to cover their post. Juniors' marshal swaps go through the desk. |
 
 ## Answering requests at the desk
 
@@ -197,7 +201,7 @@ A crew request shows as **Crew and notes**. The **Crew and notes** chip in the I
 - **Note** says **Junior** for a junior (and "No parent's consent on their profile..." until it's ticked), and "A voice they picked isn't offered any more" when a voice couldn't be applied - the phone is told when you answer.
 - **Note** says **Junior** for a junior, along with "A junior's words, spoken over the PA and the stream. Check for real names, a school, an age or where they live." when you approve. It says **Names another driver (*name*)** when a note mentions another driver by name, so read it before it reaches the PA.
 
-A name that isn't letters, spaces, hyphens and apostrophes is refused, and so is a junior's note without a parent's tick. A newer crew request from the same driver takes in the older one, so only one waits.
+A name that isn't letters, spaces, hyphens and apostrophes is refused, and so is any junior's note from a phone, and an under-13's crew name. A junior's pronouns, about line or email from a phone are refused when you approve their details. A newer crew request from the same driver takes in the older one, so only one waits.
 
 ### Changes HeatCaller makes by itself
 
@@ -245,6 +249,8 @@ Since 12 November 2026 a driver with marshal duty can say from their phone that 
 - **Marshal swap** is the asked driver's answer. A no is filed by itself. A yes waits in the Inbox, at the top as race-blocking, reading "Covers Max Power's post: Turn 3 in Q2 Heat 3 (Stock)", while **Marshal swaps from phones need the desk's OK** is ticked under **Rules** in the Inbox (it is to start with). Click **Approve...**, then **Yes**, and the swap is made, as **Swap...** in the Marshals window makes it, with a step in **Undo**. Untick the box and a yes is made by itself.
 
 The asked driver must be checked in tonight and not racing or marshalling that race. Phones see only a first name and an initial for the other driver.
+
+Juniors are left out of driver-to-driver swaps. A junior is never offered to another driver to ask, and a junior's own phone offers nobody, saying "Need a swap? Ask at the desk." Swap them in the Marshals window as usual.
 
 ### Declining
 

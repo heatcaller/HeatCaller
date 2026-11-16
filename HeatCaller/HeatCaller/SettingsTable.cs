@@ -262,7 +262,6 @@ internal static class SettingsTable
             nameof(AppSettings.DriversPickCrew),
             nameof(AppSettings.CrewVoicesHidden),
             nameof(AppSettings.JuniorNotesOnStream),
-            nameof(AppSettings.JuniorNotesFromPhone),
             nameof(AppSettings.RecapBadgeHonours),
             nameof(AppSettings.RecapHonoursName),
             nameof(AppSettings.HonoursElevenLabsVoiceId),

@@ -63,8 +63,8 @@
 
 *As first written. Superseded by the 15 Nov 2026 build pass: the phone-notes switch below is removed, and juniors' notes are desk-only with no switch. See section 9.*
 
-- **Juniors' notes are taken at the desk by default.** *Juniors can send notes from their phone* (Cast tab) is off by default. While it's off, the phone shows no note boxes for a junior, and the relay refuses a note from a junior's badge: "Your notes are filled in at the desk, with a parent there."
-- **No notes are spoken without recorded consent.** A junior's notes are never said until the club ticks *A parent or guardian agreed these notes can be said on the PA and the stream* on the profile.
+- **Juniors' notes are taken at the desk.** As first written, a Cast tab switch could let a club take them from phones; it was removed on 15 Nov 2026 (recommendation 1(a)). The phone shows no note boxes for a junior, and the relay refuses a note from a junior's badge: "Your notes are filled in at the desk, with a parent there."
+- **No notes are spoken without recorded consent.** A junior's notes are never said until the club ticks *A parent or guardian agreed these notes and the about line can be said on the PA and the stream* on the profile.
 - **Stream nights are off by default.** On any night the stream is on, a junior's notes are not said unless the club turns on *Juniors' notes on stream nights*.
 - **A junior's crew names and voice picks can still come from the phone.** Names wait for desk review; voices are picked from the club's own list.
 

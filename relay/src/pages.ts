@@ -14869,6 +14869,9 @@ function marshalActs(m) {
       if (got.ok) { coverPick.open = false; coverPick.k = ''; }
     }));
     box.appendChild(part);
+  } else if (m.swapAtDesk === true && m.in !== true) {
+    // A junior's swaps go through the desk, never driver to driver (15 Nov 2026).
+    box.appendChild(el('p', 'when', 'Need a swap? Ask at the desk.'));
   }
   return box.children.length > 0 ? box : null;
 }
@@ -16889,7 +16892,9 @@ function ydSummary() {
   line('Name', cleanText(me.name), 'Not set');
   line('Announcer', cleanText(me.announcer), 'Your name as it is');
   line('Pronouns', cleanText(me.pronouns), 'None');
-  line('About you', cleanText(me.about), 'Nothing yet');
+  // A junior's about line is online only once a parent agreed (15 Nov 2026):
+  // until then the laptop says only that there is one.
+  line('About you', cleanText(me.about) || (me.aboutSet === true ? 'Set at the desk' : ''), 'Nothing yet');
   line('Email', typeof me.email === 'string' ? cleanText(me.email) : '', 'None on file');
   line('Night email', me.emailMyNight === true ? 'On' : '', 'Off');
   line('Online', hidden.join(' \\u00b7 '), 'Shown as normal');
@@ -17025,6 +17030,9 @@ function tick(parent, title, hint, on, fixed) {
   return box;
 }
 
+// What a junior is told about the details entered at the desk - the relay's own words.
+const JUNIOR_DESK_WORDS = 'Ask at the desk - a parent fills this in with you.';
+
 function detailsForm(message) {
   const base = {
     announcer: cleanText(me.announcer),
@@ -17045,15 +17053,22 @@ function detailsForm(message) {
   form.appendChild(name);
 
   const announcer = textField(form, 'Announcer name', 'How the announcer should say your name - spell it the way it sounds.', base.announcer, 40, false);
-  const pronouns = textField(form, 'Pronouns', 'For example she/her, he/him or they/them. Leave it empty for none.', base.pronouns, 24, false);
-  const about = textField(form, 'About you', 'One line the commentary can use, like "races a red buggy and loves the hairpin".', base.about, 120, true);
 
-  const mail = el('div', 'f', 'Email');
-  mail.appendChild(el('span', 'hint', email !== '' ? 'On file: ' + email : 'No email on file.'));
+  // A JUNIOR (15 Nov 2026): only the announcer name from here. Pronouns,
+  // about line and email are entered at the desk with a parent, and the
+  // relay refuses them from a junior's badge. No boxes, one line why.
+  const junior = me.junior === true;
+  const pronouns = junior ? null : textField(form, 'Pronouns', 'For example she/her, he/him or they/them. Leave it empty for none.', base.pronouns, 24, false);
+  const about = junior ? null : textField(form, 'About you', 'One line the commentary can use, like "races a red buggy and loves the hairpin".', base.about, 120, true);
+
+  const mail = el('div', 'f', junior ? 'Pronouns, about you and email' : 'Email');
+  mail.appendChild(el('span', 'hint', junior ? JUNIOR_DESK_WORDS : email !== '' ? 'On file: ' + email : 'No email on file.'));
   form.appendChild(mail);
 
   let newEmail = null;
-  if (withPin) {
+  if (junior) {
+    // Nothing more: the desk has their email.
+  } else if (withPin) {
     newEmail = textField(form, 'New email address', 'Only if it has changed. The desk lets your old address know.', '', 120, false);
     newEmail.type = 'email';
   } else {
@@ -17088,8 +17103,8 @@ function detailsForm(message) {
   const send = tapButton('Send to the desk', 'go', async () => {
     const f = {};
     const a1 = cleanText(announcer.value);
-    const p1 = cleanText(pronouns.value);
-    const b1 = cleanText(about.value);
+    const p1 = pronouns ? cleanText(pronouns.value) : base.pronouns;
+    const b1 = about ? cleanText(about.value) : base.about;
 
     if (a1 !== base.announcer) f.announcer = a1;
     if (p1 !== base.pronouns) f.pronouns = p1;
@@ -17196,7 +17211,6 @@ const CREW_KEY = /^[0-9a-f]{12}$/;
 // The relay's own rule: letters of any script, spaces, hyphens, apostrophes, full stops.
 const CREW_NAME = /^[\\p{L}\\p{M} '\\u2019.-]*$/u;
 const CREW_NAME_WORDS = 'A crew name can only have letters, spaces, hyphens and apostrophes.';
-const CREW_JUNIOR_WORDS = "A parent or guardian needs to send notes for a junior - tick 'I'm making this change for them'.";
 let crewAudio = null;
 
 function crewOn() {
@@ -17340,22 +17354,28 @@ function crewForm(form) {
   const p = crewRole(form, 'Team Principal', 'principal', junior, namesHere);
   const t = crewRole(form, 'Technical Lead', 'tech', junior, namesHere);
 
-  // Notes typed at the desk, not from a phone (15 Nov 2026): a junior's,
-  // unless the club takes them from phones. No boxes, and one line why.
-  const notesHere = c.notes !== false;
+  // A junior's notes are typed at the desk, never sent from a phone (15 Nov
+  // 2026). No boxes and one line why - and what the desk has set: the words
+  // once a parent agreed, before then only that there is one (c.goal is
+  // true or false then, never the text).
+  const notesHere = c.notes !== false && !junior;
+  const noteText = (v) => (typeof v === 'string' ? cleanText(v) : '');
   form.appendChild(el('h4', '', 'Your notes for the commentary'));
-  if (!notesHere) form.appendChild(el('p', 'when', 'Your notes are filled in at the desk, with a parent or guardian there. Ask at the desk.'));
-  else if (junior) form.appendChild(el('p', 'when', 'A parent or guardian needs to send notes.'));
-  const goal = notesHere ? crewNote(form, "Tonight's goal", 'Said before your race tonight only', cleanText(c.goal), 80) : null;
-  const thanks = notesHere ? crewNote(form, 'Thanks / shout-out', '', cleanText(c.thanks), 80) : null;
-  const car = notesHere ? crewNote(form, "Your car's story", '', cleanText(c.car), 120) : null;
-  const guardian = junior && notesHere ? tick(form, "I'm making this change for them", '', false, false) : null;
+  if (!notesHere) {
+    form.appendChild(el('p', 'when', 'Your notes are filled in at the desk, with a parent or guardian there. Ask at the desk.'));
+    for (const [title, v] of [["Tonight's goal", c.goal], ['Thanks / shout-out', c.thanks], ["Your car's story", c.car]]) {
+      const words = noteText(v) || (v === true ? 'Set at the desk' : '');
+      if (words !== '') form.appendChild(el('p', 'when', title + ': ' + words));
+    }
+  }
+  const goal = notesHere ? crewNote(form, "Tonight's goal", 'Said before your race tonight only', noteText(c.goal), 80) : null;
+  const thanks = notesHere ? crewNote(form, 'Thanks / shout-out', '', noteText(c.thanks), 80) : null;
+  const car = notesHere ? crewNote(form, "Your car's story", '', noteText(c.car), 120) : null;
 
-  // What they have now, to send only what has changed.
-  const base = {
-    pName: p.base.name, pVoice: p.base.voice, tName: t.base.name, tVoice: t.base.voice,
-    goal: cleanText(c.goal), thanks: cleanText(c.thanks), story: cleanText(c.car),
-  };
+  // What they have now, to send only what has changed. Notes only where
+  // there are boxes for them.
+  const base = { pName: p.base.name, pVoice: p.base.voice, tName: t.base.name, tVoice: t.base.voice };
+  if (notesHere) Object.assign(base, { goal: noteText(c.goal), thanks: noteText(c.thanks), story: noteText(c.car) });
 
   const said = el('p', 'yd-said', '');
   said.setAttribute('role', 'status');
@@ -17364,8 +17384,8 @@ function crewForm(form) {
     const now = {
       pName: p.name ? cleanText(p.name.value) : p.base.name, pVoice: String(p.pick.value || ''),
       tName: t.name ? cleanText(t.name.value) : t.base.name, tVoice: String(t.pick.value || ''),
-      goal: goal ? cleanText(goal.value) : cleanText(c.goal), thanks: thanks ? cleanText(thanks.value) : cleanText(c.thanks), story: car ? cleanText(car.value) : cleanText(c.car),
     };
+    if (notesHere) Object.assign(now, { goal: cleanText(goal.value), thanks: cleanText(thanks.value), story: cleanText(car.value) });
     const f = {};
     for (const k of Object.keys(base)) if (now[k] !== base[k]) f[k] = now[k];
 
@@ -17385,14 +17405,6 @@ function crewForm(form) {
       return;
     }
 
-    const notes = ['goal', 'thanks', 'story'].some((k) => typeof f[k] === 'string' && f[k] !== '');
-    if (junior && notes && !(guardian && guardian.checked === true)) {
-      said.textContent = CREW_JUNIOR_WORDS;
-      return;
-    }
-
-    if (guardian && guardian.checked === true) f.guardian = true;
-
     send.disabled = true;
     said.textContent = 'Sending\\u2026';
     const got = await sendAsk('crew', f);
@@ -17400,7 +17412,6 @@ function crewForm(form) {
 
     if (got.ok) {
       for (const k of Object.keys(base)) if (typeof f[k] === 'string') base[k] = f[k];
-      if (guardian) guardian.checked = false;
       edited = false;
       said.textContent = got.words;
       return;

@@ -79,12 +79,24 @@ internal sealed partial class DriverRequestDesk
         return ok;
     }
 
+    /// <summary>What a junior's phone is told when it asks another driver to cover: their swaps go through the desk.</summary>
+    internal const string JuniorSwapWords = "Need a swap? Ask at the desk - they'll sort it for you.";
+
     /// <summary>The "swap" ask: who they asked is worked out from the key and noted, and the asked driver's phone offers Accept or Decline.</summary>
     internal bool ApplySwap(DriverRequest request, out string said)
     {
         if (DriverOf(request) is not { } profile)
         {
             said = "HeatCaller doesn't know your badge - ask at the desk.";
+            return false;
+        }
+
+        // Juniors swap through the desk, never driver to driver (15 Nov 2026,
+        // plan 4.4) - their phone offers nobody, so this is a phone that
+        // was not told, or an old one.
+        if (profile.IsJunior)
+        {
+            said = JuniorSwapWords;
             return false;
         }
 
@@ -97,7 +109,10 @@ internal sealed partial class DriverRequestDesk
         }
 
         var key = request.Text("to");
-        var asked = CoverCandidates!(round, profile.Transponder).FirstOrDefault(c => MarshalSwaps.KeyOf(c.Badge) == key);
+        // A junior is never asked directly by another driver: as if not on the list.
+        var asked = CoverCandidates!(round, profile.Transponder)
+            .Where(c => _profiles.Get(c.Main)?.IsJunior != true)
+            .FirstOrDefault(c => MarshalSwaps.KeyOf(c.Badge) == key);
 
         if (asked.Badge is null)
         {

@@ -136,7 +136,10 @@ public sealed class CommentaryService
 
         foreach (var transponder in transponders.Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            if (DriverDetailLine(PromptName(transponder), _profiles.Get(transponder)) is { } line)
+            var profile = _profiles.Get(transponder);
+            var aboutMaySay = DriverCrew.OwnWordsMayBeSaid(profile, StreamIsOn?.Invoke() == true, _settings.JuniorNotesOnStream);
+
+            if (DriverDetailLine(PromptName(transponder), profile, aboutMaySay) is { } line)
             {
                 lines.Add(line);
             }
@@ -166,11 +169,17 @@ public sealed class CommentaryService
     /// profile allows rather than a name's 40, and its double quotes become
     /// single ones so it cannot close the quotes it is put in.
     /// </summary>
-    internal static string? DriverDetailLine(string promptName, DriverProfile? profile)
+    /// <param name="aboutMaySay">
+    /// False leaves the about line out (15 Nov 2026, plan 1.1): a junior's,
+    /// without a parent's consent or on a streamed night the club keeps
+    /// juniors' words off - DriverCrew.OwnWordsMayBeSaid, as for their notes.
+    /// Their team and sponsors are not their words, and stay.
+    /// </param>
+    internal static string? DriverDetailLine(string promptName, DriverProfile? profile, bool aboutMaySay = true)
     {
         var team = Field(profile?.Team);
         var sponsors = AnnouncementText.SpokenList(FieldList(profile?.Sponsors));
-        var about = Field(profile?.AboutLine, DriverProfile.AboutLineMaxChars).Replace('"', '\'');
+        var about = aboutMaySay ? Field(profile?.AboutLine, DriverProfile.AboutLineMaxChars).Replace('"', '\'') : string.Empty;
 
         if (team.Length == 0 && sponsors.Length == 0 && about.Length == 0)
         {
@@ -232,7 +241,7 @@ public sealed class CommentaryService
     /// A driver's own notes for one interview, as fact lines (each ending in
     /// a new line) - empty when they gave none, the club does not let
     /// drivers set them, or they are a junior's on a streamed night (see
-    /// DriverCrew.NotesMayBeSaid). Each goes through Field like the about
+    /// DriverCrew.OwnWordsMayBeSaid). Each goes through Field like the about
     /// line, its double quotes made single so it cannot close the quotes it
     /// is put in, and is labelled as the driver's own words so the model
     /// says it as something they said, never as a fact.
@@ -254,7 +263,7 @@ public sealed class CommentaryService
 
         var profile = _profiles.Get(transponder);
 
-        if (profile is null || !DriverCrew.NotesMayBeSaid(profile, StreamIsOn?.Invoke() == true, _settings.JuniorNotesOnStream))
+        if (profile is null || !DriverCrew.OwnWordsMayBeSaid(profile, StreamIsOn?.Invoke() == true, _settings.JuniorNotesOnStream))
         {
             return string.Empty;
         }

@@ -314,13 +314,14 @@ public sealed class ProfileForm : Form
         fields.AddHint("In their own words, for the principal and the Technical Lead. Spoken over the PA and the stream; "
                        + "never shown online.");
 
-        // A junior's notes are said only with a parent's consent recorded
-        // here (15 Nov 2026) - see DriverCrew.NotesMayBeSaid.
-        _chkCrewConsent.Text = "A parent or guardian agreed these notes can be said on the PA and the stream";
+        // A junior's notes and about line are said only with a parent's
+        // consent recorded here (15 Nov 2026) - see DriverCrew.OwnWordsMayBeSaid.
+        _chkCrewConsent.Text = "A parent or guardian agreed these notes and the about line can be said on the PA and the stream";
         _chkCrewConsent.AutoSize = true;
         _chkCrewConsent.Checked = Result.CrewNotesParentConsent;
         fields.AddRow(string.Empty, _chkCrewConsent);
-        fields.AddHint("For a junior. Without it their notes are kept but never said. Ask the parent at the desk, as for the waiver.");
+        fields.AddHint("For a junior. Without it their notes and about line are kept but never said. Ask the parent at the desk, "
+                       + "as for the waiver.");
 
         AddOnStreamRows(fields, captions);
 

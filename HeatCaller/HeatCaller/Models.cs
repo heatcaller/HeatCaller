@@ -372,6 +372,8 @@ public sealed class DriverProfile
     /// A line in their own words for the AI commentary ("Racing since I
     /// was eight; my dad builds the cars"). At most
     /// <see cref="AboutLineMaxChars"/> characters. Never published online.
+    /// A junior's is entered at the desk only, and said only as their crew
+    /// notes are - with <see cref="CrewNotesParentConsent"/> (15 Nov 2026).
     /// </summary>
     public string AboutLine { get; set; } = string.Empty;
 
@@ -384,7 +386,11 @@ public sealed class DriverProfile
     // three short notes the interviews can use. Blank means the club's own.
     // Set at the desk on the profile or sent from the phone behind the
     // personal PIN; a voice pick from a phone applies by itself, the names
-    // and notes wait for the desk. Never published online. See DriverCrew.
+    // and notes wait for the desk (a junior's notes are only typed at the
+    // desk). Not on any public page: the notes are shown back only on the
+    // driver's own badge-only phone page - and a junior's only once a parent
+    // agreed (CrewNotesParentConsent); until then the relay is told only
+    // whether each is set (DriverLive.CrewOf, 15 Nov 2026). See DriverCrew.
 
     /// <summary>What the announcer calls their Team Principal. Blank: the club's name, or the role alone.</summary>
     public string CrewPrincipalName { get; set; } = string.Empty;
@@ -412,10 +418,11 @@ public sealed class DriverProfile
     public bool CrewGoalHeld { get; set; }
 
     /// <summary>
-    /// A parent or guardian has agreed that a junior's notes may be said over
-    /// the PA and on the stream (15 Nov 2026) - recorded at the desk, like a
-    /// signed waiver. Without it a junior's notes are kept but never said.
-    /// Means nothing for an adult. See DriverCrew.NotesMayBeSaid.
+    /// A parent or guardian has agreed that a junior's notes and about line
+    /// (<see cref="AboutLine"/>) may be said over the PA and on the stream
+    /// (15 Nov 2026) - recorded at the desk, like a signed waiver. Without it
+    /// they are kept but never said. Means nothing for an adult. See
+    /// DriverCrew.OwnWordsMayBeSaid.
     /// </summary>
     public bool CrewNotesParentConsent { get; set; }
 

@@ -296,8 +296,16 @@ internal static class DriverLive
 
         // Who a marshal can ask to cover their post (MarshalSwaps.Candidates):
         // by key and short name, never by transponder or badge code.
+        // JUNIORS SWAP THROUGH THE DESK (15 Nov 2026, plan 4.4): a junior is
+        // offered nobody to ask (their phone points them at the desk), and is
+        // never offered to anyone else - no driver-to-driver asks with a child.
         List<Dictionary<string, object?>>? CoverChoices(string main, string roundId, int away)
         {
+            if (profileOf(main)?.IsJunior == true)
+            {
+                return null;
+            }
+
             var driving = byMain[away].Grid;
             var marshalling = duties
                 .Where(d => d is not null && string.Equals(d.RoundId, roundId, StringComparison.Ordinal))
@@ -307,7 +315,8 @@ internal static class DriverLive
 
             foreach (var t in MarshalSwaps.Candidates(checkedIn, driving, marshalling, main))
             {
-                if (Who(t) is not { } who || ShortNameOfMain(who.Main) is not { Length: > 0 } name)
+                if (Who(t) is not { } who || ShortNameOfMain(who.Main) is not { Length: > 0 } name
+                    || profileOf(who.Main)?.IsJunior == true)
                 {
                     continue;
                 }
@@ -392,6 +401,11 @@ internal static class DriverLive
                 if (CoverChoices(main, marshal.Duty.RoundId, marshal.Away) is { Count: > 0 } choices)
                 {
                     duty["choices"] = choices;
+                }
+                else if (profileOf(main)?.IsJunior == true)
+                {
+                    // Their phone says "Need a swap? Ask at the desk." instead.
+                    duty["swapAtDesk"] = true;
                 }
 
                 entry["marshal"] = duty;
@@ -682,7 +696,30 @@ internal static class DriverLive
 
             AddText(me, "announcer", profile.AnnouncerName);
             AddText(me, "pronouns", profile.Pronouns);
-            AddText(me, "about", profile.AboutLine);
+
+            // A JUNIOR (15 Nov 2026, plans 1.1 and 2.2): their phone's details
+            // form offers only the announcer name - pronouns, about line and
+            // email are entered at the desk with a parent - and the relay
+            // refuses the rest from their badge, so it is told who is one.
+            // Their about line is treated as their crew notes are (CrewOf):
+            // without a parent's consent only whether it is set goes online.
+            if (profile.IsJunior)
+            {
+                me["junior"] = true;
+            }
+
+            if (profile.IsJunior && !profile.CrewNotesParentConsent)
+            {
+                if (!string.IsNullOrWhiteSpace(profile.AboutLine))
+                {
+                    me["aboutSet"] = true;
+                }
+            }
+            else
+            {
+                AddText(me, "about", profile.AboutLine);
+            }
+
             AddText(me, "email", MaskedEmail(profile.Email));
 
             if (profile.EmailMyNight)
@@ -747,8 +784,7 @@ internal static class DriverLive
     /// What the phone is told about the crew drivers may pick: the engine in
     /// use and the voices on it they may choose from (DriverCrew.Pickable).
     /// </summary>
-    /// <param name="JuniorNotesFromPhone">A junior's notes may be sent from a phone (AppSettings.JuniorNotesFromPhone).</param>
-    public sealed record CrewForPhone(VoiceEngine Engine, IReadOnlyList<CrewVoiceOption> Voices, bool JuniorNotesFromPhone = false);
+    public sealed record CrewForPhone(VoiceEngine Engine, IReadOnlyList<CrewVoiceOption> Voices);
 
     /// <summary>The most crew voices a phone is offered - the relay's own cap.</summary>
     public const int MostCrewVoices = 200;
@@ -822,20 +858,39 @@ internal static class DriverLive
                 ["name"] = DriverCrew.Clean(profile.CrewTechName),
                 ["voice"] = KeyFor(profile.CrewTechVoice),
             },
-            ["goal"] = DriverCrew.GoalTonight(profile, DateTime.Now),
-            ["thanks"] = DriverCrew.Clean(profile.CrewThanks),
-            ["car"] = DriverCrew.Clean(profile.CrewCarStory),
         };
+
+        var goal = DriverCrew.GoalTonight(profile, DateTime.Now);
+        var thanks = DriverCrew.Clean(profile.CrewThanks);
+        var car = DriverCrew.Clean(profile.CrewCarStory);
+
+        // A JUNIOR'S WORDS LEAVE THIS LAPTOP ONLY ONCE A PARENT AGREED (15 Nov
+        // 2026, plan 1.5): without CrewNotesParentConsent the relay is told
+        // only whether each note is set - true or false, never the text - so
+        // their phone can say "set at the desk" and nothing a child said is
+        // held online. An adult's, or a junior's with consent, go as text.
+        if (profile.IsJunior && !profile.CrewNotesParentConsent)
+        {
+            one["goal"] = goal.Length > 0;
+            one["thanks"] = thanks.Length > 0;
+            one["car"] = car.Length > 0;
+        }
+        else
+        {
+            one["goal"] = goal;
+            one["thanks"] = thanks;
+            one["car"] = car;
+        }
 
         if (repick)
         {
             one["repick"] = true;
         }
 
-        // A junior's notes are typed at the desk unless the club takes them
-        // from phones: the phone shows no note boxes and the relay refuses
-        // one (15 Nov 2026).
-        if (profile.IsJunior && !crew.JuniorNotesFromPhone)
+        // A junior's notes are typed at the desk, never sent from a phone
+        // (15 Nov 2026 - the switch that let a club take them was removed):
+        // the phone shows no note boxes and the relay refuses one.
+        if (profile.IsJunior)
         {
             one["notes"] = false;
         }

@@ -570,9 +570,9 @@ Without a crew of their own, a driver gets the club's principal and Technical Le
 
 **Juniors.** What is said goes out on the PA, the stream and its captions. So:
 
-- **Their notes and about line are typed at your desk, never on their phone.** There is no switch for this: in the US, COPPA needs a parent's verified consent before a child under 13 sends words online that are said in public, and a tick on a phone isn't that. From their phone, a junior can only send the name the announcer calls them.
+- **Their notes and about line are typed at your desk, never on their phone.** There is no switch for this: in the US, COPPA needs a parent's verified consent before a child under 13 sends words online that are said in public, and a tick on a phone isn't that. Of their details, a junior's phone can only send the name the announcer calls them; they can still pick their crew's voices.
 - **Set their age band** on their profile: **Under 13** or **13-17**. A junior without one is treated as under 13. A junior aged 13-17 can send crew names from their phone, which wait for you as usual; an under-13's crew names are typed at your desk.
-- **A parent must agree first.** A junior's notes and about line are never said until **A parent or guardian agreed these notes can be said on the PA and the stream** is ticked on their profile. Get it signed at the desk, as for the waiver. There is a form to print in the club pack.
+- **A parent must agree first.** A junior's notes and about line are never said until **A parent or guardian agreed these notes and the about line can be said on the PA and the stream** is ticked on their profile. Get it signed at the desk, as for the waiver. There is a form to print in the club pack. Until it's ticked, their phone shows only that a note is set ("Set at the desk"), not what it says.
 - On a night the stream is on, a junior's notes and about line aren't said unless you tick **Juniors' notes on stream nights**. Their crew's names and voices are heard either way.
 - A junior's principal never comes in defensive, frustrated or blunt, and the interview is told to keep it warm and encouraging. **Sailor-mouth** plays clean in any race with a junior in it.
 
@@ -1153,7 +1153,7 @@ A club note is the other kind: *"it's Jack's first race since his operation — 
 
 **Notes** in the **Broadcast** window (the **Broadcast** button on **Race Control**) — beside Hold, Play again and Skip, because that's the screen you're looking at when somebody tells you. Since 15 November 2026 it opens the [Inbox](../race-control/inbox.md) on its **Club notes** chip. Type the note in **Your own note:**, press Enter (or click **Add**), and the announcer works it into a sentence of its own between races.
 
-The **Club notes** chip lists what's waiting for you, and **Show done** lists what's ready to go out ("Ready to be said") and what's already been said ("Said"), with **Remove Note**. A note from the room waits until you pick it and click **Let the announcer say it**; **Remove** throws it away. Notes last for one night and are cleared when you start a new race day — a dedication read out at the wrong meeting, to the wrong room, about people who aren't there, is the one thing this must never do.
+The **Club notes** chip lists what's waiting for you, and **Show done** lists what's ready to go out ("Ready to be said") and what's already been said ("Said"), with **Remove Note**. A note from the room waits until you pick it and click **Let the announcer say it**; **Remove** throws it away. One that names a junior here tonight (by their name, announcer name or first name) says "Names a junior - check before it's read" in place of "For the announcer to say": read it for a school, an age or where they live before you let it go out. Before anyone has checked in, every junior counts. Notes last for one night and are cleared when you start a new race day — a dedication read out at the wrong meeting, to the wrong room, about people who aren't there, is the one thing this must never do.
 
 ### Letting the room send them
 

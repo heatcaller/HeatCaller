@@ -1752,16 +1752,13 @@ public sealed class AppSettings
     /// </summary>
     public bool JuniorNotesOnStream { get; set; }
 
-    /// <summary>
-    /// A junior's notes can be sent from a phone at all (15 Nov 2026). Off by
-    /// default, and off is the safer way to run: a child typing words online
-    /// that are then said in public is what the US children's privacy law
-    /// (COPPA) needs a parent's verified consent for, and the "I'm making this
-    /// change for them" tick is not that. Off, a junior's notes are typed at
-    /// the desk, with a parent there and their consent recorded on the
-    /// profile. A junior can still pick their crew's voices and names.
-    /// </summary>
-    public bool JuniorNotesFromPhone { get; set; }
+    // "Juniors can send notes from their phone" (JuniorNotesFromPhone) was
+    // REMOVED on 15 Nov 2026: a junior's notes and about line are only ever
+    // typed at the desk, with a parent there and their consent ticked on the
+    // profile. A child typing words online that are then said in public needs
+    // a parent's verified consent under COPPA, and a tick on a phone is not
+    // that. An old settings.json with the key still loads - the reader skips
+    // keys it does not know.
 
     // --- The honours (10 Oct 2026) ---------------------------------------
     //

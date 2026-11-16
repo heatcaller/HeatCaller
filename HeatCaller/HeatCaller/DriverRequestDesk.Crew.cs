@@ -259,8 +259,8 @@ internal sealed partial class DriverRequestDesk
     /// <summary>
     /// Applies a crew request's words to the driver's profile - the names
     /// and notes; the voices have gone already - with an undo, as
-    /// ApplyDetails does. A name that is not a name is refused, and so is a
-    /// junior's note without a parent's tick (the relay refuses it too).
+    /// ApplyDetails does. A name that is not a name is refused, and so is any
+    /// junior's note from a phone (the relay refuses it too).
     /// </summary>
     public bool ApplyCrew(DriverRequest request, out string refusal)
     {
@@ -302,20 +302,14 @@ internal sealed partial class DriverRequestDesk
             return false;
         }
 
+        // A junior's notes are only ever typed at the desk (15 Nov 2026: the
+        // switch that let a club take them from phones, with a parent's tick,
+        // was removed). Clearing one is fine: an empty note says nothing.
         if (profile.IsJunior && CrewNoteFields.Any(k => request.Text(k).Length > 0))
         {
-            if (!_settings.JuniorNotesFromPhone)
-            {
-                refusal = "Your club takes a junior's notes at the desk, with a parent there, not from a phone. Decline it, "
-                          + "and type them on their profile with the parent's consent ticked.";
-                return false;
-            }
-
-            if (!request.Guardian)
-            {
-                refusal = "A junior's notes need a parent or guardian to send them. Decline it.";
-                return false;
-            }
+            refusal = "A junior's notes are typed at the desk, with a parent there, not sent from a phone. Decline it, "
+                      + "and type them on their profile with the parent's consent ticked.";
+            return false;
         }
 
         var before = ProfileStore.Snapshot(profile);

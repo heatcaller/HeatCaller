@@ -1377,6 +1377,9 @@ internal sealed partial class DriverRequestDesk
     /// </summary>
     internal sealed record DetailsChoice(IReadOnlyDictionary<string, string> Texts, IReadOnlyDictionary<string, bool> Flags);
 
+    /// <summary>The details a junior's phone may not change: entered at the desk with a parent (15 Nov 2026).</summary>
+    internal static readonly IReadOnlySet<string> JuniorDeskOnly = new HashSet<string>(StringComparer.Ordinal) { "pronouns", "about", "email" };
+
     /// <summary>
     /// Applies the ticked changes to the driver's profile: a snapshot, the
     /// change, Upsert, and an undo that puts the snapshot back while the
@@ -1401,6 +1404,17 @@ internal sealed partial class DriverRequestDesk
         if (choice.Texts.Count == 0 && choice.Flags.Count == 0)
         {
             refusal = "Tick at least one change to approve, or decline the request.";
+            return false;
+        }
+
+        // A JUNIOR'S PRONOUNS, ABOUT LINE AND EMAIL ARE ENTERED AT THE DESK
+        // (15 Nov 2026, plans 1.1 and 2.2), with a parent there - never from
+        // their phone, which offers them only the announcer name. The relay
+        // refuses them too; this is for a phone or relay that did not.
+        if (profile.IsJunior && choice.Texts.Keys.FirstOrDefault(k => JuniorDeskOnly.Contains(k)) is { } deskOnly)
+        {
+            refusal = $"A junior's {(deskOnly == "about" ? "about line" : deskOnly)} is entered at the desk with a parent, "
+                      + "not from their phone. Untick it, or decline the request and fill it in on their profile.";
             return false;
         }
 
