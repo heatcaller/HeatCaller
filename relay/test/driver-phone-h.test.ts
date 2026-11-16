@@ -67,14 +67,25 @@ describe("the home-screen icon (items 5 and 11)", () => {
 });
 
 describe("your other clubs on this phone (item 5)", () => {
-  it("notes each club the phone opens, and Me links to the others", async () => {
+  it("never notes a club no driver signed in at, and Me links to the others (cookie policy, 15 Nov 2026)", async () => {
     const { html, script } = pageParts(myNightPage("acme-rc", "Acme RC"));
     const page = new FakePage(html, async () => ({ status: 404 }), {});
     page.store.set("hc-clubs", JSON.stringify([{ c: "brookside", n: "Brookside" }]));
     page.run(script);
     await page.settle();
     const list = JSON.parse(String(page.store.get("hc-clubs"))) as { c: string }[];
-    assert.deepEqual(list.map((c) => c.c), ["acme-rc", "brookside"]);
+    assert.deepEqual(list.map((c) => c.c), ["brookside"], "this club is not noted");
     assert.match(page.get("mn").drawn(), /Your other clubs on this phone: (<a href="\/c\/brookside\/mynight">)?Brookside/);
+  });
+
+  it("notes a club once a driver on this phone has signed in there", async () => {
+    const { html, script } = pageParts(myNightPage("acme-rc", "Acme RC"));
+    const page = new FakePage(html, async () => ({ status: 404 }), {});
+    page.store.set("hc-clubs", JSON.stringify([{ c: "brookside", n: "Brookside" }]));
+    page.store.set("hg-me-acme-rc", "a1b2c3d4e5f60718293a");
+    page.run(script);
+    await page.settle();
+    const list = JSON.parse(String(page.store.get("hc-clubs"))) as { c: string }[];
+    assert.deepEqual(list.map((c) => c.c), ["acme-rc", "brookside"]);
   });
 });
