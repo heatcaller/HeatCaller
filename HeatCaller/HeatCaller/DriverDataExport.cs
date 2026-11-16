@@ -66,7 +66,7 @@ internal static class DriverDataExport
         html.Append("<h1>").Append(E(who)).Append("</h1>")
             .Append("<p>Everything ").Append(E(string.IsNullOrWhiteSpace(clubName) ? "the club" : clubName))
             .Append(" holds about this driver in HeatCaller on this laptop, as at ")
-            .Append(E(localNow.ToString("d MMMM yyyy HH:mm", CultureInfo.CurrentCulture))).Append(".</p>")
+            .Append(E(Stamp(localNow))).Append(".</p>")
             .Append("<p class=\"muted\">Published copies on the club's web page are built from this same data.</p>");
 
         // --- Profile ------------------------------------------------------
@@ -113,7 +113,7 @@ internal static class DriverDataExport
             new[] { "When", "Race", "Track", "Place", "Laps", "Best lap", "Car" },
             results.Select(x => new[]
             {
-                x.Session.StartedAtUtc.ToLocalTime().ToString("d MMM yyyy HH:mm", CultureInfo.CurrentCulture),
+                Stamp(x.Session.StartedAtUtc.ToLocalTime()),
                 x.Session.Label,
                 x.Session.TrackLayoutName,
                 x.Row.Position.ToString(CultureInfo.InvariantCulture),
@@ -130,7 +130,7 @@ internal static class DriverDataExport
             data["resultCorrections"] = edits.Select(x => new { Session = x.Session.Label, x.Edit.AtUtc, x.Edit.Change, x.Edit.Reason, x.Edit.Source }).ToList();
             html.Append("<h2>Result corrections</h2>").Append(Rows(
                 new[] { "When", "Race", "Change", "Reason" },
-                edits.Select(x => new[] { x.Edit.AtUtc.ToLocalTime().ToString("d MMM yyyy HH:mm", CultureInfo.CurrentCulture), x.Session.Label, x.Edit.Change, x.Edit.Reason })));
+                edits.Select(x => new[] { Stamp(x.Edit.AtUtc.ToLocalTime()), x.Session.Label, x.Edit.Change, x.Edit.Reason })));
         }
 
         // --- Race days ------------------------------------------------------
@@ -228,7 +228,7 @@ internal static class DriverDataExport
                 new[] { "Asked", "What", "Details", "Answer" },
                 requests.Select(r => new[]
                 {
-                    r.AskedUtc.ToLocalTime().ToString("d MMM yyyy HH:mm", CultureInfo.CurrentCulture),
+                    Stamp(r.AskedUtc.ToLocalTime()),
                     r.Kind,
                     string.Join("; ", r.Texts.Select(t => $"{t.Key}: {t.Value}").Concat(r.Flags.Select(f => $"{f.Key}: {(f.Value ? "yes" : "no")}"))),
                     $"{r.State} {r.Said}".Trim(),
@@ -286,6 +286,10 @@ internal static class DriverDataExport
     }
 
     private static string E(string? text) => WebUtility.HtmlEncode(text ?? string.Empty);
+
+    /// <summary>A date and time, the time in the club's own clock style (AppTime).</summary>
+    private static string Stamp(DateTime local) =>
+        $"{local.ToString("d MMM yyyy", CultureInfo.CurrentCulture)} {AppTime.TimeOfDay(local)}";
 
     private static string Rows(IReadOnlyList<string> headers, IEnumerable<string?[]> rows)
     {
