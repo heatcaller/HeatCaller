@@ -2,7 +2,7 @@
 
 **Beta version of 15 November 2026.** These terms cover the HeatCaller beta. They will be revised before HeatCaller is generally released, and HeatCaller will ask you to accept the revised version before it opens again.
 
-There are two parts. **Part 1** is the license agreement for the software. **Part 2** is the privacy notice: what HeatCaller does with information about drivers, and where it sends it. You must accept both to install and use HeatCaller.
+There are three parts. **Part 1** is the license agreement for the software. **Part 2** is the privacy notice: what HeatCaller does with information about drivers, and where it sends it. **Part 3** covers the cookies on your club's online pages: where the cookie policy for your drivers is, and your part in it. You must accept all three to install and use HeatCaller.
 
 # Part 1: License agreement
 
@@ -131,6 +131,8 @@ Only if the club turns on **Drivers can pick their own crew**.
 
 Transponder numbers and email addresses are never published.
 
+The relay also sees the internet address of every phone or computer that opens the club's pages. It holds it in memory for ten minutes at most, only to limit PIN guessing and floods of requests, and does not write it down. The pages send a few anonymous daily counts of how they are used (for example how often a phone lost its signal), with no driver, phone or address in them, kept 90 days. What the pages keep in the browser is set out in the cookie policy (Part 3).
+
 **ElevenLabs** (a speech service), only if the club uses the HeatCaller voice or its own ElevenLabs account. **Each announcer line is sent to ElevenLabs to be turned into speech, and a line that names a driver carries that driver's name.** Names are sent in the short form ("Billy S") while **Shorten published names** is on, unless the club ticks **Say full names aloud with the online voices**. The free Kokoro voice runs on the club's computer and sends nothing anywhere.
 
 **Anthropic** (an AI model provider), only if the club uses online AI commentary. The race facts the commentary is written from, including drivers' names, positions and lap times, are sent through the relay to Anthropic's model. Commentary written by the model built into HeatCaller, on the club's computer, sends nothing.
@@ -165,3 +167,20 @@ We do not sell driver information or use it for advertising.
 ## Contact
 
 support@heatcaller.com
+
+# Part 3: Cookies on your club's pages
+
+Your club's online pages (the pages the relay serves for your club) keep a small amount in the browsers that open them: one cookie for the colour theme a driver picks, notes in the browser's own storage for signing in and for choices drivers make, and copies of the club's public pages for when the signal drops. They also send us a few anonymous counts of how the pages are used. They carry no advertising and do not track anyone across other websites.
+
+**The cookie policy.** What the pages keep, why, for how long, and what drivers can do about it is set out in the cookie policy at /c/<your club>/cookies on the relay, linked as **Cookies** at the foot of every one of your club's pages. It is written for your drivers, their parents and anyone else who opens the pages. We keep it up to date as the pages change and date every change on it. Changing it does not change these terms, and HeatCaller will not ask you to accept them again for it. You can also ask us for a copy at any time.
+
+**HeatCaller's part.** We decide what the pages keep in a browser, and we are responsible for the cookie policy being accurate. We will not make the pages keep anything new in a browser without first adding it to the cookie policy.
+
+**Your part.**
+
+- Do not tell your drivers or visitors anything about the pages that contradicts the cookie policy. When you tell drivers about the online pages, for example in a sign-up email or at the desk, point them to it.
+- Links you add to the pages (your website, social media, your stream) lead to other sites with their own cookies. If you show your own stream or anything else from another site on the pages, you are responsible for telling your drivers about it as the law where you race requires.
+- We built the pages to keep only what they need for the things drivers ask them to do, so that, as far as we know, they need no consent banner. If the law where you race requires a notice or consent beyond the cookie policy, tell us and we will work with you on it. Until we have, you are responsible for any notice or consent that law requires you to give your own drivers.
+- Where your drivers are children, tell their parents or guardians that the cookie policy exists and where to find it.
+
+**Contact.** support@heatcaller.com

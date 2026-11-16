@@ -108,8 +108,8 @@ describe("Me: the Signed in button asks before signing out", () => {
 
     assert.deepEqual(
       Object.fromEntries(page.store.entries()),
-      // The phone's own visit count (the install card) and its list of clubs (14 Nov 2026) are the phone's, not Bill's.
-      { "hg-follow-acme-rc": "someone", "hg-laptalk-acme-rc": "1", "hg-visits-acme-rc": "1", "hc-clubs": '[{"c":"acme-rc","n":"Acme RC"}]', [OUT]: CODE },
+      // The list of clubs loses this one with its last driver, and no visit count is kept (cookie policy, 15 Nov 2026).
+      { "hg-follow-acme-rc": "someone", "hg-laptalk-acme-rc": "1", [OUT]: CODE },
       "only what was never Bill's is left, and the note that this tab signed out",
     );
     assert.equal(page.eval("location.href"), "/c/acme-rc/mynight");

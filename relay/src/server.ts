@@ -10,6 +10,7 @@ import { PinGuard } from "./pinguard.js";
 import { previewCard, previewsIn, type PagePreview, type SessionPreview } from "./preview.js";
 import {
   badgesPage,
+  cookiesPage,
   checkinPage,
   homePage,
   livePage,
@@ -98,6 +99,8 @@ const PAGES: Readonly<Record<string, (club: string, clubName: string, context: P
   checkin: checkinPage,
   // A driver's way to their own night with their personal PIN (26 Oct 2026, asked for by Asher) - see myNightPage.
   mynight: myNightPage,
+  // What the pages keep in the browser (15 Nov 2026) - linked from every page's footer.
+  cookies: cookiesPage,
 });
 
 /** Where the relay keeps a club's queue of check-in taps. Not a channel: nobody publishes to it, and nobody reads it but the laptop. */

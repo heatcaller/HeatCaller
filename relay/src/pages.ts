@@ -22,6 +22,7 @@ import { GARAGE_CSS, GARAGE_EMBED_BODY, garageEmbedScript } from "./garagepage.j
 import { ME_BODY_END, ME_BODY_TOP, ME_COMING, ME_CSS, ME_JS, OWE_CSS } from "./mespaces.js";
 import { CLOCK_JS, clockAttr, tzAttr } from "./clock.js";
 import { PAGES_BUILD } from "./pagebuild.js";
+import { COOKIE_POLICY_HTML } from "./cookies.js";
 
 /** What a page needs to know beyond its club: how the club looks, and where it is being served from. */
 export interface PageContext {
@@ -1489,6 +1490,18 @@ mark { background: var(--primary); color: var(--on-primary, #FFFFFF); border-rad
 footer .hcmark { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); text-decoration: none;
                  padding: 6px 0; margin-left: auto; font-size: 0.95rem; }
 footer .hcmark:hover { color: var(--text); }
+/* The cookie policy, linked from every page's footer (15 Nov 2026): quiet,
+   beside the sign-off, a finger tall. */
+footer .hcpolicy { color: var(--muted); text-decoration: underline; text-underline-offset: 3px;
+                   display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; }
+footer .hcpolicy:hover { color: var(--text); }
+footer .hcpolicy:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 6px; }
+/* The cookie policy page: sentences, so held to a reading width. */
+.policy { max-width: 42rem; margin: 0 auto; text-align: left; line-height: 1.55; }
+.policy h2 { font-size: 1.1rem; margin: 26px 0 8px; }
+.policy ul { padding-left: 20px; margin: 8px 0; }
+.policy li { padding: 5px 0; }
+.policy a { color: var(--accent); }
 /* The byline, on every page: right-justified beside the club's name, under
    Live's broadcast bug (3 Nov 2026, Asher). Under the name it was a third
    line between the name and the page's one-line summary. */
@@ -2782,6 +2795,12 @@ hcApplyReading();
 // club on a relay shares its address, so each club's pages note themselves
 // in one list (hc-clubs: id and name, newest first, up to eight), and Me
 // links to the others. Only the club, never anything about a driver.
+//
+// ONLY WHERE A DRIVER SIGNED IN (15 Nov 2026, cookie policy review): a club
+// is noted only once a driver on this phone has opened their night there
+// (hg-me-<club>), so the list is part of the Me sign-in the person asked
+// for rather than a record of every club page they looked at. Signing the
+// last driver out takes the club off it again (meSignOut).
 const HC_CLUBS_KEY = 'hc-clubs';
 function hcClubs() {
   try {
@@ -2791,11 +2810,19 @@ function hcClubs() {
 }
 (function () {
   try {
-    if (!CLUB) return;
+    if (!CLUB || !localStorage.getItem('hg-me-' + CLUB)) return;
     const others = hcClubs().filter((c) => c.c !== CLUB);
     localStorage.setItem(HC_CLUBS_KEY, JSON.stringify([{ c: CLUB, n: String(CLUB_NAME || CLUB).slice(0, 60) }].concat(others).slice(0, 8)));
   } catch (e) { /* this phone keeps no list */ }
 })();
+// This club off the list, when the last driver signs out here.
+function hcClubsForget() {
+  try {
+    const others = hcClubs().filter((c) => c.c !== CLUB);
+    if (others.length > 0) localStorage.setItem(HC_CLUBS_KEY, JSON.stringify(others));
+    else localStorage.removeItem(HC_CLUBS_KEY);
+  } catch (e) { /* nothing was kept */ }
+}
 function hcOtherClubs() {
   const others = hcClubs().filter((c) => c.c !== CLUB);
   if (others.length === 0) return null;
@@ -2855,14 +2882,22 @@ function inAppHelp() {
 // ONTO THE HOME SCREEN (14 Nov 2026, driver phone plan item 7). On an
 // iPhone alerts only work from the club's page on the Home Screen, and
 // that was only said inside the alerts text. Now one card, at a good
-// moment: on a phone's second visit or later, never on the first, never
+// moment: once the page has been open 45 seconds, never
 // while a race is on (hcBusy), never once installed, and never inside
 // another app's browser (which can't install - see inAppBrowser). Android
 // gets the browser's own prompt behind the button; an iPhone in Safari
 // gets the three steps. "Not now" hides it for 14 days, "Don't ask again"
 // for good.
+//
+// NO VISIT COUNT (15 Nov 2026, cookie policy review): it used to wait for a
+// phone's second visit, counted in storage (hg-visits-<club>). Storage that
+// only serves a prompt is not something the person asked for, so the wait
+// is now 45 seconds on the page, kept in memory, and an old count is
+// removed. Only "Not now" and "Don't ask again", which the person chose,
+// are kept.
 const HC_INSTALL_KEY = 'hg-install-' + CLUB;
-const HC_VISITS_KEY = 'hg-visits-' + CLUB;
+const HC_INSTALL_WAIT_MS = 45000;
+let hcInstallFrom = Date.now() + HC_INSTALL_WAIT_MS;
 let hcInstallPrompt = null;
 try {
   addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); hcInstallPrompt = e; hcInstallCard(); });
@@ -2882,7 +2917,7 @@ function hcInstallCard() {
     if (hcInstalled() || inAppBrowser() !== '' || document.getElementById('hcinst')) return;
     const said = localStorage.getItem(HC_INSTALL_KEY) || '';
     if (said === 'never' || (Number(said) > Date.now())) return;
-    if (Number(localStorage.getItem(HC_VISITS_KEY) || '0') < 2) return;
+    if (Date.now() < hcInstallFrom) return;
     if (typeof window.hcBusy === 'function' && window.hcBusy() === true) return;
     const android = hcInstallPrompt !== null;
     if (!android && !hcIPhoneSafari()) return;
@@ -2940,11 +2975,11 @@ function hcInstallCard() {
 }
 (function () {
   try {
-    if (FRAMED || SHELL) return;
-    const n = Math.min(99, Number(localStorage.getItem(HC_VISITS_KEY) || '0') + 1);
-    localStorage.setItem(HC_VISITS_KEY, String(n));
-  } catch (e) { /* not counted */ }
-  setTimeout(hcInstallCard, 1500);
+    localStorage.removeItem('hg-visits-' + CLUB);
+    // A battery-charge timer only pages from before 6 Nov 2026 kept (see ME_LEFTOVERS).
+    localStorage.removeItem('hg-charge-' + CLUB);
+  } catch (e) { /* nothing was kept */ }
+  setTimeout(hcInstallCard, HC_INSTALL_WAIT_MS + 500);
 })();
 
 // THE CLUB'S PAGES ON THIS PHONE (14 Nov 2026, driver phone plan item 1):
@@ -3500,6 +3535,7 @@ function meSignOut(code) {
   } else {
     meForget();
     try { localStorage.removeItem(ME_WAS_KEY); } catch (e) { /* nothing was kept */ }
+    if (typeof hcClubsForget === 'function') hcClubsForget();
   }
   hcOweKeep('', '');
   for (const k of ME_LEFTOVERS) {
@@ -4008,7 +4044,7 @@ if (!SHELL && typeof window.addEventListener === 'function') {
 interface Shell {
   readonly club: string;
   readonly clubName: string;
-  readonly active: "home" | "live" | "schedule" | "results" | "standings" | "badges" | "tracks" | "checkin" | "signup" | "night" | "mynight" | "missing";
+  readonly active: "home" | "live" | "schedule" | "results" | "standings" | "badges" | "tracks" | "checkin" | "signup" | "night" | "mynight" | "missing" | "cookies";
   readonly heading: string;
   readonly sub: string;
   readonly body: string;
@@ -4294,7 +4330,7 @@ ${overrides}${sunset ? HC_SUNSET_STYLE : ""}
     ${subTab("badges", "Achievements")}
   </nav>` : ""}
   ${page.body}
-  <footer><span id="stamp">&nbsp;</span>${links}<span class="tip">Tap any driver's name to follow them on every page.</span><span class="hcread" id="hcread" role="group" aria-label="Reading"><span>Text</span><button type="button" data-ts="100" aria-label="Text size normal">A</button><button type="button" data-ts="115" aria-label="Text size larger">A+</button><button type="button" data-ts="130" aria-label="Text size largest">A++</button><button type="button" data-hc="1" aria-label="High contrast">Contrast</button>${themesOn ? '<button type="button" data-look="1" aria-haspopup="dialog">Look</button>' : ""}</span><a class="hcmark" href="https://heatcaller.com" aria-label="What's HeatCaller?" data-hc-about>${HC_SUN}${HC_WORD}</a></footer>
+  <footer><span id="stamp">&nbsp;</span>${links}<span class="tip">Tap any driver's name to follow them on every page.</span><span class="hcread" id="hcread" role="group" aria-label="Reading"><span>Text</span><button type="button" data-ts="100" aria-label="Text size normal">A</button><button type="button" data-ts="115" aria-label="Text size larger">A+</button><button type="button" data-ts="130" aria-label="Text size largest">A++</button><button type="button" data-hc="1" aria-label="High contrast">Contrast</button>${themesOn ? '<button type="button" data-look="1" aria-haspopup="dialog">Look</button>' : ""}</span><a class="hcpolicy" href="/c/${club}/cookies">Cookies</a><a class="hcmark" href="https://heatcaller.com" aria-label="What's HeatCaller?" data-hc-about>${HC_SUN}${HC_WORD}</a></footer>
 </div>
 ${aboutSheet(name)}
 <div id="follow" class="follow" hidden></div>
@@ -19919,6 +19955,24 @@ export function missingPage(club: string, clubName: string, context: PageContext
       `<a class="tile" href="${base}/live"><b>Live</b><span>The race as it runs</span></a>` +
       `<a class="tile" href="${base}/results"><b>Results</b><span>Every session</span></a>` +
       "</div>",
+    script: "",
+    noindex: true,
+  }, context);
+}
+
+/**
+ * The cookie policy (15 Nov 2026), from every page's footer: what these
+ * pages keep in the browser and why, written for whoever opens them. Part 3
+ * of the terms the club accepts points here. See cookies.ts.
+ */
+export function cookiesPage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
+  return shell({
+    club,
+    clubName,
+    active: "cookies",
+    heading: "Cookies",
+    sub: "What these pages keep on your phone, and why.",
+    body: COOKIE_POLICY_HTML,
     script: "",
     noindex: true,
   }, context);

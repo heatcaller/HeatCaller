@@ -66,16 +66,22 @@ describe("inside another app's browser (item 16)", () => {
 });
 
 describe("onto the home screen (item 7)", () => {
-  it("never on a phone's first visit, nor inside another app's browser", async () => {
-    const first = await openMe({}, "Mozilla/5.0 (iPhone) AppleWebKit Version/18.0 Mobile Safari/604.1");
+  it("never in a page's first 45 seconds, and no visit count kept for it (cookie policy, 15 Nov 2026)", async () => {
+    const { html, script } = pageParts(myNightPage("acme-rc", "Acme RC"));
+    const first = new FakePage(html, async () => ({ status: 404 }), {});
+    first.store.set("hg-visits-acme-rc", "3");
+    first.eval(`navigator.userAgent = ${JSON.stringify("Mozilla/5.0 (iPhone) AppleWebKit Version/18.0 Mobile Safari/604.1")}`);
+    first.run(script);
+    await first.settle();
     first.eval("hcInstallCard()");
     assert.equal(first.eval("document.getElementById('hcinst')"), null);
-    assert.equal(first.eval("localStorage.getItem('hg-visits-acme-rc')"), "1", "the first visit is counted");
+    assert.equal(first.eval("localStorage.getItem('hg-visits-acme-rc')"), null, "an old visit count is removed, and none is kept");
+    assert.ok(Number(first.eval("hcInstallFrom - Date.now()")) > 40000, "the wait is kept in memory");
   });
 
   it("not again once Don't ask again was chosen", async () => {
     const page = await openMe({}, "Mozilla/5.0 (iPhone) AppleWebKit Version/18.0 Mobile Safari/604.1");
-    page.eval("localStorage.setItem('hg-visits-acme-rc', '5'); localStorage.setItem('hg-install-acme-rc', 'never'); hcInstallCard()");
+    page.eval("hcInstallFrom = 0; localStorage.setItem('hg-install-acme-rc', 'never'); hcInstallCard()");
     assert.equal(page.eval("document.getElementById('hcinst')"), null);
   });
 });

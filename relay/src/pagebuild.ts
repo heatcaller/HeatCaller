@@ -25,6 +25,8 @@ export const PAGE_FILES: readonly string[] = [
   // (CLOCK_JS, DEFAULT_LOOK, SUN_ICON_SIZE): compiled pages.js holds only
   // the import, so a change there alone must still be a new build.
   "./clock.js", "./site.js", "./sun.js",
+  // The cookie policy's words (COOKIE_POLICY_HTML), shown on /cookies.
+  "./cookies.js",
 ];
 
 export const PAGES_BUILD: string = (() => {
