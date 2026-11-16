@@ -19,7 +19,7 @@ import type { PagePreview } from "./preview.js";
 import { DEFAULT_LOOK, type Look, type SocialLink } from "./site.js";
 import { SUN_ICON_SIZE } from "./sun.js";
 import { GARAGE_CSS, GARAGE_EMBED_BODY, garageEmbedScript } from "./garagepage.js";
-import { ME_BODY_END, ME_BODY_TOP, ME_COMING, ME_CSS, ME_JS } from "./mespaces.js";
+import { ME_BODY_END, ME_BODY_TOP, ME_COMING, ME_CSS, ME_JS, OWE_CSS } from "./mespaces.js";
 import { CLOCK_JS, clockAttr, tzAttr } from "./clock.js";
 import { PAGES_BUILD } from "./pagebuild.js";
 
@@ -851,7 +851,7 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
    list with one open at a time and its lap stats, lap times and lap chart
    on tabs, and the driver score beside the report card. Thumb-sized rows
    for a phone in the pits; the lap table scrolls in its own box. */
-#nj { position: sticky; top: var(--stick-t); z-index: 3; background: var(--bg); margin: 8px -16px 0; padding: 0 16px; }
+#nj { position: sticky; top: calc(var(--stick-t) + var(--owe-h, 0px)); z-index: 3; background: var(--bg); margin: 8px -16px 0; padding: 0 16px; }
 .jump { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0; max-width: 42rem; margin: 0 auto;
         scrollbar-width: none; }
 .jump::-webkit-scrollbar { display: none; }
@@ -1475,7 +1475,7 @@ html.framed .hcvideo .sheet { padding-bottom: calc(18px + 58px + var(--sa-b)); }
 .hcvmiss { color: var(--muted); font-size: 0.85rem; margin: 8px 0 0; }
 /* Live's docked player (race video V4): sticky at the top, the board
    scrolling under it; small, a corner player over the page. */
-.hcdock { position: sticky; top: var(--stick-t); z-index: 20; background: var(--bg); padding: 6px 0 4px; }
+.hcdock { position: sticky; top: calc(var(--stick-t) + var(--owe-h, 0px)); z-index: 20; background: var(--bg); padding: 6px 0 4px; }
 .hcdock[hidden] { display: none; }
 .hcdock .hcdbar { position: absolute; top: 12px; right: 6px; display: flex; gap: 6px; }
 .hcdock .hcdbar .page { min-width: 44px; min-height: 44px; padding: 0; background: rgba(0, 0, 0, 0.6); color: #FFFFFF; border-color: transparent; }
@@ -1644,6 +1644,7 @@ html[data-ts="115"] { --ts: 1.15; }
 html[data-ts="130"] { --ts: 1.3; }
 /* Driver themes (15 Nov 2026): after the club's own rules, before High contrast's. */
 ${DRIVER_THEME_CSS}
+${OWE_CSS}
 html.hc { --bg: #000000; --surface: #000000; --row-alt: #000000; --text: #FFFFFF; --muted: #E6E6E6; --border: #FFFFFF;
   --primary: #FF66C4; --on-primary: #000000; --accent: #5CF0FF; --good: #5CFF9E; --bad: #FF8095; --warn: #FFD15C;
   --tonal: #000000; --on-tonal: #FFFFFF; --ring: #FFFFFF; }
@@ -1711,7 +1712,7 @@ html.hc .stale, html.hc.hcoffline .wrap > :not(header):not(.hcoff):not(footer) {
   #board .card:not(.all) th:not(.k), #board .card:not(.all) td:not(.k):not(.bmc) { display: none; }
   #board .card:not(.all) { overflow: visible; }
   #board .card:not(.all) table { width: 100%; min-width: 0; }
-  #board .card:not(.all) tr.me td { position: sticky; top: var(--stick-t); bottom: calc(68px + var(--sa-b)); z-index: 2; }
+  #board .card:not(.all) tr.me td { position: sticky; top: calc(var(--stick-t) + var(--owe-h, 0px)); bottom: calc(68px + var(--sa-b)); z-index: 2; }
 }
 /* YOUR CARD ON LIVE (item 4). The Following chip is the card's job on Live. */
 body.has-you #follow { display: none; }
@@ -3279,6 +3280,95 @@ function meForget() {
   try { localStorage.removeItem(ME_KEY); } catch (e) { /* nothing was kept */ }
 }
 
+// OWING, ON EVERY PAGE (15 Nov 2026, Asher: "the notification should be a
+// banner across all pages with the scroll thing you just built"). While the
+// driver signed in on this phone owes tonight's entry, every club page shows
+// Me's fee banner under its header, stuck at the top as it scrolls, and a tap
+// opens Me. From their own live entry - the night's live poll, the one Me
+// makes - once a minute while the page is looked at; kept for this tab only,
+// so the next page draws it at once rather than jumping down when it
+// arrives. Me itself has its own banner (#me-fee) and is left to it.
+const OWE_KEY = 'hc-owe-' + CLUB;
+let hcOweWatch = null;
+
+function hcOweHeight() {
+  const bar = document.getElementById('hc-owe-bar');
+  if (!bar || !document.body) return;
+  const h = bar.hidden ? 0 : (bar.offsetHeight || 0);
+  try {
+    document.body.classList.toggle('hc-owing', h > 0);
+    document.body.style.setProperty('--owe-h', h + 'px');
+  } catch (e) { /* the page's own bars stick at the top as before */ }
+  if (!hcOweWatch && typeof ResizeObserver === 'function') {
+    hcOweWatch = new ResizeObserver(() => hcOweHeight());
+    hcOweWatch.observe(bar);
+  }
+}
+
+function hcOweShow(words) {
+  const bar = document.getElementById('hc-owe-bar');
+  const at = document.getElementById('hc-owe');
+  if (!bar || !at) return;
+  const w = typeof words === 'string' ? words.trim().slice(0, 140) : '';
+  at.textContent = w;
+  bar.hidden = w === '';
+  hcOweHeight();
+}
+
+function hcOweKeep(code, words) {
+  try {
+    if (code && words) sessionStorage.setItem(OWE_KEY, code + '\\n' + words);
+    else sessionStorage.removeItem(OWE_KEY);
+  } catch (e) { /* drawn when the answer comes */ }
+}
+
+// What the night's live poll answered for code: 404 is nothing tonight, so
+// nothing owed; anything else that isn't an answer keeps what the bar shows
+// until the next try. A page that makes that poll itself (Home's Your next
+// race) hands its answers here and sets hcOweFed, so the relay is asked once.
+let hcOweFed = false;
+function hcOweFrom(code, status, answer) {
+  if (status === 404) answer = { ok: true };
+  else if (status !== 200) return;
+  if (!answer || answer.ok !== true || !code || meCode() !== code) return;
+  const entry = answer.live && answer.live.entry && typeof answer.live.entry === 'object' ? answer.live.entry : null;
+  const words = entry && entry.paid !== true && typeof entry.words === 'string' ? entry.words : '';
+  hcOweKeep(code, words);
+  hcOweShow(words);
+}
+
+async function hcOweCheck() {
+  const code = meCode();
+  if (!code) { hcOweKeep('', ''); hcOweShow(''); return; }
+  let status = 0;
+  let answer = null;
+  try {
+    const r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/night', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: code, part: 'live' }),
+      cache: 'no-store',
+    });
+    status = r.status;
+    if (status === 200) answer = await r.json();
+  } catch (e) { return; }
+  hcOweFrom(code, status, answer);
+}
+
+function hcOweStart() {
+  if (!document.getElementById('hc-owe-bar')) return;
+  try {
+    const kept = sessionStorage.getItem(OWE_KEY) || '';
+    const cut = kept.indexOf('\\n');
+    if (cut > 0 && kept.slice(0, cut) === meCode()) hcOweShow(kept.slice(cut + 1));
+  } catch (e) { /* drawn when the answer comes */ }
+  if (hcOweFed || !meCode()) return;
+  poll(hcOweCheck, 60000);
+}
+
+// After the page's own script, which may feed it (hcOweFed).
+setTimeout(hcOweStart, 0);
+
 // SIGNING OUT FORGETS THE DRIVER (6 Nov 2026, Asher: "If you then sign out
 // the app should forget the pin and require a pin entry to sign back in to
 // anyone's me tab. if signed out the app should forget all of the info for
@@ -3325,6 +3415,7 @@ function meSignOut(code) {
     meForget();
     try { localStorage.removeItem(ME_WAS_KEY); } catch (e) { /* nothing was kept */ }
   }
+  hcOweKeep('', '');
   for (const k of ME_LEFTOVERS) {
     // The phone's alerts stay on for the drivers still on it.
     if (k === 'hc-alerts:' + CLUB && others.length > 0) continue;
@@ -4109,7 +4200,8 @@ ${overrides}${sunset ? HC_SUNSET_STYLE : ""}
   <header${page.active === "live" ? ' class="onair-room"' : ""}>
     <div class="hcname">${brand}</div>
     ${tabsNav(club, name, lit)}
-  </header>${ofResults ? `
+  </header>${page.active === "night" || page.active === "mynight" ? "" : `
+  <div class="hc-owe-bar" id="hc-owe-bar" hidden><a class="me-fee hc-owe" id="hc-owe" href="/c/${club}/mynight"></a></div>`}${ofResults ? `
   <nav class="subtabs" aria-label="Results">
     ${subTab("results", "Sessions")}
     ${subTab("standings", "Standings")}
@@ -10250,15 +10342,16 @@ async function readMine() {
   } catch (e) { return; }
 
   // A busy relay (429) or a failed read keeps what is on screen.
-  if (r.status === 404) drawMine(null);
+  if (r.status === 404) { drawMine(null); hcOweFrom(MINE, 404, null); }
   if (r.status !== 200) return;
 
   let body = {};
   try { body = await r.json(); } catch (e) { return; }
   drawMine(body && body.live);
+  hcOweFrom(MINE, 200, body);
 }
 
-if (mine && MINE) poll(readMine, 60000);
+if (mine && MINE) { hcOweFed = true; poll(readMine, 60000); }
 
 // THE FOLLOWED DRIVER'S NEXT RACE (14 Nov 2026, overlay plan 7.1, Asher:
 // "Build those first"). Your next race needs the badge code; a family at

@@ -46,7 +46,7 @@ describe("the board made for a phone (item 4)", () => {
   it("has the style that hides the rest under 480 px, and keeps the own row in view below the status bar", () => {
     const html = livePage("acme-rc", "Acme RC");
     assert.match(html, /@media \(max-width: 480px\) \{\s*#board \.card:not\(\.all\) th:not\(\.k\), #board \.card:not\(\.all\) td:not\(\.k\):not\(\.bmc\) \{ display: none; \}/);
-    assert.match(html, /tr\.me td \{ position: sticky; top: var\(--stick-t\); bottom: calc\(68px \+ var\(--sa-b\)\)/);
+    assert.match(html, /tr\.me td \{ position: sticky; top: calc\(var\(--stick-t\) \+ var\(--owe-h, 0px\)\); bottom: calc\(68px \+ var\(--sa-b\)\)/);
   });
 
   it("opens a tapped row in place, and All columns brings the whole table back", async () => {
