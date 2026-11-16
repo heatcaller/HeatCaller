@@ -44,11 +44,19 @@ public sealed class BugHunt4AboutTests
     /// </summary>
     private static readonly string[] PackagesThatShip = new[]
     {
+        "CommunityToolkit.HighPerformance",
         "HidSharp",
         "KokoroSharp",
         "KokoroSharp.CPU",
+        "LLamaSharp",
+        "LLamaSharp.Backend.Cpu",
         "LibVLCSharp",
         "LibVLCSharp.WinForms",
+        "Microsoft.Bcl.AsyncInterfaces",
+        "Microsoft.Bcl.Memory",
+        "Microsoft.Extensions.AI.Abstractions",
+        "Microsoft.Extensions.DependencyInjection.Abstractions",
+        "Microsoft.Extensions.Logging.Abstractions",
         "Microsoft.ML.OnnxRuntime",
         "Microsoft.ML.OnnxRuntime.Managed",
         "MisakiSharp",
@@ -65,6 +73,8 @@ public sealed class BugHunt4AboutTests
         "OpenTK.Mathematics",
         "QRCoder",
         "System.IO.Ports",
+        "System.Interactive.Async",
+        "System.Linq.Async",
         "System.Numerics.Tensors",
         "System.Speech",
         "Velopack",
@@ -257,6 +267,23 @@ public sealed class BugHunt4AboutTests
 
         Assert.Contains("GNU LESSER GENERAL PUBLIC LICENSE", text, StringComparison.Ordinal);
         Assert.Contains("Version 2.1, February 1999", text, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Qwen3-LICENSE.txt", "Apache License")]
+    [InlineData("LLamaSharp-LICENSE.txt", "MIT License")]
+    [InlineData("llama.cpp-LICENSE.txt", "MIT License")]
+    public void The_offline_commentary_licence_texts_ship_with_the_app(string file, string heading)
+    {
+        // 15 Nov 2026, the IP review: the commentary model and what runs it
+        // shipped for weeks with neither text beside the exe, though
+        // fetch-llm.cmd said the Qwen licence travelled. None of the three
+        // packages or downloads carries its own, so Assets\Licences does.
+        var licence = Path.Combine(AppContext.BaseDirectory, "Assets", "Licences", file);
+
+        Assert.True(File.Exists(licence),
+            licence + " is missing - an installer cut from this build would ship the offline commentary without its licence text.");
+        Assert.Contains(heading, File.ReadAllText(licence), StringComparison.Ordinal);
     }
 
     [Fact]

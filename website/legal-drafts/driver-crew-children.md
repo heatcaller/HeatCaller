@@ -1,5 +1,7 @@
 > **DRAFT for review by a licensed attorney - not legal advice, not in force.**
 > Written 15 Nov 2026 for HeatCaller LLC about the Drivers' own crew feature (branch `claude/driver-crew`, plans/driver-crew-plan.md). It is a working memo to take to counsel, drafted from the code as built and from public sources checked the same day. It is not a substitute for a lawyer licensed where HeatCaller and its clubs operate. Points marked **[CHECK]** need a fact or a decision before the Terms go out.
+>
+> **Widened later on 15 Nov 2026** to the whole product, not just the crew feature: federal law beyond COPPA and more US states (end of section 2 and section 3), youth-sport safeguarding (section 5), streams and images (section 6), vendor terms (section 7), a proposed retention schedule (section 8) and a checklist against the build (section 9). These additions were written from general knowledge and were not re-checked against sources that day, so treat every one as **[CHECK]** until counsel confirms it.
 
 # Drivers' own crew: children's privacy and IP memo
 
@@ -82,6 +84,13 @@
 5. **Add a line to the notice the phone shows before sending:** "What you send may be said over the PA and on the club's stream."
    - [CHECK] The relay page currently says "Voice picks change straight away. Names and notes wait for the desk to check them." It does not yet say the words may be broadcast.
 
+### Beyond COPPA: other federal law
+
+- **FTC Act section 5 (deception).** The FTC can treat a privacy notice that promises one thing about juniors while the product does another as deceptive, whatever a child's age. Keep Part 2 of the Terms and the code in step. Every switch default this memo relies on is a promise.
+- **AI training.** The FTC's 2025 rule commentary says that using a child's information to train or develop AI is not "integral" to a service, so it would need its own parental consent. HeatCaller doesn't train on drivers' words. Say so in the notice, and make sure the vendors don't either (section 7).
+- **Pending bills: the Kids Online Safety Act and "COPPA 2.0".** These would extend duties to teens up to 16 or 17, with a duty of care and design limits. **[CHECK]** whether either has passed since. Building to the UK Children's Code (section 3) covers most of what they propose.
+- **FERPA does not apply** unless a school runs the club as a school activity and the records are education records.
+
 ## 3. UK, EU and elsewhere
 
 - **UK Children's Code** (applies to services likely to be used by under-18s). The standards that matter here:
@@ -96,6 +105,9 @@
 - **EU GDPR Article 8** defaults to 16, and member states may set it as low as 13. Controllers must make "reasonable efforts" to verify parental consent. <https://gdpr-info.eu/art-8-gdpr/>
 - **Australia's Children's Online Privacy Code** is not in force yet. The exposure draft came out 31 Mar 2026 and the Code is due to be registered by 10 Dec 2026. [CHECK] its status, and whether the small-business exemption takes small clubs out of the Privacy Act.
 - **US states:** age-appropriate design codes in California (partly in force since the Ninth Circuit's March 2026 ruling), Maryland, Nebraska and others mostly have size thresholds that hobby clubs won't meet. California's CCPA opt-in for under-16s applies only above the CCPA's thresholds.
+  - **New York Child Data Protection Act** (in force June 2025, **[CHECK]** thresholds). It covers users under 18 that the operator knows are minors, and limits processing to what is strictly necessary for the service unless there is informed consent. A club ticking **Junior** is that knowledge. Its "strictly necessary" test is a useful bar for every junior feature, whether or not the Act reaches a hobby club.
+  - **App-store age-assurance laws** (Utah, Texas, Louisiana, from 2026). These bind app stores and the apps distributed through them. The relay is a web page and the desk app is a direct-download .msi, so they probably don't apply. **[CHECK]** before shipping any store app.
+  - **Biometric and voice laws** (Illinois BIPA, Texas CUBI, Washington). They apply only if HeatCaller ever records or clones a real person's voice or face. Picking from a fixed list of stock voices is outside them. A cloned voice of a junior would be inside them, and should never be offered.
 
 ## 4. Intellectual property and publicity
 
@@ -106,7 +118,69 @@
   - [CHECK] Whether the HeatCaller voice set contains any cloned or designed-to-sound-like voices.
 - **Disclosure to processors.** ElevenLabs and Anthropic receive the notes when they are used. [CHECK] Both providers' terms on retention and training, for API data that contains a child's words.
 
-## 5. Parent or guardian consent: form for the desk
+## 5. Youth-sport safeguarding
+
+- **SafeSport and MAAPP.** The US Center for SafeSport's Minor Athlete Abuse Prevention Policies (MAAPP) bind only national governing bodies under the US Olympic & Paralympic Committee and their members. **[CHECK]** As far as known, RC racing bodies such as ROAR are outside that system, so MAAPP is not law for HeatCaller's clubs. But parents, venues and insurers treat it as the standard of care for youth sport, and a club's insurer may require something like it. **[CHECK]** with a club's insurer.
+- **The rule that matters most for software is about electronic messages.** An adult must not send private one-to-one messages to a minor. Messages must be observable (a parent copied, or on a shared channel) and limited to the activity.
+  - This applies to anything that lets the desk, or another adult, reply to a junior's phone: Driver Requests answers, Desk Inbox notes, crew-request decisions, the vote, video or family links.
+  - **[CHECK] Asher to confirm** what can reach a junior's phone today, and whether any of it is free text typed by an adult. A fixed status ("Approved", "Declined") is fine. Free text from an adult to a junior should also go to a parent contact, or show only on a screen others can see.
+  - Keep a log of adult-to-junior messages for the season. It protects the club as much as the child.
+- **Driver-to-driver contact.** HeatCaller has no direct messages between drivers. Keep it that way. A junior should never be reachable by another driver, adult or junior, through the app.
+- **Club agreement.** The Terms should say that the club runs its own safeguarding: it collects consent, decides who works the desk, and handles concerns. HeatCaller supplies the switches. **[CHECK]** whether Part 1 says this yet.
+
+## 6. Streams, recordings and images
+
+- **Consent to appear.** Youth sport usually needs a parent's opt-in before a junior is shown on a public stream or recording, and an opt-out the club can actually enforce on the night. HeatCaller puts juniors on air in several ways:
+  - race video (R2 or YouTube);
+  - OBS overlays, follower alerts and "most improved";
+  - auto-captions;
+  - recap clips and posted pieces;
+  - family links.
+  - **Recommendation:** add a per-profile *On stream: name only / first name and initial / not at all* setting, defaulting to first name and initial for juniors. Apply it everywhere a name leaves the building. **[CHECK]** what each of these surfaces shows for a junior today.
+- **YouTube "made for kids".** A stream is not made for kids just because children appear in it. It is if the audience is primarily children. Club race streams are probably general-audience. **[CHECK]** the current YouTube rules, and tell clubs to set the flag themselves. Getting it wrong is the channel owner's COPPA exposure, and the channel belongs to the club.
+- **Recordings outlive consent.** A parent who withdraws consent can stop future use, but a published recording stays up unless the club takes it down. The consent form in section 10 already says this. The club also needs a takedown path, and HeatCaller should make deleting a night's video one click.
+- **Publicity.** Using a junior's name, image or voice in the club's promotion (posted recaps, social clips) needs a parent's release, which is wider than broadcast consent. Add a line to the form, or tell clubs to keep promotion to adults.
+
+## 7. Vendor terms
+
+- **Anthropic.** **[CHECK]** the current wording of these points:
+  - Claude's consumer apps are for adults (18+).
+  - Anthropic's Usage Policy lets businesses build products used by minors on the API only with extra safeguards in place, and with disclosure that AI is used.
+  - API inputs are not used for training by default under the commercial terms.
+  - Juniors' notes reaching Claude prompts (through the relay) is the case to confirm in writing. If in doubt, strip juniors' notes from the prompt and use a fixed line.
+- **ElevenLabs.** It receives the text of lines, which may include a junior's words. Confirm retention, training opt-out, and any bar on content from or about children. Track this in website/legal-drafts/elevenlabs-questions.md. The local Kokoro voices avoid the question entirely, so consider making Kokoro the default for juniors' lines.
+- **Fly.io (relay), Cloudflare R2 (video), YouTube.** Each needs a data processing agreement, or its standard terms checked, for data that includes children's information. The relay holds requests briefly. R2 holds video for longer. **[CHECK]** each provider's standard DPA.
+
+## 8. Proposed retention schedule
+
+This is a draft for Asher and counsel. COPPA §312.10 needs a published policy if any under-13 information is collected online, and it is good practice regardless.
+
+| Data | Where | Keep for | Then |
+|---|---|---|---|
+| Crew or notes request waiting for the desk | Relay | Until the laptop collects it, at most 7 days **[CHECK]** | Deleted |
+| A driver's current crew and notes (shown back to their phone) | Relay | While the driver has them set | Deleted when cleared or the feature is off |
+| Junior notes typed at the desk | Club laptop | The night, or the season if the parent agreed | Cleared at season end |
+| Parent consent form (paper) | Club | As long as the notes are kept, plus 1 year | Shredded |
+| Adult-to-junior messages log | Club laptop | The season | Deleted |
+| Race video with juniors | R2 or YouTube | The club's choice, at most 1 year by default **[CHECK]** | Deleted, unless the club pins it |
+
+## 9. Checklist against the build (15 Nov 2026)
+
+| Practice | Status |
+|---|---|
+| High-privacy defaults for juniors | **Done for notes.** Phone notes off, stream nights off, recorded parent agreement needed. |
+| Age band, not date of birth | **Not built.** HeatCaller holds only a Junior tick, so it can't tell under-13 from 13–17. Needed for recommendation 1(b). |
+| Desk review before anything is broadcast | **Done** for crew names and notes. Voice picks skip review, which is fine because the list is the club's own. |
+| No crude lines about juniors | **Partly.** The Sailor-mouth tone's prompt aims swearing at the race, never at a driver (CommentaryTones.SailorMouthRule). Clubs can switch the tone off (AllowSailorMouth). But it isn't automatically clean when a junior is in the race or is the subject of a line. **[CHECK] Asher to decide** whether a junior on track should force the clean tone. |
+| No private adult-to-junior messages | **Unknown.** See section 5. |
+| Names on stream limited for juniors | **Unknown.** See section 6. |
+| No engagement tricks aimed at juniors | **[CHECK]** follower alerts, streaks and paid upsells shown to junior profiles. |
+| DPIA | **Not written.** |
+| Written security program and named privacy contact | **Not written.** Needed before any online under-13 collection. |
+| Parent access and deletion | **At the desk only.** No self-serve parent view. |
+| Published retention policy | **Draft only** (section 8). |
+
+## 10. Parent or guardian consent: form for the desk
 
 Print one per junior. Keep it with the waiver for as long as the notes are kept.
 
@@ -135,7 +209,7 @@ Desk use: notes typed on the profile by ______________; *A parent or guardian ag
 
 ---
 
-## 6. Changes made to the in-app Terms (15 Nov 2026 edition)
+## 11. Changes made to the in-app Terms (15 Nov 2026 edition)
 
 - **Part 1, section 7:**
   - New 7.1 "Drivers' own words": the club reviews, takes a licence and tells its drivers.

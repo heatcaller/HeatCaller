@@ -27,7 +27,9 @@ rem gigabyte of memory while it runs. Three things picked it:
 rem
 rem   Licence. Apache 2.0, which permits shipping the weights inside a
 rem   commercial installer provided the licence text travels with them. It
-rem   does - Assets\Licences. Most of the better-known small models are
+rem   does - Assets\Licences\Qwen3-LICENSE.txt, added 15 Nov 2026 (until
+rem   then this line said so and it was not true; About.cs lists the model,
+rem   LLamaSharp and llama.cpp). Most of the better-known small models are
 rem   under custom community licences that would have to be pushed down into
 rem   HeatCaller's own terms, which is not a thing to do to a club.
 rem

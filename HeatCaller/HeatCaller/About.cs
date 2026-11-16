@@ -13,8 +13,16 @@ namespace HeatCaller;
 /// obj\project.assets.json, and each package's own .nuspec and licence file
 /// in the NuGet cache. The Assets folder was read the same way - the two
 /// typefaces carry their OFL text beside them, and the music and the sound
-/// packs are the club's own, synthesised by the scripts in audio-tools, so
-/// nothing in them is anyone else's to license.
+/// packs are HeatCaller's own, synthesised by the scripts in audio-tools, so
+/// nothing in them is anyone else's to license. (A club's OWN music, added
+/// on the Sounds page, is the club's to license - for its PA and its stream.)
+///
+/// 15 Nov 2026, the IP review: the offline commentary model (Qwen3 0.6B)
+/// and LLamaSharp/llama.cpp had shipped since the model was bundled without
+/// being on this list or having their licence texts beside the exe, though
+/// fetch-llm.cmd said the Qwen licence travelled. Both are on the list now,
+/// with the texts in Assets\Licences, together with eight MIT support
+/// packages that had come in with them unlisted.
 ///
 /// The voice stack is permissive throughout: the Kokoro voice is MIT (the
 /// code) over Apache-2.0 (the model and its voices), and there is no copy
@@ -233,11 +241,56 @@ internal static class ThirdPartyCatalog
 
         new Component(
             "System.Numerics.Tensors",
-            "9.0.5",
+            "10.0.5",
             "MIT",
             "Number crunching for the Kokoro voice.",
             new[] { "System.Numerics.Tensors" },
             Note: "Microsoft."),
+
+        // The offline commentary (15 Nov 2026): the model that writes colour
+        // when the relay can't, and what runs it. Missing from this list from
+        // the day the model was bundled until the IP review found it.
+        new Component(
+            "LLamaSharp",
+            "0.27.0",
+            "MIT",
+            "Runs the offline commentary model on this PC.",
+            new[] { "LLamaSharp" },
+            Note: "SciSharp STACK. The package states MIT as an expression and carries no license file; the text, fetched from the project on 15 Nov 2026, ships as Assets\\Licences\\LLamaSharp-LICENSE.txt."),
+
+        new Component(
+            "llama.cpp",
+            "LLamaSharp.Backend.Cpu 0.27.0",
+            "MIT",
+            "The engine underneath LLamaSharp (llama.dll, ggml*.dll, mtmd.dll).",
+            new[] { "LLamaSharp.Backend.Cpu" },
+            Note: "The ggml authors. The package states MIT and carries no license file; the text, fetched from ggml-org/llama.cpp on 15 Nov 2026, ships as Assets\\Licences\\llama.cpp-LICENSE.txt. Ships unmodified, one build per CPU instruction set."),
+
+        new Component(
+            "Qwen3 0.6B (Q5_K_M)",
+            "Qwen3-0.6B",
+            "Apache-2.0",
+            "The offline commentary model itself (commentary.gguf).",
+            Array.Empty<string>(),
+            Note: "By the Qwen team, Alibaba Cloud; quantised to GGUF by Unsloth, unchanged since. Neither publishes a NOTICE. The license, fetched from the Qwen3-0.6B model page on 15 Nov 2026, ships as Assets\\Licences\\Qwen3-LICENSE.txt, as Apache-2.0 4(a) asks. Bundled in the installer by fetch-llm.cmd."),
+
+        new Component(
+            "Microsoft and .NET Foundation support libraries",
+            "10.0.5 / 10.4.1 / 8.4.2 / 7.0.0",
+            "MIT",
+            "Pieces LLamaSharp and the voice stack bring with them.",
+            new[]
+            {
+                "CommunityToolkit.HighPerformance",
+                "Microsoft.Bcl.AsyncInterfaces",
+                "Microsoft.Bcl.Memory",
+                "Microsoft.Extensions.AI.Abstractions",
+                "Microsoft.Extensions.DependencyInjection.Abstractions",
+                "Microsoft.Extensions.Logging.Abstractions",
+                "System.Interactive.Async",
+                "System.Linq.Async",
+            },
+            Note: "Microsoft (Microsoft.Extensions.* 10.0.5 and AI.Abstractions 10.4.1, Microsoft.Bcl.* 10.0.5, CommunityToolkit.HighPerformance 8.4.2) and the .NET Foundation (System.Interactive.Async and System.Linq.Async 7.0.0). Found missing from this list on 15 Nov 2026 by reading obj\\project.assets.json."),
 
         new Component(
             "Oxanium",
