@@ -284,6 +284,12 @@ public sealed partial class VoiceSettingsControl : UserControl
 
     /// <summary>AppSettings.StreamLiveCalls (10 Nov 2026) - race calls played while the voice is still sending them. Shown with the ElevenLabs engine and, since 11 Nov 2026, the HeatCaller voice.</summary>
     private readonly CheckBox _chkStreamLiveCalls = new ThemedCheckBox();
+
+    /// <summary>AppSettings.ElevenLabsNoLogging (15 Nov 2026, children's privacy) - enable_logging=false on the club's own ElevenLabs key. See ElevenLabsClient.SendSpeechAsync.</summary>
+    private readonly CheckBox _chkElevenLabsNoLogging = new ThemedCheckBox();
+
+    /// <summary>AppSettings.OfflineVoicesForJuniors (15 Nov 2026, children's privacy) - lines and commentary about a junior stay on this PC. See AnnouncementService.JuniorsStayOnThisPc.</summary>
+    private readonly CheckBox _chkOfflineForJuniors = new ThemedCheckBox();
     private readonly ComboBox _cmbTextNormalization = new();
     private readonly TextBox _txtLanguageCode = new();
     private readonly TextBox _txtOutputFormat = new();
@@ -539,6 +545,11 @@ public sealed partial class VoiceSettingsControl : UserControl
         // Nor the race-energy box: it is an AppSettings switch, not part of
         // the voice profile, and saves itself (BuildParametersCard).
         _autoSaveWired.Add(_chkEnergyFollowsRace);
+
+        // Nor the two children's-privacy boxes (15 Nov 2026): AppSettings
+        // too, saved as they are ticked (BuildEngineCard).
+        _autoSaveWired.Add(_chkElevenLabsNoLogging);
+        _autoSaveWired.Add(_chkOfflineForJuniors);
 
         _cmbModel.SelectedIndexChanged += (_, _) => AutoSave();
 
@@ -1372,6 +1383,50 @@ public sealed partial class VoiceSettingsControl : UserControl
         _chkKokoroStandsIn.AutoSize = true;
         _chkKokoroStandsIn.Checked = current.KokoroStandsIn;
 
+        // DON'T KEEP OUR LINES (15 Nov 2026, children's privacy, plan 2.3).
+        // AppSettings, saved as it is ticked. Sends ElevenLabs' own
+        // enable_logging=false with every line spoken on the club's key; a
+        // plan that won't take it is asked again without it, so nothing goes
+        // quiet - see ElevenLabsClient.SendSpeechAsync.
+        _chkElevenLabsNoLogging.Text = "Ask ElevenLabs not to keep our lines";
+        _chkElevenLabsNoLogging.AutoSize = true;
+        _chkElevenLabsNoLogging.Checked = _appSettings.ElevenLabsNoLogging;
+        _chkElevenLabsNoLogging.CheckedChanged += (_, _) =>
+        {
+            if (_appSettings.ElevenLabsNoLogging == _chkElevenLabsNoLogging.Checked)
+            {
+                return;
+            }
+
+            _appSettings.ElevenLabsNoLogging = _chkElevenLabsNoLogging.Checked;
+            _appSettings.Save();
+        };
+
+        var noLoggingTip = new ToolTip();
+        AppTheme.StyleToolTip(noLoggingTip);
+        noLoggingTip.SetToolTip(_chkElevenLabsNoLogging,
+            "Asks ElevenLabs to delete each line once it's spoken (its zero-retention mode). Some ElevenLabs plans "
+            + "don't offer it - then lines are sent without it, and the console says so once.");
+
+        // OFFLINE VOICES FOR JUNIORS (15 Nov 2026, children's privacy, plan
+        // 2.3). Off by default: Kokoro sounds plainer than the cloud voices.
+        // Covers the AI commentary too, so it shows whatever voice is chosen.
+        // See AnnouncementService.JuniorsStayOnThisPc and
+        // CommentaryService.Ask.
+        _chkOfflineForJuniors.Text = "Offline voices for juniors";
+        _chkOfflineForJuniors.AutoSize = true;
+        _chkOfflineForJuniors.Checked = _appSettings.OfflineVoicesForJuniors;
+        _chkOfflineForJuniors.CheckedChanged += (_, _) =>
+        {
+            if (_appSettings.OfflineVoicesForJuniors == _chkOfflineForJuniors.Checked)
+            {
+                return;
+            }
+
+            _appSettings.OfflineVoicesForJuniors = _chkOfflineForJuniors.Checked;
+            _appSettings.Save();
+        };
+
         // --- Kokoro: free and natural, on this PC ---
         //
         // Last of the three, and the one everything else falls back on. It
@@ -1488,7 +1543,8 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         card.Add(_rdoElevenLabs, stretch: false, gapBelow: UiLayout.HintGap);
         Indented(card.Add(_usageElevenLabs));
-        Indented(card.Add(_chkKokoroStandsIn, stretch: false, gapBelow: UiLayout.SectionGap));
+        Indented(card.Add(_chkKokoroStandsIn, stretch: false, gapBelow: UiLayout.HintGap));
+        Indented(card.Add(_chkElevenLabsNoLogging, stretch: false, gapBelow: UiLayout.SectionGap));
 
         card.Add(_rdoKokoro, stretch: false, gapBelow: UiLayout.HintGap);
         // In a bar (22 Oct 2026): a bare Button in a card keeps the 75px it
@@ -1499,6 +1555,18 @@ public sealed partial class VoiceSettingsControl : UserControl
         card.Add(_lblKokoroStatus, gapBelow: UiLayout.HintGap);
         card.Add(_lblSpeakingStatus, gapBelow: UiLayout.HintGap);
         card.Add(lblHint, gapBelow: UiLayout.SectionGap);
+
+        card.Add(_chkOfflineForJuniors, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(_textSize.Wear(
+            new Label
+            {
+                Text = "Any line that names a junior is said by Kokoro on this PC, and AI commentary about a junior is "
+                     + "written by the model on this PC, so their names aren't sent to a cloud voice or the relay. Those "
+                     + "lines sound plainer.",
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+            },
+            () => AppTheme.SmallFont), gapBelow: UiLayout.SectionGap);
 
         // RACE CALLS ON OR OFF (1 Nov 2026, asked for by Asher: "race calls
         // should have an on off switch"), here rather than on Race Calls,
@@ -2965,6 +3033,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         var kokoroChosen = _rdoKokoro.Checked;
 
         _chkKokoroStandsIn.Enabled = !heatCallerChosen && !kokoroChosen;
+        _chkElevenLabsNoLogging.Enabled = !heatCallerChosen && !kokoroChosen;
 
         UpdateKokoroControls(kokoroChosen);
 

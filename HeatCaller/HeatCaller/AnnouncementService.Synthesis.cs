@@ -447,6 +447,13 @@ public sealed partial class AnnouncementService
             return await RenderWithKokoroAsync(profile, text);
         }
 
+        // A line naming a junior, with "Offline voices for juniors" on (15 Nov
+        // 2026): Kokoro, on this PC, and nothing else - see AnnouncementService.Juniors.
+        if (KeepsJuniorLineHere(beforeLetter))
+        {
+            return await RenderJuniorLineAsync(profile, text);
+        }
+
         // Off this PC from here on: names shortened when the club has asked
         // for that on its pages (22 Oct 2026) - see AnnouncementService.ShortNames.
         // Kokoro standing in is ON this PC, so it is given the line as written,

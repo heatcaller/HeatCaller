@@ -376,6 +376,14 @@ public sealed partial class AnnouncementService
             // leaves the PC from here either.
             var sent = ForCloudVoice(line.Text);
 
+            // Not a line naming a junior with "Offline voices for juniors" on
+            // (15 Nov 2026): it is said by Kokoro when it comes, so there is
+            // nothing to prepare in a cloud voice - see AnnouncementService.Juniors.
+            if (KeepsJuniorLineHere(line.Text))
+            {
+                continue;
+            }
+
             if (VoiceLibrary.Shared.Contains(line.Profile, sent))
             {
                 alreadySaved++;

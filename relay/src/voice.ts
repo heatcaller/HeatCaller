@@ -2207,6 +2207,87 @@ export async function migrateVoiceFolder(
 }
 
 /**
+ * Whether ElevenLabs is asked not to keep the lines it speaks (15 Nov 2026,
+ * children's privacy, plan 2.3). The lines name drivers, juniors among them,
+ * so every request carries ElevenLabs' own `enable_logging=false` - its
+ * zero-retention mode - unless RELAY_VOICE_NO_LOGGING says not to.
+ *
+ * WHY A FALLBACK. ElevenLabs has offered zero retention to some plans only
+ * (historically enterprise), and a plan without it may turn the request down.
+ * A race call matters more than the flag, so a refusal is asked again once
+ * without it; if that goes through, this key is remembered as one that
+ * can't have it and the rest of this run asks without, said once in the log.
+ * A request that fails both ways was failing for another reason, and
+ * nothing is remembered.
+ *
+ * One of these per key: index.ts shares it between the renderer and the
+ * streamer, so a refusal found by one is known to the other.
+ */
+export class ElevenLabsLogging {
+  private refused = false;
+
+  constructor(
+    /** Off only when RELAY_VOICE_NO_LOGGING is "0", "false", "off" or "no". */
+    readonly askNotToKeep = true,
+    private readonly log: (line: string) => void = () => {},
+  ) {}
+
+  /** Whether the next request carries enable_logging=false. */
+  get asking(): boolean {
+    return this.askNotToKeep && !this.refused;
+  }
+
+  /** The key's plan turned the flag down and a request without it went through. */
+  noteRefused(status: number): void {
+    if (this.refused) {
+      return;
+    }
+
+    this.refused = true;
+    this.log(
+      `[voice] ElevenLabs turned down "don't keep our lines" (enable_logging=false, ${status}) - this key's plan ` +
+        `doesn't offer it. Lines are sent without it until the relay restarts.`,
+    );
+  }
+}
+
+/** RELAY_VOICE_NO_LOGGING, read: on unless it plainly says off. */
+export function noLoggingFromEnv(value: string | undefined): boolean {
+  const said = (value ?? "").trim().toLowerCase();
+  return !["0", "false", "off", "no"].includes(said);
+}
+
+/** The URL with enable_logging=false on it, when asked for. */
+export function withNoLogging(url: string, ask: boolean): string {
+  return ask ? `${url}${url.includes("?") ? "&" : "?"}enable_logging=false` : url;
+}
+
+/**
+ * One POST to ElevenLabs, with the no-logging flag while it is wanted - and,
+ * when a request with it is turned down as a bad request (400, 403, 422), the
+ * same request once more without it. See ElevenLabsLogging.
+ */
+async function postToElevenLabs(url: string, init: RequestInit, logging: ElevenLabsLogging): Promise<Response> {
+  const asked = logging.asking;
+  const first = await fetch(withNoLogging(url, asked), init);
+
+  if (first.ok || !asked || ![400, 403, 422].includes(first.status)) {
+    return first;
+  }
+
+  // The refusal's body is let go unread: it can carry the account's details.
+  await first.body?.cancel().catch(() => {});
+
+  const second = await fetch(url, init);
+
+  if (second.ok) {
+    logging.noteRefused(first.status);
+  }
+
+  return second;
+}
+
+/**
  * What ElevenLabs is actually asked, when a key is configured.
  *
  * The same request the laptop used to make with the club's own key - same
@@ -2219,7 +2300,7 @@ export async function migrateVoiceFolder(
  * STREAM_FORMAT, read as it arrives. The time limit is on the answer
  * starting; once audio flows, the caller's signal is what stops it.
  */
-export function elevenLabsStreamer(apiKey: string, timeoutMs = 30_000): StreamFn {
+export function elevenLabsStreamer(apiKey: string, timeoutMs = 30_000, logging = new ElevenLabsLogging()): StreamFn {
   return async (voice, text, signal) => {
     const url =
       `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice.voiceId)}/stream` +
@@ -2231,7 +2312,7 @@ export function elevenLabsStreamer(apiKey: string, timeoutMs = 30_000): StreamFn
     signal.addEventListener("abort", stop, { once: true });
 
     try {
-      const response = await fetch(url, {
+      const response = await postToElevenLabs(url, {
         method: "POST",
         headers: {
           "xi-api-key": apiKey,
@@ -2251,7 +2332,7 @@ export function elevenLabsStreamer(apiKey: string, timeoutMs = 30_000): StreamFn
           },
         }),
         signal: controller.signal,
-      });
+      }, logging);
 
       if (!response.ok || response.body === null) {
         const body = await response.text().catch(() => "");
@@ -2265,7 +2346,7 @@ export function elevenLabsStreamer(apiKey: string, timeoutMs = 30_000): StreamFn
   };
 }
 
-export function elevenLabsRenderer(apiKey: string, timeoutMs = 30_000): RenderFn {
+export function elevenLabsRenderer(apiKey: string, timeoutMs = 30_000, logging = new ElevenLabsLogging()): RenderFn {
   return async (voice, text) => {
     const format = voice.outputFormat.trim();
     const url =
@@ -2276,7 +2357,7 @@ export function elevenLabsRenderer(apiKey: string, timeoutMs = 30_000): RenderFn
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const response = await fetch(url, {
+      const response = await postToElevenLabs(url, {
         method: "POST",
         headers: {
           "xi-api-key": apiKey,
@@ -2296,7 +2377,7 @@ export function elevenLabsRenderer(apiKey: string, timeoutMs = 30_000): RenderFn
           },
         }),
         signal: controller.signal,
-      });
+      }, logging);
 
       if (!response.ok) {
         // The body is read but never passed on: it can carry the account's

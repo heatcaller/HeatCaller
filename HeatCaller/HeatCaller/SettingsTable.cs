@@ -73,6 +73,10 @@ internal static class SettingsTable
             nameof(AppSettings.CoHostHeatCallerVoiceName),
             nameof(AppSettings.CoHostKokoroVoiceName),
 
+            // Voice: the Speak with card's two children's-privacy switches (15 Nov 2026).
+            nameof(AppSettings.ElevenLabsNoLogging),
+            nameof(AppSettings.OfflineVoicesForJuniors),
+
             // Soundscapes: Lap Times Only.
             nameof(AppSettings.LapTimesOnly),
 

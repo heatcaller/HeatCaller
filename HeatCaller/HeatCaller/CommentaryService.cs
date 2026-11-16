@@ -505,9 +505,48 @@ public sealed class CommentaryService
     /// </summary>
     internal string JuniorRule(string? transponder) =>
         !string.IsNullOrWhiteSpace(transponder) && _profiles.Get(transponder)?.IsJunior == true
-            ? "The driver is a junior - a child. Keep it warm and encouraging: nothing about pressure, disappointment, "
+            ? JuniorRuleLead + " - a child. Keep it warm and encouraging: nothing about pressure, disappointment, "
               + "mistakes or who is to blame, and any rivalry is a friendly one. "
             : string.Empty;
+
+    /// <summary>The start of <see cref="JuniorRule"/>'s sentence - how a prompt says its subject is a junior.</summary>
+    internal const string JuniorRuleLead = "The driver is a junior";
+
+    /// <summary>Who the juniors are - PublicPrivacy.Current unless a test hands in its own.</summary>
+    internal Func<PublicPrivacy>? JuniorRegister { get; set; }
+
+    /// <summary>
+    /// Whether this prompt is about a junior and the club has "Offline voices
+    /// for juniors" on (15 Nov 2026, children's privacy, plan 2.3): it says
+    /// <see cref="JuniorRule"/>'s sentence, or names a junior anywhere in it
+    /// (PublicPrivacy.MentionsJunior - every name and each word of one, so it
+    /// errs on the private side). Then the model on this PC writes it, not
+    /// the relay - see <see cref="Ask"/>.
+    /// </summary>
+    internal bool AboutAJuniorKeptHere(string? system, string? user)
+    {
+        if (!_settings.OfflineVoicesForJuniors)
+        {
+            return false;
+        }
+
+        if ((system ?? string.Empty).Contains(JuniorRuleLead, StringComparison.Ordinal)
+            || (user ?? string.Empty).Contains(JuniorRuleLead, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        try
+        {
+            var register = JuniorRegister?.Invoke() ?? PublicPrivacy.Current;
+            return register.MentionsJunior(user) || register.MentionsJunior(system);
+        }
+        catch
+        {
+            // A register that can't be read: kept here, the private side.
+            return true;
+        }
+    }
 
     /// <summary>True when any of these detail lines carries a driver's own words.</summary>
     private static bool AnyOwnWords(IEnumerable<string> details) =>
@@ -615,7 +654,29 @@ public sealed class CommentaryService
         TimeSpan? timeout = null)
     {
         var (system, user) = WithPronouns(systemPrompt, userPrompt);
-        var written = await brain.GenerateAsync(system, user, maxTokens, temperature, ct, timeout).ConfigureAwait(false);
+
+        // "Offline voices for juniors" (15 Nov 2026, children's privacy, plan
+        // 2.3): a prompt about a junior - their interview or intro, or facts
+        // that include one - is written by the model on this PC, never sent
+        // to the relay. Ambient, like RelayOnly, so it reaches the brains
+        // without every one growing an argument; restored after, so it
+        // belongs to this one write. See FallbackCommentaryBrain.LocalOnly.
+        var wasLocalOnly = FallbackCommentaryBrain.LocalOnly;
+        string? written;
+
+        try
+        {
+            if (AboutAJuniorKeptHere(system, user))
+            {
+                FallbackCommentaryBrain.LocalOnly = true;
+            }
+
+            written = await brain.GenerateAsync(system, user, maxTokens, temperature, ct, timeout).ConfigureAwait(false);
+        }
+        finally
+        {
+            FallbackCommentaryBrain.LocalOnly = wasLocalOnly;
+        }
 
         if (ScreenWords.HateTermIn(written, user) is { } term)
         {

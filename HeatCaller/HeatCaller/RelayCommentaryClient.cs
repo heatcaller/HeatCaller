@@ -51,6 +51,9 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
     /// <inheritdoc />
     public event Action<string>? StatusMessage;
 
+    /// <summary>Whether the console has been told a line about a junior was kept off the relay - once per client (15 Nov 2026). 0 or 1, for Interlocked.</summary>
+    private int _juniorSaid;
+
     /// <summary>
     /// The club's own line count for the month, as the relay reported it
     /// on its last answer - used, then the allowance.
@@ -398,8 +401,24 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
         int maxTokens,
         double temperature = 0.7,
         CancellationToken ct = default,
-        TimeSpan? timeout = null) =>
-        GenerateCoreAsync(systemPrompt, userPrompt, maxTokens, temperature, ct, timeout, trimCutOff: true, askEvenIfSpent: false);
+        TimeSpan? timeout = null)
+    {
+        // About a junior, with "Offline voices for juniors" on (15 Nov 2026):
+        // never sent to the relay. Behind FallbackCommentaryBrain this is
+        // never reached; standing alone, with no model on this PC, the line
+        // simply isn't written. See FallbackCommentaryBrain.LocalOnly.
+        if (FallbackCommentaryBrain.LocalOnly)
+        {
+            if (Interlocked.Exchange(ref _juniorSaid, 1) == 0)
+            {
+                StatusMessage?.Invoke("[brain] Lines about a junior aren't sent to the relay (\"Offline voices for juniors\" is on), and there's no model on this PC to write them. Said once.");
+            }
+
+            return Task.FromResult<string?>(null);
+        }
+
+        return GenerateCoreAsync(systemPrompt, userPrompt, maxTokens, temperature, ct, timeout, trimCutOff: true, askEvenIfSpent: false);
+    }
 
     /// <summary>
     /// The write itself. <paramref name="trimCutOff"/> is false only for the

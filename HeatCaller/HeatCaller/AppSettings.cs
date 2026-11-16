@@ -2452,6 +2452,27 @@ public sealed class AppSettings
     /// </summary>
     public bool StreamLiveCalls { get; set; }
 
+    /// <summary>
+    /// "Ask ElevenLabs not to keep our lines" (15 Nov 2026, children's
+    /// privacy, plan 2.3): every line spoken on the club's own ElevenLabs key
+    /// carries enable_logging=false, ElevenLabs' zero-retention mode. On by
+    /// default. A plan that won't take it is asked again without it - see
+    /// ElevenLabsClient.SendSpeechAsync. The HeatCaller voice's own key is the
+    /// relay's, and the relay asks the same (RELAY_VOICE_NO_LOGGING).
+    /// </summary>
+    public bool ElevenLabsNoLogging { get; set; } = true;
+
+    /// <summary>
+    /// "Offline voices for juniors" (15 Nov 2026, children's privacy, plan
+    /// 2.3): a spoken line that names a junior (DriverProfile.IsJunior) is
+    /// said by Kokoro on this PC rather than ElevenLabs or the HeatCaller
+    /// voice, and an AI commentary prompt about a junior is written by the
+    /// model on this PC rather than the relay. Off by default - it trades
+    /// voice quality for those lines. See AnnouncementService.JuniorsStayOnThisPc
+    /// and CommentaryService.Ask.
+    /// </summary>
+    public bool OfflineVoicesForJuniors { get; set; }
+
     // The last relay settings that were PROVED to work, by a test that
     // came back connected. Kept beside the live ones rather than instead
     // of them: the live ones are what publishing uses and may be

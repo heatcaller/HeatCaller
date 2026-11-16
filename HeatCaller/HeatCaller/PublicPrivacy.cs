@@ -176,6 +176,48 @@ internal sealed class PublicPrivacy
         {
             _mentions = Redactor.For(people, userProfileFolder: null);
         }
+
+        // The juniors, every name they go by, for MentionsJunior (15 Nov
+        // 2026, children's privacy - "Offline voices for juniors").
+        var juniors = entries
+            .Where(e => e.Junior)
+            .Select(e => new[] { e.Name, e.AnnouncerName }
+                .Select(SingleSpaced)
+                .Where(n => n.Count(char.IsLetter) >= 2)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList())
+            .Where(names => names.Count > 0)
+            .Select(names => new Redactor.Person(names, Array.Empty<string>()))
+            .ToList();
+
+        if (juniors.Count > 0)
+        {
+            _juniors = Redactor.For(juniors, userProfileFolder: null);
+        }
+    }
+
+    /// <summary>Every name and each word of it for the juniors, for <see cref="MentionsJunior"/>; null when there are none.</summary>
+    private readonly Redactor? _juniors;
+
+    /// <summary>
+    /// True when <paramref name="text"/> names a junior (DriverProfile.IsJunior)
+    /// by any name or any word of one - so, with "Offline voices for juniors"
+    /// on, the line is said by Kokoro and the commentary about them written on
+    /// this PC (15 Nov 2026, children's privacy, plan 2.3). The same matching
+    /// as <see cref="MentionsWithheld"/>, and it errs the same way: an adult
+    /// who shares a junior's first name or surname counts too.
+    /// </summary>
+    public bool MentionsJunior(string? text)
+    {
+        if (_juniors is null || string.IsNullOrEmpty(text))
+        {
+            return false;
+        }
+
+        var withJuniors = _juniors.Apply(text, out _);
+        var withNobody = Redactor.None.Apply(text, out _);
+
+        return !string.Equals(withJuniors, withNobody, StringComparison.Ordinal);
     }
 
     /// <summary>Nobody has asked for anything. What <see cref="Current"/> is until the first register is built.</summary>

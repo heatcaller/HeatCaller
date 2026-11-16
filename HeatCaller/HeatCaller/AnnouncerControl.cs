@@ -214,6 +214,13 @@ public sealed partial class AnnouncerControl : UserControl
         _announcer.EnergyFollowsTheRace = () => settings.VoiceEnergyFollowsRace;
         _announcer.StreamLiveCalls = () => settings.StreamLiveCalls;
 
+        // The two children's-privacy switches (15 Nov 2026), read live too:
+        // ElevenLabs asked not to keep the club's lines, and lines naming a
+        // junior kept on this PC.
+        ElevenLabsClient.AskNotToKeepLines = () => settings.ElevenLabsNoLogging;
+        ElevenLabsClient.Notice = _announcer.SayToConsole;
+        _announcer.JuniorsStayOnThisPc = () => settings.OfflineVoicesForJuniors;
+
         var gate = _announcer.SponsorMentions;
         gate.Restore(settings.SponsorMentionsNight);
 
