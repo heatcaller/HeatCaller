@@ -25,6 +25,14 @@ internal sealed partial class DriverRequestDesk
     /// <summary>The notes among them - what a junior may only send with a parent (plan 5.2).</summary>
     internal static readonly string[] CrewNoteFields = { "goal", "thanks", "story" };
 
+    /// <summary>The names among them - what an under-13 may not send from a phone at all (15 Nov 2026).</summary>
+    internal static readonly string[] CrewNameFields = { "pName", "tName" };
+
+    /// <summary>Why the desk can't apply an under-13's crew names from a phone (15 Nov 2026).</summary>
+    internal const string Under13NamesRefusal =
+        "An under-13's crew names are picked at the desk, with a parent there, not from a phone. Decline it, "
+        + "and type them on their profile. (No age band set counts as under 13 - set it in Papers.)";
+
     /// <summary>
     /// The voice a phone's key means now, or null when it is not one drivers
     /// may pick (hidden, reserved, another engine, or never listed). Set by
@@ -251,8 +259,8 @@ internal sealed partial class DriverRequestDesk
     /// <summary>
     /// Applies a crew request's words to the driver's profile - the names
     /// and notes; the voices have gone already - with an undo, as
-    /// ApplyDetails does. A name that is not a name is refused, and so is a
-    /// junior's note without a parent's tick (the relay refuses it too).
+    /// ApplyDetails does. A name that is not a name is refused, and so is any
+    /// junior's note from a phone (the relay refuses it too).
     /// </summary>
     public bool ApplyCrew(DriverRequest request, out string refusal)
     {
@@ -283,20 +291,25 @@ internal sealed partial class DriverRequestDesk
             }
         }
 
+        // AN UNDER-13'S CREW NAMES ARE PICKED AT THE DESK (15 Nov 2026,
+        // children's privacy plan 2.1): never from a phone, with a parent
+        // there. A voice pick is still fine, and so is clearing a name. A
+        // junior with no age band counts as under 13 (TreatAsUnder13). The
+        // relay refuses these too; this is for an ask sent before it did.
+        if (profile.TreatAsUnder13 && CrewNameFields.Any(k => request.Text(k).Length > 0))
+        {
+            refusal = Under13NamesRefusal;
+            return false;
+        }
+
+        // A junior's notes are only ever typed at the desk (15 Nov 2026: the
+        // switch that let a club take them from phones, with a parent's tick,
+        // was removed). Clearing one is fine: an empty note says nothing.
         if (profile.IsJunior && CrewNoteFields.Any(k => request.Text(k).Length > 0))
         {
-            if (!_settings.JuniorNotesFromPhone)
-            {
-                refusal = "Your club takes a junior's notes at the desk, with a parent there, not from a phone. Decline it, "
-                          + "and type them on their profile with the parent's consent ticked.";
-                return false;
-            }
-
-            if (!request.Guardian)
-            {
-                refusal = "A junior's notes need a parent or guardian to send them. Decline it.";
-                return false;
-            }
+            refusal = "A junior's notes are typed at the desk, with a parent there, not sent from a phone. Decline it, "
+                      + "and type them on their profile with the parent's consent ticked.";
+            return false;
         }
 
         var before = ProfileStore.Snapshot(profile);

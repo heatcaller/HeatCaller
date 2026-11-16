@@ -1,0 +1,373 @@
+LibVLC 3.0.24 (VideoLAN.LibVLC.Windows) - what HeatCaller ships, and under what licence
+=======================================================================================
+
+HeatCaller plays sponsor video slides with LibVLC and LibVLCSharp 3.10.1,
+from VideoLAN. Both are licensed under the GNU Lesser General Public License,
+version 2.1 or later; the text is LibVLC-LGPL-2.1.txt in this folder.
+
+They ship unmodified, as separate DLLs in libvlc\win-x64 beside
+HeatCaller.exe, so you can replace them with your own build of the same
+version. Only the win-x64 copy is shipped, and only the plugins listed below:
+HeatCaller.csproj leaves out whole categories it has no use for (streaming
+out, muxing, network discovery, keystores, stream extractors,
+visualisations, metadata, video splitting, Lua) and six single plugins
+(SRT, RIST, DCP and Blu-ray access, and the x264 and AOM encoders).
+
+
+SOURCE CODE
+-----------
+
+You can get the complete corresponding source code for the exact versions
+HeatCaller ships - VLC 3.0.24 (as packaged in VideoLAN.LibVLC.Windows 3.0.24)
+and LibVLCSharp 3.10.1 - in either of these ways:
+
+  1. Download it from the HeatCaller releases repository:
+     [LINK TO THE SOURCE TARBALL ON THE HeatCaller-releases REPOSITORY -
+     to be added when it is uploaded]
+
+  2. Ask us for it. Email support@heatcaller.com and we will send it to you,
+     or a link to it, for no more than our cost of sending it. This offer is
+     valid for three years from the date we last distributed this version of
+     HeatCaller, and to anyone who has a copy of it.
+
+VideoLAN also publishes the same source at https://download.videolan.org/
+and https://code.videolan.org/videolan/vlc (tag 3.0.24) and
+https://code.videolan.org/videolan/LibVLCSharp (tag 3.10.1).
+
+
+HOW THE LICENCES BELOW WERE WORKED OUT (15 Nov 2026)
+----------------------------------------------------
+
+Every VLC plugin carries a licence string that VLC itself reads when it
+loads the plugin ("Licensed under the terms of the GNU Lesser General
+Public License, version 2.1 or later." or the same for the GNU General
+Public License, version 2 or later). The list below is that string, read
+from each DLL in the NuGet package on 15 Nov 2026. It is what the plugin's
+authors declared. It has not been checked against each module's source
+header, nor against every library a plugin has built into it. See the
+notes at the end.
+
+Not legal advice. Anything marked [CHECK] is for counsel.
+
+
+THE PLUGINS THAT SHIP (262)
+---------------------------
+
+Also shipped: libvlc.dll and libvlccore.dll (LGPL-2.1-or-later), and
+hrtfs\dodeca_and_7channel_3DSL_HRTF.sofa (a data file whose own header
+carries an LGPL-2.1-or-later notice).
+
+  plugins\access\libaccess_concat_plugin.dll                   LGPL-2.1-or-later
+  plugins\access\libaccess_imem_plugin.dll                     LGPL-2.1-or-later
+  plugins\access\libaccess_mms_plugin.dll                      LGPL-2.1-or-later
+  plugins\access\libaccess_wasapi_plugin.dll                   LGPL-2.1-or-later
+  plugins\access\libattachment_plugin.dll                      LGPL-2.1-or-later
+  plugins\access\libcdda_plugin.dll                            LGPL-2.1-or-later
+  plugins\access\libdtv_plugin.dll                             LGPL-2.1-or-later
+  plugins\access\libfilesystem_plugin.dll                      LGPL-2.1-or-later
+  plugins\access\libftp_plugin.dll                             LGPL-2.1-or-later
+  plugins\access\libhttp_plugin.dll                            LGPL-2.1-or-later
+  plugins\access\libhttps_plugin.dll                           LGPL-2.1-or-later
+  plugins\access\libidummy_plugin.dll                          LGPL-2.1-or-later
+  plugins\access\libimem_plugin.dll                            LGPL-2.1-or-later
+  plugins\access\liblive555_plugin.dll                         LGPL-2.1-or-later
+  plugins\access\libnfs_plugin.dll                             LGPL-2.1-or-later
+  plugins\access\librtp_plugin.dll                             LGPL-2.1-or-later
+  plugins\access\libsatip_plugin.dll                           LGPL-2.1-or-later
+  plugins\access\libscreen_plugin.dll                          LGPL-2.1-or-later
+  plugins\access\libsdp_plugin.dll                             LGPL-2.1-or-later
+  plugins\access\libsftp_plugin.dll                            LGPL-2.1-or-later
+  plugins\access\libshm_plugin.dll                             LGPL-2.1-or-later
+  plugins\access\libsmb_plugin.dll                             LGPL-2.1-or-later
+  plugins\access\libtcp_plugin.dll                             LGPL-2.1-or-later
+  plugins\access\libtimecode_plugin.dll                        LGPL-2.1-or-later
+  plugins\access\libudp_plugin.dll                             LGPL-2.1-or-later
+  plugins\access\libvcd_plugin.dll                             LGPL-2.1-or-later
+  plugins\access\libvdr_plugin.dll                             LGPL-2.1-or-later
+  plugins\audio_filter\libaudio_format_plugin.dll              LGPL-2.1-or-later
+  plugins\audio_filter\libaudiobargraph_a_plugin.dll           LGPL-2.1-or-later
+  plugins\audio_filter\libchorus_flanger_plugin.dll            LGPL-2.1-or-later
+  plugins\audio_filter\libcompressor_plugin.dll                LGPL-2.1-or-later
+  plugins\audio_filter\libequalizer_plugin.dll                 LGPL-2.1-or-later
+  plugins\audio_filter\libgain_plugin.dll                      LGPL-2.1-or-later
+  plugins\audio_filter\libkaraoke_plugin.dll                   LGPL-2.1-or-later
+  plugins\audio_filter\libnormvol_plugin.dll                   LGPL-2.1-or-later
+  plugins\audio_filter\libparam_eq_plugin.dll                  LGPL-2.1-or-later
+  plugins\audio_filter\libremap_plugin.dll                     LGPL-2.1-or-later
+  plugins\audio_filter\libscaletempo_pitch_plugin.dll          LGPL-2.1-or-later
+  plugins\audio_filter\libscaletempo_plugin.dll                LGPL-2.1-or-later
+  plugins\audio_filter\libsimple_channel_mixer_plugin.dll      LGPL-2.1-or-later
+  plugins\audio_filter\libspatialaudio_plugin.dll              LGPL-2.1-or-later
+  plugins\audio_filter\libspatializer_plugin.dll               LGPL-2.1-or-later
+  plugins\audio_filter\libspeex_resampler_plugin.dll           LGPL-2.1-or-later
+  plugins\audio_filter\libstereo_widen_plugin.dll              LGPL-2.1-or-later
+  plugins\audio_filter\libtospdif_plugin.dll                   LGPL-2.1-or-later
+  plugins\audio_filter\libtrivial_channel_mixer_plugin.dll     LGPL-2.1-or-later
+  plugins\audio_filter\libugly_resampler_plugin.dll            LGPL-2.1-or-later
+  plugins\audio_mixer\libfloat_mixer_plugin.dll                LGPL-2.1-or-later
+  plugins\audio_mixer\libinteger_mixer_plugin.dll              LGPL-2.1-or-later
+  plugins\audio_output\libadummy_plugin.dll                    LGPL-2.1-or-later
+  plugins\audio_output\libafile_plugin.dll                     LGPL-2.1-or-later
+  plugins\audio_output\libamem_plugin.dll                      LGPL-2.1-or-later
+  plugins\audio_output\libdirectsound_plugin.dll               LGPL-2.1-or-later
+  plugins\audio_output\libmmdevice_plugin.dll                  LGPL-2.1-or-later
+  plugins\audio_output\libwasapi_plugin.dll                    LGPL-2.1-or-later
+  plugins\audio_output\libwaveout_plugin.dll                   LGPL-2.1-or-later
+  plugins\codec\libadpcm_plugin.dll                            LGPL-2.1-or-later
+  plugins\codec\libaes3_plugin.dll                             LGPL-2.1-or-later
+  plugins\codec\libaraw_plugin.dll                             LGPL-2.1-or-later
+  plugins\codec\libavcodec_plugin.dll                          LGPL-2.1-or-later
+  plugins\codec\libcc_plugin.dll                               LGPL-2.1-or-later
+  plugins\codec\libcdg_plugin.dll                              LGPL-2.1-or-later
+  plugins\codec\libcrystalhd_plugin.dll                        LGPL-2.1-or-later
+  plugins\codec\libcvdsub_plugin.dll                           LGPL-2.1-or-later
+  plugins\codec\libd3d11va_plugin.dll                          LGPL-2.1-or-later
+  plugins\codec\libdav1d_plugin.dll                            LGPL-2.1-or-later
+  plugins\codec\libddummy_plugin.dll                           LGPL-2.1-or-later
+  plugins\codec\libdmo_plugin.dll                              LGPL-2.1-or-later
+  plugins\codec\libdvbsub_plugin.dll                           LGPL-2.1-or-later
+  plugins\codec\libdxva2_plugin.dll                            LGPL-2.1-or-later
+  plugins\codec\libedummy_plugin.dll                           LGPL-2.1-or-later
+  plugins\codec\libflac_plugin.dll                             LGPL-2.1-or-later
+  plugins\codec\libfluidsynth_plugin.dll                       LGPL-2.1-or-later
+  plugins\codec\libg711_plugin.dll                             LGPL-2.1-or-later
+  plugins\codec\libjpeg_plugin.dll                             LGPL-2.1-or-later
+  plugins\codec\libkate_plugin.dll                             LGPL-2.1-or-later
+  plugins\codec\liblibass_plugin.dll                           LGPL-2.1-or-later
+  plugins\codec\liblpcm_plugin.dll                             LGPL-2.1-or-later
+  plugins\codec\libmft_plugin.dll                              LGPL-2.1-or-later
+  plugins\codec\libmpg123_plugin.dll                           LGPL-2.1-or-later
+  plugins\codec\liboggspots_plugin.dll                         LGPL-2.1-or-later
+  plugins\codec\libopus_plugin.dll                             LGPL-2.1-or-later
+  plugins\codec\libpng_plugin.dll                              LGPL-2.1-or-later
+  plugins\codec\libqsv_plugin.dll                              LGPL-2.1-or-later
+  plugins\codec\librawvideo_plugin.dll                         LGPL-2.1-or-later
+  plugins\codec\librtpvideo_plugin.dll                         LGPL-2.1-or-later
+  plugins\codec\libscte18_plugin.dll                           LGPL-2.1-or-later
+  plugins\codec\libscte27_plugin.dll                           LGPL-2.1-or-later
+  plugins\codec\libspdif_plugin.dll                            LGPL-2.1-or-later
+  plugins\codec\libspeex_plugin.dll                            LGPL-2.1-or-later
+  plugins\codec\libspudec_plugin.dll                           LGPL-2.1-or-later
+  plugins\codec\libstl_plugin.dll                              LGPL-2.1-or-later
+  plugins\codec\libsubsdec_plugin.dll                          LGPL-2.1-or-later
+  plugins\codec\libsubstx3g_plugin.dll                         LGPL-2.1-or-later
+  plugins\codec\libsubsusf_plugin.dll                          LGPL-2.1-or-later
+  plugins\codec\libsvcdsub_plugin.dll                          LGPL-2.1-or-later
+  plugins\codec\libtextst_plugin.dll                           LGPL-2.1-or-later
+  plugins\codec\libtheora_plugin.dll                           LGPL-2.1-or-later
+  plugins\codec\libttml_plugin.dll                             LGPL-2.1-or-later
+  plugins\codec\libtwolame_plugin.dll                          LGPL-2.1-or-later
+  plugins\codec\libuleaddvaudio_plugin.dll                     LGPL-2.1-or-later
+  plugins\codec\libvorbis_plugin.dll                           LGPL-2.1-or-later
+  plugins\codec\libvpx_plugin.dll                              LGPL-2.1-or-later
+  plugins\codec\libwebvtt_plugin.dll                           LGPL-2.1-or-later
+  plugins\codec\libzvbi_plugin.dll                             LGPL-2.1-or-later
+  plugins\d3d11\libdirect3d11_filters_plugin.dll               LGPL-2.1-or-later
+  plugins\d3d9\libdirect3d9_filters_plugin.dll                 LGPL-2.1-or-later
+  plugins\demux\libadaptive_plugin.dll                         LGPL-2.1-or-later
+  plugins\demux\libaiff_plugin.dll                             LGPL-2.1-or-later
+  plugins\demux\libasf_plugin.dll                              LGPL-2.1-or-later
+  plugins\demux\libau_plugin.dll                               LGPL-2.1-or-later
+  plugins\demux\libavi_plugin.dll                              LGPL-2.1-or-later
+  plugins\demux\libcaf_plugin.dll                              LGPL-2.1-or-later
+  plugins\demux\libdemux_cdg_plugin.dll                        LGPL-2.1-or-later
+  plugins\demux\libdemux_chromecast_plugin.dll                 LGPL-2.1-or-later
+  plugins\demux\libdemux_stl_plugin.dll                        LGPL-2.1-or-later
+  plugins\demux\libdemuxdump_plugin.dll                        LGPL-2.1-or-later
+  plugins\demux\libdiracsys_plugin.dll                         LGPL-2.1-or-later
+  plugins\demux\libdirectory_demux_plugin.dll                  LGPL-2.1-or-later
+  plugins\demux\libdmxmus_plugin.dll                           LGPL-2.1-or-later
+  plugins\demux\libes_plugin.dll                               LGPL-2.1-or-later
+  plugins\demux\libflacsys_plugin.dll                          LGPL-2.1-or-later
+  plugins\demux\libgme_plugin.dll                              LGPL-2.1-or-later
+  plugins\demux\libh26x_plugin.dll                             LGPL-2.1-or-later
+  plugins\demux\libimage_plugin.dll                            LGPL-2.1-or-later
+  plugins\demux\libmjpeg_plugin.dll                            LGPL-2.1-or-later
+  plugins\demux\libmkv_plugin.dll                              LGPL-2.1-or-later
+  plugins\demux\libmod_plugin.dll                              LGPL-2.1-or-later
+  plugins\demux\libmp4_plugin.dll                              LGPL-2.1-or-later
+  plugins\demux\libmpgv_plugin.dll                             LGPL-2.1-or-later
+  plugins\demux\libnoseek_plugin.dll                           LGPL-2.1-or-later
+  plugins\demux\libnsc_plugin.dll                              LGPL-2.1-or-later
+  plugins\demux\libnsv_plugin.dll                              LGPL-2.1-or-later
+  plugins\demux\libnuv_plugin.dll                              LGPL-2.1-or-later
+  plugins\demux\libogg_plugin.dll                              LGPL-2.1-or-later
+  plugins\demux\libplaylist_plugin.dll                         LGPL-2.1-or-later
+  plugins\demux\libps_plugin.dll                               LGPL-2.1-or-later
+  plugins\demux\libpva_plugin.dll                              LGPL-2.1-or-later
+  plugins\demux\librawaud_plugin.dll                           LGPL-2.1-or-later
+  plugins\demux\librawdv_plugin.dll                            LGPL-2.1-or-later
+  plugins\demux\librawvid_plugin.dll                           LGPL-2.1-or-later
+  plugins\demux\libsmf_plugin.dll                              LGPL-2.1-or-later
+  plugins\demux\libsubtitle_plugin.dll                         LGPL-2.1-or-later
+  plugins\demux\libts_plugin.dll                               LGPL-2.1-or-later
+  plugins\demux\libtta_plugin.dll                              LGPL-2.1-or-later
+  plugins\demux\libty_plugin.dll                               LGPL-2.1-or-later
+  plugins\demux\libvc1_plugin.dll                              LGPL-2.1-or-later
+  plugins\demux\libvobsub_plugin.dll                           LGPL-2.1-or-later
+  plugins\demux\libvoc_plugin.dll                              LGPL-2.1-or-later
+  plugins\demux\libwav_plugin.dll                              LGPL-2.1-or-later
+  plugins\demux\libxa_plugin.dll                               LGPL-2.1-or-later
+  plugins\logger\libconsole_logger_plugin.dll                  LGPL-2.1-or-later
+  plugins\misc\libaddonsfsstorage_plugin.dll                   LGPL-2.1-or-later
+  plugins\misc\libaddonsvorepository_plugin.dll                LGPL-2.1-or-later
+  plugins\misc\libfingerprinter_plugin.dll                     LGPL-2.1-or-later
+  plugins\misc\libgnutls_plugin.dll                            LGPL-2.1-or-later
+  plugins\misc\libxml_plugin.dll                               LGPL-2.1-or-later
+  plugins\packetizer\libpacketizer_av1_plugin.dll              LGPL-2.1-or-later
+  plugins\packetizer\libpacketizer_copy_plugin.dll             LGPL-2.1-or-later
+  plugins\packetizer\libpacketizer_dirac_plugin.dll            LGPL-2.1-or-later
+  plugins\packetizer\libpacketizer_dts_plugin.dll              LGPL-2.1-or-later
+  plugins\packetizer\libpacketizer_flac_plugin.dll             LGPL-2.1-or-later
+  plugins\packetizer\libpacketizer_h264_plugin.dll             LGPL-2.1-or-later
+  plugins\packetizer\libpacketizer_hevc_plugin.dll             LGPL-2.1-or-later
+  plugins\packetizer\libpacketizer_mlp_plugin.dll              LGPL-2.1-or-later
+  plugins\packetizer\libpacketizer_mpeg4audio_plugin.dll       LGPL-2.1-or-later
+  plugins\packetizer\libpacketizer_mpeg4video_plugin.dll       LGPL-2.1-or-later
+  plugins\packetizer\libpacketizer_mpegaudio_plugin.dll        LGPL-2.1-or-later
+  plugins\packetizer\libpacketizer_mpegvideo_plugin.dll        LGPL-2.1-or-later
+  plugins\packetizer\libpacketizer_vc1_plugin.dll              LGPL-2.1-or-later
+  plugins\spu\libaudiobargraph_v_plugin.dll                    LGPL-2.1-or-later
+  plugins\spu\liblogo_plugin.dll                               LGPL-2.1-or-later
+  plugins\spu\libmarq_plugin.dll                               LGPL-2.1-or-later
+  plugins\spu\libmosaic_plugin.dll                             LGPL-2.1-or-later
+  plugins\spu\libremoteosd_plugin.dll                          LGPL-2.1-or-later
+  plugins\spu\librss_plugin.dll                                LGPL-2.1-or-later
+  plugins\spu\libsubsdelay_plugin.dll                          LGPL-2.1-or-later
+  plugins\stream_filter\libadf_plugin.dll                      LGPL-2.1-or-later
+  plugins\stream_filter\libaribcam_plugin.dll                  LGPL-2.1-or-later
+  plugins\stream_filter\libcache_block_plugin.dll              LGPL-2.1-or-later
+  plugins\stream_filter\libcache_read_plugin.dll               LGPL-2.1-or-later
+  plugins\stream_filter\libhds_plugin.dll                      LGPL-2.1-or-later
+  plugins\stream_filter\libinflate_plugin.dll                  LGPL-2.1-or-later
+  plugins\stream_filter\libprefetch_plugin.dll                 LGPL-2.1-or-later
+  plugins\stream_filter\librecord_plugin.dll                   LGPL-2.1-or-later
+  plugins\stream_filter\libskiptags_plugin.dll                 LGPL-2.1-or-later
+  plugins\text_renderer\libfreetype_plugin.dll                 LGPL-2.1-or-later
+  plugins\text_renderer\libsapi_plugin.dll                     LGPL-2.1-or-later
+  plugins\text_renderer\libtdummy_plugin.dll                   LGPL-2.1-or-later
+  plugins\video_chroma\libchain_plugin.dll                     LGPL-2.1-or-later
+  plugins\video_chroma\libgrey_yuv_plugin.dll                  LGPL-2.1-or-later
+  plugins\video_chroma\libi420_10_p010_plugin.dll              LGPL-2.1-or-later
+  plugins\video_chroma\libi420_nv12_plugin.dll                 LGPL-2.1-or-later
+  plugins\video_chroma\libi420_rgb_mmx_plugin.dll              LGPL-2.1-or-later
+  plugins\video_chroma\libi420_rgb_plugin.dll                  LGPL-2.1-or-later
+  plugins\video_chroma\libi420_rgb_sse2_plugin.dll             LGPL-2.1-or-later
+  plugins\video_chroma\libi420_yuy2_mmx_plugin.dll             LGPL-2.1-or-later
+  plugins\video_chroma\libi420_yuy2_plugin.dll                 LGPL-2.1-or-later
+  plugins\video_chroma\libi420_yuy2_sse2_plugin.dll            LGPL-2.1-or-later
+  plugins\video_chroma\libi422_i420_plugin.dll                 LGPL-2.1-or-later
+  plugins\video_chroma\libi422_yuy2_mmx_plugin.dll             LGPL-2.1-or-later
+  plugins\video_chroma\libi422_yuy2_plugin.dll                 LGPL-2.1-or-later
+  plugins\video_chroma\libi422_yuy2_sse2_plugin.dll            LGPL-2.1-or-later
+  plugins\video_chroma\librv32_plugin.dll                      LGPL-2.1-or-later
+  plugins\video_chroma\libswscale_plugin.dll                   LGPL-2.1-or-later
+  plugins\video_chroma\libyuvp_plugin.dll                      LGPL-2.1-or-later
+  plugins\video_chroma\libyuy2_i420_plugin.dll                 LGPL-2.1-or-later
+  plugins\video_chroma\libyuy2_i422_plugin.dll                 LGPL-2.1-or-later
+  plugins\video_filter\libadjust_plugin.dll                    LGPL-2.1-or-later
+  plugins\video_filter\libalphamask_plugin.dll                 LGPL-2.1-or-later
+  plugins\video_filter\libanaglyph_plugin.dll                  LGPL-2.1-or-later
+  plugins\video_filter\libantiflicker_plugin.dll               LGPL-2.1-or-later
+  plugins\video_filter\libball_plugin.dll                      LGPL-2.1-or-later
+  plugins\video_filter\libblend_plugin.dll                     LGPL-2.1-or-later
+  plugins\video_filter\libblendbench_plugin.dll                LGPL-2.1-or-later
+  plugins\video_filter\libbluescreen_plugin.dll                LGPL-2.1-or-later
+  plugins\video_filter\libcanvas_plugin.dll                    LGPL-2.1-or-later
+  plugins\video_filter\libcolorthres_plugin.dll                LGPL-2.1-or-later
+  plugins\video_filter\libcroppadd_plugin.dll                  LGPL-2.1-or-later
+  plugins\video_filter\libdeinterlace_plugin.dll               LGPL-2.1-or-later
+  plugins\video_filter\libedgedetection_plugin.dll             LGPL-2.1-or-later
+  plugins\video_filter\liberase_plugin.dll                     LGPL-2.1-or-later
+  plugins\video_filter\libextract_plugin.dll                   LGPL-2.1-or-later
+  plugins\video_filter\libfps_plugin.dll                       LGPL-2.1-or-later
+  plugins\video_filter\libfreeze_plugin.dll                    LGPL-2.1-or-later
+  plugins\video_filter\libgaussianblur_plugin.dll              LGPL-2.1-or-later
+  plugins\video_filter\libgradfun_plugin.dll                   LGPL-2.1-or-later
+  plugins\video_filter\libgradient_plugin.dll                  LGPL-2.1-or-later
+  plugins\video_filter\libgrain_plugin.dll                     LGPL-2.1-or-later
+  plugins\video_filter\libhqdn3d_plugin.dll                    LGPL-2.1-or-later
+  plugins\video_filter\libinvert_plugin.dll                    LGPL-2.1-or-later
+  plugins\video_filter\libmagnify_plugin.dll                   LGPL-2.1-or-later
+  plugins\video_filter\libmirror_plugin.dll                    LGPL-2.1-or-later
+  plugins\video_filter\libmotionblur_plugin.dll                LGPL-2.1-or-later
+  plugins\video_filter\libmotiondetect_plugin.dll              LGPL-2.1-or-later
+  plugins\video_filter\liboldmovie_plugin.dll                  LGPL-2.1-or-later
+  plugins\video_filter\libposterize_plugin.dll                 LGPL-2.1-or-later
+  plugins\video_filter\libpsychedelic_plugin.dll               LGPL-2.1-or-later
+  plugins\video_filter\libpuzzle_plugin.dll                    LGPL-2.1-or-later
+  plugins\video_filter\libripple_plugin.dll                    LGPL-2.1-or-later
+  plugins\video_filter\libscale_plugin.dll                     LGPL-2.1-or-later
+  plugins\video_filter\libscene_plugin.dll                     LGPL-2.1-or-later
+  plugins\video_filter\libsepia_plugin.dll                     LGPL-2.1-or-later
+  plugins\video_filter\libsharpen_plugin.dll                   LGPL-2.1-or-later
+  plugins\video_filter\libtransform_plugin.dll                 LGPL-2.1-or-later
+  plugins\video_filter\libvhs_plugin.dll                       LGPL-2.1-or-later
+  plugins\video_filter\libwave_plugin.dll                      LGPL-2.1-or-later
+  plugins\video_output\libcaca_plugin.dll                      LGPL-2.1-or-later
+  plugins\video_output\libdirect3d11_plugin.dll                LGPL-2.1-or-later
+  plugins\video_output\libdirect3d9_plugin.dll                 LGPL-2.1-or-later
+  plugins\video_output\libdirectdraw_plugin.dll                LGPL-2.1-or-later
+  plugins\video_output\libdrawable_plugin.dll                  LGPL-2.1-or-later
+  plugins\video_output\libflaschen_plugin.dll                  LGPL-2.1-or-later
+  plugins\video_output\libgl_plugin.dll                        LGPL-2.1-or-later
+  plugins\video_output\libglinterop_dxva2_plugin.dll           LGPL-2.1-or-later
+  plugins\video_output\libglwin32_plugin.dll                   LGPL-2.1-or-later
+  plugins\video_output\libvdummy_plugin.dll                    LGPL-2.1-or-later
+  plugins\video_output\libvmem_plugin.dll                      LGPL-2.1-or-later
+  plugins\video_output\libwgl_plugin.dll                       LGPL-2.1-or-later
+  plugins\video_output\libwingdi_plugin.dll                    LGPL-2.1-or-later
+  plugins\video_output\libwinhibit_plugin.dll                  LGPL-2.1-or-later
+  plugins\video_output\libyuv_plugin.dll                       LGPL-2.1-or-later
+
+
+NOTES AND OPEN QUESTIONS
+------------------------
+
+1. Two plugins in the package declare the GPL, not the LGPL, and are NOT
+   shipped (excluded in HeatCaller.csproj on 15 Nov 2026):
+     audio_filter\libdolby_surround_decoder_plugin.dll
+     audio_filter\libheadphone_channel_mixer_plugin.dll
+   Both are small audio filters (Dolby Surround decoding, and a headphone
+   downmix effect). HeatCaller never asks for either, but VLC can pick a
+   plugin by itself, and shipping a GPL plugin is a GPL distribution of that
+   plugin. The simplest fix is to add both to the exclude list in
+   HeatCaller.csproj (VlcWindowsX64ExcludeFiles) - done 15 Nov 2026, so no
+   GPL plugin ships. Every plugin listed above declares the LGPL.
+
+2. Built-in third-party libraries. Several plugins have another project's
+   library compiled into them. From general knowledge of VLC 3.0's
+   contribs, not checked against this build [CHECK each]:
+     codec\libavcodec_plugin.dll, video_chroma\libswscale_plugin.dll -
+       FFmpeg (LGPL-2.1-or-later, unless built with --enable-gpl). The
+       DLLs do not say how FFmpeg was configured. No x264, x265 or
+       postproc code was found in them by name. [CHECK]
+     access\liblive555_plugin.dll - live555 (LGPL; some later versions
+       are LGPL-3.0). [CHECK which]
+     misc\libgnutls_plugin.dll and the plugins that use libgcrypt
+       (access\librtp, access\libsftp, demux\libadaptive,
+       spu\libremoteosd, access\libcdda) - GnuTLS and libgcrypt are
+       LGPL-2.1-or-later; GnuTLS's maths libraries (Nettle, GMP) are
+       LGPL-3.0 or GPL-2.0, at the distributor's choice. The libgcrypt
+       plugins contain a GPL-3.0 "--warranty" notice string, which is
+       libgpg-error's command-line help text and not a GPL component.
+       [CHECK]
+     codec\libzvbi_plugin.dll - libzvbi (parts GPL-2.0 in older
+       releases). [CHECK]
+     stream_filter\libaribcam_plugin.dll - libaribb25. [CHECK its licence]
+     video_filter\libhqdn3d_plugin.dll - declares the LGPL, but the
+       hqdn3d denoiser was ported from MPlayer, which is GPL. [CHECK its
+       source header in vlc-3.0.24]
+     Permissive (no copyleft question): dav1d, libvpx, Opus, Vorbis,
+       Theora, FLAC, Speex, libpng, libjpeg-turbo, libxml2, libass,
+       HarfBuzz, FreeType (FTL), libssh2, zlib, libmysofa, libopenmpt.
+     LGPL-2.1: mpg123, FluidSynth, TwoLAME, FriBidi, libdsm, libnfs,
+       libgme, libspatialaudio, libebml, libmatroska, libdvbpsi.
+
+3. access\libbluray-j2se-1.4.1.jar and libbluray-awt-j2se-1.4.1.jar ship
+   too (LGPL-2.1-or-later). They belong to the Blu-ray plugin, which is
+   left out, so nothing loads them. They could be excluded as well.
+
+4. "Trimming is not modifying." HeatCaller leaves files out; every file
+   it ships is VideoLAN's, byte for byte. [CHECK] that counsel agrees the
+   trimmed set is still "the Library" for LGPL section 6 purposes.

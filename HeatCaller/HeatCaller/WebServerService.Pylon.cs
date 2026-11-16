@@ -64,7 +64,12 @@ public sealed partial class WebServerService
                 return null;
             }
 
-            if (Names.Get(pick.Transponder) is { IsJunior: true }
+            if (Names.Get(pick.Transponder) is { IsJunior: true, JuniorOffStream: true } hidden)
+            {
+                // "On stream: Not at all" (15 Nov 2026, children's privacy plan 4.2).
+                name = JuniorNames.OffStreamName(hidden.RaceNumber);
+            }
+            else if (Names.Get(pick.Transponder) is { IsJunior: true }
                 && JuniorNames.ForStream(new[] { name }, _settings?.JuniorNamesOnStream).TryGetValue(name, out var shown))
             {
                 name = shown;

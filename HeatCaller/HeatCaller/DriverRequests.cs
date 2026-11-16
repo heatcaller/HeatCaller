@@ -1377,6 +1377,9 @@ internal sealed partial class DriverRequestDesk
     /// </summary>
     internal sealed record DetailsChoice(IReadOnlyDictionary<string, string> Texts, IReadOnlyDictionary<string, bool> Flags);
 
+    /// <summary>The details a junior's phone may not change: entered at the desk with a parent (15 Nov 2026).</summary>
+    internal static readonly IReadOnlySet<string> JuniorDeskOnly = new HashSet<string>(StringComparer.Ordinal) { "pronouns", "about", "email" };
+
     /// <summary>
     /// Applies the ticked changes to the driver's profile: a snapshot, the
     /// change, Upsert, and an undo that puts the snapshot back while the
@@ -1401,6 +1404,17 @@ internal sealed partial class DriverRequestDesk
         if (choice.Texts.Count == 0 && choice.Flags.Count == 0)
         {
             refusal = "Tick at least one change to approve, or decline the request.";
+            return false;
+        }
+
+        // A JUNIOR'S PRONOUNS, ABOUT LINE AND EMAIL ARE ENTERED AT THE DESK
+        // (15 Nov 2026, plans 1.1 and 2.2), with a parent there - never from
+        // their phone, which offers them only the announcer name. The relay
+        // refuses them too; this is for a phone or relay that did not.
+        if (profile.IsJunior && choice.Texts.Keys.FirstOrDefault(k => JuniorDeskOnly.Contains(k)) is { } deskOnly)
+        {
+            refusal = $"A junior's {(deskOnly == "about" ? "about line" : deskOnly)} is entered at the desk with a parent, "
+                      + "not from their phone. Untick it, or decline the request and fill it in on their profile.";
             return false;
         }
 
@@ -1993,9 +2007,29 @@ internal sealed partial class DriverRequestDesk
 
     // ------------------------------------------------------------ the rest
 
-    /// <summary>Declines it, with a reason for their phone (at most <see cref="DriverAsk.SaidMaxChars"/>).</summary>
+    /// <summary>
+    /// True when only a set reply may go to this request's phone: a junior,
+    /// or a badge nobody on this laptop has (nobody can say they're an adult).
+    /// See DeskInbox.JuniorReplyHint.
+    /// </summary>
+    public bool SetRepliesOnly(DriverRequest request) => DriverOf(request) is not { IsJunior: false };
+
+    /// <summary>
+    /// Declines it, with a reason for their phone (at most <see cref="DriverAsk.SaidMaxChars"/>).
+    /// A junior's reason is always one of HeatCaller's fixed replies, whatever was passed.
+    /// </summary>
     public bool Decline(DriverRequest request, string reason)
     {
+        // 15 Nov 2026, plan 1.4: enforced here, below the inbox, so no window
+        // or later caller can send a junior the desk's own words. Typed text
+        // or a club's edited reply becomes the nearest fixed one.
+        var setReply = SetRepliesOnly(request);
+
+        if (setReply)
+        {
+            reason = DeskInbox.SetReplyFor(reason);
+        }
+
         if (!_store.Answer(request.Id, DriverAsk.Declined, reason, DateTime.UtcNow))
         {
             return false;
@@ -2004,7 +2038,9 @@ internal sealed partial class DriverRequestDesk
         var store = _store;
         var id = request.Id;
         _undo.Capture("Decline a driver's request (their phone was told no)", () => store.Reopen(id));
-        _log("[driver requests] Declined a driver's request.");
+        _log(setReply
+            ? $"[driver requests] Declined a junior's (or unknown badge's) request with the set reply \"{reason}\"."
+            : "[driver requests] Declined a driver's request.");
         return true;
     }
 

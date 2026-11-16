@@ -329,6 +329,16 @@
          deliberately stays. -->
     <VlcWindowsX64ExcludeFiles Include="plugins\codec\libx26410b_plugin.dll" />
     <VlcWindowsX64ExcludeFiles Include="plugins\codec\libaom_plugin.dll" />
+
+    <!-- THE TWO GPL PLUGINS (15 Nov 2026, IP review): every other plugin
+         that ships declares the LGPL, which dynamic linking is designed
+         for; these two declare GPL-2.0-or-later (Assets\Licences\
+         LibVLC-plugins.txt). Both are audio filters - Dolby Surround
+         decoding and a headphone channel mixer - that a sponsor slide's
+         stereo soundtrack through the club's PA never needs. Left out so
+         no GPL code is distributed with HeatCaller at all. -->
+    <VlcWindowsX64ExcludeFiles Include="plugins\audio_filter\libdolby_surround_decoder_plugin.dll" />
+    <VlcWindowsX64ExcludeFiles Include="plugins\audio_filter\libheadphone_channel_mixer_plugin.dll" />
   </ItemGroup>
 
   <!-- ONNX Runtime (pulled in by KokoroSharp.CPU) ships its native library

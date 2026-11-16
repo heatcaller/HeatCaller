@@ -738,6 +738,15 @@ export function brainTopUpPath(dataDir: string, club: string): string {
  * Plain fetch rather than the SDK: one POST with no streaming and no tool
  * use is not worth a dependency on a relay that currently has none but
  * TypeScript itself.
+ *
+ * NO "DON'T TRAIN" FLAG TO SEND (15 Nov 2026, children's privacy, plan 2.3).
+ * The Messages API has no per-request no-training or no-retention switch,
+ * and none is needed: Anthropic does not train on commercial API data by
+ * default. Its written answers on retention and training are filed with
+ * the other vendors' in website/legal-drafts. Neither the facts nor the
+ * line written are ever logged here - the error below carries Anthropic's
+ * own answer, never the prompt - and usage logs keep counts only (see
+ * Relay.brainWrite).
  */
 export function anthropicWriter(apiKey: string, model: string, timeoutMs = 20_000): WriteFn {
   return async (system, user, maxTokens, temperature) => {

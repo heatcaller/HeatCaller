@@ -59,6 +59,14 @@ public sealed partial class AnnouncementService
             return false;
         }
 
+        // A line naming a junior with "Offline voices for juniors" on (15 Nov
+        // 2026) is never streamed from a cloud voice: played whole, it goes
+        // to Kokoro - see AnnouncementService.Juniors.
+        if (KeepsJuniorLineHere(text))
+        {
+            return false;
+        }
+
         var ready = profile.EffectiveEngine switch
         {
             VoiceEngine.ElevenLabs => ElevenLabsReady(profile)

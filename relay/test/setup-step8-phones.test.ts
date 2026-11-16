@@ -142,6 +142,9 @@ describe("marshal duty, swaps and money on the driver's night", () => {
     assert.ok(code.includes("sendAsk('post'"));
     assert.ok(code.includes("sendAsk('swap'"));
     assert.ok(code.includes("sendAsk('cover'"));
+    // A junior is offered nobody to ask: their swaps go through the desk (15 Nov 2026).
+    assert.ok(code.includes("m.swapAtDesk === true"));
+    assert.ok(code.includes("Need a swap? Ask at the desk."));
   });
 
   // The two read-only parts, run on their own with a stand-in el().

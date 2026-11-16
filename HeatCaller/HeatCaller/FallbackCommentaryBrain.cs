@@ -68,6 +68,26 @@ public sealed class FallbackCommentaryBrain : ICommentaryBrain
         set => _relayOnly.Value = value;
     }
 
+    private static readonly AsyncLocal<bool> _localOnly = new();
+
+    /// <summary>
+    /// True while the line being asked for is about a junior and the club has
+    /// "Offline voices for juniors" on (15 Nov 2026, children's privacy, plan
+    /// 2.3): the relay is not asked at all, and the model on this PC writes
+    /// it - whichever way the fallback box is ticked. Set by
+    /// CommentaryService.Ask around the one write, like RelayOnly; the relay
+    /// client checks it too, for a club with no local model, and writes
+    /// nothing rather than send the prompt.
+    ///
+    /// RelayOnly still wins: a colour segment about a junior is left unsaid
+    /// rather than written plainly here.
+    /// </summary>
+    public static bool LocalOnly
+    {
+        get => _localOnly.Value;
+        set => _localOnly.Value = value;
+    }
+
     /// <param name="first">The relay.</param>
     /// <param name="second">The model on this PC.</param>
     /// <param name="onAnyFailure">True to fall back whenever the first doesn't write; false to fall back only while its month is spent.</param>
@@ -164,6 +184,28 @@ public sealed class FallbackCommentaryBrain : ICommentaryBrain
         CancellationToken ct = default,
         TimeSpan? timeout = null)
     {
+        // About a junior, with "Offline voices for juniors" on: straight to
+        // the model on this PC, never the relay - see LocalOnly.
+        if (LocalOnly)
+        {
+            if (RelayOnly)
+            {
+                Say("[brain] A segment about a junior is left unsaid - it stays off the relay, and this kind of segment isn't written locally.");
+                return null;
+            }
+
+            if (ct.IsCancellationRequested)
+            {
+                return null;
+            }
+
+            WarmSecondOnce();
+
+            return await _second
+                .GenerateAsync(systemPrompt, userPrompt, maxTokens, temperature, ct, timeout)
+                .ConfigureAwait(false);
+        }
+
         var line = await _first
             .GenerateAsync(systemPrompt, userPrompt, maxTokens, temperature, ct, timeout)
             .ConfigureAwait(false);

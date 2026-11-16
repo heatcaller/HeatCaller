@@ -177,7 +177,9 @@ public sealed partial class ProfileManagerControl
         _miReportCard = new ToolStripMenuItem("Report Card...", null, (_, _) => ShowReportCard());
         _miDelete = new ToolStripMenuItem("Delete Driver...", null, (_, _) => DeleteSelected()) { Tag = AppTheme.DangerMenuItem };
 
-        _driverMenu.Items.AddRange(new ToolStripItem[] { _miReportCard, new ToolStripSeparator(), _miDelete });
+        // Export and Forget (15 Nov 2026, privacy plan 2.5) - see ProfileManagerControl.Forget.
+        BuildPrivacyMenuItems();
+        _driverMenu.Items.AddRange(new ToolStripItem[] { _miReportCard, _miExport, new ToolStripSeparator(), _miDelete, _miForget });
 
         _driverMenu.Opening += (_, e) =>
         {
@@ -197,6 +199,7 @@ public sealed partial class ProfileManagerControl
             // The same drivers Delete will act on (10 Nov 2026, bug hunt 16).
             var picked = DeleteTargets().Count;
             _miDelete.Text = picked > 1 ? $"Delete {Plural.Of(picked, "Driver")}..." : $"Delete {named}...";
+            ShowPrivacyMenuItems(named);
         };
 
         AppTheme.StyleContextMenu(_importMenu);

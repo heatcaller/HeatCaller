@@ -226,6 +226,14 @@ public sealed partial class AnnouncementService
             return false; // nothing to batch - one line is its own request
         }
 
+        // A grid with a junior in it, and "Offline voices for juniors" on
+        // (15 Nov 2026): line by line, so theirs goes to Kokoro through
+        // RenderLineAsync and never into the one request to ElevenLabs.
+        if (lines.Any(l => KeepsJuniorLineHere(l.Text)))
+        {
+            return false;
+        }
+
         // The cuts are found by looking for the separator's "..." in what
         // came back. A line that has "..." of its own (a template like
         // "{driver}... GO!") would be cut in the wrong place, and every clip

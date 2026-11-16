@@ -81,8 +81,9 @@ import { LapVoiceLibrary } from "./lapvoice.js";
 import { STREAM_FORMAT, VOICE_PLAN_OFF, type MeterUsage, type VoicePlan, type VoiceService } from "./voice.js";
 import { isMeterName, type TopUpRequests } from "./topuprequests.js";
 import type { UsageLog } from "./usagelog.js";
-import { BROADCAST_TTL_SECONDS, followNameFrom, myNightUrl, PUSH_CHANNEL, pushKindsFrom, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
+import { BROADCAST_TTL_SECONDS, FOLLOW_CHANNEL, followIdOf, followNameFrom, myNightUrl, PUSH_CHANNEL, pushKindsFrom, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
 import { PAGES_BUILD } from "./pagebuild.js";
+import { isJuniorName, NO_PRIVACY_RULES, namesAJunior, PRIVACY_CHANNEL, privacyNameKey, privacyRulesFrom, resultTakenDown, ROBOTS_TXT, UNKNOWN_PRIVACY_RULES, yearTakenDown, type PrivacyRules } from "./privacy.js";
 import { nextNightIcs } from "./ics.js";
 import { hiddenAfter, liveVideo, mergedStreamBody, raceVideo, STREAM_MAX_PIECES, STREAM_NIGHTS_KEPT, streamFrom, streamNightId, VIDEO_CHECK_FOR_MS, VideoCheck, type OEmbedAsk, type RaceVideo, type Stream } from "./video.js";
 import { SIGNIN_MAIL, SIGNIN_MAIL_MAX, SIGNIN_MAIL_MAX_BODY, SIGNIN_MAIL_PER_HOUR, signinEmailFrom, signinItemsFrom } from "./signinmail.js";
@@ -108,6 +109,35 @@ const INBOX = "inbox";
 
 /** The channel a session's preview card is built from - never the results themselves. See preview.ts. */
 const PREVIEW_CHANNEL = "resultsindex";
+
+/**
+ * Which of the club's documents each public page draws itself from, for
+ * noindex (15 Nov 2026, children's privacy 4.3): a page whose documents
+ * name a junior asks search engines to leave it out. Results and Home also
+ * read the newest year of the results index, and one race's page (and its
+ * "card" picture) that race - see Relay.namesAJuniorOn. A page not listed
+ * here names nobody, or is noindex already.
+ */
+const NOINDEX_DOCS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  home: ["state", "programme", "standings", "achievements", "tracks", "qualifying", "preview", "nextnight", "captions"],
+  live: ["state", "programme", "qualifying", "captions"],
+  schedule: ["programme", "qualifying", "preview"],
+  results: [],
+  card: [],
+  standings: ["standings"],
+  badges: ["achievements"],
+  tracks: ["tracks"],
+  checkin: ["roster"],
+});
+
+/** How long a club's privacy rules are held before being read again; a new document drops them at once. */
+const PRIVACY_HELD_MS = 60_000;
+
+/** How long a page's "names a junior" answer is held; any publish to the club drops it at once. */
+const NOINDEX_HELD_MS = 60_000;
+
+/** The most such answers held across every club before they are all let go. */
+const NOINDEX_HELD_MAX = 5000;
 
 /**
  * How far back a shared link can carry its own card, and how much of a
@@ -753,6 +783,11 @@ const LISTING_BUILDS_AT_ONCE = 1;
 
 const DRIVER_ID = /^[0-9a-f]{20}$/;
 
+/** Forget one driver (15 Nov 2026, privacy plan 2.5): the most of each the laptop may name, and the body that carries them. */
+const DRIVER_FORGET_MAX_BADGES = 20;
+const DRIVER_FORGET_MAX_NAMES = 10;
+const DRIVER_FORGET_MAX_BODY = 8 * 1024;
+
 interface InboxItem {
   readonly n: number;
   readonly id: string;
@@ -1374,6 +1409,10 @@ export class Relay {
   private previewCacheBytes = 0;
   /** Bumped by every write to a club's resultsindex document - per club, as siteEpochs is and for the same reason. */
   private readonly previewEpochs = new Map<string, number>();
+  /** Each club's privacy rules (privacy.ts), held for PRIVACY_HELD_MS and dropped when the laptop sends new ones. */
+  private readonly privacyHeld = new Map<string, { rules: PrivacyRules; at: number }>();
+  /** Whether a public page names a junior, by club|page|session - held for NOINDEX_HELD_MS, dropped by any publish to the club. */
+  private readonly noindexHeld = new Map<string, { names: boolean; at: number }>();
   /** Index documents being read for a preview right now, shared the same way. */
   private readonly previewLoads = new Map<string, Load<ReadonlyMap<string, SessionPreview>>>();
   /** Drawn result cards, keyed club and session. Thrown away by forgetCards - see CARD_CACHE_MAX_TOTAL. */
@@ -2290,6 +2329,12 @@ export class Relay {
       return;
     }
 
+    // robots.txt (15 Nov 2026, children's privacy 4.3) - see ROBOTS_TXT.
+    if (method === "GET" && segments.length === 1 && segments[0] === "robots.txt") {
+      sendBody(response, 200, "text/plain; charset=utf-8", ROBOTS_TXT, "public, max-age=3600");
+      return;
+    }
+
     if (method === "GET" && segments.length === 1 && segments[0] === "healthz") {
       sendJson(response, 200, { ok: true, clubs: this.tenants.count });
       return;
@@ -2355,7 +2400,7 @@ export class Relay {
           // The short address is the one people will type, and the one on
           // the poster - so it is a page in its own right that points at
           // everything else, not a redirect to one corner of it.
-          const context = await this.contextFor(request, tenant.club);
+          const context = await this.publicContextFor(request, response, tenant.club, "home");
           sendHtml(response, 200, homePage(tenant.club, tenant.name, context), context.nonce);
           return;
         }
@@ -2365,7 +2410,7 @@ export class Relay {
           const render = Object.prototype.hasOwnProperty.call(PAGES, page) ? PAGES[page] : undefined;
 
           if (render !== undefined) {
-            const context = await this.contextFor(request, tenant.club);
+            const context = await this.publicContextFor(request, response, tenant.club, page);
             sendHtml(response, 200, render(tenant.club, tenant.name, context), context.nonce);
             return;
           }
@@ -2510,7 +2555,7 @@ export class Relay {
         // itself says the session has gone. A stale link that 404s is a
         // link somebody thinks is broken.
         if (tenant !== undefined && segments.length === 4 && segments[2] === "results") {
-          const context = await this.contextFor(request, tenant.club);
+          const context = await this.publicContextFor(request, response, tenant.club, "results", segments[3] as string);
           const card = await this.cardFor(tenant, segments[3] as string, context.look);
 
           sendHtml(
@@ -2547,6 +2592,12 @@ export class Relay {
         }
 
         if (tenant !== undefined && segments.length === 5 && segments[2] === "results" && segments[4] === "card.png") {
+          // A shared card's picture shows the podium: kept out of image
+          // search when the race names a junior (15 Nov 2026).
+          if (await this.namesAJuniorOn(tenant.club, "card", segments[3] as string)) {
+            response.setHeader("x-robots-tag", "noindex");
+          }
+
           await this.cardPng(request, response, tenant, segments[3] as string);
           return;
         }
@@ -2883,6 +2934,11 @@ export class Relay {
       return;
     }
 
+    if (method === "POST" && rest.length === 2 && rest[0] === "driver" && rest[1] === "forget") {
+      await this.forgetDriver(request, response, club);
+      return;
+    }
+
     if (method === "POST" && rest.length === 2 && rest[0] === "driver" && rest[1] === "open") {
       await this.setDriverAsksOpen(request, response, club);
       return;
@@ -3197,6 +3253,10 @@ export class Relay {
       return;
     }
 
+    // What the club's pages show is changing: whether they name a junior
+    // is worked out again (15 Nov 2026, see namesAJuniorOn).
+    this.forgetNoindex(club);
+
     const outcome = await this.withLock(club, async () => {
       // A document already there that cannot be read is written over, as
       // it always was: a publish is how a club puts a broken one right.
@@ -3264,8 +3324,20 @@ export class Relay {
         // Follower alerts (overlay plan 7.1): a followed driver's race now
         // next. From the programme as the public sees it - only a club that
         // publishes line-ups names anybody in it.
+        // Never a junior's name (15 Nov 2026, children's privacy 1.2).
         if (spec.name === "programme" && this.push !== undefined && !unreadable) {
-          void this.push.afterProgramme(club, existing?.body, doc.body);
+          const push = this.push;
+          void this.juniorCheckOf(club).then((isJunior) => push.afterProgramme(club, existing?.body, doc.body, isJunior));
+        }
+
+        // The club's privacy rules (15 Nov 2026) - see privacy.ts.
+        if (spec.name === PRIVACY_CHANNEL) {
+          this.privacyHeld.delete(club);
+          this.forgetNoindex(club);
+
+          if (!unreadable) {
+            void this.applyPrivacy(club, privacyRulesFrom(body));
+          }
         }
 
         if (spec.name === "checkin") {
@@ -3368,6 +3440,19 @@ export class Relay {
           return "closed" as const;
         }
 
+        // OLDER THAN THE CLUB KEEPS (15 Nov 2026, children's privacy 2.6):
+        // a result or a year's index from before the club's "unpublish
+        // results older than" is answered as taken, and not kept - the
+        // laptop resending an old season (a privacy republish) must not put
+        // back what the club asked to take down.
+        if (spec.name === PREVIEW_CHANNEL || spec.name === "results") {
+          const rules = await this.privacyRulesOf(club);
+
+          if ((spec.name === PREVIEW_CHANNEL && yearTakenDown(rules, itemId as string)) || (spec.name === "results" && resultTakenDown(rules, body))) {
+            return { applied: false, seq, old: true };
+          }
+        }
+
         const victims = await this.planRoom(spec, club, itemId as string, Buffer.byteLength(JSON.stringify(doc)));
 
         if (victims === undefined) {
@@ -3392,7 +3477,8 @@ export class Relay {
 
         // Follower alerts (overlay plan 7.1): a followed driver's result.
         if (spec.name === "results" && this.push !== undefined && !unreadable) {
-          void this.push.afterResult(club, itemId as string, existing?.body, body);
+          const push = this.push;
+          void this.juniorCheckOf(club).then((isJunior) => push.afterResult(club, itemId as string, existing?.body, body, isJunior));
         }
 
         await this.prune(club, spec.name, victims);
@@ -5257,6 +5343,176 @@ export class Relay {
     this.log(`[relay] "${club}" deleted everything it had published.`);
 
     sendJson(response, 200, { ok: true, deleted: club });
+  }
+
+  /**
+   * contextFor for one of the club's public pages, saying noindex - in the
+   * page's head and as X-Robots-Tag - when what the page shows names a
+   * junior (15 Nov 2026, children's privacy 4.3, the owner's decision:
+   * noindex only the pages that name one). See namesAJuniorOn.
+   */
+  private async publicContextFor(request: IncomingMessage, response: ServerResponse, club: string, page: string, sessionId?: string): Promise<PageContext> {
+    const context = await this.contextFor(request, club);
+
+    if (!(await this.namesAJuniorOn(club, page, sessionId))) {
+      return context;
+    }
+
+    response.setHeader("x-robots-tag", "noindex");
+    return { ...context, noindex: true };
+  }
+
+  /** The club's privacy rules (privacy.ts). A document that will not read is UNKNOWN_PRIVACY_RULES, and is not held. */
+  private async privacyRulesOf(club: string): Promise<PrivacyRules> {
+    const held = this.privacyHeld.get(club);
+
+    if (held !== undefined && this.now().getTime() - held.at < PRIVACY_HELD_MS) {
+      return held.rules;
+    }
+
+    try {
+      const doc = await this.store.getSnapshot(club, PRIVACY_CHANNEL);
+      const rules = doc === undefined ? NO_PRIVACY_RULES : privacyRulesFrom(doc.body);
+      this.privacyHeld.set(club, { rules, at: this.now().getTime() });
+      return rules;
+    } catch {
+      return UNKNOWN_PRIVACY_RULES;
+    }
+  }
+
+  /** "Is this name a junior's?" for the club, as one function - every name is, while the rules will not read. */
+  private async juniorCheckOf(club: string): Promise<(name: string) => boolean> {
+    const rules = await this.privacyRulesOf(club);
+    return (name: string) => isJuniorName(rules, name);
+  }
+
+  /**
+   * Whether one of the club's public pages names a junior anywhere in
+   * what it draws (15 Nov 2026, children's privacy 4.3). The pages draw
+   * themselves from the club's documents, so each is checked against the
+   * documents it reads; a page not listed names nobody. Held for
+   * NOINDEX_HELD_MS and dropped by any publish to the club. Rules that
+   * will not read say yes - a page kept out of search for a minute costs
+   * nothing.
+   */
+  private async namesAJuniorOn(club: string, page: string, sessionId?: string): Promise<boolean> {
+    const snapshots = NOINDEX_DOCS[page];
+
+    if (snapshots === undefined) {
+      return false;
+    }
+
+    const rules = await this.privacyRulesOf(club);
+
+    if (rules.unknown) {
+      return true;
+    }
+
+    if (rules.pattern === undefined) {
+      return false;
+    }
+
+    const session = sessionId !== undefined && isValidItemId(sessionId) ? sessionId : "";
+    const key = `${club}|${page}|${session}`;
+    const held = this.noindexHeld.get(key);
+
+    if (held !== undefined && this.now().getTime() - held.at < NOINDEX_HELD_MS) {
+      return held.names;
+    }
+
+    let names = false;
+
+    try {
+      for (const channel of snapshots) {
+        if (names) break;
+        names = namesAJunior(rules, (await this.store.getSnapshot(club, channel))?.body);
+      }
+
+      // Results and Home show the newest year of the results index; one
+      // race's own page (and its card) shows that race.
+      if (!names && (page === "results" || page === "home")) {
+        const years = (await this.store.itemSizes(club, PREVIEW_CHANNEL)).map((item) => item.id).sort();
+        const newest = years[years.length - 1];
+        names = newest !== undefined && namesAJunior(rules, (await this.store.getItem(club, PREVIEW_CHANNEL, newest))?.body);
+      }
+
+      if (!names && session !== "") {
+        names = namesAJunior(rules, (await this.store.getItem(club, "results", session))?.body);
+      }
+    } catch {
+      // A document that will not read might name anybody.
+      return true;
+    }
+
+    if (this.noindexHeld.size >= NOINDEX_HELD_MAX) {
+      this.noindexHeld.clear();
+    }
+
+    this.noindexHeld.set(key, { names, at: this.now().getTime() });
+    return names;
+  }
+
+  /** Every held noindex answer for a club, dropped - its documents have changed. */
+  private forgetNoindex(club: string): void {
+    for (const key of [...this.noindexHeld.keys()]) {
+      if (key.startsWith(`${club}|`)) this.noindexHeld.delete(key);
+    }
+  }
+
+  /**
+   * The laptop's new privacy rules, applied (15 Nov 2026, children's
+   * privacy 1.2 and 2.6): every follow of a junior's name dropped, and the
+   * results and results-index years older than the club keeps taken off.
+   * Not waited for by the publish; never throws.
+   */
+  private async applyPrivacy(club: string, rules: PrivacyRules): Promise<void> {
+    try {
+      if (this.push !== undefined && rules.juniors.size > 0) {
+        const dropped = await this.push.dropFollows(club, (name) => isJuniorName(rules, name));
+        if (dropped > 0) this.log(`[relay] "${club}": stopped ${dropped} follow${dropped === 1 ? "" : "s"} of a junior by name`);
+      }
+
+      if (rules.fromYear === 0) {
+        return;
+      }
+
+      let years = 0;
+      let sessions = 0;
+
+      await this.withLock(club, async () => {
+        for (const item of await this.store.itemSizes(club, PREVIEW_CHANNEL)) {
+          if (!yearTakenDown(rules, item.id)) continue;
+
+          const index = await this.store.getItem(club, PREVIEW_CHANNEL, item.id).catch(() => undefined);
+          const indexBody = index?.body;
+          const list = isPlainObject(indexBody) && Array.isArray(indexBody["sessions"]) ? indexBody["sessions"] : [];
+
+          for (const s of list) {
+            const id = isPlainObject(s) && typeof s["id"] === "string" ? s["id"] : "";
+            if (!isValidItemId(id)) continue;
+            await this.store.deleteItem(club, "results", id).catch(() => undefined);
+            sessions++;
+          }
+
+          // The year's index last, so a failure part-way leaves it to try again.
+          await this.store.deleteItem(club, PREVIEW_CHANNEL, item.id);
+          years++;
+        }
+
+        if (years > 0) {
+          this.forgetListing(club, "results");
+          this.forgetListing(club, PREVIEW_CHANNEL);
+          this.forgetPreviews(club);
+        }
+      });
+
+      if (years > 0) {
+        this.forgetNoindex(club);
+        this.log(`[relay] "${club}": took down ${years} old year${years === 1 ? "" : "s"} of results (${sessions} session${sessions === 1 ? "" : "s"}), as the club asked`);
+      }
+    } catch (e) {
+      this.log(`[relay] "${club}": could not apply the privacy rules: ${String(e)}`);
+    }
   }
 
   private async contextFor(request: IncomingMessage, club: string): Promise<PageContext> {
@@ -7232,6 +7488,16 @@ export class Relay {
 
     const push = this.push;
 
+    // NO FOLLOWING A JUNIOR BY NAME (15 Nov 2026, children's privacy 1.2):
+    // anybody could follow any name and hear when a child was about to race
+    // and how they did. A junior's family follows them through a family
+    // link from the junior's own phone, which needs their badge. Turning
+    // alerts off is always allowed.
+    if (on && (await this.juniorCheckOf(club))(name)) {
+      sendJson(response, 403, { ok: false, error: "Juniors can only be followed through a family link from their own phone." });
+      return;
+    }
+
     if (!on) {
       const endpoint = isPlainObject(body["sub"]) && typeof body["sub"]["endpoint"] === "string" ? body["sub"]["endpoint"] : "";
       await push.followUnsubscribe(club, name, endpoint);
@@ -7594,6 +7860,15 @@ export class Relay {
     const me = checkin === undefined || meEntry === undefined ? {} : { me: { ...meEntryForPhone(meEntry, meDoc?.crewVoices ?? []), pin: hasRacerPin(checkin, id) } };
     const queriesOff = checkin !== undefined && await this.resultQueriesOffFor(club);
 
+    // Whether this driver is a junior (15 Nov 2026, children's privacy 2.6),
+    // so their phone forgets their sign-in after 30 days: from their crew in
+    // the details document, or their night's name among the juniors' names.
+    const crewJunior = (await this.driverDocOf(club, DRIVER_ME_CHANNEL))?.drivers.get(id)?.["crew"];
+    const nightName = doc !== undefined && isPlainObject(doc.body) && typeof doc.body["driver"] === "string" ? doc.body["driver"] : "";
+    const rules = await this.privacyRulesOf(club);
+    const junior = (isPlainObject(crewJunior) && crewJunior["junior"] === true)
+      || (nightName !== "" && !rules.unknown && rules.juniors.has(privacyNameKey(nightName)));
+
     sendJson(response, 200, {
       ok: true,
       night: doc === undefined ? null : doc.body,
@@ -7604,6 +7879,7 @@ export class Relay {
       // I'm coming to the next race night, with no check-in tonight (12 Nov 2026) - see comingGateOf.
       ...(checkin === undefined && await this.comingGateOf(club, id) ? { comingOpen: true } : {}),
       ...(queriesOff ? { queriesOff: true } : {}),
+      ...(junior ? { junior: true } : {}),
     });
   }
 
@@ -8142,13 +8418,17 @@ export class Relay {
     // THE DRIVER'S OWN CREW (15 Nov 2026, plans/driver-crew-plan.md): only
     // while the laptop offers it - driverme carries a crew for this driver
     // only when the club has "Drivers can pick their own crew" on - and a
-    // junior's notes only with a parent's tick (askFieldsFrom). Read from
-    // the stored driverme, never from anything the phone says about itself.
-    const crew = kind === "crew" && checkin !== undefined
-      ? crewFrom((await this.driverDocOf(club, DRIVER_ME_CHANNEL))?.drivers.get(id)?.["crew"])
+    // junior's notes never (askFieldsFrom). Read from the stored driverme,
+    // never from anything the phone says about itself. A junior's details
+    // too (15 Nov 2026): driverme's entry says "junior", and of their
+    // details only the announcer name is taken from a phone.
+    const meEntry = (kind === "crew" || kind === "details") && checkin !== undefined
+      ? (await this.driverDocOf(club, DRIVER_ME_CHANNEL))?.drivers.get(id)
       : undefined;
+    const crew = kind === "crew" ? crewFrom(meEntry?.["crew"]) : undefined;
+    const junior = meEntry?.["junior"] === true || crew?.junior === true;
 
-    const check = askFieldsFrom(kind, body["f"], withPin, crew?.junior === true, crew?.notes === false);
+    const check = askFieldsFrom(kind, body["f"], withPin, junior, crew?.notes === false, crew?.under13 === true);
 
     if (!check.ok) {
       sendJson(response, check.status, { ok: false, error: check.error });
@@ -8272,6 +8552,149 @@ export class Relay {
       .map((item) => ({ id: item.id, ...item.ask }));
 
     sendJson(response, 200, { ok: true, items });
+  }
+
+  /**
+   * FORGET ONE DRIVER (15 Nov 2026, children's-privacy plan 2.5): the
+   * laptop's "Forget this driver", asked by a parent. Everything the relay
+   * holds of that one driver goes - by badge code: their night, their
+   * entries in the live and details documents, their garage, the phone
+   * photos and asks waiting for the desk, the family links they made, their
+   * phone's push sign-ups and their race clips; by name: the follower
+   * sign-ups for that name. Published results are not touched here: the
+   * laptop sends those again under "Removed driver".
+   *
+   * Under the publish token like every laptop call, and idempotent - a
+   * driver already gone is not an error, so the laptop can simply send it
+   * again until it hears ok.
+   */
+  private async forgetDriver(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    const body = await readBody(request, response, DRIVER_FORGET_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    const badges = new Set(
+      (Array.isArray(body["badges"]) ? (body["badges"] as unknown[]) : [])
+        .filter((b): b is string => typeof b === "string")
+        .map((b) => b.trim().toLowerCase())
+        .filter((b) => DRIVER_ID.test(b))
+        .slice(0, DRIVER_FORGET_MAX_BADGES),
+    );
+    const followIds = new Set(
+      (Array.isArray(body["names"]) ? (body["names"] as unknown[]) : [])
+        .map((n) => followNameFrom(n))
+        .filter((n) => n !== "")
+        .slice(0, DRIVER_FORGET_MAX_NAMES)
+        .map((n) => followIdOf(n)),
+    );
+
+    if (badges.size === 0 && followIds.size === 0) {
+      sendJson(response, 400, { ok: false, error: "Say which driver: their badge codes or names." });
+      return;
+    }
+
+    let removed = 0;
+
+    const dropItems = async (channel: string, mine: (id: string, body: unknown) => boolean): Promise<void> => {
+      for (const item of await this.store.listItems(club, channel).catch(() => [])) {
+        if (mine(item.id, item.doc.body)) {
+          await this.store.deleteItem(club, channel, item.id).catch(() => undefined);
+          removed++;
+        }
+      }
+    };
+
+    await this.withLock(club, async () => {
+      for (const badge of badges) {
+        for (const channel of [NIGHTS_CHANNEL, GARAGE_CHANNEL]) {
+          if ((await this.store.getItem(club, channel, badge).catch(() => undefined)) !== undefined) {
+            await this.store.deleteItem(club, channel, badge).catch(() => undefined);
+            removed++;
+          }
+        }
+      }
+
+      await dropItems(DRIVER_ASKS_CHANNEL, (_id, b) => badges.has(asDriverAsk(b)?.b ?? ""));
+      await dropItems(DRIVER_PHOTOS_CHANNEL, (_id, b) => badges.has(asDriverPhoto(b)?.b ?? ""));
+      await dropItems(FAMILY_CHANNEL, (_id, b) => isPlainObject(b) && typeof b["d"] === "string" && badges.has(b["d"]));
+
+      // Their entries in the two one-document snapshots, taken out with the
+      // rest left as it was - seq and time too, so the next the laptop
+      // sends still wins and freshness is judged as before.
+      for (const channel of [DRIVER_LIVE_CHANNEL, DRIVER_ME_CHANNEL]) {
+        const doc = await this.store.getSnapshot(club, channel).catch(() => undefined);
+        const drivers = doc !== undefined && isPlainObject(doc.body) ? doc.body["drivers"] : undefined;
+
+        if (doc === undefined || !isPlainObject(doc.body) || !isPlainObject(drivers)) {
+          continue;
+        }
+
+        const kept = Object.fromEntries(Object.entries(drivers).filter(([id]) => !badges.has(id)));
+
+        if (Object.keys(kept).length !== Object.keys(drivers).length) {
+          removed += Object.keys(drivers).length - Object.keys(kept).length;
+          await this.store.putSnapshot(club, channel, { ...doc, body: { ...doc.body, drivers: kept } });
+          this.forgetListing(club, channel);
+          this.forgetDriverDoc(club, channel);
+        }
+      }
+    });
+
+    // Push sign-ups through the push service's own lock (its forget, with
+    // only this driver's lists as the wipe), so an alert being sent cannot
+    // write a list back after it.
+    const dropSubs = async (): Promise<void> => {
+      for (const badge of badges) {
+        if ((await this.store.getItem(club, PUSH_CHANNEL, badge).catch(() => undefined)) !== undefined) {
+          await this.store.deleteItem(club, PUSH_CHANNEL, badge).catch(() => undefined);
+          removed++;
+        }
+      }
+
+      for (const id of followIds) {
+        if ((await this.store.getItem(club, FOLLOW_CHANNEL, id).catch(() => undefined)) !== undefined) {
+          await this.store.deleteItem(club, FOLLOW_CHANNEL, id).catch(() => undefined);
+          removed++;
+        }
+      }
+    };
+
+    if (this.push !== undefined) {
+      await this.push.forget(club, dropSubs);
+    } else {
+      await dropSubs();
+    }
+
+    const vault = this.clips;
+
+    if (vault !== undefined && badges.size > 0) {
+      await this.withLock(`${club}|clips`, async () => {
+        for (const clip of await vault.list(club).catch(() => [])) {
+          if (badges.has(clip.driver)) {
+            await vault.remove(club, clip.id).catch(() => undefined);
+            removed++;
+          }
+        }
+      });
+    }
+
+    this.log(`[forget] "${club}": a driver forgotten (${removed} item${removed === 1 ? "" : "s"} removed).`);
+    sendJson(response, 200, { ok: true, removed });
   }
 
   /** The laptop saying it has filed these asks, so the relay can let them go. An id already gone is not an error. */

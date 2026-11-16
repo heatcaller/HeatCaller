@@ -215,6 +215,13 @@ public partial class MainForm
 
         if (changed.Count == 0)
         {
+            // A junior's "On stream" choice changes no result online, but the
+            // preview may name them (15 Nov 2026, children's privacy plan 4.2).
+            if (!string.Equals(before.OffStreamFingerprint, after.OffStreamFingerprint, StringComparison.Ordinal))
+            {
+                RedactTheNightBeforeAgain();
+            }
+
             if (settingsChanged)
             {
                 _settings.Save();
@@ -361,6 +368,9 @@ public partial class MainForm
                 .Append(profile.NoPhotoOnline ? '1' : '0')
                 .Append(profile.NoVideoOnline ? '1' : '0')
                 .Append(profile.InitialsOnline ? '1' : '0')
+                // "On stream: Not at all" (15 Nov 2026), only when chosen, so
+                // every other profile's key is what it was.
+                .Append(profile.JuniorOffStream ? "H" : string.Empty)
                 .Append('\n');
         }
 

@@ -14,7 +14,12 @@ public sealed class ElevenLabsClient
     // Each line's own limit is set per request by AnnouncementService
     // (30 s for a race call, more for a long recap - SynthesisTimeoutFor),
     // so a hung request still lets its synthesis slot go in good time.
-    private static readonly HttpClient Http = new()
+    /// <summary>
+    /// The client lines are spoken with. Settable so a test can answer for
+    /// ElevenLabs (15 Nov 2026); the app never sets it. A test's client
+    /// needs the same BaseAddress, since speech requests are relative.
+    /// </summary>
+    internal static HttpClient Http { get; set; } = new()
     {
         BaseAddress = new Uri("https://api.elevenlabs.io/"),
         // A backstop only (21 Oct 2026): the real limit is per line, and
@@ -138,11 +143,96 @@ public sealed class ElevenLabsClient
         return voices;
     }
 
+    /// <summary>
+    /// Whether ElevenLabs is asked not to keep our lines (15 Nov 2026,
+    /// children's privacy, plan 2.3) - AppSettings.ElevenLabsNoLogging, "Ask
+    /// ElevenLabs not to keep our lines" on the Voice tab, on by default.
+    /// Wired once by AnnouncerControl; until then, and in tests, it asks.
+    /// </summary>
+    internal static Func<bool> AskNotToKeepLines { get; set; } = () => true;
+
+    /// <summary>
+    /// Said once per key when its plan turns the flag down - see
+    /// SendSpeechAsync. AnnouncerControl points it at the console.
+    /// </summary>
+    internal static Action<string>? Notice { get; set; }
+
+    /// <summary>
+    /// The keys whose plan turned enable_logging=false down this session.
+    /// Held in memory only, so a plan upgraded later is asked again after a
+    /// restart. Keyed by a hash rather than the key itself.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> KeysWithoutNoLogging = new(StringComparer.Ordinal);
+
+    private static string KeyHash(string? apiKey) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(apiKey ?? string.Empty)));
+
+    /// <summary>Whether this key's next request carries enable_logging=false.</summary>
+    internal static bool AsksNotToLog(string? apiKey) =>
+        AskNotToKeepLines() && !KeysWithoutNoLogging.ContainsKey(KeyHash(apiKey));
+
+    /// <summary>Forgets every key's refusal. For tests.</summary>
+    internal static void ForgetNoLoggingRefusals() => KeysWithoutNoLogging.Clear();
+
+    /// <summary>
+    /// One speech request with the no-logging flag while it is wanted - and,
+    /// when ElevenLabs turns a request with it down as a bad request (400,
+    /// 403, 422), the same request once more without it (15 Nov 2026).
+    /// </summary>
+    /// <remarks>
+    /// WHY. ElevenLabs' zero-retention mode has been offered to some plans
+    /// only (historically enterprise), and a plan without it may refuse the
+    /// request outright. A flag call matters more than the flag, so it is
+    /// asked again without; if that goes through, the key is remembered for
+    /// this session and said once in the console. A request that fails both
+    /// ways was failing for another reason, and nothing is remembered.
+    /// </remarks>
+    private static async Task<HttpResponseMessage> SendSpeechAsync(
+        VoiceProfile profile, Func<bool, HttpRequestMessage> build, HttpCompletionOption completion, CancellationToken ct)
+    {
+        var asked = AsksNotToLog(profile.ApiKey);
+        int refused;
+
+        using (var first = build(asked))
+        {
+            var response = await Http.SendAsync(first, completion, ct);
+
+            if (response.IsSuccessStatusCode || !asked || !FlagMayBeRefused((int)response.StatusCode))
+            {
+                return response;
+            }
+
+            refused = (int)response.StatusCode;
+            response.Dispose();
+        }
+
+        using var second = build(false);
+        var retry = await Http.SendAsync(second, completion, ct);
+
+        if (retry.IsSuccessStatusCode && KeysWithoutNoLogging.TryAdd(KeyHash(profile.ApiKey), 0))
+        {
+            try
+            {
+                Notice?.Invoke(
+                    $"[voice] ElevenLabs turned down \"don't keep our lines\" ({refused}) - this key's plan doesn't offer it. "
+                    + "Lines are sent without it until HeatCaller restarts.");
+            }
+            catch
+            {
+                // Saying so is a nicety; the line is what matters.
+            }
+        }
+
+        return retry;
+    }
+
+    /// <summary>The answers a plan without zero retention could give the flag.</summary>
+    private static bool FlagMayBeRefused(int status) => status is 400 or 403 or 422;
+
     public async Task<byte[]> SynthesizeAsync(VoiceProfile profile, string text, CancellationToken ct = default)
     {
-        using var request = SpeechRequest(profile, text, stream: false);
-
-        using var response = await Http.SendAsync(request, ct);
+        using var response = await SendSpeechAsync(
+            profile, noLogging => SpeechRequest(profile, text, stream: false, noLogging), HttpCompletionOption.ResponseContentRead, ct);
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(ct);
@@ -161,9 +251,8 @@ public sealed class ElevenLabsClient
     /// </summary>
     internal async Task<HttpResponseMessage> OpenSpeechStreamAsync(VoiceProfile profile, string text, CancellationToken ct = default)
     {
-        using var request = SpeechRequest(profile, text, stream: true);
-
-        var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        var response = await SendSpeechAsync(
+            profile, noLogging => SpeechRequest(profile, text, stream: true, noLogging), HttpCompletionOption.ResponseHeadersRead, ct);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -178,7 +267,7 @@ public sealed class ElevenLabsClient
     }
 
     /// <summary>One speech request - whole (the club's output format, MP3 by default) or streamed (always PCM, see OpenSpeechStreamAsync).</summary>
-    private static HttpRequestMessage SpeechRequest(VoiceProfile profile, string text, bool stream)
+    private static HttpRequestMessage SpeechRequest(VoiceProfile profile, string text, bool stream, bool noLogging)
     {
         if (string.IsNullOrWhiteSpace(profile.VoiceId))
         {
@@ -215,12 +304,27 @@ public sealed class ElevenLabsClient
             payload["language_code"] = profile.LanguageCode;
         }
 
+        var request = new HttpRequestMessage(HttpMethod.Post, SpeechUrl(profile, stream, noLogging));
+        request.Headers.Add("xi-api-key", profile.ApiKey);
+        request.Headers.Add("Accept", stream ? "audio/pcm" : "audio/mpeg");
+        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+        return request;
+    }
+
+    /// <summary>
+    /// Where one speech request goes, relative to api.elevenlabs.io - with
+    /// <c>enable_logging=false</c> on the end when <paramref name="noLogging"/>
+    /// (15 Nov 2026, see SendSpeechAsync).
+    /// </summary>
+    internal static string SpeechUrl(VoiceProfile profile, bool stream, bool noLogging, string endpoint = "")
+    {
         // output_format is a QUERY parameter, not a body field - and left
         // off entirely unless set, so a free-tier account never gets a
         // request for a format that needs a paid plan by default.
         // Escaped: the voice id comes from settings, and a stray '/', '?' or
         // '#' in it would otherwise silently retarget the request.
-        var url = $"v1/text-to-speech/{Uri.EscapeDataString(profile.VoiceId)}";
+        var url = $"v1/text-to-speech/{Uri.EscapeDataString(profile.VoiceId)}{endpoint}";
         if (stream)
         {
             url += $"/stream?output_format={StreamingVoiceLine.ElevenLabsFormat}";
@@ -230,12 +334,12 @@ public sealed class ElevenLabsClient
             url += $"?output_format={Uri.EscapeDataString(profile.OutputFormat)}";
         }
 
-        var request = new HttpRequestMessage(HttpMethod.Post, url);
-        request.Headers.Add("xi-api-key", profile.ApiKey);
-        request.Headers.Add("Accept", stream ? "audio/pcm" : "audio/mpeg");
-        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        if (noLogging)
+        {
+            url += (url.Contains('?') ? "&" : "?") + "enable_logging=false";
+        }
 
-        return request;
+        return url;
     }
 
     /// <summary>
@@ -284,17 +388,17 @@ public sealed class ElevenLabsClient
             payload["language_code"] = profile.LanguageCode;
         }
 
-        var url = $"v1/text-to-speech/{Uri.EscapeDataString(profile.VoiceId)}/with-timestamps";
-        if (!string.IsNullOrWhiteSpace(profile.OutputFormat))
+        var json = JsonSerializer.Serialize(payload);
+
+        HttpRequestMessage Build(bool noLogging)
         {
-            url += $"?output_format={Uri.EscapeDataString(profile.OutputFormat)}";
+            var request = new HttpRequestMessage(HttpMethod.Post, SpeechUrl(profile, stream: false, noLogging, endpoint: "/with-timestamps"));
+            request.Headers.Add("xi-api-key", profile.ApiKey);
+            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+            return request;
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, url);
-        request.Headers.Add("xi-api-key", profile.ApiKey);
-        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-
-        using var response = await Http.SendAsync(request, ct);
+        using var response = await SendSpeechAsync(profile, Build, HttpCompletionOption.ResponseContentRead, ct);
 
         if (!response.IsSuccessStatusCode)
         {

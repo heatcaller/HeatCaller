@@ -150,6 +150,15 @@ public sealed partial class VoiceSettingsControl
             ? "the club's HeatCaller voice allowance"
             : "your ElevenLabs credits";
 
+        // Not a line naming a junior with "Offline voices for juniors" on
+        // (15 Nov 2026): the race says it with Kokoro, so a cloud take of it
+        // would only send their name away - see AnnouncementService.Juniors.
+        if (_appSettings.OfflineVoicesForJuniors && PublicPrivacy.Current.MentionsJunior(line.Text))
+        {
+            RerollSays("This line names a junior. With Offline voices for juniors on, Kokoro says it - there's no cloud take to make.", AppTheme.TextMuted);
+            return;
+        }
+
         if (AppDialog.Show(this,
                 $"Make a new take of this line?\r\n\r\n\"{line.Text}\"\r\n\r\n"
                 + $"It costs {Plural.Of(cost, "character")} of {where}, like any line that wasn't saved. "

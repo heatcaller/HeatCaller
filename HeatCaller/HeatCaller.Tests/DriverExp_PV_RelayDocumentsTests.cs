@@ -8,6 +8,7 @@ namespace HeatCaller.Tests;
 /// achievements document's "next" - bare counts, left out when nothing is
 /// in reach - sits beside a name that honours initials only.
 /// </summary>
+[Collection(PublicPrivacyCurrentCollection.Name)]
 public sealed class DriverExp_PV_RelayDocumentsTests : IDisposable
 {
     private readonly TempAppData _data = new();

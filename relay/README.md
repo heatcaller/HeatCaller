@@ -829,6 +829,11 @@ the model and the voice settings stay in the config and are never served. A
 club names a voice by its short catalogue id and sends the words, and that
 is all it can decide.
 
+Every line is sent with `enable_logging=false`, ElevenLabs' zero-retention
+mode (15 Nov 2026, children's privacy). Set `RELAY_VOICE_NO_LOGGING=0` to
+stop asking. A plan that turns the flag down is asked again without it, and
+the relay logs that once and asks without it until it restarts.
+
 `speak` takes `{ "voice": "clubhouse", "text": "Green flag!", "shared": true }`.
 `shared` is the laptop saying the line has nothing filled into it - no
 driver's name - so the rendered audio may be kept for every club. A line

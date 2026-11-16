@@ -60,9 +60,11 @@ describe("relay navigation, round 2: the night page remembers the driver", () =>
 
     // Since 14 Nov 2026 (driver phone plan items 8 and 17) also the list of
     // drivers on this phone - their codes and the names their nights gave -
-    // and a marker that a driver was signed in. Still never a PIN or a pass.
+    // and a marker that a driver was signed in. Since 15 Nov 2026 (children's
+    // privacy) when each was signed in, so a junior's expires after 30 days.
+    // Still never a PIN or a pass.
     const kept = new Map(page.store.entries());
-    assert.deepEqual([...kept.keys()].sort(), [ME, "hg-me-list-acme-rc", "hg-me-was-acme-rc"].sort());
+    assert.deepEqual([...kept.keys()].sort(), [ME, "hg-me-at-acme-rc", "hg-me-list-acme-rc", "hg-me-was-acme-rc"].sort());
     assert.equal(kept.get(ME), CODE);
     assert.equal(kept.get("hg-me-was-acme-rc"), "1");
     const list = JSON.parse(String(kept.get("hg-me-list-acme-rc"))) as { c: string; n: string }[];

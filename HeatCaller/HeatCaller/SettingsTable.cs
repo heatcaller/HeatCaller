@@ -73,6 +73,10 @@ internal static class SettingsTable
             nameof(AppSettings.CoHostHeatCallerVoiceName),
             nameof(AppSettings.CoHostKokoroVoiceName),
 
+            // Voice: the Speak with card's two children's-privacy switches (15 Nov 2026).
+            nameof(AppSettings.ElevenLabsNoLogging),
+            nameof(AppSettings.OfflineVoicesForJuniors),
+
             // Soundscapes: Lap Times Only.
             nameof(AppSettings.LapTimesOnly),
 
@@ -258,7 +262,6 @@ internal static class SettingsTable
             nameof(AppSettings.DriversPickCrew),
             nameof(AppSettings.CrewVoicesHidden),
             nameof(AppSettings.JuniorNotesOnStream),
-            nameof(AppSettings.JuniorNotesFromPhone),
             nameof(AppSettings.RecapBadgeHonours),
             nameof(AppSettings.RecapHonoursName),
             nameof(AppSettings.HonoursElevenLabsVoiceId),
@@ -340,6 +343,7 @@ internal static class SettingsTable
             nameof(AppSettings.RelayBaseUrl),
             nameof(AppSettings.RelayPublishRoster),
             nameof(AppSettings.RelayAbbreviateNames),
+            nameof(AppSettings.RelayUnpublishAfterYears),
             nameof(AppSettings.PublishDriverNightsToTheRelay),
             nameof(AppSettings.PublishNightBeforeToTheRelay),
             nameof(AppSettings.ListenAlongOnTheRelay),
@@ -461,6 +465,7 @@ internal static class SettingsTable
             nameof(AppSettings.NightEmailSentTo),
             nameof(AppSettings.PrivacyRepublishOwed),
             nameof(AppSettings.PrivacyRetained),
+            nameof(AppSettings.RelayForgetsOwed),
             nameof(AppSettings.PrivacyAppliedFingerprint),
             nameof(AppSettings.PrivacyAppliedFlagged),
 

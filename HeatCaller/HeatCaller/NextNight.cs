@@ -283,6 +283,41 @@ public sealed class PreEntryStore
     public IReadOnlyList<PreEntry> For(string nightKey) =>
         _byNight.TryGetValue(nightKey, out var night) ? night.Values.ToList() : Array.Empty<PreEntry>();
 
+    /// <summary>Every pre-entry held for these transponders, by night - for Export this driver's data (15 Nov 2026, privacy plan 2.5).</summary>
+    public IReadOnlyList<(string NightKey, PreEntry Entry)> AllFor(IEnumerable<string> transponders)
+    {
+        var ids = transponders.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return _byNight
+            .SelectMany(night => night.Value.Where(p => ids.Contains(p.Key)).Select(p => (night.Key, p.Value)))
+            .ToList();
+    }
+
+    /// <summary>Every pre-entry held for these transponders gone - Forget this driver (15 Nov 2026). Returns how many.</summary>
+    public int ForgetDrivers(IEnumerable<string> transponders)
+    {
+        var ids = transponders.ToList();
+        var gone = 0;
+
+        foreach (var night in _byNight.Values)
+        {
+            foreach (var id in ids)
+            {
+                if (night.Remove(id))
+                {
+                    gone++;
+                }
+            }
+        }
+
+        if (gone > 0)
+        {
+            Save();
+            Changed?.Invoke();
+        }
+
+        return gone;
+    }
+
     /// <summary>A driver's answer: their classes, or none for "not coming after all".</summary>
     public void Set(string nightKey, string transponder, IReadOnlyList<string> classes, DateTime saidUtc)
     {

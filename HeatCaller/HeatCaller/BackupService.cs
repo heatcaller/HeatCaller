@@ -241,7 +241,10 @@ public static class BackupService
 
         try
         {
-            WriteZip(tempPath, sealedSecrets);
+            // 15 Nov 2026 (privacy plan 2.4): with a backup password the
+            // WHOLE zip is locked with it, not just secrets.hgk - see
+            // BackupCrypto. Without one, a plain zip as before.
+            WriteZip(tempPath, sealedSecrets, string.IsNullOrEmpty(secrets?.Password) ? null : secrets.Password);
         }
         catch
         {
@@ -268,16 +271,23 @@ public static class BackupService
     /// after a restore that hasn't been dealt with yet; it belongs to that
     /// other backup and must never be passed off as this one's.
     /// </summary>
-    private static void WriteZip(string zipPath, string? sealedSecrets)
+    private static void WriteZip(string zipPath, string? sealedSecrets, string? password = null)
     {
         var root = new DirectoryInfo(DataDirectory);
         var basePath = Path.GetFullPath(root.FullName).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
 
+        // Opened (and, when locked, the key stretched) before the settings
+        // are read, so that slow step never sits between reading them and
+        // writing them.
+        using var archive = password is null
+            ? ZipFile.Open(zipPath, ZipArchiveMode.Create)
+            : new ZipArchive(
+                BackupCrypto.Encrypt(new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None), password),
+                ZipArchiveMode.Create);
+
         // The settings files, read first and all at one moment - see
         // ReadSettingsFilesTogether. Everything else is streamed below.
         var settingsFiles = ReadSettingsFilesTogether(root, basePath);
-
-        using var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create);
 
         // Written as they were read, whatever has happened on disk since.
         foreach (var (settingsEntryName, copy) in settingsFiles)
@@ -696,7 +706,50 @@ public static class BackupService
     /// </summary>
     public static RestoreResult RestoreBackup(
         string zipPath, string? backupFolderForSafetyNet = null, Action? beforeReplacing = null,
-        IReadOnlyCollection<string>? keepAsTheyAre = null)
+        IReadOnlyCollection<string>? keepAsTheyAre = null, string? password = null)
+    {
+        // 15 Nov 2026 (privacy plan 2.4): a backup made with a backup
+        // password is locked whole (BackupCrypto). It is unlocked into a
+        // file of its own beside the data folder - never inside it, so it
+        // can't end up in a backup - restored from there exactly as a plain
+        // zip is, and deleted. A plain zip from before, or from a club with
+        // no password, restores as it always did.
+        if (!BackupCrypto.IsEncrypted(zipPath))
+        {
+            return RestorePlainZip(zipPath, backupFolderForSafetyNet, beforeReplacing, keepAsTheyAre);
+        }
+
+        if (string.IsNullOrEmpty(password))
+        {
+            throw new BackupLockedException();
+        }
+
+        var unlocked = Path.Combine(
+            Path.GetDirectoryName(Path.GetFullPath(DataDirectory).TrimEnd(Path.DirectorySeparatorChar))!,
+            $"HeatCaller.unlocking-{Guid.NewGuid():N}.zip");
+
+        try
+        {
+            using (var input = new FileStream(zipPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var output = new FileStream(unlocked, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                BackupCrypto.Decrypt(input, output, password);
+            }
+
+            return RestorePlainZip(unlocked, backupFolderForSafetyNet, beforeReplacing, keepAsTheyAre);
+        }
+        finally
+        {
+            TryDelete(unlocked);
+        }
+    }
+
+    /// <summary>Whether this backup is locked with a backup password (see BackupCrypto).</summary>
+    public static bool IsLocked(string zipPath) => BackupCrypto.IsEncrypted(zipPath);
+
+    private static RestoreResult RestorePlainZip(
+        string zipPath, string? backupFolderForSafetyNet, Action? beforeReplacing,
+        IReadOnlyCollection<string>? keepAsTheyAre)
     {
         var safetyFolder = string.IsNullOrWhiteSpace(backupFolderForSafetyNet) ? DefaultBackupFolder : backupFolderForSafetyNet;
 

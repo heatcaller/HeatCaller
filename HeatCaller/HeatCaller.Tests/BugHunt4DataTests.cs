@@ -349,7 +349,8 @@ public sealed class BugHunt4DataTests : IDisposable
         var recent = Leftover(cloud, "HeatCaller-AutoBackup-2020-01-03_00-00-00.zip.partial", DateTime.UtcNow);
 
         var backup = Path.Combine(_data.Folder, "local", "HeatCaller-AutoBackup-2026-10-04_20-00-00.zip");
-        Write(backup, "a backup");
+        // Locked, as only locked backups go to the cloud (15 Nov 2026, privacy plan 2.4).
+        Write(backup, System.Text.Encoding.ASCII.GetString(BackupCrypto.Magic) + "a backup");
 
         var results = CloudBackup.CopyToTargets(
             backup,

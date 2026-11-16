@@ -13,8 +13,16 @@ namespace HeatCaller;
 /// obj\project.assets.json, and each package's own .nuspec and licence file
 /// in the NuGet cache. The Assets folder was read the same way - the two
 /// typefaces carry their OFL text beside them, and the music and the sound
-/// packs are the club's own, synthesised by the scripts in audio-tools, so
-/// nothing in them is anyone else's to license.
+/// packs are HeatCaller's own, synthesised by the scripts in audio-tools, so
+/// nothing in them is anyone else's to license. (A club's OWN music, added
+/// on the Sounds page, is the club's to license - for its PA and its stream.)
+///
+/// 15 Nov 2026, the IP review: the offline commentary model (Qwen3 0.6B)
+/// and LLamaSharp/llama.cpp had shipped since the model was bundled without
+/// being on this list or having their licence texts beside the exe, though
+/// fetch-llm.cmd said the Qwen licence travelled. Both are on the list now,
+/// with the texts in Assets\Licences, together with eight MIT support
+/// packages that had come in with them unlisted.
 ///
 /// The voice stack is permissive throughout: the Kokoro voice is MIT (the
 /// code) over Apache-2.0 (the model and its voices), and there is no copy
@@ -48,7 +56,18 @@ namespace HeatCaller;
 ///   - VLC's plugin set is trimmed in HeatCaller.csproj. Removing files
 ///     from an unmodified library is a choice about what to distribute,
 ///     not a modification of it, and every plugin that ships is byte for
-///     byte VideoLAN's.
+///     byte VideoLAN's. Which plugins ship, and the licence each one
+///     declares, is Assets\Licences\LibVLC-plugins.txt (read from the
+///     DLLs themselves on 15 Nov 2026: 262 plugins, every one declaring the
+///     LGPL. The package's two GPL-2.0-or-later audio filters -
+///     dolby_surround_decoder and headphone_channel_mixer - are excluded in
+///     the csproj, so no GPL code ships).
+///   - The source must be available. LGPL section 6 is met here by a
+///     written offer (15 Nov 2026, the IP plan's item 3.2), in the About box
+///     and at the top of LibVLC-plugins.txt: the exact source of VLC 3.0.24
+///     and LibVLCSharp 3.10.1 from the HeatCaller-releases repository, or
+///     from support@heatcaller.com for three years. The source tarball
+///     still has to be put on that repository and the link filled in.
 ///
 /// This is a straightforward LGPL dynamic-linking case rather than an open
 /// question like the MisakiSharp one below, but it is still a question for
@@ -67,8 +86,33 @@ namespace HeatCaller;
 ///     into a lap time read aloud.
 ///   - "phonemizer (GPL-3.0) - EspeakG2P/EspeakFallback reproduce its espeak
 ///     backend behavior ... via misaki". Those two classes are the espeak
-///     path; whether anything in HeatCaller can reach them has not been
-///     traced.
+///     path.
+///
+/// TRACED 15 Nov 2026 (the IP plan's item 4.6), by reading the IL of
+/// KokoroSharp 0.8.4 and MisakiSharp 2.1.1 with System.Reflection.Metadata
+/// - nothing loaded or run. HeatCaller DOES reach both, on every night:
+///
+///   - KokoroSpeech calls KokoroWavSynthesizer.SynthesizeAsync, which runs
+///     KokoroSharp's Tokenizer.Phonemize. For the English voices (the only
+///     ones HeatCaller offers) that uses an EnglishG2P made by
+///     Tokenizer.CreateEnglishG2P, which passes espeakFallback: null.
+///   - EnglishG2P's constructor answers null by building its own
+///     EspeakFallback (over EspeakReplay - a distilled table, no espeak-ng
+///     binary), and EnglishG2P.Phonemize calls it for every word missing
+///     from misaki's lexicon. Unusual driver surnames are exactly those.
+///   - EspeakFallback.Phonemize calls EspeakG2P.PhonemizeWithPunctuation,
+///     so EspeakG2P's code runs too. (EspeakG2P's own constructor is only
+///     reached for Spanish, French, Hindi, Italian and Portuguese voices,
+///     which HeatCaller never lists.)
+///
+/// So the "is it reachable" half of the question is answered: yes. Whether
+/// a port that "reproduces" phonemizer's behaviour is a derived work of
+/// GPL-3.0 code is still counsel's question, and is on their list. Nothing
+/// is forked. If counsel says it matters, EnglishG2P's constructor takes a
+/// fallback of the caller's own, so the narrowest way out is an English G2P
+/// without EspeakFallback; KokoroSharp builds its own G2P in a private
+/// static, so whether that needs a fork of KokoroSharp has not been looked
+/// at yet.
 ///
 /// So "no espeak-ng in it" is true and still not the whole question, and the
 /// line that used to stand here - nothing in here is copyleft - was resting
@@ -174,7 +218,7 @@ internal static class ThirdPartyCatalog
             "LGPL-2.1-or-later",
             "Plays sponsor video slides on the Big Screen.",
             new[] { "LibVLCSharp", "LibVLCSharp.WinForms" },
-            Note: "VideoLAN. The packages state the license as an expression and carry no license file; the text ships as Assets\\Licences\\LibVLC-LGPL-2.1.txt, shared with LibVLC below. Linked dynamically - see the LGPL note at the top of this file."),
+            Note: "VideoLAN. The packages state the license as an expression and carry no license file; the text ships as Assets\\Licences\\LibVLC-LGPL-2.1.txt, shared with LibVLC below. Linked dynamically - see the LGPL note at the top of this file. Its source is covered by the same written offer as LibVLC's, below."),
 
         new Component(
             "LibVLC",
@@ -182,7 +226,7 @@ internal static class ThirdPartyCatalog
             "LGPL-2.1-or-later",
             "VLC itself - the decoders a sponsor's video is actually played by.",
             new[] { "VideoLAN.LibVLC.Windows" },
-            Note: "VideoLAN. Ships unmodified in libvlc\\win-x64 beside the exe as replaceable DLLs, which is what section 6 of the LGPL asks for; only the win-x64 copy and a trimmed plugin set are distributed (see HeatCaller.csproj). Its license text is Assets\\Licences\\LibVLC-LGPL-2.1.txt, fetched from the FSF on 8 Oct 2026 because neither package carries one."),
+            Note: "VideoLAN. Ships unmodified in libvlc\\win-x64 beside the exe as replaceable DLLs, which is what section 6 of the LGPL asks for; only the win-x64 copy and a trimmed plugin set are distributed (see HeatCaller.csproj). Its license text is Assets\\Licences\\LibVLC-LGPL-2.1.txt, fetched from the FSF on 8 Oct 2026 because neither package carries one. The plugins that ship, with each one's licence, are listed in Assets\\Licences\\LibVLC-plugins.txt. Source code: the complete source for VLC 3.0.24 and LibVLCSharp 3.10.1 is available from the HeatCaller-releases repository [source link to be added], or by email from support@heatcaller.com, for no more than the cost of sending it. This written offer is valid for three years from the last time we distributed this version, to anyone who has a copy."),
 
         new Component(
             "KokoroSharp",
@@ -205,7 +249,7 @@ internal static class ThirdPartyCatalog
             "Apache-2.0",
             "Works out how the Kokoro voice should pronounce a line.",
             new[] { "MisakiSharp" },
-            Note: "A C# port of hexgrad's misaki, with no espeak-ng binary in it. Its NOTICE, which Apache-2.0 4(d) asks to be passed on, is not in the package - fetched from the project on 6 Oct 2026 and now shipped as Assets\\Licences\\MisakiSharp-NOTICE.txt. Read it: it names num2words (LGPL-2.1) and phonemizer (GPL-3.0) as sources two of its parts were ported from. See the note at the top of this file."),
+            Note: "A C# port of hexgrad's misaki, with no espeak-ng binary in it. Its NOTICE, which Apache-2.0 4(d) asks to be passed on, is not in the package - fetched from the project on 6 Oct 2026 and now shipped as Assets\\Licences\\MisakiSharp-NOTICE.txt. Read it: it names num2words (LGPL-2.1) and phonemizer (GPL-3.0) as sources two of its parts were ported from. Traced 15 Nov 2026: HeatCaller does reach the phonemizer-derived part, EspeakFallback, for every English word missing from misaki's lexicon (unusual driver names among them); EspeakG2P's own entry is only reached for non-English voices, which HeatCaller doesn't offer. Whether that makes any of it a derived work is a question for counsel. See the note at the top of this file."),
 
         new Component(
             "ONNX Runtime",
@@ -233,11 +277,56 @@ internal static class ThirdPartyCatalog
 
         new Component(
             "System.Numerics.Tensors",
-            "9.0.5",
+            "10.0.5",
             "MIT",
             "Number crunching for the Kokoro voice.",
             new[] { "System.Numerics.Tensors" },
             Note: "Microsoft."),
+
+        // The offline commentary (15 Nov 2026): the model that writes colour
+        // when the relay can't, and what runs it. Missing from this list from
+        // the day the model was bundled until the IP review found it.
+        new Component(
+            "LLamaSharp",
+            "0.27.0",
+            "MIT",
+            "Runs the offline commentary model on this PC.",
+            new[] { "LLamaSharp" },
+            Note: "SciSharp STACK. The package states MIT as an expression and carries no license file; the text, fetched from the project on 15 Nov 2026, ships as Assets\\Licences\\LLamaSharp-LICENSE.txt."),
+
+        new Component(
+            "llama.cpp",
+            "LLamaSharp.Backend.Cpu 0.27.0",
+            "MIT",
+            "The engine underneath LLamaSharp (llama.dll, ggml*.dll, mtmd.dll).",
+            new[] { "LLamaSharp.Backend.Cpu" },
+            Note: "The ggml authors. The package states MIT and carries no license file; the text, fetched from ggml-org/llama.cpp on 15 Nov 2026, ships as Assets\\Licences\\llama.cpp-LICENSE.txt. Ships unmodified, one build per CPU instruction set."),
+
+        new Component(
+            "Qwen3 0.6B (Q5_K_M)",
+            "Qwen3-0.6B",
+            "Apache-2.0",
+            "The offline commentary model itself (commentary.gguf).",
+            Array.Empty<string>(),
+            Note: "By the Qwen team, Alibaba Cloud; quantised to GGUF by Unsloth, unchanged since. Neither publishes a NOTICE. The license, fetched from the Qwen3-0.6B model page on 15 Nov 2026, ships as Assets\\Licences\\Qwen3-LICENSE.txt, as Apache-2.0 4(a) asks. Bundled in the installer by fetch-llm.cmd."),
+
+        new Component(
+            "Microsoft and .NET Foundation support libraries",
+            "10.0.5 / 10.4.1 / 8.4.2 / 7.0.0",
+            "MIT",
+            "Pieces LLamaSharp and the voice stack bring with them.",
+            new[]
+            {
+                "CommunityToolkit.HighPerformance",
+                "Microsoft.Bcl.AsyncInterfaces",
+                "Microsoft.Bcl.Memory",
+                "Microsoft.Extensions.AI.Abstractions",
+                "Microsoft.Extensions.DependencyInjection.Abstractions",
+                "Microsoft.Extensions.Logging.Abstractions",
+                "System.Interactive.Async",
+                "System.Linq.Async",
+            },
+            Note: "Microsoft (Microsoft.Extensions.* 10.0.5 and AI.Abstractions 10.4.1, Microsoft.Bcl.* 10.0.5, CommunityToolkit.HighPerformance 8.4.2) and the .NET Foundation (System.Interactive.Async and System.Linq.Async 7.0.0). Found missing from this list on 15 Nov 2026 by reading obj\\project.assets.json."),
 
         new Component(
             "Oxanium",

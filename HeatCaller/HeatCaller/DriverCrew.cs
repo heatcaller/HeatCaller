@@ -361,18 +361,21 @@ internal static class DriverCrew
     }
 
     /// <summary>
-    /// Whether a junior's own words may be spoken right now: always off a
+    /// Whether a junior's own words - their crew notes and their about line
+    /// (DriverProfile.AboutLine) - may be spoken right now: always off a
     /// streamed night, and on one only when the club has said so (plan 5.2,
     /// rule 4). An adult's always may. The crew's names and voices are not
-    /// notes, and are not held back by this.
+    /// their words, and are not held back by this.
     /// </summary>
     /// <remarks>
-    /// A JUNIOR'S NOTES NEED A PARENT'S CONSENT ON THE PROFILE as well (15 Nov
+    /// A JUNIOR'S WORDS NEED A PARENT'S CONSENT ON THE PROFILE as well (15 Nov
     /// 2026): what is said goes out on the PA and the stream, which children's
     /// privacy law treats as making a child's information public - a parent
-    /// agreeing to it is recorded at the desk (CrewNotesParentConsent).
+    /// agreeing to it is recorded at the desk (CrewNotesParentConsent). The
+    /// about line joined the notes the same day (plan 1.1): it is the same
+    /// kind of thing, a child's own sentence read out in public.
     /// </remarks>
-    public static bool NotesMayBeSaid(DriverProfile? profile, bool streamOn, bool juniorNotesOnStream) =>
+    public static bool OwnWordsMayBeSaid(DriverProfile? profile, bool streamOn, bool juniorNotesOnStream) =>
         profile is not { IsJunior: true }
         || (profile.CrewNotesParentConsent && (!streamOn || juniorNotesOnStream));
 

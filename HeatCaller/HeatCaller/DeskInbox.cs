@@ -143,6 +143,37 @@ internal static class DeskInbox
 
         return own.Count > 0 ? own : DefaultQuickReplies;
     }
+
+    // JUNIORS GET A SET REPLY (15 Nov 2026, plan 1.4). Youth-sport
+    // safeguarding (SafeSport's MAAPP and the like) says an adult shouldn't
+    // send a minor private one-to-one messages in their own words. A
+    // decline's reason goes straight to that one driver's phone, so for a
+    // junior the desk can only pick one of HeatCaller's own fixed replies
+    // above - never "Other reason...", and never the club's edited quick
+    // replies either, since those are typed text too and could say anything.
+    // Anything more goes to the parent, in person. The reply is still kept
+    // with the request for 30 days (DriverRequestStore.KeepAnsweredFor), so
+    // what the junior was told is on record.
+
+    /// <summary>Shown where "Other reason..." would be, for a junior.</summary>
+    internal const string JuniorReplyHint = "Juniors get a set reply - tell the parent in person if you need to say more.";
+
+    /// <summary>True for one of HeatCaller's own fixed replies, word for word (case and spaces round it aside).</summary>
+    internal static bool IsSetReply(string? reply) =>
+        reply is not null && DefaultQuickReplies.Contains(reply.Trim(), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// What a junior is actually sent: the fixed reply asked for, as HeatCaller
+    /// spells it, or the first one ("Ask at the desk") for anything else -
+    /// typed words, a club's own reply, or nothing.
+    /// </summary>
+    internal static string SetReplyFor(string? reply)
+    {
+        var wanted = (reply ?? string.Empty).Trim();
+
+        return DefaultQuickReplies.FirstOrDefault(r => string.Equals(r, wanted, StringComparison.OrdinalIgnoreCase))
+               ?? DefaultQuickReplies[0];
+    }
 }
 
 /// <summary>Where an inbox item came from.</summary>

@@ -372,6 +372,46 @@ public sealed class CheckInStore
 
     public int Count => Current.CheckedIn.Count;
 
+    /// <summary>
+    /// Every event this driver was checked in at, by any of their
+    /// transponders - for Export this driver's data (15 Nov 2026, privacy
+    /// plan 2.5).
+    /// </summary>
+    public IReadOnlyList<string> EventsWith(IEnumerable<string> transponders)
+    {
+        var ids = transponders.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return _sheets.Where(pair => pair.Value.CheckedIn.Overlaps(ids)).Select(pair => pair.Key).ToList();
+    }
+
+    /// <summary>
+    /// Takes these transponders off every event's sheet, past and present
+    /// - Forget this driver (15 Nov 2026, privacy plan 2.5). Returns how
+    /// many check-ins went; saves only when any did.
+    /// </summary>
+    public int ForgetDrivers(IEnumerable<string> transponders)
+    {
+        var ids = transponders.ToList();
+        var gone = 0;
+
+        foreach (var sheet in _sheets.Values)
+        {
+            foreach (var id in ids)
+            {
+                if (sheet.CheckedIn.Remove(id))
+                {
+                    gone++;
+                }
+            }
+        }
+
+        if (gone > 0)
+        {
+            Save();
+        }
+
+        return gone;
+    }
+
     // --- Across events -----------------------------------------------------
 
     /// <summary>Who was checked in at a given event. The question the old global list could not answer.</summary>

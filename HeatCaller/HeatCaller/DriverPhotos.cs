@@ -129,6 +129,30 @@ public static class DriverPhotos
     }
 
     /// <summary>
+    /// Forget this driver (15 Nov 2026, privacy plan 2.5): the photo gone
+    /// for good - in use, and the copy Undo keeps in Retired. Best-effort,
+    /// like Delete.
+    /// </summary>
+    public static void Forget(string? fileName)
+    {
+        Delete(fileName);
+
+        if (!PlainFileName.IsPlain(fileName))
+        {
+            return;
+        }
+
+        try
+        {
+            File.Delete(Path.Combine(RetiredFolder, fileName));
+        }
+        catch
+        {
+            // As Delete.
+        }
+    }
+
+    /// <summary>
     /// Where a replaced or removed photo waits instead of being deleted,
     /// so Undo can put it back. A photo deleted outright left an undone
     /// profile pointing at a file that no longer existed - its initials

@@ -1164,6 +1164,14 @@ public sealed class AppSettings
     public List<PrivacyRetainedDriver> PrivacyRetained { get; set; } = new();
 
     /// <summary>
+    /// Drivers forgotten on this laptop whose copy on the relay is not yet
+    /// known to be gone (15 Nov 2026, privacy plan 2.5) - their badge codes
+    /// and names, sent to the relay's driver/forget until it says done. See
+    /// MainForm.Forget. Empty in older files.
+    /// </summary>
+    public List<RelayForgetOwed> RelayForgetsOwed { get; set; } = new();
+
+    /// <summary>
     /// PublicPrivacy.FlaggedFingerprint of the register last made to stick
     /// (23 Oct 2026, bug hunt 10). A start-up that finds the profiles say
     /// otherwise - a privacy tick saved moments before HeatCaller closed or
@@ -1752,16 +1760,13 @@ public sealed class AppSettings
     /// </summary>
     public bool JuniorNotesOnStream { get; set; }
 
-    /// <summary>
-    /// A junior's notes can be sent from a phone at all (15 Nov 2026). Off by
-    /// default, and off is the safer way to run: a child typing words online
-    /// that are then said in public is what the US children's privacy law
-    /// (COPPA) needs a parent's verified consent for, and the "I'm making this
-    /// change for them" tick is not that. Off, a junior's notes are typed at
-    /// the desk, with a parent there and their consent recorded on the
-    /// profile. A junior can still pick their crew's voices and names.
-    /// </summary>
-    public bool JuniorNotesFromPhone { get; set; }
+    // "Juniors can send notes from their phone" (JuniorNotesFromPhone) was
+    // REMOVED on 15 Nov 2026: a junior's notes and about line are only ever
+    // typed at the desk, with a parent there and their consent ticked on the
+    // profile. A child typing words online that are then said in public needs
+    // a parent's verified consent under COPPA, and a tick on a phone is not
+    // that. An old settings.json with the key still loads - the reader skips
+    // keys it does not know.
 
     // --- The honours (10 Oct 2026) ---------------------------------------
     //
@@ -2420,6 +2425,14 @@ public sealed class AppSettings
     public bool RelayAbbreviateNames { get; set; } = true;
 
     /// <summary>
+    /// Unpublish results older than this many years (15 Nov 2026, children's
+    /// privacy 2.6): 0, the default, keeps every year online. 2 keeps this
+    /// year and last; older results and their year's index are taken off the
+    /// relay and never sent again. They stay on this PC. See RelayPrivacyDocument.
+    /// </summary>
+    public int RelayUnpublishAfterYears { get; set; }
+
+    /// <summary>
     /// The announcer says drivers' names in full with the HeatCaller voice
     /// and ElevenLabs too, even while RelayAbbreviateNames shortens them on
     /// the club's pages (24 Oct 2026). Off by default: those voices render
@@ -2443,6 +2456,27 @@ public sealed class AppSettings
     /// default while it is new.
     /// </summary>
     public bool StreamLiveCalls { get; set; }
+
+    /// <summary>
+    /// "Ask ElevenLabs not to keep our lines" (15 Nov 2026, children's
+    /// privacy, plan 2.3): every line spoken on the club's own ElevenLabs key
+    /// carries enable_logging=false, ElevenLabs' zero-retention mode. On by
+    /// default. A plan that won't take it is asked again without it - see
+    /// ElevenLabsClient.SendSpeechAsync. The HeatCaller voice's own key is the
+    /// relay's, and the relay asks the same (RELAY_VOICE_NO_LOGGING).
+    /// </summary>
+    public bool ElevenLabsNoLogging { get; set; } = true;
+
+    /// <summary>
+    /// "Offline voices for juniors" (15 Nov 2026, children's privacy, plan
+    /// 2.3): a spoken line that names a junior (DriverProfile.IsJunior) is
+    /// said by Kokoro on this PC rather than ElevenLabs or the HeatCaller
+    /// voice, and an AI commentary prompt about a junior is written by the
+    /// model on this PC rather than the relay. Off by default - it trades
+    /// voice quality for those lines. See AnnouncementService.JuniorsStayOnThisPc
+    /// and CommentaryService.Ask.
+    /// </summary>
+    public bool OfflineVoicesForJuniors { get; set; }
 
     // The last relay settings that were PROVED to work, by a test that
     // came back connected. Kept beside the live ones rather than instead
@@ -3336,6 +3370,7 @@ public sealed class AppSettings
         // WHY (23 Oct 2026, bug hunt 10): read on every privacy change; a
         // null in the file means "none".
         PrivacyRetained = (PrivacyRetained ?? new List<PrivacyRetainedDriver>()).Where(item => item is not null).ToList();
+        RelayForgetsOwed = (RelayForgetsOwed ?? new List<RelayForgetOwed>()).Where(item => item is not null).ToList();
         LapWindowSpots = (LapWindowSpots ?? new List<LapWindowSpot>())
             .Where(item => item is not null && item.Slot >= 0)
             .GroupBy(item => item.Slot)
@@ -3601,6 +3636,21 @@ public sealed class LapWindowSpot
 
     /// <summary>How many laps it was sized to show.</summary>
     public int Rows { get; set; } = LapDetailWindow.DefaultRows;
+}
+
+/// <summary>
+/// One forgotten driver the relay still has to be told about (15 Nov 2026,
+/// privacy plan 2.5) - see AppSettings.RelayForgetsOwed. Local only.
+/// </summary>
+public sealed class RelayForgetOwed
+{
+    /// <summary>Their badge codes (RelayCheckIn.IdFor of each transponder).</summary>
+    public List<string> Badges { get; set; } = new();
+
+    /// <summary>The names phones may follow them by.</summary>
+    public List<string> Names { get; set; } = new();
+
+    public DateTime ForgottenUtc { get; set; } = DateTime.UtcNow;
 }
 
 /// <summary>

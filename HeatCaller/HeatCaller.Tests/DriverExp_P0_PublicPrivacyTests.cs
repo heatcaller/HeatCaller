@@ -1,6 +1,7 @@
 namespace HeatCaller.Tests;
 
 /// <summary>Driver experience P0 (22 Oct 2026): PublicPrivacy - the online privacy register.</summary>
+[Collection(PublicPrivacyCurrentCollection.Name)]
 public sealed class DriverExp_P0_PublicPrivacyTests
 {
     private static DriverProfile Sam(bool initials = true, bool noPhoto = false, bool noVideo = false) => new()

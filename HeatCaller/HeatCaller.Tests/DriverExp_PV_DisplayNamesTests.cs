@@ -7,6 +7,7 @@ namespace HeatCaller.Tests;
 /// distinct when two drivers share initials. The room's form
 /// (DisplayNamesForTheRoom) is unchanged.
 /// </summary>
+[Collection(PublicPrivacyCurrentCollection.Name)]
 public sealed class DriverExp_PV_DisplayNamesTests
 {
     private static DriverProfile Driver(string transponder, string name, bool initials = false, string announcer = "") => new()

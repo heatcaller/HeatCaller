@@ -136,7 +136,10 @@ public sealed class CommentaryService
 
         foreach (var transponder in transponders.Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            if (DriverDetailLine(PromptName(transponder), _profiles.Get(transponder)) is { } line)
+            var profile = _profiles.Get(transponder);
+            var aboutMaySay = DriverCrew.OwnWordsMayBeSaid(profile, StreamIsOn?.Invoke() == true, _settings.JuniorNotesOnStream);
+
+            if (DriverDetailLine(PromptName(transponder), profile, aboutMaySay) is { } line)
             {
                 lines.Add(line);
             }
@@ -166,11 +169,17 @@ public sealed class CommentaryService
     /// profile allows rather than a name's 40, and its double quotes become
     /// single ones so it cannot close the quotes it is put in.
     /// </summary>
-    internal static string? DriverDetailLine(string promptName, DriverProfile? profile)
+    /// <param name="aboutMaySay">
+    /// False leaves the about line out (15 Nov 2026, plan 1.1): a junior's,
+    /// without a parent's consent or on a streamed night the club keeps
+    /// juniors' words off - DriverCrew.OwnWordsMayBeSaid, as for their notes.
+    /// Their team and sponsors are not their words, and stay.
+    /// </param>
+    internal static string? DriverDetailLine(string promptName, DriverProfile? profile, bool aboutMaySay = true)
     {
         var team = Field(profile?.Team);
         var sponsors = AnnouncementText.SpokenList(FieldList(profile?.Sponsors));
-        var about = Field(profile?.AboutLine, DriverProfile.AboutLineMaxChars).Replace('"', '\'');
+        var about = aboutMaySay ? Field(profile?.AboutLine, DriverProfile.AboutLineMaxChars).Replace('"', '\'') : string.Empty;
 
         if (team.Length == 0 && sponsors.Length == 0 && about.Length == 0)
         {
@@ -232,7 +241,7 @@ public sealed class CommentaryService
     /// A driver's own notes for one interview, as fact lines (each ending in
     /// a new line) - empty when they gave none, the club does not let
     /// drivers set them, or they are a junior's on a streamed night (see
-    /// DriverCrew.NotesMayBeSaid). Each goes through Field like the about
+    /// DriverCrew.OwnWordsMayBeSaid). Each goes through Field like the about
     /// line, its double quotes made single so it cannot close the quotes it
     /// is put in, and is labelled as the driver's own words so the model
     /// says it as something they said, never as a fact.
@@ -254,7 +263,7 @@ public sealed class CommentaryService
 
         var profile = _profiles.Get(transponder);
 
-        if (profile is null || !DriverCrew.NotesMayBeSaid(profile, StreamIsOn?.Invoke() == true, _settings.JuniorNotesOnStream))
+        if (profile is null || !DriverCrew.OwnWordsMayBeSaid(profile, StreamIsOn?.Invoke() == true, _settings.JuniorNotesOnStream))
         {
             return string.Empty;
         }
@@ -505,9 +514,48 @@ public sealed class CommentaryService
     /// </summary>
     internal string JuniorRule(string? transponder) =>
         !string.IsNullOrWhiteSpace(transponder) && _profiles.Get(transponder)?.IsJunior == true
-            ? "The driver is a junior - a child. Keep it warm and encouraging: nothing about pressure, disappointment, "
+            ? JuniorRuleLead + " - a child. Keep it warm and encouraging: nothing about pressure, disappointment, "
               + "mistakes or who is to blame, and any rivalry is a friendly one. "
             : string.Empty;
+
+    /// <summary>The start of <see cref="JuniorRule"/>'s sentence - how a prompt says its subject is a junior.</summary>
+    internal const string JuniorRuleLead = "The driver is a junior";
+
+    /// <summary>Who the juniors are - PublicPrivacy.Current unless a test hands in its own.</summary>
+    internal Func<PublicPrivacy>? JuniorRegister { get; set; }
+
+    /// <summary>
+    /// Whether this prompt is about a junior and the club has "Offline voices
+    /// for juniors" on (15 Nov 2026, children's privacy, plan 2.3): it says
+    /// <see cref="JuniorRule"/>'s sentence, or names a junior anywhere in it
+    /// (PublicPrivacy.MentionsJunior - every name and each word of one, so it
+    /// errs on the private side). Then the model on this PC writes it, not
+    /// the relay - see <see cref="Ask"/>.
+    /// </summary>
+    internal bool AboutAJuniorKeptHere(string? system, string? user)
+    {
+        if (!_settings.OfflineVoicesForJuniors)
+        {
+            return false;
+        }
+
+        if ((system ?? string.Empty).Contains(JuniorRuleLead, StringComparison.Ordinal)
+            || (user ?? string.Empty).Contains(JuniorRuleLead, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        try
+        {
+            var register = JuniorRegister?.Invoke() ?? PublicPrivacy.Current;
+            return register.MentionsJunior(user) || register.MentionsJunior(system);
+        }
+        catch
+        {
+            // A register that can't be read: kept here, the private side.
+            return true;
+        }
+    }
 
     /// <summary>True when any of these detail lines carries a driver's own words.</summary>
     private static bool AnyOwnWords(IEnumerable<string> details) =>
@@ -583,8 +631,126 @@ public sealed class CommentaryService
     /// The tone every line is written in - the saved one, or Enthusiastic
     /// for a Sailor-mouth choice the club has since switched off (15 Nov
     /// 2026). Every prompt reads this, never the setting itself.
+    ///
+    /// And Enthusiastic in place of Sailor-mouth whenever a junior is around
+    /// (15 Nov 2026, children's privacy plan 4.1) - see JuniorsAround.
     /// </summary>
-    private CommentaryTone Tone => CommentaryTones.Effective(_settings);
+    private CommentaryTone Tone => CommentaryTones.Effective(_settings, JuniorsAround());
+
+    // ------------------------------------------------- juniors and Sailor-mouth
+
+    /// <summary>
+    /// The line being written is about a junior: set by each Build...Async
+    /// whose subjects (the grid, the session, the picks, the drivers named in
+    /// the facts) include one. An AsyncLocal, so it holds for everything
+    /// that call writes - the prompt, the swear check in Ask - and goes back
+    /// to what it was when the call returns, without touching any other
+    /// line being written at the same time.
+    /// </summary>
+    private static readonly AsyncLocal<bool> AboutAJunior = new();
+
+    /// <summary>
+    /// The transponders in the race being called (the grid, or the cars
+    /// timed), read live - so a Sailor-mouth club's commentary plays clean
+    /// for a race a junior is in (15 Nov 2026, children's privacy plan 4.1).
+    /// Null, or an error, counts as nobody.
+    /// </summary>
+    public Func<IReadOnlyCollection<string>>? CurrentRaceTransponders { get; set; }
+
+    /// <summary>
+    /// Whether a junior has raced tonight, for the night recap: clean if any
+    /// junior raced that night (15 Nov 2026, Asher). Null counts as no.
+    /// </summary>
+    public Func<bool>? JuniorRacedTonight { get; set; }
+
+    /// <summary>
+    /// Whether a junior is around for the line being written: its subject,
+    /// or in the race on track. Only worked out while Sailor-mouth is the
+    /// tone, so every other club pays nothing for it.
+    /// </summary>
+    private bool JuniorsAround()
+    {
+        if (CommentaryTones.Effective(_settings) != CommentaryTone.SailorMouth)
+        {
+            return false;
+        }
+
+        if (AboutAJunior.Value)
+        {
+            return true;
+        }
+
+        try
+        {
+            return AnyJunior(CurrentRaceTransponders?.Invoke());
+        }
+        catch
+        {
+            // A race we could not read might have a child in it: clean.
+            return true;
+        }
+    }
+
+    /// <summary>True when any of these transponders is a junior's.</summary>
+    private bool AnyJunior(IEnumerable<string?>? transponders) =>
+        transponders is not null
+        && transponders.Any(t => !string.IsNullOrWhiteSpace(t) && _profiles.GetForAnyThread(t!)?.IsJunior == true);
+
+    /// <summary>
+    /// True when the text names a junior - by their name, announcer name or
+    /// spoken name, whole words in any case. For lines written from facts
+    /// rather than a grid (a battle, a talking point, the night recap).
+    /// </summary>
+    internal bool MentionsAJunior(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        foreach (var junior in _profiles.AllIncludingGhostsForAnyThread.Where(p => p.IsJunior))
+        {
+            foreach (var name in new[] { junior.DriverName, junior.AnnouncerName, junior.SpokenName })
+            {
+                var trimmed = (name ?? string.Empty).Trim();
+
+                if (trimmed.Length >= 2
+                    && Regex.IsMatch(text, $@"(?<![\p{{L}}\p{{N}}]){Regex.Escape(trimmed)}(?![\p{{L}}\p{{N}}])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Marks the line this call writes as about a junior when one of these
+    /// transponders, or a name in the text, is a junior's. A no-op unless
+    /// Sailor-mouth is the tone. Called at the top of each Build...Async, so
+    /// the mark lasts exactly as long as that call (see AboutAJunior).
+    /// </summary>
+    private void MarkJuniors(IEnumerable<string?>? transponders, string? text = null)
+    {
+        if (CommentaryTones.Effective(_settings) != CommentaryTone.SailorMouth || AboutAJunior.Value)
+        {
+            return;
+        }
+
+        try
+        {
+            if (AnyJunior(transponders) || MentionsAJunior(text))
+            {
+                AboutAJunior.Value = true;
+            }
+        }
+        catch
+        {
+            // Could not tell: clean, as for a race we could not read.
+            AboutAJunior.Value = true;
+        }
+    }
 
     /// <summary>Configured externally so the settings page can rebuild it without restarting anything.</summary>
     public ICommentaryBrain? Client { get; set; }
@@ -615,7 +781,29 @@ public sealed class CommentaryService
         TimeSpan? timeout = null)
     {
         var (system, user) = WithPronouns(systemPrompt, userPrompt);
-        var written = await brain.GenerateAsync(system, user, maxTokens, temperature, ct, timeout).ConfigureAwait(false);
+
+        // "Offline voices for juniors" (15 Nov 2026, children's privacy, plan
+        // 2.3): a prompt about a junior - their interview or intro, or facts
+        // that include one - is written by the model on this PC, never sent
+        // to the relay. Ambient, like RelayOnly, so it reaches the brains
+        // without every one growing an argument; restored after, so it
+        // belongs to this one write. See FallbackCommentaryBrain.LocalOnly.
+        var wasLocalOnly = FallbackCommentaryBrain.LocalOnly;
+        string? written;
+
+        try
+        {
+            if (AboutAJuniorKeptHere(system, user))
+            {
+                FallbackCommentaryBrain.LocalOnly = true;
+            }
+
+            written = await brain.GenerateAsync(system, user, maxTokens, temperature, ct, timeout).ConfigureAwait(false);
+        }
+        finally
+        {
+            FallbackCommentaryBrain.LocalOnly = wasLocalOnly;
+        }
 
         if (ScreenWords.HateTermIn(written, user) is { } term)
         {
@@ -1804,6 +1992,9 @@ public sealed class CommentaryService
             return null;
         }
 
+        // Sailor-mouth plays clean around a junior (15 Nov 2026, children's privacy plan 4.1).
+        MarkJuniors(round.AssignedTransponders);
+
         var onTrack = IntroGrid(round.AssignedTransponders);
 
         var names = onTrack
@@ -2418,6 +2609,9 @@ public sealed class CommentaryService
         {
             return null;
         }
+
+        // Sailor-mouth plays clean around a junior (15 Nov 2026, children's privacy plan 4.1).
+        MarkJuniors(grid.Select(d => (string?)d.Transponder));
 
         var hasGrid = grid.Any(d => d.Slot > 0);
 
@@ -3835,6 +4029,9 @@ public sealed class CommentaryService
             return null;
         }
 
+        // Sailor-mouth plays clean around a junior (15 Nov 2026, children's privacy plan 4.1).
+        MarkJuniors(session.Results.Select(r => (string?)r.Transponder));
+
         var finisherCount = Math.Clamp(_settings.CommentarySummaryFinishers, 1, 20);
         var ordered = session.Results.OrderBy(r => r.Position).Take(finisherCount).ToList();
         var winner = ordered[0];
@@ -4554,6 +4751,9 @@ public sealed class CommentaryService
             return null;
         }
 
+        // Sailor-mouth plays clean around a junior (15 Nov 2026, children's privacy plan 4.1).
+        MarkJuniors(session.Results.Select(r => (string?)r.Transponder));
+
         // Null when nobody was classified - a one-car main black-flagged had
         // "Winner: Sam" here all the same. See ClassifiedWinner.
         var winner = ClassifiedWinner(session);
@@ -4683,6 +4883,9 @@ public sealed class CommentaryService
             return null;
         }
 
+        // Sailor-mouth plays clean around a junior (15 Nov 2026, children's privacy plan 4.1).
+        MarkJuniors(session.Results.Select(r => (string?)r.Transponder));
+
         // With no stop set tonight the recap is "coming up next", and the
         // line must not promise a break - see StopSetThrow.
         // WHY (20 Oct 2026): "straight after this" tripped StopSetThrow's own
@@ -4764,6 +4967,9 @@ public sealed class CommentaryService
         {
             return null;
         }
+
+        // Sailor-mouth plays clean around a junior (15 Nov 2026, children's privacy plan 4.1).
+        MarkJuniors(null, string.Join(" ", brief.Guest, brief.About, brief.ThrowMustSay, brief.JustSaid, brief.GuestCovers, brief.Next));
 
         // Cleaned here, like every other field a club typed - see Field.
         // The check (HandOff.Check) compares against the same cleaned names.
@@ -4886,6 +5092,9 @@ public sealed class CommentaryService
         {
             return null;
         }
+
+        // Sailor-mouth plays clean around a junior (15 Nov 2026, children's privacy plan 4.1).
+        MarkJuniors(picks.Select(p => (string?)p.Transponder));
 
         var reader = Field(readerName, MaxShowNameChars);
         var race = Field(raceLabel, MaxShowNameChars);
@@ -5143,6 +5352,9 @@ public sealed class CommentaryService
             return null;
         }
 
+        // Sailor-mouth plays clean around a junior (15 Nov 2026, children's privacy plan 4.1).
+        MarkJuniors(session.Results.Select(r => (string?)r.Transponder));
+
         var ordered = session.Results.OrderBy(r => r.Position).ToList();
         var winner = ordered[0];
 
@@ -5374,6 +5586,9 @@ public sealed class CommentaryService
         {
             return null;
         }
+
+        // Sailor-mouth plays clean around a junior (15 Nov 2026, children's privacy plan 4.1).
+        MarkJuniors(session.Results.Select(r => (string?)r.Transponder));
 
         var ordered = session.Results.OrderBy(r => r.Position).ToList();
         var winner = ordered[0];
@@ -5613,6 +5828,9 @@ public sealed class CommentaryService
         {
             return null;
         }
+
+        // Sailor-mouth plays clean around a junior (15 Nov 2026, children's privacy plan 4.1).
+        MarkJuniors(round.AssignedTransponders);
 
         var name = Field(principalName);
         var driver = PromptName(focus);
@@ -6163,6 +6381,9 @@ public sealed class CommentaryService
             return null;
         }
 
+        // Sailor-mouth plays clean around a junior (15 Nov 2026, children's privacy plan 4.1).
+        MarkJuniors(null, string.Join(" ", observations));
+
         var observationCount = Math.Clamp(_settings.CommentaryTalkingPointObservationCount, 1, 20);
 
         // Observations are computed by the app but carry driver names and
@@ -6219,6 +6440,9 @@ public sealed class CommentaryService
         {
             return null;
         }
+
+        // Sailor-mouth plays clean around a junior (15 Nov 2026, children's privacy plan 4.1).
+        MarkJuniors(null, facts.Text);
 
         // A sponsor who presents this kind of moment (18 Oct 2026) - asked
         // as it is written. WHY (20 Oct 2026): through SegmentSponsorTaken
@@ -6347,6 +6571,22 @@ public sealed class CommentaryService
         if (Client is null || facts.Empty)
         {
             return null;
+        }
+
+        // Sailor-mouth plays clean around a junior (15 Nov 2026, children's privacy plan 4.1).
+        MarkJuniors(null, facts.Text);
+
+        // Clean if any junior raced tonight, whoever the recap names (Asher).
+        try
+        {
+            if (JuniorRacedTonight?.Invoke() == true)
+            {
+                AboutAJunior.Value = true;
+            }
+        }
+        catch
+        {
+            AboutAJunior.Value = true;
         }
 
         var body =
@@ -6580,6 +6820,9 @@ public sealed class CommentaryService
         {
             return Array.Empty<ExchangeTurn>();
         }
+
+        // Sailor-mouth plays clean around a junior (15 Nov 2026, children's privacy plan 4.1).
+        MarkJuniors(null, facts.Text);
 
         var body =
             FactsOpen + "\n" +

@@ -67,6 +67,9 @@ internal sealed partial class DeskInboxForm
             yield break;
         }
 
+        // A shout-out naming a junior here tonight is flagged (15 Nov 2026, plan 4.5).
+        var juniors = ClubNotes.JuniorsTonight(_profiles.All, _profiles.Get, _checkIns?.SnapshotCheckedIn());
+
         foreach (var note in notes.All.Where(n => !n.Approved).OrderBy(n => n.AddedAtUtc))
         {
             yield return new InboxItem(
@@ -76,7 +79,7 @@ internal sealed partial class DeskInboxForm
                 "Club note",
                 NoteFrom(note),
                 note.Text,
-                "For the announcer to say",
+                ClubNotes.NamesAJunior(note.Text, juniors) is not null ? ClubNotes.NamesAJuniorWords : "For the announcer to say",
                 note.AddedAtUtc,
                 RaceBlocking: false,
                 note);

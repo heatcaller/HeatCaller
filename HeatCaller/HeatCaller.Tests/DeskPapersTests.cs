@@ -1,3 +1,6 @@
+using System.Reflection;
+using System.Windows.Forms;
+
 namespace HeatCaller.Tests;
 
 /// <summary>
@@ -24,6 +27,7 @@ public sealed class DeskPapersTests
 
         var junior = Driver();
         junior.IsJunior = true;
+        junior.JuniorAge = JuniorAge.ThirteenToSeventeen; // the band has its own test below
         Assert.Equal(new[] { "Guardian's waiver missing" }, DeskPapers.Problems(junior, true, 12, false, Today));
 
         junior.WaiverSignedOn = Today;
@@ -31,6 +35,45 @@ public sealed class DeskPapersTests
 
         junior.WaiverGuardian = "Pat Power";
         Assert.Empty(DeskPapers.Problems(junior, true, 12, false, Today));
+    }
+
+    /// <summary>A junior's age band (15 Nov 2026, children's privacy plan 2.1).</summary>
+    [Fact]
+    public void A_junior_with_no_age_band_is_asked_for_one_and_treated_as_under_13()
+    {
+        var junior = Driver();
+        junior.IsJunior = true;
+        junior.WaiverSignedOn = Today;
+        junior.WaiverGuardian = "Pat Power";
+
+        Assert.Equal(new[] { DeskPapers.NoAgeBand }, DeskPapers.Problems(junior, true, 12, false, Today));
+        Assert.Empty(DeskPapers.Problems(junior, false, 12, false, Today));
+        Assert.True(junior.TreatAsUnder13);
+
+        junior.JuniorAge = JuniorAge.Under13;
+        Assert.Empty(DeskPapers.Problems(junior, true, 12, false, Today));
+        Assert.True(junior.TreatAsUnder13);
+
+        junior.JuniorAge = JuniorAge.ThirteenToSeventeen;
+        Assert.False(junior.TreatAsUnder13);
+
+        // The band only matters for a junior.
+        var adult = Driver();
+        Assert.False(adult.TreatAsUnder13);
+        Assert.DoesNotContain(DeskPapers.NoAgeBand, DeskPapers.Problems(adult, true, 12, false, Today));
+    }
+
+    [Fact]
+    public void An_old_profile_with_no_band_loads_as_not_set_and_the_band_round_trips()
+    {
+        var old = System.Text.Json.JsonSerializer.Deserialize<DriverProfile>("{\"Transponder\":\"1\",\"IsJunior\":true}")!;
+        Assert.Equal(JuniorAge.NotSet, old.JuniorAge);
+        Assert.True(old.TreatAsUnder13);
+
+        var teen = new DriverProfile { Transponder = "2", IsJunior = true, JuniorAge = JuniorAge.ThirteenToSeventeen };
+        var json = System.Text.Json.JsonSerializer.Serialize(teen);
+        Assert.DoesNotContain("TreatAsUnder13", json);
+        Assert.Equal(JuniorAge.ThirteenToSeventeen, ProfileStore.Snapshot(teen).JuniorAge);
     }
 
     [Fact]
@@ -98,6 +141,7 @@ public sealed class DeskPapersSurviveAnEditTests : IDisposable
             DriverName = "Max Power",
             WaiverSignedOn = new DateTime(2026, 11, 1),
             IsJunior = true,
+            JuniorAge = JuniorAge.Under13,
             WaiverGuardian = "Pat Power",
             MembershipNumber = "BRCA 12345",
             MembershipExpires = new DateTime(2027, 3, 31),
@@ -111,8 +155,37 @@ public sealed class DeskPapersSurviveAnEditTests : IDisposable
 
         Assert.Equal(driver.WaiverSignedOn, shown.WaiverSignedOn);
         Assert.True(shown.IsJunior);
+        Assert.Equal(JuniorAge.Under13, shown.JuniorAge);
         Assert.Equal("Pat Power", shown.WaiverGuardian);
         Assert.Equal("BRCA 12345", shown.MembershipNumber);
         Assert.Equal(driver.MembershipExpires, shown.MembershipExpires);
+    }
+
+    [Fact]
+    public void A_club_that_checks_no_papers_can_still_mark_a_junior_and_their_age_band_in_Driver_Hub()
+    {
+        // 15 Nov 2026, children's privacy review: the Junior tick lived only
+        // in the Papers window, which a club checking neither waivers nor
+        // memberships never sees - so none of the junior protections could
+        // ever reach its drivers. The profile dialog has it now.
+        var driver = new DriverProfile { Transponder = "2", DriverName = "Mia Kent" };
+
+        var shown = StaThread.Run(() =>
+        {
+            using var form = new ProfileForm(driver, RaceClassStore.Load());
+            var junior = (CheckBox)typeof(ProfileForm).GetField("_chkJunior", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(form)!;
+            var age = (ComboBox)typeof(ProfileForm).GetField("_cmbJuniorAge", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(form)!;
+            junior.Checked = true;
+            age.SelectedIndex = 2;
+            var ticked = form.ProfileAsShown();
+            junior.Checked = false;
+            var unticked = form.ProfileAsShown();
+            return (ticked, unticked);
+        }, TimeSpan.FromSeconds(30), () => "marking Mia Kent a junior in Driver Hub");
+
+        Assert.True(shown.ticked.IsJunior);
+        Assert.Equal(JuniorAge.ThirteenToSeventeen, shown.ticked.JuniorAge);
+        Assert.False(shown.unticked.IsJunior);
+        Assert.Equal(JuniorAge.NotSet, shown.unticked.JuniorAge);
     }
 }

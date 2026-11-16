@@ -27,6 +27,15 @@ namespace HeatCaller;
 /// feature every club switched off, and the lap call being on time is the
 /// entire job of this application.
 ///
+/// VOICE ONLY, NEVER MUSIC (15 Nov 2026, IP plan 3.4)
+///
+/// Only the announcer's own lines go out here - never the music bed, the
+/// show music or a club's own songs. HeatCaller's music is its own, but a
+/// club's songs are licensed (if at all) for its PA, and relaying them to
+/// listeners at home would make HeatCaller the one transmitting them to the
+/// public. The Terms (Part 1, 7.5) promise listen-along is voice only; keep
+/// it that way, or the music licensing question lands on HeatCaller.
+///
 /// WHY THERE IS AN ENCODER HERE AT ALL
 ///
 /// ElevenLabs sends mp3 and that can go as it is. Kokoro - the free voice,
@@ -452,7 +461,12 @@ public sealed partial class AnnouncementService
         // it shortens goes out only when its audio was rendered from the
         // shortened words; otherwise it is withheld, the way an initials-only
         // line is.
-        var caption = TextForPublicPages(words);
+        //
+        // And a junior's name (15 Nov 2026, children's privacy plan 1.3):
+        // shortened in the caption whatever the club's setting, by the same
+        // rule, so with "Shorten published names" off a line saying a
+        // junior's full name is withheld rather than heard at home in full.
+        var caption = (privacy ?? PublicPrivacy.Empty).Redact(TextForPublicPages(words));
 
         if (!string.Equals(caption, words, StringComparison.Ordinal) && audioShortened != true)
         {

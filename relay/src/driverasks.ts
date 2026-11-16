@@ -56,6 +56,10 @@ export const ASK_MAX_ABOUT = 120;
 export const ASK_MAX_EMAIL = 120;
 export const ASK_MAX_QUERY = 300;
 
+/** A junior's details their phone may not send (15 Nov 2026): entered at the desk with a parent. */
+export const ASK_JUNIOR_DESK_ONLY: readonly string[] = ["pronouns", "about", "email"];
+export const ASK_JUNIOR_DESK_WORDS = "Ask at the desk - a parent fills this in with you.";
+
 /**
  * A setup log entry from the driver's own night (4 Nov 2026, from the relay
  * roadmap Asher asked to have built): the setup sheet's five short parts and
@@ -230,11 +234,16 @@ const refuse = (status: number, error: string): AskCheck => ({ ok: false, status
  * is a bearer credential printed on a lanyard, and an email is where the
  * desk sends the PIN itself.
  */
-// `notesOff` (15 Nov 2026): driverme's crew says this driver's notes are
-// typed at the desk, not sent from a phone - a junior's, unless the club
-// has "Juniors can send notes from their phone" on (COPPA: a child's words
-// said in public need a parent's verified consent, which a tick is not).
-export function askFieldsFrom(kind: string, f: unknown, withPin: boolean, junior = false, notesOff = false): AskCheck {
+// `junior` (15 Nov 2026) is whether driverme says this driver is under 18 -
+// read by the route from the stored document, never from the phone. A
+// junior's words are only ever typed at the desk, with a parent there (COPPA:
+// a child's words said in public need a parent's verified consent, which a
+// tick on a phone is not): no crew notes, and of their details only the
+// announcer name. `notesOff` is driverme's crew saying the same of the notes.
+// `under13` (15 Nov 2026, children's privacy plan 2.1): driverme's crew
+// says this driver is under 13, or a junior with no age band yet - their
+// crew names are picked at the desk, never sent from a phone.
+export function askFieldsFrom(kind: string, f: unknown, withPin: boolean, junior = false, notesOff = false, under13 = false): AskCheck {
   if (typeof f !== "object" || f === null || Array.isArray(f)) {
     return refuse(400, "That request could not be read.");
   }
@@ -243,7 +252,7 @@ export function askFieldsFrom(kind: string, f: unknown, withPin: boolean, junior
 
   // `junior` is whether driverme's crew says this driver is under 18.
   if (kind === "crew") {
-    return crewAskFrom(input, withPin, junior, notesOff);
+    return crewAskFrom(input, withPin, junior, notesOff, under13);
   }
 
   if (kind === "pack") {
@@ -435,6 +444,13 @@ export function askFieldsFrom(kind: string, f: unknown, withPin: boolean, junior
 
   if (kind !== "details") {
     return refuse(400, "That request could not be read.");
+  }
+
+  // A junior's pronouns, about line and email are entered at the desk with a
+  // parent (15 Nov 2026, plan 2.2) - their phone offers only the announcer
+  // name. Any of them sent at all, even empty, is refused.
+  if (junior && ASK_JUNIOR_DESK_ONLY.some((name) => input[name] !== undefined)) {
+    return refuse(403, ASK_JUNIOR_DESK_WORDS);
   }
 
   const out: Record<string, string | boolean> = {};
@@ -770,12 +786,12 @@ export function asDriverAsk(value: unknown): DriverAskBody | undefined {
  *   pName, tName       the Team Principal's and Technical Lead's made-up names
  *   pVoice, tVoice     "" (the club's own voice) or a voice key off driverme
  *   goal, thanks, car  the three broadcast notes
- *   guardian           true: "I'm making this change for them"
  *
  * The whole kind needs the personal PIN: the badge code is printed on a
  * lanyard, and what is typed here is said over the PA and the stream. A
- * junior's notes need a parent or guardian on top (5.2): the guardian
- * tick, since a family link cannot ask for anything (it only reads).
+ * junior's notes are never taken from a phone at all (15 Nov 2026): they
+ * are typed at the desk with a parent there. A junior may still pick their
+ * crew's names and voices.
  */
 
 export const ASK_MAX_CREW_NAME = 24;
@@ -814,7 +830,10 @@ export function crewRude(text: string): boolean {
 
 const CREW_RUDE_WORDS = "Please pick something else - the desk would have to turn that down.";
 
-function crewAskFrom(input: Record<string, unknown>, withPin: boolean, junior: boolean, notesOff = false): AskCheck {
+/** Said to a phone that sent an under-13's crew names (15 Nov 2026). */
+export const CREW_UNDER13_NAMES = "Your crew's names are picked at the desk, with a parent there.";
+
+function crewAskFrom(input: Record<string, unknown>, withPin: boolean, junior: boolean, notesOff = false, under13 = false): AskCheck {
   if (!withPin) {
     return refuse(403, "Your crew needs your personal PIN - ask at the desk.");
   }
@@ -902,21 +921,19 @@ function crewAskFrom(input: Record<string, unknown>, withPin: boolean, junior: b
     return refuse(400, "There is nothing to change.");
   }
 
-  const guardian = input["guardian"] === true;
+  // An under-13's crew names come only from the desk, with a parent there
+  // (15 Nov 2026, children's privacy plan 2.1). Voices and clearing a name
+  // are fine: neither puts a child's words on the PA.
+  if (under13 && ["pName", "tName"].some((name) => typeof out[name] === "string" && out[name] !== "")) {
+    return refuse(403, CREW_UNDER13_NAMES);
+  }
 
-  // Notes the club takes only at the desk (a junior's, by default).
-  if (notesOff && notes.some(([name]) => typeof out[name] === "string" && out[name] !== "")) {
+  // A junior's notes are typed at the desk, never sent from a phone - with
+  // or without a parent's tick (15 Nov 2026: "Juniors can send notes from
+  // their phone" and the guardian tick it used were removed). Clearing one
+  // is fine: an empty note says nothing. The guardian tick is not passed on.
+  if ((junior || notesOff) && notes.some(([name]) => typeof out[name] === "string" && out[name] !== "")) {
     return refuse(403, "Your notes are filled in at the desk, with a parent there. Ask at the desk.");
-  }
-
-  // A junior's notes come only from a parent or guardian (plan 5.2.2).
-  // Clearing one is fine from anybody: an empty note says nothing.
-  if (junior && !guardian && notes.some(([name]) => typeof out[name] === "string" && out[name] !== "")) {
-    return refuse(403, "A parent or guardian needs to send notes for a junior - tick 'I'm making this change for them'.");
-  }
-
-  if (guardian) {
-    out["guardian"] = true;
   }
 
   return { ok: true, f: out };
@@ -938,13 +955,24 @@ export interface CrewVoice {
 /** driverme's optional crew, as the relay hands it to a phone (voices from the document's crewVoices). */
 export interface CrewDoc {
   readonly junior: boolean;
+  /**
+   * Under 13, or a junior with no age band (15 Nov 2026): crew names are
+   * picked at the desk. Only present when true. A crew from a laptop too
+   * old to send it counts a junior as under 13 - the strictest rules.
+   */
+  readonly under13?: true;
   /** False when this driver's notes are typed at the desk, not sent from a phone. */
   readonly notes: boolean;
   readonly principal: CrewMember;
   readonly tech: CrewMember;
-  readonly goal: string;
-  readonly thanks: string;
-  readonly car: string;
+  /**
+   * Each note's text - or, for a junior whose parent has not agreed yet,
+   * only whether it is set (15 Nov 2026, plan 1.5): the laptop never sends
+   * a child's words online before then, and the phone says "set at the desk".
+   */
+  readonly goal: string | boolean;
+  readonly thanks: string | boolean;
+  readonly car: string | boolean;
   readonly voices: readonly CrewVoice[];
   readonly repick?: true;
 }
@@ -1039,21 +1067,29 @@ export function crewFrom(value: unknown, voices: readonly CrewVoice[] = []): Cre
   const car = v["car"] ?? "";
   const junior = v["junior"];
 
+  const note = (value: unknown, max: number): string | boolean | undefined =>
+    typeof value === "boolean" ? value : typeof value === "string" ? cleanAskText(value, max) : undefined;
+  const goalNote = note(goal, ASK_MAX_CREW_GOAL);
+  const thanksNote = note(thanks, ASK_MAX_CREW_THANKS);
+  const carNote = note(car, ASK_MAX_CREW_CAR);
+
   if (typeof junior !== "boolean" || principal === undefined || tech === undefined
-    || typeof goal !== "string" || typeof thanks !== "string" || typeof car !== "string") {
+    || goalNote === undefined || thanksNote === undefined || carNote === undefined) {
     return undefined;
   }
 
   return {
     junior,
-    notes: v["notes"] !== false,
+    // A junior's notes are never sent from a phone, whatever the document says.
+    notes: v["notes"] !== false && !junior,
     principal,
     tech,
-    goal: cleanAskText(goal, ASK_MAX_CREW_GOAL),
-    thanks: cleanAskText(thanks, ASK_MAX_CREW_THANKS),
-    car: cleanAskText(car, ASK_MAX_CREW_CAR),
+    goal: goalNote,
+    thanks: thanksNote,
+    car: carNote,
     voices: voices.slice(0, CREW_MAX_VOICES),
     ...(v["repick"] === true ? { repick: true as const } : {}),
+    ...(v["under13"] === true || (junior && v["under13"] === undefined) ? { under13: true as const } : {}),
   };
 }
 

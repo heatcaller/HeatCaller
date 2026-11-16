@@ -425,6 +425,11 @@ public partial class MainForm
         // Tonight's report card for a driver - a right-click on the roster
         // (22 Oct 2026). See MainForm.Coach.
         driverProfiles.ReportCardFor = transponder => CoachReportFor(transponder, publicNames: false);
+
+        // Forget this driver / Export this driver's data (15 Nov 2026,
+        // privacy plan 2.5) - see MainForm.Forget.
+        driverProfiles.ForgetDriverWith = ForgetDriverEverywhere;
+        driverProfiles.ExportDriverWith = ExportDriverData;
         pageDriverProfiles.Controls.Add(driverProfiles);
         _navRefreshHooks["Driver Hub"] = driverProfiles.RefreshAll;
         _driverHubSetupsRefresh = driverProfiles.RefreshSetups;

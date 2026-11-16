@@ -687,6 +687,12 @@ internal sealed partial class DeskInboxForm : Form
             return;
         }
 
+        if (item.Source == InboxSource.Signup && SignupSetRepliesOnly(item))
+        {
+            TurnDownSignupMenu(item);
+            return;
+        }
+
         if (item.Source == InboxSource.Signup)
         {
             TurnDownSignup(item);
@@ -696,13 +702,26 @@ internal sealed partial class DeskInboxForm : Form
 
         var menu = new ContextMenuStrip();
 
-        foreach (var reply in DeskInbox.QuickReplies(_settings.InboxQuickReplies))
+        // 15 Nov 2026, plan 1.4: a junior (or a badge nobody here has) in
+        // what is picked gets HeatCaller's own fixed replies only - not the
+        // club's edited ones, and no "Other reason...". See DeskInbox.JuniorReplyHint.
+        var setOnly = SetRepliesOnly(Batch() ?? new List<InboxItem> { item });
+
+        foreach (var reply in DeclineReplies(setOnly))
         {
             menu.Items.Add(reply, null, (_, _) => Decline(reply));
         }
 
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Other reason...", null, (_, _) => Decline(null));
+        var other = menu.Items.Add("Other reason...", null, (_, _) => Decline(null));
+
+        if (setOnly)
+        {
+            other.Enabled = false;
+            other.ToolTipText = DeskInbox.JuniorReplyHint;
+            menu.Items.Add(new ToolStripMenuItem(DeskInbox.JuniorReplyHint) { Enabled = false });
+        }
+
         menu.Items.Add("Change the quick replies...", null, (_, _) => EditQuickReplies());
         AppTheme.ApplyRecursively(menu);
         menu.Closed += (_, _) => BeginInvoke(menu.Dispose);
@@ -929,7 +948,7 @@ internal sealed class QuickRepliesForm : Form
         var blurb = new Label
         {
             Text = "What Decline offers before Other reason..., one a line, up to eight. The driver's phone shows the words as they are. "
-                 + "Leave it empty to go back to HeatCaller's own.",
+                 + "Leave it empty to go back to HeatCaller's own. Juniors always get HeatCaller's own.",
             AutoSize = true,
             MaximumSize = new Size(UiLayout.AtTextSize(460), 0),
             ForeColor = AppTheme.TextMuted,

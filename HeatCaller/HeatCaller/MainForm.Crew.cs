@@ -95,8 +95,8 @@ public sealed partial class MainForm
         }
 
         return _crewForPhone is { } listed && listed.Engine == engine
-            ? listed with { JuniorNotesFromPhone = _settings.JuniorNotesFromPhone }
-            : new DriverLive.CrewForPhone(engine, Array.Empty<CrewVoiceOption>(), _settings.JuniorNotesFromPhone);
+            ? listed
+            : new DriverLive.CrewForPhone(engine, Array.Empty<CrewVoiceOption>());
     }
 
     /// <summary>

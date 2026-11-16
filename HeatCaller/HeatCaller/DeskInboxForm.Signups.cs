@@ -245,18 +245,66 @@ internal sealed partial class DeskInboxForm
         }
     }
 
-    private void TurnDownSignup(InboxItem item)
+    /// <summary>True when a sign-up may only be turned down with a set line (a junior's - see RelaySignupDesk.JuniorRejectReplies).</summary>
+    internal bool SignupSetRepliesOnly(InboxItem item) =>
+        _signups is { } desk && item.Payload is RelaySignupRequest request && desk.SetRepliesOnly(request);
+
+    /// <summary>
+    /// Turn Down for a junior's sign-up (15 Nov 2026, plan 1.4): the set
+    /// lines only, "Other reason..." greyed with the hint, no box to type in.
+    /// </summary>
+    private void TurnDownSignupMenu(InboxItem item)
+    {
+        var menu = new ContextMenuStrip();
+
+        foreach (var line in RelaySignupDesk.JuniorRejectReplies)
+        {
+            menu.Items.Add(line, null, (_, _) =>
+            {
+                TurnDownSignup(item, line);
+                RefreshAll(force: true);
+            });
+        }
+
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(new ToolStripMenuItem("Other reason...") { Enabled = false, ToolTipText = DeskInbox.JuniorReplyHint });
+        menu.Items.Add(new ToolStripMenuItem(DeskInbox.JuniorReplyHint) { Enabled = false });
+        AppTheme.ApplyRecursively(menu);
+        menu.Closed += (_, _) => BeginInvoke(menu.Dispose);
+        menu.Show(_btnDecline, new Point(0, _btnDecline.Height));
+    }
+
+    /// <summary>
+    /// Turns a sign-up down: with <paramref name="line"/>, or (null) the
+    /// desk's own words asked for - an adult's only. A junior's sign-up with
+    /// no line is refused with the hint, and the desk keeps any other line to
+    /// a set one anyway.
+    /// </summary>
+    internal void TurnDownSignup(InboxItem item, string? line = null)
     {
         if (_signups is not { } desk || item.Payload is not RelaySignupRequest request)
         {
             return;
         }
 
-        using var prompt = new SignupReasonForm(request.Name);
+        var reason = line;
 
-        if (prompt.ShowDialog(this) != DialogResult.OK)
+        if (reason is null && desk.SetRepliesOnly(request))
         {
+            AppDialog.Show(this, DeskInbox.JuniorReplyHint, "Pick a set reply", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
+        }
+
+        if (reason is null)
+        {
+            using var prompt = new SignupReasonForm(request.Name);
+
+            if (prompt.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            reason = prompt.Reason;
         }
 
         // Only an invite this laptop knows has anything to put back, and the
@@ -264,7 +312,7 @@ internal sealed partial class DeskInboxForm
         // bug hunt 11 review).
         var invite = _undo is not null && desk.InviteFor(request) is { State: SignupInviteState.Open } open ? open : null;
 
-        if (desk.Reject(request, prompt.Reason))
+        if (desk.Reject(request, reason))
         {
             if (_undo is not null && invite is not null)
             {

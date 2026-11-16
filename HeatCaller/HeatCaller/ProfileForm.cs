@@ -99,6 +99,21 @@ public sealed class ProfileForm : Form
     private readonly TextBox _txtCrewCar = new();
     private readonly CheckBox _chkCrewConsent = new ThemedCheckBox();
 
+    /// <summary>Junior and their age band (15 Nov 2026) - see AddJuniorRow.</summary>
+    private readonly CheckBox _chkJunior = new ThemedCheckBox();
+    private readonly ComboBox _cmbJuniorAge = new();
+
+    /// <summary>A junior on the stream (15 Nov 2026) - see DriverProfile.JuniorOffStream and StreamConsent.</summary>
+    private readonly ComboBox _cmbOnStream = new();
+    private readonly CheckBox _chkStreamConsent = new ThemedCheckBox();
+
+    /// <summary>The "On stream:" choices, in the order the drop-down lists them: false is Shortened, true is Not at all.</summary>
+    internal static readonly (bool OffStream, string Words)[] OnStreamChoices =
+    {
+        (false, "Shortened (Mia K)"),
+        (true, "Not at all"),
+    };
+
     /// <summary>Email them their night - see DriverProfile.EmailMyNight. Only enabled while Email is filled in.</summary>
     private readonly CheckBox _chkEmailMyNight = new ThemedCheckBox();
 
@@ -303,13 +318,18 @@ public sealed class ProfileForm : Form
         fields.AddHint("In their own words, for the principal and the Technical Lead. Spoken over the PA and the stream; "
                        + "never shown online.");
 
-        // A junior's notes are said only with a parent's consent recorded
-        // here (15 Nov 2026) - see DriverCrew.NotesMayBeSaid.
-        _chkCrewConsent.Text = "A parent or guardian agreed these notes can be said on the PA and the stream";
+        AddJuniorRow(fields, captions);
+
+        // A junior's notes and about line are said only with a parent's
+        // consent recorded here (15 Nov 2026) - see DriverCrew.OwnWordsMayBeSaid.
+        _chkCrewConsent.Text = "A parent or guardian agreed these notes and the about line can be said on the PA and the stream";
         _chkCrewConsent.AutoSize = true;
         _chkCrewConsent.Checked = Result.CrewNotesParentConsent;
         fields.AddRow(string.Empty, _chkCrewConsent);
-        fields.AddHint("For a junior. Without it their notes are kept but never said. Ask the parent at the desk, as for the waiver.");
+        fields.AddHint("For a junior. Without it their notes and about line are kept but never said. Ask the parent at the desk, "
+                       + "as for the waiver.");
+
+        AddOnStreamRows(fields, captions);
 
         // Their garage's cars, the active one showing - what they are
         // announced and recorded in. A name typed and Added is a new car,
@@ -697,6 +717,8 @@ public sealed class ProfileForm : Form
         var classWidth = FitPicker(_cmbClass, keepToRow: false);
         var pronounsWidth = FitPicker(_cmbPronouns, keepToRow: false);
         FitPicker(_cmbTransponders, keepToRow: false);
+        FitPicker(_cmbOnStream, keepToRow: false);
+        FitPicker(_cmbJuniorAge, keepToRow: false);
 
         // The fields' column: never narrower than the text boxes were, wide
         // enough for the garage's drop-down and its two buttons on one line
@@ -1359,7 +1381,10 @@ public sealed class ProfileForm : Form
             // not on this dialog, so kept exactly as they were - a Driver Hub
             // edit must never wipe a signed waiver or a membership.
             WaiverSignedOn = Result.WaiverSignedOn,
-            IsJunior = Result.IsJunior,
+            // Junior and the age band ARE on this dialog now (15 Nov 2026,
+            // AddJuniorRow), so any club can set them, waivers or not.
+            IsJunior = _chkJunior.Checked,
+            JuniorAge = JuniorAgeChosen,
             WaiverGuardian = Result.WaiverGuardian ?? string.Empty,
             MembershipNumber = Result.MembershipNumber ?? string.Empty,
             MembershipExpires = Result.MembershipExpires,
@@ -1394,6 +1419,10 @@ public sealed class ProfileForm : Form
             CrewGoalNight = GoalKept(_txtCrewGoal.Text, Result).Night,
             CrewGoalHeld = GoalKept(_txtCrewGoal.Text, Result).Held,
             CrewNotesParentConsent = _chkCrewConsent.Checked,
+
+            // A junior on the stream (15 Nov 2026), as it stands in the dialog.
+            JuniorOffStream = OnStreamOffChosen,
+            StreamConsent = _chkStreamConsent.Checked,
         };
     }
 
@@ -1408,6 +1437,84 @@ public sealed class ProfileForm : Form
         var text = DriverCrew.Clean(typed);
         return text.Length > most ? text[..most].TrimEnd() : text;
     }
+
+    /// <summary>
+    /// A JUNIOR ON THE STREAM (15 Nov 2026, children's privacy plan 4.2):
+    /// how they appear on the stream - shortened, or not at all - and the
+    /// parent's say-so, recorded at the desk beside the notes consent. Its
+    /// own rows and its own method, so nothing about the notes consent
+    /// above changes. See DriverProfile.JuniorOffStream and StreamConsent.
+    /// </summary>
+    private void AddOnStreamRows(FieldGrid fields, List<Label> captions)
+    {
+        _cmbOnStream.DropDownStyle = ComboBoxStyle.DropDownList;
+
+        foreach (var (_, words) in OnStreamChoices)
+        {
+            _cmbOnStream.Items.Add(words);
+        }
+
+        _cmbOnStream.SelectedIndex = Math.Max(0, Array.FindIndex(OnStreamChoices, c => c.OffStream == Result.JuniorOffStream));
+        captions.Add(fields.AddRow("On stream:", _cmbOnStream));
+
+        _chkStreamConsent.Text = "A parent or guardian agreed to them appearing on the stream";
+        _chkStreamConsent.AutoSize = true;
+        _chkStreamConsent.Checked = Result.StreamConsent;
+        fields.AddRow(string.Empty, _chkStreamConsent);
+        fields.AddHint("For a junior. Online their name is always shortened (\"Mia K\"), consent or not. \"Not at all\" keeps "
+                       + "their name off the stream's overlays and the club's captions, keeps lines naming them from listeners "
+                       + "at home, and leaves them out of the night-before preview. The PA in the room still says their name.");
+    }
+
+    /// <summary>The "Age:" choices for a junior, in the order the drop-down lists them.</summary>
+    private static readonly (JuniorAge Age, string Words)[] JuniorAgeChoices =
+    {
+        (JuniorAge.NotSet, "Age not set"),
+        (JuniorAge.Under13, "Under 13"),
+        (JuniorAge.ThirteenToSeventeen, "13-17"),
+    };
+
+    /// <summary>
+    /// JUNIOR AND AGE BAND ON THE PROFILE (15 Nov 2026, children's privacy
+    /// review). Until now the Junior tick lived only in the Papers window,
+    /// which a club sees only when it checks waivers or memberships - so a
+    /// club that checks neither could not mark a junior at all, and every
+    /// junior protection (shortened names, desk-only notes, no following by
+    /// name, fixed desk replies, clean Sailor-mouth) passed them by. The same
+    /// two fields, here too, so any club can set them; the Papers window
+    /// still edits them, and both write the same profile.
+    /// </summary>
+    private void AddJuniorRow(FieldGrid fields, List<Label> captions)
+    {
+        _chkJunior.Text = "Under 18";
+        _chkJunior.AutoSize = true;
+        _chkJunior.Checked = Result.IsJunior;
+
+        _cmbJuniorAge.DropDownStyle = ComboBoxStyle.DropDownList;
+
+        foreach (var (_, words) in JuniorAgeChoices)
+        {
+            _cmbJuniorAge.Items.Add(words);
+        }
+
+        _cmbJuniorAge.SelectedIndex = Math.Max(0, Array.FindIndex(JuniorAgeChoices, c => c.Age == Result.JuniorAge));
+        _cmbJuniorAge.Enabled = _chkJunior.Checked;
+        _chkJunior.CheckedChanged += (_, _) => _cmbJuniorAge.Enabled = _chkJunior.Checked;
+
+        captions.Add(fields.AddRow("Junior:", FieldGrid.Inline(_chkJunior, _cmbJuniorAge)));
+        fields.AddHint("Juniors' names are shortened online and their own words are taken only at the desk. Under 13s, and juniors with no age set, get "
+                       + "the strictest rules. Set the age band so 13-17s can send crew names from their phone.");
+    }
+
+    /// <summary>The age band as saved: NotSet unless Junior is ticked.</summary>
+    private JuniorAge JuniorAgeChosen =>
+        !_chkJunior.Checked || _cmbJuniorAge.SelectedIndex < 0 || _cmbJuniorAge.SelectedIndex >= JuniorAgeChoices.Length
+            ? JuniorAge.NotSet
+            : JuniorAgeChoices[_cmbJuniorAge.SelectedIndex].Age;
+
+    /// <summary>The "On stream:" choice as saved: true for "Not at all".</summary>
+    private bool OnStreamOffChosen =>
+        _cmbOnStream.SelectedIndex >= 0 && _cmbOnStream.SelectedIndex < OnStreamChoices.Length && OnStreamChoices[_cmbOnStream.SelectedIndex].OffStream;
 
     /// <summary>
     /// Tonight's goal as it is kept. The box shows tonight's goal only, so

@@ -2,10 +2,12 @@
 
 This page is for a club that runs its nights in LiveTime (LiveTime Scoring Engine, with results on LiveRC) and wants to try HeatCaller. It covers what LiveTime's screens are called here, and how to bring your drivers, transponders and classes across, so your first night doesn't start with typing in the whole roster.
 
+HeatCaller isn't made by, affiliated with or endorsed by the makers of LiveTime, LiveRC or MYLAPS. Their names are used here only to say what HeatCaller works with.
+
 ## Before you start
 
 - Install HeatCaller and go through [Your first race night](first-race-night.md) once, with Demo Mode if you like. It's the quickest way to see the night from start to finish.
-- Check your decoder. HeatCaller reads **EasyLap** and **I-Lap** decoders, plus the decoders listed under [The Beta decoders](../timing/decoders.md#the-beta-decoders). Most LiveTime tracks run MyLaps (AMB) decoders and transponders, which HeatCaller doesn't read. If that's you, the drivers and classes still come across, but each driver's transponder has to be changed to the one your HeatCaller decoder reads. See [Decoders](../timing/decoders.md).
+- Check your decoder. HeatCaller reads **EasyLap** and **I-Lap** decoders, plus the decoders listed under [The Beta decoders](../timing/decoders.md#the-beta-decoders). Most LiveTime tracks run MyLaps (AMB) decoders and transponders. HeatCaller reads MyLaps and AMB decoders that speak P3, as **MyLaps / AMB P3 (Beta)**, but it hasn't yet timed a real session on one, so keep LiveTime set up and ready on your first nights. Some newer MyLaps decoders ship with P3 switched off. If your decoder isn't one HeatCaller reads, the drivers and classes still come across, but each driver's transponder has to be changed to the one your HeatCaller decoder reads. See [Decoders](../timing/decoders.md).
 - Set up your classes on the **Classes** page first. The import matches each entry's class to a class there by name, ignoring capitals, so "stock buggy" goes into **Stock Buggy**.
 
 ## What LiveTime's screens are called here

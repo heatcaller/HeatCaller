@@ -596,6 +596,18 @@ public sealed partial class BackupRestoreControl : UserControl
             var captured = service;
             check.CheckedChanged += (_, _) =>
             {
+                // 15 Nov 2026 (privacy plan 2.4): no cloud copies without a
+                // backup password - see CloudBackup.RefusalWithoutPassword.
+                // Unticking is always allowed.
+                if (check.Checked
+                    && !CloudBackup.IsEnabled(_settings, captured)
+                    && CloudBackup.RefusalWithoutPassword(_settings, $"tick {CloudBackup.NameOf(captured)}") is { } refusal)
+                {
+                    check.Checked = false;
+                    AppDialog.Show(this, refusal, "Backup password needed", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
                 CloudBackup.SetEnabled(_settings, captured, check.Checked);
                 CloudBackupStatus.ServiceSwitched(_settings, check.Checked);
                 _settings.Save();
@@ -933,7 +945,8 @@ public sealed partial class BackupRestoreControl : UserControl
 
         var confirm = AppDialog.Show(this,
             "Remove the backup password?\n\n" +
-            "Backups made from now on won't carry the keys and tokens. Restored on another PC, they'd need entering again and QR check-ins reprinting. Backups already made keep the password they were made with.",
+            "Backups made from now on won't be locked or carry the keys and tokens. Restored on another PC, they'd need entering again and QR check-ins reprinting. Backups already made keep the password they were made with."
+            + (CloudBackup.EnabledTargets(_settings).Count > 0 ? "\n\nCopies to the cloud stop until a password is set again." : string.Empty),
             "Remove backup password", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
 
         if (confirm != DialogResult.Yes)
@@ -1064,6 +1077,16 @@ public sealed partial class BackupRestoreControl : UserControl
         using var dialog = new FolderBrowserDialog { SelectedPath = CurrentFolder(), Description = "Choose a folder for backups" };
         if (dialog.ShowDialog(this) != DialogResult.OK)
         {
+            return;
+        }
+
+        // 15 Nov 2026 (privacy plan 2.4): a backup folder inside Google
+        // Drive, iCloud or OneDrive is a cloud copy by another road - the
+        // same rule as the cloud ticks.
+        if (CloudBackup.ServiceHolding(dialog.SelectedPath) is { } service
+            && CloudBackup.RefusalWithoutPassword(_settings, $"choose a folder in {service}") is { } refusal)
+        {
+            AppDialog.Show(this, refusal, "Backup password needed", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
@@ -1302,7 +1325,49 @@ public sealed partial class BackupRestoreControl : UserControl
             return;
         }
 
-        RunRestore(zipPath, keepAsTheyAre: null, refused: null);
+        // 15 Nov 2026 (privacy plan 2.4): a backup locked with a backup
+        // password needs it to restore. This laptop's own password is
+        // tried first, so restoring one of this laptop's backups asks
+        // nothing; otherwise the password is asked for.
+        string? password = null;
+        if (BackupService.IsLocked(zipPath))
+        {
+            password = SavedPasswordThatOpens(zipPath, _settings.BackupPassword) ?? AskForBackupPassword(zipPath);
+            if (password is null)
+            {
+                return;
+            }
+        }
+
+        RunRestore(zipPath, keepAsTheyAre: null, refused: null, password: password);
+    }
+
+    /// <summary>The saved backup password when it opens this locked backup, otherwise null.</summary>
+    internal static string? SavedPasswordThatOpens(string zipPath, string? saved) =>
+        !string.IsNullOrEmpty(saved) && BackupCrypto.PasswordOpens(zipPath, saved) ? saved : null;
+
+    /// <summary>Asks for the password a locked backup was made with. Null when cancelled or the tries ran out.</summary>
+    private string? AskForBackupPassword(string zipPath)
+    {
+        string? opened = null;
+
+        using var dialog = new SecretRecovery.PasswordPromptForm(
+            typed =>
+            {
+                if (!BackupCrypto.PasswordOpens(zipPath, typed))
+                {
+                    return false;
+                }
+
+                opened = typed;
+                return true;
+            },
+            caption: "This backup is locked",
+            message: "It was made with a backup password, so everything in it is locked.\n\nType the password it was made with to restore it.",
+            skipText: "Cancel");
+
+        dialog.ShowDialog(this);
+        return opened;
     }
 
     /// <summary>
@@ -1318,7 +1383,7 @@ public sealed partial class BackupRestoreControl : UserControl
     /// before the first file is replaced and while saving still works - for
     /// Take Over to leave its marker, which must not be in the safety backup.
     /// </summary>
-    private void RunRestore(string zipPath, IReadOnlyCollection<string>? keepAsTheyAre, Action? refused, Action? atPointOfNoReturn = null)
+    private void RunRestore(string zipPath, IReadOnlyCollection<string>? keepAsTheyAre, Action? refused, Action? atPointOfNoReturn = null, string? password = null)
     {
         // Set the moment the restore reaches the point of no return. After
         // that the app restarts whatever happens, success or not.
@@ -1364,7 +1429,7 @@ public sealed partial class BackupRestoreControl : UserControl
 
         try
         {
-            result = BackupService.RestoreBackup(zipPath, CurrentFolder(), BeforeReplacing, keepAsTheyAre);
+            result = BackupService.RestoreBackup(zipPath, CurrentFolder(), BeforeReplacing, keepAsTheyAre, password);
         }
         catch (Exception ex)
         {

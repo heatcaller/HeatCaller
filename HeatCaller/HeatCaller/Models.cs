@@ -281,6 +281,25 @@ public sealed class DriverProfile
     /// <summary>Who signed a junior's waiver for them. Blank for an adult, or a junior's not signed yet.</summary>
     public string WaiverGuardian { get; set; } = string.Empty;
 
+    // --- A junior's age band (15 Nov 2026, children's privacy plan 2.1) ---
+    //
+    // WHY: IsJunior says "under 18" and nothing more, so the stricter rules
+    // for under-13s (US COPPA) could not be applied. The desk now picks a
+    // band beside the Junior tick. No date of birth is kept - only the band.
+    // IsJunior stays the stored "under 18" flag every other check reads.
+    // Old profiles have no band and load as NotSet, which is treated as
+    // under 13: the strictest rules until the desk says otherwise.
+
+    /// <summary>A junior's age band. Only matters while <see cref="IsJunior"/> is ticked.</summary>
+    public JuniorAge JuniorAge { get; set; }
+
+    /// <summary>
+    /// Whether the under-13 rules apply: a junior whose band is Under13 or
+    /// not set yet. The one place that rule lives - read this, not the band.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool TreatAsUnder13 => IsJunior && JuniorAge != JuniorAge.ThirteenToSeventeen;
+
     /// <summary>Their membership number - the club's, or a national body's for its racing insurance. Blank for none.</summary>
     public string MembershipNumber { get; set; } = string.Empty;
 
@@ -328,10 +347,33 @@ public sealed class DriverProfile
     /// </summary>
     public bool EmailMyNight { get; set; }
 
+    // --- A junior on the stream (15 Nov 2026, children's privacy plan 4.2) ---
+    //
+    // Recorded at the desk on the profile dialog. A junior's name is always
+    // shortened online ("Mia K"); these two say whether they appear on the
+    // stream at all. The PA in the room is never affected.
+
+    /// <summary>
+    /// "On stream: Not at all" - the overlays and the public captions show no
+    /// name for them ("Car 4"), listen-along withholds lines naming them, and
+    /// the night-before preview on the club's page leaves them out. Off (the
+    /// default) is "Shortened": a first name and an initial. See PublicPrivacy.
+    /// </summary>
+    public bool JuniorOffStream { get; set; }
+
+    /// <summary>
+    /// A parent or guardian agreed to them appearing on the stream - recorded
+    /// at the desk, like a signed waiver. A record only: without it a junior
+    /// still shows shortened, and "Not at all" is what keeps them off.
+    /// </summary>
+    public bool StreamConsent { get; set; }
+
     /// <summary>
     /// A line in their own words for the AI commentary ("Racing since I
     /// was eight; my dad builds the cars"). At most
     /// <see cref="AboutLineMaxChars"/> characters. Never published online.
+    /// A junior's is entered at the desk only, and said only as their crew
+    /// notes are - with <see cref="CrewNotesParentConsent"/> (15 Nov 2026).
     /// </summary>
     public string AboutLine { get; set; } = string.Empty;
 
@@ -344,7 +386,11 @@ public sealed class DriverProfile
     // three short notes the interviews can use. Blank means the club's own.
     // Set at the desk on the profile or sent from the phone behind the
     // personal PIN; a voice pick from a phone applies by itself, the names
-    // and notes wait for the desk. Never published online. See DriverCrew.
+    // and notes wait for the desk (a junior's notes are only typed at the
+    // desk). Not on any public page: the notes are shown back only on the
+    // driver's own badge-only phone page - and a junior's only once a parent
+    // agreed (CrewNotesParentConsent); until then the relay is told only
+    // whether each is set (DriverLive.CrewOf, 15 Nov 2026). See DriverCrew.
 
     /// <summary>What the announcer calls their Team Principal. Blank: the club's name, or the role alone.</summary>
     public string CrewPrincipalName { get; set; } = string.Empty;
@@ -372,10 +418,11 @@ public sealed class DriverProfile
     public bool CrewGoalHeld { get; set; }
 
     /// <summary>
-    /// A parent or guardian has agreed that a junior's notes may be said over
-    /// the PA and on the stream (15 Nov 2026) - recorded at the desk, like a
-    /// signed waiver. Without it a junior's notes are kept but never said.
-    /// Means nothing for an adult. See DriverCrew.NotesMayBeSaid.
+    /// A parent or guardian has agreed that a junior's notes and about line
+    /// (<see cref="AboutLine"/>) may be said over the PA and on the stream
+    /// (15 Nov 2026) - recorded at the desk, like a signed waiver. Without it
+    /// they are kept but never said. Means nothing for an adult. See
+    /// DriverCrew.OwnWordsMayBeSaid.
     /// </summary>
     public bool CrewNotesParentConsent { get; set; }
 
@@ -673,4 +720,21 @@ public sealed class GatePassEvent
     /// supply one, in which case AnnouncementService derives it itself.
     /// </summary>
     public long? LapTimeMs { get; init; }
+}
+
+/// <summary>
+/// A junior's age band (15 Nov 2026, children's privacy plan 2.1). Saved as
+/// its number, so the order must not change: NotSet is 0, what an old
+/// profile without a band loads as. See DriverProfile.TreatAsUnder13.
+/// </summary>
+public enum JuniorAge
+{
+    /// <summary>Not picked yet - treated as under 13, the strictest rules.</summary>
+    NotSet = 0,
+
+    /// <summary>Under 13.</summary>
+    Under13 = 1,
+
+    /// <summary>13 to 17.</summary>
+    ThirteenToSeventeen = 2,
 }

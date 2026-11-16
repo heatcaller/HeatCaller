@@ -42,6 +42,48 @@ internal static class CloudBackup
     /// </summary>
     internal sealed record CopyOutcome(CloudService Service, bool Copied, string Line);
 
+    /// <summary>Why a backup is kept out of the cloud (15 Nov 2026, privacy plan 2.4).</summary>
+    public const string NeedsPassword =
+        "set a backup password first. Backups hold every driver's details, so only locked ones go to the cloud.";
+
+    /// <summary>
+    /// What to say when a cloud copy is switched on, or a backup folder
+    /// inside a cloud folder picked, with no backup password - or null
+    /// when it may go ahead. One rule for every switch on the Backups page.
+    /// </summary>
+    public static string? RefusalWithoutPassword(AppSettings settings, string where) =>
+        string.IsNullOrEmpty(settings.BackupPassword)
+            ? $"Set a backup password first (on this page), then {where}.\n\n"
+              + "Backups hold every driver's details - children's too - so they only go to the cloud locked with the club's password."
+            : null;
+
+    /// <summary>
+    /// The cloud service whose sync folder holds <paramref name="folder"/>,
+    /// or null when none does. Never throws.
+    /// </summary>
+    public static string? ServiceHolding(string folder, Func<CloudService, string?>? syncRoot = null)
+    {
+        foreach (var service in Enum.GetValues<CloudService>())
+        {
+            try
+            {
+                var root = (syncRoot ?? FindSyncRoot)(service);
+                if (root is not null
+                    && (PlainFileName.IsInside(root, folder)
+                        || string.Equals(Path.GetFullPath(root).TrimEnd('\\'), Path.GetFullPath(folder).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)))
+                {
+                    return NameOf(service);
+                }
+            }
+            catch
+            {
+                // A folder that can't be compared isn't that service's.
+            }
+        }
+
+        return null;
+    }
+
     public static string NameOf(CloudService service) => service switch
     {
         CloudService.GoogleDrive => "Google Drive",
@@ -177,6 +219,18 @@ internal static class CloudBackup
             if (target.Folder is null)
             {
                 results.Add(new CopyOutcome(target.Service, false, $"Not copied to {target.Name}: {AppNameOf(target.Service)} isn't installed or signed in on this PC."));
+                continue;
+            }
+
+            // 15 Nov 2026 (privacy plan 2.4): only a locked backup goes to
+            // the cloud. A backup is every driver's details - children's
+            // among them - and a copy on somebody's Google Drive outlives
+            // the laptop and whoever looks after it. Checked on the file
+            // itself, not the setting, so nothing unlocked slips past
+            // whichever way the backup was made.
+            if (!BackupCrypto.IsEncrypted(backupPath))
+            {
+                results.Add(new CopyOutcome(target.Service, false, $"Not copied to {target.Name}: {NeedsPassword}"));
                 continue;
             }
 

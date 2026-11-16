@@ -18,7 +18,7 @@
  */
 
 /** The policy's version and date, shown at its top and named by Part 3 of the terms. */
-export const COOKIE_POLICY_VERSION = "Version 2, 15 November 2026";
+export const COOKIE_POLICY_VERSION = "Version 3, 16 November 2026";
 
 /** The policy as the page shows it - static, no driver or club data in it. */
 export const COOKIE_POLICY_HTML = `<div class="policy">
@@ -42,6 +42,7 @@ export const COOKIE_POLICY_HTML = `<div class="policy">
 <p><b>Signing in</b> (needed to show a driver their own night, or a manager the club's tools):</p>
 <ul>
 <li><b>hg-me-&lt;club&gt;</b>, <b>hg-me-list-&lt;club&gt;</b> and <b>hg-me-was-&lt;club&gt;</b> (this phone): the code that opens a driver's night, the drivers signed in on this phone (up to five, with the name each night gave) and a marker that a driver was signed in. Until <b>Sign out</b>.</li>
+<li><b>hg-me-at-&lt;club&gt;</b> (this phone): when each driver on this phone was signed in, and whether they are a junior, so a junior is signed out by themselves 30 days after signing in. Removed with the driver at <b>Sign out</b>.</li>
 <li><b>hg-night-pass-&lt;club&gt;</b> (this tab): the pass that shows <b>Your details</b> and the <b>Garage</b>.</li>
 <li><b>hg-me-out-&lt;club&gt;</b> (this tab): a note that this tab signed out, so Back goes to the PIN.</li>
 <li><b>hg-pin-&lt;club&gt;</b> (this tab): on the check-in page only, the PIN typed (a driver's or the desk's), with the pass it earned and whether it was a driver's. Gone when the tab closes; a driver's goes at <b>Sign out</b>.</li>
@@ -80,7 +81,7 @@ export const COOKIE_POLICY_HTML = `<div class="policy">
 <p>The pages ask the browser to install a small helper (a service worker) for the club's pages. It keeps a copy of the club's public pages (Home, Live, Schedule, Results and its tabs, Tracks, Me, check-in), the club's icon and logo, in a store named <b>hc-pages-</b> followed by the version, so they open with no signal. It never keeps a driver's own night or garage, a sign-up, the manager's page or any answer from the relay's API. Each new version of the pages throws the old copies away.</p>
 
 <h2>Alerts</h2>
-<p>Alerts are off until you turn them on. When you do, your browser gives the relay a push address, made by your browser's push service (for example Google for Chrome, Apple for Safari, Mozilla for Firefox), and each alert passes through that service on its way to you. The relay keeps the address, and which alerts you asked for, until you turn alerts off or sign out, or the browser withdraws it. Clearing the site's data does not tell the relay, so turn alerts off first if you want the address gone at once; otherwise the relay forgets it when the push service says it no longer works.</p>
+<p>Alerts are off until you turn them on. When you do, your browser gives the relay a push address, made by your browser's push service (for example Google for Chrome, Apple for Safari, Mozilla for Firefox), and each alert passes through that service on its way to you. The relay keeps the address, and which alerts you asked for, until you turn alerts off or sign out, or the browser withdraws it, and forgets it after 180 days in which no alert reached it and it was not renewed. A junior can only be followed through a family link from their own phone, never by name. Clearing the site's data does not tell the relay, so turn alerts off first if you want the address gone at once; otherwise the relay forgets it when the push service says it no longer works.</p>
 
 <h2>What reaches the relay</h2>
 <ul>
@@ -106,6 +107,7 @@ export const COOKIE_POLICY_HTML = `<div class="policy">
 
 <h2>What changed</h2>
 <ul>
+<li><b>Version 3, 16 November 2026</b>: a junior signed in on a phone is signed out after 30 days (hg-me-at-&lt;club&gt;); push addresses unused for 180 days are forgotten; juniors can't be followed by name.</li>
 <li><b>Version 2, 15 November 2026</b>: every item named; offline copies, anonymous counts, internet addresses, push services and children added; the visit count for the home-screen offer stopped, and the list of clubs now kept only where a driver is signed in.</li>
 <li><b>Version 1, 15 November 2026</b>: first version.</li>
 </ul>

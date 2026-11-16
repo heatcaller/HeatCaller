@@ -596,11 +596,23 @@ internal static class SecretRecovery
         private readonly Func<string, bool> _tryUnlock;
         private readonly TextBox _txtPassword = new();
         private readonly Label _lblError = new();
+        private readonly string _skipText;
         private int _attempts;
 
         public PasswordPromptForm(Func<string, bool> tryUnlock)
+            : this(tryUnlock, caption: null, message: null, skipText: null)
+        {
+        }
+
+        /// <summary>
+        /// The same window with its own words (15 Nov 2026, privacy plan
+        /// 2.4): Restore asks with it for the password a locked backup was
+        /// made with. Null keeps the words for the keys, as above.
+        /// </summary>
+        public PasswordPromptForm(Func<string, bool> tryUnlock, string? caption, string? message, string? skipText)
         {
             _tryUnlock = tryUnlock;
+            _skipText = skipText ?? "Skip";
 
             Text = "Backup password";
             Font = AppTheme.BodyFont;
@@ -608,14 +620,14 @@ internal static class SecretRecovery
 
             var lblCaption = new Label
             {
-                Text = "Unlock the keys from this backup",
+                Text = caption ?? "Unlock the keys from this backup",
                 AutoSize = true,
                 Font = AppTheme.BoldFont,
             };
 
             var lblMessage = new Label
             {
-                Text = "This backup came from another PC. Its API keys, tokens, PINs and QR check-in key are locked with the club's backup password.\n\n"
+                Text = message ?? "This backup came from another PC. Its API keys, tokens, PINs and QR check-in key are locked with the club's backup password.\n\n"
                     + "Enter it to bring them across. Skip to carry on without them - they would then need entering again, and QR check-ins reprinting.",
                 AutoSize = true,
                 Font = AppTheme.BodyFont,
@@ -633,7 +645,7 @@ internal static class SecretRecovery
             btnUnlock.Click += (_, _) => TryUnlock();
 
             // DialogResult on the button closes the dialog on its own.
-            var btnSkip = new Button { Text = "Skip", DialogResult = DialogResult.Cancel };
+            var btnSkip = new Button { Text = _skipText, DialogResult = DialogResult.Cancel };
 
             var page = new FillPage();
             page.Add(lblCaption, gapBelow: UiLayout.RowGap);
@@ -698,7 +710,7 @@ internal static class SecretRecovery
             var password = _txtPassword.Text;
             if (password.Length == 0)
             {
-                _lblError.Text = "Type the backup password, or press Skip.";
+                _lblError.Text = $"Type the backup password, or press {_skipText}.";
                 _txtPassword.Focus();
                 return;
             }

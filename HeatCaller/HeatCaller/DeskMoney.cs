@@ -448,6 +448,41 @@ public sealed class EntryPaymentStore
     public IReadOnlyList<string> TranspondersFor(string eventId) =>
         _byEvent.TryGetValue(eventId, out var day) ? day.Keys.ToList() : new List<string>();
 
+    /// <summary>Every payment held for these transponders, on any day - for Export this driver's data (15 Nov 2026, privacy plan 2.5).</summary>
+    public IReadOnlyList<(string EventId, string Transponder, EntryPayment Payment)> AllFor(IEnumerable<string> transponders)
+    {
+        var ids = transponders.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return _byEvent
+            .SelectMany(day => day.Value.Where(p => ids.Contains(p.Key)).Select(p => (day.Key, p.Key, p.Value)))
+            .ToList();
+    }
+
+    /// <summary>Every payment held for these transponders, on any day, gone - Forget this driver (15 Nov 2026). Returns how many.</summary>
+    public int ForgetDrivers(IEnumerable<string> transponders)
+    {
+        var ids = transponders.ToList();
+        var gone = 0;
+
+        foreach (var day in _byEvent.Values)
+        {
+            foreach (var id in ids)
+            {
+                if (day.Remove(id))
+                {
+                    gone++;
+                }
+            }
+        }
+
+        if (gone > 0)
+        {
+            Save();
+            Changed?.Invoke();
+        }
+
+        return gone;
+    }
+
     /// <summary>Records how a driver settled; null clears it back to owing.</summary>
     public void Set(string eventId, string transponder, EntryPayment? payment)
     {

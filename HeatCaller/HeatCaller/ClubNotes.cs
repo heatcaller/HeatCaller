@@ -657,6 +657,71 @@ internal sealed class ClubNotes
     /// </summary>
     internal static bool WasTyped(ClubNote note) => !note.FromTheRoom;
 
+    // ------------------------------------------------------------------
+    //  A shout-out that names a junior (15 Nov 2026, plan 4.5)
+    // ------------------------------------------------------------------
+
+    /// <summary>What the race director's list says beside a shout-out that names a junior.</summary>
+    internal const string NamesAJuniorWords = "Names a junior - check before it's read";
+
+    /// <summary>
+    /// The junior this shout-out names, or null. WHY: a shout-out is a
+    /// stranger's words about somebody, read out over the PA and the
+    /// stream, and "good luck Sam from Oakfield Primary" about a child is
+    /// the kind of thing the race director should read twice. It is a flag,
+    /// not a block - "happy birthday Sam!" from his mum is the point of the
+    /// list. Matched on the juniors' names as they are said and shown -
+    /// their full name, announcer name and first name of each - in whole
+    /// words, any case, with a possessive "'s" read as the name.
+    /// </summary>
+    /// <param name="text">The shout-out as sent.</param>
+    /// <param name="juniors">The juniors here tonight (see <see cref="JuniorsTonight"/>).</param>
+    internal static string? NamesAJunior(string? text, IEnumerable<DriverProfile> juniors)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        static string First(string? name) =>
+            (name ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault() ?? string.Empty;
+
+        // Longest first, so "Sam Parker" is named rather than "Sam".
+        var names = juniors
+            .Where(p => p is { IsJunior: true })
+            .SelectMany(p => new[] { p.DriverName, p.AnnouncerName, First(p.DriverName), First(p.AnnouncerName) })
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(n => n!.Length)
+            .Select(n => n!)
+            .ToList();
+
+        var plain = System.Text.RegularExpressions.Regex.Replace(text, @"['’]s\b", string.Empty,
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        return names.Count == 0 ? null : DriverCrew.NamesAnotherDriver(plain, names);
+    }
+
+    /// <summary>
+    /// The juniors here tonight: those checked in, or - before anybody has
+    /// checked in - every junior the club has, so a shout-out sent early is
+    /// still checked.
+    /// </summary>
+    internal static List<DriverProfile> JuniorsTonight(IEnumerable<DriverProfile> profiles, Func<string, DriverProfile?> profileOf, IReadOnlyCollection<string>? checkedIn)
+    {
+        if (checkedIn is null || checkedIn.Count == 0)
+        {
+            return profiles.Where(p => p is { IsJunior: true }).ToList();
+        }
+
+        return checkedIn
+            .Select(profileOf)
+            .Where(p => p is { IsJunior: true })
+            .Select(p => p!)
+            .Distinct()
+            .ToList();
+    }
+
     /// <summary>
     /// The notes waiting for the race director to tick them off, oldest
     /// first - what the approval list shows and what the button's count

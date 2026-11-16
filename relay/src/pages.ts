@@ -40,6 +40,12 @@ export interface PageContext {
   readonly preview?: PagePreview;
   /** The phone's driver theme from its hg-theme cookie ("pitlane", "night:teal"), or undefined. Checked again where it is used. */
   readonly theme?: string;
+  /**
+   * What this page shows names a junior (15 Nov 2026, children's privacy
+   * 4.3): search engines are asked to leave it out. Worked out by the
+   * server from the club's documents (Relay.namesAJuniorOn).
+   */
+  readonly noindex?: boolean;
 }
 
 export const DEFAULT_CONTEXT: PageContext = Object.freeze({ look: DEFAULT_LOOK, origin: "", nonce: "" });
@@ -3379,13 +3385,14 @@ function meForgotten() {
   try { return meCode() === '' && localStorage.getItem(ME_WAS_KEY) === '1'; } catch (e) { return false; }
 }
 
-function meRemember(code, name) {
+function meRemember(code, name, junior) {
   if (!/^[0-9a-f]{20}$/.test(String(code))) return;
   try { localStorage.setItem(ME_KEY, String(code)); } catch (e) { /* asked again next time */ }
   meKeepStorage();
   const list = meDrivers();
   const was = list.find((d) => d.c === code);
   const one = { c: String(code), n: typeof name === 'string' && name.trim() !== '' ? name.trim().slice(0, 60) : (was ? was.n : '') };
+  meNoteSignIn(String(code), junior);
   const rest = list.filter((d) => d.c !== code);
   // A sixth driver pushes out the one signed in longest ago, alerts and all.
   while (rest.length >= ME_MAX) { const old = rest.pop(); meStopPush(old.c); }
@@ -3535,6 +3542,8 @@ function meSignOut(code) {
   } else {
     meForget();
     try { localStorage.removeItem(ME_WAS_KEY); } catch (e) { /* nothing was kept */ }
+    // With nobody left, their sign-in times too (ME_JUNIOR_DAYS).
+    try { localStorage.removeItem('hg-me-at-' + CLUB); } catch (e) { /* nothing was kept */ }
     if (typeof hcClubsForget === 'function') hcClubsForget();
   }
   hcOweKeep('', '');
@@ -3579,6 +3588,70 @@ function meSignOutAll() {
   meSignOut(current || (list[0] ? list[0].c : ''));
   meForget();
 }
+
+// A JUNIOR'S SIGN-IN EXPIRES (15 Nov 2026, children's privacy 2.6). A
+// phone remembered a driver until they signed out, which for a child's
+// badge on a shared or handed-down phone could be for good. A junior's
+// sign-in is now forgotten 30 days after it was made - the relay says
+// which drivers are juniors when their night opens (junior: true) - and
+// they sign in again with their PIN or badge. Adults' are kept as before.
+// The time and the junior mark are kept beside the list, by code, in
+// ME_AT_KEY ({ code: { t: ms, j: true } }), so the list itself is what it
+// was. A driver remembered before this has no time: their 30 days start
+// from the first visit since.
+const ME_JUNIOR_DAYS = 30;
+const ME_AT_KEY = 'hg-me-at-' + CLUB;
+
+function meSignIns() {
+  try {
+    const at = JSON.parse(localStorage.getItem(ME_AT_KEY) || '{}');
+    return at && typeof at === 'object' && !Array.isArray(at) ? at : {};
+  } catch (e) { return {}; }
+}
+
+function meKeepSignIns(at) {
+  try {
+    if (Object.keys(at).length > 0) localStorage.setItem(ME_AT_KEY, JSON.stringify(at));
+    else localStorage.removeItem(ME_AT_KEY);
+  } catch (e) { /* the next visit stamps it again */ }
+}
+
+// Noted when a driver is remembered: the time of the sign-in (kept, not
+// moved, on later visits) and whether the relay says they are a junior.
+function meNoteSignIn(code, junior) {
+  const at = meSignIns();
+  const was = at[code] && typeof at[code] === 'object' ? at[code] : {};
+  const one = { t: typeof was.t === 'number' && isFinite(was.t) ? was.t : Date.now() };
+  if (junior === true || (junior === undefined && was.j === true)) one.j = true;
+  at[code] = one;
+  meKeepSignIns(at);
+}
+
+function meExpireJuniors() {
+  const codes = meDrivers().map((d) => d.c);
+  const shown = meCode();
+  if (shown && codes.indexOf(shown) < 0) codes.push(shown);
+  const at = meSignIns();
+  const now = Date.now();
+  const kept = {};
+  for (const c of codes) {
+    const one = at[c] && typeof at[c] === 'object' ? at[c] : {};
+    kept[c] = { t: typeof one.t === 'number' && isFinite(one.t) ? one.t : now };
+    if (one.j === true) kept[c].j = true;
+  }
+  meKeepSignIns(kept);
+  for (const c of codes) {
+    if (kept[c].j === true && now - kept[c].t > ME_JUNIOR_DAYS * 24 * 3600 * 1000) {
+      // Signed out as a sign-out does it: alerts stopped, the night's copies forgotten.
+      meSignOut(c);
+      if (meCode() === c) meForget();
+      const left = meSignIns();
+      delete left[c];
+      meKeepSignIns(left);
+    }
+  }
+}
+try { meExpireJuniors(); } catch (e) { /* kept until the next page */ }
 
 // Whether this tab signed out of this code and is being taken back to it -
 // Back, Forward, a reload, or a page the browser kept (restored). A badge
@@ -4300,7 +4373,8 @@ export function shell(page: Shell, context: PageContext): string {
 ${NO_ZOOM_HEAD}
 <meta name="color-scheme" content="${look.light ? "light" : "dark"}">
 <meta name="theme-color" content="${look.themeColor}">${page.noindex === true ? `
-<meta name="robots" content="noindex, nofollow">` : ""}
+<meta name="robots" content="noindex, nofollow">` : context.noindex === true ? `
+<meta name="robots" content="noindex">` : ""}
 <meta name="description" content="${description}">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="${name}">
@@ -15010,6 +15084,9 @@ function marshalActs(m) {
       if (got.ok) { coverPick.open = false; coverPick.k = ''; }
     }));
     box.appendChild(part);
+  } else if (m.swapAtDesk === true && m.in !== true) {
+    // A junior's swaps go through the desk, never driver to driver (15 Nov 2026).
+    box.appendChild(el('p', 'when', 'Need a swap? Ask at the desk.'));
   }
   return box.children.length > 0 ? box : null;
 }
@@ -17059,7 +17136,9 @@ function ydSummary() {
   line(called, 'Name', cleanText(me.name), 'Not set', 'desk only', 'desk');
   line(called, 'Announcer', cleanText(me.announcer), 'Your name as it is', wait(['announcer']), 'wait');
   line(called, 'Pronouns', cleanText(me.pronouns), 'None', wait(['pronouns']), 'wait');
-  line(called, 'About you', cleanText(me.about), 'Nothing yet', wait(['about']), 'wait');
+  // A junior's about line is online only once a parent agreed (15 Nov 2026):
+  // until then the laptop says only that there is one.
+  line(called, 'About you', cleanText(me.about) || (me.aboutSet === true ? 'Set at the desk' : ''), 'Nothing yet', wait(['about']), 'wait');
 
   const mail = group('Email');
   line(mail, 'On file', typeof me.email === 'string' ? cleanText(me.email) : '', 'None on file', wait(['email']), 'wait');
@@ -17182,8 +17261,8 @@ function ydFill(box, message) {
   const crew = crewOn() ? crewPane(panes.get('crew')) : null;
 
   // ONE SEND FOR EVERY TAB, held at the foot of the sheet as it scrolls,
-  // with the guardian tick that goes with it: up to two asks, details and
-  // crew, each with only what changed.
+  // with the guardian tick that goes with the details ask: up to two asks,
+  // details and crew, each with only what changed.
   const foot = el('div', 'yd-bar');
   const guardian = tick(foot, "I'm a parent or guardian making this change", '', false, false);
   const said = el('p', 'yd-said', message || '');
@@ -17226,17 +17305,17 @@ function ydFill(box, message) {
 
     // Checked before anything goes, and the sheet turned to the tab that
     // needs fixing.
-    const trouble = details.check(df) || (crew ? crew.check(cf, guardian.checked === true) : null);
+    const trouble = details.check(df) || (crew ? crew.check(cf) : null);
     if (trouble) {
       show(trouble.tab);
       said.textContent = trouble.words;
       return;
     }
 
-    if (guardian.checked === true) {
-      if (Object.keys(df).length > 0) df.guardian = true;
-      if (crew && crew.junior && Object.keys(cf).length > 0) cf.guardian = true;
-    }
+    // The tick goes on the details ask only: the desk records who made the
+    // change. A crew ask carries none - a junior's notes are never taken
+    // from a phone, tick or not (15 Nov 2026), and the relay drops it.
+    if (guardian.checked === true && Object.keys(df).length > 0) df.guardian = true;
 
     send.disabled = true;
     said.textContent = 'Sending\\u2026';
@@ -17418,6 +17497,9 @@ function tick(parent, title, hint, on, fixed) {
   return box;
 }
 
+// What a junior is told about the details entered at the desk - the relay's own words.
+const JUNIOR_DESK_WORDS = 'Ask at the desk - a parent fills this in with you.';
+
 // A setting that is on or off: the kit's tonal row with a real switch.
 // A switch that is on and fixed says, on its own line, how to undo it.
 function switchRow(parent, title, hint, on, fixed) {
@@ -17455,16 +17537,30 @@ function detailsParts(called, mailPane, privPane) {
   // change is the desk's, since the badge code alone is on a lanyard.
   const withPin = me.pin === true && pass() !== '';
 
+  // A JUNIOR (15 Nov 2026): only the announcer name from here. Pronouns,
+  // about line and email are entered at the desk with a parent, and the
+  // relay refuses them from a junior's badge: locked rows saying so.
+  const junior = me.junior === true;
+
   // Called
   lockedRow(called, 'Name', cleanText(me.name) || 'Not set', 'desk only');
   const announcer = textField(called, 'Announcer name', 'Spell it the way it sounds.', base.announcer, 40, false, { count: true });
-  const pronouns = textField(called, 'Pronouns', 'Leave it empty for none.', base.pronouns, 24, false, { count: true, placeholder: 'e.g. she/her, he/him, they/them' });
-  const about = textField(called, 'About you', 'One line the commentary can use.', base.about, 120, true, { count: true, placeholder: 'e.g. races a red buggy and loves the hairpin' });
+  let pronouns = null;
+  let about = null;
+  if (junior) {
+    lockedRow(called, 'Pronouns', JUNIOR_DESK_WORDS, 'desk only');
+    lockedRow(called, 'About you', JUNIOR_DESK_WORDS, 'desk only');
+  } else {
+    pronouns = textField(called, 'Pronouns', 'Leave it empty for none.', base.pronouns, 24, false, { count: true, placeholder: 'e.g. she/her, he/him, they/them' });
+    about = textField(called, 'About you', 'One line the commentary can use.', base.about, 120, true, { count: true, placeholder: 'e.g. races a red buggy and loves the hairpin' });
+  }
 
   // Email
   lockedRow(mailPane, 'On file', email !== '' ? email : 'None on file', '');
   let newEmail = null;
-  if (withPin) {
+  if (junior) {
+    lockedRow(mailPane, 'New email', JUNIOR_DESK_WORDS, 'desk only');
+  } else if (withPin) {
     newEmail = textField(mailPane, 'New email address', 'The desk lets your old address know.', '', 120, false, { placeholder: 'Only if it has changed' });
     newEmail.type = 'email';
   } else {
@@ -17490,12 +17586,13 @@ function detailsParts(called, mailPane, privPane) {
   privPane.appendChild(el('p', 'when', 'Once one is on, only the desk can turn it off again.'));
 
   return {
-    // What would go now: only what has changed.
+    // What would go now: only what has changed. A junior has no pronouns
+    // or about box, so neither is ever sent from their phone.
     diff() {
       const f = {};
       const a1 = cleanText(announcer.value);
-      const p1 = cleanText(pronouns.value);
-      const b1 = cleanText(about.value);
+      const p1 = pronouns ? cleanText(pronouns.value) : base.pronouns;
+      const b1 = about ? cleanText(about.value) : base.about;
       if (a1 !== base.announcer) f.announcer = a1;
       if (p1 !== base.pronouns) f.pronouns = p1;
       if (b1 !== base.about) f.about = b1;
@@ -17549,7 +17646,6 @@ const CREW_KEY = /^[0-9a-f]{12}$/;
 // The relay's own rule: letters of any script, spaces, hyphens, apostrophes, full stops.
 const CREW_NAME = /^[\\p{L}\\p{M} '\\u2019.-]*$/u;
 const CREW_NAME_WORDS = 'A crew name can only have letters, spaces, hyphens and apostrophes.';
-const CREW_JUNIOR_WORDS = "A parent or guardian needs to send notes for a junior - tick 'I'm a parent or guardian making this change'.";
 let crewAudio = null;
 
 function crewOn() {
@@ -17592,16 +17688,22 @@ function crewStopAudio() {
 }
 
 // One role, as a small card: a name box, a voice list, and Play beside it
-// for the voice picked.
-function crewRole(parent, title, role, junior) {
+// for the voice picked. namesHere false (an under-13, 15 Nov 2026): the
+// name is a locked row - picked at the desk - and only the voice is theirs.
+function crewRole(parent, title, role, junior, namesHere = true) {
   const m = crewMember(role);
   const card = el('div', 'yd-role');
   card.appendChild(el('h4', '', title));
   parent.appendChild(card);
 
-  const name = textField(card, 'Name',
-    junior ? "Make one up - not Mum, Dad or anyone's real name." : "Make one up - not a real person's name.", m.name, 24, false,
-    { count: true, hide: title, placeholder: "The club's own name" });
+  let name = null;
+  if (namesHere) {
+    name = textField(card, 'Name',
+      junior ? "Make one up - not Mum, Dad or anyone's real name." : "Make one up - not a real person's name.", m.name, 24, false,
+      { count: true, hide: title, placeholder: "The club's own name" });
+  } else {
+    lockedRow(card, 'Name', m.name || "The club's own name", 'desk only');
+  }
 
   const row = el('div', 'yd-vrow');
   const label = el('label', 'f');
@@ -17672,36 +17774,48 @@ function crewPane(pane) {
   pane.appendChild(el('p', 'when', 'Voice picks change straight away. Names and notes wait for the desk to check them.'));
   if (c.repick === true) pane.appendChild(el('p', 'when', "Your club changed voices - pick your crew's voice again."));
 
-  const p = crewRole(pane, 'Team Principal', 'principal', junior);
-  const t = crewRole(pane, 'Technical Lead', 'tech', junior);
+  // An under-13's crew names are picked at the desk, with a parent there
+  // (15 Nov 2026, children's privacy plan 2.1): no name boxes, just voices.
+  const namesHere = c.under13 !== true;
+  if (!namesHere) pane.appendChild(el('p', 'yd-note', "Your crew's names are picked at the desk, with a parent there."));
 
-  // Notes typed at the desk, not from a phone (15 Nov 2026): a junior's,
-  // unless the club takes them from phones. No boxes, and one line why.
-  const notesHere = c.notes !== false;
+  const p = crewRole(pane, 'Team Principal', 'principal', junior, namesHere);
+  const t = crewRole(pane, 'Technical Lead', 'tech', junior, namesHere);
+
+  // A junior's notes are typed at the desk, never sent from a phone (15 Nov
+  // 2026). No boxes and one line why - and what the desk has set: the words
+  // once a parent agreed, before then only that there is one (c.goal is
+  // true or false then, never the text).
+  const notesHere = c.notes !== false && !junior;
+  const noteText = (v) => (typeof v === 'string' ? cleanText(v) : '');
   pane.appendChild(el('h4', 'yd-sub', 'Notes for the commentary'));
-  if (!notesHere) pane.appendChild(el('p', 'yd-note', 'Your notes are filled in at the desk, with a parent or guardian there. Ask at the desk.'));
-  else if (junior) pane.appendChild(el('p', 'when', 'A parent or guardian needs to send notes.'));
-  const goal = notesHere ? textField(pane, "Tonight's goal", 'Said before your race tonight only.', cleanText(c.goal), 80, false, { count: true }) : null;
-  const thanks = notesHere ? textField(pane, 'Thanks / shout-out', '', cleanText(c.thanks), 80, false, { count: true }) : null;
-  const car = notesHere ? textField(pane, "Your car's story", '', cleanText(c.car), 120, true, { count: true }) : null;
+  if (!notesHere) {
+    pane.appendChild(el('p', 'yd-note', 'Your notes are filled in at the desk, with a parent or guardian there. Ask at the desk.'));
+    for (const [title, v] of [["Tonight's goal", c.goal], ['Thanks / shout-out', c.thanks], ["Your car's story", c.car]]) {
+      const words = noteText(v) || (v === true ? 'Set at the desk' : '');
+      if (words !== '') lockedRow(pane, title, words, 'desk only');
+    }
+  }
+  const goal = notesHere ? textField(pane, "Tonight's goal", 'Said before your race tonight only.', noteText(c.goal), 80, false, { count: true }) : null;
+  const thanks = notesHere ? textField(pane, 'Thanks / shout-out', '', noteText(c.thanks), 80, false, { count: true }) : null;
+  const car = notesHere ? textField(pane, "Your car's story", '', noteText(c.car), 120, true, { count: true }) : null;
 
   // Said before they send (15 Nov 2026, the Terms' 7.1): what they write
   // is spoken in public, and sending lets the club use it that way.
   pane.appendChild(el('p', 'yd-consent', 'What you send may be said over the PA and on the club\\u2019s stream. By sending, you let your club and HeatCaller use it in the announcer\\u2019s commentary.'));
 
-  // What they have now, to send only what has changed.
-  const base = {
-    pName: p.base.name, pVoice: p.base.voice, tName: t.base.name, tVoice: t.base.voice,
-    goal: cleanText(c.goal), thanks: cleanText(c.thanks), story: cleanText(c.car),
-  };
+  // What they have now, to send only what has changed. Notes only where
+  // there are boxes for them.
+  const base = { pName: p.base.name, pVoice: p.base.voice, tName: t.base.name, tVoice: t.base.voice };
+  if (notesHere) Object.assign(base, { goal: noteText(c.goal), thanks: noteText(c.thanks), story: noteText(c.car) });
 
   return {
     junior: junior,
 
     diff() {
       const now = {
-        pName: cleanText(p.name.value), pVoice: String(p.pick.value || ''),
-        tName: cleanText(t.name.value), tVoice: String(t.pick.value || ''),
+        pName: p.name ? cleanText(p.name.value) : base.pName, pVoice: String(p.pick.value || ''),
+        tName: t.name ? cleanText(t.name.value) : base.tName, tVoice: String(t.pick.value || ''),
         goal: goal ? cleanText(goal.value) : base.goal, thanks: thanks ? cleanText(thanks.value) : base.thanks, story: car ? cleanText(car.value) : base.story,
       };
       const f = {};
@@ -17709,7 +17823,7 @@ function crewPane(pane) {
       return f;
     },
 
-    check(f, guardianOn) {
+    check(f) {
       for (const k of ['pName', 'tName']) {
         if (f[k] === undefined) continue;
         if (f[k].length > 24) return { tab: 'crew', words: 'Keep a crew name under 24 characters.' };
@@ -17718,8 +17832,7 @@ function crewPane(pane) {
       if ((f.goal !== undefined && f.goal.length > 80) || (f.thanks !== undefined && f.thanks.length > 80) || (f.story !== undefined && f.story.length > 120)) {
         return { tab: 'crew', words: 'One of those is too long - the box stops you at its limit.' };
       }
-      const notes = ['goal', 'thanks', 'story'].some((k) => typeof f[k] === 'string' && f[k] !== '');
-      if (junior && notes && !guardianOn) return { tab: 'crew', words: CREW_JUNIOR_WORDS };
+      // A junior's notes never come from here: there are no boxes for them.
       return null;
     },
 
@@ -17982,7 +18095,7 @@ async function load() {
   refreshAsks();
   startLive();
   loadCheckIn();
-  meRemembered(CODE);
+  meRemembered(CODE, body.junior === true);
   void loadVideos();
   setInterval(() => { void loadVideos(); }, 300000);
 }
@@ -17997,12 +18110,13 @@ load();
  * it. Kept apart from NIGHT_JS so the night itself does not change.
  */
 const NIGHT_ME_JS = `
-function meRemembered(code) {
+function meRemembered(code, junior) {
   // Signed out of in this tab and come back to by Back or a reload: the
   // PIN again, never remembered again.
   if (meSignedOut(code)) { meToPin(); return; }
-  // With the name the night gives, so the phone can say who is on it (item 8).
-  meRemember(code, typeof night === 'object' && night && typeof night.driver === 'string' ? night.driver : '');
+  // With the name the night gives, so the phone can say who is on it (item 8),
+  // and whether they are a junior, whose sign-in expires (ME_JUNIOR_DAYS).
+  meRemember(code, typeof night === 'object' && night && typeof night.driver === 'string' ? night.driver : '', junior === true);
   if (meCode() !== code) return;
   meSignedInButton();
 }

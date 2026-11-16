@@ -1,3 +1,5 @@
+> **RETIRED 15 Nov 2026 - superseded.** The privacy notice in force is Part 2 of the in-app terms (`HeatCaller/HeatCaller/Assets/Legal/HeatCaller-Terms.md`, revision 2). This 22 Oct draft is kept as a record only; counsel need not review it.
+>
 > **DRAFT for review by a lawyer - not legal advice, not in force.**
 > Written 22 Oct 2026 from what the HeatCaller code and docs say it does. Every point marked **[CHECK]** could not be confirmed from the code and needs an answer before this is used. Nothing here has been reviewed by anyone qualified.
 

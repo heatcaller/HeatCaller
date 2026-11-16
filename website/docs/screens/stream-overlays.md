@@ -48,6 +48,8 @@ Older addresses keep working: `/overlay` is the **Results table**, and `/broadca
 
 A stream is public, so an under-18's name shows as a first name and initial, "Mia K", on every overlay and in the captions. Change it with **Junior drivers:** on the **Local Screens** page: **First name and initial (Mia K)**, **First name only (Mia)** or **Full name**. The room, the PA and the driver's own night keep the full name.
 
+Each junior's profile also has **On stream**: **Shortened** or **Not at all**, with a tick to record that a parent agreed to them being on the stream. Set it to what the parent agreed.
+
 ### Sponsors
 
 Sponsors with a **Logo:** on the **Sponsors** page take turns on the **Sponsor logo** graphic, fifteen seconds at a time. A sponsor with twice the share of the reads gets twice the turns. While a sponsor's read is going out, it's their logo. The logo holds back in the last minute of a race, on the final lap and while the battle box is up. A sponsor who presents a moment has their logo beside "Presented by" on that graphic.

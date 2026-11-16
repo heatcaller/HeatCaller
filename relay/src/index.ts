@@ -9,7 +9,7 @@ import { FileStore } from "./store.js";
 import { TenantRegistry } from "./tenancy.js";
 import { removeLeftoverVideos } from "./oldvideos.js";
 import { DiskClipVault } from "./clips.js";
-import { elevenLabsRenderer, elevenLabsStreamer, migrateVoiceFolder, VoiceService } from "./voice.js";
+import { ElevenLabsLogging, elevenLabsRenderer, elevenLabsStreamer, migrateVoiceFolder, noLoggingFromEnv, VoiceService } from "./voice.js";
 import { LAP_VOICE_DIR, LapVoiceLibrary } from "./lapvoice.js";
 import { TopUpRequests } from "./topuprequests.js";
 import { UsageLog } from "./usagelog.js";
@@ -113,16 +113,23 @@ async function serve(): Promise<number> {
     (line) => console.log(line),
   );
 
+  // ElevenLabs is asked not to keep the lines (15 Nov 2026, children's
+  // privacy): on unless RELAY_VOICE_NO_LOGGING=0. One choice shared by the
+  // renderer and the streamer - see ElevenLabsLogging.
+  const voiceLogging = new ElevenLabsLogging(noLoggingFromEnv(process.env["RELAY_VOICE_NO_LOGGING"]), (line) =>
+    console.log(line),
+  );
+
   const voice =
     config.voice.voices.length === 0
       ? undefined
       : new VoiceService({
           config: config.voice,
           dataDir: config.dataDir,
-          render: voiceKey.length > 0 ? elevenLabsRenderer(voiceKey) : undefined,
+          render: voiceKey.length > 0 ? elevenLabsRenderer(voiceKey, undefined, voiceLogging) : undefined,
           // Race calls streamed as they are made, for a laptop that asks
           // (11 Nov 2026) - see VoiceService.speakStream.
-          stream: voiceKey.length > 0 ? elevenLabsStreamer(voiceKey) : undefined,
+          stream: voiceKey.length > 0 ? elevenLabsStreamer(voiceKey, undefined, voiceLogging) : undefined,
           log: (line) => console.log(line),
         });
 

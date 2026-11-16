@@ -23,7 +23,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 function sub(endpoint: string): PushSub {
   const ecdh = createECDH("prime256v1");
   ecdh.generateKeys();
-  return { endpoint, p256dh: b64url(ecdh.getPublicKey()), auth: b64url(randomBytes(16)), since: "2026-11-07T19:00:00Z" };
+  return { endpoint, p256dh: b64url(ecdh.getPublicKey()), auth: b64url(randomBytes(16)), since: new Date().toISOString() }; // now: a sign-up unused for 180 days is forgotten (15 Nov 2026)
 }
 
 /** A photo body sent a little at a time - chunked, no Content-Length - and never finished until told. */

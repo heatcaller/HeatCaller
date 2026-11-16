@@ -93,7 +93,6 @@ public sealed class CastControl : UserControl
     private readonly TextBox _txtPrincipalName = new();
     private readonly CheckBox _chkDriversPickCrew = new ThemedCheckBox();
     private readonly CheckBox _chkJuniorNotesOnStream = new ThemedCheckBox();
-    private readonly CheckBox _chkJuniorNotesFromPhone = new ThemedCheckBox();
     private readonly Button _btnCrewVoices = new();
 
     /// <summary>
@@ -797,15 +796,6 @@ public sealed class CastControl : UserControl
             _settings.Save();
         };
 
-        Check(_chkJuniorNotesFromPhone, "Juniors can send notes from their phone");
-        _chkJuniorNotesFromPhone.Checked = _settings.JuniorNotesFromPhone;
-        _chkJuniorNotesFromPhone.CheckedChanged += (_, _) =>
-        {
-            _settings.JuniorNotesFromPhone = _chkJuniorNotesFromPhone.Checked;
-            _settings.Save();
-            CrewChanged?.Invoke();
-        };
-
         _btnCrewVoices.Text = "Voices drivers can pick...";
         _btnCrewVoices.AutoSize = true;
         _btnCrewVoices.Click += async (_, _) => await ChooseCrewVoicesAsync();
@@ -822,14 +812,12 @@ public sealed class CastControl : UserControl
         crewGrid.AddRow("Voices:", new ButtonBar().With(_btnCrewVoices));
         crewGrid.AddHint("Every voice on the engine in use, less any you hide here. The announcer's and the co-hosts' "
                          + "voices are never offered.");
-        Switch(crewGrid, _chkJuniorNotesFromPhone,
-            "Off (the safer way), a junior's notes are typed at the desk with a parent there, and the parent's consent "
-            + "ticked on their profile. In the US, a child under 13 sending words online that are then said in public "
-            + "needs a parent's verified consent under COPPA, and the phone's \"I'm making this change for them\" tick "
-            + "is not that. A junior can still pick their crew's names and voices.");
+        // "Juniors can send notes from their phone" was here until 15 Nov 2026:
+        // removed, a junior's notes and about line are only typed at the desk.
         Switch(crewGrid, _chkJuniorNotesOnStream,
-            "Off, a junior's own words are left out on any night the stream is on - what is said goes out on the stream "
-            + "and its captions. Their crew's names and voices are heard either way.");
+            "Off, a junior's own words - their notes and about line - are left out on any night the stream is on: what "
+            + "is said goes out on the stream and its captions. Their crew's names and voices are heard either way. "
+            + "A junior's notes and about line are typed at the desk, never sent from their phone.");
 
         var crewSection = new Section("Drivers' own crew");
 
@@ -1164,11 +1152,11 @@ public sealed class CastControl : UserControl
         var on = IsCommentaryOn;
         var summariesOn = on && _settings.CommentaryRaceSummaries;
 
-        // Drivers' own crew: the voices and the juniors' switch mean nothing
-        // until drivers may pick (15 Nov 2026).
+        // Drivers' own crew: the voices mean nothing until drivers may pick
+        // (15 Nov 2026). The juniors' stream switch stays live either way: it
+        // also holds back a junior's about line, which is said with or
+        // without a crew.
         _btnCrewVoices.Enabled = _settings.DriversPickCrew;
-        _chkJuniorNotesOnStream.Enabled = _settings.DriversPickCrew;
-        _chkJuniorNotesFromPhone.Enabled = _settings.DriversPickCrew;
 
         // NOT tied to the recap. This name is also used by the COLD OPEN,
         // which is a segment of its own, so a club running the cold open

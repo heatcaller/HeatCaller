@@ -333,6 +333,22 @@ internal sealed partial class DeskInboxForm
         }
     }
 
+    /// <summary>True when any of these requests may only get a set reply (a junior's, or a badge nobody here has).</summary>
+    internal bool SetRepliesOnly(IEnumerable<InboxItem> items) =>
+        _requests is { } desk
+        && items.Where(i => i.Source == InboxSource.Request)
+            .Select(i => desk.Store.Get(i.Id))
+            .OfType<DriverRequest>()
+            .Any(desk.SetRepliesOnly);
+
+    /// <summary>
+    /// The replies Decline offers: the club's own, or for a junior HeatCaller's
+    /// fixed ones (15 Nov 2026, plan 1.4) - a club's edited reply is typed
+    /// text like any other, so a junior gets the built-in wording instead.
+    /// </summary>
+    internal IReadOnlyList<string> DeclineReplies(bool setOnly) =>
+        setOnly ? DeskInbox.DefaultQuickReplies : DeskInbox.QuickReplies(_settings.InboxQuickReplies);
+
     /// <summary>
     /// Declines one or several, with a quick reply or (null) the desk's own
     /// reason asked for - the same reason form Driver Requests had.
@@ -352,6 +368,15 @@ internal sealed partial class DeskInboxForm
         }
 
         var reason = reply;
+
+        // 15 Nov 2026, plan 1.4: no typed reason for a junior - the menu
+        // greys "Other reason..." for one, and this is the same rule for any
+        // other way in. The desk turns anything else into a fixed reply too.
+        if (reason is null && requests.Any(desk.SetRepliesOnly))
+        {
+            AppDialog.Show(this, DeskInbox.JuniorReplyHint, "Pick a set reply", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
 
         if (reason is null)
         {

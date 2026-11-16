@@ -227,6 +227,7 @@ public partial class MainForm : Form
     partial void RosterTickDriverLive();     // MainForm.DriverLive.cs
     partial void RosterTickCaptions();       // MainForm.Captions.cs
     partial void RosterTickDriverRequests(); // MainForm.DriverRequests.cs
+    partial void RosterTickForget();         // MainForm.Forget.cs
 
     // Each time a race is filed or corrected, from PublishDriverNightsFor
     // (MainForm.Relay.cs), whatever the relay switches say.
@@ -1078,6 +1079,26 @@ public partial class MainForm : Form
                 ? (_race.LapLimit, _race.TimeLimit)
                 : null;
 
+        // SAILOR-MOUTH CLEAN AROUND JUNIORS (15 Nov 2026, children's privacy
+        // plan 4.1, Asher): the race being called - its grid, or the cars
+        // timed when there is none - and whether a junior raced tonight, for
+        // the night recap. Copies, read from the commentary's own thread.
+        _commentary.CurrentRaceTransponders = () =>
+            _race.Grid.ToList()
+                .Concat(_race.GetOrderedStandings().Select(s => s.TransponderId))
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        _commentary.JuniorRacedTonight = () =>
+        {
+            var tonight = TonightAtTheTrack.NightOf(DateTime.Now);
+
+            return _sessionHistory.All
+                .Where(s => TonightAtTheTrack.NightOf(s.StartedAtUtc.ToLocalTime()) == tonight)
+                .SelectMany(s => s.Results)
+                .Any(r => !string.IsNullOrWhiteSpace(r.Transponder) && _profiles.GetForAnyThread(r.Transponder)?.IsJunior == true);
+        };
+
         _relayPublisher = new RelayPublisher(_settings);
 
         // From the publisher's own thread; OnClientRawMessage takes lines
@@ -1417,6 +1438,7 @@ public partial class MainForm : Form
             RosterTickDriverLive();
             RosterTickCaptions();
             RosterTickDriverRequests();
+            RosterTickForget();
         };
 
         _webRosterTimer.Start();
