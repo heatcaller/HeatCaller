@@ -1,0 +1,278 @@
+> **Brief for counsel. Not legal advice; prepared by the owner (with AI help) to save counsel's time.**
+> Written 15 Nov 2026 for HeatCaller LLC. Every fact below was checked against the code on branch `claude/children-privacy-ip` the same day, except where it says **[CHECK]**. Nothing marked "built" has run at a real club yet, and the relay changes are not deployed.
+
+# HeatCaller: brief for counsel
+
+## 1. What we need from you
+
+HeatCaller LLC (a New York LLC) makes HeatCaller, race timing and announcing software for radio-controlled car racing clubs. Many clubs race juniors, some under 13. We are in a free beta and plan to charge clubs later.
+
+We have already:
+- decided how the product treats children's information;
+- built most of it;
+- drafted the documents below.
+
+**We are asking for:**
+1. Review and correction of the drafts, in the order of section 6.
+2. Answers to the questions in section 7.
+
+**We are not asking for** research or first drafts. Sections 3 and 4 describe the technology and the information involved, so you don't have to read the code.
+
+## 2. The business in one paragraph
+
+A club runs HeatCaller on its own Windows laptop at the track. The laptop:
+- reads lap times from a timing decoder;
+- runs the races;
+- announces them over the venue's PA with a computer voice;
+- shows results on screens.
+
+The club can also turn on optional online pieces:
+- results web pages;
+- drivers' and spectators' phones (check-in, requests, alerts);
+- AI-written commentary;
+- a premium cloud voice.
+
+These run through our server, the "relay". The club decides what to record and publish. We run the relay and the online AI and voice services.
+
+## 3. The technology
+
+### 3.1 The desktop app (on the club's laptop)
+
+- **Platform:** a Windows desktop application in C#, .NET 10, Windows Forms, version 0.63.0.
+  - Installed as an MSI/Setup.exe built with Velopack.
+  - Updates come from a GitHub releases repository (`heatcaller/HeatCaller-releases`). The app checks there and asks before installing. No driver information is sent. **[CHECK]** whether that repository is public.
+- **Where it keeps data:** plain JSON files in the club's Windows profile (`%AppData%\HeatCaller`), plus folders of photos, recordings and logs.
+  - Secrets (relay token, PINs, email password, API key) are encrypted with Windows DPAPI, locked to the Windows account.
+  - Drivers' profiles and results are not encrypted (section 4.1).
+- **Timing hardware:**
+  - Reads EasyLap/Robitronic decoders (USB and serial) and I-Lap decoders.
+  - Has beta readers for MyLaps/AMB P3, ZRound/RiCino, Cano/RCHourglass and OpenStint decoders.
+  - The EasyLap USB protocol was worked out from USB captures and another program's debug log (question 7.9).
+  - Each decoder's raw passes are logged for 14 days.
+- **Voice:**
+  - **Kokoro**, an offline neural voice: KokoroSharp, MisakiSharp, ONNX Runtime. It runs on the laptop and sends nothing.
+  - **ElevenLabs**, a cloud voice: either the club's own account, or "the HeatCaller voice", which is ours, resold through the relay (question 7.6).
+- **Commentary:**
+  - **Online:** Anthropic's Claude model through the relay, with our key.
+  - **Offline:** a bundled small model (Qwen3 0.6B, Apache-2.0) run by LLamaSharp/llama.cpp, used when the relay doesn't answer, or always for lines about juniors if the club turns on "Offline voices for juniors".
+- **Video and pictures:**
+  - LibVLC (LGPL) plays sponsors' video slides.
+  - An optional webcam "photo finish" keeps frames of cars crossing the line, on the laptop only.
+  - Driver photos are kept on the laptop.
+  - Podium "highlight videos" are drawn from race graphics and the PA audio.
+- **Venue network:**
+  - A built-in web server serves screens and check-in to phones on the venue's Wi-Fi.
+  - It can talk to OBS, the club's streaming software, to know when a stream is live.
+  - A second club PC can keep a "warm standby" copy of the data. This is off by default, PIN-protected, local network only, and sent over plain HTTP.
+- **Email:** the club's own mailbox (Gmail, iCloud, Outlook or other SMTP) sends drivers their PINs and night summaries. It never goes through us.
+- **Third-party code:** listed with licences in the app's About box (`About.cs`), with texts in `Assets/Licences`. All of it is permissive except:
+  - LibVLC/LibVLCSharp, which is LGPL, dynamically linked and offered as source;
+  - MisakiSharp's ported code, which is question 7.8.
+
+  The two GPL VLC plugins are excluded.
+
+### 3.2 The relay (our server)
+
+- **Platform:** Node.js and TypeScript, with no third-party runtime dependencies.
+- **Hosting:** Fly.io, app `heatcaller-relay`, region `ewr` (New Jersey, USA): one small machine (shared CPU, 256 MB) and one persistent disk mounted at `/data`.
+- **Storage:** JSON files on that disk, one folder per club.
+- **Access and security:**
+  - HTTPS only.
+  - Clubs' laptops publish with a per-club bearer token.
+  - Drivers sign in with a badge code (an 80-bit keyed hash of their transponder) and an optional personal PIN, which is stored as a PBKDF2 hash, rate-limited and locked out after repeated failures.
+  - No cookies, no analytics, no ads, no third-party scripts.
+  - A strict content-security policy. Framing is allowed only for `youtube-nocookie.com`.
+- **What it does:** serves each club's public pages (results, live race, schedule, standings, badges, check-in) and the drivers' private phone pages. It takes requests, sign-ups and shout-outs and holds them for the laptop. It forwards commentary prompts to Anthropic and speech to ElevenLabs with our keys, and sends Web Push alerts.
+- **Logs:**
+  - A usage log (counts and timings only, no words or names) kept 24 months.
+  - Anonymous page counts kept 90 days.
+  - An admin audit log, written only by our admin commands over `fly ssh`.
+  - IP addresses are used in memory for rate limits and not logged. **[CHECK]** whether Fly.io's own edge logs record them.
+- **Backups:** `relay/backup.cmd` copies the whole `/data` disk, every club, down to the operator's PC as a dated `relay-data.tgz` under `relay-backups\`. These copies are **not encrypted**. See question 7.12.
+
+### 3.3 Outside services
+
+| Service | What it receives | Under whose account |
+|---|---|---|
+| Fly.io | Everything on the relay (section 4.2) | HeatCaller LLC |
+| Anthropic (Claude API) | Commentary prompts: race facts with drivers' names (in full in prompts), pronouns, team and sponsors, the about line and notes (juniors' only with a parent's consent), "the driver is a junior" | HeatCaller LLC (key held as a Fly secret) |
+| ElevenLabs | Each spoken line's text, which can name drivers. We send `enable_logging=false`, honoured only on some plans | HeatCaller LLC's key, or the club's own |
+| Google FCM, Apple and Mozilla push services | Encrypted alert payloads naming the driver ("Mia K's race is next") | n/a (Web Push) |
+| GitHub | Update checks (no driver data) | HeatCaller LLC |
+| YouTube | The club's own stream, on the club's channel. The relay looks up a pasted video ID only | The club |
+| The club's email provider | PINs and night summaries to drivers' own addresses | The club |
+
+### 3.4 How it is built
+
+The code is written by the owner with heavy use of AI coding assistants (Claude Code), with automated tests (about 8,800 for the app and 2,000 for the relay). The source is in a private GitHub repository under the `heatcaller` organisation. **[CHECK]** account ownership: the repositories and Fly.io account should belong to the LLC (founder-ip-assignment.md).
+
+## 4. The information we take in and can reach
+
+**Never collected anywhere:**
+- dates of birth (only an age band);
+- home addresses;
+- government IDs;
+- card or bank numbers (the money ledger records amounts and "cash"/"card" only);
+- precise location;
+- biometric templates;
+- voice recordings of drivers (the voices are synthetic).
+
+### 4.1 On the club's laptop (the club controls it; we never see it unless the club sends a support file)
+
+| Information | About whom | Notes |
+|---|---|---|
+| Name, nickname or pronunciation, pronouns | Every driver | Pronouns and the about line reach AI prompts |
+| Email, free-text contact (phone numbers end up here) | Drivers who give them | Used for PINs and night emails |
+| Transponder numbers, car, class, race number, body colour, home track, skill level, sponsors, team | Every driver | Transponders are never published |
+| About line (120 characters), crew names, three notes | Drivers who give them | Juniors' notes and about line are typed at the desk only |
+| Waiver date, guardian's name, membership number and expiry | When the club records them | |
+| Junior (under 18) and age band (under 13 / 13-17) | Juniors | |
+| Consent ticks: parent agreed to notes on PA/stream; parent agreed to stream; On stream (shortened / not at all) | Juniors | |
+| Online privacy choices: no photo, no video, initials only | Any driver | |
+| Driver photo | Optional | Shown only on the club's screens and, if the club allows, to staff on the online check-in list |
+| Results, laps, penalties, standings, achievements, rivalries | Every driver | Kept until deleted; "Forget" renames them "Removed driver" |
+| Check-ins, fees paid (amount and cash/card), pre-entries, rentals, handicaps, tech inspections, setup sheets, garage cars and battery packs | Drivers who use those features | |
+| Requests and sign-ups from phones | Drivers who send them | Answered requests kept 30 days |
+| Race audio (the PA) and per-driver clips, podium highlight videos, photo-finish webcam frames | Everyone at the track, by name over the PA; children appear in webcam frames at the line | Kept for the number of nights the club chooses |
+| Racer PINs (DPAPI), relay token, email password | | Encrypted with DPAPI |
+| Logs: session logs, crash.log, freeze dumps (14 days), decoder logs (14 days) | Names can appear | Not sent anywhere automatically |
+| Backups (daily, 14 kept) | Everything above | Encrypted only if the club sets a backup password; cloud copies need one |
+| Warm-standby copy on a second PC | Everything above | A plain zip (question 7.12) |
+
+### 4.2 On the relay (we host it; we can read it)
+
+| Information | Public? | How long |
+|---|---|---|
+| Results, standings, schedule, live race, badges, records. Names shortened ("Mia K"); juniors always | Public; pages naming a junior are noindex | Until the club republishes, deletes, or unpublishes old years |
+| Roster and heat line-ups | Public, only if the club turns it on | As above |
+| Online check-in list with photos | Staff PIN only, only if the club turns it on | Check-ins ignored after 12 hours |
+| PIN hashes, badge codes | No | Until changed |
+| Each driver's private page: their night, money owed, requests and answers, crew, notes (juniors' as set/not set until a parent agrees), family links, garage cars and car photos sent from phones | Badge code or PIN only | Until republished, forgotten or deleted. A junior's phone sign-in lasts 30 days |
+| Requests and crew changes waiting for the laptop | No | Until collected |
+| Sign-ups: name, class, transponder, car, email, guardian flag | No | 14 days |
+| Sign-in email addresses | No | 30 minutes |
+| Push and follow sign-ups: phone push addresses, a label, and the followed name | No | 180 days without use. Juniors can't be followed by name |
+| Shout-outs from the public: a name (40) and a message (200), no login | Go to the club's desk; may be read on the PA | Until collected |
+| Votes (taps only), page counts (anonymous) | Counts only | 90 days for page counts |
+| Race audio clips per driver | Their private page | 7 days |
+| Podium highlight videos | Public | 1 week |
+| Captions and listen-along audio of the PA (optional) | Public | Live |
+| Spoken-line audio cache | No | A line naming a driver is kept for that club only |
+| A private list of each junior's published name forms | No (used to refuse follows and to noindex pages) | Replaced each publish |
+| Usage log, admin audit log | No (operator only) | 24 months; monthly files |
+
+### 4.3 What HeatCaller LLC itself can reach
+
+- **The relay's disk:** every club's data in section 4.2, through Fly.io's console and `fly ssh`.
+- **Relay backups:** the whole-disk copies on the operator's PC (section 3.2).
+- **Our own provider accounts:** Anthropic and ElevenLabs keys and usage dashboards. Whatever those providers keep of the prompts and lines is held under our account.
+- **Support files and feedback that clubs choose to email to us:**
+  - Names are removed on a best-effort basis.
+  - Names not in the driver list, and free text, may remain.
+  - Freeze dumps are excluded.
+- **Nothing from the laptop otherwise:** the desktop app has no telemetry, crash upload or analytics.
+
+## 5. What was decided and built for children (15 Nov 2026)
+
+Full detail is in `plans/children-privacy-and-ip-plan.md` (the status table) and `website/legal-drafts/driver-crew-children.md` (section 9).
+
+**What a junior can send, and what is said:**
+- **Age band:** juniors have one; a junior with none set is treated as under 13.
+- **Desk-only words:** a junior's notes and about line are typed only at the desk. A junior's phone can send only the name the announcer uses, plus, for 13-17s, crew names for desk review.
+- **Spoken only with consent:** a junior's words are spoken only with a parent's recorded agreement, and on stream nights only if the club allows it.
+
+**How juniors appear in public:**
+- **Names:** always shortened online, whatever the club's setting.
+- **Search and follows:** pages naming a junior are noindex, and juniors can't be followed by name (family links only).
+- **Streams:** each junior has an On stream choice (shortened / not at all) and a stream-consent tick.
+
+**Contact with juniors:**
+- **Desk replies:** fixed text only.
+- **Between drivers:** no messages, and juniors are left out of marshal-swap asks.
+- **Shout-outs:** one naming a junior is flagged for a second look.
+
+**Tone:** the swearing commentary tone plays clean when a junior is in the race.
+
+**Data handling:**
+- **Retention:**
+  - push and follow sign-ups expire after 180 days unused;
+  - a junior's phone sign-in after 30 days;
+  - freeze dumps after 14 days;
+  - old results can be unpublished.
+- **Backups:** encrypted with the backup password, and cloud copies need one.
+- **Export and Forget:** Export gives a driver's data; Forget deletes it from the laptop and the relay.
+- **Vendors:** we ask ElevenLabs not to log, and clubs can turn on offline voices for juniors.
+
+**Paperwork:** the in-app Terms (revision 2) say all of this and replace the separate beta agreement.
+
+## 6. Documents to review, in order
+
+All paths are in the repository.
+
+1. `HeatCaller/HeatCaller/Assets/Legal/HeatCaller-Terms.md`: the in-app licence and privacy notice (revision 2). Every install must accept it. **The most important.**
+2. `website/legal-drafts/driver-crew-children.md`: the children's memo (COPPA, UK and EU, US states, safeguarding, streams, vendors, retention, checklist, parent consent form).
+3. `website/legal-drafts/dpia.md`: data protection impact assessment.
+4. `website/legal-drafts/security-program.md`: COPPA §312.8-style security program.
+5. `website/legal-drafts/founder-ip-assignment.md`: assignment from Asher Kent to the LLC.
+6. `website/legal-drafts/copyright-takedown-policy.md`: DMCA §512 policy and agent checklist.
+7. `website/legal-drafts/vendor-letters.md`: letters to ElevenLabs and Anthropic (not sent).
+8. `HeatCaller/HeatCaller/About.cs` (the header comment) and `Assets/Licences/LibVLC-plugins.txt`: open-source compliance.
+
+Retired, no review needed:
+- `beta-agreement.md`
+- `privacy-notice.md` (both replaced by the Terms)
+- `elevenlabs-questions.md` (folded into vendor-letters.md)
+
+## 7. Questions for counsel
+
+**Children**
+1. **COPPA operator status.** With juniors' free text now taken only at the desk (offline), is HeatCaller LLC still an "operator" collecting personal information from under-13s online? The remaining online items from juniors are:
+   - an announcer name;
+   - a 13-17's crew names;
+   - push sign-ups;
+   - the badge-code sign-in.
+
+   If we are an operator, which of the security program (§312.8), retention policy (§312.10) and direct parental notice are required?
+2. **Parental consent.** Is the club's recorded "a parent or guardian agreed" tick, backed by the paper form in the memo's section 10, adequate for speaking a child's words on a public stream? Should the form also cover publicity?
+3. **Controller and processor.** Who is the controller and who is the processor for each flow (the club vs. HeatCaller LLC)? Do we need a data processing agreement with clubs, and with each vendor?
+4. **Age band default.** Is treating "age band not set" as under 13 the right default, and should check-in prompt for the age band of every junior?
+5. **Safeguarding.** Is Terms section 7.3's "the club runs its own safeguarding" allocation sound? Does anything in MAAPP-style guidance oblige us further? Do family links (made by the driver, never expiring) need a lapse?
+
+**Vendors and AI**
+6. **ElevenLabs.** Can we resell its speech and cache lines across clubs (both already built) before ElevenLabs answers in writing? What do the end-user flow-down terms in Terms section 6 need to say?
+7. **Anthropic.** Do Anthropic's commercial terms and usage policy cover a product used by clubs with child participants, given that juniors' consented words reach the prompt? Do we need anything beyond the commercial terms?
+
+**IP and licences**
+8. **MisakiSharp.** Its Apache-2.0 code includes a fallback that "reproduces" phonemizer (GPL-3.0) behaviour, and HeatCaller reaches it for every word not in its dictionary. Is that a GPL obligation for us? Must we fork KokoroSharp to avoid it? Its number-reading code was ported from num2words (LGPL-2.1): do the LGPL terms we already meet for LibVLC suffice?
+9. **Reverse engineering.** The EasyLap decoder protocol was worked out from USB captures, cross-checked against Next Level Timing's debug log while running NLT under its licence. Is there exposure under NLT's EULA? The P3 reader was written from the published format. **[CHECK]** source documents.
+10. **LibVLC.** Is the written source offer plus an uploaded source tarball enough under LGPL-2.1 §6? Is a trimmed plugin set still "the Library"? The open items are listed in `LibVLC-plugins.txt`.
+11. **Founder IP and AI-written code.** Is the assignment draft complete? How much copyright protection does AI-assisted code have, and should we rely on contract and trade secrets instead?
+12. **Copies of everyone's data.** Are these acceptable, or must they be encrypted or limited?
+    - relay backups on the operator's PC (unencrypted, all clubs);
+    - the warm-standby zip on a club's second PC;
+    - unencrypted profiles on the club laptop (protected only by the Windows sign-in).
+13. **Trademarks.** Is "HeatCaller" clear to register, in classes 9 and 42? Are our nominative uses of LiveTime, LiveRC, MYLAPS and others, with the footer disclaimer, fine? We renamed planned features to "Pole Shootout" and "Invitational (Reedy-style format)": is "Reedy-style" acceptable?
+14. **Copyright safe harbour.** Is the DMCA §512 policy adequate for a relay that hosts car photos, shout-outs and club content? Can we run it without a per-item admin takedown tool (today only whole-club delete exists)?
+15. **Music and AI output.** Terms 7.5 grants clubs the right to play HeatCaller's own synthesised music on their PA and streams, and puts licensing of a club's own music on the club. Terms 7.6 says the club may use AI output, but we claim no ownership and promise nothing. Are these sound?
+16. **Patents.** Is a quick freedom-to-operate search worth doing before raising money? The areas are transponder timing, heat seeding and AI race commentary.
+
+**General**
+17. **Liability.** Is limitation of liability to US$50, New York law and an as-is warranty enforceable as drafted for clubs outside New York? Should paid plans change it?
+18. **Outside the US.** For the UK, EU, Canada and Australia, what is the minimum before clubs there use the beta?
+
+## 8. Already done, or the owner's to do (no counsel time needed)
+
+**Done:**
+- licence texts and the About list;
+- GPL plugins excluded;
+- the MyLaps documentation contradiction fixed;
+- trademark footer on the docs.
+
+**The owner's to do:**
+- register the DMCA agent and publish the policy page;
+- send the vendor letters and file the answers;
+- upload the VLC source tarball and fill in its link;
+- sign the IP assignment;
+- name the security coordinator;
+- deploy the relay;
+- run a real club night.

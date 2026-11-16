@@ -60,12 +60,14 @@ Likelihood: remote / possible / probable. Severity: minimal / significant / seve
 | 4 | An adult sends a private message to a junior through HeatCaller | Remote (fixed text only) | Severe | Low |
 | 5 | A vendor keeps or trains on a child's words | Possible | Significant | Medium until vendor answers are in |
 | 6 | A relay breach exposes juniors' information | Remote | Significant | Low-medium |
-| 7 | A lost or stolen club laptop or backup exposes profiles | Possible | Significant | Low (encrypted backups; DPAPI for keys) [CHECK profiles.json itself is not encrypted] |
+| 7 | A lost or stolen club laptop or backup exposes profiles | Possible | Significant | Low-medium: backups are encrypted when the club sets a backup password, and cloud copies need one; keys and PINs use DPAPI. profiles.json on the laptop is NOT encrypted (DPAPI would tie it to one Windows account and break restoring on a new PC and the standby copy) - the laptop's own Windows sign-in is the protection. [CHECK acceptable] |
 | 8 | Crude or unkind commentary about a junior | Remote (Sailor-mouth clean with a junior in the race; desk review) | Significant | Low |
 | 9 | Data kept longer than needed | Possible | Minimal | Low (timers; Forget) |
 | 10 | A club marks a child as an adult, or doesn't tick Junior at all | Possible | Significant | Medium - outside HeatCaller's control |
 | 11 | A family link is forwarded to someone the parent wouldn't choose | Possible | Significant | Medium |
 | 12 | Old results with juniors' names remain online for years | Probable | Minimal-significant | Medium (unpublish old nights is optional, off by default) |
+| 13 | The warm-standby copy (a whole copy of the race data on a second club PC) is read on the venue network or kept unencrypted on the standby PC | Remote | Significant | Low-medium: off unless the club ticks it; local network only; a PIN of 8+ characters with a lockout; but it travels over plain HTTP and sits as a plain zip in DocumentsHeatCaller BackupsStandby Copies on the standby PC (which OneDrive may sync if Documents is redirected) [CHECK acceptable, or encrypt with the backup password] |
+| 14 | Staff type a junior's name into a Voice Settings Test line and it goes to ElevenLabs even with Offline voices for juniors on | Remote | Minimal | Low (a deliberate staff action; the fixed test sentences name nobody) |
 
 ## 6. Measures to reduce the risks
 
@@ -77,11 +79,11 @@ Likelihood: remote / possible / probable. Severity: minimal / significant / seve
 | 4 | Fixed replies only; no driver-to-driver messages | No adult free text to a junior | Low | |
 | 5 | ElevenLabs no-logging request; Offline voices for juniors; commercial API for Anthropic; written vendor answers | Limits exposure | Low once answered | |
 | 6 | Security program (security-program.md) | | Low | |
-| 7 | Backup encryption; cloud folders need a password; freeze reports deleted after 14 days; consider DPAPI for profiles.json (plan 2.4) | | Low | |
+| 7 | Backup encryption with the backup password; cloud copies refused without one; freeze reports deleted after 14 days; Terms tell clubs to keep the laptop's sign-in private. DPAPI for profiles.json considered and rejected (see risk 7) | | Low | |
 | 8 | Clean tone with juniors; desk review | | Low | |
 | 9 | Retention timers; Forget this driver | | Low | |
-| 10 | Terms 7.3 forbids it; check-in screens could prompt for the age band of any driver under 18 [CHECK whether worth building] | | Medium | |
-| 11 | Family link can be revoked by the club [CHECK it can]; subscriptions through it expire after 180 days unused [CHECK whether the link itself does] | | Low-medium | |
+| 10 | Terms 7.3 forbids it; Junior and the age band are on every driver's profile in Driver Hub (not only in the Papers window, which clubs that don't check waivers never see); a junior with no age band is treated as under 13, and the Papers window warns about it | | Medium | |
+| 11 | The driver can stop any family link from their phone (Me > family links > Stop); the club stops all of them by turning off sharing drivers' nights; Forget deletes a driver's links. Push sign-ups through a link expire after 180 days unused; the link itself does not expire [CHECK whether a junior's links should lapse, e.g. each season] | | Low-medium | |
 | 12 | Offer clubs the unpublish setting; consider defaulting it on for juniors [Asher to decide] | | Medium | |
 
 ## 7. Sign-off
