@@ -17,11 +17,11 @@ The Founder created the HeatCaller software and related materials, some before t
 
 "**HeatCaller IP**" means everything the Founder has made, alone or with others, for or relating to HeatCaller, at any time before or after the Effective Date, in any form, and all rights in it anywhere in the world, including:
 
-- **Code:** the source and object code of the HeatCaller desktop app, the relay, the website, tools and scripts, tests, and everything in the HeatCaller repositories (including github.com/heatcaller and the HeatCaller-releases repository) [CHECK the list of repositories];
+- **Code:** the source and object code of the HeatCaller desktop app, the relay, the website, tools and scripts, tests, and everything in the HeatCaller repositories (on 16 Nov 2026: github.com/heatcaller/HeatCaller, heatcaller/HeatCaller-releases, heatcaller/heatcaller-site and heatcaller/HeatCaller-Admin. The heatcaller/SmartThingsPublic fork is other people's code and is not included);
 - **Assets:** audio (music, sound packs, show music, imaging and recorded or generated voice lines), images, logos, icons, video, fonts the Founder made, and the data files that ship with the software;
 - **Writing:** documentation, the website, plans, designs, mock-ups and marketing material;
 - **Names and marks:** the names "HeatCaller" and any other product or feature names, logos and slogans, with the goodwill of the business they represent, and any applications to register them;
-- **Domains and accounts:** the domain heatcaller.com and any other domains, and the accounts used to run HeatCaller (code hosting, app hosting, email, the voice and AI providers, payment and app-store accounts), as far as they can be transferred [CHECK the list];
+- **Domains and accounts:** the domain heatcaller.com and any other domains, and the accounts used to run HeatCaller (code hosting, app hosting, email, the voice and AI providers, payment and app-store accounts), as far as they can be transferred (on 16 Nov 2026: the heatcaller GitHub organization, the Fly.io app heatcaller-relay and its volume, the Cloudflare account holding R2 video, and the ElevenLabs and Anthropic API accounts. [CHECK: add the domain registrar, the email provider, and any payment or app-store accounts]);
 - **Know-how:** inventions, ideas, methods, decoder-protocol notes, and trade secrets; and
 - **AI-assisted work:** anything above made with the help of AI tools (including code, text, audio and images generated or edited with them), to the full extent the Founder has any rights in it.
 

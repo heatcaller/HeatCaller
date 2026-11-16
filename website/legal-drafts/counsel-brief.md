@@ -316,15 +316,13 @@ Retired, no review needed:
 - the MyLaps documentation contradiction fixed;
 - trademark footer on the docs.
 
-**The owner's to do:**
+**Done since (16 Nov 2026):**
+- the cookie policy and this work merged together (PR #236), and the relay deployed (Fly v167).
+
+**The owner's to do** (step by step in owner-todo.md):
 - register the DMCA agent and publish the policy page;
 - send the vendor letters and file the answers;
 - upload the VLC source tarball and fill in its link;
 - sign the IP assignment;
 - name the security coordinator;
-- merge the cookie policy branch (`claude/inbox-themes-followups`) with this one. When merging:
-  - this branch's Terms need the Part 3 from that branch;
-  - the cookie policy needs a line for `hg-me-at-<club>` (the sign-in times behind the 30-day junior sign-in). The policy's test will fail until it has one;
-  - the policy's Alerts section must say push sign-ups expire after 180 days unused;
-- deploy the relay;
 - run a real club night.

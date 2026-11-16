@@ -38,7 +38,7 @@ The coordinator named above is responsible for this program: keeping it current,
 | Race video | R2 / YouTube | Yes, if the club records |
 | Support files | Our email | Should not, but may (names are removed on a best-effort basis) |
 
-[CHECK] this table against the relay code after the Phase 1-2 changes land.
+The Phase 1-2 changes landed on 16 Nov 2026 (PR #236) and this table describes them. Check it again at each annual review.
 
 ## 4. Annual risk assessment
 
@@ -57,17 +57,17 @@ The first assessment is the DPIA (website/legal-drafts/dpia.md).
 **Access.**
 - Only the coordinator and named people have admin access to Fly.io, R2, the relay's admin pages, the ElevenLabs and Anthropic accounts, and the code repositories. List them: ______________________.
 - Every such account uses a unique password and two-factor authentication.
-- Relay secrets (API keys, signing keys) live in the host's secret store, never in the code. [CHECK]
+- Relay secrets (API keys, signing keys) live in the host's secret store, never in the code. Checked 16 Nov 2026: Fly.io holds two secrets, RELAY_CONFIG_JSON (the clubs' token hashes and settings) and RELAY_BRAIN_KEY. Neither is in git.
 - Access is removed the same day someone no longer needs it.
 
 **The relay.**
 - HTTPS only.
 - Each club's data is kept apart by its club key; one club cannot read another's.
 - Driver phone access is by personal PIN; junior sign-ins expire after 30 days.
-- Rate limits on PIN and code entry. [CHECK what exists]
+- Rate limits on PIN entry. Checked 16 Nov 2026: a club's PIN list closes after 50 wrong PINs within 10 minutes, counted across every address. It closes for 10 minutes the first time, and longer each time after that, up to 12 hours (relay/src/pinguard.ts). [CHECK: whether family-link and crew codes have a limit of their own.]
 - The retention timers in Part 2 of the Terms run automatically, and are tested.
-- Logs do not record notes, PINs or email addresses. [CHECK]
-- Backups of relay data, if any, have the same retention. [CHECK whether Fly volumes are snapshotted]
+- Logs do not record notes, PINs or email addresses. Checked 16 Nov 2026: the relay's own log lines name the club and the kind of document, never what is in it. Fly.io's edge keeps its own request logs, with IP addresses and page addresses, under Fly's retention.
+- Backups of relay data have the same retention. Checked 16 Nov 2026: Fly takes a daily snapshot of the relay's encrypted volume (relay_data) and keeps 5. Anything deleted on the relay is therefore gone from every Fly copy within about 5 days, and the retention schedule and Forget should say "within 5 days" for those copies. The other copy is backup.cmd's relay-data.tgz on the operator's PC, which is not encrypted (counsel brief 4.3). Keep it no longer than the newest backup needs, in an encrypted folder.
 
 **Vendors.**
 - ElevenLabs: each request asks not to log or keep the line where the account allows it; Offline voices for juniors keeps lines naming juniors on the club's computer.

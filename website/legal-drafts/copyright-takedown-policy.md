@@ -64,14 +64,14 @@ For trademark complaints, a driver's or parent's privacy request, or anything el
 
 The Copyright Office runs an online directory of designated agents. Asher files this himself.
 
-- [ ] Create an account on the DMCA Designated Agent Directory: <https://dmca.copyright.gov/>. **[CHECK]** the current address and fee (about US$6 when checked; it was not re-checked on 15 Nov 2026).
+- [ ] Create an account on the DMCA Designated Agent Directory: <https://dmca.copyright.gov/>. **[CHECK]** the current address and fee (checked 16 Nov 2026: the account is free, and each designation, renewal or change costs US$6. Confirm on the payment page).
 - [ ] Register HeatCaller LLC as the service provider, with its legal name exactly as on the New York filing.
-- [ ] List every name the service is known by: "HeatCaller", and the relay's public domain(s). **[CHECK]** the relay hostnames clubs see (e.g. the Fly.io app domain and any heatcaller.com subdomain).
+- [ ] List every name the service is known by: "HeatCaller", and the relay's public domain(s). Checked 16 Nov 2026: the relay answers only at heatcaller-relay.fly.dev, with no custom domain on the Fly app. List that and heatcaller.com. If a heatcaller.com subdomain is pointed at the relay later, change the designation that day ($6).
 - [ ] Name the agent. It can be a role ("Copyright Agent") with Asher's details or a registered agent service. The postal address is published, so consider a business address or a registered-agent address rather than a home address.
 - [ ] Give the agent's email and phone. Use a mailbox someone reads, such as copyright@heatcaller.com.
 - [ ] Pay the fee and save the confirmation.
 - [ ] Put the same agent details on the heatcaller.com page (Part A), so the page and the directory match exactly.
 - [ ] Set a reminder: the designation **expires after three years** unless renewed. Renew before the expiry date shown on the confirmation. Update it straight away if the address or email changes.
 - [ ] Set up a simple log for notices, counter-notices and action taken (date, club, URL, outcome). It is the evidence for the repeat-infringer policy.
-- [ ] Check how to remove one item from the relay for one club. `deleteClub` removes everything; the desk can delete its own items. **[CHECK]** whether an admin can remove a single published item (a photo, a sponsor slide, a video) without deleting the club.
+- [ ] Check how to remove one item from the relay for one club. `deleteClub` removes everything; the desk can delete its own items. Checked 16 Nov 2026: an admin can't. The relay's only delete removes the whole club, and it needs the club's own token. Until a removal for one item is built, either ask the club to take the item down from the desk (the fastest way), or remove it by hand from the club's folder on /data over `fly ssh console`, and log what you did. That removal is worth building before this page goes live.
 - [ ] Add a link to the page from the heatcaller.com footer and from the Terms (Part 1, section 7.4 already says we may remove content on a complaint).
