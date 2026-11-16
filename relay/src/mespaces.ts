@@ -35,6 +35,67 @@
  * in the address opens one.
  */
 
+/**
+ * The fee banner's look (12-15 Nov 2026), on every club page since 15 Nov
+ * 2026 (Asher: "the notification should be a banner across all pages with the
+ * scroll thing you just built"): Me's own banner and every other page's
+ * (.hc-owe, see hcOweStart in the pages' shared script) look the same.
+ */
+export const OWE_CSS = `
+/* Tonight's entry, at the top of Me under their name (12 Nov 2026). */
+/* Larger and louder since 15 Nov 2026 (Asher: "make the payment reminder at
+   the top larger and louder"): a banner in the warning colour, not a line of
+   text. It only shows while they owe, so it is always the owing look. */
+/* Stays at the top of the screen as Me scrolls (15 Nov 2026), above the
+   tabs, which stick right under it. */
+.me-fee { position: sticky; top: var(--stick-t, 0px); z-index: 6;
+  display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 14px 16px;
+  border: 2px solid var(--warn); border-radius: 14px; color: var(--text);
+  background: color-mix(in srgb, var(--warn) 22%, var(--bg));
+  font-size: 1.2rem; font-weight: 800; line-height: 1.25;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 14%, transparent);
+  animation: me-fee-pulse 2.4s ease-in-out infinite, me-fee-nag 120s linear infinite; }
+.me-fee::before { content: "$"; flex: none; display: grid; place-items: center; width: 34px; height: 34px;
+  border-radius: 50%; background: var(--warn); color: var(--bg); font-size: 1.2rem; font-weight: 900; }
+@keyframes me-fee-pulse {
+  0%, 100% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 14%, transparent); }
+  50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--warn) 26%, transparent); } }
+/* And a nag every other minute (15 Nov 2026, Asher: "make the owe at the desk
+   card animate in an annoying way every other minute"): once every 120 s it
+   shakes, swells and flashes for about 6 s, then sits still until the next
+   one. Transform and background only, so it rides on top of the pulse. */
+@keyframes me-fee-nag {
+  0% { transform: none; }
+  0.4% { transform: translateX(-10px) rotate(-3deg) scale(1.06);
+    background: color-mix(in srgb, var(--warn) 70%, var(--bg)); }
+  0.8% { transform: translateX(10px) rotate(3deg) scale(1.08); }
+  1.2% { transform: translateX(-10px) rotate(-3deg) scale(1.06);
+    background: color-mix(in srgb, var(--warn) 22%, var(--bg)); }
+  1.6% { transform: translateX(10px) rotate(3deg) scale(1.08);
+    background: color-mix(in srgb, var(--warn) 70%, var(--bg)); }
+  2% { transform: translateX(-8px) rotate(-2deg) scale(1.06); }
+  2.4% { transform: translateX(8px) rotate(2deg) scale(1.08);
+    background: color-mix(in srgb, var(--warn) 22%, var(--bg)); }
+  2.8% { transform: translateX(-6px) rotate(-2deg) scale(1.06);
+    background: color-mix(in srgb, var(--warn) 70%, var(--bg)); }
+  3.2% { transform: translateX(6px) rotate(1deg) scale(1.08); }
+  3.6% { transform: translateX(-4px) rotate(-1deg) scale(1.04);
+    background: color-mix(in srgb, var(--warn) 22%, var(--bg)); }
+  4% { transform: translateX(4px) scale(1.04);
+    background: color-mix(in srgb, var(--warn) 70%, var(--bg)); }
+  4.6% { transform: scale(1.02); }
+  5%, 100% { transform: none; background: color-mix(in srgb, var(--warn) 22%, var(--bg)); } }
+@media (prefers-reduced-motion: reduce) { .me-fee { animation: none; } }
+.me-fee[hidden] { display: none !important; }
+/* Every other page's: a link to Me in a bar of the page's own colour that
+   sticks at the top as the page scrolls; the page's own sticky bars stop
+   under it (--owe-h, the bar's height, set by hcOweHeight). */
+.hc-owe-bar { position: sticky; top: var(--stick-t, 0px); z-index: 12; background: var(--bg); padding: 8px 0; margin: 0 0 6px; }
+.hc-owe-bar[hidden] { display: none !important; }
+.hc-owe-bar .me-fee { margin: 0; text-decoration: none; }
+.hc-owe-bar .me-fee::after { content: "Me \\203A"; flex: none; margin-left: auto; font-size: 0.9rem; font-weight: 800; white-space: nowrap; }
+`;
+
 export const ME_CSS = `
 .me-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font-size: 0.82rem;
   font-weight: 600; white-space: nowrap; background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; }
@@ -176,51 +237,6 @@ body.me-owe .me-switch::before { content: ""; position: absolute; left: -6px; ri
 
 .me-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
 .me-tiles:empty { display: none; }
-/* Tonight's entry, at the top of Me under their name (12 Nov 2026). */
-/* Larger and louder since 15 Nov 2026 (Asher: "make the payment reminder at
-   the top larger and louder"): a banner in the warning colour, not a line of
-   text. It only shows while they owe, so it is always the owing look. */
-/* Stays at the top of the screen as Me scrolls (15 Nov 2026), above the
-   tabs, which stick right under it. */
-.me-fee { position: sticky; top: var(--stick-t, 0px); z-index: 6;
-  display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 14px 16px;
-  border: 2px solid var(--warn); border-radius: 14px; color: var(--text);
-  background: color-mix(in srgb, var(--warn) 22%, var(--bg));
-  font-size: 1.2rem; font-weight: 800; line-height: 1.25;
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 14%, transparent);
-  animation: me-fee-pulse 2.4s ease-in-out infinite, me-fee-nag 120s linear infinite; }
-.me-fee::before { content: "$"; flex: none; display: grid; place-items: center; width: 34px; height: 34px;
-  border-radius: 50%; background: var(--warn); color: var(--bg); font-size: 1.2rem; font-weight: 900; }
-@keyframes me-fee-pulse {
-  0%, 100% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 14%, transparent); }
-  50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--warn) 26%, transparent); } }
-/* And a nag every other minute (15 Nov 2026, Asher: "make the owe at the desk
-   card animate in an annoying way every other minute"): once every 120 s it
-   shakes, swells and flashes for about 6 s, then sits still until the next
-   one. Transform and background only, so it rides on top of the pulse. */
-@keyframes me-fee-nag {
-  0% { transform: none; }
-  0.4% { transform: translateX(-10px) rotate(-3deg) scale(1.06);
-    background: color-mix(in srgb, var(--warn) 70%, var(--bg)); }
-  0.8% { transform: translateX(10px) rotate(3deg) scale(1.08); }
-  1.2% { transform: translateX(-10px) rotate(-3deg) scale(1.06);
-    background: color-mix(in srgb, var(--warn) 22%, var(--bg)); }
-  1.6% { transform: translateX(10px) rotate(3deg) scale(1.08);
-    background: color-mix(in srgb, var(--warn) 70%, var(--bg)); }
-  2% { transform: translateX(-8px) rotate(-2deg) scale(1.06); }
-  2.4% { transform: translateX(8px) rotate(2deg) scale(1.08);
-    background: color-mix(in srgb, var(--warn) 22%, var(--bg)); }
-  2.8% { transform: translateX(-6px) rotate(-2deg) scale(1.06);
-    background: color-mix(in srgb, var(--warn) 70%, var(--bg)); }
-  3.2% { transform: translateX(6px) rotate(1deg) scale(1.08); }
-  3.6% { transform: translateX(-4px) rotate(-1deg) scale(1.04);
-    background: color-mix(in srgb, var(--warn) 22%, var(--bg)); }
-  4% { transform: translateX(4px) scale(1.04);
-    background: color-mix(in srgb, var(--warn) 70%, var(--bg)); }
-  4.6% { transform: scale(1.02); }
-  5%, 100% { transform: none; background: color-mix(in srgb, var(--warn) 22%, var(--bg)); } }
-@media (prefers-reduced-motion: reduce) { .me-fee { animation: none; } }
-.me-fee[hidden] { display: none !important; }
 /* I'm coming to the next race night (12 Nov 2026, setup plan C1). */
 .me-coming:empty { display: none; }
 .me-coming { border: 1px solid var(--border); border-radius: 16px; padding: 12px 14px; background: var(--surface); margin: 0 0 14px; }

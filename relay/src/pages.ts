@@ -19,7 +19,7 @@ import type { PagePreview } from "./preview.js";
 import { DEFAULT_LOOK, type Look, type SocialLink } from "./site.js";
 import { SUN_ICON_SIZE } from "./sun.js";
 import { GARAGE_CSS, GARAGE_EMBED_BODY, garageEmbedScript } from "./garagepage.js";
-import { ME_BODY_END, ME_BODY_TOP, ME_COMING, ME_CSS, ME_JS } from "./mespaces.js";
+import { ME_BODY_END, ME_BODY_TOP, ME_COMING, ME_CSS, ME_JS, OWE_CSS } from "./mespaces.js";
 import { CLOCK_JS, clockAttr, tzAttr } from "./clock.js";
 import { PAGES_BUILD } from "./pagebuild.js";
 
@@ -839,17 +839,103 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .yd h3 { margin: 0 0 6px; font-size: 1rem; }
 .yd h4 { margin: 22px 0 8px; font-size: 0.95rem; }
 .yd .su { max-width: none; }
-/* Your details as a profile (6 Nov 2026): what is on file, a line each. */
-.yd-sum { margin: 8px 0 0; display: grid; }
-.yd-sum div { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 10px; padding: 9px 0; border-top: 1px solid var(--border); }
-.yd-sum div:first-child { border-top: 0; }
+/* Your details as a profile (6 Nov 2026), in the sheet's four groups
+   since 15 Nov 2026: what is on file, a line each. */
+.yd-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 2px; }
+.yd-top h3 { margin: 0; }
+.yd-pin { display: inline-flex; align-items: center; min-height: 36px; padding: 0 4px 0 12px; border-radius: 999px; font-size: 0.85rem;
+  font-weight: 600; border: 1px solid var(--border); color: var(--muted); }
+.yd-pin.on { background: var(--tonal); color: var(--on-tonal); border-color: transparent; }
+.yd-pin-b { font: inherit; font-weight: 700; color: inherit; background: none; border: 0; min-height: 44px; padding: 0 10px 0 2px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.yd-pin:not(.on) .yd-pin-b { padding-left: 0; text-decoration: none; color: var(--accent); }
+.yd-pin-b:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; border-radius: 8px; }
+.yd-sum { margin: 4px 0 0; display: grid; }
+.yd-grp { border-top: 1px solid var(--border); padding: 10px 0 6px; }
+.yd-grp:first-child { border-top: 0; }
+.yd .yd-grp h4 { margin: 0 0 4px; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.yd-sum dl { margin: 0; display: grid; }
+.yd-sum dl div { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 10px; padding: 5px 0; align-items: baseline; }
 .yd-sum dt { color: var(--muted); font-size: 0.85rem; }
 .yd-sum dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .yd-sum dd.none { color: var(--muted); font-weight: 400; }
+.yd .tag, .yd-sheet .tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 6px; font-size: 0.72rem; font-weight: 700;
+  vertical-align: 1px; }
+.tag.wait { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+.tag.desk { background: var(--row-alt); color: var(--muted); border: 1px solid var(--border); }
 .yd .go.yd-ask { margin: 14px auto 6px; }
 .yd .yd-foot { text-align: center; margin: 0; }
+/* The tabbed sheet (15 Nov 2026, B of plans/me-details-mockups.html). */
 .yd-sheet { display: grid; gap: 12px; }
-.yd-sheet .su { max-width: none; }
+.yd-sheet .su { max-width: none; margin: 0; }
+.yd-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.yd-x { width: 44px; height: 44px; flex: none; border: 0; border-radius: 12px; background: none; color: var(--muted); font: inherit;
+  font-size: 1.7rem; line-height: 1; cursor: pointer; }
+.yd-x:focus-visible, .yd-tab:focus-visible, .yd-play:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.yd-lead { margin: 0; }
+.yd-tabs { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; padding: 3px; border-radius: 13px;
+  background: var(--row-alt); border: 1px solid var(--border); position: sticky; top: -10px; z-index: 1; }
+.yd-tab { position: relative; min-height: 44px; border: 0; border-radius: 10px; background: none; color: var(--muted); font: inherit;
+  font-size: 0.9rem; font-weight: 600; cursor: pointer; padding: 0 4px; }
+.yd-tab.on { background: var(--tonal); color: var(--text); font-weight: 700; }
+.yd-tab.dirty::after { content: ""; position: absolute; top: 7px; right: 8px; width: 7px; height: 7px; border-radius: 50%; background: var(--primary); }
+.yd-pane { gap: 14px; }
+.yd-pane[hidden] { display: none !important; }
+.yd-pane p.when { margin: 0; }
+.yd-sheet .f .lr { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.yd-sheet .f .c { color: var(--muted); font-size: 0.8rem; font-weight: 400; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.yd-sheet textarea { width: 100%; min-height: 76px; margin: 0; padding: 12px; font: inherit; font-size: 1rem; font-weight: 400; resize: vertical;
+  border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.yd-sheet input:not([type=radio]):not([type=checkbox]), .yd-sheet select, .yd-sheet textarea { background: var(--bg); }
+.yd-sheet .f .hint { margin-top: -2px; }
+.yd-pinbox { letter-spacing: 0.4em; text-align: center; font-size: 1.2rem !important; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.yd-lock { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 11px 12px; border-radius: 12px;
+  background: var(--row-alt); border: 1px dashed var(--border); }
+.yd-lock .k { color: var(--muted); font-size: 0.85rem; min-width: 4.5rem; }
+.yd-lock .v { font-weight: 600; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.yd-lock .tag { margin-left: 0; }
+.yd-sw { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 12px; border-radius: 14px;
+  background: var(--tonal); color: var(--text); cursor: pointer; font-weight: 400; }
+.yd-sw .w { flex: 1; min-width: 0; }
+.yd-sw small { display: block; color: var(--muted); font-size: 0.8rem; margin-top: 1px; }
+.yd-sw .tog input { appearance: none; -webkit-appearance: none; flex: none; width: 48px; height: 28px; margin: 0; border-radius: 999px;
+  background: var(--border); position: relative; cursor: pointer; transition: background 0.15s; }
+.yd-sw .tog input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--text); transition: left 0.15s; }
+.yd-sw .tog input:checked { background: var(--primary); }
+.yd-sw .tog input:checked::after { left: 23px; background: var(--on-primary); }
+.yd-sw .tog input:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.yd-sw .tog input:disabled { cursor: default; }
+.yd-sw:has(.tog input:disabled:not(:checked)) { opacity: 0.6; cursor: default; }
+.yd-sw.fixed { background: var(--row-alt); border: 1px dashed var(--border); cursor: default; }
+.yd-sw .tog { display: flex; flex: none; }
+.yd-sw.fixed .tog input:checked { background: color-mix(in srgb, var(--primary) 45%, var(--border)); }
+@media (prefers-reduced-motion: reduce) { .yd-sw .tog input, .yd-sw .tog input::after { transition: none; } }
+.yd-role { display: grid; gap: 12px; padding: 12px; border-radius: 14px; border: 1px solid var(--border); background: var(--row-alt); }
+.yd .yd-role h4, .yd-sheet .yd-role h4 { margin: 0; font-size: 1rem; }
+.yd-vrow { display: flex; gap: 8px; align-items: flex-end; }
+.yd-vrow .f { flex: 1; min-width: 0; }
+.yd-play { flex: none; width: 48px; height: 48px; border: 0; border-radius: 12px; background: var(--tonal); color: var(--on-tonal);
+  font-size: 0; cursor: pointer; display: grid; place-items: center; }
+.yd-play::before { content: ""; width: 0; height: 0; border-style: solid; border-width: 8px 0 8px 13px;
+  border-color: transparent transparent transparent currentColor; margin-left: 3px; }
+.yd-play[hidden] { display: none; }
+.yd-sheet h4.yd-sub { margin: 6px 0 0; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.yd-note, .yd-consent { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--row-alt); color: var(--muted); font-size: 0.85rem; }
+.yd-note { border: 1px dashed var(--border); }
+.yd-bar { display: grid; gap: 8px; padding: 12px 0 4px; border-top: 1px solid var(--border); background: var(--surface); }
+.yd-bar .chk { min-height: 44px; align-items: center; }
+.yd-bar .yd-said { margin: 0; text-align: center; font-size: 0.88rem; font-weight: 400; min-height: 1.3em; }
+/* Held at the foot of Me's sheet as it scrolls, clear of the one bar when
+   Me runs inside it. The sheet's own foot padding is 22px. */
+.me-sheet .yd-bar { position: sticky; bottom: calc(-22px - env(safe-area-inset-bottom, 0px)); z-index: 1; margin: 0 -16px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); }
+html.framed .me-sheet .yd-bar { bottom: -22px; padding-bottom: 12px; }
+/* The same height on every tab, Send at its foot even on a short one. */
+.me-sheet .in:has(#yd-sheet) { height: 84%; grid-template-rows: auto 1fr; }
+#me-sheet-body:has(#yd-sheet) { display: flex; flex-direction: column; gap: 6px; }
+#yd-sheet { flex: 1 0 auto; display: flex; flex-direction: column; gap: 12px; }
+#yd-sheet > .yd-bar { margin-top: auto; }
 .yd-change { margin-top: 18px; background: none; border: none; }
 .yd-change > summary { color: var(--accent); padding: 6px 0; }
 /* My Night laid out to be found (28 Oct 2026, asked for by Asher): a jump
@@ -857,7 +943,7 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
    list with one open at a time and its lap stats, lap times and lap chart
    on tabs, and the driver score beside the report card. Thumb-sized rows
    for a phone in the pits; the lap table scrolls in its own box. */
-#nj { position: sticky; top: var(--stick-t); z-index: 3; background: var(--bg); margin: 8px -16px 0; padding: 0 16px; }
+#nj { position: sticky; top: calc(var(--stick-t) + var(--owe-h, 0px)); z-index: 3; background: var(--bg); margin: 8px -16px 0; padding: 0 16px; }
 .jump { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0; max-width: 42rem; margin: 0 auto;
         scrollbar-width: none; }
 .jump::-webkit-scrollbar { display: none; }
@@ -1481,7 +1567,7 @@ html.framed .hcvideo .sheet { padding-bottom: calc(18px + 58px + var(--sa-b)); }
 .hcvmiss { color: var(--muted); font-size: 0.85rem; margin: 8px 0 0; }
 /* Live's docked player (race video V4): sticky at the top, the board
    scrolling under it; small, a corner player over the page. */
-.hcdock { position: sticky; top: var(--stick-t); z-index: 20; background: var(--bg); padding: 6px 0 4px; }
+.hcdock { position: sticky; top: calc(var(--stick-t) + var(--owe-h, 0px)); z-index: 20; background: var(--bg); padding: 6px 0 4px; }
 .hcdock[hidden] { display: none; }
 .hcdock .hcdbar { position: absolute; top: 12px; right: 6px; display: flex; gap: 6px; }
 .hcdock .hcdbar .page { min-width: 44px; min-height: 44px; padding: 0; background: rgba(0, 0, 0, 0.6); color: #FFFFFF; border-color: transparent; }
@@ -1650,6 +1736,7 @@ html[data-ts="115"] { --ts: 1.15; }
 html[data-ts="130"] { --ts: 1.3; }
 /* Driver themes (15 Nov 2026): after the club's own rules, before High contrast's. */
 ${DRIVER_THEME_CSS}
+${OWE_CSS}
 html.hc { --bg: #000000; --surface: #000000; --row-alt: #000000; --text: #FFFFFF; --muted: #E6E6E6; --border: #FFFFFF;
   --primary: #FF66C4; --on-primary: #000000; --accent: #5CF0FF; --good: #5CFF9E; --bad: #FF8095; --warn: #FFD15C;
   --tonal: #000000; --on-tonal: #FFFFFF; --ring: #FFFFFF; }
@@ -1717,7 +1804,7 @@ html.hc .stale, html.hc.hcoffline .wrap > :not(header):not(.hcoff):not(footer) {
   #board .card:not(.all) th:not(.k), #board .card:not(.all) td:not(.k):not(.bmc) { display: none; }
   #board .card:not(.all) { overflow: visible; }
   #board .card:not(.all) table { width: 100%; min-width: 0; }
-  #board .card:not(.all) tr.me td { position: sticky; top: var(--stick-t); bottom: calc(68px + var(--sa-b)); z-index: 2; }
+  #board .card:not(.all) tr.me td { position: sticky; top: calc(var(--stick-t) + var(--owe-h, 0px)); bottom: calc(68px + var(--sa-b)); z-index: 2; }
 }
 /* YOUR CARD ON LIVE (item 4). The Following chip is the card's job on Live. */
 body.has-you #follow { display: none; }
@@ -3286,6 +3373,95 @@ function meForget() {
   try { localStorage.removeItem(ME_KEY); } catch (e) { /* nothing was kept */ }
 }
 
+// OWING, ON EVERY PAGE (15 Nov 2026, Asher: "the notification should be a
+// banner across all pages with the scroll thing you just built"). While the
+// driver signed in on this phone owes tonight's entry, every club page shows
+// Me's fee banner under its header, stuck at the top as it scrolls, and a tap
+// opens Me. From their own live entry - the night's live poll, the one Me
+// makes - once a minute while the page is looked at; kept for this tab only,
+// so the next page draws it at once rather than jumping down when it
+// arrives. Me itself has its own banner (#me-fee) and is left to it.
+const OWE_KEY = 'hc-owe-' + CLUB;
+let hcOweWatch = null;
+
+function hcOweHeight() {
+  const bar = document.getElementById('hc-owe-bar');
+  if (!bar || !document.body) return;
+  const h = bar.hidden ? 0 : (bar.offsetHeight || 0);
+  try {
+    document.body.classList.toggle('hc-owing', h > 0);
+    document.body.style.setProperty('--owe-h', h + 'px');
+  } catch (e) { /* the page's own bars stick at the top as before */ }
+  if (!hcOweWatch && typeof ResizeObserver === 'function') {
+    hcOweWatch = new ResizeObserver(() => hcOweHeight());
+    hcOweWatch.observe(bar);
+  }
+}
+
+function hcOweShow(words) {
+  const bar = document.getElementById('hc-owe-bar');
+  const at = document.getElementById('hc-owe');
+  if (!bar || !at) return;
+  const w = typeof words === 'string' ? words.trim().slice(0, 140) : '';
+  at.textContent = w;
+  bar.hidden = w === '';
+  hcOweHeight();
+}
+
+function hcOweKeep(code, words) {
+  try {
+    if (code && words) sessionStorage.setItem(OWE_KEY, code + '\\n' + words);
+    else sessionStorage.removeItem(OWE_KEY);
+  } catch (e) { /* drawn when the answer comes */ }
+}
+
+// What the night's live poll answered for code: 404 is nothing tonight, so
+// nothing owed; anything else that isn't an answer keeps what the bar shows
+// until the next try. A page that makes that poll itself (Home's Your next
+// race) hands its answers here and sets hcOweFed, so the relay is asked once.
+let hcOweFed = false;
+function hcOweFrom(code, status, answer) {
+  if (status === 404) answer = { ok: true };
+  else if (status !== 200) return;
+  if (!answer || answer.ok !== true || !code || meCode() !== code) return;
+  const entry = answer.live && answer.live.entry && typeof answer.live.entry === 'object' ? answer.live.entry : null;
+  const words = entry && entry.paid !== true && typeof entry.words === 'string' ? entry.words : '';
+  hcOweKeep(code, words);
+  hcOweShow(words);
+}
+
+async function hcOweCheck() {
+  const code = meCode();
+  if (!code) { hcOweKeep('', ''); hcOweShow(''); return; }
+  let status = 0;
+  let answer = null;
+  try {
+    const r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/night', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: code, part: 'live' }),
+      cache: 'no-store',
+    });
+    status = r.status;
+    if (status === 200) answer = await r.json();
+  } catch (e) { return; }
+  hcOweFrom(code, status, answer);
+}
+
+function hcOweStart() {
+  if (!document.getElementById('hc-owe-bar')) return;
+  try {
+    const kept = sessionStorage.getItem(OWE_KEY) || '';
+    const cut = kept.indexOf('\\n');
+    if (cut > 0 && kept.slice(0, cut) === meCode()) hcOweShow(kept.slice(cut + 1));
+  } catch (e) { /* drawn when the answer comes */ }
+  if (hcOweFed || !meCode()) return;
+  poll(hcOweCheck, 60000);
+}
+
+// After the page's own script, which may feed it (hcOweFed).
+setTimeout(hcOweStart, 0);
+
 // SIGNING OUT FORGETS THE DRIVER (6 Nov 2026, Asher: "If you then sign out
 // the app should forget the pin and require a pin entry to sign back in to
 // anyone's me tab. if signed out the app should forget all of the info for
@@ -3334,6 +3510,7 @@ function meSignOut(code) {
     // With nobody left, their sign-in times too (ME_JUNIOR_DAYS).
     try { localStorage.removeItem('hg-me-at-' + CLUB); } catch (e) { /* nothing was kept */ }
   }
+  hcOweKeep('', '');
   for (const k of ME_LEFTOVERS) {
     // The phone's alerts stay on for the drivers still on it.
     if (k === 'hc-alerts:' + CLUB && others.length > 0) continue;
@@ -4183,7 +4360,8 @@ ${overrides}${sunset ? HC_SUNSET_STYLE : ""}
   <header${page.active === "live" ? ' class="onair-room"' : ""}>
     <div class="hcname">${brand}</div>
     ${tabsNav(club, name, lit)}
-  </header>${ofResults ? `
+  </header>${page.active === "night" || page.active === "mynight" ? "" : `
+  <div class="hc-owe-bar" id="hc-owe-bar" hidden><a class="me-fee hc-owe" id="hc-owe" href="/c/${club}/mynight"></a></div>`}${ofResults ? `
   <nav class="subtabs" aria-label="Results">
     ${subTab("results", "Sessions")}
     ${subTab("standings", "Standings")}
@@ -10324,15 +10502,16 @@ async function readMine() {
   } catch (e) { return; }
 
   // A busy relay (429) or a failed read keeps what is on screen.
-  if (r.status === 404) drawMine(null);
+  if (r.status === 404) { drawMine(null); hcOweFrom(MINE, 404, null); }
   if (r.status !== 200) return;
 
   let body = {};
   try { body = await r.json(); } catch (e) { return; }
   drawMine(body && body.live);
+  hcOweFrom(MINE, 200, body);
 }
 
-if (mine && MINE) poll(readMine, 60000);
+if (mine && MINE) { hcOweFed = true; poll(readMine, 60000); }
 
 // THE FOLLOWED DRIVER'S NEXT RACE (14 Nov 2026, overlay plan 7.1, Asher:
 // "Build those first"). Your next race needs the badge code; a family at
@@ -15679,7 +15858,7 @@ function listPart(title, said) {
 // view.race is the race open in the list: '' until they choose, which
 // opens their latest race (the one they came to look at after a heat), and
 // 'none' once they close it.
-const view = { race: '', tab: 'stats', pick: 'best', asks: false, details: false, crew: false, scroll: '', hideRuns: false };
+const view = { race: '', tab: 'stats', pick: 'best', asks: false, details: false, crew: false, ydTab: 'called', scroll: '', hideRuns: false };
 
 // Demo races and practice runs (3 Nov 2026, asked for by Asher: "marked as
 // demo, and do the same for practice. make a tick mark to remove both
@@ -16581,7 +16760,8 @@ async function sendAsk(kind, f) {
   if (a !== null && a.status === 200 && a.body.ok === true) {
     const ref = typeof a.body.ref === 'string' && /^[0-9A-F]{6}$/.test(a.body.ref) ? a.body.ref : '';
     if (ref !== '') {
-      sentAsks.push({ ref: ref, kind: kind });
+      // Which fields went, so the card can say Waiting for the desk on their lines.
+      sentAsks.push({ ref: ref, kind: kind, fields: f && typeof f === 'object' ? Object.keys(f) : [] });
       if (sentAsks.length > 10) sentAsks.shift();
     }
     if (navigator.vibrate) navigator.vibrate(30);
@@ -16770,8 +16950,9 @@ function fillQuery(part, sid, q) {
 // it, so a twenty-second refresh never takes a half-typed change away.
 function refreshAsks() {
   // Whether the live card is up is in the key: it holds the pack box while
-  // it is, and Your details takes the box back when it goes.
-  const key = JSON.stringify([asksOpen, me, !!live]);
+  // it is, and Your details takes the box back when it goes. The asks'
+  // states are in it too, so "Waiting for the desk" goes when they answer.
+  const key = JSON.stringify([asksOpen, me, !!live, ydAskStates()]);
   if (key === asksKey) return;
   // With the form in Me's sheet there is no typing here to protect: this
   // card only says what the desk has, and the sheet is not touched. One
@@ -16781,8 +16962,11 @@ function refreshAsks() {
   drawAsks('');
 }
 
+// Typed in anywhere in Your details: noticed, and the sheet's Send count
+// and tab dots brought up to date.
 function markEdited() {
   edited = true;
+  if (typeof ydOnEdit === 'function') ydOnEdit();
 }
 
 function drawAsks(message) {
@@ -16800,21 +16984,27 @@ function drawAsks(message) {
   }
 
   const sec = el('section', 'yd');
-  sec.appendChild(el('h3', '', 'Your details'));
+  const top = el('div', 'yd-top');
+  top.appendChild(el('h3', '', 'Your details'));
+  const chip = ydPinChip();
+  if (chip) top.appendChild(chip);
+  sec.appendChild(top);
 
-  // A PROFILE AND AN EDIT SHEET (6 Nov 2026, Asher: "rework the your
-  // details card", the profile-and-sheet pick). The card says what the desk
-  // has on file; the form that used to open under it, about 1,260px of a
-  // phone, is in Me's bottom sheet behind one button. A page without the
-  // sheet keeps the fold below.
+  // ONE SHEET WITH TABS (15 Nov 2026, Asher: "the change details of me
+  // page on tonight tab is a mangled mess" - he picked B of
+  // plans/me-details-mockups.html). The card says what the desk has on
+  // file, in four groups; the sheet behind its one button has a tab for
+  // each and one Send for all of it. A page without the sheet keeps the
+  // same tabs in a fold below.
+  const packsNow = live ? null : packBox();
+  if (packsNow) {
+    packsNow.className = 'su';
+    sec.appendChild(packsNow);
+  }
+
   if (ydSheetCan()) {
-    const packsNow = live ? null : packBox();
-    if (packsNow) {
-      packsNow.className = 'su';
-      sec.appendChild(packsNow);
-    }
     sec.appendChild(ydSummary());
-    sec.appendChild(tapButton('Ask the desk to change', 'go yd-ask', () => ydOpenSheet('')));
+    sec.appendChild(tapButton('Change my details', 'go yd-ask', () => ydOpenSheet('')));
     sec.appendChild(el('p', 'when yd-foot', 'Nothing changes until the desk checks it.'));
     const sheetOn = ydSheetShowing();
     if (message && !sheetOn) {
@@ -16830,44 +17020,108 @@ function drawAsks(message) {
   }
 
   sec.appendChild(el('p', 'when', 'Ask the timing desk to change how you are called and shown. Nothing changes until the desk checks it.'));
-
-  // No link to the Garage and no "Log a setup change" here any more (5 Nov
-  // 2026, Asher: "remove links on your details for your packs, cars, setups
-  // and log a setup change"): on Me they are the Garage space, a tap away.
-
-  // The battery pack first, because it changes on race night; the request
-  // to change how they are called folded under it (28 Oct 2026), opened by
-  // itself when there is something to say about it. On race night the pack
-  // is in the Right now card instead (29 Oct 2026).
-  const packs = live ? null : packBox();
-  if (packs) {
-    packs.className = 'su';
-    sec.appendChild(packs);
-  }
-
   const change = el('details', 'yd-change');
   change.open = view.details || !!message;
   change.addEventListener('toggle', () => { view.details = change.open; });
-  change.appendChild(el('summary', '', 'Change how you are called and shown'));
-  if (me.pin === true && pass() === '') change.appendChild(pinGate(message));
-  else change.appendChild(detailsForm(message));
+  change.appendChild(el('summary', '', 'Change my details'));
+  const box = el('div', 'yd-sheet');
+  change.appendChild(box);
+  ydFill(box, message);
   sec.appendChild(change);
-
-  // My crew in a fold of its own (15 Nov 2026), with its own PIN box.
-  if (crewOn()) {
-    const crew = el('details', 'yd-change');
-    crew.open = view.crew === true;
-    crew.addEventListener('toggle', () => { view.crew = crew.open; });
-    crew.appendChild(el('summary', '', 'My crew'));
-    crew.appendChild(crewSection(message, false));
-    sec.appendChild(crew);
-  }
 
   ydBox.appendChild(sec);
   drawJump();
 }
 
-// ---- Your details as a profile, and its edit sheet (6 Nov 2026)
+// ---- the card: what is on file, in the sheet's four groups
+
+// "Signed in · Sign out", or a way to sign in, for a driver with a
+// personal PIN; nothing for one without (15 Nov 2026). This took the place
+// of "Forget my PIN on this phone" in the middle of the form.
+function ydPinChip() {
+  if (me.pin !== true) return null;
+  if (pass() !== '') {
+    const chip = el('span', 'yd-pin on');
+    chip.appendChild(el('span', '', 'Signed in \\u00b7 '));
+    chip.appendChild(tapButton('Sign out', 'yd-pin-b', () => {
+      setPass('');
+      if (ydSheetShowing() && typeof meCloseSheet === 'function') meCloseSheet();
+      drawAsks('Signed out on this phone.');
+    }));
+    return chip;
+  }
+  const chip = el('span', 'yd-pin');
+  chip.appendChild(tapButton('Sign in to change', 'yd-pin-b', () => {
+    if (ydSheetCan()) { ydOpenSheet(''); return; }
+    view.details = true;
+    drawAsks('');
+  }));
+  return chip;
+}
+
+// Each ask this tab sent, by ref, and where the desk has it: on the live
+// card's list, or not there yet (waiting).
+function ydAskStates() {
+  const list = (live && Array.isArray(live.asks) ? live.asks : []).filter((a) => a && typeof a === 'object');
+  return sentAsks.map((s) => {
+    const seen = list.find((a) => String(a.ref || '') === s.ref);
+    return [s.ref, seen && ASK_STATES.includes(seen.state) ? seen.state : 'waiting'];
+  });
+}
+
+// Whether a change to this field went from this tab and the desk has not
+// answered it yet - the card says so on its line.
+function ydWaiting(fields) {
+  const states = new Map(ydAskStates());
+  return sentAsks.some((s) => Array.isArray(s.fields) && s.fields.some((k) => fields.includes(k)) && states.get(s.ref) === 'waiting');
+}
+
+function ydSummary() {
+  const wrap = el('div', 'yd-sum');
+  const group = (title) => {
+    const g = el('div', 'yd-grp');
+    g.appendChild(el('h4', '', title));
+    const dl = el('dl');
+    g.appendChild(dl);
+    wrap.appendChild(g);
+    return dl;
+  };
+  const line = (dl, k, v, none, tag, tagCls) => {
+    const d = el('div');
+    d.appendChild(el('dt', '', k));
+    const dd = el('dd', v ? '' : 'none', v || none);
+    if (tag) dd.appendChild(el('span', 'tag ' + tagCls, tag));
+    d.appendChild(dd);
+    dl.appendChild(d);
+  };
+  const wait = (fields) => ydWaiting(fields) ? 'Waiting for the desk' : '';
+
+  const called = group('How you\\u2019re called');
+  line(called, 'Name', cleanText(me.name), 'Not set', 'desk only', 'desk');
+  line(called, 'Announcer', cleanText(me.announcer), 'Your name as it is', wait(['announcer']), 'wait');
+  line(called, 'Pronouns', cleanText(me.pronouns), 'None', wait(['pronouns']), 'wait');
+  // A junior's about line is online only once a parent agreed (15 Nov 2026):
+  // until then the laptop says only that there is one.
+  line(called, 'About you', cleanText(me.about) || (me.aboutSet === true ? 'Set at the desk' : ''), 'Nothing yet', wait(['about']), 'wait');
+
+  const mail = group('Email');
+  line(mail, 'On file', typeof me.email === 'string' ? cleanText(me.email) : '', 'None on file', wait(['email']), 'wait');
+  line(mail, 'Night email', me.emailMyNight === true ? 'On' : '', 'Off', wait(['emailMyNight']), 'wait');
+
+  const pv = me.privacy && typeof me.privacy === 'object' ? me.privacy : {};
+  const hidden = [pv.noPhoto === true ? 'No photo' : '', pv.noVideo === true ? 'Not in videos' : '', pv.initials === true ? 'Initials only' : ''].filter(Boolean);
+  line(group('Online privacy'), 'Online', hidden.join(' \\u00b7 '), 'Shown as normal', wait(['noPhoto', 'noVideo', 'initials']), 'wait');
+
+  // Their own crew (15 Nov 2026), behind the personal PIN as its form is.
+  if (crewOn() && me.pin === true) {
+    const crew = group('My crew');
+    line(crew, 'Principal', crewLine('principal'), "Club's own", wait(['pName', 'pVoice']), 'wait');
+    line(crew, 'Tech lead', crewLine('tech'), "Club's own", wait(['tName', 'tVoice']), 'wait');
+  }
+  return wrap;
+}
+
+// ---- the sheet
 
 function ydSheetCan() {
   return typeof meOpenSheet === 'function' && !!document.getElementById('me-sheet');
@@ -16878,40 +17132,23 @@ function ydSheetShowing() {
   return !!sheet && !sheet.hidden && !!document.getElementById('yd-sheet');
 }
 
-// What the desk has on file, as text, one line each.
-function ydSummary() {
-  const dl = el('dl', 'yd-sum');
-  const line = (k, v, none) => {
-    const d = el('div');
-    d.appendChild(el('dt', '', k));
-    d.appendChild(el('dd', v ? '' : 'none', v || none));
-    dl.appendChild(d);
-  };
-  const pv = me.privacy && typeof me.privacy === 'object' ? me.privacy : {};
-  const hidden = [pv.noPhoto === true ? 'No photo' : '', pv.noVideo === true ? 'Not in videos' : '', pv.initials === true ? 'Initials only' : ''].filter(Boolean);
-  line('Name', cleanText(me.name), 'Not set');
-  line('Announcer', cleanText(me.announcer), 'Your name as it is');
-  line('Pronouns', cleanText(me.pronouns), 'None');
-  // A junior's about line is online only once a parent agreed (15 Nov 2026):
-  // until then the laptop says only that there is one.
-  line('About you', cleanText(me.about) || (me.aboutSet === true ? 'Set at the desk' : ''), 'Nothing yet');
-  line('Email', typeof me.email === 'string' ? cleanText(me.email) : '', 'None on file');
-  line('Night email', me.emailMyNight === true ? 'On' : '', 'Off');
-  line('Online', hidden.join(' \\u00b7 '), 'Shown as normal');
-  // Their own crew (15 Nov 2026), behind the personal PIN as its form is.
-  if (crewOn() && me.pin === true) line('Your crew', crewWords(), '');
-  return dl;
-}
-
 function ydOpenSheet(message) {
   meOpenSheet('Change your details', (body) => {
+    // The heading and a close button on one line: no Done at the foot,
+    // where Send is (15 Nov 2026).
+    const h = document.getElementById('me-sheet-h');
+    const head = el('div', 'yd-head');
+    if (h) head.appendChild(h);
+    const x = tapButton('\\u00d7', 'yd-x', meCloseSheet);
+    x.setAttribute('aria-label', 'Close');
+    head.appendChild(x);
+    body.appendChild(head);
     const box = el('div', 'yd-sheet');
     box.id = 'yd-sheet';
     body.appendChild(box);
     ydFillSheet(message);
-  });
-  // From the top, on its heading: the sheet's own first-button focus would
-  // be Send, at the foot of the form.
+  }, true);
+  // From the top, on its heading.
   const h = document.getElementById('me-sheet-h');
   if (h) { h.tabIndex = -1; h.focus(); }
   const inner = h && h.closest ? h.closest('.in') : null;
@@ -16920,14 +17157,180 @@ function ydOpenSheet(message) {
 
 function ydFillSheet(message) {
   const box = document.getElementById('yd-sheet');
-  if (!box) return;
+  if (box) ydFill(box, message);
+}
+
+// The tabs, and which one the sheet is on - kept while the page is open.
+const YD_TABS = [['called', 'Called'], ['email', 'Email'], ['privacy', 'Privacy'], ['crew', 'Crew']];
+let ydOnEdit = null;
+
+// Which tab a field the sheet sends is on.
+function ydTabOf(field) {
+  if (['announcer', 'pronouns', 'about'].includes(field)) return 'called';
+  if (['email', 'emailMyNight'].includes(field)) return 'email';
+  if (['noPhoto', 'noVideo', 'initials'].includes(field)) return 'privacy';
+  return 'crew';
+}
+
+function ydFill(box, message) {
   box.textContent = '';
-  box.appendChild(el('p', 'when', 'Nothing changes until the timing desk checks it.'));
-  const gated = me.pin === true && pass() === '';
-  box.appendChild(gated ? pinGate(message) : detailsForm(message));
-  // My crew, a part of its own with its own Send (15 Nov 2026). One PIN
-  // box in the sheet: while it is up, My crew points at it.
-  if (crewOn()) box.appendChild(crewSection(message, gated));
+  ydOnEdit = null;
+
+  // SIGN IN FIRST, ON ITS OWN. With a personal PIN and this tab not yet
+  // signed in, the sheet is the PIN box and nothing else; signed in, it
+  // carries straight on to the tabs.
+  if (me.pin === true && pass() === '') {
+    box.appendChild(pinGate(message));
+    return;
+  }
+
+  box.appendChild(el('p', 'when yd-lead', 'Nothing changes until the timing desk checks it.'));
+
+  const tabs = YD_TABS.filter(([k]) => k !== 'crew' || crewOn());
+  if (!tabs.some(([k]) => k === view.ydTab)) view.ydTab = 'called';
+
+  const bar = el('div', 'yd-tabs');
+  bar.setAttribute('role', 'tablist');
+  bar.setAttribute('aria-label', 'Your details');
+  box.appendChild(bar);
+
+  const panes = new Map();
+  const buttons = new Map();
+  for (const [k, words] of tabs) {
+    const b = tapButton(words, 'yd-tab', () => show(k));
+    b.setAttribute('role', 'tab');
+    b.id = 'yd-tab-' + k;
+    b.setAttribute('aria-controls', 'yd-pane-' + k);
+    b.addEventListener('keydown', (e) => {
+      const i = tabs.findIndex((t) => t[0] === k);
+      const by = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (by === 0) return;
+      e.preventDefault();
+      const next = tabs[(i + by + tabs.length) % tabs.length][0];
+      show(next);
+      const nb = buttons.get(next);
+      if (nb && nb.focus) nb.focus();
+    });
+    bar.appendChild(b);
+    buttons.set(k, b);
+    const pane = el('div', 'yd-pane su');
+    pane.id = 'yd-pane-' + k;
+    pane.setAttribute('role', 'tabpanel');
+    pane.setAttribute('aria-labelledby', 'yd-tab-' + k);
+    box.appendChild(pane);
+    panes.set(k, pane);
+  }
+
+  const details = detailsParts(panes.get('called'), panes.get('email'), panes.get('privacy'));
+  const crew = crewOn() ? crewPane(panes.get('crew')) : null;
+
+  // ONE SEND FOR EVERY TAB, held at the foot of the sheet as it scrolls,
+  // with the guardian tick that goes with the details ask: up to two asks,
+  // details and crew, each with only what changed.
+  const foot = el('div', 'yd-bar');
+  const guardian = tick(foot, "I'm a parent or guardian making this change", '', false, false);
+  const said = el('p', 'yd-said', message || '');
+  said.setAttribute('role', 'status');
+  const send = tapButton('Send to the desk', 'go', () => ydSend());
+  foot.appendChild(send);
+  foot.appendChild(said);
+  box.appendChild(foot);
+
+  function show(k) {
+    view.ydTab = k;
+    for (const [key, pane] of panes) pane.hidden = key !== k;
+    paint();
+  }
+
+  // The count on Send and a dot on each tab with something unsent.
+  function paint() {
+    const df = details.diff();
+    const cf = crew ? crew.diff() : {};
+    const changed = Object.keys(df).concat(Object.keys(cf));
+    const dirty = new Set(changed.map(ydTabOf));
+    for (const [k, b] of buttons) {
+      const on = k === view.ydTab;
+      b.className = 'yd-tab' + (on ? ' on' : '') + (dirty.has(k) ? ' dirty' : '');
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.tabIndex = on ? 0 : -1;
+      b.setAttribute('aria-label', (dirty.has(k) ? b.textContent + ', not sent yet' : b.textContent));
+    }
+    send.textContent = changed.length === 0 ? 'Send to the desk' : 'Send ' + changed.length + (changed.length === 1 ? ' change' : ' changes');
+  }
+
+  async function ydSend() {
+    const df = details.diff();
+    const cf = crew ? crew.diff() : {};
+
+    if (Object.keys(df).length === 0 && Object.keys(cf).length === 0) {
+      said.textContent = 'Nothing has changed yet.';
+      return;
+    }
+
+    // Checked before anything goes, and the sheet turned to the tab that
+    // needs fixing.
+    const trouble = details.check(df) || (crew ? crew.check(cf) : null);
+    if (trouble) {
+      show(trouble.tab);
+      said.textContent = trouble.words;
+      return;
+    }
+
+    // The tick goes on the details ask only: the desk records who made the
+    // change. A crew ask carries none - a junior's notes are never taken
+    // from a phone, tick or not (15 Nov 2026), and the relay drops it.
+    if (guardian.checked === true && Object.keys(df).length > 0) df.guardian = true;
+
+    send.disabled = true;
+    said.textContent = 'Sending\\u2026';
+
+    const parts = [];
+    let failed = '';
+
+    if (Object.keys(df).length > 0) {
+      const got = await sendAsk('details', df);
+      // Their PIN has changed since they signed in, or the pass is from
+      // another driver's code: back to the PIN, saying why.
+      if (!got.ok && got.status === 403 && me && me.pin === true && !/email/i.test(got.words)) {
+        send.disabled = false;
+        setPass('');
+        drawAsks(got.words);
+        return;
+      }
+      if (got.ok) details.sent(df);
+      else failed = failed || ydTabOf(Object.keys(df).find((k) => k !== 'guardian'));
+      parts.push(['Your details', got.words]);
+    }
+
+    if (Object.keys(cf).length > 0) {
+      const got = await sendAsk('crew', cf);
+      if (!got.ok && got.status === 403 && /personal PIN/.test(got.words)) {
+        send.disabled = false;
+        setPass('');
+        drawAsks(got.words);
+        return;
+      }
+      if (got.ok) crew.sent(cf);
+      else failed = failed || 'crew';
+      parts.push(['Your crew', got.words]);
+    }
+
+    send.disabled = false;
+    if (parts.some((p) => /^Sent/.test(p[1]))) guardian.checked = false;
+    edited = false;
+    // Both the same trouble (the desk shut, no signal): said once.
+    const stop = (w) => /[.!?]$/.test(w) ? w : w + '.';
+    said.textContent = parts.length === 1 || parts[0][1] === parts[1][1] ? parts[0][1]
+      : parts.map((p) => p[0] + ': ' + stop(p[1])).join(' ');
+    // A half that did not go: its tab, with its dot still on.
+    if (failed !== '') show(failed);
+    else paint();
+    // The card behind says "Waiting for the desk" on what went.
+    if (ydSheetShowing()) drawAsks('');
+  }
+
+  ydOnEdit = paint;
+  show(view.ydTab);
 }
 
 // ---- signing in with the personal PIN
@@ -16948,12 +17351,17 @@ function pinTrouble(a) {
 
 function pinGate(message) {
   const part = el('div', 'su');
-  part.appendChild(el('p', '', 'You have a personal PIN, so sign in with it before changing your details. '
+  part.appendChild(el('p', 'when', 'You have a personal PIN, so sign in with it before changing your details. '
     + 'This phone remembers it only until you close this tab.'));
 
-  const label = el('label', 'f', 'Your personal PIN');
+  const label = el('label', 'f');
+  const row = el('span', 'lr');
+  row.appendChild(el('span', 'l', 'Your personal PIN'));
+  row.appendChild(el('span', 'c', '4 to 8 digits'));
+  label.appendChild(row);
   const input = document.createElement('input');
   input.type = 'password';
+  input.className = 'yd-pinbox';
   input.setAttribute('inputmode', 'numeric');
   input.setAttribute('autocomplete', 'off');
   input.setAttribute('maxlength', '8');
@@ -16999,20 +17407,43 @@ function pinGate(message) {
   return part;
 }
 
-// ---- the details form
+// ---- the parts of a field (15 Nov 2026): the label and its count on one
+// line, the box, then one short line of hint - the same for every field.
 
-function textField(parent, title, hint, value, max, long) {
-  const label = el('label', 'f', title);
+function textField(parent, title, hint, value, max, long, opts) {
+  const o = opts || {};
+  const label = el('label', 'f');
+  const row = el('span', 'lr');
+  const words = el('span', 'l');
+  if (o.hide) words.appendChild(el('span', 'vh', o.hide + ' '));
+  words.appendChild(document.createTextNode ? document.createTextNode(title) : el('span', '', title));
+  row.appendChild(words);
+  const count = o.count ? el('span', 'c', '') : null;
+  if (count) row.appendChild(count);
+  label.appendChild(row);
   const input = document.createElement(long ? 'textarea' : 'input');
   if (!long) input.type = 'text';
   input.setAttribute('maxlength', String(max));
   input.setAttribute('autocomplete', 'off');
+  if (o.placeholder) input.setAttribute('placeholder', o.placeholder);
   input.value = value;
-  input.addEventListener('input', markEdited);
+  const showCount = () => { if (count) count.textContent = cleanText(input.value).length + ' / ' + max; };
+  showCount();
+  input.addEventListener('input', () => { showCount(); markEdited(); });
   label.appendChild(input);
   if (hint) label.appendChild(el('span', 'hint', hint));
   parent.appendChild(label);
   return input;
+}
+
+// What is on file and only the desk changes: a value, not a box.
+function lockedRow(parent, title, value, tag) {
+  const row = el('div', 'yd-lock');
+  row.appendChild(el('span', 'k', title));
+  row.appendChild(el('span', 'v', value));
+  if (tag) row.appendChild(el('span', 'tag desk', tag));
+  parent.appendChild(row);
+  return row;
 }
 
 function tick(parent, title, hint, on, fixed) {
@@ -17033,7 +17464,31 @@ function tick(parent, title, hint, on, fixed) {
 // What a junior is told about the details entered at the desk - the relay's own words.
 const JUNIOR_DESK_WORDS = 'Ask at the desk - a parent fills this in with you.';
 
-function detailsForm(message) {
+// A setting that is on or off: the kit's tonal row with a real switch.
+// A switch that is on and fixed says, on its own line, how to undo it.
+function switchRow(parent, title, hint, on, fixed) {
+  const label = el('label', 'yd-sw' + (fixed === true ? ' fixed' : ''));
+  const words = el('span', 'w', title);
+  if (hint) words.appendChild(el('small', '', hint));
+  label.appendChild(words);
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.setAttribute('role', 'switch');
+  box.checked = on === true;
+  box.disabled = fixed === true;
+  box.addEventListener('change', markEdited);
+  // In a span of its own: the kit draws every label holding a checkbox
+  // straight inside it as a pill with a tick, and this one is a switch.
+  const tog = el('span', 'tog');
+  tog.appendChild(box);
+  label.appendChild(tog);
+  parent.appendChild(label);
+  return box;
+}
+
+// ---- the details tabs: Called, Email and Privacy, sent as one details ask
+
+function detailsParts(called, mailPane, privPane) {
   const base = {
     announcer: cleanText(me.announcer),
     pronouns: cleanText(me.pronouns),
@@ -17046,156 +17501,100 @@ function detailsForm(message) {
   // change is the desk's, since the badge code alone is on a lanyard.
   const withPin = me.pin === true && pass() !== '';
 
-  const form = el('div', 'su');
-
-  const name = el('div', 'f', 'Name');
-  name.appendChild(el('span', 'hint', (cleanText(me.name) || 'Not set') + ' - the desk changes this one.'));
-  form.appendChild(name);
-
-  const announcer = textField(form, 'Announcer name', 'How the announcer should say your name - spell it the way it sounds.', base.announcer, 40, false);
-
   // A JUNIOR (15 Nov 2026): only the announcer name from here. Pronouns,
   // about line and email are entered at the desk with a parent, and the
-  // relay refuses them from a junior's badge. No boxes, one line why.
+  // relay refuses them from a junior's badge: locked rows saying so.
   const junior = me.junior === true;
-  const pronouns = junior ? null : textField(form, 'Pronouns', 'For example she/her, he/him or they/them. Leave it empty for none.', base.pronouns, 24, false);
-  const about = junior ? null : textField(form, 'About you', 'One line the commentary can use, like "races a red buggy and loves the hairpin".', base.about, 120, true);
 
-  const mail = el('div', 'f', junior ? 'Pronouns, about you and email' : 'Email');
-  mail.appendChild(el('span', 'hint', junior ? JUNIOR_DESK_WORDS : email !== '' ? 'On file: ' + email : 'No email on file.'));
-  form.appendChild(mail);
-
-  let newEmail = null;
+  // Called
+  lockedRow(called, 'Name', cleanText(me.name) || 'Not set', 'desk only');
+  const announcer = textField(called, 'Announcer name', 'Spell it the way it sounds.', base.announcer, 40, false, { count: true });
+  let pronouns = null;
+  let about = null;
   if (junior) {
-    // Nothing more: the desk has their email.
-  } else if (withPin) {
-    newEmail = textField(form, 'New email address', 'Only if it has changed. The desk lets your old address know.', '', 120, false);
-    newEmail.type = 'email';
+    lockedRow(called, 'Pronouns', JUNIOR_DESK_WORDS, 'desk only');
+    lockedRow(called, 'About you', JUNIOR_DESK_WORDS, 'desk only');
   } else {
-    mail.appendChild(el('span', 'hint', ' Changing your email needs your personal PIN - ask at the desk.'));
+    pronouns = textField(called, 'Pronouns', 'Leave it empty for none.', base.pronouns, 24, false, { count: true, placeholder: 'e.g. she/her, he/him, they/them' });
+    about = textField(called, 'About you', 'One line the commentary can use.', base.about, 120, true, { count: true, placeholder: 'e.g. races a red buggy and loves the hairpin' });
   }
 
-  const nightMail = tick(form, 'Email me my night after racing', '', base.emailMyNight, false);
+  // Email
+  lockedRow(mailPane, 'On file', email !== '' ? email : 'None on file', '');
+  let newEmail = null;
+  if (junior) {
+    lockedRow(mailPane, 'New email', JUNIOR_DESK_WORDS, 'desk only');
+  } else if (withPin) {
+    newEmail = textField(mailPane, 'New email address', 'The desk lets your old address know.', '', 120, false, { placeholder: 'Only if it has changed' });
+    newEmail.type = 'email';
+  } else {
+    mailPane.appendChild(el('p', 'when', 'Changing your email needs your personal PIN - ask at the desk.'));
+  }
+  const nightMail = switchRow(mailPane, 'Email me my night after racing', '', base.emailMyNight, false);
   const mailable = () => email !== '' || (newEmail !== null && cleanText(newEmail.value) !== '');
   // As the desk's own form: no address, nothing to email - unless it is
   // already on, which they may always turn off.
   nightMail.disabled = !mailable() && !base.emailMyNight;
   if (newEmail) newEmail.addEventListener('input', () => { nightMail.disabled = !mailable() && !base.emailMyNight; });
 
-  const set = el('fieldset', '');
-  set.appendChild(el('legend', '', 'Online privacy'));
-  set.appendChild(el('span', 'hint', "These change the club's web pages only. In the room - the PA, the big screen and the club's Wi-Fi pages - nothing changes."));
+  // Privacy
+  privPane.appendChild(el('p', 'when', "These change the club's web pages only. In the room - the PA, the big screen and the club's Wi-Fi pages - nothing changes."));
   const flags = [
     ['noPhoto', 'Leave my photo off the web pages'],
     ['noVideo', 'Leave me out of podium videos online'],
     ['initials', 'Show only my initials online'],
   ].map(([key, words]) => {
     const on = privacy[key] === true;
-    return [key, tick(set, words, on ? 'On - ask at the desk to undo.' : '', on, on)];
+    return [key, switchRow(privPane, words, on ? 'On \\u00b7 ask at the desk to undo' : '', on, on)];
   });
-  form.appendChild(set);
+  privPane.appendChild(el('p', 'when', 'Once one is on, only the desk can turn it off again.'));
 
-  const guardian = tick(form, "I'm a parent or guardian making this change", '', false, false);
-
-  const said = el('p', 'yd-said', message || '');
-  said.setAttribute('role', 'status');
-
-  const send = tapButton('Send to the desk', 'go', async () => {
-    const f = {};
-    const a1 = cleanText(announcer.value);
-    const p1 = pronouns ? cleanText(pronouns.value) : base.pronouns;
-    const b1 = about ? cleanText(about.value) : base.about;
-
-    if (a1 !== base.announcer) f.announcer = a1;
-    if (p1 !== base.pronouns) f.pronouns = p1;
-    if (b1 !== base.about) f.about = b1;
-
-    if (newEmail !== null) {
-      const e1 = cleanText(newEmail.value);
-      if (e1 !== '') {
-        if (e1.length > 120 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(e1)) {
-          said.textContent = 'That email address does not look right.';
-          return;
-        }
-        f.email = e1;
+  return {
+    // What would go now: only what has changed. A junior has no pronouns
+    // or about box, so neither is ever sent from their phone.
+    diff() {
+      const f = {};
+      const a1 = cleanText(announcer.value);
+      const p1 = pronouns ? cleanText(pronouns.value) : base.pronouns;
+      const b1 = about ? cleanText(about.value) : base.about;
+      if (a1 !== base.announcer) f.announcer = a1;
+      if (p1 !== base.pronouns) f.pronouns = p1;
+      if (b1 !== base.about) f.about = b1;
+      if (newEmail !== null && cleanText(newEmail.value) !== '') f.email = cleanText(newEmail.value);
+      if ((nightMail.checked === true) !== base.emailMyNight) f.emailMyNight = nightMail.checked === true;
+      // PRIVACY ONLY EVER GOES AS true - see the note at the top of this part.
+      for (const [key, box] of flags) {
+        if (box.checked === true && !box.disabled && privacy[key] !== true) f[key] = true;
       }
-    }
+      return f;
+    },
 
-    if ((nightMail.checked === true) !== base.emailMyNight) f.emailMyNight = nightMail.checked === true;
-
-    // Only ever true - see the note at the top of this part.
-    for (const [key, box] of flags) {
-      if (box.checked === true && !box.disabled && privacy[key] !== true) f[key] = true;
-    }
-
-    if (Object.keys(f).length === 0) {
-      said.textContent = 'Nothing has changed yet.';
-      return;
-    }
-
-    // WHY (23 Oct 2026, bug hunt 10): the lengths were checked on every box,
-    // sent or not. The desk can save an announcer name over 40 characters
-    // (and maxlength does not cut a value set from script), so that driver
-    // could send nothing at all - not even a privacy tick - and was pointed
-    // at a box they never touched. Only fields being sent are checked now,
+    // WHY (23 Oct 2026, bug hunt 10): only fields being sent are checked,
     // like the relay's own check, and the message names the box.
-    if (f.announcer !== undefined && f.announcer.length > 40) {
-      said.textContent = 'Your announcer name is over 40 characters - shorten it to send.';
-      return;
-    }
+    check(f) {
+      if (f.email !== undefined && (f.email.length > 120 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(f.email))) {
+        return { tab: 'email', words: 'That email address does not look right.' };
+      }
+      if (f.announcer !== undefined && f.announcer.length > 40) {
+        return { tab: 'called', words: 'Your announcer name is over 40 characters - shorten it to send.' };
+      }
+      if ((f.pronouns !== undefined && f.pronouns.length > 24) || (f.about !== undefined && f.about.length > 120)) {
+        return { tab: 'called', words: 'One of those is too long - the box stops you at its limit.' };
+      }
+      return null;
+    },
 
-    if ((f.pronouns !== undefined && f.pronouns.length > 24) || (f.about !== undefined && f.about.length > 120)) {
-      said.textContent = 'One of those is too long - the box stops you at its limit.';
-      return;
-    }
-
-    if (guardian.checked === true) f.guardian = true;
-
-    send.disabled = true;
-    said.textContent = 'Sending\\u2026';
-    const got = await sendAsk('details', f);
-    send.disabled = false;
-
-    if (got.ok) {
-      // What was sent is the new starting point, so pressing again does
-      // not send it twice; privacy ticks sent stay on and fixed.
+    // What was sent is the new starting point, so pressing again does not
+    // send it twice; privacy switches sent stay on and fixed.
+    sent(f) {
       if (f.announcer !== undefined) base.announcer = f.announcer;
       if (f.pronouns !== undefined) base.pronouns = f.pronouns;
       if (f.about !== undefined) base.about = f.about;
       if (f.emailMyNight !== undefined) base.emailMyNight = f.emailMyNight;
       if (newEmail !== null) newEmail.value = '';
       for (const [key, box] of flags) if (f[key] === true) box.disabled = true;
-      guardian.checked = false;
-      edited = false;
-      said.textContent = got.words;
-      return;
-    }
-
-    // Their PIN has changed since they signed in, or the pass is from
-    // another driver's code: back to the PIN, saying why.
-    if (got.status === 403 && me && me.pin === true && !/email/i.test(got.words)) {
-      setPass('');
-      drawAsks(got.words);
-      return;
-    }
-
-    said.textContent = got.words;
-  });
-
-  form.appendChild(send);
-  form.appendChild(said);
-
-  if (withPin) {
-    // A full-size button, the kit's tonal one, since 7 Nov 2026 (Asher:
-    // "make the forget pin on this phone on your details menu a larger
-    // button") - it was a small text link under Send.
-    form.appendChild(tapButton('Forget my PIN on this phone', 'go quiet', () => {
-      setPass('');
-      drawAsks('Signed out on this phone.');
-    }));
-  }
-
-  return form;
+    },
+  };
 }
 
 // ---- My crew (15 Nov 2026, plans/driver-crew-plan.md 2.5 and 5)
@@ -17236,15 +17635,13 @@ function crewVoiceName(k) {
   return v ? cleanText(v.n) : '';
 }
 
-// For the card: "Principal: Gravel Jones (Voice: Rachel) · Tech lead: club's own".
-function crewWords() {
-  const one = (title, role) => {
-    const m = crewMember(role);
-    const voice = crewVoiceName(m.voice);
-    if (m.name === '' && voice === '') return title + ": club's own";
-    return title + ': ' + (m.name || "club's own name") + (voice !== '' ? ' (Voice: ' + voice + ')' : '');
-  };
-  return one('Principal', 'principal') + ' \\u00b7 ' + one('Tech lead', 'tech');
+// For the card, one role a line: "Gravel Jones · Rachel", or empty for
+// the club's own name and voice.
+function crewLine(role) {
+  const m = crewMember(role);
+  const voice = crewVoiceName(m.voice);
+  if (m.name === '' && voice === '') return '';
+  return (m.name || "Club's own name") + ' \\u00b7 ' + (voice || "club's own voice");
 }
 
 function crewStopAudio() {
@@ -17254,47 +17651,32 @@ function crewStopAudio() {
   crewAudio = null;
 }
 
-// My crew as a part: the form when signed in with the personal PIN, the
-// PIN box when not (or, in the sheet, a pointer to the one above it), and
-// one line for a driver with no personal PIN at all.
-function crewSection(message, gated) {
-  const part = el('div', 'su');
-  part.appendChild(el('h4', '', 'My crew'));
-
-  if (me.pin !== true) {
-    part.appendChild(el('p', 'when', 'Ask the desk for a personal PIN to pick your crew.'));
-    return part;
-  }
-
-  if (pass() === '') {
-    if (gated) part.appendChild(el('p', 'when', 'Sign in with your personal PIN above to pick your crew.'));
-    else part.appendChild(pinGate(message));
-    return part;
-  }
-
-  crewForm(part);
-  return part;
-}
-
-// A note box with its count under it, as the query box has.
-function crewNote(parent, title, hint, value, max) {
-  const input = textField(parent, title, hint, value, max, max > 80);
-  const count = el('div', 'when', '');
-  const show = () => { count.textContent = cleanText(input.value).length + ' of ' + max + ' characters.'; };
-  show();
-  input.addEventListener('input', show);
-  parent.appendChild(count);
-  return input;
-}
-
-// One role: a name box, a voice list, and Play for the voice picked.
-// namesHere false (an under-13, 15 Nov 2026): no name box - picked at the desk.
+// One role, as a small card: a name box, a voice list, and Play beside it
+// for the voice picked. namesHere false (an under-13, 15 Nov 2026): the
+// name is a locked row - picked at the desk - and only the voice is theirs.
 function crewRole(parent, title, role, junior, namesHere = true) {
   const m = crewMember(role);
-  const name = !namesHere ? null : textField(parent, title + ' name',
-    junior ? "Make one up - not Mum, Dad or anyone's real name." : "Make one up - not a real person's name.", m.name, 24, false);
+  const card = el('div', 'yd-role');
+  card.appendChild(el('h4', '', title));
+  parent.appendChild(card);
 
-  const label = el('label', 'f', title + ' voice');
+  let name = null;
+  if (namesHere) {
+    name = textField(card, 'Name',
+      junior ? "Make one up - not Mum, Dad or anyone's real name." : "Make one up - not a real person's name.", m.name, 24, false,
+      { count: true, hide: title, placeholder: "The club's own name" });
+  } else {
+    lockedRow(card, 'Name', m.name || "The club's own name", 'desk only');
+  }
+
+  const row = el('div', 'yd-vrow');
+  const label = el('label', 'f');
+  const lr = el('span', 'lr');
+  const words = el('span', 'l');
+  words.appendChild(el('span', 'vh', title + ' '));
+  words.appendChild(document.createTextNode ? document.createTextNode('Voice') : el('span', '', 'Voice'));
+  lr.appendChild(words);
+  label.appendChild(lr);
   const pick = document.createElement('select');
   for (const [k, n] of [['', "The club's own voice"]].concat(crewVoices().map((v) => [v.k, cleanText(v.n)]))) {
     const o = document.createElement('option');
@@ -17305,7 +17687,8 @@ function crewRole(parent, title, role, junior, namesHere = true) {
   }
   pick.value = m.voice;
   label.appendChild(pick);
-  parent.appendChild(label);
+  row.appendChild(label);
+  card.appendChild(row);
 
   const sample = () => {
     const v = crewVoices().find((x) => x.k === String(pick.value || ''));
@@ -17314,14 +17697,14 @@ function crewRole(parent, title, role, junior, namesHere = true) {
 
   // The <audio> is made here, on the tap, and not before: nothing is
   // fetched from the voice's host until they ask to hear it.
-  const play = tapButton('Play', 'go quiet', () => {
+  const play = tapButton('Play', 'yd-play', () => {
     const url = sample();
     crewStopAudio();
     if (url === '') return;
     const a = document.createElement('audio');
     a.src = url;
     crewAudio = a;
-    parent.appendChild(a);
+    card.appendChild(a);
     try {
       const p = typeof a.play === 'function' ? a.play() : null;
       if (p && typeof p.catch === 'function') p.catch(() => {});
@@ -17329,30 +17712,39 @@ function crewRole(parent, title, role, junior, namesHere = true) {
   });
   play.setAttribute('aria-label', 'Play the ' + title + ' voice');
   play.hidden = sample() === '';
-  parent.appendChild(play);
+  row.appendChild(play);
 
   pick.addEventListener('change', () => {
-    markEdited();
     crewStopAudio();
     play.hidden = sample() === '';
+    markEdited();
   });
 
   return { name: name, pick: pick, base: m };
 }
 
-function crewForm(form) {
+// The Crew tab: the form when signed in with the personal PIN (the sheet
+// asks for it before any tab shows), and one line for a driver with no
+// personal PIN at all. Answers what the sheet's Send needs, or null.
+function crewPane(pane) {
+  if (me.pin !== true) {
+    pane.appendChild(el('p', 'when', 'Ask the desk for a personal PIN to pick your crew.'));
+    return null;
+  }
+
   const c = me.crew;
   const junior = c.junior === true;
 
-  if (c.repick === true) form.appendChild(el('p', 'when', "Your club changed voices - pick your crew's voice again."));
+  pane.appendChild(el('p', 'when', 'Voice picks change straight away. Names and notes wait for the desk to check them.'));
+  if (c.repick === true) pane.appendChild(el('p', 'when', "Your club changed voices - pick your crew's voice again."));
 
   // An under-13's crew names are picked at the desk, with a parent there
   // (15 Nov 2026, children's privacy plan 2.1): no name boxes, just voices.
   const namesHere = c.under13 !== true;
-  if (!namesHere) form.appendChild(el('p', 'when', "Your crew's names are picked at the desk, with a parent there."));
+  if (!namesHere) pane.appendChild(el('p', 'yd-note', "Your crew's names are picked at the desk, with a parent there."));
 
-  const p = crewRole(form, 'Team Principal', 'principal', junior, namesHere);
-  const t = crewRole(form, 'Technical Lead', 'tech', junior, namesHere);
+  const p = crewRole(pane, 'Team Principal', 'principal', junior, namesHere);
+  const t = crewRole(pane, 'Technical Lead', 'tech', junior, namesHere);
 
   // A junior's notes are typed at the desk, never sent from a phone (15 Nov
   // 2026). No boxes and one line why - and what the desk has set: the words
@@ -17360,79 +17752,58 @@ function crewForm(form) {
   // true or false then, never the text).
   const notesHere = c.notes !== false && !junior;
   const noteText = (v) => (typeof v === 'string' ? cleanText(v) : '');
-  form.appendChild(el('h4', '', 'Your notes for the commentary'));
+  pane.appendChild(el('h4', 'yd-sub', 'Notes for the commentary'));
   if (!notesHere) {
-    form.appendChild(el('p', 'when', 'Your notes are filled in at the desk, with a parent or guardian there. Ask at the desk.'));
+    pane.appendChild(el('p', 'yd-note', 'Your notes are filled in at the desk, with a parent or guardian there. Ask at the desk.'));
     for (const [title, v] of [["Tonight's goal", c.goal], ['Thanks / shout-out', c.thanks], ["Your car's story", c.car]]) {
       const words = noteText(v) || (v === true ? 'Set at the desk' : '');
-      if (words !== '') form.appendChild(el('p', 'when', title + ': ' + words));
+      if (words !== '') lockedRow(pane, title, words, 'desk only');
     }
   }
-  const goal = notesHere ? crewNote(form, "Tonight's goal", 'Said before your race tonight only', noteText(c.goal), 80) : null;
-  const thanks = notesHere ? crewNote(form, 'Thanks / shout-out', '', noteText(c.thanks), 80) : null;
-  const car = notesHere ? crewNote(form, "Your car's story", '', noteText(c.car), 120) : null;
+  const goal = notesHere ? textField(pane, "Tonight's goal", 'Said before your race tonight only.', noteText(c.goal), 80, false, { count: true }) : null;
+  const thanks = notesHere ? textField(pane, 'Thanks / shout-out', '', noteText(c.thanks), 80, false, { count: true }) : null;
+  const car = notesHere ? textField(pane, "Your car's story", '', noteText(c.car), 120, true, { count: true }) : null;
+
+  // Said before they send (15 Nov 2026, the Terms' 7.1): what they write
+  // is spoken in public, and sending lets the club use it that way.
+  pane.appendChild(el('p', 'yd-consent', 'What you send may be said over the PA and on the club\\u2019s stream. By sending, you let your club and HeatCaller use it in the announcer\\u2019s commentary.'));
 
   // What they have now, to send only what has changed. Notes only where
   // there are boxes for them.
   const base = { pName: p.base.name, pVoice: p.base.voice, tName: t.base.name, tVoice: t.base.voice };
   if (notesHere) Object.assign(base, { goal: noteText(c.goal), thanks: noteText(c.thanks), story: noteText(c.car) });
 
-  const said = el('p', 'yd-said', '');
-  said.setAttribute('role', 'status');
+  return {
+    junior: junior,
 
-  const send = tapButton('Send my crew', 'go', async () => {
-    const now = {
-      pName: p.name ? cleanText(p.name.value) : p.base.name, pVoice: String(p.pick.value || ''),
-      tName: t.name ? cleanText(t.name.value) : t.base.name, tVoice: String(t.pick.value || ''),
-    };
-    if (notesHere) Object.assign(now, { goal: cleanText(goal.value), thanks: cleanText(thanks.value), story: cleanText(car.value) });
-    const f = {};
-    for (const k of Object.keys(base)) if (now[k] !== base[k]) f[k] = now[k];
+    diff() {
+      const now = {
+        pName: p.name ? cleanText(p.name.value) : base.pName, pVoice: String(p.pick.value || ''),
+        tName: t.name ? cleanText(t.name.value) : base.tName, tVoice: String(t.pick.value || ''),
+        goal: goal ? cleanText(goal.value) : base.goal, thanks: thanks ? cleanText(thanks.value) : base.thanks, story: car ? cleanText(car.value) : base.story,
+      };
+      const f = {};
+      for (const k of Object.keys(base)) if (now[k] !== base[k]) f[k] = now[k];
+      return f;
+    },
 
-    if (Object.keys(f).length === 0) {
-      said.textContent = 'Nothing has changed yet.';
-      return;
-    }
+    check(f) {
+      for (const k of ['pName', 'tName']) {
+        if (f[k] === undefined) continue;
+        if (f[k].length > 24) return { tab: 'crew', words: 'Keep a crew name under 24 characters.' };
+        if (!CREW_NAME.test(f[k])) return { tab: 'crew', words: CREW_NAME_WORDS };
+      }
+      if ((f.goal !== undefined && f.goal.length > 80) || (f.thanks !== undefined && f.thanks.length > 80) || (f.story !== undefined && f.story.length > 120)) {
+        return { tab: 'crew', words: 'One of those is too long - the box stops you at its limit.' };
+      }
+      // A junior's notes never come from here: there are no boxes for them.
+      return null;
+    },
 
-    for (const k of ['pName', 'tName']) {
-      if (f[k] === undefined) continue;
-      if (f[k].length > 24) { said.textContent = 'Keep a crew name under 24 characters.'; return; }
-      if (!CREW_NAME.test(f[k])) { said.textContent = CREW_NAME_WORDS; return; }
-    }
-
-    if ((f.goal !== undefined && f.goal.length > 80) || (f.thanks !== undefined && f.thanks.length > 80) || (f.story !== undefined && f.story.length > 120)) {
-      said.textContent = 'One of those is too long - the box stops you at its limit.';
-      return;
-    }
-
-    send.disabled = true;
-    said.textContent = 'Sending\\u2026';
-    const got = await sendAsk('crew', f);
-    send.disabled = false;
-
-    if (got.ok) {
+    sent(f) {
       for (const k of Object.keys(base)) if (typeof f[k] === 'string') base[k] = f[k];
-      edited = false;
-      said.textContent = got.words;
-      return;
-    }
-
-    // Their PIN has changed since they signed in: back to the PIN, saying why.
-    if (got.status === 403 && /personal PIN/.test(got.words)) {
-      setPass('');
-      drawAsks(got.words);
-      return;
-    }
-
-    said.textContent = got.words;
-  });
-
-  form.appendChild(send);
-  form.appendChild(el('p', 'when', 'Voice picks change straight away. Names and notes wait for the desk to check them.'));
-  // Said before they send (15 Nov 2026, the Terms' 7.1): what they write
-  // is spoken in public, and sending lets the club use it that way.
-  form.appendChild(el('p', 'when', 'What you send may be said over the PA and on the club\\u2019s stream. By sending, you let your club and HeatCaller use it in the announcer\\u2019s commentary.'));
-  form.appendChild(said);
+    },
+  };
 }
 
 // The pack part, built once for the packs the desk last sent and moved

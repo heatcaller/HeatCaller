@@ -105,7 +105,7 @@ describe("My Night on race night: the jobs in one row", () => {
     const { page } = await open();
 
     assert.doesNotMatch(page.get("yd").textContent, /Your battery pack/);
-    assert.match(page.get("yd").textContent, /Ask the desk to change/);
+    assert.match(page.get("yd").textContent, /Change my details/);
   });
 
   it("keeps the pack they picked through the card's next redraw", async () => {
@@ -182,6 +182,6 @@ describe("My Night on race night: charging and the setup log (4 Nov 2026)", () =
     const yd = page.get("yd");
     assert.equal(yd.find((n) => n.className.includes("setuplog")).length, 0);
     assert.doesNotMatch(yd.textContent, /Log a setup change|Your packs, cars and setups/);
-    assert.match(yd.textContent, /Ask the desk to change/);
+    assert.match(yd.textContent, /Change my details/);
   });
 });

@@ -46,7 +46,7 @@ describe("relay pages clear a phone's status bar", () => {
   });
 
   it("stops My Night's jump bar and the Manager's tabs below the status bar, not under it", () => {
-    assert.match(myNightPage("acme-rc", "Acme RC"), /#nj \{ position: sticky; top: var\(--stick-t\)/);
+    assert.match(myNightPage("acme-rc", "Acme RC"), /#nj \{ position: sticky; top: calc\(var\(--stick-t\) \+ var\(--owe-h, 0px\)\)/);
     assert.match(managePage("acme-rc", "Acme RC"), /position: sticky; top: env\(safe-area-inset-top, 0px\); z-index: 2;/);
     for (const [, html] of club) assert.doesNotMatch(html, /position: sticky; top: 0[;\s]/);
   });

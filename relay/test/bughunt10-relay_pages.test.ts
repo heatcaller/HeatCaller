@@ -195,13 +195,13 @@ describe("#98 Your details with a long announcer name from the desk", () => {
       if (url.endsWith("/driver/ask")) return { status: 200, body: { ok: true, ref: "A1B2C3" } };
       return { status: 409, body: { ok: false } };
     }, `#d=${CODE}`);
-    // The form is in Me's sheet since 6 Nov 2026, behind Ask the desk to change.
-    page.button(page.get("yd"), /^Ask the desk to change$/)!.click();
+    // The form is in Me's sheet since 6 Nov 2026, behind Change my details.
+    page.button(page.get("yd"), /^Change my details$/)!.click();
     return { page, asks: () => page.sent.filter((s) => s.url.endsWith("/driver/ask")).map((s) => s.body) };
   }
 
   async function send(page: FakePage): Promise<void> {
-    const b = page.button(page.get("me-sheet-body"), /^Send to the desk$/);
+    const b = page.button(page.get("me-sheet-body"), /^Send (to the desk|\d+ changes?)$/);
     assert.ok(b);
     b.click();
     await page.settle();
