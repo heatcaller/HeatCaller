@@ -59,10 +59,25 @@ public sealed class TermsTests : IDisposable
     }
 
     [Fact]
-    public void Both_parts_are_in_it()
+    public void All_three_parts_are_in_it()
     {
         Assert.Contains("# Part 1: License agreement", Terms.Text, StringComparison.Ordinal);
         Assert.Contains("# Part 2: Privacy notice", Terms.Text, StringComparison.Ordinal);
+        Assert.Contains("# Part 3: Cookies on your club's pages", Terms.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Part_3_points_to_the_cookie_policy_and_does_not_copy_it()
+    {
+        // The policy itself is the relay's /cookies page (relay/src/cookies.ts),
+        // written for drivers and kept true by the relay's own tests. Part 3
+        // points there and sets out the club's side, so a change to the policy
+        // does not make every club accept these terms again (15 Nov 2026).
+        var part3 = Terms.Text[Terms.Text.IndexOf("# Part 3", StringComparison.Ordinal)..];
+
+        Assert.Contains("/c/<your club>/cookies", part3, StringComparison.Ordinal);
+        Assert.Contains("Changing it does not change these terms", part3, StringComparison.Ordinal);
+        Assert.DoesNotContain("hg-theme", part3, StringComparison.Ordinal);
     }
 
     [Fact]
