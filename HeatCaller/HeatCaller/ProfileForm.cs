@@ -718,6 +718,7 @@ public sealed class ProfileForm : Form
         var pronounsWidth = FitPicker(_cmbPronouns, keepToRow: false);
         FitPicker(_cmbTransponders, keepToRow: false);
         FitPicker(_cmbOnStream, keepToRow: false);
+        FitPicker(_cmbJuniorAge, keepToRow: false);
 
         // The fields' column: never narrower than the text boxes were, wide
         // enough for the garage's drop-down and its two buttons on one line
@@ -1468,7 +1469,7 @@ public sealed class ProfileForm : Form
     /// <summary>The "Age:" choices for a junior, in the order the drop-down lists them.</summary>
     private static readonly (JuniorAge Age, string Words)[] JuniorAgeChoices =
     {
-        (JuniorAge.NotSet, "Age not set (treated as under 13)"),
+        (JuniorAge.NotSet, "Age not set"),
         (JuniorAge.Under13, "Under 13"),
         (JuniorAge.ThirteenToSeventeen, "13-17"),
     };
@@ -1501,7 +1502,7 @@ public sealed class ProfileForm : Form
         _chkJunior.CheckedChanged += (_, _) => _cmbJuniorAge.Enabled = _chkJunior.Checked;
 
         captions.Add(fields.AddRow("Junior:", FieldGrid.Inline(_chkJunior, _cmbJuniorAge)));
-        fields.AddHint("Juniors' names are shortened online, their own words are taken only at the desk, and under 13s get "
+        fields.AddHint("Juniors' names are shortened online and their own words are taken only at the desk. Under 13s, and juniors with no age set, get "
                        + "the strictest rules. Set the age band so 13-17s can send crew names from their phone.");
     }
 
