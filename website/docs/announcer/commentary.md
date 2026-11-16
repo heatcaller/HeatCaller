@@ -570,10 +570,11 @@ Without a crew of their own, a driver gets the club's principal and Technical Le
 
 **Juniors.** What is said goes out on the PA, the stream and its captions. So:
 
-- **Their notes are typed at your desk, not on their phone**, unless you tick **Juniors can send notes from their phone**. Leave it off: in the US, COPPA needs a parent's verified consent before a child under 13 sends words online that are said in public, and a tick on a phone isn't that. With it on, a parent must still tick **I'm making this change for them**.
-- **A parent must agree first.** A junior's notes are never said until **A parent or guardian agreed these notes can be said on the PA and the stream** is ticked on their profile. Get it signed at the desk, as for the waiver. There is a form to print in the club pack.
-- On a night the stream is on, a junior's notes aren't said unless you tick **Juniors' notes on stream nights**. Their crew's names and voices are heard either way.
-- A junior's principal never comes in defensive, frustrated or blunt, and the interview is told to keep it warm and encouraging.
+- **Their notes and about line are typed at your desk, never on their phone.** There is no switch for this: in the US, COPPA needs a parent's verified consent before a child under 13 sends words online that are said in public, and a tick on a phone isn't that. From their phone, a junior can only send the name the announcer calls them.
+- **Set their age band** on their profile: **Under 13** or **13-17**. A junior without one is treated as under 13. A junior aged 13-17 can send crew names from their phone, which wait for you as usual; an under-13's crew names are typed at your desk.
+- **A parent must agree first.** A junior's notes and about line are never said until **A parent or guardian agreed these notes can be said on the PA and the stream** is ticked on their profile. Get it signed at the desk, as for the waiver. There is a form to print in the club pack.
+- On a night the stream is on, a junior's notes and about line aren't said unless you tick **Juniors' notes on stream nights**. Their crew's names and voices are heard either way.
+- A junior's principal never comes in defensive, frustrated or blunt, and the interview is told to keep it warm and encouraging. **Sailor-mouth** plays clean in any race with a junior in it.
 
 <a id="broadcast"></a>
 

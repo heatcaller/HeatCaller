@@ -1,3 +1,5 @@
+> **RETIRED 15 Nov 2026 - not to be used or sent to clubs.** The beta is now governed by the in-app terms alone (HeatCaller\HeatCaller\Assets\Legal\HeatCaller-Terms.md, the 15 November 2026 revision 2 edition), which every install must accept and which say they replace any separate beta agreement (Part 1, opening). This draft's points were folded in or answered there: the operator is HeatCaller LLC; the law is New York (section 11); data is handled under Part 2; the voice's provider rules are in section 6; ending is section 10; the support file's name removal is section 9, now worded as best-effort; and the relay copy after ending is covered by **Delete Everything Published** and the retention list in Part 2. Two points with no home in the Terms yet, for counsel to place if they're wanted: a best-efforts support promise (section 5 below) and the club's agreement to send feedback after each night (section 6). Kept below only as a record (plans/children-privacy-and-ip-plan.md, item 3.10).
+>
 > **DRAFT for review by a lawyer - not legal advice, not in force.**
 > Written 22 Oct 2026. Points marked **[CHECK]** need a decision or a lawyer's wording.
 

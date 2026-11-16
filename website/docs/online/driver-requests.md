@@ -102,7 +102,7 @@ Each asks "Ask the desk to...?" first, and the request then shows under the driv
 
 When the club has ticked **Drivers can pick their own crew** (see [Drivers' own crew](../announcer/commentary.md#drivers-own-crew)), **Your details** has a **My crew** part. It needs their personal PIN: a driver without one sees "Ask the desk for a personal PIN to pick your crew."
 
-For their **Team Principal** and **Technical Lead** they can type a made-up name and pick a voice, with **Play** to hear it. Under **Your notes for the commentary** are **Tonight's goal**, **Thanks / shout-out** and **Your car's story**. **Send my crew** sends what changed. A voice they pick changes straight away; names and notes wait for the desk. Under the button it says "What you send may be said over the PA and on the club's stream. By sending, you let your club and HeatCaller use it in the announcer's commentary." For a junior there are no note boxes ("Your notes are filled in at the desk, with a parent or guardian there. Ask at the desk.") unless the club ticks **Juniors can send notes from their phone**; then a parent must tick **I'm making this change for them**.
+For their **Team Principal** and **Technical Lead** they can type a made-up name and pick a voice, with **Play** to hear it. Under **Your notes for the commentary** are **Tonight's goal**, **Thanks / shout-out** and **Your car's story**. **Send my crew** sends what changed. A voice they pick changes straight away; names and notes wait for the desk. Under the button it says "What you send may be said over the PA and on the club's stream. By sending, you let your club and HeatCaller use it in the announcer's commentary." For a junior there are no note boxes ("Your notes are filled in at the desk, with a parent or guardian there. Ask at the desk."): a junior's notes and about line are always typed at the desk. An under-13's crew names are typed at the desk too; see [Drivers' own crew](../announcer/commentary.md#drivers-own-crew).
 
 ### How each request is getting on
 
@@ -135,9 +135,8 @@ A setup change shows as "Setup log", and a change to their packs or cars as "Req
 | "Your crew needs your personal PIN - ask at the desk." | A crew request without signing in with their personal PIN. |
 | "A crew name can only have letters, spaces, hyphens and apostrophes." | A crew name with numbers or symbols in it. |
 | "Please pick something else - the desk would have to turn that down." | A rude word in a crew name or note. |
-| "A parent or guardian needs to send notes for a junior - tick 'I'm making this change for them'." | A junior's note without the tick. |
 | "Your club is not taking crew picks from phones just now. Ask at the desk." | **Drivers can pick their own crew** is unticked. |
-| "Your notes are filled in at the desk, with a parent there. Ask at the desk." | A junior's note while **Juniors can send notes from their phone** is unticked. |
+| "Your notes are filled in at the desk, with a parent there. Ask at the desk." | A junior's note sent from a phone. A junior's notes are always typed at the desk. |
 
 ## Answering requests at the desk
 

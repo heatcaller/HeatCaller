@@ -167,6 +167,9 @@ A track that won't play, stops part-way with an error, or has no sound in it is 
 1. Press **Add Track** and choose one or more `.wav` or `.mp3` files.
 2. The files are copied into HeatCaller's music folder, so they keep working if you move or delete the originals.
 
+!!! note "Music licences are yours to sort out"
+    The music and sounds that come with HeatCaller are HeatCaller's own, and you can play them at your race nights and on your stream. Music you add yourself is different. Playing it over your PA to the public usually needs a public-performance licence, from a music licensing body or through your venue. Putting it on a stream or a recording needs the rights holders' permission, and YouTube and other platforms may mute or take down a stream with music you have no licence for. Listening along on a phone carries the announcer's voice only, never music. See section 7.5 of HeatCaller's terms (**Backup & Restore → Getting help → License and Privacy**).
+
 The list on the **Library** card shows each **Track**, its **Source** ("Included" or "Yours"), whether it's ticked for **My music** ("Yes" or "No"), and the **File**. The applied soundscape's tracks have "• theme" after their source, whichever choice is playing. The track that's playing is shown in bold with "(now playing)" after its name. Tracks that aren't in what's playing now are grayed. Double-click a track to play it.
 
 Double-clicking a track that isn't in what's playing now plays it once without adding it, and the page says: "*name*" is excluded from My music - playing it once. With **Theme music** playing, any track that isn't the theme's plays once the same way, and the page says: "*name*" isn't part of the theme music - playing it once, then back to the theme. The music then carries on from the top, reshuffled if **Shuffle** is on. If the track won't play, the page says: Couldn't play "*name*" - the console says why.

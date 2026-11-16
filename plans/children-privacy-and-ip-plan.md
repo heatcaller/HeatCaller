@@ -7,6 +7,42 @@
 
 *Not legal advice. Every legal point is for counsel to confirm.*
 
+## Status (15 Nov 2026, later the same day)
+
+Asher answered decisions 1-8 (below): remove the phone-notes switch; under-13 crew names desk-only; yes to the age band; "Removed driver"; Sailor-mouth clean with any junior in the race; noindex on pages naming a junior; fold the beta agreement into the Terms; rename the features. Seven code builders and one documents builder then worked in parallel. "Built" below means built in that pass, on separate branches - **check each one is merged** before relying on it.
+
+| # | Status |
+|---|---|
+| 0.1-0.6 | **Done** (committed with the documents pass). |
+| 1.1 | **Built** (code): the about line follows the notes' consent and stream-night rules; with the switch gone, juniors send neither from a phone. |
+| 1.2 | **Built** (code): juniors can't be followed by name; family links only. |
+| 1.3 | **Built** (code): junior names shortened on every published page. |
+| 1.4 | **Built** (code): fixed desk replies to juniors. |
+| 1.5 | Not in the context given to the documents pass. **Check** whether a code builder took it. |
+| 2.1 | **Built** (code): age band Under 13 / 13-17, unset = under 13. |
+| 2.2 | **Built** (code): juniors' phone details form offers only the announcer name. |
+| 2.3 | **Code built:** *Ask ElevenLabs not to keep our lines* (on by default), optional *Offline voices for juniors*. **Vendor: left for Asher** - letters drafted in website/legal-drafts/vendor-letters.md, not sent. |
+| 2.4 | **Built** (code): backups fully encrypted, cloud folders need a password, freeze dumps deleted after 14 days. DPAPI for profiles.json not taken. |
+| 2.5 | **Built** (code): Forget this driver ("Removed driver"; relay copies deleted) and Export this driver's data. |
+| 2.6 | **Code built:** 180-day follow/push expiry, 30-day junior sign-ins, optional unpublish of old nights. **Docs done:** schedule published in Terms Part 2. |
+| 2.7 | **Drafted** (documents pass): security-program.md (coordinator blank), dpia.md, retention policy in the Terms. **Left for counsel** and for Asher to name the coordinator. |
+| 3.1 | **Done** in the Terms (revision 2). **Counsel** to see the wording. |
+| 3.2 | **Done in About.cs and Assets\Licences\LibVLC-plugins.txt:** written offer (3 years, support@heatcaller.com) and a placeholder link. 264 plugins listed; two declare GPL-2.0-or-later (dolby_surround_decoder, headphone_channel_mixer) - **left for Asher/code:** exclude them in HeatCaller.csproj, and **upload the source tarball** to HeatCaller-releases and fill in the link. |
+| 3.3 | **Done** in the Terms, 7.4 and 7.6. **Counsel.** |
+| 3.4 | **Done** in the Terms (7.5) and on the music docs page. The listen-along code comment belongs to the code side - **check** it was added. |
+| 3.5 | **Done** in the Terms, 7.3. |
+| 3.6 | **Drafted:** website/legal-drafts/copyright-takedown-policy.md (page + agent checklist). **Left for Asher:** register the agent, then publish the page. |
+| 3.7 | **Drafted:** website/legal-drafts/founder-ip-assignment.md. **Left for Asher and counsel:** complete and sign. |
+| 3.8 | **Drafted** in vendor-letters.md. **Left for Asher:** send, file answers, link ElevenLabs' end-user terms from Terms section 6. |
+| 3.9 | **Names decided:** "Pole Shootout" and "Invitational (Reedy-style format)". Nothing committed on main used the old names (the docs, the code strings and the committed race-night-build-plan.md don't name either feature). The only uses are the **uncommitted** 15 Nov update of plans/race-night-build-plan.md in the shared folder (row 14b, "Not built: Super Pole, the Reedy Invitational format") and the race-night-build-progress memory note - **rename both there** when that update is committed. competitor-research/README.md keeps "Super Pole" because it describes LiveTime's own feature; SanctioningPreset.cs keeps "Reedy Race" and the Reedy event's own "Invitational class" as descriptions. **Left for Asher:** clearance search, USPTO filing, check SUPERPOLE. |
+| 3.10 | **Done:** the beta agreement is marked retired; the Terms say they replace it. |
+| 4.1 | **Built** (code): clean with any junior in the race. |
+| 4.2 | **Built** (code): per-junior On stream + stream consent tick. |
+| 4.3 | **Built** (code): noindex on pages naming a junior. |
+| 4.4, 4.5 | Not in this pass. |
+| 4.6 | **Traced** (documents pass, recorded in About.cs): HeatCaller reaches MisakiSharp's EspeakFallback for every English out-of-lexicon word (and through it EspeakG2P's shared code); EspeakG2P's own entry is reached only for non-English voices, which HeatCaller doesn't offer. Nothing forked. **Counsel:** is it a derived work of phonemizer (GPL-3.0)? |
+| 4.7-4.10 | Not in this pass. |
+
 **How to read it.** Each item says who does it and roughly how big it is.
 
 | Tag | Meaning |

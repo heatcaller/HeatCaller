@@ -61,6 +61,8 @@
 
 ### What the build does about it
 
+*As first written. Superseded by the 15 Nov 2026 build pass: the phone-notes switch below is removed, and juniors' notes are desk-only with no switch. See section 9.*
+
 - **Juniors' notes are taken at the desk by default.** *Juniors can send notes from their phone* (Cast tab) is off by default. While it's off, the phone shows no note boxes for a junior, and the relay refuses a note from a junior's badge: "Your notes are filled in at the desk, with a parent there."
 - **No notes are spoken without recorded consent.** A junior's notes are never said until the club ticks *A parent or guardian agreed these notes can be said on the PA and the stream* on the profile.
 - **Stream nights are off by default.** On any night the stream is on, a junior's notes are not said unless the club turns on *Juniors' notes on stream nights*.
@@ -164,21 +166,37 @@ This is a draft for Asher and counsel. COPPA §312.10 needs a published policy i
 | Adult-to-junior messages log | Club laptop | The season | Deleted |
 | Race video with juniors | R2 or YouTube | The club's choice, at most 1 year by default **[CHECK]** | Deleted, unless the club pins it |
 
-## 9. Checklist against the build (15 Nov 2026)
+**Added 15 Nov 2026 (later), as decided and being built**, and published in Part 2 of the Terms (revision 2):
+
+| Data | Where | Keep for | Then |
+|---|---|---|---|
+| Follow and push subscriptions | Relay | 180 days without use | Deleted |
+| A junior's phone sign-in | Relay | 30 days | Expires; signs in again with the PIN |
+| Freeze reports (hang dumps) | Club laptop | 14 days | Deleted |
+| Old race nights | Relay | Until the club's optional "older than N seasons" setting removes them (off by default) | Unpublished |
+| Everything about one driver | Laptop and relay | Until **Forget this driver** | Deleted; results kept as "Removed driver" |
+
+## 9. Checklist against the build
+
+*First written 15 Nov 2026. Updated later the same day for the children's-privacy build pass (plans/children-privacy-and-ip-plan.md), whose decisions were: remove the phone-notes switch, add an age band, desk-only under-13 crew names, follow by family link only, fixed desk replies, a per-junior stream setting, noindex, retention timers, encrypted backups, forget and export, and the ElevenLabs no-logging request. Items marked "Built in the 15 Nov pass" were being built in parallel when this was written: **[CHECK] each one against the merged code** before counsel relies on it.*
 
 | Practice | Status |
 |---|---|
-| High-privacy defaults for juniors | **Done for notes.** Phone notes off, stream nights off, recorded parent agreement needed. |
-| Age band, not date of birth | **Not built.** HeatCaller holds only a Junior tick, so it can't tell under-13 from 13–17. Needed for recommendation 1(b). |
+| High-privacy defaults for juniors | **Built in the 15 Nov pass.** The *Juniors can send notes from their phone* switch is removed: a junior's notes and about line are typed at the desk only, and the phone's details form offers a junior only the announcer name. The about line follows the notes' consent and stream-night rules. Recommendation 1(a). |
+| Age band, not date of birth | **Built in the 15 Nov pass.** Under 13 / 13-17 on the profile; not set is treated as under 13. Under-13s' crew names are desk-only (recommendation 2, conservative option). |
 | Desk review before anything is broadcast | **Done** for crew names and notes. Voice picks skip review, which is fine because the list is the club's own. |
-| No crude lines about juniors | **Partly.** The Sailor-mouth tone's prompt aims swearing at the race, never at a driver (CommentaryTones.SailorMouthRule). Clubs can switch the tone off (AllowSailorMouth). But it isn't automatically clean when a junior is in the race or is the subject of a line. **[CHECK] Asher to decide** whether a junior on track should force the clean tone. |
-| No private adult-to-junior messages | **Unknown.** See section 5. |
-| Names on stream limited for juniors | **Unknown.** See section 6. |
-| No engagement tricks aimed at juniors | **[CHECK]** follower alerts, streaks and paid upsells shown to junior profiles. |
-| DPIA | **Not written.** |
-| Written security program and named privacy contact | **Not written.** Needed before any online under-13 collection. |
-| Parent access and deletion | **At the desk only.** No self-serve parent view. |
-| Published retention policy | **Draft only** (section 8). |
+| No crude lines about juniors | **Built in the 15 Nov pass.** Sailor-mouth plays clean in any race with a junior in it, on top of the SailorMouthRule prompt and the club switch. |
+| No private adult-to-junior messages | **Built in the 15 Nov pass.** Desk replies to a junior's phone are fixed text only. No driver-to-driver messages. **[CHECK]** marshal-swap asks between drivers (plan 4.4) and shout-outs naming a junior (plan 4.5) are not in this pass. |
+| Names on stream limited for juniors | **Built in the 15 Nov pass.** Per-junior *On stream: Shortened / Not at all*, with a parent's stream-consent tick. Junior names are shortened on every published page whatever the club setting. **[CHECK]** every surface in section 6 honours it (overlays, captions, listen-along, recap clips, race video titles). |
+| Not findable by strangers | **Built in the 15 Nov pass.** Juniors can't be followed by name (family links only); pages naming a junior are noindex. |
+| No engagement tricks aimed at juniors | **[CHECK]** follower alerts, streaks and paid upsells shown to junior profiles. Not in this pass. |
+| Third parties | **Built in the 15 Nov pass:** *Ask ElevenLabs not to keep our lines* (on by default) and an optional *Offline voices for juniors*. **Vendor answers not yet in:** letters drafted in vendor-letters.md, not sent. |
+| Data at rest | **Built in the 15 Nov pass.** Backups fully encrypted with the backup password; cloud folders need a password; freeze dumps deleted after 14 days. **[CHECK]** profiles.json itself is still unencrypted (plan 2.4's optional DPAPI). |
+| DPIA | **Drafted** (dpia.md). Needs consultation, sign-off and counsel. |
+| Written security program and named privacy contact | **Drafted** (security-program.md). Coordinator not yet named; privacy contact is support@heatcaller.com in the Terms. |
+| Parent access and deletion | **Built in the 15 Nov pass.** *Export this driver's data* and *Forget this driver* (results show "Removed driver"; relay copies deleted). Still at the desk only: no self-serve parent view. |
+| Published retention policy | **Published** in Part 2 of the Terms (revision 2), with the timers above. |
+| Safeguarding statement in the Terms | **Done** (Part 1, section 7.3, revision 2). Answers the [CHECK] at the end of section 5. |
 
 ## 10. Parent or guardian consent: form for the desk
 
@@ -220,3 +238,16 @@ Desk use: notes typed on the profile by ______________; *A parent or guardian ag
   - Retention lines for crew requests, the night's goal and other notes.
   - A choices line on clearing notes and turning the feature off.
 - **The edition date is now 15 November 2026.** Every install asks for acceptance again, because acceptance is held to the text's hash.
+
+## 12. Changes made to the in-app Terms (15 Nov 2026, revision 2)
+
+One new edition for the children's-privacy and IP pass, so clubs re-accept once. The edition line reads "Beta version of 15 November 2026 (revision 2)", and Terms.Edition matches.
+
+- **Part 1:**
+  - Opening: the Terms are the whole agreement for the beta and replace the separate beta agreement (now retired).
+  - Section 2: the garbled sentence is fixed, and an LGPL-2.1 section 6 carve-out is added (modify for your own use, reverse engineer to debug that, replace the LGPL parts), pointing at the About box for source.
+  - 7.1: covers the about line too.
+  - 7.3 rewritten as "Children and safeguarding": the club runs its own safeguarding; age band (unset = under 13); desk-only notes and about line; announcer name only from a junior's phone; under-13 crew names desk-only; consent and stream-night rules; per-junior **On stream**; names always shortened, noindex, family links only; fixed desk replies; Sailor-mouth clean; Export and Forget.
+  - New 7.4 (licence to host the club's content on the relay, club warranty and indemnity, removal on complaint), 7.5 (music: HeatCaller's own music may be played; the club licenses its own music for its PA and streams; listen-along is voice only) and 7.6 (AI-written output: the club may use it; no ownership claimed; no promise).
+  - Section 9: Save Support Info "tries to remove" names and emails.
+- **Part 2:** age band and stream choices in what is kept; encrypted backups; the junior rules restated; follows and family links; the stream setting; ElevenLabs no-logging request and Offline voices for juniors; Anthropic's commercial terms on training; no AI training by us; the retention list with 180-day follows, 30-day junior sign-ins, 14-day freeze reports and optional unpublishing of old nights; Export and Forget; a contact line.

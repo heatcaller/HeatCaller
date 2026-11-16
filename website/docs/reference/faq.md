@@ -184,6 +184,8 @@ A few protections are on by default:
 - The roster and heat line-ups aren't published unless you tick **Also publish the roster and heat line-ups (who is entered, and who is in which heat)**.
 - Driver photos aren't included in online check-in unless you tick the photos option.
 
+Juniors get more, whatever you tick: their names are always shortened, pages that name them ask search engines not to list them, and only their family can follow them, with a family link. See [Children and privacy](../online/index.md#children-and-privacy).
+
 See [Online](../online/index.md) and [Security and privacy](../admin/security-and-privacy.md).
 
 ### Do we have to host the relay ourselves?
@@ -223,4 +225,4 @@ See [Troubleshooting](../admin/troubleshooting.md).
 
 ### What other software is inside HeatCaller?
 
-**About HeatCaller** on the **Getting help** card of the **Backup & Restore** page lists every third-party component HeatCaller ships with and the license it is under — the audio playback, the decoder connections, the QR codes, the free on-PC voice and the two typefaces. All of it is free to use and redistribute, and the font license files travel with the fonts as those licenses require. Its **License and privacy notice** link opens the terms you accepted.
+**About HeatCaller** on the **Getting help** card of the **Backup & Restore** page lists every third-party component HeatCaller ships with and the license it is under — the audio playback, the decoder connections, the QR codes, the free on-PC voice and the two typefaces. All of it is free to use and redistribute, and the font license files travel with the fonts as those licenses require. The video player for sponsor videos (LibVLC) is under the LGPL; its entry says how to get its source code, and `Assets\Licences\LibVLC-plugins.txt` beside HeatCaller.exe lists the parts of it that ship. Its **License and privacy notice** link opens the terms you accepted.
