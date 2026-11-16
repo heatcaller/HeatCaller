@@ -66,8 +66,9 @@ namespace HeatCaller;
 ///     written offer (15 Nov 2026, the IP plan's item 3.2), in the About box
 ///     and at the top of LibVLC-plugins.txt: the exact source of VLC 3.0.24
 ///     and LibVLCSharp 3.10.1 from the HeatCaller-releases repository, or
-///     from support@heatcaller.com for three years. The source tarball
-///     still has to be put on that repository and the link filled in.
+///     from support@heatcaller.com for three years. The source went up on
+///     16 Nov 2026 as the third-party-source release, a pre-release so the
+///     app's update check (GithubSource, prerelease: false) never sees it.
 ///
 /// This is a straightforward LGPL dynamic-linking case rather than an open
 /// question like the MisakiSharp one below, but it is still a question for
@@ -226,7 +227,7 @@ internal static class ThirdPartyCatalog
             "LGPL-2.1-or-later",
             "VLC itself - the decoders a sponsor's video is actually played by.",
             new[] { "VideoLAN.LibVLC.Windows" },
-            Note: "VideoLAN. Ships unmodified in libvlc\\win-x64 beside the exe as replaceable DLLs, which is what section 6 of the LGPL asks for; only the win-x64 copy and a trimmed plugin set are distributed (see HeatCaller.csproj). Its license text is Assets\\Licences\\LibVLC-LGPL-2.1.txt, fetched from the FSF on 8 Oct 2026 because neither package carries one. The plugins that ship, with each one's licence, are listed in Assets\\Licences\\LibVLC-plugins.txt. Source code: the complete source for VLC 3.0.24 and LibVLCSharp 3.10.1 is available from the HeatCaller-releases repository [source link to be added], or by email from support@heatcaller.com, for no more than the cost of sending it. This written offer is valid for three years from the last time we distributed this version, to anyone who has a copy."),
+            Note: "VideoLAN. Ships unmodified in libvlc\\win-x64 beside the exe as replaceable DLLs, which is what section 6 of the LGPL asks for; only the win-x64 copy and a trimmed plugin set are distributed (see HeatCaller.csproj). Its license text is Assets\\Licences\\LibVLC-LGPL-2.1.txt, fetched from the FSF on 8 Oct 2026 because neither package carries one. The plugins that ship, with each one's licence, are listed in Assets\\Licences\\LibVLC-plugins.txt. Source code: the complete source for VLC 3.0.24 and LibVLCSharp 3.10.1 is available from the HeatCaller-releases repository (https://github.com/heatcaller/HeatCaller-releases/releases/tag/third-party-source), or by email from support@heatcaller.com, for no more than the cost of sending it. This written offer is valid for three years from the last time we distributed this version, to anyone who has a copy."),
 
         new Component(
             "KokoroSharp",

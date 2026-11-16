@@ -317,12 +317,12 @@ Retired, no review needed:
 - trademark footer on the docs.
 
 **Done since (16 Nov 2026):**
-- the cookie policy and this work merged together (PR #236), and the relay deployed (Fly v167).
+- the cookie policy and this work merged together (PR #236), and the relay deployed (Fly v167);
+- the VLC 3.0.24 and LibVLCSharp 3.10.1 sources published on HeatCaller-releases (the third-party-source release), and the About box links to them.
 
 **The owner's to do** (step by step in owner-todo.md):
 - register the DMCA agent and publish the policy page;
 - send the vendor letters and file the answers;
-- upload the VLC source tarball and fill in its link;
 - sign the IP assignment;
 - name the security coordinator;
 - run a real club night.

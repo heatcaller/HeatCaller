@@ -2,7 +2,7 @@
 
 # Owner to-do
 
-Do them in this order. 1 and 4 are about 15 minutes each; 2 is one sitting; 3 is about 20 minutes; 5 is waiting on replies.
+Do them in this order. 4 is done. 1 and 2 take about 15 minutes each, 3 about 20 minutes, and 5 is waiting on replies.
 
 ## 1. Name the security coordinator (security-program.md)
 
@@ -30,26 +30,24 @@ Print two copies, sign both (once as yourself, once for the company), and keep o
 
 1. Go to <https://dmca.copyright.gov/> and create an account (free).
 2. Register **HeatCaller LLC**, with the name exactly as on the New York filing. List the names it is known by: "HeatCaller", `heatcaller.com` and `heatcaller-relay.fly.dev`.
-3. Name the agent: "Copyright Agent, HeatCaller LLC". The postal address is published, so use a business or registered-agent address, not your home. Give a mailbox you read (create copyright@heatcaller.com, or use support@).
+3. Name the agent: "Copyright Agent, HeatCaller LLC". Give a mailbox you read (create copyright@heatcaller.com, or use support@). The postal address is published in the directory. The LLC is at your home, so choose one of these:
+   - **Your home address.** It costs nothing. If you gave the same address to New York as the LLC's address for service of process, it is probably public already in the state's business entity search, which you can check. The cost is a public link between your name, your home and every takedown notice.
+   - **A registered-agent or virtual-mailbox service with a street address.** These usually cost about US$50-150 a year. It also lets you move the LLC's service-of-process address off your home (a change filed with New York's Department of State, with a small fee), which keeps your home off both lists. This is the usual choice for a home business.
+   - **A P.O. box is probably not accepted.** The Copyright Office expects a street address. Check the form's own instructions.
+
+   Recommended: the mailbox service, put on both filings at once.
 4. Pay the $6 and save the confirmation. The registration expires after 3 years, so put the renewal date in your calendar.
 5. Copy the same address and email into Part A of the policy, so the page and the directory match. Then put Part A on heatcaller.com and link it from the site footer.
 6. Before going live: the relay can't yet remove one item for one club without deleting the whole club. Until it can, a takedown means asking the club, or a hand edit over `fly ssh`. Claude can build an admin removal if you want it.
 
-## 4. Upload the VLC source and fill in the link (LGPL section 6)
+## 4. Upload the VLC source and fill in the link - DONE 16 Nov 2026
 
-What goes up: the exact sources of what ships.
+The sources are on the public HeatCaller-releases repository as the `third-party-source` release: <https://github.com/heatcaller/HeatCaller-releases/releases/tag/third-party-source>.
 
-- VLC 3.0.24: `vlc-3.0.24.tar.xz` from <https://download.videolan.org/pub/videolan/vlc/3.0.24/>, about 25 MB. Check its SHA-256 against the one VideoLAN publishes beside it.
-- LibVLCSharp 3.10.1: the source archive of the `3.10.1` tag on <https://github.com/videolan/libvlcsharp>.
+- `vlc-3.0.24.tar.xz`: its SHA-256 matches VideoLAN's.
+- `libvlcsharp-3.10.1.tar.gz`: from the 3.10.1 tag.
 
-Where: a release on the public HeatCaller-releases repository, for example a release tagged `third-party-source` with both files attached.
-
-Then the link goes in two places:
-
-- `HeatCaller/HeatCaller/About.cs`: replace `[source link to be added]` in the LibVLC note, and drop the line in the comment above it that says the tarball "still has to be put" there;
-- `HeatCaller/HeatCaller/Assets/Licences/LibVLC-plugins.txt`, line 25.
-
-Claude can do all of this (the download, the release and the code change) once you say yes to downloading the two files and publishing them on the public repository.
+The release is marked as a pre-release, so the app's update check never treats it as an update; v0.63.0 is still the latest release. The About box and LibVLC-plugins.txt link to it from the next build on. If a later build changes the VLC or LibVLCSharp version, upload that version's source the same way.
 
 ## 5. Send the vendor letters (vendor-letters.md)
 

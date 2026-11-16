@@ -22,8 +22,7 @@ HeatCaller ships - VLC 3.0.24 (as packaged in VideoLAN.LibVLC.Windows 3.0.24)
 and LibVLCSharp 3.10.1 - in either of these ways:
 
   1. Download it from the HeatCaller releases repository:
-     [LINK TO THE SOURCE TARBALL ON THE HeatCaller-releases REPOSITORY -
-     to be added when it is uploaded]
+     https://github.com/heatcaller/HeatCaller-releases/releases/tag/third-party-source
 
   2. Ask us for it. Email support@heatcaller.com and we will send it to you,
      or a link to it, for no more than our cost of sending it. This offer is
