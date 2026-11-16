@@ -132,13 +132,14 @@ async function press(page: FakePage, under: FakeNode, words: RegExp): Promise<vo
 
 /**
  * The details form. Since 6 Nov 2026 (Asher: "rework the your details card")
- * it is in Me's bottom sheet, opened by Ask the desk to change on the card.
+ * it is in Me's bottom sheet, opened by Change my details on the card - on
+ * tabs since 15 Nov 2026, with one Send for all of them.
  */
 function form(page: FakePage): FakeNode {
   const body = page.get("me-sheet-body");
   if (body.find((n) => n.id === "yd-sheet").length === 0) {
-    const b = page.button(page.get("yd"), /^Ask the desk to change$/);
-    assert.ok(b, "Ask the desk to change, on the card");
+    const b = page.button(page.get("yd"), /^Change my details$/);
+    assert.ok(b, "Change my details, on the card");
     b.click();
   }
   return body;
@@ -161,7 +162,7 @@ describe("Your details: when it shows", () => {
   it("asksOpen without the laptop's details offers no form, but still the race query", async () => {
     const page = await open(relay({ full: { ok: true, night: night(), asksOpen: true } }));
     assert.equal(page.get("yd").children.length, 0);
-    assert.equal(page.button(page.get("yd"), /Ask the desk to change/), undefined);
+    assert.equal(page.button(page.get("yd"), /Change my details/), undefined);
     assert.ok(page.button(page.get("nx"), /Something wrong/));
   });
 
@@ -174,8 +175,8 @@ describe("Your details: when it shows", () => {
     assert.equal(field(card, /^The pack in your car now/).value, PACK_A);
 
     const yd = form(page);
-    assert.match(yd.textContent, /Sam Parker - the desk changes this one/);
-    assert.match(yd.textContent, /On file: s•••@gmail\.com/);
+    assert.match(yd.textContent, /NameSam Parkerdesk only/);
+    assert.match(yd.textContent, /On files•••@gmail\.com/);
     assert.equal(field(yd, /^Pronouns/).value, "she/her");
     assert.match(yd.textContent, /Changing your email needs your personal PIN/);
     assert.deepEqual(card.find((n) => n !== card && n.hadMarkup), [], "built with createElement, never markup");
@@ -188,18 +189,18 @@ describe("Your details: when it shows", () => {
     const lines = card.find((n) => n.tagName === "DT").map((n) => [n.textContent, card.find((d) => d.tagName === "DD")[card.find((x) => x.tagName === "DT").indexOf(n)]!.textContent]);
 
     assert.deepEqual(lines, [
-      ["Name", "Sam Parker"], ["Announcer", "Sam Rocket"], ["Pronouns", "she/her"], ["About you", "Nothing yet"],
-      ["Email", "s•••@gmail.com"], ["Night email", "On"], ["Online", "Not in videos · Initials only"],
+      ["Name", "Sam Parkerdesk only"], ["Announcer", "Sam Rocket"], ["Pronouns", "she/her"], ["About you", "Nothing yet"],
+      ["On file", "s•••@gmail.com"], ["Night email", "On"], ["Online", "Not in videos · Initials only"],
     ]);
     assert.equal(card.find((n) => n.tagName === "INPUT" || n.tagName === "TEXTAREA").length, 0, "no form boxes on the card itself");
     assert.equal(card.find((n) => n.tagName === "DETAILS").length, 0, "no fold");
-    assert.ok(page.button(card, /^Ask the desk to change$/));
+    assert.ok(page.button(card, /^Change my details$/));
     assert.match(card.textContent, /Nothing changes until the desk checks it\./);
 
-    page.button(card, /^Ask the desk to change$/)!.click();
+    page.button(card, /^Change my details$/)!.click();
     assert.equal(page.get("me-sheet").hidden, false);
     assert.match(page.get("me-sheet-body").textContent, /^Change your details/);
-    assert.ok(page.button(page.get("me-sheet-body"), /^Send to the desk$/));
+    assert.ok(page.button(page.get("me-sheet-body"), /^Send (to the desk|\d+ changes?)$/));
   });
 
   it("a privacy flag already on is drawn on, fixed, and says ask at the desk", async () => {
@@ -208,7 +209,7 @@ describe("Your details: when it shows", () => {
 
     assert.equal(box.checked, true);
     assert.equal(box.disabled, true);
-    assert.match(form(page).textContent, /On - ask at the desk to undo/);
+    assert.match(form(page).textContent, /On · ask at the desk to undo/);
   });
 });
 
@@ -219,7 +220,7 @@ describe("sending a details change", () => {
 
     type(field(yd, /^Announcer name/), "  Sam   'Rocket'  Parker ");
     type(field(yd, /^Pronouns/), "she/her");
-    await press(page, yd, /^Send to the desk$/);
+    await press(page, yd, /^Send (to the desk|\d+ changes?)$/);
 
     const sent = asks(page);
     assert.equal(sent.length, 1);
@@ -227,7 +228,7 @@ describe("sending a details change", () => {
     assert.match(said(yd), /Sent - the desk will check it \(ref A1B2C3\)/);
 
     // Pressing again sends nothing: what was sent is the new start.
-    await press(page, yd, /^Send to the desk$/);
+    await press(page, yd, /^Send (to the desk|\d+ changes?)$/);
     assert.equal(asks(page).length, 1);
     assert.match(said(yd), /Nothing has changed yet/);
   });
@@ -235,7 +236,7 @@ describe("sending a details change", () => {
   it("an emptied field is sent as an empty string, which clears it", async () => {
     const page = await open(relay({ full: { ok: true, night: night(), me: me(), asksOpen: true } }));
     type(field(form(page), /^Pronouns/), "   ");
-    await press(page, form(page), /^Send to the desk$/);
+    await press(page, form(page), /^Send (to the desk|\d+ changes?)$/);
     assert.deepEqual(asks(page)[0]?.body["f"], { pronouns: "" });
   });
 
@@ -250,7 +251,7 @@ describe("sending a details change", () => {
     // The one already on, forced off in the page: still not sent.
     tickBox(field(yd, /^Leave me out of podium videos/), false);
     tickBox(field(yd, /^I'm a parent or guardian/), true);
-    await press(page, yd, /^Send to the desk$/);
+    await press(page, yd, /^Send (to the desk|\d+ changes?)$/);
 
     assert.deepEqual(asks(page)[0]?.body["f"], { noPhoto: true, guardian: true });
   });
@@ -258,7 +259,7 @@ describe("sending a details change", () => {
   it("emailMyNight goes both ways, and is offered only with an address on file", async () => {
     const page = await open(relay({ full: { ok: true, night: night(), me: me({ emailMyNight: true }), asksOpen: true } }));
     tickBox(field(form(page), /^Email me my night/), false);
-    await press(page, form(page), /^Send to the desk$/);
+    await press(page, form(page), /^Send (to the desk|\d+ changes?)$/);
     assert.deepEqual(asks(page)[0]?.body["f"], { emailMyNight: false });
 
     const none = await open(relay({ full: { ok: true, night: night(), me: me({ email: "" }), asksOpen: true } }));
@@ -270,11 +271,11 @@ describe("sending a details change", () => {
     const nt = page.get("nx");
     await press(page, nt, /Something wrong/);
 
-    await press(page, nt, /^Send to the desk$/);
+    await press(page, nt, /^Send (to the desk|\d+ changes?)$/);
     assert.match(said(nt), /Say what looks wrong/);
 
     type(field(nt, /^What looks wrong/), "x".repeat(301));
-    await press(page, nt, /^Send to the desk$/);
+    await press(page, nt, /^Send (to the desk|\d+ changes?)$/);
     assert.match(said(nt), /Keep it under 300 characters/);
     assert.equal(asks(page).length, 0);
   });
@@ -289,7 +290,7 @@ describe("the personal PIN", () => {
     const yd = form(page);
 
     assert.ok(page.button(yd, /^Sign in$/));
-    assert.equal(page.button(yd, /^Send to the desk$/), undefined, "no form before the PIN");
+    assert.equal(page.button(yd, /^Send (to the desk|\d+ changes?)$/), undefined, "no form before the PIN");
 
     type(field(yd, /^Your personal PIN/), "123456");
     await press(page, yd, /^Sign in$/);
@@ -304,7 +305,7 @@ describe("the personal PIN", () => {
 
     // Signed in: the email can change now, and the pass goes with it.
     type(field(yd, /^New email address/), "sam@example.com");
-    await press(page, yd, /^Send to the desk$/);
+    await press(page, yd, /^Send (to the desk|\d+ changes?)$/);
     assert.deepEqual(asks(page)[0]?.body, { id: CODE, kind: "details", f: { email: "sam@example.com" }, pass: PASS });
   });
 
@@ -354,7 +355,7 @@ describe("the personal PIN", () => {
     type(field(yd, /^Your personal PIN/), "123456");
     await press(page, yd, /^Sign in$/);
     type(field(yd, /^Announcer name/), "Rocket");
-    await press(page, yd, /^Send to the desk$/);
+    await press(page, yd, /^Send (to the desk|\d+ changes?)$/);
 
     assert.ok(page.button(yd, /^Sign in$/), "back to the PIN");
     assert.match(said(yd), /Sign in with your personal PIN first/);
@@ -385,7 +386,7 @@ describe("every refusal from driver/ask, in plain words", () => {
         },
       }));
       type(field(form(page), /^Announcer name/), "Rocket");
-      await press(page, form(page), /^Send to the desk$/);
+      await press(page, form(page), /^Send (to the desk|\d+ changes?)$/);
 
       const text = said(form(page));
       assert.match(text, words);
@@ -422,11 +423,11 @@ describe("the pack and the race query", () => {
 
     await press(page, nt, /Something wrong/);
     type(field(nt, /^What looks wrong/), "I did 13 laps,\nnot 12.");
-    await press(page, nt, /^Send to the desk$/);
+    await press(page, nt, /^Send (to the desk|\d+ changes?)$/);
 
     assert.deepEqual(asks(page)[0]?.body, { id: CODE, kind: "query", f: { race: RACE, m: "I did 13 laps, not 12." } });
     assert.match(said(nt), /Sent - the desk will check it \(ref A1B2C3\)/);
-    assert.equal(page.button(nt, /^Send to the desk$/), undefined, "the form closes once sent");
+    assert.equal(page.button(nt, /^Send (to the desk|\d+ changes?)$/), undefined, "the form closes once sent");
   });
 
   it("a race without a proper id offers no query", async () => {
@@ -463,7 +464,7 @@ describe("request status on the live card", () => {
   it("shows a request just sent as waiting until the live entry lists it", async () => {
     const page = await open(relay({ full: { ok: true, night: night(), me: me(), asksOpen: true, live: {} } }));
     type(field(form(page), /^Announcer name/), "Rocket");
-    await press(page, form(page), /^Send to the desk$/);
+    await press(page, form(page), /^Send (to the desk|\d+ changes?)$/);
 
     assert.match(page.get("lv").textContent, /Your details \(ref A1B2C3\) - waiting for the desk/);
   });
@@ -479,13 +480,13 @@ describe("what never leaves the page the wrong way", () => {
     type(field(yd, /^Your personal PIN/), "123456");
     await press(page, yd, /^Sign in$/);
     type(field(yd, /^Announcer name/), "Rocket");
-    await press(page, yd, /^Send to the desk$/);
+    await press(page, yd, /^Send (to the desk|\d+ changes?)$/);
     // The pack is on the card, not in the sheet.
     field(page.get("yd"), /^The pack in your car now/).value = PACK_B;
     await press(page, page.get("yd"), /^Save$/);
     await press(page, page.get("nx"), /Something wrong/);
     type(field(page.get("nx"), /^What looks wrong/), "Wrong.");
-    await press(page, page.get("nx"), /^Send to the desk$/);
+    await press(page, page.get("nx"), /^Send (to the desk|\d+ changes?)$/);
 
     assert.equal(asks(page).length, 3);
 
@@ -543,7 +544,7 @@ describe("against the real relay", () => {
     await press(page, yd, /^Sign in$/);
     type(field(yd, /^New email address/), "sam@example.com");
     tickBox(field(yd, /^Show only my initials/), true);
-    await press(page, yd, /^Send to the desk$/);
+    await press(page, yd, /^Send (to the desk|\d+ changes?)$/);
 
     assert.match(said(yd), /Sent - the desk will check it \(ref [0-9A-F]{6}\)/);
 

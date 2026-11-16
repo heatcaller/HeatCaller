@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Change your details mockups</title>
+<style>
+/* Mock of plans/me-details-redesign-plan.md. Colours are the relay's own
+   look tokens (pages.ts :root, DRIVER_THEMES night/daylight, the Pit Wall
+   kit's --tonal/--on-tonal/--ring). Every phone frame is 375 wide, the
+   width the current sheet was measured at. */
+:root {
+  --bg: #0F0722; --surface: #1A0F3A; --row-alt: #150B2E; --primary: #FF2E9A; --on-primary: #FFFFFF;
+  --accent: #2EE6FF; --text: #F7F2FF; --muted: #9E8AC7; --border: #33215C; --good: #3DD68C; --bad: #FF5C7A; --warn: #F5B83D;
+  --page: #08040F; --pagetext: #F7F2FF; --pagemuted: #9E8AC7;
+}
+:root[data-look="night"] {
+  --bg: #12141C; --surface: #1B1F2A; --row-alt: #171A24; --text: #E8EAF0; --muted: #A3A9B8; --border: #2C3242;
+  --primary: #7C9CFF; --on-primary: #0B0E16; --accent: #5ED6C8; --good: #4CD38A; --bad: #FF7A85; --warn: #F2C14E;
+  --page: #0A0B10; --pagetext: #E8EAF0; --pagemuted: #A3A9B8;
+}
+:root[data-look="daylight"] {
+  --bg: #F7F7F4; --surface: #FFFFFF; --row-alt: #F0F0EC; --text: #15171C; --muted: #4F5560; --border: #CDD0D6;
+  --primary: #B0124F; --on-primary: #FFFFFF; --accent: #00695C; --good: #1B7339; --bad: #B3261E; --warn: #7F5300;
+  --page: #E6E6E1; --pagetext: #15171C; --pagemuted: #4F5560;
+}
+:root {
+  --tonal: color-mix(in srgb, var(--primary) 16%, var(--surface));
+  --on-tonal: color-mix(in srgb, var(--primary) 45%, var(--text));
+  --ring: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+* { box-sizing: border-box; }
+html { background: var(--page); }
+body { margin: 0; padding: 24px 16px 80px; background: var(--page); color: var(--pagetext);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+h1 { font-size: 1.6rem; margin: 0 0 6px; }
+h2 { font-size: 1.25rem; margin: 48px 0 4px; }
+.lede { color: var(--pagemuted); max-width: 62rem; margin: 0 0 12px; }
+.looks { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 8px; }
+.looks button { font: inherit; font-size: 0.9rem; min-height: 40px; padding: 0 14px; border-radius: 12px; cursor: pointer;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+.looks button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.row { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; margin-top: 18px; }
+figure { margin: 0; width: 375px; max-width: 100%; }
+figcaption { margin-top: 10px; font-size: 0.88rem; color: var(--pagemuted); }
+figcaption b { color: var(--pagetext); display: block; font-size: 0.95rem; margin-bottom: 2px; }
+figcaption ol { margin: 6px 0 0; padding-left: 1.2rem; }
+
+/* ---- the phone */
+.phone { position: relative; width: 375px; max-width: 100%; height: 780px; border-radius: 38px; overflow: hidden;
+  background: var(--bg); color: var(--text); border: 9px solid #000; box-shadow: 0 10px 40px rgba(0,0,0,.45); }
+.status { height: 34px; display: flex; justify-content: space-between; align-items: center; padding: 0 22px;
+  font-size: 0.78rem; font-weight: 600; }
+.mepage { position: absolute; inset: 34px 0 64px; overflow: hidden; padding: 0 14px; }
+.spaces { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; margin: 6px 0 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+.spaces span { text-align: center; padding: 7px 0; border-radius: 10px; font-size: 0.88rem; color: var(--muted); }
+.spaces span.on { background: var(--tonal); color: var(--text); font-weight: 600; }
+.tabbar { position: absolute; left: 0; right: 0; bottom: 0; height: 64px; display: grid; grid-template-columns: repeat(5, 1fr);
+  border-top: 1px solid var(--border); background: var(--bg); font-size: 0.7rem; color: var(--muted); }
+.tabbar span { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.tabbar span.on { color: var(--text); font-weight: 600; }
+.tabbar i { width: 22px; height: 22px; border: 2px solid currentColor; border-radius: 7px; display: block; }
+.tabbar span.on i { background: var(--tonal); border-color: var(--primary); }
+.ghost { height: 92px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); margin-bottom: 12px; opacity: .55; }
+
+/* ---- the Your details card */
+.yd { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px 14px 10px; }
+.yd-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.yd-top { flex-wrap: wrap; }
+.yd-top h3 { margin: 0; font-size: 1.1rem; }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; border-radius: 999px;
+  font-size: 0.8rem; font-weight: 600; background: var(--tonal); color: var(--on-tonal); border: 1px solid transparent; white-space: nowrap; }
+.chip.out { background: transparent; border-color: var(--border); color: var(--muted); }
+.chip svg { width: 14px; height: 14px; }
+.grp { border-top: 1px solid var(--border); padding: 8px 0 6px; }
+.grp:first-of-type { border-top: 0; }
+.grp-h { display: flex; align-items: center; justify-content: space-between; min-height: 44px; }
+.grp-h .t { font-size: 0.75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.chg { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; padding: 0 4px 0 12px; font: inherit; font-size: 0.92rem;
+  font-weight: 600; color: var(--accent); background: none; border: 0; cursor: pointer; }
+.chg svg { width: 18px; height: 18px; }
+dl.sum { margin: 0; display: grid; }
+dl.sum div { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: 10px; padding: 5px 0; align-items: baseline; }
+dl.sum dt { color: var(--muted); font-size: 0.85rem; }
+dl.sum dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; font-size: 0.95rem; }
+dl.sum dd.none { color: var(--muted); font-weight: 400; }
+.tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 6px; font-size: 0.7rem; font-weight: 700;
+  vertical-align: 1px; white-space: nowrap; }
+.tag.wait { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+.tag.desk { background: var(--row-alt); color: var(--muted); border: 1px solid var(--border); }
+.yd-foot { text-align: center; color: var(--muted); font-size: 0.85rem; margin: 6px 0 2px; }
+.go { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 52px; border-radius: 14px;
+  border: 0; font: inherit; font-weight: 700; font-size: 1.02rem; background: var(--primary); color: var(--on-primary); cursor: pointer; }
+.go.quiet { background: var(--tonal); color: var(--on-tonal); }
+.go:disabled { opacity: .45; cursor: default; }
+.go:focus-visible, .chg:focus-visible, .ib:focus-visible, .x:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+/* ---- the sheet */
+.scrim { position: absolute; inset: 0; background: rgba(0,0,0,.55); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: calc(100% - 46px); display: flex; flex-direction: column;
+  background: var(--surface); border-radius: 22px 22px 0 0; border-top: 1px solid var(--border); box-shadow: 0 -10px 30px rgba(0,0,0,.35); }
+.grab { width: 40px; height: 5px; border-radius: 3px; background: var(--border); margin: 8px auto 0; }
+.sheet-h { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 4px 18px; }
+.sheet-h h3 { margin: 0; font-size: 1.2rem; }
+.x { width: 44px; height: 44px; border-radius: 12px; border: 0; background: none; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
+.x svg { width: 22px; height: 22px; }
+.sheet-b { overflow-y: auto; padding: 0 18px 14px; flex: 1 1 auto; overscroll-behavior: contain; }
+.sheet-f { padding: 10px 18px 16px; border-top: 1px solid var(--border); background: var(--surface); }
+.sheet-f .said { min-height: 1.2em; margin: 0 0 8px; font-size: 0.85rem; color: var(--muted); text-align: center; }
+.sheet-f .said.ok { color: var(--good); }
+.lead { margin: 0 0 12px; font-size: 0.88rem; color: var(--muted); }
+
+/* field: label + counter on one line, box, one-line hint */
+.fld { display: block; margin: 0 0 14px; }
+.fld .lr { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.fld .l { font-weight: 600; font-size: 0.95rem; }
+.fld .c { font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.fld input, .fld textarea, .fld select { width: 100%; min-height: 48px; padding: 10px 12px; border-radius: 12px; font: inherit;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+.fld textarea { min-height: 72px; resize: none; }
+.fld input:focus, .fld textarea:focus, .fld select:focus { outline: 3px solid var(--ring); outline-offset: 1px; border-color: var(--accent); }
+.fld input.ed, .fld textarea.ed { border-color: color-mix(in srgb, var(--primary) 60%, var(--border)); }
+.fld .h { display: block; margin-top: 5px; font-size: 0.8rem; color: var(--muted); }
+.fld ::placeholder { color: color-mix(in srgb, var(--muted) 70%, transparent); }
+
+/* locked row */
+.lock { display: flex; align-items: center; gap: 10px; padding: 11px 12px; margin: 0 0 14px; border-radius: 12px;
+  background: var(--row-alt); border: 1px dashed var(--border); }
+.lock svg { width: 16px; height: 16px; color: var(--muted); flex: none; }
+.lock .k { font-size: 0.8rem; color: var(--muted); width: 4.6rem; flex: none; }
+.lock .v { font-weight: 600; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+/* switch row */
+.sw { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 12px; margin: 0 0 8px; border-radius: 14px;
+  background: var(--tonal); color: var(--text); cursor: pointer; }
+.sw .w { flex: 1; min-width: 0; }
+.sw .w small { display: block; color: var(--muted); font-size: 0.78rem; margin-top: 1px; }
+.tog { flex: none; width: 46px; height: 28px; border-radius: 999px; background: var(--border); position: relative; }
+.tog::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--text); transition: left .15s; }
+.sw.on .tog { background: var(--primary); }
+.sw.on .tog::after { left: 21px; background: var(--on-primary); }
+.sw.fixed { background: var(--row-alt); border: 1px dashed var(--border); cursor: default; }
+.sw.fixed .tog { background: color-mix(in srgb, var(--primary) 45%, var(--border)); }
+.sw.fixed .tog::after { left: 21px; }
+.sw .lk { width: 14px; height: 14px; vertical-align: -2px; margin-right: 3px; }
+
+/* tick (guardian) */
+.tick { display: flex; gap: 10px; align-items: center; min-height: 48px; margin: 0 0 10px; padding: 0 12px; border-radius: 12px;
+  border: 1px solid var(--border); font-size: 0.9rem; }
+.tick .bx { width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--muted); flex: none; }
+.tick.on .bx { background: var(--primary); border-color: var(--primary); }
+
+/* crew role card */
+.role { border: 1px solid var(--border); border-radius: 14px; padding: 12px 12px 2px; margin: 0 0 12px; background: var(--row-alt); }
+.role h4 { margin: 0 0 10px; font-size: 1rem; display: flex; align-items: center; gap: 8px; }
+.role h4 small { font-weight: 400; color: var(--muted); font-size: 0.8rem; }
+.vrow { display: flex; gap: 8px; }
+.vrow select { flex: 1; }
+.ib { width: 48px; height: 48px; flex: none; border-radius: 12px; border: 0; background: var(--tonal); color: var(--on-tonal);
+  display: grid; place-items: center; cursor: pointer; }
+.ib svg { width: 20px; height: 20px; }
+.sub { font-size: 0.75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 18px 0 10px; }
+.consent { font-size: 0.8rem; color: var(--muted); margin: 4px 0 10px; padding: 10px 12px; border-radius: 12px; background: var(--row-alt); }
+.note-box { padding: 12px; border-radius: 12px; background: var(--row-alt); border: 1px dashed var(--border); font-size: 0.88rem; color: var(--muted); }
+
+/* B: the tabbed sheet's segmented control */
+.seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; padding: 3px; margin: 2px 18px 12px; border-radius: 13px;
+  background: var(--row-alt); border: 1px solid var(--border); }
+.seg span { position: relative; text-align: center; min-height: 40px; display: grid; place-items: center; border-radius: 10px;
+  font-size: 0.84rem; color: var(--muted); }
+.seg span.on { background: var(--tonal); color: var(--text); font-weight: 700; }
+.seg span.dirty::after { content: ""; position: absolute; top: 6px; right: 8px; width: 7px; height: 7px; border-radius: 50%; background: var(--primary); }
+.pin { letter-spacing: .4em; font-size: 1.3rem; text-align: center; }
+
+/* comparison */
+table { border-collapse: collapse; width: 100%; max-width: 62rem; margin-top: 14px; font-size: 0.92rem; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+th { color: var(--pagemuted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: .05em; }
+td:first-child { color: var(--pagemuted); width: 12rem; }
+.pick { color: var(--good); font-weight: 700; }
+@media (max-width: 420px) { .row { gap: 22px; } .phone { border-width: 6px; } }
+</style>
+</head>
+<body>
+
+<h1>Change your details: two ways</h1>
+<p class="lede">These mockups go with <code>plans/me-details-redesign-plan.md</code>. <b>A</b> gives each group its own short sheet, opened from the card. <b>B</b> keeps one button and one sheet, with tabs across the top. Both use the same card rows, fields, locked rows, switches and crew cards, so they differ only in how you get in and how Send works. Each sheet scrolls inside its phone, and its Send stays pinned at the bottom.</p>
+<div class="looks" role="group" aria-label="Look">
+  <button type="button" data-look="" aria-pressed="true">Default</button>
+  <button type="button" data-look="night">Night</button>
+  <button type="button" data-look="daylight">Daylight</button>
+</div>
+
+<!-- ============================================================ A -->
+<h2>A. Four sheets, opened from the card</h2>
+<p class="lede">Each group on the card has its own <b>Change ›</b>. Every sheet does one job, has one Send and fits on about a screen.</p>
+
+<div class="row">
+
+<!-- A1 card -->
+<figure>
+<div class="phone">
+  <div class="status"><span>8:14</span><span>●●● 5G</span></div>
+  <div class="mepage" style="overflow-y:auto">
+    <div class="spaces"><span class="on">Tonight</span><span>Races</span><span>Garage</span><span>Stats</span></div>
+    <div class="ghost"></div>
+    <section class="yd">
+      <div class="yd-top"><h3>Your details</h3>
+        <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12l5 5 9-10"/></svg>Signed in · Sign out</span></div>
+
+      <div class="grp">
+        <div class="grp-h"><span class="t">How you're called</span><button class="chg" type="button">Change<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg></button></div>
+        <dl class="sum">
+          <div><dt>Name</dt><dd>Al Gorithim<span class="tag desk">desk only</span></dd></div>
+          <div><dt>Announcer</dt><dd>Al Gor-ith-im<span class="tag wait">Waiting for the desk</span></dd></div>
+          <div><dt>Pronouns</dt><dd>he/him</dd></div>
+          <div><dt>About you</dt><dd>Races a red buggy and loves the hairpin</dd></div>
+        </dl>
+      </div>
+
+      <div class="grp">
+        <div class="grp-h"><span class="t">Email</span><button class="chg" type="button">Change<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg></button></div>
+        <dl class="sum">
+          <div><dt>On file</dt><dd>al@example.test</dd></div>
+          <div><dt>Night email</dt><dd>On</dd></div>
+        </dl>
+      </div>
+
+      <div class="grp">
+        <div class="grp-h"><span class="t">Online privacy</span><button class="chg" type="button">Change<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg></button></div>
+        <dl class="sum"><div><dt>Online</dt><dd>Not in videos</dd></div></dl>
+      </div>
+
+      <div class="grp">
+        <div class="grp-h"><span class="t">My crew</span><button class="chg" type="button">Change<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg></button></div>
+        <dl class="sum">
+          <div><dt>Principal</dt><dd>Gravel Jones · Rachel</dd></div>
+          <div><dt>Tech lead</dt><dd class="none">Club's own</dd></div>
+          <div><dt>Goal</dt><dd>Top 3 in the A main</dd></div>
+        </dl>
+      </div>
+      <p class="yd-foot">Nothing changes until the desk checks it.</p>
+    </section>
+    <div class="ghost" style="margin-top:12px"></div>
+  </div>
+  <div class="tabbar"><span><i></i>Home</span><span><i></i>Live</span><span><i></i>Schedule</span><span><i></i>Results</span><span class="on"><i></i>Me</span></div>
+</div>
+<figcaption><b>A1 · The card on Tonight</b>
+<ol><li>Four groups, each with its own Change ›.</li><li>The sign-in state is the chip at the top. Forget PIN is gone from the forms.</li><li>A change that's been sent shows "Waiting for the desk" on its row.</li><li>Name is tagged "desk only" here, so nobody tries to change it.</li></ol></figcaption>
+</figure>
+
+<!-- A2 sign in -->
+<figure>
+<div class="phone">
+  <div class="status"><span>8:14</span><span>●●● 5G</span></div>
+  <div class="mepage">
+    <div class="spaces"><span class="on">Tonight</span><span>Races</span><span>Garage</span><span>Stats</span></div>
+    <div class="ghost"></div>
+    <section class="yd">
+      <div class="yd-top"><h3>Your details</h3><span class="chip out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>Sign in to change</span></div>
+      <div class="grp"><div class="grp-h"><span class="t">How you're called</span></div></div>
+    </section>
+  </div>
+  <div class="tabbar"><span><i></i>Home</span><span><i></i>Live</span><span><i></i>Schedule</span><span><i></i>Results</span><span class="on"><i></i>Me</span></div>
+  <div class="scrim"></div>
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="sheet-h"><h3>Sign in first</h3><button class="x" type="button" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-b">
+      <p class="lead">You have a personal PIN, so sign in to change your crew. This phone remembers it until you close this tab.</p>
+      <label class="fld"><span class="lr"><span class="l">Your personal PIN</span><span class="c">4 to 8 digits</span></span>
+        <input class="pin" type="password" inputmode="numeric" value="••••" aria-label="Your personal PIN"></label>
+    </div>
+    <div class="sheet-f"><p class="said"></p><button class="go" type="button">Sign in and change my crew</button></div>
+  </div>
+</div>
+<figcaption><b>A2 · Signed out, tapped Change › on My crew</b>
+<ol><li>Signing in is a step of its own. It never shares a sheet with a form.</li><li>The button says where it goes next. After sign-in, the My crew sheet opens in its place.</li><li>If the PIN is wrong, the relay's words show in the line above the button.</li></ol></figcaption>
+</figure>
+
+<!-- A3 how you're called -->
+<figure>
+<div class="phone">
+  <div class="status"><span>8:14</span><span>●●● 5G</span></div>
+  <div class="mepage"><div class="spaces"><span class="on">Tonight</span><span>Races</span><span>Garage</span><span>Stats</span></div><div class="ghost"></div><div class="ghost"></div></div>
+  <div class="tabbar"><span><i></i>Home</span><span><i></i>Live</span><span><i></i>Schedule</span><span><i></i>Results</span><span class="on"><i></i>Me</span></div>
+  <div class="scrim"></div>
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="sheet-h"><h3>How you're called</h3><button class="x" type="button" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-b">
+      <div class="lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg><span class="k">Name</span><span class="v">Al Gorithim</span><span class="tag desk">desk only</span></div>
+      <label class="fld"><span class="lr"><span class="l">Announcer name</span><span class="c">14 / 40</span></span>
+        <input class="ed" value="Al Gor-ITH-im"><span class="h">Spell it the way it sounds.</span></label>
+      <label class="fld"><span class="lr"><span class="l">Pronouns</span><span class="c">6 / 24</span></span>
+        <input value="he/him" placeholder="e.g. she/her, he/him, they/them"><span class="h">Leave it empty for none.</span></label>
+      <label class="fld"><span class="lr"><span class="l">About you</span><span class="c">39 / 120</span></span>
+        <textarea>Races a red buggy and loves the hairpin</textarea><span class="h">One line the commentary can use.</span></label>
+      <div class="tick"><span class="bx"></span>I'm a parent or guardian making this change</div>
+    </div>
+    <div class="sheet-f"><p class="said">Nothing changes until the desk checks it.</p><button class="go" type="button">Send 1 change to the desk</button></div>
+  </div>
+</div>
+<figcaption><b>A3 · How you're called</b>
+<ol><li>Name is a locked row, so it isn't mistaken for a field.</li><li>The counter is on the label line and the hint is one short line, the same for every field.</li><li>A field you've changed gets a tinted edge, and Send counts the changes ("Send 1 change").</li><li>The guardian tick sits right above Send.</li></ol></figcaption>
+</figure>
+
+<!-- A4 email -->
+<figure>
+<div class="phone">
+  <div class="status"><span>8:14</span><span>●●● 5G</span></div>
+  <div class="mepage"><div class="spaces"><span class="on">Tonight</span><span>Races</span><span>Garage</span><span>Stats</span></div><div class="ghost"></div><div class="ghost"></div></div>
+  <div class="tabbar"><span><i></i>Home</span><span><i></i>Live</span><span><i></i>Schedule</span><span><i></i>Results</span><span class="on"><i></i>Me</span></div>
+  <div class="scrim"></div>
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="sheet-h"><h3>Email</h3><button class="x" type="button" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-b">
+      <div class="lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg><span class="k">On file</span><span class="v">al@example.test</span></div>
+      <label class="fld"><span class="lr"><span class="l">New email address</span></span>
+        <input type="email" placeholder="Only if it has changed"><span class="h">The desk lets your old address know.</span></label>
+      <div class="sw on"><span class="w">Email me my night after racing<small>Results, laps and clips, after the last race</small></span><span class="tog"></span></div>
+    </div>
+    <div class="sheet-f"><p class="said"></p><button class="go" type="button" disabled>Send to the desk</button></div>
+  </div>
+</div>
+<figcaption><b>A4 · Email</b>
+<ol><li>The address on file is a locked row, with one box underneath for a new one.</li><li>Night email is a switch. It's turned off while there's no address, as it is now.</li><li>Send is greyed out until something changes, so "Nothing has changed yet" never needs saying.</li><li>Without a PIN, the box is replaced by the line "Changing your email needs your personal PIN - ask at the desk."</li></ol></figcaption>
+</figure>
+
+<!-- A5 privacy -->
+<figure>
+<div class="phone">
+  <div class="status"><span>8:14</span><span>●●● 5G</span></div>
+  <div class="mepage"><div class="spaces"><span class="on">Tonight</span><span>Races</span><span>Garage</span><span>Stats</span></div><div class="ghost"></div><div class="ghost"></div></div>
+  <div class="tabbar"><span><i></i>Home</span><span><i></i>Live</span><span><i></i>Schedule</span><span><i></i>Results</span><span class="on"><i></i>Me</span></div>
+  <div class="scrim"></div>
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="sheet-h"><h3>Online privacy</h3><button class="x" type="button" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-b">
+      <p class="lead">These change the club's web pages only. The PA, the big screen and the Wi-Fi pages stay the same.</p>
+      <div class="sw on"><span class="w">Leave my photo off the web pages</span><span class="tog"></span></div>
+      <div class="sw fixed"><span class="w">Leave me out of podium videos<small><svg class="lk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>On · ask the desk to undo</small></span><span class="tog"></span></div>
+      <div class="sw"><span class="w">Show only my initials online</span><span class="tog"></span></div>
+      <p class="lead" style="margin-top:12px">Once one is on, only the desk can turn it off again.</p>
+      <div class="tick"><span class="bx"></span>I'm a parent or guardian making this change</div>
+    </div>
+    <div class="sheet-f"><p class="said"></p><button class="go" type="button">Send 1 change to the desk</button></div>
+  </div>
+</div>
+<figcaption><b>A5 · Online privacy</b>
+<ol><li>Real switches, no more radio circles.</li><li>A switch that's already on is dashed and locked, and says how to undo it on its own line.</li><li>It's said once, before they tap, that only the desk can turn one off.</li></ol></figcaption>
+</figure>
+
+<!-- A6 crew -->
+<figure>
+<div class="phone">
+  <div class="status"><span>8:14</span><span>●●● 5G</span></div>
+  <div class="mepage"><div class="spaces"><span class="on">Tonight</span><span>Races</span><span>Garage</span><span>Stats</span></div><div class="ghost"></div><div class="ghost"></div></div>
+  <div class="tabbar"><span><i></i>Home</span><span><i></i>Live</span><span><i></i>Schedule</span><span><i></i>Results</span><span class="on"><i></i>Me</span></div>
+  <div class="scrim"></div>
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="sheet-h"><h3>My crew</h3><button class="x" type="button" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-b">
+      <p class="lead">Voices change straight away. Names and notes wait for the desk.</p>
+      <div class="role"><h4>Team Principal</h4>
+        <label class="fld"><span class="lr"><span class="l">Name</span><span class="c">12 / 24</span></span><input value="Gravel Jones"><span class="h">Make one up - not a real person's name.</span></label>
+        <div class="fld"><span class="lr"><span class="l">Voice</span></span><div class="vrow"><select aria-label="Team Principal voice"><option>Rachel</option></select>
+          <button class="ib" type="button" aria-label="Play the Team Principal voice"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></div></div>
+      </div>
+      <div class="role"><h4>Technical Lead <small>club's own</small></h4>
+        <label class="fld"><span class="lr"><span class="l">Name</span><span class="c">0 / 24</span></span><input placeholder="The club's own name"></label>
+        <div class="fld"><span class="lr"><span class="l">Voice</span></span><div class="vrow"><select aria-label="Technical Lead voice"><option>The club's own voice</option></select>
+          <button class="ib" type="button" aria-label="Play the Technical Lead voice"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></div></div>
+      </div>
+      <div class="sub">Notes for the commentary</div>
+      <label class="fld"><span class="lr"><span class="l">Tonight's goal</span><span class="c">19 / 80</span></span><input value="Top 3 in the A main"><span class="h">Said before your race tonight only.</span></label>
+      <label class="fld"><span class="lr"><span class="l">Thanks / shout-out</span><span class="c">0 / 80</span></span><input placeholder="e.g. thanks to Dad for the new tyres"></label>
+      <label class="fld"><span class="lr"><span class="l">Your car's story</span><span class="c">0 / 120</span></span><textarea placeholder="e.g. built from a garage-sale chassis"></textarea></label>
+      <p class="consent">What you send may be said over the PA and on the club's stream. By sending, you let your club and HeatCaller use it in commentary.</p>
+    </div>
+    <div class="sheet-f"><p class="said"></p><button class="go" type="button" disabled>Send my crew</button></div>
+  </div>
+</div>
+<figcaption><b>A6 · My crew (scroll it)</b>
+<ol><li>Each role is a small card. Play is a 48px square next to the voice, not a full-width bar.</li><li>What changes straight away and what waits for the desk is said at the top.</li><li>The consent line is the last thing before Send, which stays in view as you scroll.</li></ol></figcaption>
+</figure>
+
+<!-- A7 crew junior -->
+<figure>
+<div class="phone">
+  <div class="status"><span>8:14</span><span>●●● 5G</span></div>
+  <div class="mepage"><div class="spaces"><span class="on">Tonight</span><span>Races</span><span>Garage</span><span>Stats</span></div><div class="ghost"></div><div class="ghost"></div></div>
+  <div class="tabbar"><span><i></i>Home</span><span><i></i>Live</span><span><i></i>Schedule</span><span><i></i>Results</span><span class="on"><i></i>Me</span></div>
+  <div class="scrim"></div>
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="sheet-h"><h3>My crew</h3><button class="x" type="button" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-b">
+      <p class="lead">Voices change straight away. Names wait for the desk.</p>
+      <div class="role"><h4>Team Principal</h4>
+        <label class="fld"><span class="lr"><span class="l">Name</span><span class="c">0 / 24</span></span><input placeholder="The club's own name"><span class="h">Make one up - not Mum, Dad or anyone's real name.</span></label>
+        <div class="fld"><span class="lr"><span class="l">Voice</span></span><div class="vrow"><select aria-label="Team Principal voice"><option>Brian</option></select>
+          <button class="ib" type="button" aria-label="Play the Team Principal voice"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></div></div>
+      </div>
+      <div class="role"><h4>Technical Lead <small>club's own</small></h4>
+        <label class="fld"><span class="lr"><span class="l">Name</span><span class="c">0 / 24</span></span><input placeholder="The club's own name"></label>
+        <div class="fld"><span class="lr"><span class="l">Voice</span></span><div class="vrow"><select aria-label="Technical Lead voice"><option>The club's own voice</option></select>
+          <button class="ib" type="button" aria-label="Play the Technical Lead voice" hidden><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></div></div>
+      </div>
+      <div class="sub">Notes for the commentary</div>
+      <div class="note-box">Your notes are filled in at the desk, with a parent or guardian there.</div>
+    </div>
+    <div class="sheet-f"><p class="said ok">Sent. Your voice is changed already · ref 4F2A1C</p><button class="go" type="button">Send my crew</button></div>
+  </div>
+</div>
+<figcaption><b>A7 · My crew, junior, notes kept at the desk</b>
+<ol><li>The three note boxes are replaced by one line.</li><li>The junior name hint as it is now.</li><li>After sending, the result shows above the button in green, with the request's ref.</li></ol></figcaption>
+</figure>
+
+</div>
+
+<!-- ============================================================ B -->
+<h2>B. One sheet with tabs</h2>
+<p class="lede">The card keeps one button. The sheet has four tabs across the top, and typing on one tab is kept when you switch to another. A dot marks each tab with unsent changes. <b>One Send</b> sends everything changed on every tab: one request for details and one for crew.</p>
+
+<div class="row">
+
+<!-- B1 card -->
+<figure>
+<div class="phone">
+  <div class="status"><span>8:14</span><span>●●● 5G</span></div>
+  <div class="mepage" style="overflow-y:auto">
+    <div class="spaces"><span class="on">Tonight</span><span>Races</span><span>Garage</span><span>Stats</span></div>
+    <div class="ghost"></div>
+    <section class="yd">
+      <div class="yd-top"><h3>Your details</h3><span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12l5 5 9-10"/></svg>Signed in · Sign out</span></div>
+      <div class="grp"><div class="grp-h"><span class="t">How you're called</span></div>
+        <dl class="sum">
+          <div><dt>Name</dt><dd>Al Gorithim<span class="tag desk">desk only</span></dd></div>
+          <div><dt>Announcer</dt><dd>Al Gor-ith-im<span class="tag wait">Waiting for the desk</span></dd></div>
+          <div><dt>Pronouns</dt><dd>he/him</dd></div>
+          <div><dt>About you</dt><dd>Races a red buggy and loves the hairpin</dd></div>
+        </dl></div>
+      <div class="grp"><div class="grp-h"><span class="t">Email</span></div>
+        <dl class="sum"><div><dt>On file</dt><dd>al@example.test</dd></div><div><dt>Night email</dt><dd>On</dd></div></dl></div>
+      <div class="grp"><div class="grp-h"><span class="t">Online privacy</span></div>
+        <dl class="sum"><div><dt>Online</dt><dd>Not in videos</dd></div></dl></div>
+      <div class="grp"><div class="grp-h"><span class="t">My crew</span></div>
+        <dl class="sum"><div><dt>Principal</dt><dd>Gravel Jones · Rachel</dd></div><div><dt>Tech lead</dt><dd class="none">Club's own</dd></div></dl></div>
+      <button class="go" type="button" style="margin:10px 0 6px">Change my details</button>
+      <p class="yd-foot">Nothing changes until the desk checks it.</p>
+    </section>
+  </div>
+  <div class="tabbar"><span><i></i>Home</span><span><i></i>Live</span><span><i></i>Schedule</span><span><i></i>Results</span><span class="on"><i></i>Me</span></div>
+</div>
+<figcaption><b>B1 · The card on Tonight</b>
+<ol><li>The same groups and tags as A1, but read-only.</li><li>One button at the foot opens the sheet on its first tab.</li><li>Tapping a group could also open its own tab, which is a cheap extra.</li></ol></figcaption>
+</figure>
+
+<!-- B2 sign in -->
+<figure>
+<div class="phone">
+  <div class="status"><span>8:14</span><span>●●● 5G</span></div>
+  <div class="mepage"><div class="spaces"><span class="on">Tonight</span><span>Races</span><span>Garage</span><span>Stats</span></div><div class="ghost"></div><div class="ghost"></div></div>
+  <div class="tabbar"><span><i></i>Home</span><span><i></i>Live</span><span><i></i>Schedule</span><span><i></i>Results</span><span class="on"><i></i>Me</span></div>
+  <div class="scrim"></div>
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="sheet-h"><h3>Change your details</h3><button class="x" type="button" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-b">
+      <p class="lead">You have a personal PIN, so sign in first. This phone remembers it until you close this tab.</p>
+      <label class="fld"><span class="lr"><span class="l">Your personal PIN</span><span class="c">4 to 8 digits</span></span>
+        <input class="pin" type="password" inputmode="numeric" value="••••" aria-label="Your personal PIN"></label>
+    </div>
+    <div class="sheet-f"><p class="said"></p><button class="go" type="button">Sign in</button></div>
+  </div>
+</div>
+<figcaption><b>B2 · Signed out</b>
+<ol><li>The tabs appear only after sign-in, so there's never a half-locked tab.</li><li>The same sheet carries straight on to the tabs.</li></ol></figcaption>
+</figure>
+
+<!-- B3 called tab -->
+<figure>
+<div class="phone">
+  <div class="status"><span>8:14</span><span>●●● 5G</span></div>
+  <div class="mepage"><div class="spaces"><span class="on">Tonight</span><span>Races</span><span>Garage</span><span>Stats</span></div><div class="ghost"></div><div class="ghost"></div></div>
+  <div class="tabbar"><span><i></i>Home</span><span><i></i>Live</span><span><i></i>Schedule</span><span><i></i>Results</span><span class="on"><i></i>Me</span></div>
+  <div class="scrim"></div>
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="sheet-h"><h3>Change your details</h3><button class="x" type="button" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="seg" role="tablist"><span class="on dirty">Called</span><span>Email</span><span>Privacy</span><span>Crew</span></div>
+    <div class="sheet-b">
+      <div class="lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg><span class="k">Name</span><span class="v">Al Gorithim</span><span class="tag desk">desk only</span></div>
+      <label class="fld"><span class="lr"><span class="l">Announcer name</span><span class="c">14 / 40</span></span>
+        <input class="ed" value="Al Gor-ITH-im"><span class="h">Spell it the way it sounds.</span></label>
+      <label class="fld"><span class="lr"><span class="l">Pronouns</span><span class="c">6 / 24</span></span>
+        <input value="he/him"><span class="h">Leave it empty for none.</span></label>
+      <label class="fld"><span class="lr"><span class="l">About you</span><span class="c">39 / 120</span></span>
+        <textarea>Races a red buggy and loves the hairpin</textarea><span class="h">One line the commentary can use.</span></label>
+    </div>
+    <div class="sheet-f"><div class="tick" style="margin-bottom:8px"><span class="bx"></span>I'm a parent or guardian making this change</div><button class="go" type="button">Send 1 change</button></div>
+  </div>
+</div>
+<figcaption><b>B3 · Called tab</b>
+<ol><li>The same fields as A3, under the tabs.</li><li>The guardian tick moves into the pinned footer so it covers every tab at once. That makes the footer taller on every tab.</li><li>The dot on "Called" means it has an unsent change.</li></ol></figcaption>
+</figure>
+
+<!-- B4 privacy tab -->
+<figure>
+<div class="phone">
+  <div class="status"><span>8:14</span><span>●●● 5G</span></div>
+  <div class="mepage"><div class="spaces"><span class="on">Tonight</span><span>Races</span><span>Garage</span><span>Stats</span></div><div class="ghost"></div><div class="ghost"></div></div>
+  <div class="tabbar"><span><i></i>Home</span><span><i></i>Live</span><span><i></i>Schedule</span><span><i></i>Results</span><span class="on"><i></i>Me</span></div>
+  <div class="scrim"></div>
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="sheet-h"><h3>Change your details</h3><button class="x" type="button" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="seg" role="tablist"><span class="dirty">Called</span><span>Email</span><span class="on dirty">Privacy</span><span>Crew</span></div>
+    <div class="sheet-b">
+      <p class="lead">These change the club's web pages only. The PA, the big screen and the Wi-Fi pages stay the same.</p>
+      <div class="sw on"><span class="w">Leave my photo off the web pages</span><span class="tog"></span></div>
+      <div class="sw fixed"><span class="w">Leave me out of podium videos<small><svg class="lk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>On · ask the desk to undo</small></span><span class="tog"></span></div>
+      <div class="sw"><span class="w">Show only my initials online</span><span class="tog"></span></div>
+      <p class="lead" style="margin-top:12px">Once one is on, only the desk can turn it off again.</p>
+    </div>
+    <div class="sheet-f"><div class="tick" style="margin-bottom:8px"><span class="bx"></span>I'm a parent or guardian making this change</div><button class="go" type="button">Send 2 changes</button></div>
+  </div>
+</div>
+<figcaption><b>B4 · Privacy tab, with Called still unsent</b>
+<ol><li>Two tabs now have dots. The count on Send adds up every tab.</li><li>The Email tab is the same as A4, so it isn't drawn again.</li></ol></figcaption>
+</figure>
+
+<!-- B5 crew tab -->
+<figure>
+<div class="phone">
+  <div class="status"><span>8:14</span><span>●●● 5G</span></div>
+  <div class="mepage"><div class="spaces"><span class="on">Tonight</span><span>Races</span><span>Garage</span><span>Stats</span></div><div class="ghost"></div><div class="ghost"></div></div>
+  <div class="tabbar"><span><i></i>Home</span><span><i></i>Live</span><span><i></i>Schedule</span><span><i></i>Results</span><span class="on"><i></i>Me</span></div>
+  <div class="scrim"></div>
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="sheet-h"><h3>Change your details</h3><button class="x" type="button" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="seg" role="tablist"><span class="dirty">Called</span><span>Email</span><span class="dirty">Privacy</span><span class="on dirty">Crew</span></div>
+    <div class="sheet-b">
+      <p class="lead">Voices change straight away. Names and notes wait for the desk.</p>
+      <div class="role"><h4>Team Principal</h4>
+        <label class="fld"><span class="lr"><span class="l">Name</span><span class="c">12 / 24</span></span><input value="Gravel Jones"></label>
+        <div class="fld"><span class="lr"><span class="l">Voice</span></span><div class="vrow"><select aria-label="Team Principal voice"><option>Brian</option></select>
+          <button class="ib" type="button" aria-label="Play the Team Principal voice"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></div></div>
+      </div>
+      <div class="role"><h4>Technical Lead <small>club's own</small></h4>
+        <label class="fld"><span class="lr"><span class="l">Name</span><span class="c">0 / 24</span></span><input placeholder="The club's own name"></label>
+        <div class="fld"><span class="lr"><span class="l">Voice</span></span><div class="vrow"><select aria-label="Technical Lead voice"><option>The club's own voice</option></select>
+          <button class="ib" type="button" aria-label="Play the Technical Lead voice"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></div></div>
+      </div>
+      <div class="sub">Notes for the commentary</div>
+      <label class="fld"><span class="lr"><span class="l">Tonight's goal</span><span class="c">19 / 80</span></span><input value="Top 3 in the A main"><span class="h">Said before your race tonight only.</span></label>
+      <label class="fld"><span class="lr"><span class="l">Thanks / shout-out</span><span class="c">24 / 80</span></span><input class="ed" value="Thanks Dad for the tyres"></label>
+      <label class="fld"><span class="lr"><span class="l">Your car's story</span><span class="c">0 / 120</span></span><textarea></textarea></label>
+      <p class="consent">What you send may be said over the PA and on the club's stream. By sending, you let your club and HeatCaller use it in commentary.</p>
+    </div>
+    <div class="sheet-f"><div class="tick" style="margin-bottom:8px"><span class="bx"></span>I'm a parent or guardian making this change</div><button class="go" type="button">Send 4 changes</button></div>
+  </div>
+</div>
+<figcaption><b>B5 · Crew tab: one Send for all of it</b>
+<ol><li>"Send 4 changes" sends two requests: details (announcer plus photo) and crew (voice plus thanks).</li><li>The consent line covers what's on the crew tab, but Send also sends changes on tabs you might not have looked at again. That's the trade-off.</li><li>If one of the two requests fails, the footer has to say which, and leave that tab's dot showing.</li></ol></figcaption>
+</figure>
+
+</div>
+
+<!-- ============================================================ compare -->
+<h2>Side by side</h2>
+<div style="overflow-x:auto;max-width:100%"><table>
+  <thead><tr><th></th><th>A · four sheets</th><th>B · one tabbed sheet</th></tr></thead>
+  <tbody>
+    <tr><td>Taps to change one thing</td><td>Change › → edit → Send (3)</td><td>Change my details → tab → edit → Send (4, or 3 if groups open their tab)</td></tr>
+    <tr><td>What Send sends</td><td>Only what's on the sheet in front of you</td><td>Everything changed on every tab, in up to two requests</td></tr>
+    <tr><td>Consent line</td><td>Right above the Send it covers</td><td>On the crew tab only, while one Send covers every tab</td></tr>
+    <tr><td>Guardian tick</td><td>On each sheet, above its Send</td><td>Once, in the pinned footer, which is taller on every tab</td></tr>
+    <tr><td>One request fails</td><td>That sheet shows the error</td><td>Has to say which half failed and keep that tab's dot</td></tr>
+    <tr><td>Longest sheet</td><td>My crew, about 1.6 screens</td><td>Crew tab, about 1.7 screens (tabs + taller footer)</td></tr>
+    <tr><td>Code</td><td>Splits <code>detailsForm</code> into three builders, plus a <code>meOpenSheet</code> footer option</td><td>The same builders, plus tab state, dirty tracking across tabs and a combined send</td></tr>
+    <tr><td>Fits the Me sheets today</td><td>Yes. Pack, late and at-the-track are all one-job sheets</td><td>It would be the only tabbed sheet on Me</td></tr>
+    <tr><td>Recommendation</td><td class="pick">Build this one</td><td>Only if one entry point matters more</td></tr>
+  </tbody>
+</table></div>
+
+<script>
+document.querySelectorAll('.looks button').forEach((b) => b.addEventListener('click', () => {
+  const v = b.dataset.look;
+  if (v) document.documentElement.dataset.look = v; else delete document.documentElement.dataset.look;
+  document.querySelectorAll('.looks button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+}));
+document.querySelectorAll('.sw:not(.fixed)').forEach((s) => s.addEventListener('click', () => s.classList.toggle('on')));
+document.querySelectorAll('.tick').forEach((t) => t.addEventListener('click', () => t.classList.toggle('on')));
+</script>
+</body>
+</html>

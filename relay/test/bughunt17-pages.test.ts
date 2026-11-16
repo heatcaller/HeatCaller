@@ -226,8 +226,8 @@ describe("Your details on Me, kept up to date", () => {
     const page = await open(relay);
     assert.match(page.get("yd").textContent, /she\/her/);
 
-    const ask = page.button(page.get("yd"), /^Ask the desk to change$/);
-    assert.ok(ask, "Ask the desk to change, on the card");
+    const ask = page.button(page.get("yd"), /^Change my details$/);
+    assert.ok(ask, "Change my details, on the card");
     ask.click();
     const input: FakeNode | undefined = page.get("me-sheet-body").find((n) => n.tagName === "INPUT" || n.tagName === "TEXTAREA")[0];
     assert.ok(input, "a field in the sheet");

@@ -289,8 +289,8 @@ async function openPage(me: Record<string, unknown>, signedIn: boolean, answer?:
 function sheet(page: FakePage): FakeNode {
   const body = page.get("me-sheet-body");
   if (body.find((n) => n.id === "yd-sheet").length === 0) {
-    const b = page.button(page.get("yd"), /^Ask the desk to change$/);
-    assert.ok(b, "Ask the desk to change");
+    const b = page.button(page.get("yd"), /^Change my details$/);
+    assert.ok(b, "Change my details");
     b.click();
   }
   return body;
@@ -324,32 +324,32 @@ describe("My crew on the phone", () => {
     const page = await openPage(meDoc({ pin: false }), false);
     const body = sheet(page);
     assert.match(body.textContent, /Ask the desk for a personal PIN to pick your crew\./);
-    assert.equal(page.button(body, /^Send my crew$/), undefined);
-    assert.doesNotMatch(page.get("yd").textContent, /Your crew/, "no crew line on the card either");
+    assert.equal(body.find((n) => n.tagName === "SELECT").length, 0, "no crew form without a PIN");
+    assert.doesNotMatch(page.get("yd").textContent, /My crew/, "no crew group on the card either");
   });
 
   it("with a PIN not yet given, the PIN box comes first", async () => {
     const page = await openPage(meDoc(), false);
     const body = sheet(page);
     assert.ok(page.button(body, /^Sign in$/));
-    assert.equal(page.button(body, /^Send my crew$/), undefined);
-    assert.match(body.textContent, /Sign in with your personal PIN above to pick your crew\./);
+    assert.equal(page.button(body, /^Send (to the desk|\d+ changes?)$/) === undefined, true, "no Send before the PIN");
+    assert.equal(body.find((n) => n.tagName === "SELECT").length, 0, "no crew form before the PIN");
   });
 
   it("signed in: the card line, the form, Play only for a voice with a sample, made on tap", async () => {
     const page = await openPage(meDoc(), true);
-    assert.match(page.get("yd").textContent, /Principal: Gravel Jones \(Voice: Rachel\) · Tech lead: club's own/);
+    assert.match(page.get("yd").textContent, /PrincipalGravel Jones · RachelTech leadClub's own/);
 
     const body = sheet(page);
-    assert.match(body.textContent, /My crew/);
-    assert.equal(field(body, /^Team Principal name/).value, "Gravel Jones");
-    assert.equal(field(body, /^Team Principal name/).getAttribute("maxlength"), "24");
+    assert.ok(page.button(body, /^Crew$/), "a Crew tab");
+    assert.equal(field(body, /^Team Principal Name/).value, "Gravel Jones");
+    assert.equal(field(body, /^Team Principal Name/).getAttribute("maxlength"), "24");
     assert.match(body.textContent, /Make one up - not a real person's name\./);
-    assert.equal(field(body, /^Team Principal voice/).value, V1);
+    assert.equal(field(body, /^Team Principal Voice/).value, V1);
     assert.match(body.textContent, /The club's own voice/);
     assert.match(body.textContent, /Voice picks change straight away\. Names and notes wait for the desk to check them\./);
     assert.match(body.textContent, /may be said over the PA and on the club.s stream/);
-    assert.match(body.textContent, /0 of 80 characters\./);
+    assert.match(body.textContent, /Tonight's goal0 \/ 80/);
 
     const plays = body.find((n) => n.tagName === "BUTTON" && n.textContent === "Play");
     assert.equal(plays.length, 2);
@@ -362,7 +362,7 @@ describe("My crew on the phone", () => {
     assert.equal(audio.length, 1);
     assert.equal(audio[0]?.src, VOICES[0]?.s);
 
-    const tech = field(body, /^Technical Lead voice/);
+    const tech = field(body, /^Technical Lead Voice/);
     tech.value = V2;
     tech.fire("change");
     assert.equal(plays[1]?.hidden, true, "Adam has no sample either");
@@ -371,11 +371,11 @@ describe("My crew on the phone", () => {
   it("sends only what changed, as a crew ask with the pass", async () => {
     const page = await openPage(meDoc(), true);
     const body = sheet(page);
-    const tech = field(body, /^Technical Lead voice/);
+    const tech = field(body, /^Technical Lead Voice/);
     tech.value = V2;
     tech.fire("change");
     type(field(body, /^Tonight's goal/), "  A top   three ");
-    page.button(body, /^Send my crew$/)!.click();
+    page.button(body, /^Send (to the desk|\d+ changes?)$/)!.click();
     await page.settle();
 
     const sent = crewAsks(page);
@@ -383,7 +383,7 @@ describe("My crew on the phone", () => {
     assert.deepEqual(sent[0]?.body, { id: CODE, kind: "crew", f: { tVoice: V2, goal: "A top three" }, pass: PASS });
     assert.match(body.textContent, /Sent - voice picks apply in a few seconds; the desk checks names and notes \(ref A1B2C3\)/);
 
-    page.button(body, /^Send my crew$/)!.click();
+    page.button(body, /^Send (to the desk|\d+ changes?)$/)!.click();
     await page.settle();
     assert.equal(crewAsks(page).length, 1, "nothing twice");
     assert.match(body.textContent, /Nothing has changed yet\./);
@@ -392,8 +392,8 @@ describe("My crew on the phone", () => {
   it("refuses a name with digits on the phone, before sending", async () => {
     const page = await openPage(meDoc(), true);
     const body = sheet(page);
-    type(field(body, /^Team Principal name/), "R2D2");
-    page.button(body, /^Send my crew$/)!.click();
+    type(field(body, /^Team Principal Name/), "R2D2");
+    page.button(body, /^Send (to the desk|\d+ changes?)$/)!.click();
     await page.settle();
     assert.equal(crewAsks(page).length, 0);
     assert.match(body.textContent, /A crew name can only have letters, spaces, hyphens and apostrophes\./);
@@ -406,15 +406,15 @@ describe("My crew on the phone", () => {
     assert.match(body.textContent, /A parent or guardian needs to send notes\./);
 
     type(field(body, /^Tonight's goal/), "A clean race");
-    page.button(body, /^Send my crew$/)!.click();
+    page.button(body, /^Send (to the desk|\d+ changes?)$/)!.click();
     await page.settle();
     assert.equal(crewAsks(page).length, 0);
-    assert.match(body.textContent, /tick 'I'm making this change for them'/);
+    assert.match(body.textContent, /tick 'I'm a parent or guardian making this change'/);
 
-    const tickBox = field(body, /^I'm making this change for them/) as unknown as { checked: boolean; fire(t: string): void };
+    const tickBox = field(body, /^I'm a parent or guardian making this change/) as unknown as { checked: boolean; fire(t: string): void };
     tickBox.checked = true;
     tickBox.fire("change");
-    page.button(body, /^Send my crew$/)!.click();
+    page.button(body, /^Send (to the desk|\d+ changes?)$/)!.click();
     await page.settle();
     assert.deepEqual(crewAsks(page)[0]?.body["f"], { goal: "A clean race", guardian: true });
   });
@@ -427,9 +427,149 @@ describe("My crew on the phone", () => {
   it("a stale pass goes back to the PIN box", async () => {
     const page = await openPage(meDoc(), true, () => ({ status: 403, body: { ok: false, error: "Your crew needs your personal PIN - ask at the desk." } }));
     const body = sheet(page);
-    type(field(body, /^Team Principal name/), "Turbo Tess");
-    page.button(body, /^Send my crew$/)!.click();
+    type(field(body, /^Team Principal Name/), "Turbo Tess");
+    page.button(body, /^Send (to the desk|\d+ changes?)$/)!.click();
     await page.settle();
     assert.ok(page.button(page.get("me-sheet-body"), /^Sign in$/));
+  });
+});
+
+// ---- the tabbed sheet (15 Nov 2026, B of plans/me-details-mockups.html)
+
+const SEND = /^Send (to the desk|\d+ changes?)$/;
+const tab = (body: FakeNode, words: string) => body.find((n) => n.tagName === "BUTTON" && n.getAttribute("role") === "tab" && n.textContent === words)[0];
+const allAsks = (page: FakePage) => page.sent.filter((s) => s.url.endsWith("/driver/ask"));
+
+describe("Change your details: one sheet, four tabs, one Send", () => {
+  it("has a tab each, shows one at a time, and remembers the one picked", async () => {
+    const page = await openPage(meDoc(), true);
+    const body = sheet(page);
+    const tabs = body.find((n) => n.getAttribute("role") === "tab").map((n) => n.textContent);
+    assert.deepEqual(tabs, ["Called", "Email", "Privacy", "Crew"]);
+    assert.equal(page.get("yd-pane-called").hidden, false);
+    assert.equal(page.get("yd-pane-crew").hidden, true);
+
+    tab(body, "Crew")!.click();
+    assert.equal(page.get("yd-pane-called").hidden, true);
+    assert.equal(page.get("yd-pane-crew").hidden, false);
+    assert.equal(tab(body, "Crew")!.getAttribute("aria-selected"), "true");
+    assert.equal(page.eval("view.ydTab"), "crew");
+  });
+
+  it("has no Crew tab while the club has crews off", async () => {
+    const page = await openPage(meDoc({ crew: undefined }), true);
+    assert.equal(tab(sheet(page), "Crew"), undefined);
+  });
+
+  it("counts what changed on every tab, dots the tabs, and sends a details ask and a crew ask", async () => {
+    const page = await openPage(meDoc(), true);
+    const body = sheet(page);
+    type(field(body, /^Announcer name/), "Sam Rocket");
+    const tech = field(body, /^Technical Lead Voice/);
+    tech.value = V2;
+    tech.fire("change");
+
+    assert.ok(page.button(body, /^Send 2 changes$/));
+    assert.match(tab(body, "Called")!.className, /dirty/);
+    assert.match(tab(body, "Crew")!.className, /dirty/);
+    assert.doesNotMatch(tab(body, "Email")!.className, /dirty/);
+
+    page.button(body, SEND)!.click();
+    await page.settle();
+    const sent = allAsks(page);
+    assert.deepEqual(sent.map((s) => [s.body["kind"], s.body["f"]]), [["details", { announcer: "Sam Rocket" }], ["crew", { tVoice: V2 }]]);
+    assert.match(body.textContent, /Your details: Sent - the desk will check it \(ref A1B2C3\)\. Your crew: Sent - voice picks apply/);
+    assert.ok(page.button(body, /^Send to the desk$/), "back to nothing to send");
+    assert.doesNotMatch(tab(body, "Called")!.className, /dirty/);
+  });
+
+  it("when one half is refused, says which, and turns to its tab with the dot still on", async () => {
+    const page = await openPage(meDoc(), true, (b) => b["kind"] === "details"
+      ? { status: 503, body: { ok: false, error: "The desk has a lot to get through right now." } }
+      : { status: 200, body: { ok: true, ref: "D4E5F6" } });
+    const body = sheet(page);
+    type(field(body, /^Pronouns/), "they/them");
+    tab(body, "Crew")!.click();
+    type(field(body, /^Tonight's goal/), "Finish every race");
+    page.button(body, SEND)!.click();
+    await page.settle();
+
+    assert.match(body.textContent, /Your details: The desk has a lot to get through right now\. Your crew: Sent/);
+    assert.equal(page.get("yd-pane-called").hidden, false, "turned to the tab that did not go");
+    assert.match(tab(body, "Called")!.className, /dirty/);
+    assert.doesNotMatch(tab(body, "Crew")!.className, /dirty/);
+    assert.ok(page.button(body, /^Send 1 change$/));
+  });
+
+  it("the same trouble for both halves is said once", async () => {
+    const page = await openPage(meDoc(), true, () => ({ status: 503, body: { ok: false, error: "The desk has a lot to get through right now." } }));
+    const body = sheet(page);
+    type(field(body, /^Pronouns/), "they/them");
+    type(field(body, /^Tonight's goal/), "Finish every race");
+    page.button(body, SEND)!.click();
+    await page.settle();
+    const said = body.find((n) => n.className === "yd-said").map((n) => n.textContent).join("|");
+    assert.equal(said, "The desk has a lot to get through right now.");
+  });
+
+  it("a problem on another tab is said, and the sheet turns to it, before anything goes", async () => {
+    const page = await openPage(meDoc(), true);
+    const body = sheet(page);
+    type(field(body, /^Announcer name/), "Sam");
+    type(field(body, /^Team Principal Name/), "R2D2");
+    tab(body, "Called")!.click();
+    page.button(body, SEND)!.click();
+    await page.settle();
+    assert.equal(allAsks(page).length, 0);
+    assert.equal(page.get("yd-pane-crew").hidden, false);
+    assert.match(body.textContent, /A crew name can only have letters/);
+  });
+
+  it("one guardian tick: on the details ask always, on the crew ask only for a junior", async () => {
+    for (const junior of [false, true]) {
+      const page = await openPage(meDoc({ crew: { ...crew({ junior }), voices: VOICES } }), true);
+      const body = sheet(page);
+      type(field(body, /^About you/), "Loves the hairpin");
+      type(field(body, /^Tonight's goal/), "A clean race");
+      const g = field(body, /^I'm a parent or guardian making this change/) as unknown as { checked: boolean; fire(t: string): void };
+      g.checked = true;
+      g.fire("change");
+      page.button(body, SEND)!.click();
+      await page.settle();
+      const sent = allAsks(page);
+      assert.equal(sent[0]?.body["kind"], "details");
+      assert.equal((sent[0]?.body["f"] as Record<string, unknown>)["guardian"], true);
+      assert.equal((sent[1]?.body["f"] as Record<string, unknown>)["guardian"], junior ? true : undefined, `junior ${junior}`);
+    }
+  });
+
+  it("the card says Waiting for the desk on a line sent from this phone", async () => {
+    const page = await openPage(meDoc(), true);
+    const body = sheet(page);
+    assert.doesNotMatch(page.get("yd").textContent, /Waiting for the desk/);
+    type(field(body, /^Announcer name/), "Sam Rocket");
+    page.button(body, SEND)!.click();
+    await page.settle();
+    const line = page.get("yd").find((n) => n.tagName === "DD" && /Waiting for the desk/.test(n.textContent));
+    assert.equal(line.length, 1, "on one line only");
+    const dt = line[0]!.parent!.find((n) => n.tagName === "DT")[0];
+    assert.equal(dt?.textContent, "Announcer");
+  });
+
+  it("signed in: the card's chip signs this phone out; signed out, it offers sign-in", async () => {
+    const page = await openPage(meDoc(), true);
+    assert.match(page.get("yd").textContent, /Signed in · Sign out/);
+    page.button(page.get("yd"), /^Sign out$/)!.click();
+    assert.equal(page.eval("pass()"), "");
+    assert.match(page.get("yd").textContent, /Signed out on this phone\./);
+    assert.ok(page.button(page.get("yd"), /^Sign in to change$/));
+
+    page.button(page.get("yd"), /^Sign in to change$/)!.click();
+    assert.ok(page.button(page.get("me-sheet-body"), /^Sign in$/), "the sheet opens on the PIN box");
+  });
+
+  it("a driver with no personal PIN has no chip at all", async () => {
+    const page = await openPage(meDoc({ pin: false }), false);
+    assert.equal(page.button(page.get("yd"), /^Sign (out|in to change)$/), undefined);
   });
 });
