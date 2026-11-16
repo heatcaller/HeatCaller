@@ -452,7 +452,12 @@ public sealed partial class AnnouncementService
         // it shortens goes out only when its audio was rendered from the
         // shortened words; otherwise it is withheld, the way an initials-only
         // line is.
-        var caption = TextForPublicPages(words);
+        //
+        // And a junior's name (15 Nov 2026, children's privacy plan 1.3):
+        // shortened in the caption whatever the club's setting, by the same
+        // rule, so with "Shorten published names" off a line saying a
+        // junior's full name is withheld rather than heard at home in full.
+        var caption = (privacy ?? PublicPrivacy.Empty).Redact(TextForPublicPages(words));
 
         if (!string.Equals(caption, words, StringComparison.Ordinal) && audioShortened != true)
         {

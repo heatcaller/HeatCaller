@@ -463,7 +463,12 @@ public partial class MainForm
             // replaced here. The file in Documents keeps the full names - it
             // is the club's own copy. Best effort: a bare first name in the
             // prose can still slip through (PublicPrivacy.Redact).
-            var shown = script is null ? null : PublicPrivacy.Current.Redact(script);
+            //
+            // And juniors (15 Nov 2026, children's privacy plan 1.3 and 4.2):
+            // shortened to "Mia K" whatever the club's setting, and a junior
+            // whose profile says "On stream: Not at all" left out - every
+            // sentence naming them goes. See PublicPrivacy.ForPublicProse.
+            var shown = script is null ? null : PublicPrivacy.Current.ForPublicProse(script);
 
             _relayPublisher.PublishSnapshot(
                 RelayChannel.Preview, NightBefore.Document(dayName, whenLocal, firstRaceLocal, shown));
@@ -562,7 +567,7 @@ public partial class MainForm
                 return;
             }
 
-            var shown = up.Script is null ? null : PublicPrivacy.Current.Redact(up.Script);
+            var shown = up.Script is null ? null : PublicPrivacy.Current.ForPublicProse(up.Script);
 
             _relayPublisher.PublishSnapshot(
                 RelayChannel.Preview, NightBefore.Document(up.DayName, up.WhenLocal, up.FirstRaceLocal, shown));

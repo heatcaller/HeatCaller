@@ -365,9 +365,19 @@ public partial class MainForm
     {
         var redacted = register.Redact(l.Text);
 
+        // JUNIORS ALWAYS SHORTENED (15 Nov 2026, children's privacy plan
+        // 1.3): Redact makes "Mia Kent" "Mia K" whatever the club's setting.
+        // With the setting off and a junior in the register, the line still
+        // goes the whole-line way below, so a piece cut inside a junior's
+        // name ("...third is Mia" / "Kent in the...") can't let the surname out.
         if (shorten is null)
         {
-            return new CaptionLine(l.N, redacted, l.AtUtc);
+            if (!register.AnyJuniors)
+            {
+                return new CaptionLine(l.N, redacted, l.AtUtc);
+            }
+
+            shorten = static text => text;
         }
 
         // 6 Nov 2026, Bug hunt 11b review: shortened piece by piece, a long

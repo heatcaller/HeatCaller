@@ -32,7 +32,7 @@ namespace HeatCaller;
 internal sealed class PublicPrivacy
 {
     /// <summary>One driver's three flags and the names they go by.</summary>
-    private sealed record Entry(string Transponder, string Name, string AnnouncerName, bool NoPhoto, bool NoVideo, bool Initials, bool Junior = false)
+    private sealed record Entry(string Transponder, string Name, string AnnouncerName, bool NoPhoto, bool NoVideo, bool Initials, bool Junior = false, bool OffStream = false)
     {
         /// <summary>
         /// Anything that changes how they go online. Junior counts (15 Nov
@@ -60,6 +60,11 @@ internal sealed class PublicPrivacy
 
     /// <summary>Every form a junior's name can go online in - see <see cref="JuniorPublicNames"/>. Sorted, no repeats.</summary>
     private readonly IReadOnlyList<string> _juniorPublicNames;
+    /// <summary>Each junior's full and announcer name (any case) to their short form, "Mia K" (15 Nov 2026).</summary>
+    private readonly Dictionary<string, string> _juniorByName;
+
+    /// <summary>Every name and each word of it for juniors off the stream, for <see cref="MentionsOffStream"/>; null when none are.</summary>
+    private readonly Redactor? _offStream;
 
     private PublicPrivacy(IReadOnlyList<Entry> entries)
     {
@@ -131,6 +136,72 @@ internal sealed class PublicPrivacy
         }
 
         _juniorPublicNames = juniorForms.ToList();
+        // JUNIORS BY NAME (15 Nov 2026, children's privacy plan 1.3). A
+        // junior's name is shortened on every published surface whatever the
+        // club's "Shorten published names" says - and some surfaces only
+        // know a name: the schedule's line-ups, the badges page, captions,
+        // the night-before preview. So each junior's full and announcer name
+        // maps to their short form, worked out across every junior together
+        // ("Sam T" beside "Sam Tr"), for DisplayNames and Redact alike. An
+        // initials-only junior stays initials, which the loop above has
+        // already claimed. Errs on the private side: an adult who shares a
+        // junior's exact name is shortened too.
+        _juniorByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var juniors = entries.Where(e => e.Junior && !e.Initials).ToList();
+        var shortForms = JuniorNames.ForStream(juniors.Select(e => e.Name), JuniorNames.Initial);
+
+        foreach (var junior in juniors)
+        {
+            if (!shortForms.TryGetValue(junior.Name, out var shortForm))
+            {
+                continue;
+            }
+
+            foreach (var name in new[] { junior.Name, junior.AnnouncerName }
+                         .Where(n => n.Contains(' ', StringComparison.Ordinal) && n.Count(char.IsLetter) >= 2)
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                _juniorByName.TryAdd(name, shortForm);
+
+                foreach (var form in new[] { name, name.ToUpperInvariant(), TitleCase(name) })
+                {
+                    _namesTo.TryAdd(form, shortForm);
+                }
+            }
+        }
+
+        // OFF THE STREAM (15 Nov 2026, children's privacy plan 4.2): a junior
+        // whose profile says "On stream: Not at all". Lines naming them - by
+        // any name or any word of one - are withheld from listen-along and
+        // the public captions the way an initials-only driver's are, and the
+        // preview on the club's page leaves out the sentences that name them.
+        var offStream = new List<Redactor.Person>();
+        var offStreamKey = new StringBuilder();
+
+        foreach (var entry in entries.Where(e => e.OffStream).OrderBy(e => e.Transponder, StringComparer.OrdinalIgnoreCase))
+        {
+            var names = new[] { entry.Name, entry.AnnouncerName }
+                .Select(SingleSpaced)
+                .Where(n => n.Count(char.IsLetter) >= 2)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            offStreamKey.Append(entry.Transponder.ToUpperInvariant()).Append('|').Append(string.Join("|", names)).Append('\n');
+
+            if (names.Count > 0)
+            {
+                offStream.Add(new Redactor.Person(names, Array.Empty<string>()));
+                people.Add(new Redactor.Person(names, Array.Empty<string>()));
+            }
+
+            // Only when somebody is off the stream, so every other club's
+            // fingerprint stays what it was.
+            fingerprint.Append("H|").Append(entry.Transponder.ToUpperInvariant()).Append('\n');
+        }
+
+        _offStream = offStream.Count > 0 ? Redactor.For(offStream, userProfileFolder: null) : null;
+        OffStreamFingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(offStreamKey.ToString())));
 
         Fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint.ToString())));
 
@@ -179,7 +250,7 @@ internal sealed class PublicPrivacy
 
         // The juniors, every name they go by, for MentionsJunior (15 Nov
         // 2026, children's privacy - "Offline voices for juniors").
-        var juniors = entries
+        var juniorPeople = entries
             .Where(e => e.Junior)
             .Select(e => new[] { e.Name, e.AnnouncerName }
                 .Select(SingleSpaced)
@@ -190,9 +261,9 @@ internal sealed class PublicPrivacy
             .Select(names => new Redactor.Person(names, Array.Empty<string>()))
             .ToList();
 
-        if (juniors.Count > 0)
+        if (juniorPeople.Count > 0)
         {
-            _juniors = Redactor.For(juniors, userProfileFolder: null);
+            _juniors = Redactor.For(juniorPeople, userProfileFolder: null);
         }
     }
 
@@ -271,7 +342,7 @@ internal sealed class PublicPrivacy
 
             foreach (var id in profile.AllTransponderIds)
             {
-                var entry = new Entry(id, name, announcer, profile.NoPhotoOnline, profile.NoVideoOnline, profile.InitialsOnline, profile.IsJunior);
+                var entry = new Entry(id, name, announcer, profile.NoPhotoOnline, profile.NoVideoOnline, profile.InitialsOnline, profile.IsJunior, profile.IsJunior && profile.JuniorOffStream);
 
                 (string.Equals(id.Trim(), main, StringComparison.OrdinalIgnoreCase) ? entries : extras).Add(entry);
             }
@@ -505,6 +576,82 @@ internal sealed class PublicPrivacy
         return Enumerable.Range(1, last.Length).Select(take => head + " " + last[..take]).ToList();
     }
 
+    /// <summary>True when the register holds a driver with this transponder (main or extra), flagged or not.</summary>
+    public bool Knows(string? transponder) => Find(transponder) is not null;
+
+    /// <summary>True when any junior (not shown by initials) is in the register - so DisplayNames can skip the name work for a club with none.</summary>
+    public bool AnyJuniors => _juniorByName.Count > 0;
+
+    /// <summary>
+    /// The short form of a junior's full or announcer name ("Mia Kent" to
+    /// "Mia K"), or null when the name is not a junior's (15 Nov 2026,
+    /// children's privacy plan 1.3). For a surface that knows only a name.
+    /// </summary>
+    public string? JuniorShortName(string? name) =>
+        !string.IsNullOrWhiteSpace(name) && _juniorByName.TryGetValue(SingleSpaced(name), out var shortForm) ? shortForm : null;
+
+    /// <summary>
+    /// Changes whenever who is off the stream (or their names) changes -
+    /// so the night-before preview can be redone when a junior's "On
+    /// stream" choice changes, which republishes no results (15 Nov 2026).
+    /// </summary>
+    public string OffStreamFingerprint { get; }
+
+    /// <summary>
+    /// True when <paramref name="text"/> mentions, by any name or any word of
+    /// one, a junior whose profile says "On stream: Not at all" (15 Nov 2026,
+    /// children's privacy plan 4.2). Errs on the private side, as
+    /// <see cref="MentionsWithheld"/> does - which counts them too.
+    /// </summary>
+    public bool MentionsOffStream(string? text)
+    {
+        if (_offStream is null || string.IsNullOrEmpty(text))
+        {
+            return false;
+        }
+
+        return !string.Equals(_offStream.Apply(text, out _), Redactor.None.Apply(text, out _), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Public prose (the night-before preview) as it may go online: every
+    /// sentence naming a junior who is off the stream left out, and the rest
+    /// <see cref="Redact"/>ed - initials for those who asked, and juniors
+    /// shortened (15 Nov 2026, children's privacy plan 1.3 and 4.2). Lines
+    /// and paragraphs are kept; one left with nothing in it goes.
+    /// </summary>
+    public string ForPublicProse(string? text)
+    {
+        var prose = text ?? string.Empty;
+
+        if (_offStream is not null && prose.Length > 0)
+        {
+            var lines = new List<string>();
+
+            foreach (var line in prose.Split('\n'))
+            {
+                var sentences = SentenceEnd.Split(line);
+                var kept = sentences.Where(s => !MentionsOffStream(s)).ToList();
+
+                if (kept.Count == sentences.Length)
+                {
+                    lines.Add(line);
+                }
+                else if (kept.Any(s => s.Trim().Length > 0))
+                {
+                    lines.Add(string.Join(" ", kept.Select(s => s.Trim()).Where(s => s.Length > 0)));
+                }
+            }
+
+            prose = string.Join("\n", lines);
+        }
+
+        return Redact(prose);
+    }
+
+    /// <summary>The space after a sentence's end - ". ", "! ", "?\" " - where public prose is cut into sentences.</summary>
+    private static readonly Regex SentenceEnd = new(@"(?<=[.!?…][""'”’)\]]*)\s+", RegexOptions.CultureInvariant);
+
     /// <summary>True when <paramref name="name"/> is the full or announcer name of a driver shown online by initials only.</summary>
     public bool InitialsFor(string? name) =>
         !string.IsNullOrWhiteSpace(name) && _initialsByName.ContainsKey(SingleSpaced(name));
@@ -564,6 +711,10 @@ internal sealed class PublicPrivacy
     /// driver shown by initials replaced by their initials - for public
     /// prose (captions, the night-before preview). Whole words only; as
     /// typed, in capitals, or with a capital and the rest small.
+    ///
+    /// And every junior's full and announcer name with their short form,
+    /// "Mia K" (15 Nov 2026, children's privacy plan 1.3): captions and the
+    /// preview shortened juniors only while the club shortened everybody.
     /// </summary>
     public string Redact(string? text)
     {

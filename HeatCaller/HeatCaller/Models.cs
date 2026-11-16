@@ -347,6 +347,27 @@ public sealed class DriverProfile
     /// </summary>
     public bool EmailMyNight { get; set; }
 
+    // --- A junior on the stream (15 Nov 2026, children's privacy plan 4.2) ---
+    //
+    // Recorded at the desk on the profile dialog. A junior's name is always
+    // shortened online ("Mia K"); these two say whether they appear on the
+    // stream at all. The PA in the room is never affected.
+
+    /// <summary>
+    /// "On stream: Not at all" - the overlays and the public captions show no
+    /// name for them ("Car 4"), listen-along withholds lines naming them, and
+    /// the night-before preview on the club's page leaves them out. Off (the
+    /// default) is "Shortened": a first name and an initial. See PublicPrivacy.
+    /// </summary>
+    public bool JuniorOffStream { get; set; }
+
+    /// <summary>
+    /// A parent or guardian agreed to them appearing on the stream - recorded
+    /// at the desk, like a signed waiver. A record only: without it a junior
+    /// still shows shortened, and "Not at all" is what keeps them off.
+    /// </summary>
+    public bool StreamConsent { get; set; }
+
     /// <summary>
     /// A line in their own words for the AI commentary ("Racing since I
     /// was eight; my dad builds the cars"). At most

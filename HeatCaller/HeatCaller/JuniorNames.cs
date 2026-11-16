@@ -58,4 +58,43 @@ internal static class JuniorNames
 
         return map;
     }
+
+    /// <summary>
+    /// <see cref="ForStream(IEnumerable{string}, string?)"/>, with every
+    /// junior whose profile says "On stream: Not at all" (15 Nov 2026,
+    /// children's privacy plan 4.2) shown as <see cref="OffStreamName"/>
+    /// instead - whatever the rule, "full" included, and a one-word name too.
+    /// </summary>
+    /// <param name="offStream">Each such junior's full name and what the stream shows for them ("Car 4").</param>
+    public static IReadOnlyDictionary<string, string> ForStream(
+        IEnumerable<string> juniorNames,
+        string? setting,
+        IReadOnlyDictionary<string, string>? offStream)
+    {
+        var names = juniorNames.ToList();
+        var map = new Dictionary<string, string>(ForStream(names, setting), StringComparer.Ordinal);
+
+        if (offStream is null || offStream.Count == 0)
+        {
+            return map;
+        }
+
+        foreach (var name in names.Select(n => (n ?? string.Empty).Trim()).Where(n => n.Length > 0))
+        {
+            if (offStream.TryGetValue(name, out var shown))
+            {
+                map[name] = shown;
+            }
+        }
+
+        return map;
+    }
+
+    /// <summary>
+    /// What the stream shows for a junior kept off it: their race number as
+    /// "Car 4", or "A driver" when they have none - never any part of their
+    /// name (15 Nov 2026, children's privacy plan 4.2).
+    /// </summary>
+    public static string OffStreamName(string? raceNumber) =>
+        string.IsNullOrWhiteSpace(raceNumber) ? "A driver" : $"Car {raceNumber.Trim()}";
 }

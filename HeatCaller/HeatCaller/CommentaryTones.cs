@@ -242,6 +242,20 @@ public static class CommentaryTones
             : settings.CommentaryToneStyle;
 
     /// <summary>
+    /// The tone for one line: <see cref="Effective(AppSettings)"/>, and
+    /// Enthusiastic in place of Sailor-mouth whenever a junior is around -
+    /// in the race being called, or the subject of the line (15 Nov 2026,
+    /// children's privacy plan 4.1, Asher's decision). A club that allows
+    /// Sailor-mouth still never has it swear in a race a child is driving,
+    /// in a child's interview or intro, or in the recap of a night a child
+    /// raced. Every other tone is left as it is.
+    /// </summary>
+    public static CommentaryTone Effective(AppSettings settings, bool juniorsAround) =>
+        Effective(settings) is var tone && tone == CommentaryTone.SailorMouth && juniorsAround
+            ? CommentaryTone.Enthusiastic
+            : tone;
+
+    /// <summary>
     /// The tone for writing that is SHARED - a driver's own night, the season
     /// piece, the night before - which clubs post and people send around.
     /// Sailor-mouth is for the room, so these are written Enthusiastic instead

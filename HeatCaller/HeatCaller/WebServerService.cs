@@ -3545,14 +3545,28 @@ public sealed partial class WebServerService
                 duties = Array.Empty<MarshalAssigner.MarshalDuty>();
             }
 
-            var juniors = ordered.Select(s => s.TransponderId)
+            var juniorIds = ordered.Select(s => s.TransponderId)
                 .Concat(upcoming.SelectMany(r => r.Grid))
                 .Concat(duties.Select(d => d.Transponder))
                 .Where(id => !string.IsNullOrWhiteSpace(id) && Names.Get(id) is { IsJunior: true })
                 .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Select(id => DisplayNameFor(id, false));
+                .ToList();
+            var juniors = juniorIds.Select(id => DisplayNameFor(id, false)).ToList();
 
-            foreach (var (full, shown) in JuniorNames.ForStream(juniors, _settings?.JuniorNamesOnStream))
+            // "On stream: Not at all" (15 Nov 2026, children's privacy plan
+            // 4.2): no name at all for them - "Car 4" - on every name the
+            // page draws and inside its lines.
+            var offStream = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (var id in juniorIds)
+            {
+                if (Names.Get(id) is { JuniorOffStream: true } hidden)
+                {
+                    offStream.TryAdd(DisplayNameFor(id, false).Trim(), JuniorNames.OffStreamName(hidden.RaceNumber));
+                }
+            }
+
+            foreach (var (full, shown) in JuniorNames.ForStream(juniors, _settings?.JuniorNamesOnStream, offStream))
             {
                 map[full] = shown;
             }
@@ -3620,15 +3634,33 @@ public sealed partial class WebServerService
                 return;
             }
 
-            var named = _profiles.AllIncludingGhostsForAnyThread
+            var namedJuniors = _profiles.AllIncludingGhostsForAnyThread
                 .Where(p => p.IsJunior && !string.IsNullOrWhiteSpace(p.DriverName))
-                .Select(p => p.DriverName.Trim())
-                .Where(n => !map.ContainsKey(n) && texts.Any(t => t.Contains(n, StringComparison.Ordinal)))
+                .Where(p => !map.ContainsKey(p.DriverName.Trim()) && texts.Any(t => t.Contains(p.DriverName.Trim(), StringComparison.Ordinal)))
                 .ToList();
+            var named = namedJuniors.Select(p => p.DriverName.Trim()).ToList();
 
             if (named.Count == 0)
             {
                 return;
+            }
+
+            // Those off the stream keep "Car 4" (15 Nov 2026, children's
+            // privacy plan 4.2) - the ones already in the map as they were.
+            var offStream = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (var hidden in namedJuniors.Where(p => p.JuniorOffStream))
+            {
+                offStream.TryAdd(hidden.DriverName.Trim(), JuniorNames.OffStreamName(hidden.RaceNumber));
+            }
+
+            foreach (var kv in map)
+            {
+                if (kv.Value is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<string>(out var was)
+                    && _profiles.AllIncludingGhostsForAnyThread.Any(p => p.JuniorOffStream && string.Equals(p.DriverName?.Trim(), kv.Key, StringComparison.Ordinal)))
+                {
+                    offStream.TryAdd(kv.Key, was);
+                }
             }
 
             // The whole map again, with them in: "Mia K" beside "Mia Ke" is
@@ -3636,7 +3668,7 @@ public sealed partial class WebServerService
             var all = map.Select(kv => kv.Key).Concat(named).ToList();
             map.Clear();
 
-            foreach (var (full, shown) in JuniorNames.ForStream(all, _settings?.JuniorNamesOnStream))
+            foreach (var (full, shown) in JuniorNames.ForStream(all, _settings?.JuniorNamesOnStream, offStream))
             {
                 map[full] = shown;
             }

@@ -3964,14 +3964,30 @@ public sealed partial class RelayPublisher : IDisposable
         // full; an under-18's name still goes out as "Mia K". Matched by
         // transponder, so only where the caller knows them; initials-only
         // drivers stay initials. With shortening on, every name already is.
-        if (abbreviate || privacy is null || transponders is null)
+        //
+        // AND BY NAME WHERE NO TRANSPONDER IS KNOWN (15 Nov 2026, children's
+        // privacy plan 1.3): the schedule's line-ups and the badges page
+        // passed names alone, so with shortening off a junior went out there
+        // in full. A name with no transponder - or one the register does not
+        // know - is matched against the juniors' names; a transponder the
+        // register knows decides on its own, so an adult who shares a
+        // junior's name keeps theirs wherever the caller knows who they are.
+        if (abbreviate || privacy is null || (transponders is null && !privacy.AnyJuniors))
         {
             return shown;
         }
 
+        bool IsJunior(int i)
+        {
+            var transponder = transponders is not null && i < transponders.Count ? transponders[i] : null;
+
+            return privacy.Knows(transponder)
+                ? privacy.JuniorForTransponder(transponder) && !privacy.InitialsForTransponder(transponder)
+                : privacy.JuniorShortName(names[i]) is not null && !privacy.InitialsFor(names[i]);
+        }
+
         var juniors = Enumerable.Range(0, names.Count)
-            .Where(i => i < transponders.Count && privacy.JuniorForTransponder(transponders[i])
-                        && !privacy.InitialsForTransponder(transponders[i])
+            .Where(i => IsJunior(i)
                         && string.Equals(shown[i], (names[i] ?? string.Empty).Trim(), StringComparison.Ordinal))
             .ToList();
 

@@ -168,7 +168,14 @@ internal static class RelayDocuments
 
         // One name map for the whole day, so a driver in three heats is
         // shortened the same way in all three.
-        var shown = NameMap(heats.Values.SelectMany(grid => grid.Select(g => g.Name)), abbreviate);
+        //
+        // WITH EACH SLOT'S TRANSPONDER (15 Nov 2026, children's privacy plan
+        // 1.3): by name alone a junior was shown in full here whenever the
+        // club turned "Shorten published names" off.
+        var shown = NameMap(
+            heats.Values.SelectMany(grid => grid.Select(g => g.Name)),
+            abbreviate,
+            heats.Values.SelectMany(grid => grid.Select(g => ((string?)g.Name, g.Transponder))).ToList());
 
         var current = events.Current;
         var ev = current.Id == RaceEventStore.LegacyEventId ? null : current;
@@ -222,7 +229,7 @@ internal static class RelayDocuments
     }
 
     /// <summary>One driver on a heat's grid: their slot, public name and car.</summary>
-    private sealed record GridSlot(int Slot, string Name, string? Car);
+    private sealed record GridSlot(int Slot, string Name, string? Car, string? Transponder = null);
 
     /// <summary>
     /// Who is in the heat a generated line runs, in grid order. Empty for a
@@ -238,7 +245,7 @@ internal static class RelayDocuments
 
         return round.AssignedTransponders
             .Select((t, i) => PublicName(profiles, t) is { } name
-                ? new GridSlot(i + 1, name, PublicCar(profiles, t))
+                ? new GridSlot(i + 1, name, PublicCar(profiles, t), t)
                 : null)
             .OfType<GridSlot>()
             .ToList();
@@ -378,7 +385,10 @@ internal static class RelayDocuments
             .ThenBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
-        var shown = NameMap(drivers.Select(d => d.Name!), abbreviate);
+        // With each driver's transponder (15 Nov 2026, children's privacy
+        // plan 1.3): by name alone a junior's badges went out under their
+        // full name whenever the club turned "Shorten published names" off.
+        var shown = NameMap(drivers.Select(d => d.Name!), abbreviate, drivers.Select(d => ((string?)d.Name, (string?)d.Driver.Transponder)).ToList());
 
         return JsonSerializer.Serialize(new
         {
@@ -1399,7 +1409,9 @@ internal static class RelayDocuments
     /// <param name="rows">
     /// Saved rows (name, transponder) the names may have come from, or null.
     /// Given, each name is also matched to an initials-only driver by
-    /// transponder - see PublicPrivacy.TransponderForEach.
+    /// transponder - see PublicPrivacy.TransponderForEach. Null or not, a
+    /// junior is shortened whatever the club's setting (15 Nov 2026) - by
+    /// transponder where a row gives one, by name otherwise.
     /// </param>
     private static Dictionary<string, string> NameMap(
         IEnumerable<string> names,
