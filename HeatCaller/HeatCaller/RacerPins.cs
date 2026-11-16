@@ -229,6 +229,22 @@ internal static class RacerPins
 
     private const int MaxForgotten = 200;
 
+    /// <summary>
+    /// Forget this driver (15 Nov 2026, privacy plan 2.5): their PINs gone
+    /// for good - from the settings, from who has been emailed, and from
+    /// the PINs kept aside for a deleted driver's return, so none comes
+    /// back if the transponder is added again. Does not save.
+    /// </summary>
+    internal static void ForgetFor(AppSettings settings, IEnumerable<string> transponders)
+    {
+        foreach (var id in transponders)
+        {
+            settings.RacerPins.Remove(id);
+            settings.RacerPinsEmailed?.RemoveAll(t => string.Equals(t, id, StringComparison.OrdinalIgnoreCase));
+            Forgotten.RemoveAll(f => string.Equals(f.Transponder, id, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
     private static void Forget(AppSettings settings, string transponder, string pin)
     {
         Forgotten.RemoveAll(f => string.Equals(f.Transponder, transponder, StringComparison.OrdinalIgnoreCase));

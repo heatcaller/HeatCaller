@@ -227,6 +227,7 @@ public partial class MainForm : Form
     partial void RosterTickDriverLive();     // MainForm.DriverLive.cs
     partial void RosterTickCaptions();       // MainForm.Captions.cs
     partial void RosterTickDriverRequests(); // MainForm.DriverRequests.cs
+    partial void RosterTickForget();         // MainForm.Forget.cs
 
     // Each time a race is filed or corrected, from PublishDriverNightsFor
     // (MainForm.Relay.cs), whatever the relay switches say.
@@ -1437,6 +1438,7 @@ public partial class MainForm : Form
             RosterTickDriverLive();
             RosterTickCaptions();
             RosterTickDriverRequests();
+            RosterTickForget();
         };
 
         _webRosterTimer.Start();

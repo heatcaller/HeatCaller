@@ -465,6 +465,7 @@ internal static class SettingsTable
             nameof(AppSettings.NightEmailSentTo),
             nameof(AppSettings.PrivacyRepublishOwed),
             nameof(AppSettings.PrivacyRetained),
+            nameof(AppSettings.RelayForgetsOwed),
             nameof(AppSettings.PrivacyAppliedFingerprint),
             nameof(AppSettings.PrivacyAppliedFlagged),
 

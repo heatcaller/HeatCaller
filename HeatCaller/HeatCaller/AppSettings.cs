@@ -1164,6 +1164,14 @@ public sealed class AppSettings
     public List<PrivacyRetainedDriver> PrivacyRetained { get; set; } = new();
 
     /// <summary>
+    /// Drivers forgotten on this laptop whose copy on the relay is not yet
+    /// known to be gone (15 Nov 2026, privacy plan 2.5) - their badge codes
+    /// and names, sent to the relay's driver/forget until it says done. See
+    /// MainForm.Forget. Empty in older files.
+    /// </summary>
+    public List<RelayForgetOwed> RelayForgetsOwed { get; set; } = new();
+
+    /// <summary>
     /// PublicPrivacy.FlaggedFingerprint of the register last made to stick
     /// (23 Oct 2026, bug hunt 10). A start-up that finds the profiles say
     /// otherwise - a privacy tick saved moments before HeatCaller closed or
@@ -3362,6 +3370,7 @@ public sealed class AppSettings
         // WHY (23 Oct 2026, bug hunt 10): read on every privacy change; a
         // null in the file means "none".
         PrivacyRetained = (PrivacyRetained ?? new List<PrivacyRetainedDriver>()).Where(item => item is not null).ToList();
+        RelayForgetsOwed = (RelayForgetsOwed ?? new List<RelayForgetOwed>()).Where(item => item is not null).ToList();
         LapWindowSpots = (LapWindowSpots ?? new List<LapWindowSpot>())
             .Where(item => item is not null && item.Slot >= 0)
             .GroupBy(item => item.Slot)
@@ -3627,6 +3636,21 @@ public sealed class LapWindowSpot
 
     /// <summary>How many laps it was sized to show.</summary>
     public int Rows { get; set; } = LapDetailWindow.DefaultRows;
+}
+
+/// <summary>
+/// One forgotten driver the relay still has to be told about (15 Nov 2026,
+/// privacy plan 2.5) - see AppSettings.RelayForgetsOwed. Local only.
+/// </summary>
+public sealed class RelayForgetOwed
+{
+    /// <summary>Their badge codes (RelayCheckIn.IdFor of each transponder).</summary>
+    public List<string> Badges { get; set; } = new();
+
+    /// <summary>The names phones may follow them by.</summary>
+    public List<string> Names { get; set; } = new();
+
+    public DateTime ForgottenUtc { get; set; } = DateTime.UtcNow;
 }
 
 /// <summary>

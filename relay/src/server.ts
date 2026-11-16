@@ -80,7 +80,7 @@ import { LapVoiceLibrary } from "./lapvoice.js";
 import { STREAM_FORMAT, VOICE_PLAN_OFF, type MeterUsage, type VoicePlan, type VoiceService } from "./voice.js";
 import { isMeterName, type TopUpRequests } from "./topuprequests.js";
 import type { UsageLog } from "./usagelog.js";
-import { BROADCAST_TTL_SECONDS, followNameFrom, myNightUrl, PUSH_CHANNEL, pushKindsFrom, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
+import { BROADCAST_TTL_SECONDS, FOLLOW_CHANNEL, followIdOf, followNameFrom, myNightUrl, PUSH_CHANNEL, pushKindsFrom, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
 import { PAGES_BUILD } from "./pagebuild.js";
 import { isJuniorName, NO_PRIVACY_RULES, namesAJunior, PRIVACY_CHANNEL, privacyNameKey, privacyRulesFrom, resultTakenDown, ROBOTS_TXT, UNKNOWN_PRIVACY_RULES, yearTakenDown, type PrivacyRules } from "./privacy.js";
 import { nextNightIcs } from "./ics.js";
@@ -779,6 +779,11 @@ const LISTING_CACHE_MAX_TOTAL = 32 * 1024 * 1024;
 const LISTING_BUILDS_AT_ONCE = 1;
 
 const DRIVER_ID = /^[0-9a-f]{20}$/;
+
+/** Forget one driver (15 Nov 2026, privacy plan 2.5): the most of each the laptop may name, and the body that carries them. */
+const DRIVER_FORGET_MAX_BADGES = 20;
+const DRIVER_FORGET_MAX_NAMES = 10;
+const DRIVER_FORGET_MAX_BODY = 8 * 1024;
 
 interface InboxItem {
   readonly n: number;
@@ -2923,6 +2928,11 @@ export class Relay {
 
     if (method === "POST" && rest.length === 2 && rest[0] === "driver" && rest[1] === "collected") {
       await this.clearDriverAsks(request, response, club);
+      return;
+    }
+
+    if (method === "POST" && rest.length === 2 && rest[0] === "driver" && rest[1] === "forget") {
+      await this.forgetDriver(request, response, club);
       return;
     }
 
@@ -8539,6 +8549,149 @@ export class Relay {
       .map((item) => ({ id: item.id, ...item.ask }));
 
     sendJson(response, 200, { ok: true, items });
+  }
+
+  /**
+   * FORGET ONE DRIVER (15 Nov 2026, children's-privacy plan 2.5): the
+   * laptop's "Forget this driver", asked by a parent. Everything the relay
+   * holds of that one driver goes - by badge code: their night, their
+   * entries in the live and details documents, their garage, the phone
+   * photos and asks waiting for the desk, the family links they made, their
+   * phone's push sign-ups and their race clips; by name: the follower
+   * sign-ups for that name. Published results are not touched here: the
+   * laptop sends those again under "Removed driver".
+   *
+   * Under the publish token like every laptop call, and idempotent - a
+   * driver already gone is not an error, so the laptop can simply send it
+   * again until it hears ok.
+   */
+  private async forgetDriver(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    const body = await readBody(request, response, DRIVER_FORGET_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    const badges = new Set(
+      (Array.isArray(body["badges"]) ? (body["badges"] as unknown[]) : [])
+        .filter((b): b is string => typeof b === "string")
+        .map((b) => b.trim().toLowerCase())
+        .filter((b) => DRIVER_ID.test(b))
+        .slice(0, DRIVER_FORGET_MAX_BADGES),
+    );
+    const followIds = new Set(
+      (Array.isArray(body["names"]) ? (body["names"] as unknown[]) : [])
+        .map((n) => followNameFrom(n))
+        .filter((n) => n !== "")
+        .slice(0, DRIVER_FORGET_MAX_NAMES)
+        .map((n) => followIdOf(n)),
+    );
+
+    if (badges.size === 0 && followIds.size === 0) {
+      sendJson(response, 400, { ok: false, error: "Say which driver: their badge codes or names." });
+      return;
+    }
+
+    let removed = 0;
+
+    const dropItems = async (channel: string, mine: (id: string, body: unknown) => boolean): Promise<void> => {
+      for (const item of await this.store.listItems(club, channel).catch(() => [])) {
+        if (mine(item.id, item.doc.body)) {
+          await this.store.deleteItem(club, channel, item.id).catch(() => undefined);
+          removed++;
+        }
+      }
+    };
+
+    await this.withLock(club, async () => {
+      for (const badge of badges) {
+        for (const channel of [NIGHTS_CHANNEL, GARAGE_CHANNEL]) {
+          if ((await this.store.getItem(club, channel, badge).catch(() => undefined)) !== undefined) {
+            await this.store.deleteItem(club, channel, badge).catch(() => undefined);
+            removed++;
+          }
+        }
+      }
+
+      await dropItems(DRIVER_ASKS_CHANNEL, (_id, b) => badges.has(asDriverAsk(b)?.b ?? ""));
+      await dropItems(DRIVER_PHOTOS_CHANNEL, (_id, b) => badges.has(asDriverPhoto(b)?.b ?? ""));
+      await dropItems(FAMILY_CHANNEL, (_id, b) => isPlainObject(b) && typeof b["d"] === "string" && badges.has(b["d"]));
+
+      // Their entries in the two one-document snapshots, taken out with the
+      // rest left as it was - seq and time too, so the next the laptop
+      // sends still wins and freshness is judged as before.
+      for (const channel of [DRIVER_LIVE_CHANNEL, DRIVER_ME_CHANNEL]) {
+        const doc = await this.store.getSnapshot(club, channel).catch(() => undefined);
+        const drivers = doc !== undefined && isPlainObject(doc.body) ? doc.body["drivers"] : undefined;
+
+        if (doc === undefined || !isPlainObject(doc.body) || !isPlainObject(drivers)) {
+          continue;
+        }
+
+        const kept = Object.fromEntries(Object.entries(drivers).filter(([id]) => !badges.has(id)));
+
+        if (Object.keys(kept).length !== Object.keys(drivers).length) {
+          removed += Object.keys(drivers).length - Object.keys(kept).length;
+          await this.store.putSnapshot(club, channel, { ...doc, body: { ...doc.body, drivers: kept } });
+          this.forgetListing(club, channel);
+          this.forgetDriverDoc(club, channel);
+        }
+      }
+    });
+
+    // Push sign-ups through the push service's own lock (its forget, with
+    // only this driver's lists as the wipe), so an alert being sent cannot
+    // write a list back after it.
+    const dropSubs = async (): Promise<void> => {
+      for (const badge of badges) {
+        if ((await this.store.getItem(club, PUSH_CHANNEL, badge).catch(() => undefined)) !== undefined) {
+          await this.store.deleteItem(club, PUSH_CHANNEL, badge).catch(() => undefined);
+          removed++;
+        }
+      }
+
+      for (const id of followIds) {
+        if ((await this.store.getItem(club, FOLLOW_CHANNEL, id).catch(() => undefined)) !== undefined) {
+          await this.store.deleteItem(club, FOLLOW_CHANNEL, id).catch(() => undefined);
+          removed++;
+        }
+      }
+    };
+
+    if (this.push !== undefined) {
+      await this.push.forget(club, dropSubs);
+    } else {
+      await dropSubs();
+    }
+
+    const vault = this.clips;
+
+    if (vault !== undefined && badges.size > 0) {
+      await this.withLock(`${club}|clips`, async () => {
+        for (const clip of await vault.list(club).catch(() => [])) {
+          if (badges.has(clip.driver)) {
+            await vault.remove(club, clip.id).catch(() => undefined);
+            removed++;
+          }
+        }
+      });
+    }
+
+    this.log(`[forget] "${club}": a driver forgotten (${removed} item${removed === 1 ? "" : "s"} removed).`);
+    sendJson(response, 200, { ok: true, removed });
   }
 
   /** The laptop saying it has filed these asks, so the relay can let them go. An id already gone is not an error. */
