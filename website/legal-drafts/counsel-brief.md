@@ -1,5 +1,7 @@
 > **Brief for counsel. Not legal advice; prepared by the owner (with AI help) to save counsel's time.**
 > Written 15 Nov 2026 for HeatCaller LLC. Every fact below was checked against the code on branch `claude/children-privacy-ip` the same day, except where it says **[CHECK]**. Nothing marked "built" has run at a real club yet, and the relay changes are not deployed.
+>
+> **Updated 16 Nov 2026: cookies.** A cookie policy for the club's web pages was written, reviewed and corrected on a separate branch, `claude/inbox-themes-followups` (not yet merged with this one). The facts about cookies and browser storage in sections 3.2, 3.3 and 4.4 were checked against that branch. Section 7 has the new questions (19-26).
 
 # HeatCaller: brief for counsel
 
@@ -80,8 +82,9 @@ These run through our server, the "relay". The club decides what to record and p
   - HTTPS only.
   - Clubs' laptops publish with a per-club bearer token.
   - Drivers sign in with a badge code (an 80-bit keyed hash of their transponder) and an optional personal PIN, which is stored as a PBKDF2 hash, rate-limited and locked out after repeated failures.
-  - No cookies, no analytics, no ads, no third-party scripts.
-  - A strict content-security policy. Framing is allowed only for `youtube-nocookie.com`.
+  - One first-party cookie (`hg-theme`, the colour theme a visitor picks, one year). No ads, no third-party scripts, no tracking across sites.
+  - Browser storage for sign-in, visitors' choices and quick page drawing, and a service worker that keeps offline copies of the club's public pages. All of it is listed in the cookie policy (section 4.4).
+  - A strict content-security policy. Framing is allowed only for `youtube-nocookie.com`, and the player loads only when a visitor taps to watch.
 - **What it does:** serves each club's public pages (results, live race, schedule, standings, badges, check-in) and the drivers' private phone pages. It takes requests, sign-ups and shout-outs and holds them for the laptop. It forwards commentary prompts to Anthropic and speech to ElevenLabs with our keys, and sends Web Push alerts.
 - **Logs:**
   - A usage log (counts and timings only, no words or names) kept 24 months.
@@ -99,7 +102,7 @@ These run through our server, the "relay". The club decides what to record and p
 | ElevenLabs | Each spoken line's text, which can name drivers. We send `enable_logging=false`, honoured only on some plans | HeatCaller LLC's key, or the club's own |
 | Google FCM, Apple and Mozilla push services | Encrypted alert payloads naming the driver ("Mia K's race is next") | n/a (Web Push) |
 | GitHub | Update checks (no driver data) | HeatCaller LLC |
-| YouTube | The club's own stream, on the club's channel. The relay looks up a pasted video ID only | The club |
+| YouTube | The club's own stream, on the club's channel. The relay looks up a pasted video ID only. A visitor who taps to watch loads YouTube's privacy-enhanced player, which sends their IP address to Google and may store data in their browser | The club |
 | The club's email provider | PINs and night summaries to drivers' own addresses | The club |
 
 ### 3.4 How it is built
@@ -172,6 +175,30 @@ The code is written by the owner with heavy use of AI coding assistants (Claude 
   - Freeze dumps are excluded.
 - **Nothing from the laptop otherwise:** the desktop app has no telemetry, crash upload or analytics.
 
+### 4.4 In visitors' browsers (the cookie policy)
+
+The club's web pages keep a small amount in the browser of whoever opens them: drivers, parents, spectators. HeatCaller LLC decides what is kept. The policy is written for those visitors and served on each club's pages at `/c/<club>/cookies`, linked as **Cookies** in every page's footer. Its source is `relay/src/cookies.ts`.
+
+- **The cookie:** `hg-theme`, the visitor's colour theme, kept one year.
+- **Browser storage (about 45 named items):**
+  - **Signing in:**
+    - a driver's night code, kept until sign-out;
+    - the passes for Your details and the Garage, kept for the open tab only;
+    - on the check-in page, the PIN that was typed, for the open tab only;
+    - for managers, a key derived from their PIN (open tab only), plus an enrolment key and a random phone id.
+  - **Visitors' choices:** theme, text size, followed driver, alerts, card order and the Who wins? picks.
+  - **Keeping pages working:** copies of the relay's last answers, "already seen" markers, and a random voter id (stored only hashed on the relay).
+- **Offline copies:** the service worker keeps the club's public pages, never a driver's night, the Garage, sign-ups or the Manage page.
+- **Sent to the relay:**
+  - push addresses, when alerts are turned on;
+  - anonymous daily page counts (90 days);
+  - IP addresses, held in memory for 10 minutes at most for rate limits.
+- **Changed in the code after review:**
+  - a visit counter for the "add to home screen" prompt was removed;
+  - the list of a phone's clubs now records only clubs where a driver signed in on Me.
+- **Kept in step with the code:** a relay test reads the page code and fails if anything is stored under a name the policy does not list.
+- **The club's side:** Part 3 of the Terms (on that branch) points to the policy and sets out the club's duties. A change to the policy does not make clubs accept the Terms again.
+
 ## 5. What was decided and built for children (15 Nov 2026)
 
 Full detail is in `plans/children-privacy-and-ip-plan.md` (the status table) and `website/legal-drafts/driver-crew-children.md` (section 9).
@@ -217,6 +244,10 @@ All paths are in the repository.
 6. `website/legal-drafts/copyright-takedown-policy.md`: DMCA §512 policy and agent checklist.
 7. `website/legal-drafts/vendor-letters.md`: letters to ElevenLabs and Anthropic (not sent).
 8. `HeatCaller/HeatCaller/About.cs` (the header comment) and `Assets/Licences/LibVLC-plugins.txt`: open-source compliance.
+9. The cookie policy, on branch `claude/inbox-themes-followups`:
+   - `relay/src/cookies.ts`, the text served at `/c/<club>/cookies`;
+   - Part 3 of that branch's Terms, which covers the club's side;
+   - `website/legal-drafts/cookie-policy-questions.md`, which records what the first review changed and explains questions 19-26 in more detail.
 
 Retired, no review needed:
 - `beta-agreement.md`
@@ -230,11 +261,12 @@ Retired, no review needed:
    - an announcer name;
    - a 13-17's crew names;
    - push sign-ups;
-   - the badge-code sign-in.
+   - the badge-code sign-in;
+   - persistent identifiers from the club's web pages: the night code kept on the phone, the push address and the random voter id (section 4.4). Does each fall under "support for internal operations" (§312.5(c)(7))?
 
    If we are an operator, which of the security program (§312.8), retention policy (§312.10) and direct parental notice are required?
 2. **Parental consent.** Is the club's recorded "a parent or guardian agreed" tick, backed by the paper form in the memo's section 10, adequate for speaking a child's words on a public stream? Should the form also cover publicity?
-3. **Controller and processor.** Who is the controller and who is the processor for each flow (the club vs. HeatCaller LLC)? Do we need a data processing agreement with clubs, and with each vendor?
+3. **Controller and processor.** Who is the controller and who is the processor for each flow (the club vs. HeatCaller LLC)? Do we need a data processing agreement with clubs, and with each vendor? The cookie policy says HeatCaller LLC decides what the pages store in a browser, so that part is ours: is that right?
 4. **Age band default.** Is treating "age band not set" as under 13 the right default, and should check-in prompt for the age band of every junior?
 5. **Safeguarding.** Is Terms section 7.3's "the club runs its own safeguarding" allocation sound? Does anything in MAAPP-style guidance oblige us further? Do family links (made by the driver, never expiring) need a lapse?
 
@@ -258,7 +290,23 @@ Retired, no review needed:
 
 **General**
 17. **Liability.** Is limitation of liability to US$50, New York law and an as-is warranty enforceable as drafted for clubs outside New York? Should paid plans change it?
-18. **Outside the US.** For the UK, EU, Canada and Australia, what is the minimum before clubs there use the beta?
+18. **Outside the US.** For the UK, EU, Canada and Australia, what is the minimum before clubs there use the beta? The cookie policy tells visitors the relay is in the US: does the transfer need a named mechanism?
+
+**Cookies and browser storage** (detail in `cookie-policy-questions.md`)
+
+19. **Consent exemption.** The pages show no consent banner, on the basis that everything stored is needed for something the visitor asked for (UK PECR reg. 6, EU ePrivacy Art. 5(3)). Please confirm for the borderline items:
+    - the offline copies of public pages, which the service worker keeps on every visit;
+    - the "already seen" markers;
+    - the random voter id.
+
+    If any of them needs consent, what mechanism suits an audience that is mostly children?
+20. **UK Children's Code.** Is the policy's section on children clear enough for a child to understand, or is a separate child-friendly version needed?
+21. **Address and representative.** The policy gives "HeatCaller LLC, New York, USA" with no street address. Is a postal address required, and an EU or UK representative under Art. 27?
+22. **Legal basis wording.** The policy gives its reasons in plain words rather than citing GDPR Art. 6(1)(b) and (f). Is that enough?
+23. **Indemnity.** Part 3 sets out the club's duties under the cookie policy but has no indemnity. Should it have one during a free beta?
+24. **A public privacy notice.** The privacy notice (Part 2) is shown only in the app, so visitors can't read it. Should a version for drivers be published on the relay?
+25. **GPC.** The policy treats a Global Privacy Control signal as an opt-out of sale or sharing, which we never do. Is anything more needed under the state laws that require honouring it?
+26. **YouTube.** Is a notice needed at the moment of the tap that loads YouTube's player, beyond what the cookie policy says?
 
 ## 8. Already done, or the owner's to do (no counsel time needed)
 
@@ -274,5 +322,9 @@ Retired, no review needed:
 - upload the VLC source tarball and fill in its link;
 - sign the IP assignment;
 - name the security coordinator;
+- merge the cookie policy branch (`claude/inbox-themes-followups`) with this one. When merging:
+  - this branch's Terms need the Part 3 from that branch;
+  - the cookie policy needs a line for `hg-me-at-<club>` (the sign-in times behind the 30-day junior sign-in). The policy's test will fail until it has one;
+  - the policy's Alerts section must say push sign-ups expire after 180 days unused;
 - deploy the relay;
 - run a real club night.
