@@ -117,8 +117,65 @@ internal static class HangWatchdog
     /// </summary>
     public static void Stop() => _stopped = true;
 
+    /// <summary>
+    /// How long a freeze dump is kept (15 Nov 2026, privacy plan 2.4). A
+    /// dump holds every driver's name, email and contact in clear (see
+    /// DumpHoldsSecrets); two weeks is long enough to send one to whoever
+    /// is looking at the freeze, and no longer.
+    /// </summary>
+    internal static readonly TimeSpan KeepDumpsFor = TimeSpan.FromDays(14);
+
+    /// <summary>
+    /// Deletes freeze dumps in <paramref name="folder"/> last written more
+    /// than <see cref="KeepDumpsFor"/> before <paramref name="nowUtc"/>.
+    /// Returns how many went. Never throws: a dump still open, or a folder
+    /// that isn't there, is left for the next start.
+    /// </summary>
+    internal static int DeleteOldDumps(string folder, DateTime nowUtc)
+    {
+        var deleted = 0;
+
+        try
+        {
+            if (!Directory.Exists(folder))
+            {
+                return 0;
+            }
+
+            foreach (var file in new DirectoryInfo(folder).GetFiles("freeze-*.dmp", SearchOption.TopDirectoryOnly))
+            {
+                try
+                {
+                    if (nowUtc - file.LastWriteTimeUtc > KeepDumpsFor)
+                    {
+                        file.Delete();
+                        deleted++;
+                    }
+                }
+                catch
+                {
+                    // In use or gone - tried again on the next start.
+                }
+            }
+        }
+        catch
+        {
+            // A folder that can't be listed has nothing to tidy.
+        }
+
+        return deleted;
+    }
+
     private static void Run(Control window, Action<string> log)
     {
+        // On this thread, not the window's: a dump is hundreds of MB, and
+        // deleting a few should never hold up the app opening.
+        var gone = DeleteOldDumps(SessionLog.Folder, DateTime.UtcNow);
+        if (gone > 0)
+        {
+            Say(log, $"[watchdog] Deleted {Plural.Of(gone, "freeze dump", "freeze dumps")} older than {KeepDumpsFor.TotalDays:0} days - they hold drivers' details.");
+        }
+
         try
         {
             Watch(window, log);

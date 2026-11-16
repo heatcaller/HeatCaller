@@ -30,7 +30,10 @@ public sealed class BugHuntCloudBackupTests : IDisposable
 
         Directory.CreateDirectory(Local);
         var backup = Path.Combine(Local, AutoName(28));
-        File.WriteAllText(backup, "practice");
+
+        // Locked (15 Nov 2026, privacy plan 2.4): only a backup locked with
+        // the backup password goes to the cloud - see Privacy_BackupLockTests.
+        File.WriteAllBytes(backup, BackupCrypto.Magic.Concat("practice"u8.ToArray()).ToArray());
         return backup;
     }
 
