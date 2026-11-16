@@ -234,7 +234,10 @@ const refuse = (status: number, error: string): AskCheck => ({ ok: false, status
 // typed at the desk, not sent from a phone - a junior's, unless the club
 // has "Juniors can send notes from their phone" on (COPPA: a child's words
 // said in public need a parent's verified consent, which a tick is not).
-export function askFieldsFrom(kind: string, f: unknown, withPin: boolean, junior = false, notesOff = false): AskCheck {
+// `under13` (15 Nov 2026, children's privacy plan 2.1): driverme's crew
+// says this driver is under 13, or a junior with no age band yet - their
+// crew names are picked at the desk, never sent from a phone.
+export function askFieldsFrom(kind: string, f: unknown, withPin: boolean, junior = false, notesOff = false, under13 = false): AskCheck {
   if (typeof f !== "object" || f === null || Array.isArray(f)) {
     return refuse(400, "That request could not be read.");
   }
@@ -243,7 +246,7 @@ export function askFieldsFrom(kind: string, f: unknown, withPin: boolean, junior
 
   // `junior` is whether driverme's crew says this driver is under 18.
   if (kind === "crew") {
-    return crewAskFrom(input, withPin, junior, notesOff);
+    return crewAskFrom(input, withPin, junior, notesOff, under13);
   }
 
   if (kind === "pack") {
@@ -814,7 +817,10 @@ export function crewRude(text: string): boolean {
 
 const CREW_RUDE_WORDS = "Please pick something else - the desk would have to turn that down.";
 
-function crewAskFrom(input: Record<string, unknown>, withPin: boolean, junior: boolean, notesOff = false): AskCheck {
+/** Said to a phone that sent an under-13's crew names (15 Nov 2026). */
+export const CREW_UNDER13_NAMES = "Your crew's names are picked at the desk, with a parent there.";
+
+function crewAskFrom(input: Record<string, unknown>, withPin: boolean, junior: boolean, notesOff = false, under13 = false): AskCheck {
   if (!withPin) {
     return refuse(403, "Your crew needs your personal PIN - ask at the desk.");
   }
@@ -904,6 +910,13 @@ function crewAskFrom(input: Record<string, unknown>, withPin: boolean, junior: b
 
   const guardian = input["guardian"] === true;
 
+  // An under-13's crew names come only from the desk, with a parent there
+  // (15 Nov 2026, children's privacy plan 2.1). Voices and clearing a name
+  // are fine: neither puts a child's words on the PA.
+  if (under13 && ["pName", "tName"].some((name) => typeof out[name] === "string" && out[name] !== "")) {
+    return refuse(403, CREW_UNDER13_NAMES);
+  }
+
   // Notes the club takes only at the desk (a junior's, by default).
   if (notesOff && notes.some(([name]) => typeof out[name] === "string" && out[name] !== "")) {
     return refuse(403, "Your notes are filled in at the desk, with a parent there. Ask at the desk.");
@@ -938,6 +951,12 @@ export interface CrewVoice {
 /** driverme's optional crew, as the relay hands it to a phone (voices from the document's crewVoices). */
 export interface CrewDoc {
   readonly junior: boolean;
+  /**
+   * Under 13, or a junior with no age band (15 Nov 2026): crew names are
+   * picked at the desk. Only present when true. A crew from a laptop too
+   * old to send it counts a junior as under 13 - the strictest rules.
+   */
+  readonly under13?: true;
   /** False when this driver's notes are typed at the desk, not sent from a phone. */
   readonly notes: boolean;
   readonly principal: CrewMember;
@@ -1054,6 +1073,7 @@ export function crewFrom(value: unknown, voices: readonly CrewVoice[] = []): Cre
     car: cleanAskText(car, ASK_MAX_CREW_CAR),
     voices: voices.slice(0, CREW_MAX_VOICES),
     ...(v["repick"] === true ? { repick: true as const } : {}),
+    ...(v["under13"] === true || (junior && v["under13"] === undefined) ? { under13: true as const } : {}),
   };
 }
 

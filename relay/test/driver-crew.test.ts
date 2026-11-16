@@ -121,6 +121,25 @@ describe("notes typed at the desk (15 Nov 2026)", () => {
   });
 });
 
+describe("an under-13's crew names are picked at the desk (15 Nov 2026)", () => {
+  const refused = { ok: false, status: 403, error: "Your crew's names are picked at the desk, with a parent there." };
+
+  it("refuses a name, but not a voice, a cleared name, or a guardian's note", () => {
+    assert.deepEqual(askFieldsFrom("crew", { pName: "Turbo Tess" }, true, true, false, true), refused);
+    assert.deepEqual(askFieldsFrom("crew", { tName: "Gravel", pVoice: V1 }, true, true, false, true), refused);
+    assert.deepEqual(askFieldsFrom("crew", { pVoice: V2, tName: "" }, true, true, false, true), { ok: true, f: { pVoice: V2, tName: "" } });
+    assert.equal(askFieldsFrom("crew", { goal: "A clean race", guardian: true }, true, true, false, true).ok, true);
+    assert.equal(askFieldsFrom("crew", { pName: "Turbo Tess" }, true, true, false, false).ok, true, "13 to 17");
+  });
+
+  it("reads under13 off driverme's crew, a junior with none counting as under 13", () => {
+    assert.equal(crewFrom(crew({ junior: true, under13: true }))?.under13, true);
+    assert.equal(crewFrom(crew({ junior: true }))?.under13, true, "an older laptop: the strictest rules");
+    assert.equal("under13" in (crewFrom(crew({ junior: true, under13: false })) ?? {}), false);
+    assert.equal("under13" in (crewFrom(crew()) ?? {}), false, "an adult");
+  });
+});
+
 describe("driverme's crew", () => {
   it("drops a crew that will not read, whole", () => {
     assert.equal(crewFrom(undefined), undefined);
@@ -202,7 +221,7 @@ describe("a crew ask through the relay", () => {
   });
 
   it("a junior's notes need the tick, read from the stored driverme", async () => {
-    await withCrew(crew({ junior: true }));
+    await withCrew(crew({ junior: true, under13: false }));
     const pass = await samPass(h);
 
     const no = await ask({ id: SAM, kind: "crew", pass, f: { goal: "A clean race", junior: false } });
@@ -211,6 +230,17 @@ describe("a crew ask through the relay", () => {
 
     assert.equal((await ask({ id: SAM, kind: "crew", pass, f: { pName: "Turbo Tess" } })).status, 200, "names need no tick");
     assert.equal((await ask({ id: SAM, kind: "crew", pass, f: { goal: "A clean race", guardian: true } })).status, 200);
+  });
+
+  it("an under-13's names are refused, read from the stored driverme; a voice is not", async () => {
+    await withCrew(crew({ junior: true, under13: true }));
+    const pass = await samPass(h);
+
+    const no = await ask({ id: SAM, kind: "crew", pass, f: { pName: "Turbo Tess", under13: false } });
+    assert.equal(no.status, 403);
+    assert.equal(no.body.error, "Your crew's names are picked at the desk, with a parent there.");
+
+    assert.equal((await ask({ id: SAM, kind: "crew", pass, f: { pVoice: V2 } })).status, 200);
   });
 
   it("is turned away when the club is not offering crews", async () => {
@@ -400,7 +430,7 @@ describe("My crew on the phone", () => {
   });
 
   it("a junior: the junior hint, the parent line, and notes only with the tick", async () => {
-    const page = await openPage(meDoc({ crew: { ...crew({ junior: true }), voices: VOICES } }), true);
+    const page = await openPage(meDoc({ crew: { ...crew({ junior: true, under13: false }), voices: VOICES } }), true);
     const body = sheet(page);
     assert.match(body.textContent, /Make one up - not Mum, Dad or anyone's real name\./);
     assert.match(body.textContent, /A parent or guardian needs to send notes\./);
@@ -417,6 +447,20 @@ describe("My crew on the phone", () => {
     page.button(body, /^Send my crew$/)!.click();
     await page.settle();
     assert.deepEqual(crewAsks(page)[0]?.body["f"], { goal: "A clean race", guardian: true });
+  });
+
+  it("an under-13: no name boxes, one line why, and a voice pick still sends", async () => {
+    const page = await openPage(meDoc({ crew: { ...crew({ junior: true, under13: true }), voices: VOICES } }), true);
+    const body = sheet(page);
+    assert.match(body.textContent, /Your crew's names are picked at the desk, with a parent there\./);
+    assert.equal(body.find((n) => n.tagName === "LABEL" && /^(Team Principal|Technical Lead) name/.test(n.textContent)).length, 0);
+
+    const tech = field(body, /^Technical Lead voice/);
+    tech.value = V2;
+    tech.fire("change");
+    page.button(body, /^Send my crew$/)!.click();
+    await page.settle();
+    assert.deepEqual(crewAsks(page)[0]?.body["f"], { tVoice: V2 });
   });
 
   it("says when the club changed voices", async () => {

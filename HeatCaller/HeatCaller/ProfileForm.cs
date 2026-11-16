@@ -1360,6 +1360,7 @@ public sealed class ProfileForm : Form
             // edit must never wipe a signed waiver or a membership.
             WaiverSignedOn = Result.WaiverSignedOn,
             IsJunior = Result.IsJunior,
+            JuniorAge = Result.JuniorAge,
             WaiverGuardian = Result.WaiverGuardian ?? string.Empty,
             MembershipNumber = Result.MembershipNumber ?? string.Empty,
             MembershipExpires = Result.MembershipExpires,

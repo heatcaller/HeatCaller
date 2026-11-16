@@ -25,6 +25,14 @@ internal sealed partial class DriverRequestDesk
     /// <summary>The notes among them - what a junior may only send with a parent (plan 5.2).</summary>
     internal static readonly string[] CrewNoteFields = { "goal", "thanks", "story" };
 
+    /// <summary>The names among them - what an under-13 may not send from a phone at all (15 Nov 2026).</summary>
+    internal static readonly string[] CrewNameFields = { "pName", "tName" };
+
+    /// <summary>Why the desk can't apply an under-13's crew names from a phone (15 Nov 2026).</summary>
+    internal const string Under13NamesRefusal =
+        "An under-13's crew names are picked at the desk, with a parent there, not from a phone. Decline it, "
+        + "and type them on their profile. (No age band set counts as under 13 - set it in Papers.)";
+
     /// <summary>
     /// The voice a phone's key means now, or null when it is not one drivers
     /// may pick (hidden, reserved, another engine, or never listed). Set by
@@ -281,6 +289,17 @@ internal sealed partial class DriverRequestDesk
                 refusal = $"\"{typed}\" isn't a name the announcer can say - letters, spaces, hyphens and apostrophes only. Decline it.";
                 return false;
             }
+        }
+
+        // AN UNDER-13'S CREW NAMES ARE PICKED AT THE DESK (15 Nov 2026,
+        // children's privacy plan 2.1): never from a phone, with a parent
+        // there. A voice pick is still fine, and so is clearing a name. A
+        // junior with no age band counts as under 13 (TreatAsUnder13). The
+        // relay refuses these too; this is for an ask sent before it did.
+        if (profile.TreatAsUnder13 && CrewNameFields.Any(k => request.Text(k).Length > 0))
+        {
+            refusal = Under13NamesRefusal;
+            return false;
         }
 
         if (profile.IsJunior && CrewNoteFields.Any(k => request.Text(k).Length > 0))

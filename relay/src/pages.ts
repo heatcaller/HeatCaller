@@ -17200,9 +17200,10 @@ function crewNote(parent, title, hint, value, max) {
 }
 
 // One role: a name box, a voice list, and Play for the voice picked.
-function crewRole(parent, title, role, junior) {
+// namesHere false (an under-13, 15 Nov 2026): no name box - picked at the desk.
+function crewRole(parent, title, role, junior, namesHere = true) {
   const m = crewMember(role);
-  const name = textField(parent, title + ' name',
+  const name = !namesHere ? null : textField(parent, title + ' name',
     junior ? "Make one up - not Mum, Dad or anyone's real name." : "Make one up - not a real person's name.", m.name, 24, false);
 
   const label = el('label', 'f', title + ' voice');
@@ -17257,8 +17258,13 @@ function crewForm(form) {
 
   if (c.repick === true) form.appendChild(el('p', 'when', "Your club changed voices - pick your crew's voice again."));
 
-  const p = crewRole(form, 'Team Principal', 'principal', junior);
-  const t = crewRole(form, 'Technical Lead', 'tech', junior);
+  // An under-13's crew names are picked at the desk, with a parent there
+  // (15 Nov 2026, children's privacy plan 2.1): no name boxes, just voices.
+  const namesHere = c.under13 !== true;
+  if (!namesHere) form.appendChild(el('p', 'when', "Your crew's names are picked at the desk, with a parent there."));
+
+  const p = crewRole(form, 'Team Principal', 'principal', junior, namesHere);
+  const t = crewRole(form, 'Technical Lead', 'tech', junior, namesHere);
 
   // Notes typed at the desk, not from a phone (15 Nov 2026): a junior's,
   // unless the club takes them from phones. No boxes, and one line why.
@@ -17282,8 +17288,8 @@ function crewForm(form) {
 
   const send = tapButton('Send my crew', 'go', async () => {
     const now = {
-      pName: cleanText(p.name.value), pVoice: String(p.pick.value || ''),
-      tName: cleanText(t.name.value), tVoice: String(t.pick.value || ''),
+      pName: p.name ? cleanText(p.name.value) : p.base.name, pVoice: String(p.pick.value || ''),
+      tName: t.name ? cleanText(t.name.value) : t.base.name, tVoice: String(t.pick.value || ''),
       goal: goal ? cleanText(goal.value) : cleanText(c.goal), thanks: thanks ? cleanText(thanks.value) : cleanText(c.thanks), story: car ? cleanText(car.value) : cleanText(c.car),
     };
     const f = {};

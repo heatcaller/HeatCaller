@@ -8145,7 +8145,7 @@ export class Relay {
       ? crewFrom((await this.driverDocOf(club, DRIVER_ME_CHANNEL))?.drivers.get(id)?.["crew"])
       : undefined;
 
-    const check = askFieldsFrom(kind, body["f"], withPin, crew?.junior === true, crew?.notes === false);
+    const check = askFieldsFrom(kind, body["f"], withPin, crew?.junior === true, crew?.notes === false, crew?.under13 === true);
 
     if (!check.ok) {
       sendJson(response, check.status, { ok: false, error: check.error });

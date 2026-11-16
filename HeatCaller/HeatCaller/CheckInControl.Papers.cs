@@ -85,7 +85,7 @@ public sealed partial class CheckInControl
 
         profile = onFile;
 
-        var before = (profile.WaiverSignedOn, profile.IsJunior, profile.WaiverGuardian, profile.MembershipNumber, profile.MembershipExpires);
+        var before = (profile.WaiverSignedOn, profile.IsJunior, profile.JuniorAge, profile.WaiverGuardian, profile.MembershipNumber, profile.MembershipExpires);
 
         form.WriteTo(profile);
         _profiles.Upsert(profile);
@@ -95,7 +95,7 @@ public sealed partial class CheckInControl
         {
             if (_profiles.Get(transponder) is { } current)
             {
-                (current.WaiverSignedOn, current.IsJunior, current.WaiverGuardian, current.MembershipNumber, current.MembershipExpires) = before;
+                (current.WaiverSignedOn, current.IsJunior, current.JuniorAge, current.WaiverGuardian, current.MembershipNumber, current.MembershipExpires) = before;
                 _profiles.Upsert(current);
             }
 
@@ -179,6 +179,12 @@ internal sealed class PapersForm : Form
     private readonly DateTimePicker _dtpWaiver = new() { Format = DateTimePickerFormat.Short, Width = 130 };
     private readonly CheckBox _chkJunior = new ThemedCheckBox();
     private readonly TextBox _txtGuardian = new() { Width = 220 };
+
+    // A junior's age band (15 Nov 2026, children's privacy plan 2.1): neither
+    // picked is NotSet, which is treated as under 13. See DriverProfile.TreatAsUnder13.
+    private readonly RadioButton _rdoUnder13 = new ThemedRadioButton { Text = "Under 13", AutoSize = true };
+    private readonly RadioButton _rdoTeen = new ThemedRadioButton { Text = "13-17", AutoSize = true };
+
     private readonly TextBox _txtNumber = new() { Width = 220 };
     private readonly CheckBox _chkExpires = new ThemedCheckBox();
     private readonly DateTimePicker _dtpExpires = new() { Format = DateTimePickerFormat.Short, Width = 130 };
@@ -213,6 +219,11 @@ internal sealed class PapersForm : Form
         _txtGuardian.Enabled = _chkJunior.Checked;
         _chkJunior.CheckedChanged += (_, _) => _txtGuardian.Enabled = _chkJunior.Checked;
 
+        _rdoUnder13.Checked = profile.IsJunior && profile.JuniorAge == JuniorAge.Under13;
+        _rdoTeen.Checked = profile.IsJunior && profile.JuniorAge == JuniorAge.ThirteenToSeventeen;
+        _rdoUnder13.Enabled = _rdoTeen.Enabled = _chkJunior.Checked;
+        _chkJunior.CheckedChanged += (_, _) => _rdoUnder13.Enabled = _rdoTeen.Enabled = _chkJunior.Checked;
+
         _txtNumber.Text = profile.MembershipNumber;
 
         _chkExpires.Text = "Runs out on";
@@ -228,6 +239,7 @@ internal sealed class PapersForm : Form
         {
             grid.AddRow("Waiver:", FieldGrid.Inline(_chkWaiver, _dtpWaiver));
             grid.AddField(_chkJunior);
+            grid.AddRow("Age:", FieldGrid.Inline(_rdoUnder13, _rdoTeen));
             grid.AddRow("Guardian:", _txtGuardian);
         }
 
@@ -250,7 +262,7 @@ internal sealed class PapersForm : Form
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
-        DialogFit.Keep(this, page, width: 500, height: 360);
+        DialogFit.Keep(this, page, width: 500, height: 390);
     }
 
     /// <summary>
@@ -344,6 +356,10 @@ internal sealed class PapersForm : Form
     {
         profile.WaiverSignedOn = _chkWaiver.Checked ? _dtpWaiver.Value.Date : null;
         profile.IsJunior = _chkJunior.Checked;
+        profile.JuniorAge = !_chkJunior.Checked ? JuniorAge.NotSet
+            : _rdoUnder13.Checked ? JuniorAge.Under13
+            : _rdoTeen.Checked ? JuniorAge.ThirteenToSeventeen
+            : JuniorAge.NotSet;
         profile.WaiverGuardian = _chkJunior.Checked ? _txtGuardian.Text.Trim() : string.Empty;
         profile.MembershipNumber = _txtNumber.Text.Trim();
         profile.MembershipExpires = _chkExpires.Checked ? _dtpExpires.Value.Date : null;

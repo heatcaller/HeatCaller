@@ -18,6 +18,9 @@ public static class DeskPapers
     /// <summary>How long a signed waiver lasts when the club says nothing else.</summary>
     public const int DefaultWaiverMonths = 12;
 
+    /// <summary>The desk's warning for a junior with no age band (15 Nov 2026).</summary>
+    public const string NoAgeBand = "Set their age band - under 13s get the strictest rules";
+
     /// <summary>
     /// What's not in order for this driver tonight, in plain words, or an
     /// empty list when nothing is (or the club checks neither).
@@ -44,6 +47,14 @@ public static class DeskPapers
             else if (profile.IsJunior && string.IsNullOrWhiteSpace(profile.WaiverGuardian))
             {
                 problems.Add("Junior: no guardian named on the waiver");
+            }
+
+            // A junior with no age band (15 Nov 2026, children's privacy plan
+            // 2.1) gets the under-13 rules until the desk picks one. Beside
+            // the Junior tick in the papers window, so asked for here too.
+            if (profile.IsJunior && profile.JuniorAge == JuniorAge.NotSet)
+            {
+                problems.Add(NoAgeBand);
             }
         }
 

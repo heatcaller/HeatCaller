@@ -808,6 +808,10 @@ internal static class DriverLive
         var one = new Dictionary<string, object?>
         {
             ["junior"] = profile.IsJunior,
+            // Under 13, or a junior with no age band yet (15 Nov 2026,
+            // children's privacy plan 2.1): the phone hides the crew name
+            // boxes and the relay refuses a name - they're picked at the desk.
+            ["under13"] = profile.TreatAsUnder13,
             ["principal"] = new Dictionary<string, object?>
             {
                 ["name"] = DriverCrew.Clean(profile.CrewPrincipalName),

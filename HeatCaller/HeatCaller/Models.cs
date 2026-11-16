@@ -281,6 +281,25 @@ public sealed class DriverProfile
     /// <summary>Who signed a junior's waiver for them. Blank for an adult, or a junior's not signed yet.</summary>
     public string WaiverGuardian { get; set; } = string.Empty;
 
+    // --- A junior's age band (15 Nov 2026, children's privacy plan 2.1) ---
+    //
+    // WHY: IsJunior says "under 18" and nothing more, so the stricter rules
+    // for under-13s (US COPPA) could not be applied. The desk now picks a
+    // band beside the Junior tick. No date of birth is kept - only the band.
+    // IsJunior stays the stored "under 18" flag every other check reads.
+    // Old profiles have no band and load as NotSet, which is treated as
+    // under 13: the strictest rules until the desk says otherwise.
+
+    /// <summary>A junior's age band. Only matters while <see cref="IsJunior"/> is ticked.</summary>
+    public JuniorAge JuniorAge { get; set; }
+
+    /// <summary>
+    /// Whether the under-13 rules apply: a junior whose band is Under13 or
+    /// not set yet. The one place that rule lives - read this, not the band.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool TreatAsUnder13 => IsJunior && JuniorAge != JuniorAge.ThirteenToSeventeen;
+
     /// <summary>Their membership number - the club's, or a national body's for its racing insurance. Blank for none.</summary>
     public string MembershipNumber { get; set; } = string.Empty;
 
@@ -673,4 +692,21 @@ public sealed class GatePassEvent
     /// supply one, in which case AnnouncementService derives it itself.
     /// </summary>
     public long? LapTimeMs { get; init; }
+}
+
+/// <summary>
+/// A junior's age band (15 Nov 2026, children's privacy plan 2.1). Saved as
+/// its number, so the order must not change: NotSet is 0, what an old
+/// profile without a band loads as. See DriverProfile.TreatAsUnder13.
+/// </summary>
+public enum JuniorAge
+{
+    /// <summary>Not picked yet - treated as under 13, the strictest rules.</summary>
+    NotSet = 0,
+
+    /// <summary>Under 13.</summary>
+    Under13 = 1,
+
+    /// <summary>13 to 17.</summary>
+    ThirteenToSeventeen = 2,
 }

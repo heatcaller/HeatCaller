@@ -267,11 +267,11 @@ public sealed class DriverCrewTests : IDisposable
 
         public DriverRequestDesk Desk { get; }
 
-        public World(bool junior = false, bool juniorNotesFromPhone = true)
+        public World(bool junior = false, bool juniorNotesFromPhone = true, JuniorAge age = JuniorAge.NotSet)
         {
             Settings.JuniorNotesFromPhone = juniorNotesFromPhone;
             // Upsert: a second world in one test loads the first one's drivers from disk.
-            Profiles.Upsert(new DriverProfile { Transponder = "100", DriverName = "Sam Parker", IsJunior = junior });
+            Profiles.Upsert(new DriverProfile { Transponder = "100", DriverName = "Sam Parker", IsJunior = junior, JuniorAge = age });
             Profiles.Upsert(new DriverProfile { Transponder = "500", DriverName = "Bill Hart" });
 
             Desk = new DriverRequestDesk(Store, Settings, Profiles, BatteryPackStore.Load(), SessionHistoryStore.FromSessions(Array.Empty<SessionRecord>()),
@@ -572,5 +572,53 @@ public sealed class DriverCrewTests : IDisposable
         Assert.Equal(false, DriverLive.CrewOf(new DriverProfile { Transponder = "1", IsJunior = true }, crew)["notes"]);
         Assert.False(DriverLive.CrewOf(new DriverProfile { Transponder = "2" }, crew).ContainsKey("notes"));
         Assert.False(DriverLive.CrewOf(new DriverProfile { Transponder = "3", IsJunior = true }, crew with { JuniorNotesFromPhone = true }).ContainsKey("notes"));
+    }
+
+    // --- Under-13s' crew names: desk only (15 Nov 2026, children's privacy plan 2.1) ---
+
+    [Fact]
+    public void The_phone_is_told_who_counts_as_under_13_with_no_band_counting()
+    {
+        var crew = new DriverLive.CrewForPhone(VoiceEngine.ElevenLabs, Array.Empty<CrewVoiceOption>());
+
+        Assert.Equal(true, DriverLive.CrewOf(new DriverProfile { Transponder = "1", IsJunior = true }, crew)["under13"]);
+        Assert.Equal(true, DriverLive.CrewOf(new DriverProfile { Transponder = "2", IsJunior = true, JuniorAge = JuniorAge.Under13 }, crew)["under13"]);
+        Assert.Equal(false, DriverLive.CrewOf(new DriverProfile { Transponder = "3", IsJunior = true, JuniorAge = JuniorAge.ThirteenToSeventeen }, crew)["under13"]);
+        Assert.Equal(false, DriverLive.CrewOf(new DriverProfile { Transponder = "4", JuniorAge = JuniorAge.Under13 }, crew)["under13"]);
+    }
+
+    [Theory]
+    [InlineData(JuniorAge.NotSet)]
+    [InlineData(JuniorAge.Under13)]
+    public void An_under_13s_crew_names_from_a_phone_are_refused_but_a_voice_or_a_cleared_name_is_not(JuniorAge age)
+    {
+        var w = new World(junior: true, age: age);
+        var named = w.File(1, r => r.Texts["tName"] = "Turbo Tess");
+
+        Assert.False(w.Desk.ApplyCrew(named, out var refusal));
+        Assert.Equal(DriverRequestDesk.Under13NamesRefusal, refusal);
+        Assert.Equal(string.Empty, w.Profiles.Get("100")!.CrewTechName);
+
+        // The desk declines it, so the next asks don't take it in.
+        w.Store.Answer(named.Id, DriverAsk.Declined, string.Empty, DateTime.UtcNow);
+
+        var rachel = Pick(VoiceEngine.ElevenLabs, "rachel-id", "Rachel");
+        w.Offered[DriverCrew.KeyOf(rachel)] = rachel;
+        var voice = w.File(2, r => r.Texts["pVoice"] = DriverCrew.KeyOf(rachel));
+        Assert.Equal(1, w.Desk.FileWaitingCrewVoices());
+        Assert.Equal(DriverAsk.Approved, w.Store.Get(voice.Id)!.State);
+
+        var cleared = w.File(3, r => r.Texts["pName"] = string.Empty);
+        Assert.True(w.Desk.ApplyCrew(cleared, out refusal), refusal);
+    }
+
+    [Fact]
+    public void A_13_to_17s_crew_names_still_wait_for_the_desk_as_before()
+    {
+        var w = new World(junior: true, age: JuniorAge.ThirteenToSeventeen);
+        var named = w.File(1, r => r.Texts["tName"] = "Turbo Tess");
+
+        Assert.True(w.Desk.ApplyCrew(named, out var refusal), refusal);
+        Assert.Equal("Turbo Tess", w.Profiles.Get("100")!.CrewTechName);
     }
 }
