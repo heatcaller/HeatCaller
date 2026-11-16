@@ -9,6 +9,7 @@ namespace HeatCaller.Tests;
 /// junior's "On stream: Not at all" keeps their name off the stream, the
 /// captions, listen-along and the preview (plan 4.2).
 /// </summary>
+[Collection(PublicPrivacyCurrentCollection.Name)]
 public sealed class ChildrensPrivacy_JuniorsTests : IDisposable
 {
     private readonly TempAppData _data = new();
@@ -297,4 +298,16 @@ public sealed class ChildrensPrivacy_JuniorsTests : IDisposable
         Assert.Empty(PublicPrivacy.Changed(before, after));
         Assert.Equal(before.FlaggedFingerprint, after.FlaggedFingerprint);
     }
+}
+
+/// <summary>
+/// Every test class that sets PublicPrivacy.Current, run one at a time
+/// (15 Nov 2026): it is one static register, and two classes setting it in
+/// parallel made a listen-along test see the other's drivers - it passed
+/// alone and failed once in a full run.
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class PublicPrivacyCurrentCollection
+{
+    public const string Name = "PublicPrivacy.Current";
 }

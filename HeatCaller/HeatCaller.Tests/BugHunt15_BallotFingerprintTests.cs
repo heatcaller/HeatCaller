@@ -6,6 +6,7 @@ namespace HeatCaller.Tests;
 /// on it. A driver ticked "initials only online" (or renamed) while a vote
 /// was open stayed on the relay's ballot under the old full name.
 /// </summary>
+[Collection(PublicPrivacyCurrentCollection.Name)]
 public sealed class BugHunt15_BallotFingerprintTests
 {
     private const string Key = "0123456789abcdef0123456789abcdef";
