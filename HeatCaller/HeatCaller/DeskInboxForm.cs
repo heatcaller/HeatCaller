@@ -230,6 +230,9 @@ internal sealed partial class DeskInboxForm : Form
 
         Controls.Add(_page);
 
+        // Now the lists have their holders on the page to hide.
+        ShowDone();
+
         CancelButton = btnClose;
 
         AppTheme.ApplyRecursively(this);
@@ -379,6 +382,27 @@ internal sealed partial class DeskInboxForm : Form
 
         _lblEmpty.Visible = shown.Count == 0;
         _grid.Visible = shown.Count > 0;
+        _anyWaitingShown = shown.Count > 0;
+        ShowWaitingList();
+    }
+
+    /// <summary>
+    /// An empty waiting list gives its height up to the Done list when that
+    /// is showing. With neither, it keeps it, so Close stays at the bottom.
+    /// </summary>
+    private void ShowWaitingList()
+    {
+        // Not _grid.Visible: that reads false while its holder is hidden.
+        if (_grid.Parent is { } holder)
+        {
+            var show = _anyWaitingShown || !_showDone;
+
+            if (holder.Visible != show)
+            {
+                holder.Visible = show;
+                _page.PerformLayout();
+            }
+        }
     }
 
     /// <summary>The width under which the list drops its Note column, at the text size in use.</summary>

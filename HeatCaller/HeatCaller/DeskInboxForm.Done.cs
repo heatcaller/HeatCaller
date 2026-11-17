@@ -28,6 +28,9 @@ internal sealed partial class DeskInboxForm
     private readonly ButtonBar _doneButtons = new();
 
     private bool _showDone;
+
+    /// <summary>The waiting list has rows in view - see ShowWaitingList.</summary>
+    private bool _anyWaitingShown;
     private bool _loadingRules;
 
     private void BuildRules()
@@ -100,8 +103,17 @@ internal sealed partial class DeskInboxForm
 
     private void ShowDone()
     {
-        _gridDone.Visible = _showDone;
+        // The holder, not the grid: a hidden grid left its empty holder
+        // keeping half the spare height (FillPage.AddFill).
+        // Before the page is built there is no holder yet; the constructor
+        // calls this again once there is.
+        if (_gridDone.Parent is { } holder)
+        {
+            holder.Visible = _showDone;
+        }
+
         _doneButtons.Visible = _showDone;
+        ShowWaitingList();
         FillDone();
         _page.PerformLayout();
     }
