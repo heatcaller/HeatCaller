@@ -48,24 +48,64 @@ describe("Me's Tonight under the four tabs", () => {
   });
 });
 
-describe("tonight's car on the moment card", () => {
-  it("is a chip beside the kicker, with the car's name", async () => {
+// Option C of relay/mockups/me-hero-car-chip.html (16 Nov 2026).
+describe("Up next's car bar", () => {
+  const bar = (page: FakePage) => page.get("me-moment").find((n) => n.tagName === "BUTTON" && /\bme-carbar\b/.test(n.className))[0];
+
+  it("names tonight's car and says no setup is logged, with Log setup to fix it", async () => {
     const page = await open();
-    const chip = page.button(page.get("me-moment"), /^Stinger 2$/);
-    assert.ok(chip, "the chip is there");
-    assert.match(chip!.className, /\bme-chip\b/);
-    assert.equal(chip!.parent?.className, "me-hero-top");
+    const b = bar(page);
+    assert.ok(b, "the bar is there");
+    assert.match(b!.textContent, /^Racing tonightStinger 2No setup todayLog setup$/);
+    assert.match(b!.className, /\bwait\b/);
+    assert.equal(b!.getAttribute("aria-label"), "Racing tonight: Stinger 2. No setup today. Log setup");
   });
 
-  it("opens Garage", async () => {
+  it("goes to Log setup in Garage while none is logged", async () => {
     const page = await open();
-    page.button(page.get("me-moment"), /^Stinger 2$/)!.click();
+    // meLogSetup itself finds the Garage's Log setup button, which this fake
+    // page cannot look for; that the bar calls it is the point here.
+    page.eval("meLogged = 0; meLogSetup = () => { meLogged++; }; meMoment();");
+    bar(page)!.click();
+    assert.equal(page.eval("meLogged"), 1);
+  });
+
+  it("says Garage once a setup is logged, and opens it", async () => {
+    const page = await open();
+    page.eval("meSetupTonight = true; meMoment();");
+    const b = bar(page)!;
+    assert.match(b.textContent, /Setup logged today.*Garage$/);
+    assert.match(b.className, /\bok\b/);
+    b.click();
     assert.equal(page.eval("meSpace"), "garage");
+  });
+
+  it("took the Setup tile's place: Pack and Transponder, two across, and no chip", async () => {
+    const page = await open();
+    const hero = page.get("me-moment");
+    const row = hero.find((n) => /\bme-acts\b/.test(n.className))[0]!;
+    assert.equal(row.className, "me-acts two");
+    assert.doesNotMatch(row.textContent, /Setup/);
+    assert.equal(hero.find((n) => /\bme-chip\b/.test(n.className)).length, 0);
   });
 
   it("is not there with no car racing tonight", async () => {
     const page = await open();
     page.eval("meGarage = { cars: [{ id: 'c1', name: 'Stinger 2', tonight: false }], packs: [] }; meMoment();");
-    assert.equal(page.button(page.get("me-moment"), /^Stinger 2$/), undefined);
+    assert.equal(bar(page), undefined);
+  });
+});
+
+describe("tonight's car on the other moment cards", () => {
+  it("is a chip beside the kicker that opens Garage", async () => {
+    const page = await open();
+    // Your night: races filed, nothing next.
+    page.eval(`live = { at: '2026-10-22T19:00:00Z' };
+      night = { races: [{ label: 'Q1 Heat 1', laps: 12, bestMs: 14218, at: '2026-10-22T17:00:00Z' }] }; meMoment();`);
+    const chip = page.button(page.get("me-moment"), /^Stinger 2$/);
+    assert.ok(chip, "the chip is there");
+    assert.equal(chip!.parent?.className, "me-hero-top");
+    chip!.click();
+    assert.equal(page.eval("meSpace"), "garage");
   });
 });
