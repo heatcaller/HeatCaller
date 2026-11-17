@@ -679,6 +679,19 @@ internal sealed class RoomVote
         }
     }
 
+    /// <summary>How long the open vote has before it stops itself (<see cref="LongestOpen"/>), or null when none is taking votes.</summary>
+    internal TimeSpan? TimeLeft
+    {
+        get
+        {
+            lock (_gate)
+            {
+                var now = DateTime.UtcNow;
+                return TakingAt(now) && _file.Current is { } poll ? LongestOpen - (now - poll.OpenedUtc) : null;
+            }
+        }
+    }
+
     /// <summary>The race the open vote is about, by its label, or null when none is open.</summary>
     internal string? OnRace
     {

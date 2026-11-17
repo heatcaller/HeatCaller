@@ -23,6 +23,7 @@ internal sealed partial class DeskInboxForm
     /// <summary>A vote on anything (15 Nov 2026): the desk's own question and answers.</summary>
     private readonly Button _btnCustomVote = new() { Text = "New vote" };
     private readonly DataGridView _tally = new();
+    private readonly TallyBars _tallyBars = new();
 
     /// <summary>The race the card offers to open a vote on, as Race Control last said.</summary>
     private VoteTarget? _target;
@@ -55,10 +56,14 @@ internal sealed partial class DeskInboxForm
         {
             _tally.Visible = !_tally.Visible;
             _btnTally.Text = _tally.Visible ? "Hide the tally" : "Show the tally";
-            _page.PerformLayout();
+            _votePop?.Fit();
         };
 
         _voteCard.Add(_lblVote, gapBelow: UiLayout.HintGap);
+
+        // The tally as bars, moving as the votes come in - the full table
+        // is still under Show the tally.
+        _voteCard.Add(_tallyBars, gapBelow: UiLayout.RowGap);
         _voteCard.Add(_lblVoteWhere, gapBelow: UiLayout.HintGap);
         _voteCard.Add(new ButtonBar().With(_btnOpenVote, _btnCustomVote, _btnStopVote, _btnTally), gapBelow: UiLayout.HintGap);
         _voteCard.Add(_tally, gapBelow: 0);
@@ -119,6 +124,9 @@ internal sealed partial class DeskInboxForm
             _lblVoteWhere.Text = where;
         }
 
+        // Bars only while a vote has answers to show.
+        _tallyBars.Show(vote.OnRace is { Length: > 0 } ? standings : Array.Empty<VoteStanding>());
+
         var firstHeader = custom ? "Answer" : "Driver";
 
         if (_tally.Columns["driver"] is { } first && first.HeaderText != firstHeader)
@@ -160,7 +168,43 @@ internal sealed partial class DeskInboxForm
         // with no race picked or nobody on the grid.
         _btnOpenVote.Enabled = canOpen;
         _btnStopVote.Enabled = taking;
+
+        ShowVoteOnTopBar(vote, taking);
+
+        if (_votePop is { IsOpen: true } pop)
+        {
+            pop.Fit();
+        }
     }
+
+    /// <summary>
+    /// The top bar's vote button says how the vote stands, so its card need
+    /// not be open to know - in the main colour, with the time it has left,
+    /// while the room is voting.
+    /// </summary>
+    private void ShowVoteOnTopBar(RoomVote vote, bool taking)
+    {
+        // Docked, in fewer words, so it sits beside Rules.
+        var docked = _body is { Wide: false };
+        var left = vote.TimeLeft is { } time ? $"{(int)time.TotalMinutes}:{time.Seconds:00}" : null;
+        var text = taking
+            ? left is null ? "Vote open" : docked ? $"Vote · {left}" : $"Vote open · {left} left"
+            : vote.OnRace is { Length: > 0 } ? "Vote · closed" : docked ? "Vote" : "Room vote";
+
+        if (_btnVoteTop.Text != text)
+        {
+            _btnVoteTop.Text = text;
+            FitTopBar();
+        }
+
+        if (_voteTopLit != taking)
+        {
+            _voteTopLit = taking;
+            AppTheme.StyleButton(_btnVoteTop, taking ? AppTheme.ButtonKind.Primary : AppTheme.ButtonKind.Secondary);
+        }
+    }
+
+    private bool _voteTopLit;
 
     private void OpenVoting()
     {
