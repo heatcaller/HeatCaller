@@ -610,8 +610,31 @@ public sealed partial class RaceControlControl
         return "Nothing is on air to skip.";
     }
 
-    /// <summary>Skip held for a second: the whole recap show ends, as the Broadcast window's Skip ends it.</summary>
-    private void SkipWholeShow() => SkipWhatIsOnAir();
+    /// <summary>
+    /// Skip held for a second: the whole recap show ends, as the Broadcast
+    /// window's Skip ends it - or, while On Air is opening the race, On Air
+    /// is skipped and the race staged, as holding 0 does.
+    ///
+    /// WHY (16 Nov 2026, Asher: "the skip flag button doesn't skip the
+    /// playing ai segment. You hold it until it's supposed to skip and it
+    /// goes back to playing"). On Air's opening, driver introductions and
+    /// pit lane are not a recap show or a segment block, so the hold went to
+    /// SkipWhatIsOnAir, which said "none is on air" in the log and let the
+    /// opening play on - four holds in a row on the night it was found.
+    /// </summary>
+    private void SkipWholeShow()
+    {
+        if (OnAirRunning)
+        {
+            SkipOnAirToStage();
+            return;
+        }
+
+        SkipWhatIsOnAir();
+    }
+
+    /// <summary>What holding Skip does now, as the strip finishes "Keep holding to …".</summary>
+    internal string SkipHoldDoing => OnAirRunning ? OnAirHoldDoing : "end the recap show";
 
     /// <summary>The flag row's Hold Talk as the hold stands - amber "Resume Talk" while held.</summary>
     private void ShowTalkHold()
@@ -716,7 +739,7 @@ public sealed partial class RaceControlControl
     /// </summary>
     private void BuildTalkButtons()
     {
-        var skip = new HoldToAct(_btnBarSkip, "end the recap show", SkipWholeShow);
+        var skip = new HoldToAct(_btnBarSkip, () => SkipHoldDoing, SkipWholeShow);
 
         skip.Changed += h => _holdStrip.Follow(h);
         skip.Changed += _ => MoveDeskIfOwed();
