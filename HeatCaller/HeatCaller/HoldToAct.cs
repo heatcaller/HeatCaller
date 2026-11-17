@@ -94,15 +94,26 @@ internal sealed class HoldToAct : IDisposable, IShownHold
 
     private readonly Button _button;
     private readonly Action _act;
+    private readonly Func<string> _doing;
     private readonly HoldGesture _gesture = new((long)HoldFor.TotalMilliseconds);
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 15 };
     private bool _disposed;
 
     /// <param name="doing">What the hold does, in the words "Keep holding to …" finishes with: "throw the red flag".</param>
     public HoldToAct(Button button, string doing, Action act)
+        : this(button, () => doing, act)
+    {
+    }
+
+    /// <param name="doing">
+    /// What the hold does, asked each time it is shown - for a button whose
+    /// hold does different things (16 Nov 2026): the flag row's Skip ends the
+    /// recap show, or skips On Air while it runs.
+    /// </param>
+    public HoldToAct(Button button, Func<string> doing, Action act)
     {
         _button = button;
-        Doing = doing;
+        _doing = doing;
         _act = act;
 
         _timer.Tick += (_, _) => Tick();
@@ -129,7 +140,7 @@ internal sealed class HoldToAct : IDisposable, IShownHold
     }
 
     /// <summary>What the hold does: "throw the red flag".</summary>
-    public string Doing { get; }
+    public string Doing => _doing();
 
     /// <summary>How far through the hold, 0 to 1, or null when it is not being held.</summary>
     public float? Progress => _gesture.ProgressAt(Environment.TickCount64);
