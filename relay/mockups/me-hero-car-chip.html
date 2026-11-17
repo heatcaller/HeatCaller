@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hero Car Chip</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap">
+<style>
+/* A review sheet for tonight's car on Me > Tonight's "Up next" hero card
+   (16 Nov 2026, Asher: "give me 3 detailed mockups on how to integrate the
+   new chip into the card"). Today the car is a plain chip at the top right,
+   in the Signed in chip's style, while the rest of the card speaks in tiles
+   and dock keys. Each option below makes the car part of the card. The
+   phones use the club look tokens and the card's real CSS from
+   relay/src/mespaces.ts. */
+:root {
+  --page: #F3F1F7; --ink: #1B1530; --soft: #615A78; --line: #DDD8E8; --card: #FFFFFF; --hi: #D81B7A;
+  --f-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page: #0E0A1A; --ink: #EEEAF7; --soft: #A39BBD; --line: #2B2443; --card: #171128; --hi: #FF5FAE; color-scheme: dark } }
+:root[data-theme="dark"] { --page: #0E0A1A; --ink: #EEEAF7; --soft: #A39BBD; --line: #2B2443; --card: #171128; --hi: #FF5FAE; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.55 var(--f-body); overflow-x: clip; }
+.wrap { max-width: 1560px; margin: 0 auto; padding: 28px 16px 80px; }
+h1, h2 { font-family: var(--f-display); letter-spacing: .01em; text-wrap: balance; }
+h1 { font-size: 2.6rem; line-height: 1; margin: 0 0 8px; }
+.eyebrow { font-weight: 600; font-size: .72rem; text-transform: uppercase; letter-spacing: .14em; color: var(--hi); margin-bottom: 6px; }
+.lede { color: var(--soft); max-width: 78ch; margin: 0; }
+
+.ctl { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center;
+  margin: 22px -16px 0; padding: 10px 16px; background: color-mix(in srgb, var(--page) 88%, transparent); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line); }
+.ctl b { font-family: var(--f-display); font-size: 1.05rem; }
+.ctl label { display: inline-flex; gap: 6px; align-items: center; font-weight: 600; font-size: .9rem; cursor: pointer; min-height: 36px; }
+.ctl input { width: 18px; height: 18px; accent-color: var(--hi); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 34px 22px; justify-items: center; margin-top: 30px; }
+.slot { display: grid; gap: 10px; justify-items: center; width: 100%; max-width: 360px; min-width: 0; align-content: start; }
+.slot > * { min-width: 0; }
+.cap { width: 100%; display: grid; gap: 4px; }
+.cap .eb { font-weight: 700; font-size: .7rem; text-transform: uppercase; letter-spacing: .14em; color: var(--hi); }
+.cap b { font-family: var(--f-display); font-size: 1.45rem; line-height: 1.05; }
+.cap > span { color: var(--soft); font-size: .92rem; }
+.slot.rec .cap b::after { content: "My pick"; font-family: var(--f-body); font-size: .68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .1em; color: #fff; background: var(--hi); border-radius: 999px; padding: 2px 8px; margin-left: 8px; vertical-align: 4px; }
+.notes { width: 100%; display: grid; gap: 8px; font-size: .86rem; }
+.notes div { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+.notes h3 { margin: 0 0 2px; font-size: .7rem; text-transform: uppercase; letter-spacing: .12em; color: var(--soft); }
+.notes ul { margin: 0; padding-left: 16px; }
+.notes li { margin: 2px 0; }
+.toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--ink); color: var(--page);
+  padding: 9px 16px; border-radius: 999px; font-weight: 600; font-size: .9rem; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.on { opacity: 1; }
+
+/* ---- the phone: club look tokens, and the card as mespaces.ts draws it */
+.phone {
+  --bg: #0F0722; --surface: #1A0F3A; --primary: #FF2E9A; --accent: #2EE6FF; --text: #F7F2FF;
+  --muted: #9E8AC7; --border: #33215C; --good: #3DD68C; --warn: #F5B83D; --bad: #FF5C6C; --on-primary: #FFFFFF; --ring: var(--accent);
+  width: 360px; max-width: 100%; border-radius: 34px; padding: 10px; background: #05020C; box-shadow: 0 18px 40px -18px rgba(20, 0, 40, .55);
+  color-scheme: dark;
+}
+.scr { background: var(--bg); color: var(--text); border-radius: 26px; overflow: hidden; padding: 14px 16px 18px;
+  font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; min-height: 640px; }
+.sb { display: flex; justify-content: space-between; font-size: .72rem; font-weight: 600; color: var(--muted); padding: 0 4px 10px; }
+.who { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.who b { font-family: var(--f-display); font-size: 1.5rem; font-weight: 800; }
+.sw { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; border-radius: 16px; background: var(--surface);
+  border: 1px solid var(--border); margin-bottom: 12px; }
+.sw span { text-align: center; font-weight: 700; font-size: .85rem; color: var(--muted); padding: 9px 0; border-radius: 12px; }
+.sw span.on { background: var(--primary); color: var(--on-primary); }
+
+.phone button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.phone button:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.phone svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.phone button:active { transform: scale(.97); }
+@media (prefers-reduced-motion: reduce) { .phone button:active { transform: none; } .toast { transition: none; } }
+
+.me-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font-size: .82rem;
+  font-weight: 600; white-space: nowrap; background: var(--surface); border: 1px solid var(--border); color: var(--text); min-height: 32px; }
+.me-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
+
+.me-hero { border-radius: 16px; padding: 16px 16px 0; display: grid; gap: 10px; text-align: left; overflow: hidden;
+  background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--accent) 38%, transparent), transparent 60%),
+              linear-gradient(160deg, color-mix(in srgb, var(--primary) 30%, var(--surface)), var(--surface));
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border)); }
+.me-hero .k { font-size: .72rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--primary); }
+.me-hero .big { font-size: 2.3rem; line-height: .98; font-weight: 800; letter-spacing: -.01em; }
+.me-hero .big small { font-size: 1.05rem; color: var(--muted); font-weight: 700; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+.top .me-chip { max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
+
+.me-acts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.me-acts.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.me-act { min-height: 92px; border-radius: 14px; padding: 10px 4px 12px; position: relative; display: grid; justify-items: center;
+  align-content: center; gap: 3px; text-align: center; min-width: 0; grid-template-columns: minmax(0, 1fr);
+  background: color-mix(in srgb, var(--bg) 55%, transparent); border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); }
+.me-act.wait { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.me-act .ic { width: 32px; height: 32px; border-radius: 12px; display: grid; place-items: center; margin-bottom: 2px;
+  background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.me-act.wait .ic { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+.me-act .ic svg { width: 24px; height: 24px; }
+.me-act .n { font-size: .66rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.me-act .s { font-weight: 800; font-size: .9rem; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; padding: 0 4px; }
+.me-act .badge { position: absolute; top: 7px; right: 7px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--good); color: var(--bg); }
+.me-act.wait .badge { background: var(--warn); }
+.me-act .badge svg { width: 12px; height: 12px; stroke-width: 3.2; }
+
+.me-mini { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.me-mini div { background: color-mix(in srgb, var(--bg) 55%, transparent); border-radius: 12px; padding: 8px 10px; display: grid; gap: 2px; min-width: 0; }
+.me-mini small { color: var(--muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; }
+.me-mini b { font-size: 1.02rem; font-variant-numeric: tabular-nums; }
+
+.me-dock { margin: 2px -16px 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+  border-top: 1px solid color-mix(in srgb, var(--text) 14%, transparent); background: color-mix(in srgb, var(--bg) 62%, transparent); }
+.me-dk { min-height: 84px; display: grid; justify-items: center; align-content: start; gap: 5px; padding: 14px 4px 12px; min-width: 0;
+  font-weight: 800; font-size: .86rem; line-height: 1.1; text-align: center; background: none; border: 0; }
+.me-dk + .me-dk { border-left: 1px solid color-mix(in srgb, var(--text) 12%, transparent); }
+.me-dk svg { width: 24px; height: 24px; }
+.me-dk .ic { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; color: var(--accent);
+  background: color-mix(in srgb, var(--text) 10%, transparent); }
+.me-dk.late .ic { color: var(--warn); background: color-mix(in srgb, var(--warn) 22%, transparent); }
+.me-dk.skip .ic { color: var(--bad); background: color-mix(in srgb, var(--bad) 22%, transparent); }
+
+.below { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.below div { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); min-height: 80px; padding: 12px; display: grid; align-content: start; gap: 2px; }
+.below small { font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.below b { font-size: 1.05rem; }
+
+/* ---- A: the chip, in the card's own language */
+.car-a { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; max-width: 62%; padding: 0 8px 0 6px; border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 55%, transparent); border: 1px solid color-mix(in srgb, var(--good) 55%, transparent);
+  font-weight: 800; font-size: .86rem; min-width: 0; }
+.car-a .ic { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.car-a .ic svg { width: 18px; height: 18px; }
+.car-a .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.car-a .go { width: 14px; height: 14px; color: var(--muted); stroke-width: 2.6; }
+.car-a.wait { border-color: color-mix(in srgb, var(--warn) 60%, transparent); }
+.car-a.wait .ic { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+
+/* ---- C: the car bar */
+.car-c { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 60px;
+  border-radius: 14px; padding: 8px 8px 8px 10px; text-align: left; width: 100%;
+  background: color-mix(in srgb, var(--bg) 55%, transparent); border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); }
+.car-c .ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.car-c .ic svg { width: 26px; height: 26px; }
+.car-c .t { display: grid; min-width: 0; line-height: 1.15; }
+.car-c .t small { font-size: .62rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.car-c .t b { font-size: 1.05rem; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.car-c .t span { font-size: .76rem; font-weight: 600; color: var(--good); display: flex; gap: 5px; align-items: center; }
+.car-c .t span::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.car-c.wait .t span { color: var(--warn); }
+.car-c .do { min-height: 44px; padding: 0 12px; border-radius: 11px; font-weight: 800; font-size: .82rem; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--text) 10%, transparent); border: 0; }
+.car-c.wait .do { background: var(--warn); color: var(--bg); }
+.car-c .do svg { width: 14px; height: 14px; stroke-width: 2.6; }
+
+/* stress toggles */
+.nocar .has-car { display: none !important; }
+.yescar .no-car { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Me · Tonight · Up next</div>
+  <h1>Tonight's car on the hero card</h1>
+  <p class="lede">Today the car is a plain chip at the top right, styled like <b>Signed in</b>. The rest of the card uses tiles and dock keys.
+    Each option below brings the car into the card. Every phone works: tap a car to see where it goes, and tap a tile or key to see what it does.
+    Use the toggles to try a long name, no setup logged, or no car racing tonight.</p>
+
+  <div class="ctl" role="group" aria-label="Try">
+    <b>Try</b>
+    <label><input type="checkbox" id="t-long"> Long car name</label>
+    <label><input type="checkbox" id="t-nosetup"> No setup logged</label>
+    <label><input type="checkbox" id="t-nocar"> No car tonight</label>
+  </div>
+
+  <div class="grid" id="grid"></div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const I = {
+  car: 'M3.5 14.5h17M5 14.5l1.6-4.2A2 2 0 0 1 8.5 9h7a2 2 0 0 1 1.9 1.3l1.6 4.2M3.5 14.5v2h3M20.5 14.5v2h-3M9.5 17.5a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM18.5 17.5a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM10 9l1-3h3',
+  pack: 'M4.2 7h12.6a2.2 2.2 0 0 1 2.2 2.2v5.6a2.2 2.2 0 0 1-2.2 2.2H4.2A2.2 2.2 0 0 1 2 14.8V9.2A2.2 2.2 0 0 1 4.2 7zM22 10.5v3M6 10.5v3M9.5 10.5v3M13 10.5v3',
+  tp: 'M13.8 12a1.8 1.8 0 1 1-3.6 0a1.8 1.8 0 1 1 3.6 0zM8.6 15.4a4.8 4.8 0 0 1 0-6.8M15.4 8.6a4.8 4.8 0 0 1 0 6.8M5.7 18.3a8.9 8.9 0 0 1 0-12.6M18.3 5.7a8.9 8.9 0 0 1 0 12.6',
+  setup: 'M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M17 6a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM11 12a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM19 18a2 2 0 1 1-4 0a2 2 0 1 1 4 0z',
+  tick: 'M5 12.5l4.5 4.5L19 7.5', bang: 'M12 6v7M12 17.5v.01', chev: 'M9 6l6 6-6 6',
+  order: 'M9 6h11M9 12h11M9 18h11M4.5 6v.01M4.5 12v.01M4.5 18v.01',
+  late: 'M20 13a8 8 0 1 1-16 0a8 8 0 1 1 16 0zM12 9v4l2.5 2M9.5 2.5h5',
+  skip: 'M14.7 6.3a4 4 0 0 0-5.4 5.2l-5.8 5.8a1.6 1.6 0 0 0 2.2 2.2l5.8-5.8a4 4 0 0 0 5.2-5.4l-2.4 2.4-2.2-.4-.4-2.2zM17 17l4 4M21 17l-4 4',
+};
+const svg = (n, cls = '') => `<svg viewBox="0 0 24 24" aria-hidden="true" class="${cls}"><path d="${I[n]}"/></svg>`;
+const S = { long: false, nosetup: false, nocar: false };
+const carName = () => (S.long ? 'Associated RC10 B7 Team "Stinger"' : 'Stinger 2');
+const setupWords = () => (S.nosetup ? 'No setup today' : 'Setup logged 18:42');
+
+function tile(icon, name, status, ok, says) {
+  return `<button class="me-act ${ok ? 'ok' : 'wait'}" type="button" aria-label="${says}" data-says="${says}">
+    <span class="badge">${svg(ok ? 'tick' : 'bang')}</span><span class="ic">${svg(icon)}</span>
+    <span class="n">${name}</span><span class="s">${status}</span></button>`;
+}
+const packT = () => tile('pack', 'Pack', 'Red 2S', true, 'Opens Pack in the car');
+const tpT = () => tile('tp', 'Transponder', 'Heard 18:51', true, 'Opens the transponder check');
+const setupT = () => tile('setup', 'Setup', S.nosetup ? 'None yet' : 'Logged', !S.nosetup, 'Opens Log setup in Garage');
+
+function shell(heroInside, docked = true) {
+  return `<div class="phone"><div class="scr">
+    <div class="sb"><span>18:58</span><span>5G · 82%</span></div>
+    <div class="who"><b>Al Gorithim</b><span class="me-chip">Signed in</span></div>
+    <div class="sw"><span class="on">Tonight</span><span>Races</span><span>Garage</span><span>Stats</span></div>
+    <section class="me-hero">${heroInside}
+      ${docked ? `<div class="me-dock">
+        <button class="me-dk" type="button" data-says="Opens the running order"><span class="ic">${svg('order')}</span>Running order</button>
+        <button class="me-dk late" type="button" data-says="Asks the desk for 5 more minutes"><span class="ic">${svg('late')}</span>5 more min</button>
+        <button class="me-dk skip" type="button" data-says="Asks the desk to skip you"><span class="ic">${svg('skip')}</span>Car broken</button>
+      </div>` : ''}
+    </section>
+    <div class="below"><div><small>Last result</small><b>2nd</b><small style="text-transform:none;letter-spacing:0">Q1 Heat 1 · best 14.218</small></div>
+      <div><small>Pack health</small><b>Red 2S holds best</b></div></div>
+  </div></div>`;
+}
+const head = (right = '') => `<div class="top"><span class="k">Up next</span>${right}</div>`;
+const big = `<div class="big">Q2 Heat 1 (Stock Buggy)<br><small>2 races before yours · about 9 min</small></div>`;
+const mini = `<div class="me-mini"><div><small>Grid</small><b>3rd</b></div><div><small>Best tonight</small><b>14.218</b></div><div><small>Marshal</small><b>Q1 H2</b></div></div>`;
+
+const OPTIONS = [
+  {
+    id: 'today', eb: 'Today', title: 'A plain chip, top right',
+    sub: 'What ships now: the Signed in chip’s style, a green dot that means nothing about the car.',
+    hero: () => head(S.nocar ? '' : `<button class="me-chip" type="button" data-says="Opens Garage" style="max-width:60%;overflow:hidden;text-overflow:ellipsis">${carName()}</button>`)
+      + big + `<div class="me-acts${S.nocar ? ' two' : ''}">${packT()}${tpT()}${S.nocar ? '' : setupT()}</div>` + mini,
+    notes: [
+      ['Works', ['One tap to Garage', 'Takes no height']],
+      ['Doesn’t', ['Looks borrowed from the top of Me, not part of the card', '32px tall, under the 44px tap size', 'Its green dot says nothing (setup is in a tile below)']],
+    ],
+  },
+  {
+    id: 'a', eb: 'Option A', title: 'Tuned chip in the kicker row', rec: false,
+    sub: 'Same place, the card’s language: a car icon in the tiles’ tinted circle, a chevron, and a 40px pill. Its ring turns amber with no setup logged.',
+    hero: () => head(S.nocar ? '' : `<button class="car-a${S.nosetup ? ' wait' : ''}" type="button" data-says="Opens Garage on ${carName()}" aria-label="Car tonight: ${carName()}. Open Garage">
+        <span class="ic">${svg('car')}</span><span class="nm">${carName()}</span>${svg('chev', 'go')}</button>`)
+      + big + `<div class="me-acts${S.nocar ? ' two' : ''}">${packT()}${tpT()}${S.nocar ? '' : setupT()}</div>` + mini,
+    notes: [
+      ['Works', ['Smallest change: CSS and an icon', 'Reads as the card’s own, not Signed in’s', 'Chevron says it goes somewhere']],
+      ['Watch', ['Setup state shows twice (chip ring and Setup tile)', 'A long name ellipses at 62% width', 'At A++ text the pill may wrap under Up next']],
+    ],
+  },
+  {
+    id: 'b', eb: 'Option B', title: 'The car becomes a tile', rec: true,
+    sub: 'No chip. The tiles become Car · Pack · Transponder. The Car tile names the car and its badge is the setup state; tap opens Garage on that car, where Log setup is.',
+    hero: () => head() + big
+      + `<div class="me-acts">${S.nocar
+          ? tile('car', 'Car', 'Pick one', false, 'Opens Garage to pick tonight’s car')
+          : tile('car', 'Car', carName(), !S.nosetup, S.nosetup ? 'Opens Garage on ' + carName() + ' - no setup logged' : 'Opens Garage on ' + carName())}${packT()}${tpT()}</div>` + mini,
+    notes: [
+      ['Works', ['One language across the card: three tiles, as option A of me-hero-actions picked', 'Always three tiles, so the two-across case goes', '92px target', 'No car tonight becomes a prompt, not a gap']],
+      ['Costs', ['Log setup is one tap further (Car tile, then Log setup in Garage)', 'Long names ellipse in a third of the width', 'Small change in meMoment plus the tests that name the Setup tile']],
+    ],
+  },
+  {
+    id: 'c', eb: 'Option C', title: 'A car bar under the race',
+    sub: 'A full-width bar between the race and the tiles: car icon, the name in full, its setup state, and one action, Log setup while none is logged, Garage once it is.',
+    hero: () => head() + big
+      + (S.nocar ? '' : `<button class="car-c${S.nosetup ? ' wait' : ''}" type="button" data-says="${S.nosetup ? 'Opens Log setup on ' + carName() : 'Opens Garage on ' + carName()}">
+          <span class="ic">${svg('car')}</span>
+          <span class="t"><small>Racing tonight</small><b>${carName()}</b><span>${setupWords()}</span></span>
+          <span class="do">${S.nosetup ? 'Log setup' : 'Garage'}${svg('chev')}</span></button>`)
+      + `<div class="me-acts two">${packT()}${tpT()}</div>` + mini,
+    notes: [
+      ['Works', ['Room for a long name', 'Setup said once, in words, with the fix beside it', 'Pack and Transponder get bigger tiles (two across)']],
+      ['Costs', ['About 70px more height, so the dock sits lower', 'A new piece of UI to keep in the kit', 'Bar and tiles side by side read as two kinds of thing']],
+    ],
+  },
+];
+
+function draw() {
+  document.getElementById('grid').innerHTML = OPTIONS.map((o) => `
+    <div class="slot${o.rec ? ' rec' : ''} ${S.nocar ? 'nocar' : 'yescar'}">
+      <div class="cap"><span class="eb">${o.eb}</span><b>${o.title}</b><span>${o.sub}</span></div>
+      ${shell(o.hero())}
+      <div class="notes">${o.notes.map(([h, items]) => `<div><h3>${h}</h3><ul>${items.map((i) => `<li>${i}</li>`).join('')}</ul></div>`).join('')}</div>
+    </div>`).join('');
+}
+
+let tt = 0;
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-says]');
+  if (!b) return;
+  const t = document.getElementById('toast');
+  t.textContent = b.getAttribute('data-says');
+  t.classList.add('on');
+  clearTimeout(tt);
+  tt = setTimeout(() => t.classList.remove('on'), 1600);
+});
+for (const k of ['long', 'nosetup', 'nocar']) {
+  document.getElementById('t-' + k).addEventListener('change', (e) => { S[k] = e.target.checked; draw(); });
+}
+draw();
+</script>
+</body>
+</html>

@@ -175,6 +175,37 @@ export const ME_CSS = `
   .me-acts.two .me-act .s { align-self: start; padding: 0; white-space: normal; }
   .me-acts.two .me-act .badge { top: 50%; margin-top: -9px; right: 12px; }
 }
+/* THE CAR BAR (16 Nov 2026, option C of relay/mockups/me-hero-car-chip.html):
+   tonight's car under Up next's race, in the tiles' glass, with its setup in
+   words and one action at the end - amber while no setup is logged. */
+.me-carbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 60px;
+  border-radius: 14px; padding: 8px 8px 8px 10px; text-align: left; width: 100%; font: inherit; color: var(--text); cursor: pointer;
+  background: color-mix(in srgb, var(--bg) 55%, transparent); border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); }
+.me-carbar.wait { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.me-carbar svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.me-carbar .ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.me-carbar .ic svg { width: 26px; height: 26px; }
+.me-carbar .t { display: grid; min-width: 0; line-height: 1.15; }
+.me-carbar .t small { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.me-carbar .t b { font-size: 1.05rem; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.me-carbar .st { font-size: 0.76rem; font-weight: 600; color: var(--good); display: flex; gap: 5px; align-items: center; }
+.me-carbar .st::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+.me-carbar.wait .st { color: var(--warn); }
+.me-carbar .do { min-height: 44px; padding: 0 12px; border-radius: 11px; font-weight: 800; font-size: 0.82rem; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--text) 10%, transparent); }
+.me-carbar.wait .do { background: var(--warn); color: var(--bg); }
+.me-carbar .do svg { width: 14px; height: 14px; stroke-width: 2.6; }
+@media (hover: hover) { .me-carbar:hover { border-color: var(--primary); } }
+.me-carbar:focus-visible { outline: 3px solid var(--ring, var(--accent)); outline-offset: 2px; }
+.me-carbar:active { transform: scale(0.98); }
+@media (prefers-reduced-motion: reduce) { .me-carbar:active { transform: none; } }
+/* Big text: the action drops under the name rather than squeezing it. */
+@container me-hero (max-width: 19em) {
+  .me-carbar { grid-template-columns: auto minmax(0, 1fr); }
+  .me-carbar .do { grid-column: 1 / -1; justify-content: center; }
+}
+.me-hero { container: me-hero / inline-size; }
 /* THE DOCK (11 Nov 2026, Asher: "Build option A" of
    relay/mockups/me-hero-requests.html). See the running order, Need 5 more
    minutes and Car broken - skip me were a text link and two small buttons
@@ -792,6 +823,9 @@ const ME_ICON = {
   tp: 'M13.8 12a1.8 1.8 0 1 1-3.6 0a1.8 1.8 0 1 1 3.6 0zM8.6 15.4a4.8 4.8 0 0 1 0-6.8M15.4 8.6a4.8 4.8 0 0 1 0 6.8M5.7 18.3a8.9 8.9 0 0 1 0-12.6M18.3 5.7a8.9 8.9 0 0 1 0 12.6',
   setup: 'M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M17 6a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM11 12a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM19 18a2 2 0 1 1-4 0a2 2 0 1 1 4 0z',
   tick: 'M5 12.5l4.5 4.5L19 7.5',
+  // Tonight's car, side on, and the car bar's chevron (16 Nov 2026).
+  car: 'M3.5 14.5h17M5 14.5l1.6-4.2A2 2 0 0 1 8.5 9h7a2 2 0 0 1 1.9 1.3l1.6 4.2M3.5 14.5v2h3M20.5 14.5v2h-3M9.5 17.5a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM18.5 17.5a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM10 9l1-3h3',
+  chev: 'M9 6l6 6-6 6',
   bang: 'M12 6v7M12 17.5v.01',
   cross: 'M6 6l12 12M18 6L6 18',
   order: 'M9 6h11M9 12h11M9 18h11M4.5 6v.01M4.5 12v.01M4.5 18v.01',
@@ -1177,28 +1211,28 @@ function meMoment() {
     hero.appendChild(acts);
   } else if (n) {
     meHeroKind = 'next';
-    meKicker(hero, 'Up next');
+    hero.appendChild(el('span', 'k', 'Up next'));
     const big = el('div', 'big', String(n.race || 'Your race'));
     const eta = n.now === true ? '' : etaWords(n.eta, relayNow());
     big.appendChild(el('br'));
     big.appendChild(el('small', '', callWords(n) + (eta ? ' · ' + eta : '')));
     hero.appendChild(big);
-    const row = el('div', 'me-acts');
+    // Tonight's car as a bar under the race (16 Nov 2026, option C of
+    // relay/mockups/me-hero-car-chip.html): its name in full, its setup in
+    // words, and the one thing to do - Log setup while none is logged,
+    // Garage once it is. It took the Setup tile's place.
+    const car = meCarTonight();
+    if (car) hero.appendChild(meCarBar(car));
+    const row = el('div', 'me-acts two');
     const pack = mePackNow();
     const seen = meSeen();
     // Each one a way to fix what it says (7 Nov 2026, Asher): the pack to
-    // the quick pack change, the transponder to its check on Tonight, the
-    // setup to Log setup in the Garage. Tiles, not chips, since the same day.
+    // the quick pack change, the transponder to its check on Tonight.
+    // Tiles, not chips, since the same day.
     row.appendChild(meAct('pack', 'Pack', pack !== '' ? pack : 'None set', pack !== '',
       pack !== '' ? pack + ' in the car' : 'No pack set', mePackSheet));
     row.appendChild(meAct('tp', 'Transponder', Number.isFinite(seen) ? 'Heard ' + hm(seen) : 'Not heard', Number.isFinite(seen),
       Number.isFinite(seen) ? 'Transponder heard' : 'Transponder not heard', meToTransponder));
-    const car = meCarTonight();
-    if (car) {
-      const logged = meSetupLoggedTonight(car);
-      row.appendChild(meAct('setup', 'Setup', logged ? 'Logged' : 'None yet', logged, logged ? 'Setup logged' : 'No setup logged', meLogSetup));
-    }
-    if (!car) row.className = 'me-acts two';
     hero.appendChild(row);
     const best = races.reduce((b, r) => (num(r.bestMs) > 0 && (b === 0 || num(r.bestMs) < b) ? num(r.bestMs) : b), 0);
     const m = live && live.marshal && typeof live.marshal === 'object' && typeof live.marshal.race === 'string' ? live.marshal : null;
@@ -1236,7 +1270,8 @@ function meMoment() {
 
 // The card's kicker and, beside it, tonight's car as a chip (16 Nov 2026,
 // Asher: "add tonights car chip to the hero card that jumps to the garage
-// on click"). Not on Check in, which is the one thing to do on arrival.
+// on click"). Not on Check in, which is the one thing to do on arrival, nor
+// on Up next, which has the car bar instead (meCarBar).
 function meKicker(hero, words) {
   const car = meCarTonight();
   if (!car) {
@@ -1250,6 +1285,32 @@ function meKicker(hero, words) {
   chip.setAttribute('aria-label', 'Car tonight: ' + name + '. Open Garage');
   top.appendChild(chip);
   hero.appendChild(top);
+}
+
+// Up next's car bar - see meMoment.
+function meCarBar(car) {
+  const name = String(car.name || 'Your car');
+  const logged = meSetupLoggedTonight(car);
+  const s = Array.isArray(car.setups) ? car.setups[0] : null;
+  const at = s && typeof s.at === 'string' ? Date.parse(s.at) : NaN;
+  const today = Number.isFinite(at) && new Date(at).toDateString() === new Date().toDateString();
+  const words = !logged ? 'No setup today' : today ? 'Setup logged ' + hm(at) : 'Setup logged today';
+  const b = el('button', 'me-carbar ' + (logged ? 'ok' : 'wait'));
+  b.type = 'button';
+  b.setAttribute('aria-label', 'Racing tonight: ' + name + '. ' + words + '. ' + (logged ? 'Open Garage' : 'Log setup'));
+  const ic = el('span', 'ic');
+  ic.appendChild(meIcon('car'));
+  b.appendChild(ic);
+  const t = el('span', 't');
+  t.appendChild(el('small', '', 'Racing tonight'));
+  t.appendChild(el('b', '', name));
+  t.appendChild(el('span', 'st', words));
+  b.appendChild(t);
+  const go = el('span', 'do', logged ? 'Garage' : 'Log setup');
+  go.appendChild(meIcon('chev'));
+  b.appendChild(go);
+  b.addEventListener('click', logged ? meToGarage : meLogSetup);
+  return b;
 }
 
 function meToGarage() {
