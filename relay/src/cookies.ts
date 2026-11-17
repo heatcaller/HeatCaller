@@ -58,6 +58,7 @@ export const COOKIE_POLICY_HTML = `<div class="policy">
 <li><b>hc-alerts:&lt;club&gt;</b>, <b>hc-alert-kinds:&lt;club&gt;</b> and <b>hc-alert-kinds-seen:&lt;club&gt;</b> (this phone): whether alerts are on, which kinds you want, and which kinds you have been offered.</li>
 <li><b>hg-laptalk-&lt;club&gt;</b>, <b>hg-laptalk-short-&lt;club&gt;</b>, <b>hg-laptalk-say-&lt;club&gt;</b>, <b>hg-nighttalk-&lt;club&gt;</b>, <b>hg-nighttalk-short-&lt;club&gt;</b> and <b>hg-nighttalk-say-&lt;club&gt;</b> (this phone): whether lap times are read in your ear, and how.</li>
 <li><b>hg-me-space</b>, <b>hg-night-order</b>, <b>hg-night-just-me</b>, <b>hg-night-hide-runs</b> and <b>hg-me-seen-&lt;club&gt;</b> (this phone): which part of Me was open, the order of its cards, what it shows, and what you have already seen there. Until <b>Sign out</b>.</li>
+<li><b>hg-coming-&lt;club&gt;</b> and <b>hg-nn-gone-&lt;club&gt;</b> (this phone): the date of the next race night you said you are coming to, and of one whose card you dismissed on Home, so Home shows Dismiss instead of asking again. Until <b>Sign out</b>.</li>
 <li><b>hc-clubs</b> (this phone): the clubs where a driver is signed in on this phone (up to eight, club names only), so Me can link to them. A club comes off it when its last driver signs out.</li>
 <li><b>hc-video-dock:&lt;club&gt;</b> (this phone): whether the live video player was open, small or closed.</li>
 <li><b>hg-picks-&lt;club&gt;</b> (this phone): your picks in the <b>Who wins?</b> game and how they turned out.</li>

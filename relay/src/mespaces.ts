@@ -111,6 +111,8 @@ export const ME_CSS = `
               linear-gradient(160deg, color-mix(in srgb, var(--primary) 30%, var(--surface)), var(--surface));
   border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border)); }
 .me-hero .k { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--primary); }
+.me-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+.me-hero-top .me-car { min-height: 36px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
 .me-hero .big { font-size: 2.3rem; line-height: 0.98; font-weight: 800; letter-spacing: -0.01em; }
 .me-hero .big small { font-size: 1.05rem; color: var(--muted); font-weight: 700; }
 .me-mini { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
@@ -637,6 +639,14 @@ async function meSendComing(day, classes) {
   if (got.ok) {
     const last = typeof sentAsks !== 'undefined' && sentAsks.length > 0 ? sentAsks[sentAsks.length - 1] : null;
     if (last && last.kind === 'coming') meComingSent.set(last.ref, classes.join(','));
+    // For Home's next race night card: Dismiss in place of Coming? once put
+    // down for this day; Coming? again after Not coming after all.
+    try {
+      if (typeof CLUB === 'string' && CLUB) {
+        if (classes.length > 0) localStorage.setItem('hg-coming-' + CLUB, day);
+        else localStorage.removeItem('hg-coming-' + CLUB);
+      }
+    } catch (e) { /* this visit only */ }
     meToast(classes.length > 0 ? 'Sent - HeatCaller will put you down' : 'Sent - HeatCaller will take you off the list');
     meComingCard();
   } else {
@@ -1153,12 +1163,12 @@ function meMoment() {
     hero.appendChild(big);
     hero.appendChild(tapButton('I’m here – check me in', 'go', meAskCheckIn));
   } else if (n && n.now === true) {
-    hero.appendChild(el('span', 'k', 'On track · ' + String(n.race || 'your race')));
+    meKicker(hero, 'On track · ' + String(n.race || 'your race'));
     hero.appendChild(el('div', 'big', 'Racing now'));
     const go = typeof goLink === 'function' ? goLink(n) : null;
     if (go) hero.appendChild(go);
   } else if (fresh && last && !(n && (n.staged === true || num(n.away) === 0))) {
-    hero.appendChild(el('span', 'k', 'Result in · ' + String(last.label || 'your race')));
+    meKicker(hero, 'Result in · ' + String(last.label || 'your race'));
     const big = el('div', 'big', finishWords(last) || 'Filed');
     hero.appendChild(big);
     hero.appendChild(meMini([['Best lap', meLap(last.bestMs)], ['Laps', num(last.laps) > 0 ? String(num(last.laps)) : ''], ['Pack', mePackNow()]]));
@@ -1167,7 +1177,7 @@ function meMoment() {
     hero.appendChild(acts);
   } else if (n) {
     meHeroKind = 'next';
-    hero.appendChild(el('span', 'k', 'Up next'));
+    meKicker(hero, 'Up next');
     const big = el('div', 'big', String(n.race || 'Your race'));
     const eta = n.now === true ? '' : etaWords(n.eta, relayNow());
     big.appendChild(el('br'));
@@ -1199,7 +1209,7 @@ function meMoment() {
     // build plan, Phase 1; the desk approves): the dock, drawn last.
     dock = meDock(n);
   } else if (races.length > 0) {
-    hero.appendChild(el('span', 'k', 'Your night'));
+    meKicker(hero, 'Your night');
     const best = races.reduce((b, r) => (num(r.bestMs) > 0 && (b === 0 || num(r.bestMs) < b) ? num(r.bestMs) : b), 0);
     hero.appendChild(el('div', 'big', plural(races.length, 'race', 'races')));
     hero.appendChild(meMini([['Best lap', meLap(best)], ['Last', last ? finishWords(last) : ''], ['Pack', mePackNow()]]));
@@ -1222,6 +1232,31 @@ function meMoment() {
     hero.appendChild(dock);
   }
   at.appendChild(hero);
+}
+
+// The card's kicker and, beside it, tonight's car as a chip (16 Nov 2026,
+// Asher: "add tonights car chip to the hero card that jumps to the garage
+// on click"). Not on Check in, which is the one thing to do on arrival.
+function meKicker(hero, words) {
+  const car = meCarTonight();
+  if (!car) {
+    hero.appendChild(el('span', 'k', words));
+    return;
+  }
+  const top = el('div', 'me-hero-top');
+  top.appendChild(el('span', 'k', words));
+  const name = String(car.name || 'Your car');
+  const chip = tapButton(name, 'me-chip ok me-car', meToGarage);
+  chip.setAttribute('aria-label', 'Car tonight: ' + name + '. Open Garage');
+  top.appendChild(chip);
+  hero.appendChild(top);
+}
+
+function meToGarage() {
+  meCloseSheet();
+  meSetSpace('garage', 'l');
+  const g = document.getElementById('me-garage');
+  if (g) g.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 // ---- the Tonight tiles
@@ -1280,23 +1315,15 @@ function meTiles() {
     at.appendChild(meTile('w hot', 'Next race', String(n.race || 'Your race'), [callWords(n), eta, num(n.slot) > 0 ? 'grid ' + nth(n.slot) : ''].filter(Boolean).join(' · '),
       () => { const lv = document.getElementById('lv'); if (lv) lv.scrollIntoView({ block: 'start', behavior: 'smooth' }); }));
   }
-  if (mePacks().choices.length > 0 || mePackNow() !== '') {
-    at.appendChild(meTile('', 'Pack in the car', mePackNow() || 'None set', 'Tap to swap', mePackSheet));
-  }
-  const car = meCarTonight();
-  if (car) {
-    at.appendChild(meTile('', 'Car tonight', String(car.name || 'Your car'), meSetupLoggedTonight(car) ? 'Setup logged today' : 'No setup logged today', meToSetup));
-  }
+  // No Pack in the car, Car tonight or Transponder tiles (16 Nov 2026, Asher:
+  // "remove the pack in card, car tonight, and transponder cards that are
+  // BELOW the four tabs"): the moment card's Pack and Transponder tiles and
+  // its car chip say the same.
   const races = meRacesReal();
   const last = races.length > 0 ? races[races.length - 1] : null;
   if (last) {
     at.appendChild(meTile('', 'Last result', finishWords(last) || 'Filed', [String(last.label || ''), meLap(last.bestMs) ? 'best ' + meLap(last.bestMs) : ''].filter(Boolean).join(' · '),
       () => meSetSpace('races', 'l')));
-  }
-  if (live) {
-    const seen = meSeen();
-    at.appendChild(meTile('', 'Transponder', Number.isFinite(seen) ? 'Heard' : 'Not yet', Number.isFinite(seen) ? 'at ' + hm(seen) + ' · tap to check' : 'Tap to check it',
-      () => { if (typeof startCheck === 'function') startCheck(); const lv = document.getElementById('lv'); if (lv) lv.scrollIntoView({ block: 'start', behavior: 'smooth' }); }));
   }
   const health = meHealth();
   if (health.length > 0) {

@@ -653,16 +653,13 @@ describe("Change your details: one sheet, four tabs, one Send", () => {
     assert.equal(dt?.textContent, "Announcer");
   });
 
-  it("signed in: the card's chip signs this phone out; signed out, it offers sign-in", async () => {
+  it("signed in: the card's chip signs this phone out; signed out, there is no chip", async () => {
     const page = await openPage(meDoc(), true);
     assert.match(page.get("yd").textContent, /Signed in · Sign out/);
     page.button(page.get("yd"), /^Sign out$/)!.click();
     assert.equal(page.eval("pass()"), "");
     assert.match(page.get("yd").textContent, /Signed out on this phone\./);
-    assert.ok(page.button(page.get("yd"), /^Sign in to change$/));
-
-    page.button(page.get("yd"), /^Sign in to change$/)!.click();
-    assert.ok(page.button(page.get("me-sheet-body"), /^Sign in$/), "the sheet opens on the PIN box");
+    assert.equal(page.button(page.get("yd"), /^Sign in to change$/), undefined);
   });
 
   it("a driver with no personal PIN has no chip at all", async () => {
