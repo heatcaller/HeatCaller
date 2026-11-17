@@ -1331,6 +1331,7 @@ select {
 /* "Coming? Put yourself down" on a night taking entries (12 Nov 2026), a
    button like See the running order since 13 Nov 2026. */
 .hero .nn-go { margin-top: 12px; }
+.hero .nn-gone { width: 100%; font: inherit; cursor: pointer; }
 .hero:has(.nn-go):hover { border-color: var(--border); }
 /* The next race night called off (12 Nov 2026, setup plan D13). */
 .hero.off { border-left-color: var(--bad); }
@@ -3511,7 +3512,7 @@ setTimeout(hcOweStart, 0);
 // the PIN instead of opening it again (meSignedOut).
 const ME_OUT_KEY = 'hg-me-out-' + CLUB;
 const ME_LEFTOVERS = ['hg-me-seen-' + CLUB, 'hg-charge-' + CLUB, 'hg-me-space', 'hg-night-order', 'hg-night-just-me',
-  'hg-night-hide-runs', 'hg-nighttalk-' + CLUB, 'hg-nighttalk-short-' + CLUB, 'hg-nighttalk-say-' + CLUB, 'hc-alerts:' + CLUB];
+  'hg-night-hide-runs', 'hg-coming-' + CLUB, 'hg-nn-gone-' + CLUB, 'hg-nighttalk-' + CLUB, 'hg-nighttalk-short-' + CLUB, 'hg-nighttalk-say-' + CLUB, 'hc-alerts:' + CLUB];
 
 // Signing out stops this phone's push alerts too (6 Nov 2026): the relay
 // forgets it for that driver, and the phone drops its push address - only
@@ -11304,7 +11305,16 @@ function nextNightHtml(answer) {
   // next race day card should be a button, like the link to schedule
   // button"): the card itself stays still, and the way in is the same
   // pill as See the running order.
-  const comingTo = b.takingEntries === true && typeof nextNightComingHref === 'function' ? nextNightComingHref() : '';
+  // Once Me has put them down for this night, Dismiss instead of Coming?,
+  // and the card goes for good once dismissed (16 Nov 2026, Asher: "if
+  // marked coming on the home page change the coming? button to a dismiss
+  // button that removes the card when clicked"). Me's own I'm coming card
+  // stays, for a change of mind.
+  const day = word(b.day);
+  const stored = (p) => (typeof nnStored === 'function' ? nnStored(p) : '');
+  if (day !== '' && stored('hg-nn-gone-') === day) return '';
+  const coming = day !== '' && stored('hg-coming-') === day;
+  const comingTo = !coming && b.takingEntries === true && typeof nextNightComingHref === 'function' ? nextNightComingHref() : '';
   return '<div class="hero next" style="cursor:default">' +
     '<span class="kicker">Next race night</span>' +
     '<span class="big">' + esc([title, when].filter(Boolean).join(' - ') || 'Next race night') + '</span>' +
@@ -11312,9 +11322,26 @@ function nextNightHtml(answer) {
     (times ? '<span class="when">' + times + '</span>' : '') +
     (word(b.venue) ? '<span class="when">' + esc(word(b.venue)) + '</span>' : '') +
     (comingTo ? '<a class="page wide hp-go nn-go" href="' + esc(comingTo) + '">Coming? Put yourself down</a>' : '') +
+    (coming ? '<button class="page wide hp-go nn-gone" type="button" data-day="' + esc(day) + '">Dismiss</button>' : '') +
     // Into the phone's calendar (14 Nov 2026, driver phone plan item 10).
     (word(b.day) && typeof CLUB === 'string' && CLUB ? '<a class="page wide hp-go nn-cal" href="/c/' + encodeURIComponent(CLUB) + '/nextnight.ics" download>Add to calendar</a>' : '') +
     '</div>';
+}
+
+// This phone's note for this club: the day Me put them down for
+// ('hg-coming-'), or the day Home's card was dismissed ('hg-nn-gone-').
+function nnStored(prefix) {
+  try { return typeof CLUB === 'string' && CLUB ? localStorage.getItem(prefix + CLUB) || '' : ''; } catch (e) { return ''; }
+}
+
+// Dismiss: the card goes now and stays gone for that night.
+function nnWire(at) {
+  const b = at.querySelector('.nn-gone');
+  if (!b) return;
+  b.addEventListener('click', () => {
+    try { localStorage.setItem('hg-nn-gone-' + CLUB, String(b.getAttribute('data-day') || '')); } catch (e) { /* this visit only */ }
+    at.innerHTML = '';
+  });
 }
 
 // Me's I'm coming card: the Me tab's own link (their night once the phone
@@ -11390,7 +11417,7 @@ async function load() {
   // The next race night's card, whatever else is on: a driver at tonight's
   // meeting is exactly who wants to know about the next one.
   const nnAt = document.getElementById('nn');
-  if (nnAt) nnAt.innerHTML = nextNightHtml(nn);
+  if (nnAt) { nnAt.innerHTML = nextNightHtml(nn); nnWire(nnAt); }
   drawRacingTonight(prog);
 
   if (state === null && prog === null) {
@@ -17086,13 +17113,10 @@ function ydPinChip() {
     }));
     return chip;
   }
-  const chip = el('span', 'yd-pin');
-  chip.appendChild(tapButton('Sign in to change', 'yd-pin-b', () => {
-    if (ydSheetCan()) { ydOpenSheet(''); return; }
-    view.details = true;
-    drawAsks('');
-  }));
-  return chip;
+  // Signed out: nothing at the top of the card (16 Nov 2026, Asher: "remove
+  // the sign in to change cyan link at top of the card"). Change my details
+  // under it asks for the PIN.
+  return null;
 }
 
 // Each ask this tab sent, by ref, and where the desk has it: on the live

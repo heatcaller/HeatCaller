@@ -269,7 +269,7 @@ internal sealed partial class DeskInboxForm
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem("Other reason...") { Enabled = false, ToolTipText = DeskInbox.JuniorReplyHint });
         menu.Items.Add(new ToolStripMenuItem(DeskInbox.JuniorReplyHint) { Enabled = false });
-        AppTheme.ApplyRecursively(menu);
+        AppTheme.StyleContextMenu(menu);
         menu.Closed += (_, _) => BeginInvoke(menu.Dispose);
         menu.Show(_btnDecline, new Point(0, _btnDecline.Height));
     }
