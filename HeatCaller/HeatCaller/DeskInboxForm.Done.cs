@@ -96,7 +96,10 @@ internal sealed partial class DeskInboxForm
 
         _btnRemoveDone.Enabled = false;
         _btnRemoveDone.Click += (_, _) => RemoveNote(SelectedDoneNote());
-        _doneButtons.With(_btnRemoveDone);
+
+        // The Done list is a view of the list's own (the rail's Done, or H):
+        // "Hide done" under it goes back to what is waiting, as Esc does.
+        _doneButtons.With(_btnRemoveDone, _doneToggle);
 
         ShowDone();
     }
@@ -107,16 +110,23 @@ internal sealed partial class DeskInboxForm
         // keeping half the spare height (FillPage.AddFill).
         // Before the page is built there is no holder yet; the constructor
         // calls this again once there is.
-        if (_gridDone.Parent is { } holder)
+        // In place of the waiting list, as a view of its own - see InboxBody.
+        if (_body is not null)
         {
-            holder.Visible = _showDone;
+            _body.ShowingDone = _showDone;
         }
 
-        _doneButtons.Visible = _showDone;
+        _rail.PickedId = _showDone ? "done" : _filter == InboxFilter.Vote ? InboxFilter.All : _filter;
+
         ShowWaitingList();
         FillDone();
+        _doneView.PerformLayout();
         _page.PerformLayout();
     }
+
+    /// <summary>How many are in the Done list: requests answered and tonight's notes approved or said.</summary>
+    private int DoneCount() =>
+        (_requests?.Store.All.Count(r => !r.IsWaiting) ?? 0) + (_notes?.All.Count(n => n.Approved) ?? 0);
 
     /// <summary>The Done list: answered requests newest first, then tonight's notes approved or said.</summary>
     private void FillDone()
@@ -156,6 +166,15 @@ internal sealed partial class DeskInboxForm
                 var at = _gridDone.Rows.Add(WhenText(request.AskedUtc), DriverRequestDesk.KindWords(request.Kind), desk.NameFor(request),
                     desk.Summary(request), DriverRequestDesk.AnswerWords(request), request.Ref);
                 _gridDone.Rows[at].Tag = request;
+
+                // How it was answered, at a glance: yes in green, no in red.
+                var answer = _gridDone.Rows[at].Cells["answer"].Style;
+                answer.ForeColor = answer.SelectionForeColor = request.State switch
+                {
+                    DriverAsk.Approved => AppTheme.Success,
+                    DriverAsk.Declined => AppTheme.Danger,
+                    _ => AppTheme.TextMuted,
+                };
             }
         }
 

@@ -15,7 +15,8 @@ internal sealed partial class DeskInboxForm
     /// <summary>How wide the typing box is at the normal text size - a sentence, not a word.</summary>
     private const int NoteBoxWidth = 520;
 
-    private readonly ButtonBar _noteBox = new();
+    private readonly ButtonBar _noteBox = new(tight: true);
+    private readonly Label _noteCaption = new();
     private readonly TextBox _txtNote = new();
     private readonly Button _btnAddNote = new() { Text = "Add" };
 
@@ -30,8 +31,12 @@ internal sealed partial class DeskInboxForm
 
     private void BuildNoteBox()
     {
-        var caption = new Label { Text = "Your own note:", AutoSize = true, Anchor = AnchorStyles.Left };
+        var caption = _noteCaption;
+        caption.Text = "Your own note:";
+        caption.AutoSize = true;
+        caption.Anchor = AnchorStyles.Left;
 
+        _txtNote.PlaceholderText = "For the announcer to read out between races";
         _txtNote.MaxLength = ClubNotes.MostChars;
         _txtNote.Width = UiLayout.AtTextSize(NoteBoxWidth);
         _txtNote.AccessibleName = "Your own note for the announcer";
@@ -57,6 +62,26 @@ internal sealed partial class DeskInboxForm
         _btnAddNote.Click += (_, _) => AddTypedNote();
 
         _noteBox.With(caption, _txtNote, _btnAddNote);
+
+        // The box takes the width the list has, with its caption and Add
+        // beside it on one line - rather than a fixed width that wrapped
+        // onto three lines in the middle column.
+        _list.SizeChanged += (_, _) => FitNoteBox(caption);
+        caption.SizeChanged += (_, _) => FitNoteBox(caption);
+    }
+
+    private void FitNoteBox(Label caption)
+    {
+        var room = _list.ClientSize.Width - _list.Padding.Horizontal
+            - (caption.Visible || !Visible ? caption.Width + caption.Margin.Horizontal : 0)
+            - _btnAddNote.Width - _btnAddNote.Margin.Horizontal
+            - _txtNote.Margin.Horizontal - UiLayout.AtDpi(8);
+        var width = Math.Max(UiLayout.AtTextSize(120), room);
+
+        if (_txtNote.Width != width)
+        {
+            _txtNote.Width = width;
+        }
     }
 
     /// <summary>Notes from the room still waiting for the desk's OK.</summary>

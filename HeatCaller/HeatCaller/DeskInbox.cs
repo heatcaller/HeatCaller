@@ -115,6 +115,31 @@ internal static class DeskInbox
         return waited >= red ? InboxAge.Red : waited >= amber ? InboxAge.Amber : InboxAge.Fine;
     }
 
+    /// <summary>
+    /// The headline a driver's phone shows for an answer, so the desk sees
+    /// it before pressing (16 Nov 2026, the Inbox's "their phone will say").
+    /// The same words as the Me page's meReplyWords (relay/src/mespaces.ts)
+    /// for the kinds it answers there, and the night page's for the rest -
+    /// DeskInboxTests holds the two in step. A decline's chosen words are
+    /// shown under it on the phone as well.
+    /// </summary>
+    internal static string PhoneHeadline(string kind, string state, string badge)
+    {
+        var no = state == DriverAsk.Declined;
+        var noted = state == DriverAsk.Noted;
+
+        return kind switch
+        {
+            DriverAsk.Late => no ? "Can't hold your race" : "Yes, 5 more minutes",
+            DriverAsk.Skip => no ? "You're still in your race" : "You're out of your race",
+            DriverAsk.Cover => no ? "No marshal swap" : "Marshal swap done",
+            DriverAsk.Details => no ? "Your details stay as they were" : noted ? "The desk has your details" : "Your details are changed",
+            DriverAsk.Query => no ? "Your result stands" : noted ? "The desk has your query" : "The desk agreed with your query",
+            // The night page's own: the kind, then its stateWords.
+            _ => $"{badge} - {(no ? "declined" : noted ? "noted by the desk" : "approved")}",
+        };
+    }
+
     /// <summary>The badge's colour on Race Control's Inbox button: red while anything race-blocking waits.</summary>
     internal static bool AnyRaceBlocking(IEnumerable<InboxItem> items, ISet<string>? snoozed = null) =>
         items.Any(item => item.RaceBlocking && (snoozed is null || !snoozed.Contains(item.Key)));
