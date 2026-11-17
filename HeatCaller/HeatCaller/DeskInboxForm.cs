@@ -747,7 +747,9 @@ internal sealed partial class DeskInboxForm : Form
         }
 
         menu.Items.Add("Change the quick replies...", null, (_, _) => EditQuickReplies());
-        AppTheme.ApplyRecursively(menu);
+        // StyleContextMenu, not ApplyRecursively: that gave the items the
+        // theme's light text on the stock white menu, all but unreadable.
+        AppTheme.StyleContextMenu(menu);
         menu.Closed += (_, _) => BeginInvoke(menu.Dispose);
         menu.Show(_btnDecline, new Point(0, _btnDecline.Height));
     }
