@@ -1514,7 +1514,8 @@ internal sealed class CheckList : Panel
         Invalidate();
     }
 
-    private static int RowHeight => Math.Max(AppTheme.BodyFont.Height + UiLayout.AtTextSize(14), AppTheme.SmallFont.Height + UiLayout.AtTextSize(18));
+    // Tall enough for a fix button: the theme draws buttons in the bold face, whatever they were given (17 Nov 2026 - its words were cut off at the bottom).
+    private static int RowHeight => Math.Max(AppTheme.BodyFont.Height + UiLayout.AtTextSize(14), AppTheme.BoldFont.Height + UiLayout.AtTextSize(16));
 
     private static int Gap => UiLayout.AtTextSize(6);
 
@@ -1532,8 +1533,8 @@ internal sealed class CheckList : Panel
                 continue;
             }
 
-            var height = AppTheme.SmallFont.Height + UiLayout.AtTextSize(10);
-            var width = TextRenderer.MeasureText(button.Text, button.Font).Width + UiLayout.AtTextSize(18);
+            var height = Math.Max(button.Font.Height, AppTheme.BoldFont.Height) + UiLayout.AtTextSize(8);
+            var width = Math.Max(TextRenderer.MeasureText(button.Text, button.Font).Width, TextRenderer.MeasureText(button.Text, AppTheme.BoldFont).Width) + UiLayout.AtTextSize(12);
             var y = i * (RowHeight + Gap) + (RowHeight - height) / 2;
             button.Bounds = new Rectangle(Width - width - UiLayout.AtTextSize(6), y, width, height);
         }
