@@ -199,9 +199,16 @@ internal static class MissionControl
         : new("health", "Transponders", $"{i.Fading.Count} fading",
             $"{string.Join("; ", i.Fading.Take(2))}{More(i.Fading.Count, 2)}. Check batteries and mounts.", Level.Watch);
 
-    private static Tile Website(Inputs i)
+    private static Tile Website(Inputs i) => Website(i.Relay);
+
+    /// <summary>
+    /// The website check on its own, from the relay's status - for Race
+    /// Day's go/no-go list (17 Nov 2026), which needs this one and the sound
+    /// and none of the decoder's.
+    /// </summary>
+    internal static Tile Website(RelayStatus? relayStatus)
     {
-        if (i.Relay is not { Enabled: true } relay)
+        if (relayStatus is not { Enabled: true } relay)
         {
             return new("website", "Website", "Off", "Results aren't published online.", Level.Off);
         }
@@ -317,7 +324,10 @@ internal static class MissionControl
         return $"{UsageGlance.ShortName(most.Kind)} {most.ShortPercent()}";
     }
 
-    private static Tile Sound(Inputs i) => i.VoiceMuted
+    private static Tile Sound(Inputs i) => Sound(i.VoiceMuted);
+
+    /// <summary>The sound check on its own - see Website(RelayStatus?).</summary>
+    internal static Tile Sound(bool voiceMuted) => voiceMuted
         ? new("sound", "Sound", "Muted", "The announcer is muted - unmute before the green if it should be heard.", Level.Watch)
         : new("sound", "Sound", "On", "The announcer will be heard.", Level.Good);
 

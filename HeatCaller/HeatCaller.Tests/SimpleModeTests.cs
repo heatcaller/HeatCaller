@@ -421,7 +421,7 @@ public sealed class SimpleModeTests : IDisposable
         "RaceDayEventControl.cs|Which race day", "RaceDayEventControl.cs|The night", "RaceDayEventControl.cs|Times",
         "RaceDayEventControl.cs|Heats", "RaceDayEventControl.cs|Money", "RaceDayEventControl.cs|Running the night", "RaceDayEventControl.cs|The heats",
         "RaceDayEventControl.cs|Marshals", "RaceDayEventControl.cs|Papers", "RaceDayEventControl.cs|End of the night", "RaceDayEventControl.cs|Commentary",
-        "TodayControl.cs|Ready to race", "RaceProgramControl.cs|Tonight's program", "EventsControl.cs|Race days",
+        "TodayControl.cs|Get back on time", "TodayControl.cs|Go / no-go", "RaceProgramControl.cs|Tonight's run sheet", "EventsControl.cs|Race days",
         "EventsControl.cs|Nights", "CheckInControl.cs|Drivers", "CheckInControl.Desk.cs|Scan to Check In", "CheckInControl.Desk.cs|Tonight at the Desk",
         "SeasonsControl.cs|Championships", "SeasonsControl.cs|Races counted", "SeasonsControl.cs|Standings", "SeasonsControl.cs|Points scheme", "SeasonsControl.cs|Can they still win?", "SeasonsControl.cs|Scoring rules", "SeasonsControl.cs|Points carried in",
         "AnalyticsOverviewControl.cs|From the last race night",

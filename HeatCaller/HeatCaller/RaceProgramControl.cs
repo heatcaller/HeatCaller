@@ -162,6 +162,9 @@ public sealed partial class RaceProgramControl : UserControl
 
     private readonly Label _lblStatus = new();
 
+    /// <summary>"4 of 12 run", beside the class filter.</summary>
+    private readonly Label _lblRunCount = new();
+
     /// <summary>The next step, as last worked out by RefreshNextStep. Run by RunPrimaryAction.</summary>
     private ProgramStep _step = new(ProgramStage.NoEvent, string.Empty, string.Empty, "...");
 
@@ -369,39 +372,45 @@ public sealed partial class RaceProgramControl : UserControl
         filterRow.Add(new Label { Text = "Class:" }, _cmbFilter, FilterWidth);
         _filterRow = filterRow;
 
-        // --- The status line ---
-        //
-        // What the last command did. Two lines kept for it whatever it says,
-        // so the buttons above it do not hop as the messages come and go.
-        _lblStatus.AutoSize = true;
-        _lblStatus.ForeColor = AppTheme.TextMuted;
-        _textSize.Wear(_lblStatus, () => AppTheme.SmallFont);
-        _textSize.ReserveLines(_lblStatus, 2);
+        // How far through the night, beside the filter: "4 of 12 run".
+        _lblRunCount.AutoSize = true;
+        _lblRunCount.ForeColor = AppTheme.TextMuted;
+        _textSize.Wear(_lblRunCount, () => AppTheme.SmallFont);
+        filterRow.Add(null, _lblRunCount);
 
-        // Until a command says what it did: where everything that is not a
-        // button is. The menu has no button of its own - see the summary.
-        _lblStatus.Text = "Right-click the list for everything else: building the program, the heat sheet, "
-            + "moving and deleting rounds.";
+        // --- What the last command did ---
+        //
+        // The run sheet (17 Nov 2026) has no status line under it - the
+        // sheet shows what a command did, and the footer that used to sit
+        // between the two moved out to Next Steps. What a command says still
+        // goes to the console, as every program line does.
+        _lblStatus.TextChanged += (_, _) =>
+        {
+            if (!string.IsNullOrWhiteSpace(_lblStatus.Text))
+            {
+                StatusMessage?.Invoke("[program] " + _lblStatus.Text);
+            }
+        };
 
         // --- The card ---
         //
-        // The split is the point of the two bars. Every button on the left
-        // needs a round chosen and is disabled without one; nothing on the
-        // right does. That is the distinction the old single wrapping row
-        // of ten buttons had no way to express. The glossary - the one thing
-        // here that is not an action on the day - ends up hard against the
-        // right-hand edge, where help is looked for.
-        var roundCommands = new ButtonBar().With(_btnStart, _btnEditDrivers);
-        var dayTools = new ButtonBar(alignRight: true).With(_btnWords, _btnBumpUps, _btnMarshals, _btnStandings, _btnTimetable);
-
-        var list = new Section("Tonight's program");
+        // Tonight's run sheet (17 Nov 2026, the Race Day redesign - see
+        // RaceProgramControl.RunSheet): the class filter, and the grid drawn
+        // as the night's timetable with Next Steps' card in it. The buttons
+        // that were under the grid are Next Steps' footer now, across the
+        // whole page; the ones they ran are still here (EditDriversFromFooter
+        // and the rest), and everything else is still on the right-click.
+        var list = new Section("Tonight's run sheet");
 
         list.Add(filterRow);
-        list.AddFill(_grid, LeastGridHeight);
-        list.Add(new SplitBar(roundCommands, dayTools));
-        list.Add(_lblStatus, gapBelow: 0);
+        list.AddFill(_grid, LeastGridHeight, gapBelow: 0);
 
-        var page = new FillPage();
+        var page = new FillPage
+        {
+            // Next Steps' page gives it its margins - it is the left of
+            // that page's two columns now, not a pane of its own.
+            Padding = Padding.Empty,
+        };
 
         page.AddFill(list, list.LeastHeight, gapBelow: 0);
         page.LeastHeightChanged += PostLeastPaneHeightChanged;
@@ -462,7 +471,8 @@ public sealed partial class RaceProgramControl : UserControl
 
     /// <summary>The least height the list can do with: its headings and three rounds. Below that the pane scrolls instead - see FillPage.</summary>
     private int LeastGridHeight() =>
-        _grid.ColumnHeadersHeight + 3 * _grid.RowTemplate.Height;
+        _grid.ColumnHeadersHeight + 3 * _grid.RowTemplate.Height
+        + (NowRow() is { } card ? Math.Max(0, card.Height - _grid.RowTemplate.Height) : 0);
 
     private void BuildGrid()
     {
@@ -502,8 +512,14 @@ public sealed partial class RaceProgramControl : UserControl
         _grid.MouseLeave += (_, _) => note.Hide();
         _grid.MouseDown += (_, _) => note.Hide();
         _grid.Scroll += (_, _) => note.Hide();
+        // THE RUN SHEET (17 Nov 2026): Time, the timeline's dot, Race
+        // ("Stock · Q1 Heat 1"), Drivers ("4 of 5 here"), Length and Status,
+        // all drawn by hand - see RaceProgramControl.RunSheet. The running
+        // number, the kind, the class on its own and the track are still
+        // columns, hidden: the heat sheet, the hover note and the old code
+        // that reads them by name all still find them.
         _grid.Columns.AddRange(
-            new DataGridViewTextBoxColumn { Name = "order", HeaderText = "#", FillWeight = 22 },
+            new DataGridViewTextBoxColumn { Name = "order", HeaderText = "#", FillWeight = 22, Visible = false },
 
             // When it is due, off the timetable.
             //
@@ -518,9 +534,14 @@ public sealed partial class RaceProgramControl : UserControl
             // When it should start, worked out from tonight's own pace (11
             // Nov 2026, race-night build plan, Phase 2 - see NightPlan).
             // Blank for a round already run; hidden with nothing still to run.
-            new DataGridViewTextBoxColumn { Name = "est", HeaderText = "About", FillWeight = 42, Visible = false },
+            //
+            // The sheet's first column now, always shown: a raced round's
+            // start, and when each one still to run should go.
+            new DataGridViewTextBoxColumn { Name = "est", HeaderText = "Time", FillWeight = 42 },
 
-            new DataGridViewTextBoxColumn { Name = "round", HeaderText = "Round", FillWeight = 95 },
+            new DataGridViewTextBoxColumn { Name = "dot", HeaderText = string.Empty, FillWeight = 14 },
+
+            new DataGridViewTextBoxColumn { Name = "round", HeaderText = "Race", FillWeight = 150 },
 
             // What KIND of round this is - and it was not on screen at all.
             //
@@ -531,11 +552,14 @@ public sealed partial class RaceProgramControl : UserControl
             // are entirely about tiers and a hand-added main has its tier
             // read from its label. The phone has been given both all along
             // (RoundRow.kind and .tier); the desk had neither.
-            new DataGridViewTextBoxColumn { Name = "kind", HeaderText = "Kind", FillWeight = 60 },
-            new DataGridViewTextBoxColumn { Name = "class", HeaderText = "Class", FillWeight = 105 },
-            new DataGridViewTextBoxColumn { Name = "drivers", HeaderText = "Drivers", FillWeight = 45 },
-            new DataGridViewTextBoxColumn { Name = "track", HeaderText = "Track", FillWeight = 80 },
-            new DataGridViewTextBoxColumn { Name = "status", HeaderText = "Status", FillWeight = 70 });
+            new DataGridViewTextBoxColumn { Name = "kind", HeaderText = "Kind", FillWeight = 60, Visible = false },
+            new DataGridViewTextBoxColumn { Name = "class", HeaderText = "Class", FillWeight = 105, Visible = false },
+            new DataGridViewTextBoxColumn { Name = "drivers", HeaderText = "Drivers", FillWeight = 105 },
+            new DataGridViewTextBoxColumn { Name = "length", HeaderText = "Length", FillWeight = 50 },
+            new DataGridViewTextBoxColumn { Name = "track", HeaderText = "Track", FillWeight = 80, Visible = false },
+            new DataGridViewTextBoxColumn { Name = "status", HeaderText = "Status", FillWeight = 90 });
+
+        WireSheet();
 
         // WHY (23 Oct 2026, bug hunt 10): the columns kept the default
         // Automatic sort mode, so a header click quietly re-sorted the rows
@@ -1767,81 +1791,59 @@ public sealed partial class RaceProgramControl : UserControl
             ? day
             : day.Where(r => MixedHeats.RunsClass(r, filter)).ToList(); // a shared heat shows under each of its classes (Phase 4.1)
 
-        // Worked out against the WHOLE day, not the filtered view - the
-        // next round is the next round whether or not you are looking at
-        // its class.
-        var next = day.FirstOrDefault(r => !r.IsRecorded);
+        // The run sheet (17 Nov 2026): the rounds, the fold, the card's row,
+        // the mains to come and the end of racing - see
+        // RaceProgramControl.RunSheet. The next round is worked out against
+        // the WHOLE day there, not the filtered view: the next round is the
+        // next round whether or not you are looking at its class.
 
         // A note left up would describe a row that is about to go.
         _driversNote?.Hide();
-        _grid.Rows.Clear();
 
-        // Due times, by round, from the timetable - and the column is only
-        // shown when at least one of today's rounds has one. A DataGridView
-        // column's Visible is its own state and not effective visibility, so
-        // this is safe to read back, unlike Control.Visible.
-        var due = _schedule is null
-            ? new Dictionary<string, string>(StringComparer.Ordinal)
-            : _schedule.All
-                .Where(e => !string.IsNullOrWhiteSpace(e.RoundId) && !string.IsNullOrWhiteSpace(e.ScheduledTime))
-                .GroupBy(e => e.RoundId, StringComparer.Ordinal)
-                .ToDictionary(g => g.Key, g => g.First().ScheduledTime.Trim(), StringComparer.Ordinal);
+        _fillingSheet = true;
 
-        // Made with the grid, so always there; asked for by name, which
-        // .NET says can come back empty.
-        if (_grid.Columns["due"] is { } dueColumn)
+        try
         {
-            dueColumn.Visible = shown.Any(r => due.ContainsKey(r.Id));
-        }
+            _grid.Rows.Clear();
 
-        // When each round still to run should start - see NightPlan.
-        var plan = Plan(day);
+            // Due times, by round, from the timetable - and the column is
+            // only shown when at least one of today's rounds has one. A
+            // DataGridView column's Visible is its own state and not
+            // effective visibility, so this is safe to read back, unlike
+            // Control.Visible.
+            var due = _schedule is null
+                ? new Dictionary<string, string>(StringComparer.Ordinal)
+                : _schedule.All
+                    .Where(e => !string.IsNullOrWhiteSpace(e.RoundId) && !string.IsNullOrWhiteSpace(e.ScheduledTime))
+                    .GroupBy(e => e.RoundId, StringComparer.Ordinal)
+                    .ToDictionary(g => g.Key, g => g.First().ScheduledTime.Trim(), StringComparer.Ordinal);
 
-        if (_grid.Columns["est"] is { } estColumn)
-        {
-            estColumn.Visible = plan is not null && shown.Any(r => plan.StartOf(r.Id) is not null);
-        }
-
-        var position = 1;
-
-        foreach (var round in shown)
-        {
-            var isNext = next is not null && string.Equals(round.Id, next.Id, StringComparison.Ordinal);
-
-            var index = _grid.Rows.Add(
-                position++,
-                due.TryGetValue(round.Id, out var at) ? at : string.Empty,
-                plan?.StartOf(round.Id) is { } estimate ? AppTime.TimeOfDay(estimate.ToLocalTime()) : string.Empty,
-                round.RoundLabel,
-                DescribeKind(round),
-                MixedHeats.ClassLabel(round), // "Stock + Mod" for a shared heat (Phase 4.1)
-                round.AssignedTransponders.Count,
-                string.IsNullOrWhiteSpace(round.TrackLayoutName) ? "-" : round.TrackLayoutName,
-                round.IsRecorded ? "Recorded" : isNext ? "NEXT" : "Scheduled");
-
-            var row = _grid.Rows[index];
-            row.Tag = round.Id;
-            row.Cells["drivers"].Tag = DriversTip(round);
-
-            // The class cell carries the class's colour, the same one the
-            // heat sheet is banded with - so the paper on the pit table and
-            // the row on the screen are recognisably the same thing.
-            row.Cells["class"].Style.ForeColor = ClassColourFor(round.ClassName);
-
-            if (round.IsRecorded)
+            if (_grid.Columns["due"] is { } dueColumn)
             {
-                // Done is quiet. It is still there to be looked at, but it
-                // is not what the director is scanning the list for.
-                row.DefaultCellStyle.ForeColor = AppTheme.TextMuted;
-                row.Cells["class"].Style.ForeColor = AppTheme.TextMuted;
+                dueColumn.Visible = shown.Any(r => due.ContainsKey(r.Id));
             }
-            else if (isNext)
+
+            FillSheet(day, shown, filter, due);
+            _grid.ClearSelection();
+
+            // The top of the sheet, so the card - folded under at most two
+            // rows - is where it was last time. Only once the grid is on
+            // screen: scrolling a grid makes its window, and one made by a
+            // control built off screen on another thread (a test's) waited
+            // on that thread for ever.
+            if (_grid.IsHandleCreated && _grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => r.Visible) is { } first)
             {
-                row.DefaultCellStyle.BackColor = AppTheme.PrimaryTint;
-                row.DefaultCellStyle.ForeColor = AppTheme.TextDark;
-                row.DefaultCellStyle.Font = AppTheme.BoldFont;
+                _grid.FirstDisplayedScrollingRowIndex = first.Index;
             }
         }
+        finally
+        {
+            _fillingSheet = false;
+        }
+
+        _lblRunCount.Text = day.Count == 0 ? string.Empty : $"{day.Count(r => r.IsRecorded)} of {day.Count} run";
+        PlaceNowCard();
+        SheetRebuilt?.Invoke();
 
         RefreshNextStep(day);
         UpdateSelectionActions();
@@ -3777,7 +3779,11 @@ public sealed partial class RaceProgramControl : UserControl
     /// </summary>
     private void DropRounds(List<string> ids, int insertBefore)
     {
-        var anchor = AnchorFor(ShownRoundIds(), insertBefore);
+        // The drop's row counted in rounds: the run sheet's rows that aren't
+        // rounds (the fold, the card's own row, the mains to come) take no
+        // place in the running order (17 Nov 2026).
+        var roundsBefore = _grid.Rows.Cast<DataGridViewRow>().Count(r => r.Index < insertBefore && r.Tag is string);
+        var anchor = AnchorFor(ShownRoundIds(), roundsBefore);
 
         // A driver closer than tonight's races off asks first (12 Nov 2026,
         // setup plan step 8) - see RaceProgramControl.RestGap.
@@ -3842,7 +3848,12 @@ public sealed partial class RaceProgramControl : UserControl
 
         foreach (DataGridViewRow row in _grid.Rows)
         {
-            ids.Add(row.Tag as string ?? string.Empty);
+            // Rounds only: the run sheet's other rows are not in the
+            // running order (17 Nov 2026).
+            if (row.Tag is string id)
+            {
+                ids.Add(id);
+            }
         }
 
         return ids;

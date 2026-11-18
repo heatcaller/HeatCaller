@@ -34,14 +34,22 @@ public sealed class ResizeGripTests
         Assert.Equal("Drag to make Tonight's program taller or shorter.", program.TipText);
     }
 
+    /// <summary>
+    /// Race Day's Next Steps had a grip to drag between its card and the
+    /// program grid. Since the run sheet (17 Nov 2026) the program IS the
+    /// page, with the next race's card on it, so there is no line to drag:
+    /// one page, the program in it, and no splitter left behind.
+    /// </summary>
     [Fact]
-    public void Race_Day_sizes_Tonights_program_with_the_grip_not_the_splitter()
+    public void Race_Day_is_one_page_with_the_run_sheet_in_it_not_a_split()
     {
         var pages = File.ReadAllText(Path.Combine(SourceDir(), "MainForm.Pages.cs"));
+        var today = File.ReadAllText(Path.Combine(SourceDir(), "TodayControl.cs"));
 
-        Assert.Contains("IsSplitterFixed = true", pages, StringComparison.Ordinal);
-        Assert.Contains("var programGrip = new ResizeGrip", pages, StringComparison.Ordinal);
-        Assert.Contains("ResizeGrip.PaintNow(todaySplit)", pages, StringComparison.Ordinal);
+        Assert.Contains("subPageToday.Controls.Add(today);", pages, StringComparison.Ordinal);
+        Assert.DoesNotContain("var todaySplit = new SplitContainer", pages, StringComparison.Ordinal);
+        Assert.Contains("middle.AddFill(_program,", today, StringComparison.Ordinal);
+        Assert.Contains("_program.HostNowCard(_card);", today, StringComparison.Ordinal);
     }
 
     private static string SourceDir()

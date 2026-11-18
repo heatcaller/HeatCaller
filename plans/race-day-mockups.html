@@ -1,0 +1,603 @@
+<title>Race Day Rethink</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: a design review sheet. A reading column for the argument; wide, scrollable "app windows" for each mockup, numbered callouts under each. */
+:root{
+  --bg:#f4f3f8; --fg:#1a1726; --muted:#5d5873; --line:#dcd9e6; --paper:#ffffff;
+  --accent:#c2185b; --accent-soft:#fbe1ec;
+  --f-display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  /* the app itself: always its own dark theme, as it ships */
+  --a-bg:#150c29; --a-surf:#1f1439; --a-surf2:#2a1c4b; --a-line:#3a2a62; --a-fg:#f4effe; --a-mut:#a99cc8; --a-dim:#7a6e99;
+  --a-pink:#ff2e88; --a-pink-fg:#1a0614; --a-cyan:#2fd3e0;
+  --a-good:#3ddc84; --a-good-t:#123826; --a-warn:#ffb020; --a-warn-t:#3d2a08; --a-bad:#ff5252; --a-bad-t:#43121a; --a-info:#7aa7ff;
+  --f-app:"Barlow","Segoe UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#110f18; --fg:#ebe8f4; --muted:#a19bb6; --line:#2c2839; --paper:#1a1724; --accent:#ff5c9d; --accent-soft:#3a1626; color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#110f18; --fg:#ebe8f4; --muted:#a19bb6; --line:#2c2839; --paper:#1a1724; --accent:#ff5c9d; --accent-soft:#3a1626; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.6 var(--f-body);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:40px 96px}
+.wrap{max-width:1260px;margin:0 auto;display:flex;flex-direction:column;gap:64px}
+.prose{max-width:740px;display:flex;flex-direction:column;gap:14px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.1}
+h1{font-size:46px;font-weight:700}
+h2{font-size:31px;font-weight:700}
+h3{font-size:19px;font-weight:600}
+p{margin:0}
+.eyebrow{font:600 12px/1 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.lede{font-size:17px;color:var(--muted)}
+code{font:500 13px var(--f-mono);background:var(--accent-soft);padding:1px 5px;border-radius:3px}
+
+.shot{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:900px){.shot{grid-template-columns:1fr}}
+.issues{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.issues li{display:grid;grid-template-columns:30px 1fr;gap:10px;font-size:14.5px}
+.issues b.n{font:700 15px/26px var(--f-display);width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;text-align:center}
+.issues strong{display:block}
+.issues span{color:var(--muted)}
+
+.rules{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px 26px}
+@media (max-width:860px){.rules{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.rules{grid-template-columns:1fr}}
+.rules div{border-top:2px solid var(--fg);padding-top:10px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.rules p{color:var(--muted);font-size:14px}
+.rules small{font:500 12px var(--f-mono);color:var(--accent)}
+
+.mock{display:flex;flex-direction:column;gap:18px}
+.mock-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 18px}
+.mock-head .letter{font:700 60px/.8 var(--f-display);color:var(--accent)}
+.mock-head p{color:var(--muted);max-width:720px;flex-basis:100%}
+.tag{font:600 11px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase;padding:5px 8px;border-radius:4px;background:var(--accent-soft);color:var(--accent)}
+.scroller{overflow-x:auto;border-radius:12px;box-shadow:0 1px 0 var(--line),0 18px 44px -20px rgba(20,8,40,.5)}
+.notes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 36px;list-style:none;margin:0;padding:0}
+@media (max-width:760px){.notes{grid-template-columns:1fr}}
+.notes li{display:grid;grid-template-columns:24px 1fr;gap:8px;font-size:14px;min-width:0}
+.notes li b{font:700 13px/22px var(--f-display);width:22px;height:22px;border-radius:50%;background:var(--fg);color:var(--bg);text-align:center}
+.tradeoff{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:640px){.tradeoff{grid-template-columns:1fr}}
+.tradeoff div{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:14px 16px;font-size:14px}
+.tradeoff h4{margin:0 0 6px;font:600 12px var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+.compare{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--paper)}
+.compare table{border-collapse:collapse;width:100%;min-width:760px;font-size:14px}
+.compare th,.compare td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+.compare th{font:600 12px var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.compare tr:last-child td{border-bottom:0}
+.dots{font-family:var(--f-mono);letter-spacing:2px;color:var(--accent)}
+.pick{background:var(--accent-soft)}
+
+.steps{display:flex;flex-direction:column;gap:18px;max-width:860px}
+.steps>div{display:grid;grid-template-columns:54px 1fr;gap:14px}
+.steps .ph{font:700 28px/1 var(--f-display);color:var(--accent)}
+.steps ul{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:14px;display:flex;flex-direction:column;gap:4px}
+.steps ul strong{color:var(--fg);font-weight:600}
+
+/* ============ the app windows ============ */
+.app{width:1220px;background:var(--a-bg);color:var(--a-fg);font:15px/1.35 var(--f-app);font-variant-numeric:tabular-nums;position:relative}
+.app *{font-variant-numeric:tabular-nums}
+.tabs{display:flex;align-items:center;gap:34px;padding:14px 26px 0;border-bottom:1px solid var(--a-line)}
+.tabs .brand{font:600 12px var(--f-app);letter-spacing:.3em;color:var(--a-pink);margin-right:8px}
+.tabs span{font-weight:600;color:var(--a-mut);padding-bottom:12px;font-size:16px}
+.tabs span.on{color:var(--a-pink);box-shadow:inset 0 -3px 0 var(--a-pink)}
+.tabs .clock{margin-left:auto;font:700 22px var(--f-app);color:var(--a-fg);padding-bottom:10px}
+.tabs .clock i{font-style:normal;font-size:13px;color:var(--a-mut);font-weight:600;margin-left:6px}
+.body{padding:20px 26px 24px;display:flex;flex-direction:column;gap:16px}
+.card{background:var(--a-surf);border:1px solid var(--a-line);border-radius:10px;padding:16px 18px}
+.lbl{font:700 12px/1 var(--f-app);letter-spacing:.14em;text-transform:uppercase;color:var(--a-mut)}
+.lbl.pk{color:var(--a-pink)}
+.btn{display:inline-flex;align-items:center;gap:8px;border-radius:8px;font:700 16px var(--f-app);padding:11px 18px;border:1px solid var(--a-line);background:var(--a-surf2);color:var(--a-fg);white-space:nowrap}
+.btn.pri{background:var(--a-pink);border-color:var(--a-pink);color:var(--a-pink-fg)}
+.btn.big{font-size:22px;padding:16px 26px;border-radius:10px}
+.btn.ghost{background:transparent}
+.btn.off{background:var(--a-surf2);color:var(--a-dim);border-style:dashed}
+.btn kbd,.kbd{font:600 12px var(--f-mono);border:1px solid currentColor;border-radius:4px;padding:1px 5px;opacity:.75}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:6px;font:700 13px var(--f-app);padding:4px 10px;border-radius:999px;white-space:nowrap}
+.pill.good{background:var(--a-good-t);color:var(--a-good)}
+.pill.warn{background:var(--a-warn-t);color:var(--a-warn)}
+.pill.bad{background:var(--a-bad-t);color:var(--a-bad)}
+.pill.mut{background:var(--a-surf2);color:var(--a-mut)}
+.ico{display:inline-block;width:14px;text-align:center;font-weight:800}
+.mut{color:var(--a-mut)}
+.dim{color:var(--a-dim)}
+.co{position:absolute;width:24px;height:24px;border-radius:50%;background:#fff;color:#150c29;font:700 13px/24px var(--f-display);text-align:center;box-shadow:0 0 0 3px var(--a-pink);z-index:3}
+
+/* A */
+.a-alarm{display:grid;grid-template-columns:auto 1fr auto;gap:18px;align-items:center;background:var(--a-bad-t);border:1px solid var(--a-bad);border-left:8px solid var(--a-bad);border-radius:10px;padding:14px 18px}
+.a-alarm .big{font:700 30px/1 var(--f-app);color:var(--a-bad)}
+.a-alarm .fix{display:flex;gap:8px;flex-wrap:wrap}
+.a-alarm .fix .btn{font-size:14px;padding:8px 12px}
+.a-alarm .fix .btn small{color:var(--a-good);font-weight:700}
+.a-grid{display:grid;grid-template-columns:1.55fr 1fr;gap:16px}
+.a-now{border:2px solid var(--a-pink);background:linear-gradient(180deg,#2b1546,#1f1439)}
+.a-now h2{font:700 44px/1.05 var(--f-app);color:var(--a-fg);margin:8px 0 4px}
+.a-now h2 em{font-style:normal;color:var(--a-cyan)}
+.a-facts{display:flex;gap:26px;margin:10px 0 16px}
+.a-facts div b{display:block;font:700 26px/1 var(--f-app)}
+.a-facts div span{font-size:13px;color:var(--a-mut)}
+.a-block{display:flex;align-items:center;gap:10px;background:var(--a-warn-t);color:var(--a-warn);border-radius:8px;padding:9px 12px;font-weight:600;margin-bottom:14px}
+.queue{display:flex;flex-direction:column}
+.queue .q{display:grid;grid-template-columns:62px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--a-line)}
+.queue .q:last-child{border-bottom:0}
+.queue .q b{font-size:17px}
+.queue .t{font:700 17px var(--f-app);color:var(--a-mut)}
+.gates{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.gate{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-radius:8px;background:var(--a-surf);border:1px solid var(--a-line);border-top:4px solid var(--a-good)}
+.gate.warn{border-top-color:var(--a-warn)} .gate.bad{border-top-color:var(--a-bad);background:var(--a-bad-t)}
+.gate b{font:700 22px/1 var(--f-app)}
+.gate span{font-size:13px;color:var(--a-mut)}
+.foot{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.foot .sp{flex:1}
+
+/* B */
+.b-top{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.b-k{padding:12px 16px;border-radius:10px;background:var(--a-surf);border:1px solid var(--a-line)}
+.b-k b{display:block;font:700 34px/1.05 var(--f-app)}
+.b-k.bad{border-color:var(--a-bad);background:var(--a-bad-t)} .b-k.bad b{color:var(--a-bad)}
+.b-main{display:grid;grid-template-columns:1fr 340px;gap:16px}
+.tl{position:relative;padding-left:0}
+.tl .r{display:grid;grid-template-columns:84px 22px 1.1fr 1fr 70px 128px;gap:12px;align-items:center;padding:9px 12px;border-radius:8px}
+.tl .r .tm{font:700 16px var(--f-app);color:var(--a-mut);text-align:right}
+.tl .r .tm s{display:block;font-size:12px;color:var(--a-dim);text-decoration:line-through;font-weight:600}
+.tl .r .dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--a-dim);justify-self:center}
+.tl .r.done{opacity:.55} .tl .r.done .dot{background:var(--a-good);border-color:var(--a-good)}
+.tl .r.next{background:var(--a-surf2);outline:2px solid var(--a-pink)} .tl .r.next .dot{background:var(--a-pink);border-color:var(--a-pink);box-shadow:0 0 0 5px rgba(255,46,136,.25)}
+.tl .r.cut .dot{border-style:dashed;border-color:var(--a-warn)} .tl .r.cut{color:var(--a-dim)}
+.tl .r.late .tm{color:var(--a-bad)}
+.tl .now{display:grid;grid-template-columns:84px 1fr;gap:12px;align-items:center;margin:2px 0}
+.tl .now b{font:700 13px var(--f-app);color:var(--a-cyan);text-align:right;letter-spacing:.06em}
+.tl .now i{height:2px;background:var(--a-cyan)}
+.tl .out{display:grid;grid-template-columns:84px 1fr;gap:12px;align-items:center;margin:4px 0}
+.tl .out b{font:700 13px var(--f-app);color:var(--a-bad);text-align:right}
+.tl .out i{border-top:2px dashed var(--a-bad);position:relative}
+.tl .out i::after{content:"OUT BY 5:00 PM";position:absolute;left:8px;top:-9px;background:var(--a-surf);padding:0 6px;font:700 12px var(--f-app);color:var(--a-bad);letter-spacing:.08em}
+.recover{display:flex;flex-direction:column;gap:10px}
+.opt{display:grid;grid-template-columns:22px 1fr auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--a-line);border-radius:8px;background:var(--a-surf2)}
+.opt .box{width:18px;height:18px;border:2px solid var(--a-mut);border-radius:4px}
+.opt.on{border-color:var(--a-good)} .opt.on .box{background:var(--a-good);border-color:var(--a-good)}
+.opt b{color:var(--a-good)}
+.opt span{font-size:14px}
+
+/* C */
+.strip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.ann{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:2px solid var(--a-good);background:var(--a-good-t);min-width:0}
+.ann .sh{font:800 18px/1 var(--f-app);color:var(--a-good);width:20px;text-align:center}
+.ann b{display:block;font:700 15px/1.1 var(--f-app);color:var(--a-fg)}
+.ann span{font-size:12.5px;color:var(--a-mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.ann.warn{border-color:var(--a-warn);background:var(--a-warn-t)} .ann.warn .sh{color:var(--a-warn)}
+.ann.bad{border-color:var(--a-bad);background:var(--a-bad-t);animation:none} .ann.bad .sh{color:var(--a-bad)}
+.c-main{display:grid;grid-template-columns:1fr 1.25fr 300px;gap:16px}
+.c-big{display:flex;flex-direction:column;gap:8px}
+.c-big h2{font:700 40px/1 var(--f-app);margin:6px 0 0}
+.lineup{display:flex;flex-direction:column;gap:6px}
+.dr{display:grid;grid-template-columns:30px 1fr 74px 96px;gap:10px;align-items:center;padding:8px 10px;border-radius:6px;background:var(--a-surf2)}
+.dr .pos{font:700 18px var(--f-app);color:var(--a-mut)}
+.dr .tx{font:500 13px var(--f-mono);color:var(--a-mut)}
+.dr.miss{background:var(--a-warn-t)}
+.log{display:flex;flex-direction:column;gap:8px;font-size:14px}
+.log div{display:grid;grid-template-columns:62px 1fr;gap:8px}
+.log time{color:var(--a-dim);font-weight:600}
+.keys{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--a-mut);padding-top:4px}
+
+/* D */
+.d-shell{display:grid;grid-template-columns:270px 1fr;min-height:640px}
+.d-side{background:#120a23;border-right:1px solid var(--a-line);padding:20px 18px;display:flex;flex-direction:column;gap:6px}
+.ph{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start;padding:10px;border-radius:8px}
+.ph .ck{width:24px;height:24px;border-radius:50%;border:2px solid var(--a-dim);font:800 13px/20px var(--f-app);text-align:center;color:var(--a-bg)}
+.ph.done .ck{background:var(--a-good);border-color:var(--a-good)}
+.ph.cur{background:var(--a-surf2);outline:2px solid var(--a-pink)} .ph.cur .ck{border-color:var(--a-pink);color:var(--a-pink)}
+.ph b{display:block;font-size:16px}
+.ph span{font-size:13px;color:var(--a-mut)}
+.d-main{padding:22px 26px;display:flex;flex-direction:column;gap:16px}
+.checklist{display:flex;flex-direction:column;gap:8px}
+.ci{display:grid;grid-template-columns:30px 1fr auto;gap:12px;align-items:center;padding:12px 14px;border-radius:8px;background:var(--a-surf);border:1px solid var(--a-line)}
+.ci .s{font:800 18px var(--f-app);text-align:center}
+.ci.ok .s{color:var(--a-good)} .ci.ok{opacity:.7}
+.ci.no{border-color:var(--a-bad);background:var(--a-bad-t)} .ci.no .s{color:var(--a-bad)}
+.ci.wn{border-color:var(--a-warn);background:var(--a-warn-t)} .ci.wn .s{color:var(--a-warn)}
+.ci b{font-size:17px} .ci span{display:block;font-size:13.5px;color:var(--a-mut)}
+.ci .btn{font-size:14px;padding:8px 14px}
+.hold{position:relative;overflow:hidden}
+/* E: A + B, run sheet first */
+.e-alarm{display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:var(--a-bad-t);border:1px solid var(--a-bad);border-left:8px solid var(--a-bad);border-radius:10px;padding:10px 16px}
+.e-alarm .big{font:700 24px/1 var(--f-app);color:var(--a-bad)}
+.e-main{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
+.e-sheet{padding:10px 12px 14px}
+.e-sheet .hd{display:grid;grid-template-columns:84px 22px 1.25fr 1fr 70px 150px;gap:12px;padding:4px 12px 8px;border-bottom:1px solid var(--a-line);margin-bottom:6px}
+.e-sheet .hd span{font:700 11px var(--f-app);letter-spacing:.12em;text-transform:uppercase;color:var(--a-dim)}
+.e-sheet .tl .r{grid-template-columns:84px 22px 1.25fr 1fr 70px 150px;font-size:16px}
+.e-sheet .fold{display:grid;grid-template-columns:84px 22px 1fr;gap:12px;padding:6px 12px;color:var(--a-dim);font-size:14px}
+.e-now{margin:4px 0 6px;border:2px solid var(--a-pink);border-radius:8px;background:linear-gradient(180deg,#2b1546,#1f1439);display:grid;grid-template-columns:84px 22px 1fr;gap:12px;padding:9px 12px}
+.e-now .tm{font:700 17px var(--f-app);color:var(--a-fg);text-align:right}
+.e-now .tm small{display:block;font-size:11px;color:var(--a-pink);font-weight:700;letter-spacing:.08em}
+.e-now .dot{width:14px;height:14px;border-radius:50%;background:var(--a-pink);box-shadow:0 0 0 5px rgba(255,46,136,.25);justify-self:center;margin-top:6px}
+.e-now h3{font:700 23px/1.05 var(--f-app);margin:0;color:var(--a-fg)}
+.e-now h3 em{font-style:normal;color:var(--a-cyan)}
+.e-now .facts{display:flex;gap:18px;margin:5px 0 8px;font-size:13px;color:var(--a-mut)}
+.e-now .facts b{color:var(--a-fg);font-size:15px;margin-right:4px}
+.e-now .a-block{margin-bottom:8px;padding:6px 10px;font-size:14px}
+.e-now .a-block .btn{font-size:13px!important;padding:4px 10px!important}
+.e-now .btn{font-size:14px;padding:7px 12px}
+.e-now .btn.big{font-size:16px;padding:10px 18px;border-radius:8px}
+.e-side{display:flex;flex-direction:column;gap:12px}
+.e-fix .opt{padding:9px 10px}
+.e-checks{display:flex;flex-direction:column;gap:6px}
+.e-chk{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;padding:8px 10px;border-radius:7px;font-size:14px}
+.e-chk .s{font-weight:800;text-align:center}
+.e-chk.ok{color:var(--a-mut)} .e-chk.ok .s{color:var(--a-good)}
+.e-chk.wn{background:var(--a-warn-t)} .e-chk.wn .s{color:var(--a-warn)}
+.e-chk.no{background:var(--a-bad-t);outline:1px solid var(--a-bad)} .e-chk.no .s{color:var(--a-bad)}
+.e-chk b{color:var(--a-fg)}
+.e-chk .btn{font-size:12.5px;padding:4px 9px}
+.hold::after{content:"";position:absolute;left:0;bottom:0;height:4px;width:38%;background:var(--a-fg);opacity:.6}
+</style>
+
+<div class="wrap">
+
+<header class="prose">
+  <span class="eyebrow">HeatCaller · design review · 17 Nov 2026</span>
+  <h1>Race Day Rethink</h1>
+  <p class="lede">The Race Day page is the screen a race director looks at between races, standing up, with drivers at the stand and a marshal asking a question. Below: what goes wrong on today's page under that pressure, the rules a redesign should follow, four mockups that each try a different idea, and a build plan for the recommended one. <a href="#a-plus-b" style="color:var(--accent)">Jump to the A+B mockup (run sheet first) ↓</a></p>
+</header>
+
+<section class="stack" style="display:flex;flex-direction:column;gap:22px">
+  <div class="prose"><span class="eyebrow">What the screenshot shows</span><h2>Today's page asks you to read sentences</h2>
+  <p>Everything on the page is accurate, and it is all drawn about the same size and colour. The worst news on it (the night ends four hours late) is the quietest text on it.</p></div>
+  <div class="shot">
+    <ul class="issues">
+      <li><b class="n">1</b><div><strong>The biggest problem is in muted body text.</strong><span>"Finishes about 9:01 PM - 4 h 02 min past the 5:00 PM out-by time" sits mid-sentence in grey, after the race count. The three ways to fix it are in the same sentence with no button.</span></div></li>
+      <li><b class="n">2</b><div><strong>The page says "start" and "not ready" at once.</strong><span>Start Q1 Heat 1 is the loudest button on screen while Ready to Race says the timer isn't connected. Nothing links the two, so the director finds out at the green flag.</span></div></li>
+      <li><b class="n">3</b><div><strong>"Q1 Heat 1" means four different races.</strong><span>The headline, the Next Up tile and three grid rows all say Q1 Heat 1. Only the small detail line says it's Stock. The grid opens on races already recorded, so the next race isn't in view.</span></div></li>
+      <li><b class="n">4</b><div><strong>Numbers without a judgement.</strong><span>"19 drivers in" and "6 checked in" sit side by side as equals, but 13 people not checked in is a problem. "5 of 6 ready" counts setup steps and uses the same words as the drivers.</span></div></li>
+      <li><b class="n">5</b><div><strong>Too many buttons that look the same.</strong><span>Nine buttons, two of them pink primaries (Start Q1 Heat 1, Start Selected). The rest of the commands are on a right-click menu that you have to know about.</span></div></li>
+      <li><b class="n">6</b><div><strong>Hard to read from a few steps away.</strong><span>The section labels are widely spaced small caps (T H E &nbsp;D A Y), there's no clock on the page, and the hidden "About" (expected time) column means you can't see when each race should go.</span></div></li>
+    </ul>
+    <div class="tradeoff" style="grid-template-columns:1fr">
+      <div><h4>What a director needs between two races</h4>
+      <p>In about 90 seconds: <b>what's next</b> (which race, which class, who's in it), <b>can I start it</b> (timer, drivers, marshals), <b>am I on time</b> (and, if not, what I can cut), and <b>what's going wrong</b>. Everything else (standings, glossary, editing drivers) can be one step further away.</p></div>
+      <div><h4>Already in the app</h4>
+      <p><code>ProgramNextStep</code> works out the next race. <code>NightPlan.For</code> projects the finish and <code>FinalsCuts</code> works out the savings. <code>NightPlan.AboutOf</code> gives each race an expected time. <code>MissionControl.Assess</code> sorts every check into a good, watch or problem level. <code>ReadyToRace</code> knows what's left to set up. The redesign is mostly about how these are shown. Very little new logic is needed.</p></div>
+    </div>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:22px">
+  <div class="prose"><span class="eyebrow">Rules for the redesign</span><h2>What a high-pressure screen has to do</h2>
+  <p>These come from places where mistakes are costly and people are rushed: aircraft cockpits, control rooms, broadcast galleries, ICU monitors. Every mockup is checked against them.</p></div>
+  <div class="rules">
+    <div><h3>One obvious next action</h3><p>One primary button on the screen, always for the next race. Every other button is secondary or behind a menu.</p><small>Hick's law · reduce choices</small></div>
+    <div><h3>Quiet when things are fine</h3><p>Green checks are small and dim. Only problems get size, colour and position. If everything is loud, the director stops noticing any of it.</p><small>"dark cockpit" philosophy</small></div>
+    <div><h3>Never colour alone</h3><p>Every status is a shape and a word as well as a colour (✓ OK, ▲ Watch, ■ Stop), so it still works for colour-blind directors, in sunlight and on a cheap projector.</p><small>WCAG 1.4.1 · redundant coding</small></div>
+    <div><h3>Things stay in fixed places</h3><p>The timer status is always in the same spot, and so is the Start button. A button never moves because the text above it got longer. People find things by remembering where they are.</p><small>spatial memory · no layout shift</small></div>
+    <div><h3>Show the decision, not the data</h3><p>Show "47 min late, and here are 3 ways to fix it" as buttons, not a sentence to work out. Times are clock times ("8:12 PM"), not durations you have to add up.</p><small>recognition over recall</small></div>
+    <div><h3>Readable from a few steps away</h3><p>The next race, the clock and the alarm are 28px or larger. No long words in widely spaced capitals. Contrast is at least 4.5:1, and 7:1 for anything you act on.</p><small>glanceability · WCAG 1.4.6</small></div>
+    <div><h3>Mistakes can be undone</h3><p>Starting a race can be undone in one step (the app's undo already covers it). Risky choices like "start anyway" need a held press, not a pop-up asking "Are you sure?" that people click through without reading.</p><small>forgiving design · avoid confirm fatigue</small></div>
+    <div><h3>Easy to pick up after a distraction</h3><p>A marshal pulls you away for two minutes. When you look back, the screen shows what changed while you were away and where you were, with no hunting.</p><small>situation awareness, level 1-3</small></div>
+    <div><h3>Works without a mouse</h3><p>Space starts the next race, H holds and U undoes, and each shortcut is printed on its button. A director holding a radio has one hand free.</p><small>keyboard shortcuts · Fitts's law</small></div>
+  </div>
+</section>
+
+<!-- ================= MOCKUP A ================= -->
+<section class="mock">
+  <div class="mock-head"><span class="letter">A</span><h2>Now, Next, Later</h2><span class="tag">recommended</span>
+  <p>Built around the director's three questions. A red banner appears only when the night is in trouble, with the fixes as buttons. One large card for the race about to go, the next few races beside it, and a row of go/no-go checks underneath. The full program moves into a drawer.</p></div>
+  <div class="scroller"><div class="app">
+    <div class="tabs"><span class="brand">RACE DAY</span><span class="on">Next Steps</span><span>Who's Racing</span><span>Setup</span><span class="clock">4:58 PM<i>Wed 11 Nov · Upstate Mini Z · Home Track</i></span></div>
+    <div class="body">
+      <span class="co" style="left:14px;top:76px">1</span>
+      <div class="a-alarm">
+        <span class="big">■ 4 h 02 min late</span>
+        <div><b style="font-size:17px">At this pace racing ends at 9:01 PM. Out-by time is 5:00 PM.</b><div class="mut" style="font-size:14px">8 races left · each fix shows the minutes it saves and can be undone</div></div>
+        <div class="fix"><span class="btn">Drop Q3 · 4 races <small>−31 min</small></span><span class="btn">Shorter quals, −1 min <small>−8 min</small></span><span class="btn">One main fewer in Stock <small>−7 min</small></span></div>
+      </div>
+      <div class="a-grid">
+        <div class="card a-now" style="position:relative">
+          <span class="co" style="left:-12px;top:-12px">2</span>
+          <span class="lbl pk">Next on track</span>
+          <h2>Stock · <em>Q1 Heat 1</em></h2>
+          <div class="a-facts"><div><b>5</b><span>drivers</span></div><div><b>4 / 5</b><span>checked in</span></div><div><b>5:00 PM</b><span>due on the stand</span></div><div><b>5 min</b><span>race length</span></div></div>
+          <div class="a-block" style="position:relative"><span class="co" style="left:-30px;top:6px">3</span>▲ Timer not connected. Laps won't be counted. <span class="btn" style="margin-left:auto;font-size:14px;padding:6px 12px">Connect Timer</span></div>
+          <div class="row"><span class="btn pri big">▶ Start Stock Q1 Heat 1 <kbd>Space</kbd></span><span class="btn ghost">Call to the stand</span><span class="btn ghost">Skip ▾</span></div>
+        </div>
+        <div class="card" style="position:relative">
+          <span class="co" style="right:-12px;top:-12px">4</span>
+          <div class="row" style="justify-content:space-between"><span class="lbl">Coming up</span><span class="mut" style="font-size:13px">4 of 12 run</span></div>
+          <div class="queue" style="margin-top:8px">
+            <div class="q"><span class="t">5:08</span><div><b>Box Stock · Q2 Heat 1</b><div class="mut" style="font-size:13px">5 drivers · all checked in</div></div><span class="pill good"><span class="ico">✓</span>Ready</span></div>
+            <div class="q"><span class="t">5:16</span><div><b>Mod · Q2 Heat 1</b><div class="mut" style="font-size:13px">5 drivers · 2 not here</div></div><span class="pill warn"><span class="ico">▲</span>2 missing</span></div>
+            <div class="q"><span class="t">5:24</span><div><b>50% · Q2 Heat 1</b><div class="mut" style="font-size:13px">4 drivers · all checked in</div></div><span class="pill good"><span class="ico">✓</span>Ready</span></div>
+            <div class="q"><span class="t dim">+4</span><div class="mut">4 more races, then mains</div><span class="btn ghost" style="font-size:13px;padding:5px 10px">Full program ▸</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="position:relative"><span class="co" style="left:-12px;top:-10px">5</span>
+      <div class="gates">
+        <div class="gate bad"><b>■ Timer</b><span>Not connected</span></div>
+        <div class="gate warn"><b>▲ 6 of 19</b><span>drivers checked in</span></div>
+        <div class="gate"><b>✓ Marshals</b><span>3 called for Q1 H1</span></div>
+        <div class="gate"><b>✓ Phones</b><span>Relay live · 14 watching</span></div>
+        <div class="gate"><b>✓ 4 classes</b><span>12 races built</span></div>
+      </div></div>
+      <div class="foot" style="position:relative"><span class="co" style="left:-12px;top:-4px">6</span>
+        <span class="btn">Drivers' Meeting</span><span class="btn">Edit Drivers</span><span class="sp"></span>
+        <span class="btn ghost">Timetable</span><span class="btn ghost">Standings</span><span class="btn ghost">Marshals</span><span class="btn ghost">More ▾</span><span class="btn ghost">↶ Undo <kbd>U</kbd></span>
+      </div>
+    </div>
+  </div></div>
+  <ol class="notes">
+    <li><b>1</b><span><strong>The alarm only appears when something is wrong.</strong> It stays hidden while the night is on time, turns amber at 10 minutes late and red at 30. It uses the numbers from <code>NightPlan.For</code> and <code>FinalsCuts</code>, and each fix is a button that shows the minutes it saves, so the director picks one instead of working it out.</span></li>
+    <li><b>2</b><span><strong>The class comes first in the name.</strong> "Stock · Q1 Heat 1", everywhere, every time. The four large numbers are the ones the director checks before starting: drivers, who's here, when it's due and how long it runs.</span></li>
+    <li><b>3</b><span><strong>The problem sits right above the Start button.</strong> Start still works (practice nights run without a timer), but the problem and its fix are right where the director's eye is going.</span></li>
+    <li><b>4</b><span><strong>Expected times from the hidden "About" column.</strong> Each race is a clock time plus a single status pill: ✓ Ready or ▲ with what's missing. That gives the director a two-race warning about missing drivers.</span></li>
+    <li><b>5</b><span><strong>Five fixed checks, always in the same order.</strong> Taken from <code>MissionControl.Assess</code>. Problems get a coloured top bar, a shape and a filled background. Checks that are OK stay quiet.</span></li>
+    <li><b>6</b><span><strong>The nine buttons become two, plus quiet links.</strong> The right-click commands move into a visible "More ▾". Undo is always on screen.</span></li>
+  </ol>
+  <div class="tradeoff"><div><h4>Strengths</h4>The smallest change from today's page, because it's the same three parts in a better order. It covers every rule above. The program grid isn't lost; it opens in a drawer from "Full program ▸".</div><div><h4>Costs</h4>The director can no longer see all 12 races at a glance on the page. Building and editing heats becomes a drawer visit. Clubs that rebuild the program mid-night will notice.</div></div>
+</section>
+
+<!-- ================= MOCKUP B ================= -->
+<section class="mock">
+  <div class="mock-head"><span class="letter">B</span><h2>Run sheet timeline</h2><span class="tag">time first</span>
+  <p>The night as a timetable running down the page, with a "now" line and the out-by line drawn in. Being late is something you see as distance between the two lines. The recovery options sit beside the timeline and redraw it as you tick them.</p></div>
+  <div class="scroller"><div class="app">
+    <div class="tabs"><span class="brand">RACE DAY</span><span class="on">Next Steps</span><span>Who's Racing</span><span>Setup</span><span class="clock">4:58 PM<i>Wed 11 Nov · Home Track</i></span></div>
+    <div class="body">
+      <div class="b-top" style="position:relative"><span class="co" style="left:-12px;top:-10px">1</span>
+        <div class="b-k"><span class="lbl">Next</span><b>Stock Q1 H1</b><span class="mut">due 5:00 PM · 5 drivers</span></div>
+        <div class="b-k bad"><span class="lbl">Finish</span><b>9:01 PM</b><span class="mut">■ 4 h 02 min after out-by</span></div>
+        <div class="b-k"><span class="lbl">Progress</span><b>4 / 12</b><span class="mut">races run · 8 to go</span></div>
+        <div class="b-k"><span class="lbl">Last race gap</span><b>+3 min</b><span class="mut">over the 3 min target</span></div>
+      </div>
+      <div class="b-main">
+        <div class="card" style="padding:12px;position:relative"><span class="co" style="left:-12px;top:30px">2</span>
+          <div class="tl">
+            <div class="r done"><span class="tm">4:22</span><span class="dot"></span><b>50% · Q1 Heat 1</b><span class="mut">4 drivers</span><span class="mut">5 min</span><span class="pill good"><span class="ico">✓</span>Recorded</span></div>
+            <div class="r done"><span class="tm">4:30</span><span class="dot"></span><b>Box Stock · Q1 Heat 1</b><span class="mut">5 drivers</span><span class="mut">5 min</span><span class="pill good"><span class="ico">✓</span>Recorded</span></div>
+            <div class="r done"><span class="tm">4:41</span><span class="dot"></span><b>Mod · Q1 Heat 1</b><span class="mut">5 drivers</span><span class="mut">5 min</span><span class="pill good"><span class="ico">✓</span>Recorded</span></div>
+            <div class="now"><b>NOW 4:58</b><i></i></div>
+            <div class="r next"><span class="tm">5:00</span><span class="dot"></span><b>Stock · Q1 Heat 1</b><span class="mut">4 of 5 here</span><span class="mut">5 min</span><span class="btn pri" style="padding:7px 12px;font-size:14px">▶ Start <kbd>Space</kbd></span></div>
+            <div class="out"><b></b><i></i></div>
+            <div class="r late"><span class="tm">5:08</span><span class="dot"></span><b>Box Stock · Q2 Heat 1</b><span class="mut">5 drivers</span><span class="mut">5 min</span><span class="pill good"><span class="ico">✓</span>Ready</span></div>
+            <div class="r late"><span class="tm">5:16</span><span class="dot"></span><b>Mod · Q2 Heat 1</b><span class="mut">3 of 5 here</span><span class="mut">5 min</span><span class="pill warn"><span class="ico">▲</span>2 missing</span></div>
+            <div class="r cut"><span class="tm"><s>6:40</s>cut</span><span class="dot"></span><b>Q3 · all classes (4 races)</b><span class="dim">ticked: drop</span><span class="dim">−31 min</span><span class="pill mut">Dropped</span></div>
+            <div class="r late"><span class="tm">8:21</span><span class="dot"></span><b>Stock · A-Main</b><span class="mut">8 drivers</span><span class="mut">8 min</span><span class="pill mut">Not built</span></div>
+            <div class="r late"><span class="tm">8:30</span><span class="dot"></span><b class="mut">Racing done</b><span></span><span></span><span class="pill bad"><span class="ico">■</span>+3 h 30</span></div>
+          </div>
+        </div>
+        <div class="card recover" style="position:relative"><span class="co" style="right:-12px;top:-12px">3</span>
+          <span class="lbl">Get back on time</span>
+          <p class="mut" style="font-size:14px">Tick to preview the change on the timeline. Nothing changes until you press Apply.</p>
+          <div class="opt on"><span class="box"></span><span>Drop Q3 (4 races)</span><b>−31 min</b></div>
+          <div class="opt"><span class="box"></span><span>Qualifiers 1 min shorter</span><b>−8 min</b></div>
+          <div class="opt"><span class="box"></span><span>One main fewer in Stock</span><b>−7 min</b></div>
+          <div class="opt"><span class="box"></span><span>Gaps to 2 min</span><b>−8 min</b></div>
+          <div class="row" style="margin-top:4px"><span class="btn pri">Apply 1 change</span><span class="btn ghost">Tell the drivers</span></div>
+          <p class="dim" style="font-size:13px">Still +3 h 30 after this. Nothing on the list closes the whole gap. Consider ending after the mains.</p>
+        </div>
+      </div>
+    </div>
+  </div></div>
+  <ol class="notes">
+    <li><b>1</b><span><strong>Four large numbers at the top.</strong> Only the finish number can turn red, and it does so with ■ and the words, not colour alone.</span></li>
+    <li><b>2</b><span><strong>Races are laid out on the clock.</strong> Done races fade, the next one is outlined, and anything below the dashed out-by line has its time in red. Cut races stay visible with the old time crossed out, so nobody wonders where Q3 went.</span></li>
+    <li><b>3</b><span><strong>Preview the fix first, then apply it.</strong> Ticking previews the change; Apply makes it, with one undo entry. "Tell the drivers" reuses the existing <code>NightPlan.Announcement</code> on the phones and the PA.</span></li>
+    <li><b>·</b><span><strong>The Ready-to-race card has gone from the screen.</strong> Missing setup shows as a pill on the race it would stop. That's honest, but it hides the timer problem until race time.</span></li>
+  </ol>
+  <div class="tradeoff"><div><h4>Strengths</h4>The best answer to "are we on time?", and the most honest picture of a late night. It suits clubs with a hard out-by time (rented halls, school gyms).</div><div><h4>Costs</h4>It has the most reading of the four (eleven rows). It's weak on blockers. It's a new control, because the timeline can't be built from the existing grid. It needs <code>AboutOf</code> to be trustworthy for every row.</div></div>
+</section>
+
+<!-- ================= MOCKUP C ================= -->
+<section class="mock">
+  <div class="mock-head"><span class="letter">C</span><h2>Annunciator console</h2><span class="tag">cockpit</span>
+  <p>A fixed row of status lights along the top, like an aircraft's warning panel: six slots that never move, each lit green, amber or red with a shape and a word. Below it, the next race with its actual driver line-up, and a short "since you looked away" log for when you come back from a distraction.</p></div>
+  <div class="scroller"><div class="app">
+    <div class="tabs"><span class="brand">RACE DAY</span><span class="on">Next Steps</span><span>Who's Racing</span><span>Setup</span><span class="clock">4:58 PM<i>Home Track</i></span></div>
+    <div class="body">
+      <div class="strip" style="position:relative"><span class="co" style="left:-12px;top:-10px">1</span>
+        <div class="ann bad"><span class="sh">■</span><div><b>TIMER</b><span>Not connected</span></div></div>
+        <div class="ann bad"><span class="sh">■</span><div><b>PACE</b><span>+4 h 02 · 9:01 PM</span></div></div>
+        <div class="ann warn"><span class="sh">▲</span><div><b>CHECK-IN</b><span>6 of 19 here</span></div></div>
+        <div class="ann"><span class="sh">✓</span><div><b>MARSHALS</b><span>3 called</span></div></div>
+        <div class="ann"><span class="sh">✓</span><div><b>PHONES</b><span>Relay live</span></div></div>
+        <div class="ann"><span class="sh">✓</span><div><b>VOICE</b><span>Caller on</span></div></div>
+      </div>
+      <div class="c-main">
+        <div class="card c-big" style="position:relative"><span class="co" style="left:-12px;top:-12px">2</span>
+          <span class="lbl pk">Next · due 5:00 PM</span>
+          <h2>Stock<br>Q1 Heat 1</h2>
+          <span class="mut">5 min · 5 drivers · Home Track</span>
+          <div style="flex:1"></div>
+          <span class="btn pri big hold" style="justify-content:center">▶ Start <kbd>Space</kbd></span>
+          <span class="dim" style="font-size:13px">2 lights are red · hold Space for 1 s to start anyway</span>
+          <div class="row"><span class="btn" style="flex:1;justify-content:center">Fix timer</span><span class="btn" style="flex:1;justify-content:center">Fix pace ▾</span></div>
+        </div>
+        <div class="card" style="position:relative"><span class="co" style="left:-12px;top:-12px">3</span>
+          <div class="row" style="justify-content:space-between"><span class="lbl">On the stand</span><span class="pill warn"><span class="ico">▲</span>1 not here</span></div>
+          <div class="lineup" style="margin-top:10px">
+            <div class="dr"><span class="pos">1</span><b>Dana Reyes</b><span class="tx">#4411</span><span class="pill good"><span class="ico">✓</span>Here</span></div>
+            <div class="dr"><span class="pos">2</span><b>Marco Valli</b><span class="tx">#2093</span><span class="pill good"><span class="ico">✓</span>Here</span></div>
+            <div class="dr miss"><span class="pos">3</span><b>Priya Shah</b><span class="tx">#7718</span><span class="pill warn"><span class="ico">▲</span>Not in</span></div>
+            <div class="dr"><span class="pos">4</span><b>Tom Kerr</b><span class="tx">#1180</span><span class="pill good"><span class="ico">✓</span>Here</span></div>
+            <div class="dr"><span class="pos">5</span><b>Jess Lowe</b><span class="tx">#3352</span><span class="pill good"><span class="ico">✓</span>Here</span></div>
+          </div>
+          <div class="row" style="margin-top:10px"><span class="btn" style="font-size:14px;padding:7px 12px">Page Priya</span><span class="btn ghost" style="font-size:14px;padding:7px 12px">Move to a later heat</span></div>
+          <div style="border-top:1px solid var(--a-line);margin-top:14px;padding-top:10px"><span class="lbl">Then</span><div class="mut" style="margin-top:6px">5:08 Box Stock Q2 H1 · ✓ &nbsp; 5:16 Mod Q2 H1 · ▲ 2 missing</div></div>
+        </div>
+        <div class="card" style="position:relative"><span class="co" style="right:-12px;top:-12px">4</span>
+          <span class="lbl">Since you looked away</span>
+          <div class="log" style="margin-top:10px">
+            <div><time>4:57</time><span><b style="color:var(--a-warn)">▲</b> Priya Shah's check-in timed out on her phone</span></div>
+            <div><time>4:55</time><span><b style="color:var(--a-bad)">■</b> Timer dropped. USB unplugged?</span></div>
+            <div><time>4:52</time><span><b style="color:var(--a-good)">✓</b> Mod Q1 H1 recorded · win: K. Alvarez</span></div>
+            <div><time>4:50</time><span>Marshals called for Stock Q1 H1</span></div>
+          </div>
+          <div class="keys" style="margin-top:14px"><span><span class="kbd">Space</span> start</span><span><span class="kbd">H</span> hold</span><span><span class="kbd">U</span> undo</span><span><span class="kbd">P</span> program</span></div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+  <ol class="notes">
+    <li><b>1</b><span><strong>Six slots that never move or reorder.</strong> Each slot stays put whatever its state, so after a week the director glances top-left for the timer without thinking. It's driven by <code>MissionControl.Assess</code> levels.</span></li>
+    <li><b>2</b><span><strong>The Start button checks the lights.</strong> While anything is red, a single click doesn't start the race; a held press (a filling bar) does. No pop-up to click through.</span></li>
+    <li><b>3</b><span><strong>The actual drivers, not just a count.</strong> The missing driver is named, with the two things a director actually does about it: page them, or move them to a later heat.</span></li>
+    <li><b>4</b><span><strong>A log for after a distraction.</strong> The last few events, newest first, shape-coded. It uses the desk log the check-in page already keeps.</span></li>
+  </ol>
+  <div class="tradeoff"><div><h4>Strengths</h4>The best at spotting problems at a glance and at recovering from distractions. It shows driver-level detail where today's page shows only counts. The light row could also go on Race Control, so both pages read the same way.</div><div><h4>Costs</h4>It looks dense, and a first-time director may feel it's a lot. Two red lights look alarming even on a casual practice night, so each club needs a "this check doesn't apply tonight" switch.</div></div>
+</section>
+
+<!-- ================= MOCKUP D ================= -->
+<section class="mock">
+  <div class="mock-head"><span class="letter">D</span><h2>Guided phases with a pre-race checklist</h2><span class="tag">checklist</span>
+  <p>The night as four phases down the left: Set up, Check in, Race, Close. The page only shows the current phase. While racing, each race gets a short pre-race checklist, like a pilot's before-take-off list, with the fix beside each failing line.</p></div>
+  <div class="scroller"><div class="app">
+    <div class="tabs"><span class="brand">RACE DAY</span><span class="on">Next Steps</span><span>Who's Racing</span><span>Setup</span><span class="clock">4:58 PM<i>Home Track</i></span></div>
+    <div class="d-shell">
+      <div class="d-side" style="position:relative"><span class="co" style="left:6px;top:8px">1</span>
+        <div class="ph done"><span class="ck">✓</span><div><b>Set up</b><span>4 classes · 12 races</span></div></div>
+        <div class="ph done"><span class="ck">✓</span><div><b>Check in</b><span>6 of 19 · late arrivals open</span></div></div>
+        <div class="ph cur"><span class="ck">3</span><div><b>Race</b><span>4 of 12 run</span></div></div>
+        <div class="ph"><span class="ck"></span><div><b>Close</b><span>results, money, post</span></div></div>
+        <div style="flex:1"></div>
+        <div class="card" style="padding:12px;background:var(--a-bad-t);border-color:var(--a-bad)"><b style="color:var(--a-bad)">■ 4 h 02 min late</b><div class="mut" style="font-size:13px;margin-top:4px">Ends 9:01 PM · out by 5:00 PM</div><span class="btn" style="margin-top:8px;font-size:13px;padding:6px 10px">See fixes</span></div>
+      </div>
+      <div class="d-main">
+        <div class="row" style="justify-content:space-between"><div><span class="lbl pk">Race 5 of 12 · due 5:00 PM</span><div style="font:700 38px/1.1 var(--f-app);margin-top:6px">Stock · Q1 Heat 1</div></div><span class="pill warn" style="font-size:15px;padding:7px 14px"><span class="ico">▲</span>2 of 5 checks not done</span></div>
+        <div class="checklist" style="position:relative"><span class="co" style="left:-12px;top:-10px">2</span>
+          <div class="ci no"><span class="s">■</span><div><b>Timer connected</b><span>Laps won't be counted without it.</span></div><span class="btn pri">Connect Timer</span></div>
+          <div class="ci wn"><span class="s">▲</span><div><b>All drivers checked in</b><span>Priya Shah (#7718) not checked in.</span></div><span class="btn">Page · Move · Run without</span></div>
+          <div class="ci ok"><span class="s">✓</span><div><b>Marshals called</b><span>Box Stock Q1 H1 drivers · called 4:50</span></div><span class="dim">auto</span></div>
+          <div class="ci ok"><span class="s">✓</span><div><b>Grid called on the PA</b><span>Caller read the line-up at 4:56</span></div><span class="dim">auto</span></div>
+          <div class="ci ok"><span class="s">✓</span><div><b>Track clear</b><span>Previous race recorded 4:52</span></div><span class="dim">auto</span></div>
+        </div>
+        <div class="row" style="position:relative"><span class="co" style="left:-12px;top:6px">3</span>
+          <span class="btn off big">▶ Start when checks pass</span>
+          <span class="btn hold">Start anyway (hold) <kbd>Space</kbd></span>
+          <span class="btn ghost">Skip this race</span>
+          <span style="flex:1"></span>
+          <span class="btn ghost">Program ▸</span><span class="btn ghost">↶ Undo</span>
+        </div>
+        <div class="card" style="position:relative"><span class="co" style="left:-12px;top:-12px">4</span>
+          <span class="lbl">Up next, checked ahead</span>
+          <div class="row" style="margin-top:10px;gap:28px"><span><b>5:08</b> Box Stock Q2 H1 <span class="pill good"><span class="ico">✓</span>5/5</span></span><span><b>5:16</b> Mod Q2 H1 <span class="pill warn"><span class="ico">▲</span>2 missing</span></span><span><b>5:24</b> 50% Q2 H1 <span class="pill good"><span class="ico">✓</span>5/5</span></span></div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+  <ol class="notes">
+    <li><b>1</b><span><strong>The phase rail is today's three tabs as one sequence.</strong> It tells a new director what stage the night is at, and the alarm is pinned in the same place at the bottom of the rail.</span></li>
+    <li><b>2</b><span><strong>A checklist, read the same way every race.</strong> Lines that pass dim and say "auto" when the app checked them itself. Failing lines get the fix beside them.</span></li>
+    <li><b>3</b><span><strong>The primary button stays disabled until the checks pass.</strong> The way past it is visible and takes a held press. That makes overriding a deliberate choice, without blocking a club that races without a timer.</span></li>
+    <li><b>4</b><span><strong>The next three races are checked ahead,</strong> so a missing Mod driver shows up two races early.</span></li>
+  </ol>
+  <div class="tradeoff"><div><h4>Strengths</h4>The best for new or occasional directors, and it builds the habit of checking before starting. It reuses the Set Up Tonight wizard's steps for phase 1, so there's one way to set up.</div><div><h4>Costs</h4>It's slow for a regular who knows the night by heart (the checklist every race gets old). A held "start anyway" every race at a no-timer club is annoying, so it needs a per-club setting for which checks to skip. It's the biggest structural change: the tabs go.</div></div>
+</section>
+
+<!-- ================= MOCKUP E: A + B ================= -->
+<section class="mock" id="a-plus-b">
+  <div class="mock-head"><span class="letter">A+B</span><h2>The run sheet in charge</h2><span class="tag">new · 17 Nov</span>
+  <p>B's timeline takes up most of the page, and A's parts go inside it. The next race opens up in place on the sheet as A's large Now card, between the "now" line and the races still to come. A's alarm shrinks to a strip at the top. The right-hand column holds the fixes (ticked on to preview them on the sheet) and the go/no-go checks.</p></div>
+  <div class="scroller"><div class="app">
+    <div class="tabs"><span class="brand">RACE DAY</span><span class="on">Next Steps</span><span>Who's Racing</span><span>Setup</span><span class="clock">4:58 PM<i>Wed 11 Nov · Upstate Mini Z · Home Track</i></span></div>
+    <div class="body">
+      <div class="e-alarm" style="position:relative"><span class="co" style="left:-12px;top:-10px">1</span>
+        <span class="big">■ 4 h 02 min late</span>
+        <span style="font-size:16px"><b>Ends 9:01 PM</b> <span class="mut">· out by 5:00 PM · 8 races left</span></span>
+        <span style="flex:1"></span>
+        <span class="mut" style="font-size:14px">With the fix ticked: <b style="color:var(--a-fg)">ends 8:30 PM</b></span>
+      </div>
+      <div class="e-main">
+        <div class="card e-sheet" style="position:relative"><span class="co" style="left:-12px;top:-12px">2</span>
+          <div class="row" style="justify-content:space-between;padding:4px 12px 10px"><span class="lbl">Tonight's run sheet</span><span class="row" style="gap:8px"><span class="pill mut">All classes ▾</span><span class="mut" style="font-size:13px">4 of 12 run</span></span></div>
+          <div class="hd"><span style="text-align:right">Time</span><span></span><span>Race</span><span>Drivers</span><span>Length</span><span>Status</span></div>
+          <div class="tl">
+            <div class="fold"><span style="text-align:right">4:10–4:30</span><span></span><span>▸ 2 earlier races recorded</span></div>
+            <div class="r done"><span class="tm">4:41</span><span class="dot"></span><b>Mod · Q1 Heat 1</b><span class="mut">5 drivers</span><span class="mut">5 min</span><span class="pill good"><span class="ico">✓</span>Recorded</span></div>
+            <div class="now"><b>NOW 4:58</b><i></i></div>
+            <div class="e-now" style="position:relative"><span class="co" style="left:-26px;top:10px">3</span>
+              <span class="tm"><small>NEXT</small>5:00</span><span class="dot"></span>
+              <div>
+                <h3>Stock · <em>Q1 Heat 1</em></h3>
+                <div class="facts"><span><b>5</b>drivers</span><span><b>4 of 5</b>checked in</span><span><b>5 min</b>race</span><span><b>Home Track</b></span></div>
+                <div class="a-block">▲ Timer not connected. Laps won't be counted. <span class="btn" style="margin-left:auto;font-size:14px;padding:6px 12px">Connect Timer</span></div>
+                <div class="row"><span class="btn pri big hold">▶ Start Stock Q1 Heat 1 <kbd>Space</kbd></span><span class="btn ghost">Call to the stand</span><span class="btn ghost">Skip ▾</span></div>
+              </div>
+            </div>
+            <div class="out"><b></b><i></i></div>
+            <div class="r late"><span class="tm">5:08</span><span class="dot"></span><b>Box Stock · Q2 Heat 1</b><span class="mut">5 of 5 here</span><span class="mut">5 min</span><span class="pill good"><span class="ico">✓</span>Ready</span></div>
+            <div class="r late"><span class="tm">5:16</span><span class="dot"></span><b>Mod · Q2 Heat 1</b><span class="mut">3 of 5 here</span><span class="mut">5 min</span><span class="pill warn"><span class="ico">▲</span>2 missing</span></div>
+            <div class="r late"><span class="tm">5:24</span><span class="dot"></span><b>50% · Q2 Heat 1</b><span class="mut">4 of 4 here</span><span class="mut">5 min</span><span class="pill good"><span class="ico">✓</span>Ready</span></div>
+            <div class="r late"><span class="tm">5:32</span><span class="dot"></span><b>Stock · Q2 Heat 1</b><span class="mut">4 of 5 here</span><span class="mut">5 min</span><span class="pill warn"><span class="ico">▲</span>1 missing</span></div>
+            <div class="r cut" style="position:relative"><span class="co" style="left:-26px;top:6px">4</span><span class="tm"><s>6:40</s>cut</span><span class="dot"></span><b>Q3 · all classes (4 races)</b><span class="dim">preview: drop</span><span class="dim">−31 min</span><span class="pill mut">Dropped</span></div>
+            <div class="r late"><span class="tm">6:12</span><span class="dot"></span><b>Mains · 4 classes</b><span class="mut">built after Q2</span><span class="mut">8 min</span><span class="pill mut">Not built</span></div>
+            <div class="r late"><span class="tm">8:30</span><span class="dot"></span><b class="mut">Racing done</b><span></span><span></span><span class="pill bad"><span class="ico">■</span>+3 h 30</span></div>
+          </div>
+        </div>
+        <div class="e-side">
+          <div class="card e-fix recover" style="position:relative"><span class="co" style="right:-12px;top:-12px">5</span>
+            <span class="lbl">Get back on time</span>
+            <div class="opt on"><span class="box"></span><span>Drop Q3 (4 races)</span><b>−31 min</b></div>
+            <div class="opt"><span class="box"></span><span>Qualifiers 1 min shorter</span><b>−8 min</b></div>
+            <div class="opt"><span class="box"></span><span>One main fewer in Stock</span><b>−7 min</b></div>
+            <div class="row"><span class="btn" style="font-size:14px;padding:8px 14px">Apply 1 change</span><span class="btn ghost" style="font-size:14px;padding:8px 12px">Tell the drivers</span></div>
+          </div>
+          <div class="card" style="position:relative;padding:14px"><span class="co" style="right:-12px;top:-12px">6</span>
+            <span class="lbl">Go / no-go</span>
+            <div class="e-checks" style="margin-top:10px">
+              <div class="e-chk no"><span class="s">■</span><span><b>Timer</b> not connected</span><span class="btn">Connect</span></div>
+              <div class="e-chk wn"><span class="s">▲</span><span><b>6 of 19</b> checked in</span><span class="btn">Who's out</span></div>
+              <div class="e-chk ok"><span class="s">✓</span><span>Marshals called</span><span></span></div>
+              <div class="e-chk ok"><span class="s">✓</span><span>Phones · relay live</span><span></span></div>
+              <div class="e-chk ok"><span class="s">✓</span><span>Caller on</span><span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        <span class="btn">Drivers' Meeting</span><span class="btn">Edit Drivers</span><span class="btn">+ Add race</span><span class="sp"></span>
+        <span class="btn ghost">Standings</span><span class="btn ghost">Marshals</span><span class="btn ghost">More ▾</span><span class="btn ghost">↶ Undo <kbd>U</kbd></span>
+      </div>
+    </div>
+  </div></div>
+  <ol class="notes">
+    <li><b>1</b><span><strong>The alarm is a single line.</strong> The sheet already shows how late the night is, so the strip only gives the headline and what it becomes with the ticked fix. It's hidden when the night is on time.</span></li>
+    <li><b>2</b><span><strong>The run sheet is the page.</strong> It replaces today's program grid and stays on this page instead of going to a drawer. It's the same grid with the "About" times turned on, sorted in running order, and done races folded away. It keeps the class filter and the right-click menu.</span></li>
+    <li><b>3</b><span><strong>The next race opens up in place.</strong> A's Now card sits between the "now" line and the races to come, so the eye goes from the clock to the race to the Start button in one line. The blocker strip sits above Start, and the button needs a held press while a check is red.</span></li>
+    <li><b>4</b><span><strong>The sheet shows the fix before you apply it.</strong> A ticked fix crosses out the old time on the races it affects and moves the later times up. Nothing changes until you press Apply, which makes one undo entry.</span></li>
+    <li><b>5</b><span><strong>Fixes on the side, not inside a sentence.</strong> B's tick boxes, using A's numbers from <code>FinalsCuts</code>. Apply is deliberately secondary: the only pink button on the page is Start.</span></li>
+    <li><b>6</b><span><strong>The go/no-go checks are a short list.</strong> The five check tiles shrink to a narrow list. Red and amber rows get a fill and a fix button, and green ones stay plain grey text.</span></li>
+  </ol>
+  <div class="tradeoff"><div><h4>What it keeps from each</h4>From B: the timeline, the out-by line, the preview of a fix before you apply it, crossed-out cut races. From A: one large Start card, the blocker above Start, the checks, the trimmed footer. Nothing moves to a drawer: the program is on the page, as it is today.</div><div><h4>What it costs</h4>The Now card sits in the sheet, so it moves down the page as races are recorded. To keep the Start button from moving, done races fold away and the sheet scrolls to keep the "now" line at the same height. It's more work than A alone, because the program grid gets a custom row for the next race.</div></div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:18px">
+  <div class="prose"><span class="eyebrow">Side by side</span><h2>How the four compare</h2></div>
+  <div class="compare"><table>
+    <tr><th>Rule</th><th>A · Now, Next, Later</th><th>B · Timeline</th><th>C · Annunciators</th><th>D · Phases</th></tr>
+    <tr><td>One obvious next action</td><td class="dots">●●●</td><td class="dots">●●○</td><td class="dots">●●●</td><td class="dots">●●●</td></tr>
+    <tr><td>Quiet when things are fine</td><td class="dots">●●●</td><td class="dots">●●○</td><td class="dots">●●○</td><td class="dots">●●●</td></tr>
+    <tr><td>Answers "are we on time?"</td><td class="dots">●●○</td><td class="dots">●●●</td><td class="dots">●●○</td><td class="dots">●○○</td></tr>
+    <tr><td>Shows problems before they bite</td><td class="dots">●●○</td><td class="dots">●○○</td><td class="dots">●●●</td><td class="dots">●●●</td></tr>
+    <tr><td>Recovering after a distraction</td><td class="dots">●●○</td><td class="dots">●●○</td><td class="dots">●●●</td><td class="dots">●●○</td></tr>
+    <tr><td>Speed for a regular director</td><td class="dots">●●●</td><td class="dots">●●○</td><td class="dots">●●●</td><td class="dots">●○○</td></tr>
+    <tr><td>Build size</td><td>Medium · rearranges existing parts</td><td>Large · new timeline control</td><td>Medium · new line-up and log parts</td><td>Large · replaces the tabs</td></tr>
+    <tr class="pick"><td><b>Verdict</b></td><td colspan="4"><b>Build A, and take two parts from C:</b> its fixed light row instead of A's five check tiles, and the held press to start while anything is red. Keep B's crossed-out times for cut races, inside the program drawer. Leave D's phase rail for first-run mode only.</td></tr>
+  </table></div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:20px">
+  <div class="prose"><span class="eyebrow">Build plan</span><h2>A, with C's light row: in phases</h2><p>Each phase can be merged on its own and leaves the page working. The full step list with files is in <code>plans/race-day-redesign-plan.md</code>.</p></div>
+  <div class="steps">
+    <div><span class="ph">0</span><div><h3>Pure logic, tested first</h3><ul><li><strong>New <code>RaceDayGlance.cs</code></strong>: one record built from <code>ProgramNextStep</code>, <code>NightPlan.For</code>, <code>FinalsCuts</code>, <code>MissionControl.Assess</code> and the check-in store. It holds the next race, the coming-up list with clock times, the pace level, the light states and what's blocking the next race.</li><li>Pace thresholds: hidden when on time, amber at 10 min late, red at 30 (club setting). Tests cover no out-by time, a club night with no finals, and the case where no fix is enough.</li><li>The race name always leads with the class ("Stock · Q1 Heat 1"): a <code>RoundName.WithClass</code> helper, used on this page, Race Control's Next Up bar and the phones.</li></ul></div></div>
+    <div><span class="ph">1</span><div><h3>The pace alarm with fix buttons</h3><ul><li>A banner at the top of <code>TodayControl</code>, shown only when the pace level isn't on time. Each fix button runs the existing apply path with one undo entry and shows the minutes it saves.</li><li>The pace sentence is removed from the next-step detail line.</li></ul></div></div>
+    <div><span class="ph">2</span><div><h3>The Now card and Coming up list</h3><ul><li>Rebuild the next-step card: kicker, class-first name, four fact numbers, a blocker strip above Start, one primary button with <kbd>Space</kbd>. The demo hold (<code>BuildDemoHold</code>) stays.</li><li>A Coming-up list beside it in place of the Ready card: three rows plus "Full program ▸", each with its <code>AboutOf</code> time and one status pill.</li></ul></div></div>
+    <div><span class="ph">3</span><div><h3>The light row</h3><ul><li>Six fixed slots in place of the five stat tiles: Timer, Pace, Check-in, Marshals, Phones, Voice. Each draws a shape, a word and a colour. Clicking a slot opens its fix.</li><li>A club setting to turn a slot off for the night (for example, a practice night with no timer), so a red light always means something.</li><li>Start needs a 1-second hold while any slot is red (reusing <code>HeldClickFilter</code>).</li></ul></div></div>
+    <div><span class="ph">4</span><div><h3>The program drawer and footer</h3><ul><li>The program grid moves to a side drawer (like the existing timetable drawer). It opens scrolled to the next race, with the About column shown and cut races crossed out.</li><li>The footer goes from nine buttons to two secondary buttons plus quiet links, with right-click commands copied into a visible "More ▾". Start Selected moves into the drawer.</li></ul></div></div>
+    <div><span class="ph">5</span><div><h3>Check it at race-night conditions</h3><ul><li>Screenshot tests at 100/150/200% text size and at 1280 and 1920 wide. No sideways scroll, and Start doesn't move between states.</li><li>Contrast check on every pill (7:1 for anything you act on). A colour-blind simulation pass on the light row.</li><li>A timed run-through: 12 races on the demo timer, measuring seconds from "race recorded" to the next Start press, against today's page.</li></ul></div></div>
+  </div>
+</section>
+
+</div>
