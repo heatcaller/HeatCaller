@@ -860,9 +860,12 @@ public sealed class EventsControl : UserControl
 /// <summary>
 /// Renames a race day and edits its notes. Everything else about a day is set on Race Day &gt; The Day.
 ///
-/// On the layout pieces (DialogFit): the name and the notes lined up in a
-/// field grid, running to the right-hand edge, the hint under the name in
-/// the field's column, and Save and Cancel at the foot; as tall as that. It
+/// On the layout pieces (DialogFit): tiles across the top saying what the day
+/// is - when it started, its rounds and classes - then the name and
+/// the notes in a card each, with a line on what it is for, the fields running
+/// to the cards' right-hand edge, the hint under the name in the field's
+/// column; and Save and Cancel at the foot; as
+/// tall as that (18 Nov 2026, dialog jazz-up - it was one field grid). It
 /// used to be placed in pixels in a 440x260 window: the fields at a fixed x
 /// of 100 whatever the captions beside them needed, the hint wrapped at a
 /// fixed 324px, the notes a fixed 90px tall at every text size, and Save and
@@ -872,7 +875,7 @@ public sealed class EventsControl : UserControl
 public sealed class EventEditForm : Form
 {
     /// <summary>How wide the window is inside its frame at the normal text size.</summary>
-    private const int DialogWidth = 440;
+    private const int DialogWidth = 520;
 
     /// <summary>How many lines of notes show before the box scrolls - about the 90px it was at the normal text size.</summary>
     private const int NotesLines = 4;
@@ -922,17 +925,46 @@ public sealed class EventEditForm : Form
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        // Both fields run to the right-hand edge, where the buttons end, as
-        // the 324px fields did beside their captions; the hint under the
-        // name, wrapping to the field's width.
-        var fields = new FieldGrid();
-        fields.AddRow("Name:", _txtName, stretch: true);
-        fields.AddHint("Rounds built while this race day is the current one belong to it. Qualifying and mains are then worked out "
-                       + "from those rounds alone.");
-        fields.AddRow("Notes:", _txtNotes, stretch: true);
+        // THE TOP (18 Nov 2026, dialog jazz-up): the day at a glance - when
+        // it started, and what is in it so far. Read only; nothing here
+        // changes them. The dialog is built at the text size in use, so the
+        // tiles take their faces here.
+        var tiles = new StatTile[] { new(), new(), new() };
+
+        foreach (var tile in tiles)
+        {
+            tile.Value.Font = AppTheme.TitleFont;
+            tile.Caption.Font = AppTheme.MicroFont;
+        }
+
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        var started = Result.StartedUtc.ToLocalTime();
+
+        tiles[0].Value.ForeColor = AppTheme.Primary;
+        tiles[0].Set(started.ToString(started.Year == DateTime.Now.Year ? "d MMM" : "d MMM yyyy", culture), "Started");
+        tiles[1].Set(Result.RoundIds.Count.ToString(culture), "Rounds");
+        tiles[2].Set(Result.ClassNames.Count == 0 ? "Any" : Result.ClassNames.Count.ToString(culture), "Classes");
+
+        // The name in a card of its own, running to the card's right-hand
+        // edge, its hint under it; the notes across another, which names
+        // them, as the handicap window's are.
+        var nameFields = new FieldGrid();
+        nameFields.AddRow("Name:", _txtName, stretch: true);
+        nameFields.AddHint("Rounds built while this race day is the current one belong to it. Qualifying and mains are then worked out "
+                           + "from those rounds alone.");
+
+        var nameCard = new Section("The day");
+        nameCard.Add(CardHint("What it is called on the calendar, results and the PA."), gapBelow: UiLayout.RowGap);
+        nameCard.Add(nameFields, gapBelow: 0);
+
+        var notesCard = new Section("Notes");
+        notesCard.Add(CardHint("Anything to remember about the night: doors, layout, loan cars."), gapBelow: UiLayout.RowGap);
+        notesCard.Add(_txtNotes, gapBelow: 0);
 
         var page = new FillPage();
-        page.Add(fields);
+        page.Add(new TileStrip(tiles), gapBelow: UiLayout.RowGap);
+        page.Add(nameCard, gapBelow: UiLayout.RowGap);
+        page.Add(notesCard);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // and Tab still reaches Save first: the bar takes them right to left,
@@ -947,6 +979,7 @@ public sealed class EventEditForm : Form
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
+        AppTheme.StyleButton(btnSave, AppTheme.ButtonKind.Primary);
 
         // After the theme pass, in the face it leaves the box in: a few
         // lines of it, as the box draws them (Pieces.LineHeight).
@@ -954,4 +987,13 @@ public sealed class EventEditForm : Form
 
         DialogFit.Keep(this, page, width: DialogWidth);
     }
+
+    /// <summary>A card's line saying what it is for, in the small muted face.</summary>
+    private static Label CardHint(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        ForeColor = AppTheme.TextMuted,
+        Font = AppTheme.SmallFont,
+    };
 }

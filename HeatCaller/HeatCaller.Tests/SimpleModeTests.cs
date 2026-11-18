@@ -424,6 +424,10 @@ public sealed class SimpleModeTests : IDisposable
         "RaceDayEventControl.cs|Marshals", "RaceDayEventControl.cs|Papers", "RaceDayEventControl.cs|End of the night", "RaceDayEventControl.cs|Commentary",
         "TodayControl.cs|Get back on time", "TodayControl.cs|Go / no-go", "RaceProgramControl.cs|Tonight's run sheet", "EventsControl.cs|Race days",
         "EventsControl.cs|Nights", "CheckInControl.cs|Drivers", "CheckInControl.Desk.cs|Scan to Check In", "CheckInControl.Desk.cs|Tonight at the Desk",
+        // Renaming a race day (EventEditForm) and a car's tech inspection (TechInspectionEditForm),
+        // in cards (18 Nov 2026, dialog jazz-up, second batch).
+        "EventsControl.cs|The day", "EventsControl.cs|Notes",
+        "TechInspectionEditForm.cs|Car", "TechInspectionEditForm.cs|Checklist", "TechInspectionEditForm.cs|Result", "TechInspectionEditForm.cs|Notes",
         "SeasonsControl.cs|Championships", "SeasonsControl.cs|Races counted", "SeasonsControl.cs|Standings", "SeasonsControl.cs|Points scheme", "SeasonsControl.cs|Can they still win?", "SeasonsControl.cs|Scoring rules", "SeasonsControl.cs|Points carried in",
         "AnalyticsOverviewControl.cs|From the last race night",
         "AnalyticsOverviewControl.cs|Track records", "PersonalBestsControl.cs|Personal bests", "LapChartControl.cs|Drivers",
