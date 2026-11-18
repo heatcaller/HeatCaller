@@ -1515,9 +1515,33 @@ internal sealed class CheckList : Panel
     }
 
     // Tall enough for a fix button: the theme draws buttons in the bold face, whatever they were given (17 Nov 2026 - its words were cut off at the bottom).
-    private static int RowHeight => Math.Max(AppTheme.BodyFont.Height + UiLayout.AtTextSize(14), AppTheme.BoldFont.Height + UiLayout.AtTextSize(16));
+    // 18 Nov 2026: the fix buttons were still a few pixels short of their words, so they're sized as the layout check measures a button, and a row grows to hold one.
+    private int RowHeight => Math.Max(
+        Math.Max(AppTheme.BodyFont.Height + UiLayout.AtTextSize(14), AppTheme.BoldFont.Height + UiLayout.AtTextSize(16)),
+        _buttons.Count == 0 ? 0 : _buttons.Max(b => ButtonSize(b).Height) + UiLayout.AtTextSize(4));
 
     private static int Gap => UiLayout.AtTextSize(6);
+
+    /// <summary>
+    /// What a fix button needs for its words, in its own font or the bold one
+    /// the theme may draw it in: the caption and 22 across (or the padded
+    /// caption and 16), and a line and 12 tall.
+    /// </summary>
+    private static Size ButtonSize(Button button)
+    {
+        var width = 0;
+        var height = 0;
+
+        foreach (var font in new[] { button.Font, AppTheme.BoldFont })
+        {
+            var tight = TextRenderer.MeasureText(button.Text, font, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+            var padded = TextRenderer.MeasureText(button.Text, font);
+            width = Math.Max(width, Math.Max(tight.Width + 22, padded.Width + 16));
+            height = Math.Max(height, padded.Height + 12);
+        }
+
+        return new Size(width + UiLayout.AtTextSize(4), height);
+    }
 
     public override Size GetPreferredSize(Size proposedSize) =>
         new(Math.Max(1, proposedSize.Width), _rows.Count == 0 ? 0 : _rows.Count * RowHeight + (_rows.Count - 1) * Gap);
@@ -1533,9 +1557,10 @@ internal sealed class CheckList : Panel
                 continue;
             }
 
-            var height = Math.Max(button.Font.Height, AppTheme.BoldFont.Height) + UiLayout.AtTextSize(8);
-            var width = Math.Max(TextRenderer.MeasureText(button.Text, button.Font).Width, TextRenderer.MeasureText(button.Text, AppTheme.BoldFont).Width) + UiLayout.AtTextSize(12);
-            var y = i * (RowHeight + Gap) + (RowHeight - height) / 2;
+            var size = ButtonSize(button);
+            var (width, height) = (size.Width, size.Height);
+            var rowHeight = RowHeight;
+            var y = i * (rowHeight + Gap) + (rowHeight - height) / 2;
             button.Bounds = new Rectangle(Width - width - UiLayout.AtTextSize(6), y, width, height);
         }
     }
