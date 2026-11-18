@@ -389,7 +389,7 @@ public sealed class SimpleModeTests : IDisposable
         "CastControl.cs|Achievements reader",
 
         // Connection.
-        "MainForm.ConnectionPage.cs|Developer console",
+        "MainForm.ConnectionPage.cs|Developer console", "MainForm.ConnectionPage.cs|Split loop",
 
         // Sponsors, Local Screens, Club Website.
         "SponsorsControl.cs|Rotation timing", "SponsorsControl.cs|Video sound",
@@ -458,10 +458,10 @@ public sealed class SimpleModeTests : IDisposable
         "SoundscapeEditorForm.cs|Sounds", "SoundscapeEditorForm.cs|Announcer",
 
         // Connection, Backup & Restore.
-        "MainForm.ConnectionPage.cs|Timing decoder",
+        "MainForm.ConnectionPage.cs|Timing decoder", "MainForm.ConnectionPage.cs|Start-up options", "MainForm.ConnectionPage.cs|Race tools",
         "BackupRestoreControl.cs|Manual backup and restore", "BackupRestoreControl.cs|Automatic backups",
         "BackupRestoreControl.cs|Backup password", "BackupRestoreControl.cs|Settings mode", "BackupRestoreControl.cs|Getting help",
-        "BackupRestoreControl.cs|Updates",
+        "BackupRestoreControl.cs|Updates", "BackupRestoreControl.cs|Cloud copies",
         "BackupRestoreControl.cs|Existing backups", "BackupRestoreControl.Standby.cs|Standby PC",
 
         // Themes, Sponsors, Local Screens, Club Website.

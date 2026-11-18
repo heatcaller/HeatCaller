@@ -108,7 +108,13 @@ public partial class MainForm
         // No caption on the card used to read CONNECTION, under the page's
         // own heading saying the same thing. This one names what the card
         // is about instead.
+        //
+        // 17 Nov 2026 (page jazz-up): the one card that held everything is
+        // four now, each with a line saying what it is for - the decoder
+        // itself, how it starts up, the tools for a race, and the split
+        // loop - with the page's state in tiles over them.
         var decoder = new Section("Timing decoder") { Name = "Timing decoder" };
+        decoder.Add(ConnectionHint("Pick the decoder at your track and press Connect. The light turns green once HeatCaller is talking to it."));
         var grid = decoder.Add(new FieldGrid(), gapBelow: 0);
 
         grid.AddRow("Connect via:", FieldGrid.Inline(cmbConnectionType, btnConnect, btnDisconnect));
@@ -120,13 +126,20 @@ public partial class MainForm
         lblSerialPort = grid.AddRow("COM port:", serialPortRow);
         lblBaud = grid.AddRow("Baud:", cmbBaud);
 
+        grid.AddRow("Status:", new StatusLine(pnlStatusDot, lblStatus), stretch: true);
+
+        // --- Start-up options ---
+        var startUp = new Section("Start-up options") { Name = "Start-up options" };
+        startUp.Add(ConnectionHint("How the decoder connects as HeatCaller opens, and what is kept of the passes it hears."));
+        var options = startUp.Add(new FieldGrid(), gapBelow: 0);
+
         // Whichever decoder: the line (and the split loop with it) connects
         // as HeatCaller starts. Set from the settings in the constructor.
         chkConnectAtStartup.Text = "Connect when HeatCaller starts";
         chkConnectAtStartup.AutoSize = true;
-        grid.AddField(chkConnectAtStartup);
+        options.AddField(chkConnectAtStartup);
 
-        grid.AddField(chkAutoConnect);
+        options.AddField(chkAutoConnect);
 
         // WHY (23 Oct 2026, timing layer, P4): the switch for the timing
         // thread, beside the decoder it is about. Read once at start, so the
@@ -134,24 +147,27 @@ public partial class MainForm
         // constructor, where it is also saved.
         chkTimingThread.Text = "Run timing on its own thread";
         chkTimingThread.AutoSize = true;
-        grid.AddField(chkTimingThread);
-        grid.AddHint("Takes effect the next time HeatCaller starts.");
+        options.AddField(chkTimingThread);
+        options.AddHint("Takes effect the next time HeatCaller starts.");
 
         // WHY (24 Oct 2026): pass recording was a settings-file switch only.
         // Beside the timing thread, because both are about timing; it starts
         // and stops at once (see MainForm's handler).
         chkRecordPasses.Text = "Record every pass to a file";
         chkRecordPasses.AutoSize = true;
-        grid.AddField(chkRecordPasses);
-        grid.AddHint("For checking timing afterwards. One file per run in this PC's timing-recordings folder, kept 30 days.");
+        options.AddField(chkRecordPasses);
+        options.AddHint("For checking timing afterwards. One file per run in this PC's timing-recordings folder, kept 30 days.");
 
-        grid.AddRow("Status:", new StatusLine(pnlStatusDot, lblStatus), stretch: true);
+        // --- Race tools ---
+        var tools = new Section("Race tools") { Name = "Race tools" };
+        tools.Add(ConnectionHint("Every check before a green flag in one window, and the webcam photo finish."));
+        var toolGrid = tools.Add(new FieldGrid(), gapBelow: 0);
 
         // Every check before a green flag at once - the decoder, the cars
         // heard, timing, the website, the sound. See MissionControl.
         var btnMissionControl = new Button { Text = "Mission Control..." };
         btnMissionControl.Click += (_, _) => ShowMissionControl();
-        grid.AddRow("Before a race:", FieldGrid.Inline(btnMissionControl));
+        toolGrid.AddRow("Before a race:", FieldGrid.Inline(btnMissionControl));
 
         // The webcam photo finish: the camera page in this PC's browser, and
         // the pictures it keeps - see PhotoFinish.
@@ -159,10 +175,16 @@ public partial class MainForm
         btnCamera.Click += (_, _) => OpenCameraPage();
         var btnPhotoFinish = new Button { Text = "Photo Finish..." };
         btnPhotoFinish.Click += (_, _) => ShowPhotoFinish();
-        grid.AddRow("Finish camera:", FieldGrid.Inline(btnCamera, btnPhotoFinish));
+        toolGrid.AddRow("Finish camera:", FieldGrid.Inline(btnCamera, btnPhotoFinish));
 
+        // --- Split loop ---
+        //
         // The split loop: the other decoder, partway round the track - see
         // MainForm.SplitLoop. Its light and line show only while it is on.
+        var split = new Section("Split loop") { Name = "Split loop" };
+        split.Add(ConnectionHint("A second decoder partway round the track, for sector times. Line Up matches its clock to the line's."));
+        var splitGrid = split.Add(new FieldGrid(), gapBelow: 0);
+
         cmbSplitLoop.DropDownStyle = ComboBoxStyle.DropDownList;
         cmbSplitLoop.SelectedIndexChanged += CmbSplitLoop_SelectedIndexChanged;
 
@@ -175,13 +197,18 @@ public partial class MainForm
         pnlSplitDot.BackColor = Color.Gray;
         lblSplitStatus.Text = "Not connected.";
 
-        grid.AddRow("Split loop:", FieldGrid.Inline(cmbSplitLoop, btnConnectSplit, btnLineUp));
+        splitGrid.AddRow("Split loop:", FieldGrid.Inline(cmbSplitLoop, btnConnectSplit, btnLineUp));
         splitStatusLine = new StatusLine(pnlSplitDot, lblSplitStatus);
-        lblSplitStatusCaption = grid.AddRow("Split status:", splitStatusLine, stretch: true);
+        lblSplitStatusCaption = splitGrid.AddRow("Split status:", splitStatusLine, stretch: true);
         lblSplitStatusCaption.Visible = false;
         splitStatusLine.Visible = false;
         btnConnectSplit.Visible = false;
         btnLineUp.Visible = false;
+
+        // The decoder's card and the split loop's run the page's width, one
+        // under the other: one caption column for both, so their pickers
+        // line up.
+        _connectionTextSize.Keep(() => FieldGrid.LineUp(new[] { grid, splitGrid }));
 
         // Only the chosen decoder's rows show - UpdateConnectionModeUi,
         // which runs as the window is set up. EasyLap is the first choice.
@@ -261,15 +288,28 @@ public partial class MainForm
         // Before a race and the finish camera. The timing thread, pass
         // recording, the split loop and the console are Advanced - the split
         // status row follows the split loop's own switch as well
-        // (RenderSplitStatus). See SimpleMode.
-        SimpleMode.HideRow(grid, chkTimingThread);
-        SimpleMode.HideRow(grid, chkRecordPasses);
-        SimpleMode.HideRow(grid, cmbSplitLoop);
+        // (RenderSplitStatus). See SimpleMode. The split loop has a card of
+        // its own now (17 Nov 2026), so the whole card is what is hidden.
+        SimpleMode.HideRow(options, chkTimingThread);
+        SimpleMode.HideRow(options, chkRecordPasses);
+        SimpleMode.Hide(split);
+
+        // The start-up ticks and the race tools side by side on a wide
+        // page, one over the other on a narrow one or at a large text size.
+        var middle = new CardColumns { TwoColumnsFrom = () => UiLayout.AtTextSize(900) };
+        middle.AddLeft(startUp);
+        middle.AddRight(tools);
+
+        // --- The tiles: the page at a glance ---
+        BuildConnectionTiles();
 
         var page = new FillPage();
 
         page.Add(intro);
+        page.Add(new TileStrip(_connectionTiles));
         page.Add(decoder);
+        page.Add(middle);
+        page.Add(split);
         page.Add(SimpleMode.MoreLine(), stretch: false);
         page.AddFill(SimpleMode.Hide(console), console.LeastHeight, gapBelow: 0);
 
@@ -332,4 +372,108 @@ public partial class MainForm
     /// <summary>The least the console can do with: six lines of its type. Below that the page scrolls instead - see FillPage.</summary>
     private int ConsoleLeastHeight() =>
         Pieces.LineHeight(txtConsole.Font) * ConsoleLeastLines + UiLayout.HintGap * 2;
+
+    // --- The tiles (17 Nov 2026, page jazz-up) ---------------------------------------
+
+    /// <summary>The page at a glance, over the cards: the decoder, its status, the split loop and the passes heard.</summary>
+    private readonly StatTile[] _connectionTiles = { new(), new(), new(), new() };
+
+    private static readonly string[] ConnectionTileCaptions = { "Decoder", "Status", "Split loop", "Passes heard" };
+
+    /// <summary>The status tile's value, drawn as a chip in the state's colour.</summary>
+    private ConnectionTileChip? _connectionStatusChip;
+
+    /// <summary>The split loop tile's value, the same way.</summary>
+    private ConnectionTileChip? _splitStatusChip;
+
+    /// <summary>Line passes heard since HeatCaller opened - only ever shown, never kept.</summary>
+    private long _connectionPassesHeard;
+
+    /// <summary>A card's line saying what it is for, in the small muted type, following the text size.</summary>
+    private Label ConnectionHint(string text) =>
+        _connectionTextSize.Wear(new Label { Text = text, AutoSize = true, ForeColor = AppTheme.TextMuted }, () => AppTheme.SmallFont);
+
+    /// <summary>
+    /// The tiles' faces, and what keeps them up to date. They only watch:
+    /// the light and line the decoder code already sets (RenderDecoderStatus,
+    /// RenderSplitStatus), the pickers, and the passes as they are heard -
+    /// so nothing about connecting changes for them.
+    /// </summary>
+    private void BuildConnectionTiles()
+    {
+        for (var i = 0; i < _connectionTiles.Length; i++)
+        {
+            _connectionTextSize.Wear(_connectionTiles[i].Value, () => AppTheme.TitleFont);
+            _connectionTextSize.Wear(_connectionTiles[i].Caption, () => AppTheme.MicroFont);
+            _connectionTiles[i].Set("-", ConnectionTileCaptions[i]);
+        }
+
+        _connectionStatusChip = new ConnectionTileChip(_connectionTiles[1]);
+        _splitStatusChip = new ConnectionTileChip(_connectionTiles[2]);
+
+        cmbConnectionType.SelectedIndexChanged += (_, _) => ShowConnectionTiles();
+        cmbSplitLoop.SelectedIndexChanged += (_, _) => ShowConnectionTiles();
+        lblStatus.TextChanged += (_, _) => ShowConnectionTiles();
+        pnlStatusDot.BackColorChanged += (_, _) => ShowConnectionTiles();
+        lblSplitStatus.TextChanged += (_, _) => ShowConnectionTiles();
+        pnlSplitDot.BackColorChanged += (_, _) => ShowConnectionTiles();
+
+        // On the UI thread, after the pass is routed (LinePassSeenOnUi);
+        // only a number goes up here, and it cannot throw.
+        LinePassSeen += _ =>
+        {
+            _connectionPassesHeard++;
+            _connectionTiles[3].Set(_connectionPassesHeard.ToString("N0"), ConnectionTileCaptions[3]);
+        };
+
+        ShowConnectionTiles();
+    }
+
+    /// <summary>The tiles brought up to date from what the page shows now. UI thread.</summary>
+    private void ShowConnectionTiles()
+    {
+        var line = cmbConnectionType.SelectedIndex >= 0 ? SelectedDecoder : 0;
+
+        _connectionTiles[0].Set(line == 0 ? "-" : DecoderConnection.ShortName(line), ConnectionTileCaptions[0]);
+
+        var (word, tone) = StateFromLight(pnlStatusDot.BackColor);
+        _connectionTiles[1].Set(word, ConnectionTileCaptions[1]);
+
+        if (_connectionStatusChip is not null)
+        {
+            _connectionStatusChip.Tone = tone;
+        }
+
+        // The split loop: off, or the other decoder and how it is doing.
+        var other = OtherDecoder(line);
+        var splitOn = _settings is not null && _settings.SplitLoopEnabled && other != 0;
+
+        if (splitOn)
+        {
+            var (splitWord, splitTone) = StateFromLight(pnlSplitDot.BackColor);
+            _connectionTiles[2].Set($"{DecoderConnection.ShortName(other)} - {splitWord}", ConnectionTileCaptions[2]);
+            _splitStatusChip!.Tone = splitTone;
+        }
+        else
+        {
+            _connectionTiles[2].Set("Off", ConnectionTileCaptions[2]);
+            _splitStatusChip!.Tone = AppTheme.TextMuted;
+        }
+
+        if (_connectionPassesHeard == 0)
+        {
+            _connectionTiles[3].Set("-", ConnectionTileCaptions[3]);
+        }
+    }
+
+    /// <summary>
+    /// The state a status light shows, in a word and the look's colour for
+    /// it: the light's own colours are the ones RenderDecoderStatus and
+    /// RenderSplitStatus paint it.
+    /// </summary>
+    private static (string Word, Color Tone) StateFromLight(Color light) =>
+        light.ToArgb() == Color.SeaGreen.ToArgb() ? ("Connected", AppTheme.Success)
+        : light.ToArgb() == Color.Goldenrod.ToArgb() ? ("Connecting", AppTheme.Warning)
+        : light.ToArgb() == Color.Firebrick.ToArgb() ? ("Error", AppTheme.Danger)
+        : ("Disconnected", AppTheme.TextMuted);
 }
