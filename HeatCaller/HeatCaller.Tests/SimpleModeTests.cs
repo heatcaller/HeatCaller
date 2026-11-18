@@ -521,6 +521,11 @@ public sealed class SimpleModeTests : IDisposable
         "RaceDaySetupWizard.cs|Race format", "RaceDaySetupWizard.cs|Who's here",
         "RaceDaySetupWizard.cs|Ready to build", "RaceDaySetupWizard.cs|Where things stand",
         "RentalTransponderForms.cs|Who's taking it", "RentalTransponderForms.cs|Deposit",
+
+        // The class editor's and the time penalty's cards (18 Nov 2026).
+        "RaceClassForms.cs|The class", "RaceClassForms.cs|Qualifying", "RaceClassForms.cs|Mains",
+        "RaceClassForms.cs|On the track", "RaceClassForms.cs|Fees",
+        "RaceControlControl.Leaderboard.cs|Penalty",
     };
 
     [Fact]

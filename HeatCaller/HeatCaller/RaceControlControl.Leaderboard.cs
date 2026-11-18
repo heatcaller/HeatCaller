@@ -2002,9 +2002,9 @@ public sealed partial class RaceControlControl
     /// internal, so the layout test can build it (WindowCatalog) without a
     /// race on the board.
     ///
-    /// On the layout pieces (DialogFit): the caption and the seconds beside
-    /// it on one line (FieldRow), and Apply and Cancel at the foot; as tall
-    /// as that. It used to be placed in pixels in a 300x116 window: the box
+    /// On the layout pieces (DialogFit): a card holding the caption and the
+    /// seconds beside it on one line (FieldRow) and a line on what Apply does,
+    /// and Apply and Cancel at the foot; as tall as that. It used to be placed in pixels in a 300x116 window: the box
     /// at a fixed 128px from the left beside a caption that a larger text
     /// size ran into, and the buttons a fixed 80px wide at fixed places.
     /// </summary>
@@ -2049,8 +2049,22 @@ public sealed partial class RaceControlControl
             var row = new FieldRow();
             row.Add(new Label { Text = "Seconds to add:" }, _seconds);
 
+            // In a card with one line under it saying what Apply does (18
+            // Nov 2026, the dialog version of the Venues look) - and no more:
+            // this is opened mid-race, so the box is the first thing read and
+            // Enter applies it.
+            var card = new Section("Penalty");
+            card.Add(row, gapBelow: UiLayout.HintGap);
+            card.Add(new Label
+            {
+                Text = "Added to the selected driver's race time. Less than 0 takes time off.",
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+                Font = AppTheme.SmallFont,
+            }, gapBelow: 0);
+
             var page = new FillPage();
-            page.Add(row);
+            page.Add(card);
 
             // Against the right-hand edge, Cancel furthest right, as they
             // were - and Tab still reaches Apply first: the bar takes them
