@@ -46,25 +46,31 @@ was ever redesigned.
 **Reworked:** Track Designer (RcpTrackEditorForm, RcpBuildForm), Car window
 (CarForm), Desk Inbox (DeskInboxForm, CustomVoteForm), Track Layout edit
 (TrackLayoutEditForm), Overlay editor Studio (OverlayEditorForm), Papers
-(PapersForm), Tab visibility / first-run wizard (light touch with Venues).
+(PapersForm), Tab visibility (light touch with Venues).
+
+**Reworked in the first dialog batch (18 Nov 2026):** FirstRunWizard,
+NewRaceDayForm, RaceDaySetupWizard, RentalCheckOutForm, ProfileForm,
+HandicapEditForm, RaceClassEditForm and TimePenaltyForm. The two wizards share
+one step header: a progress bar, "STEP 2 OF 4" in small caps, a dark title, and
+numbered marks on the rail.
 
 **Never reworked**, biggest first (lines of code), so the windows people
 meet most often come first:
 
-BigScreenForm, MainForm chrome, Sheet, RaceDaySetupWizard, TimePenaltyForm,
-AmbienceLayerForm, ProfileForm, HeatBalanceForm, FirstRunWizard,
-LapDetailWindow, RaceClassEditForm, SetupEntryForm, EventEditForm,
+BigScreenForm, MainForm chrome, Sheet,
+AmbienceLayerForm, HeatBalanceForm,
+LapDetailWindow, SetupEntryForm, EventEditForm,
 TemplateDaysForm, SoundscapeEditorForm, TechInspectionEditForm,
 PasswordPromptForm, PackPickerForm, ChassisTemplateForm, RaceFormatForm,
 AchievementDetailForm, DialogForm, RaceReplayForm, GhostRivalPickerForm,
 LookEditorForm, CarTransferForm, AboutForm, NoteWindow, CsvMappingForm,
 SeasonRulesForm, GhostEditForm, HandScoringForm, ApproveSignupForm,
-TargetLapForm, ResultEditForm, HandicapEditForm, NameCheckForm,
+TargetLapForm, ResultEditForm, NameCheckForm,
 PhotoFinishForm, BroadcastWindow, LateArrivalsForm, PostHeatsForm,
 QualifyingStandingsForm, PickCarForm, RoundRosterForm, AppTour,
-ThisMonthForm, RentalCheckOutForm, BelongsToForm, UnsaidLinesForm,
+ThisMonthForm, BelongsToForm, UnsaidLinesForm,
 ApproveDriverRequestForm, DriversMeetingForm, WarningReasonForm,
-ChartExportForm, EventReportForm, NewRaceDayForm, DeskPinForm,
+ChartExportForm, EventReportForm, DeskPinForm,
 CloseNightForm, QualifyingProjectionForm, SetupFieldEditorForm,
 TemplateEditForm, SanctioningPresetForm, ReadinessCheckForm,
 RacingWordsForm, DeleteRaceDayForm, MissionControlForm, JoinPosterForm,
@@ -78,11 +84,11 @@ ResultsExportForm, BulkInspectionForm, RcpPrintForm, KpiPickerForm,
 FillTimesForm, OtherClassesForm, CrewVoicesForm, PageWindow,
 PaceAnalysisForm, TextPromptForm.
 
-These are not in this pass. About a hundred windows are too many to redesign
-one by one in a single change, so they are left for a follow-up in batches.
-The first batch should be the windows a club meets on its first night:
-FirstRunWizard, RaceDaySetupWizard, ProfileForm, RaceClassEditForm,
-TimePenaltyForm, NewRaceDayForm, RentalCheckOutForm and HandicapEditForm.
+About a hundred windows are too many to redesign in a single change, so they
+are being done in batches. The first batch, the windows a club meets on its
+first night, is done (above). The next batch should be the race-night windows:
+LapDetailWindow, HeatBalanceForm, SetupEntryForm, EventEditForm,
+TechInspectionEditForm, ResultEditForm, LateArrivalsForm and PostHeatsForm.
 
 Before-pictures of the pages in this pass (1366x768, text 100%) are in
 `layout-check/before/` (git-ignored).
