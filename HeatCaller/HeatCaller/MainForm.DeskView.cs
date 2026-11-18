@@ -166,7 +166,7 @@ public partial class MainForm
 
         var lbl = new Label
         {
-            Text = "Desk view: check-ins, papers and money only.",
+            Text = "Desk view is on",
             AutoSize = true,
             ForeColor = AppTheme.Warning,
             Margin = new Padding(0, 6, 8, 0),
@@ -191,11 +191,23 @@ public partial class MainForm
         page.Add(new ButtonBar(tight: true).With(lbl, unlock), gapBelow: 0);
         banner.Controls.Add(page);
 
-        AppTheme.ApplyRecursively(banner);
-        DialogFit.Keep(banner, page, width: 420, height: 90);
+        // A small card with no title bar, its own thin edge (17 Nov 2026,
+        // Asher: "at the top of the screen, in the middle, make it smaller").
+        banner.Paint += (_, e) =>
+        {
+            using var pen = new Pen(AppTheme.Border);
+            e.Graphics.DrawRectangle(pen, 0, 0, banner.Width - 1, banner.Height - 1);
+        };
 
-        var screen = Screen.FromControl(this).WorkingArea;
-        banner.Location = new Point(screen.Right - banner.Width - 24, screen.Top + 24);
+        AppTheme.ApplyRecursively(banner);
+        DialogFit.Keep(banner, page, width: 240, frameless: true);
+
+        // After DialogFit's own Load handler, which centres it over the window.
+        banner.Load += (_, _) =>
+        {
+            var screen = Screen.FromControl(this).WorkingArea;
+            banner.Location = new Point(screen.Left + (screen.Width - banner.Width) / 2, screen.Top + 8);
+        };
 
         _deskBanner = banner;
         banner.Show(this);
