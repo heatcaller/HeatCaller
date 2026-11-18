@@ -385,6 +385,7 @@ public sealed class SimpleModeTests : IDisposable
         // Voice, Cast.
         "MainForm.Pages.cs|Race Calls",
         "VoiceSettingsControl.cs|Voice parameters", "VoiceSettingsControl.cs|Saved voice lines",
+        "VoiceSettingsControl.cs|Voice consent",
         "CastControl.cs|Recap host", "CastControl.cs|Technical Lead", "CastControl.cs|Team Principal", "CastControl.cs|Drivers' own crew",
         "CastControl.cs|Achievements reader",
 
@@ -444,12 +445,14 @@ public sealed class SimpleModeTests : IDisposable
         // Voice and Cast.
         "MainForm.Pages.cs|Voice", "MainForm.Pages.cs|Cast", "MainForm.Pages.cs|AI Commentary",
         "VoiceSettingsControl.cs|Speak with", "VoiceSettingsControl.cs|ElevenLabs connection",
+        "VoiceSettingsControl.cs|Race calls", "VoiceSettingsControl.cs|Juniors", "CommentaryControl.cs|On air",
         "CastControl.cs|Voices", "CastControl.cs|Announcer", "CastControl.cs|Co-host",
 
         // AI Commentary's Simple view: shown in Simple only (SimpleMode.ShowInSimpleOnly).
         "CommentaryControl.cs|What it talks about", "CommentaryControl.cs|Countdown",
 
         // On the Race Calls tab, which Simple hides.
+        "VoiceSettingsControl.Announcements.cs|Writing the lines",
         "VoiceSettingsControl.Announcements.cs|How often", "RivalriesControl.cs|Configured rivalries", "RivalriesControl.cs|Edit selected rivalry",
 
         // Sounds: on Mixer, Soundscapes and Music, or on the tabs Simple hides.

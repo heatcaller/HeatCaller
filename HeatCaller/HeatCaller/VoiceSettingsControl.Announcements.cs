@@ -469,10 +469,21 @@ public sealed partial class VoiceSettingsControl
 
         FillPage page = new();
 
-        page.Add(lblLegend, gapBelow: UiLayout.HintGap);
-        page.Add(lblLegend2, gapBelow: UiLayout.RowGap);
-        page.Add(restore, gapBelow: UiLayout.RowGap);
-        page.Add(_lblAudioTags, gapBelow: UiLayout.RowGap);
+        // THE TILES AND THE LINES' CARD (17 Nov 2026, page jazz-up, as
+        // Venues'): how many calls are on, the pacing and the most a lap at a
+        // glance (ShowRaceCallTiles), then what a line can say and how one is
+        // picked, in a card over the rows rather than loose on the page.
+        VoicePagePieces.Dress(textSize, _raceCallTiles, RaceCallTileCaptions);
+        page.Add(new TileStrip(_raceCallTiles));
+
+        var linesCard = new Section("Writing the lines");
+
+        linesCard.Add(lblLegend, gapBelow: UiLayout.HintGap);
+        linesCard.Add(lblLegend2, gapBelow: UiLayout.RowGap);
+        linesCard.Add(restore, gapBelow: UiLayout.RowGap);
+        linesCard.Add(_lblAudioTags, gapBelow: 0);
+
+        page.Add(linesCard, gapBelow: UiLayout.SectionGap);
         // The grip under the list drags it taller or shorter (17 Oct 2026),
         // so a club can see more of the ticks at once. The height asked for
         // becomes the least the list can do with, so the page scrolls to
@@ -664,6 +675,7 @@ public sealed partial class VoiceSettingsControl
 
         var card = new Section("How often");
 
+        card.Add(Hint("How many of the calls ticked above can be said on one lap, and how far apart."));
         card.Add(grid, gapBelow: 0);
 
         return (card, grid);
@@ -1076,6 +1088,9 @@ public sealed partial class VoiceSettingsControl
         {
             all.Sync();
         }
+
+        // And the tiles over the page count them (17 Nov 2026).
+        ShowRaceCallTiles();
     }
 
     /// <summary>
@@ -1155,6 +1170,10 @@ public sealed partial class VoiceSettingsControl
 
         _annAllRace?.Follow(chkRace);
         _annAllPractice?.Follow(chkPractice);
+
+        // The tiles over the page count the ticks (17 Nov 2026).
+        chkRace.CheckedChanged += (_, _) => ShowRaceCallTiles();
+        chkPractice.CheckedChanged += (_, _) => ShowRaceCallTiles();
 
         NumericUpDown? numWeight = null;
 
