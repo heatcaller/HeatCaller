@@ -494,6 +494,10 @@ public sealed class SimpleModeTests : IDisposable
         "BroadcastWindow.cs|At a glance", "BroadcastWindow.cs|Controls", "ThisMonthForm.cs|This month", "ThisMonthForm.cs|Emails",
         "Shortcuts.cs|Anywhere", "Shortcuts.cs|Race Control", "Shortcuts.cs|Selected driver",
         "ChassisTemplateForm.cs|Other tuning fields (not on the diagram)", "ChassisTemplateForm.cs|Selected point",
+        // A driver's profile and a driver's handicap, in cards (18 Nov 2026, dialog jazz-up).
+        "ProfileForm.cs|Who they are", "ProfileForm.cs|Car and class", "ProfileForm.cs|On the PA",
+        "ProfileForm.cs|Their crew", "ProfileForm.cs|Junior", "ProfileForm.cs|Privacy", "ProfileForm.cs|Contact",
+        "ProfileForm.cs|Driver card", "ProfileForm.cs|Records", "ProfileForm.cs|Notes", "HandicapForms.cs|Credit", "HandicapForms.cs|Lock", "HandicapForms.cs|Notes",
         "RcpStockForm.cs|Boxed sets", "RcpStockForm.cs|Loose parts", "RcpPrintForm.cs|Parts", "RcpPrintForm.cs|Scale",
         "RcpTrackEditorForm.cs|Build me a track", "RcpTrackEditorForm.cs|Check against a kit", "RcpTrackEditorForm.cs|Keys",
         // Lanes, Plan file and Trace a photo went with the rethought window (8 Nov 2026), and Rail the edge,

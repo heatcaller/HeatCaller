@@ -3,11 +3,13 @@ namespace HeatCaller;
 /// <summary>
 /// Edits one driver's handicap.
 ///
-/// On the layout pieces (DialogFit): what the class's mode makes of these
-/// numbers across the top, then a field grid - the two credits, each with
-/// its unit beside it, the Locked tick across the grid with its note a step
-/// in under it, and the notes - and Save and Cancel at the foot; as tall as
-/// that. It used to be placed in pixels in a 440x330 window: the fields at
+/// On the layout pieces (DialogFit): tiles across the top - what the class
+/// counts and the two credits, following the boxes - with what the class's
+/// mode makes of these numbers under them; then three cards, each with a
+/// line on what it is for: the credits, each with its unit beside it; the
+/// Locked tick with its note a step in under it; and the notes. Save and
+/// Cancel at the foot; as tall as that (18 Nov 2026, dialog jazz-up - it
+/// was one field grid under the mode line). It used to be placed in pixels in a 440x330 window: the fields at
 /// a fixed 140px from the left whatever their captions needed, each unit at
 /// a fixed place beside its box, the notes a fixed 60px tall at every text
 /// size, and Save and Cancel at a fixed height under them.
@@ -15,7 +17,7 @@ namespace HeatCaller;
 public sealed class HandicapEditForm : Form
 {
     /// <summary>How wide the window is inside its frame at the normal text size.</summary>
-    private const int DialogWidth = 440;
+    private const int DialogWidth = 480;
 
     /// <summary>The credit boxes' width at the normal text size - wider when the largest value either takes needs it.</summary>
     private const int CreditWidth = 90;
@@ -27,6 +29,9 @@ public sealed class HandicapEditForm : Form
     private readonly NumericUpDown _numLaps = new();
     private readonly CheckBox _chkLocked = new ThemedCheckBox();
     private readonly TextBox _txtNotes = new();
+
+    /// <summary>The handicap at a glance across the top: what the class counts, the time credit and the lap credit.</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new() };
 
     public DriverHandicap Result { get; }
 
@@ -120,27 +125,64 @@ public sealed class HandicapEditForm : Form
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
+        // THE TOP (18 Nov 2026, dialog jazz-up): the handicap at a glance -
+        // what the class counts and the two credits, following the boxes as
+        // they change - with the line on what the mode makes of them under
+        // the tiles. The dialog is built at the text size in use, so the
+        // tiles take their faces here rather than through a TextSize.
+        foreach (var tile in _tiles)
+        {
+            tile.Value.Font = AppTheme.TitleFont;
+            tile.Caption.Font = AppTheme.MicroFont;
+        }
+
+        _tiles[0].Value.ForeColor = classMode == HandicapMode.None ? AppTheme.Warning : AppTheme.Primary;
+        _tiles[0].Set(classMode switch
+        {
+            HandicapMode.TimeCredit => "Time",
+            HandicapMode.LapCredit => "Laps",
+            _ => "Off",
+        }, "Mode");
+
+        void ShowCredits()
+        {
+            _tiles[1].Set(TimeTile(_numTime.Value), "Time credit");
+            _tiles[2].Set(LapTile(_numLaps.Value), "Lap credit");
+        }
+
+        _numTime.ValueChanged += (_, _) => ShowCredits();
+        _numLaps.ValueChanged += (_, _) => ShowCredits();
+        ShowCredits();
+
         // Each credit with its unit beside it, wrapping under the box on a
-        // line too narrow for both; the notes run to the right-hand edge,
-        // where the buttons end, as the 284px box did.
-        var fields = new FieldGrid();
-        fields.AddRow("Time credit:", FieldGrid.Inline(_numTime, lblTimeUnit));
-        fields.AddRow("Lap credit:", FieldGrid.Inline(_numLaps, lblLapsUnit));
+        // line too narrow for both, in a card with a line on what they do.
+        var credits = new FieldGrid();
+        credits.AddRow("Time credit:", FieldGrid.Inline(_numTime, lblTimeUnit));
+        credits.AddRow("Lap credit:", FieldGrid.Inline(_numLaps, lblLapsUnit));
 
-        // The tick from the left-hand edge, across both columns, as it was -
-        // it says what it is itself - and its note under it, a step in so it
-        // sits under the tick's caption rather than its box, a hint's gap
-        // from it rather than a row's.
-        fields.AddWide(_chkLocked, stretch: false);
-        fields.AddWide(lblLockHint);
-        _chkLocked.Margin = new Padding(0, 0, 0, UiLayout.HintGap);
-        lblLockHint.Margin = new Padding(TickBox.CaptionIndent, 0, 0, UiLayout.RowGap);
+        var creditCard = new Section("Credit");
+        creditCard.Add(CardHint("A head start for a slower driver. Only the one the class counts changes results."), gapBelow: UiLayout.RowGap);
+        creditCard.Add(credits, gapBelow: 0);
 
-        fields.AddRow("Notes:", _txtNotes, stretch: true);
+        // The tick from the card's left-hand edge - it says what it is
+        // itself - and its note under it, a step in so it sits under the
+        // tick's caption rather than its box, a hint's gap from it.
+        var lockCard = new Section("Lock");
+        lockCard.Add(_chkLocked, stretch: false, gapBelow: UiLayout.HintGap);
+        lockCard.Add(lblLockHint, gapBelow: 0);
+        lblLockHint.Margin = new Padding(TickBox.CaptionIndent, 0, 0, 0);
+
+        // The notes across the card, where the buttons end.
+        var notesCard = new Section("Notes");
+        notesCard.Add(CardHint("Why it is what it is, for whoever looks next."), gapBelow: UiLayout.RowGap);
+        notesCard.Add(_txtNotes, gapBelow: 0);
 
         var page = new FillPage();
+        page.Add(new TileStrip(_tiles), gapBelow: UiLayout.RowGap);
         page.Add(lblMode, gapBelow: UiLayout.RowGap);
-        page.Add(fields);
+        page.Add(creditCard, gapBelow: UiLayout.RowGap);
+        page.Add(lockCard, gapBelow: UiLayout.RowGap);
+        page.Add(notesCard);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // and Tab still reaches Save first: the bar takes them right to
@@ -155,6 +197,7 @@ public sealed class HandicapEditForm : Form
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
+        AppTheme.StyleButton(btnSave, AppTheme.ButtonKind.Primary);
 
         // After the theme pass, in the faces it leaves them in: the two
         // credit boxes one width - they sit one under the other, and boxes
@@ -170,6 +213,23 @@ public sealed class HandicapEditForm : Form
 
         DialogFit.Keep(this, page, width: DialogWidth);
     }
+
+    /// <summary>The time credit's tile: "12.5 s", or "None".</summary>
+    internal static string TimeTile(decimal seconds) =>
+        seconds <= 0 ? "None" : seconds.ToString("0.#", System.Globalization.CultureInfo.CurrentCulture) + " s";
+
+    /// <summary>The lap credit's tile: "2 laps", "1 lap", or "None".</summary>
+    internal static string LapTile(decimal laps) =>
+        laps <= 0 ? "None" : laps == 1 ? "1 lap" : $"{laps:0} laps";
+
+    /// <summary>A card's line saying what it is for, in the small muted face.</summary>
+    private static Label CardHint(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        ForeColor = AppTheme.TextMuted,
+        Font = AppTheme.SmallFont,
+    };
 
     /// <summary>
     /// A credit box as wide as its largest value - every digit a nought,
