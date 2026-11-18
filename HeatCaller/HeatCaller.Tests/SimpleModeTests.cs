@@ -526,6 +526,10 @@ public sealed class SimpleModeTests : IDisposable
         "RaceClassForms.cs|The class", "RaceClassForms.cs|Qualifying", "RaceClassForms.cs|Mains",
         "RaceClassForms.cs|On the track", "RaceClassForms.cs|Fees",
         "RaceControlControl.Leaderboard.cs|Penalty",
+
+        // Post the Heats' cards (PostHeatsForm, 18 Nov 2026, dialog jazz-up).
+        "RaceProgramControl.Posting.cs|Before you post", "RaceProgramControl.Posting.cs|Print and tell",
+        "RaceProgramControl.Posting.cs|Once they're posted",
     };
 
     [Fact]

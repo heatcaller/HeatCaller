@@ -43,7 +43,9 @@ namespace HeatCaller;
 /// would put them in a second is refused rather than half-done.
 ///
 /// On the layout pieces (DialogFit): the title and the hint across the top,
-/// the strip of heats taking the height, and the spread line beside Save
+/// a row of tiles under them - heats, drivers, how many in each and how
+/// many in no heat (18 Nov 2026, dialog jazz-up) - the strip of heats, each
+/// a card of its own (HeatColumnCard), taking the height, and the spread line beside Save
 /// and Cancel at the foot. Inside the strip the columns are the form's own
 /// to place (LayoutColumns) - it is a board that drivers are dragged across,
 /// not a stack of parts - each as wide as the longest name, heading and
@@ -105,8 +107,22 @@ public sealed class HeatBalanceForm : Form
     /// <summary>Every column shows its heading and at least this many drivers before the window scrolls instead.</summary>
     private const int LeastRows = 4;
 
+    /// <summary>Room between a column's card edge and its list, at the normal text size - clear of the card's rounded corners.</summary>
+    private const int CardPad = 4;
+
     private readonly List<Column> _columns = new();
     private readonly Panel _strip = new();
+
+    // The board at a glance across the top (18 Nov 2026, dialog jazz-up):
+    // how many heats, how many drivers, how many in each and how many in
+    // no heat - rewritten after every move with the counts (UpdateHeaders).
+    private readonly StatTile _tileHeats = new();
+    private readonly StatTile _tileDrivers = new();
+    private readonly StatTile _tileEach = new();
+    private readonly StatTile _tileOut = new();
+
+    /// <summary>How many heats can't be changed - only on the board when there are some.</summary>
+    private readonly StatTile? _tileLocked;
 
     /// <summary>The spread, as tall as the longest it can come to - it is rewritten after every move (UpdateHeaders).</summary>
     private readonly SteadyLabel _lblSpread = new();
@@ -125,6 +141,15 @@ public sealed class HeatBalanceForm : Form
 
     /// <summary>Where a column's list starts: under its heading and its count.</summary>
     private readonly int _listTop;
+
+    /// <summary>Room between a column's card edge and its list (CardPad), at the text size in use.</summary>
+    private readonly int _cardPad;
+
+    /// <summary>The pill a heat's running order is drawn in, as wide as the widest number it can show.</summary>
+    private readonly Size _badge;
+
+    /// <summary>The gap between a running-order pill and the name after it.</summary>
+    private readonly int _badgeGap;
 
     /// <summary>
     /// Everyone this form is allowed to show. The class roster plus anyone
@@ -177,6 +202,9 @@ public sealed class HeatBalanceForm : Form
     private Column? _dropColumn;
     private int _dropIndex = -1;
 
+    /// <summary>True while LayoutColumns turns the strip's scrolling off and on again, which lays it out once more.</summary>
+    private bool _resettingBars;
+
     /// <summary>
     /// The rest-gap check (12 Nov 2026, setup plan step 8): the changes about
     /// to be saved, to the warning to ask about - "Max Power would race in Q2
@@ -219,10 +247,27 @@ public sealed class HeatBalanceForm : Form
         _countHeight = Pieces.LineHeight(AppTheme.SmallFont) + UiLayout.AtTextSize(6);
         _itemHeight = Math.Max(UiLayout.AtTextSize(24), Pieces.LineHeight(AppTheme.BodyFont) + UiLayout.AtTextSize(6));
         _listTop = _headerTop + _headerHeight + _countHeight + _headerTop;
+        _cardPad = UiLayout.AtTextSize(CardPad);
+        _badgeGap = UiLayout.AtTextSize(8);
 
         BuildUniverse(rounds, classRoster, profiles);
 
+        // The running-order pill: as tall as a line of the small face with a
+        // little room, and as wide as the widest number a heat can come to.
+        var badgeHeight = Math.Min(_itemHeight - UiLayout.AtTextSize(4), Pieces.LineHeight(AppTheme.SmallFont) + UiLayout.AtTextSize(4));
+        var widestNumber = TextRenderer.MeasureText(
+            WidestNumber(MostInAColumn(rounds), AppTheme.SmallFont).ToString(),
+            AppTheme.SmallFont,
+            new Size(int.MaxValue, int.MaxValue),
+            TextFormatFlags.SingleLine | TextFormatFlags.NoPadding).Width;
+        _badge = new Size(Math.Max(badgeHeight + UiLayout.AtTextSize(4), widestNumber + UiLayout.AtTextSize(12)), badgeHeight);
+
         _columnWidth = MeasureColumnWidth(rounds);
+
+        if (rounds.Any(IsLocked))
+        {
+            _tileLocked = new StatTile();
+        }
 
         var lblTitle = new Label
         {
@@ -234,8 +279,8 @@ public sealed class HeatBalanceForm : Form
 
         var lblHint = new Label
         {
-            Text = "Drag a driver from one heat to another. Drop onto \"Not in a heat\" - or press Delete - "
-                 + "to take somebody out. Nothing is saved until you press Save.",
+            Text = "Drag a driver to another heat. Drop them on \"Not in a heat\", or press Delete, to take them out. "
+                 + "Nothing is saved until you press Save.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
@@ -288,9 +333,23 @@ public sealed class HeatBalanceForm : Form
             spreadBar = new ButtonBar().With(btnGroup, btnSpread, _lblSpread);
         }
 
+        var tiles = new List<StatTile> { _tileHeats, _tileDrivers, _tileEach, _tileOut };
+
+        if (_tileLocked is not null)
+        {
+            tiles.Add(_tileLocked);
+        }
+
+        foreach (var tile in tiles)
+        {
+            tile.Value.Font = AppTheme.TitleFont;
+            tile.Caption.Font = AppTheme.MicroFont;
+        }
+
         var page = new FillPage();
         page.Add(lblTitle, gapBelow: UiLayout.HintGap);
         page.Add(lblHint, gapBelow: UiLayout.RowGap);
+        page.Add(new TileStrip(tiles), gapBelow: UiLayout.RowGap);
 
         // The heats take the height; the strip keeps a column's heading and
         // a few drivers, and room under them for the bar it scrolls
@@ -339,7 +398,9 @@ public sealed class HeatBalanceForm : Form
         // columns are measured at the text size in use, so the width is too.
         var wanted = UiLayout.PageLeft + UiLayout.PageRight + Math.Min(4, _columns.Count) * (_columnWidth + _columnGap);
 
-        DialogFit.Keep(this, page, width: Math.Max(UiLayout.AtTextSize(640), wanted), height: 560, widthMeasured: true);
+        // As tall as it was and the tiles' row on top, so the heats keep the
+        // height they had.
+        DialogFit.Keep(this, page, width: Math.Max(UiLayout.AtTextSize(640), wanted), height: 640, widthMeasured: true);
     }
 
     // ------------------------------------------------------------------
@@ -382,8 +443,8 @@ public sealed class HeatBalanceForm : Form
     /// time - the same fault that had every other page in this app clipping
     /// its captions once the text size went up.
     ///
-    /// The longest name with the highest position number in front of it,
-    /// as DrawEntry draws it, the room either side, and a scrollbar's width
+    /// The longest name with the running-order pill in front of it, as
+    /// DrawEntry draws it, the room either side and the card's, and a scrollbar's width
     /// beside it - a list that scrolls has the native bar, with the themed
     /// one parked over it, taking that off its rows. Kept between two widths
     /// chosen at the normal text size, so a class of short names still reads
@@ -401,8 +462,10 @@ public sealed class HeatBalanceForm : Form
 
         var longestName = _universe.Values.MaxBy(Drawn) ?? string.Empty;
 
+        // The running-order pill and its gap in front of the name, and the
+        // card's own room either side of the list.
         var entries = Math.Clamp(
-            Drawn($"{WidestNumber(most, AppTheme.BodyFont)}    {longestName}") + 2 * _textInset + SystemInformation.VerticalScrollBarWidth,
+            _badge.Width + _badgeGap + Drawn(longestName) + 2 * _textInset + SystemInformation.VerticalScrollBarWidth + 2 * _cardPad,
             UiLayout.AtTextSize(190),
             UiLayout.AtTextSize(380));
 
@@ -512,11 +575,17 @@ public sealed class HeatBalanceForm : Form
     {
         var locked = round is not null && IsLocked(round);
 
-        var host = new Panel
-        {
-            BackColor = AppTheme.Surface,
-            Tag = AppTheme.KeepBackColor,
-        };
+        // Each heat a card (18 Nov 2026, dialog jazz-up): its heading on a
+        // wash of the class's colour under the class's band - grey for one
+        // that can't be changed - and the spares on a plain grey one.
+        var ink = round is null || locked ? AppTheme.TextMuted : _accent;
+        var wash = RosterInk.Blend(ink, AppTheme.Surface, round is null || locked ? 0.9f : 0.88f);
+
+        var host = new HeatColumnCard(
+            band: round is null ? null : ink,
+            wash: wash,
+            washHeight: _listTop - _headerTop / 2,
+            bandHeight: UiLayout.AtTextSize(4));
 
         var header = new Label
         {
@@ -524,6 +593,8 @@ public sealed class HeatBalanceForm : Form
             AutoSize = false,
             Font = AppTheme.BoldFont,
             ForeColor = round is null ? AppTheme.TextMuted : AppTheme.TextDark,
+            BackColor = wash,
+            Tag = AppTheme.KeepBackColor,
             TextAlign = ContentAlignment.MiddleLeft,
         };
 
@@ -532,11 +603,18 @@ public sealed class HeatBalanceForm : Form
             AutoSize = false,
             Font = AppTheme.SmallFont,
             ForeColor = AppTheme.TextMuted,
+            BackColor = wash,
+            Tag = AppTheme.KeepBackColor,
             TextAlign = ContentAlignment.MiddleLeft,
         };
 
-        var list = new ListBox
+        // What an empty list says, so an empty heat reads as somewhere to
+        // drop a driver rather than as something gone wrong.
+        var list = new HeatDropList
         {
+            EmptyNote = round is null
+                ? "Everyone is in a heat."
+                : locked ? string.Empty : "Drag drivers here.",
             Dock = DockStyle.Fill,
             DrawMode = DrawMode.OwnerDrawFixed,
             ItemHeight = _itemHeight,
@@ -576,7 +654,10 @@ public sealed class HeatBalanceForm : Form
         // the three gets laid out first. The heading and the count go in it
         // one under the other, as wide as the column less the room either
         // side - which MeasureColumnWidth made wide enough for both.
-        host.Padding = new Padding(0, _listTop, 0, 0);
+        //
+        // The list stands in from the card's edges (CardPad), clear of its
+        // rounded corners, so the card's outline shows all the way round.
+        host.Padding = new Padding(_cardPad, _listTop, _cardPad, _cardPad);
 
         header.Bounds = new Rectangle(_textInset, _headerTop, _columnWidth - 2 * _textInset, _headerHeight);
         count.Bounds = new Rectangle(_textInset, _headerTop + _headerHeight, _columnWidth - 2 * _textInset, _countHeight);
@@ -585,24 +666,9 @@ public sealed class HeatBalanceForm : Form
         host.Controls.Add(header);
         host.Controls.Add(count);
 
-        // The class's colour across the top of each heat, the same band the
-        // printed heat sheet carries - above the heading, at any text size.
-        if (round is not null)
-        {
-            var band = UiLayout.AtTextSize(3);
-
-            host.Paint += (s, e) =>
-            {
-                if (s is not Panel panel)
-                {
-                    return;
-                }
-
-                using var brush = new SolidBrush(locked ? AppTheme.Border : _accent);
-
-                e.Graphics.FillRectangle(brush, 0, 0, panel.Width, band);
-            };
-        }
+        // The card is the list's edge; the input ring the theme draws round
+        // a list would be a second box inside it.
+        InputOutline.Exclude(list);
 
         _strip.Controls.Add(host);
 
@@ -630,22 +696,30 @@ public sealed class HeatBalanceForm : Form
         var across = _columns.Count * _columnWidth + Math.Max(0, _columns.Count - 1) * _columnGap;
         var bar = across > _strip.Width ? SystemInformation.HorizontalScrollBarHeight : 0;
         var height = Math.Max(ColumnLeast, _strip.Height - bar);
-        var origin = _strip.AutoScrollPosition;
-        var x = 0;
-        var moved = false;
 
-        foreach (var column in _columns)
+        bool Place()
         {
-            var bounds = new Rectangle(origin.X + x, origin.Y, _columnWidth, height);
+            var origin = _strip.AutoScrollPosition;
+            var x = 0;
+            var changed = false;
 
-            if (column.Host.Bounds != bounds)
+            foreach (var column in _columns)
             {
-                column.Host.Bounds = bounds;
-                moved = true;
+                var bounds = new Rectangle(origin.X + x, origin.Y, _columnWidth, height);
+
+                if (column.Host.Bounds != bounds)
+                {
+                    column.Host.Bounds = bounds;
+                    changed = true;
+                }
+
+                x += _columnWidth + _columnGap;
             }
 
-            x += _columnWidth + _columnGap;
+            return changed;
         }
+
+        var moved = Place();
 
         // And the strip's bars worked out again for the columns as they are
         // now. It works them out when it lays itself out, which a resize
@@ -658,6 +732,44 @@ public sealed class HeatBalanceForm : Form
         if (moved)
         {
             _strip.PerformLayout();
+        }
+
+        // And bars that outlive what they were for. The columns are never
+        // taller than the strip leaves them, so a bar down its side is never
+        // needed - yet one left from the taller window took the width that
+        // then needed a bar along the bottom, and that one the height that
+        // kept the first: each holding the other up, over the last heat's
+        // edge, even with every heat fitting across (layout pictures, 18 Nov
+        // 2026). Scrolling turned off and on again works them out afresh for
+        // the columns as they are; the heats are placed again from the start
+        // and scrolled back to where they were.
+        if (_resettingBars
+            || height != _strip.Height - bar
+            || !(_strip.VerticalScroll.Visible || (bar == 0 && _strip.HorizontalScroll.Visible)))
+        {
+            return;
+        }
+
+        var keepAcross = -_strip.AutoScrollPosition.X;
+
+        _resettingBars = true;
+
+        try
+        {
+            _strip.AutoScroll = false;
+            _strip.AutoScroll = true;
+
+            Place();
+            _strip.PerformLayout();
+
+            if (bar > 0 && keepAcross > 0)
+            {
+                _strip.AutoScrollPosition = new Point(keepAcross, 0);
+            }
+        }
+        finally
+        {
+            _resettingBars = false;
         }
     }
 
@@ -684,18 +796,72 @@ public sealed class HeatBalanceForm : Form
             e.Graphics.FillRectangle(brush, e.Bounds);
         }
 
-        // Numbered in a heat because the order is the grid order; not
-        // numbered in the spares column, where there is no order to mean
-        // anything.
-        var text = column.IsSpares ? entry.Name : $"{e.Index + 1}    {entry.Name}";
+        const TextFormatFlags line = TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis
+                                     | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
+
+        var x = e.Bounds.X + _textInset;
+        var right = e.Bounds.Right - _textInset;
+
+        // Numbered in a heat because the order is the grid order - in a pill
+        // of the class's colour, as the heat's band (18 Nov 2026, dialog
+        // jazz-up); not numbered in the spares column, where there is no
+        // order to mean anything.
+        if (!column.IsSpares)
+        {
+            var tone = column.Locked ? AppTheme.TextMuted : _accent;
+            var pill = new RectangleF(x, e.Bounds.Y + (e.Bounds.Height - _badge.Height) / 2f, _badge.Width, _badge.Height);
+
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            using (var path = AppTheme.RoundedRect(pill, (int)(pill.Height / 2)))
+            using (var fill = new SolidBrush(RosterInk.Blend(tone, AppTheme.Surface, column.Locked ? 0.85f : 0.8f)))
+            {
+                e.Graphics.FillPath(fill, path);
+            }
+
+            TextRenderer.DrawText(
+                e.Graphics,
+                (e.Index + 1).ToString(System.Globalization.CultureInfo.CurrentCulture),
+                AppTheme.SmallFont,
+                Rectangle.Round(pill),
+                column.Locked ? AppTheme.TextMuted : AppTheme.TextDark,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+
+            x += _badge.Width + _badgeGap;
+        }
+
+        // A late arrival's note - "(not in Q2, Q3)" - in the muted ink after
+        // the name, so the name is read first.
+        var name = entry.Name;
+        var note = string.Empty;
+        var split = column.IsSpares ? name.IndexOf("  (", StringComparison.Ordinal) : -1;
+
+        if (split > 0)
+        {
+            note = name[split..];
+            name = name[..split];
+        }
+
+        var nameWidth = Math.Min(Math.Max(0, right - x), Drawn(name));
 
         TextRenderer.DrawText(
             e.Graphics,
-            text,
+            name,
             AppTheme.BodyFont,
-            new Rectangle(e.Bounds.X + _textInset, e.Bounds.Y, e.Bounds.Width - 2 * _textInset, e.Bounds.Height),
+            new Rectangle(x, e.Bounds.Y, Math.Max(0, right - x), e.Bounds.Height),
             column.Locked ? AppTheme.TextMuted : AppTheme.TextDark,
-            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            line);
+
+        if (note.Length > 0 && x + nameWidth < right)
+        {
+            TextRenderer.DrawText(
+                e.Graphics,
+                note,
+                AppTheme.BodyFont,
+                new Rectangle(x + nameWidth, e.Bounds.Y, right - x - nameWidth, e.Bounds.Height),
+                AppTheme.Primary,
+                line);
+        }
 
         if (!ReferenceEquals(_dropColumn, column) || _dropIndex < 0)
         {
@@ -1461,6 +1627,24 @@ public sealed class HeatBalanceForm : Form
             : sizes.Min() == sizes.Max()
                 ? $"{Plural.Of(sizes.Count, "heat")}, {Plural.Of(sizes.Min(), "driver")} in each."
                 : $"{Plural.Of(sizes.Count, "heat")}, between {sizes.Min()} and {sizes.Max()} drivers each.";
+
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        var sittingOut = _columns.Count > 0 ? _columns[0].List.Items.Count : 0;
+
+        _tileHeats.Set(sizes.Count.ToString(culture), "Heats");
+        _tileDrivers.Set(_universe.Count.ToString(culture), "Drivers");
+        _tileEach.Set(
+            sizes.Count == 0 ? "-"
+            : sizes.Min() == sizes.Max() ? sizes.Min().ToString(culture)
+            : $"{sizes.Min()} - {sizes.Max()}",
+            "In each heat");
+
+        // In the app's colour while anyone is left without a heat - the one
+        // number here that asks for something to be done.
+        _tileOut.Set(sittingOut.ToString(culture), "Not in a heat");
+        _tileOut.Value.ForeColor = sittingOut > 0 ? AppTheme.Primary : AppTheme.TextDark;
+
+        _tileLocked?.Set(_columns.Count(c => c.Locked).ToString(culture), "Locked");
     }
 
     // ------------------------------------------------------------------
