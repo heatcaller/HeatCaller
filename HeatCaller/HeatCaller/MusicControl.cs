@@ -50,6 +50,10 @@ public sealed class MusicControl : UserControl
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
+    /// <summary>The music at a glance, over the cards: on or off, which music plays, how much of the library is in My music, and its level.</summary>
+    private StatTile[] _tiles = Array.Empty<StatTile>();
+    private static readonly string[] TileCaptions = { "Music", "Plays", "My music", "Level" };
+
     /// <summary>The clock's column width as last measured, and the face it was measured in - see TimeWidth.</summary>
     private (Font Font, int Width)? _timeWidth;
 
@@ -383,6 +387,7 @@ public sealed class MusicControl : UserControl
 
         var playerCard = new Section("Player");
 
+        playerCard.Add(SoundsPagePieces.Hint(_textSize, "Start, pause and skip the music by hand; between races it plays on its own once music is enabled."));
         playerCard.Add(nowPlaying);
         playerCard.Add(seekRow, gapBelow: 0);
 
@@ -480,6 +485,8 @@ public sealed class MusicControl : UserControl
 
         var library = new Section("Library");
 
+        library.Add(SoundsPagePieces.Hint(_textSize, "Every track the app knows. Double-click one to play it; Include / Exclude ticks it in or out of My music."));
+
         library.AddFill(_grid, () => _grid.ColumnHeadersHeight + _grid.RowTemplate.Height * GridLeastRows + 2);
         library.Add(new ButtonBar().With(btnAdd, btnToggle, btnRemove, btnFolder, btnRestore, btnClear), gapBelow: 0);
 
@@ -512,6 +519,8 @@ public sealed class MusicControl : UserControl
 
         var behaviour = new Section("Behavior");
 
+        behaviour.Add(SoundsPagePieces.Hint(_textSize, "What the music does while a race is on."));
+
         behaviour.Add(_chkPauseDuringRaces, stretch: false, gapBelow: UiLayout.HintGap);
         behaviour.Add(lblPauseHint, gapBelow: 0);
 
@@ -530,10 +539,22 @@ public sealed class MusicControl : UserControl
 
         var page = new FillPage();
 
+        // --- The tiles: the music at a glance ---
+
+        _tiles = SoundsPagePieces.Tiles(_textSize, TileCaptions);
+
+        // --- What plays: the switch, shuffle, and theme or my music ---
+
+        var playsCard = new Section("What plays");
+
+        playsCard.Add(SoundsPagePieces.Hint(_textSize, "Switch the music on, and pick the soundscape's own music or the tracks ticked for My music."));
+        playsCard.Add(switches, gapBelow: UiLayout.RowGap);
+        playsCard.Add(source, gapBelow: UiLayout.HintGap);
+        playsCard.Add(_lblSource, gapBelow: 0);
+
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.Add(switches, gapBelow: UiLayout.RowGap);
-        page.Add(source, gapBelow: UiLayout.HintGap);
-        page.Add(_lblSource);
+        page.Add(new TileStrip(_tiles));
+        page.Add(playsCard);
         page.Add(playerCard);
         page.AddFill(library, library.LeastHeight);
         // The Behavior card is Advanced (1 Nov 2026, Simple mode).
@@ -545,6 +566,35 @@ public sealed class MusicControl : UserControl
 
         UpdateEnabledState();
         RefreshSource();
+        ShowTiles();
+    }
+
+    /// <summary>
+    /// The tiles over the cards: music on or off (or playing), theme or my
+    /// music, how many tracks are ticked for My music, and the Mixer's music
+    /// level. Run as anything they show changes, and on the position tick,
+    /// so a level set on the Mixer shows here too.
+    /// </summary>
+    private void ShowTiles()
+    {
+        if (_tiles.Length < TileCaptions.Length)
+        {
+            return;
+        }
+
+        var settings = _store.Current;
+        var on = settings.Enabled;
+        var tracks = settings.Tracks;
+        var ticked = tracks.Count(t => t.Enabled && File.Exists(t.FilePath));
+
+        SoundsPagePieces.Show(_tiles[0],
+            _player.IsPlaying ? "Playing" : _player.IsPaused ? "Paused" : on ? "On" : "Off",
+            TileCaptions[0],
+            _player.IsPlaying ? AppTheme.Success : on ? AppTheme.TextDark : AppTheme.TextMuted);
+        SoundsPagePieces.Show(_tiles[1], settings.PlayThemeMusic == true ? "Theme music" : "My music", TileCaptions[1]);
+        SoundsPagePieces.Show(_tiles[2], tracks.Count == 0 ? "-" : $"{ticked} of {tracks.Count}", TileCaptions[2],
+            tracks.Count > 0 && ticked == 0 ? AppTheme.Danger : null);
+        SoundsPagePieces.Show(_tiles[3], SoundsPagePieces.Percent(settings.Volume), TileCaptions[3]);
     }
 
     /// <summary>
@@ -809,6 +859,8 @@ public sealed class MusicControl : UserControl
     /// <summary>Moves the seek bar and clock while a track plays.</summary>
     private void TickPosition()
     {
+        ShowTiles();
+
         var (position, duration) = _player.CurrentPosition;
 
         if (duration <= TimeSpan.Zero)
@@ -870,6 +922,7 @@ public sealed class MusicControl : UserControl
         _lblNowPlaying.ForeColor = playing ? AppTheme.Success : AppTheme.TextMuted;
 
         MarkPlayingRow();
+        ShowTiles();
     }
 
     /// <summary>
@@ -978,6 +1031,7 @@ public sealed class MusicControl : UserControl
         // Rebuilding the list, or ticking a track in or out, can change what
         // "Theme music" finds to play - so the sentence saying so follows.
         RefreshSource();
+        ShowTiles();
     }
 
     private void AddTracks()

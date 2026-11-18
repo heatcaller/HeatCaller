@@ -54,6 +54,10 @@ public sealed class AmbienceControl : UserControl
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
+    /// <summary>The ambience at a glance, over the cards: the switch, which layers play, how many are heard, and the reactions.</summary>
+    private StatTile[] _tiles = Array.Empty<StatTile>();
+    private static readonly string[] TileCaptions = { "Ambience", "Plays", "Layers heard", "Reactions" };
+
     /// <summary>The live monitor's height at the normal text size - what Monitor_Paint draws into.</summary>
     private const int MonitorHeight = 78;
 
@@ -505,6 +509,7 @@ public sealed class AmbienceControl : UserControl
 
         var reactions = new Section("Reactions");
 
+        reactions.Add(SoundsPagePieces.Hint(_textSize, "The crowd surges for the moments ticked below, then settles back."), gapBelow: UiLayout.HintGap);
         reactions.Add(_lblReactionsState, gapBelow: UiLayout.HintGap);
         reactions.Add(_chkReact, stretch: false);
         reactions.Add(timing);
@@ -521,9 +526,21 @@ public sealed class AmbienceControl : UserControl
 
         var page = new FillPage();
 
+        // --- The tiles: the ambience at a glance ---
+
+        _tiles = SoundsPagePieces.Tiles(_textSize, TileCaptions);
+
+        // --- The switch and the live monitor, in a card of their own ---
+
+        var liveCard = new Section("Live");
+
+        liveCard.Add(SoundsPagePieces.Hint(_textSize, "The switch for the whole crowd, and what it is doing right now."));
+        liveCard.Add(master, gapBelow: UiLayout.RowGap);
+        liveCard.Add(_monitor, gapBelow: 0);
+
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.Add(master, gapBelow: UiLayout.RowGap);
-        page.Add(_monitor);
+        page.Add(new TileStrip(_tiles));
+        page.Add(liveCard);
         page.AddFill(layers, layers.LeastHeight);
         page.Add(reactions, gapBelow: 0);
 
@@ -930,6 +947,36 @@ public sealed class AmbienceControl : UserControl
         _chkStreak.Enabled = reacting;
         _chkPersonalBest.Enabled = reacting;
         _chkLapped.Enabled = reacting;
+
+        ShowTiles();
+    }
+
+    /// <summary>The tiles over the cards: the switch, the Play choice, the layers that would be heard, and whether the crowd reacts.</summary>
+    private void ShowTiles()
+    {
+        if (_tiles.Length < TileCaptions.Length)
+        {
+            return;
+        }
+
+        var current = _store.Current;
+        var on = current.Enabled;
+        var heard = current.PlayableLayers.Count(l => File.Exists(l.FilePath));
+        var total = current.Layers.Count;
+
+        SoundsPagePieces.Show(_tiles[0], on ? "On" : "Off", TileCaptions[0], on ? AppTheme.Success : AppTheme.TextMuted);
+        SoundsPagePieces.Show(_tiles[1],
+            current.Source switch
+            {
+                AmbienceSource.Soundscape => "Soundscape",
+                AmbienceSource.Mine => "My ambience",
+                _ => "Both",
+            },
+            TileCaptions[1]);
+        SoundsPagePieces.Show(_tiles[2], total == 0 ? "-" : $"{heard} of {total}", TileCaptions[2],
+            total > 0 && heard == 0 ? AppTheme.Danger : null);
+        SoundsPagePieces.Show(_tiles[3], on && current.ReactToEvents ? "On" : "Off", TileCaptions[3],
+            on && current.ReactToEvents ? AppTheme.Success : AppTheme.TextMuted);
     }
 
     private void RefreshGrid()
@@ -1024,6 +1071,8 @@ public sealed class AmbienceControl : UserControl
             _lblStatus.Text = $"{usable} of {Plural.Of(total, "layer")} ready to play.";
             _lblStatus.ForeColor = usable < total ? AppTheme.Accent : AppTheme.Success;
         }
+
+        ShowTiles();
     }
 
     private void EditLayer(AmbienceLayer? existing)

@@ -22,6 +22,10 @@ public sealed class LapBeepControl : UserControl
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
+    /// <summary>The cues at a glance, over the cards: the switch, the drivers, how many have a cue, and how many share one.</summary>
+    private StatTile[] _tiles = Array.Empty<StatTile>();
+    private static readonly string[] TileCaptions = { "Lap cues", "Drivers", "With a cue", "Sharing a cue" };
+
     /// <summary>The fewest drivers the list shows before the page scrolls instead.</summary>
     private const int GridLeastRows = 3;
 
@@ -116,9 +120,10 @@ public sealed class LapBeepControl : UserControl
         ?? transponder;
 
     /// <summary>
-    /// The intro, the switch with what it means under it, then one card: the
+    /// The intro, the tiles, the switch's card, then the drivers' card: the
     /// drivers and their cues taking the height that is left, the buttons
-    /// under them and the status line. On the layout pieces
+    /// for the one picked under them and the status line; and last the
+    /// card for every driver at once. On the layout pieces
     /// (LayoutPieces.cs), so nothing is placed by hand.
     ///
     /// It used to be placed in pixels: the switch's note at x=230 whatever
@@ -197,18 +202,41 @@ public sealed class LapBeepControl : UserControl
         _lblStatus.AutoSize = true;
         _lblStatus.ForeColor = AppTheme.TextMuted;
 
+        // Test Cue is the one a club reaches for most - hearing a cue - so
+        // it is the primary button of the row.
+        AppTheme.StyleButton(btnTest, AppTheme.ButtonKind.Primary);
+
+        // --- The tiles: the cues at a glance ---
+
+        _tiles = SoundsPagePieces.Tiles(_textSize, TileCaptions);
+
+        // --- The cards: the switch, the drivers, and everyone at once ---
+
+        var cuesCard = new Section("Lap cues");
+
+        cuesCard.Add(SoundsPagePieces.Hint(_textSize, "One switch for every driver's cue. Off, the line stays quiet for everyone."));
+        cuesCard.Add(_chkEnabled, stretch: false, gapBelow: UiLayout.HintGap);
+        cuesCard.Add(lblEnabledHint, gapBelow: 0);
+
         var drivers = new Section("Drivers");
 
+        drivers.Add(SoundsPagePieces.Hint(_textSize, "Pick a driver, then Change Cue steps to the next cue and plays it, so you choose by ear. Double-click does the same."));
         drivers.AddFill(_grid, () => _grid.ColumnHeadersHeight + GridLeastRows * _grid.RowTemplate.Height + 2);
-        drivers.Add(new ButtonBar().With(btnTone, btnTest, btnToggle, btnAuto, btnClear));
+        drivers.Add(new ButtonBar().With(btnTest, btnTone, btnToggle));
         drivers.Add(_lblStatus, gapBelow: 0);
+
+        var everyone = new Section("Everyone at once");
+
+        everyone.Add(SoundsPagePieces.Hint(_textSize, "Auto-Assign gives every driver a cue of their own; Clear All takes every cue away. Both can be undone."));
+        everyone.Add(new ButtonBar().With(btnAuto, btnClear), gapBelow: 0);
 
         var page = new FillPage();
 
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.Add(_chkEnabled, stretch: false, gapBelow: UiLayout.HintGap);
-        page.Add(lblEnabledHint);
-        page.AddFill(drivers, drivers.LeastHeight, gapBelow: 0);
+        page.Add(new TileStrip(_tiles));
+        page.Add(cuesCard);
+        page.AddFill(drivers, drivers.LeastHeight);
+        page.Add(everyone, gapBelow: 0);
 
         Controls.Add(page);
 
@@ -221,6 +249,27 @@ public sealed class LapBeepControl : UserControl
     {
         _chkEnabled.Text = _store.Enabled ? "Per-driver lap cues ON" : "Per-driver lap cues OFF";
         _chkEnabled.ForeColor = _store.Enabled ? AppTheme.Success : AppTheme.TextMuted;
+
+        if (_tiles.Length > 0)
+        {
+            SoundsPagePieces.Show(_tiles[0], _store.Enabled ? "On" : "Off", TileCaptions[0],
+                _store.Enabled ? AppTheme.Success : AppTheme.TextMuted);
+        }
+    }
+
+    /// <summary>The tiles for the drivers listed: how many, how many have a cue on, and how many share one with someone else.</summary>
+    private void ShowDriverTiles(int drivers, int withCue, int sharing)
+    {
+        if (_tiles.Length < TileCaptions.Length)
+        {
+            return;
+        }
+
+        SoundsPagePieces.Show(_tiles[1], drivers == 0 ? "-" : drivers.ToString(), TileCaptions[1]);
+        SoundsPagePieces.Show(_tiles[2], drivers == 0 ? "-" : $"{withCue} of {drivers}", TileCaptions[2],
+            withCue > 0 ? AppTheme.Success : null);
+        SoundsPagePieces.Show(_tiles[3], drivers == 0 ? "-" : sharing.ToString(), TileCaptions[3],
+            sharing > 0 ? AppTheme.Warning : null);
     }
 
     public void RefreshAll()
@@ -297,6 +346,8 @@ public sealed class LapBeepControl : UserControl
             : $"{assignedCount} of {Plural.Of(drivers.Count, "driver")} {(assignedCount == 1 ? "has" : "have")} a cue.";
 
         _lblStatus.ForeColor = duplicates.Count > 0 ? AppTheme.Accent : AppTheme.TextMuted;
+
+        ShowDriverTiles(drivers.Count, assignedCount, sharing);
     }
 
     /// <summary>Steps to the next cue and plays it, so the choice is made by ear rather than by name.</summary>

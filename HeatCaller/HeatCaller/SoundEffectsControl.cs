@@ -142,6 +142,10 @@ public sealed class SoundEffectsControl : UserControl
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
+    /// <summary>The sounds at a glance, over the cards: how many are on for races and for practice, how many play the club's own file, and the most per lap.</summary>
+    private StatTile[] _tiles = Array.Empty<StatTile>();
+    private static readonly string[] TileCaptions = { "On for races", "On for practice", "Your own files", "Most per lap" };
+
     /// <summary>
     /// The rows, which scroll down - and sideways, when the page is narrower
     /// than a row - inside the list's frame (StickyHeadings).
@@ -304,6 +308,31 @@ public sealed class SoundEffectsControl : UserControl
         // which fires the change events. The guard comes off now, so the
         // first write is a real edit rather than the page loading itself.
         _loading = false;
+
+        ShowTiles();
+    }
+
+    /// <summary>
+    /// The tiles over the cards, read off the rows as they stand - run as
+    /// any change is queued to save, and when the stored sounds are shown
+    /// again (an undo, a soundscape).
+    /// </summary>
+    private void ShowTiles()
+    {
+        if (_tiles.Length < TileCaptions.Length)
+        {
+            return;
+        }
+
+        var total = _rows.Count;
+        var races = _rows.Values.Count(r => r.Race.Checked);
+        var practice = _rows.Values.Count(r => r.Practice.Checked);
+        var own = _rows.Values.Count(r => !string.IsNullOrWhiteSpace(r.FilePath));
+
+        SoundsPagePieces.Show(_tiles[0], $"{races} of {total}", TileCaptions[0], races > 0 ? AppTheme.Success : AppTheme.TextMuted);
+        SoundsPagePieces.Show(_tiles[1], $"{practice} of {total}", TileCaptions[1], practice > 0 ? AppTheme.Success : AppTheme.TextMuted);
+        SoundsPagePieces.Show(_tiles[2], own.ToString(), TileCaptions[2]);
+        SoundsPagePieces.Show(_tiles[3], ((int)_numMaxPerLap.Value).ToString(), TileCaptions[3]);
     }
 
     /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
@@ -535,14 +564,35 @@ public sealed class SoundEffectsControl : UserControl
 
         // --- The page ---
 
+        // Test All Enabled is the button to reach for - hearing the lot - so
+        // it is the row's primary one.
+        AppTheme.StyleButton(btnTestAll, AppTheme.ButtonKind.Primary);
+
+        // --- The tiles: the sounds at a glance ---
+
+        _tiles = SoundsPagePieces.Tiles(_textSize, TileCaptions);
+
+        // --- The cards: every sound at once, and how many per lap ---
+
+        var everyCard = new Section("Every sound at once");
+
+        everyCard.Add(SoundsPagePieces.Hint(_textSize, "Switch every row on or off, hear all the ones on, or give every row the same pack."), gapBelow: UiLayout.HintGap);
+        everyCard.Add(bulk, gapBelow: UiLayout.HintGap);
+        everyCard.Add(lblBulkHint, gapBelow: 0);
+
+        var perLapCard = new Section("Per lap");
+
+        perLapCard.Add(SoundsPagePieces.Hint(_textSize, "When several per-lap sounds fire on the same lap, the heaviest win up to this many."), gapBelow: UiLayout.HintGap);
+        perLapCard.Add(maxPerLap, gapBelow: 0);
+
         var page = new FillPage();
 
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.Add(new TileStrip(_tiles));
+        page.Add(everyCard);
         page.Add(_lblContextHint, gapBelow: UiLayout.RowGap);
-        page.Add(bulk, gapBelow: UiLayout.HintGap);
-        page.Add(lblBulkHint, gapBelow: UiLayout.RowGap);
         _listFrame = page.AddFill(list, _ => ListLeastHeight());
-        page.Add(maxPerLap, gapBelow: UiLayout.RowGap);
+        page.Add(perLapCard);
         page.Add(_lblStatus, gapBelow: 0);
 
         Controls.Add(page);
@@ -1574,6 +1624,8 @@ public sealed class SoundEffectsControl : UserControl
             return;
         }
 
+        ShowTiles();
+
         _saveDebounce.Stop();
         _saveDebounce.Start();
     }
@@ -1717,6 +1769,7 @@ public sealed class SoundEffectsControl : UserControl
             _loading = wasLoading;
         }
 
+        ShowTiles();
         _profileShown = profile;
         UpdateSetAll();
     }

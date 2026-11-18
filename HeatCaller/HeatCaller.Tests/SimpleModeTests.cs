@@ -455,6 +455,9 @@ public sealed class SimpleModeTests : IDisposable
         "AmbienceControl.cs|Layers", "AmbienceControl.cs|Reactions", "LapBeepControl.cs|Drivers",
         "BroadcastImagingControl.cs|Soundscape", "BroadcastImagingControl.cs|Pieces", "BroadcastImagingControl.cs|Timing",
         "BroadcastImagingControl.cs|Run of show", "ShowTreatmentCard.cs|Show treatment",
+        "MusicControl.cs|What plays", "AmbienceControl.cs|Live", "BroadcastImagingControl.cs|On air",
+        "LapBeepControl.cs|Lap cues", "LapBeepControl.cs|Everyone at once",
+        "SoundEffectsControl.cs|Every sound at once", "SoundEffectsControl.cs|Per lap",
         "SoundscapeEditorForm.cs|Sounds", "SoundscapeEditorForm.cs|Announcer",
 
         // Connection, Backup & Restore.

@@ -68,6 +68,10 @@ public sealed class BroadcastImagingControl : UserControl
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
+    /// <summary>The imaging at a glance, over the cards: the switch, the soundscape being set up, its pieces, and any whose file has gone.</summary>
+    private StatTile[] _tiles = Array.Empty<StatTile>();
+    private static readonly string[] TileCaptions = { "Imaging", "Setting up", "Pieces", "Files missing" };
+
     private (Font Font, int Count, int Width)? _soundscapeWidth;
     private (Font Font, int Count, int Width)? _elementWidth;
     private readonly Dictionary<ImagingCue, (Font Font, int Count, int Width)?> _cueWidths = new();
@@ -389,6 +393,7 @@ public sealed class BroadcastImagingControl : UserControl
 
         var pieces = new Section("Pieces");
 
+        pieces.Add(SoundsPagePieces.Hint(_textSize, "Every jingle, sweeper, bumper, stinger and bed the soundscape has. Play one to hear it; the marks set where its voice comes in."));
         pieces.AddFill(_grid, () => _grid.ColumnHeadersHeight + GridLeastRows * _grid.RowTemplate.Height + 2);
         pieces.Add(new ButtonBar().With(_cmbElement, btnAdd, btnPlay, btnStop, btnRemove, btnRestoreElement, btnRestoreSoundscape));
         pieces.Add(postGrid);
@@ -483,18 +488,28 @@ public sealed class BroadcastImagingControl : UserControl
         levelGrid.AddHint("The pieces' and beds' levels are on the Mixer tab.");
 
         var levels = new Section("Timing");
+        levels.Add(SoundsPagePieces.Hint(_textSize, "Where a piece's voice lands against the announcer's last word."));
         levels.Add(levelGrid, gapBelow: 0);
 
         // --- The page ----------------------------------------------------
 
         var top = new Section("Soundscape");
+        top.Add(SoundsPagePieces.Hint(_textSize, "Pick the soundscape whose pieces you want to hear, add to or change."));
         top.Add(soundscapeGrid, gapBelow: 0);
+
+        // The switch and what it means in a card of its own, outside the
+        // cards it greys (_imagingCards), so it can always be switched back on.
+        var switchCard = new Section("On air");
+        switchCard.Add(_chkEnabled, stretch: false, gapBelow: UiLayout.HintGap);
+        switchCard.Add(lblEnabledHint, gapBelow: 0);
+
+        _tiles = SoundsPagePieces.Tiles(_textSize, TileCaptions);
 
         var page = new FillPage();
 
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.Add(_chkEnabled, stretch: false, gapBelow: UiLayout.HintGap);
-        page.Add(lblEnabledHint);
+        page.Add(new TileStrip(_tiles));
+        page.Add(switchCard);
         page.Add(top);
         page.AddFill(pieces, pieces.LeastHeight);
         page.Add(run);
@@ -625,6 +640,25 @@ public sealed class BroadcastImagingControl : UserControl
                 card.Enabled = on;
             }
         }
+
+        if (_tiles.Length > 0)
+        {
+            SoundsPagePieces.Show(_tiles[0], on ? "On" : "Off", TileCaptions[0], on ? AppTheme.Success : AppTheme.TextMuted);
+        }
+    }
+
+    /// <summary>The tiles for the soundscape being set up: its name, how many pieces it has, and how many of their files have gone.</summary>
+    private void ShowPieceTiles(string? soundscape, int pieces, int missing)
+    {
+        if (_tiles.Length < TileCaptions.Length)
+        {
+            return;
+        }
+
+        SoundsPagePieces.Show(_tiles[1], soundscape ?? "-", TileCaptions[1]);
+        SoundsPagePieces.Show(_tiles[2], soundscape is null ? "-" : pieces.ToString(), TileCaptions[2]);
+        SoundsPagePieces.Show(_tiles[3], soundscape is null ? "-" : missing.ToString(), TileCaptions[3],
+            missing > 0 ? AppTheme.Danger : null);
     }
 
     private void RefreshPieces()
@@ -638,6 +672,7 @@ public sealed class BroadcastImagingControl : UserControl
         {
             _lblSoundscape.Text = string.Empty;
             _lblStatus.Text = "No soundscapes to set up.";
+            ShowPieceTiles(null, 0, 0);
             return;
         }
 
@@ -646,6 +681,8 @@ public sealed class BroadcastImagingControl : UserControl
             : "the pieces it ships with";
 
         var counts = new List<string>();
+        var pieceCount = 0;
+        var missingCount = 0;
 
         foreach (var element in Enum.GetValues<ImagingElement>())
         {
@@ -657,6 +694,9 @@ public sealed class BroadcastImagingControl : UserControl
             {
                 var isShipped = shipped.Contains(path, StringComparer.OrdinalIgnoreCase);
                 var there = File.Exists(path);
+
+                pieceCount++;
+                missingCount += there ? 0 : 1;
 
                 var marked = BroadcastImaging.ClubPost(path) ?? BroadcastImaging.ShippedPost(path);
                 var talkUp = BroadcastImaging.ClubTalkUp(path);
@@ -695,6 +735,8 @@ public sealed class BroadcastImagingControl : UserControl
         _lblStatus.Text = counts.Count == 0
             ? $"{theme.Name} has no imaging yet - add some with Add Files."
             : $"{theme.Name}: {string.Join(", ", counts)}.";
+
+        ShowPieceTiles(theme.Name, pieceCount, missingCount);
     }
 
     private void RefreshRunOfShow()
