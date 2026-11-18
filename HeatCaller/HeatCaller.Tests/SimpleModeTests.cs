@@ -503,6 +503,12 @@ public sealed class SimpleModeTests : IDisposable
         // breakdown window (LapDetailWindow) is painted, with no Section.
         "RaceProgramControl.LateArrivals.cs|Add to the heats",
 
+        // Check How Names Are Read, Drivers in Round, Other Classes, the driver
+        // picker (PickDriverForm) and the car picker (PickCarForm), one card each
+        // (18 Nov 2026, dialog jazz-up, third batch).
+        "NameCheckForm.cs|Names to hear", "RoundRosterForm.cs|Running order", "OtherClassesForm.cs|Also races",
+        "LateEntry.cs|Drivers", "SetupLinking.cs|Cars in the garage",
+
         // A driver's profile and a driver's handicap, in cards (18 Nov 2026, dialog jazz-up).
         "ProfileForm.cs|Who they are", "ProfileForm.cs|Car and class", "ProfileForm.cs|On the PA",
         "ProfileForm.cs|Their crew", "ProfileForm.cs|Junior", "ProfileForm.cs|Privacy", "ProfileForm.cs|Contact",

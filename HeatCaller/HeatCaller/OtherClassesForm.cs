@@ -17,9 +17,9 @@ namespace HeatCaller;
 /// listed at the end, still ticked, so opening this and pressing Save never
 /// quietly drops it.
 ///
-/// On the layout pieces (DialogFit), like MainRoundForm: the explanation
-/// across the top, the classes taking the height, and Save and Cancel
-/// against the right at the foot. Built by the layout test (WindowCatalog,
+/// On the layout pieces (DialogFit): one card (18 Nov 2026), the
+/// explanation as its hint line and the classes taking the height, and
+/// Save and Cancel against the right at the foot. Built by the layout test (WindowCatalog,
 /// "Other Classes").
 /// </summary>
 public sealed class OtherClassesForm : Form
@@ -60,6 +60,7 @@ public sealed class OtherClassesForm : Form
                 : "Tick the classes they race. They go into those classes' heats.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
         };
 
         _clbClasses.CheckOnClick = true;
@@ -99,9 +100,22 @@ public sealed class OtherClassesForm : Form
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
+        // An empty list says what fills it, in the line over it.
+        if (_clbClasses.Items.Count == 0)
+        {
+            lblIntro.Text = main.Length > 0
+                ? $"The club has no classes besides {main} yet. Add them on the Classes page and they show here."
+                : "The club has no classes yet. Add them on the Classes page and they show here.";
+        }
+
+        // THE LOOK (18 Nov 2026, dialog jazz-up): the classes in one card,
+        // the explanation as its line on what it is for.
+        var card = new Section("Also races");
+        card.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        card.AddFill(_clbClasses, () => LeastRows * _clbClasses.ItemHeight + 4, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.AddFill(_clbClasses, _ => LeastRows * _clbClasses.ItemHeight + 4, gapBelow: UiLayout.RowGap);
+        page.AddFill(card, card.LeastHeight, gapBelow: UiLayout.RowGap);
 
         // Against the right-hand edge, Cancel furthest right, as a dialog's buttons go.
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
@@ -115,6 +129,8 @@ public sealed class OtherClassesForm : Form
         AppTheme.StyleButton(btnSave, AppTheme.ButtonKind.Primary);
         lblIntro.ForeColor = AppTheme.TextMuted;
 
-        DialogFit.Keep(this, page, width: 460, height: 420);
+        // Wider and taller than the 460x420 it was made at by the card's
+        // edges and caption, so the list is the size it was.
+        DialogFit.Keep(this, page, width: 492, height: 450);
     }
 }
