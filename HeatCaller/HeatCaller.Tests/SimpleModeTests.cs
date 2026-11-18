@@ -474,11 +474,14 @@ public sealed class SimpleModeTests : IDisposable
         "LooksControl.cs|Looks", "LooksControl.cs|Club logo", "LooksControl.cs|Appearance",
         "LooksControl.cs|Crowd screens", "AchievementsControl.cs|Whose achievements", "GarageControl.cs|Which cars", "GarageControl.cs|Garage",
         "SponsorsControl.cs|Slides (shown in this order)", "SponsorsControl.cs|Sponsor reads",
-        "WebServerControl.cs|Server", "WebServerControl.cs|Open these on your phone, tablet, or in OBS",
+        "SponsorsControl.cs|Sponsors", "SponsorsControl.cs|The selected sponsor", "SponsorsControl.cs|Tonight's report",
+        "WebServerControl.cs|Server", "WebServerControl.cs|Phone and tablet pages", "WebServerControl.cs|Streaming in OBS",
+        "WebServerControl.cs|Big Screen", "WebServerControl.cs|Off this Wi-Fi",
         "MainForm.Pages.cs|Website", "RelaySettingsControl.cs|Relay", "RelaySettingsControl.cs|Online check-in",
         "RelaySettingsControl.cs|Share", "RelaySettingsControl.cs|Status",
         "RelaySettingsControl.cs|Your first night guide", "RelaySettingsControl.cs|Club updates",
         "RecordingControl.cs|Recording the night", "RecordingControl.cs|Written from the night",
+        "RecordingControl.cs|Where recordings are kept", "RecordingControl.cs|The night before", "RecordingControl.cs|Why it said that",
 
         // Venues, which Simple hides as a page.
         "VenuesControl.cs|Venues", "VenuesControl.cs|The venue", "VenuesControl.cs|Race defaults", "VenuesControl.cs|Apply",

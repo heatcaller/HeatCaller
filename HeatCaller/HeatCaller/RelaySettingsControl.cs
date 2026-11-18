@@ -16,6 +16,15 @@ public sealed partial class RelaySettingsControl : UserControl
     private readonly TextSize _textSize = new();
 
     /// <summary>
+    /// The club website at a glance, over the cards (17 Nov 2026, page
+    /// jazz-up): whether it is getting through, the club, when something
+    /// last landed, and whether drivers can check in from their phones.
+    /// Kept by the status tick, once a second. A dash for none.
+    /// </summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
+    private static readonly string[] TileCaptions = { "Publishing", "Club", "Last published", "Phone check-in" };
+
+    /// <summary>
     /// The grids whose captions share one column down the page - the
     /// relay's, the welcome line's, the links', the personal PINs' and the
     /// mail's - so their boxes line up from card to card. Filled as the
@@ -390,26 +399,47 @@ public sealed partial class RelaySettingsControl : UserControl
 
         var page = new PageStack();
 
+        // --- The tiles: the club website at a glance (17 Nov 2026, page jazz-up) ---
+
+        for (var i = 0; i < _tiles.Length; i++)
+        {
+            _textSize.Wear(_tiles[i].Value, () => AppTheme.TitleFont);
+            _textSize.Wear(_tiles[i].Caption, () => AppTheme.MicroFont);
+            _tiles[i].Set("-", TileCaptions[i]);
+        }
+
+        // The relay's card, then the address to hand out under it - the
+        // two a club comes here for most - and the rest after them. The
+        // guide and the updates are two of a kind, side by side when there
+        // is the room (CardColumns).
+        var relay = BuildRelayCard();
+        var publish = SimpleMode.Hide(BuildPublishCard());
+        var look = SimpleMode.Hide(BuildLookCard());
+
+        var writing = new CardColumns();
+        writing.AddLeft(BuildGuideCard());
+        writing.AddRight(BuildUpdatesCard());
+
         // Simple mode (1 Nov 2026) keeps the Relay card (club and token),
         // Online check-in, Share and Status; what gets published, the look,
         // personal PINs, email, the race-day manager and Room & Web are
         // Advanced. See SimpleMode.
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.Add(BuildRelayCard());
-        page.Add(SimpleMode.Hide(BuildPublishCard()));
-        page.Add(SimpleMode.Hide(BuildLookCard()));
-        page.Add(BuildGuideCard());
-        page.Add(BuildUpdatesCard());
+        page.Add(new TileStrip(_tiles), gapBelow: UiLayout.SectionGap);
+        page.Add(relay);
+        page.Add(BuildShareCard());
+        page.Add(publish);
+        page.Add(look);
+        page.Add(writing);
         page.Add(BuildCheckInCard());
         page.Add(SimpleMode.Hide(BuildPinsCard()));
         page.Add(SimpleMode.Hide(BuildMailCard()));
         page.Add(SimpleMode.Hide(BuildManagerCard()));
         page.Add(BuildVideoCard());
-        page.Add(BuildShareCard());
 
         // ROOM & WEB (17 Oct 2026): what the room and the people at home can
         // send in or hear through the club's pages - from the Commentary
-        // page. After Share, which is the address they use to get there.
+        // page.
         page.Add(SimpleMode.Hide(_roomAndWeb.Card));
         page.Add(BuildStatusCard(), gapBelow: 0);
         page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
@@ -609,6 +639,7 @@ public sealed partial class RelaySettingsControl : UserControl
         // and token are not.
         SimpleMode.HideRow(fields, _txtBaseUrl);
 
+        card.Add(HintLabel("Where this laptop sends to: the relay's address, your club and its publish token. Nothing goes until the box below is ticked."));
         card.Add(_chkEnabled, stretch: false);
         card.Add(fields);
         card.Add(new ButtonBar().With(_btnSave, _btnTest, _btnRestore), gapBelow: UiLayout.HintGap);
@@ -1377,6 +1408,7 @@ public sealed partial class RelaySettingsControl : UserControl
 
         var card = new Section("Look");
 
+        card.Add(HintLabel("How the club's pages greet people: the welcome line, the newcomers' note and the club's links."));
         card.Add(tagline, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
         card.Add(lblNewcomer, stretch: false, gapBelow: UiLayout.HintGap);
         card.Add(lblNewcomerHint);
@@ -1835,6 +1867,7 @@ public sealed partial class RelaySettingsControl : UserControl
 
         var card = new Section("Online check-in");
 
+        card.Add(HintLabel("Drivers check themselves in on the club's page, from their own phones - off the venue's Wi-Fi too."));
         card.Add(_chkCheckIn, stretch: false);
         card.Add(pin, gapBelow: UiLayout.HintGap);
         card.Add(lblHint);
@@ -2696,6 +2729,7 @@ public sealed partial class RelaySettingsControl : UserControl
 
         var card = new Section("Email (for racer PINs)");
 
+        card.Add(HintLabel("The club's own mailbox, which racers' PINs are emailed from."));
         card.Add(fields, gapBelow: UiLayout.HintGap);
         card.Add(lblMailHint, gapBelow: 0);
 
@@ -3098,6 +3132,7 @@ public sealed partial class RelaySettingsControl : UserControl
 
         var card = new Section("Status");
 
+        card.Add(HintLabel("Whether what this laptop publishes is reaching the relay, and the one way to take it all back down."));
         card.Add(_lblStatus, gapBelow: UiLayout.HintGap);
         card.Add(_lblDetail);
         card.Add(new ButtonBar().With(_btnDelete), gapBelow: UiLayout.HintGap);
@@ -3540,6 +3575,8 @@ public sealed partial class RelaySettingsControl : UserControl
 
         var status = _publisher.Status;
 
+        ShowTiles(status);
+
         // Before "Not configured", which is what the publisher reports while
         // it holds back - and which would send somebody looking for a
         // missing token that is sitting right there. And before "Not
@@ -3616,6 +3653,64 @@ public sealed partial class RelaySettingsControl : UserControl
     }
 
     /// <summary>The one sentence a race director actually needs: is it getting through, and how far behind is it.</summary>
+    /// <summary>
+    /// The tiles over the cards - see _tiles. The first in the colour the
+    /// Status card's word is in: the accent while publishing, the page's
+    /// own colour for anything that needs doing, muted while off.
+    /// </summary>
+    private void ShowTiles(RelayStatus status)
+    {
+        string state;
+        Color ink;
+
+        if (RestoredSettings.IsHeld(RestoredSettings.Part.PublishRelay))
+        {
+            (state, ink) = ("Check settings", AppTheme.Primary);
+        }
+        else if (!status.Enabled)
+        {
+            (state, ink) = ("Off", AppTheme.TextMuted);
+        }
+        else if (!status.Configured)
+        {
+            (state, ink) = ("Not set up", AppTheme.Primary);
+        }
+        else if (status.Online)
+        {
+            (state, ink) = ("Online", AppTheme.Success);
+        }
+        else
+        {
+            (state, ink) = (status.LastSuccessUtc is null ? "Waiting" : "Offline", AppTheme.Primary);
+        }
+
+        SetTile(0, state, ink);
+
+        var club = (_settings.RelayClub ?? string.Empty).Trim();
+        SetTile(1, club.Length == 0 ? "-" : club, AppTheme.TextDark);
+
+        SetTile(2, status.LastSuccessUtc is DateTime last ? Ago(DateTime.UtcNow - last) : "-", AppTheme.TextDark);
+
+        var checkIn = _settings.RelayCheckInEnabled;
+        SetTile(3, checkIn ? "On" : "Off", checkIn ? AppTheme.Success : AppTheme.TextMuted);
+
+        // Once a second: only what changed is touched, so nothing repaints for nothing.
+        void SetTile(int index, string value, Color colour)
+        {
+            var tile = _tiles[index];
+
+            if (tile.Value.Text != value)
+            {
+                tile.Set(value, TileCaptions[index]);
+            }
+
+            if (tile.Value.ForeColor != colour)
+            {
+                tile.Value.ForeColor = colour;
+            }
+        }
+    }
+
     public static string DescribeStatus(RelayStatus status)
     {
         var parts = new List<string>();

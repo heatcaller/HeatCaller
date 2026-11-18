@@ -54,7 +54,7 @@ public sealed class SponsorsControl : UserControl
     private readonly Button _btnReport = new();
 
     private readonly CheckBox _chkEnabled = new ThemedCheckBox();
-    private readonly ListBox _lstSlides = new();
+    private readonly SponsorCardList _lstSlides = new();
     private readonly PictureBox _picPreview = new();
     private readonly NumericUpDown _numLeaderboardSeconds = new();
     private readonly NumericUpDown _numSlideSeconds = new();
@@ -66,7 +66,7 @@ public sealed class SponsorsControl : UserControl
 
     private readonly CheckBox _chkReadInAdBreaks = new ThemedCheckBox();
     private readonly CheckBox _chkReadInSegments = new ThemedCheckBox();
-    private readonly ListBox _lstSponsors = new();
+    private readonly SponsorCardList _lstSponsors = new();
     private readonly TextBox _txtSponsorName = new();
     private readonly TextBox _txtSponsorTagline = new();
 
@@ -110,6 +110,22 @@ public sealed class SponsorsControl : UserControl
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
+    /// <summary>
+    /// The page at a glance, over the slides (17 Nov 2026, page jazz-up):
+    /// the Big Screen's switch, the slides, the sponsors in tonight's
+    /// rotation, and the reads said tonight. A dash for none.
+    /// </summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
+    private static readonly string[] TileCaptions = { "Big Screen slides", "Slides", "In rotation", "Reads tonight" };
+
+    /// <summary>The sponsors' own cards, built with the reads card and put on the page after it - see BuildSponsorReadsCard.</summary>
+    private Section? _sponsorListCard;
+    private Section? _sponsorCard;
+    private Section? _reportCard;
+
+    /// <summary>The grids in those cards, lined up with the timing's - see BuildLayout.</summary>
+    private readonly List<FieldGrid> _sponsorGrids = new();
+
     /// <summary>The slides and the preview side by side - the list's column is worked out from its width. See ListColumnWidth.</summary>
     private Beside? _slidesBand;
 
@@ -126,7 +142,7 @@ public sealed class SponsorsControl : UserControl
     /// scaled with it in SizeFields, never set in pixels at the size the
     /// page happens to be running at.
     /// </summary>
-    private const int SponsorListWidth = 260;
+    private const int SponsorListWidth = 380;
     private const int SponsorNameWidth = 300;
     /// <summary>
     /// The picture the crowd screen shows while this sponsor's read is
@@ -298,6 +314,9 @@ public sealed class SponsorsControl : UserControl
         // --- The slides ---
 
         _lstSlides.IntegralHeight = false;
+        _lstSlides.Describe = (item, index) => SlideLook(item as string ?? string.Empty, index);
+        _textSize.Keep(_lstSlides.Remeasure);
+        _lstSlides.EmptyText = "No slides yet. Add Image... or Add Video... puts one in the rotation.";
         _lstSlides.SelectedIndexChanged += (_, _) => RefreshPreview();
         _lstSlides.DoubleClick += (_, _) => PreviewSelectedVideo();
 
@@ -343,6 +362,7 @@ public sealed class SponsorsControl : UserControl
 
         var slidesCard = new Section("Slides (shown in this order)");
 
+        slidesCard.Add(Hint("Pictures and videos the Big Screen shows between leaderboard views, top to bottom. Double-click a video to watch it here."));
         slidesCard.AddFill(band, () => band.LeastHeight(Math.Max(1, band.Width)));
         slidesCard.Add(new ButtonBar().With(btnAdd, btnAddVideo, _btnPreviewVideo, btnRemove, btnMoveUp, btnMoveDown), gapBelow: 0);
 
@@ -415,6 +435,7 @@ public sealed class SponsorsControl : UserControl
 
         var timingCard = new Section("Rotation timing");
 
+        timingCard.Add(Hint("How long the leaderboard stays up between slides, and how long each picture holds the screen."));
         timingCard.Add(timing);
         timingCard.Add(_chkPauseDuringRace, stretch: false);
         timingCard.Add(new ButtonBar().With(btnTimingDefaults), gapBelow: 0);
@@ -463,17 +484,49 @@ public sealed class SponsorsControl : UserControl
 
         // --- The page ---
 
+        // --- The tiles: the page at a glance ---
+
+        for (var i = 0; i < _tiles.Length; i++)
+        {
+            _textSize.Wear(_tiles[i].Value, () => AppTheme.TitleFont);
+            _textSize.Wear(_tiles[i].Caption, () => AppTheme.MicroFont);
+            _tiles[i].Set("-", TileCaptions[i]);
+        }
+
+        _chkEnabled.CheckedChanged += (_, _) => ShowTiles();
+
+        // Tonight's reads move on while the page is away; they are counted
+        // again whenever it comes back into view.
+        VisibleChanged += (_, _) =>
+        {
+            if (Visible)
+            {
+                ShowTiles();
+            }
+        };
+
+        // The timing and the video's sound side by side when there is the
+        // room, one under the other when there is not (CardColumns).
+        var settingsCards = new CardColumns();
+
+        // The rotation timing and the video's sound are Advanced (1 Nov
+        // 2026, Simple mode); the slides and the reads are the sponsors.
+        settingsCards.AddLeft(SimpleMode.Hide(timingCard));
+        settingsCards.AddRight(SimpleMode.Hide(videoCard));
+
+        // --- The page ---
+
         var page = new FillPage();
 
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
         page.Add(_chkEnabled, stretch: false);
+        page.Add(new TileStrip(_tiles), gapBelow: UiLayout.SectionGap);
         page.AddFill(slidesCard, slidesCard.LeastHeight);
-
-        // The rotation timing and the video's sound are Advanced (1 Nov
-        // 2026, Simple mode); the slides and the reads are the sponsors.
-        page.Add(SimpleMode.Hide(timingCard));
-        page.Add(SimpleMode.Hide(videoCard));
-        page.Add(readsCard, gapBelow: 0);
+        page.Add(SimpleMode.Hide(settingsCards));
+        page.Add(readsCard);
+        page.Add(_sponsorListCard!);
+        page.Add(_sponsorCard!);
+        page.Add(_reportCard!, gapBelow: 0);
         page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
 
         Controls.Add(page);
@@ -482,7 +535,91 @@ public sealed class SponsorsControl : UserControl
         // had a caption column of their own, so their fields started at
         // different x. One column for both now - once the grids are on the
         // page and wear its face, which is what the captions are measured in.
-        _textSize.Keep(() => FieldGrid.LineUp(new[] { timing, readsGrid }));
+        _textSize.Keep(() => FieldGrid.LineUp(new[] { timing, readsGrid }.Concat(_sponsorGrids).Distinct().ToList()));
+
+        ShowTiles();
+    }
+
+    /// <summary>A line of help in the small muted type the app's hints use, in that face at every text size.</summary>
+    private Label Hint(string text) =>
+        _textSize.Wear(new Label { Text = text, AutoSize = true, ForeColor = AppTheme.TextMuted }, () => AppTheme.SmallFont);
+
+    /// <summary>The tiles over the slides - see _tiles. Read from the store, so it is right after anything that changes it.</summary>
+    private void ShowTiles()
+    {
+        var on = _chkEnabled.Checked;
+        _tiles[0].Set(on ? "On" : "Off", TileCaptions[0]);
+        _tiles[0].Value.ForeColor = on ? AppTheme.Success : AppTheme.TextMuted;
+
+        var slides = _store.SlideFileNames.Count();
+        var videos = _store.SlideFileNames.Count(SponsorMedia.IsVideoName);
+        _tiles[1].Set(
+            slides == 0 ? "-" : videos == 0 ? slides.ToString() : $"{slides} ({videos} video{(videos == 1 ? "" : "s")})",
+            TileCaptions[1]);
+
+        var sponsors = _store.Sponsors.Count;
+        var rotating = _store.Sponsors.Count(s => s.Enabled);
+        _tiles[2].Set(sponsors == 0 ? "-" : rotating == sponsors ? rotating.ToString() : $"{rotating} of {sponsors}", TileCaptions[2]);
+
+        var reads = 0;
+
+        try
+        {
+            reads = ReadsTonight?.Invoke()?.Values.Sum() ?? 0;
+        }
+        catch
+        {
+            // Only a count for a tile - a dash will do.
+        }
+
+        _tiles[3].Set(reads == 0 ? "-" : reads.ToString(), TileCaptions[3]);
+    }
+
+    /// <summary>A slide's card in the list: its place in the order, its file name, and VIDEO on a video.</summary>
+    private SponsorCardList.Look SlideLook(string fileName, int index)
+    {
+        var video = SponsorMedia.IsVideoName(fileName);
+        var used = _store.Sponsors.Where(s => string.Equals(s.PictureFileName, fileName, StringComparison.OrdinalIgnoreCase))
+            .Select(s => string.IsNullOrWhiteSpace(s.Name) ? null : s.Name.Trim())
+            .OfType<string>()
+            .ToList();
+
+        var line = video
+            ? "Plays to its own end"
+            : used.Count > 0 ? "Picture for " + string.Join(", ", used) + "'s read" : $"Holds the screen {_store.Current.SlideSeconds} sec";
+
+        return new SponsorCardList.Look((index + 1).ToString(), Path.GetFileNameWithoutExtension(fileName), line, video ? "VIDEO" : "IMAGE", false);
+    }
+
+    /// <summary>A sponsor's card in the list: their initials, name, what they bought, and OFF TONIGHT when out of the rotation.</summary>
+    private SponsorCardList.Look SponsorLook(object item)
+    {
+        if (item is not SponsorRow row || _store.Sponsor(row.Id) is not { } sponsor)
+        {
+            return new SponsorCardList.Look("?", item.ToString() ?? string.Empty, string.Empty, null, false);
+        }
+
+        var name = string.IsNullOrWhiteSpace(sponsor.Name) ? "(no name yet)" : sponsor.Name.Trim();
+        var parts = new List<string> { string.IsNullOrWhiteSpace(sponsor.SalesCopy) ? "No read yet" : "Read written" };
+
+        if (sponsor.Weight > 1)
+        {
+            parts.Add($"share {sponsor.Weight}");
+        }
+
+        var presents = sponsor.Presents?.Count ?? 0;
+
+        if (presents > 0)
+        {
+            parts.Add(presents == 1 ? "presents 1 moment" : $"presents {presents} moments");
+        }
+
+        if (!string.IsNullOrWhiteSpace(sponsor.LogoFileName))
+        {
+            parts.Add("logo");
+        }
+
+        return new SponsorCardList.Look(VenueList.Initials(name), name, string.Join("  ·  ", parts), sponsor.Enabled ? null : "OFF TONIGHT", !sponsor.Enabled);
     }
 
     /// <summary>
@@ -611,6 +748,15 @@ public sealed class SponsorsControl : UserControl
 
         grid.AddRow("Sponsors:", _lstSponsors);
         grid.AddField(new ButtonBar().With(btnAddSponsor, btnRemoveSponsor, btnSponsorUp, btnSponsorDown));
+
+        var listGrid = grid;
+
+        // The selected sponsor's own fields in a card of their own, under
+        // the list's (17 Nov 2026, page jazz-up) - one grid for them, lined
+        // up with the list's.
+        grid = new FieldGrid();
+
+        grid.AddField(_chkSponsorEnabled);
         grid.AddRow("Name, as it's said:", _txtSponsorName);
         grid.AddHint("Spell it the way it should sound - \"and co\" rather than the ampersand on their banner.");
         grid.AddRow("One-line tagline:", _txtSponsorTagline);
@@ -686,7 +832,9 @@ public sealed class SponsorsControl : UserControl
             + "often (fastest laps, lead changes, battles) is credited at most once every three minutes; introductions, the qualifying recap "
             + "and the result every time. Every mention goes in tonight's report.");
         grid.AddHint(_lblMomentClashes);
-        grid.AddField(_chkSponsorEnabled);
+
+        var detailGrid = grid;
+        grid = listGrid;
 
         // WHAT EACH OF THEM GOT (11 Oct 2026). The counting has happened
         // since the paid reads were built and nothing ever collected it
@@ -695,18 +843,39 @@ public sealed class SponsorsControl : UserControl
         _btnReport.Text = "Copy report for tonight";
         _btnReport.Click += (_, _) => CopyTheReport();
 
-        grid.AddField(new ButtonBar().With(_btnReport));
-        grid.AddHint(
+        var report = new Section("Tonight's report");
+
+        report.Add(new ButtonBar().With(_btnReport), gapBelow: UiLayout.HintGap);
+        report.Add(Hint(
             "Copies a plain-text report of what each sponsor got tonight, ready to paste into an email: their reads, "
             + "the share of the evening that was, and the share they bought. Reads only - the app doesn't know which "
-            + "slide belongs to which sponsor.");
+            + "slide belongs to which sponsor."), gapBelow: 0);
+
+        _textSize.Keep(_lstSponsors.Remeasure);
+        _lstSponsors.Describe = (item, _) => SponsorLook(item);
+        _lstSponsors.EmptyText = "No sponsors yet. Add Sponsor makes one.";
+
+        var list = new Section("Sponsors");
+
+        list.Add(Hint("Everyone the announcer reads for, in the order they come round. Pick one to fill in their read below."));
+        list.Add(listGrid, gapBelow: 0);
+
+        var sponsorCard = new Section("The selected sponsor");
+
+        sponsorCard.Add(Hint("What the announcer says for them, what the Big Screen shows while it's said, and how they look online."));
+        sponsorCard.Add(detailGrid, gapBelow: 0);
+
+        _sponsorListCard = list;
+        _sponsorCard = sponsorCard;
+        _reportCard = report;
+        _sponsorGrids.Add(listGrid);
+        _sponsorGrids.Add(detailGrid);
 
         var card = new Section("Sponsor reads");
 
         card.Add(lblReadsIntro, gapBelow: UiLayout.RowGap);
         card.Add(_chkReadInAdBreaks, stretch: false);
-        card.Add(_chkReadInSegments, stretch: false, gapBelow: UiLayout.SectionGap);
-        card.Add(grid, gapBelow: 0);
+        card.Add(_chkReadInSegments, stretch: false, gapBelow: 0);
 
         return card;
     }
@@ -874,6 +1043,8 @@ public sealed class SponsorsControl : UserControl
         {
             RefreshPreview();
         }
+
+        ShowTiles();
     }
 
     private void RefreshPreview()
@@ -885,6 +1056,13 @@ public sealed class SponsorsControl : UserControl
 
         if (_lstSlides.SelectedItem is not string fileName)
         {
+            // An empty preview says what goes in it, rather than a blank box.
+            if (_lstSlides.Items.Count == 0)
+            {
+                _lblVideoNote.Text = "The picked slide shows here, as the Big Screen will show it.";
+                _lblVideoNote.Visible = true;
+            }
+
             return;
         }
 
@@ -1209,6 +1387,8 @@ public sealed class SponsorsControl : UserControl
             // removed would still be showing in them.
             FillSponsorFields();
         }
+
+        ShowTiles();
     }
 
     /// <summary>
@@ -1602,6 +1782,11 @@ public sealed class SponsorsControl : UserControl
 
         set(sponsor);
         _store.Save();
+
+        // The sponsor's card in the list says what they bought - the logo
+        // and the moments as well as the read - and the tiles count them.
+        _lstSponsors.Invalidate();
+        ShowTiles();
     }
 
     /// <summary>

@@ -128,6 +128,14 @@ public sealed class RecordingControl : UserControl
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
+    /// <summary>
+    /// The tab at a glance, over the cards (17 Nov 2026, page jazz-up):
+    /// whether races are recorded, whether drivers get clips, who gets a
+    /// highlight video, and what is kept on disk. A dash for none.
+    /// </summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
+    private static readonly string[] TileCaptions = { "Recording", "Driver clips", "Highlight videos", "On disk" };
+
     // True while the night recap, a driver's night or the preview is
     // running. Their buttons are held down for the length of the run, and
     // UpdateEnabledState would otherwise put them back up mid-run and let a
@@ -405,9 +413,34 @@ public sealed class RecordingControl : UserControl
 
         Stepped(audioGrid.AddRow("Highlight videos:", Line(_cmbVideos, Suffix("an upright video with captions, for a driver's phone"))));
         Stepped(audioGrid.AddRow("Club handle:", Line(_txtVideoHandle, Suffix("shown at the end of each video"))));
-        Stepped(audioGrid.AddRow("Keep the last:", Line(_numKeepNights, Suffix("race nights - older nights' folders are removed"))));
-        Stepped(audioGrid.AddRow("Folder:", Line(_txtAudioFolder, _btnAudioFolder, _btnAudioOpen)));
-        audioGrid.AddHint(_lblOnDisk);
+
+        // Where they are kept, and for how long, in a card of their own
+        // (17 Nov 2026, page jazz-up) - with the note that backups leave
+        // them out.
+        var keptGrid = new FieldGrid();
+
+        Flush(keptGrid.AddRow("Keep the last:", Line(_numKeepNights, Suffix("race nights - older nights' folders are removed"))));
+        Flush(keptGrid.AddRow("Folder:", Line(_txtAudioFolder, _btnAudioFolder, _btnAudioOpen)));
+        keptGrid.AddHint(_lblOnDisk);
+
+        var kept = new Section("Where recordings are kept");
+
+        kept.Add(Hint(
+            "Recordings are NOT in backups (a night is a few hundred MB). Copy a night's folder elsewhere to keep it."));
+        kept.Add(keptGrid, gapBelow: 0);
+
+        // --- The tiles: the tab at a glance ---
+
+        for (var i = 0; i < _tiles.Length; i++)
+        {
+            _textSize.Wear(_tiles[i].Value, () => AppTheme.TitleFont);
+            _textSize.Wear(_tiles[i].Caption, () => AppTheme.MicroFont);
+            _tiles[i].Set("-", TileCaptions[i]);
+        }
+
+        _chkRecord.CheckedChanged += (_, _) => ShowTiles();
+        _chkClips.CheckedChanged += (_, _) => ShowTiles();
+        _cmbVideos.SelectedIndexChanged += (_, _) => ShowTiles();
 
         var audio = new Section("Recording the night");
 
@@ -419,9 +452,7 @@ public sealed class RecordingControl : UserControl
             + "highlight video has the music and crowd under it as the room heard them. One folder per night, with a "
             + "Highlights folder inside."));
         audio.Add(_chkRecord, stretch: false);
-        audio.Add(_chkClips, stretch: false, gapBelow: UiLayout.HintGap);
-        audio.Add(Hint(
-            "Recordings are NOT in backups (a night is a few hundred MB). Copy a night's folder elsewhere to keep it."));
+        audio.Add(_chkClips, stretch: false);
         audio.Add(audioGrid);
         audio.Add(_chkMusicUnderVideos, stretch: false, gapBelow: UiLayout.HintGap);
         audio.Add(Hint(
@@ -554,9 +585,20 @@ public sealed class RecordingControl : UserControl
             "Needs AI commentary on (Voice > AI Commentary)."),
             gapBelow: UiLayout.RowGap);
         written.Add(recapGrid, gapBelow: UiLayout.SectionGap);
-        written.Add(cutGrid, gapBelow: UiLayout.SectionGap);
-        written.Add(proofGrid, gapBelow: UiLayout.SectionGap);
-        written.Add(beforeGrid, gapBelow: 0);
+        written.Add(cutGrid, gapBelow: 0);
+
+        // The preview and the proof are not pieces about the night just
+        // raced, so each has a card of its own under it (17 Nov 2026, page
+        // jazz-up).
+        var before = new Section("The night before");
+
+        before.Add(Hint("Gets people to the track: a preview of the next race day, from its program and entries. Needs AI commentary on."));
+        before.Add(beforeGrid, gapBelow: 0);
+
+        var proof = new Section("Why it said that");
+
+        proof.Add(Hint("Every claim the announcer makes is worked out from the club's own results - this shows which. Needs AI commentary on."));
+        proof.Add(proofGrid, gapBelow: 0);
 
         FillDriversTonight();
 
@@ -568,14 +610,18 @@ public sealed class RecordingControl : UserControl
 
         var page = new PageStack();
 
+        page.Add(new TileStrip(_tiles), gapBelow: UiLayout.SectionGap);
         page.Add(audio);
-        page.Add(written, gapBelow: 0);
+        page.Add(kept);
+        page.Add(written);
+        page.Add(before);
+        page.Add(proof, gapBelow: 0);
 
         Controls.Add(page);
 
-        // One caption column down both cards. Every grid on the page - a
+        // One caption column down every card. Every grid on the page - a
         // grid left out of this still looks correct on its own.
-        _textSize.Keep(() => FieldGrid.LineUp(new[] { audioGrid, recapGrid, cutGrid, proofGrid, beforeGrid }));
+        _textSize.Keep(() => FieldGrid.LineUp(new[] { audioGrid, keptGrid, recapGrid, cutGrid, proofGrid, beforeGrid }));
 
         _textSize.Keep(SizeFields);
 
@@ -744,6 +790,36 @@ public sealed class RecordingControl : UserControl
         _lblOnDisk.Text = nights == 0
             ? "Nothing recorded yet. A folder appears here after the first race of a night."
             : $"On disk now: {Plural.Of(nights, "night")}, about {megabytes:n0} MB.";
+
+        ShowTiles(nights, megabytes);
+    }
+
+    /// <summary>What is on disk, as last counted, for the tile - see ShowWhatIsOnDisk.</summary>
+    private (int Nights, double Megabytes) _onDisk;
+
+    /// <summary>The tiles over the cards - see _tiles. The switches as they stand, and what was on disk when last counted.</summary>
+    private void ShowTiles(int? nights = null, double? megabytes = null)
+    {
+        if (nights is { } n && megabytes is { } mb)
+        {
+            _onDisk = (n, mb);
+        }
+
+        var recording = _chkRecord.Checked;
+        _tiles[0].Set(recording ? "On" : "Off", TileCaptions[0]);
+        _tiles[0].Value.ForeColor = recording ? AppTheme.Success : AppTheme.TextMuted;
+
+        var clips = recording && _chkClips.Checked;
+        _tiles[1].Set(clips ? "Every driver" : "Off", TileCaptions[1]);
+        _tiles[1].Value.ForeColor = clips ? AppTheme.TextDark : AppTheme.TextMuted;
+
+        var videos = clips && _cmbVideos.SelectedIndex > 0 ? _cmbVideos.Text : "Off";
+        _tiles[2].Set(videos, TileCaptions[2]);
+        _tiles[2].Value.ForeColor = videos == "Off" ? AppTheme.TextMuted : AppTheme.TextDark;
+
+        _tiles[3].Set(
+            _onDisk.Nights == 0 ? "-" : $"{Plural.Of(_onDisk.Nights, "night")}, {_onDisk.Megabytes:n0} MB",
+            TileCaptions[3]);
     }
 
     /// <summary>
