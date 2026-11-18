@@ -434,6 +434,9 @@ public sealed class SimpleModeTests : IDisposable
         "RaceControlControl.Layout.cs|Leaderboard", "MainForm.Designer.cs|Session",
         "PracticeModeControl.cs|Setup", "PracticeModeControl.cs|This session", "PracticeModeControl.cs|Ghost cars",
         "GhostControl.cs|Your ghosts", "DemoModeControl.cs|Settings", "DemoModeControl.cs|Racers", "DemoModeControl.cs|Log",
+        // Their page jazz-up's cards (17 Nov 2026).
+        "PracticeModeControl.cs|Run practice", "GhostControl.cs|Ghost racing", "GhostControl.cs|Quick Rival",
+        "DemoModeControl.cs|Run the demo", "DemoModeControl.cs|Race history",
         "TrackLayoutForms.cs|Track layouts", "TrackLayoutForms.cs|Selected track",
         "HandicapControl.cs|Drivers", "RentalTransponderControl.cs|Transponders",
         "HandicapControl.cs|Class and mode",
