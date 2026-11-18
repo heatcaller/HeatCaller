@@ -528,10 +528,14 @@ public sealed class SimpleModeTests : IDisposable
         Assert.Empty(untagged);
     }
 
-    /// <summary>Every literal card and tab caption in the app, as "File|Caption".</summary>
+    /// <summary>
+    /// Every literal card and tab caption in the app, as "File|Caption" -
+    /// a Section or TabPage, or one of Tonight's folding cards (Fold, 17 Nov
+    /// 2026), which is a Section whose caption sits in its header.
+    /// </summary>
     private static IEnumerable<string> Captions()
     {
-        var pattern = new Regex("new (?:Section|TabPage)\\(\"([^\"]+)\"");
+        var pattern = new Regex("(?:new (?:Section|TabPage)|\\bFold)\\(\"([^\"]+)\"");
 
         foreach (var file in Directory.GetFiles(SourceFolder(), "*.cs"))
         {

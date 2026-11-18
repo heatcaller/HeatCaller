@@ -113,7 +113,11 @@ public sealed partial class RaceDayEventControl
 
         foreach (var tile in tiles)
         {
-            _textSize.Wear(tile.Value, () => AppTheme.TitleFont);
+            // The heading face, not the title one: in half a page a tile is
+            // about 150px, and "5:00 PM" in the title face lost its "PM" to
+            // the ellipsis. Centred in the room the strip keeps for a value.
+            tile.Value.TextAlign = ContentAlignment.MiddleLeft;
+            _textSize.Wear(tile.Value, () => AppTheme.HeadingFont);
             _textSize.Wear(tile.Caption, () => AppTheme.MicroFont);
         }
 
