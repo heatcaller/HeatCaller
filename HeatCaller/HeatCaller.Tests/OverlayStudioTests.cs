@@ -101,6 +101,45 @@ public sealed class OverlayStudioTests
     }
 
     [Fact]
+    public void The_when_it_shows_pills_switch_auto_and_parts_and_never_leave_none()
+    {
+        var path = NewPath();
+
+        try
+        {
+            var store = OverlayStore.Load(path);
+            var mine = store.AddCopy(OverlayLayouts.BuiltIn(OverlayLayouts.BroadcastId)!, "Friday stream");
+            using var form = new OverlayEditorForm(store, id => "http://localhost:8080/overlay/" + id, mine.Id);
+            OverlayDuring Battle() => store.Get(mine.Id)!.Element(OverlayElementKind.Battle)!.During;
+
+            typeof(OverlayEditorForm).GetField("_kind", Private)!.SetValue(form, OverlayElementKind.Battle);
+            Assert.Equal(OverlayDuring.Always, Battle());
+
+            // A part clicked from Auto: out of Auto, the parts Auto had, that one changed.
+            form.ShowsPillClicked("finished");
+            Assert.Equal(OverlayDuring.Racing | OverlayDuring.Finished, Battle());
+
+            form.ShowsPillClicked("finished");
+            Assert.Equal(OverlayDuring.Racing, Battle());
+
+            // The last part stays: none would mean "always".
+            form.ShowsPillClicked("racing");
+            Assert.Equal(OverlayDuring.Racing, Battle());
+
+            form.ShowsPillClicked("auto");
+            Assert.Equal(OverlayDuring.Always, Battle());
+
+            // Auto off again: the parts it was showing in.
+            form.ShowsPillClicked("auto");
+            Assert.Equal(OverlayEditorForm.NaturalParts(OverlayElementKind.Battle), Battle());
+        }
+        finally
+        {
+            Delete(path);
+        }
+    }
+
+    [Fact]
     public void The_picture_opens_the_layout_in_edit_mode_held_at_the_part_picked()
     {
         var path = NewPath();
