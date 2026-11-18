@@ -31,8 +31,8 @@ count.
 | Sponsors | No: only feature cards added; given the jazz-up in this pass | |
 | Local Screens | No: only feature cards added; given the jazz-up in this pass | |
 | Club Website (Website, Recording) | No: given the jazz-up in this pass | |
-| Voice (Voice, Cast, Race Calls, AI Commentary) | Cast lined up (33ab8ae3); the rest no: given the jazz-up in this pass | |
-| Sounds (7 tabs) | Level meters only (70c4ddbf); given the jazz-up in this pass | |
+| Voice (Voice, Cast, Race Calls, AI Commentary) | Cast lined up (33ab8ae3) and left as it was; the other three given the jazz-up in this pass | |
+| Sounds (7 tabs) | Level meters only (70c4ddbf); six tabs given the jazz-up in this pass, Mixer left as it was (a card per fader already) | |
 | Connection | No: given the jazz-up in this pass | |
 | Backup & Restore | No: only a Check for Updates card; given the jazz-up in this pass | |
 
