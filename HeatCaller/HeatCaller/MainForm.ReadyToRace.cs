@@ -289,8 +289,8 @@ internal sealed class DriversMeetingForm : Form
             Text = "Two minutes before the first race, said the same way every week. Built from tonight's day - change anything "
                    + "before you print it or have the announcer read it out. Changes here are for tonight only.",
             AutoSize = true,
-            MaximumSize = new Size(560, 0),
             ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
         };
 
         _txt.Text = text;
@@ -314,9 +314,17 @@ internal sealed class DriversMeetingForm : Form
             _lblStatus.Text = "The announcer never said it finished - Read It Again if it wasn't heard.";
         };
 
+        // 18 Nov 2026, the dialog version of the Venues look: the points in
+        // one card, its hint line under the caption, the box taking the
+        // height; where the read-out is under the card; Read It Out, the
+        // button used most on the night, in the primary colour. The window
+        // is 40px taller than it was so the box keeps its height in the card.
+        var card = new Section("Tonight's meeting");
+        card.Add(lblHow, gapBelow: UiLayout.RowGap);
+        card.AddFill(_txt, () => 260, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblHow, stretch: false, gapBelow: UiLayout.RowGap);
-        page.AddFill(_txt, 260, gapBelow: UiLayout.RowGap);
+        page.AddFill(card, card.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(_lblStatus, stretch: false, gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar(alignRight: true).With(btnClose, btnRead, btnPrint), gapBelow: 0);
 
@@ -335,6 +343,7 @@ internal sealed class DriversMeetingForm : Form
         FormClosed += (_, _) => _giveUp.Dispose();
 
         AppTheme.ApplyRecursively(this);
-        DialogFit.Keep(this, page, width: 640, height: 520);
+        AppTheme.StyleButton(_btnRead, AppTheme.ButtonKind.Primary);
+        DialogFit.Keep(this, page, width: 640, height: 560);
     }
 }

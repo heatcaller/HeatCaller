@@ -542,6 +542,14 @@ public sealed class SimpleModeTests : IDisposable
         "RaceClassForms.cs|On the track", "RaceClassForms.cs|Fees",
         "RaceControlControl.Leaderboard.cs|Penalty",
 
+        // Third dialog batch, D (18 Nov 2026): Close the Night / Ready to Race
+        // and its own lines, Warning for, Warnings, Driver Paid, Drivers'
+        // Meeting and Target lap for.
+        "CloseNightForm.cs|Your own lines",
+        "RaceControlWarnings.cs|Other reason", "WarningLadderForm.cs|Warning ladder",
+        "DriverPaidForm.cs|On the slip", "MainForm.ReadyToRace.cs|Tonight's meeting",
+        "RaceControlControl.Coaching.cs|Coaching",
+
         // Post the Heats' cards (PostHeatsForm, 18 Nov 2026, dialog jazz-up).
         "RaceProgramControl.Posting.cs|Before you post", "RaceProgramControl.Posting.cs|Print and tell",
         "RaceProgramControl.Posting.cs|Once they're posted",
