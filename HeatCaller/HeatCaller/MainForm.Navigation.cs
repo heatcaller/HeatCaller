@@ -1180,6 +1180,9 @@ public partial class MainForm
 
     private enum WarmKind { Page, Layout, Theme, Tab }
 
+    /// <summary>A warm-up step longer than this means the PC is too busy: the rest of the themes and tabs wait for their first open - see WarmPagesInTurn.</summary>
+    internal static readonly TimeSpan WarmStepTooSlow = TimeSpan.FromSeconds(3);
+
     /// <summary>One step of WarmPagesInTurn: a page, the content area, a page's theming, or one of its tabs.</summary>
     private sealed record WarmStep(WarmKind Kind, NavItem? Nav, TabControl? Tabs, TabPage? Tab);
 
@@ -1222,11 +1225,11 @@ public partial class MainForm
     /// end; still open then, its tabs are made as they are clicked, as any
     /// tab is.
     /// </summary>
-    private void WarmPagesInTurn(Action<TimeSpan, string> done)
+    private void WarmPagesInTurn(Action<TimeSpan, string, string?> done)
     {
         if (!Visible || _navItems.Count == 0)
         {
-            done(TimeSpan.Zero, string.Empty);
+            done(TimeSpan.Zero, string.Empty, null);
             return;
         }
 
@@ -1263,6 +1266,7 @@ public partial class MainForm
         var retried = new HashSet<WarmStep>();
         var busy = TimeSpan.Zero;
         var slowest = new List<(TimeSpan Took, string What)>();
+        string? stoppedEarly = null;
         var timer = new System.Windows.Forms.Timer { Interval = 1 };
 
         timer.Tick += (_, _) =>
@@ -1278,7 +1282,7 @@ public partial class MainForm
             {
                 timer.Stop();
                 timer.Dispose();
-                done(busy, string.Join(", ", slowest.OrderByDescending(s => s.Took).Take(5).Select(s => $"{s.What} {s.Took.TotalSeconds:0.00}s")));
+                done(busy, string.Join(", ", slowest.OrderByDescending(s => s.Took).Take(5).Select(s => $"{s.What} {s.Took.TotalSeconds:0.00}s")), stoppedEarly);
                 return;
             }
 
@@ -1397,13 +1401,36 @@ public partial class MainForm
                 NoRedraw.End(pnlContent);
                 busy += step.Elapsed;
 
-                slowest.Add((step.Elapsed, next.Kind switch
+                var what = next.Kind switch
                 {
                     WarmKind.Layout => "the content area",
                     WarmKind.Theme => $"theming {nav!.Name}",
                     WarmKind.Tab => $"{nav!.Name} > {next.Tab!.Text}",
                     _ => nav!.Name,
-                }));
+                };
+
+                slowest.Add((step.Elapsed, what));
+
+                // A PC too busy to warm up without freezing (17 Nov 2026):
+                // the window can't answer while a step runs, and with three
+                // test runs and a backup going a single tab took 13-17s,
+                // where it takes about 1s on a quiet PC - the "not
+                // responding" Asher saw, three times in ten minutes. Past one
+                // slow step, pass two (theming and tabs - what a page does
+                // anyway the first time it is opened) is left to each page's
+                // first open. Pass one, every page's handles, is kept: code
+                // reaching a page from another thread counts on them.
+                if (stoppedEarly is null && step.Elapsed > WarmStepTooSlow)
+                {
+                    stoppedEarly = $"{what} took {step.Elapsed.TotalSeconds:0.0}s";
+                    var keep = steps.Where(s => s.Kind is WarmKind.Page or WarmKind.Layout).ToList();
+                    steps.Clear();
+
+                    foreach (var s in keep)
+                    {
+                        steps.Enqueue(s);
+                    }
+                }
             }
         };
 
