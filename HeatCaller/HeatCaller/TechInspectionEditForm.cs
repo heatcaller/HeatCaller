@@ -9,13 +9,16 @@ namespace HeatCaller;
 /// at" and "looked at and failed" are different things and collapsing them
 /// would make an incomplete inspection read as a clean one.
 ///
-/// On the layout pieces (DialogFit): the driver, class and car lined up in a
-/// field grid; the checklist under its heading taking the height the rest
-/// leave - a line per check, what is checked wrapping to the room left of
-/// its drop-down - and scrolling on its own when the class has more checks
-/// than the window shows; under it the verdict (or the result picked by
-/// hand), the inspector and the notes, their captions in one column with
-/// the fields' above; and Save and Cancel at the foot. It used to be placed
+/// On the layout pieces (DialogFit), in cards with a line each on what they
+/// are for, in two columns (18 Nov 2026, dialog jazz-up - it was one column):
+/// on the left the driver, class and car lined up in a field grid, and the
+/// checklist taking the height the rest leave - a line per check, what is
+/// checked wrapping to the room left of its drop-down, red when it is FAIL -
+/// scrolling on its own when the class has more checks than the window
+/// shows; on the right tiles counting the checks OK, FAIL and to do, the
+/// verdict (or the result picked by hand) and the inspector, their captions
+/// in one column with the car's, and the notes taking the height; and Save
+/// and Cancel at the foot. Before that it was one column, and it was placed
 /// in pixels in a 520x600 window: every field at a fixed 110px, which the
 /// captions ran into at a larger text size; the checks 32px apart, what is
 /// checked wrapped at 300px beside a drop-down at 320px; and the verdict,
@@ -34,14 +37,16 @@ public sealed class TechInspectionEditForm : Form
     /// taller than the screen - and can be made bigger, the checklist taking
     /// the height.
     ///
-    /// 40px taller than the 600 it was, so the six checks Add Common gives a
-    /// class all show without scrolling, at 1920x1080 and at 1366x768. The
-    /// old window put its checks 32px apart; each is a field row's distance
-    /// from the next now, as the fields above and below are, and at 600 the
-    /// sixth was under the window's edge (layout pictures, 30 Sep).
+    /// The six checks Add Common gives a class must all show without
+    /// scrolling, at 1920x1080 and at 1366x768 (layout pictures, 30 Sep). In
+    /// two columns (18 Nov 2026) the checklist has the left one under the
+    /// car to itself, so it is wider and no taller than the 640 it was.
     /// </summary>
-    private const int DialogWidth = 520;
-    private const int DialogHeight = 640;
+    private const int DialogWidth = 900;
+    private const int DialogHeight = 600;
+
+    /// <summary>The right-hand column - the tiles, the result and the notes - at the normal text size.</summary>
+    private const int SideWidth = 340;
 
     /// <summary>The field column at the normal text size: the driver, the car, the inspector and the notes all ran this wide.</summary>
     private const int FieldColumnWidth = 380;
@@ -77,6 +82,13 @@ public sealed class TechInspectionEditForm : Form
     private (Font Font, int Count, int Width)? _stateMeasured;
 
     private readonly Label _lblVerdict = new();
+
+    /// <summary>
+    /// The checklist at a glance, over the result: how many checks are OK,
+    /// FAIL and still to look at - following the drop-downs (ShowTiles).
+    /// Read only.
+    /// </summary>
+    private readonly StatTile[] _tiles = { new(), new(), new() };
 
     private readonly Dictionary<string, ComboBox> _checkControls = new();
 
@@ -136,8 +148,6 @@ public sealed class TechInspectionEditForm : Form
 
         FillFields();
 
-        var lblChecks = new Label { Text = "Checklist", AutoSize = true, Font = AppTheme.BoldFont };
-
         // The checklist scrolls down on its own, its lines as wide as the
         // fields above and below it: no margins of its own - the page's are
         // round it - and no room under its last line, which the theme pass
@@ -159,8 +169,8 @@ public sealed class TechInspectionEditForm : Form
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        // Who, in what, and the car across the top - the driver and the car
-        // running to the right-hand edge, as they always did.
+        // Who, in what, and the car - the driver and the car running to the
+        // card's right-hand edge, as they always ran to the window's.
         var fields = new FieldGrid();
         var captions = new List<Label>
         {
@@ -169,27 +179,71 @@ public sealed class TechInspectionEditForm : Form
             fields.AddRow("Car:", _txtCar, stretch: true),
         };
 
-        // Under the checklist, what it comes to: the verdict it gives across
-        // the grid, or - when there is no checklist to give one - the result
-        // picked by hand, in the same place (ShowManualVerdict). Then who
-        // inspected the car, and the notes.
+        // What the checklist comes to: the verdict it gives, over the grid
+        // (in the card - see below), or - when there is no checklist to give
+        // one - the result picked by hand, in the same place
+        // (ShowManualVerdict). Then who inspected the car. The notes have a
+        // card of their own.
         var outcome = new FieldGrid();
-        outcome.AddWide(_lblVerdict);
 
         _lblManualVerdict = outcome.AddRow("Result:", _cmbManualVerdict);
         captions.Add(_lblManualVerdict);
         captions.Add(outcome.AddRow("Inspector:", _txtInspector, stretch: true));
-        captions.Add(outcome.AddRow("Notes:", _txtNotes, stretch: true));
+
+        // THE LOOK (18 Nov 2026, dialog jazz-up): cards, each with a line on
+        // what it is for, in two columns so the whole inspection is in view
+        // at once at the pit table. On the left the car, then the checklist
+        // taking the height; on the right the count of checks OK, FAIL and
+        // still to look at - big, following the drop-downs (ShowTiles) - then
+        // the result and the notes, the notes taking the height. It was one
+        // column, the checklist under a bold heading. The dialog is built at
+        // the text size in use, so the tiles take their faces here.
+        foreach (var tile in _tiles)
+        {
+            tile.Value.Font = AppTheme.TitleFont;
+            tile.Caption.Font = AppTheme.MicroFont;
+        }
+
+        var carCard = new Section("Car");
+        carCard.Add(CardHint("Who is racing what. The class picks the checklist."), gapBelow: UiLayout.RowGap);
+        carCard.Add(fields, gapBelow: 0);
+
+        // The checklist takes the card's height, and the card the column's;
+        // it keeps a few checks' worth - a drop-down and the gap under it for
+        // each - before the window scrolls instead.
+        var checksCard = new Section("Checklist");
+        checksCard.Add(CardHint("Set each check to OK or FAIL. One FAIL fails the car."), gapBelow: UiLayout.RowGap);
+        checksCard.AddFill(_checksPanel, () => LeastChecks * (_cmbManualVerdict.Height + UiLayout.RowGap), gapBelow: 0);
+
+        var resultCard = new Section("Result");
+        resultCard.Add(CardHint("What the car comes out as, and who looked."), gapBelow: UiLayout.RowGap);
+
+        // The verdict in the card rather than across the grid: hidden, a
+        // card leaves its row out, where the grid, measured in a card in a
+        // column, kept a blank line's room for it over the result picked by
+        // hand (layout pictures, 18 Nov 2026).
+        resultCard.Add(_lblVerdict, gapBelow: UiLayout.RowGap);
+        resultCard.Add(outcome, gapBelow: 0);
+
+        // The notes fill what the right-hand column has left, never fewer
+        // than a few lines, as the box draws them (Pieces.LineHeight).
+        var notesCard = new Section("Notes");
+        notesCard.Add(CardHint("What to fix, and anything to check again later."), gapBelow: UiLayout.RowGap);
+        notesCard.AddFill(_txtNotes, () => NotesLines * Pieces.LineHeight(_txtNotes.Font) + UiLayout.HintGap * 2, gapBelow: 0);
+
+        // The right-hand column's width, worked out once the theme pass has
+        // set the faces - see below.
+        var sideWidth = 0;
+
+        var columns = new Beside(() => sideWidth);
+        columns.Add(carCard, gapBelow: UiLayout.RowGap);
+        columns.AddFill(checksCard, checksCard.LeastHeight);
+        columns.AddSideMeasured(new TileStrip(_tiles), gapBelow: UiLayout.RowGap);
+        columns.AddSideCard(resultCard, gapBelow: UiLayout.RowGap);
+        columns.AddSideFill(notesCard, notesCard.LeastHeight, gapBelow: 0);
 
         var page = new FillPage();
-        page.Add(fields);
-        page.Add(lblChecks, stretch: false, gapBelow: UiLayout.HintGap);
-
-        // The checklist takes the height; it keeps a few checks' worth - a
-        // drop-down and the gap under it for each - before the window
-        // scrolls instead.
-        page.AddFill(_checksPanel, _ => LeastChecks * (_cmbManualVerdict.Height + UiLayout.RowGap), gapBelow: UiLayout.RowGap);
-        page.Add(outcome);
+        page.AddFill(columns, columns.LeastHeight, gapBelow: UiLayout.RowGap);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // and Tab still reaches Save first: the bar takes them right to left,
@@ -204,17 +258,15 @@ public sealed class TechInspectionEditForm : Form
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
+        AppTheme.StyleButton(btnSave, AppTheme.ButtonKind.Primary);
 
         // After the theme pass: the lines are themed as they are made, and
         // measured in the face it leaves them in (AddCheckRow).
         BuildChecklist();
 
-        // The captions in one column down both grids, as they were.
+        // The captions in one column down both grids, as they were, so the
+        // two cards' fields start the same distance in.
         FieldGrid.LineUp(new[] { fields, outcome });
-
-        // A few lines of notes, as the box draws them (Pieces.LineHeight),
-        // in the face the theme pass leaves it in.
-        _txtNotes.Height = NotesLines * Pieces.LineHeight(_txtNotes.Font) + UiLayout.HintGap * 2;
 
         // The class and the result as wide as they were at the normal text
         // size, at the size in use - or as their longest choice, which a
@@ -229,22 +281,26 @@ public sealed class TechInspectionEditForm : Form
         _cmbClass.Width = classWidth;
         _cmbManualVerdict.Width = verdictWidth;
 
-        // As wide as it was at the normal text size, at the size in use - or
-        // wider when the field column needs more: never narrower than the
-        // 380px the driver and the car ran to, and wide enough for the
-        // longest driver's name and transponder, the class and the result.
-        // The caption column beside it as the grids work it out: the widest
-        // caption and the gap after it. The checks wrap to whatever width
-        // that comes to.
+        // The left-hand column as wide as the car's fields need: never
+        // narrower than the 380px the driver and the car ran to, and wide
+        // enough for the longest driver's name and transponder and the
+        // class, beside the caption column as the grids work it out - the
+        // widest caption and the gap after it - inside its card. The checks
+        // wrap to whatever width that comes to.
         var fieldColumn = Math.Max(
             Math.Max(UiLayout.AtTextSize(FieldColumnWidth), Pieces.PickerWidth(_cmbDriver, ref driverMeasured)),
-            Math.Max(classWidth, verdictWidth));
+            classWidth);
 
         var captionColumn = captions.Max(caption => caption.GetPreferredSize(Size.Empty).Width + caption.Margin.Horizontal);
 
+        // The right-hand column as wide as it is at the normal text size, at
+        // the size in use - or as the result picked by hand needs beside its
+        // caption, inside its card.
+        sideWidth = Math.Max(UiLayout.AtTextSize(SideWidth), Section.Inset.Horizontal + captionColumn + verdictWidth);
+
         var width = Math.Max(
             UiLayout.AtTextSize(DialogWidth),
-            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.PageRight);
+            UiLayout.PageLeft + Section.Inset.Horizontal + captionColumn + fieldColumn + UiLayout.RowGap + sideWidth + UiLayout.PageRight);
 
         DialogFit.Keep(this, page, width, height: DialogHeight, widthMeasured: true);
     }
@@ -478,7 +534,7 @@ public sealed class TechInspectionEditForm : Form
         {
             _lblNoChecklist.Text = className is null
                 ? "Pick a class to see its checklist."
-                : $"{className} has no checklist set. Add one on the Classes page, or just record a pass/fail below.";
+                : $"{className} has no checklist set. Add one on the Classes page, or just pick the result on the right.";
         }
 
         _lblNoChecklist.Visible = items.Count == 0;
@@ -568,6 +624,13 @@ public sealed class TechInspectionEditForm : Form
         Level();
         state.SizeChanged += (_, _) => Level();
 
+        // A failed check's words in red, so the ones to fix stand out down
+        // the list (18 Nov 2026, dialog jazz-up). After the theme pass on
+        // the line, which would put them back.
+        var plain = item.ForeColor;
+        state.SelectedIndexChanged += (_, _) =>
+            item.ForeColor = (string?)state.SelectedItem == StateFailed ? AppTheme.Danger : plain;
+
         var row = new CheckRow(line, item, state);
         _checkRows.Add(row);
 
@@ -614,7 +677,47 @@ public sealed class TechInspectionEditForm : Form
         {
             _lblVerdict.Text = string.Empty;
         }
+
+        ShowTiles();
     }
+
+    /// <summary>
+    /// The tiles across the right-hand column: how many checks are OK, FAIL
+    /// and not looked at yet, as the drop-downs say - the FAIL count red
+    /// when there is one, the ones to do orange. With no checklist there is
+    /// nothing to count, and they say so.
+    /// </summary>
+    private void ShowTiles()
+    {
+        var counting = _checkControls.Count > 0;
+
+        int Count(string state) => _checkControls.Count(kv => (string?)kv.Value.SelectedItem == state
+            && (state != StateUnchecked || !_staleItems.Contains(kv.Key)));
+
+        var ok = Count(StatePassed);
+        var failed = Count(StateFailed);
+        var toDo = Count(StateUnchecked);
+
+        string Shown(int n) => counting ? n.ToString(System.Globalization.CultureInfo.CurrentCulture) : "-";
+
+        _tiles[0].Value.ForeColor = counting && ok > 0 ? AppTheme.Success : AppTheme.TextDark;
+        _tiles[0].Set(Shown(ok), "OK");
+
+        _tiles[1].Value.ForeColor = failed > 0 ? AppTheme.Danger : AppTheme.TextDark;
+        _tiles[1].Set(Shown(failed), "Fail");
+
+        _tiles[2].Value.ForeColor = toDo > 0 ? AppTheme.Accent : AppTheme.TextDark;
+        _tiles[2].Set(Shown(toDo), "To check");
+    }
+
+    /// <summary>A card's line saying what it is for, in the small muted face.</summary>
+    private static Label CardHint(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        ForeColor = AppTheme.TextMuted,
+        Font = AppTheme.SmallFont,
+    };
 
     private void BtnSave_Click(object? sender, EventArgs e)
     {
@@ -784,6 +887,15 @@ public sealed class TechInspectionEditForm : Form
         _lblManualVerdict.Visible = show;
         _cmbManualVerdict.Visible = show;
         _lblVerdict.Visible = !show;
+
+        // The verdict's card and the result's grid told, as the visibility
+        // changing does not tell them while the window is still being built
+        // (nothing of it on screen yet): each kept the hidden part's row -
+        // the card, measured without it, too short for what it then laid
+        // out, and the grid a blank line over the inspector (layout
+        // pictures, 18 Nov 2026).
+        _lblVerdict.Parent?.PerformLayout(_lblVerdict, nameof(Visible));
+        _cmbManualVerdict.Parent?.PerformLayout(_cmbManualVerdict, nameof(Visible));
     }
 
     /// <summary>One check's line in the checklist, kept to be handed another check when the class changes - see BuildChecklist.</summary>

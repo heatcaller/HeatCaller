@@ -767,14 +767,15 @@ public sealed class LapDetailWindow : Form
                 "Laps", _present ? _laps.ToString() : "-", AppTheme.TextDark);
 
             DrawTile(g, new RectangleF(left + tileWidth + gap, top, tileWidth, tileHeight),
-                "Best", _bestMs > 0 ? $"{_bestMs / 1000.0:0.000}" : "-", AppTheme.Primary);
+                "Best", _bestMs > 0 ? $"{_bestMs / 1000.0:0.000}" : "-", AppTheme.Primary, marked: _bestMs > 0);
 
             DrawTile(g, new RectangleF(left + (tileWidth + gap) * 2, top, tileWidth, tileHeight),
                 "Average", average > 0 ? $"{average / 1000.0:0.000}" : "-", AppTheme.TextDark);
 
             DrawTile(g, new RectangleF(left + (tileWidth + gap) * 3, top, tileWidth, tileHeight),
                 "Run", _present ? _currentRun.ToString() : "-",
-                _currentRun >= _streakThreshold ? AppTheme.Success : AppTheme.TextDark);
+                _currentRun >= _streakThreshold ? AppTheme.Success : AppTheme.TextDark,
+                marked: _present && _currentRun >= _streakThreshold);
         }
 
         /// <summary>
@@ -808,16 +809,31 @@ public sealed class LapDetailWindow : Form
             return count > 0 ? total / (double)count : 0;
         }
 
-        /// <summary>The app's stat tile, sized down and with the value measured to fit.</summary>
-        private static void DrawTile(Graphics g, RectangleF bounds, string label, string value, Color valueColor)
+        /// <summary>
+        /// The app's stat tile (StatTile), painted: the value on top and its
+        /// caption under it, from the tile's left edge - the same order as
+        /// the tiles on the pages and the other windows (18 Nov 2026). A
+        /// tile whose value is called out (the best lap, a clean run going)
+        /// gets a short bar of that colour along its top, so the eye finds
+        /// it before reading it.
+        /// </summary>
+        private static void DrawTile(Graphics g, RectangleF bounds, string label, string value, Color valueColor, bool marked = false)
         {
             AppTheme.DrawCard(g, bounds);
 
+            if (marked)
+            {
+                var bar = new RectangleF(bounds.Left + Px(10), bounds.Top + 1, Math.Max(1f, Px(22)), Math.Max(2f, Px(3)));
+                using var barPath = AppTheme.RoundedRect(bar, 1);
+                using var barFill = new SolidBrush(valueColor);
+                g.FillPath(barFill, barPath);
+            }
+
             using var labelBrush = new SolidBrush(AppTheme.TextMuted);
             using var valueBrush = new SolidBrush(valueColor);
-            using var centred = new StringFormat
+            using var near = new StringFormat
             {
-                Alignment = StringAlignment.Center,
+                Alignment = StringAlignment.Near,
                 LineAlignment = StringAlignment.Center,
                 Trimming = StringTrimming.EllipsisCharacter,
 
@@ -826,19 +842,21 @@ public sealed class LapDetailWindow : Form
                 FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip,
             };
 
-            // The label's box is as tall as the font's own line, measured on
-            // the surface being painted (31 Oct 2026, Asher: "tops of the
-            // kpi's on the lap detail windows is cut off"). It was a fixed
-            // 13 pixels, shorter than the caption font's line, and DrawString
-            // clips to its box - so the centred caps lost their top edge, and
-            // at a larger text size or display scale lost more of it.
+            var inset = Px(10);
+            var inner = bounds.Width - inset - Px(4);
+
+            // The caption's box is as tall as the font's own line, measured
+            // on the surface being painted (31 Oct 2026, Asher: "tops of the
+            // kpi's on the lap detail windows is cut off"). A fixed height
+            // shorter than the caption font's line clips its caps, and more
+            // so at a larger text size or display scale.
             var labelHeight = (float)Math.Ceiling(AppTheme.MicroFont.GetHeight(g));
-            var labelRect = new RectangleF(bounds.Left + 3, bounds.Top + Px(4), bounds.Width - 6, labelHeight);
+            var labelRect = new RectangleF(bounds.Left + inset, bounds.Bottom - Px(4) - labelHeight, inner, labelHeight);
 
-            g.DrawString(AppTheme.Spaced(label.ToUpperInvariant()), AppTheme.MicroFont, labelBrush, labelRect, centred);
+            g.DrawString(AppTheme.Spaced(label.ToUpperInvariant()), AppTheme.MicroFont, labelBrush, labelRect, near);
 
-            var valueTop = labelRect.Bottom - Px(1);
-            var valueRect = new RectangleF(bounds.Left + 3, valueTop, bounds.Width - 6, Math.Max(1f, bounds.Bottom - Px(3) - valueTop));
+            var valueTop = bounds.Top + Px(3);
+            var valueRect = new RectangleF(bounds.Left + inset, valueTop, inner, Math.Max(1f, labelRect.Top + Px(1) - valueTop));
 
             // Stepped down in whole points until it fits, the same way the
             // race stat strip does it - a lap time at a fixed size ends up
@@ -848,9 +866,9 @@ public sealed class LapDetailWindow : Form
             {
                 using var font = Display(size);
 
-                if (g.MeasureString(value, font).Width <= bounds.Width - 8 || size <= 9f)
+                if (g.MeasureString(value, font).Width <= inner || size <= 9f)
                 {
-                    g.DrawString(value, font, valueBrush, valueRect, centred);
+                    g.DrawString(value, font, valueBrush, valueRect, near);
                     return;
                 }
             }
@@ -891,13 +909,13 @@ public sealed class LapDetailWindow : Form
         {
             if (!_present)
             {
-                DrawNote(g, left, right, top, "This driver is no longer in the standings.");
+                DrawNote(g, left, right, top, "Not in the standings", "This driver is no longer in the standings.");
                 return;
             }
 
             if (_lapMs.Length == 0)
             {
-                DrawNote(g, left, right, top, "No laps yet - this fills in as they cross the line.");
+                DrawNote(g, left, right, top, "No laps yet", "This fills in as they cross the line.");
                 return;
             }
 
@@ -987,11 +1005,27 @@ public sealed class LapDetailWindow : Form
             var endedRun = streak == 1 && previous >= _streakThreshold;
             var isBest = !isStartLap && _bestMs > 0 && lapMs == _bestMs;
 
+            var rowRect = new RectangleF(left - Px(4), top + 1, right - left + Px(8), RowHeight - 2);
+
             if (isBest || endedRun)
             {
-                var rowRect = new RectangleF(left - Px(4), top + 1, right - left + Px(8), RowHeight - 2);
                 using var path = AppTheme.RoundedRect(rowRect, 5);
                 using var fill = new SolidBrush(isBest ? AppTheme.PrimaryTint : Tinted(AppTheme.Danger, 28));
+                g.FillPath(fill, path);
+
+                // A short bar down the row's left edge in the same colour,
+                // so the best lap and the lap that ended a run stand out
+                // even on a screen washed out by the pit lights.
+                using var mark = new SolidBrush(isBest ? AppTheme.Primary : AppTheme.Danger);
+                using var markPath = AppTheme.RoundedRect(new RectangleF(rowRect.Left, rowRect.Top + Px(4), Math.Max(2f, Px(3)), rowRect.Height - Px(8)), 1);
+                g.FillPath(mark, markPath);
+            }
+            else if (lapIndex % 2 == 1)
+            {
+                // Every other lap on a faint band, by lap rather than by
+                // row, so the bands stay with their laps as the list scrolls.
+                using var path = AppTheme.RoundedRect(rowRect, 5);
+                using var fill = new SolidBrush(Mix(AppTheme.Surface, AppTheme.RowAlt, 0.5f));
                 g.FillPath(fill, path);
             }
 
@@ -1009,7 +1043,11 @@ public sealed class LapDetailWindow : Form
                 LineAlignment = StringAlignment.Center,
             };
 
-            g.DrawString(isStartLap ? "START" : $"L{lapIndex + 1}", AppTheme.SmallFont, muted,
+            // "Start" in the lap numbers' face where it fits whole, else the
+            // smaller caption face: "START" came out "STA..." in the column.
+            var lapFont = isStartLap && g.MeasureString("Start", AppTheme.SmallFont).Width > Px(40) ? AppTheme.MicroFont : AppTheme.SmallFont;
+
+            g.DrawString(isStartLap ? "Start" : $"L{lapIndex + 1}", lapFont, muted,
                 new RectangleF(left, top, Px(40), RowHeight), near);
 
             using var timeFont = Display(11.5f);
@@ -1055,8 +1093,12 @@ public sealed class LapDetailWindow : Form
                 : lapMs <= _bestMs ? "their best"
                 : $"+{(lapMs - _bestMs) / 1000.0:0.000}";
 
+            // The start lap has no bar, so its words may run left into the
+            // bar's room: in the figures' own column it read "green to lin".
+            var deltaLeft = isStartLap ? BarLeft(left) + Px(24) : DeltaLeft(right);
+
             g.DrawString(delta, AppTheme.SmallFont, isBest ? timeBrush : muted,
-                new RectangleF(DeltaLeft(right), top, DeltaRight(right) - DeltaLeft(right), RowHeight), far);
+                new RectangleF(deltaLeft, top, DeltaRight(right) - deltaLeft, RowHeight), far);
 
             if (endedRun)
             {
@@ -1109,8 +1151,24 @@ public sealed class LapDetailWindow : Form
             }
         }
 
-        private void DrawNote(Graphics g, int left, int right, int top, string text)
+        /// <summary>
+        /// What the list says when it has no laps to show, on a soft panel
+        /// where the laps would be: a heading, and what fills it - as the
+        /// lists on the pages say it.
+        /// </summary>
+        private void DrawNote(Graphics g, int left, int right, int top, string heading, string text)
         {
+            var panel = new RectangleF(left - Px(4), top + Px(6), right - left + Px(8), Math.Max(RowHeight * 2, Rows * RowHeight - Px(12)));
+
+            using (var path = AppTheme.RoundedRect(panel, 8))
+            using (var fill = new SolidBrush(Mix(AppTheme.Surface, AppTheme.RowAlt, 0.6f)))
+            using (var pen = new Pen(AppTheme.Border) { DashStyle = DashStyle.Dash })
+            {
+                g.FillPath(fill, path);
+                g.DrawPath(pen, path);
+            }
+
+            using var headingBrush = new SolidBrush(AppTheme.TextDark);
             using var brush = new SolidBrush(AppTheme.TextMuted);
             using var centred = new StringFormat
             {
@@ -1120,7 +1178,12 @@ public sealed class LapDetailWindow : Form
                 FormatFlags = StringFormatFlags.NoWrap,
             };
 
-            g.DrawString(text, AppTheme.BodyFont, brush, new RectangleF(left, top, right - left, RowHeight), centred);
+            var middle = panel.Top + panel.Height / 2f;
+
+            g.DrawString(heading, AppTheme.BoldFont, headingBrush,
+                new RectangleF(panel.Left + Px(8), middle - RowHeight, panel.Width - Px(16), RowHeight), centred);
+            g.DrawString(text, AppTheme.SmallFont, brush,
+                new RectangleF(panel.Left + Px(8), middle, panel.Width - Px(16), RowHeight), centred);
         }
 
         private void DrawFooter(Graphics g, int left, int right, int top)
@@ -1129,23 +1192,61 @@ public sealed class LapDetailWindow : Form
             var shown = Math.Min(Rows, total);
             var back = ScrollBack;
 
-            var text = total <= shown
-                ? "Updates live - drag the name to move, Esc or X closes"
+            // Longest first: the first that fits beside the chips is drawn.
+            var texts = total <= shown
+                ? new[] { "Updates live - drag the name to move, Esc or X closes", "Updates live - Esc or X closes", "Updates live" }
                 : back > 0
-                    ? $"Laps {total - shown - back + 1}-{total - back} of {total} - scroll down for the latest"
-                    : $"Last {shown} of {total} laps - scroll up for earlier ones - updates live";
+                    ? new[] { $"Laps {total - shown - back + 1}-{total - back} of {total} - scroll down for the latest", $"Laps {total - shown - back + 1}-{total - back} of {total}" }
+                    : new[] { $"Last {shown} of {total} laps - scroll up for more - updates live", $"Last {shown} of {total} laps - scroll up for more", $"Last {shown} of {total} laps" };
+
+            using var rule = new Pen(AppTheme.Border);
+            g.DrawLine(rule, left, top - Px(4), right, top - Px(4));
+
+            // The penalty and the ideal lap as chips on the right (18 Nov
+            // 2026), each in its own colour, rather than run on in front of
+            // the line about scrolling - which pushed that line off the end.
+            // Laid out from the right edge in.
+            var chips = new List<(string Text, Color Colour)>();
 
             if (_penaltyMs != 0)
             {
-                text = $"Penalty {_penaltyMs / 1000.0:0.0}s applied - " + text;
+                chips.Add(($"Penalty {_penaltyMs / 1000.0:0.0}s", AppTheme.Danger));
             }
 
             // Their best sectors on one lap: what they could do, and how
             // much of it they have put together so far.
             if (_idealMs is { } ideal && ideal > 0)
             {
-                var gap = _bestMs > ideal ? $" ({(_bestMs - ideal) / 1000.0:0.00} under their best)" : string.Empty;
-                text = $"Ideal lap {Sectors.Format(ideal)}{gap} - " + text;
+                var gap = _bestMs > ideal ? $" ({(_bestMs - ideal) / 1000.0:0.00} under best)" : string.Empty;
+                chips.Add(($"Ideal {Sectors.Format(ideal)}{gap}", AppTheme.Success));
+            }
+
+            var textRight = (float)right;
+            var chipHeight = FooterHeight - Px(2);
+
+            foreach (var (chipText, colour) in chips)
+            {
+                var width = g.MeasureString(chipText, AppTheme.MicroFont).Width + Px(14);
+                var chip = new RectangleF(textRight - width, top + Px(1), width, chipHeight);
+
+                using (var path = AppTheme.RoundedRect(chip, (int)(chip.Height / 2)))
+                using (var fill = new SolidBrush(Tinted(colour, 36)))
+                {
+                    g.FillPath(fill, path);
+                }
+
+                using var chipBrush = new SolidBrush(colour);
+                using var centred = new StringFormat
+                {
+                    Alignment = StringAlignment.Center,
+                    LineAlignment = StringAlignment.Center,
+                    FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip,
+                };
+
+                using var chipFont = new Font(AppTheme.MicroFont, FontStyle.Bold);
+                g.DrawString(chipText, chipFont, chipBrush, chip, centred);
+
+                textRight = chip.Left - Px(6);
             }
 
             using var brush = new SolidBrush(AppTheme.TextMuted);
@@ -1156,12 +1257,18 @@ public sealed class LapDetailWindow : Form
                 LineAlignment = StringAlignment.Center,
             };
 
-            using var rule = new Pen(AppTheme.Border);
-            g.DrawLine(rule, left, top - Px(4), right, top - Px(4));
+            var room = Math.Max(1f, textRight - left);
+            var text = texts.FirstOrDefault(t => g.MeasureString(t, AppTheme.SmallFont).Width <= room) ?? texts[^1];
 
-            g.DrawString(text, AppTheme.SmallFont, brush, new RectangleF(left, top, right - left, FooterHeight), format);
+            g.DrawString(text, AppTheme.SmallFont, brush, new RectangleF(left, top, room, FooterHeight), format);
         }
 
         private static Color Tinted(Color color, int alpha) => Color.FromArgb(alpha, color.R, color.G, color.B);
+
+        /// <summary>Part way from one colour to another - 0 is all <paramref name="from"/>.</summary>
+        private static Color Mix(Color from, Color to, float amount) => Color.FromArgb(
+            (int)Math.Round(from.R + (to.R - from.R) * amount),
+            (int)Math.Round(from.G + (to.G - from.G) * amount),
+            (int)Math.Round(from.B + (to.B - from.B) * amount));
     }
 }

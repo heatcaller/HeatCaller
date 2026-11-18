@@ -17,6 +17,15 @@ internal static partial class WindowCatalog
         ("Move drivers between heats", () => HeatBalanceBoard(qualifyingRounds: 1)),
         ("Move drivers between heats (9 heats)", () => HeatBalanceBoard(qualifyingRounds: 3, lateArrival: true)),
         ("Move drivers between heats (recorded and on track)", () => HeatBalanceBoard(qualifyingRounds: 1, locked: true)),
+
+        // Posting the heats (PostHeatsForm, RaceProgramControl.Posting): with
+        // cars the loop hasn't heard and papers not in order, as long as the
+        // warning gets; with every car heard; and on a club night of races.
+        ("Post the Heats", () => new PostHeatsForm(clubNight: false,
+            HeatPosting.NotHeardWords(Drivers(16).Select(d => d.DriverName).ToList(), listed: 12)
+            + " 2 drivers' papers aren't in order: Alexandria Montgomery-Fitzwilliam 4 (no waiver) and Driver 7 (membership ran out).")),
+        ("Post the Heats (all heard)", () => new PostHeatsForm(clubNight: false, string.Empty)),
+        ("Post the Races", () => new PostHeatsForm(clubNight: true, HeatPosting.NotHeardWords(new[] { "Driver 3" }))),
     };
 
     /// <summary>

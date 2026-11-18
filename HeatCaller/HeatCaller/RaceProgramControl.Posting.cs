@@ -282,21 +282,26 @@ internal sealed class PostHeatsForm : Form
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterParent;
 
+        // What posting is and what it changes afterwards, in a card of its
+        // own, last (18 Nov 2026, dialog jazz-up): read once, not every night.
         var lblWhat = new Label
         {
-            Text = $"Posting puts tonight's {heats} on the board. Drivers look up their {(clubNight ? "races" : "heat")} once and trust it, "
-                   + $"so from now on, Move Drivers Between Heats and Redo Remaining Heats ask before changing a posted {(clubNight ? "race" : "heat")}. "
+            Text = $"Posting puts tonight's {heats} on the board. Drivers look up their {(clubNight ? "races" : "heat")} once and trust it, so from now on, "
+                   + $"Move Drivers Between Heats and Redo Remaining Heats ask before changing a posted {(clubNight ? "race" : "heat")}. "
                    + "A driver who arrives late still goes in with Add a Late Entry, which moves nobody else.",
             AutoSize = true,
-            MaximumSize = new Size(500, 0),
+            Font = AppTheme.SmallFont,
+            ForeColor = AppTheme.TextMuted,
         };
 
+        // First, because it is the one thing here to act on before posting:
+        // the cars the loop hasn't heard and papers not in order - or, in
+        // green, that every car has been heard.
         var lblNotHeard = new Label
         {
             Text = notHeard.Length > 0 ? notHeard : "Every car on tonight's " + heats + " has crossed the loop tonight.",
             AutoSize = true,
-            MaximumSize = new Size(500, 0),
-            ForeColor = notHeard.Length > 0 ? AppTheme.Warning : AppTheme.TextMuted,
+            ForeColor = notHeard.Length > 0 ? AppTheme.Warning : AppTheme.Success,
         };
 
         _chkHeats.Text = clubNight ? "Print the race sheets" : "Print the heat sheets";
@@ -314,20 +319,51 @@ internal sealed class PostHeatsForm : Form
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
         var btnPost = new Button { Text = clubNight ? "Post the Races" : "Post the Heats", DialogResult = DialogResult.OK, AutoSize = true };
 
+        var checkCard = new Section("Before you post");
+        checkCard.Add(lblNotHeard, gapBelow: 0);
+
+        var printCard = new Section("Print and tell");
+        printCard.Add(_chkHeats, stretch: false, gapBelow: 0);
+        printCard.Add(_chkMarshals, stretch: false, gapBelow: 0);
+        printCard.Add(_chkAnnounce, stretch: false, gapBelow: UiLayout.HintGap);
+        printCard.Add(new Label
+        {
+            Text = "The sheets open together in one print preview.",
+            AutoSize = true,
+            Font = AppTheme.SmallFont,
+            ForeColor = AppTheme.TextMuted,
+        }, gapBelow: 0);
+
+        var afterCard = new Section("Once they're posted");
+        afterCard.Add(lblWhat, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblWhat, stretch: false, gapBelow: UiLayout.RowGap);
-        page.Add(lblNotHeard, stretch: false, gapBelow: UiLayout.RowGap);
-        page.Add(_chkHeats, stretch: false, gapBelow: 0);
-        page.Add(_chkMarshals, stretch: false, gapBelow: 0);
-        page.Add(_chkAnnounce, stretch: false, gapBelow: UiLayout.RowGap);
+        page.Add(checkCard, gapBelow: UiLayout.RowGap);
+        page.Add(printCard, gapBelow: UiLayout.RowGap);
+        page.Add(afterCard);
+
+        // Against the right-hand edge, Cancel furthest right, as they were -
+        // and Tab still reaches Post first: the bar takes them right to
+        // left, in the order they were added.
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnPost), gapBelow: 0);
+        btnPost.TabIndex = 0;
+        btnCancel.TabIndex = 1;
 
         Controls.Add(page);
         AcceptButton = btnPost;
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
-        DialogFit.Keep(this, page, width: 560, height: 380);
+
+        // The window's own button in the app's colour, as Save and OK are in
+        // every other window - the theme goes by the caption, and "Post the
+        // Heats" is not one it knows.
+        AppTheme.StyleButton(btnPost, AppTheme.ButtonKind.Primary);
+
+        // As tall as what is in it - the warning can name a dozen cars - and
+        // wide enough that, at its longest, Post the Heats is still on a
+        // 1280x720 screen without scrolling.
+        DialogFit.Keep(this, page, width: 640);
     }
 }
 

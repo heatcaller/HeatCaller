@@ -338,9 +338,24 @@ public sealed partial class RaceProgramControl
     }
 }
 
-/// <summary>The late arrivals window: each driver and where they'd go, ticked to add. An unticked one is "not tonight".</summary>
+/// <summary>
+/// The late arrivals window: each driver and where they'd go, ticked to add.
+/// An unticked one is "not tonight".
+///
+/// 18 Nov 2026, the dialog version of the Venues look: a row of tiles with
+/// how many came in late, across how many classes, and how many have no heat
+/// left; then one card with each driver ticked, their name and class on the
+/// tick and where they'd go on a line under it. Opened on race night with
+/// the heats already out, so it reads at a glance and Enter adds them all.
+/// </summary>
 internal sealed class LateArrivalsForm : Form
 {
+    /// <summary>How wide the window is inside its frame at the normal text size.</summary>
+    private const int DialogWidth = 580;
+
+    /// <summary>What the place list says when there's no heat left - see RaceProgramControl.ShowLateArrivals.</summary>
+    private const string NoHeat = "no heat left to go in";
+
     private readonly List<CheckBox> _ticks = new();
 
     public bool Ticked(int index) => index >= 0 && index < _ticks.Count && _ticks[index].Checked;
@@ -350,41 +365,137 @@ internal sealed class LateArrivalsForm : Form
         Text = "Checked In Late";
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
+        ForeColor = AppTheme.TextDark;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterParent;
 
+        var drivers = lines.Select(Split).ToList();
+
         var lblHow = new Label
         {
-            Text = $"These drivers checked in after {LateArrivals.After(clubNight, posted, "tonight's")}. A ticked driver goes into the heat "
-                   + "nearest their pace that has room, in every round still to run, and nobody else moves. "
-                   + "An unticked one isn't added tonight, and Next Steps stops asking. Undo takes either back.",
+            Text = $"These drivers checked in after {LateArrivals.After(clubNight, posted, "tonight's")}.",
             AutoSize = true,
-            MaximumSize = new Size(520, 0),
+            Font = AppTheme.SmallFont,
             ForeColor = AppTheme.TextMuted,
         };
 
-        var page = new FillPage();
-        page.Add(lblHow, stretch: false, gapBelow: UiLayout.RowGap);
+        // Tonight's late check-ins at a glance.
+        var tiles = new[] { new StatTile(), new StatTile(), new StatTile() };
 
-        foreach (var line in lines)
+        foreach (var tile in tiles)
         {
-            var tick = new ThemedCheckBox { Text = line, AutoSize = true, Checked = true, MaximumSize = new Size(520, 0) };
-            _ticks.Add(tick);
-            page.Add(tick, stretch: false, gapBelow: 0);
+            tile.Value.Font = AppTheme.TitleFont;
+            tile.Caption.Font = AppTheme.MicroFont;
         }
+
+        var noHeat = drivers.Count(d => d.NoHeat);
+        var classes = drivers.Select(d => d.ClassName).Where(c => c.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+
+        tiles[0].Set(lines.Count.ToString(System.Globalization.CultureInfo.CurrentCulture), "Checked in late");
+        tiles[1].Set(classes.ToString(System.Globalization.CultureInfo.CurrentCulture), classes == 1 ? "Class" : "Classes");
+        tiles[2].Set(noHeat.ToString(System.Globalization.CultureInfo.CurrentCulture), "No heat left");
+
+        // Each driver: the tick with who they are, and under it where they'd go.
+        var card = new Section("Add to the heats");
+        card.Add(new Label
+        {
+            Text = "A ticked driver goes into the heat nearest their pace that has room, in every round still to run. Nobody else moves.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        }, gapBelow: UiLayout.RowGap);
+
+        var placeLabels = new List<(Label Label, bool NoHeat)>();
+
+        for (var i = 0; i < drivers.Count; i++)
+        {
+            var driver = drivers[i];
+            var tick = new ThemedCheckBox { Text = driver.Who, AutoSize = true, Checked = true, Font = AppTheme.BodyFont };
+            _ticks.Add(tick);
+
+            var place = new Label
+            {
+                Text = driver.NoHeat ? "No heat left to go in" : driver.Where.Length > 0 ? $"Goes in: {driver.Where}" : string.Empty,
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+                Font = AppTheme.SmallFont,
+            };
+
+            var last = i == drivers.Count - 1;
+
+            card.Add(tick, stretch: false, gapBelow: place.Text.Length > 0 ? UiLayout.HintGap : last ? 0 : UiLayout.RowGap);
+
+            if (place.Text.Length > 0)
+            {
+                card.Add(place, gapBelow: last ? 0 : UiLayout.RowGap);
+                place.Margin = new Padding(TickBox.CaptionIndent, place.Margin.Top, place.Margin.Right, place.Margin.Bottom);
+                placeLabels.Add((place, driver.NoHeat));
+            }
+        }
+
+        var lblAfter = new Label
+        {
+            Text = "An unticked driver isn't added tonight, and Next Steps stops asking. Undo takes either back.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
         var btnOk = new Button { Text = "Add the Ticked", DialogResult = DialogResult.OK, AutoSize = true };
 
-        page.Add(new Panel { Height = UiLayout.RowGap }, stretch: false, gapBelow: 0);
+        var page = new FillPage();
+        page.Add(lblHow, gapBelow: UiLayout.RowGap);
+        page.Add(new TileStrip(tiles), gapBelow: UiLayout.RowGap);
+        page.Add(card, gapBelow: UiLayout.RowGap);
+        page.Add(lblAfter);
+
+        // Against the right-hand edge, Cancel furthest right, as they were -
+        // and Tab still reaches Add the Ticked first: the bar takes them
+        // right to left, in the order they were added.
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnOk), gapBelow: 0);
+        btnOk.TabIndex = 0;
+        btnCancel.TabIndex = 1;
 
         Controls.Add(page);
         AcceptButton = btnOk;
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
-        DialogFit.Keep(this, page, width: 580, height: 260 + 30 * lines.Count);
+
+        // After the theme pass: the window's own button in the app's colour,
+        // and a driver with nowhere to go called out, as the theme knows
+        // neither.
+        AppTheme.StyleButton(btnOk, AppTheme.ButtonKind.Primary);
+
+        foreach (var (label, _) in placeLabels.Where(p => p.NoHeat))
+        {
+            label.ForeColor = AppTheme.Danger;
+        }
+
+        DialogFit.Keep(this, page, width: DialogWidth);
+    }
+
+    /// <summary>
+    /// One line as RaceProgramControl.ShowLateArrivals writes it,
+    /// "Name (Class): where", split into the name and class and the where.
+    /// A line not in that shape is shown whole on the tick.
+    /// </summary>
+    private static (string Who, string ClassName, string Where, bool NoHeat) Split(string line)
+    {
+        var at = line.IndexOf("): ", StringComparison.Ordinal);
+
+        if (at < 0)
+        {
+            return (line, string.Empty, string.Empty, false);
+        }
+
+        var who = line[..(at + 1)];
+        var where = line[(at + 3)..].Trim();
+        var open = who.LastIndexOf(" (", StringComparison.Ordinal);
+        var className = open >= 0 ? who[(open + 2)..^1] : string.Empty;
+
+        return (who, className, where, string.Equals(where, NoHeat, StringComparison.OrdinalIgnoreCase));
     }
 }
 
