@@ -93,7 +93,7 @@ Every step can be skipped, and **Skip setup** leaves the wizard at any point. A 
 
 Setup opens on **Templates** while no race day is open, and on **Tonight** once one is. A tab you pick yourself stays picked until a night is started or closed.
 
-![Race Day, Setup, Tonight tab: Race Day 14 Nov 2026 picked under Which race day, and The night card with the name, kind of night, venue, track layout, championship, Next night on phones and notes](../assets/images/race-day-setup.png)
+![Race Day, Setup, Tonight tab: Race Day 11 Nov 2026 picked under Which race day, a banner with the night's name, kind and Next night on phones, then the Times and The night cards on the left and Heats, Money and Running the night on the right, each with a Change button](../assets/images/race-day-setup.png)
 
 There's no Save button. Every change saves itself as you make it, and a **Saved** note appears for a moment after the **Close Day**, **Delete Day** and **Save as Template...** buttons. Typing in a box is saved when you pause or move to another field, and a run of typing is one step for **Undo**.
 
