@@ -535,6 +535,10 @@ public sealed class SimpleModeTests : IDisposable
         // Post the Heats' cards (PostHeatsForm, 18 Nov 2026, dialog jazz-up).
         "RaceProgramControl.Posting.cs|Before you post", "RaceProgramControl.Posting.cs|Print and tell",
         "RaceProgramControl.Posting.cs|Once they're posted",
+
+        // The Setup Sheet's and Edit Result's cards (SetupEntryForm, ResultEditForm; 18 Nov 2026).
+        "SetupEntryForm.cs|This setup",
+        "ResultEditForm.cs|Corrections", "ResultEditForm.cs|New order",
     };
 
     [Fact]

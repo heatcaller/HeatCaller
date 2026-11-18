@@ -8,6 +8,11 @@ namespace HeatCaller;
 /// so a chassis with different springs or an extra adjustment needs no code
 /// change - just an edit to its template.
 ///
+/// The look (18 Nov 2026, dialog jazz-up): the header in a "This setup"
+/// card, the diagram on a card, two tiles over the fields - how much of the
+/// sheet and of the diagram is filled - and each of the sheet's sections a
+/// card of its own in the scrolling fields.
+///
 /// On the layout pieces (DialogFit): who, where and in what car along one
 /// line, and the chassis sheet and the session it ran in along the next -
 /// each a FieldRow, wrapping when the window is narrow, its last field
@@ -84,6 +89,22 @@ public sealed class SetupEntryForm : Form
     }
 
     private readonly ChassisCanvas _canvas = new();
+
+    /// <summary>The setup at a glance across the top: fields filled, callouts filled, and the session it ran in - see ShowTiles.</summary>
+    private readonly StatTile[] _tiles = { new(), new() };
+
+    /// <summary>No shortcut letter, so measuring it makes no window handle - see Caption. The main action, in the primary colour.</summary>
+    private readonly Button _btnSave = new() { Text = "Save", UseMnemonic = false };
+
+    /// <summary>The line on using the diagram, at the foot.</summary>
+    private readonly Label _lblHint = new()
+    {
+        Text = "Click a callout on the diagram to jump to its field. Filled callouts are highlighted.",
+        UseMnemonic = false,
+        AutoSize = true,
+        ForeColor = AppTheme.TextMuted,
+        Font = AppTheme.SmallFont,
+    };
 
     /// <summary>
     /// Where the fields go, beside the diagram. The fields themselves are a
@@ -196,6 +217,29 @@ public sealed class SetupEntryForm : Form
                 var footer = BuildButtons();
                 WhereTimeGoes.Mark("header");
 
+                // THE TOP (18 Nov 2026, dialog jazz-up): the setup at a glance -
+                // how much of the sheet is filled, how much of the diagram, and
+                // whether it is tied to a session - following the editors as
+                // they change (ShowTiles). Built at the text size in use, so
+                // the tiles take their faces here.
+                foreach (var tile in _tiles)
+                {
+                    tile.Value.Font = AppTheme.TitleFont;
+                    tile.Caption.Font = AppTheme.MicroFont;
+                }
+
+                // Who, where and on what sheet, in a card of its own. No hint
+                // line: the captions say it, and on a 1280x720 screen the
+                // diagram has no height to spare (layout pictures, 18 Nov 2026).
+                var setupCard = new Section("This setup");
+                setupCard.Add(who, gapBelow: UiLayout.RowGap);
+                setupCard.Add(sheet, gapBelow: 0);
+
+                // The diagram on a card of its own, no caption: the picture
+                // says what it is, and its hint stays at the foot.
+                var diagramCard = new Section();
+                diagramCard.AddFill(_canvas, () => UiLayout.AtTextSize(DiagramLeastHeight), gapBelow: 0);
+
                 // The diagram down the left, the width it always was; the fields
                 // beside it taking the rest, and never less than they can do with -
                 // the diagram gives way first (DiagramColumnWidth). Both take the
@@ -204,15 +248,19 @@ public sealed class SetupEntryForm : Form
 
                 band = new Beside(() => DiagramColumnWidth(band?.Width ?? 0)) { SideOnLeft = true };
 
-                // A few lines of fields - a drop-down and the gap under it for each -
-                // before the window scrolls instead.
+                // The tiles over the fields, not across the window: there they
+                // take their height from the fields, which have it to spare
+                // beside the diagram, rather than from the diagram; and beside
+                // the header card they left the session's drop-down too narrow
+                // at a large text size. A few lines of fields - a drop-down and
+                // the gap under it for each - before the window scrolls instead.
+                band.Add(new TileStrip(_tiles), gapBelow: UiLayout.RowGap);
                 band.AddFill(_fieldsHost, _ => LeastFieldLines * (_cmbTemplate.Height + UiLayout.RowGap));
-                band.AddSideFill(_canvas, _ => UiLayout.AtTextSize(DiagramLeastHeight), gapBelow: 0);
+                band.AddSideFill(diagramCard, diagramCard.LeastHeight, gapBelow: 0);
 
                 page = new FillPage();
-                page.Add(who, gapBelow: UiLayout.RowGap);
-                page.Add(sheet);
-                page.AddFill(band, band.LeastHeight);
+                page.Add(setupCard, gapBelow: UiLayout.RowGap);
+                page.AddFill(band, band.LeastHeight, gapBelow: UiLayout.RowGap);
                 page.Add(footer, gapBelow: 0);
 
                 Controls.Add(page);
@@ -222,6 +270,7 @@ public sealed class SetupEntryForm : Form
                 LoadTemplateIntoUi();
 
                 AppTheme.ApplyRecursively(this);
+                AppTheme.StyleButton(_btnSave, AppTheme.ButtonKind.Primary);
                 _themed = true;
                 WhereTimeGoes.Mark("theme pass");
             }
@@ -405,28 +454,18 @@ public sealed class SetupEntryForm : Form
     {
         // No shortcut letters, so measuring these makes no window handle -
         // see Caption.
-        var btnSave = new Button { Text = "Save", UseMnemonic = false };
-        btnSave.Click += BtnSave_Click;
+        _btnSave.Click += BtnSave_Click;
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, UseMnemonic = false };
 
-        var lblHint = new Label
-        {
-            Text = "Click a callout on the diagram to jump to its field. Filled callouts are highlighted.",
-            UseMnemonic = false,
-            AutoSize = true,
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-
         var footer = new SplitBar(
-            new ButtonBar().With(lblHint),
-            new ButtonBar(alignRight: true).With(btnCancel, btnSave));
+            new ButtonBar().With(_lblHint),
+            new ButtonBar(alignRight: true).With(btnCancel, _btnSave));
 
-        btnSave.TabIndex = 0;
+        _btnSave.TabIndex = 0;
         btnCancel.TabIndex = 1;
 
-        AcceptButton = btnSave;
+        AcceptButton = _btnSave;
         CancelButton = btnCancel;
 
         return footer;
@@ -492,26 +531,17 @@ public sealed class SetupEntryForm : Form
         {
             var section = sections[s];
 
-            fields.Add(new Label
-            {
-                Text = section.Name.ToUpperInvariant(),
-                AutoSize = true,
-                Font = AppTheme.BoldFont,
-                ForeColor = AppTheme.Primary,
-
-                // "CHASSIS & DRIVETRAIN" shows its ampersand, rather than
-                // underlining the space after it.
-                UseMnemonic = false,
-            }, gapBelow: UiLayout.HintGap);
+            // Each of the sheet's sections a card of its own, its name the
+            // card's caption (18 Nov 2026, dialog jazz-up) - the card's
+            // caption shows an ampersand as itself ("CHASSIS & DRIVETRAIN").
+            var card = new Section(section.Name);
 
             for (var f = 0; f < section.Fields.Count; f++)
             {
-                var gapBelow = f < section.Fields.Count - 1
-                    ? UiLayout.RowGap
-                    : s < sections.Count - 1 ? UiLayout.SectionGap : 0;
-
-                fields.Add(BuildFieldLine(section.Fields[f]), gapBelow: gapBelow);
+                card.Add(BuildFieldLine(section.Fields[f]), gapBelow: f < section.Fields.Count - 1 ? UiLayout.RowGap : 0);
             }
+
+            fields.Add(card, gapBelow: s < sections.Count - 1 ? UiLayout.RowGap : 0);
         }
 
         var old = _fields;
@@ -534,6 +564,33 @@ public sealed class SetupEntryForm : Form
 
         SizeEditors();
         WhereTimeGoes.Mark("sizing the fields");
+
+        ShowTiles();
+    }
+
+    /// <summary>
+    /// The tiles, from what the entry holds now: how many of this sheet's
+    /// fields have a value, and how many of its callouts on the diagram do.
+    /// Read from Result.Values, not the editors - a box counts once it is
+    /// left, as the diagram shows it. A sheet all filled in shows in the
+    /// success colour.
+    /// </summary>
+    private void ShowTiles()
+    {
+        var all = _template.AllFields.ToList();
+        var pinned = all.Where(field => field.OnDiagram).ToList();
+
+        bool Filled(SetupField field) =>
+            Result.Values.TryGetValue(field.Id, out var value) && !string.IsNullOrWhiteSpace(value);
+
+        var filled = all.Count(Filled);
+        var pinnedFilled = pinned.Count(Filled);
+
+        _tiles[0].Set($"{filled} of {all.Count}", "Fields filled");
+        _tiles[1].Set(pinned.Count == 0 ? "None" : $"{pinnedFilled} of {pinned.Count}", "On the diagram");
+
+        _tiles[0].Value.ForeColor = all.Count > 0 && filled == all.Count ? AppTheme.Success : AppTheme.TextDark;
+        _tiles[1].Value.ForeColor = pinned.Count > 0 && pinnedFilled == pinned.Count ? AppTheme.Success : AppTheme.TextDark;
     }
 
     /// <summary>
@@ -798,8 +855,9 @@ public sealed class SetupEntryForm : Form
     /// </summary>
     private int DiagramColumnWidth(int band)
     {
-        var wanted = UiLayout.AtTextSize(DiagramWidth);
-        var least = UiLayout.AtTextSize(DiagramLeastWidth);
+        // The diagram's card round it: its inset either side.
+        var wanted = UiLayout.AtTextSize(DiagramWidth) + Section.Inset.Horizontal;
+        var least = UiLayout.AtTextSize(DiagramLeastWidth) + Section.Inset.Horizontal;
         var fields = FieldsLeastWidth();
         var room = Math.Max(0, band - UiLayout.RowGap);
 
@@ -820,10 +878,11 @@ public sealed class SetupEntryForm : Form
     /// The least the fields can do with across: a caption's least room, the
     /// gap a line keeps before its editor, the editors, and the scrollbar the
     /// fields take their width from when there are more than the window
-    /// shows.
+    /// shows - and the inset of the cards the lines sit in.
     /// </summary>
     private int FieldsLeastWidth() =>
-        UiLayout.AtTextSize(CaptionLeastWidth) + UiLayout.RowGap + _editorWidth + SystemInformation.VerticalScrollBarWidth;
+        UiLayout.AtTextSize(CaptionLeastWidth) + UiLayout.RowGap + _editorWidth + SystemInformation.VerticalScrollBarWidth
+        + Section.Inset.Horizontal;
 
     /// <summary>Pulls every editor's current state into Result.Values.</summary>
     private void ReadEditorsIntoResult()
@@ -849,6 +908,7 @@ public sealed class SetupEntryForm : Form
         if (ReadEditorIntoResult(fieldId, editor))
         {
             _canvas.Invalidate();
+            ShowTiles();
         }
     }
 
