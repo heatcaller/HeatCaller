@@ -171,6 +171,15 @@ public sealed partial class RaceProgramControl : UserControl
     /// <summary>Raised to run a round as a simulated race - nothing is recorded against it.</summary>
     public event Action<RoundDefinition>? RoundDemoRequested;
 
+    /// <summary>
+    /// Raised with a raced round's saved race, to open it in Race History with
+    /// Edit Result open - the round menu's Edit Result (17 Nov 2026, Asher:
+    /// "add a right click option to go to race history from race day menu",
+    /// "call it edit result"). Race Control's own Edit Result only reaches the
+    /// race just run, and goes once the next one is staged.
+    /// </summary>
+    public event Action<string>? EditResultRequested;
+
     /// <summary>Everything this tab does, echoed to the developer console.</summary>
     public event Action<string>? StatusMessage;
 
@@ -617,6 +626,17 @@ public sealed partial class RaceProgramControl : UserControl
         var miDemo = new ToolStripMenuItem("Start as Demo...", null, (_, _) => StartRoundAsDemo());
         var miEdit = new ToolStripMenuItem("Edit Drivers...", null, (_, _) => EditRoundRoster());
 
+        // A round already raced: its saved result, in Race History, with
+        // Edit Result open on it - a missed lap or a penalty found after the
+        // next race is under way.
+        var miResult = new ToolStripMenuItem("Edit Result", null, (_, _) =>
+        {
+            if (RecordedSessionOf(SelectedRound()) is { } id)
+            {
+                EditResultRequested?.Invoke(id);
+            }
+        });
+
         // About the CLASS rather than one round, so it stays available with
         // nothing selected - which is the state you are in when you look at
         // the programme and think "those heats are lopsided".
@@ -680,6 +700,7 @@ public sealed partial class RaceProgramControl : UserControl
             miStart,
             miDemo,
             miEdit,
+            miResult,
             miBalance,
             miLate,
             miTogether,
@@ -710,6 +731,7 @@ public sealed partial class RaceProgramControl : UserControl
             miStart.Enabled = single;
             miDemo.Enabled = single;
             miEdit.Enabled = single;
+            miResult.Enabled = RecordedSessionOf(SelectedRound()) is not null;
             miUp.Enabled = single;
             miDown.Enabled = single;
             miDelete.Enabled = selected > 0;
@@ -1669,6 +1691,13 @@ public sealed partial class RaceProgramControl : UserControl
         _grid.SelectedRows.Count == 1 && _grid.SelectedRows[0].Tag is string id
             ? _rounds.Get(id)
             : null;
+
+    /// <summary>The saved race a raced round is linked to, while it is still in Race History; null for one not raced yet.</summary>
+    private string? RecordedSessionOf(RoundDefinition? round) =>
+        RecordedSessionOf(round, _sessionHistory.Get);
+
+    internal static string? RecordedSessionOf(RoundDefinition? round, Func<string, SessionRecord?> sessionOf) =>
+        round is { LinkedSessionId: { Length: > 0 } id } && sessionOf(id) is not null ? id : null;
 
     // ------------------------------------------------------------------
     //  Refreshing

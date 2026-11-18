@@ -537,6 +537,18 @@ public partial class MainForm
         // Calendar - does not take it from under the race.
         RaceDayDeleter.RoundOnTrackId = () => _race.State == RaceState.Idle ? null : _activeRound?.Id;
 
+        // Edit Result on the round menu: that round's race, in Race History.
+        raceProgram.EditResultRequested += id =>
+        {
+            if (_raceHistoryControl is null)
+            {
+                return;
+            }
+
+            GoToPage("Race History");
+            _raceHistoryControl.ShowSession(id, edit: true);
+        };
+
         raceProgram.RoundStartRequested += round =>
         {
             // Checked before the round is set up or its grid call spoken -
