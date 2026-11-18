@@ -385,11 +385,12 @@ public sealed class SimpleModeTests : IDisposable
         // Voice, Cast.
         "MainForm.Pages.cs|Race Calls",
         "VoiceSettingsControl.cs|Voice parameters", "VoiceSettingsControl.cs|Saved voice lines",
+        "VoiceSettingsControl.cs|Voice consent",
         "CastControl.cs|Recap host", "CastControl.cs|Technical Lead", "CastControl.cs|Team Principal", "CastControl.cs|Drivers' own crew",
         "CastControl.cs|Achievements reader",
 
         // Connection.
-        "MainForm.ConnectionPage.cs|Developer console",
+        "MainForm.ConnectionPage.cs|Developer console", "MainForm.ConnectionPage.cs|Split loop",
 
         // Sponsors, Local Screens, Club Website.
         "SponsorsControl.cs|Rotation timing", "SponsorsControl.cs|Video sound",
@@ -434,18 +435,24 @@ public sealed class SimpleModeTests : IDisposable
         "RaceControlControl.Layout.cs|Leaderboard", "MainForm.Designer.cs|Session",
         "PracticeModeControl.cs|Setup", "PracticeModeControl.cs|This session", "PracticeModeControl.cs|Ghost cars",
         "GhostControl.cs|Your ghosts", "DemoModeControl.cs|Settings", "DemoModeControl.cs|Racers", "DemoModeControl.cs|Log",
+        // Their page jazz-up's cards (17 Nov 2026).
+        "PracticeModeControl.cs|Run practice", "GhostControl.cs|Ghost racing", "GhostControl.cs|Quick Rival",
+        "DemoModeControl.cs|Run the demo", "DemoModeControl.cs|Race history",
         "TrackLayoutForms.cs|Track layouts", "TrackLayoutForms.cs|Selected track",
         "HandicapControl.cs|Drivers", "RentalTransponderControl.cs|Transponders",
+        "HandicapControl.cs|Class and mode",
 
         // Voice and Cast.
         "MainForm.Pages.cs|Voice", "MainForm.Pages.cs|Cast", "MainForm.Pages.cs|AI Commentary",
         "VoiceSettingsControl.cs|Speak with", "VoiceSettingsControl.cs|ElevenLabs connection",
+        "VoiceSettingsControl.cs|Race calls", "VoiceSettingsControl.cs|Juniors", "CommentaryControl.cs|On air",
         "CastControl.cs|Voices", "CastControl.cs|Announcer", "CastControl.cs|Co-host",
 
         // AI Commentary's Simple view: shown in Simple only (SimpleMode.ShowInSimpleOnly).
         "CommentaryControl.cs|What it talks about", "CommentaryControl.cs|Countdown",
 
         // On the Race Calls tab, which Simple hides.
+        "VoiceSettingsControl.Announcements.cs|Writing the lines",
         "VoiceSettingsControl.Announcements.cs|How often", "RivalriesControl.cs|Configured rivalries", "RivalriesControl.cs|Edit selected rivalry",
 
         // Sounds: on Mixer, Soundscapes and Music, or on the tabs Simple hides.
@@ -454,23 +461,30 @@ public sealed class SimpleModeTests : IDisposable
         "AmbienceControl.cs|Layers", "AmbienceControl.cs|Reactions", "LapBeepControl.cs|Drivers",
         "BroadcastImagingControl.cs|Soundscape", "BroadcastImagingControl.cs|Pieces", "BroadcastImagingControl.cs|Timing",
         "BroadcastImagingControl.cs|Run of show", "ShowTreatmentCard.cs|Show treatment",
+        "MusicControl.cs|What plays", "AmbienceControl.cs|Live", "BroadcastImagingControl.cs|On air",
+        "LapBeepControl.cs|Lap cues", "LapBeepControl.cs|Everyone at once",
+        "SoundEffectsControl.cs|Every sound at once", "SoundEffectsControl.cs|Per lap",
         "SoundscapeEditorForm.cs|Sounds", "SoundscapeEditorForm.cs|Announcer",
 
         // Connection, Backup & Restore.
-        "MainForm.ConnectionPage.cs|Timing decoder",
+        "MainForm.ConnectionPage.cs|Timing decoder", "MainForm.ConnectionPage.cs|Start-up options", "MainForm.ConnectionPage.cs|Race tools",
         "BackupRestoreControl.cs|Manual backup and restore", "BackupRestoreControl.cs|Automatic backups",
         "BackupRestoreControl.cs|Backup password", "BackupRestoreControl.cs|Settings mode", "BackupRestoreControl.cs|Getting help",
-        "BackupRestoreControl.cs|Updates",
+        "BackupRestoreControl.cs|Updates", "BackupRestoreControl.cs|Cloud copies",
         "BackupRestoreControl.cs|Existing backups", "BackupRestoreControl.Standby.cs|Standby PC",
 
         // Themes, Sponsors, Local Screens, Club Website.
         "LooksControl.cs|Looks", "LooksControl.cs|Club logo", "LooksControl.cs|Appearance",
+        "LooksControl.cs|Crowd screens", "AchievementsControl.cs|Whose achievements", "GarageControl.cs|Which cars", "GarageControl.cs|Garage",
         "SponsorsControl.cs|Slides (shown in this order)", "SponsorsControl.cs|Sponsor reads",
-        "WebServerControl.cs|Server", "WebServerControl.cs|Open these on your phone, tablet, or in OBS",
+        "SponsorsControl.cs|Sponsors", "SponsorsControl.cs|The selected sponsor", "SponsorsControl.cs|Tonight's report",
+        "WebServerControl.cs|Server", "WebServerControl.cs|Phone and tablet pages", "WebServerControl.cs|Streaming in OBS",
+        "WebServerControl.cs|Big Screen", "WebServerControl.cs|Off this Wi-Fi",
         "MainForm.Pages.cs|Website", "RelaySettingsControl.cs|Relay", "RelaySettingsControl.cs|Online check-in",
         "RelaySettingsControl.cs|Share", "RelaySettingsControl.cs|Status",
         "RelaySettingsControl.cs|Your first night guide", "RelaySettingsControl.cs|Club updates",
         "RecordingControl.cs|Recording the night", "RecordingControl.cs|Written from the night",
+        "RecordingControl.cs|Where recordings are kept", "RecordingControl.cs|The night before", "RecordingControl.cs|Why it said that",
 
         // Venues, which Simple hides as a page.
         "VenuesControl.cs|Venues", "VenuesControl.cs|The venue", "VenuesControl.cs|Race defaults", "VenuesControl.cs|Apply",
@@ -487,6 +501,7 @@ public sealed class SimpleModeTests : IDisposable
         "RcpTrackEditorForm.cs|Rail the edge", "RcpTrackEditorForm.cs|Start from a kit",
         "RcpTrackEditorForm.cs|The lap", "RcpTrackEditorForm.cs|The room it goes in", "RcpTrackEditorForm.cs|Tile size",
         "RcpTrackEditorForm.cs|Track name", "RcpTrackEditorForm.cs|What the club owns",
+        "OverlayEditorForm.cs|The picked graphic", "OverlayEditorForm.cs|The whole layout",
     };
 
     [Fact]

@@ -41,6 +41,10 @@ public sealed class AchievementsControl : UserControl
     /// <summary>Raised after Where you race was changed here - for the club website's badge list to be sent again.</summary>
     public event Action? RacingAtChanged;
     private readonly ProgressStrip _progress = new();
+
+    /// <summary>The driver's set at a glance, over everything else (17 Nov 2026, page jazz-up).</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
+    private static readonly string[] TileCaptions = { "Earned", "Complete", "Rarest earned", "Latest earned" };
     private readonly Panel _scroll = new();
     private readonly BadgeWall _wall = new();
 
@@ -156,8 +160,27 @@ public sealed class AchievementsControl : UserControl
             ShowWhere();
         }
 
-        pickRow.AddLast(null, lblOpenHint, () => lblOpenHint.GetPreferredSize(Size.Empty).Width);
         _pickRow = pickRow;
+
+        // The open hint is the card's line now (17 Nov 2026, page jazz-up):
+        // over the pickers, wrapping to the card, rather than squeezed onto
+        // the end of their line.
+        lblOpenHint.AutoSize = true;
+        lblOpenHint.AutoEllipsis = false;
+        lblOpenHint.Text = "Pick a driver to see what they have earned and what is still to go. " + lblOpenHint.Text;
+
+        var pickCard = new Section("Whose achievements");
+        pickCard.Add(lblOpenHint, gapBelow: UiLayout.RowGap);
+        pickCard.Add(pickRow, gapBelow: 0);
+
+        // --- The tiles: the driver's set at a glance ---
+
+        for (var i = 0; i < _tiles.Length; i++)
+        {
+            _textSize.Wear(_tiles[i].Value, () => AppTheme.TitleFont);
+            _textSize.Wear(_tiles[i].Caption, () => AppTheme.MicroFont);
+            _tiles[i].Set("-", TileCaptions[i]);
+        }
 
         // As tall as the three lines it draws, at the text size in use - see
         // ProgressStrip.HeightFor.
@@ -191,7 +214,8 @@ public sealed class AchievementsControl : UserControl
 
         var page = new FillPage();
 
-        page.Add(pickRow, gapBelow: UiLayout.RowGap);
+        page.Add(new TileStrip(_tiles), gapBelow: UiLayout.RowGap);
+        page.Add(pickCard, gapBelow: UiLayout.RowGap);
         page.Add(_progress, gapBelow: UiLayout.RowGap);
         page.AddFill(_scroll, _ => UiLayout.AtTextSize(WallLeastHeight), gapBelow: 0);
 
@@ -327,7 +351,10 @@ public sealed class AchievementsControl : UserControl
         {
             _progress.Apply("No drivers yet", "Achievements appear once somebody has raced.", 0,
                 AchievementCatalogue.All.Count(b => AchievementCatalogue.IsOffered(b, Where)), string.Empty);
+            _wall.EmptyTitle = "No achievements yet";
+            _wall.EmptyLine = "They land at the end of a race, and every one shows here with what earns it.";
             _wall.Apply(new List<BadgeWall.Entry>());
+            ShowTiles(null, 0, 0);
             LayoutWall();
             return;
         }
@@ -432,10 +459,15 @@ public sealed class AchievementsControl : UserControl
             entries.Add(new BadgeWall.Entry(badge, earned));
         }
 
+        _wall.EmptyTitle = "Nothing earned yet";
+        _wall.EmptyLine = _chkHideLocked.Checked
+            ? "Achievements land at the end of a race. Untick Earned only to see what is still to go."
+            : "Achievements land at the end of a race.";
         _wall.Apply(entries);
         LayoutWall();
 
         var held = driver.Unlocked.Count(u => AchievementCatalogue.Get(u.Id) is not null);
+        ShowTiles(driver, held, total);
 
         var name = _cmbDriver.SelectedItem as string ?? transponder;
 
@@ -455,6 +487,37 @@ public sealed class AchievementsControl : UserControl
 
         _progress.Apply(name, stats, held, total,
             best is null ? string.Empty : $"Best achievement: {best.Name} ({BadgeArt.TierName(best.Tier)})");
+    }
+
+    /// <summary>
+    /// The tiles over the page: how many of the set, how far through it, the
+    /// rarest held and the newest. Dashes with nobody picked, or nothing held.
+    /// </summary>
+    private void ShowTiles(DriverAchievements? driver, int held, int total)
+    {
+        if (driver is null)
+        {
+            for (var i = 0; i < _tiles.Length; i++)
+            {
+                _tiles[i].Set("-", TileCaptions[i]);
+            }
+
+            return;
+        }
+
+        var unlocked = driver.Unlocked
+            .Select(u => (Unlocked: u, Badge: AchievementCatalogue.Get(u.Id)))
+            .Where(x => x.Badge is not null)
+            .ToList();
+
+        var rarest = unlocked.OrderByDescending(x => (int)x.Badge!.Tier).Select(x => x.Badge).FirstOrDefault();
+        var latest = unlocked.OrderByDescending(x => x.Unlocked.UnlockedUtc).Select(x => x.Badge).FirstOrDefault();
+        var percent = total <= 0 ? 0 : (int)Math.Round(100.0 * Math.Min(held, total) / total);
+
+        _tiles[0].Set($"{held} of {total}", TileCaptions[0]);
+        _tiles[1].Set(held == 0 ? "-" : $"{percent}%", TileCaptions[1]);
+        _tiles[2].Set(rarest is null ? "-" : rarest.Name, TileCaptions[2]);
+        _tiles[3].Set(latest is null ? "-" : latest.Name, TileCaptions[3]);
     }
 
     /// <summary>
@@ -662,7 +725,7 @@ public sealed class AchievementsControl : UserControl
         {
             if (_entries.Count == 0)
             {
-                return Px(80);
+                return EmptyHeight;
             }
 
             var columns = ColumnsFor(width);
@@ -745,11 +808,7 @@ public sealed class AchievementsControl : UserControl
 
             if (_entries.Count == 0)
             {
-                using var brush = new SolidBrush(AppTheme.TextMuted);
-                using var centred = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-
-                g.DrawString("Nothing earned yet - achievements land at the end of a race.", AppTheme.BodyFont, brush,
-                    new RectangleF(0, 0, Width, Px(70)), centred);
+                DrawEmpty(g);
                 return;
             }
 
@@ -782,6 +841,71 @@ public sealed class AchievementsControl : UserControl
                 var rows = (int)Math.Ceiling(group.Count() / (double)columns);
                 y += rows * (TileHeight + Gap);
             }
+        }
+
+        /// <summary>The empty wall's heading - "Nothing earned yet", "No drivers yet".</summary>
+        public string EmptyTitle { get; set; } = "Nothing earned yet";
+
+        /// <summary>The line under it, saying what to do next.</summary>
+        public string EmptyLine { get; set; } = "Achievements land at the end of a race.";
+
+        /// <summary>The empty wall's height: the medallion, the heading and the line, with room round them.</summary>
+        private static int EmptyHeight =>
+            Px(24) + Px(88) + Px(14) + AppTheme.HeadingFont.Height + Px(6) + AppTheme.BodyFont.Height * 2 + Px(24);
+
+        /// <summary>
+        /// The empty wall (17 Nov 2026, page jazz-up): an unearned medallion
+        /// outlined in the look's colour, a star in it, a heading and a line
+        /// saying where achievements come from - rather than one grey line.
+        /// </summary>
+        private void DrawEmpty(Graphics g)
+        {
+            var size = Px(88);
+            var top = Px(24);
+            var circle = new RectangleF((Width - size) / 2f, top, size, size);
+
+            using (var fill = new SolidBrush(RosterInk.Blend(AppTheme.Primary, AppTheme.Background, 0.86f)))
+            {
+                g.FillEllipse(fill, circle);
+            }
+
+            using (var ring = new Pen(AppTheme.Primary, Math.Max(2f, Px(3))) { DashStyle = DashStyle.Dash })
+            {
+                var inset = Px(3);
+                g.DrawEllipse(ring, RectangleF.Inflate(circle, -inset, -inset));
+            }
+
+            // A five-pointed star in the middle, in the look's colour.
+            var centre = new PointF(circle.X + size / 2f, circle.Y + size / 2f);
+            var outer = size * 0.28f;
+            var inner = outer * 0.45f;
+            var points = new PointF[10];
+
+            for (var i = 0; i < 10; i++)
+            {
+                var angle = -Math.PI / 2 + i * Math.PI / 5;
+                var r = i % 2 == 0 ? outer : inner;
+                points[i] = new PointF(centre.X + (float)(Math.Cos(angle) * r), centre.Y + (float)(Math.Sin(angle) * r));
+            }
+
+            using (var star = new SolidBrush(AppTheme.Primary))
+            {
+                g.FillPolygon(star, points);
+            }
+
+            var y = (int)circle.Bottom + Px(14);
+            var flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.Top | TextFormatFlags.NoPrefix;
+
+            TextRenderer.DrawText(g, EmptyTitle, AppTheme.HeadingFont,
+                new Rectangle(0, y, Width, AppTheme.HeadingFont.Height), AppTheme.TextDark, flags | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+
+            y += AppTheme.HeadingFont.Height + Px(6);
+
+            var lineWidth = Math.Min(Width - Px(24), Px(640));
+
+            TextRenderer.DrawText(g, EmptyLine, AppTheme.BodyFont,
+                new Rectangle((Width - lineWidth) / 2, y, Math.Max(1, lineWidth), AppTheme.BodyFont.Height * 2 + Px(4)),
+                AppTheme.TextMuted, flags | TextFormatFlags.WordBreak);
         }
 
         private void DrawGroupHeader(Graphics g, AchievementCategory category, int earned, int total, float y)

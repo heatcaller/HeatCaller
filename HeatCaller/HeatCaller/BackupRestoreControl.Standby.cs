@@ -278,6 +278,8 @@ public sealed partial class BackupRestoreControl
         _btnTakeOver.Visible = taken is null && (mirroring || StandbyMirror?.HasCopy == true);
         _btnTakeOver.Enabled = StandbyMirror?.HasCopy == true;
         _btnStandbyAgain.Visible = taken is not null;
+
+        ShowStandbyTile(taken is not null, status);
     }
 
     /// <summary>

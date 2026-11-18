@@ -78,7 +78,7 @@ public sealed partial class BackupRestoreControl : UserControl
     private readonly NumericUpDown _numIntervalDays = new();
     private readonly NumericUpDown _numKeepCount = new();
     private readonly TextBox _txtFolder = new();
-    private readonly ListBox _lstBackups = new();
+    private readonly ListBox _lstBackups = new BackupFileList();
     private readonly Label _lblStatus = new();
     private readonly Button _btnRestoreSelected = new();
     private readonly Button _btnDeleteSelected = new();
@@ -210,13 +210,32 @@ public sealed partial class BackupRestoreControl : UserControl
     {
         var page = new PageStack();
 
-        page.Add(BuildManualCard());
-        page.Add(BuildAutoCard());
-        page.Add(BuildPasswordCard());
-        page.Add(BuildStandbyCard());
-        page.Add(BuildModeCard());
-        page.Add(BuildSupportCard());
-        page.Add(BuildUpdatesCard());
+        // 17 Nov 2026 (page jazz-up): tiles over the cards saying how the
+        // backups stand at a glance, the cloud copies a card of their own,
+        // and the cards two across on a page wide enough for them - the
+        // backups themselves first, then this PC and the app. Every card
+        // one under another, in that order, on a narrow page or at a large
+        // text size (CardColumns).
+        BuildBackupTiles();
+        page.Add(new TileStrip(_backupTiles));
+
+        // Wider than the default before these go two across: the automatic
+        // backups' lines - "Keep the last ... automatic backups (older ones
+        // are deleted)", the folder and Change - each broke over three lines
+        // in half of a 1366-wide window.
+        var backups = new CardColumns { TwoColumnsFrom = () => UiLayout.AtTextSize(1300) };
+        backups.AddLeft(BuildManualCard());
+        backups.AddLeft(BuildAutoCard());
+        backups.AddRight(BuildCloudCard());
+        backups.AddRight(BuildPasswordCard());
+        page.Add(backups);
+
+        var thisPc = new CardColumns();
+        thisPc.AddLeft(BuildStandbyCard());
+        thisPc.AddLeft(BuildModeCard());
+        thisPc.AddRight(BuildSupportCard());
+        thisPc.AddRight(BuildUpdatesCard());
+        page.Add(thisPc);
 
         // The list stays the last card on the page: it grows and shrinks
         // with the backups it holds (SizeList), and nothing sits below it
@@ -559,6 +578,15 @@ public sealed partial class BackupRestoreControl : UserControl
         var lblKeep = new Label { Text = "Keep the last", AutoSize = true };
         var lblKeepSuffix = new Label { Text = "automatic backups (older ones are deleted)", AutoSize = true };
 
+        var lblAutoHint = new Label
+        {
+            Text = "HeatCaller makes these by itself into the folder below, as often as you choose.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _textSize.Wear(lblAutoHint, () => AppTheme.SmallFont);
+
         // --- Folder: [path] [Change...] ---
         var lblFolder = new Label { Text = "Folder:", AutoSize = true };
 
@@ -574,6 +602,37 @@ public sealed partial class BackupRestoreControl : UserControl
         // a line too narrow for both, the button goes under the box
         // (FieldGrid.Inline). See SizeFolderBox.
         var folderRow = FieldGrid.Inline(lblFolder, _txtFolder, _btnChangeFolder);
+
+        // --- Last backup: ... ---
+        _lblLastBackup.AutoSize = true;
+        _lblLastBackup.ForeColor = AppTheme.TextMuted;
+
+        var card = new Section("Automatic backups");
+
+        card.Add(lblAutoHint);
+        card.Add(FieldGrid.Inline(_chkAutoBackupEnabled, lblEvery, _numIntervalDays, lblDays));
+        card.Add(FieldGrid.Inline(lblKeep, _numKeepCount, lblKeepSuffix));
+        card.Add(folderRow);
+        card.Add(_lblLastBackup, gapBelow: 0);
+
+        return card;
+    }
+
+    /// <summary>
+    /// The cloud folders every backup is copied to, and what each of those
+    /// is doing - a card of its own since 17 Nov 2026 (page jazz-up); it
+    /// was the bottom half of the automatic backups' card.
+    /// </summary>
+    private Section BuildCloudCard()
+    {
+        var lblCloudHint = new Label
+        {
+            Text = "A copy of every backup in a cloud folder too, so a lost or broken laptop doesn't take the club's data with it.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _textSize.Wear(lblCloudHint, () => AppTheme.SmallFont);
 
         // --- Also copy every backup to:
         //     [x] Google Drive  [x] iCloud Drive  [x] OneDrive  [Check Again] ---
@@ -632,6 +691,12 @@ public sealed partial class BackupRestoreControl : UserControl
         var cloudLight = new StatusLine(_pnlCloudLight, _lblCloudLight);
 
         _lblCloudDetail.AutoSize = true;
+
+        // The detail can name "the Backup & Restore page": the ampersand is
+        // a character, not a shortcut key, or it shows as "Backup  Restore".
+        _lblCloudDetail.UseMnemonic = false;
+        _lblCloudLight.UseMnemonic = false;
+        _lblCloudStatus.UseMnemonic = false;
         _textSize.Wear(_lblCloudDetail, () => AppTheme.SmallFont);
 
         // Two lines kept for the detail, so the wording changing with what
@@ -649,21 +714,14 @@ public sealed partial class BackupRestoreControl : UserControl
         _textSize.ReserveLines(_lblCloudStatus, Enum.GetValues<CloudService>().Length + 1);
         RefreshCloudStatus();
 
-        // --- Last backup: ... ---
-        _lblLastBackup.AutoSize = true;
-        _lblLastBackup.ForeColor = AppTheme.TextMuted;
+        var card = new Section("Cloud copies");
 
-        var card = new Section("Automatic backups");
-
-        card.Add(FieldGrid.Inline(_chkAutoBackupEnabled, lblEvery, _numIntervalDays, lblDays));
-        card.Add(FieldGrid.Inline(lblKeep, _numKeepCount, lblKeepSuffix));
-        card.Add(folderRow);
+        card.Add(lblCloudHint);
         card.Add(lblCloud, gapBelow: UiLayout.HintGap);
         card.Add(FieldGrid.Inline(cloudRow.ToArray()), gapBelow: UiLayout.HintGap);
         card.Add(cloudLight, gapBelow: UiLayout.HintGap);
         card.Add(_lblCloudDetail, gapBelow: UiLayout.HintGap);
-        card.Add(_lblCloudStatus);
-        card.Add(_lblLastBackup, gapBelow: 0);
+        card.Add(_lblCloudStatus, gapBelow: 0);
 
         return card;
     }
@@ -749,6 +807,19 @@ public sealed partial class BackupRestoreControl : UserControl
             old?.Dispose();
         });
 
+        // The rows are cards drawn in the theme's faces now (BackupFileList),
+        // as tall as those at the text size in use.
+        _textSize.Keep(BackupRows.Remeasure);
+
+        var lblListHint = new Label
+        {
+            Text = "Every backup in the folder above, newest first. Pick one to restore this PC to it, or to delete it.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _textSize.Wear(lblListHint, () => AppTheme.SmallFont);
+
         // Off, or the list quietly rounds its own height down to a whole
         // number of rows and leaves a gap under it that nothing explains.
         _lstBackups.IntegralHeight = false;
@@ -763,6 +834,7 @@ public sealed partial class BackupRestoreControl : UserControl
 
         var card = new Section("Existing backups");
 
+        card.Add(lblListHint);
         card.Add(_lstBackups);
         card.Add(new ButtonBar().With(_btnRestoreSelected, _btnDeleteSelected));
         card.Add(_lblStatus, gapBelow: 0);
@@ -855,7 +927,8 @@ public sealed partial class BackupRestoreControl : UserControl
         // but a list that has not measured itself yet can report nothing -
         // hence the font as the floor.
         var rowHeight = Math.Max(_lstBackups.ItemHeight, _lstBackups.Font.Height);
-        var rows = Math.Clamp(_lstBackups.Items.Count, MinBackupRows, MaxBackupRows);
+        // An empty folder's list holds the one line saying so (BackupFileList), in two rows rather than four.
+        var rows = _lstBackups.Items.Count == 0 ? 2 : Math.Clamp(_lstBackups.Items.Count, MinBackupRows, MaxBackupRows);
         var height = rowHeight * rows + 4;
 
         // Only when it changed: a new height lays the card out again.
@@ -1044,6 +1117,8 @@ public sealed partial class BackupRestoreControl : UserControl
 
         lines.Add("Copies upload whenever the laptop is online. Set a backup password below to include your keys, locked.");
         _lblCloudStatus.Text = string.Join(Environment.NewLine, lines);
+
+        ShowBackupTiles();
     }
 
     /// <summary>
@@ -1605,6 +1680,7 @@ public sealed partial class BackupRestoreControl : UserControl
         }
 
         SizeList();
+        ShowBackupTiles();
     }
 
     private void RefreshLastBackupLabel()
@@ -1612,6 +1688,8 @@ public sealed partial class BackupRestoreControl : UserControl
         _lblLastBackup.Text = _settings.LastAutoBackupUtc is { } last
             ? $"Last backup: {last.ToLocalTime():yyyy-MM-dd} {AppTime.TimeOfDay(last.ToLocalTime())}"
             : "Last backup: never";
+
+        ShowBackupTiles();
     }
 
     private void OpenFolderInExplorer(string folder)
@@ -1642,8 +1720,17 @@ public sealed partial class BackupRestoreControl : UserControl
     /// March backup brought back on a USB stick showed today's date while
     /// sorting below October's.
     /// </summary>
-    private sealed record BackupListItem(FileInfo File)
+    private sealed record BackupListItem(FileInfo File) : BackupFileList.IBackupRow
     {
+        public DateTime Taken => BackupService.BackupTime(File);
+
+        public long Bytes => File.Length;
+
+        public string FileName => File.Name;
+
+        /// <summary>Made by itself: BackupService names those HeatCaller-AutoBackup-..., the ones made by hand HeatCaller-Backup-....</summary>
+        public bool Automatic => File.Name.StartsWith("HeatCaller-AutoBackup-", StringComparison.OrdinalIgnoreCase);
+
         public override string ToString() =>
             $"{BackupService.BackupTime(File):yyyy-MM-dd} {AppTime.TimeOfDay(BackupService.BackupTime(File))}   {File.Length / 1024.0:0.#} KB   {File.Name}";
     }

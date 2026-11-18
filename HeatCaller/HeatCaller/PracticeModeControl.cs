@@ -175,6 +175,14 @@ public sealed class PracticeModeControl : UserControl
 
     private readonly Label _lblIntro = new();
 
+    /// <summary>
+    /// The session at a glance (page jazz-up, 17 Nov 2026): running or not,
+    /// drivers on the board, laps counted and the quickest of them - two
+    /// rows of two under the clock, in the room that was blank there.
+    /// </summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
+    private static readonly string[] TileCaptions = { "Session", "Drivers", "Laps", "Best lap" };
+
     public PracticeModeControl(RaceTiming race, ProfileStore profiles, SessionHistoryStore history, TrackLayoutStore trackLayouts, AppSettings settings,
         GhostStore ghostStore,
         AnnouncementService? announcer = null, DayScheduleStore? daySchedule = null, SponsorStore? sponsors = null,
@@ -215,6 +223,9 @@ public sealed class PracticeModeControl : UserControl
         RebuildColumns();
 
         RefreshGhosts();
+
+        // Idle, from the start, rather than dashes until the first refresh.
+        ShowTiles();
 
         _refreshTimer.Tick += (_, _) =>
         {
@@ -422,6 +433,14 @@ public sealed class PracticeModeControl : UserControl
         switches.Add(null, _chkAutoSave);
         switches.Add(null, _chkAutoStartOnGate);
 
+        // The buttons and the switches that go with them, in a card of their
+        // own (page jazz-up, 17 Nov 2026) - bare on the page until then.
+        var run = new Section("Run practice");
+
+        run.Add(Hint("Start opens the track: every transponder that crosses the line is timed until you press Stop."));
+        run.Add(new ButtonBar().With(btnStart, btnStop, btnClear, btnSave));
+        run.Add(switches, gapBelow: 0);
+
         // --- Setup ---
 
         _cmbTrack.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -479,6 +498,7 @@ public sealed class PracticeModeControl : UserControl
 
         var setup = new Section("Setup");
 
+        setup.Add(Hint("Where practice is run, how long it goes on, and how the table's averages are worked out."));
         setup.Add(fields, gapBelow: 0);
 
         // --- Ghost cars ---
@@ -538,6 +558,7 @@ public sealed class PracticeModeControl : UserControl
 
         _ghostsCard = new Section("Ghost cars");
 
+        _ghostsCard.Add(Hint("Virtual cars to chase when you're out alone. Tick the ones to run."));
         _ghostsCard.Add(_chkGhosts, stretch: false);
         _ghostsCard.AddFill(_clbGhosts, () => GhostListItemHeight() * GhostListLeastRows + 4);
         _ghostsCard.Add(_lblGhostHint);
@@ -589,19 +610,30 @@ public sealed class PracticeModeControl : UserControl
             }
         };
 
-        var top = new Beside(sideLeastWidth: ClockWidth)
+        var top = new Beside(TilesColumnWidth)
         {
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
         };
 
         top.Add(_lblIntro);
-        top.Add(new ButtonBar().With(btnStart, btnStop, btnClear, btnSave));
-        top.Add(switches);
+        top.Add(run);
         top.Add(cards, gapBelow: 0);
 
+        // The tiles under the clock, two to a row - in the room that was
+        // blank there, so they cost the table none of its height. The column
+        // widens with the text size (TilesColumnWidth) so a caption is whole.
+        for (var i = 0; i < _tiles.Length; i++)
+        {
+            _textSize.Wear(_tiles[i].Value, () => AppTheme.TitleFont);
+            _textSize.Wear(_tiles[i].Caption, () => AppTheme.MicroFont);
+            _tiles[i].Set("-", TileCaptions[i]);
+        }
+
         top.AddSide(_clock);
-        top.AddSide(_btnBigScreen, gapBelow: 0);
+        top.AddSide(_btnBigScreen);
+        top.AddSideMeasured(new TileStrip(new[] { _tiles[0], _tiles[1] }));
+        top.AddSideMeasured(new TileStrip(new[] { _tiles[2], _tiles[3] }), gapBelow: 0);
 
         // --- This session ---
 
@@ -613,6 +645,10 @@ public sealed class PracticeModeControl : UserControl
         _lblStatus.ForeColor = AppTheme.TextMuted;
         _textSize.Wear(_lblStatus, () => AppTheme.BodyFont);
         _textSize.ReserveLines(_lblStatus, 1);
+
+        // The tiles follow the status line, which every start, stop and
+        // clear rewrites - see ShowTiles.
+        _lblStatus.TextChanged += (_, _) => ShowTiles();
 
         _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
@@ -656,6 +692,11 @@ public sealed class PracticeModeControl : UserControl
                 RefreshGrid();
             }
         };
+
+        // No laps yet: what fills the table, in the table itself.
+        EmptyNote.For(_grid, () => _active
+            ? "Waiting for the first lap - every car that crosses the line shows here, quickest first."
+            : "No laps yet. Press Start Practice, or tick \"Start automatically when a car crosses the gate\", and cars show here as they cross the line.");
 
         var session = new Section("This session");
 
@@ -1546,6 +1587,65 @@ public sealed class PracticeModeControl : UserControl
         {
             _lblStatus.Text = $"Practice running - {standings.Count} driver{(standings.Count == 1 ? "" : "s")} on track";
         }
+
+        ShowTiles(standings);
+    }
+
+    /// <summary>A card's line saying what it does: muted, in the small face, at the text size in use.</summary>
+    private Label Hint(string text)
+    {
+        var label = new Label
+        {
+            Text = text,
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _textSize.Wear(label, () => AppTheme.SmallFont);
+        return label;
+    }
+
+    /// <summary>
+    /// The column down the right: the clock's width, or wider at a large
+    /// text size, so two tiles side by side under it keep their captions
+    /// whole - 230px a tile pair at the normal size, at the size in use.
+    /// </summary>
+    private static int TilesColumnWidth() => Math.Max(ClockWidth, UiLayout.AtTextSize(TilesPairWidth));
+
+    /// <summary>Two tiles side by side under the clock, at the normal text size - see TilesColumnWidth.</summary>
+    private const int TilesPairWidth = 230;
+
+    /// <summary>The tiles, from the board as it stands - see the overload.</summary>
+    private void ShowTiles()
+    {
+        if (IsDisposed || Disposing)
+        {
+            return;
+        }
+
+        ShowTiles(_race.GetOrderedStandings().Where(s => s.LapTimesMs.Count > 0).ToList());
+    }
+
+    /// <summary>
+    /// The tiles under the clock: Running or Idle (Stopped once a practice
+    /// has laps on the board), the drivers with a lap, the laps they have
+    /// done between them, and the quickest of those laps - a ghost's left
+    /// out while a real car is out, as the table's gap column does
+    /// (Ghosts.FastestLapMs). Dashes with nothing on the board.
+    /// </summary>
+    private void ShowTiles(IReadOnlyList<RacerStanding> standings)
+    {
+        _tiles[0].Set(_active ? "Running" : standings.Count > 0 ? "Stopped" : "Idle", TileCaptions[0]);
+        _tiles[1].Set(standings.Count > 0 ? standings.Count.ToString() : "-", TileCaptions[1]);
+
+        var laps = standings.Sum(s => s.LapTimesMs.Count);
+        _tiles[2].Set(laps > 0 ? laps.ToString() : "-", TileCaptions[2]);
+
+        var best = standings.Count > 0 ? Ghosts.FastestLapMs(standings) : 0;
+        _tiles[3].Set(best > 0 ? $"{best / 1000.0:0.000}s" : "-", TileCaptions[3]);
+
+        // The empty table's note says something else once practice is on.
+        _grid.Invalidate();
     }
 
     /// <summary>Call when this page becomes visible - track layouts can change elsewhere while it's not active.</summary>

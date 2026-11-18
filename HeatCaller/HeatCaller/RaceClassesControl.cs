@@ -45,6 +45,10 @@ public sealed class RaceClassesControl : UserControl
     /// <summary>The page the rest is laid out on - see LeastHeight.</summary>
     private readonly FillPage _page = new();
 
+    /// <summary>The classes at a glance, over the grid - see ShowTiles.</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
+    private static readonly string[] TileCaptions = { "Classes", "With tech checks", "With own fees", "Main size" };
+
     public RaceClassesControl(RaceClassStore store, UndoService? undo = null, HandicapStore? handicaps = null)
     {
         _store = store;
@@ -132,6 +136,13 @@ public sealed class RaceClassesControl : UserControl
 
         _grid.SelectionChanged += (_, _) => UpdateButtons();
 
+        // The class's colour as a swatch by its name, its tech checks as a
+        // chip, and a word in the empty grid.
+        _grid.CellPainting += PaintClassCell;
+        GridHints.ShowWhenEmpty(_grid, () => _store.All.Count == 0
+            ? ("Add your first class", "Add a Class... sets its qualifying, mains, race format and tech checks.")
+            : null);
+
         _btnAdd.Click += (_, _) => AddNew();
         _btnEdit.Click += (_, _) => EditSelected();
         _btnPreset.Click += (_, _) => ApplyPresetToSelected();
@@ -141,11 +152,26 @@ public sealed class RaceClassesControl : UserControl
         // count under it says how many.
         var list = new Section();
 
-        list.Add(_lblSummary);
+        // The count in the bold face, as a card's heading, and what to do with the list under it.
+        _textSize.Wear(_lblSummary, () => AppTheme.BoldFont);
+        _lblSummary.ForeColor = AppTheme.TextDark;
+
+        list.Add(_lblSummary, gapBelow: UiLayout.HintGap);
+        list.Add(GridHints.Hint(_textSize, "Double-click a class to edit its rules. Sanctioning Preset sets the one picked to a rulebook's."));
         list.AddFill(_grid, LeastGridHeight);
         list.Add(new ButtonBar().With(_btnAdd, _btnEdit, _btnPreset, _btnDelete), gapBelow: 0);
 
+        // --- The tiles: the classes at a glance ---
+
+        for (var i = 0; i < _tiles.Length; i++)
+        {
+            _textSize.Wear(_tiles[i].Value, () => AppTheme.TitleFont);
+            _textSize.Wear(_tiles[i].Caption, () => AppTheme.MicroFont);
+            _tiles[i].Set("-", TileCaptions[i]);
+        }
+
         _page.Add(lblIntro);
+        _page.Add(new TileStrip(_tiles));
         _page.AddFill(list, list.LeastHeight, gapBelow: 0);
 
         Controls.Add(_page);
@@ -190,6 +216,12 @@ public sealed class RaceClassesControl : UserControl
             row.Cells["class"].Style.ForeColor = OnPageBackground(raceClass.Colour);
             row.Cells["class"].Style.Font = AppTheme.BoldFont;
 
+            // The day's fee is the usual; a class's own stands out from it.
+            if (DeskMoney.ClassFeeWords(raceClass).Length == 0)
+            {
+                row.Cells["fee"].Style.ForeColor = AppTheme.TextMuted;
+            }
+
             if (raceClass.Id == selectedId)
             {
                 _grid.CurrentCell = row.Cells[0];
@@ -204,7 +236,98 @@ public sealed class RaceClassesControl : UserControl
             var n => $"{n} classes.",
         };
 
+        ShowTiles();
         UpdateButtons();
+    }
+
+    /// <summary>
+    /// The tiles over the grid: how many classes, how many have a tech
+    /// checklist and a fee of their own, and how big their mains are - one
+    /// size, or the smallest to the largest. Dashes with no classes.
+    /// </summary>
+    private void ShowTiles()
+    {
+        var all = _store.All;
+
+        if (all.Count == 0)
+        {
+            for (var i = 0; i < _tiles.Length; i++)
+            {
+                _tiles[i].Set("-", TileCaptions[i]);
+            }
+
+            return;
+        }
+
+        var smallest = all.Min(c => c.MainSize);
+        var largest = all.Max(c => c.MainSize);
+
+        _tiles[0].Set(all.Count.ToString(), TileCaptions[0]);
+        _tiles[1].Set(all.Count(c => c.TechCheckItems.Count > 0).ToString(), TileCaptions[1]);
+        _tiles[2].Set(all.Count(c => DeskMoney.ClassFeeWords(c).Length > 0).ToString(), TileCaptions[2]);
+        _tiles[3].Set(smallest == largest ? $"{largest} per main" : $"{smallest}-{largest} per main", TileCaptions[3]);
+    }
+
+    /// <summary>
+    /// The Class column with the class's colour as a round swatch before
+    /// its name - the colour its heat sheets are banded with - and the Tech
+    /// column's count as a chip. Everything else is the grid's own.
+    /// </summary>
+    private void PaintClassCell(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.Graphics is not { } g || e.CellStyle is not { } style)
+        {
+            return;
+        }
+
+        var column = _grid.Columns[e.ColumnIndex].Name;
+
+        if (column == "tech")
+        {
+            if (e.FormattedValue is string count && int.TryParse(count, out var items))
+            {
+                GridHints.PaintChip(e, Plural.Of(items, "check"), AppTheme.Primary, dot: false);
+            }
+
+            return;
+        }
+
+        if (column != "class" || _grid.Rows[e.RowIndex].Tag is not string id || _store.Get(id) is not { } raceClass)
+        {
+            return;
+        }
+
+        var selected = (e.State & DataGridViewElementStates.Selected) != 0;
+        e.PaintBackground(e.CellBounds, selected);
+
+        var smoothing = g.SmoothingMode;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+        var side = Math.Max(UiLayout.AtDpi(8), AppTheme.SmallFont.Height - UiLayout.AtDpi(4));
+        var left = e.CellBounds.Left + style.Padding.Left + UiLayout.AtDpi(6);
+        var swatch = new RectangleF(left, e.CellBounds.Top + (e.CellBounds.Height - side) / 2f, side, side);
+        var colour = OnPageBackground(raceClass.Colour);
+
+        using (var fill = new SolidBrush(colour))
+        {
+            g.FillEllipse(fill, swatch);
+        }
+
+        using (var ring = new Pen(RosterInk.Blend(colour, AppTheme.TextDark, 0.35f), Math.Max(1f, UiLayout.AtDpi(1))))
+        {
+            g.DrawEllipse(ring, swatch);
+        }
+
+        g.SmoothingMode = smoothing;
+
+        var textLeft = (int)swatch.Right + UiLayout.AtDpi(8);
+        var text = new Rectangle(textLeft, e.CellBounds.Top, Math.Max(1, e.CellBounds.Right - textLeft - UiLayout.AtDpi(4)), e.CellBounds.Height);
+
+        TextRenderer.DrawText(g, e.FormattedValue as string ?? string.Empty, style.Font ?? AppTheme.BoldFont, text,
+            selected ? style.SelectionForeColor : style.ForeColor,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+
+        e.Handled = true;
     }
 
     /// <summary>

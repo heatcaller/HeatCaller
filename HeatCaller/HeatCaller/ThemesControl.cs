@@ -46,6 +46,10 @@ public sealed class ThemesControl : UserControl
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
+    /// <summary>The soundscapes at a glance, over the cards: the one applied last, and how many there are, built in and the club's own.</summary>
+    private StatTile[] _tiles = Array.Empty<StatTile>();
+    private static readonly string[] TileCaptions = { "Last applied", "Soundscapes", "Built in", "Your own" };
+
     /// <summary>
     /// The cards' labels that wear a face of their own, and the face - kept
     /// at the text size in use by FaceCards. Forgotten, with the cards, each
@@ -287,9 +291,12 @@ public sealed class ThemesControl : UserControl
         // The cards' own faces at the text size in use - see FaceCards.
         _textSize.Keep(FaceCards);
 
+        _tiles = SoundsPagePieces.Tiles(_textSize, TileCaptions);
+
         var page = new FillPage();
 
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.Add(new TileStrip(_tiles));
 
         // Simple mode (1 Nov 2026) picks, previews and applies; saving a new
         // soundscape, the voice in previews and the wizards' question are
@@ -342,6 +349,26 @@ public sealed class ThemesControl : UserControl
         // flow panel left out of what it scrolled.
         _cards.ResumeLayout();
         AppTheme.ApplyRecursively(_cards);
+
+        ShowTiles(activeId);
+    }
+
+    /// <summary>The tiles over the cards: the soundscape applied last ("-" for none, or lap times only), and the counts.</summary>
+    private void ShowTiles(string? activeId)
+    {
+        if (_tiles.Length < TileCaptions.Length)
+        {
+            return;
+        }
+
+        var all = _themeStore.All;
+        var active = activeId is null ? null : all.FirstOrDefault(t => t.Id == activeId);
+        var builtIn = all.Count(t => t.IsBuiltIn);
+
+        SoundsPagePieces.Show(_tiles[0], active?.Name ?? "-", TileCaptions[0], active is null ? AppTheme.TextMuted : AppTheme.Primary);
+        SoundsPagePieces.Show(_tiles[1], all.Count.ToString(), TileCaptions[1]);
+        SoundsPagePieces.Show(_tiles[2], builtIn.ToString(), TileCaptions[2]);
+        SoundsPagePieces.Show(_tiles[3], (all.Count - builtIn).ToString(), TileCaptions[3]);
     }
 
     /// <summary>

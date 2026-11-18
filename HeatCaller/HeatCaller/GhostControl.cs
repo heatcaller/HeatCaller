@@ -12,8 +12,22 @@ public sealed class GhostControl : UserControl
 
     private readonly CheckBox _chkEnabled = new ThemedCheckBox();
     private readonly CheckBox _chkAnnounce = new ThemedCheckBox();
-    private readonly DataGridView _grid = new();
+    /// <summary>The ghosts, one card each (GhostList, 17 Nov 2026) - a six-column grid until then. Several can be picked at once, as the grid allowed.</summary>
+    private readonly GhostList _list = new();
     private readonly Label _lblStatus = new();
+
+    /// <summary>ON or OFF beside the switches, for ghost racing as a whole.</summary>
+    private readonly StateChip _chipEnabled = new();
+
+    /// <summary>The garage at a glance, over the cards: how many, how many will run, the quickest set pace, and how steady they are.</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
+    private static readonly string[] TileCaptions = { "Ghosts", "Will run", "Quickest set lap", "Consistency" };
+
+    /// <summary>Quick Rival's button, in the card down the right, which the column's width is measured from.</summary>
+    private Button? _btnQuickRival;
+
+    /// <summary>The Quick Rival column at the normal text size.</summary>
+    private const int QuickRivalWidth = 300;
 
     /// <summary>
     /// Set while RefreshAll copies the stored switches back onto the two
@@ -25,7 +39,7 @@ public sealed class GhostControl : UserControl
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
-    /// <summary>The fewest ghosts the list shows under its headings before the page scrolls instead.</summary>
+    /// <summary>The fewest ghosts the list shows before the page scrolls instead.</summary>
     private const int GridLeastRows = 3;
 
     public GhostControl(GhostStore store, ProfileStore profiles, SessionHistoryStore history, UndoService undo)
@@ -66,15 +80,18 @@ public sealed class GhostControl : UserControl
     }
 
     /// <summary>
-    /// The intro and the two switches along a line, then one card: the
-    /// ghosts taking the height that is left, their buttons, the hint about
-    /// Quick Rival and the status line. On the layout pieces
-    /// (LayoutPieces.cs), so nothing is placed by hand.
+    /// The intro; the garage at a glance in four tiles; then the switches
+    /// in a card of their own with ON or OFF beside them, and Quick Rival
+    /// in a card down the right, the two level; and under them the ghosts'
+    /// card, its list taking the height that is left, with their buttons and
+    /// the status line. On the layout pieces (LayoutPieces.cs), so nothing is
+    /// placed by hand.
     ///
-    /// It used to be placed in pixels: the second switch at x=240 whatever
-    /// the first one's caption came to at the text size in use, the grid
-    /// 230px tall with the buttons anchored to the bottom of the page under
-    /// it, and a 900x480 floor the page kept however small its window.
+    /// Page jazz-up, 17 Nov 2026: the switches sat bare on the page and the
+    /// ghosts in a six-column grid. Before that it was placed in pixels: the
+    /// second switch at x=240 whatever the first one's caption came to, the
+    /// grid 230px tall, and a 900x480 floor the page kept however small its
+    /// window.
     /// </summary>
     private void BuildLayout()
     {
@@ -86,6 +103,17 @@ public sealed class GhostControl : UserControl
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
+
+        // --- The tiles: the garage at a glance ---
+
+        for (var i = 0; i < _tiles.Length; i++)
+        {
+            _textSize.Wear(_tiles[i].Value, () => AppTheme.TitleFont);
+            _textSize.Wear(_tiles[i].Caption, () => AppTheme.MicroFont);
+            _tiles[i].Set("-", TileCaptions[i]);
+        }
+
+        // --- Ghost racing: the switches ---
 
         _chkEnabled.Text = "Enable ghost cars";
         _chkEnabled.AutoSize = true;
@@ -118,36 +146,61 @@ public sealed class GhostControl : UserControl
             _store.Save();
         };
 
-        // Side by side, and one under the other when the line is too narrow
-        // for both (FieldRow).
+        _textSize.Wear(_chipEnabled, () => AppTheme.MicroFont);
+
+        // ON or OFF, then the two switches - side by side, and one under the
+        // other when the line is too narrow for all three (FieldRow).
         var switches = new FieldRow();
 
+        switches.Add(null, _chipEnabled);
         switches.Add(null, _chkEnabled);
         switches.Add(null, _chkAnnounce);
 
+        var racing = new Section("Ghost racing");
+
+        racing.Add(Hint("On, the ghosts marked ON below join races and practice, lapping through the timing like real cars. "
+            + "Off, they stay in the garage - which you can still set up either way."));
+        racing.Add(switches, gapBelow: 0);
+
+        // --- Quick Rival, down the right ---
+
+        _btnQuickRival = new Button { Text = "Quick Rival" };
+        _btnQuickRival.Click += (_, _) => AddQuickRival();
+
+        var quick = new Section("Quick Rival");
+
+        quick.Add(Hint("Quick Rival adds a ghost set to 98% of your own best lap - something you can't quite beat yet."));
+        quick.Add(new ButtonBar().With(_btnQuickRival), gapBelow: 0);
+
+        // The two level: the switches' card takes the band's height, and the
+        // Quick Rival card the column's.
+        var top = new Beside(QuickRivalColumnWidth)
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
+
+        top.AddFill(racing, racing.LeastHeight);
+        top.AddSideFill(quick, quick.LeastHeight, gapBelow: 0);
+
         // --- The garage ---
 
-        _grid.ReadOnly = true;
-        _grid.AllowUserToAddRows = false;
-        _grid.RowHeadersVisible = false;
+        // Several at once, as the grid allowed: toggling or deleting a few
+        // ghosts together is the normal case when you keep a few and swap
+        // between them (GhostList is MultiExtended).
+        _list.DoubleClick += (_, _) =>
+        {
+            if (_list.IndexFromPoint(_list.PointToClient(Cursor.Position)) >= 0)
+            {
+                EditGhost(Selected());
+            }
+        };
 
-        // Multi-select: toggling or deleting several ghosts at once is the
-        // normal case when you keep a few and swap between them.
-        _grid.MultiSelect = true;
-        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-        _grid.Columns.AddRange(
-            new DataGridViewTextBoxColumn { Name = "on", HeaderText = "On", FillWeight = 24 },
-            new DataGridViewTextBoxColumn { Name = "name", HeaderText = "Name", FillWeight = 70 },
-            new DataGridViewTextBoxColumn { Name = "car", HeaderText = "Car", FillWeight = 70 },
-            new DataGridViewTextBoxColumn { Name = "pace", HeaderText = "Pace from", FillWeight = 95 },
-            new DataGridViewTextBoxColumn { Name = "adjust", HeaderText = "Adjust", FillWeight = 40 },
-            new DataGridViewTextBoxColumn { Name = "consistency", HeaderText = "Consistency", FillWeight = 60 }
-        );
-        _grid.CellDoubleClick += (_, args) => { if (args.RowIndex >= 0) { EditGhost(Selected()); } };
+        _textSize.Keep(_list.Remeasure);
 
-        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
-        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
+        // Nothing in the garage yet: what to press, in the list itself.
+        EmptyNote.For(_list, () => "No ghosts yet.\nPress Quick Rival for one set just under a driver's best lap, "
+            + "or Add Ghost... to build your own from a fixed lap time, a record or a driver's pace.");
 
         var btnAdd = new Button { Text = "Add Ghost..." };
         btnAdd.Click += (_, _) => EditGhost(null);
@@ -161,38 +214,49 @@ public sealed class GhostControl : UserControl
         var btnDelete = new Button { Text = "Delete" };
         btnDelete.Click += (_, _) => DeleteSelected();
 
-        var btnQuickRival = new Button { Text = "Quick Rival" };
-        btnQuickRival.Click += (_, _) => AddQuickRival();
-
-        var lblQuickHint = new Label
-        {
-            Text = "Quick Rival adds a ghost set to 98% of your own best lap - something you can't quite beat yet.",
-            AutoSize = true,
-            ForeColor = AppTheme.TextMuted,
-        };
-
-        _textSize.Wear(lblQuickHint, () => AppTheme.SmallFont);
-
         // What the list comes to.
         _lblStatus.AutoSize = true;
         _lblStatus.ForeColor = AppTheme.TextMuted;
 
         var ghosts = new Section("Your ghosts");
 
-        ghosts.AddFill(_grid, () => _grid.ColumnHeadersHeight + GridLeastRows * _grid.RowTemplate.Height);
-        ghosts.Add(new ButtonBar().With(btnAdd, btnEdit, btnToggle, btnDelete, btnQuickRival), gapBelow: UiLayout.HintGap);
-        ghosts.Add(lblQuickHint);
+        ghosts.Add(Hint("Double-click a ghost to edit it. Pick several (Ctrl or Shift) to switch them on or off, or delete them, together."));
+        ghosts.AddFill(_list, () => GridLeastRows * _list.ItemHeight + 4);
+        ghosts.Add(new ButtonBar().With(btnAdd, btnEdit, btnToggle, btnDelete));
         ghosts.Add(_lblStatus, gapBelow: 0);
 
         var page = new FillPage();
 
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.Add(switches);
+        page.Add(new TileStrip(_tiles));
+        page.Add(top);
         page.AddFill(ghosts, ghosts.LeastHeight, gapBelow: 0);
 
         Controls.Add(page);
 
         UpdateEnabledState();
+    }
+
+    /// <summary>A card's line saying what it does: muted, in the small face, at the text size in use.</summary>
+    private Label Hint(string text)
+    {
+        var label = new Label
+        {
+            Text = text,
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _textSize.Wear(label, () => AppTheme.SmallFont);
+        return label;
+    }
+
+    /// <summary>The Quick Rival column: 300px at the normal text size, at the size in use, and never narrower than its button needs.</summary>
+    private int QuickRivalColumnWidth()
+    {
+        var button = _btnQuickRival is null ? 0 : _btnQuickRival.GetPreferredSize(Size.Empty).Width + _btnQuickRival.Margin.Horizontal;
+
+        return Math.Max(UiLayout.AtTextSize(QuickRivalWidth), button + Section.Inset.Horizontal);
     }
 
     /// <summary>
@@ -227,11 +291,14 @@ public sealed class GhostControl : UserControl
     private void UpdateEnabledState()
     {
         _chkAnnounce.Enabled = _chkEnabled.Checked;
+        _chipEnabled.Show(_chkEnabled.Checked ? "ON" : "OFF", _chkEnabled.Checked);
 
         // The garage stays usable when ghosts are off - the same deadlock
         // the ambience page had, where you couldn't set content up without
         // first enabling the feature that needs it.
-        _grid.Enabled = true;
+        _list.Enabled = true;
+
+        ShowTiles();
     }
 
     private GhostCar? Selected() => SelectedMany().FirstOrDefault();
@@ -244,16 +311,16 @@ public sealed class GhostControl : UserControl
     /// </summary>
     private List<GhostCar> SelectedMany()
     {
-        var ids = _grid.SelectedRows
-            .Cast<DataGridViewRow>()
-            .OrderBy(r => r.Index)
-            .Select(r => r.Tag as string)
+        var ids = _list.SelectedIndices
+            .Cast<int>()
+            .OrderBy(i => i)
+            .Select(i => (_list.Items[i] as GhostRow)?.Id)
             .Where(id => id is not null)
             .ToList();
 
-        if (ids.Count == 0 && _grid.CurrentRow?.Tag is string currentId)
+        if (ids.Count == 0 && _list.SelectedItem is GhostRow current)
         {
-            ids.Add(currentId);
+            ids.Add(current.Id);
         }
 
         return ids
@@ -265,31 +332,35 @@ public sealed class GhostControl : UserControl
 
     private void RefreshGrid()
     {
-        var selectedId = _grid.CurrentRow?.Tag as string;
-        _grid.Rows.Clear();
+        // Every ghost picked before is picked again, and the list kept where
+        // it was scrolled to.
+        var selectedIds = _list.SelectedItems.OfType<GhostRow>().Select(r => r.Id).ToHashSet();
+        var top = _list.TopIndex;
 
-        foreach (var ghost in _store.Current.Ghosts)
+        _list.BeginUpdate();
+
+        try
         {
-            var row = _grid.Rows.Add(
-                ghost.Enabled ? "Yes" : "No",
-                ghost.Name,
-                string.IsNullOrWhiteSpace(ghost.CarModel) ? "-" : ghost.CarModel,
-                DescribePace(ghost),
-                ghost.PacePercent == 100 ? "-" : $"{ghost.PacePercent}%",
-                ghost.Consistency.ToString());
+            _list.Items.Clear();
 
-            _grid.Rows[row].Tag = ghost.Id;
-
-            if (!ghost.Enabled)
+            foreach (var ghost in _store.Current.Ghosts)
             {
-                _grid.Rows[row].DefaultCellStyle.ForeColor = AppTheme.TextMuted;
+                var index = _list.Items.Add(new GhostRow(ghost, LineFor(ghost)));
+
+                if (selectedIds.Contains(ghost.Id))
+                {
+                    _list.SetSelected(index, true);
+                }
             }
 
-            if (selectedId == ghost.Id)
+            if (top > 0 && top < _list.Items.Count)
             {
-                _grid.Rows[row].Selected = true;
-                _grid.CurrentCell = _grid.Rows[row].Cells[0];
+                _list.TopIndex = top;
             }
+        }
+        finally
+        {
+            _list.EndUpdate();
         }
 
         var active = _store.Current.Ghosts.Count(g => g.Enabled);
@@ -298,6 +369,84 @@ public sealed class GhostControl : UserControl
             ? "No ghosts yet - press Quick Rival for the fastest way to get one."
             : $"{active} of {Plural.Of(_store.Current.Ghosts.Count, "ghost")} will run.";
         _lblStatus.ForeColor = AppTheme.TextMuted;
+
+        ShowTiles();
+    }
+
+    /// <summary>A ghost's card in the list - see GhostList.</summary>
+    private sealed record GhostRow(GhostCar Ghost, string Line) : GhostList.IGhostRow
+    {
+        public string Id => Ghost.Id;
+        public string Name => Ghost.Name;
+        public bool On => Ghost.Enabled;
+        public override string ToString() => Ghost.Name;
+    }
+
+    /// <summary>The line under a ghost's name: its car, where its pace comes from, how far it is adjusted, and how steady it is - what the grid's columns said.</summary>
+    private string LineFor(GhostCar ghost)
+    {
+        var parts = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(ghost.CarModel))
+        {
+            parts.Add(ghost.CarModel.Trim());
+        }
+
+        parts.Add("Pace from " + DescribePace(ghost));
+
+        if (ghost.PacePercent != 100)
+        {
+            parts.Add($"{ghost.PacePercent}%");
+        }
+
+        parts.Add(ghost.Consistency.ToString());
+
+        return string.Join("  ·  ", parts);
+    }
+
+    /// <summary>
+    /// The tiles: how many ghosts, how many will run ("Off" with ghost
+    /// racing switched off), the quickest lap one that runs is set to - a
+    /// fixed-lap ghost's, adjusted; "From lap times" when every one that runs
+    /// takes its pace from somebody's laps - and how steady the ones that
+    /// run are. Dashes with no ghosts.
+    /// </summary>
+    private void ShowTiles()
+    {
+        var all = _store.Current.Ghosts;
+
+        if (all.Count == 0)
+        {
+            for (var i = 0; i < _tiles.Length; i++)
+            {
+                _tiles[i].Set("-", TileCaptions[i]);
+            }
+
+            return;
+        }
+
+        var running = all.Where(g => g.Enabled).ToList();
+
+        _tiles[0].Set(all.Count.ToString(), TileCaptions[0]);
+        _tiles[1].Set(_store.Current.Enabled ? $"{running.Count} of {all.Count}" : "Off", TileCaptions[1]);
+
+        var fixedLaps = running
+            .Where(g => g.PaceSource == GhostPaceSource.FixedLapTime && g.FixedLapMs > 0)
+            .Select(g => GhostService.ApplyPaceAdjustment(g.FixedLapMs, g.PacePercent))
+            .ToList();
+
+        _tiles[2].Set(
+            fixedLaps.Count > 0 ? $"{fixedLaps.Min() / 1000.0:0.000}s" : running.Count > 0 ? "From lap times" : "-",
+            TileCaptions[2]);
+
+        var steadiness = running.Select(g => g.Consistency).Distinct().ToList();
+
+        _tiles[3].Set(steadiness.Count switch
+        {
+            0 => "-",
+            1 => steadiness[0].ToString(),
+            _ => "Mixed",
+        }, TileCaptions[3]);
     }
 
     /// <summary>A readable description of where a ghost's pace comes from.</summary>

@@ -97,6 +97,18 @@ public sealed partial class WebServerControl : UserControl
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
+    /// <summary>
+    /// The page at a glance, over the cards (17 Nov 2026, page jazz-up):
+    /// whether the server is running, the address phones use, whether the
+    /// remote has a PIN, and how many stream overlays there are to pick.
+    /// </summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
+    private static readonly string[] TileCaptions = { "Server", "Address", "Remote PIN", "Stream overlays" };
+
+    /// <summary>The streaming addresses' card and grid, built with the phone pages' - see BuildUrlCard.</summary>
+    private Section? _streamCard;
+    private FieldGrid? _streamGrid;
+
     /// <summary>The PIN boxes and the address boxes at the normal text size.</summary>
     private const int PinBoxWidth = 130;
     private const int UrlBoxWidth = 420;
@@ -298,7 +310,10 @@ public sealed partial class WebServerControl : UserControl
         {
             Text = "The Big Screen and these pages use the crowd-screen look set in the Looks card on the Themes page.",
             AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
         };
+
+        _textSize.Wear(lblLooksNote, () => AppTheme.SmallFont);
 
         var lblColumnsHint = new Label
         {
@@ -325,15 +340,43 @@ public sealed partial class WebServerControl : UserControl
         // it) and the column choosers are Advanced. See SimpleMode.
         SimpleMode.HideRow(serverGrid, _numPort);
 
+        // --- The tiles: the page at a glance ---
+
+        for (var i = 0; i < _tiles.Length; i++)
+        {
+            _textSize.Wear(_tiles[i].Value, () => AppTheme.TitleFont);
+            _textSize.Wear(_tiles[i].Caption, () => AppTheme.MicroFont);
+            _tiles[i].Set("-", TileCaptions[i]);
+        }
+
+        // --- The Big Screen, and the club website: two small cards side by
+        // side when there is the room (17 Nov 2026, page jazz-up) ---
+
+        var bigScreen = new Section("Big Screen");
+
+        bigScreen.Add(Hint("The crowd screen for a TV in the pits, and the columns it and the OBS overlay show."));
+        bigScreen.Add(new ButtonBar().With(SimpleMode.Hide(btnWebColumns), SimpleMode.Hide(btnBigScreenColumns), btnOpenBigScreen), gapBelow: UiLayout.RowGap);
+        bigScreen.Add(lblLooksNote, gapBelow: UiLayout.HintGap);
+        bigScreen.Add(SimpleMode.Hide(lblColumnsHint), gapBelow: 0);
+
+        var online = new Section("Off this Wi-Fi");
+
+        online.Add(Hint("The same pages for anyone, anywhere, come from the club website - published from this laptop."));
+        online.Add(_lblRelay, gapBelow: UiLayout.HintGap);
+        online.Add(new ButtonBar().With(btnOnline), gapBelow: 0);
+
+        var lower = new CardColumns();
+
+        lower.AddLeft(bigScreen);
+        lower.AddRight(online);
+
         page.Add(lblIntro);
+        page.Add(new TileStrip(_tiles), gapBelow: UiLayout.SectionGap);
         page.Add(server);
         page.Add(SimpleMode.Hide(manager));
         page.Add(urls);
-        page.Add(new ButtonBar().With(SimpleMode.Hide(btnWebColumns), SimpleMode.Hide(btnBigScreenColumns), btnOpenBigScreen), gapBelow: UiLayout.RowGap);
-        page.Add(lblLooksNote, gapBelow: UiLayout.HintGap);
-        page.Add(SimpleMode.Hide(lblColumnsHint));
-        page.Add(_lblRelay, gapBelow: UiLayout.HintGap);
-        page.Add(new ButtonBar().With(btnOnline), gapBelow: 0);
+        page.Add(_streamCard!);
+        page.Add(lower, gapBelow: 0);
         page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
 
         Controls.Add(page);
@@ -346,7 +389,33 @@ public sealed partial class WebServerControl : UserControl
         // (22 Oct 2026, page tidy): the addresses' grid was left out, so its
         // boxes started at a different x from the PIN boxes above them.
         _textSize.Keep(SizeFields);
-        _textSize.Keep(() => FieldGrid.LineUp(new[] { serverGrid, managerGrid, urlGrid }));
+        _textSize.Keep(() => FieldGrid.LineUp(new[] { serverGrid, managerGrid, urlGrid, _streamGrid! }));
+    }
+
+    /// <summary>A line of help in the small muted type the app's hints use, in that face at every text size.</summary>
+    private Label Hint(string text) =>
+        _textSize.Wear(new Label { Text = text, AutoSize = true, ForeColor = AppTheme.TextMuted }, () => AppTheme.SmallFont);
+
+    /// <summary>The tiles over the cards - see _tiles. Run with UpdateUi, and when the overlays are listed again.</summary>
+    private void ShowTiles()
+    {
+        var running = _server.IsRunning;
+
+        _tiles[0].Set(running ? "Running" : "Stopped", TileCaptions[0]);
+        _tiles[0].Value.ForeColor = running ? AppTheme.Success : AppTheme.TextMuted;
+
+        // The address without its scheme or the slash after it: what a
+        // volunteer reads out to somebody typing it into a phone.
+        var address = running ? _server.LocalUrl().Replace("http://", string.Empty).TrimEnd('/') : "-";
+        _tiles[1].Set(address, TileCaptions[1]);
+
+        var pin = (_settings.WebServerPin ?? string.Empty).Trim();
+        _tiles[2].Set(pin.Length >= 4 ? "Set" : "Not set", TileCaptions[2]);
+        _tiles[2].Value.ForeColor = pin.Length >= 4 ? AppTheme.TextDark : AppTheme.Warning;
+
+        var yours = _cmbStreamOverlay.Items.OfType<StreamOverlayItem>().Count(i => !i.Layout.BuiltIn);
+        var all = _cmbStreamOverlay.Items.Count;
+        _tiles[3].Set(all == 0 ? "-" : yours == 0 ? all.ToString() : $"{all} ({yours} yours)", TileCaptions[3]);
     }
 
     /// <summary>
@@ -460,6 +529,7 @@ public sealed partial class WebServerControl : UserControl
 
         var card = new Section("Server");
 
+        card.Add(Hint("Turns the pages below on, for phones, tablets and OBS on this laptop's Wi-Fi."));
         card.Add(grid);
         card.Add(lblPinHint);
         card.Add(chkAutoStart, stretch: false);
@@ -557,6 +627,13 @@ public sealed partial class WebServerControl : UserControl
         grid.AddRow("Phone remote:", FieldGrid.Inline(_txtRemoteUrl, btnCopyRemote, btnQrRemote));
         grid.AddRow("Driver check-in:", FieldGrid.Inline(_txtCheckInUrl, btnCopyCheckIn, btnQrCheckIn));
         grid.AddRow("Race manager:", FieldGrid.Inline(_txtManageUrl, btnCopyManage, btnQrManage));
+
+        // The streaming addresses in a card of their own under the phone
+        // pages' (17 Nov 2026, page jazz-up), their captions in the same
+        // column - see BuildLayout.
+        var phoneGrid = grid;
+        grid = new FieldGrid();
+
         var btnCopyStream = new Button { Text = "Copy" };
         _txtStreamUrl.ReadOnly = true;
         _cmbStreamOverlay.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -639,10 +716,20 @@ public sealed partial class WebServerControl : UserControl
 
         _textSize.Wear(lblUrlHint, () => AppTheme.SmallFont);
 
-        var card = new Section("Open these on your phone, tablet, or in OBS");
+        var stream = new Section("Streaming in OBS");
 
-        card.Add(grid);
-        card.Add(lblUrlHint, gapBelow: 0);
+        stream.Add(Hint("Paste one of these into OBS as a Browser source. They work while the server is running."));
+        stream.Add(grid);
+        stream.Add(lblUrlHint, gapBelow: 0);
+
+        _streamCard = stream;
+        _streamGrid = grid;
+        grid = phoneGrid;
+
+        var card = new Section("Phone and tablet pages");
+
+        card.Add(Hint("Scan a QR code or copy an address onto a phone on the same Wi-Fi. They show once the server is running."));
+        card.Add(grid, gapBelow: 0);
 
         return card;
     }
@@ -874,6 +961,8 @@ public sealed partial class WebServerControl : UserControl
             _relay.SettingsChanged();
         }
 
+        ShowTiles();
+
         string Allowed(TextBox box, string saved, string name)
         {
             var typed = box.Text.Trim();
@@ -1023,6 +1112,7 @@ public sealed partial class WebServerControl : UserControl
         }
 
         ShowStreamOverlay();
+        ShowTiles();
     }
 
     /// <summary>Opens the layout editor on the picked layout, then lists what it leaves.</summary>
@@ -1079,6 +1169,7 @@ public sealed partial class WebServerControl : UserControl
 
         var again = _cmbStreamOverlay.Items.Cast<StreamOverlayItem>().ToList().FindIndex(i => i.Layout.Id == picked);
         _cmbStreamOverlay.SelectedIndex = again >= 0 ? again : 0;
+        ShowTiles();
     }
 
     /// <summary>The picked layout's line and address. localhost, as for the broadcast graphics: OBS runs on this PC.</summary>

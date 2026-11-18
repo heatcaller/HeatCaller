@@ -200,6 +200,10 @@ public sealed class CommentaryControl : UserControl
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
+    /// <summary>The page at a glance, over its cards (17 Nov 2026) - see ShowTiles.</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
+    private static readonly string[] TileCaptions = { "AI commentary", "Written by", "Model on this PC", "Writing tone" };
+
     /// <summary>The pickers' widths as last measured - see Pieces.PickerWidth.</summary>
     private (Font Font, int Count, int Width)? _toneWidth;
     private (Font Font, int Count, int Width)? _chatterWidth;
@@ -589,6 +593,7 @@ public sealed class CommentaryControl : UserControl
 
         var connection = new Section("Who writes it");
 
+        connection.Add(Hint("The club relay, the small model on this PC, or both - and what is used when neither can write."));
         connection.Add(_chkUseRelay, stretch: false, gapBelow: UiLayout.HintGap);
         connection.Add(_lblRelayState, gapBelow: UiLayout.RowGap);
         connection.Add(connectionGrid);
@@ -1249,6 +1254,7 @@ public sealed class CommentaryControl : UserControl
         // --- Recap show: the recap and what dresses it.
         var recap = new Section("Recap show");
 
+        recap.Add(Hint("The recap after the race, and the opening and sign-off around it."));
         recap.Add(_chkSummaries, stretch: false, gapBelow: 0);
         recap.Add(summariesGrid, gapBelow: UiLayout.HintGap);
         Ticked(recap, _chkOpening, null);
@@ -1279,8 +1285,19 @@ public sealed class CommentaryControl : UserControl
 
         var page = new PageStack();
 
-        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.Add(_chkEnabled, stretch: false);
+        // THE TILES (17 Nov 2026, page jazz-up, as Venues'): on or off, what
+        // writes, whether the model on this PC is here, and the tone - kept
+        // in step by ShowTiles. Then the intro and the master switch in a
+        // card of their own, where they sat loose on the page.
+        VoicePagePieces.Dress(_textSize, _tiles, TileCaptions);
+        page.Add(new TileStrip(_tiles));
+
+        var master = new Section("On air");
+
+        master.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        master.Add(_chkEnabled, stretch: false, gapBelow: 0);
+
+        page.Add(master);
 
         // SIMPLE MODE (1 Nov 2026, round 3): the master switch above, then
         // six section switches and the talking points tick, in place of
@@ -1291,12 +1308,24 @@ public sealed class CommentaryControl : UserControl
         // Who writes it first (1 Nov 2026, asked for by Asher: "move who
         // writes it card to the top"), then How it's written, whose wording
         // covers every card below. All of them Advanced.
-        page.Add(SimpleMode.Hide(connection));
-        page.Add(SimpleMode.Hide(style));
+        //
+        // Side by side on a wide page (17 Nov 2026), in pairs that read in
+        // the same order one under another on a narrow one: who writes and
+        // how, then after the flag and the recap show that follows it.
+        int WideFrom() => UiLayout.AtTextSize(1200);
+
+        var setUp = new CardColumns { TwoColumnsFrom = WideFrom };
+        setUp.AddLeft(SimpleMode.Hide(connection));
+        setUp.AddRight(SimpleMode.Hide(style));
+
+        var afterTheFlag = new CardColumns { TwoColumnsFrom = WideFrom };
+        afterTheFlag.AddLeft(SimpleMode.Hide(after));
+        afterTheFlag.AddRight(SimpleMode.Hide(recap));
+
+        page.Add(SimpleMode.Hide(setUp));
         page.Add(SimpleMode.Hide(before));
         page.Add(SimpleMode.Hide(segments));
-        page.Add(SimpleMode.Hide(after));
-        page.Add(SimpleMode.Hide(recap));
+        page.Add(SimpleMode.Hide(afterTheFlag));
 
         // --- Between races (31 Oct 2026): the gap after the recap and before
         // the next race is called - see BetweenRacesCard.
@@ -1307,6 +1336,9 @@ public sealed class CommentaryControl : UserControl
         page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
 
         Controls.Add(page);
+
+        // The tone's tile follows the picker (the rest follow UpdateRelayState).
+        _cmbTone.SelectedIndexChanged += (_, _) => UpdateRelayState();
 
         // Once everything is on the page and wears its face - what these are
         // measured in.
@@ -2081,6 +2113,44 @@ public sealed class CommentaryControl : UserControl
         var willWrite = ready || useLocal;
 
         _lblRelayState.ForeColor = willWrite ? AppTheme.TextMuted : AppTheme.Accent;
+
+        // The tiles over the page say the same (17 Nov 2026).
+        ShowTiles(ready);
+    }
+
+    /// <summary>
+    /// The tiles over the page (17 Nov 2026, page jazz-up, as Venues'):
+    /// whether commentary is on, what writes it, whether the model on this
+    /// PC is here, and the writing tone - from the page as it is now.
+    /// <paramref name="relayReady"/> is UpdateRelayState's answer, asked once.
+    /// </summary>
+    private void ShowTiles(bool relayReady)
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        var on = _chkEnabled.Checked;
+
+        VoicePagePieces.Show(_tiles[0], on ? "On" : "Off", TileCaptions[0], on ? VoicePagePieces.Tone.Good : VoicePagePieces.Tone.Muted);
+
+        var useLocal = _settings.CommentaryUseLocalModel;
+        var (writer, writerTone) = (relayReady, useLocal) switch
+        {
+            (true, true) => ("Relay, then this PC", VoicePagePieces.Tone.Plain),
+            (true, false) => ("Club relay", VoicePagePieces.Tone.Plain),
+            (false, true) => ("This PC", VoicePagePieces.Tone.Plain),
+            _ => ("Nothing", VoicePagePieces.Tone.Warn),
+        };
+
+        VoicePagePieces.Show(_tiles[1], writer, TileCaptions[1], writerTone);
+
+        var modelHere = BundledLlmClient.IsModelAvailableWith(_settings.CommentaryLocalModelPath);
+        VoicePagePieces.Show(_tiles[2], modelHere ? "Ready" : "Not here", TileCaptions[2],
+            modelHere ? VoicePagePieces.Tone.Good : useLocal ? VoicePagePieces.Tone.Warn : VoicePagePieces.Tone.Muted);
+
+        VoicePagePieces.Show(_tiles[3], VoicePagePieces.Short(VoicePagePieces.Picked(_cmbTone)), TileCaptions[3]);
     }
 
     /// <summary>

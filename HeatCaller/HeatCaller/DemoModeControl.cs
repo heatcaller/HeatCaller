@@ -129,6 +129,10 @@ public sealed class DemoModeControl : UserControl
     /// <summary>The log's monospaced face, made for the text size in use.</summary>
     private Font? _logFont;
 
+    /// <summary>The demo at a glance, over the cards (page jazz-up, 17 Nov 2026): who is in it, what it runs, the pace it laps at, and what it is doing.</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
+    private static readonly string[] TileCaptions = { "Racers", "Run", "Lap pace", "Status" };
+
     /// <summary>The racers' column at the normal text size, at its narrowest and widest - see RacersWidth.</summary>
     private const int RacersLeastWidth = 320;
     private const int RacersMostWidth = 480;
@@ -189,6 +193,21 @@ public sealed class DemoModeControl : UserControl
 
         run.Add(null, new ButtonBar().With(_btnStart, _btnStop));
         run.AddLast(null, _lblStatus, () => _lblStatus.GetPreferredSize(Size.Empty).Width);
+
+        // The tiles follow what it is doing (its status line) - see ShowTiles.
+        _lblStatus.TextChanged += (_, _) => ShowTiles();
+
+        var runCard = new Section("Run the demo");
+
+        runCard.Add(Hint("Starts a race on Race Control with the racers picked on the right. Stop ends it at once; nothing it does is scored."));
+        runCard.Add(run, gapBelow: 0);
+
+        for (var i = 0; i < _tiles.Length; i++)
+        {
+            _textSize.Wear(_tiles[i].Value, () => AppTheme.TitleFont);
+            _textSize.Wear(_tiles[i].Caption, () => AppTheme.MicroFont);
+            _tiles[i].Set("-", TileCaptions[i]);
+        }
 
         // --- Settings ---
 
@@ -296,13 +315,21 @@ public sealed class DemoModeControl : UserControl
         _settingsCaptions.Add(fields.AddRow("Staging (sec):", _numStagingSeconds));
         _settingsCaptions.Add(fields.AddRow("Countdown (sec):", _numCountdownSeconds));
 
+        // The race the demo runs in one card, and what is kept of it
+        // afterwards in another (page jazz-up, 17 Nov 2026) - one card of
+        // both until then.
         var settings = new Section("Settings");
 
-        settings.Add(fields);
-        settings.Add(_chkSaveDemo, stretch: false, gapBelow: UiLayout.HintGap);
-        settings.Add(lblSaveDemoHint, gapBelow: UiLayout.HintGap);
-        settings.Add(_chkDemoNight, stretch: false, gapBelow: UiLayout.HintGap);
-        settings.Add(lblDemoNightHint, gapBelow: 0);
+        settings.Add(Hint("The track the demo laps at its average pace, and how long it stages and counts down before the green."));
+        settings.Add(fields, gapBelow: 0);
+
+        var keeping = new Section("Race history");
+
+        keeping.Add(Hint("Whether a demo leaves anything behind once it is over."));
+        keeping.Add(_chkSaveDemo, stretch: false, gapBelow: UiLayout.HintGap);
+        keeping.Add(lblSaveDemoHint, gapBelow: UiLayout.RowGap);
+        keeping.Add(_chkDemoNight, stretch: false, gapBelow: UiLayout.HintGap);
+        keeping.Add(lblDemoNightHint, gapBelow: 0);
 
         // --- The log ---
 
@@ -332,12 +359,17 @@ public sealed class DemoModeControl : UserControl
 
         var log = new Section("Log");
 
+        log.Add(Hint("What the demo did, line by line - cleared each time one starts."));
         log.AddFill(_txtLog, () => Pieces.LineHeight(_txtLog.Font) * LogLeastLines + 8, gapBelow: 0);
 
         // --- Racers ---
 
         _cmbRound.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbRound.SelectedIndexChanged += (_, _) => UpdateRoundMode();
+        _cmbRound.SelectedIndexChanged += (_, _) =>
+        {
+            UpdateRoundMode();
+            ShowTiles();
+        };
 
         var lblDrivers = new Label
         {
@@ -361,7 +393,14 @@ public sealed class DemoModeControl : UserControl
             }
 
             BeginInvoke(SaveCheckedDrivers);
+
+            // After the tick has landed, as the save is: CheckedItems is
+            // one behind while ItemCheck is raised.
+            BeginInvoke(ShowTiles);
         };
+
+        // No drivers on file: what fills the list, in the list itself.
+        EmptyNote.For(_clbDrivers, () => "No driver profiles yet. Add drivers in Driver Hub, or set some placeholder racers below.");
 
         _numPlaceholderCount.Minimum = 0;
         _numPlaceholderCount.Maximum = 8;
@@ -370,6 +409,7 @@ public sealed class DemoModeControl : UserControl
         {
             _settings.LastDemoPlaceholderCount = (int)_numPlaceholderCount.Value;
             _settings.Save();
+            ShowTiles();
         };
 
         // What to run above the tick list rather than beside it: this is the
@@ -382,6 +422,7 @@ public sealed class DemoModeControl : UserControl
 
         _racers = new Section("Racers");
 
+        _racers.Add(Hint("Who lines up: a heat from tonight's program, or the drivers you tick and some made-up racers."));
         _racers.Add(runGrid);
         _racers.Add(lblDrivers);
         _racers.AddFill(_clbDrivers, () => DriverListItemHeight() * DriverListLeastRows + 4);
@@ -399,8 +440,9 @@ public sealed class DemoModeControl : UserControl
 
         band = new Beside(() => RacersWidth(band?.Width ?? 0));
 
-        band.Add(run);
+        band.Add(runCard);
         band.Add(settings);
+        band.Add(keeping);
         band.AddFill(log, log.LeastHeight);
         band.AddSideFill(_racers, _racers.LeastHeight, gapBelow: 0);
 
@@ -409,6 +451,10 @@ public sealed class DemoModeControl : UserControl
         var page = new FillPage();
 
         page.Add(lblIntro);
+
+        // Across the page, over the cards and the racers: beside the racers
+        // they were too narrow for a round's label at a large text size.
+        page.Add(new TileStrip(_tiles));
         page.AddFill(band, band.LeastHeight, gapBelow: 0);
 
         Controls.Add(page);
@@ -681,6 +727,8 @@ public sealed class DemoModeControl : UserControl
                 _clbDrivers.SetItemChecked(index, true);
             }
         }
+
+        ShowTiles();
     }
 
     private void SaveCheckedDrivers()
@@ -727,6 +775,52 @@ public sealed class DemoModeControl : UserControl
                 ? $"Pacing laps around {track.AverageLapSeconds:0.00}s (this track's average)."
                 : $"Pacing laps around {track.AverageLapSeconds:0.00}s ({track.Name}, Race Control's track)."
             : NoPaceHint;
+
+        ShowTiles();
+    }
+
+    /// <summary>A card's line saying what it does: muted, in the small face, at the text size in use.</summary>
+    private Label Hint(string text)
+    {
+        var label = new Label
+        {
+            Text = text,
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _textSize.Wear(label, () => AppTheme.SmallFont);
+        return label;
+    }
+
+    /// <summary>
+    /// The tiles over the cards: how many racers the demo would start with
+    /// (a round's own drivers, or placeholders standing in for an empty one;
+    /// free-form, the ticked drivers and the placeholders), what it runs,
+    /// the lap it paces at ("Made up" with no average to go on), and the
+    /// status line's word. Asked again whenever one of those changes.
+    /// </summary>
+    private void ShowTiles()
+    {
+        if (IsDisposed || _tiles[0].Value.IsDisposed)
+        {
+            return;
+        }
+
+        var round = ChosenRound();
+
+        var racers = round is null
+            ? _clbDrivers.CheckedItems.Count + (int)_numPlaceholderCount.Value
+            : round.AssignedTransponders.Count > 0 ? round.AssignedTransponders.Count : Math.Max(1, (int)_numPlaceholderCount.Value);
+
+        _tiles[0].Set(racers > 0 ? racers.ToString() : "-", TileCaptions[0]);
+        _tiles[1].Set(round is null ? "Free-form" : round.RoundLabel, TileCaptions[1]);
+
+        var pace = SelectedTrack()?.AverageLapSeconds;
+        _tiles[2].Set(pace is > 0 ? $"{pace:0.00}s" : "Made up", TileCaptions[2]);
+
+        var status = (_lblStatus.Text ?? string.Empty).Trim().TrimEnd('.');
+        _tiles[3].Set(status.Length > 0 ? status : "-", TileCaptions[3]);
     }
 
     /// <summary>

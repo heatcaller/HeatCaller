@@ -690,12 +690,39 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         var page = new PageStack();
 
+        // THE TILES (17 Nov 2026, page jazz-up, as Venues'): which voice
+        // speaks, in what voice, whether Kokoro can stand in, and the race
+        // calls' switch - kept in step by ShowVoiceTiles.
+        VoicePagePieces.Dress(_textSize, _voiceTiles, VoiceTileCaptions);
+        page.Add(new TileStrip(_voiceTiles));
+
         page.Add(speak);
+
+        // The race calls' switch and the juniors' tick side by side when
+        // there is room, each a short card of its own (BuildEngineCard).
+        var pair = new CardColumns();
+
+        if (_raceCallsCard is { } raceCallsCard)
+        {
+            pair.AddLeft(raceCallsCard);
+        }
+
+        if (_juniorsCard is { } juniorsCard)
+        {
+            pair.AddRight(juniorsCard);
+        }
+
+        page.Add(pair);
         page.Add(connection);
 
         // Simple mode (1 Nov 2026): the voice parameters and the saved lines
-        // are Advanced, as are the voice relay and consent rows on Speak with
+        // are Advanced, as are the voice relay on Speak with and the consent
         // (BuildEngineCard). See SimpleMode.
+        if (_consentCard is { } consentCard)
+        {
+            page.Add(SimpleMode.Hide(consentCard));
+        }
+
         page.Add(SimpleMode.Hide(parameters));
         page.Add(SimpleMode.Hide(library), gapBelow: 0);
         page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
@@ -762,6 +789,24 @@ public sealed partial class VoiceSettingsControl : UserControl
                 statusBar.Height = height;
             }
         });
+
+        // The tiles follow the voices picked on the Cast tab (the engine's
+        // own follow UpdateEngineControls), and the Race Calls tab's follow
+        // its How often card.
+        _cmbVoice.SelectedIndexChanged += (_, _) => ShowVoiceTiles();
+        _cmbKokoroVoice.SelectedIndexChanged += (_, _) => ShowVoiceTiles();
+        _numMaxPerLap.ValueChanged += (_, _) => ShowRaceCallTiles();
+        _cmbPacing.SelectedIndexChanged += (_, _) => ShowRaceCallTiles();
+        VisibleChanged += (_, _) =>
+        {
+            if (Visible)
+            {
+                ShowVoiceTiles();
+            }
+        };
+
+        ShowVoiceTiles();
+        ShowRaceCallTiles();
     }
 
     /// <summary>
@@ -1554,10 +1599,16 @@ public sealed partial class VoiceSettingsControl : UserControl
         ShowKokoroDownloadButton();
         card.Add(_lblKokoroStatus, gapBelow: UiLayout.HintGap);
         card.Add(_lblSpeakingStatus, gapBelow: UiLayout.HintGap);
-        card.Add(lblHint, gapBelow: UiLayout.SectionGap);
+        card.Add(lblHint, gapBelow: 0);
 
-        card.Add(_chkOfflineForJuniors, stretch: false, gapBelow: UiLayout.HintGap);
-        card.Add(_textSize.Wear(
+        // The juniors' tick, the race calls' switch and the consent are cards
+        // of their own since 17 Nov 2026 (page jazz-up), placed by
+        // BuildLayout: on Speak with they made one card of five things.
+        var juniors = new Section("Juniors");
+        _juniorsCard = juniors;
+
+        juniors.Add(_chkOfflineForJuniors, stretch: false, gapBelow: UiLayout.HintGap);
+        juniors.Add(_textSize.Wear(
             new Label
             {
                 Text = "Any line that names a junior is said by Kokoro on this PC, and AI commentary about a junior is "
@@ -1566,7 +1617,7 @@ public sealed partial class VoiceSettingsControl : UserControl
                 AutoSize = true,
                 ForeColor = AppTheme.TextMuted,
             },
-            () => AppTheme.SmallFont), gapBelow: UiLayout.SectionGap);
+            () => AppTheme.SmallFont), gapBelow: 0);
 
         // RACE CALLS ON OR OFF (1 Nov 2026, asked for by Asher: "race calls
         // should have an on off switch"), here rather than on Race Calls,
@@ -1588,14 +1639,26 @@ public sealed partial class VoiceSettingsControl : UserControl
             "Every call on the Race Calls tab, on or off at once. Off keeps each call's own ticks as they are, ready for "
             + "when it's on again. Sound effects and the AI commentary aren't race calls.");
 
-        card.Add(raceCalls, gapBelow: UiLayout.SectionGap);
+        var raceCallsCard = new Section("Race calls");
+        _raceCallsCard = raceCallsCard;
 
-        // THE CONSENT BEHIND THE CLUB'S OWN VOICE, on this card rather
-        // than a card of its own: it belongs beside the voice it is about,
-        // and a club that never clones a voice should not have a section
-        // about likeness staring at them. The hint says so when there is
-        // nothing to consent to.
-        var consent = BuildConsent(card);
+        raceCallsCard.Add(raceCalls, gapBelow: 0);
+
+        // The tiles over the Voice and Race Calls tabs follow the switch.
+        _chkRaceCallsRaces.CheckedChanged += (_, _) => { ShowVoiceTiles(); ShowRaceCallTiles(); };
+        _chkRaceCallsPractice.CheckedChanged += (_, _) => { ShowVoiceTiles(); ShowRaceCallTiles(); };
+
+        // THE CONSENT BEHIND THE CLUB'S OWN VOICE. It was on Speak with,
+        // beside the voice it is about; a card of its own since 17 Nov 2026,
+        // Advanced only as its rows were - a club that never clones a voice
+        // should not have a section about likeness staring at them. The
+        // hint says so when there is nothing to consent to.
+        var consentCard = new Section("Voice consent");
+        _consentCard = consentCard;
+
+        consentCard.Add(VoicePagePieces.Hint(_textSize, "Who agreed that a voice recorded from a real person may be used, and when."));
+
+        var consent = BuildConsent(consentCard);
 
         return (card, new[] { relay, consent });
     }
@@ -3140,6 +3203,9 @@ public sealed partial class VoiceSettingsControl : UserControl
         // And the announcer's voice on the Cast tab is the chosen voice's
         // (22 Oct 2026) - see ShowAnnouncerVoiceRows.
         ShowAnnouncerVoiceRows();
+
+        // And the tiles over the tab say so (17 Nov 2026).
+        ShowVoiceTiles();
     }
 
     /// <summary>
