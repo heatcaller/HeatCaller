@@ -1763,6 +1763,28 @@ public sealed partial class WebServerService
             return;
         }
 
+        // Every layout as a live thumbnail, for the editor's Pick a look
+        // (17 Nov 2026, WebServerService.OverlayEdit). Only looks at layouts.
+        if (path == OverlayGalleryPath)
+        {
+            IReadOnlyList<OverlayLayout> own;
+
+            try
+            {
+                own = CustomOverlayList?.Invoke() ?? Array.Empty<OverlayLayout>();
+            }
+            catch
+            {
+                own = Array.Empty<OverlayLayout>();
+            }
+
+            WriteHtml(context, BuildOverlayGalleryPage(OverlayLayouts.BuiltIns
+                .Where(l => l.Id != OverlayLayouts.ResultsId)
+                .Select(l => (l.Id, l.Name, l.About ?? string.Empty, true))
+                .Concat(own.Select(l => (l.Id, l.Name, l.About ?? string.Empty, false)))));
+            return;
+        }
+
         // A stream overlay layout by its address (14 Nov 2026, stream overlay
         // plan section 3): /overlay/broadcast, /overlay/lower-third, ... The
         // Results table is the overlay page it has always been.
@@ -2657,6 +2679,9 @@ public sealed partial class WebServerService
     /// hands back copies, never the layouts it is editing.
     /// </summary>
     internal Func<string, OverlayLayout?>? CustomOverlay { get; set; }
+
+    /// <summary>The club's own layouts, in order, for the editor's Pick a look (/overlay-gallery).</summary>
+    internal Func<IReadOnlyList<OverlayLayout>>? CustomOverlayList { get; set; }
 
     /// <summary>How many times one of the club's own layouts has changed - an open overlay page redraws when it moves (section 4).</summary>
     internal Func<string, int>? CustomOverlayVersion { get; set; }

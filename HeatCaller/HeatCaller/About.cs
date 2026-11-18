@@ -206,6 +206,14 @@ internal static class ThirdPartyCatalog
             new[] { "QRCoder" }),
 
         new Component(
+            "WebView2",
+            "1.0.4314.35",
+            "BSD-3-Clause",
+            "Shows the live overlay picture inside the Stream overlays editor.",
+            new[] { "Microsoft.Web.WebView2" },
+            Note: "Microsoft. The SDK only: the Edge engine it drives is the WebView2 runtime that comes with Windows, not shipped here."),
+
+        new Component(
             "Velopack",
             "1.2.161",
             "MIT",

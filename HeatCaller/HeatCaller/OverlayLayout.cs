@@ -274,6 +274,8 @@ public static class OverlayLayouts
                 during = DuringNames(e.During),
                 rows = Math.Clamp(e.Rows, 0, 20),
                 placed = e.Anchor != OverlayAnchor.Default,
+                // Where it sits, for the editor's nudges (edit=1).
+                scale = Math.Clamp(double.IsFinite(e.Scale) ? e.Scale : 1, 0.5, 2),
             };
         }
 

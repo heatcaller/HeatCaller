@@ -127,6 +127,14 @@
     <PackageReference Include="LibVLCSharp" Version="3.10.1" />
     <PackageReference Include="LibVLCSharp.WinForms" Version="3.10.1" />
     <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.24" />
+    <!-- The live picture in the Stream overlays editor (17 Nov 2026,
+         plans/overlay-editor-mockups.html, option A): the real overlay
+         page, drawn by Edge's engine inside the window, so what is edited
+         is what OBS shows. Microsoft, BSD-3-Clause. No packages of its own;
+         WebView2Loader.dll ships from runtimes\win-x64. The runtime itself
+         is part of Windows 11 and nearly every Windows 10 - without it the
+         editor still works and offers the browser instead (OverlayPreview). -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
 
     <!-- The installer and the updater (Velopack, MIT). VelopackApp.Build().Run()
          is the first thing Main does, and AppUpdates is the rest of it.

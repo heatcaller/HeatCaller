@@ -2888,6 +2888,7 @@ public partial class MainForm
 
         _webServer.CustomOverlay = overlays.Get;
         _webServer.CustomOverlayVersion = overlays.Version;
+        _webServer.CustomOverlayList = () => overlays.Layouts;
         webServer.Overlays = overlays;
         webServer.CustomOverlays = () => overlays.Layouts;
         webServer.FillStreamOverlays();

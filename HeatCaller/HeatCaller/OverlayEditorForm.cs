@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace HeatCaller;
 
 /// <summary>
@@ -5,47 +7,95 @@ namespace HeatCaller;
 /// Asher: "the ability to roll your own"). Opened from the Web Server page's
 /// Stream overlay row.
 ///
-/// Down the left, every layout: the presets (read-only - "Make a copy" turns
-/// one into the club's own) and the club's own. On the right, the picked
-/// layout's graphics, each with a tick, and the picked graphic's settings:
-/// where it sits (nine places, or where the broadcast page has always put
-/// it), a nudge across and down, its size, how many rows, and which parts of
-/// the night it shows in.
+/// THE STUDIO (17 Nov 2026, plans/overlay-editor-mockups.html, option A,
+/// with B's part-of-the-night dots and C's Pick a look). Three panes: the
+/// layout's graphics down the left, the live picture in the middle, the
+/// picked graphic's settings on the right.
+///
+///   The picture is the real overlay page (OverlayPreview), running the
+///   demo race held at the part of the night the tabs above it pick. Drag
+///   a graphic to move it, drag the pink dot to resize it, arrow keys nudge
+///   it. "Play the night" lets the demo run from between races to the
+///   result, lighting each tab as it gets there.
+///
+///   The list shows all sixteen graphics: an eye to turn each on and off,
+///   and four dots for when it shows - grid, racing, result, between -
+///   with the part the picture is showing ringed.
+///
+///   The settings: nine places to put it (or Usual place, where the page
+///   has always put it), Across, Down, Size and - for the positions only -
+///   Drivers; when it shows (Auto, or the parts ticked); and the settings
+///   for the whole layout in a card of their own.
+///
+/// A PRESET COPIES ITSELF ON THE FIRST CHANGE. Nothing is greyed out: the
+/// first change to a preset goes into "&lt;name&gt; (our copy)", a strip says
+/// so, and Undo takes the copy away again. The preset never changes.
+///
+/// NOTHING IS STUCK AT THE USUAL PLACE. Moving a graphic that is where the
+/// page puts it - a drag, a nudge, a number - first puts it in the one of
+/// the nine places it was already in (UsualPlace), so it moves from where
+/// it is rather than the boxes sitting disabled until a place is picked.
 ///
 /// CHANGES SAVE AS THEY ARE MADE (OverlayStore.Update), and an open overlay
 /// page redraws when its layout changes - so a club editing with OBS open
 /// sees each change on the stream there and then. That is also why there is
 /// no OK and Cancel, only Close.
-///
-/// A dialog rather than a page of its own (the plan said "under Screens"):
-/// it is opened from where the overlay's address already is, and it is set
-/// up once, not used on a race night.
 /// </summary>
 public sealed class OverlayEditorForm : Form
 {
     private readonly OverlayStore _store;
     private readonly Func<string, string> _addressOf;
 
-    private readonly ListBox _lstLayouts = new();
-    private readonly Button _btnCopy = new() { Text = "Make a copy..." };
+    private readonly ComboBox _cmbLayouts = new();
+    private readonly Button _btnLook = new() { Text = "Pick a look..." };
     private readonly Button _btnRename = new() { Text = "Rename..." };
     private readonly Button _btnDelete = new() { Text = "Delete" };
+    private readonly Button _btnUndo = new() { Text = "Undo" };
+    private readonly Button _btnRedo = new() { Text = "Redo" };
+    private readonly TextBox _txtAddress = new() { ReadOnly = true };
+    private readonly Button _btnCopyAddress = new() { Text = "Copy" };
+    private readonly Button _btnBrowser = new() { Text = "Open in browser" };
+    private readonly Button _btnObsHelp = new() { Text = "Add it to OBS..." };
 
-    private readonly Label _lblNote = new() { AutoSize = true };
-    private readonly CheckedListBox _lstElements = new();
-    private readonly ComboBox _cmbAnchor = new();
+    private readonly Label _lblNotice = new() { AutoSize = true };
+    private readonly Button _btnNoticeUndo = new() { Text = "Undo" };
+    private readonly Button _btnNoticeOk = new() { Text = "OK" };
+    private readonly TableLayoutPanel _notice;
+
+    private readonly OverlayLayersList _lstLayers = new();
+
+    private readonly Button[] _btnParts =
+    {
+        new() { Text = "The grid" }, new() { Text = "Racing" }, new() { Text = "The result" }, new() { Text = "Between races" },
+    };
+
+    private readonly Button _btnPlay = new() { Text = "Play the night" };
+    private readonly CheckBox _chkGhosts = new ThemedCheckBox { Text = "Show hidden ones", Checked = true };
+    private readonly CheckBox _chkPhone = new ThemedCheckBox { Text = "As on a phone" };
+    private readonly OverlayPreview _preview = new();
+
+    /// <summary>Under the picture: what covers what, and how to move things.</summary>
+    private Label _lblClash => _preview.Clash;
+    private Label _lblHint => _preview.Hint;
+
+    private readonly Label _lblWhat = new() { AutoSize = true };
+    private readonly Label _lblWhatNote = new() { AutoSize = true };
+    private readonly NinePlaces _nine = new();
+    private readonly Button _btnUsual = new() { Text = "Usual place" };
     private readonly NumericUpDown _numX = new();
     private readonly NumericUpDown _numY = new();
     private readonly NumericUpDown _numScale = new();
     private readonly NumericUpDown _numRows = new();
+    private readonly Label _lblRows;
+    private readonly Label _lblRowsHint;
+    private readonly CheckBox _chkAuto = new ThemedCheckBox { Text = "Auto", AutoSize = true };
     private readonly CheckBox _chkStaging = new ThemedCheckBox { Text = "The grid" };
     private readonly CheckBox _chkRacing = new ThemedCheckBox { Text = "Racing" };
     private readonly CheckBox _chkFinished = new ThemedCheckBox { Text = "The result" };
     private readonly CheckBox _chkBetween = new ThemedCheckBox { Text = "Between races" };
+    private readonly Label _lblShowsHint = new() { AutoSize = true };
     private readonly NumericUpDown _numGlass = new();
     private readonly NumericUpDown _numTextScale = new();
-    private readonly Label _lblOverlap = new() { AutoSize = true };
-    private readonly Button _btnUndo = new() { Text = "Undo" };
     private readonly Button _btnBasics = new() { Text = "Basics cards..." };
 
     /// <summary>The club's settings, for the basics cards - null leaves that button off.</summary>
@@ -53,12 +103,23 @@ public sealed class OverlayEditorForm : Form
 
     /// <summary>Each change's layout as it was before, newest last, for Undo. This window's changes only.</summary>
     private readonly List<OverlayLayout> _undo = new();
-    private readonly TextBox _txtAddress = new() { ReadOnly = true };
-    private readonly Button _btnCopyAddress = new() { Text = "Copy" };
-    private readonly Button _btnPreview = new() { Text = "Preview" };
+
+    /// <summary>What Undo took back, newest last, for Redo. Emptied by any new change.</summary>
+    private readonly List<OverlayLayout> _redo = new();
+
+    /// <summary>The copies this window made of a preset on its first change, and the preset each came from - Undo with nothing else to take back removes the copy.</summary>
+    private readonly Dictionary<string, string> _copiedFrom = new(StringComparer.Ordinal);
+
+    /// <summary>Waits a moment after a change before reopening the picture, so a spinner held down does not reload it at every step.</summary>
+    private readonly System.Windows.Forms.Timer _reload = new() { Interval = 150 };
 
     /// <summary>Set while the controls are being filled, so filling them is not taken as an edit.</summary>
     private bool _filling;
+
+    private OverlayElementKind _kind = OverlayElementKind.Tower;
+    private OverlayDuring _part = OverlayDuring.Racing;
+    private bool _playing;
+    private bool _gallery;
 
     private static readonly OverlayElementKind[] Kinds = Enum.GetValues<OverlayElementKind>();
 
@@ -84,18 +145,53 @@ public sealed class OverlayEditorForm : Form
         _ => kind.ToString(),
     };
 
-    private static readonly (OverlayAnchor Anchor, string Words)[] Anchors =
+    /// <summary>
+    /// The parts of the night a graphic left on Auto shows in - when the
+    /// overlay page has something for it to show (WebServerService.Camera's
+    /// draw(): the champ table only while racing, the ticker on track, the
+    /// bug from the grid on). For the list's dots.
+    /// </summary>
+    internal static OverlayDuring NaturalParts(OverlayElementKind kind) => kind switch
     {
-        (OverlayAnchor.Default, "Where it usually goes"),
-        (OverlayAnchor.TopLeft, "Top left"),
-        (OverlayAnchor.Top, "Top middle"),
-        (OverlayAnchor.TopRight, "Top right"),
-        (OverlayAnchor.Left, "Middle left"),
-        (OverlayAnchor.Middle, "Middle"),
-        (OverlayAnchor.Right, "Middle right"),
-        (OverlayAnchor.BottomLeft, "Bottom left"),
-        (OverlayAnchor.Bottom, "Bottom middle"),
-        (OverlayAnchor.BottomRight, "Bottom right"),
+        OverlayElementKind.Tower or OverlayElementKind.Ticker => OverlayDuring.Racing | OverlayDuring.Finished,
+        OverlayElementKind.Battle or OverlayElementKind.Fastest or OverlayElementKind.Moment or OverlayElementKind.Champ => OverlayDuring.Racing,
+        OverlayElementKind.Grid => OverlayDuring.Staging,
+        OverlayElementKind.Podium => OverlayDuring.Finished,
+        OverlayElementKind.Status => OverlayDuring.Staging | OverlayDuring.Racing | OverlayDuring.Finished,
+        OverlayElementKind.Schedule or OverlayElementKind.Basics => OverlayDuring.Between,
+        _ => OverlayDuring.Staging | OverlayDuring.Racing | OverlayDuring.Finished | OverlayDuring.Between,
+    };
+
+    /// <summary>
+    /// Which of the nine places a graphic at its usual place is already in,
+    /// and how far in it sits there - the page's own CSS for it, in vw. A
+    /// graphic moved from its usual place starts from here.
+    /// </summary>
+    internal static (OverlayAnchor Anchor, double X, double Y) UsualPlace(OverlayElementKind kind) => kind switch
+    {
+        OverlayElementKind.Tower => (OverlayAnchor.TopLeft, 2, 3),
+        OverlayElementKind.Champ => (OverlayAnchor.TopLeft, 2, 3),
+        OverlayElementKind.Battle => (OverlayAnchor.Bottom, 0, 3),
+        OverlayElementKind.Fastest => (OverlayAnchor.BottomRight, 2, 3),
+        OverlayElementKind.Moment => (OverlayAnchor.Top, 0, 3),
+        OverlayElementKind.Grid or OverlayElementKind.Podium or OverlayElementKind.Schedule => (OverlayAnchor.Middle, 0, 0),
+        OverlayElementKind.Captions => (OverlayAnchor.Bottom, 0, 1),
+        OverlayElementKind.Ticker => (OverlayAnchor.Bottom, 0, 2),
+        OverlayElementKind.Basics => (OverlayAnchor.Bottom, 0, 3),
+        OverlayElementKind.ClubLogo => (OverlayAnchor.TopLeft, 2, 2),
+        OverlayElementKind.Mark => (OverlayAnchor.BottomRight, 2, 2),
+        _ => (OverlayAnchor.TopRight, 2, 2),
+    };
+
+    private static readonly (OverlayDuring Part, string Name, string At)[] PartsOfTheNight =
+    {
+        // Where in the demo's loop each part is (the page's &hold= and &at=):
+        // the racing one starts just before the lead change, so the
+        // battle box and the banner are up to be placed.
+        (OverlayDuring.Staging, "staging", "22"),
+        (OverlayDuring.Racing, "racing", "95"),
+        (OverlayDuring.Finished, "finished", "142"),
+        (OverlayDuring.Between, "between", "2"),
     };
 
     public OverlayEditorForm(OverlayStore store, Func<string, string> addressOf, string? pick = null, AppSettings? clubSettings = null)
@@ -108,52 +204,127 @@ public sealed class OverlayEditorForm : Form
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
-        _lstLayouts.IntegralHeight = false;
-        _lstLayouts.SelectedIndexChanged += (_, _) => ShowLayout();
-        _btnCopy.Click += (_, _) => MakeCopy();
+        // --- The top: the layout, and its address for OBS ---
+        _cmbLayouts.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbLayouts.Width = UiLayout.AtTextSize(280);
+        _cmbLayouts.SelectedIndexChanged += (_, _) =>
+        {
+            if (!_filling)
+            {
+                _gallery = false;
+                ShowLayout();
+            }
+        };
+        _btnLook.Click += (_, _) => ShowGallery();
         _btnRename.Click += (_, _) => RenameLayout();
         _btnDelete.Click += (_, _) => DeleteLayout();
-
-        _lstElements.CheckOnClick = true;
-        _lstElements.IntegralHeight = false;
-        _lstElements.BorderStyle = BorderStyle.None;
-        foreach (var kind in Kinds)
+        _btnUndo.Click += (_, _) => UndoLast();
+        _btnRedo.Click += (_, _) => RedoLast();
+        _txtAddress.Width = UiLayout.AtTextSize(330);
+        _btnCopyAddress.Click += (_, _) => CopyAddress();
+        _btnBrowser.Click += (_, _) =>
         {
-            _lstElements.Items.Add(KindWords(kind));
-        }
-
-        _lstElements.SelectedIndexChanged += (_, _) => ShowElement();
-        _lstElements.ItemCheck += (_, e) =>
-        {
-            if (_filling)
+            if (_txtAddress.Text.Length > 0)
             {
-                return;
+                AppSupport.Open(_txtAddress.Text + "?demo=1");
             }
+        };
+        _btnObsHelp.Click += (_, _) => AppDialog.Show(this,
+            "In OBS: Sources, then +, then Browser. Call it \"HeatCaller\".\n\n"
+            + "Paste the address from here into URL" + (_txtAddress.Text.Length > 0 ? " (" + _txtAddress.Text + ")" : string.Empty) + ".\n\n"
+            + "Set Width to 1920 and Height to 1080, and leave \"Shutdown source when not visible\" unticked.\n\n"
+            + "A change you make here shows in OBS straight away - there is nothing to paste again.",
+            "Add it to OBS");
 
+        _lblNotice.ForeColor = AppTheme.Warning;
+        _btnNoticeUndo.Click += (_, _) => UndoLast();
+        _btnNoticeOk.Click += (_, _) => _notice!.Visible = false;
+        // One strip: the words wrap in the room left of the two buttons.
+        var strip = new TableLayoutPanel { ColumnCount = 3, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Margin = Padding.Empty };
+        strip.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        strip.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        strip.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _lblNotice.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _btnNoticeUndo.AutoSize = true;
+        _btnNoticeOk.AutoSize = true;
+        _btnNoticeUndo.Anchor = AnchorStyles.None;
+        _btnNoticeOk.Anchor = AnchorStyles.None;
+        strip.Controls.Add(_lblNotice, 0, 0);
+        strip.Controls.Add(_btnNoticeUndo, 1, 0);
+        strip.Controls.Add(_btnNoticeOk, 2, 0);
+        _notice = strip;
+        _notice.Visible = false;
+
+        // --- The graphics down the left ---
+        _lstLayers.StateOf = StateOf;
+        _lstLayers.SelectedIndexChanged += (_, _) =>
+        {
+            if (_lstLayers.Picked is { } kind && kind != _kind)
+            {
+                _kind = kind;
+                ShowElement();
+                TellPictureWhichIsPicked();
+            }
+        };
+        _lstLayers.EyeClicked += kind =>
+        {
             // The mark can be moved but never turned off.
-            if (Kinds[e.Index] == OverlayElementKind.Mark && e.NewValue != CheckState.Checked)
+            if (kind == OverlayElementKind.Mark)
             {
-                e.NewValue = CheckState.Checked;
                 return;
             }
 
-            var on = e.NewValue == CheckState.Checked;
-            Edit(layout => ElementOf(layout, Kinds[e.Index]).On = on);
+            var on = Current?.Element(kind) is { On: true };
+            _kind = kind;
+            Edit(layout => ElementOf(layout, kind).On = !on);
         };
 
-        _cmbAnchor.DropDownStyle = ComboBoxStyle.DropDownList;
-
-        // Wide enough for "Where it usually goes", and the address for most
-        // of a LAN address and an id - left to themselves both were cut off.
-        _cmbAnchor.Width = UiLayout.AtTextSize(240);
-        _txtAddress.Width = UiLayout.AtTextSize(330);
-
-        foreach (var (_, words) in Anchors)
+        // --- The picture in the middle ---
+        for (var i = 0; i < _btnParts.Length; i++)
         {
-            _cmbAnchor.Items.Add(words);
+            var part = PartsOfTheNight[i].Part;
+            _btnParts[i].Click += (_, _) =>
+            {
+                _playing = false;
+                _part = part;
+                ShowParts();
+                ReloadPicture();
+            };
         }
 
-        _cmbAnchor.SelectedIndexChanged += (_, _) => EditElement(e => e.Anchor = Anchors[Math.Max(0, _cmbAnchor.SelectedIndex)].Anchor);
+        _btnPlay.Click += (_, _) =>
+        {
+            _playing = !_playing;
+            ShowParts();
+            ReloadPicture();
+        };
+        _chkGhosts.CheckedChanged += (_, _) => ReloadPicture();
+        _chkPhone.CheckedChanged += (_, _) => ReloadPicture();
+        _lblClash.ForeColor = AppTheme.Danger;
+        _lblHint.ForeColor = AppTheme.TextMuted;
+        _preview.Message += OnPictureMessage;
+        _reload.Tick += (_, _) =>
+        {
+            _reload.Stop();
+            ShowPicture();
+        };
+
+        // --- The picked graphic, on the right ---
+        _lblWhat.Font = new Font(AppTheme.BodyFont, FontStyle.Bold);
+        _lblWhatNote.ForeColor = AppTheme.TextMuted;
+        _nine.Picked += anchor => EditElement(e =>
+        {
+            e.Anchor = anchor;
+
+            // Out of the usual place into one of the nine: from its edge,
+            // as the usual place had it, rather than numbers left over.
+            if (anchor != OverlayAnchor.Default && (Math.Abs(e.X) > 20 || Math.Abs(e.Y) > 20))
+            {
+                e.X = 2;
+                e.Y = 2;
+            }
+        });
+        _btnUsual.Click += (_, _) => EditElement(e => e.Anchor = OverlayAnchor.Default);
 
         Spinner(_numX, -50, 50, 0.5m, 1);
         Spinner(_numY, -50, 50, 0.5m, 1);
@@ -161,16 +332,18 @@ public sealed class OverlayEditorForm : Form
         Spinner(_numRows, 0, 20, 1, 0);
         Spinner(_numGlass, 40, 100, 5, 0);
         Spinner(_numTextScale, 80, 160, 5, 0);
-        _numTextScale.ValueChanged += (_, _) => Edit(layout => layout.TextScale = (double)_numTextScale.Value / 100);
-        _btnUndo.Click += (_, _) => UndoLast();
-        _btnBasics.Click += (_, _) => EditBasics();
-        _btnBasics.Visible = clubSettings is not null;
-        _lblOverlap.ForeColor = AppTheme.Danger;
-        _numX.ValueChanged += (_, _) => EditElement(e => e.X = (double)_numX.Value);
-        _numY.ValueChanged += (_, _) => EditElement(e => e.Y = (double)_numY.Value);
-        _numScale.ValueChanged += (_, _) => EditElement(e => e.Scale = (double)_numScale.Value / 100);
+        _numX.ValueChanged += (_, _) => EditElement(e => { OutOfUsualPlace(e); e.X = (double)_numX.Value; });
+        _numY.ValueChanged += (_, _) => EditElement(e => { OutOfUsualPlace(e); e.Y = (double)_numY.Value; });
+        _numScale.ValueChanged += (_, _) => EditElement(e => { OutOfUsualPlace(e); e.Scale = (double)_numScale.Value / 100; });
         _numRows.ValueChanged += (_, _) => EditElement(e => e.Rows = (int)_numRows.Value);
         _numGlass.ValueChanged += (_, _) => Edit(layout => layout.Glass = (double)_numGlass.Value / 100);
+        _numTextScale.ValueChanged += (_, _) => Edit(layout => layout.TextScale = (double)_numTextScale.Value / 100);
+        _chkAuto.CheckedChanged += (_, _) => EditElement(e =>
+        {
+            // Off Auto: start from the parts it was showing in, so nothing
+            // changes on the stream until a part is ticked or unticked.
+            e.During = _chkAuto.Checked ? OverlayDuring.Always : NaturalParts(_kind);
+        });
 
         foreach (var box in new[] { _chkStaging, _chkRacing, _chkFinished, _chkBetween })
         {
@@ -182,73 +355,59 @@ public sealed class OverlayEditorForm : Form
                 | (_chkBetween.Checked ? OverlayDuring.Between : 0));
         }
 
-        _btnCopyAddress.Click += (_, _) =>
-        {
-            try
-            {
-                if (_txtAddress.Text.Length > 0)
-                {
-                    Clipboard.SetText(_txtAddress.Text);
-                }
-            }
-            catch
-            {
-                // Another program holds the clipboard; the address is on screen.
-            }
-        };
-        _btnPreview.Click += (_, _) =>
-        {
-            if (_txtAddress.Text.Length > 0)
-            {
-                AppSupport.Open(_txtAddress.Text + "?demo=1");
-            }
-        };
-
-        _lblNote.ForeColor = AppTheme.TextMuted;
+        _lblShowsHint.ForeColor = AppTheme.TextMuted;
+        _btnBasics.Click += (_, _) => EditBasics();
+        _btnBasics.Visible = clubSettings is not null;
+        _btnBasics.AutoSize = true;
 
         // --- Layout ---
-        var settings = new FieldGrid();
-        settings.AddRow("Where:", _cmbAnchor);
-        settings.AddRow("Across:", _numX);
-        settings.AddHint("From the place above towards the middle, in hundredths of the picture's width.");
-        settings.AddRow("Down:", _numY);
-        settings.AddRow("Size (%):", _numScale);
-        settings.AddRow("Rows:", _numRows);
-        settings.AddHint("For the positions: how many drivers. 0 is its usual number.");
-        settings.AddRow("Shows during:", FieldGrid.Inline(_chkStaging, _chkRacing, _chkFinished, _chkBetween));
-        settings.AddHint("None ticked: whenever it has something to show.");
-        settings.AddRow("Boxes (% solid):", _numGlass);
-        settings.AddRow("Everything (% size):", _numTextScale);
-        settings.AddHint("Makes every graphic bigger or smaller at once - bigger reads better on a phone.");
-        settings.AddRow("Its address:", FieldGrid.Inline(_txtAddress, _btnCopyAddress, _btnPreview));
+        var place = new FieldGrid();
+        place.AddRow("Across:", _numX);
+        place.AddRow("Down:", _numY);
+        place.AddRow("Size (%):", _numScale);
+        _lblRows = place.AddRow("Drivers:", _numRows);
+        _lblRowsHint = place.AddHint("How many drivers it lists. 0 is its usual number.");
 
-        var main = new FillPage();
-        main.Add(_lblNote, gapBelow: UiLayout.RowGap);
-        main.Add(_lblOverlap, gapBelow: UiLayout.RowGap);
-        main.AddFill(_lstElements, _ => _lstElements.ItemHeight * 6 + 4, gapBelow: UiLayout.RowGap);
-        main.Add(settings, gapBelow: 0);
+        var graphic = new Section("The picked graphic");
+        graphic.Add(_lblWhat, gapBelow: 0);
+        graphic.Add(_lblWhatNote, gapBelow: UiLayout.RowGap);
+        graphic.Add(FieldGrid.Inline(_nine, _btnUsual), gapBelow: UiLayout.RowGap);
+        graphic.Add(place, gapBelow: UiLayout.RowGap);
+        graphic.Add(new Label { Text = "When it shows", AutoSize = true, ForeColor = AppTheme.TextMuted }, gapBelow: 0);
+        graphic.Add(_chkAuto, gapBelow: 0);
+        graphic.Add(FieldGrid.Inline(_chkStaging, _chkRacing), gapBelow: 0);
+        graphic.Add(FieldGrid.Inline(_chkFinished, _chkBetween), gapBelow: 0);
+        graphic.Add(_lblShowsHint, gapBelow: 0);
 
-        var columns = new Beside(() => UiLayout.AtTextSize(220)) { SideOnLeft = true };
-        columns.AddFill(main, main.LeastHeight);
-        columns.AddSideFill(_lstLayouts, _ => _lstLayouts.ItemHeight * 6 + 4, gapBelow: UiLayout.RowGap);
-        columns.AddSide(_btnCopy, gapBelow: UiLayout.ButtonGap);
-        columns.AddSide(_btnRename, gapBelow: UiLayout.ButtonGap);
-        columns.AddSide(_btnDelete, gapBelow: UiLayout.SectionGap);
-        columns.AddSide(_btnUndo, gapBelow: UiLayout.ButtonGap);
-        columns.AddSide(_btnBasics, gapBelow: 0);
+        var whole = new FieldGrid();
+        whole.AddRow("Boxes (% solid):", _numGlass);
+        whole.AddRow("Text size (%):", _numTextScale);
+        whole.AddHint("Every graphic bigger or smaller at once - bigger reads better on a phone.");
 
-        var intro = new Label
-        {
-            Text = "Pick a layout. A preset can't be changed: make a copy, then turn graphics on and off and move them. "
-                 + "Changes save as you make them, and an overlay open in OBS updates straight away.",
-            AutoSize = true,
-            ForeColor = AppTheme.TextMuted,
-        };
+        var wholeCard = new Section("The whole layout");
+        wholeCard.Add(whole, gapBelow: UiLayout.RowGap);
+        wholeCard.Add(_btnBasics, stretch: false, gapBelow: 0);
+
+        _chkGhosts.AutoSize = true;
+        _chkPhone.AutoSize = true;
+        var partsRow = FieldGrid.Inline(_btnParts[0], _btnParts[1], _btnParts[2], _btnParts[3], _btnPlay, _chkGhosts, _chkPhone);
+
+        var middle = new Beside(() => UiLayout.AtTextSize(300));
+        middle.Add(partsRow, gapBelow: UiLayout.RowGap);
+        middle.AddFill(_preview, width => Math.Max(UiLayout.AtTextSize(180), width * 9 / 16) + AppTheme.BodyFont.Height * 3 + UiLayout.RowGap, gapBelow: UiLayout.RowGap);
+        middle.AddSideCard(graphic, gapBelow: UiLayout.RowGap);
+        middle.AddSideCard(wholeCard, gapBelow: 0);
+
+        var columns = new Beside(() => UiLayout.AtTextSize(270)) { SideOnLeft = true };
+        columns.AddFill(middle, middle.LeastHeight);
+        columns.AddSideFill(_lstLayers, _ => _lstLayers.ItemHeight * 8 + 4, gapBelow: 0);
 
         var btnClose = new Button { Text = "Close", DialogResult = DialogResult.OK };
 
         var page = new FillPage();
-        page.Add(intro, gapBelow: UiLayout.RowGap);
+        page.Add(FieldGrid.Inline(new Label { Text = "Layout:" }, _cmbLayouts, _btnLook, _btnRename, _btnDelete, _btnUndo, _btnRedo), gapBelow: UiLayout.RowGap);
+        page.Add(FieldGrid.Inline(new Label { Text = "For OBS:" }, _txtAddress, _btnCopyAddress, _btnBrowser, _btnObsHelp), gapBelow: UiLayout.RowGap);
+        page.Add(_notice, gapBelow: UiLayout.RowGap);
         page.AddFill(columns, columns.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar(alignRight: true).With(btnClose), gapBelow: 0);
 
@@ -256,10 +415,28 @@ public sealed class OverlayEditorForm : Form
         AcceptButton = btnClose;
         CancelButton = btnClose;
 
+        AppTheme.StyleButton(_btnCopyAddress, AppTheme.ButtonKind.Primary);
+        AppTheme.StyleButton(_btnObsHelp, AppTheme.ButtonKind.Secondary);
+        AppTheme.StyleButton(_btnLook, AppTheme.ButtonKind.Secondary);
         AppTheme.ApplyRecursively(this);
+        _lstLayers.BackColor = AppTheme.Surface;
+        _lstLayers.ForeColor = AppTheme.TextDark;
 
         FillLayouts(pick);
-        DialogFit.Keep(this, page, width: 860, height: 700);
+
+        // A club with no layouts of its own yet starts by picking a look.
+        _gallery = pick is null && _store.Layouts.Count == 0;
+        ShowParts();
+        DialogFit.Keep(this, page, width: 1320, height: 820);
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+
+        // The picture's engine starts only once the window is on screen.
+        ShowPicture();
+        _preview.Start();
     }
 
     private static void Spinner(NumericUpDown box, decimal least, decimal most, decimal step, int places)
@@ -279,29 +456,56 @@ public sealed class OverlayEditorForm : Form
 
     private void FillLayouts(string? pick)
     {
-        _lstLayouts.BeginUpdate();
-        _lstLayouts.Items.Clear();
+        _filling = true;
 
-        foreach (var preset in OverlayLayouts.BuiltIns.Where(l => l.Id != OverlayLayouts.ResultsId))
+        try
         {
-            _lstLayouts.Items.Add(new Item(preset, Preset: true));
+            _cmbLayouts.BeginUpdate();
+            _cmbLayouts.Items.Clear();
+
+            foreach (var preset in OverlayLayouts.BuiltIns.Where(l => l.Id != OverlayLayouts.ResultsId))
+            {
+                _cmbLayouts.Items.Add(new Item(preset, Preset: true));
+            }
+
+            foreach (var mine in _store.Layouts)
+            {
+                _cmbLayouts.Items.Add(new Item(mine, Preset: false));
+            }
+
+            _cmbLayouts.EndUpdate();
+
+            // Wide enough for the longest name, within reason.
+            var widest = _cmbLayouts.Items.Cast<object>().Select(i => TextRenderer.MeasureText(i.ToString(), _cmbLayouts.Font).Width).DefaultIfEmpty(0).Max();
+            _cmbLayouts.Width = Math.Clamp(widest + UiLayout.AtTextSize(40), UiLayout.AtTextSize(280), UiLayout.AtTextSize(460));
+
+            var at = _cmbLayouts.Items.Cast<Item>().ToList().FindIndex(i => i.Layout.Id == pick);
+            _cmbLayouts.SelectedIndex = at >= 0 ? at : 0;
+        }
+        finally
+        {
+            _filling = false;
         }
 
-        foreach (var mine in _store.Layouts)
-        {
-            _lstLayouts.Items.Add(new Item(mine, Preset: false));
-        }
-
-        _lstLayouts.EndUpdate();
-
-        var at = _lstLayouts.Items.Cast<Item>().ToList().FindIndex(i => i.Layout.Id == pick);
-        _lstLayouts.SelectedIndex = at >= 0 ? at : 0;
+        ShowLayout();
     }
 
-    private Item? Picked => _lstLayouts.SelectedItem as Item;
+    private Item? Picked => _cmbLayouts.SelectedItem as Item;
 
     /// <summary>The picked layout as it is now: a preset as built, the club's own fresh from the store.</summary>
     private OverlayLayout? Current => Picked is not { } item ? null : item.Preset ? item.Layout : _store.Get(item.Layout.Id) ?? item.Layout;
+
+    private (bool On, OverlayDuring Shows) StateOf(OverlayElementKind kind)
+    {
+        var e = Current?.Element(kind);
+
+        if (e is not { On: true })
+        {
+            return (false, 0);
+        }
+
+        return (true, e.During == OverlayDuring.Always ? NaturalParts(kind) : e.During);
+    }
 
     private void ShowLayout()
     {
@@ -312,82 +516,291 @@ public sealed class OverlayEditorForm : Form
 
         try
         {
-            for (var i = 0; i < Kinds.Length; i++)
-            {
-                _lstElements.SetItemChecked(i, layout?.Element(Kinds[i]) is { On: true });
-            }
-
             _numGlass.Value = (decimal)Math.Round(Math.Clamp(layout?.Glass ?? 0.82, 0.4, 1) * 100);
             _numTextScale.Value = (decimal)Math.Round(Math.Clamp(layout?.TextScale ?? 1, 0.8, 1.6) * 100);
             _txtAddress.Text = layout is null ? string.Empty : _addressOf(layout.Id);
+
+            if (_lstLayers.SelectedIndex != Array.IndexOf(Kinds, _kind))
+            {
+                _lstLayers.SelectedIndex = Array.IndexOf(Kinds, _kind);
+            }
         }
         finally
         {
             _filling = false;
         }
 
-        var editable = item is { Preset: false };
-        _lblNote.Text = item is null ? string.Empty
-            : editable ? "Your own layout. " + (layout?.About is { Length: > 0 } about ? about : string.Empty)
-            : "A preset: " + item.Layout.About + " Make a copy to change it.";
-        _lstElements.Enabled = editable;
-        _btnRename.Enabled = editable;
-        _btnDelete.Enabled = editable;
-        _numGlass.Enabled = editable;
-        _numTextScale.Enabled = editable;
-        _btnUndo.Enabled = editable && _undo.Any(u => u.Id == item!.Layout.Id);
-        var warnings = layout is null ? Array.Empty<string>() : OverlayOverlap.Warnings(layout, KindWords);
-        _lblOverlap.Text = warnings.Count == 0 ? string.Empty : string.Join(" ", warnings.Take(3));
-        _btnPreview.Enabled = _txtAddress.Text.Length > 0;
+        var own = item is { Preset: false };
+        _btnRename.Enabled = own;
+        _btnDelete.Enabled = own;
+        _btnUndo.Enabled = item is not null && (_undo.Any(u => u.Id == item.Layout.Id) || _copiedFrom.ContainsKey(item.Layout.Id));
+        _btnRedo.Enabled = item is not null && _redo.Any(u => u.Id == item.Layout.Id);
         _btnCopyAddress.Enabled = _txtAddress.Text.Length > 0;
+        _btnBrowser.Enabled = _txtAddress.Text.Length > 0;
+        _preview.BrowserAddress = _txtAddress.Text.Length > 0 ? _txtAddress.Text + "?demo=1" : string.Empty;
 
-        if (_lstElements.SelectedIndex < 0 && _lstElements.Items.Count > 0)
+        // Until the picture measures them, the overlaps worked out from the layout.
+        var warnings = layout is null ? Array.Empty<string>() : OverlayOverlap.Warnings(layout, KindWords);
+        if (!_preview.Live)
         {
-            _lstElements.SelectedIndex = 0;
+            _lblClash.Text = string.Join(" ", warnings.Take(3));
         }
 
+        _lstLayers.Invalidate();
         ShowElement();
     }
 
     private void ShowElement()
     {
         var layout = Current;
-        var kind = _lstElements.SelectedIndex >= 0 ? Kinds[_lstElements.SelectedIndex] : (OverlayElementKind?)null;
-        var element = kind is { } k ? layout?.Element(k) : null;
+        var kind = _kind;
+        var element = layout?.Element(kind);
+        var on = element is { On: true };
+        var usual = element is null || element.Anchor == OverlayAnchor.Default;
+        var (usualAnchor, usualX, usualY) = UsualPlace(kind);
 
         _filling = true;
 
         try
         {
-            _cmbAnchor.SelectedIndex = Math.Max(0, Array.FindIndex(Anchors, a => a.Anchor == (element?.Anchor ?? OverlayAnchor.Default)));
-            _numX.Value = (decimal)Math.Clamp(element?.X ?? 2, -50, 50);
-            _numY.Value = (decimal)Math.Clamp(element?.Y ?? 2, -50, 50);
-            _numScale.Value = (decimal)Math.Round(Math.Clamp(element?.Scale ?? 1, 0.5, 2) * 100);
+            _lblWhat.Text = KindWords(kind).Replace(" (always on)", string.Empty, StringComparison.Ordinal);
+            _lblWhatNote.Text = !on
+                ? "Off in this layout. Click its eye in the list to turn it on."
+                : usual ? "At its usual place. Drag it, or pick one of the nine places."
+                : "Moved by this layout.";
+            _nine.Anchor9 = usual ? OverlayAnchor.Default : element!.Anchor;
+            _nine.Usual = usualAnchor;
+            _numX.Value = (decimal)Math.Clamp(usual ? usualX : element!.X, -50, 50);
+            _numY.Value = (decimal)Math.Clamp(usual ? usualY : element!.Y, -50, 50);
+            _numScale.Value = (decimal)Math.Round(Math.Clamp(usual ? 1 : element!.Scale, 0.5, 2) * 100);
             _numRows.Value = Math.Clamp(element?.Rows ?? 0, 0, 20);
             var during = element?.During ?? OverlayDuring.Always;
-            _chkStaging.Checked = during.HasFlag(OverlayDuring.Staging);
-            _chkRacing.Checked = during.HasFlag(OverlayDuring.Racing);
-            _chkFinished.Checked = during.HasFlag(OverlayDuring.Finished);
-            _chkBetween.Checked = during.HasFlag(OverlayDuring.Between);
+            var auto = during == OverlayDuring.Always;
+            var shows = auto ? NaturalParts(kind) : during;
+            _chkAuto.Checked = auto;
+            _chkStaging.Checked = shows.HasFlag(OverlayDuring.Staging);
+            _chkRacing.Checked = shows.HasFlag(OverlayDuring.Racing);
+            _chkFinished.Checked = shows.HasFlag(OverlayDuring.Finished);
+            _chkBetween.Checked = shows.HasFlag(OverlayDuring.Between);
+            _lblShowsHint.Text = auto
+                ? "Auto: whenever it has something to show - the parts ticked are when that is."
+                : "Only in the parts ticked.";
         }
         finally
         {
             _filling = false;
         }
 
-        var editable = Picked is { Preset: false } && element is { On: true };
-        var placed = editable && element!.Anchor != OverlayAnchor.Default;
+        // A preset is editable too: its first change makes the club's copy.
+        var editable = on;
+        _nine.Enabled = editable;
+        _btnUsual.Enabled = editable && !usual;
+        var at = usual ? usualAnchor : element!.Anchor;
+        _numX.Enabled = editable && at is not (OverlayAnchor.Top or OverlayAnchor.Middle or OverlayAnchor.Bottom);
+        _numY.Enabled = editable && at is not (OverlayAnchor.Left or OverlayAnchor.Middle or OverlayAnchor.Right);
+        _numScale.Enabled = editable;
 
-        _cmbAnchor.Enabled = editable;
-        _numX.Enabled = placed;
-        _numY.Enabled = placed;
-        _numScale.Enabled = placed;
-        _numRows.Enabled = editable && kind is OverlayElementKind.Tower or OverlayElementKind.Ticker;
+        var rows = kind is OverlayElementKind.Tower or OverlayElementKind.Ticker;
+        _lblRows.Visible = rows;
+        _numRows.Visible = rows;
+        _lblRowsHint.Visible = rows;
+        _numRows.Enabled = editable && rows;
+
+        var choosable = editable && kind != OverlayElementKind.Mark;
+        _chkAuto.Enabled = choosable;
         foreach (var box in new[] { _chkStaging, _chkRacing, _chkFinished, _chkBetween })
         {
-            box.Enabled = editable && kind != OverlayElementKind.Mark;
+            box.Enabled = choosable && !_chkAuto.Checked;
         }
     }
+
+    /// <summary>The part-of-the-night buttons: the one the picture shows filled, and Play's caption.</summary>
+    private void ShowParts()
+    {
+        for (var i = 0; i < _btnParts.Length; i++)
+        {
+            AppTheme.StyleButton(_btnParts[i], PartsOfTheNight[i].Part == _part ? AppTheme.ButtonKind.Primary : AppTheme.ButtonKind.Secondary);
+        }
+
+        _btnPlay.Text = _playing ? "Stop playing" : "Play the night";
+        _lstLayers.Showing = _part;
+        _lstLayers.Invalidate();
+    }
+
+    // --- The picture ---
+
+    /// <summary>Reopens the picture in a moment - after a change, or a new part of the night.</summary>
+    private void ReloadPicture()
+    {
+        _reload.Stop();
+        _reload.Start();
+    }
+
+    /// <summary>The overlay page as the picture shows it: edit mode, the demo held at the part picked (or playing), the picked graphic outlined.</summary>
+    internal string PictureAddress()
+    {
+        var layout = Current;
+        var address = layout is null ? string.Empty : _addressOf(layout.Id);
+
+        if (address.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        if (_gallery)
+        {
+            return Uri.TryCreate(address, UriKind.Absolute, out var uri)
+                ? uri.GetLeftPart(UriPartial.Authority) + WebServerService.OverlayGalleryPath
+                : string.Empty;
+        }
+
+        var part = PartsOfTheNight.First(p => p.Part == _part);
+        var demo = _playing ? "demo=1&at=0" : "demo=1&hold=" + part.Name + "&at=" + part.At;
+
+        if (_chkPhone.Checked)
+        {
+            return address + "?phone=1&" + demo;
+        }
+
+        return address + "?" + demo + "&edit=1&sel=" + OverlayLayouts.ElementName(_kind) + (_chkGhosts.Checked ? string.Empty : "&ghosts=0");
+    }
+
+    private void ShowPicture() => _preview.Show(PictureAddress());
+
+    private void ShowGallery()
+    {
+        _gallery = true;
+        _playing = false;
+        ShowParts();
+        ShowPicture();
+    }
+
+    private void TellPictureWhichIsPicked() => _preview.Post(new { t = "select", k = OverlayLayouts.ElementName(_kind) });
+
+    private static OverlayElementKind? KindNamed(string? name) =>
+        Kinds.Cast<OverlayElementKind?>().FirstOrDefault(k => OverlayLayouts.ElementName(k!.Value) == name);
+
+    /// <summary>What the overlay page says: a graphic picked, placed, the overlaps it measured, the part the demo is in, a look picked.</summary>
+    private void OnPictureMessage(JsonElement m)
+    {
+        var t = m.TryGetProperty("t", out var tv) && tv.ValueKind == JsonValueKind.String ? tv.GetString() : null;
+
+        switch (t)
+        {
+            case "pick":
+                if (KindNamed(Str(m, "k")) is { } picked && picked != _kind)
+                {
+                    _kind = picked;
+                    _lstLayers.SelectedIndex = Array.IndexOf(Kinds, picked);
+                    ShowElement();
+                }
+
+                break;
+
+            case "place":
+                if (KindNamed(Str(m, "k")) is { } kind && Enum.TryParse<OverlayAnchor>(Str(m, "anchor"), out var anchor) && anchor != OverlayAnchor.Default
+                    && Number(m, "x") is { } x && Number(m, "y") is { } y && Number(m, "scale") is { } scale)
+                {
+                    _kind = kind;
+                    Edit(layout =>
+                    {
+                        var e = ElementOf(layout, kind);
+                        e.Anchor = anchor;
+                        e.X = Math.Clamp(x, -50, 50);
+                        e.Y = Math.Clamp(y, -50, 50);
+                        e.Scale = Math.Clamp(scale, 0.5, 2);
+                    });
+                }
+
+                break;
+
+            case "clash":
+                _lblClash.Text = ClashWords(m);
+                break;
+
+            case "part":
+                if (_playing && PartsOfTheNight.FirstOrDefault(p => p.Name == Str(m, "p")) is { Name: not null } reached)
+                {
+                    _part = reached.Part;
+                    ShowParts();
+                }
+
+                break;
+
+            case "pickLayout":
+                if (Str(m, "id") is { } id)
+                {
+                    _gallery = false;
+                    FillLayouts(id);
+                    ShowPicture();
+                }
+
+                break;
+        }
+    }
+
+    private static string? Str(JsonElement m, string name) =>
+        m.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+    private static double? Number(JsonElement m, string name) =>
+        m.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out var d) && double.IsFinite(d) ? d : null;
+
+    /// <summary>"Covering each other: Battle box and Fastest lap" - the page's measured pairs in the club's words.</summary>
+    internal static string ClashWords(JsonElement m)
+    {
+        if (!m.TryGetProperty("pairs", out var pairs) || pairs.ValueKind != JsonValueKind.Array)
+        {
+            return string.Empty;
+        }
+
+        var said = new List<string>();
+
+        foreach (var pair in pairs.EnumerateArray())
+        {
+            if (pair.ValueKind == JsonValueKind.Array && pair.GetArrayLength() == 2
+                && KindNamed(pair[0].GetString()) is { } a && KindNamed(pair[1].GetString()) is { } b)
+            {
+                said.Add(Short(a) + " and " + Short(b));
+            }
+        }
+
+        if (said.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        return "Covering each other now: " + string.Join("; ", said.Take(3)) + (said.Count > 3 ? $"; and {said.Count - 3} more" : string.Empty) + ".";
+
+        static string Short(OverlayElementKind kind) => KindWords(kind).Split(" (")[0];
+    }
+
+    private void CopyAddress()
+    {
+        try
+        {
+            if (_txtAddress.Text.Length > 0)
+            {
+                Clipboard.SetText(_txtAddress.Text);
+                _btnCopyAddress.Text = "Copied";
+                var back = new System.Windows.Forms.Timer { Interval = 1500 };
+                back.Tick += (_, _) =>
+                {
+                    back.Dispose();
+                    if (!_btnCopyAddress.IsDisposed)
+                    {
+                        _btnCopyAddress.Text = "Copy";
+                    }
+                };
+                back.Start();
+            }
+        }
+        catch
+        {
+            // Another program holds the clipboard; the address is on screen.
+        }
+    }
+
+    // --- Changes ---
 
     /// <summary>The element of this kind in the layout, added (off, where it usually goes) when the layout has none yet.</summary>
     private static OverlayElement ElementOf(OverlayLayout layout, OverlayElementKind kind)
@@ -402,10 +815,60 @@ public sealed class OverlayEditorForm : Form
         return added;
     }
 
-    /// <summary>One change to the picked layout, saved at once. Nothing for a preset or while filling.</summary>
+    /// <summary>A graphic at its usual place, moved by a number: into the one of the nine it was already in, from there.</summary>
+    private void OutOfUsualPlace(OverlayElement e)
+    {
+        if (e.Anchor != OverlayAnchor.Default)
+        {
+            return;
+        }
+
+        var (anchor, x, y) = UsualPlace(e.Kind);
+        e.Anchor = anchor;
+        e.X = x;
+        e.Y = y;
+        e.Scale = 1;
+    }
+
+    /// <summary>
+    /// The club's own copy to change: the picked layout itself, or - for a
+    /// preset - a copy made now, "&lt;name&gt; (our copy)", picked in its place
+    /// and said so. Null when there is nothing picked.
+    /// </summary>
+    private OverlayLayout? OwnToChange()
+    {
+        if (Picked is not { } item)
+        {
+            return null;
+        }
+
+        if (!item.Preset)
+        {
+            return _store.Get(item.Layout.Id);
+        }
+
+        var name = item.Layout.Name + " (our copy)";
+        var n = 2;
+
+        while (_store.Layouts.Any(l => string.Equals(l.Name, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            name = item.Layout.Name + $" (our copy {n++})";
+        }
+
+        var copy = _store.AddCopy(item.Layout, name);
+        _copiedFrom[copy.Id] = item.Layout.Id;
+        FillLayouts(copy.Id);
+
+        _lblNotice.Text = $"\"{item.Layout.Name}\" is a preset, so your change went into a copy of your own: \"{copy.Name}\". Its address is new - copy it for OBS. The preset stays as it was.";
+        _notice.Visible = true;
+
+        return _store.Get(copy.Id);
+    }
+
+    /// <summary>One change to the picked layout, saved at once. A preset's first change makes the club's copy. Nothing while filling.</summary>
     private void Edit(Action<OverlayLayout> change)
     {
-        if (_filling || Picked is not { Preset: false } item || _store.Get(item.Layout.Id) is not { } layout)
+        if (_filling || OwnToChange() is not { } layout)
         {
             return;
         }
@@ -416,23 +879,16 @@ public sealed class OverlayEditorForm : Form
             _undo.RemoveAt(0);
         }
 
+        _redo.RemoveAll(r => r.Id == layout.Id);
         change(layout);
         _store.Update(layout);
-        ShowLayoutKeepingElement();
-    }
-
-    /// <summary>Redraws the picked layout's state - the warnings, Undo - without losing the graphic picked.</summary>
-    private void ShowLayoutKeepingElement()
-    {
-        var at = _lstElements.SelectedIndex;
         ShowLayout();
-        if (at >= 0 && at < _lstElements.Items.Count)
-        {
-            _lstElements.SelectedIndex = at;
-        }
+        ReloadPicture();
     }
 
-    /// <summary>Puts the picked layout back as it was before its last change in this window.</summary>
+    private void EditElement(Action<OverlayElement> change) => Edit(layout => change(ElementOf(layout, _kind)));
+
+    /// <summary>Puts the picked layout back as it was before its last change in this window - and, with none left, takes away the copy a preset's first change made.</summary>
     private void UndoLast()
     {
         if (Picked is not { Preset: false } item)
@@ -444,6 +900,15 @@ public sealed class OverlayEditorForm : Form
 
         if (at < 0)
         {
+            if (_copiedFrom.Remove(item.Layout.Id, out var preset))
+            {
+                _redo.RemoveAll(r => r.Id == item.Layout.Id);
+                _store.Remove(item.Layout.Id);
+                _notice.Visible = false;
+                FillLayouts(preset);
+                ReloadPicture();
+            }
+
             return;
         }
 
@@ -458,10 +923,36 @@ public sealed class OverlayEditorForm : Form
         if (_store.Get(before.Id) is { } now)
         {
             before.Name = now.Name;
+            _redo.Add(now);
         }
 
         _store.Update(before);
-        ShowLayoutKeepingElement();
+        ShowLayout();
+        ReloadPicture();
+    }
+
+    /// <summary>Makes again the change Undo last took back.</summary>
+    private void RedoLast()
+    {
+        if (Picked is not { Preset: false } item)
+        {
+            return;
+        }
+
+        var at = _redo.FindLastIndex(r => r.Id == item.Layout.Id);
+
+        if (at < 0 || _store.Get(item.Layout.Id) is not { } now)
+        {
+            return;
+        }
+
+        var again = _redo[at];
+        _redo.RemoveAt(at);
+        again.Name = now.Name;
+        _undo.Add(now);
+        _store.Update(again);
+        ShowLayout();
+        ReloadPicture();
     }
 
     /// <summary>
@@ -516,35 +1007,7 @@ public sealed class OverlayEditorForm : Form
         var typed = text.Text.Replace("\r\n", "\n", StringComparison.Ordinal).Trim();
         _settings.StreamBasics = typed == StreamBasics.BuiltInText.Replace("\r\n", "\n", StringComparison.Ordinal) ? string.Empty : typed;
         _settings.Save();
-    }
-
-    private void EditElement(Action<OverlayElement> change)
-    {
-        if (_lstElements.SelectedIndex < 0)
-        {
-            return;
-        }
-
-        var kind = Kinds[_lstElements.SelectedIndex];
-        Edit(layout => change(ElementOf(layout, kind)));
-    }
-
-    private void MakeCopy()
-    {
-        if (Current is not { } from)
-        {
-            return;
-        }
-
-        var name = AskName("Make a copy", "What should your layout be called?", from.Name + " (mine)");
-
-        if (name is null)
-        {
-            return;
-        }
-
-        var copy = _store.AddCopy(from, name);
-        FillLayouts(copy.Id);
+        ReloadPicture();
     }
 
     private void RenameLayout()
@@ -581,7 +1044,10 @@ public sealed class OverlayEditorForm : Form
         }
 
         _store.Remove(layout.Id);
+        _copiedFrom.Remove(layout.Id);
+        _notice.Visible = false;
         FillLayouts(null);
+        ReloadPicture();
     }
 
     /// <summary>A name, asked for in a small box of the app's own; null when cancelled or left blank.</summary>
@@ -609,5 +1075,15 @@ public sealed class OverlayEditorForm : Form
         DialogFit.Keep(ask, page, width: 420);
 
         return ask.ShowDialog(this) == DialogResult.OK && text.Text.Trim().Length > 0 ? text.Text.Trim() : null;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _reload.Dispose();
+        }
+
+        base.Dispose(disposing);
     }
 }
