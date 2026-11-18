@@ -299,7 +299,8 @@ public sealed partial class FirstRunWizard : Form
 
         _lblProgress.AutoSize = true;
 
-        _lblProgress.Font = AppTheme.BoldFont;
+        // The same eyebrow as Set Up Tonight's: "STEP 2 OF 5" in small spaced caps over a dark title.
+        _lblProgress.Font = AppTheme.MicroFont;
 
         _btnSkipAll.Text = "Skip setup";
         _btnSkipAll.Click += (_, _) => SkipEverything();
@@ -1056,7 +1057,7 @@ public sealed partial class FirstRunWizard : Form
         _btnBack.Visible = _step > 0;
         _btnSkipAll.Visible = !last;
         _btnNext.Text = last ? "Finish" : (_step == 0 ? "Get started" : "Next");
-        _lblProgress.Text = _step == 0 || last ? string.Empty : $"Step {_step} of {StepNames.Length - 2}";
+        _lblProgress.Text = _step == 0 || last ? string.Empty : AppTheme.Spaced($"STEP {_step} OF {StepNames.Length - 2}");
 
         // Nothing to say on the welcome page or the last one - and on the
         // last, nothing on the left at all, so no empty row is left there.
@@ -1102,7 +1103,7 @@ public sealed partial class FirstRunWizard : Form
             }
         }
 
-        _lblStepTitle.ForeColor = AppTheme.Primary;
+        _lblStepTitle.ForeColor = AppTheme.TextDark;
         _lblStepBody.ForeColor = AppTheme.TextDark;
         _lblProgress.ForeColor = AppTheme.Primary;
 
