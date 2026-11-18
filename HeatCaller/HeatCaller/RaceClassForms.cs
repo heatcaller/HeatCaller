@@ -3,14 +3,15 @@ namespace HeatCaller;
 /// <summary>
 /// Small add/edit dialog for a single RaceClass.
 ///
-/// On the layout pieces (DialogFit): the settings in three field grids, one
-/// under the other, their captions in one column as wide as the longest of
-/// them (FieldGrid.LineUp) - the name with the colour swatch beside it, the
-/// notes, how qualifying is scored and the note on it; the mains under
-/// their heading, and the note on them; then jump starts and the tech
-/// warning. All of that is the window's body, which scrolls on a screen too
-/// short for it. Under it, always in view, the class's sub-editors in a row
-/// that wraps, and Save and Cancel at the foot. It used to be placed in
+/// On the layout pieces (DialogFit): a line saying what the window is for
+/// and a strip of tiles with the class at a glance - how it qualifies, how
+/// many to a main, its A-main and its entry fee, kept in step as they are
+/// changed below (ShowTiles). Then the settings in cards, each with a short
+/// line saying what it does (18 Nov 2026, the dialog version of the Venues
+/// look): the class itself, qualifying, the mains, on the track and fees,
+/// their captions in one column down all of them (FieldGrid.LineUp). All of
+/// that is the window's body, which scrolls on a screen too short for it.
+/// Under it, always in view, the class's sub-editors in a row that wraps, and Save and Cancel at the foot. It used to be placed in
 /// pixels: every caption and field at a fixed place in a window 652px wide
 /// whatever the text size, the fields beside a caption at an x chosen for
 /// it and the sub-editors flowed at a fixed width - about 674px tall at the
@@ -24,9 +25,11 @@ public sealed class RaceClassEditForm : Form
     /// How wide the window is inside its frame at the normal text size - the
     /// width the old one worked out from its row of sub-editors, which it
     /// wrapped at 620px rather than run them along one line eight hundred
-    /// pixels long.
+    /// pixels long - and 48px more since the settings went into cards (18 Nov
+    /// 2026): a card's insets take that from the field column, and at 652 the
+    /// swatch wrapped under the name and the points picker was cut short.
     /// </summary>
-    private const int DialogWidth = 652;
+    private const int DialogWidth = 700;
 
     /// <summary>
     /// The name box's width at the normal text size: about forty-five
@@ -134,6 +137,9 @@ public sealed class RaceClassEditForm : Form
     private readonly CheckBox _chkOwnExtraFee = new ThemedCheckBox();
     private readonly NumericUpDown _numOwnExtraFee = new() { DecimalPlaces = 2, Maximum = 1000, Increment = 1 };
 
+    /// <summary>The class at a glance, over its settings - see ShowTiles.</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
+
     public RaceClassEditForm(RaceClass? existing, RaceClassStore? store = null)
     {
         // A new class starts with a race length (setup plan A5): see RaceFormat.ForNewClass.
@@ -227,7 +233,6 @@ public sealed class RaceClassEditForm : Form
         };
 
         // --- Mains ---
-        var lblMains = new Label { Text = "Mains", AutoSize = true, Font = AppTheme.BoldFont };
 
         _numMainSize.Minimum = 2;
         _numMainSize.Maximum = 40;
@@ -379,14 +384,15 @@ public sealed class RaceClassEditForm : Form
         // first thing after the name a club has to decide (setup plan step 8).
         _length?.AddTo(about);
 
-        about.AddRow("Qualifying:", _cmbQualifying);
-        _lblConsecutive = about.AddRow("Consecutive laps to count:", _numConsecutive);
-        about.AddRow("Heats that count:", _numCountBest);
-        _lblPointsScale = about.AddRow("Top qualifier scores:", _cmbPointsScale);
+        var qualifying = new FieldGrid();
+        qualifying.AddRow("Qualifying:", _cmbQualifying);
+        _lblConsecutive = qualifying.AddRow("Consecutive laps to count:", _numConsecutive);
+        qualifying.AddRow("Heats that count:", _numCountBest);
+        _lblPointsScale = qualifying.AddRow("Top qualifier scores:", _cmbPointsScale);
 
         // Across both columns, under the rows it explains - it is about the
         // two of them together - wrapping to the grid's width.
-        about.AddWide(lblQualHint);
+        qualifying.AddWide(lblQualHint);
 
         var mains = new FieldGrid();
         mains.AddRow("Drivers per main:", _numMainSize);
@@ -408,7 +414,6 @@ public sealed class RaceClassEditForm : Form
         // The class's own fees (12 Nov 2026, setup plan step 8): each row a
         // tick and the amount, greyed while unticked - unticked, the class
         // pays the race day's fees. See RaceClass.EntryFee and DeskMoney.FeeFor.
-        var lblMoney = new Label { Text = "Fees", AutoSize = true, Font = AppTheme.BoldFont };
         var money = new FieldGrid();
         money.AddRow("Entry fee:", FieldGrid.Inline(_chkOwnFee, _numOwnFee));
         money.AddRow("As an extra class:", FieldGrid.Inline(_chkOwnExtraFee, _numOwnExtraFee));
@@ -429,18 +434,67 @@ public sealed class RaceClassEditForm : Form
         _chkOwnFee.CheckedChanged += (_, _) => UpdateFeesEnabled();
         _chkOwnExtraFee.CheckedChanged += (_, _) => UpdateFeesEnabled();
 
+        // The tiles follow what they show as it is changed below.
+        _cmbQualifying.SelectedIndexChanged += (_, _) => ShowTiles();
+        _numConsecutive.ValueChanged += (_, _) => ShowTiles();
+        _numMainSize.ValueChanged += (_, _) => ShowTiles();
+        _cmbAMainLegs.SelectedIndexChanged += (_, _) => ShowTiles();
+        _chkOwnFee.CheckedChanged += (_, _) => ShowTiles();
+        _numOwnFee.ValueChanged += (_, _) => ShowTiles();
+
+        // --- The cards: each a group of settings and a line on what they do ---
+        var classCard = new Section("The class");
+        classCard.Add(CardHint("Its name, its color on the sheets and anything to remember about it."));
+        classCard.Add(about, gapBelow: 0);
+
+        var qualifyingCard = new Section("Qualifying");
+        qualifyingCard.Add(CardHint("How the heats rank drivers before the mains."));
+        qualifyingCard.Add(qualifying, gapBelow: 0);
+
+        var mainsCard = new Section("Mains");
+        mainsCard.Add(CardHint("How the field is split into finals once qualifying is done."));
+        mainsCard.Add(mains, gapBelow: 0);
+
+        var trackCard = new Section("On the track");
+        trackCard.Add(CardHint("What Race Control watches for when this class races."));
+        trackCard.Add(raceDay, gapBelow: 0);
+
+        var feesCard = new Section("Fees");
+        feesCard.Add(CardHint("What a driver pays to race in this class."));
+        feesCard.Add(money, gapBelow: 0);
+
+        // --- The top: what the window is for, and the class at a glance ---
+        var lblIntro = new Label
+        {
+            Text = existing is null
+                ? "A new class: how it qualifies, how its mains run and what it costs. Save adds it to the list."
+                : "How this class qualifies, how its mains run and what it costs.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        var tileCaptions = new[] { "Qualifying", "Main size", "A-main", "Entry fee" };
+
+        for (var i = 0; i < _tiles.Length; i++)
+        {
+            _tiles[i].Set("-", tileCaptions[i]);
+        }
+
+        var tiles = new TileStrip(_tiles);
+
         var page = new FillPage();
 
         // Every setting: on a screen too short for all of them - 1280x720,
         // or any at a larger text size - they scroll, and the sub-editors,
         // Save and Cancel under them stay in view.
         var body = DialogFit.Body(page);
-        body.Add(about);
-        body.Add(lblMains, stretch: false, gapBelow: UiLayout.LabelGap);
-        body.Add(mains);
-        body.Add(raceDay);
-        body.Add(lblMoney, stretch: false, gapBelow: UiLayout.LabelGap);
-        body.Add(money, gapBelow: 0);
+        body.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        body.Add(tiles);
+        body.Add(classCard);
+        body.Add(qualifyingCard);
+        body.Add(mainsCard);
+        body.Add(trackCard);
+        body.Add(feesCard, gapBelow: 0);
 
         // Two rows with two jobs: the class's sub-editors on one, the exit
         // buttons on the other, bottom-right where a dialog keeps them.
@@ -453,6 +507,9 @@ public sealed class RaceClassEditForm : Form
         // limits - the window hides its own tuning), color and sanctioning
         // preset; the tech list, qualifier format and warning ladder are
         // Advanced. See SimpleMode.
+        // On the page itself, not in a card: on a 1280x720 screen a card's
+        // caption, hint and insets took another 80px from the settings over
+        // them, which already scroll there (layout pictures, 18 Nov 2026).
         page.Add(new ButtonBar().With(SimpleMode.Hide(btnTechList), btnFormat, SimpleMode.Hide(btnQualFormat), btnColour, btnPreset, SimpleMode.Hide(btnWarnings)), gapBelow: UiLayout.RowGap);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
@@ -476,8 +533,17 @@ public sealed class RaceClassEditForm : Form
 
         // Once the captions are on the dialog and wear its face - what they
         // are measured in.
-        FieldGrid.LineUp(new[] { about, mains, raceDay, money });
+        FieldGrid.LineUp(new[] { about, qualifying, mains, raceDay, money });
         SizeFields();
+
+        // The tiles in their own faces, after the theme pass, and filled in.
+        foreach (var tile in _tiles)
+        {
+            tile.Value.Font = AppTheme.TitleFont;
+            tile.Caption.Font = AppTheme.MicroFont;
+        }
+
+        ShowTiles();
 
         DialogFit.Keep(this, page, width: DialogWidth, body: body);
     }
@@ -536,6 +602,46 @@ public sealed class RaceClassEditForm : Form
         _numOwnExtraFee.Width = feeWidth;
 
         _length?.SizeFields();
+    }
+
+    /// <summary>A card's line on what it does, under its caption, in the small muted type.</summary>
+    private static Label CardHint(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        ForeColor = AppTheme.TextMuted,
+        Font = AppTheme.SmallFont,
+    };
+
+    /// <summary>
+    /// The tiles over the settings, from what the fields say now rather than
+    /// what was saved - so they read as the class will once Save is pressed.
+    /// </summary>
+    private void ShowTiles()
+    {
+        // Short: a tile is a quarter of the window, in the title face.
+        var method = CurrentMethod() switch
+        {
+            QualifyingMethod.BestConsecutiveLaps => $"Best {(int)_numConsecutive.Value}",
+            QualifyingMethod.RoundPoints => "Points",
+            _ => "Laps",
+        };
+
+        var legs = LegChoices[Math.Clamp(_cmbAMainLegs.SelectedIndex, 0, LegChoices.Length - 1)].Legs switch
+        {
+            3 => "Triple",
+            2 => "Double",
+            _ => "Single",
+        };
+
+        _tiles[0].Value.Text = method;
+        _tiles[1].Value.Text = ((int)_numMainSize.Value).ToString(System.Globalization.CultureInfo.CurrentCulture);
+        _tiles[2].Value.Text = legs;
+
+        // Unticked, the class pays the race day's usual fee.
+        _tiles[3].Value.Text = _chkOwnFee.Checked
+            ? _numOwnFee.Value.ToString("0.00", System.Globalization.CultureInfo.CurrentCulture)
+            : "Usual";
     }
 
     /// <summary>A fee's amount only means anything with its tick, so it is greyed rather than hidden.</summary>

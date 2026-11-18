@@ -41,10 +41,25 @@ public sealed class RentalCheckOutForm : Form
 
         var lblUnit = new Label
         {
-            Text = $"Transponder {unit.Transponder}",
+            Text = "Lend this transponder out. It shows as out until it comes back.",
             AutoSize = true,
-            Font = AppTheme.BoldFont,
+            Font = AppTheme.SmallFont,
+            ForeColor = AppTheme.TextMuted,
         };
+
+        // The unit at a glance across the top (18 Nov 2026, dialog
+        // jazz-up): its number, its tag, and how often it has gone out.
+        var tiles = new[] { new StatTile(), new StatTile(), new StatTile() };
+
+        foreach (var tile in tiles)
+        {
+            tile.Value.Font = AppTheme.TitleFont;
+            tile.Caption.Font = AppTheme.MicroFont;
+        }
+
+        tiles[0].Set(unit.Transponder, "Number");
+        tiles[1].Set(string.IsNullOrWhiteSpace(unit.AssetTag) ? "None" : unit.AssetTag, "Tag");
+        tiles[2].Set(unit.History.Count.ToString(System.Globalization.CultureInfo.CurrentCulture), "Times lent");
 
         _cmbHolder.DropDownStyle = ComboBoxStyle.DropDown;
         foreach (var name in profiles.All.Select(p => p.DriverName)
@@ -72,23 +87,33 @@ public sealed class RentalCheckOutForm : Form
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        // Both fields run to the right-hand edge, where the buttons end, as
-        // the 290px fields did beside their captions; each hint under its
-        // field, wrapping to the field's width.
-        var fields = new FieldGrid();
+        // Each field in a card of its own, running to the card's right-hand
+        // edge; each hint under its field, wrapping to the field's width. The
+        // two grids share one caption column (LineUp), so the fields line up
+        // from one card to the next.
+        var holderGrid = new FieldGrid();
+        var depositGrid = new FieldGrid();
         var captions = new List<Label>
         {
-            fields.AddRow("Loan to:", _cmbHolder, stretch: true),
+            holderGrid.AddRow("Loan to:", _cmbHolder, stretch: true),
         };
 
-        fields.AddHint("Pick a saved driver or just type a name - a walk-in doesn't need a profile first.");
+        holderGrid.AddHint("Pick a saved driver or just type a name - a walk-in doesn't need a profile first.");
 
-        captions.Add(fields.AddRow("Deposit held:", _txtDeposit, stretch: true));
-        fields.AddHint("Whatever you're holding until it comes back, so whoever is on the counter later knows what to return.");
+        captions.Add(depositGrid.AddRow("Deposit held:", _txtDeposit, stretch: true));
+        depositGrid.AddHint("Whatever you're holding until it comes back, so whoever is on the counter later knows what to return.");
+
+        var holderCard = new Section("Who's taking it");
+        holderCard.Add(holderGrid, gapBelow: 0);
+
+        var depositCard = new Section("Deposit");
+        depositCard.Add(depositGrid, gapBelow: 0);
 
         var page = new FillPage();
         page.Add(lblUnit, gapBelow: UiLayout.RowGap);
-        page.Add(fields);
+        page.Add(new TileStrip(tiles), gapBelow: UiLayout.RowGap);
+        page.Add(holderCard, gapBelow: UiLayout.RowGap);
+        page.Add(depositCard);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // and Tab still reaches Check Out first: the bar takes them right to
@@ -118,12 +143,15 @@ public sealed class RentalCheckOutForm : Form
         // caption and the gap after it.
         (Font Font, int Count, int Width)? holderWidth = null;
 
+        FieldGrid.LineUp(new[] { holderGrid, depositGrid });
+
         var fieldColumn = Math.Max(UiLayout.AtTextSize(FieldWidth), Pieces.PickerWidth(_cmbHolder, ref holderWidth));
         var captionColumn = captions.Max(caption => caption.GetPreferredSize(Size.Empty).Width + caption.Margin.Horizontal);
 
+        // With the cards' own room either side of their fields.
         var width = Math.Max(
             UiLayout.AtTextSize(DialogWidth),
-            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.PageRight);
+            UiLayout.PageLeft + Section.Inset.Horizontal + captionColumn + fieldColumn + UiLayout.PageRight);
 
         DialogFit.Keep(this, page, width, widthMeasured: true);
     }

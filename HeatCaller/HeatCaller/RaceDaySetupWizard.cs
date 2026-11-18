@@ -39,7 +39,7 @@ namespace HeatCaller;
 /// coordinates in a 600x400 box, which a larger text size ran off the
 /// bottom and the right of.
 /// </summary>
-internal sealed class RaceDaySetupWizard : Form
+internal sealed partial class RaceDaySetupWizard : Form
 {
     /// <summary>The rail's width at the normal text size - wider only when its step names and the marks beside them need it.</summary>
     private const int RailWidth = 190;
@@ -324,8 +324,8 @@ internal sealed class RaceDaySetupWizard : Form
 
     private RaceEvent? OpenDay => _events.Active is { IsLegacy: false, IsOpen: true } day ? day : null;
 
-    /// <summary>The steps' own pages, in order - the welcome step has none. See ShowStep.</summary>
-    private Control[] StepPages => new Control[] { _dayStep, _racingStep, _driversStep, _programStep, _summaryStep };
+    /// <summary>The steps' own pages, in order. See ShowStep.</summary>
+    private Control[] StepPages => new Control[] { _welcomeStep, _dayStep, _racingStep, _driversStep, _programStep, _summaryStep };
 
     /// <summary>The three cards on the program step, in the order of the steps they stand for.</summary>
     private ReadinessCard[] Cards => new[] { _cardDay, _cardClasses, _cardDrivers };
@@ -367,6 +367,10 @@ internal sealed class RaceDaySetupWizard : Form
         _btnNext.Text = "Next";
         _btnNext.Click += (_, _) => NextClicked();
 
+        _lblEyebrow.AutoSize = true;
+        _lblEyebrow.Font = AppTheme.MicroFont;
+
+        BuildWelcomeStep();
         BuildDayStep();
         BuildRacingStep();
         BuildCheckInStep();
@@ -410,8 +414,12 @@ internal sealed class RaceDaySetupWizard : Form
         _stepPage.Padding = new Padding(UiLayout.PageLeft, UiLayout.SectionGap, UiLayout.SectionGap, UiLayout.SectionGap);
         ScrollTheming.NoRoomBelow(_stepPage);
 
-        _stepPage.Add(_lblStepTitle, gapBelow: UiLayout.RowGap);
-        _stepPage.Add(_lblStepBody);
+        // Where you are first: the bar of the four steps, "STEP 2 OF 4"
+        // under it, then the step's title and what it is about.
+        _stepPage.Add(_stepTrack, gapBelow: UiLayout.RowGap);
+        _stepPage.Add(_lblEyebrow, gapBelow: UiLayout.HintGap);
+        _stepPage.Add(_lblStepTitle, gapBelow: UiLayout.HintGap);
+        _stepPage.Add(_lblStepBody, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
 
         // The step takes the height the rest leave, and scrolls inside it
         // when it needs more - down to a few lines of it, below which the
@@ -479,7 +487,9 @@ internal sealed class RaceDaySetupWizard : Form
                 Text = StepNames[i],
                 AutoSize = false,
                 Height = stepHeight,
-                Padding = new Padding(inset, 0, 0, 0),
+
+                // Room before the name for its numbered badge (PaintRailBadge).
+                Padding = new Padding(RailNameLeft, 0, 0, 0),
                 TextAlign = ContentAlignment.MiddleLeft,
                 Cursor = Cursors.Hand,
             };
@@ -492,7 +502,12 @@ internal sealed class RaceDaySetupWizard : Form
             };
 
             // Done or still needed, beside the step's name - see RefreshReadiness.
-            label.Paint += (_, e) => PaintRailMark(e.Graphics, label, _railMarks[index]);
+            // And its number before it, filled on the step on show.
+            label.Paint += (_, e) =>
+            {
+                PaintRailBadge(e.Graphics, label, index);
+                PaintRailMark(e.Graphics, label, _railMarks[index]);
+            };
 
             _railLabels[i] = label;
             _rail.Add(label, gapBelow: i == StepNames.Length - 1 ? 0 : UiLayout.HintGap);
@@ -510,7 +525,7 @@ internal sealed class RaceDaySetupWizard : Form
         var inset = UiLayout.AtTextSize(RailStepInset);
 
         var names = StepNames.Max(name => TextRenderer.MeasureText(name, AppTheme.BoldFont).Width);
-        var steps = inset + names + UiLayout.LabelGap + UiLayout.AtTextSize(MarkSize) + UiLayout.AtTextSize(MarkInset);
+        var steps = RailNameLeft + names + UiLayout.LabelGap + UiLayout.AtTextSize(MarkSize) + UiLayout.AtTextSize(MarkInset);
         var brand = inset + TextRenderer.MeasureText(BrandText, AppTheme.NavFont).Width;
 
         return Math.Max(UiLayout.AtTextSize(RailWidth), Math.Max(steps, brand) + 2 * inset);
@@ -534,26 +549,42 @@ internal sealed class RaceDaySetupWizard : Form
         _lblDayState.AutoSize = true;
         _lblDayState.Font = AppTheme.SmallFont;
 
-        var grid = new FieldGrid();
-
         // The kind of night first, and what it means under it. Captioned as
         // on Race Day's Setup: with the other fields' captions beside them,
         // a drop-down in their column with none of its own read as a field
         // whose caption had gone missing (layout pictures, 29 Sep).
-        grid.AddRow("What kind of night:", _cmbShape);
-        grid.AddHint(_lblShapeHint);
+        _nightGrid.AddRow("What kind of night:", _cmbShape);
+        _nightGrid.AddHint(_lblShapeHint);
+        _nightGrid.AddRow("Call it:", _txtDayName);
 
-        grid.AddRow("Call it:", _txtDayName);
-        grid.AddRow("Venue:", _cmbVenue);
-        grid.AddRow("Track layout:", _cmbTrack);
+        _nightGrid.AddRow("Venue:", _cmbVenue);
+        _nightGrid.AddRow("Track layout:", _cmbTrack);
 
-        // Tonight's sound, in the same grid so its caption lines up with
-        // the others: a soundscape, lap times only, or what is set already.
-        _sound?.AddTo(grid);
+        // In cards (18 Nov 2026, dialog jazz-up): the night and where it
+        // is, with whether a day is open under them; and the sound. The
+        // grids share one caption column (SizeFields), so the fields still
+        // line up down the step as they did in one grid.
+        var night = new Section("The night");
+        night.Add(_nightGrid, gapBelow: UiLayout.RowGap);
+        night.Add(_lblDayState, gapBelow: 0);
 
-        _dayStep.Add(grid, gapBelow: UiLayout.RowGap);
-        _dayStep.Add(_lblDayState, gapBelow: 0);
+        _dayStep.Add(night, gapBelow: _sound is null ? 0 : UiLayout.RowGap);
+
+        // Tonight's sound: a soundscape, lap times only, or what is set already.
+        if (_sound is not null)
+        {
+            _sound.AddTo(_soundGrid);
+
+            var sound = new Section("Sound");
+            sound.Add(_soundGrid, gapBelow: 0);
+            _dayStep.Add(sound, gapBelow: 0);
+        }
     }
+
+    /// <summary>The day's fields: the night and its name, where, and the sound - one caption column between them (SizeFields).</summary>
+    private readonly FieldGrid _nightGrid = new();
+
+    private readonly FieldGrid _soundGrid = new();
 
     /// <summary>
     /// Tonight's classes and how they race: the classes ticked from a list
@@ -599,16 +630,25 @@ internal sealed class RaceDaySetupWizard : Form
         _dtpFirstRace.AutoSize = true;
         _dtpFirstRace.Value = TimeSpan.FromHours(10);
 
-        // To the right-hand edge: a class's name can be long, and in the
-        // column's width it was cut off ("Kyosho Mini-Z MR-03 Stock 70T
-        // Tourin", layout pictures, 29 Sep).
-        _racingGrid.AddRow("Classes racing:", _lstClasses, stretch: true);
-        _racingGrid.AddField(new ButtonBar().With(_btnAddClass));
+        // In cards (18 Nov 2026, dialog jazz-up): the classes, ticked from
+        // the list with Add Class under it; how they race; and the format
+        // each one runs. The list to the card's right-hand edge: a class's
+        // name can be long, and in a column's width it was cut off ("Kyosho
+        // Mini-Z MR-03 Stock 70T Tourin", layout pictures, 29 Sep).
+        var classes = new Section("Classes racing");
+        classes.Add(CardHint("Tick the ones out tonight."), gapBelow: UiLayout.RowGap);
+        classes.Add(_lstClasses, gapBelow: UiLayout.RowGap);
+        classes.Add(new ButtonBar().With(_btnAddClass), gapBelow: 0);
+
         _lblRoundsCaption = _racingGrid.AddRow(HeatsCaption, _numRounds);
         _racingGrid.AddRow("Drivers per heat:", _numHeatSize);
         _racingGrid.AddField(FieldGrid.Inline(_chkFirstRace, _dtpFirstRace));
 
-        _lblFormatsCaption.Text = "Race format - what each class runs tonight";
+        var howTheyRace = new Section("How they race");
+        howTheyRace.Add(CardHint("The same for every class tonight."), gapBelow: UiLayout.RowGap);
+        howTheyRace.Add(_racingGrid, gapBelow: 0);
+
+        _lblFormatsCaption.Text = "What each class runs tonight. Format changes it for that class.";
         _lblFormatsCaption.AutoSize = true;
         _lblFormatsCaption.Font = AppTheme.SmallFont;
 
@@ -616,13 +656,19 @@ internal sealed class RaceDaySetupWizard : Form
         _lblNoFormats.AutoSize = true;
         _lblNoFormats.Font = AppTheme.SmallFont;
 
-        _racingStep.Add(_racingGrid);
-        _racingStep.Add(_lblFormatsCaption, gapBelow: UiLayout.RowGap);
+        _formatsCard.Add(_lblFormatsCaption, gapBelow: UiLayout.RowGap);
 
         // Then a line per ticked class, added as they are needed - see
         // FillFormatRows - or this, when none is ticked.
-        _racingStep.Add(_lblNoFormats, gapBelow: 0);
+        _formatsCard.Add(_lblNoFormats, gapBelow: 0);
+
+        _racingStep.Add(classes, gapBelow: UiLayout.RowGap);
+        _racingStep.Add(howTheyRace, gapBelow: UiLayout.RowGap);
+        _racingStep.Add(_formatsCard, gapBelow: 0);
     }
+
+    /// <summary>The race format each ticked class runs, a line each - see FillFormatRows.</summary>
+    private readonly Section _formatsCard = new Section("Race format");
 
     /// <summary>
     /// One class's line in the formats: its name over its format, and the
@@ -741,7 +787,7 @@ internal sealed class RaceDaySetupWizard : Form
         line.Add(format, gapBelow: 0);
         line.AddSide(button, gapBelow: 0);
 
-        _racingStep.Add(line, gapBelow: UiLayout.RowGap);
+        _formatsCard.Add(line, gapBelow: UiLayout.RowGap);
 
         var row = new FormatRow(line, name, format);
 
@@ -851,13 +897,16 @@ internal sealed class RaceDaySetupWizard : Form
             new ButtonBar().With(_btnCheckAllShown, _btnClearAll, _btnAddDriver),
             new ButtonBar(alignRight: true).With(_btnGoToCheckIn));
 
-        // The list takes the room the new-driver row used to - taller, so
-        // more of the club is on screen at once.
-        _driversStep.Add(filter, gapBelow: UiLayout.RowGap);
-        _driversStep.AddFill(_lstWhosHere, _ => WhosHereLeastRows * _lstWhosHere.ItemHeight + 4, gapBelow: UiLayout.RowGap);
-        _driversStep.Add(actions, gapBelow: UiLayout.RowGap);
-        _driversStep.Add(_lblCheckInState, gapBelow: UiLayout.RowGap);
-        _driversStep.Add(_chkCheckedInOnly, stretch: false, gapBelow: 0);
+        // In a card (18 Nov 2026, dialog jazz-up), the list taking the
+        // height the step has - so more of the club is on screen at once.
+        var who = new Section("Who's here");
+        who.Add(filter, gapBelow: UiLayout.RowGap);
+        who.AddFill(_lstWhosHere, () => WhosHereLeastRows * _lstWhosHere.ItemHeight + 4, gapBelow: UiLayout.RowGap);
+        who.Add(actions, gapBelow: UiLayout.RowGap);
+        who.Add(_lblCheckInState, gapBelow: UiLayout.RowGap);
+        who.Add(_chkCheckedInOnly, stretch: false, gapBelow: 0);
+
+        _driversStep.AddFill(who, who.LeastHeight, gapBelow: 0);
     }
 
     /// <summary>
@@ -1083,7 +1132,13 @@ internal sealed class RaceDaySetupWizard : Form
         _cardClasses.Fix.Click += (_, _) => GoToStep(StepClasses);
         _cardDrivers.Fix.Click += (_, _) => GoToStep(StepDrivers);
 
-        _programStep.Add(_lblProgrammeState, gapBelow: 0);
+        // What building would make, in a card of its own (18 Nov 2026,
+        // dialog jazz-up) - shown while there is something to build.
+        _buildCard = new Section("Ready to build");
+        _buildCard.Add(_lblProgrammeState, gapBelow: UiLayout.RowGap);
+        _buildCard.Add(CardHint("Build It makes tonight's races. Back changes anything first."), gapBelow: 0);
+
+        _programStep.Add(_buildCard, gapBelow: 0);
         _programStep.Add(_lblNeedsTitle, gapBelow: UiLayout.HintGap);
         _programStep.Add(_lblNeedsNote);
         _programStep.Add(_cardDay, gapBelow: UiLayout.ButtonGap);
@@ -1130,6 +1185,10 @@ internal sealed class RaceDaySetupWizard : Form
         _lblCheckInState.MinimumSize = new Size(0, 2 * Pieces.LineHeight(_lblCheckInState.Font) + _lblCheckInState.Padding.Vertical);
 
         FieldGrid.LineUp(new[] { _racingGrid }, HeatsCaption, RacesCaption);
+
+        // The day's three cards, one caption column between them - as they
+        // lined up when they were one grid.
+        FieldGrid.LineUp(new[] { _nightGrid, _soundGrid });
     }
 
     /// <summary>
@@ -1583,7 +1642,12 @@ internal sealed class RaceDaySetupWizard : Form
     {
         _lblSummary.AutoSize = true;
 
-        _summaryStep.Add(_lblSummary, gapBelow: 0);
+        // Tiles of where the night stands over the summary, in a card
+        // (18 Nov 2026, dialog jazz-up).
+        var card = new Section("Where things stand");
+        card.Add(_lblSummary, gapBelow: 0);
+
+        BuildSummaryTiles(card);
     }
 
     // --- Moving between steps -------------------------------------------
@@ -1602,9 +1666,9 @@ internal sealed class RaceDaySetupWizard : Form
         {
             case 0:
                 _lblStepTitle.Text = "Let's get tonight ready";
-                _lblStepBody.Text = "Four short steps: the day itself, tonight's classes and how they race, who's here, "
-                                  + "and the program. Skip any of them - nothing here is a gate, and you can run this again "
-                                  + "from the Setup tab whenever you like.";
+                _lblStepBody.Text = "Skip any step you like - nothing here is a gate, and you can run this again "
+                                  + "from the Setup tab whenever you want.";
+                content = _welcomeStep;
                 break;
 
             case StepDay:
@@ -1639,10 +1703,7 @@ internal sealed class RaceDaySetupWizard : Form
 
             case StepProgramme:
                 _lblStepTitle.Text = "The program";
-                _lblStepBody.Text = _plan.Ok
-                    ? "The races themselves, built from the classes and the drivers above. "
-                      + "Build It makes them; Back changes anything first."
-                    : "The races themselves, built from tonight's classes and the drivers in them.";
+                _lblStepBody.Text = "The races themselves, built from tonight's classes and the drivers in them.";
                 LoadProgrammeStep();
                 content = _programStep;
                 break;
@@ -1672,7 +1733,12 @@ internal sealed class RaceDaySetupWizard : Form
             : _step == StepProgramme ? "Skip for Now"
             : "Next";
 
-        _lblProgress.Text = _step is 0 || last ? string.Empty : $"Step {_step} of {StepNames.Length - 2}";
+        // How many are left, beside Skip setup - the step's own number is over its title (ShowWhereWeAre).
+        _lblProgress.Text = _step is 0 || last ? string.Empty
+            : _step == CountedSteps ? "Last step"
+            : Plural.Of(CountedSteps - _step, "step") + " left";
+
+        ShowWhereWeAre();
 
         // Nothing to say on the welcome page or the last one - and on the
         // last, nothing on the left at all, so no empty row is left there.
@@ -1703,14 +1769,15 @@ internal sealed class RaceDaySetupWizard : Form
             _railLabels[i].Font = current ? AppTheme.BoldFont : AppTheme.BodyFont;
         }
 
-        _lblStepTitle.ForeColor = AppTheme.Primary;
-        _lblStepBody.ForeColor = AppTheme.TextDark;
+        _lblEyebrow.ForeColor = AppTheme.Primary;
+        _lblStepTitle.ForeColor = AppTheme.TextDark;
+        _lblStepBody.ForeColor = AppTheme.TextMuted;
         _lblProgress.ForeColor = AppTheme.TextMuted;
 
-        foreach (var hint in new[]
+        foreach (var hint in new Label[]
                  {
                      _lblShapeHint, _lblDayState, _lblFormatsCaption, _lblNoFormats,
-                 })
+                 }.Concat(_cardHints))
         {
             hint.ForeColor = AppTheme.TextMuted;
         }
@@ -2276,6 +2343,12 @@ internal sealed class RaceDaySetupWizard : Form
         // to it - the cards only when one of the steps is what stands in the
         // way (ShowNeedsYou).
         _lblProgrammeState.Visible = plan.Ok;
+
+        if (_buildCard is not null)
+        {
+            _buildCard.Visible = plan.Ok;
+        }
+
         _lblNeedsTitle.Visible = !plan.Ok;
         _lblNeedsNote.Visible = !plan.Ok;
 
@@ -2321,6 +2394,8 @@ internal sealed class RaceDaySetupWizard : Form
         lines.Add("Next Steps keeps track of whatever is left - it always shows the next thing to do.");
 
         _lblSummary.Text = string.Join("\r\n", lines);
+
+        FillSummaryTiles();
     }
 }
 

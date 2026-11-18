@@ -494,6 +494,10 @@ public sealed class SimpleModeTests : IDisposable
         "BroadcastWindow.cs|At a glance", "BroadcastWindow.cs|Controls", "ThisMonthForm.cs|This month", "ThisMonthForm.cs|Emails",
         "Shortcuts.cs|Anywhere", "Shortcuts.cs|Race Control", "Shortcuts.cs|Selected driver",
         "ChassisTemplateForm.cs|Other tuning fields (not on the diagram)", "ChassisTemplateForm.cs|Selected point",
+        // A driver's profile and a driver's handicap, in cards (18 Nov 2026, dialog jazz-up).
+        "ProfileForm.cs|Who they are", "ProfileForm.cs|Car and class", "ProfileForm.cs|On the PA",
+        "ProfileForm.cs|Their crew", "ProfileForm.cs|Junior", "ProfileForm.cs|Privacy", "ProfileForm.cs|Contact",
+        "ProfileForm.cs|Driver card", "ProfileForm.cs|Records", "ProfileForm.cs|Notes", "HandicapForms.cs|Credit", "HandicapForms.cs|Lock", "HandicapForms.cs|Notes",
         "RcpStockForm.cs|Boxed sets", "RcpStockForm.cs|Loose parts", "RcpPrintForm.cs|Parts", "RcpPrintForm.cs|Scale",
         "RcpTrackEditorForm.cs|Build me a track", "RcpTrackEditorForm.cs|Check against a kit", "RcpTrackEditorForm.cs|Keys",
         // Lanes, Plan file and Trace a photo went with the rethought window (8 Nov 2026), and Rail the edge,
@@ -502,6 +506,26 @@ public sealed class SimpleModeTests : IDisposable
         "RcpTrackEditorForm.cs|The lap", "RcpTrackEditorForm.cs|The room it goes in", "RcpTrackEditorForm.cs|Tile size",
         "RcpTrackEditorForm.cs|Track name", "RcpTrackEditorForm.cs|What the club owns",
         "OverlayEditorForm.cs|The picked graphic", "OverlayEditorForm.cs|The whole layout",
+
+        // The first-run wizard and Start Tonight (18 Nov 2026, dialog jazz-up).
+        "FirstRunWizard.cs|The five steps", "FirstRunWizard.cs|Already have a backup?", "FirstRunWizard.cs|Looks and clock",
+        "FirstRunWizard.cs|Sound", "FirstRunWizard.cs|Decoder", "FirstRunWizard.cs|Track layout",
+        "FirstRunWizard.cs|Where do you race?", "FirstRunWizard.cs|Class names", "FirstRunWizard.cs|Race length",
+        "FirstRunWizard.cs|Drivers", "FirstRunWizard.cs|Bring a list", "FirstRunWizard.cs|What's ready",
+        "FirstRunWizard.cs|On race night", "FirstRunWizard.cs|The tour",
+        "NewRaceDayForm.cs|How to start", "NewRaceDayForm.cs|The night", "NewRaceDayForm.cs|Classes",
+
+        // Set Up Tonight's and Check Out's cards (18 Nov 2026, dialog jazz-up).
+        "RaceDaySetupWizard.Look.cs|What's ahead", "RaceDaySetupWizard.cs|The night",
+        "RaceDaySetupWizard.cs|Sound", "RaceDaySetupWizard.cs|Classes racing", "RaceDaySetupWizard.cs|How they race",
+        "RaceDaySetupWizard.cs|Race format", "RaceDaySetupWizard.cs|Who's here",
+        "RaceDaySetupWizard.cs|Ready to build", "RaceDaySetupWizard.cs|Where things stand",
+        "RentalTransponderForms.cs|Who's taking it", "RentalTransponderForms.cs|Deposit",
+
+        // The class editor's and the time penalty's cards (18 Nov 2026).
+        "RaceClassForms.cs|The class", "RaceClassForms.cs|Qualifying", "RaceClassForms.cs|Mains",
+        "RaceClassForms.cs|On the track", "RaceClassForms.cs|Fees",
+        "RaceControlControl.Leaderboard.cs|Penalty",
     };
 
     [Fact]

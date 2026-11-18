@@ -247,26 +247,53 @@ public sealed class NewRaceDayForm : Form
         var btnOk = new Button { Text = "Start Tonight", Font = AppTheme.BodyFont, DialogResult = DialogResult.OK };
         var btnCancel = new Button { Text = "Cancel", Font = AppTheme.BodyFont, DialogResult = DialogResult.Cancel };
 
+        // --- The cards ---
+        //
+        // How to start (when there is a choice), the kind of night, and the
+        // classes: each a card of its own, its question in it, on the
+        // window's background - as the redesigned pages have them (Venues,
+        // 14 Nov 2026). The classes' card takes the height the window has.
         var page = new FillPage();
-        page.Add(lblIntro);
+        page.Add(lblIntro, gapBelow: UiLayout.SectionGap);
 
-        foreach (var (part, gap) in choiceParts)
+        if (choosing)
         {
-            page.Add(part, stretch: part is not RadioButton, gapBelow: gap);
+            var howCard = new Section("How to start");
+
+            for (var i = 0; i < choiceParts.Count; i++)
+            {
+                var (part, gap) = choiceParts[i];
+                howCard.Add(part, stretch: part is not RadioButton, gapBelow: i == choiceParts.Count - 1 ? 0 : gap);
+            }
+
+            page.Add(howCard, gapBelow: UiLayout.RowGap);
+        }
+        else
+        {
+            // Only the open day's line, when there is one.
+            foreach (var (part, _) in choiceParts)
+            {
+                page.Add(part, gapBelow: UiLayout.SectionGap);
+            }
         }
 
         _questionParts = new Control[] { lblShape, _cmbShape, _lblShapeHint, lblClasses, _lstClasses, _lblNoClasses };
 
-        page.Add(lblShape, gapBelow: UiLayout.LabelGap);
+        var nightCard = new Section("The night");
+        nightCard.Add(lblShape, gapBelow: UiLayout.LabelGap);
 
-        // Its own width (see below), not the page's.
-        page.Add(_cmbShape, stretch: false, gapBelow: UiLayout.HintGap);
+        // Its own width (see below), not the card's.
+        nightCard.Add(_cmbShape, stretch: false, gapBelow: UiLayout.HintGap);
         Pieces.KeepHeightTold(_cmbShape);
 
-        page.Add(_lblShapeHint);
-        page.Add(lblClasses, gapBelow: UiLayout.LabelGap);
-        page.AddFill(_lstClasses, _ => LeastRows * _lstClasses.ItemHeight + 4, gapBelow: UiLayout.HintGap);
-        page.Add(_lblNoClasses);
+        nightCard.Add(_lblShapeHint, gapBelow: 0);
+        page.Add(nightCard, gapBelow: UiLayout.RowGap);
+
+        var classesCard = new Section("Classes");
+        classesCard.Add(lblClasses, gapBelow: UiLayout.LabelGap);
+        classesCard.AddFill(_lstClasses, () => LeastRows * _lstClasses.ItemHeight + 4, gapBelow: UiLayout.HintGap);
+        classesCard.Add(_lblNoClasses, gapBelow: 0);
+        page.AddFill(classesCard, classesCard.LeastHeight);
 
         // Against the right-hand edge, Cancel furthest right, as a dialog's
         // buttons go - and Tab still reaches Start Tonight first, as it did:
@@ -283,6 +310,8 @@ public sealed class NewRaceDayForm : Form
         ApplyShapeHint();
 
         AppTheme.ApplyRecursively(this);
+        AppTheme.StyleButton(btnOk, AppTheme.ButtonKind.Primary);
+        AppTheme.StyleButton(btnCancel, AppTheme.ButtonKind.Secondary);
         ApplyChoice();
 
         // After the theme pass, in the face it leaves it in: as wide as it
@@ -295,7 +324,7 @@ public sealed class NewRaceDayForm : Form
         // the classes about six rows tall. It can be made taller, for a club
         // with more classes than that.
         // Taller by the choices at the top, when there are any.
-        DialogFit.Keep(this, page, width: 552, height: choosing ? 500 + 52 * _options.Count : 500);
+        DialogFit.Keep(this, page, width: 552, height: choosing ? 580 + 52 * _options.Count : 560);
     }
 
     /// <summary>The two questions and what they are shown with - only "Something different..." uses them.</summary>
