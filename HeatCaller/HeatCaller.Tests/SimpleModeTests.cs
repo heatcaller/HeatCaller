@@ -510,6 +510,13 @@ public sealed class SimpleModeTests : IDisposable
         "FirstRunWizard.cs|Drivers", "FirstRunWizard.cs|Bring a list", "FirstRunWizard.cs|What's ready",
         "FirstRunWizard.cs|On race night", "FirstRunWizard.cs|The tour",
         "NewRaceDayForm.cs|How to start", "NewRaceDayForm.cs|The night", "NewRaceDayForm.cs|Classes",
+
+        // Set Up Tonight's and Check Out's cards (18 Nov 2026, dialog jazz-up).
+        "RaceDaySetupWizard.Look.cs|What's ahead", "RaceDaySetupWizard.cs|The night",
+        "RaceDaySetupWizard.cs|Sound", "RaceDaySetupWizard.cs|Classes racing", "RaceDaySetupWizard.cs|How they race",
+        "RaceDaySetupWizard.cs|Race format", "RaceDaySetupWizard.cs|Who's here",
+        "RaceDaySetupWizard.cs|Ready to build", "RaceDaySetupWizard.cs|Where things stand",
+        "RentalTransponderForms.cs|Who's taking it", "RentalTransponderForms.cs|Deposit",
     };
 
     [Fact]
