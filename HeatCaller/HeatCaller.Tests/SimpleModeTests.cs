@@ -564,6 +564,13 @@ public sealed class SimpleModeTests : IDisposable
         "MainRoundForm.cs|The main", "MainRoundForm.cs|Drivers in this main",
         "SplitLineUpForm.cs|Line it up", "SplitLineUpForm.cs|Crossings",
         "PhotoFinishForm.cs|Shots",
+
+        // Paste a Result's, Fill in the Times', Export Results' and Event Report's cards
+        // (PasteResultForm, FillTimesForm, ResultsExportForm, EventReportForm; 18 Nov 2026).
+        "PasteResultForm.cs|The race", "PasteResultForm.cs|Drivers",
+        "FillTimesForm.cs|The times",
+        "ResultsExportForm.cs|The file", "ResultsExportForm.cs|Sessions",
+        "EventReportForm.cs|The report", "EventReportForm.cs|Include",
     };
 
     [Fact]
