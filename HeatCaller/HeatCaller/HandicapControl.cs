@@ -29,6 +29,13 @@ public sealed class HandicapControl : UserControl
     private readonly Label _lblMode = new();
     private readonly Label _lblStatus = new();
 
+    /// <summary>Under the pickers: what the class's mode does to its results - see ModeHint.</summary>
+    private readonly Label _lblModeHint = new();
+
+    /// <summary>The class's handicaps at a glance, over the pickers - see ShowTiles.</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
+    private static readonly string[] TileCaptions = { "With a handicap", "Mode", "Biggest credit", "Locked" };
+
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
@@ -167,6 +174,10 @@ public sealed class HandicapControl : UserControl
             }
         };
 
+        // A locked handicap as a chip, and a word in the empty grid.
+        _grid.CellPainting += PaintLockedCell;
+        GridHints.ShowWhenEmpty(_grid, EmptyNote);
+
         var btnEdit = new Button { Text = "Edit..." };
         btnEdit.Click += (_, _) => EditSelected();
 
@@ -184,9 +195,29 @@ public sealed class HandicapControl : UserControl
         _lblStatus.AutoSize = true;
         _lblStatus.ForeColor = AppTheme.TextMuted;
 
+        // --- The tiles: the class's handicaps at a glance ---
+
+        for (var i = 0; i < _tiles.Length; i++)
+        {
+            _textSize.Wear(_tiles[i].Value, () => AppTheme.TitleFont);
+            _textSize.Wear(_tiles[i].Caption, () => AppTheme.MicroFont);
+            _tiles[i].Set("-", TileCaptions[i]);
+        }
+
+        // --- The cards: the class and its mode, then its drivers ---
+
+        _lblModeHint.AutoSize = true;
+        _lblModeHint.ForeColor = AppTheme.TextMuted;
+        _textSize.Wear(_lblModeHint, () => AppTheme.SmallFont);
+
+        var classCard = new Section("Class and mode");
+
+        classCard.Add(pickerRow);
+        classCard.Add(_lblModeHint, gapBelow: 0);
+
         var drivers = new Section("Drivers");
 
-        drivers.Add(pickerRow);
+        drivers.Add(GridHints.Hint(_textSize, "Everyone whose profile runs this class. Double-click a driver to set their handicap."));
         drivers.AddFill(_grid, () => _grid.ColumnHeadersHeight + 3 * _grid.RowTemplate.Height);
         drivers.Add(new ButtonBar().With(btnEdit, btnSuggest, btnClear, btnClearAll));
         drivers.Add(_lblStatus, gapBelow: 0);
@@ -194,6 +225,8 @@ public sealed class HandicapControl : UserControl
         var page = new FillPage();
 
         page.Add(lblIntro);
+        page.Add(new TileStrip(_tiles));
+        page.Add(classCard);
         page.AddFill(drivers, drivers.LeastHeight, gapBelow: 0);
 
         Controls.Add(page);
@@ -252,6 +285,8 @@ public sealed class HandicapControl : UserControl
         if (raceClass is null)
         {
             _lblMode.Text = string.Empty;
+            _lblModeHint.Text = "Pick a class to see its drivers and set how its handicaps work.";
+            ShowTiles(null, Array.Empty<DriverProfile>());
             return;
         }
 
@@ -303,6 +338,86 @@ public sealed class HandicapControl : UserControl
 
         _lblStatus.Text = $"{Plural.Of(roster.Count, "driver")} in this class, "
                           + $"{roster.Count(d => _store.Get(d.Transponder)?.HasAny == true)} with a handicap.";
+
+        _lblModeHint.Text = ModeHint(mode);
+        ShowTiles(mode, roster);
+    }
+
+    /// <summary>What the mode does to a class's results, under the pickers.</summary>
+    private static string ModeHint(HandicapMode mode) => mode switch
+    {
+        HandicapMode.TimeCredit => "Time credit: each driver's seconds come off their total time when results are shown.",
+        HandicapMode.LapCredit => "Lap credit: each driver's whole laps are added to their count when results are shown.",
+        _ => "Off: scratch racing, results as timed. Credits set below are kept, but not used until a mode is picked.",
+    };
+
+    /// <summary>
+    /// The tiles over the pickers: how many of the class's drivers have a
+    /// handicap, the mode, the biggest credit in the mode's own terms, and
+    /// how many are locked. Dashes with no class, or no drivers in it.
+    /// </summary>
+    private void ShowTiles(HandicapMode? mode, IReadOnlyList<DriverProfile> roster)
+    {
+        _tiles[1].Set(mode switch
+        {
+            HandicapMode.TimeCredit => "Time credit",
+            HandicapMode.LapCredit => "Lap credit",
+            HandicapMode.None => "Off",
+            _ => "-",
+        }, TileCaptions[1]);
+
+        if (mode is null || roster.Count == 0)
+        {
+            _tiles[0].Set("-", TileCaptions[0]);
+            _tiles[2].Set("-", TileCaptions[2]);
+            _tiles[3].Set("-", TileCaptions[3]);
+            return;
+        }
+
+        var handicaps = roster
+            .Select(d => _store.Get(d.Transponder))
+            .OfType<DriverHandicap>()
+            .ToList();
+
+        _tiles[0].Set($"{handicaps.Count(h => h.HasAny)} of {roster.Count}", TileCaptions[0]);
+        _tiles[3].Set(handicaps.Count(h => h.Locked).ToString(), TileCaptions[3]);
+
+        var mostSeconds = handicaps.Select(h => h.TimeCreditSeconds).DefaultIfEmpty(0).Max();
+        var mostLaps = handicaps.Select(h => h.LapCredit).DefaultIfEmpty(0).Max();
+
+        var seconds = mostSeconds > 0 ? $"-{mostSeconds:0.0}s" : null;
+        var laps = mostLaps > 0 ? $"+{Plural.Of(mostLaps, "lap")}" : null;
+
+        // The mode's own credit first; the other only when the mode's has none.
+        var biggest = mode == HandicapMode.LapCredit ? laps ?? seconds : seconds ?? laps;
+        _tiles[2].Set(biggest ?? "-", TileCaptions[2]);
+    }
+
+    /// <summary>The empty grid's word: no class to pick, or nobody in the one picked.</summary>
+    private (string Headline, string Line)? EmptyNote()
+    {
+        if (_cmbClass.Items.Count == 0)
+        {
+            return ("No classes yet", "Add a class on the Classes page, and its drivers show here.");
+        }
+
+        return SelectedClassName is { } name
+            ? ($"Nobody runs {name} yet", "Give a driver this class in Driver Hub and they show here.")
+            : null;
+    }
+
+    /// <summary>The Locked column as a chip in the look's colour.</summary>
+    private void PaintLockedCell(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || _grid.Columns[e.ColumnIndex].Name != "locked")
+        {
+            return;
+        }
+
+        if (e.FormattedValue is "yes")
+        {
+            GridHints.PaintChip(e, "Locked", AppTheme.Primary);
+        }
     }
 
 

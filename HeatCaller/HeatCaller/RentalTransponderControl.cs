@@ -16,8 +16,15 @@ public sealed class RentalTransponderControl : UserControl
     private readonly UndoService _undo;
 
     private readonly DataGridView _grid = new();
-    private readonly Panel _bannerOutstanding = new();
+    private readonly Panel _bannerOutstanding = new RentalStatusCard();
     private readonly Label _lblOutstanding = new();
+
+    /// <summary>The line under the count: what it means, and what to do about it.</summary>
+    private readonly Label _lblOutstandingLine = new();
+
+    /// <summary>The units at a glance, under the count - see ShowTiles.</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
+    private static readonly string[] TileCaptions = { "In the box", "On loan", "Deposits held", "Loans all time" };
 
     /// <summary>Drives the slow pulse while units are out. Stopped when everything is back, so a settled page isn't animating for no reason.</summary>
     private readonly System.Windows.Forms.Timer _pulse = new() { Interval = 600 };
@@ -71,7 +78,8 @@ public sealed class RentalTransponderControl : UserControl
     }
 
     /// <summary>
-    /// The intro, the count of units still out, then one card: the units
+    /// The intro, the count of units still out on a card of its own, the
+    /// tiles (17 Nov 2026, page jazz-up), then one card: the units
     /// taking the height that is left, the buttons under them and the
     /// status line. On the layout pieces (LayoutPieces.cs), so nothing is
     /// placed by hand.
@@ -91,19 +99,36 @@ public sealed class RentalTransponderControl : UserControl
             ForeColor = AppTheme.TextMuted,
         };
 
-        // The count, as big as the stat tiles' numbers, in a band as tall as
-        // it needs. Its colours are the page's to set (ApplyBannerColors),
-        // not the theme pass's - left to it, the band went the page's
-        // colour whenever the look or the text size changed, until the next
-        // refresh.
+        // The count, on a card of its own tinted in the state's colour
+        // (RentalStatusCard, 17 Nov 2026 page jazz-up), with a line under it
+        // saying what to do. Its colours are the page's to set
+        // (ApplyBannerColors), not the theme pass's - left to it, the card
+        // went the page's colour whenever the look or the text size
+        // changed, until the next refresh.
         _bannerOutstanding.Tag = AppTheme.KeepBackColor;
 
-        _lblOutstanding.Dock = DockStyle.Fill;
-        _lblOutstanding.TextAlign = ContentAlignment.MiddleCenter;
-        _textSize.Wear(_lblOutstanding, () => AppTheme.StatFont);
+        foreach (var label in new[] { _lblOutstanding, _lblOutstandingLine })
+        {
+            label.AutoSize = false;
+            label.AutoEllipsis = true;
+            label.Dock = DockStyle.Top;
+            label.TextAlign = ContentAlignment.MiddleLeft;
+            label.BackColor = Color.Transparent;
+            label.Tag = AppTheme.KeepBackColor;
+        }
+
+        _lblOutstandingLine.ForeColor = AppTheme.TextMuted;
+
+        _textSize.Wear(_lblOutstanding, () => AppTheme.TitleFont);
+        _textSize.Wear(_lblOutstandingLine, () => AppTheme.SmallFont);
         _textSize.Keep(() =>
         {
-            var height = AppTheme.StatFont.Height + UiLayout.RowGap * 2;
+            var inset = UiLayout.AtTextSize(12);
+            _bannerOutstanding.Padding = new Padding(RentalStatusCard.BarWidth + UiLayout.AtTextSize(16), inset, UiLayout.AtTextSize(16), inset);
+            _lblOutstanding.Height = AppTheme.TitleFont.Height + 2;
+            _lblOutstandingLine.Height = AppTheme.SmallFont.Height + UiLayout.HintGap;
+
+            var height = _bannerOutstanding.Padding.Vertical + _lblOutstanding.Height + _lblOutstandingLine.Height;
 
             if (_bannerOutstanding.Height != height)
             {
@@ -111,7 +136,18 @@ public sealed class RentalTransponderControl : UserControl
             }
         });
 
+        // Docked from the top, the last added uppermost: the count, then its line.
+        _bannerOutstanding.Controls.Add(_lblOutstandingLine);
         _bannerOutstanding.Controls.Add(_lblOutstanding);
+
+        // --- The tiles: the units at a glance ---
+
+        for (var i = 0; i < _tiles.Length; i++)
+        {
+            _textSize.Wear(_tiles[i].Value, () => AppTheme.TitleFont);
+            _textSize.Wear(_tiles[i].Caption, () => AppTheme.MicroFont);
+            _tiles[i].Set("-", TileCaptions[i]);
+        }
 
         _pulse.Tick += (_, _) =>
         {
@@ -147,6 +183,12 @@ public sealed class RentalTransponderControl : UserControl
             }
         };
 
+        // The status as a chip in its colour, and a word in the empty grid.
+        _grid.CellPainting += PaintStatusCell;
+        GridHints.ShowWhenEmpty(_grid, () => _store.All.Count == 0
+            ? ("No rental units yet", "Add Unit... registers a club transponder, ready to loan out.")
+            : null);
+
         var btnCheckOut = new Button { Text = "Check Out...", };
         btnCheckOut.Click += (_, _) => CheckOutSelected();
 
@@ -172,6 +214,7 @@ public sealed class RentalTransponderControl : UserControl
         var units = new Section("Transponders");
 
         units.AddFill(_grid, () => _grid.ColumnHeadersHeight + 3 * _grid.RowTemplate.Height);
+        units.Add(GridHints.Hint(_textSize, "Double-click a unit to check it out - or back in, when it's out. Check In shows the deposit to give back."));
         units.Add(new ButtonBar().With(btnCheckOut, btnCheckIn, btnAdd, btnEdit, btnHistory, btnDelete));
         units.Add(_lblStatus, gapBelow: 0);
 
@@ -179,6 +222,7 @@ public sealed class RentalTransponderControl : UserControl
 
         page.Add(lblIntro);
         page.Add(_bannerOutstanding);
+        page.Add(new TileStrip(_tiles));
         page.AddFill(units, units.LeastHeight, gapBelow: 0);
 
         Controls.Add(page);
@@ -256,6 +300,14 @@ public sealed class RentalTransponderControl : UserControl
                 ? "1 UNIT STILL OUT"
                 : $"{out_} UNITS STILL OUT";
 
+        _lblOutstandingLine.Text = _store.All.Count == 0
+            ? "No club transponders registered yet - Add Unit... adds the first."
+            : out_ == 0
+                ? "Every club transponder is back in the box."
+                : "Check them in before packing up - they're at the top of the list, with who has them.";
+
+        ShowTiles();
+
         // Only animate when there's something to chase. A page that pulses
         // when everything is fine trains people to ignore it.
         if (out_ > 0 && !_pulse.Enabled)
@@ -287,10 +339,19 @@ public sealed class RentalTransponderControl : UserControl
 
         var anyOut = _store.OutNow.Count > 0;
 
+        var card = _bannerOutstanding as RentalStatusCard;
+
         if (!anyOut)
         {
             _bannerOutstanding.BackColor = Color.FromArgb(40, AppTheme.Success);
             _lblOutstanding.ForeColor = AppTheme.Success;
+            _lblOutstandingLine.ForeColor = AppTheme.TextMuted;
+
+            if (card is not null)
+            {
+                card.Tone = AppTheme.Success;
+            }
+
             return;
         }
 
@@ -299,6 +360,59 @@ public sealed class RentalTransponderControl : UserControl
             ? Color.FromArgb(80, accent.R, accent.G, accent.B)
             : Color.FromArgb(45, accent.R, accent.G, accent.B);
         _lblOutstanding.ForeColor = accent;
+        _lblOutstandingLine.ForeColor = AppTheme.TextDark;
+
+        if (card is not null)
+        {
+            card.Tone = accent;
+        }
+    }
+
+    /// <summary>
+    /// The tiles under the count: units in the box ready to loan, units
+    /// out, deposits held for them, and every loan made. Dashes with no
+    /// units registered.
+    /// </summary>
+    private void ShowTiles()
+    {
+        var all = _store.All;
+
+        if (all.Count == 0)
+        {
+            for (var i = 0; i < _tiles.Length; i++)
+            {
+                _tiles[i].Set("-", TileCaptions[i]);
+            }
+
+            return;
+        }
+
+        var onLoan = all.Count(u => u.IsOut);
+
+        _tiles[0].Set(all.Count(u => !u.IsOut && !u.Retired).ToString(), TileCaptions[0]);
+        _tiles[1].Set(onLoan.ToString(), TileCaptions[1]);
+        _tiles[2].Set(all.Count(u => u.IsOut && !string.IsNullOrWhiteSpace(u.DepositHeld)).ToString(), TileCaptions[2]);
+        _tiles[3].Set((all.Sum(u => u.History.Count) + onLoan).ToString(), TileCaptions[3]);
+    }
+
+    /// <summary>The Status column as a chip: out in the accent, available in green, retired muted.</summary>
+    private void PaintStatusCell(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || _grid.Columns[e.ColumnIndex].Name != "status")
+        {
+            return;
+        }
+
+        var text = e.FormattedValue as string;
+        Color? tone = text switch
+        {
+            "OUT" => AppTheme.Accent,
+            "Available" => AppTheme.Success,
+            "Retired" => AppTheme.TextMuted,
+            _ => null,
+        };
+
+        GridHints.PaintChip(e, text, tone);
     }
 
     private static string FormatSpan(TimeSpan span) =>

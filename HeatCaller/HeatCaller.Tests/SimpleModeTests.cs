@@ -436,6 +436,7 @@ public sealed class SimpleModeTests : IDisposable
         "GhostControl.cs|Your ghosts", "DemoModeControl.cs|Settings", "DemoModeControl.cs|Racers", "DemoModeControl.cs|Log",
         "TrackLayoutForms.cs|Track layouts", "TrackLayoutForms.cs|Selected track",
         "HandicapControl.cs|Drivers", "RentalTransponderControl.cs|Transponders",
+        "HandicapControl.cs|Class and mode",
 
         // Voice and Cast.
         "MainForm.Pages.cs|Voice", "MainForm.Pages.cs|Cast", "MainForm.Pages.cs|AI Commentary",
