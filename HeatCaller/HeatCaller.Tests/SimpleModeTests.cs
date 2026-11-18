@@ -495,6 +495,7 @@ public sealed class SimpleModeTests : IDisposable
         "RcpTrackEditorForm.cs|Rail the edge", "RcpTrackEditorForm.cs|Start from a kit",
         "RcpTrackEditorForm.cs|The lap", "RcpTrackEditorForm.cs|The room it goes in", "RcpTrackEditorForm.cs|Tile size",
         "RcpTrackEditorForm.cs|Track name", "RcpTrackEditorForm.cs|What the club owns",
+        "OverlayEditorForm.cs|The picked graphic", "OverlayEditorForm.cs|The whole layout",
     };
 
     [Fact]
