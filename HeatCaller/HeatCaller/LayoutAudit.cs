@@ -504,6 +504,10 @@ internal static class LayoutAudit
 
         // The manager PIN before Advanced mode, when a club asks for it (ManagerPinForm, round 5).
         "Manager PIN",
+
+        // The Stream overlays editor, rebuilt as the Studio (17 Nov 2026): the
+        // graphics, the live picture and the picked graphic's settings (OverlayEditorForm).
+        "Stream overlays",
     };
 
     /// <summary>

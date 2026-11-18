@@ -58,18 +58,29 @@ The sponsor report counts how long each logo was on the stream, and how many "pr
 
 ## Make your own layout
 
-1. On the **Local Screens** page, press **Edit** beside **Stream overlay:**. The **Stream overlays** window opens.
-2. Pick the layout closest to what you want and press **Make a copy**. Give it a name.
-3. Tick the graphics you want. Pick one to set:
-    - **Where:** one of nine places, or **Where it usually goes**.
-    - **Across:** and **Down:** nudge it from that place towards the middle.
-    - **Size (%):** makes it bigger or smaller.
-    - **Rows:** how many drivers the positions show (0 is its usual number).
-    - **Shows during:** **The grid**, **Racing**, **The result** and **Between races**. None ticked shows it whenever it has something to show.
-4. **Boxes (% solid):** sets how see-through the boxes are, and **Everything (% size):** makes every graphic bigger or smaller at once.
-5. Copy **Its address:** into OBS.
+On the **Local Screens** page, press **Edit** beside **Stream overlay:**. The **Stream overlays** window opens in three parts: the layout's graphics on the left, a live picture of the overlay in the middle, and the picked graphic's settings on the right. The picture is the real overlay running a made-up race, so what you see there is what OBS will show.
 
-Changes save as you make them, and an overlay already open in OBS updates within a few seconds. **Undo** puts back the last change you made in the window. A red line warns when two graphics would sit on top of each other in the same part of the night.
+1. Pick a layout from **Layout:**, or press **Pick a look** to choose from live pictures of them all. With no layouts of your own yet, the window opens on **Pick a look**.
+2. Change anything. A preset can't change, so your first change goes into a copy of your own, named "(our copy)", and a yellow strip says so. Its address is new, so copy it again for OBS. **Undo** in the strip takes the copy away again.
+3. In the picture:
+    - Drag a graphic to move it. Drag the pink dot on its corner to make it bigger or smaller.
+    - Click a graphic, then use the arrow keys to nudge it. Hold **Shift** to move it further.
+    - **The grid**, **Racing**, **The result** and **Between races** above the picture show that part of the night. **Play the night** runs through all four and lights each one as it gets there.
+    - **Show hidden ones** draws a dashed outline where a graphic sits when it isn't showing in that part of the night.
+    - **As on a phone** shows the overlay at the size most viewers see it.
+    - A red line under the picture names any graphics covering each other.
+4. In the list on the left, click a graphic's eye to turn it on or off. Its four dots show when it appears (the grid, racing, the result, between races), and the part the picture is showing is ringed.
+5. On the right, for the picked graphic:
+    - The nine places. At its usual place, the place it's in now is dashed. **Usual place** puts it back there.
+    - **Across:**, **Down:** and **Size (%):** set it exactly. Changing them on a graphic at its usual place starts from where it already is.
+    - **Drivers:** for the positions: how many drivers they list (0 is the usual number).
+    - **When it shows:** **Auto** shows it whenever it has something to show. Untick **Auto** to choose the parts yourself.
+6. Under **The whole layout**, **Boxes (% solid):** sets how see-through the boxes are, and **Text size (%):** makes every graphic bigger or smaller at once.
+7. Press **Copy** beside **For OBS:** and paste the address into OBS. **Add it to OBS** says how.
+
+Changes save as you make them, and an overlay already open in OBS updates within a few seconds. **Undo** and **Redo** work on the changes made in the window.
+
+The live picture needs Microsoft Edge WebView2, which comes with Windows 11 and nearly every copy of Windows 10. Without it, or with the Wi-Fi server stopped, the window says so, and **Open in browser** shows the overlay there instead.
 
 Renaming a layout keeps its address, so OBS keeps working. A deleted layout's address says the overlay isn't in HeatCaller any more.
 
@@ -79,7 +90,7 @@ HeatCaller's mark can be moved but not turned off.
 
 ### Cards for newcomers
 
-**Basics cards** in the **Stream overlays** window sets the "New to RC racing?" cards. Write one card a line: a heading, a bar, then the words.
+**Basics cards** under **The whole layout** in the **Stream overlays** window sets the "New to RC racing?" cards. Write one card a line: a heading, a bar, then the words.
 
 ```
 Tonight's classes | Junior: under-16s on 1/28 cars

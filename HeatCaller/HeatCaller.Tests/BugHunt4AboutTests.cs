@@ -59,6 +59,7 @@ public sealed class BugHunt4AboutTests
         "Microsoft.Extensions.Logging.Abstractions",
         "Microsoft.ML.OnnxRuntime",
         "Microsoft.ML.OnnxRuntime.Managed",
+        "Microsoft.Web.WebView2",
         "MisakiSharp",
         "NAudio",
         "NAudio.Asio",

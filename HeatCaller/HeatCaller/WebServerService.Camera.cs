@@ -728,10 +728,16 @@ public sealed partial class WebServerService
         // A page opened from a file has no laptop to ask.
         const DEMO_ONLY_STATIC = location.protocol === 'file:';
         const DEMO_START = Date.now() - Math.max(0, Number(params.get('at')) || 0) * 1000;
+        // &hold=racing (17 Nov 2026, the overlay editor's part-of-the-night
+        // tabs): the loop keeps to one part - between, the grid, racing or
+        // the result - so a graphic that only shows there stays up to be
+        // placed. &at= says where in that part it starts.
+        const DEMO_HOLD = { between: [0, 20], staging: [20, 35], racing: [35, 140], finished: [140, 160] }[params.get('hold') || ''] || null;
         // "about 19:40", that many minutes from now, as the laptop writes it.
         function demoAbout(minutes){ const t = new Date(Date.now() + minutes * 60000); return 'about ' + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0'); }
         function demoState(){
-          const loop = 160, t = ((Date.now() - DEMO_START) / 1000) % loop;
+          const loop = 160, run = (Date.now() - DEMO_START) / 1000;
+          const t = DEMO_HOLD ? DEMO_HOLD[0] + (((run - DEMO_HOLD[0]) % (DEMO_HOLD[1] - DEMO_HOLD[0])) + (DEMO_HOLD[1] - DEMO_HOLD[0])) % (DEMO_HOLD[1] - DEMO_HOLD[0]) : run % loop;
           const people = DEMO_NAMES.map((name, i) => ({ id: 'd' + i, name }));
           const base = { sponsorUp: { name: 'Hobby Hut', logo: '' }, race: 'Junior - Heat 2', people, presented: {}, presentedLogos: {}, improved: { name: 'Sam Tr', line: '0.42 s quicker than in Junior - Heat 1' }, champ: null, ratings: {}, captions: [], pylon: { changes: 0, leaders: 1, cars: {} } };
           if (t < 20) return Object.assign(base, { state: 'Idle', flag: 'None', countdown: '', standings: [], cards: {}, onDeck: '19:40  •  Junior  •  Heat 2',
@@ -1127,7 +1133,8 @@ public sealed partial class WebServerService
         // A CLUB'S OWN LAYOUT REDRAWS AS IT IS EDITED (section 4): every three
         // seconds it asks whether it has changed, and reloads when it has -
         // or when it has been deleted, to say so in words.
-        if (!PHONE && LAYOUT && LAYOUT.custom && !DEMO_ONLY_STATIC){
+        // In the editor (edit=1) the window reloads the page itself, at once.
+        if (!PHONE && LAYOUT && LAYOUT.custom && !DEMO_ONLY_STATIC && params.get('edit') !== '1'){
           let layoutSeen = null;
           setInterval(async () => {
             try {
@@ -1141,7 +1148,7 @@ public sealed partial class WebServerService
 
         // The phone view only frames the overlay; the frame does the drawing.
         if (!PHONE) { setInterval(tick, 1000); tick(); }
-        </script><script>{{LookWatchScript}}</script></body></html>
+        </script><script>{{OverlayEditScript}}</script><script>{{LookWatchScript}}</script></body></html>
         """;
     }
 }
