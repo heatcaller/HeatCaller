@@ -494,6 +494,11 @@ public sealed class SimpleModeTests : IDisposable
         "BroadcastWindow.cs|At a glance", "BroadcastWindow.cs|Controls", "ThisMonthForm.cs|This month", "ThisMonthForm.cs|Emails",
         "Shortcuts.cs|Anywhere", "Shortcuts.cs|Race Control", "Shortcuts.cs|Selected driver",
         "ChassisTemplateForm.cs|Other tuning fields (not on the diagram)", "ChassisTemplateForm.cs|Selected point",
+
+        // Checked In Late's card (LateArrivalsForm, 18 Nov 2026, dialog jazz-up). The lap
+        // breakdown window (LapDetailWindow) is painted, with no Section.
+        "RaceProgramControl.LateArrivals.cs|Add to the heats",
+
         // A driver's profile and a driver's handicap, in cards (18 Nov 2026, dialog jazz-up).
         "ProfileForm.cs|Who they are", "ProfileForm.cs|Car and class", "ProfileForm.cs|On the PA",
         "ProfileForm.cs|Their crew", "ProfileForm.cs|Junior", "ProfileForm.cs|Privacy", "ProfileForm.cs|Contact",
