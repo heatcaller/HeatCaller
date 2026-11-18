@@ -317,15 +317,20 @@ internal static class WindowSweep
     /// window's turn - building it, sizing it, checking one of its tabs,
     /// putting it away - takes more than a minute and a half, and named with
     /// that part; the whole sweep, which grows with every window added, may
-    /// take up to three quarters of an hour. (The last full sweep before this, 29 Sep:
+    /// take up to two hours. (The last full sweep before this, 29 Sep:
     /// 50 windows at five sizes in about two minutes. The next, with 40 more,
     /// was still going at five - the report's Slowest line says which take
     /// the time.)
+    ///
+    /// 18 Nov 2026: the sweep passed 45 minutes on a PC running three other
+    /// test runs, and failed at that limit half way through - read as a hang,
+    /// though no step was stuck for the 90 seconds. Two hours, so only a
+    /// stuck step fails it; that is what the 90 seconds is for.
     /// </summary>
     public static WindowSweepResult Run(IReadOnlyList<LayoutView> views, IReadOnlySet<string>? only, string? pictures) =>
         StaThread.Run(
             () => Sweep(views, only, pictures),
-            TimeSpan.FromMinutes(45),
+            TimeSpan.FromMinutes(120),
             () => _doing.Length == 0 ? _now : $"{_now}, {_doing}",
             stuckAfter: TimeSpan.FromSeconds(90));
 

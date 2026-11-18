@@ -122,9 +122,12 @@ internal static class StaThread
             {
                 _leftRunning = (thread, now);
 
+                // With a stuck check, every step moved on in time: slow, not stuck.
                 throw new TimeoutException(
                     $"Did not finish in {limit.TotalMinutes:0.#} minutes. It was on: {now}. "
-                    + "A window waiting for an answer that cannot come would do this.");
+                    + (stuckAfter is { } each
+                        ? $"Nothing was stuck - every step moved on within {each.TotalSeconds:0} seconds - so it is too slow: a busy PC, or windows that got slower to build."
+                        : "A window waiting for an answer that cannot come would do this."));
             }
         }
 

@@ -5,19 +5,24 @@ namespace HeatCaller;
 /// in code rather than a separate .Designer.cs partial - functionally
 /// identical, just fewer files for a form this small.
 ///
-/// On the layout pieces (DialogFit): the organiser's fields down the left in
-/// a field grid - the captions in a column as wide as the longest, the
-/// garage and the class each a drop-down with its buttons beside it (under
-/// it, when a long name leaves them no room) - and down the right the strip
-/// for the crowd: the photo, square and as wide as the strip, its two
-/// buttons, then team and sponsors. The badges line, when the driver has
-/// earned any, is under the fields. All of that is the window's body, which
-/// scrolls on a screen too short for it, and Save and Cancel are under it
-/// at the foot. It opens at least as wide as it was made at the normal text
-/// size, at the size in use, and wider when its columns need more: the
-/// garage's drop-down and its two buttons on one line, a drop-down's longest
-/// name, the body's scrollbar on a short screen. It used to be placed in
-/// pixels in a 640x792 window - taller than a 1280x720 screen has room for,
+/// On the layout pieces (DialogFit): a card across the top saying who the
+/// driver is at a glance - their photo or initials, their name, a line of
+/// transponder, number, class and car that follows the boxes, the badges
+/// they have earned, and the photo's two buttons - then the fields in cards
+/// by what they are for, each with a line saying so: who they are, car and
+/// class, on the PA, their crew, junior, privacy, contact, the driver card
+/// (team and sponsors), records, and notes (18 Nov 2026, dialog jazz-up).
+/// Every card's captions share one column, as wide as the longest; the
+/// garage and the class are each a drop-down with its buttons beside it
+/// (under it, when a long name leaves them no room). All of that is the
+/// window's body, which scrolls on a screen too short for it, and Save and
+/// Cancel are under it at the foot. It opens at least as wide as it was made
+/// at the normal text size, at the size in use, and wider when its columns
+/// need more: the garage's drop-down and its two buttons on one line, a
+/// drop-down's longest name, the body's scrollbar on a short screen. Before
+/// the cards it was one long field grid with the photo, team and sponsors in
+/// a strip down the right; before that it was placed in pixels in a 640x792
+/// window - taller than a 1280x720 screen has room for,
 /// so Save and Cancel were off the bottom of it - with the captions in a
 /// 124px column, both drop-downs 200px wide whatever they held, and the
 /// badges line laid over the bottom of the notes box.
@@ -26,12 +31,11 @@ public sealed class ProfileForm : Form
 {
     /// <summary>
     /// How wide the window is inside its frame at the normal text size, at
-    /// the least: the left column is the admin (everything the organiser
-    /// needs), and the strip down the right is the show - photo, team,
-    /// sponsors. Made wide rather than tall, because this dialog has more
-    /// fields than a small laptop has height for.
+    /// the least - about the width it had with the photo strip down the
+    /// right, which gives the cards' fields room: the transponders'
+    /// drop-down and its three buttons on one line, the ticks on one.
     /// </summary>
-    private const int DialogWidth = 640;
+    private const int DialogWidth = 780;
 
     /// <summary>The fields' column at the normal text size, at the least: the 320px the text boxes had.</summary>
     private const int FieldColumnWidth = 320;
@@ -39,8 +43,8 @@ public sealed class ProfileForm : Form
     /// <summary>A drop-down's width at the normal text size - wider when its longest name needs it.</summary>
     private const int PickerLeastWidth = 200;
 
-    /// <summary>The photo's side at the normal text size. The strip is this wide, or as wide as its buttons need.</summary>
-    private const int PhotoSide = 136;
+    /// <summary>The photo's side in the top card, at the normal text size.</summary>
+    private const int PhotoSide = 112;
 
     /// <summary>Lines of text the setup and notes boxes show - about the 90px they had.</summary>
     private const int NotesLines = 4;
@@ -157,13 +161,8 @@ public sealed class ProfileForm : Form
     /// <summary>Files imported while this dialog was open. All but the one that gets saved are deleted on close.</summary>
     private readonly List<string> _importedThisSession = new();
 
-    /// <summary>
-    /// How wide the photo strip is: the photo's side at the text size in
-    /// use, or as wide as its wider button's caption needs. Worked out once
-    /// the theme pass has been (SizeStrip); the strip asks for it whenever
-    /// it is placed.
-    /// </summary>
-    private int _stripWidth;
+    /// <summary>The photo's side in the top card at the text size in use - see BuildHeader.</summary>
+    private int _photoSide;
 
     /// <summary>The field column's width with the body's scrollbar showing - see FitPicker.</summary>
     private int _fieldColumn;
@@ -218,16 +217,26 @@ public sealed class ProfileForm : Form
         // seconds to open, which timed out the tests that open it.
         using var building = LayoutFreeze.HoldWhileBuilding();
 
-        // The organiser's column: a caption and its field on each row, the
-        // captions in one column as wide as the longest of them, and every
-        // text box running to the column's right-hand edge.
-        var fields = new FieldGrid();
+        // The cards (18 Nov 2026, dialog jazz-up): a caption and its field
+        // on each row of each card, the captions of every card in one column
+        // as wide as the longest of them (FieldGrid.LineUp, after the theme
+        // pass), and every text box running to the card's right-hand edge.
+        // One grid per card, filled in the order the fields were always
+        // built in; the cards' order down the window is set at the end.
+        var who = new FieldGrid();
+        var voice = new FieldGrid();
+        var crew = new FieldGrid();
+        var junior = new FieldGrid();
+        var carGrid = new FieldGrid();
+        var contact = new FieldGrid();
+        var records = new FieldGrid();
+        var crowd = new FieldGrid();
         var captions = new List<Label>();
 
-        captions.Add(AddLabeledTextBox(fields, "Transponder:", _txtTransponder, Result.Transponder));
+        captions.Add(AddLabeledTextBox(who, "Transponder:", _txtTransponder, Result.Transponder));
         _txtTransponder.ReadOnly = fixedTransponder is not null;
 
-        captions.Add(AddLabeledTextBox(fields, "Driver name:", _txtDriverName, Result.DriverName));
+        captions.Add(AddLabeledTextBox(who, "Driver name:", _txtDriverName, Result.DriverName));
 
         // What the announcer says, when it differs. A nickname the crowd
         // knows, or a spelling the voice actually pronounces correctly -
@@ -241,7 +250,7 @@ public sealed class ProfileForm : Form
         // until the name went out over the PA in front of the room - so
         // Hear It reads whatever is in the box, now, through the same name
         // resolution the race calls use (NameAsAnnounced).
-        captions.Add(AddLabeledTextBox(fields, "Announcer name:", _txtAnnouncerName, Result.AnnouncerName));
+        captions.Add(AddLabeledTextBox(voice, "Announcer name:", _txtAnnouncerName, Result.AnnouncerName));
         _txtAnnouncerName.PlaceholderText = "optional - a nickname, or how the name sounds";
 
         // Not built at all when there is no voice to read through - see
@@ -258,7 +267,7 @@ public sealed class ProfileForm : Form
             // runs to the column's right-hand edge like every other one
             // here, and narrowing it to make room for a button would single
             // this field out for no reason a club would understand.
-            fields.AddField(new ButtonBar().With(btnHearName));
+            voice.AddField(new ButtonBar().With(btnHearName));
         }
 
         var announcerHint =
@@ -270,7 +279,7 @@ public sealed class ProfileForm : Form
             announcerHint += " Hear It plays it as the announcer will say it.";
         }
 
-        fields.AddHint(announcerHint);
+        voice.AddHint(announcerHint);
 
         // Their pronouns, under the name they are announced by (21 Oct
         // 2026) - the other half of the announcer getting a driver right.
@@ -286,8 +295,8 @@ public sealed class ProfileForm : Form
 
         _cmbPronouns.Text = Pronouns.Clean(Result.Pronouns);
 
-        captions.Add(fields.AddRow("Pronouns:", _cmbPronouns));
-        fields.AddHint("Optional. The AI commentary uses these instead of guessing from their name. Pick one, or type "
+        captions.Add(voice.AddRow("Pronouns:", _cmbPronouns));
+        voice.AddHint("Optional. The AI commentary uses these instead of guessing from their name. Pick one, or type "
                        + "their own (like \"she/they\").");
 
         // WHY (22 Oct 2026, driver experience): a line about them in their
@@ -295,10 +304,10 @@ public sealed class ProfileForm : Form
         // thing on here only the commentary reads. A driver can now ask for
         // it from their own phone, and the desk sees and edits it here.
         // Never shown publicly. Capped where the phone's is (AboutLineMaxChars).
-        captions.Add(AddLabeledTextBox(fields, "About them:", _txtAboutLine, Result.AboutLine ?? string.Empty));
+        captions.Add(AddLabeledTextBox(voice, "About them:", _txtAboutLine, Result.AboutLine ?? string.Empty));
         _txtAboutLine.MaxLength = DriverProfile.AboutLineMaxChars;
         _txtAboutLine.PlaceholderText = "optional - for the AI commentary, in their own words";
-        fields.AddHint($"For the AI commentary: a line in their own words, up to {DriverProfile.AboutLineMaxChars} characters "
+        voice.AddHint($"For the AI commentary: a line in their own words, up to {DriverProfile.AboutLineMaxChars} characters "
                        + "(like \"racing since I was eight; my dad builds the cars\"). Never shown publicly.");
 
         // THEIR OWN CREW AND NOTES (15 Nov 2026, driver crew plan): beside
@@ -306,39 +315,39 @@ public sealed class ProfileForm : Form
         // reads. A phone can send these too; the desk sees and edits them
         // here. The voices they picked are kept as they are - a phone picks
         // those from the club's whole list (DriverCrew).
-        captions.Add(AddLabeledTextBox(fields, "Their principal:", _txtCrewPrincipal, Result.CrewPrincipalName ?? string.Empty));
+        captions.Add(AddLabeledTextBox(crew, "Their principal:", _txtCrewPrincipal, Result.CrewPrincipalName ?? string.Empty));
         _txtCrewPrincipal.MaxLength = DriverCrew.NameMaxChars;
         _txtCrewPrincipal.PlaceholderText = "optional - blank for the club's Team Principal";
-        captions.Add(AddLabeledTextBox(fields, "Their tech lead:", _txtCrewTech, Result.CrewTechName ?? string.Empty));
+        captions.Add(AddLabeledTextBox(crew, "Their tech lead:", _txtCrewTech, Result.CrewTechName ?? string.Empty));
         _txtCrewTech.MaxLength = DriverCrew.NameMaxChars;
         _txtCrewTech.PlaceholderText = "optional - blank for the club's Technical Lead";
-        fields.AddHint("Made-up names for their own Team Principal and Technical Lead. Letters, spaces, hyphens and "
+        crew.AddHint("Made-up names for their own Team Principal and Technical Lead. Letters, spaces, hyphens and "
                        + "apostrophes. " + CrewVoicesHint(Result));
 
-        captions.Add(AddLabeledTextBox(fields, "Tonight's goal:", _txtCrewGoal, DriverCrew.GoalTonight(Result, DateTime.Now)));
+        captions.Add(AddLabeledTextBox(crew, "Tonight's goal:", _txtCrewGoal, DriverCrew.GoalTonight(Result, DateTime.Now)));
         _txtCrewGoal.MaxLength = DriverCrew.GoalMaxChars;
         _txtCrewGoal.PlaceholderText = "optional - said before their race tonight only";
-        captions.Add(AddLabeledTextBox(fields, "Thanks:", _txtCrewThanks, Result.CrewThanks ?? string.Empty));
+        captions.Add(AddLabeledTextBox(crew, "Thanks:", _txtCrewThanks, Result.CrewThanks ?? string.Empty));
         _txtCrewThanks.MaxLength = DriverCrew.ThanksMaxChars;
         _txtCrewThanks.PlaceholderText = "optional - who they'd like to thank";
-        captions.Add(AddLabeledTextBox(fields, "Car's story:", _txtCrewCar, Result.CrewCarStory ?? string.Empty));
+        captions.Add(AddLabeledTextBox(crew, "Car's story:", _txtCrewCar, Result.CrewCarStory ?? string.Empty));
         _txtCrewCar.MaxLength = DriverCrew.CarStoryMaxChars;
         _txtCrewCar.PlaceholderText = "optional - for the Technical Lead";
-        fields.AddHint("In their own words, for the principal and the Technical Lead. Spoken over the PA and the stream; "
+        crew.AddHint("In their own words, for the principal and the Technical Lead. Spoken over the PA and the stream; "
                        + "never shown online.");
 
-        AddJuniorRow(fields, captions);
+        AddJuniorRow(junior, captions);
 
         // A junior's notes and about line are said only with a parent's
         // consent recorded here (15 Nov 2026) - see DriverCrew.OwnWordsMayBeSaid.
         _chkCrewConsent.Text = "A parent or guardian agreed these notes and the about line can be said on the PA and the stream";
         _chkCrewConsent.AutoSize = true;
         _chkCrewConsent.Checked = Result.CrewNotesParentConsent;
-        fields.AddRow(string.Empty, _chkCrewConsent);
-        fields.AddHint("For a junior. Without it their notes and about line are kept but never said. Ask the parent at the desk, "
+        junior.AddRow(string.Empty, _chkCrewConsent);
+        junior.AddHint("For a junior. Without it their notes and about line are kept but never said. Ask the parent at the desk, "
                        + "as for the waiver.");
 
-        AddOnStreamRows(fields, captions);
+        AddOnStreamRows(junior, captions);
 
         // Their garage's cars, the active one showing - what they are
         // announced and recorded in. A name typed and Added is a new car,
@@ -378,37 +387,37 @@ public sealed class ProfileForm : Form
         // No Remove: the list is their garage (GarageSync.SyncNames), where
         // a car is retired, deleted or transferred - a name taken off here
         // would only come back from it.
-        captions.Add(fields.AddRow("Active car:", ButtonsBeside(_cmbCars, btnAddCar)));
-        fields.AddHint("The car they race in now, announced and recorded. Pick one, or type a new one and press Add: it joins their garage when you save. Retire or transfer cars in their garage.");
+        captions.Add(carGrid.AddRow("Active car:", ButtonsBeside(_cmbCars, btnAddCar)));
+        carGrid.AddHint("The car they race in now, announced and recorded. Pick one, or type a new one and press Add: it joins their garage when you save. Retire or transfer cars in their garage.");
 
-        captions.Add(AddLabeledTextBox(fields, "Race number:", _txtRaceNumber, Result.RaceNumber));
+        captions.Add(AddLabeledTextBox(who, "Race number:", _txtRaceNumber, Result.RaceNumber));
 
         _bodyColour = CarColour.Clean(Result.BodyColour);
         _pnlBodyColour.Size = new Size(UiLayout.AtTextSize(44), UiLayout.AtTextSize(24));
         _btnBodyColour.Click += (_, _) => ChooseBodyColour();
         _btnBodyColourNone.Click += (_, _) => { _bodyColour = string.Empty; ShowBodyColour(); };
         ShowBodyColour();
-        captions.Add(fields.AddRow("Car colour:", FieldGrid.Inline(_pnlBodyColour, _btnBodyColour, _btnBodyColourNone)));
-        fields.AddHint("The main colour of their car's body. It goes beside their name on the stream, so viewers can tell the cars apart.");
-        captions.Add(AddLabeledTextBox(fields, "Home track:", _txtHomeTrack, Result.HomeTrack));
-        captions.Add(AddLabeledTextBox(fields, "Skill level:", _txtSkillLevel, Result.SkillLevel));
+        captions.Add(carGrid.AddRow("Car colour:", FieldGrid.Inline(_pnlBodyColour, _btnBodyColour, _btnBodyColourNone)));
+        carGrid.AddHint("The main colour of their car's body. It goes beside their name on the stream, so viewers can tell the cars apart.");
+        captions.Add(AddLabeledTextBox(who, "Home track:", _txtHomeTrack, Result.HomeTrack));
+        captions.Add(AddLabeledTextBox(who, "Skill level:", _txtSkillLevel, Result.SkillLevel));
         _txtSkillLevel.PlaceholderText = "e.g. Novice / Intermediate / Expert";
 
         // New to racing (12 Nov 2026, setup plan D12).
         _chkNovice.Text = "New to racing (the desk shows it, and the announcer welcomes them)";
         _chkNovice.AutoSize = true;
         _chkNovice.Checked = Result.IsNovice;
-        fields.AddField(_chkNovice);
-        captions.Add(AddLabeledTextBox(fields, "Mentor:", _txtMentor, Result.Mentor ?? string.Empty));
+        who.AddField(_chkNovice);
+        captions.Add(AddLabeledTextBox(who, "Mentor:", _txtMentor, Result.Mentor ?? string.Empty));
         _txtMentor.PlaceholderText = "who's looking after them tonight";
 
-        captions.Add(AddLabeledTextBox(fields, "Contact:", _txtContact, Result.Contact));
+        captions.Add(AddLabeledTextBox(contact, "Contact:", _txtContact, Result.Contact));
         _txtContact.PlaceholderText = "organizer use only - never announced";
 
         // Its own box rather than read out of Contact, which is free text
         // ("Dad, 07700 900123"). Only ever used to send this racer their
         // check-in PIN.
-        captions.Add(AddLabeledTextBox(fields, "Email:", _txtEmail, Result.Email));
+        captions.Add(AddLabeledTextBox(contact, "Email:", _txtEmail, Result.Email));
         _txtEmail.PlaceholderText = "for check-in PINs - never shown publicly";
 
         // WHY (22 Oct 2026, driver experience): whether they'd like their
@@ -421,8 +430,8 @@ public sealed class ProfileForm : Form
         _chkEmailMyNight.Text = "Email them their night";
         _chkEmailMyNight.AutoSize = true;
         _chkEmailMyNight.Checked = Result.EmailMyNight;
-        fields.AddField(_chkEmailMyNight);
-        fields.AddHint("When the club sends night emails: their results and report card, to the address above.");
+        contact.AddField(_chkEmailMyNight);
+        contact.AddHint("When the club sends night emails: their results and report card, to the address above.");
 
         void UpdateEmailMyNight() => _chkEmailMyNight.Enabled = _txtEmail.Text.Trim().Length > 0;
 
@@ -464,8 +473,8 @@ public sealed class ProfileForm : Form
         _cmbTransponders.TextChanged += (_, _) => UpdateTransponderButtons();
         UpdateTransponderButtons();
 
-        captions.Add(fields.AddRow("Transponders:", ButtonsBeside(_cmbTransponders, btnAddTransponder, btnRetireTransponder, btnRemoveTransponder)));
-        fields.AddHint("Their other transponders - a second car, a spare. A retired one keeps what was timed on it.");
+        captions.Add(carGrid.AddRow("Transponders:", ButtonsBeside(_cmbTransponders, btnAddTransponder, btnRetireTransponder, btnRemoveTransponder)));
+        carGrid.AddHint("Their other transponders - a second car, a spare. A retired one keeps what was timed on it.");
 
         _cmbClass.DropDownStyle = ComboBoxStyle.DropDownList;
 
@@ -525,7 +534,7 @@ public sealed class ProfileForm : Form
         };
 
         RefreshClassCombo(Result.ClassName, keepIfUnlisted: true);
-        captions.Add(fields.AddRow("Class:", ButtonsBeside(_cmbClass, btnManageClasses)));
+        captions.Add(carGrid.AddRow("Class:", ButtonsBeside(_cmbClass, btnManageClasses)));
 
         // Any other classes they race. Wraps rather than running past the
         // edge when there are several.
@@ -534,55 +543,46 @@ public sealed class ProfileForm : Form
         btnOtherClasses.Click += (_, _) => ChooseOtherClasses();
         _cmbClass.SelectedIndexChanged += (_, _) => ShowOtherClasses();
         ShowOtherClasses();
-        captions.Add(fields.AddRow("Also races:", new ButtonBar(tight: true).With(_lblOtherClasses, btnOtherClasses)));
-        fields.AddHint("They go into these classes' heats as well as their main class's.");
+        captions.Add(carGrid.AddRow("Also races:", new ButtonBar(tight: true).With(_lblOtherClasses, btnOtherClasses)));
+        carGrid.AddHint("They go into these classes' heats as well as their main class's.");
 
         _txtSetupConfiguration.Multiline = true;
         _txtSetupConfiguration.AcceptsReturn = true;
         _txtSetupConfiguration.ScrollBars = ScrollBars.Vertical;
         _txtSetupConfiguration.Text = Result.SetupConfiguration;
-        captions.Add(fields.AddRow("Setup configuration:", _txtSetupConfiguration, stretch: true));
+        captions.Add(carGrid.AddRow("Setup configuration:", _txtSetupConfiguration, stretch: true));
 
         // In the fields' column, under the fields, as they were.
         _chkRental.Text = "Rental / loaner transponder";
         _chkRental.AutoSize = true;
         _chkRental.Checked = Result.IsRental;
-        fields.AddField(_chkRental);
+        records.AddField(_chkRental);
 
         _chkExcludeRecords.Text = "Exclude from track records and points";
         _chkExcludeRecords.AutoSize = true;
         _chkExcludeRecords.Checked = Result.ExcludeFromRecords;
-        fields.AddField(_chkExcludeRecords);
-        fields.AddHint("Both keep a driver out of all-time records - for guests, staff cars and loaners.");
+        records.AddField(_chkExcludeRecords);
+        records.AddHint("Both keep a driver out of all-time records - for guests, staff cars and loaners.");
 
         _chkVisitor.Text = "Visiting from another club";
         _chkVisitor.AutoSize = true;
         _chkVisitor.Checked = Result.Visitor;
-        fields.AddField(_chkVisitor);
-        fields.AddHint("The announcer's opening counts these: \"six of them visiting\".");
+        records.AddField(_chkVisitor);
+        records.AddHint("The announcer's opening counts these: \"six of them visiting\".");
 
         _txtNotes.Multiline = true;
         _txtNotes.AcceptsReturn = true;
         _txtNotes.ScrollBars = ScrollBars.Vertical;
         _txtNotes.Text = Result.Notes;
-        captions.Add(fields.AddRow("Notes:", _txtNotes, stretch: true));
 
         // ONLINE PRIVACY (22 Oct 2026, driver experience): the three ways a
         // driver can ask to be kept off the internet - see the flags on
         // DriverProfile, which PublicPrivacy enforces for the relay. A phone
         // can only turn these on; turning one off is done here, at the desk.
-        // A grid of its own under a heading, lined up with the fields above
+        // A card of its own, lined up with the other cards' fields
         // (FieldGrid.LineUp, after the theme pass). The hint says the room
         // is not affected, because a club will otherwise expect the Big
         // Screen to change too.
-        var privacyHeading = new Label
-        {
-            Text = "PRIVACY",
-            AutoSize = true,
-            Font = AppTheme.MicroFont,
-            ForeColor = AppTheme.Primary,
-        };
-
         var privacy = new FieldGrid();
 
         _chkNoPhotoOnline.Text = "Leave their photo out";
@@ -618,49 +618,58 @@ public sealed class ProfileForm : Form
                         + "A driver can ask for them from their phone; only the desk can turn one off. "
                         + "Big Screen keeps their photo off the driver introductions; their name still shows.");
 
-        // The fields on the left and the strip down the right, as tall as
-        // the taller of the two. The strip is as wide as SizeStrip works
-        // out; until the theme pass, the photo's side.
-        _stripWidth = UiLayout.AtTextSize(PhotoSide);
+        // Team and sponsors: the two fields for the crowd rather than the
+        // organiser, in a card of their own - see BuildCrowdRows.
+        BuildCrowdRows(crowd, captions);
 
-        var band = new Beside(() => _stripWidth)
-        {
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-        };
-
-        // Badges, read-only, under the rest of the left column. Read here
-        // rather than passed in so the form's callers don't all need a store
-        // they otherwise have no use for.
+        // Badges, read-only, in the card at the top. Read here rather than
+        // passed in so the form's callers don't all need a store they
+        // otherwise have no use for.
         var badgeSummary = DescribeBadges(fixedTransponder ?? _txtTransponder.Text);
-        var hasBadges = !string.IsNullOrWhiteSpace(badgeSummary);
 
-        band.Add(fields, gapBelow: UiLayout.SectionGap);
-        band.Add(privacyHeading, gapBelow: UiLayout.HeadingGap);
-        band.Add(privacy, gapBelow: hasBadges ? UiLayout.RowGap : 0);
-
-        if (hasBadges)
-        {
-            band.Add(new Label
-            {
-                Text = badgeSummary,
-                AutoSize = true,
-                ForeColor = AppTheme.TextMuted,
-            }, gapBelow: 0);
-        }
-
-        var strip = BuildPhotoStrip(band);
+        var header = BuildHeader(badgeSummary, adding: existing is null);
 
         var btnSave = new Button { Text = "Save" };
         btnSave.Click += BtnSave_Click;
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
+
+        // THE CARDS (18 Nov 2026, dialog jazz-up): who the driver is at a
+        // glance across the top - their photo, name and number - then the
+        // fields in cards by what they are for, each with a line saying so.
+        // It was one long grid of thirty-odd rows, with the photo, team and
+        // sponsors in a strip down the right. The junior card keeps its rows
+        // and words exactly as they were, and sits straight under the crew
+        // card its notes consent is about.
+        var cards = new[]
+        {
+            Card(new Section("Who they are"), "Their name and number, as the desk and the results show them.", who),
+            Card(new Section("Car and class"), "What they race, and which heats they go in.", carGrid),
+            Card(new Section("On the PA"), "How the announcer and the AI commentary talk about them.", voice),
+            Card(new Section("Their crew"), "Their own made-up pit crew and a few words for the race calls. All optional.", crew),
+            Card(new Section("Junior"), "For a driver under 18, and what a parent or guardian agreed to.", junior),
+            Card(new Section("Privacy"), "What they asked to keep off the internet and the Big Screen.", privacy),
+            Card(new Section("Contact"), "For the desk only. Never announced.", contact),
+            Card(new Section("Driver card"), "Shown on their driver card - the works-driver treatment.", crowd),
+            Card(new Section("Records"), "Who counts in the club's records, and in the visitor count.", records),
+        };
+
+        var notesCard = new Section("Notes");
+        notesCard.Add(CardHint("Anything else the desk should know about them."), gapBelow: UiLayout.RowGap);
+        notesCard.Add(_txtNotes, gapBelow: 0);
 
         // Everything but the buttons is the body: this dialog has more
         // fields than a small screen has height for, and on one they scroll
         // while Save and Cancel stay in view.
         var page = new FillPage();
         var body = DialogFit.Body(page);
-        body.Add(band, gapBelow: 0);
+        body.Add(header.Card, gapBelow: UiLayout.SectionGap);
+
+        foreach (var card in cards)
+        {
+            body.Add(card, gapBelow: UiLayout.RowGap);
+        }
+
+        body.Add(notesCard, gapBelow: 0);
 
         // Bottom-right of the dialog, Cancel furthest right, as a dialog's
         // buttons go - and Tab still reaches Save first, as it did: the bar
@@ -708,19 +717,21 @@ public sealed class ProfileForm : Form
             }
         };
 
-        // After the theme pass, in the faces it leaves them in: the strip
-        // and what is in it, the two note boxes their lines, and each
-        // drop-down as wide as its longest name.
-        SizeStrip(strip);
+        AppTheme.StyleButton(btnSave, AppTheme.ButtonKind.Primary);
 
-        // One caption column down the fields and the privacy grid, measured
-        // in the faces the theme pass left the captions in - before the
-        // width below, which is worked out from the captions (22 Oct 2026,
-        // driver experience).
-        FieldGrid.LineUp(new[] { fields, privacy });
+        // After the theme pass, in the faces it leaves them in: the top
+        // card's photo and words, the three note boxes their lines, and
+        // each drop-down as wide as its longest name.
+        SizeHeader(header);
+
+        // One caption column down every card, measured in the faces the
+        // theme pass left the captions in - before the width below, which
+        // is worked out from the captions (22 Oct 2026, driver experience).
+        FieldGrid.LineUp(new[] { who, carGrid, voice, crew, junior, privacy, contact, crowd, records });
 
         _txtSetupConfiguration.Height = LinesHigh(_txtSetupConfiguration, NotesLines);
         _txtNotes.Height = LinesHigh(_txtNotes, NotesLines);
+        _txtSponsors.Height = LinesHigh(_txtSponsors, SponsorsLines);
 
         var carsWidth = FitPicker(_cmbCars, keepToRow: false);
         var classWidth = FitPicker(_cmbClass, keepToRow: false);
@@ -767,18 +778,29 @@ public sealed class ProfileForm : Form
         // and the gap after it.
         var captionColumn = captions.Max(caption => caption.GetPreferredSize(Size.Empty).Width + caption.Margin.Horizontal);
 
+        // The cards' own room: their inset either side, and the widest of
+        // their captions on one line (Section.CaptionWidth), and the top
+        // card's photo beside its buttons.
+        var insets = Section.Inset.Horizontal;
+        var cardCaptions = cards.Append(notesCard).Max(card => card.CaptionWidth) + insets;
+        var headerNeeds = insets + _photoSide + UiLayout.RowGap + header.Buttons.OneLineWidth;
+
         // The width it was made at, at the text size in use, or wider when
-        // the two columns need it - with room for the body's scrollbar, which
+        // the columns need it - with room for the body's scrollbar, which
         // takes its width from the fields on a screen too short for them.
-        var width = Math.Max(
+        var width = new[]
+        {
             UiLayout.AtTextSize(DialogWidth),
-            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.RowGap + _stripWidth
-                + SystemInformation.VerticalScrollBarWidth + UiLayout.PageRight);
+            UiLayout.PageLeft + insets + captionColumn + fieldColumn
+                + SystemInformation.VerticalScrollBarWidth + UiLayout.PageRight,
+            UiLayout.PageLeft + Math.Max(cardCaptions, headerNeeds)
+                + SystemInformation.VerticalScrollBarWidth + UiLayout.PageRight,
+        }.Max();
 
         // The field column as it is when the body's scrollbar is showing -
         // the narrowest it gets - for a drop-down widened once the window
         // is up (FitPicker).
-        _fieldColumn = width - UiLayout.PageLeft - captionColumn - UiLayout.RowGap - _stripWidth
+        _fieldColumn = width - UiLayout.PageLeft - insets - captionColumn
                        - SystemInformation.VerticalScrollBarWidth - UiLayout.PageRight;
 
         // Let go, children first, and laid out once: everything above is
@@ -792,23 +814,23 @@ public sealed class ProfileForm : Form
     }
 
     /// <summary>
-    /// The right-hand strip: photo on top, then team and sponsors - the
-    /// three fields that exist for the crowd rather than the organiser,
-    /// grouped away from the paperwork on the left. Down the side of
-    /// <paramref name="band"/>, one under another and each as wide as the
-    /// strip, the captions above their boxes as they always were. The strip
-    /// gives its parts its width but not their heights: the photo, the
-    /// captions, the note and the sponsors box are given theirs once the
-    /// theme pass is done (SizeStrip), and this returns what that needs.
+    /// The card across the top (18 Nov 2026, dialog jazz-up): who this
+    /// driver is at a glance. Their photo down the left - or the initials
+    /// avatar, which follows the name as it is typed - and beside it their
+    /// name in the heading face, a line of transponder, number, class and
+    /// car that follows the boxes below, the badges they have earned when
+    /// there are any, and Choose Photo and Remove Photo. The photo is given
+    /// its height once the theme pass is done (SizeHeader).
     /// </summary>
-    private PhotoStrip BuildPhotoStrip(Beside band)
+    private HeaderCard BuildHeader(string badgeSummary, bool adding)
     {
+        _photoSide = UiLayout.AtTextSize(PhotoSide);
+
         _photoPanel.Paint += (_, e) =>
         {
             var who = _txtDriverName.Text.Trim().Length > 0 ? _txtDriverName.Text.Trim() : Result.Transponder;
             DriverPhotos.DrawAvatar(e.Graphics, _photoPanel.ClientRectangle, who, _photoFileName);
         };
-        band.AddSide(_photoPanel);
 
         // The initials avatar follows the name as it is typed.
         _txtDriverName.TextChanged += (_, _) => _photoPanel.Invalidate();
@@ -840,7 +862,6 @@ public sealed class ProfileForm : Form
             _photoFileName = imported;
             _photoPanel.Invalidate();
         };
-        band.AddSide(btnChoose, gapBelow: UiLayout.ButtonGap);
 
         var btnRemove = new Button { Text = "Remove Photo" };
         btnRemove.Click += (_, _) =>
@@ -848,57 +869,149 @@ public sealed class ProfileForm : Form
             _photoFileName = string.Empty;
             _photoPanel.Invalidate();
         };
-        band.AddSide(btnRemove, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
 
-        var lblTeam = band.AddSide(new Label { Text = "Team / club:" }, gapBelow: UiLayout.HintGap);
-        _txtTeam.Text = Result.Team;
-        band.AddSide(_txtTeam);
-
-        var lblSponsors = band.AddSide(new Label { Text = "Sponsors:" }, gapBelow: UiLayout.HintGap);
-        _txtSponsors.Multiline = true;
-        _txtSponsors.ScrollBars = ScrollBars.Vertical;
-        _txtSponsors.Text = Result.Sponsors;
-        band.AddSide(_txtSponsors, gapBelow: UiLayout.HintGap);
-
-        var lblSponsorsHint = band.AddSide(new Label
+        var lblName = new Label
         {
-            Text = "Shown on the driver card - the works-driver treatment.",
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        }, gapBelow: 0);
+            AutoSize = true,
+            Font = AppTheme.HeadingFont,
+            ForeColor = AppTheme.TextDark,
+            UseMnemonic = false,
+        };
 
-        return new PhotoStrip(btnChoose, btnRemove, new[] { lblTeam, lblSponsors, lblSponsorsHint });
+        var lblLine = new Label
+        {
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            UseMnemonic = false,
+        };
+
+        void ShowWho()
+        {
+            lblName.Text = WhoHeading(_txtDriverName.Text, adding);
+            lblLine.Text = WhoLine(_txtTransponder.Text, _txtRaceNumber.Text, MainClassShown(), _cmbCars.Text);
+        }
+
+        _txtDriverName.TextChanged += (_, _) => ShowWho();
+        _txtTransponder.TextChanged += (_, _) => ShowWho();
+        _txtRaceNumber.TextChanged += (_, _) => ShowWho();
+        _cmbClass.SelectedIndexChanged += (_, _) => ShowWho();
+        _cmbCars.TextChanged += (_, _) => ShowWho();
+        ShowWho();
+
+        var buttons = new ButtonBar().With(btnChoose, btnRemove);
+
+        var band = new Beside(() => _photoSide)
+        {
+            SideOnLeft = true,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
+
+        band.AddSide(_photoPanel, gapBelow: 0);
+        band.Add(lblName, gapBelow: UiLayout.HintGap);
+        band.Add(lblLine, gapBelow: UiLayout.RowGap);
+
+        if (!string.IsNullOrWhiteSpace(badgeSummary))
+        {
+            band.Add(new Label
+            {
+                Text = badgeSummary,
+                AutoSize = true,
+                ForeColor = AppTheme.Primary,
+                Font = AppTheme.SmallFont,
+                UseMnemonic = false,
+            }, gapBelow: UiLayout.RowGap);
+        }
+
+        band.Add(buttons, stretch: false, gapBelow: 0);
+
+        var card = new Section();
+        card.Add(band, gapBelow: 0);
+
+        return new HeaderCard(card, buttons);
+    }
+
+    /// <summary>The top card and its photo buttons, whose width the window's is worked out from.</summary>
+    private sealed record HeaderCard(Section Card, ButtonBar Buttons);
+
+    /// <summary>
+    /// The photo square, at the text size in use, in the face the theme pass
+    /// left - once: the dialog is built at the text size in use and is not
+    /// kept in step with a change made while it is up (see DialogFit).
+    /// </summary>
+    private void SizeHeader(HeaderCard header)
+    {
+        _photoPanel.Height = _photoSide;
+        header.Card.PerformLayout();
+    }
+
+    /// <summary>The top card's name: the name as typed, or what it is until there is one.</summary>
+    internal static string WhoHeading(string? typedName, bool adding)
+    {
+        var name = (typedName ?? string.Empty).Trim();
+
+        return name.Length > 0 ? name : adding ? "New driver" : "No name yet";
+    }
+
+    /// <summary>The top card's line: "Transponder 4001644 · #117 · Stock Buggy · Mini-Z", the parts there are.</summary>
+    internal static string WhoLine(string? transponder, string? raceNumber, string? className, string? carName)
+    {
+        var parts = new List<string>();
+        var tx = (transponder ?? string.Empty).Trim();
+
+        parts.Add(tx.Length > 0 ? "Transponder " + tx : "No transponder yet");
+
+        if (!string.IsNullOrWhiteSpace(raceNumber))
+        {
+            parts.Add("#" + raceNumber.Trim().TrimStart('#'));
+        }
+
+        if (!string.IsNullOrWhiteSpace(className))
+        {
+            parts.Add(className.Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(carName))
+        {
+            parts.Add(carName.Trim());
+        }
+
+        return string.Join("  ·  ", parts);
     }
 
     /// <summary>
-    /// The strip's width and the heights of what is in it, in the faces the
-    /// theme pass left them in. The width: the photo's side at the text size
-    /// in use, or what the wider button's caption needs if that is more -
-    /// measured as the strip measures its buttons (UiLayout.ButtonSizeFor),
-    /// so the strip comes out exactly this wide. The photo square in it; the
-    /// captions and the note each as tall as their text wrapped to it; the
-    /// sponsors box its lines. Once: the dialog is built at the text size in
-    /// use and is not kept in step with a change made while it is up (see
-    /// DialogFit).
+    /// Team and sponsors, the fields that exist for the crowd rather than
+    /// the organiser, as rows of their own card. They used to sit down the
+    /// photo strip with their captions above the boxes.
     /// </summary>
-    private void SizeStrip(PhotoStrip strip)
+    private void BuildCrowdRows(FieldGrid crowd, List<Label> captions)
     {
-        _stripWidth = Math.Max(
-            UiLayout.AtTextSize(PhotoSide),
-            Math.Max(UiLayout.ButtonSizeFor(strip.Choose).Width, UiLayout.ButtonSizeFor(strip.Remove).Width));
+        _txtTeam.Text = Result.Team;
+        captions.Add(crowd.AddRow("Team / club:", _txtTeam, stretch: true));
 
-        _photoPanel.Height = _stripWidth;
-
-        foreach (var label in strip.Labels)
-        {
-            label.Height = label.GetPreferredSize(new Size(_stripWidth, 0)).Height;
-        }
-
-        _txtSponsors.Height = LinesHigh(_txtSponsors, SponsorsLines);
+        _txtSponsors.Multiline = true;
+        _txtSponsors.ScrollBars = ScrollBars.Vertical;
+        _txtSponsors.Text = Result.Sponsors;
+        captions.Add(crowd.AddRow("Sponsors:", _txtSponsors, stretch: true));
     }
 
-    /// <summary>What the strip hands back to be sized after the theme pass: its two buttons, whose captions can widen it, and its captions and note.</summary>
-    private sealed record PhotoStrip(Button Choose, Button Remove, IReadOnlyList<Label> Labels);
+    /// <summary>A card filled in: a line saying what it is for, and its fields under it.</summary>
+    private static Section Card(Section card, string hint, FieldGrid grid)
+    {
+        card.Add(CardHint(hint), gapBelow: UiLayout.RowGap);
+        card.Add(grid, gapBelow: 0);
+
+        return card;
+    }
+
+    /// <summary>A card's line saying what it is for, in the small muted face.</summary>
+    private static Label CardHint(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        ForeColor = AppTheme.TextMuted,
+        Font = AppTheme.SmallFont,
+    };
 
     /// <summary>
     /// A drop-down with its buttons after it, in one field, wrapping under it
