@@ -54,19 +54,21 @@ HandicapEditForm, RaceClassEditForm and TimePenaltyForm. The two wizards share
 one step header: a progress bar, "STEP 2 OF 4" in small caps, a dark title, and
 numbered marks on the rail.
 
+**Reworked in the second dialog batch (18 Nov 2026), the race-night windows:**
+HeatBalanceForm, PostHeatsForm, LapDetailWindow, LateArrivalsForm,
+SetupEntryForm, ResultEditForm, EventEditForm and TechInspectionEditForm.
+
 **Never reworked**, biggest first (lines of code), so the windows people
 meet most often come first:
 
-BigScreenForm, MainForm chrome, Sheet,
-AmbienceLayerForm, HeatBalanceForm,
-LapDetailWindow, SetupEntryForm, EventEditForm,
-TemplateDaysForm, SoundscapeEditorForm, TechInspectionEditForm,
+BigScreenForm, MainForm chrome, Sheet, AmbienceLayerForm,
+TemplateDaysForm, SoundscapeEditorForm,
 PasswordPromptForm, PackPickerForm, ChassisTemplateForm, RaceFormatForm,
 AchievementDetailForm, DialogForm, RaceReplayForm, GhostRivalPickerForm,
 LookEditorForm, CarTransferForm, AboutForm, NoteWindow, CsvMappingForm,
 SeasonRulesForm, GhostEditForm, HandScoringForm, ApproveSignupForm,
-TargetLapForm, ResultEditForm, NameCheckForm,
-PhotoFinishForm, BroadcastWindow, LateArrivalsForm, PostHeatsForm,
+TargetLapForm, NameCheckForm,
+PhotoFinishForm, BroadcastWindow,
 QualifyingStandingsForm, PickCarForm, RoundRosterForm, AppTour,
 ThisMonthForm, BelongsToForm, UnsaidLinesForm,
 ApproveDriverRequestForm, DriversMeetingForm, WarningReasonForm,
@@ -86,9 +88,10 @@ PaceAnalysisForm, TextPromptForm.
 
 About a hundred windows are too many to redesign in a single change, so they
 are being done in batches. The first batch, the windows a club meets on its
-first night, is done (above). The next batch should be the race-night windows:
-LapDetailWindow, HeatBalanceForm, SetupEntryForm, EventEditForm,
-TechInspectionEditForm, ResultEditForm, LateArrivalsForm and PostHeatsForm.
+first night, and the second, the race-night windows, are done (above). The
+third batch should be the rest of race night: PhotoFinishForm,
+QualifyingStandingsForm, HandScoringForm, NameCheckForm, RoundRosterForm,
+CloseNightForm, WarningReasonForm and DriverPaidForm.
 
 Before-pictures of the pages in this pass (1366x768, text 100%) are in
 `layout-check/before/` (git-ignored).
