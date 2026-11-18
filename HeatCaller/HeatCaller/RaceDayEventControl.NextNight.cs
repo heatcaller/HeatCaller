@@ -7,7 +7,8 @@ namespace HeatCaller;
 /// </summary>
 public sealed partial class RaceDayEventControl
 {
-    private readonly Label _lblNextNight = new() { AutoSize = true, Margin = new Padding(0, 6, 8, 0) };
+    /// <summary>What the phones are told, on a pill: green while taking entries, amber once called off (17 Nov 2026).</summary>
+    private readonly InboxPill _lblNextNight = new() { Anchor = AnchorStyles.Left };
     private readonly Button _btnAnnounce = new() { Text = "Announce...", AutoSize = true };
     private readonly Button _btnCallOff = new() { Text = "Call It Off...", AutoSize = true };
 
@@ -17,8 +18,8 @@ public sealed partial class RaceDayEventControl
     /// <summary>"Call It Off..." - the next race night is off.</summary>
     public event Action<IWin32Window>? CallOffRequested;
 
-    /// <summary>The row, added to a grid by the layout.</summary>
-    private Control BuildNextNightRow()
+    /// <summary>The row, on Tonight's banner after its caption.</summary>
+    private Control BuildNextNightRow(Label caption)
     {
         _btnAnnounce.Click += (_, _) =>
         {
@@ -32,7 +33,7 @@ public sealed partial class RaceDayEventControl
         };
 
         ShowNextNight();
-        return FieldGrid.Inline(_lblNextNight, _btnAnnounce, _btnCallOff);
+        return FieldGrid.Inline(caption, _lblNextNight, _btnAnnounce, _btnCallOff);
     }
 
     /// <summary>What the phones are told about the next night, in a few words.</summary>
@@ -43,6 +44,9 @@ public sealed partial class RaceDayEventControl
             : night.Off
                 ? $"{NextNight.When(night.Day)} - called off"
                 : $"{NextNight.When(night.Day)}" + (night.TakingEntries ? " - taking entries" : string.Empty);
+        _lblNextNight.Tone = _settings?.NextNight is not { } shown
+            ? PillTone.Plain
+            : shown.Off ? PillTone.Warning : PillTone.Good;
         _btnCallOff.Enabled = _settings?.NextNight is { Off: false };
         _btnAnnounce.Enabled = _settings is not null;
     }

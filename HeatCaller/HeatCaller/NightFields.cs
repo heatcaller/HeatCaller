@@ -235,13 +235,51 @@ internal sealed class NightFields
     /// <summary>The times card: entries close (first, as in the night), the first race, out by, and the breaks.</summary>
     public void AddTimesRows(FieldGrid grid)
     {
-        grid.AddRow(EntriesCloseCaption, FieldGrid.Inline(EntriesClose, EntriesCloseSet));
+        grid.AddRow(EntriesCloseCaption, TimeRow(EntriesClose, EntriesCloseSet));
         grid.AddHint("After this, a driver who checks in is a late entry. The announcer calls it ten minutes before and as it passes, and Next Steps counts down to it.");
-        grid.AddRow(FirstRaceCaption, FieldGrid.Inline(FirstRace, FirstRaceSet));
-        grid.AddRow(OutByCaption, FieldGrid.Inline(OutBy, OutBySet));
+        grid.AddRow(FirstRaceCaption, TimeRow(FirstRace, FirstRaceSet));
+        grid.AddRow(OutByCaption, TimeRow(OutBy, OutBySet));
         grid.AddRow("Breaks:", FieldGrid.Inline(BreaksLine, BreaksButton));
         grid.AddHint("Watering the track, dinner, track repairs. The finish time, every estimated start and the gap before the next race allow for them, and the announcer tells the room.");
     }
+
+    /// <summary>
+    /// One time's field (17 Nov 2026, Tonight summary cards): "Not set" and
+    /// Set a time while it has none, the picker and Clear once it has one.
+    /// The tick is still what holds the answer - everything reads and
+    /// writes it as before - but it is never shown: a grayed-out 10:00 AM
+    /// with "Set" after it read as a time that was set. Swapping one line
+    /// for another of the same height moves nothing under it.
+    /// </summary>
+    private Control TimeRow(TimePicker picker, CheckBox set)
+    {
+        var notSet = new Label { Text = "Not set", AutoSize = true, ForeColor = AppTheme.TextMuted };
+        var setTime = new Button { Text = "Set a time", AutoSize = true };
+        var clear = new Button { Text = "Clear", AutoSize = true };
+
+        // Clear would be guessed red from its caption; it takes nothing away
+        // that Set a time can't put back.
+        AppTheme.StyleButton(setTime, AppTheme.ButtonKind.Secondary);
+        AppTheme.StyleButton(clear, AppTheme.ButtonKind.Secondary);
+
+        setTime.Click += (_, _) =>
+        {
+            set.Checked = true;
+            picker.Focus();
+        };
+        clear.Click += (_, _) => set.Checked = false;
+
+        set.Visible = false;
+        _timeRows.Add((picker, set, notSet, setTime, clear));
+
+        var row = FieldGrid.Inline(picker, notSet, setTime, clear, set);
+
+        FollowTicks();
+        return row;
+    }
+
+    /// <summary>The times' rows, for FollowTicks: the picker, its tick, and what stands in for the tick.</summary>
+    private readonly List<(TimePicker Picker, CheckBox Set, Label NotSet, Button SetTime, Button Clear)> _timeRows = new();
 
     /// <summary>The heats card: rounds, classes, heat size, seeding, sharing, the rest gap, the check-in rule, the running order.</summary>
     public void AddHeatsRows(FieldGrid grid)
@@ -556,12 +594,24 @@ internal sealed class NightFields
         _lblClassHint.Text = clubNight ? ClubNightClassHint : RaceDayClassHint;
     }
 
-    /// <summary>A time's picker is grayed rather than hidden while its tick is off - a picker that vanished would move the rows under it.</summary>
+    /// <summary>
+    /// A time's picker grayed while its tick is off - and, on a row built by
+    /// TimeRow, swapped for "Not set" and Set a time, on a line of the same
+    /// height. Set a time and Clear only while the fields can be changed.
+    /// </summary>
     private void FollowTicks()
     {
         FirstRace.Enabled = _editable && FirstRaceSet.Checked;
         OutBy.Enabled = _editable && OutBySet.Checked;
         EntriesClose.Enabled = _editable && EntriesCloseSet.Checked;
+
+        foreach (var (picker, set, notSet, setTime, clear) in _timeRows)
+        {
+            picker.Visible = set.Checked;
+            clear.Visible = set.Checked && _editable;
+            notSet.Visible = !set.Checked;
+            setTime.Visible = !set.Checked && _editable;
+        }
     }
 
     private void Wire()

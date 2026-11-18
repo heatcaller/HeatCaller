@@ -369,27 +369,23 @@ public sealed partial class RaceDayEventControl : UserControl
         // about what the rest of the app shows than every field below it.
         _fields.AddNightRows(nightGrid);
 
-        // Tell the drivers (12 Nov 2026, setup plan D13).
-        nightGrid.AddRow("Next night on phones:", BuildNextNightRow());
-        nightGrid.AddHint("Announce the next race night on the Home page of the club's phone pages - the classes on and the times - so drivers can say they're coming. Call It Off tells them it's off, and emails the regulars.");
-
+        // Telling the drivers (12 Nov 2026, setup plan D13) is on the banner
+        // at the top now (BuildHero), beside what tonight is.
         _txtNotes.Multiline = true;
         _txtNotes.AcceptsReturn = true;
         _txtNotes.ScrollBars = ScrollBars.Vertical;
         nightGrid.AddRow("Notes:", _txtNotes);
 
-        var night = new Section("The night");
-
-        night.Add(nightGrid, gapBelow: 0);
+        // Every card says what is set, and Change opens its fields (17 Nov
+        // 2026, RaceDayEventControl.Cards).
+        var night = Fold("The night", BuildNightSummary(), nightGrid);
 
         // --- Times ---
         var timesGrid = new FieldGrid();
 
         _fields.AddTimesRows(timesGrid);
 
-        var times = new Section("Times");
-
-        times.Add(timesGrid, gapBelow: 0);
+        var times = Fold("Times", BuildTimesSummary(), timesGrid);
 
         // Five cards now where there were two (14 Nov 2026): the heats, the
         // money, running the night - and the ticks that are the club's, for
@@ -541,17 +537,9 @@ public sealed partial class RaceDayEventControl : UserControl
         closingGrid.AddField(_chkCloseNight);
         closingGrid.AddHint("When the last race has run, Next Steps opens a list to tick off: rentals, money, backups, Close Day and your own lines. Off, it says what's left in one line.");
 
-        var heats = new Section("Heats");
-
-        heats.Add(heatsGrid, gapBelow: 0);
-
-        var money = new Section("Money");
-
-        money.Add(moneyGrid, gapBelow: 0);
-
-        var running = new Section("Running the night");
-
-        running.Add(runGrid, gapBelow: 0);
+        var heats = Fold("Heats", BuildHeatsSummary(), heatsGrid);
+        var money = Fold("Money", BuildMoneySummary(), moneyGrid);
+        var running = Fold("Running the night", BuildRunSummary(), runGrid);
 
         var postingRules = new Section("The heats");
 
@@ -631,11 +619,20 @@ public sealed partial class RaceDayEventControl : UserControl
         // night is open, Tonight when one is - see ShowDefaultTab.
         _tonightPage.Add(lblIntro, gapBelow: UiLayout.RowGap);
         _tonightPage.Add(which);
-        _tonightPage.Add(night);
-        _tonightPage.Add(times);
-        _tonightPage.Add(heats);
-        _tonightPage.Add(money);
-        _tonightPage.Add(running);
+        _tonightPage.Add(BuildHero());
+
+        // Two columns on a wide window: when it happens on the left, how
+        // the racing goes on the right. One column, in that order, on a
+        // narrow one.
+        var columns = new CardColumns();
+
+        columns.AddLeft(times.Card);
+        columns.AddLeft(night.Card);
+        columns.AddRight(heats.Card);
+        columns.AddRight(money.Card);
+        columns.AddRight(running.Card);
+
+        _tonightPage.Add(columns);
         _tonightPage.Add(FieldGrid.Inline(_btnCloseDay, _btnDeleteDay, _btnSaveTemplate, _lblSaved), gapBelow: UiLayout.RowGap);
         _tonightPage.Add(lblHint, gapBelow: 0);
 
@@ -665,6 +662,7 @@ public sealed partial class RaceDayEventControl : UserControl
         // rules lines up on its own.
         _textSize.Keep(() => FieldGrid.LineUp(new[] { dayGrid, nightGrid, timesGrid, heatsGrid, moneyGrid, runGrid }, NightFields.HeatsPerDriverCaption, NightFields.RacesPerDriverCaption));
         _textSize.Keep(() => FieldGrid.LineUp(new[] { marshalGrid }, MarshalRuleCaption));
+        _textSize.Keep(() => FieldGrid.LineUp(_summaryGrids, "Races:"));
         _textSize.Keep(SizeFields);
 
         WireAutoSave();
@@ -763,6 +761,14 @@ public sealed partial class RaceDayEventControl : UserControl
         _fields.LeftTyping += CommitNow;
         _fields.Changed += CommitNow;
 
+        // The summaries say what the fields say, as they change.
+        _fields.Typed += ShowSummaries;
+        _fields.Changed += ShowSummaries;
+        _txtName.TextChanged += (_, _) => ShowSummaries();
+        _txtNotes.TextChanged += (_, _) => ShowSummaries();
+        _fields.BreaksLine.TextChanged += (_, _) => ShowSummaries();
+        _fields.ClassOrderLine.TextChanged += (_, _) => ShowSummaries();
+
         _chkAutoAdvance.CheckedChanged += (_, _) =>
         {
             // "Next race is:" only means something while the next race
@@ -772,6 +778,7 @@ public sealed partial class RaceDayEventControl : UserControl
             // from the day, as the first race time's box is.
             FollowAutoAdvance(!(Selected?.IsLegacy ?? true));
             CommitNow();
+            ShowSummaries();
         };
         _cmbAutoAdvanceScope.SelectedIndexChanged += (_, _) => CommitNow();
 
@@ -1279,6 +1286,8 @@ public sealed partial class RaceDayEventControl : UserControl
         // where everything from before race days lives. Nor can anything be
         // deleted without the two stores the reach-through needs.
         _btnDeleteDay.Enabled = editable && _history is not null;
+
+        ShowSummaries();
     }
 
     /// <summary>
