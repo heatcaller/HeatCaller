@@ -209,6 +209,15 @@ public sealed class ProfileForm : Form
         _photoFileName = Result.PhotoFileName;
         _originalPhotoFileName = Result.PhotoFileName;
 
+        // Built with its layout held, and let go once it is all measured -
+        // see LayoutFreeze.HoldWhileBuilding, and the Setup Sheet and the
+        // template editor, which do the same (18 Nov 2026). Built live, its
+        // forty-odd rows laid themselves out again for every row added, for
+        // every face the theme pass changed, and for every size set after
+        // it - each pass seconds on a busy PC - and the dialog took 15 to 30
+        // seconds to open, which timed out the tests that open it.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         // The organiser's column: a caption and its field on each row, the
         // captions in one column as wide as the longest of them, and every
         // text box running to the column's right-hand edge.
@@ -771,6 +780,13 @@ public sealed class ProfileForm : Form
         // is up (FitPicker).
         _fieldColumn = width - UiLayout.PageLeft - captionColumn - UiLayout.RowGap - _stripWidth
                        - SystemInformation.VerticalScrollBarWidth - UiLayout.PageRight;
+
+        // Let go, children first, and laid out once: everything above is
+        // worked out from what the parts want (their preferred sizes), never
+        // from where a layout put them, so none of it needed the dialog laid
+        // out - and each change made live, from the strip's heights to each
+        // drop-down's width, laid out all of it again.
+        building.Dispose();
 
         DialogFit.Keep(this, page, width, body: body, widthMeasured: true);
     }
