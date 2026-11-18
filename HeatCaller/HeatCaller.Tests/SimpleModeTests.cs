@@ -502,6 +502,14 @@ public sealed class SimpleModeTests : IDisposable
         "RcpTrackEditorForm.cs|The lap", "RcpTrackEditorForm.cs|The room it goes in", "RcpTrackEditorForm.cs|Tile size",
         "RcpTrackEditorForm.cs|Track name", "RcpTrackEditorForm.cs|What the club owns",
         "OverlayEditorForm.cs|The picked graphic", "OverlayEditorForm.cs|The whole layout",
+
+        // The first-run wizard and Start Tonight (18 Nov 2026, dialog jazz-up).
+        "FirstRunWizard.cs|The five steps", "FirstRunWizard.cs|Already have a backup?", "FirstRunWizard.cs|Looks and clock",
+        "FirstRunWizard.cs|Sound", "FirstRunWizard.cs|Decoder", "FirstRunWizard.cs|Track layout",
+        "FirstRunWizard.cs|Where do you race?", "FirstRunWizard.cs|Class names", "FirstRunWizard.cs|Race length",
+        "FirstRunWizard.cs|Drivers", "FirstRunWizard.cs|Bring a list", "FirstRunWizard.cs|What's ready",
+        "FirstRunWizard.cs|On race night", "FirstRunWizard.cs|The tour",
+        "NewRaceDayForm.cs|How to start", "NewRaceDayForm.cs|The night", "NewRaceDayForm.cs|Classes",
     };
 
     [Fact]

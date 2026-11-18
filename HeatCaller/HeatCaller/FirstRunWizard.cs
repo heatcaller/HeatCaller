@@ -48,7 +48,8 @@ public sealed partial class FirstRunWizard : Form
     /// </summary>
     private const int WindowWidth = 850;
 
-    private const int WindowHeight = 580;
+    /// <summary>Taller than the 580 it was, for the cards each step is in now (18 Nov 2026, dialog jazz-up).</summary>
+    private const int WindowHeight = 680;
 
     /// <summary>A step has at least this much height at the normal text size - a few lines - before the window scrolls instead of the step.</summary>
     private const int StepLeastHeight = 120;
@@ -123,6 +124,9 @@ public sealed partial class FirstRunWizard : Form
 
     private readonly ButtonBar _footerLeft = new();
     private readonly Label _lblProgress = new();
+
+    /// <summary>The bar over the step of how far through setup it is - see FirstRunWizard.Pieces.</summary>
+    private readonly StepTrack _stepTrack = new() { Count = StepNames.Length - 2 };
     private readonly Button _btnSkipAll = new();
     private readonly Button _btnBack = new();
     private readonly Button _btnNext = new();
@@ -294,11 +298,8 @@ public sealed partial class FirstRunWizard : Form
         _lblStepBody.AutoSize = true;
 
         _lblProgress.AutoSize = true;
-        _lblProgress.Font = AppTheme.SmallFont;
 
-        // Level with the middle of Skip setup beside it, not its top - as a
-        // label among buttons is in a row of them (FieldGrid.Inline).
-        _lblProgress.Anchor = AnchorStyles.Left;
+        _lblProgress.Font = AppTheme.BoldFont;
 
         _btnSkipAll.Text = "Skip setup";
         _btnSkipAll.Click += (_, _) => SkipEverything();
@@ -336,14 +337,14 @@ public sealed partial class FirstRunWizard : Form
             _stepHolder.Controls.Add(stepPage);
         }
 
-        // Skip setup and the progress on the left, Back and Next against the
+        // Skip setup on the left, Back and Next against the
         // right-hand edge, Next furthest right - on one line, or Back and
         // Next under the other two when a narrow window has no room for both
         // (SplitBar). The bar is handed Next first, as its first button goes
         // furthest right; Tab still goes Back before Next, as it did, from
         // the tab order set here.
         var footer = new SplitBar(
-            _footerLeft.With(_btnSkipAll, _lblProgress),
+            _footerLeft.With(_btnSkipAll),
             new ButtonBar(alignRight: true).With(_btnNext, _btnBack));
 
         _btnBack.TabIndex = 0;
@@ -354,8 +355,15 @@ public sealed partial class FirstRunWizard : Form
         _stepPage.Padding = new Padding(UiLayout.PageLeft, UiLayout.SectionGap, UiLayout.SectionGap, UiLayout.SectionGap);
         ScrollTheming.NoRoomBelow(_stepPage);
 
+        // Over the title, on the steps that are counted: the bar of how far
+        // through it is, and "Step 2 of 5" under it - so the step on show,
+        // and how many are left, read at a glance (18 Nov 2026, dialog
+        // jazz-up). They were a line of small print beside Skip setup.
+        _stepTrack.Height = UiLayout.AtDpi(6);
+        _stepPage.Add(_stepTrack, gapBelow: UiLayout.RowGap);
+        _stepPage.Add(_lblProgress, gapBelow: UiLayout.HintGap);
         _stepPage.Add(_lblStepTitle, gapBelow: UiLayout.RowGap);
-        _stepPage.Add(_lblStepBody);
+        _stepPage.Add(_lblStepBody, gapBelow: UiLayout.RowGap + UiLayout.HintGap * 2);
 
         // The step takes the height the rest leave, and scrolls inside it
         // when it needs more - down to a few lines of it, below which the
@@ -408,20 +416,26 @@ public sealed partial class FirstRunWizard : Form
         _rail.Add(_lblBrand, gapBelow: UiLayout.HintGap);
         _rail.Add(_lblRailCaption);
 
-        // Tall enough for the current step's name in the bold face.
+        // Tall enough for the current step's name in the bold face, and for
+        // its mark with a little room round it.
+        var markSize = UiLayout.AtTextSize(RailMarkSize);
         var stepHeight = Math.Max(
-            UiLayout.AtTextSize(RailStepHeight),
+            Math.Max(UiLayout.AtTextSize(RailStepHeight), markSize + UiLayout.AtTextSize(UiLayout.RowGap)),
             Pieces.LineHeight(AppTheme.BoldFont) + UiLayout.AtTextSize(UiLayout.RowGap + 2));
 
+        // The counted steps are numbered as "Step 2 of 5" counts them; the
+        // welcome and the last page have a dot.
         for (var i = 0; i < StepNames.Length; i++)
         {
             var index = i;
-            var label = new Label
+            var label = new RailStep
             {
                 Text = i == 1 && _sound is not null ? LookAndSoundName : StepNames[i],
+                Mark = i == 0 || i == StepNames.Length - 1 ? string.Empty : i.ToString(),
+                MarkLeft = inset,
                 AutoSize = false,
                 Height = stepHeight,
-                Padding = new Padding(inset, 0, 0, 0),
+                Padding = new Padding(inset + markSize + UiLayout.AtTextSize(RailMarkGap), 0, 0, 0),
                 TextAlign = ContentAlignment.MiddleLeft,
                 Cursor = Cursors.Hand,
             };
@@ -453,7 +467,10 @@ public sealed partial class FirstRunWizard : Form
         var names = StepNames.Append(LookAndSoundName).Max(name => TextRenderer.MeasureText(name, AppTheme.BoldFont).Width);
         var brand = TextRenderer.MeasureText(BrandText, AppTheme.NavFont).Width;
 
-        return Math.Max(UiLayout.AtTextSize(RailWidth), Math.Max(names, brand) + 3 * inset);
+        // A step's name starts after its mark (RailStep).
+        var marked = names + UiLayout.AtTextSize(RailMarkSize) + UiLayout.AtTextSize(RailMarkGap);
+
+        return Math.Max(UiLayout.AtTextSize(RailWidth), Math.Max(marked, brand) + 3 * inset);
     }
 
     /// <summary>The welcome step: the way to a backup instead, under what the app is.</summary>
@@ -471,8 +488,47 @@ public sealed partial class FirstRunWizard : Form
             Finish(takeTour: false);
         };
 
-        _welcomeStep.Add(_lblWelcomeRestore, gapBelow: UiLayout.RowGap);
-        _welcomeStep.Add(new ButtonBar().With(_btnRestore), gapBelow: 0);
+        // What the steps ahead cover, a line each, as the last page lists
+        // what they came to - then the way out to a backup, in a card of
+        // its own (18 Nov 2026, dialog jazz-up).
+        var covers = new FieldGrid();
+
+        foreach (var (caption, text) in new[]
+        {
+            ("Look:", _sound is null ? "How the app looks on this laptop, and the clock" : "How the app looks and sounds, and the clock"),
+            ("Timing:", "Which timing decoder you have"),
+            ("Track:", "Your track's name, and where you race"),
+            ("Classes:", "The classes you race, and how long a race is"),
+            ("Drivers:", "A few drivers - or a list from another system"),
+        })
+        {
+            var answer = new Label { Text = text, AutoSize = true };
+            var captionLabel = covers.AddRow(caption, answer, stretch: true);
+
+            captionLabel.Margin = new Padding(captionLabel.Margin.Left, captionLabel.Margin.Top, captionLabel.Margin.Right, UiLayout.HintGap);
+            answer.Margin = new Padding(answer.Margin.Left, answer.Margin.Top, answer.Margin.Right, UiLayout.HintGap);
+        }
+
+        var coversCard = new Section("The five steps");
+        coversCard.Add(covers, gapBelow: 0);
+
+        var restoreCard = new Section("Already have a backup?");
+        restoreCard.Add(_lblWelcomeRestore, gapBelow: UiLayout.RowGap);
+        restoreCard.Add(new ButtonBar().With(_btnRestore), gapBelow: 0);
+
+        _welcomeStep.Add(coversCard, gapBelow: UiLayout.RowGap);
+        _welcomeStep.Add(restoreCard, gapBelow: 0);
+    }
+
+    /// <summary>The cards' hint lines, given the muted text with the step's own hints - see ApplyFrameColours.</summary>
+    private readonly List<Label> _cardHints = new();
+
+    /// <summary>A card's hint line: what the card is for, in the small face.</summary>
+    private Label CardHint(string text)
+    {
+        var hint = new Label { Text = text, AutoSize = true, Font = AppTheme.SmallFont };
+        _cardHints.Add(hint);
+        return hint;
     }
 
     /// <summary>
@@ -533,21 +589,29 @@ public sealed partial class FirstRunWizard : Form
         band.Add(_lblLookDescription, gapBelow: 0);
         band.AddSideFill(_lstLooks, _ => LookListLeastRows * _lstLooks.ItemHeight + 4, gapBelow: 0);
 
-        _lookStep.AddFill(band, band.LeastHeight, gapBelow: UiLayout.SectionGap);
+        // In a card that takes the step's height, the clock under the looks;
+        // the sound, when it is offered, in a card of its own under it.
+        var looksCard = new Section("Looks and clock");
+
+        looksCard.AddFill(band, () => band.LeastHeight(Math.Max(UiLayout.AtTextSize(300), looksCard.Width - Section.Inset.Horizontal)), gapBelow: UiLayout.RowGap);
+        looksCard.Add(_chk24Hour, stretch: false, gapBelow: 0);
 
         if (_sound is null)
         {
-            _lookStep.Add(_chk24Hour, stretch: false, gapBelow: 0);
+            _lookStep.AddFill(looksCard, looksCard.LeastHeight, gapBelow: 0);
             return;
         }
 
-        _lookStep.Add(_chk24Hour, stretch: false, gapBelow: UiLayout.SectionGap);
+        _lookStep.AddFill(looksCard, looksCard.LeastHeight, gapBelow: UiLayout.RowGap);
 
         // The sound under the look, in a grid of its own: its caption beside
         // the drop-down, what the choice means under it, then the tick.
         var soundGrid = new FieldGrid();
         _sound.AddTo(soundGrid);
-        _lookStep.Add(soundGrid, gapBelow: 0);
+
+        var soundCard = new Section("Sound");
+        soundCard.Add(soundGrid, gapBelow: 0);
+        _lookStep.Add(soundCard, gapBelow: 0);
     }
 
     /// <summary>
@@ -594,11 +658,17 @@ public sealed partial class FirstRunWizard : Form
         _iLapFields.AddRow("COM port:", FieldGrid.Inline(_cmbSerialPort, _btnRescan));
         _iLapFields.AddRow("Baud:", _cmbBaud);
 
-        _timingStep.Add(_cmbConnection, stretch: false, gapBelow: UiLayout.RowGap);
+        // In a card, its hint line over the picker (18 Nov 2026, dialog jazz-up).
+        var decoderCard = new Section("Decoder");
+
+        decoderCard.Add(CardHint("The timing box your track uses. Nothing connects yet - it is only remembered."), gapBelow: UiLayout.RowGap);
+        decoderCard.Add(_cmbConnection, stretch: false, gapBelow: UiLayout.RowGap);
         Pieces.KeepHeightTold(_cmbConnection);
 
-        _timingStep.Add(_iLapFields, gapBelow: UiLayout.RowGap);
-        _timingStep.Add(_lblTimingHint, gapBelow: 0);
+        decoderCard.Add(_iLapFields, gapBelow: UiLayout.RowGap);
+        decoderCard.Add(_lblTimingHint, gapBelow: 0);
+
+        _timingStep.Add(decoderCard, gapBelow: 0);
     }
 
     /// <summary>The track step: the layout's name, and where the rest of a track is set up.</summary>
@@ -613,8 +683,10 @@ public sealed partial class FirstRunWizard : Form
         // In a row of its own (FieldGrid.Inline), which keeps the pixel round
         // the box that the theme draws its outline in - against the step's
         // edge, that side of the outline would be cut off.
-        _trackStep.Add(FieldGrid.Inline(_txtTrackName), gapBelow: UiLayout.RowGap);
-        _trackStep.Add(_lblTrackHint, gapBelow: UiLayout.SectionGap);
+        var trackCard = new Section("Track layout");
+        trackCard.Add(FieldGrid.Inline(_txtTrackName), gapBelow: UiLayout.RowGap);
+        trackCard.Add(_lblTrackHint, gapBelow: 0);
+        _trackStep.Add(trackCard, gapBelow: UiLayout.RowGap);
 
         // Where you race - the badges on offer, and whether practice earns
         // any. Both in the step itself, so WinForms groups them.
@@ -630,10 +702,13 @@ public sealed partial class FirstRunWizard : Form
         _lblWhereHint.Text = "At home, practice earns the achievements you can earn on your own, and the club-sized ones "
                              + "(a full grid, fifty opponents) aren't offered. Change it any time on the Achievements page.";
 
-        _trackStep.Add(new Label { Text = "Where do you race?", AutoSize = true, Font = AppTheme.BoldFont }, stretch: false, gapBelow: UiLayout.HintGap);
-        _trackStep.Add(_rdoClub, stretch: false, gapBelow: UiLayout.HintGap);
-        _trackStep.Add(_rdoHome, stretch: false, gapBelow: UiLayout.RowGap);
-        _trackStep.Add(_lblWhereHint, gapBelow: 0);
+        // The question is the card's caption; both buttons in the one card,
+        // so WinForms still groups them.
+        var whereCard = new Section("Where do you race?");
+        whereCard.Add(_rdoClub, stretch: false, gapBelow: UiLayout.HintGap);
+        whereCard.Add(_rdoHome, stretch: false, gapBelow: UiLayout.RowGap);
+        whereCard.Add(_lblWhereHint, gapBelow: 0);
+        _trackStep.Add(whereCard, gapBelow: 0);
     }
 
     /// <summary>
@@ -662,14 +737,19 @@ public sealed partial class FirstRunWizard : Form
         _lblClassesHint.Font = AppTheme.SmallFont;
 
         // The box in a row of its own for its outline, as the track's name is.
-        _classesStep.Add(FieldGrid.Inline(_txtClasses), gapBelow: UiLayout.RowGap);
-        _classesStep.Add(_lblChipsCaption, stretch: false, gapBelow: UiLayout.HintGap);
-        _classesStep.Add(_classChips, gapBelow: UiLayout.RowGap);
+        var namesCard = new Section("Class names");
+        namesCard.Add(FieldGrid.Inline(_txtClasses), gapBelow: UiLayout.RowGap);
+        namesCard.Add(_lblChipsCaption, stretch: false, gapBelow: UiLayout.HintGap);
+        namesCard.Add(_classChips, gapBelow: UiLayout.RowGap);
+        namesCard.Add(_lblClassesHint, gapBelow: 0);
+        _classesStep.Add(namesCard, gapBelow: UiLayout.RowGap);
 
         // How long the new classes race and how they finish (setup plan step 8):
         // one answer for every class typed here, as a club's classes mostly share it.
-        _classLengthGrid = _classesStep.Add(_classLength.Grid(), gapBelow: UiLayout.RowGap);
-        _classesStep.Add(_lblClassesHint, gapBelow: 0);
+        var lengthCard = new Section("Race length");
+        lengthCard.Add(CardHint("Every class typed above gets this length and finish."), gapBelow: UiLayout.RowGap);
+        _classLengthGrid = lengthCard.Add(_classLength.Grid(), gapBelow: 0);
+        _classesStep.Add(lengthCard, gapBelow: 0);
     }
 
     /// <summary>
@@ -690,7 +770,8 @@ public sealed partial class FirstRunWizard : Form
         // The headings in a row laid out as the driver rows are, the name
         // heading as wide as a name box and its outline (SizeFields) - so
         // the transponder heading starts where the transponder boxes do.
-        _driversStep.Add(FieldGrid.Inline(_lblNameHeader, _lblTransponderHeader), gapBelow: UiLayout.HintGap);
+        var driversCard = new Section("Drivers");
+        driversCard.Add(FieldGrid.Inline(_lblNameHeader, _lblTransponderHeader), gapBelow: UiLayout.HintGap);
 
         for (var i = 0; i < DriverRows; i++)
         {
@@ -704,7 +785,7 @@ public sealed partial class FirstRunWizard : Form
                 PlaceholderText = i == 0 ? "e.g. 8467BE" : string.Empty,
             };
 
-            _driversStep.Add(FieldGrid.Inline(_txtDriverNames[i], _txtTransponders[i]), gapBelow: UiLayout.RowGap);
+            driversCard.Add(FieldGrid.Inline(_txtDriverNames[i], _txtTransponders[i]), gapBelow: i == DriverRows - 1 ? UiLayout.RowGap : UiLayout.HintGap);
         }
 
         _cmbDriverClass.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -718,11 +799,14 @@ public sealed partial class FirstRunWizard : Form
         var classRow = new FieldGrid();
         classRow.AddRow("Class:", FieldGrid.Inline(_cmbDriverClass, _lblDriversHint));
 
-        _driversStep.Add(classRow, gapBelow: UiLayout.RowGap);
+        driversCard.Add(classRow, gapBelow: 0);
+        _driversStep.Add(driversCard, gapBelow: UiLayout.RowGap);
 
         // Bringing a club over (12 Nov 2026, setup plan C2): a whole list at
         // once - RCSignup or LiveTime export, a LiveRC entry list, any CSV.
-        _driversStep.Add(BuildImportRow(), gapBelow: 0);
+        var importCard = new Section("Bring a list");
+        importCard.Add(BuildImportRow(), gapBelow: 0);
+        _driversStep.Add(importCard, gapBelow: 0);
     }
 
     /// <summary>
@@ -798,9 +882,20 @@ public sealed partial class FirstRunWizard : Form
         _chkTour.Checked = true;
         _chkTour.Font = AppTheme.BoldFont;
 
-        _doneStep.Add(ready, gapBelow: UiLayout.SectionGap);
-        _doneStep.Add(_lblRaceNight, gapBelow: UiLayout.SectionGap);
-        _doneStep.Add(_chkTour, stretch: false, gapBelow: 0);
+        // What is ready, race night and the tour, each a card of its own
+        // (18 Nov 2026, dialog jazz-up).
+        var readyCard = new Section("What's ready");
+        readyCard.Add(ready, gapBelow: 0);
+
+        var nightCard = new Section("On race night");
+        nightCard.Add(_lblRaceNight, gapBelow: 0);
+
+        var tourCard = new Section("The tour");
+        tourCard.Add(_chkTour, stretch: false, gapBelow: 0);
+
+        _doneStep.Add(readyCard, gapBelow: UiLayout.RowGap);
+        _doneStep.Add(nightCard, gapBelow: UiLayout.RowGap);
+        _doneStep.Add(tourCard, gapBelow: 0);
     }
 
     /// <summary>
@@ -966,6 +1061,10 @@ public sealed partial class FirstRunWizard : Form
         // Nothing to say on the welcome page or the last one - and on the
         // last, nothing on the left at all, so no empty row is left there.
         _lblProgress.Visible = _lblProgress.Text.Length > 0;
+        // From the text, not _lblProgress.Visible - which reads false until
+        // the window itself is on screen.
+        _stepTrack.Visible = _lblProgress.Text.Length > 0;
+        _stepTrack.Current = _step;
         _footerLeft.Visible = !last;
 
         ApplyFrameColours();
@@ -995,13 +1094,19 @@ public sealed partial class FirstRunWizard : Form
             _railLabels[i].BackColor = current ? AppTheme.SidebarHover : AppTheme.SidebarBackground;
             _railLabels[i].ForeColor = current ? AppTheme.Primary : AppTheme.SidebarText;
             _railLabels[i].Font = current ? AppTheme.BoldFont : AppTheme.BodyFont;
+
+            if (_railLabels[i] is RailStep step)
+            {
+                step.State = current ? RailState.Current : i < _step ? RailState.Done : RailState.Ahead;
+                step.Invalidate();
+            }
         }
 
         _lblStepTitle.ForeColor = AppTheme.Primary;
         _lblStepBody.ForeColor = AppTheme.TextDark;
-        _lblProgress.ForeColor = AppTheme.TextMuted;
+        _lblProgress.ForeColor = AppTheme.Primary;
 
-        foreach (var hint in new[] { _lblWelcomeRestore, _lblLookDescription, _lblTimingHint, _lblTrackHint, _lblClassesHint, _lblDriversHint, _lblNameHeader, _lblTransponderHeader })
+        foreach (var hint in _cardHints.Concat(new[] { _lblWelcomeRestore, _lblLookDescription, _lblTimingHint, _lblTrackHint, _lblWhereHint, _lblClassesHint, _lblDriversHint, _lblNameHeader, _lblTransponderHeader, _lblImported }))
         {
             hint.ForeColor = AppTheme.TextMuted;
         }
