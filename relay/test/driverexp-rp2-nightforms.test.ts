@@ -227,10 +227,9 @@ describe("sending a details change", () => {
     assert.deepEqual(sent[0]?.body, { id: CODE, kind: "details", f: { announcer: "Sam 'Rocket' Parker" } });
     assert.match(said(yd), /Sent - the desk will check it \(ref A1B2C3\)/);
 
-    // Pressing again sends nothing: what was sent is the new start.
-    await press(page, yd, /^Send (to the desk|\d+ changes?)$/);
+    // Sent: Send says so and rests, so a second tap sends nothing.
+    await press(page, yd, /^Sent ✓$/);
     assert.equal(asks(page).length, 1);
-    assert.match(said(yd), /Nothing has changed yet/);
   });
 
   it("an emptied field is sent as an empty string, which clears it", async () => {

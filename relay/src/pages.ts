@@ -926,7 +926,9 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .yd-note { border: 1px dashed var(--border); }
 .yd-bar { display: grid; gap: 8px; padding: 12px 0 4px; border-top: 1px solid var(--border); background: var(--surface); }
 .yd-bar .chk { min-height: 44px; align-items: center; }
-.yd-bar .yd-said { margin: 0; text-align: center; font-size: 0.88rem; font-weight: 400; min-height: 1.3em; }
+.yd-bar .yd-said { margin: 0; text-align: center; font-size: 0.95rem; font-weight: 600; min-height: 1.3em; }
+/* Sent, and nothing new to send: Send says so and rests until the next change. */
+.yd-bar .go.sent, .yd-bar .go.sent:disabled { background: var(--good); color: var(--bg); opacity: 1; cursor: default; }
 /* Held at the foot of Me's sheet as it scrolls, clear of the one bar when
    Me runs inside it. The sheet's own foot padding is 22px. */
 .me-sheet .yd-bar { position: sticky; bottom: calc(-22px - env(safe-area-inset-bottom, 0px)); z-index: 1; margin: 0 -16px;
@@ -17292,9 +17294,16 @@ function ydFill(box, message) {
   const said = el('p', 'yd-said', message || '');
   said.setAttribute('role', 'status');
   const send = tapButton('Send to the desk', 'go', () => ydSend());
-  foot.appendChild(send);
+  // What happened goes above Send, where it is seen. Under it, it sat on
+  // the sheet's bottom edge, behind the phone's own bar.
   foot.appendChild(said);
+  foot.appendChild(send);
   box.appendChild(foot);
+  // Sent with nothing left over: Send reads Sent and rests until the next
+  // edit (17 Nov 2026, Asher: "it doesnt registar feedback. you can just
+  // keep clicking it"). sending: a tap is on its way, so no second one.
+  let justSent = false;
+  let sending = false;
 
   function show(k) {
     view.ydTab = k;
@@ -17315,10 +17324,15 @@ function ydFill(box, message) {
       b.tabIndex = on ? 0 : -1;
       b.setAttribute('aria-label', (dirty.has(k) ? b.textContent + ', not sent yet' : b.textContent));
     }
-    send.textContent = changed.length === 0 ? 'Send to the desk' : 'Send ' + changed.length + (changed.length === 1 ? ' change' : ' changes');
+    const rest = changed.length === 0 && justSent;
+    send.className = 'go' + (rest ? ' sent' : '');
+    send.disabled = sending || rest;
+    send.textContent = sending ? 'Sending\\u2026' : rest ? 'Sent \\u2713'
+      : changed.length === 0 ? 'Send to the desk' : 'Send ' + changed.length + (changed.length === 1 ? ' change' : ' changes');
   }
 
   async function ydSend() {
+    if (sending) return;
     const df = details.diff();
     const cf = crew ? crew.diff() : {};
 
@@ -17341,7 +17355,9 @@ function ydFill(box, message) {
     // from a phone, tick or not (15 Nov 2026), and the relay drops it.
     if (guardian.checked === true && Object.keys(df).length > 0) df.guardian = true;
 
-    send.disabled = true;
+    sending = true;
+    justSent = false;
+    paint();
     said.textContent = 'Sending\\u2026';
 
     const parts = [];
@@ -17352,7 +17368,7 @@ function ydFill(box, message) {
       // Their PIN has changed since they signed in, or the pass is from
       // another driver's code: back to the PIN, saying why.
       if (!got.ok && got.status === 403 && me && me.pin === true && !/email/i.test(got.words)) {
-        send.disabled = false;
+        sending = false;
         setPass('');
         drawAsks(got.words);
         return;
@@ -17365,7 +17381,7 @@ function ydFill(box, message) {
     if (Object.keys(cf).length > 0) {
       const got = await sendAsk('crew', cf);
       if (!got.ok && got.status === 403 && /personal PIN/.test(got.words)) {
-        send.disabled = false;
+        sending = false;
         setPass('');
         drawAsks(got.words);
         return;
@@ -17375,7 +17391,8 @@ function ydFill(box, message) {
       parts.push(['Your crew', got.words]);
     }
 
-    send.disabled = false;
+    sending = false;
+    justSent = failed === '' && parts.every((p) => /^Sent/.test(p[1]));
     if (parts.some((p) => /^Sent/.test(p[1]))) guardian.checked = false;
     edited = false;
     // Both the same trouble (the desk shut, no signal): said once.
@@ -17389,7 +17406,7 @@ function ydFill(box, message) {
     if (ydSheetShowing()) drawAsks('');
   }
 
-  ydOnEdit = paint;
+  ydOnEdit = () => { justSent = false; paint(); };
   show(view.ydTab);
 }
 

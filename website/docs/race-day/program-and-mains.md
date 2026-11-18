@@ -214,6 +214,7 @@ Everything else is on the round menu. Right-click the list to open it: on a roun
 | **Start This Round** | Same as **Start Selected**. |
 | **Start as Demo...** | Runs the round as a simulated race, with no timing hardware. Nothing is recorded against the round unless **Let a demo fill in the race program (rehearse a whole night)** is ticked on **Demo Mode**; then the demo marks it as run. See [Practice, ghosts and demo mode](../race-control/practice-and-ghosts.md). |
 | **Edit Drivers...** | Changes who's in the round. |
+| **Edit Result** | For a round that has been raced: opens its race in **Race History** with **Edit Result** open, to add a missed lap, a penalty or a DNF after the next race is under way. Greyed out for a round not raced yet. See [Correcting a saved result](../race-control/corrections-and-recovery.md#correcting-a-saved-result). |
 | **Move Drivers Between Heats...** | Opens the class's heats side by side. See [Balance heats](#balance-heats). |
 | **Add a Late Entry...** | Puts a driver who has just arrived into the smallest heat of each round still to run, without moving anyone else. See [A late entry](#a-late-entry). |
 | **Move Up** / **Move Down** | Moves the round one place in the running order. |

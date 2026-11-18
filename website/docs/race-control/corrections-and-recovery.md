@@ -112,7 +112,7 @@ The saved result, the championship points and the qualifying figures keep the fi
 
 **Edit Result** on the **Race History** page corrects a race after it has been saved. It only works once **Allow corrections to saved results** is ticked on the **Local Screens** page, in the **Race-day manager (phone)** card, which shows in Advanced mode only (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)). It's off by default; until then it says "Correcting saved results is switched off on the laptop." Only a real race can be corrected, not practice or a demo race. A result pasted in from LiveRC can't be corrected either: delete it and paste it again.
 
-1. Select the race on **Race History** and click **Edit Result**.
+1. Select the race on **Race History** and click **Edit Result**. From the race program, right-click a round that has been raced and choose **Edit Result** to go straight there.
 2. For each driver, set **Added Laps** (laps added, or taken away with a minus sign), **Time Penalty (s)**, **Lap Penalty** and **Outcome** (**Finished**, **DNF** or **DQ**). **New order** shows the result as it will be.
 3. Type a reason in **Reason (required, kept with the result):** and click **Save Correction**.
 

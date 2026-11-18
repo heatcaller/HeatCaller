@@ -444,10 +444,12 @@ describe("My crew on the phone", () => {
     assert.deepEqual(sent[0]?.body, { id: CODE, kind: "crew", f: { tVoice: V2, goal: "A top three" }, pass: PASS });
     assert.match(body.textContent, /Sent - voice picks apply in a few seconds; the desk checks names and notes \(ref A1B2C3\)/);
 
-    page.button(body, /^Send (to the desk|\d+ changes?)$/)!.click();
+    // Sent: Send says so and takes no second tap.
+    const done = page.button(body, /^Sent ✓$/)!;
+    assert.equal(done.disabled, true);
+    done.click();
     await page.settle();
     assert.equal(crewAsks(page).length, 1, "nothing twice");
-    assert.match(body.textContent, /Nothing has changed yet\./);
   });
 
   it("refuses a name with digits on the phone, before sending", async () => {
@@ -572,8 +574,12 @@ describe("Change your details: one sheet, four tabs, one Send", () => {
     const sent = allAsks(page);
     assert.deepEqual(sent.map((s) => [s.body["kind"], s.body["f"]]), [["details", { announcer: "Sam Rocket" }], ["crew", { tVoice: V2 }]]);
     assert.match(body.textContent, /Your details: Sent - the desk will check it \(ref A1B2C3\)\. Your crew: Sent - voice picks apply/);
-    assert.ok(page.button(body, /^Send to the desk$/), "back to nothing to send");
+    const done = page.button(body, /^Sent ✓$/);
+    assert.ok(done, "Send says Sent and rests");
+    assert.equal(done!.disabled, true, "no second tap on what already went");
     assert.doesNotMatch(tab(body, "Called")!.className, /dirty/);
+    type(field(body, /^Announcer name/), "Sam Rockets");
+    assert.ok(page.button(body, /^Send 1 change$/), "the next edit wakes it");
   });
 
   it("when one half is refused, says which, and turns to its tab with the dot still on", async () => {
