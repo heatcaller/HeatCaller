@@ -84,6 +84,10 @@ public sealed class LooksControl : UserControl
     private readonly CheckBox _chkDriverThemes = new ThemedCheckBox();
     private readonly Label _lblStatus = new();
 
+    /// <summary>The looks in use at a glance, over the cards (17 Nov 2026, page jazz-up).</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
+    private static readonly string[] TileCaptions = { "App look", "Crowd screens", "Your looks", "Club logo" };
+
     private Image? _logoImage;
 
     /// <summary>
@@ -321,14 +325,23 @@ public sealed class LooksControl : UserControl
 
         _textSize.Wear(lblScreensHint, () => AppTheme.SmallFont);
 
+        // The intro is the Looks card's line now (17 Nov 2026, page jazz-up),
+        // in the small type every card's line wears.
+        _textSize.Wear(lblIntro, () => AppTheme.SmallFont);
+
         var looks = new Section("Looks");
 
+        looks.Add(lblIntro, gapBelow: UiLayout.RowGap);
         looks.Add(band);
         // New Look and Edit (the color editor) are Advanced (1 Nov 2026,
         // Simple mode) - picking a look is not.
-        looks.Add(new ButtonBar().With(_btnUseApp, _btnUseScreens, SimpleMode.Hide(_btnNew), SimpleMode.Hide(_btnEdit), _btnDelete), gapBelow: UiLayout.SectionGap);
-        looks.Add(screens, gapBelow: UiLayout.HintGap);
-        looks.Add(lblScreensHint, gapBelow: 0);
+        looks.Add(new ButtonBar().With(_btnUseApp, _btnUseScreens, SimpleMode.Hide(_btnNew), SimpleMode.Hide(_btnEdit), _btnDelete), gapBelow: 0);
+
+        // The crowd screens' choice in a card of its own, its line over it.
+        var crowd = new Section("Crowd screens");
+
+        crowd.Add(lblScreensHint, gapBelow: UiLayout.RowGap);
+        crowd.Add(screens, gapBelow: 0);
 
         // --- Club logo, and Appearance ---
         var logo = BuildLogoCard();
@@ -337,12 +350,28 @@ public sealed class LooksControl : UserControl
         _lblStatus.AutoSize = true;
         _lblStatus.ForeColor = AppTheme.TextMuted;
 
+        // --- The tiles: the looks in use at a glance ---
+
+        for (var i = 0; i < _tiles.Length; i++)
+        {
+            _textSize.Wear(_tiles[i].Value, () => AppTheme.TitleFont);
+            _textSize.Wear(_tiles[i].Caption, () => AppTheme.MicroFont);
+            _tiles[i].Set("-", TileCaptions[i]);
+        }
+
+        // The logo and Appearance side by side when the page is wide enough,
+        // one under the other when it is not (CardColumns).
+        var columns = new CardColumns();
+
+        columns.AddLeft(logo);
+        columns.AddRight(appearance);
+
         var page = new PageStack();
 
-        page.Add(lblIntro);
+        page.Add(new TileStrip(_tiles), gapBelow: UiLayout.RowGap);
         page.Add(looks);
-        page.Add(logo);
-        page.Add(appearance, gapBelow: UiLayout.RowGap);
+        page.Add(crowd);
+        page.Add(columns, gapBelow: UiLayout.RowGap);
         page.Add(SimpleMode.MoreLine(), stretch: false);
         page.Add(_lblStatus, gapBelow: 0);
 
@@ -442,6 +471,7 @@ public sealed class LooksControl : UserControl
             _settings.ShowLogoInApp = _chkLogoInApp.Checked;
             _settings.Save();
             _onAppLogoChanged();
+            ShowTiles();
         };
 
         _chkLogoOnScreens.Text = "Show the logo on the Big Screen and Wi-Fi pages";
@@ -456,6 +486,7 @@ public sealed class LooksControl : UserControl
             _settings.ShowLogoOnScreens = _chkLogoOnScreens.Checked;
             _settings.Save();
             Looks.NotifyDisplaysChanged();
+            ShowTiles();
         };
 
         var lblNote = new Label
@@ -481,8 +512,18 @@ public sealed class LooksControl : UserControl
         band.Add(lblNote, gapBelow: 0);
         band.AddSide(_logoPreview, gapBelow: 0);
 
+        var lblLogoHint = new Label
+        {
+            Text = "The club's own badge, for the app's top-left corner and the crowd screens.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _textSize.Wear(lblLogoHint, () => AppTheme.SmallFont);
+
         var card = new Section("Club logo");
 
+        card.Add(lblLogoHint, gapBelow: UiLayout.RowGap);
         card.Add(band, gapBelow: 0);
 
         return card;
@@ -551,7 +592,18 @@ public sealed class LooksControl : UserControl
                 : "Every phone shows the club's own look. The Look button is gone from the club's pages.";
         };
 
+        var lblAppearanceHint = new Label
+        {
+            Text = "How times read across the app, and what drivers may change on their phones.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _textSize.Wear(lblAppearanceHint, () => AppTheme.SmallFont);
+
         var card = new Section("Appearance");
+
+        card.Add(lblAppearanceHint, gapBelow: UiLayout.RowGap);
 
         // The animated header is Advanced (1 Nov 2026, Simple mode); 24-hour time is not.
         card.Add(SimpleMode.Hide(_chkAnimate), stretch: false, gapBelow: UiLayout.HintGap);
@@ -793,6 +845,7 @@ public sealed class LooksControl : UserControl
         var look = SelectedLook();
 
         _list.Invalidate();
+        ShowTiles();
 
         if (look is null)
         {
@@ -1198,12 +1251,46 @@ public sealed class LooksControl : UserControl
     // The club logo (moved here from the Club Website page)
     // ------------------------------------------------------------------
 
+    /// <summary>
+    /// The tiles over the cards: the look the app runs (and the one it
+    /// switches to at its next start, when that differs), what the crowd
+    /// screens show, how many looks of their own the club has made, and
+    /// where the logo shows. Dashes for none.
+    /// </summary>
+    private void ShowTiles()
+    {
+        var app = AppChangePending
+            ? $"{AppTheme.Active.Name} → {Looks.ForApp(_settings).Name}"
+            : AppTheme.Active.Name;
+
+        // The look the screens show - the app's when they match it. A name
+        // rather than "Match the app", which is too long for a tile at the
+        // larger text sizes.
+        var screens = Looks.Find(ScreensKey)?.Name ?? AppTheme.Active.Name;
+
+        var logo = _logoImage is null
+            ? "-"
+            : (_settings.ShowLogoInApp, _settings.ShowLogoOnScreens) switch
+            {
+                (true, true) => "App and screens",
+                (true, false) => "In the app",
+                (false, true) => "On the screens",
+                _ => "Online pages",
+            };
+
+        _tiles[0].Set(app, TileCaptions[0]);
+        _tiles[1].Set(screens, TileCaptions[1]);
+        _tiles[2].Set(Looks.Custom.Count == 0 ? "-" : Looks.Custom.Count.ToString(System.Globalization.CultureInfo.CurrentCulture), TileCaptions[2]);
+        _tiles[3].Set(logo, TileCaptions[3]);
+    }
+
     private void LoadLogoPreview()
     {
         _logoImage?.Dispose();
         _logoImage = ClubLogo.Load(_settings.RelayLogoFile);
         _btnRemoveLogo.Enabled = _logoImage is not null;
         _logoPreview.Invalidate();
+        ShowTiles();
     }
 
     /// <summary>The logo as it sits in the sidebar's corner: on the sidebar's colour, on a plate when it would vanish there.</summary>

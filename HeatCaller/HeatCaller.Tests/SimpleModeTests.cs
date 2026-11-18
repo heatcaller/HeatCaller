@@ -466,6 +466,7 @@ public sealed class SimpleModeTests : IDisposable
 
         // Themes, Sponsors, Local Screens, Club Website.
         "LooksControl.cs|Looks", "LooksControl.cs|Club logo", "LooksControl.cs|Appearance",
+        "LooksControl.cs|Crowd screens", "AchievementsControl.cs|Whose achievements", "GarageControl.cs|Which cars", "GarageControl.cs|Garage",
         "SponsorsControl.cs|Slides (shown in this order)", "SponsorsControl.cs|Sponsor reads",
         "WebServerControl.cs|Server", "WebServerControl.cs|Open these on your phone, tablet, or in OBS",
         "MainForm.Pages.cs|Website", "RelaySettingsControl.cs|Relay", "RelaySettingsControl.cs|Online check-in",

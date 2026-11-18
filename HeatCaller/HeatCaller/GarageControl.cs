@@ -77,6 +77,13 @@ public sealed class GarageControl : UserControl
     /// <summary>One class's heading and the cards under it, kept so a resize can reflow without rebuilding.</summary>
     private readonly List<(Label Band, List<CarCard> Cards)> _groups = new();
 
+    /// <summary>The garage at a glance, over the Garage page (17 Nov 2026, page jazz-up). Not on a driver's page.</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
+    private static readonly string[] TileCaptions = { "Cars", "Classes", "Retired", "Setups logged" };
+
+    /// <summary>The empty Garage page's invitation: an outline plate saying Add a Car - see GarageEmptyPlate.</summary>
+    private readonly GarageEmptyPlate _emptyPlate = new();
+
     private const int WallPad = 12;
     private const int CardGap = 12;
 
@@ -307,10 +314,31 @@ public sealed class GarageControl : UserControl
         // club-wide lists - those stay on the Garage page.
         if (!_forOneDriver)
         {
-            page.Add(lblIntro);
+            // The garage at a glance over everything (17 Nov 2026, page
+            // jazz-up), then the filter in a card of its own with the intro
+            // as its line.
+            for (var i = 0; i < _tiles.Length; i++)
+            {
+                _textSize.Wear(_tiles[i].Value, () => AppTheme.TitleFont);
+                _textSize.Wear(_tiles[i].Caption, () => AppTheme.MicroFont);
+                _tiles[i].Set("-", TileCaptions[i]);
+            }
+
+            page.Add(new TileStrip(_tiles), gapBelow: UiLayout.RowGap);
+
+            _textSize.Wear(lblIntro, () => AppTheme.SmallFont);
+
+            var filterCard = new Section("Which cars");
+            filterCard.Add(lblIntro, gapBelow: UiLayout.RowGap);
+            filterCard.Add(filterRow, gapBelow: 0);
+
+            page.Add(filterCard, gapBelow: UiLayout.RowGap);
+        }
+        else
+        {
+            page.Add(filterRow, gapBelow: UiLayout.RowGap);
         }
 
-        page.Add(filterRow, gapBelow: UiLayout.RowGap);
         filterRow.Visible = !_forOneDriver;
 
         // On a driver's page: how many cars, and what the active one is
@@ -358,7 +386,28 @@ public sealed class GarageControl : UserControl
             _btnClubBatteries.Click += (_, _) => ShowClubBatteries();
             _btnClubBatteries.Visible = _batteries is not null;
 
-            page.Add(new ButtonBar().With(btnAdd, btnChassis, btnSheets, _btnClubBatteries, _btnUnlinked), gapBelow: 0);
+            // The buttons in a command bar of their own, with a line saying
+            // what they look after.
+            var lblCommandsHint = new Label
+            {
+                Text = "Add a car, or look after the chassis types and setup sheets the cars share"
+                     + (_batteries is not null ? " and the club's battery packs." : "."),
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+            };
+
+            _textSize.Wear(lblCommandsHint, () => AppTheme.SmallFont);
+
+            var commands = new Section("Garage");
+            commands.Add(lblCommandsHint, gapBelow: UiLayout.RowGap);
+            commands.Add(new ButtonBar().With(btnAdd, btnChassis, btnSheets, _btnClubBatteries, _btnUnlinked), gapBelow: 0);
+
+            page.Add(commands, gapBelow: 0);
+
+            // An empty garage: a plate to click, over the wall's words.
+            _emptyPlate.Click += (_, _) => AddCar();
+            _emptyPlate.Visible = false;
+            _wall.Controls.Add(_emptyPlate);
         }
 
         Controls.Add(page);
@@ -643,6 +692,15 @@ public sealed class GarageControl : UserControl
         _lblEmpty.Text = EmptyWallText();
         _lblEmpty.Visible = _groups.Count == 0;
 
+        // An empty garage on the Garage page: the plate to click, the words
+        // under it.
+        _emptyPlate.Visible = !_forOneDriver && _cars.All.Count == 0;
+
+        if (!_forOneDriver)
+        {
+            ShowTiles();
+        }
+
         if (_forOneDriver)
         {
             var count = cars.Count;
@@ -668,6 +726,57 @@ public sealed class GarageControl : UserControl
 
         _wall.ResumeLayout();
         LayoutWall();
+    }
+
+    /// <summary>
+    /// The tiles over the Garage page: the cars in use, the classes they
+    /// are in, the retired ones and the setups logged - for the whole
+    /// garage, whatever Show is on. Dashes for none.
+    /// </summary>
+    private void ShowTiles()
+    {
+        var inUse = _cars.InUse;
+        var classes = inUse
+            .Where(c => !string.IsNullOrWhiteSpace(c.ClassName))
+            .Select(c => c.ClassName.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+        var retired = _cars.All.Count - inUse.Count;
+        var setups = _setups.All.Count;
+
+        static string Count(int n) => n == 0 ? "-" : n.ToString(System.Globalization.CultureInfo.CurrentCulture);
+
+        _tiles[0].Set(Count(inUse.Count), TileCaptions[0]);
+        _tiles[1].Set(Count(classes), TileCaptions[1]);
+        _tiles[2].Set(Count(retired), TileCaptions[2]);
+        _tiles[3].Set(Count(setups), TileCaptions[3]);
+    }
+
+    /// <summary>The empty wall: the plate centred at the top (on the Garage page), and the words under it - or the words alone.</summary>
+    private void LayoutEmpty()
+    {
+        // Asked of the cars rather than of Visible, which reads false while
+        // the page itself is hidden.
+        if (_forOneDriver || _cars.All.Count > 0)
+        {
+            var at = new Point(WallPad, WallPad);
+
+            if (_lblEmpty.Location != at)
+            {
+                _lblEmpty.Location = at;
+            }
+
+            return;
+        }
+
+        var size = _emptyPlate.PreferredSize;
+        var left = Math.Max(WallPad, (_wall.ClientSize.Width - size.Width) / 2);
+        _emptyPlate.Bounds = new Rectangle(left, WallPad + UiLayout.AtTextSize(12), size.Width, size.Height);
+
+        var words = _lblEmpty.PreferredSize;
+        _lblEmpty.Location = new Point(
+            Math.Max(WallPad, (_wall.ClientSize.Width - words.Width) / 2),
+            _emptyPlate.Bottom + UiLayout.AtTextSize(12));
     }
 
     /// <summary>
@@ -710,8 +819,14 @@ public sealed class GarageControl : UserControl
 
     private void LayoutWall()
     {
-        if (_groups.Count == 0 || _layingOut)
+        if (_layingOut)
         {
+            return;
+        }
+
+        if (_groups.Count == 0)
+        {
+            LayoutEmpty();
             return;
         }
 
