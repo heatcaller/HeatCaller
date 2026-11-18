@@ -59,7 +59,28 @@ public static class NightPlan
 
     /// <summary>A change that would bring the finish forward, and by how much.</summary>
     /// <param name="DropsRound">For "drop a round", the qualifying round number it drops; otherwise null.</param>
-    public sealed record Fix(string Text, TimeSpan Saves, int? DropsRound = null);
+    /// <param name="Kind">
+    /// What sort of change it is (17 Nov 2026, Race Day run sheet), so Next
+    /// Steps can offer the ones the app can make itself as tick boxes and
+    /// leave the rest as advice. See RunSheet.ChoicesFor.
+    /// </param>
+    public sealed record Fix(string Text, TimeSpan Saves, int? DropsRound = null, FixKind Kind = FixKind.Advice);
+
+    /// <summary>The sorts of change a <see cref="Fix"/> can be.</summary>
+    public enum FixKind
+    {
+        /// <summary>Something only the director can do, such as putting two classes' heats together.</summary>
+        Advice,
+
+        /// <summary>Drop the last qualifying round still wholly to run.</summary>
+        DropRound,
+
+        /// <summary>A minute off every qualifier still to run that can spare one.</summary>
+        ShorterQualifiers,
+
+        /// <summary>One main fewer in each class with more than one still to come, while those mains are still to be built.</summary>
+        OneMainFewer,
+    }
 
     /// <summary>The rest of the night.</summary>
     /// <param name="Slots">Every race still to run, in order, with its start.</param>
@@ -442,7 +463,8 @@ public static class NightPlan
             fixes.Add(new Fix(
                 $"drop {dropping.Name} ({Plural.Of(heats.Count, "race")}) to save {Minutes(saves)}",
                 saves,
-                dropping.Number));
+                dropping.Number,
+                FixKind.DropRound));
         }
 
         // 2. A minute off every qualifier still to run that can spare one.
@@ -451,7 +473,7 @@ public static class NightPlan
         if (shortenable > 0)
         {
             var saves = TimeSpan.FromMinutes(shortenable);
-            fixes.Add(new Fix($"run qualifiers a minute shorter to save {Minutes(saves)}", saves));
+            fixes.Add(new Fix($"run qualifiers a minute shorter to save {Minutes(saves)}", saves, Kind: FixKind.ShorterQualifiers));
         }
 
         // 3. One main fewer in each class with more than one still to run.
@@ -469,7 +491,12 @@ public static class NightPlan
                 mainSaves.Count == 1
                     ? $"run one main fewer in {mainSaves[0].ClassName} to save {Minutes(saves)}"
                     : $"run one main fewer in each class to save {Minutes(saves)}",
-                saves));
+                saves,
+                // The app can only take a main off the night's plan while it
+                // is still to be built (RaceEvent.FinalsOneMainFewer, applied
+                // as the finals are seeded). Built mains are the director's
+                // to delete, so then it stays advice.
+                Kind: slots.Where(s => s.Kind == RoundKind.Main).All(s => s.Round is null) ? FixKind.OneMainFewer : FixKind.Advice));
         }
 
         // 4. Two small classes sharing their heats (11 Nov 2026, Phase 4.1,

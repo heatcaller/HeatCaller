@@ -988,9 +988,16 @@ public partial class MainForm
             _daySchedule,
             // The line decoder, whichever it is - a split loop connected on
             // its own times no laps.
-            LineDecoderConnected) { Dock = DockStyle.Fill };
+            LineDecoderConnected,
+            // The phones and the caller on the go/no-go list (17 Nov 2026):
+            // Mission Control's own two checks, read the same way.
+            () => new[] { MissionControl.Website(_relayPublisher?.Status), MissionControl.Sound(_announcer?.Muted == true) }) { Dock = DockStyle.Fill };
 
         _todayControl = today;
+
+        // The footer's Undo, and the card's Call to the Stand (17 Nov 2026).
+        today.UndoRequested += () => UndoSteps(1, " (Next Steps)");
+        today.CallUp = () => _raceControlControl?.CallUpNow();
 
         // The Ready to Race bar's one button: the Set Up Tonight wizard, at
         // the first step still to do.
@@ -1071,6 +1078,7 @@ public partial class MainForm
         };
 
         pageRaceDay.Controls.Add(tabRaceDay);
+        PlaceTodayClock(tabRaceDay, subPageToday, today);
         pageChampionship.Controls.Add(tabChampionship);
 
         _navRefreshHooks["Race Day"] = () => RefreshSubTab(tabRaceDay);
@@ -1569,399 +1577,75 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// Next Steps: the day's card above the programme, split by a line the director can drag.
+    /// Next Steps' clock and the day's line, in the Race Day tab row to the
+    /// right of the tabs (17 Nov 2026, the run sheet - mockup A+B): the time
+    /// is the one thing the director checks every race against, and the row
+    /// beside the tabs was empty. On the tab row's parent, above the tab
+    /// control in front, placed whenever either is resized; shown only while
+    /// Next Steps is.
+    /// </summary>
+    private static void PlaceTodayClock(TabControl tabs, TabPage nextSteps, TodayControl today)
+    {
+        var clock = today.Clock;
+
+        if (tabs.Parent is not { } host)
+        {
+            return;
+        }
+
+        host.Controls.Add(clock);
+        clock.BringToFront();
+
+        void Place()
+        {
+            if (tabs.TabCount == 0 || tabs.IsDisposed)
+            {
+                return;
+            }
+
+            var row = tabs.GetTabRect(0);
+            var width = Math.Min(clock.WidthWanted(), Math.Max(0, tabs.Width - row.Right - UiLayout.PageRight - (tabs.GetTabRect(tabs.TabCount - 1).Right - row.Right)));
+            var bounds = new Rectangle(tabs.Right - width - UiLayout.PageRight, tabs.Top + row.Top, width, Math.Max(1, row.Height - 3));
+
+            if (clock.Bounds != bounds)
+            {
+                clock.Bounds = bounds;
+            }
+
+            clock.Visible = ReferenceEquals(tabs.SelectedTab, nextSteps) && width > 0;
+        }
+
+        tabs.Resize += (_, _) => Place();
+        tabs.SelectedIndexChanged += (_, _) => Place();
+        tabs.FontChanged += (_, _) => Place();
+        clock.WidthChanged += Place;
+        Place();
+    }
+
+    /// <summary>
+    /// Next Steps: the night's run sheet with the next race's card on it (17 Nov 2026).
     ///
     /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
-    /// unchanged and called in the same place, so the pages are still built in
-    /// the order they always were.
+    /// and called in the same place, so the pages are still built in the
+    /// order they always were.
     /// </summary>
     private void BuildTodayWithTheProgramme(TabPage subPageToday, RaceProgramControl raceProgram, TodayControl today)
     {
-        // --- Today, with the programme under it ---
+        // --- Next Steps, with the run sheet in it ---
         //
-        // This is the fold of the old Heats & Mains tab. That page had two
-        // halves: a next-step card that printed the same sentence Today's
-        // card prints, because both ask ProgramNextStep, and a grid of the
-        // rounds with the commands that act on one. The card was duplication;
-        // the grid was the only place in the app that showed the running
-        // order and let somebody start a round from it. So the card comes off
-        // and the grid moves here, under the card that was already saying
-        // what to do next.
+        // This was a splitter (11 Nov 2026): the next-step card, the Ready to
+        // Race card and the day's tiles on top, the program grid underneath,
+        // and a grip between them to drag. The Race Day redesign (17 Nov
+        // 2026, plans/race-day-mockups.html, mockup A+B) made the program
+        // the page instead - the night's run sheet, with the next race's
+        // card opened up on it - so there is one page here, not two halves.
+        // TodayControl holds the program (RaceProgramControl) as the left of
+        // its two columns and puts its card on the program's grid.
         //
-        // A splitter rather than a fixed stack, because which half matters
-        // changes through the evening. Before the first heat the checklist is
-        // the page and there is no programme to look at; by the third round
-        // the checklist is six ticks and the grid is the page. Rather than
-        // guess, the line is the director's to drag, and where they leave it
-        // is remembered.
-        //
-        // The programme page is built for this half now - no next-step banner
-        // of its own, no height floor - so there is nothing to switch off.
-
-        // How much of the page each half wants. Measured rather than written
-        // down, because what "enough to be useful" costs in pixels depends
-        // entirely on the text-size setting and the width.
-        //
-        // The two are not equals. The program's least is a floor: its class
-        // filter, the headings and three rounds, and the buttons under them
-        // (RaceProgramControl.LeastPaneHeight) - any shorter and the buttons
-        // go below the fold, and the program is the half a race night is
-        // run from. The top half gives way instead, and scrolls: on a small
-        // screen or at a large text size, what it cannot show is under its
-        // own scrollbar rather than under the splitter. The top's least is
-        // only where it OPENS when there is room for both - the day's name,
-        // the card's headline and its button.
-        //
-        // These are NOT Panel1MinSize and Panel2MinSize, and that is the whole
-        // point of this comment. Assigning those properties validates
-        // immediately against the size the control happens to be at the time,
-        // and a SplitContainer that has not been laid out yet is 150x100 - so
-        // setting a 228px Panel2MinSize in the initializer threw
-        // "SplitterDistance must be between Panel1MinSize and Width -
-        // Panel2MinSize" out of the constructor, before the window ever
-        // appeared. They are applied by moving the splitter instead, once
-        // there is room for them, and the panels keep WinForms' own 25px
-        // minimums - which are small enough to survive any window size, and
-        // still stop either half being dragged away to nothing.
-        //
-        // Asked each time rather than worked out once, so they follow the
-        // text size and the width as the two halves do.
-        static int TodayTopMin() =>
-            AppTheme.TitleFont.Height + AppTheme.BodyFont.Height
-            + AppTheme.HeadingFont.Height + UiLayout.ButtonHeight
-            + UiLayout.SectionGap * 2;
-
-        var todaySplit = new SplitContainer
-        {
-            Dock = DockStyle.Fill,
-            Orientation = Orientation.Horizontal,
-
-            // Panel1 keeps its height when the window is resized and the grid
-            // takes the slack. That is the right way round - a taller window
-            // does not want a taller checklist - and it also means resizing
-            // never moves the splitter, so nothing overwrites the saved
-            // position behind the director's back.
-            FixedPanel = FixedPanel.Panel1,
-
-            // A hairline, and not draggable itself (11 Nov 2026): the handle
-            // is the grip on top of Tonight's program below, as on Race
-            // Calls. A SplitContainer's own drag only draws a ghost line
-            // and moves the halves when the mouse is let go, which felt
-            // stuck; the grip moves them as the mouse moves.
-            SplitterWidth = 1,
-            IsSplitterFixed = true,
-        };
-
-        // The bar between the two halves. The SplitContainer itself is not a
-        // Panel, so the recursive theming pass never reaches its BackColor -
-        // left alone it draws the system grey, which is a bright line across
-        // the page in either dark theme.
-        todaySplit.BackColor = AppTheme.Border;
-
-        // Both halves are built on the layout pieces, and nothing else moves
-        // them. The layout repair pass that used to run over every page (it
-        // was deleted on 30 Sep) once had to be told to keep out of this
-        // split in particular - a SplitContainer is a scrollable control, and
-        // caught mid-resize with a half hanging past its edge, the pass
-        // turned scrolling on for the WHOLE split, which put a second pair of
-        // scrollbars round the entire tab.
-
-        // THE HANDLE (11 Nov 2026, asked for by Asher: "just like the race
-        // calls page, add the ability to click and drag a handle to resize
-        // the tonights program card. make it smooth"). The Race Calls grip,
-        // across the top of the program: dragged, the line between the
-        // halves follows the mouse as it moves; let go, where it was left
-        // is remembered; double-clicked, back to fitting Next Steps.
-        var programGrip = new ResizeGrip
-        {
-            Dock = DockStyle.Top,
-            TipText = "Drag to make Tonight's program taller or shorter. Double-click to put it back.",
-        };
-
-        todaySplit.Panel1.Controls.Add(today);
-
-        // The program fills what the grip leaves: docked after it, so in
-        // front of it.
-        todaySplit.Panel2.Controls.Add(raceProgram);
-        todaySplit.Panel2.Controls.Add(programGrip);
-        raceProgram.BringToFront();
-
-        // The program's least, at the width the split gives it - the lower
-        // half is as wide as the split - with the grip over it, and never
-        // under the panel's own 25px, which the arithmetic below relies on
-        // to stay in range.
-        int TodayBottomMin() => Math.Max(todaySplit.Panel2MinSize, raceProgram.LeastPaneHeight(todaySplit.Width) + programGrip.Height);
-
-        // The most the top half can have and still leave the program its
-        // least. Under the top half's own 25px when the window is too short
-        // for both, which the callers check for.
-        int TodayTopMost() => todaySplit.Height - todaySplit.SplitterWidth - TodayBottomMin();
-
-        // Placed on the first resize that has room for it, not here: a
-        // SplitterDistance assigned before the control has a height is either
-        // ignored or throws, depending on how far out it is.
-        var todaySplitPlaced = false;
-
-        // Set while the splitter is moved from here rather than by hand, so
-        // only a position the director chose is remembered. Moved to fit -
-        // the window made smaller for a minute, the text size tried out - it
-        // would otherwise overwrite the one they dragged it to.
-        var todaySplitFitting = false;
-
-        void MoveTodaySplitter(int distance)
-        {
-            if (todaySplit.SplitterDistance == distance)
-            {
-                return;
-            }
-
-            todaySplitFitting = true;
-
-            try
-            {
-                todaySplit.SplitterDistance = distance;
-            }
-            finally
-            {
-                todaySplitFitting = false;
-            }
-        }
-
-        void PlaceTodaySplitter()
-        {
-            if (todaySplitPlaced)
-            {
-                return;
-            }
-
-            var most = TodayTopMost();
-
-            // Not enough room for the program's least and a strip of the top
-            // half over it: leave WinForms to it and try again on the next
-            // resize. Nothing is assigned until the arithmetic below is known
-            // to be in range.
-            if (most < todaySplit.Panel1MinSize)
-            {
-                return;
-            }
-
-            // Until the director has dragged the line, as tall as the top
-            // half's content (see FitTodayToContent) - or 55% when that is
-            // not known yet, measured rather than written down: the
-            // summary's real height depends on the text-size setting, and any
-            // pixel count decided here would be right at one setting only.
-            // Never so far down that the program loses its least; never
-            // higher than the top's least while there is room for that.
-            var room = todaySplit.Height - todaySplit.SplitterWidth;
-            var saved = _settings.TodayProgrammeSplit;
-            var wanted = saved > 0 ? saved : today.ContentHeight > 0 ? today.ContentHeight : room * 55 / 100;
-
-            MoveTodaySplitter(Math.Clamp(wanted, Math.Min(TodayTopMin(), most), most));
-
-            todaySplitPlaced = true;
-
-            FitTodayToContent();
-        }
-
-        // The program is always tall enough for its buttons: when it is not
-        // - the window made smaller, the buttons wrapping onto a second line,
-        // the line dragged too far down - the top half gives way, and
-        // scrolls. Down to its own 25px and no further, which only a window
-        // too short for anything reaches.
-        void KeepProgramInView()
-        {
-            if (!todaySplitPlaced || todaySplit.IsDisposed)
-            {
-                return;
-            }
-
-            var most = Math.Max(todaySplit.Panel1MinSize, TodayTopMost());
-
-            if (todaySplit.SplitterDistance > most && todaySplit.Height - todaySplit.SplitterWidth - todaySplit.Panel2MinSize >= most)
-            {
-                MoveTodaySplitter(most);
-            }
-        }
-
-        // The top half is tall enough to show all of Next Steps - the card,
-        // Ready to Race and the tiles - without scrolling, whenever that
-        // leaves the program its least.
-        //
-        // Until the director drags the line, it is exactly that tall: the
-        // program gets everything else, rather than a blank band opening
-        // under the tiles at 55% of a tall window (layout pictures, 29 Sep).
-        // Once they have, it only ever GROWS the half, so a director who
-        // drags the line down to give the program less room keeps that;
-        // dragging it up past the content is what is undone, the next time
-        // the content changes or the window is resized.
-        void FitTodayToContent()
-        {
-            if (!todaySplitPlaced || todaySplit.IsDisposed)
-            {
-                return;
-            }
-
-            var most = TodayTopMost();
-
-            if (most >= todaySplit.Panel1MinSize && today.ContentHeight > 0)
-            {
-                var wanted = Math.Clamp(today.ContentHeight, todaySplit.Panel1MinSize, most);
-                var dragged = _settings.TodayProgrammeSplit > 0;
-
-                if (dragged ? todaySplit.SplitterDistance < wanted : todaySplit.SplitterDistance != wanted)
-                {
-                    MoveTodaySplitter(wanted);
-                }
-            }
-
-            KeepProgramInView();
-        }
-
-        today.ContentHeightChanged += FitTodayToContent;
-        raceProgram.LeastPaneHeightChanged += FitTodayToContent;
-
-        todaySplit.Resize += (_, _) =>
-        {
-            PlaceTodaySplitter();
-            FitTodayToContent();
-        };
-
-        // And when the page is first shown, in case the sidebar page it lives
-        // on was never laid out at a real height while it was hidden. Both
-        // hooks are harmless once the splitter has been placed - the method
-        // returns immediately after that.
-        todaySplit.VisibleChanged += (_, _) => PlaceTodaySplitter();
-
-        todaySplit.SplitterMoved += (_, _) =>
-        {
-            if (!todaySplitPlaced || todaySplitFitting)
-            {
-                return;
-            }
-
-            _settings.TodayProgrammeSplit = todaySplit.SplitterDistance;
-            _settings.Save();
-
-            // Dragged so far down that the program's buttons would go below
-            // the fold: back up to where they show, once the drag is over -
-            // not from inside the splitter's own event. WinForms moves the
-            // splitter itself too, when the window is made too short for the
-            // top half, and that can be before the window has a handle.
-            if (IsHandleCreated && !IsDisposed)
-            {
-                BeginInvoke(new Action(KeepProgramInView));
-            }
-        };
-
-        // The grip works in the top half's height - the line between the
-        // halves - so dragging it down gives the program less room. Moved
-        // as "fitting" while the mouse moves, so nothing is written to disk
-        // on every pixel; saved once, when the drag ends. Never so far down
-        // that the program loses its least.
-        programGrip.CurrentHeight = () => todaySplit.SplitterDistance;
-
-        // Next Steps is held at its full height while the grip is dragged,
-        // and the top half only clips it (13 Nov 2026, asked for by Asher:
-        // dragged up past the tiles, a white bar flashed down the right and
-        // another along the bottom, then went away). Left docked, the page
-        // shrank under its content on every move: Windows put its own
-        // scrollbars up at once, in the system colours, and the themed bars
-        // that cover them only catch up on their 150ms poll - the sideways
-        // one for the one layout the page was too wide while the bar took
-        // its width. Held, nothing on the top half lays out while the mouse
-        // moves, which is most of what made the drag feel heavy too. Fitted
-        // once when the drag ends - see ReleaseToday.
-        var todayHeld = false;
-
-        void HoldToday()
-        {
-            var height = Math.Max(todaySplit.Panel1.Height, today.ContentHeight);
-
-            if (!todayHeld)
-            {
-                todayHeld = true;
-                today.Dock = DockStyle.None;
-                today.Bounds = new Rectangle(0, 0, todaySplit.Panel1.Width, height);
-
-                // Scrolling when the drag began: made tall enough not to, so
-                // its bars go now rather than on the next tick.
-                ThinScrollBar.SyncNow();
-            }
-            else if (today.Height < height)
-            {
-                // Dragged down past it: it grows with the half, so no strip
-                // of nothing opens under it. Taller than its content never
-                // scrolls, so this brings no bars.
-                today.Height = height;
-            }
-        }
-
-        // Docked again, scrollbars and all, with painting held off until the
-        // themed bars are over the native ones - so the one layout that may
-        // bring them is never seen in the system colours.
-        void ReleaseToday()
-        {
-            if (!todayHeld)
-            {
-                return;
-            }
-
-            todayHeld = false;
-            NoRedraw.Begin(todaySplit);
-
-            try
-            {
-                today.Dock = DockStyle.Fill;
-                todaySplit.Panel1.PerformLayout();
-                ThinScrollBar.SyncNow();
-            }
-            finally
-            {
-                NoRedraw.End(todaySplit);
-            }
-        }
-
-        programGrip.Dragged += asked =>
-        {
-            if (!todaySplitPlaced || todaySplit.IsDisposed)
-            {
-                return;
-            }
-
-            // Held before the move, so not even the first step shrinks it;
-            // asked again after, for when the move made the half taller.
-            HoldToday();
-            MoveTodaySplitter(ResizeGrip.Clamp(asked, todaySplit.Panel1MinSize, TodayTopMost()));
-            HoldToday();
-
-            // Painted now rather than when the drag next pauses, so the
-            // halves keep up with the mouse instead of trailing it.
-            ResizeGrip.PaintNow(todaySplit);
-        };
-
-        programGrip.Finished += () =>
-        {
-            ReleaseToday();
-
-            if (!todaySplitPlaced || todaySplit.IsDisposed)
-            {
-                return;
-            }
-
-            _settings.TodayProgrammeSplit = todaySplit.SplitterDistance;
-            _settings.Save();
-            KeepProgramInView();
-        };
-
-        // Double-click: forget the drag, and fit Next Steps again.
-        programGrip.Reset += () =>
-        {
-            _settings.TodayProgrammeSplit = 0;
-            _settings.Save();
-            FitTodayToContent();
-        };
-
-        subPageToday.Controls.Add(todaySplit);
+        // _settings.TodayProgrammeSplit, where the line was left, is still a
+        // setting so old settings files read back - nothing uses it now.
+        _ = raceProgram;
+        subPageToday.Controls.Add(today);
     }
 
     /// <summary>
