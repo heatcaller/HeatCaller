@@ -203,6 +203,17 @@ public sealed class ProfileForm : Form
                             System.Text.Json.JsonSerializer.Serialize(Result.Transponders ?? new List<OwnedTransponder>()))
                         ?? new List<OwnedTransponder>();
 
+        // Built with its layout held (18 Nov 2026) - see
+        // LayoutFreeze.HoldWhileBuilding, as the Setup Sheet and Edit
+        // Template are. Built live, the body's PageStack made its window as
+        // it was made (Pieces.ScrollDownOnly), so every part put in it got
+        // a window of its own and every field grid laid itself out again for
+        // each row added, measuring every tick box each time: with the
+        // privacy and junior ticks that came to minutes on a busy PC, and
+        // the name check's tests timed out opening it. Let go just before
+        // DialogFit sizes the window.
+        using var hold = LayoutFreeze.HoldWhileBuilding();
+
         Text = existing is null ? "Add Driver Profile" : "Edit Driver Profile";
         Font = AppTheme.BodyFont;
 
@@ -771,6 +782,8 @@ public sealed class ProfileForm : Form
         // is up (FitPicker).
         _fieldColumn = width - UiLayout.PageLeft - captionColumn - UiLayout.RowGap - _stripWidth
                        - SystemInformation.VerticalScrollBarWidth - UiLayout.PageRight;
+
+        hold.Dispose();
 
         DialogFit.Keep(this, page, width, body: body, widthMeasured: true);
     }
