@@ -543,6 +543,13 @@ public sealed class SimpleModeTests : IDisposable
         // The Setup Sheet's and Edit Result's cards (SetupEntryForm, ResultEditForm; 18 Nov 2026).
         "SetupEntryForm.cs|This setup",
         "ResultEditForm.cs|Corrections", "ResultEditForm.cs|New order",
+
+        // Add Main's, Line Up the Split Loop's and Photo Finish's cards (MainRoundForm, SplitLineUpForm,
+        // PhotoFinishForm; 18 Nov 2026, dialog jazz-up, third batch). Line Up opens only from the split
+        // loop card Simple hides, so its cards need no tag of their own.
+        "MainRoundForm.cs|The main", "MainRoundForm.cs|Drivers in this main",
+        "SplitLineUpForm.cs|Line it up", "SplitLineUpForm.cs|Crossings",
+        "PhotoFinishForm.cs|Shots",
     };
 
     [Fact]
