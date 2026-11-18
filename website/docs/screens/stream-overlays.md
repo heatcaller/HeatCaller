@@ -74,7 +74,7 @@ On the **Local Screens** page, press **Edit** beside **Stream overlay:**. The **
     - The nine places. At its usual place, the place it's in now is dashed. **Usual place** puts it back there.
     - **Across:**, **Down:** and **Size (%):** set it exactly. Changing them on a graphic at its usual place starts from where it already is.
     - **Drivers:** for the positions: how many drivers they list (0 is the usual number).
-    - **When it shows:** **Auto** shows it whenever it has something to show. Untick **Auto** to choose the parts yourself.
+    - **When it shows:** **Auto** shows it whenever it has something to show, and the dashed pills are when that is. Click **The grid**, **Racing**, **The result** or **Between races** to choose the parts yourself: pink ones are on. One part always stays on; to take a graphic off the stream, click its eye.
 6. Under **The whole layout**, **Boxes (% solid):** sets how see-through the boxes are, and **Text size (%):** makes every graphic bigger or smaller at once.
 7. Press **Copy** beside **For OBS:** and paste the address into OBS. **Add it to OBS** says how.
 

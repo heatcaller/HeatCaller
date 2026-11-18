@@ -86,13 +86,12 @@ public sealed class OverlayEditorForm : Form
     private readonly NumericUpDown _numY = new();
     private readonly NumericUpDown _numScale = new();
     private readonly NumericUpDown _numRows = new();
+    private readonly FieldGrid _rowsGrid;
     private readonly Label _lblRows;
     private readonly Label _lblRowsHint;
-    private readonly CheckBox _chkAuto = new ThemedCheckBox { Text = "Auto", AutoSize = true };
-    private readonly CheckBox _chkStaging = new ThemedCheckBox { Text = "The grid" };
-    private readonly CheckBox _chkRacing = new ThemedCheckBox { Text = "Racing" };
-    private readonly CheckBox _chkFinished = new ThemedCheckBox { Text = "The result" };
-    private readonly CheckBox _chkBetween = new ThemedCheckBox { Text = "Between races" };
+    /// <summary>When it shows: Auto, then the four parts of the night, as pill buttons (TogglePills).</summary>
+    private readonly TogglePills _pillsShows = new();
+    private const string AutoPill = "auto";
     private readonly Label _lblShowsHint = new() { AutoSize = true };
     private readonly NumericUpDown _numGlass = new();
     private readonly NumericUpDown _numTextScale = new();
@@ -338,22 +337,9 @@ public sealed class OverlayEditorForm : Form
         _numRows.ValueChanged += (_, _) => EditElement(e => e.Rows = (int)_numRows.Value);
         _numGlass.ValueChanged += (_, _) => Edit(layout => layout.Glass = (double)_numGlass.Value / 100);
         _numTextScale.ValueChanged += (_, _) => Edit(layout => layout.TextScale = (double)_numTextScale.Value / 100);
-        _chkAuto.CheckedChanged += (_, _) => EditElement(e =>
-        {
-            // Off Auto: start from the parts it was showing in, so nothing
-            // changes on the stream until a part is ticked or unticked.
-            e.During = _chkAuto.Checked ? OverlayDuring.Always : NaturalParts(_kind);
-        });
-
-        foreach (var box in new[] { _chkStaging, _chkRacing, _chkFinished, _chkBetween })
-        {
-            box.AutoSize = true;
-            box.CheckedChanged += (_, _) => EditElement(e => e.During =
-                (_chkStaging.Checked ? OverlayDuring.Staging : 0)
-                | (_chkRacing.Checked ? OverlayDuring.Racing : 0)
-                | (_chkFinished.Checked ? OverlayDuring.Finished : 0)
-                | (_chkBetween.Checked ? OverlayDuring.Between : 0));
-        }
+        _pillsShows.SetPills(new[] { new TogglePills.Pill(AutoPill, "Auto") }
+            .Concat(PartsOfTheNight.Select(p => new TogglePills.Pill(p.Name, PartWords(p.Part)))).ToList());
+        _pillsShows.Clicked += ShowsPillClicked;
 
         _lblShowsHint.ForeColor = AppTheme.TextMuted;
         _btnBasics.Click += (_, _) => EditBasics();
@@ -365,18 +351,19 @@ public sealed class OverlayEditorForm : Form
         place.AddRow("Across:", _numX);
         place.AddRow("Down:", _numY);
         place.AddRow("Size (%):", _numScale);
-        _lblRows = place.AddRow("Drivers:", _numRows);
-        _lblRowsHint = place.AddHint("How many drivers it lists. 0 is its usual number.");
+        // Drivers in a grid of its own, hidden whole for the graphics it means nothing to.
+        _rowsGrid = new FieldGrid();
+        _lblRows = _rowsGrid.AddRow("Drivers:", _numRows);
+        _lblRowsHint = _rowsGrid.AddHint("How many drivers it lists. 0 is its usual number.");
 
         var graphic = new Section("The picked graphic");
         graphic.Add(_lblWhat, gapBelow: 0);
         graphic.Add(_lblWhatNote, gapBelow: UiLayout.RowGap);
         graphic.Add(FieldGrid.Inline(_nine, _btnUsual), gapBelow: UiLayout.RowGap);
-        graphic.Add(place, gapBelow: UiLayout.RowGap);
-        graphic.Add(new Label { Text = "When it shows", AutoSize = true, ForeColor = AppTheme.TextMuted }, gapBelow: 0);
-        graphic.Add(_chkAuto, gapBelow: 0);
-        graphic.Add(FieldGrid.Inline(_chkStaging, _chkRacing), gapBelow: 0);
-        graphic.Add(FieldGrid.Inline(_chkFinished, _chkBetween), gapBelow: 0);
+        graphic.Add(place, gapBelow: 0);
+        graphic.Add(_rowsGrid, gapBelow: UiLayout.RowGap);
+        graphic.Add(new Label { Text = "When it shows", AutoSize = true, ForeColor = AppTheme.TextMuted, Padding = new Padding(0, UiLayout.RowGap, 0, 0) }, gapBelow: UiLayout.AtDpi(4));
+        graphic.Add(_pillsShows, gapBelow: UiLayout.RowGap);
         graphic.Add(_lblShowsHint, gapBelow: 0);
 
         var whole = new FieldGrid();
@@ -577,14 +564,15 @@ public sealed class OverlayEditorForm : Form
             var during = element?.During ?? OverlayDuring.Always;
             var auto = during == OverlayDuring.Always;
             var shows = auto ? NaturalParts(kind) : during;
-            _chkAuto.Checked = auto;
-            _chkStaging.Checked = shows.HasFlag(OverlayDuring.Staging);
-            _chkRacing.Checked = shows.HasFlag(OverlayDuring.Racing);
-            _chkFinished.Checked = shows.HasFlag(OverlayDuring.Finished);
-            _chkBetween.Checked = shows.HasFlag(OverlayDuring.Between);
+            _pillsShows.SetState(AutoPill, auto ? TogglePills.State.On : TogglePills.State.Off);
+            foreach (var (part, name, _) in PartsOfTheNight)
+            {
+                _pillsShows.SetState(name, !shows.HasFlag(part) ? TogglePills.State.Off : auto ? TogglePills.State.Auto : TogglePills.State.On);
+            }
+
             _lblShowsHint.Text = auto
-                ? "Auto: whenever it has something to show - the parts ticked are when that is."
-                : "Only in the parts ticked.";
+                ? "Whenever it has something to show - the dashed ones are when that is. Click a part to choose for yourself."
+                : "Only in the parts in pink. Auto hands it back.";
         }
         finally
         {
@@ -601,17 +589,11 @@ public sealed class OverlayEditorForm : Form
         _numScale.Enabled = editable;
 
         var rows = kind is OverlayElementKind.Tower or OverlayElementKind.Ticker;
-        _lblRows.Visible = rows;
-        _numRows.Visible = rows;
-        _lblRowsHint.Visible = rows;
+        _rowsGrid.Visible = rows;
         _numRows.Enabled = editable && rows;
 
         var choosable = editable && kind != OverlayElementKind.Mark;
-        _chkAuto.Enabled = choosable;
-        foreach (var box in new[] { _chkStaging, _chkRacing, _chkFinished, _chkBetween })
-        {
-            box.Enabled = choosable && !_chkAuto.Checked;
-        }
+        _pillsShows.Enabled = choosable;
     }
 
     /// <summary>The part-of-the-night buttons: the one the picture shows filled, and Play's caption.</summary>
@@ -625,6 +607,54 @@ public sealed class OverlayEditorForm : Form
         _btnPlay.Text = _playing ? "Stop playing" : "Play the night";
         _lstLayers.Showing = _part;
         _lstLayers.Invalidate();
+    }
+
+    /// <summary>A part's name on its pill and its tab: "The grid", "Racing", "The result", "Between races".</summary>
+    private static string PartWords(OverlayDuring part) => part switch
+    {
+        OverlayDuring.Staging => "The grid",
+        OverlayDuring.Racing => "Racing",
+        OverlayDuring.Finished => "The result",
+        _ => "Between races",
+    };
+
+    /// <summary>
+    /// A pill clicked. Auto on: back to whenever it has something to show.
+    /// Auto off: the parts it was showing in, so nothing on the stream
+    /// changes until a part is clicked. A part: on or off - from Auto, out
+    /// of the parts Auto had. The last part can't go: none would mean
+    /// "always", the opposite of what was clicked; the eye turns it off.
+    /// </summary>
+    internal void ShowsPillClicked(string key)
+    {
+        if (Current?.Element(_kind) is not { On: true } element)
+        {
+            return;
+        }
+
+        var auto = element.During == OverlayDuring.Always;
+        var shows = auto ? NaturalParts(_kind) : element.During;
+
+        if (key == AutoPill)
+        {
+            EditElement(e => e.During = auto ? NaturalParts(_kind) : OverlayDuring.Always);
+            return;
+        }
+
+        if (PartsOfTheNight.FirstOrDefault(p => p.Name == key) is not { Name: not null } picked)
+        {
+            return;
+        }
+
+        var after = shows ^ picked.Part;
+
+        if (after == OverlayDuring.Always)
+        {
+            _lblShowsHint.Text = "It has to show some time - to take it off the stream, click its eye in the list.";
+            return;
+        }
+
+        EditElement(e => e.During = after);
     }
 
     // --- The picture ---
