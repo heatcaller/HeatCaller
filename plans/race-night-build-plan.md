@@ -15,30 +15,34 @@ Every item has been checked against the **code**, not just the docs (paths are r
 
 ## 1. Where each item stands today (verified in code)
 
+**Updated 15 Nov 2026**, checked against the code on main (a655e91a). All seven phases were merged between 11 and 13 Nov 2026. The 10 Nov starting point for each row is in git history (commit 224a0986 and earlier).
+
 | # | Item | Today | Evidence | Phase |
 |---|---|---|---|---|
-| 1 | Auto-start between heats | **Missing.** Start Next only runs on a click, F-key or phone. "Start the next race automatically" only links a race to the next round. The countdown and call-ups only *speak*. | `RaceControlControl.Layout.cs:444`, `AppSettings.cs:2702 AutoAdvanceRounds`, `:741 BetweenRacesAutoCountdown`, `DayScheduleControl.cs:1393` | 1 |
-| 2 | Clock time per heat, end of night | **Partial.** `RaceEta.cs` gives "about 7 min (19:42)" to phones. The Next Up bar shows "N min behind". There's no projected end of night and no time on each heat in the desk program. | `RaceEta.cs`, `RaceControlControl.NextUp.cs:500`, `FillTimesForm.cs` | 2 |
-| 3 | Rest-time guard | **Missing.** `BuildQualifying` interleaves classes but never checks a driver's gap. | `RaceProgramControl.cs:1879-1940` | 1 |
-| 4 | Q1 seeding | **Alphabetical, dealt round-robin.** Pace seeding is a manual extra in Move Drivers Between Heats. | `ProfileStore.cs:666`, `RaceProgramControl.cs:2066`, `HeatSeeding.cs` | 3 |
-| 5 | Mixed-class heats | **Missing.** A round has one `ClassName`. | `RoundModels.cs:22` | 4 |
-| 6 | Entry fees and payments | **Missing.** Only the rental `DepositHeld`. | `RentalTransponderStore.cs:30` | 4 |
-| 7 | Hand scoring when the decoder dies | **Partial.** Per-car +1/-1 lap in a race, stored as hand laps shown "12\*". No decoder-down mode and no typed lap counts. | `HandCountedLaps.cs`, `RaceControlControl.Leaderboard.cs:851` | 6 |
-| 8 | Provisional results / protest window | **Missing.** Drivers can *query* a result from the phone, but nothing holds the mains back. | `DriverRequests.cs:340`, `DriverAskContracts.cs:36` | 3 |
-| 9 | Rain / stop early | **Missing as a flow.** Seed Mains already works from partial qualifying, and Close Day exists. | `RaceProgramControl.cs:2284`, `RaceDayEventControl.cs:1784` | 2 |
-| 10 | Driver "car broken / need 5 min" | **Missing.** The phone request kinds are details, pack, query, setup, car and photo. | `DriverAskContracts.cs:30-58`, `relay/src/driverasks.ts:138` | 1 |
-| 11 | Marshal swaps | **Missing.** Duty is automatic and read-only. | `MarshalAssigner.cs`, `MarshalAssignmentsForm.cs` | 4 |
-| 12 | "Leader behind you" in the ear | **Missing.** The lap voice only knows the car behind by position. | `relay/src/lapvoice.ts:159-254`, `relay/src/pages.ts:4817` | 7 |
-| 13 | Mains preview | **Partial.** It shows counts per tier, not names or reasons. A live qualifying projection exists. | `RaceProgramControl.cs:2352`, `QualifyingProjectionForm.cs` | 3 |
-| 14a | Best N of M, ladder mains A–Z, staggered start | **Exist** | `QualifyingCalculator.cs`, `MainsBuilder.cs`, `RaceFormat.cs` | – |
-| 14b | Points qualifying, HRQF / heads-up, double/triple A-mains | **Missing.** Qualifying is TotalLaps or BestConsecutiveLaps only. | `RaceClassModels.cs:6-19` | 5 |
-| 15 | Entry import | **Partial.** Generic CSV of driver profiles. No race-day entries, RCSignup or LiveTime. | `DriverImport.cs`, `CsvMappingForm.cs` | 7 |
-| 16 | Late entry without reposting | **Partial.** Redo Remaining Heats *reshuffles* posted heats. Dragging by hand is the only gentle route. | `RaceControlControl.NextUp.cs:598-640` | 3 |
-| 17 | Standby PC | **Missing.** Backups only. | `BackupService.cs`, `CloudBackup.cs` | 6 |
-| 18 | Night-pace metrics, close-the-night checklist | **Partial.** Event report, night recap, night emails. The median start gap is computed in `RaceEta` but never reported. | `EventReportBuilder.cs`, `NightRecap.cs` | 0, 2 |
-| 19 | "You're up" push | **Exists, counted in races.** It fires when the race is next, not at a set number of minutes. | `relay/src/push.ts:20-27, 270-290` | 1 |
-| 20 | Sanctioning presets | **Done (12 Nov).** PNWC, IFMAR clocks, BRCA on-road, and IFMAR sections, ROAR, EFRA, NZRCA and Reedy Race from their own rulebooks. No points scales. | `SanctioningPreset.cs:120-200` | 5 |
-| 21 | Mid-pack "something to race for" lines | **Partial.** Driver score, report card, close-battle calls. No personal after-race lines. | relay Me page, `NightEmail.cs` | 7 |
+| 1 | Auto-start between heats | **Built (#144, 11 Nov).** An Auto start switch on Race Control, on by default, with a 2:30 gap, Hold / +1 min / Start now and "Off until I switch it on again". A car not seen holds the start until the director says "Start without them". Counting through warm-up and staging came in #197 and #199 (14 Nov). | `AutoStart.cs`, `RaceControlControl.AutoStart.cs`, `RaceControlControl.SkipDns.cs` | 1 |
+| 2 | Clock time per heat, end of night | **Built (#141, #150, 11 Nov).** "about 20:42" on phones' Schedule, the printed sheet, the Big Screen and the program. The end of the night is projected before the first green. | `NightPlan.cs`, `MainForm.EstimatedStarts.cs` | 2 |
+| 3 | Rest-time guard | **Built (#144, 11 Nov).** "Races off between a driver's races:" (0 to 3, settable since 12 Nov). Manual moves and drags warn first. | `RestOrder.cs` | 1 |
+| 4 | Q1 seeding | **Built (#146, 11 Nov).** "First round seeded:" by recent pace (the default), alphabetical, random, heads-up (HRQF) or race number (12 Nov). | `FairResults.cs` (FirstRoundSeeding) | 3 |
+| 5 | Mixed-class heats | **Built (#149, 11 Nov; #175, 13 Nov).** "Run Together..." on the program. Each class gets its own results, standings, mains and points, with places by class in the position report, Race History, the sheet, exports and phones. | `MixedHeats.cs` | 4 |
+| 6 | Entry fees and payments | **Built, tracking only (#147, #151, 11 Nov).** Entry fee, a cheaper fee per extra class, per-class fees, "Driver Paid..." (Cash / Card / Comp / Still Owing), cash and card totals in the event report. | `DeskMoney.cs`, `CheckInControl.Money.cs` | 4 |
+| 7 | Hand scoring when the decoder dies | **Built (#149, #150, 11 Nov).** "Score by Hand" is offered when the decoder goes quiet: a tap grid with Undo and "Add a car to the grid", also from the phone remote. Results are marked hand-scored. | `HandScoring.cs`, `HandScoringForm.cs`, `RaceControlControl.HandScoring.cs` | 6 |
+| 8 | Provisional results / protest window | **Built (#146, #150, 11 Nov).** "Provisional until 20:42" on screens and phones, with a "Something wrong?" link. It warns but does not stop the mains being built. | `FairResults.cs` (ProtestWindow), `MainForm.ProtestWindow.cs` | 3 |
+| 9 | Rain / stop early | **Built (#141, 11 Nov).** "We're Done After This Round..." finishes the round, seeds the mains from completed rounds, offers cut or shorter finals, and is announced. | `NightPlan.cs`, `RaceProgramControl.cs` | 2 |
+| 10 | Driver "car broken / need 5 min" | **Built (#144, 11 Nov).** "Need 5 minutes" and "Skip my race" from the phone; approving one acts in Race Control. | `DriverRequests.cs`, `relay/src/driverasks.ts` | 1 |
+| 11 | Marshal swaps | **Built (#147, 11 Nov; #176, 13 Nov).** "Cover my post": a friend accepts, then the desk approves (or it's automatic if allowed). | `MarshalAssigner.cs`, `MarshalAssignmentsForm.cs` | 4 |
+| 12 | "Leader behind you" in the ear | **Built (#149, 11 Nov).** The laptop predicts the lapping; the phone plays a "Leader behind" clip once per lapping. | `LeaderBehind.cs`, `relay/src/lapvoice.ts` | 7 |
+| 13 | Mains preview | **Built (#146, 11 Nov).** "Build the Finals from Qualifying..." names each driver per main with the result that put them there and marks bump-up places. | `FairResults.cs` (MainsPreview) | 3 |
+| 14a | Best N of M, ladder mains A–Z, staggered start | **Exist** (before this plan) | `QualifyingCalculator.cs`, `MainsBuilder.cs`, `RaceFormat.cs` | – |
+| 14b | Points qualifying, HRQF / heads-up, double/triple A-mains | **Built (#149, #150, 11 Nov).** Round points (club, IFMAR and EFRA scales), heads-up HRQF from practice, A-main legs with best N counted and bump-ups into every leg. **Not built:** Super Pole, the Reedy Invitational format, lower mains in legs. | `QualifyingCalculator.cs`, `HeadsUpQualifying.cs`, `AMainLegs.cs` | 5 |
+| 15 | Entry import | **Built (#149, 11 Nov).** "Import Entries..." reads RCSignup, a pasted LiveRC entry list, a LiveTime driver export or any CSV, and matches by transponder then name. A "Switching from LiveTime" guide is in the docs. | `EntryImport.cs`, `EntryImportForm.cs`, `website/docs/getting-started/switching-from-livetime.md` | 7 |
+| 16 | Late entry without reposting | **Built (#146, 11 Nov).** "Add a Late Entry..." puts the driver in the smallest unrun heat and touches no one else. | `LateEntry.cs` | 3 |
+| 17 | Standby PC | **Built, manual takeover (#149, 11 Nov).** A standby copies the timing PC every 15 s; "Take Over..." by hand. One-way, so no live mirror of a race in progress. | `WarmStandby.cs`, `StandbyMirror.cs`, `BackupRestoreControl.Standby.cs` | 6 |
+| 18 | Night-pace metrics, close-the-night checklist | **Built (#140, #141, #160, 11 Nov).** "Night pace" in the event report (green to green, longest gaps with cause, on-track share, rounds against plan) and a "Close the Night" window. The head-to-head demo script exists but has not been run. | `NightPace.cs`, `EventReportBuilder.cs`, `NightClose.cs`, `CloseNightForm.cs`, `plans/head-to-head-demo-script.md` | 0, 2 |
+| 19 | "You're up" push | **Built (#144, 11 Nov; #169, 12 Nov).** "Your race is in about 5 minutes" to drivers, and to marshals with their post. | `relay/src/push.ts` | 1 |
+| 20 | Sanctioning presets | **Done (12 Nov).** PN Racing, IFMAR, BRCA, ROAR, EFRA, NZRCA and Reedy Race from their own rulebooks, with points scales. | `SanctioningPreset.cs` | 5 |
+| 21 | Mid-pack "something to race for" lines | **Built (#149, 11 Nov).** Lines like "Best lap 0.31s quicker than your Heat 1" and "Held off Sam for 4 laps" on the night page, report card and night email. | `RaceLines.cs` | 7 |
+
+Still not built from the wider plan: the cross-club results index (proposal only, `plans/cross-club-index-proposal.md`).
 
 ---
 

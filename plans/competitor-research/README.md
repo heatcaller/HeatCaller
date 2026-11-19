@@ -13,6 +13,8 @@ Researched 10 Nov 2026 from:
 
 Screenshots are in [`screenshots/`](screenshots/).
 
+**Updated 15 Nov 2026.** Sections 6 and 7 originally described HeatCaller as it stood on 10 Nov. Most of the plan was built between 11 and 13 Nov, so those sections now show each item's current status, checked against the code on main (a655e91a). The research into the competitors themselves is unchanged.
+
 ---
 
 ## 1. The bottom line
@@ -23,7 +25,7 @@ Screenshots are in [`screenshots/`](screenshots/).
   - RCM: automatic start by time schedule.
   - Everlaps: the *Auto* panel.
 
-  As far as HeatCaller's docs show, HeatCaller calls the next heat up and shows NEXT, but **a person still presses Start Next**. There is no fixed-interval auto-start. This is the biggest gap against LiveTime.
+  On 10 Nov, HeatCaller called the next heat up and showed NEXT, but **a person still pressed Start Next**. That was the biggest gap against LiveTime. *Closed 11 Nov 2026 (PR #144):* Race Control now has an Auto start switch, on by default, with a 2:30 gap, Hold / +1 min / Start now, and a "Start without them?" check when a car hasn't been seen.
 - **Going from heats to mains is always a separate step done by hand**, buried in a settings panel:
   - LiveTime: a *Seeding Options* panel with about 15 settings.
   - Everlaps: you press *Generate* again.
@@ -134,6 +136,12 @@ Also captured: [overall final ranking](screenshots/liverc-overall-final-ranking.
 ### 3e. What drivers and spectators get
 
 - **LiveRC live pages:** scoring, lineups, rankings and results, published automatically as the night runs. Video of each race is embedded if the track streams.
+- **How LiveRC's race video works** (checked 15 Nov 2026 from LiveRC's own news posts and public pages):
+  - The **Race Video Archive (RVA)** records one clip per heat and embeds it on that heat's result page. It was announced in 2012/13 for subscribers ([announcement](https://www.liverc.com/news/liverc-unveils-revolutionary-new-race-video-archival-system/)).
+  - Since Dec 2016 the recording is tied to the LiveTime race start, "tweaked to capture the start of the race, every time" ([Dec 2016 post](https://www.liverc.com/news/lrc-new-liverc-broadcasting-features-available-to-all-tracks-using-livetime-scoring-engine/)).
+  - In Nov 2020 it moved off YouTube to LiveRC's own hosting after YouTube capped automated uploads, and became a Bonus Lap member feature ([Nov 2020 post](https://liverc.com/news/liverc-rva-race-video-archive-back)). Result pages today say "The (RVA) Race Video Archive is available to Bonus Lap members" ([example](https://lcrc.liverc.com/results/?p=view_race_result&id=6994730)).
+  - **Not known:** whether the member player can jump to a lap, how exactly the clip is synced, or whether any offset can be adjusted. Answering that needs a Bonus Lap login. Nothing public shows per-lap links.
+- **Other race-video-from-timing products found** (same check): RotorHazard's [rh-youtube-chapters](https://github.com/dutchdronesquad/rh-youtube-chapters) plugin (drone racing, Jan 2025) and Skate Results' [chapter export](https://docs.skateresults.app/features/livestream/export-chapters) (roller skating, with a time-offset field) make one YouTube chapter per race from timing data, but not per lap. Onboard-camera loggers (Racelogic Circuit Tools, AiM SmartyCam) let you click a lap to seek the video, but from the car's own logger, not a stream linked from results. Patents [US10923157B2](https://patents.google.com/patent/US10923157B2/en) and [US11636880B2](https://patents.google.com/patent/US20210134329A1/en) (Scorebreak) align game video with box-score events using a computed offset.
 - **RaceVision** for a TV and **RaceBoard** wall tablets (both Premium; RaceBoard was last updated 2018).
 - **Voice:** Windows text-to-speech. It calls the race, the heat and the driver order before the start, the countdown, laps and positions, the last lap, and the next race and marshals.
 - **No official phone app.** A third-party "RC Replay" app reads LiveRC.
@@ -208,20 +216,61 @@ Ranked by how often each came up:
   LiveRC has no first-party phone app. RCGTiming is the only rival in this space.
 - **Price:** HeatCaller is not tiered by registration count. LiveTime's Basic tier stops at 20 registrations a day.
 
-**Where HeatCaller is behind or unproven:**
+**Built since 10 Nov 2026, and not matched by anything found in this research:**
 
-1. **No fixed-interval auto-advance or auto-start between heats** (as far as the docs show). LiveTime, RCM and Everlaps all have one, and it targets complaint #1.
-2. **Format breadth.** LiveTime has ladder mains (A–L), double/triple A-mains, HRQF, Reedy, Super Pole, and "best N of M" on any seeding. HeatCaller's docs show qualifying method, main size and bump-ups per class, plus sanctioning presets. Each LiveTime format needs checking against HeatCaller.
-3. **Spectator reach.** LiveRC is a national destination: racers already have accounts and follow other tracks. HeatCaller's relay pages are per club.
-4. **Entry import** from RCSignup, the de facto US pre-entry system, is a one-click import in LiveTime.
-5. **Backup timing PC.** LiveTime's Parent/Child mode mirrors the PC; HeatCaller has crash recovery but no live mirror.
-6. **No measured proof.** Nothing yet shows HeatCaller makes a night faster.
+- **Race video:** each race on a driver's page links to its moment in the club's YouTube stream ("Watch my race"), with a per-lap jump for the driver's own laps (PRs #203 and #204, 14 Nov). LiveRC embeds race video behind its paid membership; see section 3e.
+- **Stream overlays for OBS** that follow the race state, with presets, sponsor turns and a phone view (PR #207, 15 Nov). RC Scoring Pro offers free YouTube overlays.
+- **Live track map** on phones and the Big Screen, with stopped-car alerts (built 4 Nov, before this research, but not listed in it), and the **track designer** (25 Oct).
+- **Family and follower links** with a "your driver races soon" alert (PR #207).
+- **Warm-up flag** and a **Drivers' Meeting** read-out (PRs #195, #209 to #211).
+- **Race Analytics** with a head-to-head grid and gaps in car lengths (PR #188), and a **championship hub** with "Can they still win?" (PR #185).
+
+**Where HeatCaller was behind or unproven on 10 Nov, and where each stands now:**
+
+1. **No fixed-interval auto-advance or auto-start between heats.** *Closed 11 Nov (PR #144).* Auto start is on by default with a 2:30 gap, Hold / +1 min / Start now, and a director "Skip in this race (DNS)".
+2. **Format breadth.** LiveTime has ladder mains (A–L), double/triple A-mains, HRQF, Reedy, Super Pole, and "best N of M" on any seeding. *Mostly closed.* Ladder mains, best N of M and staggered starts (1 to 120 s) were already there. Points qualifying, HRQF heads-up and double/triple A-mains came 11 Nov (PRs #149, #150). Sanctioning presets for ROAR, BRCA, EFRA, NZRCA, IFMAR, Reedy Race and PN Racing came 12 Nov. *Still missing:* Super Pole, the Reedy Invitational head-to-head format, and lower mains in legs.
+3. **Spectator reach.** LiveRC is a national destination: racers already have accounts and follow other tracks. HeatCaller's relay pages are per club. *Still open.* A cross-club index is a proposal only (`plans/cross-club-index-proposal.md`, 12 Nov). Phones gained a clubs list on 14 Nov (PR #198).
+4. **Entry import** from RCSignup, the de facto US pre-entry system, is a one-click import in LiveTime. *Closed 11 Nov (PR #149).* "Import Entries..." reads RCSignup exports, a pasted LiveRC entry list, a LiveTime driver export or any CSV, and matches by transponder then name. It does not read LiveTime's database directly.
+5. **Backup timing PC.** LiveTime's Parent/Child mode mirrors the PC. *Mostly closed 11 Nov (PR #149).* A standby PC copies the timing PC every 15 seconds and can Take Over by hand. The copy is one-way: there is no live mirror of a race in progress and no automatic failover.
+6. **No measured proof.** *Half closed.* Night pace is measured in the event report (PR #140, 11 Nov). The head-to-head demo script is written (`plans/head-to-head-demo-script.md`) but has not been run against LiveTime yet.
 
 ---
 
 ## 7. Plan: make it demonstrably better
 
 The goal is something a club can *see*, not a feature list. Two parts: measure the night, then attack the gaps that cost the most minutes.
+
+### Where the plan stands (15 Nov 2026, checked in code)
+
+Almost all of it was built and merged between 11 and 13 Nov 2026. The steps below are the original plan, kept as written.
+
+| Plan item | Status | What exists now |
+|---|---|---|
+| Night pace measurement | Built (#140) | "Night pace" in the event report: green to green, longest gaps with cause, on-track share, rounds against plan |
+| Timed head-to-head demo | Script only | `plans/head-to-head-demo-script.md`; not yet run against LiveTime |
+| Keep the night moving | Built (#144) | Auto start, Hold / +1 min / Start now, director "Skip in this race (DNS)" |
+| Rest-time guard | Built (#144) | "Races off between a driver's races" (0 to 3); manual moves warn first |
+| "You're up in 5 minutes" push | Built (#144, #169) | To drivers, and to marshals with their post |
+| Mains preview | Built (#146) | "Build the Finals from Qualifying..." shows each main, why each driver is there, and bump-up places |
+| Disputes window | Built (#146, #150) | "Provisional until 20:42" on every screen. It warns but does not block building the mains |
+| Late entry without reposting | Built (#146) | "Add a Late Entry..." puts the driver in the smallest unrun heat |
+| Imports and LiveTime guide | Built (#149) | RCSignup, LiveRC entry list, LiveTime driver export, CSV; `website/docs/getting-started/switching-from-livetime.md` |
+| Offline first, said loudly | Partly | In the app and the user guide; not on the docs home page |
+| Warm standby PC | Built (#149) | One-way copy every 15 s, manual Take Over; no live mirror |
+| Cross-club results index | Not built | Proposal only (`plans/cross-club-index-proposal.md`) |
+| Curfew planner | Built (#141) | "Out of the venue by:", finish estimate, fixes with minutes saved |
+| Rain / stoppage plan | Built (#141) | "We're Done After This Round..." |
+| Decoder-down fallback | Built (#149, #150) | "Score by Hand" tap grid, also from the phone remote; results marked hand-scored |
+| Mixed-class heats | Built (#149, #175) | "Run Together...", scored per class |
+| Money at the desk | Built (#147, #151) | Fees, extra-class price, comps, paid/owing, cash and card totals (tracking only) |
+| Close-the-night checklist | Built (#141, #160) | "Close the Night" window, club can add lines |
+| Car broken / need 5 minutes | Built (#144) | "Need 5 minutes" and "Skip my race" from the phone |
+| Clock time for my heat | Built (#150) | "about 20:42" on phones, sheets, Big Screen and program |
+| Seed Q1 by pace | Built (#146) | "First round seeded:" by recent pace (default), alphabetical, random, HRQF, race number |
+| Marshal swaps | Built (#147, #176) | "Cover my post": a friend accepts, the desk approves or it's automatic |
+| "Leader behind you" in your ear | Built (#149) | A clip in the phone lap voice |
+| Mid-pack personal lines | Built (#149) | "0.31s quicker than your Heat 1" and similar, on the night page, report card and email |
+| Formats from the Step 3 audit | Mostly built (#149, #150, 12 Nov presets) | Missing: Super Pole, Reedy Invitational, lower mains in legs |
 
 ### Step 1: Measure (so "better" is a number)
 - **Night pace on Next Steps and in the event report:**
@@ -289,7 +338,8 @@ These were found by reading the guide as a veteran driver would. The guide alrea
 
 - The LiveTime desktop frames come from their own training videos. The Schedule, seeding and race frames are v4.6 (2026). The Time Table frames are from an old v0.9 video; the feature is still current according to the release notes and training list.
 - I couldn't read forum threads in full; RCTech returned 403. Pain points come from search excerpts plus full LiveRC and RC Car Action columns.
-- "HeatCaller has no auto-start between heats" comes from reading the user guide, not the code. Check it before planning around it.
+- The original 10 Nov claims about HeatCaller's gaps came from reading the user guide, not the code. The 15 Nov status updates in sections 1, 6 and 7 were checked against the code.
+- LiveRC's member-only video player was not seen; whether it can jump to a lap is still unknown.
 - Prices are from public pages on 10 Nov 2026. RCM and Everlaps don't publish prices.
 
 ## Sources
@@ -304,4 +354,5 @@ These were found by reading the guide as a veteran driver would. The guide alrea
 - RC Scoring Pro: https://rcscoringpro.com/about-rcsp2/
 - RCGTiming: https://rcgarage.info · https://rcgtiming.com/page/timing-faq
 - ZRound: https://www.zround.com
+- Race video (15 Nov 2026): the LiveRC news posts and pages linked in section 3e; https://github.com/dutchdronesquad/rh-youtube-chapters; https://docs.skateresults.app/features/livestream/export-chapters; https://support-centre.racelogic.co.uk/motorsport/software/ct3/ug/view-layout/; https://patents.google.com/patent/US10923157B2/en; https://patents.google.com/patent/US20210134329A1/en
 - RCTech threads via search excerpts: "many bigger races vs club racing", "timing software recommendations", transponder-missing-laps threads
