@@ -191,7 +191,7 @@ internal sealed class CallOffForm : Form
             Text = $"The next race night, {NextNight.When(night.Day)}, shows as called off on the phones' Home page, with your words. "
                    + "Drivers can't say they're coming to it any more.",
             AutoSize = true,
-            MaximumSize = new Size(460, 0),
+            MaximumSize = new Size(UiLayout.AtTextSize(460), 0),
         };
 
         _txtWords.Text = string.IsNullOrWhiteSpace(night.OffText)
@@ -203,7 +203,7 @@ internal sealed class CallOffForm : Form
             : $"Email the {regulars} regulars with an email address (raced in the last 8 weeks, or said they're coming)";
         _chkEmail.Checked = regulars > 0 && mailProblem is null;
         _chkEmail.Enabled = regulars > 0 && mailProblem is null;
-        _chkEmail.MaximumSize = new Size(460, 0);
+        _chkEmail.MaximumSize = new Size(UiLayout.AtTextSize(460), 0);
 
         // Setup plan step 7: a push too, to phones signed up for alerts.
         _chkPush.Text = canPush
@@ -211,13 +211,13 @@ internal sealed class CallOffForm : Form
             : "Send a push (needs the club website switched on)";
         _chkPush.Checked = canPush;
         _chkPush.Enabled = canPush;
-        _chkPush.MaximumSize = new Size(460, 0);
+        _chkPush.MaximumSize = new Size(UiLayout.AtTextSize(460), 0);
 
         var lblMail = new Label
         {
             Text = mailProblem is null ? string.Empty : $"Email can't go: {mailProblem}",
             AutoSize = true,
-            MaximumSize = new Size(460, 0),
+            MaximumSize = new Size(UiLayout.AtTextSize(460), 0),
             ForeColor = AppTheme.Warning,
             Visible = mailProblem is not null,
         };
@@ -225,18 +225,32 @@ internal sealed class CallOffForm : Form
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
         var btnOff = new Button { Text = "Call It Off", DialogResult = DialogResult.OK, AutoSize = true };
 
+        // THE LOOK (18 Nov 2026, dialog pass): two cards in the order the
+        // parts always ran, so Tab goes the same way - the club's words,
+        // what happens as their line over the box, the box across the card
+        // and taking the height the window has spare (it was left at a
+        // TextBox's own narrow width); then who is told. Call It Off in the
+        // app's colour. Wider and taller by the cards' edges and captions,
+        // so the words wrap where they did.
+        var wordsCard = new Section("Your words");
+        wordsCard.Add(lblHow, gapBelow: UiLayout.RowGap);
+        wordsCard.AddFill(_txtWords, () => UiLayout.AtTextSize(70), gapBelow: 0);
+
+        var tellCard = new Section("Who is told");
+        tellCard.Add(_chkPush, stretch: false, gapBelow: 0);
+        tellCard.Add(_chkEmail, stretch: false, gapBelow: lblMail.Visible ? UiLayout.HintGap : 0);
+        tellCard.Add(lblMail, stretch: false, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblHow, stretch: false, gapBelow: UiLayout.RowGap);
-        page.Add(_txtWords, stretch: false, gapBelow: UiLayout.RowGap);
-        page.Add(_chkPush, stretch: false, gapBelow: 0);
-        page.Add(_chkEmail, stretch: false, gapBelow: 0);
-        page.Add(lblMail, stretch: false, gapBelow: UiLayout.RowGap);
+        page.AddFill(wordsCard, wordsCard.LeastHeight, gapBelow: UiLayout.RowGap);
+        page.Add(tellCard, gapBelow: UiLayout.SectionGap);
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnOff), gapBelow: 0);
 
         Controls.Add(page);
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
-        DialogFit.Keep(this, page, width: 520, height: 340);
+        AppTheme.StyleButton(btnOff, AppTheme.ButtonKind.Primary);
+        DialogFit.Keep(this, page, width: 520 + Section.Inset.Horizontal, height: 340 + 80);
     }
 }

@@ -280,9 +280,10 @@ internal sealed class CarForm : Form
 /// back, and a name whose file had been deleted would put back a broken
 /// picture. A few kilobytes is the cheaper mistake.
 ///
-/// On the layout pieces (DialogFit): what the window is for across the top;
-/// the list of photos down the left at its own width, beside the preview,
-/// which takes the width left and the height; and under them the buttons
+/// On the layout pieces (DialogFit): one card, what happens to a picture as
+/// its hint line, and in it the list of photos down the left at its own
+/// width, beside the preview, which takes the width left and the height;
+/// and under the card the buttons
 /// that change the photos on the left, Done and Cancel against the
 /// right-hand edge, all on one line - the window made wide enough for it at
 /// the text size in use. It opens at the size it had and can be made
@@ -296,8 +297,8 @@ internal sealed class CarPhotosForm : Form
     /// <summary>How wide the window is inside its frame at the normal text size, at the least - wider when its buttons need more to stay on one line.</summary>
     private const int DialogWidth = 652;
 
-    /// <summary>How tall it opens inside its frame at the normal text size - the height it had.</summary>
-    private const int DialogHeight = 370;
+    /// <summary>How tall it opens inside its frame at the normal text size - the 370 it had, and the card's caption and edges, so the list and the preview keep their height.</summary>
+    private const int DialogHeight = 420;
 
     /// <summary>The list's width at the normal text size.</summary>
     private const int ListWidth = 220;
@@ -386,9 +387,15 @@ internal sealed class CarPhotosForm : Form
         btnDone.TabIndex = 0;
         btnCancel.TabIndex = 1;
 
+        // THE LOOK (18 Nov 2026, dialog jazz-up): the list and the preview
+        // in one card, what happens to a picture as its hint line, the two
+        // taking the height the card has.
+        var card = new Section("Photos of this car");
+        card.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        card.AddFill(photos, () => photos.LeastHeight(Math.Max(1, photos.Width)), gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.AddFill(photos, photos.LeastHeight, gapBelow: UiLayout.RowGap);
+        page.AddFill(card, card.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(buttons, gapBelow: 0);
 
         Controls.Add(page);
@@ -404,8 +411,11 @@ internal sealed class CarPhotosForm : Form
 
         // Done keeps what was done here, and is this window's own button: in
         // the app's colour, as Save and OK are in every other window. The
-        // theme goes by the caption, and "Done" is not one it knows.
+        // theme goes by the caption, and "Done" is not one it knows. Add a
+        // Photo is one it knows as a main button, which left two orange
+        // buttons side by side: plain now, so Done is the one.
         AppTheme.StyleButton(btnDone, AppTheme.ButtonKind.Primary);
+        AppTheme.StyleButton(btnAdd, AppTheme.ButtonKind.Secondary);
 
         Reload();
 
@@ -557,8 +567,9 @@ internal sealed class CarPhotosForm : Form
 /// so it ends when the night does and there is no state anybody has to
 /// remember to clear. See Car.DriverFor.
 ///
-/// On the layout pieces (DialogFit): whose car it is and what lending it
-/// means across the top, who is taking it under that, and Save and Cancel at
+/// On the layout pieces (DialogFit): one card, whose car it is and what
+/// lending it means as its hint line and who is taking it under that, and
+/// Save and Cancel at
 /// the foot; as tall as that, and wider than it was made when a driver's name
 /// needs the drop-down wider. It used to be placed in pixels in a window
 /// 452px wide: the caption in a column 180px wide and the drop-down the 232px
@@ -638,9 +649,14 @@ internal sealed class LendCarForm : Form
         var fields = new FieldGrid();
         var lblTo = fields.AddRow("Lend it to:", _cmbTo, stretch: true);
 
+        // THE LOOK (18 Nov 2026, dialog jazz-up): who takes it in one card,
+        // whose car it is and how long the loan lasts as its hint line.
+        var card = new Section("Who takes it");
+        card.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        card.Add(fields, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.Add(fields);
+        page.Add(card, gapBelow: UiLayout.SectionGap);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // and Tab still reaches Save first: the bar takes them right to
@@ -673,9 +689,10 @@ internal sealed class LendCarForm : Form
         var fieldColumn = Math.Max(UiLayout.AtTextSize(FieldWidth), Pieces.PickerWidth(_cmbTo, ref toWidth));
         var captionColumn = lblTo.GetPreferredSize(Size.Empty).Width + lblTo.Margin.Horizontal;
 
+        // The card's edges on top of both, so the drop-down keeps its width.
         var width = Math.Max(
-            UiLayout.AtTextSize(DialogWidth),
-            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.PageRight);
+            UiLayout.AtTextSize(DialogWidth) + Section.Inset.Horizontal,
+            UiLayout.PageLeft + Section.Inset.Horizontal + captionColumn + fieldColumn + UiLayout.PageRight);
 
         DialogFit.Keep(this, page, width, widthMeasured: true);
     }
@@ -690,10 +707,10 @@ internal sealed class LendCarForm : Form
 /// deleting is offered first, because a chassis nobody runs any more is
 /// still what last season's cars were.
 ///
-/// On the layout pieces (DialogFit): what the list is across the top; the
-/// chassis taking the height and the width the fields leave, and down the
-/// right the fields for the one selected, each under its caption, with the
-/// hint under the setup sheet; and under them the buttons that change the
+/// On the layout pieces (DialogFit): the chassis in a card, what the list is
+/// as its hint line, taking the height and the width the other card leaves;
+/// down the right a card for the one selected, each field under its
+/// caption, with the hint under the setup sheet; and under them the buttons that change the
 /// list on the left, Close against the right-hand edge, all on one line -
 /// the window made wide enough for it at the text size in use. It opens at
 /// the height it had and can be made bigger, the list taking the room. It
@@ -707,8 +724,8 @@ internal sealed class ChassisTypesForm : Form
     /// <summary>How wide the window is inside its frame at the normal text size, at the least - wider when its buttons or its fields need more.</summary>
     private const int DialogWidth = 632;
 
-    /// <summary>How tall it opens inside its frame at the normal text size - the height it had.</summary>
-    private const int DialogHeight = 356;
+    /// <summary>How tall it opens inside its frame at the normal text size - the 356 it had, and the cards' captions and edges, so the list keeps its height.</summary>
+    private const int DialogHeight = 436;
 
     /// <summary>The list's width at the normal text size, at the least - it takes whatever the fields leave.</summary>
     private const int ListWidth = 240;
@@ -769,9 +786,11 @@ internal sealed class ChassisTypesForm : Form
         // With every one deleted, the list says so, and what makes one.
         EmptyNote.For(_list, () => "No chassis types. Add makes one.");
 
+        // As tall as their text wrapped to the card's width: a card asks.
         Label Caption(string text) => new()
         {
             Text = text,
+            AutoSize = true,
             Font = AppTheme.SmallFont,
             ForeColor = AppTheme.TextMuted,
         };
@@ -806,15 +825,31 @@ internal sealed class ChassisTypesForm : Form
         // in the column keeps the height it is given.
         _fieldsWidth = UiLayout.AtTextSize(FieldsWidth);
 
-        var band = new Beside(() => _fieldsWidth);
-        band.AddFill(_list, _ => LeastRows * _list.ItemHeight + 4);
-        band.AddSide(lblName, gapBelow: UiLayout.HintGap);
-        band.AddSide(_txtName);
-        band.AddSide(lblMaker, gapBelow: UiLayout.HintGap);
-        band.AddSide(_txtMaker);
-        band.AddSide(lblSheet, gapBelow: UiLayout.HintGap);
-        band.AddSide(_cmbSheet, gapBelow: UiLayout.HintGap);
-        band.AddSide(lblSheetHint, gapBelow: 0);
+        // THE LOOK (18 Nov 2026, dialog jazz-up): the list in a card with
+        // what it is as its hint line, and the one picked in a card of its
+        // own down the right, the fields the width SizeFields works out
+        // inside the card's edges.
+        var listCard = new Section("Chassis types");
+        listCard.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        listCard.AddFill(_list, () => LeastRows * _list.ItemHeight + 4, gapBelow: 0);
+
+        var fieldsCard = new Section("Selected chassis");
+        fieldsCard.Add(lblName, gapBelow: UiLayout.HintGap);
+        fieldsCard.Add(_txtName);
+        fieldsCard.Add(lblMaker, gapBelow: UiLayout.HintGap);
+        fieldsCard.Add(_txtMaker);
+        fieldsCard.Add(lblSheet, gapBelow: UiLayout.HintGap);
+        fieldsCard.Add(_cmbSheet, gapBelow: UiLayout.HintGap);
+        fieldsCard.Add(lblSheetHint, gapBelow: 0);
+
+        // The drop-down's row as tall as the drop-down is: it said less than
+        // it stood at the larger text sizes, and the hint under it ran into
+        // it (layout test, 18 Nov 2026).
+        Pieces.KeepHeightTold(_cmbSheet);
+
+        var band = new Beside(() => _fieldsWidth + Section.Inset.Horizontal);
+        band.AddFill(listCard, listCard.LeastHeight);
+        band.AddSideCard(fieldsCard, gapBelow: 0);
 
         // What changes the list on the left, Close against the right-hand
         // edge, as they were.
@@ -823,7 +858,6 @@ internal sealed class ChassisTypesForm : Form
             new ButtonBar(alignRight: true).With(btnClose));
 
         var page = new FillPage();
-        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
         page.AddFill(band, band.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(buttons, gapBelow: 0);
 
@@ -841,44 +875,46 @@ internal sealed class ChassisTypesForm : Form
         // filled here, and its longest choice can widen the column.
         Reload();
 
-        SizeFields(new[] { lblName, lblMaker, lblSheet, lblSheetHint });
+        SizeFields();
+
+        // Save Changes is what Enter presses, and the window's own button:
+        // the one in the app's colour. The theme painted Add so as well, by
+        // its caption - plain now, beside it.
+        AppTheme.StyleButton(_btnSave, AppTheme.ButtonKind.Primary);
+        AppTheme.StyleButton(btnAdd, AppTheme.ButtonKind.Secondary);
 
         // As wide as it was at the normal text size, at the size in use - or
         // wider when the five buttons need more to stay on one line, as they
         // do at every text size (about 814px of them at the normal one), or
-        // the list and the fields beside it need more than that. Measured
-        // as the row measures itself on one line, in the faces the theme
-        // pass left the buttons in.
+        // the list and the fields beside it, each in its card, need more
+        // than that. Measured as the row measures itself on one line, in the
+        // faces the theme pass left the buttons in.
         var width = new[]
         {
             UiLayout.AtTextSize(DialogWidth),
             UiLayout.PageLeft + buttons.GetPreferredSize(Size.Empty).Width + UiLayout.PageRight,
-            UiLayout.PageLeft + UiLayout.AtTextSize(ListWidth) + UiLayout.RowGap + _fieldsWidth + UiLayout.PageRight,
+            UiLayout.PageLeft + Section.Inset.Horizontal + UiLayout.AtTextSize(ListWidth) + UiLayout.RowGap
+                + Section.Inset.Horizontal + _fieldsWidth + UiLayout.PageRight,
         }.Max();
 
         DialogFit.Keep(this, page, width, height: DialogHeight, widthMeasured: true);
     }
 
     /// <summary>
-    /// The fields' column and what is in it, in the faces the theme pass left
-    /// them in: as wide as it was at the normal text size, at the size in
-    /// use, or as the setup sheet drop-down's longest choice if that is more
-    /// - measured once the drop-down is filled, which LoadSelected does again
-    /// with the same sheets whenever a chassis is picked. The captions and
-    /// the hint each as tall as their text wrapped to it. Once: the dialog
-    /// is built at the text size in use and is not kept in step with a
-    /// change made while it is up (see DialogFit).
+    /// The fields' width, in the faces the theme pass left them in: as wide
+    /// as it was at the normal text size, at the size in use, or as the
+    /// setup sheet drop-down's longest choice if that is more - measured once
+    /// the drop-down is filled, which LoadSelected does again with the same
+    /// sheets whenever a chassis is picked. Their card is that and its edges;
+    /// the captions and the hint in it wrap to it themselves. Once: the
+    /// dialog is built at the text size in use and is not kept in step with
+    /// a change made while it is up (see DialogFit).
     /// </summary>
-    private void SizeFields(IEnumerable<Label> labels)
+    private void SizeFields()
     {
         (Font Font, int Count, int Width)? sheetWidth = null;
 
         _fieldsWidth = Math.Max(UiLayout.AtTextSize(FieldsWidth), Pieces.PickerWidth(_cmbSheet, ref sheetWidth));
-
-        foreach (var label in labels)
-        {
-            label.Height = label.GetPreferredSize(new Size(_fieldsWidth, 0)).Height;
-        }
     }
 
     // keepId names the chassis to leave selected. Save and Retire must pass
@@ -1052,8 +1088,8 @@ internal sealed class ChassisTypesForm : Form
 /// Every change is written through the stores before this closes, so the
 /// wall behind it just re-reads. Nothing is handed back.
 ///
-/// On the layout pieces (DialogFit): a strip across the top for the car -
-/// a thumbnail of its photo, and beside it the heading, the facts on a line
+/// On the layout pieces (DialogFit): a header card across the top for the
+/// car - a thumbnail of its photo, and beside it the heading, the facts on a line
 /// or two, the notes, and the car's three buttons: Edit, Photos and More,
 /// whose menu holds Lend Out, Transfer, Retire and Delete Car. Then the
 /// setups' heading with Log a Setup against the right-hand edge, the setups
@@ -1275,10 +1311,17 @@ internal sealed class CarDetailForm : Form
         btnPhotos.TabIndex = 1;
         btnMore.TabIndex = 2;
 
+        // THE LOOK (18 Nov 2026, dialog jazz-up): the car in a header card,
+        // as a driver's profile opens on one - the setups' own cards under
+        // it. The gap under it a row's rather than a section's, so the
+        // setups lose only a little height to the card's edges at 1280x720.
+        var header = new Section();
+        header.Add(band, gapBelow: 0);
+
         // The setups take the height; one card's first lines stay before the
         // window scrolls instead.
         var page = new FillPage();
-        page.Add(band, gapBelow: UiLayout.SectionGap);
+        page.Add(header, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
         page.Add(setupsHeading, gapBelow: UiLayout.RowGap);
         page.AddFill(_timeline, _ => SetupTimeline.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar(alignRight: true).With(btnClose), gapBelow: 0);

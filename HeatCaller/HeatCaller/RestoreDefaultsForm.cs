@@ -144,8 +144,8 @@ public sealed class RestoreDefaultsForm : Form
 /// </summary>
 public sealed class PutBackSettingsForm : Form
 {
-    /// <summary>How wide the window is inside its frame at the normal text size.</summary>
-    private const int DialogWidth = 460;
+    /// <summary>How wide the window is inside its frame at the normal text size: the 460 it was, and the card's inset round the list (18 Nov 2026).</summary>
+    private const int DialogWidth = 460 + 32;
 
     private readonly ListBox _lstCopies = new();
 
@@ -165,13 +165,27 @@ public sealed class PutBackSettingsForm : Form
 
         page.Add(new Label
         {
+            Text = "Put back earlier settings",
+            AutoSize = true,
+            Font = AppTheme.HeadingFont,
+        }, gapBelow: UiLayout.LabelGap);
+
+        // 18 Nov 2026, the dialog look, as RestoreDefaultsForm: a heading
+        // over one card - what the copies are as its hint line, the list
+        // taking the height as it did, and the race line. The list, its
+        // order and the gating as before.
+        var card = new Section("Saved copies");
+
+        card.Add(new Label
+        {
             Text = copies.Count == 0
                 ? "There are no saved settings yet. A copy is saved each time default settings are restored."
                 : "Each is the settings as they were just before a restore. The one you pick goes back over the settings now - "
                   + "which are saved as a copy first - and HeatCaller restarts.",
             AutoSize = true,
-            Font = AppTheme.BodyFont,
-        });
+            Font = AppTheme.SmallFont,
+            ForeColor = AppTheme.TextMuted,
+        }, gapBelow: UiLayout.RowGap);
 
         foreach (var copy in copies)
         {
@@ -186,18 +200,22 @@ public sealed class PutBackSettingsForm : Form
             _lstCopies.SelectedIndex = 0;
         }
 
-        page.AddFill(_lstCopies, _ => _lstCopies.ItemHeight * 5 + 4);
+        // At least the five rows it always had; the card takes the page's
+        // height above the buttons, and the list what the card has left.
+        card.AddFill(_lstCopies, () => _lstCopies.ItemHeight * 5 + 4, gapBelow: raceRunning ? UiLayout.RowGap : 0);
 
         if (raceRunning)
         {
-            page.Add(new Label
+            card.Add(new Label
             {
                 Text = SettingsRestore.RaceLine,
                 AutoSize = true,
                 ForeColor = AppTheme.Warning,
                 Font = AppTheme.BoldFont,
-            });
+            }, gapBelow: 0);
         }
+
+        page.AddFill(card, width => card.LeastHeight(width));
 
         var btnPutBack = new Button { Text = "Put Back", Font = AppTheme.BodyFont, DialogResult = DialogResult.OK, Enabled = copies.Count > 0 && !raceRunning };
         var btnCancel = new Button { Text = "Cancel", Font = AppTheme.BodyFont, DialogResult = DialogResult.Cancel };
@@ -211,6 +229,9 @@ public sealed class PutBackSettingsForm : Form
         Load += (_, _) => ActiveControl = copies.Count > 0 ? _lstCopies : btnCancel;
 
         AppTheme.ApplyRecursively(this);
+
+        // The way on, in the primary colour, as Restore Defaults is; greyed as before.
+        AppTheme.StyleButton(btnPutBack, AppTheme.ButtonKind.Primary);
 
         DialogFit.Keep(this, page, UiLayout.AtTextSize(DialogWidth));
     }

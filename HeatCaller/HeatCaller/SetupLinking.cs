@@ -243,6 +243,10 @@ internal sealed class PickCarForm : Form
 /// belonged to cars and not certain enough to link by themselves, or left
 /// behind by a car since deleted - to link by hand or delete. Opened from
 /// the Garage page.
+///
+/// On the layout pieces (DialogFit): one card, why they have no car as its
+/// hint line, the setups taking the height and how many under them; Link to
+/// Car, Delete and Close at the foot.
 /// </summary>
 internal sealed class UnlinkedSetupsForm : Form
 {
@@ -272,6 +276,8 @@ internal sealed class UnlinkedSetupsForm : Form
             Text = "These setups aren't linked to a car in the garage - logged before setups belonged to cars, or for a "
                    + "car since deleted. Link each to its car to show it there and on its driver's Setups tab.",
             AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
         };
 
         _list.View = View.Details;
@@ -290,10 +296,16 @@ internal sealed class UnlinkedSetupsForm : Form
 
         var btnClose = new Button { Text = "Close", DialogResult = DialogResult.OK };
 
+        // THE LOOK (18 Nov 2026, dialog jazz-up): the setups in one card,
+        // why they have no car as its hint line and the count under the
+        // list; Link to Car in the app's colour.
+        var card = new Section("Setups to link");
+        card.Add(lblWhat, gapBelow: UiLayout.RowGap);
+        card.AddFill(_list, () => UiLayout.AtTextSize(180), gapBelow: UiLayout.HintGap);
+        card.Add(_lblCount, stretch: false, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblWhat, stretch: false, gapBelow: UiLayout.RowGap);
-        page.AddFill(_list, _ => UiLayout.AtTextSize(180), gapBelow: UiLayout.HintGap);
-        page.Add(_lblCount, stretch: false, gapBelow: UiLayout.RowGap);
+        page.AddFill(card, card.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(new SplitBar(new ButtonBar().With(_btnLink, _btnDelete), new ButtonBar(alignRight: true).With(btnClose)), gapBelow: 0);
 
         Controls.Add(page);
@@ -301,9 +313,14 @@ internal sealed class UnlinkedSetupsForm : Form
 
         AppTheme.ApplyRecursively(this);
         _lblCount.ForeColor = AppTheme.TextMuted;
+        _lblCount.Font = AppTheme.SmallFont;
+        AppTheme.StyleButton(_btnLink, AppTheme.ButtonKind.Primary);
 
         Fill();
-        DialogFit.Keep(this, page, width: 640, height: 480);
+
+        // Wider and taller than the 640x480 it was made at by the card's
+        // edges and caption, so the list keeps its size.
+        DialogFit.Keep(this, page, width: 672, height: 500);
     }
 
     private void Fill()

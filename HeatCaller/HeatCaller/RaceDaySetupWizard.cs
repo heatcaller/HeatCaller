@@ -2429,8 +2429,8 @@ internal sealed partial class RaceDaySetupWizard : Form
 /// </summary>
 internal sealed class QuickClassForm : Form
 {
-    /// <summary>How wide it is inside its frame at the normal text size: a 460px column - it was 360 until it asked for the race length and finish (12 Nov 2026, setup plan step 8), whose captions and picker need the room - and the page's margins.</summary>
-    private const int DialogWidth = 460 + UiLayout.PageLeft + UiLayout.PageRight;
+    /// <summary>How wide it is inside its frame at the normal text size: a 460px column - it was 360 until it asked for the race length and finish (12 Nov 2026, setup plan step 8), whose captions and picker need the room - the card's inset round it (18 Nov 2026) and the page's margins.</summary>
+    private const int DialogWidth = 460 + 32 + UiLayout.PageLeft + UiLayout.PageRight;
 
     private readonly TextBox _txtName = new();
     private readonly Label _lblProblem = new();
@@ -2485,12 +2485,18 @@ internal sealed class QuickClassForm : Form
 
         ok.Click += (_, _) => TryAccept();
 
+        // 18 Nov 2026, the dialog look, as the wizard's own cards: the fields
+        // in one card, what it is for as the hint line under its caption.
+        // Every field, check and tab stop as before.
+        var card = new Section("New class");
+        card.Add(lblIntro, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
+        card.Add(lblName, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(nameField, gapBelow: UiLayout.RowGap);
+        var lengthGrid = card.Add(_length.Grid(), gapBelow: UiLayout.RowGap);
+        card.Add(_lblProblem, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblIntro, gapBelow: UiLayout.SectionGap - UiLayout.HintGap);
-        page.Add(lblName, stretch: false, gapBelow: UiLayout.HintGap);
-        page.Add(nameField, gapBelow: UiLayout.RowGap);
-        var lengthGrid = page.Add(_length.Grid(), gapBelow: UiLayout.RowGap);
-        page.Add(_lblProblem, gapBelow: UiLayout.RowGap);
+        page.Add(card);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // the bar is handed Cancel first, as its first button goes furthest
@@ -2554,8 +2560,8 @@ internal sealed class QuickClassForm : Form
 /// </summary>
 internal sealed class QuickDriverForm : Form
 {
-    /// <summary>How wide it is inside its frame at the normal text size: the 360px column it was made with, and the page's margins.</summary>
-    private const int DialogWidth = 360 + UiLayout.PageLeft + UiLayout.PageRight;
+    /// <summary>How wide it is inside its frame at the normal text size: the 360px column it was made with, the card's inset round it (18 Nov 2026), and the page's margins.</summary>
+    private const int DialogWidth = 360 + 32 + UiLayout.PageLeft + UiLayout.PageRight;
 
     /// <summary>The transponder box's width at the normal text size.</summary>
     private const int TransponderWidth = 240;
@@ -2715,19 +2721,25 @@ internal sealed class QuickDriverForm : Form
 
         // Each field under its caption: the name across the page, the
         // transponder narrower, the classes wrapping across the page.
+        // 18 Nov 2026, the dialog look, as the wizard's own cards: the fields
+        // in one card, what it is for as the hint line under its caption.
+        // Every field, check and tab stop as before.
+        var card = new Section("New driver");
+        card.Add(lblIntro, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
+
+        card.Add(lblName, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(nameField, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
+
+        card.Add(lblTransponder, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(transponderField, stretch: false, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
+
+        card.Add(lblClass, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(classes_, gapBelow: UiLayout.RowGap);
+
+        card.Add(_lblProblem, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblIntro, gapBelow: UiLayout.SectionGap - UiLayout.HintGap);
-
-        page.Add(lblName, stretch: false, gapBelow: UiLayout.HintGap);
-        page.Add(nameField, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
-
-        page.Add(lblTransponder, stretch: false, gapBelow: UiLayout.HintGap);
-        page.Add(transponderField, stretch: false, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
-
-        page.Add(lblClass, stretch: false, gapBelow: UiLayout.HintGap);
-        page.Add(classes_, gapBelow: UiLayout.RowGap);
-
-        page.Add(_lblProblem, gapBelow: UiLayout.RowGap);
+        page.Add(card);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // the bar is handed Cancel first, as its first button goes furthest
