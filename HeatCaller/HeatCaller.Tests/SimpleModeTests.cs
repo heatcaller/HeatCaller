@@ -505,6 +505,11 @@ public sealed class SimpleModeTests : IDisposable
         "AdvancedModeForm.cs|Before you turn it on",
         "RestoreDefaultsForm.cs|What goes back",
 
+        // The manager PIN and Put back earlier settings (ManagerPinForm,
+        // PutBackSettingsForm; 18 Nov 2026, dialog pass 8).
+        "AdvancedModeForm.cs|To turn on Advanced mode",
+        "RestoreDefaultsForm.cs|Saved copies",
+
         // Themes, Sponsors, Local Screens, Club Website.
         "LooksControl.cs|Looks", "LooksControl.cs|Club logo", "LooksControl.cs|Appearance",
         "LooksControl.cs|Crowd screens", "AchievementsControl.cs|Whose achievements", "GarageControl.cs|Which cars", "GarageControl.cs|Garage",
@@ -591,6 +596,10 @@ public sealed class SimpleModeTests : IDisposable
         "RaceDaySetupWizard.cs|Sound", "RaceDaySetupWizard.cs|Classes racing", "RaceDaySetupWizard.cs|How they race",
         "RaceDaySetupWizard.cs|Race format", "RaceDaySetupWizard.cs|Who's here",
         "RaceDaySetupWizard.cs|Ready to build", "RaceDaySetupWizard.cs|Where things stand",
+
+        // Set Up Tonight's Add Class and Add Driver windows (QuickClassForm,
+        // QuickDriverForm; 18 Nov 2026, dialog pass 8).
+        "RaceDaySetupWizard.cs|New class", "RaceDaySetupWizard.cs|New driver",
         "RentalTransponderForms.cs|Who's taking it", "RentalTransponderForms.cs|Deposit",
 
         // The class editor's and the time penalty's cards (18 Nov 2026).
