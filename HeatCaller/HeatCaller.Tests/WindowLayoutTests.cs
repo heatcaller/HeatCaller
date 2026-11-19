@@ -160,6 +160,7 @@ internal static partial class WindowCatalog
         all.AddRange(GarageWindows());
         all.AddRange(CarTransferWindows());
         all.AddRange(ChassisSheetWindows());
+        all.AddRange(UnlinkedSetupsWindows());
         all.AddRange(SetupWindows());
         all.AddRange(BatteryWindows());
 

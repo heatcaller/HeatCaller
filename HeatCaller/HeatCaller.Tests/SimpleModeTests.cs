@@ -555,6 +555,13 @@ public sealed class SimpleModeTests : IDisposable
         // 18 Nov 2026, dialog pass 8).
         "BatteryForms.cs|The pack", "BatteryForms.cs|Notes", "BatteryForms.cs|Who gets it",
 
+        // The rest of the garage's popups in cards (18 Nov 2026, dialog jazz-up, eighth batch):
+        // Photos, Lend a Car, Chassis Types, Chassis Setup Sheets and Setups Without a Car.
+        // Car Details' header card has no caption.
+        "GarageForms.cs|Photos of this car", "GarageForms.cs|Who takes it", "GarageForms.cs|Chassis types",
+        "GarageForms.cs|Selected chassis", "ChassisTemplateForm.cs|The club's setup sheets",
+        "SetupLinking.cs|Setups to link",
+
         // Checked In Late's card (LateArrivalsForm, 18 Nov 2026, dialog jazz-up). The lap
         // breakdown window (LapDetailWindow) is painted, with no Section.
         "RaceProgramControl.LateArrivals.cs|Add to the heats",
