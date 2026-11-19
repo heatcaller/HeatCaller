@@ -801,17 +801,8 @@ internal sealed class TemplateDaysForm : Form
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterParent;
 
-        var lblHow = new Label
-        {
-            Text = "The nights this template is for. On one of them, with no race day open, Next Steps offers to start tonight from it. "
-                   + "A date wins over a day of the week, so a monthly points round can fall on a club night's Tuesday.",
-            AutoSize = true,
-            MaximumSize = new System.Drawing.Size(460, 0),
-            ForeColor = AppTheme.TextMuted,
-        };
-
         var format = System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat;
-        var week = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = new System.Drawing.Size(460, 0) };
+        var week = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = new System.Drawing.Size(460, 0), Tag = AppTheme.KeepBackColor };
 
         foreach (var day in new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday })
         {
@@ -853,13 +844,27 @@ internal sealed class TemplateDaysForm : Form
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
         var btnSave = new Button { Text = "Save", DialogResult = DialogResult.OK, AutoSize = true };
 
+        // Two cards (18 Nov 2026, dialog pass 4): the days of the week, and
+        // the dates with their picker under them, each with a line on what
+        // it does - the note that ran across the top shared out between
+        // them. The list takes whatever height the window has to spare.
+        var weekCard = new Section("Every week");
+        weekCard.Add(NightSetupDialog.CardHint("On these days, with no race day open, Next Steps offers to start tonight from this template."), gapBelow: UiLayout.HintGap);
+        weekCard.Add(week, stretch: false, gapBelow: 0);
+
+        var datesCard = new Section("On these dates");
+        datesCard.Add(NightSetupDialog.CardHint("A date wins over a day of the week, so a monthly points round can fall on a club night's Tuesday."), gapBelow: UiLayout.HintGap);
+        datesCard.AddFill(_lstDates, () => UiLayout.AtTextSize(110), gapBelow: UiLayout.HintGap);
+        datesCard.Add(_lblCount, gapBelow: UiLayout.RowGap);
+        datesCard.Add(new ButtonBar().With(_dtpDate, btnAdd, btnRemove), gapBelow: 0);
+
+        ShowCount();
+        btnAdd.Click += (_, _) => ShowCount();
+        btnRemove.Click += (_, _) => ShowCount();
+
         var page = new FillPage();
-        page.Add(lblHow, stretch: false, gapBelow: UiLayout.RowGap);
-        page.Add(new Label { Text = "Every:", AutoSize = true }, stretch: false, gapBelow: UiLayout.HintGap);
-        page.Add(week, stretch: false, gapBelow: UiLayout.RowGap);
-        page.Add(new Label { Text = "And on these dates:", AutoSize = true }, stretch: false, gapBelow: UiLayout.HintGap);
-        page.Add(_lstDates, stretch: false, gapBelow: UiLayout.HintGap);
-        page.Add(new ButtonBar().With(_dtpDate, btnAdd, btnRemove), gapBelow: UiLayout.RowGap);
+        page.Add(weekCard, gapBelow: UiLayout.RowGap);
+        page.AddFill(datesCard, datesCard.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
 
         Controls.Add(page);
@@ -867,6 +872,24 @@ internal sealed class TemplateDaysForm : Form
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
-        DialogFit.Keep(this, page, width: 520, height: 460);
+        AppTheme.StyleButton(btnSave, AppTheme.ButtonKind.Primary);
+        AppTheme.StyleButton(btnAdd, AppTheme.ButtonKind.Secondary);
+
+        // The date picker as wide as the text size needs: at a fixed 130px
+        // the date was cut to "11/..." at 200%.
+        _dtpDate.Width = UiLayout.AtTextSize(130);
+
+        DialogFit.Keep(this, page, width: 560, height: 520);
     }
+
+    /// <summary>Under the list: how many dates it holds, or what fills it when it holds none.</summary>
+    private readonly Label _lblCount = new() { AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.SmallFont, UseMnemonic = false };
+
+    private void ShowCount() =>
+        _lblCount.Text = _lstDates.Items.Count switch
+        {
+            0 => "No dates yet: pick one below and Add Date.",
+            1 => "1 date to come.",
+            var n => $"{n} dates to come.",
+        };
 }

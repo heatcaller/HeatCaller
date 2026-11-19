@@ -127,6 +127,7 @@ internal static partial class WindowCatalog
 
         all.AddRange(MessageWindows());
         all.AddRange(NewDayAndRosterWindows());
+        all.AddRange(NightSetupWindows());
         all.AddRange(FormatAndResultWindows());
         all.AddRange(HeatBalanceWindows());
         all.AddRange(SignupWindows());

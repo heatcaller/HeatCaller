@@ -86,14 +86,11 @@ internal sealed class ClassOrderForm : Form
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterParent;
 
-        var lblHow = new Label
-        {
-            Text = "The order tonight's classes run in within each round, first at the top. It decides who marshals for whom, "
-                   + "and when each class finishes: put the juniors first to have them done early. Used the next time the heats are built.",
-            AutoSize = true,
-            MaximumSize = new Size(440, 0),
-            ForeColor = AppTheme.TextMuted,
-        };
+        // One card (18 Nov 2026, dialog pass 4): the list under a line on
+        // what the order decides, the moves and the tick under it.
+        var lblHow = NightSetupDialog.CardHint(
+            "The order the classes run in within each round, first at the top. It decides who marshals for whom "
+            + "and when each class finishes: put the juniors first to have them done early. Used the next time the heats are built.");
 
         foreach (var name in classes)
         {
@@ -115,11 +112,14 @@ internal sealed class ClassOrderForm : Form
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
         var btnSave = new Button { Text = "Save", DialogResult = DialogResult.OK, AutoSize = true };
 
+        var card = new Section("Running order");
+        card.Add(lblHow, gapBelow: UiLayout.RowGap);
+        card.AddFill(_list, () => 140, gapBelow: UiLayout.RowGap);
+        card.Add(new ButtonBar().With(btnUp, btnDown), gapBelow: UiLayout.RowGap);
+        card.Add(_chkRotate, stretch: false, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblHow, stretch: false, gapBelow: UiLayout.RowGap);
-        page.AddFill(_list, 140, gapBelow: UiLayout.RowGap);
-        page.Add(new ButtonBar().With(btnUp, btnDown), gapBelow: UiLayout.RowGap);
-        page.Add(_chkRotate, stretch: false, gapBelow: UiLayout.RowGap);
+        page.AddFill(card, card.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
 
         Controls.Add(page);
@@ -127,7 +127,11 @@ internal sealed class ClassOrderForm : Form
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
-        DialogFit.Keep(this, page, width: 500, height: 420);
+        AppTheme.StyleButton(btnSave, AppTheme.ButtonKind.Primary);
+
+        // Wider and taller than the 500x420 it was by the card's inset and
+        // caption, so the list keeps the room it had.
+        DialogFit.Keep(this, page, width: 500 + Section.Inset.Horizontal, height: 470);
     }
 
     private void MoveSelected(int by)

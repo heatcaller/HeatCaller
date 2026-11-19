@@ -580,6 +580,13 @@ public sealed class SimpleModeTests : IDisposable
         "FillTimesForm.cs|The times",
         "ResultsExportForm.cs|The file", "ResultsExportForm.cs|Sessions",
         "EventReportForm.cs|The report", "EventReportForm.cs|Include",
+
+        // Setting up a night: a template's nights, the breaks, the class running order
+        // and a run sheet line (TemplateDaysForm, BreaksForm, ClassOrderForm,
+        // ScheduleEntryForm; 18 Nov 2026, dialog pass 4).
+        "RaceDayEventControl.Templates.cs|Every week", "RaceDayEventControl.Templates.cs|On these dates",
+        "RaceDayEventControl.Breaks.cs|Planned breaks", "RaceDayEventControl.ClassOrder.cs|Running order",
+        "ScheduleEntryForm.cs|Run sheet line",
     };
 
     [Fact]
