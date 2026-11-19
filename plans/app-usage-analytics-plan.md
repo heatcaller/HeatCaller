@@ -161,6 +161,19 @@ ShowPage / SegmentTabs ──► AppUsage   POST /club/<id>/app-usage ──► 
 1. **Laptop, local only.** `AppUsage`, the hooks, idle clock, the file on
    disk, and **See what's sent**. Nothing leaves the PC. Lets us check the
    numbers look right on a real race night first.
+   **Built 19 Nov 2026** on `claude/usage-sharing` (PR 274): `AppUsage.cs`
+   (totals, the two clocks, `Scrub`, the file), `AppUsageTracker.cs` (15 s
+   tick, `GetLastInputInfo`, tab strips found on a page's first show),
+   `UsagePreviewForm.cs`, hooks in `ShowPage` and `MainForm`'s constructor,
+   `AppUsageTests`. Differences from the plan above:
+   - **Any driver's name** in a caption, not only a junior's, makes it
+     `unknown_driver`.
+   - **Counting is off when the box is off.** Unticked means nothing is
+     counted either, and unticking deletes what was held.
+   - **Dialogs** count as time on the page beneath them; they aren't rows of
+     their own yet.
+   - **Not done yet:** the text-size context and the feature events other
+     than `nav_search_used` (Manage Navigation, warm-up flag and the rest).
 2. **Relay.** `appusage.ts`, the route, `app-usage` admin command, tests.
    Deploy (memory: from the main checkout, then restart the app).
 3. **Laptop sends.** The box is already there (on); the daily report through the

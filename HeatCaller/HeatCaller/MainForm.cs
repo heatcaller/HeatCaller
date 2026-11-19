@@ -712,6 +712,19 @@ public partial class MainForm : Form
 
         _profiles = ProfileStore.Load();
 
+        // Usage totals, counted on this PC only (19 Nov 2026, round 1 of
+        // plans/app-usage-analytics-plan.md): which pages and tabs, how long.
+        // Here because it checks captions against every driver's names.
+        _usageTracker = new AppUsageTracker(
+            new AppUsage(AppUsage.DefaultPath, () => _profiles.AllIncludingGhosts, AppVersion.Number),
+            _settings,
+            () => new AppUsage.Context(_raceEvents.Active is { IsLegacy: false, IsOpen: true }, _deskOnly));
+        FormClosed += (_, _) =>
+        {
+            _usageTracker.Save();
+            _usageTracker.Dispose();
+        };
+
         // The Garage starts with the cars the club already named on its
         // driver profiles, rather than empty. Once, guarded by its own
         // flag - see GarageMigration.

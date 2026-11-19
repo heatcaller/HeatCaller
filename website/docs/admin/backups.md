@@ -245,6 +245,10 @@ They never include a driver's name or anything else about a driver, anything typ
 
 To stop them, untick the box on the **Getting help** card; to send them from outside the US, tick it. Once you've changed it, your choice stays, whatever the Windows region, and **Restore Default Settings** never changes it. With the relay off, nothing is sent at all. The privacy notice (**License and Privacy**, Part 2, **Usage totals**) says the same.
 
+**See What's Sent...** under the box shows every total this PC holds, day by day in words and then exactly as the report carries them. A tab named after a driver shows as `unknown_driver`: no driver's name is ever kept. Unticking the box also deletes what was already counted.
+
+**For now, nothing is sent.** This version only counts, on this PC, the last 31 days. Sending through the relay comes in a later update.
+
 ## Default settings
 
 Use the **Default settings** card if a change to a setting has broken something, or to start again from how HeatCaller ships. It resets settings only: your drivers, results and keys are never touched.

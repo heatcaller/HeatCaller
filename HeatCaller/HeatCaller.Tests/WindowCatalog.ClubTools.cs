@@ -25,6 +25,8 @@ internal static partial class WindowCatalog
         ("About HeatCaller", () => new AboutForm()),
         ("HeatCaller license and privacy notice (asking)", () => new TermsForm(asking: true)),
         ("HeatCaller license and privacy notice (to read again)", () => new TermsForm(asking: false)),
+        ("What HeatCaller sends", () => new UsagePreviewForm(SampleUsage(), on: true)),
+        ("What HeatCaller sends (unticked)", () => new UsagePreviewForm(SampleUsage(), on: false)),
         ("Scan to join", () => new JoinPosterForm(
             "http://192.168.1.42:8080/checkin",
             "CHECK IN",
@@ -34,4 +36,21 @@ internal static partial class WindowCatalog
             "FOLLOW THE RACING",
             "Scan with your phone camera. Live timing, schedule and results - and your own races under Me.")),
     };
+
+    /// <summary>A few days' usage totals for See What's Sent, held in memory only (never saved).</summary>
+    private static AppUsage SampleUsage()
+    {
+        var usage = new AppUsage(Path.Combine(Path.GetTempPath(), "hc-catalog-usage-never-saved.json"), () => [], "0.63.0");
+        var context = new AppUsage.Context(RaceDay: true, DeskView: false);
+        var at = new DateTime(2026, 11, 18, 18, 0, 0);
+
+        foreach (var (page, tab) in new[] { ("Race Control", ""), ("Who's Racing", "Entries"), ("Setup", "Tonight"), ("Live Timing", "") })
+        {
+            usage.Enter(page, tab, at, context);
+            at = at.AddSeconds(45);
+            usage.Mark(at, inFront: true, active: true, context);
+        }
+
+        return usage;
+    }
 }

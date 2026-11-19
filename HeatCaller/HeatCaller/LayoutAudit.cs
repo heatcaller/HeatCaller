@@ -405,6 +405,10 @@ internal static class LayoutAudit
         // to read from the Getting help card and the About box (TermsForm).
         "HeatCaller license and privacy notice",
 
+        // Every usage total this PC holds, in words and as the report carries
+        // them - from the Getting help card's See What's Sent (UsagePreviewForm, 19 Nov 2026).
+        "What HeatCaller sends",
+
         // The scan-to-join poster over Print, Full screen and Close (JoinPosterForm, titled "<heading> - scan to join").
         "Scan to join",
 

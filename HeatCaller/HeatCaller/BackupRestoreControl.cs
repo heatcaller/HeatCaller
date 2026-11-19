@@ -39,6 +39,9 @@ public sealed partial class BackupRestoreControl : UserControl
     /// </summary>
     public event Action? SupportInfoRequested;
 
+    /// <summary>Raised by See What's Sent. The host (MainForm) holds the usage totals - see AppUsageTracker.</summary>
+    public event Action? UsagePreviewRequested;
+
     /// <summary>
     /// Asked before a restore starts: true while a race (or practice) is
     /// under way. Set by the host (MainForm), which knows the race state;
@@ -360,8 +363,12 @@ public sealed partial class BackupRestoreControl : UserControl
         card.Add(new ButtonBar().With(btnSupport, btnAbout, btnTerms));
         card.Add(lblHint);
         card.Add(FieldGrid.Inline(lnkEmail, btnCopyEmail), gapBelow: UiLayout.RowGap);
+        var btnSeeSent = new Button { Text = "See What's Sent..." };
+        btnSeeSent.Click += (_, _) => UsagePreviewRequested?.Invoke();
+
         card.Add(chkShare, stretch: false, gapBelow: 0);
-        card.Add(lblShareHint, gapBelow: 0);
+        card.Add(lblShareHint, gapBelow: UiLayout.HintGap);
+        card.Add(new ButtonBar().With(btnSeeSent), gapBelow: 0);
 
         return card;
     }

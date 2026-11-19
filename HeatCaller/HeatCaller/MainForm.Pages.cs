@@ -2866,6 +2866,11 @@ public partial class MainForm
         // Save Support Info - done here rather than on the page, which has
         // no Driver Hub to take the names out with. See SupportInfo.
         backupRestore.SupportInfoRequested += () => SupportInfo.Save(backupRestore, _settings, _voiceStore, _profiles, OnClientRawMessage);
+        backupRestore.UsagePreviewRequested += () =>
+        {
+            _usageTracker.Save();
+            UsagePreviewForm.ShowFor(backupRestore, _usageTracker.Usage, UsageSharing.IsOn(_settings));
+        };
         backupRestore.RestoreCompleted += () =>
         {
             // Every store only reads from disk once, at startup - the only
