@@ -34,6 +34,11 @@ public sealed class WarningLadderForm : Form
 
     public WarningLadderForm(IReadOnlyList<WarningStep>? current, string title)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, nearly every part had its window before
+        // the theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         Text = title;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
