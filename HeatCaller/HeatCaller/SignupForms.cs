@@ -7,7 +7,7 @@ namespace HeatCaller;
 /// RelaySignupDesk.Approve is what adds it.
 ///
 /// On the layout pieces (DialogFit): what they signed up with and the
-/// fields lined up in a field grid, in a body that scrolls on a screen too
+/// fields lined up in a card, in a body that scrolls on a screen too
 /// short for them; under it, room for what is wrong, and Approve and Not
 /// Yet at the foot. It used to be placed in pixels, the captions in a
 /// column of 150px and every field 300px beside it, with three lines of
@@ -114,7 +114,9 @@ internal sealed class ApproveSignupForm : Form
         _txtEmail.MaxLength = 254;
 
         // Every field runs to the right-hand edge, where the buttons end, as
-        // the 300px fields did beside their 150px captions.
+        // the 300px fields did beside their 150px captions. In one card with
+        // a hint line (18 Nov 2026, dialog pass): three cards made the window
+        // too tall for a 1366x768 screen, and it is opened on race night.
         var fields = new FieldGrid();
         var captions = new[]
         {
@@ -126,6 +128,16 @@ internal sealed class ApproveSignupForm : Form
             fields.AddRow("Race number", _txtNumber, stretch: true),
             fields.AddRow("Email", _txtEmail, stretch: true),
         };
+
+        var card = new Section("Their details");
+        card.Add(new Label
+        {
+            Text = "As they typed it. Put anything right here before you approve.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        }, gapBelow: UiLayout.RowGap);
+        card.Add(fields, gapBelow: 0);
 
         _lblError.AutoSize = true;
         _lblError.ForeColor = AppTheme.Danger;
@@ -142,7 +154,7 @@ internal sealed class ApproveSignupForm : Form
         var page = new FillPage();
         var body = DialogFit.Body(page, gapBelow: UiLayout.RowGap);
         body.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        body.Add(fields, gapBelow: 0);
+        body.Add(card, gapBelow: 0);
         page.Add(_lblError, gapBelow: UiLayout.RowGap);
 
         // Against the right-hand edge, Not Yet furthest right, as it was -
@@ -158,6 +170,9 @@ internal sealed class ApproveSignupForm : Form
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
+
+        // After the theme pass: Approve in the app's colour.
+        AppTheme.StyleButton(btnOk, AppTheme.ButtonKind.Primary);
 
         // Three lines kept for what is wrong, as the label draws them
         // (Pieces.LineHeight), so a message appearing takes nothing from the
@@ -182,9 +197,12 @@ internal sealed class ApproveSignupForm : Form
 
         var captionColumn = captions.Max(caption => caption.GetPreferredSize(Size.Empty).Width + caption.Margin.Horizontal);
 
+        // With the cards' insets beside the grids, and room for the body's
+        // scrollbar, which takes its width on a screen too short for it all.
         var width = Math.Max(
             UiLayout.AtTextSize(482),
-            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.PageRight);
+            UiLayout.PageLeft + Section.Inset.Horizontal + captionColumn + fieldColumn
+            + SystemInformation.VerticalScrollBarWidth + UiLayout.PageRight);
 
         // Straight to the one thing a rental or "don't know" sign-up still needs.
         Shown += (_, _) =>

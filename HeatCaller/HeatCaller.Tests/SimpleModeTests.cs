@@ -405,6 +405,9 @@ public sealed class SimpleModeTests : IDisposable
         "CommentaryControl.cs|How it's written", "CommentaryControl.cs|Who writes it", "CommentaryControl.cs|Before the start",
         "CommentaryControl.cs|Through the night", "CommentaryControl.cs|After the flag", "CommentaryControl.cs|Recap show",
         "BetweenRacesCard.cs|Between races",
+
+        // A race format's two cards with nothing Simple keeps (RaceFormatForm, 18 Nov 2026, dialog jazz-up).
+        "RaceFormat.cs|Lap counting", "RaceFormat.cs|Start sequence and finish",
     };
 
     /// <summary>
@@ -499,6 +502,12 @@ public sealed class SimpleModeTests : IDisposable
         "Shortcuts.cs|Anywhere", "Shortcuts.cs|Race Control", "Shortcuts.cs|Selected driver",
         "ChassisTemplateForm.cs|Other tuning fields (not on the diagram)", "ChassisTemplateForm.cs|Selected point",
 
+        // The garage and battery windows in cards (18 Nov 2026, dialog jazz-up): Chassis Diagram,
+        // Edit Field, Transfer (a car), Which pack? and Club Batteries.
+        "ChassisTemplateForm.cs|Diagram", "SetupFieldEditorForm.cs|The field", "SetupFieldEditorForm.cs|Options",
+        "CarTransfer.cs|Who gets it", "CarTransfer.cs|What goes with it", "BatteryForms.cs|Packs",
+        "ClubBatteriesForm.cs|The club's packs",
+
         // Checked In Late's card (LateArrivalsForm, 18 Nov 2026, dialog jazz-up). The lap
         // breakdown window (LapDetailWindow) is painted, with no Section.
         "RaceProgramControl.LateArrivals.cs|Add to the heats",
@@ -508,6 +517,15 @@ public sealed class SimpleModeTests : IDisposable
         // (18 Nov 2026, dialog jazz-up, third batch).
         "NameCheckForm.cs|Names to hear", "RoundRosterForm.cs|Running order", "OtherClassesForm.cs|Also races",
         "LateEntry.cs|Drivers", "SetupLinking.cs|Cars in the garage",
+
+        // A sign-up and a driver's phone changes approved, a transponder given and
+        // a race day's delete, in cards (ApproveSignupForm,
+        // ApproveDriverRequestForm, BelongsToForm, DeleteRaceDayForm;
+        // 18 Nov 2026, dialog pass). The entry import (EntryImportForm) has tiles, no Section.
+        "SignupForms.cs|Their details",
+        "DriverRequestsForm.cs|Their details", "DriverRequestsForm.cs|Online and email",
+        "BelongsToForm.cs|The driver", "BelongsToForm.cs|Where is it?",
+        "DeleteRaceDayForm.cs|Saved races",
 
         // A driver's profile and a driver's handicap, in cards (18 Nov 2026, dialog jazz-up).
         "ProfileForm.cs|Who they are", "ProfileForm.cs|Car and class", "ProfileForm.cs|On the PA",
@@ -571,6 +589,21 @@ public sealed class SimpleModeTests : IDisposable
         "FillTimesForm.cs|The times",
         "ResultsExportForm.cs|The file", "ResultsExportForm.cs|Sessions",
         "EventReportForm.cs|The report", "EventReportForm.cs|Include",
+
+        // Setting up a night: a template's nights, the breaks, the class running order
+        // and a run sheet line (TemplateDaysForm, BreaksForm, ClassOrderForm,
+        // ScheduleEntryForm; 18 Nov 2026, dialog pass 4).
+        "RaceDayEventControl.Templates.cs|Every week", "RaceDayEventControl.Templates.cs|On these dates",
+        "RaceDayEventControl.Breaks.cs|Planned breaks", "RaceDayEventControl.ClassOrder.cs|Running order",
+        "ScheduleEntryForm.cs|Run sheet line",
+
+        // The rules windows' cards (RaceFormatForm, SeasonRulesForm, SanctioningPresetForm;
+        // 18 Nov 2026, dialog jazz-up). Points carried in and the check-in PINs have tiles, no cards.
+        "RaceFormat.cs|Following the app default", "RaceFormat.cs|Race length", "RaceFormat.cs|Start",
+        "SeasonRulesForm.cs|What counts", "SeasonRulesForm.cs|How it adds up",
+        "SeasonRulesForm.cs|For the announcer",
+        "SanctioningPresetForm.cs|Presets", "SanctioningPresetForm.cs|Where it came from", "SanctioningPresetForm.cs|What it sets",
+        "SanctioningPresetForm.cs|What it does not set",
     };
 
     [Fact]

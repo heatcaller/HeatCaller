@@ -113,31 +113,33 @@ internal sealed class BreaksForm : Form
             _points.Add(PlannedBreak.BeforeFinals);
         }
 
-        var lblHow = new Label
-        {
-            Text = "Breaks planned into tonight, such as watering the track after Q2 or dinner before the finals. "
-                   + "The finish time, every estimated start and the gap before the next race allow for them, "
-                   + "and the announcer says when a break begins and when racing starts again.",
-            AutoSize = true,
-            MaximumSize = new Size(520, 0),
-            ForeColor = AppTheme.TextMuted,
-        };
+        // One card (18 Nov 2026, dialog pass 4): the four lines under a
+        // line on what a break does, their column headings muted.
+        var lblHow = NightSetupDialog.CardHint(
+            "Watering the track after Q2, dinner before the finals. The finish time, every start time and the gap "
+            + "before the next race allow for them, and the announcer says when a break starts and ends.");
 
         var grid = new TableLayoutPanel
         {
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 3,
-            Dock = DockStyle.Top,
+            Margin = Padding.Empty,
+            Tag = AppTheme.KeepBackColor,
+
+            // Room under the last line: the theme's drop-down stands a little
+            // taller than the size it asks for (its margin takes it on the
+            // lines above), and the last ran 2px past the foot of the lines.
+            Padding = new Padding(0, 0, 0, 2),
         };
 
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        grid.Controls.Add(new Label { Text = "When", AutoSize = true, Margin = new Padding(0, 0, 8, 4) }, 0, 0);
-        grid.Controls.Add(new Label { Text = "Minutes", AutoSize = true, Margin = new Padding(0, 0, 8, 4) }, 1, 0);
-        grid.Controls.Add(new Label { Text = "What for (said to the room)", AutoSize = true, Margin = new Padding(0, 0, 0, 4) }, 2, 0);
+        grid.Controls.Add(Heading("When", 8), 0, 0);
+        grid.Controls.Add(Heading("Minutes", 8), 1, 0);
+        grid.Controls.Add(Heading("What for (said to the room)", 0), 2, 0);
 
         for (var i = 0; i < Lines; i++)
         {
@@ -150,7 +152,12 @@ internal sealed class BreaksForm : Form
             }
 
             var minutes = new NumericUpDown { Minimum = 1, Maximum = NightBreaks.MaxMinutes, Value = 10, Width = 70, Margin = new Padding(0, 2, 8, 2) };
-            var what = new TextBox { Dock = DockStyle.Fill, Margin = new Padding(0, 2, 0, 2) };
+
+            // Room on the right for the outline the theme draws a pixel outside
+            // the box (Pieces.RingRoom): flush with the edge, its right side was
+            // cut off by the card.
+            var what = new TextBox { Dock = DockStyle.Fill };
+            what.Margin = new Padding(0, 2, Pieces.RingRoom(what).Right, 2);
 
             when.SelectedIndex = 0;
 
@@ -171,9 +178,12 @@ internal sealed class BreaksForm : Form
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
         var btnSave = new Button { Text = "Save", DialogResult = DialogResult.OK, AutoSize = true };
 
+        var card = new Section("Planned breaks");
+        card.Add(lblHow, gapBelow: UiLayout.RowGap);
+        card.Add(grid, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblHow, stretch: false, gapBelow: UiLayout.RowGap);
-        page.Add(grid, stretch: false, gapBelow: UiLayout.RowGap);
+        page.Add(card, gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
 
         Controls.Add(page);
@@ -181,6 +191,23 @@ internal sealed class BreaksForm : Form
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
-        DialogFit.Keep(this, page, width: 620, height: 340);
+        AppTheme.StyleButton(btnSave, AppTheme.ButtonKind.Primary);
+
+        // Each "when" as wide as its longest choice in the face it is drawn
+        // in, and the minutes as wide as the text size needs: at a fixed 170
+        // and 70px, "Before the finals" and "45" were cut short at 150%.
+        (Font Font, int Count, int Width)? kept = null;
+
+        foreach (var (when, minutes, _) in _lines)
+        {
+            when.Width = Math.Max(UiLayout.AtTextSize(170), Pieces.PickerWidth(when, ref kept));
+            minutes.Width = UiLayout.AtTextSize(70);
+        }
+
+        DialogFit.Keep(this, page, width: 620 + Section.Inset.Horizontal, height: 300);
     }
+
+    /// <summary>A column's heading over the lines, muted.</summary>
+    private static Label Heading(string text, int right) =>
+        new() { Text = text, AutoSize = true, ForeColor = AppTheme.TextMuted, Margin = new Padding(0, 0, right, 4) };
 }

@@ -8,9 +8,14 @@ namespace HeatCaller;
 /// is the kind of window that gets opened on a laptop with a queue of
 /// racers stood behind it.
 ///
-/// On the layout pieces (DialogFit): the racers taking the height, and
-/// under them Show PINs and the count on the left with Copy All and Close
-/// against the right-hand edge. It used to be placed in pixels in a 760x540
+/// On the layout pieces (DialogFit): tiles across the top - how many racers
+/// have a PIN, how many have no email address and how many have been
+/// emailed theirs (18 Nov 2026, dialog jazz-up) - then the racers taking
+/// the height, saying what fills the list while it is empty, and under them
+/// Show PINs and a line on what Copy All copies on the left, with Copy All
+/// (the window's own button, in the app's colour) and Close against the
+/// right-hand edge. The window is taller by the tiles, so the list is as
+/// tall as it was. It used to be placed in pixels in a 760x540
 /// window: the list a fixed distance above a row of buttons at a fixed
 /// height from the bottom, the count beside the tick box at an x worked out
 /// from the tick box's width, all of it anchored to follow a resize.
@@ -21,6 +26,9 @@ public sealed class RacerPinsForm : Form
 
     /// <summary>The list shows its headings and at least this many racers before the window scrolls instead.</summary>
     private const int LeastRows = 4;
+
+    /// <summary>How tall the window is inside its frame at the normal text size: the 540 it had, and room for the tiles.</summary>
+    private const int DialogHeight = 540 + 70;
 
     private readonly DataGridView _grid = new();
     private readonly CheckBox _chkShow = new ThemedCheckBox();
@@ -75,11 +83,39 @@ public sealed class RacerPinsForm : Form
         _chkShow.Font = AppTheme.BodyFont;
         _chkShow.CheckedChanged += (_, _) => ShowPins(_chkShow.Checked);
 
+        // The list at a glance, across the top (18 Nov 2026, dialog jazz-up).
+        // The line beside Show PINs used to give the first two; it now says
+        // what Copy All copies, and the tiles give the counts.
+        var tiles = new[] { new StatTile(), new StatTile(), new StatTile() };
+
+        foreach (var tile in tiles)
+        {
+            tile.Value.Font = AppTheme.TitleFont;
+            tile.Caption.Font = AppTheme.MicroFont;
+        }
+
+        var noEmail = _rows.Count(r => r.Email.Length == 0);
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+
+        tiles[0].Set(_rows.Count.ToString(culture), _rows.Count == 1 ? "Racer with a PIN" : "Racers with a PIN");
+        tiles[1].Set(noEmail.ToString(culture), "No email address");
+        tiles[2].Set(_rows.Count(r => r.Emailed).ToString(culture), "Emailed their PIN");
+
+        if (noEmail > 0)
+        {
+            tiles[1].Value.ForeColor = AppTheme.Warning;
+        }
+
+        // What fills the list, said while nobody has a PIN.
+        EmptyNote.For(_grid, () => _rows.Count == 0
+            ? "Nobody has a PIN yet. Each racer given a personal check-in PIN is listed here."
+            : null);
+
         var lblCount = new Label
         {
             Text = _rows.Count == 0
                 ? "Nobody has a PIN yet."
-                : $"{Plural.Of(_rows.Count, "racer")} - {_rows.Count(r => r.Email.Length == 0)} without an email address.",
+                : "Copy All copies the real PINs, shown or not.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
@@ -110,6 +146,7 @@ public sealed class RacerPinsForm : Form
         btnClose.TabIndex = 1;
 
         var page = new FillPage();
+        page.Add(new TileStrip(tiles), gapBelow: UiLayout.RowGap);
         page.AddFill(_grid, _ => _grid.ColumnHeadersHeight + LeastRows * _grid.RowTemplate.Height + 2, gapBelow: UiLayout.RowGap);
         page.Add(footer, gapBelow: 0);
 
@@ -123,8 +160,13 @@ public sealed class RacerPinsForm : Form
         // Every heading whole, the rest shared by weight - see Pieces.KeepHeadingsWhole.
         Pieces.KeepHeadingsWhole(_grid);
 
-        // The size it had at the normal text size. It can be made bigger.
-        DialogFit.Keep(this, page, width: 760, height: 540);
+        // Copy All in the app's colour: copying the list is what the window
+        // is opened for. After the theme pass, which does not know it.
+        AppTheme.StyleButton(btnCopy, AppTheme.ButtonKind.Primary);
+
+        // The width it had at the normal text size, and taller by the tiles
+        // (DialogHeight). It can be made bigger.
+        DialogFit.Keep(this, page, width: 760, height: DialogHeight);
     }
 
     private void ShowPins(bool show)

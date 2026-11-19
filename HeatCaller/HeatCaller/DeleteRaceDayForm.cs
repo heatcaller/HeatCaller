@@ -19,7 +19,7 @@ namespace HeatCaller;
 /// a number they cannot see.
 ///
 /// On the layout pieces (DialogFit): the question, what goes regardless,
-/// the four ticks each with its hint under its words - the three that
+/// the four ticks in a card, each with its hint under its words - the three that
 /// depend on the first a step in from it - and the note on Undo, all of it
 /// the window's body, wrapping to the width; Delete and Cancel at the foot.
 /// The window is as tall as all of that, and on a screen too short for it
@@ -32,7 +32,7 @@ namespace HeatCaller;
 public sealed class DeleteRaceDayForm : Form
 {
     /// <summary>How wide the window is inside its frame at the normal text size - wider when a tick's words need more.</summary>
-    private const int DialogWidth = 552;
+    private const int DialogWidth = 584;
 
     /// <summary>
     /// How far the three ticks that depend on the first are in from it, at
@@ -130,7 +130,11 @@ public sealed class DeleteRaceDayForm : Form
             Font = AppTheme.BoldFont,
         };
 
-        body.Add(lblAlso, gapBelow: UiLayout.LabelGap);
+        // The choices in a card of their own (18 Nov 2026, dialog pass), the
+        // question first in it, under what goes regardless. Every tick and
+        // its gating as before, in the same order.
+        var choices = new Section("Saved races");
+        choices.Add(lblAlso, gapBelow: UiLayout.LabelGap);
 
         // A tick, as wide as its words, in from the left by its indent, and
         // its hint under its words, wrapping to the width the body has. The
@@ -151,8 +155,8 @@ public sealed class DeleteRaceDayForm : Form
                 Font = AppTheme.SmallFont,
             };
 
-            body.Add(box, stretch: false, gapBelow: UiLayout.HintGap);
-            body.Add(lbl, gapBelow: gapBelow);
+            choices.Add(box, stretch: false, gapBelow: UiLayout.HintGap);
+            choices.Add(lbl, gapBelow: gapBelow);
 
             box.Margin = new Padding(indent, box.Margin.Top, box.Margin.Right, box.Margin.Bottom);
             lbl.Margin = new Padding(indent + TickBox.UnderCaption(HintIndent), lbl.Margin.Top, lbl.Margin.Right, lbl.Margin.Bottom);
@@ -191,8 +195,8 @@ public sealed class DeleteRaceDayForm : Form
             TickBox.UnderCaption(TickIndent),
             anyRaces && counts.Seasons > 0);
 
-        // A section's gap under the last, before the note on Undo, which is
-        // about all four rather than about this one.
+        // The last in the card, so nothing under it; the card is followed by
+        // the note on Undo, which is about all four rather than about this one.
         Tick(_chkBadges,
             counts.Badges == 1
                 ? "Also take back 1 achievement earned in them"
@@ -202,7 +206,9 @@ public sealed class DeleteRaceDayForm : Form
             + "kept, as the profile totals that earned them are left as they are.",
             TickBox.UnderCaption(TickIndent),
             anyRaces && counts.Badges > 0,
-            gapBelow: UiLayout.SectionGap);
+            gapBelow: 0);
+
+        body.Add(choices, gapBelow: UiLayout.RowGap);
 
         // Ticking the top one is what makes the other three available, and
         // unticking it puts them away again rather than leaving three
@@ -284,7 +290,7 @@ public sealed class DeleteRaceDayForm : Form
 
         var width = Math.Max(
             UiLayout.AtTextSize(DialogWidth),
-            UiLayout.PageLeft + widestTick + SystemInformation.VerticalScrollBarWidth + UiLayout.PageRight);
+            UiLayout.PageLeft + Section.Inset.Horizontal + widestTick + SystemInformation.VerticalScrollBarWidth + UiLayout.PageRight);
 
         DialogFit.Keep(this, page, width, body: body, widthMeasured: true);
     }

@@ -127,6 +127,7 @@ internal static partial class WindowCatalog
 
         all.AddRange(MessageWindows());
         all.AddRange(NewDayAndRosterWindows());
+        all.AddRange(NightSetupWindows());
         all.AddRange(FormatAndResultWindows());
         all.AddRange(HeatBalanceWindows());
         all.AddRange(SignupWindows());
@@ -157,6 +158,7 @@ internal static partial class WindowCatalog
 
         // The garage, setup sheets and batteries (30 Sep).
         all.AddRange(GarageWindows());
+        all.AddRange(CarTransferWindows());
         all.AddRange(ChassisSheetWindows());
         all.AddRange(SetupWindows());
         all.AddRange(BatteryWindows());
@@ -172,6 +174,9 @@ internal static partial class WindowCatalog
         all.AddRange(ClubToolWindows());
         all.AddRange(CsvImportWindows());
         all.AddRange(EntryImportWindows());
+
+        // A driver's phone changes approved, and a transponder given or transferred (18 Nov 2026).
+        all.AddRange(ApprovalAndTransponderWindows());
         all.AddRange(CloseNightWindows());
         all.AddRange(DeskAndMeetingWindows());
         all.AddRange(PasteResultWindows());

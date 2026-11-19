@@ -75,7 +75,12 @@ internal sealed class ApproveDriverRequestForm : Form
             Font = AppTheme.SmallFont,
         };
 
-        var fields = new FieldGrid();
+        // The changes in two cards (18 Nov 2026, dialog pass): the text ones,
+        // each with its box, and the yes-or-no ones. Each change goes in its
+        // card in the order the desk lists them, so Tab goes down them as it
+        // did.
+        var texts = new FieldGrid();
+        var flags = new FieldGrid();
 
         foreach (var field in desk.FieldsOf(request, profile))
         {
@@ -85,7 +90,7 @@ internal sealed class ApproveDriverRequestForm : Form
             if (field.IsFlag)
             {
                 tick.Text = $"{field.Caption}: {(field.ProposedFlag ? "yes" : "no")} (now {(field.CurrentFlag ? "yes" : "no")})";
-                fields.AddWide(tick, stretch: false);
+                flags.AddWide(tick, stretch: false);
                 _rows.Add((field, tick, null));
                 continue;
             }
@@ -93,9 +98,9 @@ internal sealed class ApproveDriverRequestForm : Form
             var box = new TextBox { Text = field.Proposed, MaxLength = field.MaxChars > 0 ? field.MaxChars : 120 };
             box.TextChanged += (_, _) => UpdateApprove();
 
-            fields.AddWide(tick, stretch: false);
-            fields.AddRow("Change to", box, stretch: true);
-            fields.AddHint(field.Current.Length == 0 ? "Now: (empty). Leave the box empty to clear it." : $"Now: {field.Current}");
+            texts.AddWide(tick, stretch: false);
+            texts.AddRow("Change to", box, stretch: true);
+            texts.AddHint(field.Current.Length == 0 ? "Now: (empty). Leave the box empty to clear it." : $"Now: {field.Current}");
 
             if (field.Key == "announcer")
             {
@@ -115,12 +120,12 @@ internal sealed class ApproveDriverRequestForm : Form
                 btnCheck.Click += (_, _) => CheckWithTonightsNames();
                 buttons.Add(btnCheck);
 
-                fields.AddField(FieldGrid.Inline(buttons.ToArray()), stretch: true);
+                texts.AddField(FieldGrid.Inline(buttons.ToArray()), stretch: true);
             }
 
             if (field.Key == "email")
             {
-                fields.AddHint("Their old address is sent a note saying it was changed.");
+                texts.AddHint("Their old address is sent a note saying it was changed.");
             }
 
             _rows.Add((field, tick, box));
@@ -135,7 +140,26 @@ internal sealed class ApproveDriverRequestForm : Form
         var page = new FillPage();
         var body = DialogFit.Body(page, gapBelow: UiLayout.RowGap);
         body.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        body.Add(fields, gapBelow: 0);
+
+        // Only the cards with something in them; the last with no gap under
+        // it, as the last part of the body (DialogFit.Body).
+        var cards = new List<Section>();
+
+        if (_rows.Any(r => r.Box is not null))
+        {
+            cards.Add(Card(new Section("Their details"), "Each box can be changed before you approve.", texts));
+        }
+
+        if (_rows.Any(r => r.Box is null))
+        {
+            cards.Add(Card(new Section("Online and email"), "What they asked for, and what it is now.", flags));
+        }
+
+        for (var i = 0; i < cards.Count; i++)
+        {
+            body.Add(cards[i], gapBelow: i == cards.Count - 1 ? 0 : UiLayout.RowGap);
+        }
+
         page.Add(_lblError, gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, _btnOk), gapBelow: 0);
         _btnOk.TabIndex = 0;
@@ -148,6 +172,9 @@ internal sealed class ApproveDriverRequestForm : Form
 
         AppTheme.ApplyRecursively(this);
 
+        // After the theme pass: Approve in the app's colour.
+        AppTheme.StyleButton(_btnOk, AppTheme.ButtonKind.Primary);
+
         // Two lines kept for what is wrong or still to do, so a message
         // appearing takes nothing from the fields above it.
         _lblError.MinimumSize = new Size(0, 2 * Pieces.LineHeight(_lblError.Font) + _lblError.Padding.Vertical);
@@ -155,6 +182,21 @@ internal sealed class ApproveDriverRequestForm : Form
         UpdateApprove();
 
         DialogFit.Keep(this, page, width: 600, body: body);
+    }
+
+    /// <summary>A captioned card: its hint line, and the grid of changes under it.</summary>
+    private static Section Card(Section card, string hint, FieldGrid grid)
+    {
+        card.Add(new Label
+        {
+            Text = hint,
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        }, gapBelow: UiLayout.RowGap);
+
+        card.Add(grid, gapBelow: 0);
+        return card;
     }
 
     /// <summary>Whether the announcer name is ticked, changed from what they have, and not yet heard as it stands.</summary>

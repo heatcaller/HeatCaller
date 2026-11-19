@@ -7,8 +7,11 @@ namespace HeatCaller;
 /// the sessions run on it say who had it. Transfer gives one to a driver
 /// for good.
 ///
-/// On the layout pieces (DialogFit): the list taking the height, the
-/// buttons under it and Close at the foot.
+/// On the layout pieces (DialogFit): a line on what the window is for, then
+/// the packs in a card (18 Nov 2026, dialog jazz-up) - its caption, a short
+/// hint, the list drawn as a card per pack (ClubPackList) taking the height,
+/// and the buttons that act on the picked pack under it - and Close at the
+/// foot. With no club packs, the list's one row says what fills it.
 /// </summary>
 internal sealed class ClubBatteriesForm : Form
 {
@@ -17,7 +20,7 @@ internal sealed class ClubBatteriesForm : Form
     private readonly UndoService _undo;
 
     private readonly Label _lblIntro = new() { AutoSize = true };
-    private readonly ListView _list = new();
+    private readonly ClubPackList _list = new();
     private readonly Button _btnAdd = new() { Text = "Add Pack..." };
     private readonly Button _btnEdit = new() { Text = "Edit..." };
     private readonly Button _btnRetire = new() { Text = "Retire" };
@@ -38,17 +41,6 @@ internal sealed class ClubBatteriesForm : Form
         _lblIntro.Text = "The club's own packs. Any driver can run one - put it in their car on their Batteries tab, "
                          + "on Race Control or at check-in. Transfer gives one to a driver for good.";
 
-        _list.View = View.Details;
-        _list.FullRowSelect = true;
-        _list.MultiSelect = false;
-        _list.HideSelection = false;
-        _list.HeaderStyle = ColumnHeaderStyle.Nonclickable;
-        _list.Columns.Add("Pack");
-        _list.Columns.Add("Type");
-        _list.Columns.Add(new ColumnHeader { Text = "Sessions", TextAlign = HorizontalAlignment.Right });
-        _list.Columns.Add("In the car of");
-        _list.Columns.Add("Notes");
-        _list.ClientSizeChanged += (_, _) => FitColumns();
         _list.SelectedIndexChanged += (_, _) => UpdateButtons();
         _list.DoubleClick += (_, _) => Run(pack => BatteryActions.AddOrEdit(this, _store, _undo, pack, string.Empty) is not null);
 
@@ -75,10 +67,22 @@ internal sealed class ClubBatteriesForm : Form
 
         var btnClose = new Button { Text = "Close", DialogResult = DialogResult.Cancel };
 
+        // The packs and the buttons that act on them in one card, the list
+        // taking the height the card has.
+        var packsCard = new Section("The club's packs");
+        packsCard.Add(new Label
+        {
+            Text = "Pick one to change it. Each says how many sessions it has run and whose car it's in now.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        });
+        packsCard.AddFill(_list, () => UiLayout.AtTextSize(160));
+        packsCard.Add(new ButtonBar().With(_btnAdd, _btnEdit, _btnRetire, _btnTransfer, _btnDelete), gapBelow: 0);
+
         var page = new FillPage();
         page.Add(_lblIntro, stretch: false, gapBelow: UiLayout.RowGap);
-        page.AddFill(_list, _ => UiLayout.AtTextSize(160), gapBelow: UiLayout.RowGap);
-        page.Add(new ButtonBar().With(_btnAdd, _btnEdit, _btnRetire, _btnTransfer, _btnDelete), gapBelow: UiLayout.SectionGap);
+        page.AddFill(packsCard, packsCard.LeastHeight);
         page.Add(new ButtonBar(alignRight: true).With(btnClose), gapBelow: 0);
 
         Controls.Add(page);
@@ -87,13 +91,18 @@ internal sealed class ClubBatteriesForm : Form
         AppTheme.ApplyRecursively(this);
         _lblIntro.ForeColor = AppTheme.TextMuted;
 
+        // The rows as tall as the faces the theme pass left in use.
+        _list.Remeasure();
+
         Fill(null);
 
-        DialogFit.Keep(this, page, width: 640, height: 440);
+        // 100px taller than it was (440): the card's caption, hint and insets
+        // come out of that, and a card row is taller than a grid line.
+        DialogFit.Keep(this, page, width: 640, height: 540);
     }
 
     private BatteryPack? Picked() =>
-        _list.SelectedItems.Count == 1 && _list.SelectedItems[0].Tag is BatteryPack pack ? _store.Get(pack.Id) : null;
+        _list.SelectedItem is ClubPackList.Row { Pack: { } pack } ? _store.Get(pack.Id) : null;
 
     /// <summary>Runs an action on the highlighted pack, and fills the list again when it did something.</summary>
     private void Run(Func<BatteryPack, bool> action)
@@ -121,36 +130,43 @@ internal sealed class ClubBatteriesForm : Form
                 .OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase)
                 .ToList();
 
-            var item = new ListViewItem(new[]
-            {
-                pack.DisplayName + (pack.Retired ? "  (retired)" : string.Empty),
-                pack.Chemistry,
-                _store.SessionsOn(pack.Id).ToString(),
-                drivers.Count == 0 ? "-" : string.Join(", ", drivers),
-                pack.Notes.Replace('\r', ' ').Replace('\n', ' '),
-            })
-            { Tag = pack };
+            var sessions = _store.SessionsOn(pack.Id);
 
-            if (pack.Retired)
+            // What the grid's columns said, on one line under the name.
+            var parts = new List<string>
             {
-                item.ForeColor = AppTheme.TextMuted;
+                pack.Chemistry,
+                sessions == 1 ? "1 session" : $"{sessions} sessions",
+                drivers.Count == 0 ? "in nobody's car" : "in the car of " + string.Join(", ", drivers),
+            };
+
+            if (!string.IsNullOrWhiteSpace(pack.Notes))
+            {
+                parts.Add(pack.Notes.Replace('\r', ' ').Replace('\n', ' '));
             }
 
-            _list.Items.Add(item);
+            var row = new ClubPackList.Row(
+                pack,
+                pack.DisplayName,
+                ClubPackList.BadgeOf(pack.Chemistry),
+                string.Join("  ·  ", parts.Where(part => !string.IsNullOrWhiteSpace(part))),
+                pack.Retired);
+
+            _list.Items.Add(row);
 
             if (pack.Id == select)
             {
-                item.Selected = true;
+                _list.SelectedItem = row;
             }
         }
 
         if (_list.Items.Count == 0)
         {
-            _list.Items.Add(new ListViewItem(new[] { "No club packs yet - click Add Pack.", string.Empty, string.Empty, string.Empty, string.Empty }));
+            _list.Items.Add(new ClubPackList.Row(null, "No club packs yet",
+                string.Empty, "Click Add Pack. Each one shows here with its sessions and whose car it's in.", false));
         }
 
         _list.EndUpdate();
-        FitColumns();
         UpdateButtons();
     }
 
@@ -170,20 +186,5 @@ internal sealed class ClubBatteriesForm : Form
             _btnRetire.Text = text;
             AppTheme.StyleButton(_btnRetire, AppTheme.ButtonKind.Secondary);
         }
-    }
-
-    private void FitColumns()
-    {
-        if (_list.Columns.Count < 5)
-        {
-            return;
-        }
-
-        var width = Math.Max(1, _list.ClientSize.Width);
-        _list.Columns[0].Width = width * 22 / 100;
-        _list.Columns[1].Width = width * 13 / 100;
-        _list.Columns[2].Width = width * 12 / 100;
-        _list.Columns[3].Width = width * 25 / 100;
-        _list.Columns[4].Width = Math.Max(20, width - _list.Columns[0].Width - _list.Columns[1].Width - _list.Columns[2].Width - _list.Columns[3].Width);
     }
 }

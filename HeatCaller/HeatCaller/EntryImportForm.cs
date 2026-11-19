@@ -20,10 +20,10 @@ namespace HeatCaller;
 /// pure (EntryImport.Plan) and holds copies, so Cancel here leaves
 /// everything as it was.
 ///
-/// On the layout pieces (DialogFit): the note across the top, the summary,
+/// On the layout pieces (DialogFit): the note across the top, the counts in tiles,
 /// the rows taking the height, the classes the club hasn't got, the two
-/// ticks, and Import and Cancel against the right-hand edge. The summary
-/// and the classes line are as tall as the longest they can say
+/// ticks with a note under them, and Import and Cancel against the right-hand edge. The tiles
+/// keep their height and the classes line is as tall as the longest it can say
 /// (SteadyLabel), so ticking a box moves nothing.
 /// </summary>
 internal sealed class EntryImportForm : Form
@@ -35,7 +35,8 @@ internal sealed class EntryImportForm : Form
     private readonly IReadOnlyList<DriverProfile> _profiles;
     private readonly IReadOnlyCollection<string> _classes;
     private readonly DataGridView _grid = new();
-    private readonly SteadyLabel _lblSummary = new();
+    /// <summary>The plan's counts: new drivers, updated, already here with nothing to change, and rows skipped.</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
     private readonly SteadyLabel _lblClasses = new();
     private readonly CheckBox _chkCheckIn = new ThemedCheckBox();
     private readonly CheckBox _chkReplace = new ThemedCheckBox();
@@ -84,20 +85,24 @@ internal sealed class EntryImportForm : Form
 
     private FillPage BuildLayout(string source, string? checkInTo)
     {
+        // (18 Nov 2026, dialog pass) The note across the top says where the
+        // list came from and that nothing has changed; what a row does to a
+        // driver's classes and details is said under the two ticks, which
+        // are what decide it. The counts the summary line gave are tiles.
         var lblIntro = new Label
         {
-            Text = $"The entries from {source}, and what each row will do. Nothing has changed yet. A class on a row is added "
-                   + "to the classes the driver races - their main class stays as it is - and a detail already on a profile "
-                   + "is only replaced when you tick the box below. The whole import is one step for Undo.",
+            Text = $"The entries from {source}, and what each row will do. Nothing has changed yet, "
+                   + "and the whole import is one step for Undo.",
             AutoSize = true,
-            Font = AppTheme.BodyFont,
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
         };
 
-        // The summary with either tick - the counts can differ, a driver
-        // with only a kept detail becoming an updated one.
-        var replaced = EntryImport.Plan(_rows, _profiles, _classes, replaceDiffering: true);
-        _lblSummary.Wordings = new[] { Plan.Summary(), replaced.Summary() };
-        _lblSummary.Font = AppTheme.BoldFont;
+        foreach (var tile in _tiles)
+        {
+            tile.Value.Font = AppTheme.TitleFont;
+            tile.Caption.Font = AppTheme.MicroFont;
+        }
 
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
@@ -156,13 +161,26 @@ internal sealed class EntryImportForm : Form
             Close();
         };
 
+        var lblHow = new Label
+        {
+            Text = "A class on a row is added to the driver's classes, not made their main one. "
+                   + "A detail on a profile is only replaced if the second box is ticked.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
+
         var page = new FillPage();
-        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.Add(_lblSummary, gapBelow: UiLayout.RowGap);
+        page.Add(lblIntro, gapBelow: UiLayout.HintGap);
+        page.Add(new TileStrip(_tiles), gapBelow: UiLayout.RowGap);
         page.AddFill(_grid, _ => _grid.ColumnHeadersHeight + LeastRows * _grid.RowTemplate.Height + 2, gapBelow: UiLayout.RowGap);
         page.Add(_lblClasses, gapBelow: UiLayout.RowGap);
         page.Add(_chkCheckIn, gapBelow: UiLayout.HintGap);
-        page.Add(_chkReplace, gapBelow: UiLayout.RowGap);
+        page.Add(_chkReplace, gapBelow: UiLayout.HintGap);
+        page.Add(lblHow, gapBelow: UiLayout.RowGap);
+
+        // Under each tick's words, as a tick's hint is.
+        lblHow.Margin = new Padding(TickBox.CaptionIndent, lblHow.Margin.Top, lblHow.Margin.Right, lblHow.Margin.Bottom);
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, _btnImport), gapBelow: 0);
 
         Controls.Add(page);
@@ -176,7 +194,12 @@ internal sealed class EntryImportForm : Form
     /// <summary>The plan in the list and the lines around it.</summary>
     private void ShowPlan(EntryImport.EntryPlan plan)
     {
-        _lblSummary.Text = plan.Summary();
+        _tiles[0].Set(Count(plan.NewDrivers), plan.NewDrivers == 1 ? "New driver" : "New drivers");
+        _tiles[1].Set(Count(plan.UpdatedDrivers), "Updated");
+        _tiles[2].Set(Count(plan.UnchangedDrivers), "Already here");
+        _tiles[3].Set(Count(plan.Skipped), plan.Skipped == 1 ? "Row skipped" : "Rows skipped");
+        _tiles[3].Value.ForeColor = plan.Skipped > 0 ? AppTheme.Danger : AppTheme.TextDark;
+
         _lblClasses.Text = UnknownClassesText(plan.UnknownClasses);
 
         _grid.SuspendLayout();
@@ -209,6 +232,8 @@ internal sealed class EntryImportForm : Form
         // does something, even only a check-in, there is.
         _btnImport.Enabled = plan.Entries.Any(e => e.Action != EntryImport.EntryAction.Skip);
     }
+
+    private static string Count(int count) => count.ToString(CultureInfo.CurrentCulture);
 
     /// <summary>A row's "What happens": "New driver - class Stock", "Skipped: ...", "Updated - adds class Mod; keeps race number 12 (the sheet says 7)".</summary>
     internal static string WhatHappens(EntryImport.PlannedEntry entry) => entry.Action switch
