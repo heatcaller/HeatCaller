@@ -30,6 +30,12 @@ change in the same PR as the first byte sent.
    come from one list in code (`AppUsageNames.cs`), like
    `PAGE_COUNT_EVENTS`. No driver names, no text from fields, no file paths, no
    window titles.
+   - **Juniors never named (decided 19 Nov 2026).** A report has no driver
+     field at all. If one ever needs a driver (a per-driver page such as
+     Driver Details, a debug line, the **See what's sent** preview), a junior
+     is written as `Unknown driver`, never by name, initials or badge. Round 1
+     gets a test that builds a day's report with juniors on the roster and
+     checks that none of their name forms appear in it.
 2. **Totals, not a trail.** The laptop adds up per day: `{page, tab, opens,
    activeSeconds}` plus counts for a short list of feature events. No
    timestamps for each click and no order of clicks, so nobody can rebuild what
