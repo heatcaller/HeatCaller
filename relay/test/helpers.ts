@@ -6,6 +6,7 @@ import type { BrainService } from "../src/brain.js";
 import type { TopUpRequests } from "../src/topuprequests.js";
 import type { VoiceService } from "../src/voice.js";
 import type { UsageLog } from "../src/usagelog.js";
+import type { AppUsageLog } from "../src/appusage.js";
 
 export const ACME_TOKEN = "acme-token-aaaaaaaaaaaaaaaa";
 export const BROOK_TOKEN = "brook-token-bbbbbbbbbbbbbb";
@@ -38,6 +39,7 @@ export async function start(
     readonly brain?: BrainService | undefined;
     readonly topUpRequests?: TopUpRequests | undefined;
     readonly usageLog?: UsageLog | undefined;
+    readonly appUsage?: AppUsageLog | undefined;
   } = {},
 ): Promise<Harness> {
   const relay = new Relay({
@@ -49,6 +51,7 @@ export async function start(
     brain: extras.brain,
     topUpRequests: extras.topUpRequests,
     usageLog: extras.usageLog,
+    appUsage: extras.appUsage,
   });
 
   const server: Server = relay.listen(0, "127.0.0.1");

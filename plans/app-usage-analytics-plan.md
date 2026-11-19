@@ -1,6 +1,6 @@
 # App usage analytics: what clubs use, and for how long
 
-19 Nov 2026. A plan, nothing built yet.
+19 Nov 2026. Rounds 1 (laptop counting) and 2 (relay) built on `claude/usage-sharing`; nothing is sent yet.
 
 **Goal.** See which parts of HeatCaller clubs actually open, how long they
 spend in each, and what they never touch, on a dashboard in the relay admin
@@ -176,6 +176,24 @@ ShowPage / SegmentTabs ──► AppUsage   POST /club/<id>/app-usage ──► 
      than `nav_search_used` (Manage Navigation, warm-up flag and the rest).
 2. **Relay.** `appusage.ts`, the route, `app-usage` admin command, tests.
    Deploy (memory: from the main checkout, then restart the app).
+   **Built 19 Nov 2026** on `claude/usage-sharing` (PR 274), not deployed:
+   `relay/src/appusage.ts` (`cleanAppUsage`, `AppUsageLog`,
+   `readAppUsage`, `forgetAppUsage`), `POST /api/v1/c/<club>/app-usage` in
+   `server.ts`, `app-usage` and `app-usage-forget` in `voiceadmin.ts`,
+   `relay/test/appusage.test.ts`. The body is the laptop's own
+   `app-usage.json` shape (`{version, days: [{date, version, rows, events}]}`),
+   so round 3 can send `AppUsage.ReportJson()` cut to the finished days.
+   Differences from the plan above:
+   - **Lines are filed by when they arrived**, not by the day they count, so
+     the admin app can page by `at` like `usage-log`. A day sent twice (the
+     laptop missed the 204) is two lines: the admin app keeps the newest
+     per club and date.
+   - **503, not 204, when the relay can't keep them** (no store, disk
+     full), so the laptop holds the day and tries again.
+   - **`app-usage-forget <club>`** deletes a club's lines, for a club that
+     leaves or asks.
+   - A report is at most 512 KB and 31 days; round 3 sends a few days at a
+     time.
 3. **Laptop sends.** The box is already there (on); the daily report through the
    publisher, and the check that revision 3 of the Terms was accepted. The
    privacy docs were rewritten on 19 Nov 2026 (claude/usage-sharing).

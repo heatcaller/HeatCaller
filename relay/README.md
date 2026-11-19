@@ -1790,6 +1790,52 @@ which prints `{"version":1,"events":[...],"more":false}` - events strictly
 after `--since`, oldest first, up to 20,000 (`--limit` for fewer). When
 `more` is true, ask again with the last event's `at`.
 
+### App usage totals
+
+Since 19 Nov 2026 (plans/app-usage-analytics-plan.md, round 2) a laptop
+whose box **Send HeatCaller anonymous usage totals** is ticked can send its
+daily totals of which pages and tabs were used, for the relay admin app's
+Product page:
+
+```
+POST /api/v1/c/<club>/app-usage
+Authorization: Bearer <publish token>
+
+{"version":1,"days":[{"date":"2026-11-18","version":"1.4.2",
+  "rows":[{"page":"live_timing","tab":"","raceDay":true,"deskView":false,
+           "opens":3,"activeSeconds":600,"shownSeconds":5400}],
+  "events":{"nav_search_used":2}}]}
+```
+
+- **The shape is checked and anything else dropped**: page, tab and event
+  names must match `[a-z0-9_.]{1,64}` (tab may be empty), seconds 0 to
+  86,400 (in use is cut to on screen), at most 31 days a report, 400 rows
+  and 60 events a day, dates within the last 31 days. A report with
+  nothing left is still `204`, so a newer laptop is never told off.
+- `401` / `403` without the club's own token, `400` for a body that won't
+  read or is over 512 KB, `429` after 40 reports from a club in 24 hours,
+  `503` when the relay couldn't keep them (the laptop keeps them and tries
+  again).
+- Kept in `dataDir/.app-usage/<YYYY-MM>.jsonl`, one line per club per day
+  reported, filed by the month it arrived, **13 months**. No address, no
+  click times, nothing typed: the laptop already writes a caption holding a
+  driver's name as `unknown_driver`.
+
+Read it with:
+
+```
+node /app/dist/src/index.js app-usage --json --since 2026-11-01T00:00:00Z
+```
+
+which prints `{"version":1,"entries":[...],"more":false}` - lines strictly
+after `--since` (by arrival), oldest first, up to 5,000 (`--limit` for
+fewer). When `more` is true, ask again with the last line's `at`. A laptop
+that never heard the `204` sends a day again, so keep the newest line for
+each club and date.
+
+Delete one club's totals (a club that has left, or asks) with
+`app-usage-forget <club> [--json]`.
+
 ### Automatic top-ups, the shared audit log, one-trip refresh
 
 Added for the relay admin app's improvement rounds (Oct 2026).

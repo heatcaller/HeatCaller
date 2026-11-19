@@ -597,6 +597,7 @@ The data, all under the relay's data folder:
 | `.requests/done/<club>.json` | Which of those requests have been answered. | `brain-topup`, `voice-topup` and `topup-decline` only. |
 | `.requests/<club>.auto.json` | What automatic top-ups have given, by month. | The relay only. |
 | `.usage-log/<YYYY-MM>.jsonl` | One line per voice and commentary request: the club, what it cost, how it went. No words, names or facts are ever kept. Kept 24 months. | The relay only. |
+| `.app-usage/<YYYY-MM>.jsonl` | Laptops' daily usage totals, from clubs that tick the box: which pages and tabs were used and for how long. No names, nothing typed. Kept 13 months; `app-usage-forget <club>` deletes a club's. | The relay only. |
 | `.clips/<club>/` | A driver's own race calls for their private night page: `<id>.mp3` beside `<id>.json`. Each is removed after 7 days. | The relay only. |
 | `.push/vapid.json` | The relay's own key pair for [push alerts](#push-alerts), made the first time it's needed. | The relay only. |
 | `<club>/collection/pushsubs/` | The phones signed up for each driver's alerts. | The relay only. |
