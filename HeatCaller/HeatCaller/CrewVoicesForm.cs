@@ -15,7 +15,9 @@ internal sealed class CrewVoicesForm : Form
     /// <summary>The list shows at least this many voices before the window scrolls instead.</summary>
     private const int LeastRows = 5;
 
-    private readonly CheckedListBox _list = new() { CheckOnClick = true, IntegralHeight = false };
+    // Themed, as Start Tonight's class list is, so its ticks are drawn in
+    // the app's colour rather than Windows' blue.
+    private readonly CheckedListBox _list = new ThemedCheckedListBox { CheckOnClick = true, IntegralHeight = false };
     private readonly IReadOnlyList<CrewVoiceOption> _voices;
     private readonly IReadOnlyCollection<string> _hiddenBefore;
 
