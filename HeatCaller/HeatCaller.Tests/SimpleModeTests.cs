@@ -572,6 +572,14 @@ public sealed class SimpleModeTests : IDisposable
         "SignupForms.cs|Their details",
         "DriverRequestsForm.cs|Their details", "DriverRequestsForm.cs|Online and email",
         "BelongsToForm.cs|The driver", "BelongsToForm.cs|Where is it?",
+
+        // Invite Drivers, Turn Down / Code for Someone Here, a phone request declined,
+        // the Desk Inbox's quick replies, Call It Off and Add a Driver to This Round,
+        // one card or two each (InviteDriversForm, SignupReasonForm, DriverRequestReasonForm,
+        // QuickRepliesForm, CallOffForm, RoundRosterForm.DriverPicker; 18 Nov 2026, dialog pass 8).
+        "SignupForms.cs|Who to invite", "SignupForms.cs|For your list", "SignupForms.cs|Your words to them",
+        "DriverRequestsForm.cs|Your words to them", "DeskInboxForm.cs|Decline replies",
+        "NextNightForms.cs|Your words", "NextNightForms.cs|Who is told", "RoundRosterForm.cs|Saved drivers",
         "DeleteRaceDayForm.cs|Saved races",
 
         // A driver's profile and a driver's handicap, in cards (18 Nov 2026, dialog jazz-up).
