@@ -76,7 +76,10 @@ public sealed class ThisMonthForm : Form
         };
 
         // --- The meters, one line each, in the store's order ---
+        // The line on where the figures come from is this card's hint now
+        // (18 Nov 2026, dialog jazz-up), rather than a line over the cards.
         var metersCard = new Section("This month");
+        metersCard.Add(lblIntro, gapBelow: UiLayout.RowGap);
 
         foreach (var kind in Enum.GetValues<MeterKind>())
         {
@@ -138,7 +141,15 @@ public sealed class ThisMonthForm : Form
         var sendTo = new FieldGrid();
         sendTo.AddRow("Send to:", _txtEmailTo);
 
+        var lblEmailsHint = new Label
+        {
+            Text = "A heads-up by email before an allowance runs out, so nobody finds out on race night.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
         var emailsCard = new Section("Emails");
+        emailsCard.Add(lblEmailsHint, gapBelow: UiLayout.RowGap);
         emailsCard.Add(_chkEmails, stretch: false, gapBelow: UiLayout.HintGap);
         emailsCard.Add(sendTo, stretch: false, gapBelow: UiLayout.HintGap);
         emailsCard.Add(_lblEmailTo, gapBelow: 0);
@@ -152,7 +163,6 @@ public sealed class ThisMonthForm : Form
         var page = new FillPage();
         var body = DialogFit.Body(page);
 
-        body.Add(lblIntro, gapBelow: UiLayout.RowGap);
         body.Add(metersCard);
         body.Add(_requestsCard);
         body.Add(emailsCard, gapBelow: 0);
@@ -167,9 +177,14 @@ public sealed class ThisMonthForm : Form
         // The hints keep the small face the theme pass gives every label
         // the body's.
         lblIntro.Font = AppTheme.SmallFont;
+        lblEmailsHint.Font = AppTheme.SmallFont;
+        lblEmailsHint.ForeColor = AppTheme.TextMuted;
         _lblEmailTo.Font = AppTheme.SmallFont;
         _lblChecked.Font = AppTheme.SmallFont;
         _lblNone.Font = AppTheme.SmallFont;
+
+        // Asking now is the one thing the window does.
+        AppTheme.StyleButton(_btnRefresh, AppTheme.ButtonKind.Primary);
 
         ShowAll();
         ShowEmailTo();

@@ -500,6 +500,13 @@ public sealed class SimpleModeTests : IDisposable
         "AnnouncerControl.cs|Running order", "AnnouncerControl.cs|Spotlight", "AnnouncerControl.cs|Talking points",
         "BroadcastWindow.cs|At a glance", "BroadcastWindow.cs|Controls", "ThisMonthForm.cs|This month", "ThisMonthForm.cs|Emails",
         "Shortcuts.cs|Anywhere", "Shortcuts.cs|Race Control", "Shortcuts.cs|Selected driver",
+
+        // The look editor, badge details, report card and sponsor video preview in cards
+        // (18 Nov 2026, dialog jazz-up): LookEditorForm, AchievementDetailForm, ReportCardForm
+        // and SponsorVideoPreviewForm.
+        "LookEditorForm.cs|The look", "LookEditorForm.cs|Colors", "LookEditorForm.cs|Preview",
+        "LookEditorForm.cs|Readability", "AchievementDetailForm.cs|Who has it",
+        "ReportCardForm.cs|What the laps said", "SponsorVideoPreviewForm.cs|The video",
         "ChassisTemplateForm.cs|Other tuning fields (not on the diagram)", "ChassisTemplateForm.cs|Selected point",
 
         // The garage and battery windows in cards (18 Nov 2026, dialog jazz-up): Chassis Diagram,

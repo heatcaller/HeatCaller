@@ -42,25 +42,36 @@ internal sealed class ReportCardForm : Form
         BackColor = AppTheme.Background;
         ForeColor = AppTheme.TextDark;
 
-        var body = new Label
-        {
-            AutoSize = true,
-            MaximumSize = new Size(UiLayout.AtTextSize(560), 0),
-            UseMnemonic = false,
-            Text = lines.Count == 0
-                ? "Nothing to report for that night - no laps were filed for this driver."
-                : string.Join(Environment.NewLine + Environment.NewLine, lines.Select((line, i) => $"{i + 1}.  {line}")),
-        };
+        // Who and which night at a glance across the top (18 Nov 2026,
+        // dialog jazz-up), then the lines in a card of their own with the
+        // note on how they are worked out as its hint. The printed and saved
+        // card is ReportCardSheet's, and none of this changes it.
+        var tiles = new[] { new StatTile(), new StatTile() };
+
+        tiles[0].Set(_driver, "Driver");
+        tiles[1].Set(_when, "Night");
 
         var note = new Label
         {
             AutoSize = true,
-            MaximumSize = new Size(UiLayout.AtTextSize(560), 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
             Text = "Worked out from the lap times HeatCaller read that night. A line is left out rather than guessed "
                    + "when there weren't enough clean laps (or sector times) to say it honestly.",
         };
+
+        var body = new Label
+        {
+            AutoSize = true,
+            UseMnemonic = false,
+            Text = lines.Count == 0
+                ? "Nothing to report for that night - no laps were filed for this driver. The card fills in from the laps of a night they raced."
+                : string.Join(Environment.NewLine + Environment.NewLine, lines.Select((line, i) => $"{i + 1}.  {line}")),
+        };
+
+        var card = new Section("What the laps said");
+        card.Add(note, gapBelow: UiLayout.RowGap);
+        card.Add(body, gapBelow: 0);
 
         var btnPrint = new Button { Text = "Print..." };
         btnPrint.Click += (_, _) => PrintCard();
@@ -80,8 +91,8 @@ internal sealed class ReportCardForm : Form
             new ButtonBar(alignRight: true).With(btnClose));
 
         var page = new FillPage();
-        page.Add(body, gapBelow: UiLayout.RowGap * 2);
-        page.Add(note, gapBelow: UiLayout.RowGap);
+        page.Add(new TileStrip(tiles), gapBelow: UiLayout.RowGap);
+        page.Add(card, gapBelow: UiLayout.SectionGap);
         page.Add(footer, gapBelow: 0);
 
         Controls.Add(page);
@@ -90,6 +101,19 @@ internal sealed class ReportCardForm : Form
         CancelButton = btnClose;
 
         AppTheme.ApplyRecursively(this);
+
+        // The tiles' faces, the hint's small face and the empty line's muted
+        // ink, over what the theme pass gives every label.
+        foreach (var tile in tiles)
+        {
+            tile.Value.Font = AppTheme.TitleFont;
+            tile.Caption.Font = AppTheme.MicroFont;
+            tile.Caption.ForeColor = AppTheme.TextMuted;
+        }
+
+        note.Font = AppTheme.SmallFont;
+        note.ForeColor = AppTheme.TextMuted;
+        body.ForeColor = lines.Count == 0 ? AppTheme.TextMuted : AppTheme.TextDark;
 
         DialogFit.Keep(this, page, width: 620);
     }

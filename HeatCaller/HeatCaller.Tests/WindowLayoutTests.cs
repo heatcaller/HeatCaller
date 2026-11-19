@@ -172,6 +172,9 @@ internal static partial class WindowCatalog
         all.AddRange(PickOneWindows());
 
         all.AddRange(ClubToolWindows());
+
+        // A driver's report card and the sponsor video preview (18 Nov 2026, dialog jazz-up).
+        all.AddRange(CardAndPreviewWindows());
         all.AddRange(CsvImportWindows());
         all.AddRange(EntryImportWindows());
 
