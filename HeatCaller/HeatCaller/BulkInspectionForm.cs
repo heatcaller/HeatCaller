@@ -12,14 +12,24 @@ namespace HeatCaller;
 /// be in different classes with different checklists, and a pass marks every
 /// check on each car's own checklist OK.
 ///
-/// On the layout pieces (DialogFit), like the Add a driver window: what it is
-/// for and who it covers at the top, the result, inspector and notes lined up
-/// in a field grid, and Save and Cancel at the foot.
+/// On the layout pieces (DialogFit), in two columns as the one-car
+/// inspection window is (18 Nov 2026, dialog jazz-up - it was one column of
+/// a names line, a note and a field grid): on the left a card naming the
+/// cars it covers, with a line on how they are filed, then the result and
+/// the inspector in a card of their own; on the right tiles counting the
+/// cars and those already inspected today, then the notes taking the
+/// height; and Save and Cancel at the foot, Save in the app's colour.
 /// </summary>
 internal sealed class BulkInspectionForm : Form
 {
     /// <summary>How wide it is inside its frame at the normal text size.</summary>
-    private const int DialogWidth = 440 + UiLayout.PageLeft + UiLayout.PageRight;
+    private const int DialogWidth = 760;
+
+    /// <summary>How tall it opens inside its frame at the normal text size - never less than its content needs.</summary>
+    private const int DialogHeight = 320;
+
+    /// <summary>The right-hand column - the tiles and the notes - at the normal text size.</summary>
+    private const int SideWidth = 320;
 
     /// <summary>Lines of notes the box shows before it scrolls.</summary>
     private const int NotesLines = 3;
@@ -61,8 +71,7 @@ internal sealed class BulkInspectionForm : Form
             Font = AppTheme.BoldFont,
         };
 
-        var intro = "One inspection is filed for each car, in every class its Tech cell is still waiting on. "
-                    + "Passed marks every check on that class's checklist OK.";
+        var intro = "One inspection is filed for each car, in every class its Tech cell is still waiting on.";
 
         if (alreadyToday > 0)
         {
@@ -71,16 +80,6 @@ internal sealed class BulkInspectionForm : Form
                 : $" {Plural.Of(alreadyToday, "car was", "cars were")} inspected today already, so "
                   + $"{(alreadyToday == 1 ? "that inspection is" : "those inspections are")} updated.";
         }
-
-        intro += " Leave Inspector or Notes blank to keep what an inspection already says.";
-
-        var lblIntro = new Label
-        {
-            Text = intro,
-            AutoSize = true,
-            Font = AppTheme.SmallFont,
-            ForeColor = AppTheme.TextMuted,
-        };
 
         _cmbResult.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbResult.Items.AddRange(new object[] { VerdictPassed, VerdictPassedWithNote, VerdictFailed });
@@ -97,7 +96,6 @@ internal sealed class BulkInspectionForm : Form
         var fields = new FieldGrid();
         fields.AddRow("Result:", _cmbResult);
         fields.AddRow("Inspector:", _txtInspector, stretch: true);
-        fields.AddRow("Notes:", _txtNotes, stretch: true);
 
         var ok = new Button { Text = $"Save {Plural.Of(count, "Inspection")}" };
         var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
@@ -108,10 +106,45 @@ internal sealed class BulkInspectionForm : Form
             Close();
         };
 
+        // THE LOOK (18 Nov 2026, dialog jazz-up), after the one-car
+        // inspection window: the cars and the result on the left, the counts
+        // and the notes on the right. Tab still goes Result, Inspector,
+        // Notes, Save: the left-hand column comes first. The dialog is built
+        // at the text size in use, so the tiles take their faces here.
+        var tiles = new[] { new StatTile(), new StatTile() };
+
+        foreach (var tile in tiles)
+        {
+            tile.Value.Font = AppTheme.TitleFont;
+            tile.Caption.Font = AppTheme.MicroFont;
+        }
+
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+
+        tiles[0].Set(count.ToString(culture), count == 1 ? "Car" : "Cars");
+        tiles[1].Set(alreadyToday.ToString(culture), "Updated");
+
+        var carsCard = new Section("Cars");
+        carsCard.Add(lblWho, gapBelow: UiLayout.HintGap);
+        carsCard.Add(CardHint(intro), gapBelow: 0);
+
+        var resultCard = new Section("Result");
+        resultCard.Add(CardHint("Passed marks every check on each car's checklist OK. "
+                                + "Leave Inspector blank to keep who an inspection already says."), gapBelow: UiLayout.RowGap);
+        resultCard.Add(fields, gapBelow: 0);
+
+        var notesCard = new Section("Notes");
+        notesCard.Add(CardHint("The same note goes on every car. Leave it blank to keep what's there."), gapBelow: UiLayout.RowGap);
+        notesCard.AddFill(_txtNotes, () => NotesLines * Pieces.LineHeight(_txtNotes.Font) + UiLayout.HintGap * 2, gapBelow: 0);
+
+        var columns = new Beside(() => UiLayout.AtTextSize(SideWidth));
+        columns.Add(carsCard, gapBelow: UiLayout.RowGap);
+        columns.Add(resultCard, gapBelow: 0);
+        columns.AddSideMeasured(new TileStrip(tiles), gapBelow: UiLayout.RowGap);
+        columns.AddSideFill(notesCard, notesCard.LeastHeight, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblWho, gapBelow: UiLayout.HintGap);
-        page.Add(lblIntro, gapBelow: UiLayout.SectionGap - UiLayout.HintGap);
-        page.Add(fields, gapBelow: UiLayout.RowGap);
+        page.AddFill(columns, columns.LeastHeight, gapBelow: UiLayout.RowGap);
 
         // Against the right-hand edge, Cancel furthest right, as in the
         // other inspection window - and Tab reaches Save first.
@@ -128,14 +161,19 @@ internal sealed class BulkInspectionForm : Form
         AppTheme.StyleButton(ok, AppTheme.ButtonKind.Primary);
         AppTheme.StyleButton(cancel, AppTheme.ButtonKind.Secondary);
 
-        // A few lines of notes, in the face the theme pass leaves the box in.
-        _txtNotes.Height = NotesLines * Pieces.LineHeight(_txtNotes.Font) + UiLayout.HintGap * 2;
-
         // The result as wide as a field at the text size in use, or as its
         // longest choice.
         (Font Font, int Count, int Width)? resultMeasured = null;
         _cmbResult.Width = Math.Max(UiLayout.AtTextSize(UiLayout.FieldWidth), Pieces.PickerWidth(_cmbResult, ref resultMeasured));
 
-        DialogFit.Keep(this, page, width: DialogWidth);
+        DialogFit.Keep(this, page, width: DialogWidth, height: DialogHeight);
     }
+
+    private static Label CardHint(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        ForeColor = AppTheme.TextMuted,
+        Font = AppTheme.SmallFont,
+    };
 }

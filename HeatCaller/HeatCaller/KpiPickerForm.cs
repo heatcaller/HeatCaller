@@ -12,9 +12,10 @@ namespace HeatCaller;
 /// the picked one. This window adds what the drop-down has no room for: the
 /// picked column's description and Move Up/Down buttons.
 ///
-/// On the layout pieces (DialogFit): the explanation across the top, the
-/// columns taking the height with their buttons in a column beside them
-/// (Beside), the selected column's description under them and OK and Cancel
+/// On the layout pieces (DialogFit): one card taking the height (18 Nov
+/// 2026, dialog jazz-up) - the explanation across its top, the columns
+/// taking the height with their buttons in a column beside them (Beside),
+/// and the selected column's description under them - and OK and Cancel
 /// at the foot.
 /// </summary>
 public sealed class KpiPickerForm : Form
@@ -66,7 +67,7 @@ public sealed class KpiPickerForm : Form
             Text = "Tick a column to show it. Use Move Up/Down, or the arrows on a row, to set the order they appear in.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.BodyFont,
+            Font = AppTheme.SmallFont,
         };
 
         _list.SelectedIndexChanged += (_, _) => ShowDescription();
@@ -91,10 +92,18 @@ public sealed class KpiPickerForm : Form
         columns.AddSide(btnDown, gapBelow: UiLayout.SectionGap);
         columns.AddSide(btnDefaults, gapBelow: 0);
 
+        // All of it in one card (18 Nov 2026, dialog jazz-up): the line on
+        // how it works over the list, and the picked column's description
+        // under it. No caption: on a 1280x720 screen, where the window is as
+        // tall as it can be, one took another row from the list (layout
+        // pictures, 18 Nov 2026), and the line over the list says it all.
+        var card = new Section();
+        card.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        card.AddFill(columns, () => columns.LeastHeight(Math.Max(1, card.Width - card.Padding.Horizontal)), gapBelow: UiLayout.RowGap);
+        card.Add(_lblDescription, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.AddFill(columns, columns.LeastHeight, gapBelow: UiLayout.RowGap);
-        page.Add(_lblDescription, gapBelow: UiLayout.RowGap);
+        page.AddFill(card, card.LeastHeight, gapBelow: UiLayout.RowGap);
 
         // Against the right-hand edge, Cancel furthest right. The bar is
         // handed Cancel first, as its first button goes furthest right; Tab
@@ -125,8 +134,9 @@ public sealed class KpiPickerForm : Form
         // The width and height it measured itself to at the normal text
         // size - 541 by about 596, the list fourteen rows tall. It can be
         // made bigger, for every column at once, or shorter down to a few
-        // rows.
-        DialogFit.Keep(this, page, width: 540, height: 600);
+        // rows. Forty taller since the card went round the list, for its
+        // insets and the gap under it, so the list keeps the rows it had.
+        DialogFit.Keep(this, page, width: 540, height: 640);
     }
 
     private void ShowDescription() =>

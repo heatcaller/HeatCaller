@@ -78,7 +78,10 @@ public sealed class JoinPosterForm : Form
         // the window stays white, whatever look the app is wearing.
         Font = AppTheme.BodyFont;
         hint.Font = AppTheme.SmallFont;
-        AppTheme.StyleButton(btnPrint);
+        // Print in the app's own colour, the window's main button as in every
+        // other window (18 Nov 2026, dialog jazz-up). The poster itself, on
+        // screen and on paper, is JoinPosterRenderer's and is not changed.
+        AppTheme.StyleButton(btnPrint, AppTheme.ButtonKind.Primary);
         AppTheme.StyleButton(btnFullScreen);
         AppTheme.StyleButton(btnClose, AppTheme.ButtonKind.Secondary);
 

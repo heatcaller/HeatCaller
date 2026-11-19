@@ -1,3 +1,5 @@
+using System.Drawing.Drawing2D;
+
 namespace HeatCaller;
 
 /// <summary>
@@ -43,7 +45,7 @@ internal sealed class UnsaidLinesForm : Form
 
     private readonly Label _lblReport = new();
     private readonly Label _lblAi = new();
-    private readonly CheckBox _chkHeld = new();
+    private readonly CheckBox _chkHeld = new ThemedCheckBox();
     private readonly ListBox _list = new();
     private readonly Label _lblCount = new();
     private readonly System.Windows.Forms.Timer _tick = new();
@@ -108,10 +110,18 @@ internal sealed class UnsaidLinesForm : Form
             new ButtonBar().With(_lblCount),
             new ButtonBar(alignRight: true).With(btnClose));
 
+        // (18 Nov 2026, dialog batch 5): what the race came to in a card of
+        // its own over the list - the count, the AI's line and the tick -
+        // and the window a little taller for it, so the list keeps the
+        // height it had at 1280x720. No tiles: the room they need would come
+        // out of the list, and the count already sits at its foot.
+        var header = new Section("This race");
+        header.Add(_lblReport, gapBelow: UiLayout.HintGap);
+        header.Add(_lblAi, gapBelow: UiLayout.RowGap);
+        header.Add(_chkHeld, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(_lblReport, gapBelow: UiLayout.RowGap);
-        page.Add(_lblAi, gapBelow: UiLayout.RowGap);
-        page.Add(_chkHeld, gapBelow: UiLayout.RowGap);
+        page.Add(header, gapBelow: UiLayout.RowGap);
         page.AddFill(_list, _ => UiLayout.AtTextSize(260), gapBelow: UiLayout.RowGap);
         page.Add(footer, gapBelow: 0);
 
@@ -139,7 +149,7 @@ internal sealed class UnsaidLinesForm : Form
             _tick.Dispose();
         };
 
-        DialogFit.Keep(this, page, width: 640, height: 560);
+        DialogFit.Keep(this, page, width: 640, height: 585);
     }
 
     /// <summary>
@@ -253,6 +263,9 @@ internal sealed class UnsaidLinesForm : Form
     private int TextWidth() =>
         Math.Max(80, _list.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - Pad * 2 - 2);
 
+    /// <summary>A card's top line: the badge's chip, or the small face's line when that is taller.</summary>
+    private static int HeadHeight() => Math.Max(AppTheme.SmallFont.Height, AppTheme.MicroFont.Height * 3 / 2);
+
     private const TextFormatFlags Wrap = TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl | TextFormatFlags.NoPrefix;
 
     private void MeasureCard(object? sender, MeasureItemEventArgs e)
@@ -264,7 +277,7 @@ internal sealed class UnsaidLinesForm : Form
 
         var width = TextWidth();
 
-        var head = AppTheme.SmallFont.Height;
+        var head = HeadHeight();
         var words = TextRenderer.MeasureText(e.Graphics, WordsOf(line), AppTheme.BodyFont, new Size(width, int.MaxValue), Wrap).Height;
         var why = TextRenderer.MeasureText(e.Graphics, line.Why, AppTheme.SmallFont, new Size(width, int.MaxValue), Wrap).Height;
 
@@ -289,42 +302,68 @@ internal sealed class UnsaidLinesForm : Form
 
         var card = new Rectangle(bounds.X, bounds.Y, bounds.Width - SystemInformation.VerticalScrollBarWidth, bounds.Height - CardGap);
 
-        using (var surface = new SolidBrush(AppTheme.Surface))
-        {
-            g.FillRectangle(surface, card);
-        }
-
         var lost = line.Kind == UnsaidKind.Lost;
 
-        // A bar down the left edge in the warning colour for a lost line,
-        // so a scroll down the list shows where the trouble is.
-        using (var edge = new SolidBrush(lost ? AppTheme.Danger : AppTheme.Border))
-        {
-            g.FillRectangle(edge, card.X, card.Y, 3, card.Height);
-        }
+        // (18 Nov 2026, dialog batch 5): rounded, as the card lists on the
+        // sidebar pages are, with a lost line's edge in the warning colour -
+        // so a scroll down the list still shows where the trouble is.
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-        using (var border = new Pen(AppTheme.Border))
+        var radius = UiLayout.AtDpi(8);
+
+        using (var path = AppTheme.RoundedRect(new RectangleF(card.X + 0.5f, card.Y + 0.5f, card.Width - 1f, card.Height - 1f), radius))
         {
-            g.DrawRectangle(border, card.X, card.Y, card.Width - 1, card.Height - 1);
+            using (var surface = new SolidBrush(AppTheme.Surface))
+            {
+                g.FillPath(surface, path);
+            }
+
+            // The bar down the left edge, kept inside the rounded corners.
+            var clip = g.Clip;
+            g.SetClip(path, CombineMode.Intersect);
+
+            using (var edge = new SolidBrush(lost ? AppTheme.Danger : AppTheme.Border))
+            {
+                g.FillRectangle(edge, card.X, card.Y, UiLayout.AtDpi(4), card.Height);
+            }
+
+            g.Clip = clip;
+
+            using var border = new Pen(lost ? RosterInk.Blend(AppTheme.Danger, AppTheme.Surface, 0.55f) : AppTheme.Border);
+            g.DrawPath(border, path);
         }
 
         var x = card.X + Pad;
         var y = card.Y + Pad;
         var width = TextWidth();
 
-        // The top line: the badge, then when, what and who.
+        // The top line: the badge - a chip, as Venues' "Applied" is - then
+        // when, what and who.
         var badge = lost ? "LOST" : "HELD";
-        var badgeSize = TextRenderer.MeasureText(g, badge, AppTheme.BoldFont, Size.Empty, TextFormatFlags.NoPadding);
+        var badgeText = TextRenderer.MeasureText(g, badge, AppTheme.MicroFont, Size.Empty, TextFormatFlags.NoPadding);
+        var headHeight = HeadHeight();
+        var chip = new RectangleF(x, y, badgeText.Width + AppTheme.MicroFont.Height, headHeight);
+        var ink = lost ? AppTheme.Danger : AppTheme.TextMuted;
 
-        TextRenderer.DrawText(g, badge, AppTheme.BoldFont, new Point(x, y), lost ? AppTheme.Danger : AppTheme.TextMuted, TextFormatFlags.NoPadding);
+        using (var path = AppTheme.RoundedRect(chip, (int)(chip.Height / 2)))
+        using (var fill = new SolidBrush(RosterInk.Blend(ink, AppTheme.Surface, lost ? 0.85f : 0.88f)))
+        {
+            g.FillPath(fill, path);
+        }
+
+        TextRenderer.DrawText(g, badge, AppTheme.MicroFont, Rectangle.Round(chip), ink,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+
+        var chipWidth = (int)Math.Ceiling(chip.Width);
 
         var head = $"{AppTime.TimeWithSeconds(line.AtUtc.ToLocalTime())}  ·  {line.Call}" + (line.Driver is { Length: > 0 } driver ? $"  ·  {driver}" : string.Empty);
 
         TextRenderer.DrawText(g, head, AppTheme.SmallFont,
-            new Rectangle(x + badgeSize.Width + 10, y, width - badgeSize.Width - 10, AppTheme.SmallFont.Height),
+            new Rectangle(x + chipWidth + 8, y, width - chipWidth - 8, headHeight),
             AppTheme.TextMuted, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.VerticalCenter);
 
-        y += Math.Max(AppTheme.SmallFont.Height, badgeSize.Height) + 4;
+        y += headHeight + 4;
 
         // What it would have said.
         var words = WordsOf(line);

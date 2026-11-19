@@ -172,6 +172,9 @@ internal static partial class WindowCatalog
         all.AddRange(PickOneWindows());
 
         all.AddRange(ClubToolWindows());
+
+        // A driver's report card and the sponsor video preview (18 Nov 2026, dialog jazz-up).
+        all.AddRange(CardAndPreviewWindows());
         all.AddRange(CsvImportWindows());
         all.AddRange(EntryImportWindows());
 
@@ -189,6 +192,9 @@ internal static partial class WindowCatalog
         all.AddRange(TrackWindows());
         all.AddRange(PageHostWindows());
         all.AddRange(AnnouncerWindows());
+
+        // Announce the next night, from Next Steps (18 Nov 2026, dialog jazz-up).
+        all.AddRange(AnnounceNightWindows());
 
         // Last: some of its windows close the day that is open, which the
         // windows above do not expect to find closed.

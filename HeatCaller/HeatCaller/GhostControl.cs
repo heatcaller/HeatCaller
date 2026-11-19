@@ -707,8 +707,10 @@ public sealed class GhostControl : UserControl
 /// <summary>
 /// Picks whose best lap a Quick Rival should be built from.
 ///
-/// On the layout pieces (DialogFit): the question, the drivers' drop-down
-/// under it across the window, and Add and Cancel at the foot; as tall as
+/// On the layout pieces (DialogFit): one card - the question, the drivers'
+/// drop-down under it across the card and a line on what the pick is for
+/// (18 Nov 2026, dialog jazz-up) - and Add, the main button, and Cancel at
+/// the foot; as tall as
 /// that, and as wide as it was made at the normal text size, at the size in
 /// use - wider when a driver's name and transponder need the drop-down
 /// wider. It used to be placed in pixels in a 400x150 window: the drop-down
@@ -767,12 +769,24 @@ public sealed class GhostRivalPickerForm : Form
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        // The question over the drop-down, which runs across the window as
-        // it did.
-        var page = new FillPage();
-        page.Add(lbl, gapBelow: UiLayout.HintGap);
-        page.Add(_cmbDriver);
+        // The question over the drop-down, which runs across the card, and a
+        // line under it on what happens next (18 Nov 2026, dialog jazz-up).
+        var hint = new Label
+        {
+            Text = "The ghost takes its pace from their best lap on this track.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
+
+        var card = new Section("Driver");
+        card.Add(lbl, gapBelow: UiLayout.HintGap);
+        card.Add(_cmbDriver, gapBelow: UiLayout.HintGap);
+        card.Add(hint, gapBelow: 0);
         Pieces.KeepHeightTold(_cmbDriver);
+
+        var page = new FillPage();
+        page.Add(card);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // and Tab still reaches Add first: the bar takes them right to left,
@@ -787,6 +801,7 @@ public sealed class GhostRivalPickerForm : Form
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
+        AppTheme.StyleButton(btnOk, AppTheme.ButtonKind.Primary);
 
         // After the theme pass, in the face it leaves the drop-down in: the
         // window as wide as it was at the normal text size, at the size in
@@ -799,7 +814,7 @@ public sealed class GhostRivalPickerForm : Form
 
         var width = Math.Max(
             UiLayout.AtTextSize(DialogWidth),
-            UiLayout.PageLeft + pickerWidth + UiLayout.PageRight);
+            UiLayout.PageLeft + Section.Inset.Horizontal + pickerWidth + UiLayout.PageRight);
 
         DialogFit.Keep(this, page, width, widthMeasured: true);
     }

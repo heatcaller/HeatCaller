@@ -12,7 +12,12 @@ namespace HeatCaller;
 /// </summary>
 internal sealed class CrewVoicesForm : Form
 {
-    private readonly CheckedListBox _list = new() { CheckOnClick = true, IntegralHeight = false };
+    /// <summary>The list shows at least this many voices before the window scrolls instead.</summary>
+    private const int LeastRows = 5;
+
+    // Themed, as Start Tonight's class list is, so its ticks are drawn in
+    // the app's colour rather than Windows' blue.
+    private readonly CheckedListBox _list = new ThemedCheckedListBox { CheckOnClick = true, IntegralHeight = false };
     private readonly IReadOnlyList<CrewVoiceOption> _voices;
     private readonly IReadOnlyCollection<string> _hiddenBefore;
 
@@ -25,32 +30,17 @@ internal sealed class CrewVoicesForm : Form
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
         ForeColor = AppTheme.TextDark;
-        StartPosition = FormStartPosition.CenterParent;
-        MinimizeBox = false;
-        MaximizeBox = false;
-        ShowInTaskbar = false;
-        ClientSize = new Size(UiLayout.AtTextSize(420), UiLayout.AtTextSize(460));
-
-        var intro = new Label
-        {
-            Text = "Ticked voices are offered to drivers for their own Team Principal and Technical Lead. Untick any "
-                   + "you'd rather nobody picked.",
-            AutoSize = false,
-            Dock = DockStyle.Top,
-            Height = UiLayout.AtTextSize(48),
-        };
-
         foreach (var voice in voices)
         {
             var name = string.IsNullOrWhiteSpace(voice.Pick.Name) ? voice.Pick.Id : voice.Pick.Name;
             _list.Items.Add(name, !hidden.Contains(DriverCrew.KeyOf(voice.Pick)));
         }
 
-        _list.Dock = DockStyle.Fill;
+        EmptyNote.For(_list, () => "No voices to list. The voices on this PC's voice engine show here once it has some.");
 
-        var ok = new Button { Text = "Save", DialogResult = DialogResult.OK, AutoSize = true };
-        var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
-        var all = new Button { Text = "Tick all", AutoSize = true };
+        var ok = new Button { Text = "Save", DialogResult = DialogResult.OK };
+        var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
+        var all = new Button { Text = "Tick all" };
         all.Click += (_, _) =>
         {
             for (var i = 0; i < _list.Items.Count; i++)
@@ -59,22 +49,40 @@ internal sealed class CrewVoicesForm : Form
             }
         };
 
-        var buttons = new FlowLayoutPanel
+        // (18 Nov 2026, dialog batch 5): one card - the list, its hint line
+        // under the caption - over the buttons, as the app's other dialogs.
+        // The list takes the height the window has.
+        var card = new Section("Crew voices");
+        card.Add(new Label
         {
-            Dock = DockStyle.Bottom,
-            FlowDirection = FlowDirection.RightToLeft,
+            Text = "Ticked voices are offered to drivers for their own Team Principal and Technical Lead. Untick any "
+                   + "you'd rather nobody picked.",
             AutoSize = true,
-            Padding = new Padding(0, UiLayout.AtTextSize(8), 0, 0),
-        };
-        buttons.Controls.AddRange(new Control[] { cancel, ok, all });
+            Font = AppTheme.SmallFont,
+            ForeColor = AppTheme.TextMuted,
+        });
+        card.AddFill(_list, () => LeastRows * _list.ItemHeight + 4, gapBelow: 0);
 
-        Padding = new Padding(UiLayout.AtTextSize(12));
-        Controls.Add(_list);
-        Controls.Add(intro);
-        Controls.Add(buttons);
+        var page = new FillPage();
+        page.AddFill(card, card.LeastHeight, gapBelow: UiLayout.RowGap);
+
+        // Right to left, Cancel outermost, as they always were - and Tab goes
+        // Cancel, Save, Tick all after the list, as it did: the bar takes
+        // them in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(cancel, ok, all), gapBelow: 0);
+
+        Controls.Add(page);
 
         AcceptButton = ok;
         CancelButton = cancel;
+
+        // It was never given the theme, so it opened in Windows' own grey.
+        AppTheme.ApplyRecursively(this);
+
+        // Wider than the 420x460 it was, so the three buttons share one line
+        // in the theme's button size, and taller by what the card's caption
+        // and edges take, so the list shows as many voices as it did.
+        DialogFit.Keep(this, page, width: 540, height: 560);
     }
 
     /// <summary>The hidden voices after Save, as keys.</summary>

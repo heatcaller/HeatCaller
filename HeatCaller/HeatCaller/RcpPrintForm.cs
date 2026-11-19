@@ -8,8 +8,10 @@ namespace HeatCaller;
 /// (RcpPlanPrinter), where the paper can still change - the sheets are
 /// worked out again from whatever is chosen there.
 ///
-/// On the layout pieces (DialogFit): a line of what it is for, the scales
-/// in a card, the parts tick in another, and the buttons at the foot.
+/// On the layout pieces (DialogFit): a line of what it is for, tiles for
+/// the paper, the scale picked and its sheets (18 Nov 2026, dialog
+/// jazz-up), the scales in a card, the parts tick in another, and the
+/// buttons at the foot, Print in the app's colour.
 /// </summary>
 public sealed class RcpPrintForm : Form
 {
@@ -46,6 +48,9 @@ public sealed class RcpPrintForm : Form
             Font = AppTheme.BodyFont,
         };
 
+        // The sheets each choice takes, for the tile that follows the pick.
+        var sheetsOf = new Dictionary<RadioButton, string>();
+
         var scaleCard = new Section("Scale");
         RadioButton? pick = null;
         RadioButton? smallestThatFits = null;
@@ -66,6 +71,7 @@ public sealed class RcpPrintForm : Form
             };
 
             _scales.Add((button, ratio));
+            sheetsOf[button] = tooMany ? "-" : sheets.ToString(System.Globalization.CultureInfo.CurrentCulture);
             scaleCard.Add(button, gapBelow: UiLayout.HintGap);
 
             if (!tooMany)
@@ -90,9 +96,45 @@ public sealed class RcpPrintForm : Form
         };
 
         _scales.Add((fit, 0));
+        sheetsOf[fit] = "1";
         scaleCard.Add(fit, gapBelow: UiLayout.HintGap);
 
         (pick ?? smallestThatFits ?? fit).Checked = true;
+
+        // THE LOOK (18 Nov 2026, dialog jazz-up): the print at a glance in
+        // tiles over the cards - the paper, the scale picked and the sheets
+        // it takes, following the pick. Print in the app's colour. The
+        // dialog is built at the text size in use, so the tiles take their
+        // faces here.
+        var tiles = new[] { new StatTile(), new StatTile(), new StatTile() };
+
+        foreach (var tile in tiles)
+        {
+            tile.Value.Font = AppTheme.TitleFont;
+            tile.Caption.Font = AppTheme.MicroFont;
+        }
+
+        tiles[0].Set(paperName, "Paper");
+
+        void ShowPick()
+        {
+            var (button, ratio) = _scales.FirstOrDefault(s => s.Button.Checked);
+
+            if (button is null)
+            {
+                return;
+            }
+
+            tiles[1].Set(ratio == 0 ? "Fit" : $"1:{ratio}", "Scale");
+            tiles[2].Set(sheetsOf[button], "Sheets");
+        }
+
+        foreach (var (button, _) in _scales)
+        {
+            button.CheckedChanged += (_, _) => ShowPick();
+        }
+
+        ShowPick();
 
         scaleCard.Add(Note($"Sheets counted for {paperName} paper, {(landscape ? "landscape" : "portrait")}. "
                            + "Change the paper in the next step and they're worked out again."), gapBelow: 0);
@@ -108,6 +150,7 @@ public sealed class RcpPrintForm : Form
         var page = new FillPage();
         var body = DialogFit.Body(page);
         body.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        body.Add(new TileStrip(tiles), gapBelow: UiLayout.RowGap);
         body.Add(scaleCard, gapBelow: UiLayout.RowGap);
         body.Add(partsCard, gapBelow: 0);
 
@@ -121,6 +164,7 @@ public sealed class RcpPrintForm : Form
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
+        AppTheme.StyleButton(btnPrint, AppTheme.ButtonKind.Primary);
 
         DialogFit.Keep(this, page, width: DialogWidth, body: body);
     }

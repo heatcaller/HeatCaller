@@ -137,9 +137,11 @@ public sealed class ChartExportOptions
 /// Asks how a chart image should be rendered before saving it.
 ///
 /// On the layout pieces (DialogFit): the style and the size lined up in a
-/// field grid, each drop-down running to the right-hand edge; the preview
-/// under them taking the width and the height that are left; Save and
-/// Cancel at the foot against the right-hand edge. It opens at the size it
+/// field grid, each drop-down running to the right-hand edge, in an Image
+/// card with a line on what they are for; the preview under them in a card
+/// of its own, taking the width and the height that are left (18 Nov 2026,
+/// dialog jazz-up); Save, the main button, and Cancel at the foot against
+/// the right-hand edge. It opens at the size it
 /// had - wider when the longest style needs more - and can be made bigger,
 /// the preview growing with it. The preview draws itself as it always did;
 /// only the room it is given is new. It used to be placed in pixels in a
@@ -152,8 +154,8 @@ public sealed class ChartExportForm : Form
     /// <summary>How wide the window is inside its frame at the normal text size, at the least - the width it had, wider when the drop-downs need more.</summary>
     private const int DialogWidth = 520;
 
-    /// <summary>How tall it opens inside its frame at the normal text size - the height it had.</summary>
-    private const int DialogHeight = 420;
+    /// <summary>How tall it opens inside its frame at the normal text size - the 420 it had, and the room the two cards' captions, hint and insets take, so the preview keeps the height it had.</summary>
+    private const int DialogHeight = 500;
 
     /// <summary>The drop-downs' width at the normal text size - the width they had, wider when the longest choice needs more.</summary>
     private const int DropDownWidth = 380;
@@ -203,7 +205,6 @@ public sealed class ChartExportForm : Form
         SelectStyle(settings.ChartExportStyle);
         SelectSize(settings.ChartExportWidth);
 
-        var lblPreview = new Label { Text = "Preview:", AutoSize = true, Font = AppTheme.BoldFont };
 
         _preview.BorderStyle = BorderStyle.FixedSingle;
         _preview.Paint += (_, e) =>
@@ -246,10 +247,21 @@ public sealed class ChartExportForm : Form
             captions.Add(fields.AddRow("Size:", _cmbSize, stretch: true));
         }
 
+        // Two cards (18 Nov 2026, dialog jazz-up): what the image is to be,
+        // with a line on what the choices are for, and the preview taking the
+        // height that is left.
+        var imageCard = new Section("Image");
+        imageCard.Add(CardHint(chooseSize
+            ? "How the saved picture looks, and how big it is. Kept for next time."
+            : "How the saved picture looks. Kept for next time."));
+        imageCard.Add(fields, gapBelow: 0);
+
+        var previewCard = new Section("Preview");
+        previewCard.AddFill(_preview, () => UiLayout.AtTextSize(PreviewLeastHeight), gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(fields);
-        page.Add(lblPreview, stretch: false, gapBelow: UiLayout.HintGap);
-        page.AddFill(_preview, _ => UiLayout.AtTextSize(PreviewLeastHeight));
+        page.Add(imageCard, gapBelow: UiLayout.RowGap);
+        page.AddFill(previewCard, previewCard.LeastHeight, gapBelow: UiLayout.RowGap);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // and Tab still reaches Save first: the bar takes them right to
@@ -284,12 +296,21 @@ public sealed class ChartExportForm : Form
 
         var width = Math.Max(
             UiLayout.AtTextSize(DialogWidth),
-            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.PageRight);
+            UiLayout.PageLeft + Section.Inset.Horizontal + captionColumn + fieldColumn + UiLayout.PageRight);
 
         DialogFit.Keep(this, page, width, height: DialogHeight, widthMeasured: true);
     }
 
-    private string CurrentStyleKey() => (_cmbStyle.SelectedItem as StyleItem)?.Key ?? "print";
+    /// <summary>A card's line saying what it is for, in the small muted face.</summary>
+    private static Label CardHint(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        ForeColor = AppTheme.TextMuted,
+        Font = AppTheme.SmallFont,
+    };
+
+    private string CurrentStyleKey() =>(_cmbStyle.SelectedItem as StyleItem)?.Key ?? "print";
 
     private void SelectStyle(string key)
     {
