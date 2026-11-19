@@ -388,8 +388,6 @@ public static class AppDialog
             // Before the measuring below, which takes the face it has.
             lblCaption.Font = AppTheme.HeadingFont;
 
-            MarkDefaultButton(made);
-
             // A hairline between the message and the buttons, in the gap the
             // page already leaves there - nothing taller for it.
             if (bar.Parent is { } rows)
@@ -426,38 +424,6 @@ public static class AppDialog
             // caption bar to grab. The page and what is in it cover the
             // window, so each of them hands a press on to it (see DragWindow).
             DragFrom(page);
-        }
-
-        /// <summary>
-        /// One orange button, the one Enter presses (18 Nov 2026, dialog
-        /// look) - the main action is the primary one, as in every other
-        /// dialog. A red or yellow default keeps its colour: that colour is
-        /// the warning. The others are the plain kind, so an OK beside a
-        /// default Cancel does not look like the answer Enter gives. Colours
-        /// only: which button is the default is not touched.
-        /// </summary>
-        private void MarkDefaultButton(Button[] made)
-        {
-            var danger = AppTheme.Danger.ToArgb();
-            var warning = AppTheme.Warning.ToArgb();
-            var primary = AppTheme.Primary.ToArgb();
-
-            foreach (var button in made)
-            {
-                var back = button.BackColor.ToArgb();
-
-                if (ReferenceEquals(button, _defaultButton))
-                {
-                    if (back != danger && back != warning && back != primary)
-                    {
-                        AppTheme.StyleButton(button, AppTheme.ButtonKind.Primary);
-                    }
-                }
-                else if (back == primary && back != danger && back != warning)
-                {
-                    AppTheme.StyleButton(button, AppTheme.ButtonKind.Secondary);
-                }
-            }
         }
 
         /// <summary>The hairline over the buttons, halfway down the gap above them, across the page.</summary>
