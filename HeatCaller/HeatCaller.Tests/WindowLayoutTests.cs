@@ -158,6 +158,7 @@ internal static partial class WindowCatalog
 
         // The garage, setup sheets and batteries (30 Sep).
         all.AddRange(GarageWindows());
+        all.AddRange(CarTransferWindows());
         all.AddRange(ChassisSheetWindows());
         all.AddRange(SetupWindows());
         all.AddRange(BatteryWindows());

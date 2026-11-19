@@ -499,6 +499,12 @@ public sealed class SimpleModeTests : IDisposable
         "Shortcuts.cs|Anywhere", "Shortcuts.cs|Race Control", "Shortcuts.cs|Selected driver",
         "ChassisTemplateForm.cs|Other tuning fields (not on the diagram)", "ChassisTemplateForm.cs|Selected point",
 
+        // The garage and battery windows in cards (18 Nov 2026, dialog jazz-up): Chassis Diagram,
+        // Edit Field, Transfer (a car), Which pack? and Club Batteries.
+        "ChassisTemplateForm.cs|Diagram", "SetupFieldEditorForm.cs|The field", "SetupFieldEditorForm.cs|Options",
+        "CarTransfer.cs|Who gets it", "CarTransfer.cs|What goes with it", "BatteryForms.cs|Packs",
+        "ClubBatteriesForm.cs|The club's packs",
+
         // Checked In Late's card (LateArrivalsForm, 18 Nov 2026, dialog jazz-up). The lap
         // breakdown window (LapDetailWindow) is painted, with no Section.
         "RaceProgramControl.LateArrivals.cs|Add to the heats",

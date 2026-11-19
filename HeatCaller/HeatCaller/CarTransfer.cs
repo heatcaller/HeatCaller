@@ -375,13 +375,21 @@ internal static class CarTransferring
 /// CarTransferring.Apply makes the change.
 ///
 /// On the layout pieces (DialogFit), as BelongsToForm: the question at the
-/// top, the search and the drivers taking the height, the transponders and
-/// what will happen under them, the buttons at the foot.
+/// top, then two cards side by side with a line each on what they hold - who
+/// gets it (the search and the drivers, taking the room) and, in a column
+/// beside it, what goes with it (the transponders and what will happen) -
+/// and the buttons at the foot.
 /// </summary>
 internal sealed class CarTransferForm : Form
 {
     /// <summary>The list shows at least this many before the window scrolls instead.</summary>
     private const int LeastRows = 5;
+
+    /// <summary>How wide the window opens at the normal text size: the drivers about the 490px they had, and the column beside them.</summary>
+    private const int DialogWidth = 840;
+
+    /// <summary>The column beside the drivers - what goes with the car - at the normal text size.</summary>
+    private const int SideWidth = 300;
 
     /// <summary>The club's line in the list.</summary>
     private const string ClubKey = "\u0001club";
@@ -459,24 +467,25 @@ internal sealed class CarTransferForm : Form
         var find = new FieldGrid();
         find.AddRow("Find:", _txtFind, stretch: true);
 
-        var page = new FillPage();
-        page.Add(lblWhat, stretch: false, gapBelow: UiLayout.RowGap);
-        page.Add(new Label { Text = "Who gets it?", AutoSize = true, Font = AppTheme.BoldFont }, stretch: false, gapBelow: UiLayout.HintGap);
-        page.Add(find, gapBelow: UiLayout.HintGap);
-        page.AddFill(_lstTo, _ => LeastRows * _lstTo.ItemHeight + 4, gapBelow: UiLayout.RowGap);
+        // Two cards side by side (18 Nov 2026, dialog jazz-up): who it goes
+        // to - the search and the drivers, taking the height - and, in a
+        // column beside it, what goes with it: the transponders fitted to it,
+        // the notes on them, and the line saying what Transfer will do.
+        // Stacked, the cards made the window too tall for a 1366x768 screen
+        // and squeezed the drivers to five lines; side by side, the drivers
+        // get more height than they had.
+        var whoCard = new Section("Who gets it");
+        whoCard.Add(CardHint("A driver on file, or the club. Type to narrow the list."));
+        whoCard.Add(find, gapBelow: UiLayout.HintGap);
+        whoCard.AddFill(_lstTo, () => LeastRows * _lstTo.ItemHeight + 4, gapBelow: 0);
+
+        var withCard = new Section("What goes with it");
 
         if (movable.Count > 0)
         {
-            page.Add(new Label { Text = "Transponders fitted to it - tick the ones that go with it:", AutoSize = true, Font = AppTheme.BoldFont },
-                stretch: false, gapBelow: UiLayout.HintGap);
-            page.Add(_lstTransponders, gapBelow: UiLayout.HintGap);
+            withCard.Add(CardHint($"Tick the transponders that go too. One left unticked stays {ownerName}'s, and moves between their cars from now on."));
+            withCard.Add(_lstTransponders);
             _lstTransponders.Height = Math.Min(movable.Count, 4) * _lstTransponders.ItemHeight + 6;
-            page.Add(new Label
-            {
-                Text = $"One left unticked stays {ownerName}'s, and moves between their cars from now on.",
-                AutoSize = true,
-                ForeColor = AppTheme.TextMuted,
-            }, stretch: false, gapBelow: UiLayout.RowGap);
         }
 
         // Their main transponder is how their results are filed, so it never
@@ -485,15 +494,18 @@ internal sealed class CarTransferForm : Form
             && _owner.TransponderEntry(_owner.Transponder) is { Retired: false } main
             && string.Equals(main.CarId, car.Id, StringComparison.Ordinal))
         {
-            page.Add(new Label
-            {
-                Text = $"{_owner.Transponder} is {ownerName}'s main transponder, which their results are filed under, so it stays theirs.",
-                AutoSize = true,
-                ForeColor = AppTheme.TextMuted,
-            }, stretch: false, gapBelow: UiLayout.RowGap);
+            withCard.Add(CardHint($"{_owner.Transponder} is {ownerName}'s main transponder, which their results are filed under, so it stays theirs."));
         }
 
-        page.Add(_lblOutcome, stretch: false);
+        withCard.Add(_lblOutcome, gapBelow: 0);
+
+        var band = new Beside(() => UiLayout.AtTextSize(SideWidth));
+        band.AddFill(whoCard, whoCard.LeastHeight);
+        band.AddSideCard(withCard, gapBelow: 0);
+
+        var page = new FillPage();
+        page.Add(lblWhat, stretch: false, gapBelow: UiLayout.RowGap);
+        page.AddFill(band, band.LeastHeight);
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, _btnTransfer), gapBelow: 0);
 
         Controls.Add(page);
@@ -503,10 +515,29 @@ internal sealed class CarTransferForm : Form
         FillList();
 
         AppTheme.ApplyRecursively(this);
-        _lblOutcome.ForeColor = AppTheme.TextMuted;
 
-        DialogFit.Keep(this, page, width: 520, height: 560);
+        // What Transfer will do, in the body's ink - it is the line to read
+        // before pressing it; the notes round it are muted.
+        _lblOutcome.ForeColor = AppTheme.TextDark;
+        lblWhat.ForeColor = AppTheme.TextMuted;
+
+        // The window's own button in the app's colour - the theme goes by the
+        // caption, and "Transfer to ..." is not one it knows. Kept as its
+        // caption changes with the pick (StyleButton remembers the kind).
+        AppTheme.StyleButton(_btnTransfer, AppTheme.ButtonKind.Primary);
+
+        // Wider than it was (520) by the column beside the drivers; as tall.
+        DialogFit.Keep(this, page, width: DialogWidth, height: 560);
     }
+
+    /// <summary>A card's line on what it holds, in the small muted type.</summary>
+    private static Label CardHint(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        ForeColor = AppTheme.TextMuted,
+        Font = AppTheme.SmallFont,
+    };
 
     /// <summary>One line of the list: a driver, or the club.</summary>
     private sealed record Choice(string Key, string Label)
